@@ -6,6 +6,7 @@ import { demoFixturesForDate } from "../src/server/demo/api-football.ts";
 import { demoForecast, demoHash, demoId } from "../src/server/demo/forecast.ts";
 import { evidenceSerialize } from "../src/server/evidence/evidence-input.ts";
 import { storedFeedFixture, storedFeedFixtures } from "../src/server/matches/fixture-read.ts";
+import { storedCycleDisplay } from "../src/server/predictions/history-read.ts";
 
 const asOf = Date.parse("2026-10-28T09:00:00Z"), window = { startInclusive: asOf - 86_400_000, endExclusive: asOf + 7 * 86_400_000 };
 
@@ -72,6 +73,37 @@ test("bulk open-cycle hydration matches ordinary feed projections using the same
   assert.equal(actual.reads.filter(sql => sql.includes("FROM PredictionSet")).length, 1);
   assert.equal(actual.reads.filter(sql => sql.includes("FROM MarketPrediction")).length, 1);
   assert.deepEqual(batch.map(record => record.fixtureId), ids, "the decision cohort retains its selected order");
+});
+
+test("detail and card projections share one verified display without repeated archive reads", async () => {
+  const expected = source(), actual = source(), ids = actual.fixtures.map(fixture => fixture.id).reverse();
+  const ordinary = [], reused = [];
+  for (const id of ids) {
+    const cycleId = actual.fixtures.find(fixture => fixture.id === id).activeCycleId;
+    ordinary.push(await storedFeedFixture(expected.tx, id, false, window, "en", { prices: true }));
+    const before = await storedCycleDisplay(expected.tx, cycleId);
+    const display = await storedCycleDisplay(actual.tx, cycleId);
+    reused.push(await storedFeedFixture(actual.tx, id, false, window, "en", { prices: true, display }));
+    assert.deepEqual(display, before);
+  }
+  assert.deepEqual(reused, ordinary, "all forecast, result, price and UI fields remain identical in requested order");
+  assert.deepEqual(reused.map(record => record.fixtureId), ids);
+  assert.equal(expected.reads.filter(sql => sql.includes("FROM PredictionSet")).length, 6);
+  assert.equal(actual.reads.filter(sql => sql.includes("FROM PredictionSet")).length, 3);
+  assert.equal(actual.reads.filter(sql => sql.includes("FROM MarketPrediction")).length, 3);
+});
+
+test("a supplied display cannot cross fixture or active-cycle boundaries", async () => {
+  for (const change of [
+    (state, display) => ({ ...display, cycle: { ...display.cycle, fixtureId: state.fixtures[1].id } }),
+    (state, display) => { state.fixtures[0].activeCycleId = state.cycles[1].id; return display; },
+    () => null,
+  ]) {
+    const state = source(), fixture = state.fixtures[0];
+    const display = change(state, await storedCycleDisplay(state.tx, fixture.activeCycleId));
+    await assert.rejects(storedFeedFixture(state.tx, fixture.id, false, window, "en", { display }),
+      error => error.name === "PredictionHistoryError");
+  }
 });
 
 test("bulk locked-cycle hydration preserves audited outcomes without per-fixture archive queries", async () => {

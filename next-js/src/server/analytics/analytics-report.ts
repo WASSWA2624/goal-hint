@@ -136,7 +136,7 @@ export function createAnalyticsReporter(database: DatabaseRuntime, { now = Date.
     return grid;
   }
 
-  async function breakdowns(w: Window, filters: ReportQuery["filters"], totals: AnalyticsSummary): Promise<Record<BreakdownKey, BreakdownRow[]>> {
+  async function breakdowns(w: Window, filters: ReportQuery["filters"]): Promise<(totals: AnalyticsSummary) => Record<BreakdownKey, BreakdownRow[]>> {
     const where = sessionsIn(w, filters);
     const pageWhere = Prisma.sql`p.occurredAt >= ${w.start} AND p.occurredAt < ${w.end} AND ${filterSql(filters)}`;
     const eventWhere = (type: string) => Prisma.sql`e.type = ${type} AND e.occurredAt >= ${w.start} AND e.occurredAt < ${w.end} AND ${filterSql(filters)}`;
@@ -193,7 +193,7 @@ export function createAnalyticsReporter(database: DatabaseRuntime, { now = Date.
         return { label, [count]: value, share: ratio(value, total) };
       });
     };
-    return {
+    return (totals) => ({
       pages: pages.map((row) => ({ path: text(row.path), title: text(row.title), views: num(row.views), visitors: num(row.visitors),
         avgMs: Math.round(num(row.avgMs)), entries: num(row.entries), exits: num(row.exits), exitRate: ratio(num(row.exits), num(row.views)) })),
       routes: routes.map((row) => ({ label: analyticsRouteLabel(String(row.route)), route: text(row.route), views: num(row.views),
@@ -222,7 +222,7 @@ export function createAnalyticsReporter(database: DatabaseRuntime, { now = Date.
         rate: ratio(num(row.count), totals.visits) })),
       frequency: buckets(frequency, "visits", "visitors", [["1 visit", 1, 1], ["2 visits", 2, 2], ["3–5 visits", 3, 5], ["6–10 visits", 6, 10], ["11+ visits", 11, Infinity]]),
       loyalty: buckets(loyalty, "visitNumber", "visits", [["First visit", 1, 1], ["2nd visit", 2, 2], ["3rd–5th visit", 3, 5], ["6th–10th visit", 6, 10], ["11th visit or later", 11, Infinity]]),
-    };
+    });
   }
 
   return Object.freeze({
@@ -232,15 +232,19 @@ export function createAnalyticsReporter(database: DatabaseRuntime, { now = Date.
       const w = reportWindow(range);
       const compared = comparisonRange(range, query.compare);
       const cw = compared ? reportWindow(compared) : null;
-      const [current, previous, currentSeries, previousSeries, grid] = await Promise.all([
+      // Breakdown reads do not depend on summary/series queries. Only their final
+      // shares need the current totals; let the existing connection pool schedule
+      // the same bounded reads while slower comparison queries are still running.
+      const [current, previous, currentSeries, previousSeries, grid, projectBreakdowns] = await Promise.all([
         summary(w, query.filters), cw ? summary(cw, query.filters) : null,
         series(range, w, granularity, query.filters), compared && cw ? series(compared, cw, granularity, query.filters) : null,
         heatmap(w, query.filters),
+        breakdowns(w, query.filters),
       ]);
       return {
         query, range: { ...range, days: rangeDays(range), granularity }, comparison: compared,
         generatedAt: new Date(now()).toISOString(), summary: current, previous, series: currentSeries, previousSeries,
-        heatmap: grid, breakdowns: await breakdowns(w, query.filters, current),
+        heatmap: grid, breakdowns: projectBreakdowns(current),
       };
     },
 

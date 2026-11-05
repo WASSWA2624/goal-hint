@@ -37,17 +37,20 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
       await prepareDemoFixture(options.database, id, asOf);
       const read = () => options.database.transaction(async (tx) => {
         try {
-          const known = await tx.footballFixture.findUnique({ where: { id }, select: { id: true, kickoff: true } });
+          const known = await tx.footballFixture.findUnique({ where: { id }, select: { id: true, kickoff: true, activeCycleId: true } });
           if (!known) throw new MatchFeedError("not-found");
           const date = known.kickoff ? getReportingDate(utcInstantFromEpochMilliseconds(known.kickoff.getTime())) : today;
           const range = validateReportingDateRange(date, date, 1), coverage = await storedFeedCoverage(tx, range);
           const { run, window } = await storedFeedRunContext(tx, today, range);
-          const fixture = await storedFeedFixture(tx, id, !coverage[0]?.authoritative, window, "en", { prices: providerOdds });
+          // The card projection and full current detail share this transaction's
+          // verified cycle/revision instead of reading the same archive twice.
+          const currentDisplay = known.activeCycleId ? await storedCycleDisplay(tx, known.activeCycleId) : null;
+          const fixture = await storedFeedFixture(tx, id, !coverage[0]?.authoritative, window, "en", { prices: providerOdds, display: currentDisplay });
           // Market-implied odds groups are mutable observation data, read outside the immutable revision cache.
           const odds = await storedFixtureOddsGroups(tx, id, providerOdds);
           const currentRevisionId = fixture.forecast?.revisionId ?? null;
-          // History selections always replace the applicable display, so only the default read loads it.
-          let display = !query.cycle && !query.revision && fixture.cycleId ? await storedCycleDisplay(tx, fixture.cycleId) : null;
+          // History selections replace the detail snapshot; the card keeps the active cycle.
+          let display = !query.cycle && !query.revision ? currentDisplay : null;
           if (query.cycle) {
             const owned = await tx.predictionCycle.findFirst({ where: { id: query.cycle, fixtureId: id }, select: { id: true } });
             if (!owned) throw new MatchFeedError("not-found");

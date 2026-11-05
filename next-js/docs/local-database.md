@@ -285,9 +285,12 @@ can update the response cache. Two new forward history rows were added.
 `npm run db:verify` reports no drift. The 93-table backup drills include populated
 adopted tables, successful legacy history and its rolled-back attempt.
 
-Development uses `next dev --webpack` through nodemon. Next owns source HMR;
-nodemon restarts for environment changes. This avoids the reproduced Turbopack
-Edge-instrumentation hang. Paid access remains off; nothing was deployed.
+At this October checkpoint, development used `next dev --webpack` through
+nodemon to avoid a reproduced Turbopack Edge-instrumentation hang. The November
+[performance audit](reports/ui-performance-287.md) requalified the pinned stack
+and restored the default development compiler, retaining `--webpack` as an
+explicit fallback. Next owns source HMR and nodemon restarts for environment
+changes. Nothing was deployed by this database repair.
 
 
 **Later owner instruction, 20 October:** nothing should remain closed locally. The confirmed receiving-wallet name was saved privately; local test mode is open, with the existing daily plan preserved and approved Weekly/Monthly plans added through the plans service. Settings/mode changes are audited. No existing data was deleted. Production activation/deployment did not occur; release/legal notices remain drafts.

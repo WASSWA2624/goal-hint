@@ -190,7 +190,7 @@ def run_web(args, env, port, *, live=False):
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     command = [development_node_binary(), str(ROOT / "node_modules/nodemon/bin/nodemon.js"), *args] if live else [
-        development_node_binary(), str(ROOT / "node_modules/next/dist/bin/next"), "dev", "--webpack", *args]
+        development_node_binary(), str(ROOT / "node_modules/next/dist/bin/next"), "dev", *args]
     for attempt in range(3):
         release_port(port)
         child = subprocess.Popen(command, cwd=ROOT, env=env, creationflags=hidden_process(), stdout=subprocess.PIPE,

@@ -78,7 +78,7 @@ async function bundle({ name = "one", data = snapshot(), badAsset = false, polic
   return { manifest, data, responses, entryBody, assetBody };
 }
 
-function worker({ storage = new MemoryStorage(), current, now = at + 1000, locks = storage.locks, clients, timerCap = Infinity } = {}) {
+function worker({ storage = new MemoryStorage(), current, now = at + 1000, locks = storage.locks, clients, timerCap = Infinity, cryptography = webcrypto } = {}) {
   const events = new Map(), calls = [];
   const clock = { now };
   const network = { current, offline: false, navigationStatus: 200, navigationBody: "Online private document" };
@@ -86,7 +86,7 @@ function worker({ storage = new MemoryStorage(), current, now = at + 1000, locks
   const context = vm.createContext({
     self: { location: { origin }, addEventListener: (name, callback) => events.set(name, callback),
       navigator: { locks }, clients: { claim: async () => {}, ...(clients ? { get: async (id) => clients.get(id) } : {}) } },
-    caches: storage, crypto: webcrypto, URL, Request, Response, Headers, TextEncoder, TextDecoder, AbortController,
+    caches: storage, crypto: cryptography, URL, Request, Response, Headers, TextEncoder, TextDecoder, AbortController,
     setTimeout: (callback, delay) => setTimeout(callback, Math.min(delay, timerCap)), clearTimeout, Date: Clock, Intl,
     fetch: async (input, options = {}) => {
       const url = typeof input === "string" ? input : input.url;
@@ -141,6 +141,105 @@ test("complete anonymous bundle survives a cold worker restart and renders with 
   assert.equal(state.ok, true);
   assert.equal(state.records, 1);
   assert.deepEqual(await cold.message("STATUS"), state);
+});
+
+test("concurrent cached assets share only their pending bundle validation and retain individual integrity checks", async t => {
+  const initial = await bundle(), bodies = new Map([[initial.manifest.assets[0].url, initial.assetBody]]);
+  for (let index = 1; index < 12; index++) {
+    const url = `/_next/static/chunks/part-${index}.js`, body = `window.syntheticPart${index} = true;`, bytes = encode(body);
+    initial.manifest.assets.push({ url, sha256: await hash(bytes), bytes: bytes.byteLength });
+    initial.responses.set(url, new Response(body, { headers: { "cache-control": "public", "content-type": "application/javascript" } }));
+    bodies.set(url, body);
+  }
+  initial.manifest.assets.sort((left, right) => left.url < right.url ? -1 : left.url > right.url ? 1 : 0);
+  const { schemaVersion, entry, assets } = initial.manifest;
+  initial.manifest.version = await hash(encode({ schemaVersion, entry, assets }));
+  initial.responses.set("/offline-manifest.json", new Response(JSON.stringify(initial.manifest), {
+    headers: { "cache-control": "public", "content-type": "application/json", "x-goalhint-offline-manifest": "1" },
+  }));
+  let hashes = 0;
+  const host = worker({ current: initial, cryptography: { subtle: { digest(algorithm, bytes) {
+    hashes++;
+    return webcrypto.subtle.digest(algorithm, bytes);
+  } } } });
+  assert.equal((await host.message()).ok, true);
+  const cache = await host.storage.open((await host.storage.keys()).find(name => name.includes("bundle")));
+  const match = cache.match.bind(cache), started = deferred(), release = deferred();
+  let records = 0, snapshots = 0, assetReads = 0;
+  cache.match = async key => {
+    if (key.endsWith("/record")) records++;
+    if (key.endsWith("/snapshot")) { snapshots++; started.resolve(); await release.promise; }
+    if (new URL(key).pathname.startsWith("/_next/static/")) assetReads++;
+    return match(key);
+  };
+  hashes = 0;
+  const requests = [...bodies].map(async ([url, body]) => assert.equal(await (await host.request(url)).text(), body));
+  await started.promise;
+  await new Promise(setImmediate);
+  release.resolve();
+  await Promise.all(requests);
+  t.diagnostic(JSON.stringify({ concurrentAssets: bodies.size, bundleRecordReads: records, snapshotReads: snapshots, assetReads, digestCalls: hashes }));
+  assert.deepEqual({ records, snapshots, assetReads, hashes }, { records: 1, snapshots: 1, assetReads: 12, hashes: 15 });
+  await host.request(initial.manifest.assets[0].url);
+  assert.equal(snapshots, 2, "A settled validation cannot suppress the next cache read.");
+});
+
+test("concurrent asset reads cannot replace a complete status integrity check and recover after snapshot corruption", async () => {
+  const initial = await bundle(), host = worker({ current: initial });
+  await host.message();
+  host.network.offline = true;
+  const cache = await host.storage.open((await host.storage.keys()).find(name => name.includes("bundle")));
+  const originalEntry = await cache.match(absolute("/offline"));
+  await cache.put(absolute("/offline"), new Response("corrupt"));
+  const [asset, status] = await Promise.all([host.request(initial.manifest.assets[0].url), host.message("STATUS")]);
+  assert.equal(await asset.text(), initial.assetBody);
+  assert.deepEqual(status, { ok: false, error: "integrity-failure" }, "Partial validation never satisfies a complete read.");
+  await cache.put(absolute("/offline"), originalEntry);
+  const snapshotKey = absolute("/offline-cache/snapshot"), originalSnapshot = await cache.match(snapshotKey);
+  await cache.put(snapshotKey, new Response("corrupt"));
+  const failed = await Promise.allSettled(Array.from({ length: 4 }, () => host.request(initial.manifest.assets[0].url)));
+  assert.ok(failed.every(result => result.status === "rejected"), "Later reads must detect corruption after the first validation settled.");
+  await cache.put(snapshotKey, originalSnapshot);
+  for (const response of await Promise.all(Array.from({ length: 4 }, () => host.request(initial.manifest.assets[0].url)))) {
+    assert.equal(await response.text(), initial.assetBody, "Failed shared reads must release their pending entry.");
+  }
+  assert.equal((await host.message("STATUS")).ok, true);
+});
+
+test("pending complete reads recheck retention before serving a bundle that expires during validation", async () => {
+  const initial = await bundle(), host = worker({ current: initial });
+  await host.message();
+  const name = (await host.storage.keys()).find(value => value.includes("bundle")), cache = await host.storage.open(name);
+  const match = cache.match.bind(cache), started = deferred(), release = deferred();
+  cache.match = async key => {
+    if (key.endsWith("/one.js")) { started.resolve(); await release.promise; }
+    return match(key);
+  };
+  const status = host.message("STATUS"), snapshotRead = host.request("/offline-cache/snapshot");
+  await started.promise;
+  host.clock.now = initial.data.expiresAt;
+  release.resolve();
+  assert.deepEqual(await status, { ok: false, error: "expired" });
+  assert.equal((await snapshotRead).status, 503);
+  assert.equal((await host.storage.keys()).includes(name), false, "Expired data is removed even when expiry occurred during shared work.");
+});
+
+test("concurrent current and prior version assets keep separate validation and enforce each snapshot expiry", async () => {
+  const initial = await bundle(), host = worker({ current: initial });
+  await host.message();
+  const next = await bundle({ name: "two", data: snapshot({ capturedAt: at + 2000, expiresAt: at + 86_402_000 }) });
+  host.network.current = next;
+  host.clock.now = at + 3000;
+  assert.equal((await host.message()).version, next.manifest.version);
+  host.network.offline = true;
+  const [previous, current] = await Promise.all([host.request(initial.manifest.assets[0].url), host.request(next.manifest.assets[0].url)]);
+  assert.equal(await previous.text(), initial.assetBody);
+  assert.equal(await current.text(), next.assetBody);
+  host.clock.now = initial.data.expiresAt;
+  const [expired, fresh] = await Promise.allSettled([host.request(initial.manifest.assets[0].url), host.request(next.manifest.assets[0].url)]);
+  assert.equal(expired.status, "rejected");
+  assert.equal(fresh.status, "fulfilled");
+  assert.equal(await fresh.value.text(), next.assetBody);
 });
 
 test("both theme branding variants remain available after an offline restart", async () => {

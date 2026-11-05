@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { appDownloadsHref, appReleaseKey, detectAppPlatform, nativeAppIdentity, shouldOfferAppDownload,
-  type AppDownload, type AppDownloads, type AppPlatform, type AppPromptMemory, type NativeAppIdentity } from "@/domain/app-downloads";
+  type AppDownload, type AppDownloads, type AppPlatform, type AppPromptMemory, type NativeAppIdentity } from "@/domain/app-download-presentation";
 import { createMessages } from "@/i18n/messages";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { Button, ButtonLink } from "@/components/ui/controls";

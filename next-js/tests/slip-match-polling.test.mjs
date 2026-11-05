@@ -179,9 +179,9 @@ test('phone pagehide/freeze, persisted restore, connectivity and navigation shar
     if (descriptor) Object.defineProperty(globalThis, name, descriptor); else delete globalThis[name];
   } });
   const c = clock(), browser = new EventTarget(), page = new EventTarget(), network = { onLine: true }, observers = [];
-  let navigating = false;
+  let navigating = false, navigationChecks = 0;
   browser.setTimeout = c.env.schedule; browser.clearTimeout = c.env.cancel;
-  page.visibilityState = 'visible'; page.documentElement = {}; page.querySelector = () => navigating ? {} : null;
+  page.visibilityState = 'visible'; page.documentElement = {}; page.querySelector = () => { navigationChecks++; return navigating ? {} : null; };
   class Observer {
     constructor(callback) { this.callback = callback; this.active = true; observers.push(this); }
     observe() {}
@@ -194,14 +194,19 @@ test('phone pagehide/freeze, persisted restore, connectivity and navigation shar
     accept: value => accepted.push(value), revoke: () => assert.fail('unexpected withdrawal') }, slipMatchPollingEnvironment());
   const event = async (target, name, fields = {}) => { const message = new Event(name); Object.assign(message, fields); target.dispatchEvent(message); await flush(); };
   assert.equal(requests.length, 1);
+  const initialChecks = navigationChecks;
+  for (let update = 0; update < 500; update++) observers[0].callback([{ type: 'childList', addedNodes: [{ nodeType: 3 }], removedNodes: [] }]);
+  assert.equal(navigationChecks, initialChecks, 'Unrelated score/text updates cannot rescan the complete document.');
   await event(browser, 'pagehide'); assert.equal(requests[0].signal.aborted, true); assert.equal(c.timers.size, 0);
   await c.advance(60_000); assert.equal(requests.length, 1);
   await event(browser, 'pageshow', { persisted: true }); assert.equal(requests.length, 2);
   await event(browser, 'pageshow', { persisted: true }); await event(page, 'visibilitychange'); assert.equal(requests.length, 2);
   await event(page, 'freeze'); assert.equal(requests[1].signal.aborted, true);
   await event(page, 'resume'); assert.equal(requests.length, 3);
-  navigating = true; observers[0].callback(); await flush(); assert.equal(requests[2].signal.aborted, true);
-  navigating = false; observers[0].callback(); await flush(); assert.equal(requests.length, 4);
+  navigating = true; observers[0].callback([{ type: 'attributes', attributeName: 'data-navigation-pending' }]); await flush(); assert.equal(requests[2].signal.aborted, true);
+  navigating = false; observers[0].callback([{ type: 'childList', addedNodes: [], removedNodes: [
+    { nodeType: 1, matches: () => false, querySelector: () => ({}) },
+  ] }]); await flush(); assert.equal(requests.length, 4);
   page.visibilityState = 'hidden'; await event(page, 'visibilitychange'); assert.equal(requests[3].signal.aborted, true);
   network.onLine = false; await event(browser, 'offline'); page.visibilityState = 'visible'; await event(page, 'visibilitychange');
   assert.equal(requests.length, 4);

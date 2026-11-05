@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import styled from "styled-components";
-import { appPlatforms, type AppPlatform } from "@/domain/app-downloads";
+import { appPlatforms, type AppPlatform } from "@/domain/app-download-presentation";
 import { Button, ButtonLink, TextLink } from "@/components/ui/controls";
 import { AndroidIcon, CheckIcon, DownloadIcon, WindowsIcon } from "@/components/ui/icons";
 import { BrandMark } from "@/components/ui/brand";

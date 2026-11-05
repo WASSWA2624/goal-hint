@@ -2,7 +2,7 @@
 
 import { useContext, useSyncExternalStore, type ReactNode } from "react";
 import { ThemeContext, ThemeProvider } from "styled-components";
-import { nativeAppIdentity } from "@/domain/app-downloads";
+import { nativeAppIdentity } from "@/domain/app-download-presentation";
 import { GlobalStyle } from "./global-style";
 import { StyledComponentsRegistry } from "./registry";
 import { darkTheme, isGoalHintTheme, lightTheme } from "./theme";

@@ -45,6 +45,10 @@ npm ci
 npm run dev
 ```
 
+Development uses Turbopack; `npm run dev -- --webpack` retains the alternative
+compiler when needed. See the [development performance audit](docs/reports/ui-performance-287.md)
+for cold compilation, warm response and interaction measurements.
+
 Open [localhost:3000](http://localhost:3000). No database, account, token, cookie
 or provider credentials are needed for the foundation. Install from
 `package-lock.json` with `npm ci`; use `npm install` only for intentional,
