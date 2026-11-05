@@ -14,8 +14,9 @@ settings controls and light/dark themes.
   with the existing protected settings and audit flow. Add matching Prisma and
   MariaDB migrations; do not change production configuration from this task.
 - Give Community its own Settings section with a URL and visibility control per
-  destination. Blank links remain clickable and open the official platform
-  website, with “Link not added yet” and “Open website” copy.
+  destination. Channels without links remain visible as non-clickable rows with
+  “Coming soon” copy. Configured destinations retain their Join/Follow links.
+- Title the dialog “Join our community” with the shared group icon.
 - Validate official HTTPS invitation/profile URLs and common share parameters.
   Omit hidden URLs from public responses and fail closed on storage errors.
 - Reserve More menu space whenever Community is public, even with no ordinary
@@ -37,9 +38,18 @@ passed; scoped ESLint, full type checking and Prisma validation passed.
 The production rendering fixture passed browser checks at 320, 390 and 1440px
 in both themes, including save/reload, undo, immediate refresh, global and
 individual hiding, configured/empty links, all-hidden state and six intercepted
-external openings, with no browser errors. The database integration test was
-skipped because a genuine MySQL test-server binary was unavailable. No production
+external openings, with no browser errors. These initial checks preceded the
+follow-up change from homepage fallbacks to non-clickable “Coming soon” rows.
+The database integration test was skipped because a genuine MySQL test-server
+binary was unavailable. No production
 database or platform membership was changed.
+
+The follow-up passed 23 community/navigation tests, scoped ESLint and the fixture
+build/type check. Browser verification passed at 320, 390 and 1440px in both
+themes: the “Join our community” title and group icon fit, blank rows neither
+navigate nor receive keyboard focus, and configured links still open. Save,
+undo, reload, visibility and mixed configured/blank states passed with no browser
+errors. No additional database migration is needed for this presentation change.
 
 ## Release
 

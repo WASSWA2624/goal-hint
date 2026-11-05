@@ -15,7 +15,7 @@ export function SettingsCommunityEditor({ value, visible, onChange, onVisibleCha
       aria-invalid={visibilityError ? true : undefined} aria-describedby={visibilityError ? "setting-communityVisible-error" : undefined}
       onChange={event => onVisibleChange(event.target.checked)} />Show Community to the public</label></ContactOptions>
     {visibilityError && <FieldError id="setting-communityVisible-error" role="alert">{visibilityError}</FieldError>}
-    <p id="setting-communityLinks-hint">A blank link opens the platform website. Add your link to open your group, channel or profile.</p>
+    <p id="setting-communityLinks-hint">Channels without a link show “Coming soon”. Add a link to let visitors open your group, channel or profile.</p>
     {error && <FieldError id="setting-communityLinks-error" role="alert">{error}</FieldError>}
     <ContactList>{communityDestinations.map((destination, index) => {
       const link = links.find(link => link.type === destination.type) ?? { type: destination.type, url: "", enabled: true };
