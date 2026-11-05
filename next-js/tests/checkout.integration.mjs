@@ -56,6 +56,48 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     await reviewWarnings(id, claim);
     return act(id, { action: "verify-receipt", ...verification(detail, claim, amountUgx) });
   }
+  await t.test("remembered provider follows the latest approved subscription, including legacy payments", async () => {
+    const who = await member(), other = await member();
+    let sequence = 0;
+    const historyStart = now() - 86_400_000;
+    async function history(patch = {}) {
+      const reference = `H${String(++sequence).padStart(3, "0")}`;
+      const decidedAt = new Date(historyStart + sequence * 60_000);
+      return database.query(tx => tx.paymentSubmission.create({ data: {
+        id: randomUUID(), reference, source: "checkout", accountId: who.accountId, workflowVersion: 2,
+        purpose: "plan", planId, planName: "Weekly", durationDays: 7, priceUgx: 5000,
+        method: "airtel", claimedNetwork: "airtel", claimedAmountUgx: 5000,
+        status: "approved", submittedAt: decidedAt, decidedAt, decidedBy: "test", amountReceivedUgx: 5000,
+        ...patch,
+      } }));
+    }
+    assert.equal((await checkout.read(who)).lastMethod, null);
+    await history({ source: "report", workflowVersion: 1, method: null, network: "mtn", approvedTxnKey: "mtn:HISTORYMTN001" });
+    assert.equal((await checkout.read(who)).lastMethod, "mtn", "Legacy approval uses its verified network, not the claimed provider");
+
+    await history({ purpose: "topup", planId: null, planName: "Account credit", durationDays: null });
+    await history({ method: "wallet", claimedNetwork: "wallet", network: "airtel", walletUgx: 5000, amountReceivedUgx: 0 });
+    await history({ purpose: "referral", planId: null, planName: "Referral days", durationDays: 0, priceUgx: 0,
+      method: "referral", claimedNetwork: "referral", referralDays: 3, claimedAmountUgx: 0, amountReceivedUgx: 0 });
+    for (const status of ["pending", "superseded", "rejected", "reversed", "remaining", "disputed", "correction", "reconfirm", "cancelled"]) {
+      await history({ status });
+    }
+    await history({ reversedAt: new Date(now()) });
+    await history({ accountId: other.accountId });
+    assert.equal((await checkout.read(who)).lastMethod, "mtn", "Other purposes, unsuccessful reports, reversals and other accounts do not change the subscription preference");
+    assert.equal((await checkout.read(other)).lastMethod, "airtel");
+
+    const airtel = await history();
+    assert.equal((await checkout.read(who)).lastMethod, "airtel");
+    await history({ method: "mtn", claimedNetwork: "mtn", decidedAt: new Date(airtel.decidedAt.getTime() - 1) });
+    assert.equal((await checkout.read(who)).lastMethod, "airtel", "Approval time takes precedence over report time");
+    await history({ method: "mtn", claimedNetwork: "mtn", submittedAt: new Date(historyStart) });
+    assert.equal((await checkout.read(who)).lastMethod, "mtn", "A later approval updates the preference even for an older report");
+
+    const fresh = await member();
+    await history({ accountId: fresh.accountId, purpose: "topup", planId: null, planName: "Account credit", durationDays: null });
+    assert.equal((await checkout.read(fresh)).lastMethod, null, "A top-up alone does not establish a subscription provider");
+  });
   await t.test("stored provider settings drive quotes and pending review even as payment destinations change", async () => {
     const who = await member();
     const settings = createSettingsService(database, { now, environment: null });

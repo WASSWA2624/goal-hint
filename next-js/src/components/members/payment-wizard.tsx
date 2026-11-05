@@ -52,11 +52,12 @@ const Card = styled.section`
   ${Assent} { align-items: flex-start; padding-block: var(--gh-spacing-1); font-size: var(--gh-font-reading); line-height: var(--gh-size-5_25); }
   ${Assent} input { inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); min-block-size: var(--gh-size-4_5); margin-block-start: var(--gh-spacing-0_25); }
   @media (max-width: ${({ theme }) => theme.viewport[25]}) { padding: var(--gh-spacing-3_5) var(--gh-spacing-3); }
-  &[data-package-screen="true"] {
+  &[data-package-screen="true"], &[data-pay-screen="true"] {
     max-inline-size: var(--gh-size-200);
     border-radius: ${({ theme }) => theme.radius.none};
     > h2 { font-size: var(--gh-font-feature); }
   }
+  &[data-details-screen="true"] { border-radius: ${({ theme }) => theme.radius.none}; }
 `;
 
 const Progress = styled.nav`
@@ -119,29 +120,37 @@ const Progress = styled.nav`
     li { flex-direction: column; align-items: center; gap: var(--gh-spacing-1); font-size: var(--gh-font-secondary); }
     &[data-inline-labels="true"] li { flex-direction: row; align-items: center; }
   }
-  &[data-package-progress="true"] {
+  &[data-connected-progress="true"] {
     padding-block-end: var(--gh-spacing-3);
     border-block-end: var(--gh-size-0_25) solid ${({ theme }) => theme.color.border};
-    ol { gap: 0; }
-    li { position: relative; flex-direction: column; align-items: center; gap: var(--gh-spacing-1_5); }
+    ol { grid-template-columns: repeat(3, minmax(0, 1fr)) var(--gh-size-7); gap: 0; }
+    li {
+      position: relative; display: grid;
+      grid-template-columns: var(--gh-size-7) minmax(0, 1fr);
+      align-items: center; gap: var(--gh-spacing-1_5) 0;
+    }
     li > span:first-child {
+      grid-column: 1; grid-row: 1;
+      box-sizing: border-box;
       inline-size: var(--gh-size-7); block-size: var(--gh-size-7);
       border: var(--gh-size-0_25) solid ${({ theme }) => theme.color.controlBorder};
       border-radius: ${({ theme }) => theme.radius.small};
       font-size: var(--gh-font-emphasis);
     }
     li[aria-current="step"] > span:first-child { border-color: ${({ theme }) => theme.color.brand}; }
-    li > span:last-child { white-space: nowrap; }
+    li > span:last-child { grid-column: 1; grid-row: 2; justify-self: center; white-space: nowrap; }
+    li:first-child > span:last-child { justify-self: start; }
+    li:last-child > span:last-child { justify-self: end; }
     li:not(:last-child)::after {
       content: ""; position: absolute;
       inset-block-start: var(--gh-size-3_5);
-      inset-inline-start: calc(50% + var(--gh-size-5));
-      inline-size: calc(100% - var(--gh-size-10));
+      inset-inline-start: calc(var(--gh-size-7) + var(--gh-spacing-2));
+      inline-size: calc(100% - var(--gh-size-7) - var(--gh-spacing-4));
       border-block-start: var(--gh-size-0_25) solid ${({ theme }) => theme.color.controlBorder};
     }
     @media (min-width: ${({ theme }) => theme.viewport[64]}) {
       ol { grid-template-columns: repeat(3, minmax(0, 1fr)) max-content; gap: var(--gh-spacing-3); }
-      li { flex-direction: row; }
+      li { display: flex; flex-direction: row; gap: var(--gh-spacing-1_5); }
       li:not(:last-child)::after {
         position: static; flex: 1; inline-size: auto; margin-inline-start: var(--gh-spacing-1);
       }
@@ -160,12 +169,13 @@ export function PaymentWizard({ locale, step, title, children, headingRef, total
   hideTitle?: boolean;
   inlineLabels?: boolean;
   labels?: readonly [string, string, string, string];
-  variant?: "default" | "package";
+  variant?: "default" | "package" | "pay" | "details";
 }) {
   const m = createMessages(locale), titleId = useId();
+  const connectedProgress = totalSteps === 4;
   const labels = ["subscribe.wizard.package", "subscribe.wizard.pay", "subscribe.wizard.proof", "subscribe.wizard.review"] as const;
-  return <Card data-subscribe-layout="stepwise" data-payment-step={step + 1} data-package-screen={variant === "package"} aria-labelledby={titleId} style={{ "--payment-steps": totalSteps } as CSSProperties}>
-    <Progress aria-label={m.text("subscribe.wizard.progress")} data-payment-progress data-inline-labels={variant === "package" ? false : inlineLabels} data-package-progress={variant === "package"}>
+  return <Card data-subscribe-layout="stepwise" data-payment-step={step + 1} data-package-screen={variant === "package"} data-pay-screen={variant === "pay"} data-details-screen={variant === "details"} aria-labelledby={titleId} style={{ "--payment-steps": totalSteps } as CSSProperties}>
+    <Progress aria-label={m.text("subscribe.wizard.progress")} data-payment-progress data-inline-labels={connectedProgress ? false : inlineLabels} data-connected-progress={connectedProgress}>
       <ol>{labels.slice(0, totalSteps).map((label, index) => <li key={label} aria-current={index === step ? "step" : undefined} data-complete={index < step}>
         <span aria-hidden="true">{index < step ? <CheckIcon /> : index + 1}</span>
         <span>{stepLabels?.[index] ?? (totalSteps === 3 && index === 2 ? "Confirm" : m.text(label))}</span>

@@ -1,19 +1,22 @@
-# 283 — Compact payment Details preview
+# 283 — Compact payment Details layout
 
 ## Scope and status
 
-Design preview only, requested on 5 November 2026. The desktop/mobile samples
-live in the requesting chat. Production checkout, validation, extraction,
-navigation and deployment are unchanged. Implementation remains a subsequent
-step; this plan does not describe shipped behavior.
+The desktop/mobile preview was approved for implementation on 5 November 2026.
+The source now uses the compact layout in both application themes. Payment
+validation, extraction, navigation and submission rules are unchanged; source
+implementation and production deployment remain separate.
 
-## Proposed layout
+## Implemented layout
 
+- Omit the free-trial notice above Details, as subsequently requested, so the
+  stepper and form move up without retaining an empty notice container.
 - Retain the existing Package / Pay / Details / Review progress and one
   “Message or screenshot required.” notice. Keep desktop step labels inline;
   place mobile labels below their markers, consistent with the other previews.
 - Retain the full-width Transaction message with its Paste action and conditional
-  Clear action. Keep the existing message/screenshot optional-label behavior.
+  Clear action below the text, clear of its label. Keep the shared floating-field
+  states and existing message/screenshot optional-label behavior.
 - Keep Payment screenshot immediately below the message. Choose image and
   Paste image form equal-width columns spanning the available row, with matching
   tops, bottoms and shared control heights.
@@ -27,11 +30,14 @@ step; this plan does not describe shipped behavior.
 ## Implementation constraints
 
 Reuse FloatingField, AmountInput, PhoneInput, Button, PaymentScreenshot and the
-existing theme tokens. Use a reusable grid wrapper for the transaction fields
-and a dedicated selector for the screenshot action row; do not change every
-direct child of CheckoutScreenshot, because previews/removal have another
-layout. Preserve attachment preview/removal, recheck/cancel states and all
-existing replacement, duplicate, extraction and validation dialogs.
+existing theme tokens. CheckoutTransactionFields uses the shared control-row
+alignment and a 2:1 grid at the shared tablet breakpoint, stacking below it.
+CheckoutMessageField gives only this field a separate action row inside its
+outline, below the scrollable text viewport, so long text cannot pass beneath
+Paste/Clear. A dedicated
+screenshot action selector stretches Choose/Paste without changing the preview,
+removal, recheck or cancellation controls. Existing replacement, duplicate,
+extraction and validation dialogs are retained.
 
 Keep the shared 40px fine-pointer / 44px coarse-pointer height independent of
 viewport width, subtle control corners, square surrounding layout, keyboard
@@ -41,17 +47,38 @@ continues to use NavigationProgress and aria-busy.
 ## Coordination and verification
 
 - Coordinated with Package screen, Pay screen, and Audit & prediction engine.
-  Package retains ownership of its checkout source changes and APP_OVERVIEW;
-  Pay owns plan 282; prediction owns plan 280 and its active linked worktree.
-- This change owns only plan 283. Generated preview and browser output remain
-  outside the repository. No APP_OVERVIEW update is needed for an unimplemented
-  presentation proposal.
+  Package is integrated; Pay owns plan 282 and integrates the shared checkout
+  files and APP_OVERVIEW sentence after both UI reviews. Prediction owns plan
+  280 and its active linked worktree. Preserve its branch and both Git stashes.
+- Details owns checkout-details-styles.tsx, payment-screenshot.tsx, the Details
+  JSX/imports in checkout-flow.tsx, screenshot styles in checkout-parts.tsx and
+  this plan. Pay supplied the scoped Details wizard variant with square framing,
+  the inherited 640px width, hidden heading and mobile labels below markers.
+- Generated preview and browser output remain untracked. The implementation
+  updates APP_OVERVIEW alongside the coordinated source commit.
 - Preview QA passed for both Desktop and Mobile samples in light/dark themes at
   736px, 390px and 320px (12 combinations). Browser checks confirmed the desktop
   2:1 field ratio, stacked narrow fields, equal aligned image actions, five
   distinct inputs and no horizontal overflow. Message Clear/optional labeling
   and local attachment selection/removal passed. Light/dark screenshots were
   visually inspected, including the revised mobile step labels at 320px.
-- Before production implementation, exercise the real checkout fixture and
-  validate the existing screenshot/extraction/loading behavior. Preview checks
-  do not establish payment or production workflow correctness.
+- Scoped ESLint and the shared theme-token contract passed. Existing checkout
+  evidence/funding and provider tests passed (21 tests).
+- Real checkout production fixtures compiled and passed TypeScript. Browser
+  layout verification passed at 320px, 390px and 1440px in both themes with
+  fine/coarse pointers (12 combinations), including 40/44px shared heights,
+  exact desktop 2:1 sizing, mobile stacking, equal full-width image buttons,
+  unique fields/actions and long-message scrolling clear of Paste/Clear.
+- Real clipboard message extraction, Pay Back/Next and Review/Back draft
+  preservation, Clear retaining entered fields, image OCR from file selection
+  and clipboard paste, preview/close/remove, and duplicate-image rejection
+  passed against the synthetic checkout API. No payments were submitted.
+- Inspected light/dark desktop/phone screenshots. Screenshot recheck and
+  cancellation handlers are unchanged; no special persisted-image fixture was
+  added. Fixture-only missing service-worker/session routes do not represent
+  production endpoint checks; no page exceptions occurred in the layout matrix.
+- The Package chat separately owns the subsequently requested progress-edge
+  alignment (plan 284); its final shared-stepper verification covers that change.
+- The requested trial-notice removal passed live browser checks at 390px and
+  1440px in light/dark themes: no notice element, no reserved gap above Details,
+  and the evidence instruction and form remain present. Scoped lint passed.
