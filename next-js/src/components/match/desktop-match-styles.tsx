@@ -47,6 +47,8 @@ export const desktopMatchBaseStyles = css`
   [data-row-market] > strong { color: ${({ theme }) => theme.color.link}; font-size: var(--gh-font-body); }
   [data-desktop-row] [data-market-label], [data-desktop-row] [data-number-label] { color: ${({ theme }) => theme.color.mutedText}; }
   [data-row-odds], [data-row-probability] { justify-content: flex-end; }
+  [data-row-unlock] { grid-column: span 3; }
+  [data-row-unlock] > [data-unlock-button] { inline-size: 100%; }
   [data-row-odds] strong, [data-row-probability] strong { font-size: var(--gh-font-body); }
   [data-row-result] { gap: var(--gh-spacing-1); justify-content: flex-end; font-size: var(--gh-font-secondary); }
   [data-desktop-row][data-outcome="correct"] [data-row-result] { color: ${({ theme }) => theme.color.outcome.correct.text}; }

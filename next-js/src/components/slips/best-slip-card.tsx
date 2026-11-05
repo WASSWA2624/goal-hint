@@ -7,7 +7,7 @@ import type { SlipPreviewView } from "@/domain/best-slips";
 import { canonicalMatchSlug } from "@/domain/match-slug";
 import { publicBestSlipPath } from "@/domain/public-best-slip";
 import { SlipCard, SlipCardSummary } from "./slip-card";
-import { LockedSurface, UnlockButton, UnlockLabel, UnlockLink } from "@/components/members/prediction-unlock";
+import { LockedSurface, UnlockButton } from "@/components/members/prediction-unlock";
 
 /** Both public previews and entitled slips retain the production disclosure and match layout. */
 export function BestSlipCard({ view, day, locale, signedIn = false }: { view: SlipPreviewView; day: string; locale: string; signedIn?: boolean }) {
@@ -22,12 +22,11 @@ export function BestSlipCard({ view, day, locale, signedIn = false }: { view: Sl
     {...(view.matchStates ? { matchStates: view.matchStates } : {})} />;
   return <LockedSurface data-locked-slip><SlipCardSummary locale={locale} index={view.rank - 1} {...publication} collapsible={false}
     totalOdds={view.totalOdds} averageProbability={view.averageProbability} selectionCount={view.matchCount}
-    headerAction={desktop ? <span aria-hidden="true"><UnlockLabel locale={locale} /></span>
-      : <UnlockButton locale={locale} signedIn={signedIn} returnTo={returnTo} compact />}>
+    headerAction={<UnlockButton locale={locale} signedIn={signedIn} returnTo={returnTo} compact />}>
     <MatchCardLayoutContext value={desktop}>
       {view.preview?.map(({ fixture, pick }, index) => <MatchCard key={fixture.fixtureId} fixture={fixture} locale={locale}
-        interactive={!desktop} signedIn={signedIn} position={index + 1} headingLevel={3} lockedPrediction={pick === null}
+        interactive={!desktop} signedIn={signedIn} accessReturnTo={returnTo} position={index + 1} headingLevel={3} lockedPrediction={pick === null}
         analysisSlug={canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name)} {...(pick ? { snapshotPick: pick } : {})} />)}
     </MatchCardLayoutContext>
-  </SlipCardSummary>{desktop && <UnlockLink locale={locale} signedIn={signedIn} returnTo={returnTo} overlay />}</LockedSurface>;
+  </SlipCardSummary></LockedSurface>;
 }

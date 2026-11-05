@@ -28,6 +28,8 @@ export type DesktopMatchRowProps = Readonly<{
   /** A preformatted authorized market; the row never selects or fabricates a forecast. */
   market: ReactNode; marketFamily?: MarketFamily; marketDescription?: string;
   odds: ReactNode; probability: ReactNode; analysisHref?: string; analysisLabel?: string;
+  /** One access action replaces all private prediction fields on a locked row. */
+  predictionAction?: ReactNode;
   headingLevel?: 2 | 3 | 4; titleNote?: string; position?: number;
   matchState?: string; savedScore?: boolean; scoreDescription?: string; regulationOnly?: boolean;
   details?: ReactNode; pickState?: string; interactive?: boolean;
@@ -40,7 +42,7 @@ export type DesktopMatchRowProps = Readonly<{
 
 /** One approved desktop match row for live feed records and immutable slip selections. */
 export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTeam, competition, status, score, liveClock,
-  outcome, market, marketFamily, marketDescription, odds, probability, analysisHref, analysisLabel, headingLevel = 4, titleNote, position,
+  outcome, market, marketFamily, marketDescription, odds, probability, predictionAction, analysisHref, analysisLabel, headingLevel = 4, titleNote, position,
   matchState: suppliedMatchState, savedScore = false, scoreDescription: suppliedScoreDescription, regulationOnly = false, details,
   pickState, eagerLogos = false, offline = false, preview = false, messages, datePrefix, interactive = true }: DesktopMatchRowProps) {
   const m = messages ?? createMessages(locale), id = useId();
@@ -71,7 +73,7 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
     <ScoreFigures home={m.number(score.home)} away={m.number(score.away)} /></Scoreline>
     : <span data-score {...scoreProps}>{status === "live" || final ? "–" : "VS"}</span>;
   const Heading = `h${headingLevel}` as "h2" | "h3" | "h4";
-  const descriptionIds = ["date", "time", "country", "league", "score", "clock", "market", "odds", "probability", "status", ...(details ? ["details"] : [])]
+  const descriptionIds = ["date", "time", "country", "league", "score", "clock", ...(predictionAction ? ["access"] : ["market", "odds", "probability"]), "status", ...(details ? ["details"] : [])]
     .map((name) => `${id}-${name}`).join(" ");
   return <div data-desktop-row data-desktop-design="aligned-ledger" data-desktop-preview-row={preview || undefined}
     data-fixture-id={preview ? undefined : fixtureId} data-market={marketFamily} data-outcome={outcome} data-pick-state={pickState}
@@ -96,9 +98,11 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
         </span></span>
       <span data-away><TeamLogo name={away} url={offline ? undefined : awayTeam.logoUrl ?? undefined} eager={eagerLogos} size={14} /><TruncatedText interactive={interactive} text={away} href={detailsHref} /></span>
     </Heading>
+    {predictionAction ? <div data-row-unlock id={`${id}-access`}>{predictionAction}</div> : <>
     <span data-row-market id={`${id}-market`} title={marketDescription}>{market}</span>
     <span data-row-odds id={`${id}-odds`}><span data-number-label data-row-number-label>{m.text("slips.odds")}</span><strong>{odds}</strong></span>
     <span data-row-probability id={`${id}-probability`}><span data-number-label data-row-number-label aria-hidden="true">Prob.</span><VisuallyHidden>{m.text("slips.probability")}: </VisuallyHidden><strong>{probability}</strong></span>
+    </>}
     <span data-row-status id={`${id}-status`}><MatchStatus status={status} outcome={outcome} messages={m}
       snapshot={matchState === "snapshot"} offline={offline} /></span>
     {details && <div data-row-details id={`${id}-details`}>{details}</div>}

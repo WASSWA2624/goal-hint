@@ -43,8 +43,10 @@ export type MatchCardProps = {
   /** The viewer lacks subscriber access: an unfinished fixture's published forecast in an eligible family renders locked even
    * when delivered whole. A fixture without one shows the no-prediction reason every viewer gets. */
   gated?: boolean;
-  /** A containing locked slip owns the single accessible navigation target. */
+  /** Disable row-wide navigation inside a containing preview; explicit access actions remain available. */
   interactive?: boolean;
+  /** Preserve a containing slip as the destination after access is granted. */
+  accessReturnTo?: string;
   /** A published slip selection whose private fields were removed by the server. */
   lockedPrediction?: boolean;
   signedIn?: boolean;
@@ -570,7 +572,7 @@ function DesktopCard(props: ComponentProps<typeof DesktopMatchRow>) {
 }
 
 function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, markets, selectedFamily, locale: requestedLocale,
-  headingLevel = 2, eagerLogos = false, position, titleNote, offline = false, snapshotPick, lockedPrediction = false, signedIn = false, interactive = true }: MatchCardProps) {
+  headingLevel = 2, eagerLogos = false, position, titleNote, offline = false, snapshotPick, lockedPrediction = false, signedIn = false, interactive = true, accessReturnTo }: MatchCardProps) {
   const locale = resolveLocale(requestedLocale);
   const messages = createMessages(locale);
   const titleId = `gh-match-${useId()}`;
@@ -639,7 +641,9 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       }) } : {})}
       outcome={offline ? "unavailable" : outcome} headingLevel={headingLevel} pickState={pickState}
       {...(position !== undefined ? { position } : {})} {...(titleNote ? { titleNote } : {})}
-      {...(!offline && interactive ? { analysisHref: targetHref, ...(gated ? { analysisLabel: messages.text("paywall.unlock") } : {}) } : {})}
+      {...(!offline && interactive && !gated ? { analysisHref: detailHref } : {})}
+      {...(gated && !offline ? { predictionAction: <UnlockButton locale={locale} signedIn={signedIn}
+        returnTo={accessReturnTo ?? detailHref} label={messages.text("paywall.unlockPrediction")} /> } : {})}
       {...(snapshotPick ? { matchState: "snapshot", savedScore: true } : {})}
       offline={offline} interactive={interactive} eagerLogos={eagerLogos} {...(!gated && !offline ? { marketFamily: shownFamily } : {})}
       {...(marketDescription ? { marketDescription } : {})}

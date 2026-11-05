@@ -51,8 +51,11 @@ def prepare_fixture(scenarios):
 def main():
     args = parse_args("paid-access leak scan", extra=("--fixture",))
     generated = run_node(["--conditions=react-server", "--input-type=module", "--eval",
-        "import {scenarios} from './tests/helpers/paywall-fixtures.mjs'; process.stdout.write(JSON.stringify(scenarios));"])
-    scenarios = json.loads(generated.stdout)
+        "import {scenarios} from './tests/helpers/paywall-fixtures.mjs'; "
+        "import {matchFeedPageDefaults,defaultSortDirection} from './src/domain/feed-query.ts'; "
+        "process.stdout.write(JSON.stringify({scenarios,pageDefaults:matchFeedPageDefaults,defaultSortDirection}));"])
+    generated_data = json.loads(generated.stdout)
+    scenarios, page_defaults = generated_data["scenarios"], generated_data["pageDefaults"]
     slip_checks = runpy.run_path(str(ROOT / "scripts/verify-slip-rendering.py"))
     document = slip_checks["Document"]
     env = environment(GOAL_HINT_DATABASE_ENABLED="false")
@@ -64,7 +67,8 @@ def main():
         print(f"Building leak-scan fixture: {directory}", flush=True)
         build_fixture(directory, env, timeout=240)
     checks = 0
-    with Server(directory, env, ready="/en") as server:
+    # The locale root redirects to Matches; readiness requires an actual page response.
+    with Server(directory, env, ready="/en/matches") as server:
         def verify_viewer(viewer):
             checks = 0
             headers = {"x-test-viewer": viewer}
@@ -146,7 +150,11 @@ def main():
                     assert page.status == 307, (oracle, page.status)
                     safe_query = parse_qs(urlsplit(page.headers.get("Location")).query)
                     assert safe_query.get("picks") in (None, ["all"]) and "odds" not in safe_query, (viewer, oracle, "protected oracle criteria survived redirect")
-                    assert safe_query.get("when") == ["today"] and safe_query.get("sort") == ["probability"], (viewer, oracle, "safe redirect retains public page defaults")
+                    sort = page_defaults["sort"]
+                    direction = safe_query.get("dir", [generated_data["defaultSortDirection"][sort["by"]]])
+                    assert (safe_query.get("when") == [page_defaults["dates"]["kind"]]
+                        and safe_query.get("sort") == [sort["by"]] and direction == [sort["direction"]]), (
+                            viewer, oracle, "safe redirect retains public page defaults")
                     checks += 2
                 slips = request(server.origin, "/en/slips?build=1", headers=headers)
                 assert slips.status == 200 and not re.search(SENTINELS, slips.text)

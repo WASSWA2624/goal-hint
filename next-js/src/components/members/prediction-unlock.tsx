@@ -54,12 +54,12 @@ const AccessButton = styled(ButtonLink)<{ $embedded: boolean }>`
   ${({ $embedded }) => $embedded && `&& { min-block-size: var(--slip-header-action-size); padding: var(--gh-spacing-0_75) var(--gh-spacing-1_5); font-size: var(--gh-font-secondary); }`}
 `;
 
-/** Context-aware mobile access actions reuse the shared button surface and control metric. */
-export function UnlockButton({ locale = "en", signedIn = false, returnTo = "/en", guestView = "register", compact = false }: {
-  locale?: string; signedIn?: boolean; returnTo?: string; guestView?: "login" | "register"; compact?: boolean;
+/** Context-aware access actions reuse the shared button surface and control metric. */
+export function UnlockButton({ locale = "en", signedIn = false, returnTo = "/en", guestView = "register", compact = false, label }: {
+  locale?: string; signedIn?: boolean; returnTo?: string; guestView?: "login" | "register"; compact?: boolean; label?: string;
 }) {
   const m = createMessages(locale);
   return <AccessButton href={subscriberHref(signedIn, returnTo, guestView)} prefetch={false} variant="secondary" $embedded={compact} data-unlock-button>
-    <LockIcon aria-hidden="true" /><span>{m.text(compact ? "paywall.unlock" : signedIn ? "paywall.subscribeUnlock" : "paywall.registerUnlock")}</span>
+    <LockIcon aria-hidden="true" /><span>{label ?? m.text(compact ? "paywall.unlock" : signedIn ? "paywall.subscribeUnlock" : "paywall.registerUnlock")}</span>
   </AccessButton>;
 }
