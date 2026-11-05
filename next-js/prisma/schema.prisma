@@ -194,6 +194,7 @@ model FootballSeason {
 }
 
 model FootballFixture {
+  intelligenceShadow    IntelligenceShadowState?
   liveMatchSnapshots    LiveMatchSnapshot[]
   publishedSlipLegs     PublishedSlipLeg[]
   id                    String                        @id @default(uuid()) @db.Char(36)
@@ -246,6 +247,57 @@ model FootballFixture {
   @@index([seasonId, round, kickoff])
   @@index([homeTeamId, kickoff])
   @@index([awayTeamId, kickoff])
+}
+
+// Shadow-only forecasts never alter public prediction or published-slip history.
+model IntelligenceShadowState {
+  fixtureId                String                      @id @db.Char(36)
+  latestRevisionId         String?                     @unique @db.Char(64)
+  latestEligibleRevisionId String?                     @unique @db.Char(64)
+  lastCheckedAt            DateTime                    @db.DateTime(3)
+  checks                   BigInt                      @default(0) @db.UnsignedBigInt
+  lastObservationJson      Json?
+  lastObservationHash      String?                     @db.Char(64)
+  availability             String                      @db.VarChar(24)
+  fixture                  FootballFixture             @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  latestRevision           IntelligenceShadowRevision? @relation("ShadowLatest", fields: [latestRevisionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  latestEligibleRevision   IntelligenceShadowRevision? @relation("ShadowEligible", fields: [latestEligibleRevisionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  revisions                IntelligenceShadowRevision[] @relation("ShadowHistory")
+  checkReceipts            IntelligenceShadowCheck[]
+}
+
+model IntelligenceShadowRevision {
+  id              String                     @id @db.Char(64)
+  fixtureId       String                     @db.Char(36)
+  sequence        Int                        @db.UnsignedInt
+  semanticHash    String                     @db.Char(64)
+  modelVersion    String                     @db.VarChar(128)
+  createdAt       DateTime                   @db.DateTime(3)
+  eligible        Boolean
+  bodyJson        Json
+  integrity       String                     @db.Char(64)
+  state           IntelligenceShadowState    @relation("ShadowHistory", fields: [fixtureId], references: [fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  latestFor       IntelligenceShadowState?   @relation("ShadowLatest")
+  latestEligibleFor IntelligenceShadowState? @relation("ShadowEligible")
+  checks          IntelligenceShadowCheck[]
+
+  @@unique([fixtureId, sequence])
+  @@index([fixtureId, createdAt])
+  @@index([modelVersion, createdAt])
+}
+
+// Compact idempotency receipts have no raw provider/news payload.
+model IntelligenceShadowCheck {
+  id          String                      @id @db.Char(64)
+  fixtureId   String                      @db.Char(36)
+  checkedAt   DateTime                    @db.DateTime(3)
+  requestHash String                      @db.Char(64)
+  outcome     String                      @db.VarChar(24)
+  revisionId  String?                     @db.Char(64)
+  state       IntelligenceShadowState     @relation(fields: [fixtureId], references: [fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  revision    IntelligenceShadowRevision? @relation(fields: [revisionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([fixtureId, checkedAt])
 }
 
 // Existing public tokens retain their sealed snapshots; new personal exports are transient.

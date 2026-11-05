@@ -1,13 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { registerHooks } from 'node:module';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
-import ts from 'typescript';
+import { registerServerRouteTestLoader, stubRouteComponents as empty } from './helpers/server-route-loader.mjs';
 
 const source = new URL('../src/', import.meta.url).href;
-const stub = code => ({ url: `data:text/javascript,${encodeURIComponent(code)}`, shortCircuit: true });
-const empty = names => names.map(name => `export function ${name}() { return null; }`).join('\n');
 const modules = {
   '@/components/performance/performance-dashboard': empty(['PerformanceDashboard']),
   '@/components/slips/best-slips': empty(['BestSlips']),
@@ -17,32 +12,14 @@ const modules = {
   '@/components/ui/layout': empty(['Inline', 'Stack']),
   '@/server/slips/best-slips': 'export const readBestSlips = async () => null; export const gateBestSlips = value => value;',
   '@/components/admin/admin-shell': empty(['AdminShell']),
-  '@/components/navigation/page-loading': empty(['PageContentLoading']),
+  '@/components/navigation/navigation-progress': empty(['AppLoading']),
   '@/styles/provider': empty(['FallbackStyleProvider', 'ServerThemeUntilHydrated']),
   '@/server/admin/admin-http': 'export const adminPageGate = async () => globalThis.loadingAdmin;',
   '@/server/members/account-login-redirect': 'export const redirectToAccountLogin = () => { throw new Error("login-required"); };',
   '@/app/_components/online-runtime': empty(['OnlineRuntime']),
   './public-shell': 'export const getShellInstant = async () => Date.parse("2026-11-03T09:00:00Z"); export const getShellDate = async () => "2026-11-03"; export function PublicShell() { return null; }',
 };
-registerHooks({
-  resolve(specifier, context, next) {
-    if (modules[specifier]) return stub(modules[specifier]);
-    if (specifier === 'next/navigation') return next(new URL('../node_modules/next/dist/client/components/navigation.react-server.js', import.meta.url).href, context);
-    const target = specifier.startsWith('@/') ? source + specifier.slice(2) : specifier;
-    try { return next(target, context); } catch (error) {
-      if (!target.startsWith('.') && !target.startsWith('file:')) throw error;
-      for (const extension of ['.ts', '.tsx']) { try { return next(target + extension, context); } catch { /* Try the next extension. */ } }
-      throw error;
-    }
-  },
-  load(url, context, next) {
-    if (!url.startsWith(source) || !url.endsWith('.tsx')) return next(url, context);
-    const path = fileURLToPath(url);
-    return { format: 'module', shortCircuit: true, source: ts.transpileModule(readFileSync(path, 'utf8'), {
-      fileName: path, compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-    }).outputText };
-  },
-});
+registerServerRouteTestLoader({ source, modules });
 const { createPerformanceRoute } = await import('../src/app/_components/performance-route.tsx');
 const { createBestSlipsRoute } = await import('../src/app/_components/best-slips-route.tsx');
 const { default: OwnerLayout } = await import('../src/app/(owner)/layout.tsx');
@@ -96,6 +73,6 @@ test('the owner layout authenticates before rendering its shared workspace loadi
   const layout = await OwnerLayout({ children: 'private' });
   const boundary = layout.props.children.props.children[0];
   assert.equal(boundary.type, Symbol.for('react.suspense'));
-  assert.equal(boundary.props.fallback.type.name, 'PageContentLoading');
+  assert.equal(boundary.props.fallback.type.name, 'AppLoading');
   assert.equal(boundary.props.children.props.children, 'private');
 });

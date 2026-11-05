@@ -1,21 +1,17 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { registerHooks } from 'node:module';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
-import ts from 'typescript';
+import { registerServerRouteTestLoader, stubRouteComponents as exportsFor } from './helpers/server-route-loader.mjs';
 
 const source = new URL('../src/', import.meta.url).href;
-const stub = (code) => ({ url: `data:text/javascript,${encodeURIComponent(code)}`, shortCircuit: true });
-const exportsFor = (names) => names.map(name => `export function ${name}() { return null; }`).join('\n');
 const modules = {
   'next/headers': 'export const cookies = async () => ({ get() {} }); export const headers = async () => new Headers();',
   '@/components/members/member-controls': exportsFor(['MemberNavigationRecovery']),
   '@/components/members/subscribe-controls': exportsFor(['SubscribeFlow', 'SubscribeIntro', 'SubscribeLayout']),
   '@/components/members/payment-status': exportsFor(['ApprovalRefresh']),
   '@/components/members/subscription-summary-card': exportsFor(['SubscriptionSummaryCard']),
+  '@/components/members/free-trial-control': exportsFor(['FreeTrialControl']),
   '@/components/ui/controls': exportsFor(['ButtonLink']),
-  '@/components/admin/desk-styles': exportsFor(['DeskHead']),
+  '@/components/ui/visually-hidden': exportsFor(['VisuallyHidden']),
   '@/components/admin/subscribers-editor': exportsFor(['SubscribersEditor']),
   '@/components/analytics/dashboard/dashboard-styles': exportsFor(['Notice']),
   '@/server/admin/admin-http': 'export const adminPageGate = async () => ({ owner: true, services: { database: {} } });',
@@ -25,30 +21,10 @@ const modules = {
   '@/server/analytics/analytics-http': 'export const getAnalyticsServices = async () => ({ database: null });',
   '@/server/members/member-http': 'export const getMemberServices = async () => { throw new Error("Inject test services"); };',
   '@/server/members/account-login-redirect': 'export const redirectToAccountLogin = () => { throw new Error("Login required"); };',
-  '@/server/members/member-sessions': 'export const memberCookieName = () => "test-session";',
   '@/server/members/plans': 'export const createPlansService = () => ({ list: async () => [] }); export const plansServiceFor = () => ({ list: () => globalThis.performancePlans() });',
   './public-shell': exportsFor(['PublicShell']),
 };
-registerHooks({
-  resolve(specifier, context, next) {
-    if (modules[specifier]) return stub(modules[specifier]);
-    const target = specifier.startsWith('@/') ? source + specifier.slice(2) : specifier;
-    try { return next(target, context); } catch (error) {
-      if (!target.startsWith('.') && !target.startsWith('file:')) throw error;
-      for (const extension of ['.ts', '.tsx']) {
-        try { return next(target + extension, context); } catch { /* Try the next extension. */ }
-      }
-      throw error;
-    }
-  },
-  load(url, context, next) {
-    if (!url.startsWith(source) || !url.endsWith('.tsx')) return next(url, context);
-    const path = fileURLToPath(url);
-    return { format: 'module', shortCircuit: true, source: ts.transpileModule(readFileSync(path, 'utf8'), {
-      fileName: path, compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-    }).outputText };
-  },
-});
+registerServerRouteTestLoader({ source, modules });
 const { createSubscribeRoute } = await import('../src/app/_components/subscribe-route.tsx');
 const member = { accountId: 'member', tokenHash: 'session', phone: '256700000000', blocked: false, administrator: false };
 const subscription = { activeUntil: '2026-11-01T09:00:00Z', paymentPending: false, creditUgx: 0, autoRenew: false, renewsFromCredit: false };
