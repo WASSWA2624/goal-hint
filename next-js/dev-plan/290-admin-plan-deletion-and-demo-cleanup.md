@@ -19,4 +19,6 @@
 
 ## Deployment
 
+Verified on 5 November 2026: TypeScript and changed-file ESLint passed; 51 backend/audit unit tests, 88 demo unit tests, four MySQL plan-deletion tests and the MySQL reset integration passed. Browser checks passed in both themes at 1440, 390 and 320px, including 40px fine-pointer and 44px coarse-pointer controls, cancellation/focus, foreground progress, refusal, failure/retry and successful deletion. QA servers and browsers were stopped after verification.
+
 Local demo cleanup is a separate operator action with a verified target and backup. Production data is not reset by deploying this source. Restricted application targets need the documented plan DELETE grant before using permanent deletion.
