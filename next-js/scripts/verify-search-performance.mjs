@@ -91,12 +91,12 @@ export async function verifySearchPerformance(page, origin, widths = [320, 390, 
 }
 
 /** Exercise the shared production feed filters at both viewport sizes in the loading fixture. */
-export async function verifyFeedSearchFilters(page, origin) {
+export async function verifyFeedSearchFilters(page, origin, pathname = '/en/matches') {
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
   const results = [];
   for (const mode of ['light', 'dark']) for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto(`${origin}/en/matches`);
+    await page.goto(`${origin}${pathname}`);
     await page.evaluate(value => localStorage.setItem('goal-hint-theme', value), mode);
     await page.reload();
     const desktop = width >= 1024;
@@ -112,7 +112,9 @@ export async function verifyFeedSearchFilters(page, origin) {
     const dialog = page.getByRole('dialog', { name: 'Advanced Filters', exact: true });
     await dialog.waitFor({ state: 'visible' });
     assert(await filter.getAttribute('aria-controls') === await dialog.getAttribute('id'), 'The feed opener targets its own dialog');
-    assert(await dialog.locator('input[type="date"]').count() === 2, 'One shared pair of date fields');
+    const dates = dialog.locator('[data-date-time-field="datetime"]');
+    await dates.first().waitFor();
+    assert(await dates.count() === 2, 'One shared pair of date-time fields');
     const probability = dialog.locator('input[inputmode="decimal"]').first(), original = await probability.inputValue();
     const applied = page.url();
     await probability.fill('101');
