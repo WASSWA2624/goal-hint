@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { communityDestinations, communityLinksSchema, communityLinksWithDefaults, defaultCommunityLinks, publicCommunityLinks, validCommunityUrl } from "../src/domain/community.ts";
+import { communityLinksSchema, communityLinksWithDefaults, defaultCommunityLinks, publicCommunityLinks, validCommunityUrl } from "../src/domain/community.ts";
 import { defaultSubscriptionSettings, parseSettingsChanges } from "../src/domain/subscription-settings.ts";
 import { createCommunityHandler } from "../src/server/members/community-http.ts";
 
@@ -20,7 +20,6 @@ test("new and legacy community settings show all six platforms while preserving 
     assert.deepEqual(publicCommunityLinks(value), []);
   }
   assert.equal(communityLinksSchema.safeParse(defaultCommunityLinks).success, true);
-  assert.ok(communityDestinations.every(destination => new URL(destination.homeUrl).protocol === "https:"));
 });
 
 test("platform fields accept copied invitation/profile links and refuse other platforms, redirects and unsafe paths", () => {

@@ -14,8 +14,9 @@ async function openCommunity(page, width) {
   const navigation = page.locator(`[data-responsive-navigation="${width < 1024 ? "mobile" : "desktop"}"]`).first();
   await navigation.locator("[data-nav-more] summary").click();
   await navigation.locator("[data-community-entry]").click();
-  const dialog = page.getByRole("dialog", { name: "Community" });
+  const dialog = page.getByRole("dialog", { name: "Join our community" });
   await dialog.waitFor({ state: "visible" });
+  assert.equal(await dialog.getByRole("heading", { name: "Join our community" }).locator("svg").count(), 1, "community heading includes its icon");
   return dialog;
 }
 
@@ -88,29 +89,33 @@ export async function verifyCommunity(page, origin, { widths = [320, 390, 1440],
         const session = await (await page.request.get(`${origin}/api/account/session`)).json();
         assert.equal(session.phone, null, "community works logged out");
         const dialog = await openCommunity(page, width);
-        const anchors = dialog.locator("a[data-community-type]");
-        const destinations = await anchors.evaluateAll(elements => elements.map(element => ({
-          type: element.dataset.communityType, href: element.href, target: element.target, rel: element.rel,
+        const rows = dialog.locator("[data-community-type]");
+        const destinations = await rows.evaluateAll(elements => elements.map(element => ({
+          type: element.dataset.communityType, tag: element.tagName, href: element.getAttribute("href"),
+          tabindex: element.getAttribute("tabindex"), tabIndex: element.tabIndex,
+          interactiveChildren: element.querySelectorAll('a, button, input, select, textarea, [tabindex], [data-community-action]').length,
           text: element.textContent, icon: Boolean(element.querySelector("svg")), height: element.getBoundingClientRect().height,
         })));
         assert.deepEqual(destinations.map(link => link.type).sort(), [...types].sort());
         for (const link of destinations) {
-          assert.ok(externalHosts.has(new URL(link.href).hostname), `${link.type}: official fallback host`);
-          assert.equal(link.target, "_blank");
-          assert.match(link.rel, /noopener/u);
-          assert.match(link.text, /Link not added yet/iu);
+          assert.equal(link.tag, "DIV", `${link.type}: unconfigured channels are plain rows`);
+          assert.equal(link.href, null);
+          assert.equal(link.tabindex, null);
+          assert.equal(link.tabIndex, -1, `${link.type}: coming-soon rows are not focus targets`);
+          assert.equal(link.interactiveChildren, 0);
+          assert.match(link.text, /Coming soon/u);
+          assert.doesNotMatch(link.text, /Open website|Join|Follow|Link not added yet/iu);
           assert.equal(link.icon, true, `${link.type}: platform icon`);
           assert.ok(link.height >= 39, `${link.type}: full control height`);
         }
+        assert.equal(await dialog.locator("a").count(), 0, "unconfigured channels have no external links");
         await noOverflow(page, "dialog[open]");
         if (screenshotDirectory) await page.screenshot({ path: resolve(screenshotDirectory, `community-${mode}-${width}.png`) });
-        const popupPromise = page.waitForEvent("popup");
-        const expected = await anchors.first().getAttribute("href");
-        await anchors.first().click();
-        const popup = await popupPromise;
-        await popup.waitForLoadState("domcontentloaded");
-        assert.equal(popup.url(), expected, "fallback actually opens outside the app");
-        await popup.close();
+        const beforeClick = { url: page.url(), pages: page.context().pages().length, requests: intercepted.length };
+        await rows.first().click();
+        assert.equal(page.url(), beforeClick.url, "coming-soon rows do not navigate");
+        assert.equal(page.context().pages().length, beforeClick.pages, "coming-soon rows do not open a popup");
+        assert.equal(intercepted.length, beforeClick.requests, "coming-soon rows do not request a platform");
         await page.keyboard.press("Escape");
         await dialog.waitFor({ state: "hidden" });
 
@@ -137,9 +142,22 @@ export async function verifyCommunity(page, origin, { widths = [320, 390, 1440],
         assert.equal(configuration.links.find(link => link.type === "x").url, "https://x.com/gh_fixture");
         assert.equal(configuration.links.some(link => link.type === "instagram"), false, "hidden destination is omitted from the public API");
         const updatedDialog = await openCommunity(page, width);
-        await page.waitForFunction(() => document.querySelectorAll("dialog[open] a[data-community-type]").length === 5);
-        assert.equal(await updatedDialog.locator("a[data-community-type]").count(), 5, "save refreshes the public panel in the same page");
-        assert.equal(await updatedDialog.locator('[data-community-type="x"]').getAttribute("href"), "https://x.com/gh_fixture");
+        await page.waitForFunction(() => document.querySelectorAll("dialog[open] [data-community-type]").length === 5
+          && document.querySelectorAll("dialog[open] a[data-community-type]").length === 1);
+        assert.equal(await updatedDialog.locator("[data-community-type]").count(), 5, "save refreshes the public panel in the same page");
+        assert.equal(await updatedDialog.locator("div[data-community-type]").count(), 4, "remaining blank channels stay non-interactive");
+        const configuredLink = updatedDialog.locator('a[data-community-type="x"]');
+        assert.equal(await configuredLink.getAttribute("href"), "https://x.com/gh_fixture");
+        assert.equal(await configuredLink.getAttribute("target"), "_blank");
+        assert.match(await configuredLink.getAttribute("rel"), /noopener/u);
+        assert.match(await configuredLink.textContent(), /Follow/u);
+        assert.doesNotMatch(await configuredLink.textContent(), /Coming soon/u);
+        const popupPromise = page.waitForEvent("popup");
+        await configuredLink.click();
+        const popup = await popupPromise;
+        await popup.waitForLoadState("domcontentloaded");
+        assert.equal(popup.url(), "https://x.com/gh_fixture", "configured links open outside the app");
+        await popup.close();
         await page.keyboard.press("Escape");
         await page.reload({ waitUntil: "domcontentloaded" });
         await page.waitForFunction(() => document.querySelector('meta[name="color-scheme"]'));
@@ -155,7 +173,8 @@ export async function verifyCommunity(page, origin, { widths = [320, 390, 1440],
         await page.goto(origin, { waitUntil: "domcontentloaded" });
         await publicResponse;
         await page.waitForFunction(() => !document.querySelector("[data-community-entry]"));
-        checks.push({ mode, width, channels: destinations.length, publicAccess: true, saveAndReload: true, undo: true, immediateRefresh: true, visibility: true });
+        checks.push({ mode, width, channels: destinations.length, comingSoon: true, nonInteractive: true,
+          publicAccess: true, saveAndReload: true, undo: true, immediateRefresh: true, visibility: true });
       }
     }
 
@@ -164,14 +183,14 @@ export async function verifyCommunity(page, origin, { widths = [320, 390, 1440],
     const configuredDialog = await openCommunity(page, widths.at(-1));
     const configuredLinks = await configuredDialog.locator("a[data-community-type]").evaluateAll(elements => elements.map(element => ({ href: element.href, text: element.textContent })));
     assert.equal(configuredLinks.length, 6, "signed-in visitors see configured channels");
-    assert.ok(configuredLinks.every(link => /TEST_ONLY_FIXTURE|gh_fixture/u.test(link.href) && !/Link not added yet/iu.test(link.text)));
+    assert.ok(configuredLinks.every(link => /TEST_ONLY_FIXTURE|gh_fixture/u.test(link.href) && !/Coming soon/iu.test(link.text)));
     await page.keyboard.press("Escape");
 
     await scenario(page, origin, { scenario: "all-hidden", role: "visitor" });
     assert.deepEqual(await publicConfiguration(page, origin), { visible: true, links: [] });
     await page.goto(origin, { waitUntil: "domcontentloaded" });
     const emptyDialog = await openCommunity(page, widths.at(-1));
-    assert.equal(await emptyDialog.locator("a[data-community-type]").count(), 0, "disabled channels never reappear as defaults");
+    assert.equal(await emptyDialog.locator("[data-community-type]").count(), 0, "disabled channels never reappear as defaults");
     await page.keyboard.press("Escape");
 
     await scenario(page, origin, { scenario: "unconfigured", role: "visitor" });
@@ -180,7 +199,7 @@ export async function verifyCommunity(page, origin, { widths = [320, 390, 1440],
     const shortNavigation = page.locator("[data-community-short-navigation]");
     await shortNavigation.locator("[data-nav-more] summary").click();
     await shortNavigation.locator("[data-community-entry]").click();
-    assert.equal(await page.getByRole("dialog", { name: "Community" }).locator("a[data-community-type]").count(), 6,
+    assert.equal(await page.getByRole("dialog", { name: "Join our community" }).locator("div[data-community-type]").count(), 6,
       "Community remains available when every normal navigation item fits");
     assert.ok(intercepted.length >= widths.length * 2, "platform navigation was exercised");
     return { passed: true, checks, configuredAccess: true, allHidden: true, noOverflowMenu: true, externalOpens: intercepted.length };
