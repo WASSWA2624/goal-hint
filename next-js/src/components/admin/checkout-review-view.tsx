@@ -95,6 +95,10 @@ function ReceiptDetails({ claim, detail, url, showLegacy, editable, exception, b
   const recipient = claim.receipt.recipient ?? detail.receivingNumber;
   const originalText = claim.original && typeof claim.original === "object" && "text" in claim.original
     && typeof claim.original.text === "string" ? claim.original.text : "";
+  const extracted = claim.original && typeof claim.original === "object" && "extracted" in claim.original
+    && claim.original.extracted && typeof claim.original.extracted === "object" ? claim.original.extracted : null;
+  const imageMessage = extracted && "messageSource" in extracted && extracted.messageSource === "image";
+  const rawImageText = extracted && "screenshotText" in extracted && typeof extracted.screenshotText === "string" ? extracted.screenshotText : "";
   const images = claim.purgedAt ? [] : [
     ...(claim.imageSha256 && !claim.imageIsLegacy ? [`${url}/screenshot?claimId=${claim.id}`] : []),
     ...(claim.legacyImage && showLegacy ? [`${url}/screenshot`] : []),
@@ -133,7 +137,8 @@ function ReceiptDetails({ claim, detail, url, showLegacy, editable, exception, b
     {!claim.validation.reviewed && claim.validation.warnings.length > 0 && <details open>
       <summary>Evidence discrepancies</summary>
       <ul>{claim.validation.warnings.map(warning => <li key={warning.id}>{warning.message}</li>)}</ul>
-      {originalText && <details><summary>Original payment message</summary><Muted>{originalText}</Muted></details>}
+      {originalText && <details><summary>{imageMessage ? "Image text submitted by member" : "Original payment message"}</summary><Muted>{originalText}</Muted></details>}
+      {rawImageText && rawImageText.trim() !== originalText.trim() && <details><summary>Original text extracted from image</summary><Muted>{rawImageText}</Muted></details>}
     </details>}
     {claim.receipt.disputed && <Muted role="note">Receipt ownership disputed. Contact the verified sender before allocating funds.</Muted>}
   </Receipt>;

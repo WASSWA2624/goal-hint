@@ -194,7 +194,7 @@ test("a changed payment number clears its tested shortcut unless the same save s
 
 test("provider controls, payment identity, support contacts and message templates are protected", () => {
   assert.deepEqual([...protectedSettingFields].sort(), ["airtelEnabled", "airtelMenuShortcut", "airtelName", "airtelNumber", "contactPhone", "mtnEnabled", "mtnMenuShortcut", "mtnName",
-    "mtnNumber", "whatsappPhone", "supportContacts", "messageTemplates", "communityLinks", "paymentAlertsEnabled"].sort());
+    "mtnNumber", "whatsappPhone", "supportContacts", "messageTemplates", "communityVisible", "communityLinks", "paymentAlertsEnabled"].sort());
   assert.ok(protectedSettingFields.every((field) => editableSettingFields.includes(field)));
 });
 

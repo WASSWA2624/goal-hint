@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { TextLink } from "@/components/ui/controls";
 import { ChatIcon } from "@/components/ui/icons";
-import { CommunityDialog, useCommunityLinks } from "./community";
+import { CommunityDialog, useCommunitySettings } from "./community";
 import { DashboardIcon, DocumentIcon, DownloadIcon, GiftIcon, HelpIcon, HomeIcon, LiveIcon, MailIcon, MoreIcon, ResultsIcon, ShieldIcon, SlipIcon } from "@/components/ui/icons";
 import type { NavigationLocation } from "@/domain/navigation";
 import { normalizeNavigationLocation } from "@/domain/navigation-paths";
@@ -43,7 +43,8 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
   destinations: readonly NavigationDestination[]; current?: NavigationLocation; moreLabel: string; mobile?: boolean;
 }) {
   const current = normalizeNavigationLocation(selected);
-  const communityLinks = useCommunityLinks(), [communityOpen, setCommunityOpen] = useState(false);
+  const community = useCommunitySettings(), [communityOpen, setCommunityOpen] = useState(false);
+  if (communityOpen && !community.visible) setCommunityOpen(false);
   const root = useRef<HTMLDivElement>(null), measurements = useRef<HTMLDivElement>(null), list = useRef<HTMLUListElement>(null);
   const [count, setCount] = useState(Math.min(mobile ? 1 : minimumPrimaryDestinations, destinations.length));
   const pendingFocus = useRef<{ target: FocusTarget; previous: Element | null } | null>(null);
@@ -80,7 +81,7 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
       const activeMoreWidth = pool.querySelector<HTMLElement>('[data-more-measure="active"]')?.getBoundingClientRect().width ?? moreWidth;
       const gap = Number.parseFloat(getComputedStyle(navigation).columnGap) || 0;
       const next = fitNavigationItems({ widths, moreWidth, activeMoreWidth, currentIndex: destinations.findIndex(({ key }) => key === current),
-        availableWidth: width, gap, equalColumns: mobile });
+        availableWidth: width, gap, equalColumns: mobile, reserveMore: community.visible });
       setCount((previous) => {
         if (previous === next) return previous;
         const target = container.contains(active) ? focusTarget(active) : null;
@@ -97,7 +98,7 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
     fonts.addEventListener("loadingdone", schedule);
     schedule();
     return () => { cancelled = true; observer.disconnect(); cancelAnimationFrame(frame); fonts.removeEventListener("loadingdone", schedule); };
-  }, [destinations, current, mobile]);
+  }, [destinations, current, mobile, community.visible]);
 
   const List = mobile ? TabList : TopNavList, Primary = mobile ? TabLink : TopNavLink, Measure = mobile ? TabMeasure : TopNavMeasure;
   return <Layout ref={root} data-responsive-navigation={mobile ? "mobile" : "desktop"}
@@ -112,10 +113,10 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
         return <li key={key}><Primary href={href} prefetch={key === "slips" ? null : false} $tone={tone} data-nav-key={key}
           aria-current={current === key ? "page" : undefined}><Icon /><span>{mobile ? tab : label}</span></Primary></li>;
       })}
-      {overflow.length > 0 && <li data-nav-more>
+      {(overflow.length > 0 || community.visible) && <li data-nav-more>
         <MoreMenu $mobile={mobile} current={overflowCurrent} label={<><MoreIcon /><span>{moreLabel}</span></>}>
           <MoreList $mobile={mobile}>
-            {communityLinks.length > 0 && <li><button type="button" data-community-entry onClick={event => {
+            {community.visible && <li><button type="button" data-community-entry aria-haspopup="dialog" onClick={event => {
               const menu = event.currentTarget.closest("details");
               if (menu) { menu.open = false; menu.querySelector("summary")?.focus({ preventScroll: true }); }
               setCommunityOpen(true);
@@ -138,6 +139,6 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
       <Measure $tone="blue" data-more-measure="default"><MoreIcon /><span>{moreLabel}</span></Measure>
       <Measure $tone="blue" data-more-measure="active" aria-current="page"><MoreIcon /><span>{moreLabel}</span></Measure>
     </div></Measurements>
-    <CommunityDialog open={communityOpen} links={communityLinks} onClose={() => setCommunityOpen(false)} />
+    <CommunityDialog open={communityOpen && community.visible} links={community.links} onClose={() => setCommunityOpen(false)} />
   </Layout>;
 }

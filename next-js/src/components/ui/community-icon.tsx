@@ -1,8 +1,10 @@
 import type { CommunityType } from "@/domain/community";
-import { GroupIcon, TelegramIcon, WhatsAppIcon, type IconProps } from "./icons";
+import type { IconProps } from "./icons";
+import { communityBrandPaths } from "./community-brand-paths";
 
-const icons = { "whatsapp-channel": WhatsAppIcon, "telegram-channel": TelegramIcon, "whatsapp-group": GroupIcon };
+const brands = { "whatsapp-channel": "whatsapp", "whatsapp-group": "whatsapp", "telegram-channel": "telegram", tiktok: "tiktok", x: "x", instagram: "instagram" } as const;
 export function CommunityIcon({ type, ...props }: IconProps & { type: CommunityType }) {
-  const Icon = icons[type];
-  return <Icon {...props} />;
+  return <svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true" focusable="false" {...props}>
+    <path d={communityBrandPaths[brands[type]]} />
+  </svg>;
 }

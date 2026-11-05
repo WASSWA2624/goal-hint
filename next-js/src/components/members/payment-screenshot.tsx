@@ -2,7 +2,7 @@
 import { useEffect, useId, useRef, useState, type ClipboardEvent } from "react";
 import { Button } from "@/components/ui/controls";
 import { CriteriaDialogButton } from "@/components/ui/criteria-dialog";
-import { ClipboardIcon, ImageIcon, TrashIcon } from "@/components/ui/icons";
+import { CameraIcon, ClipboardIcon, ImageIcon, TrashIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import type { CheckoutEvidenceCheck } from "@/domain/checkout";
 import { inspectPaymentScreenshot, unreadableScreenshotMessage, type ScreenshotMetadata } from "@/domain/payment-screenshot";
@@ -12,6 +12,7 @@ import { preparePaymentImage } from "./payment-image";
 import { readScreenshotText } from "./payment-ocr";
 import { sendCheckout } from "./checkout-client";
 import { PaymentImagePreview } from "./payment-image-preview";
+import { PaymentCamera } from "./payment-camera";
 
 export async function screenshotDigest(blob: Blob) {
   return [...new Uint8Array(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer()))].map(byte => byte.toString(16).padStart(2, "0")).join("");
@@ -27,17 +28,22 @@ export function PaymentScreenshot({ image, metadata, provider, submissionId, dis
   optional?: boolean;
   onRemove: () => void; onBusyChange: (busy: boolean) => void; onPasteMessage: () => void;
 }) {
-  const id = useId(), input = useRef<HTMLInputElement>(null), abort = useRef<AbortController | null>(null), running = useRef(false);
+  const id = useId(), input = useRef<HTMLInputElement>(null), camera = useRef<HTMLInputElement>(null), abort = useRef<AbortController | null>(null), running = useRef(false);
   const [processing, setProcessing] = useState(false), [dialog, setDialog] = useState<Dialog | null>(null);
   const [cancellable, setCancellable] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const cameraButton = useRef<HTMLButtonElement>(null);
   const [selected, setSelected] = useState<number | null>(null), urls = useRef<string[]>([]), mounted = useRef(true);
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; abort.current?.abort(); urls.current.forEach(url => URL.revokeObjectURL(url)); }; }, []);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; abort.current?.abort(); urls.current.forEach(url => URL.revokeObjectURL(url)); onBusyChange(false); };
+  }, [onBusyChange]);
   function close() { urls.current.forEach(url => URL.revokeObjectURL(url)); urls.current = []; setDialog(null); setSelected(null); }
   function failure(message = unreadableScreenshotMessage) { setDialog({ kind: "error", title: "Check your screenshot", message }); }
   function duplicate() { setDialog({ kind: "duplicate", title: "Screenshot already added", message: "This screenshot is already attached to this transaction. No second copy has been added." }); }
   function accept(candidate: Candidate, meta: ScreenshotMetadata, text: string) { close(); onAccept(candidate.image, meta, text); }
   async function read(candidate: Candidate) {
-    if (running.current || disabled) return;
+    if (!mounted.current || running.current || disabled) return;
     running.current = true; close(); onBusyChange(true); setProcessing(true);
     const controller = new AbortController(); abort.current = controller;
     setCancellable(true);
@@ -71,7 +77,7 @@ export function PaymentScreenshot({ image, metadata, provider, submissionId, dis
     }
   }
   async function prepare(file: File, recheck = false) {
-    if (running.current || disabled) return;
+    if (!mounted.current || running.current || disabled) return;
     running.current = true; abort.current = null; onBusyChange(true); setProcessing(true);
     let candidate: Candidate | null = null;
     try {
@@ -90,7 +96,7 @@ export function PaymentScreenshot({ image, metadata, provider, submissionId, dis
     if (candidate && mounted.current) await read(candidate);
   }
   async function choose(files: File[]) {
-    if (disabled || running.current) return;
+    if (!mounted.current || disabled || running.current) return;
     close();
     if (files.length === 1) { await prepare(files[0]!); return; }
     if (!files.length) { failure("No image was found. Copy a screenshot or choose an image file."); return; }
@@ -113,26 +119,37 @@ export function PaymentScreenshot({ image, metadata, provider, submissionId, dis
         if (type) files.push(new File([await item.getType(type)], "Pasted screenshot", { type }));
       }
       await choose(files);
-    } catch { failure("Your browser couldn’t read an image from the clipboard. Paste a copied screenshot into the screenshot box, or choose an image file."); }
+    } catch { if (mounted.current) failure("Your browser couldn’t read an image from the clipboard. Paste a copied screenshot into the screenshot box, or choose an image file."); }
   }
   function onPaste(event: ClipboardEvent<HTMLDivElement>) {
     const files = [...event.clipboardData?.items ?? []].filter(item => item.kind === "file" && item.type.startsWith("image/")).flatMap(item => item.getAsFile() ?? []);
     event.preventDefault(); void choose(files);
   }
+  function takePhoto() {
+    if (/Android|iPhone|iPad|iPod|GoalHintNative\/android/iu.test(navigator.userAgent)) camera.current?.click();
+    else setCameraOpen(true);
+  }
+  function closeCamera() { setCameraOpen(false); requestAnimationFrame(() => cameraButton.current?.focus()); }
   const busy = disabled || processing;
   const ready = !!image && metadata?.version === 1;
   return <CheckoutEvidenceField aria-busy={processing}>
     <header><label htmlFor={`${id}-file`}>Payment screenshot{optional ? " (optional)" : ""}</label></header>
     <VisuallyHidden as="input" ref={input} id={`${id}-file`} type="file" accept="image/*" disabled={busy}
-      onChange={event => { const files = [...event.currentTarget.files ?? []]; event.currentTarget.value = ""; void choose(files); }} />
+      onChange={event => { const files = [...event.currentTarget.files ?? []]; event.currentTarget.value = ""; if (files.length) void choose(files); }} />
+    <VisuallyHidden as="input" ref={camera} type="file" accept="image/*" capture="environment" disabled={busy} aria-label="Take a payment photo"
+      onChange={event => { const files = [...event.currentTarget.files ?? []]; event.currentTarget.value = ""; if (files.length) void choose(files); }} />
     <CheckoutScreenshot role="group" tabIndex={0} aria-label={`Choose or paste a payment screenshot${optional ? " (optional)" : ""}`} aria-describedby={requirementId} onPaste={onPaste}>
-      <div data-screenshot-actions><Button variant="secondary" disabled={busy} onClick={() => input.current?.click()}><ImageIcon />Choose image</Button>
+      <div data-screenshot-actions><Button ref={cameraButton} variant="secondary" disabled={busy} onClick={takePhoto}><CameraIcon />Take photo</Button>
+        <Button variant="secondary" disabled={busy} onClick={() => input.current?.click()}><ImageIcon />Choose image</Button>
         <Button variant="quiet" disabled={busy} onClick={() => void paste()}><ClipboardIcon />Paste image</Button></div>
       {image && <div data-screenshot-preview><PaymentImagePreview image={image} disabled={busy} compact />
         <Button variant="quiet" disabled={busy} onClick={onRemove}><TrashIcon />Remove screenshot</Button></div>}
       {image && !ready && !processing && <Button variant="secondary" disabled={disabled} onClick={() => void prepare(new File([image], "Saved screenshot", { type: image.type }), true)}>Recheck saved screenshot</Button>}
       {cancellable && <Button variant="quiet" onClick={() => abort.current?.abort()}>Cancel reading</Button>}
     </CheckoutScreenshot>
+    {cameraOpen && <PaymentCamera onClose={closeCamera}
+      onCapture={file => { closeCamera(); void choose([file]); }}
+      onChoose={() => { closeCamera(); input.current?.click(); }} />}
     {dialog && <CheckoutDialog id={`${id}-dialog`} title={dialog.title} open onCancel={close} closeLabel="Close screenshot message"
       footer={dialog.kind === "replace" ? <><CriteriaDialogButton variant="secondary" onClick={close}>Keep current</CriteriaDialogButton>
         <CriteriaDialogButton onClick={() => { const candidate = dialog.candidate!; close(); void read(candidate); }}>Replace screenshot</CriteriaDialogButton></>

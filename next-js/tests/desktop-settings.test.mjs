@@ -82,6 +82,29 @@ test("an open subscription cannot lose its last usable support contact", async (
   assert.equal(state.audits.length, 0);
 });
 
+test("public community visibility and platform links require authorization, persist and retain an audit", async () => {
+  const { state, database, service } = harness({ communityLinks: null });
+  const links = [{ type: "whatsapp-group", url: "https://chat.whatsapp.com/TestInvite?mode=ac_t", enabled: true },
+    { type: "instagram", url: "", enabled: false }];
+  const changes = { communityVisible: false, communityLinks: links };
+  const refused = await service.save("owner", changes, { password: null, confirm: async () => assert.fail() });
+  assert.equal(refused.status, "password-required");
+  assert.deepEqual(refused.fields, ["communityVisible", "communityLinks"]);
+  assert.equal(state.row.communityVisible, true);
+  assert.equal(state.audits.length, 0);
+  const saved = await service.save("owner", changes, authorized);
+  assert.equal(saved.status, "saved");
+  assert.equal(state.row.communityVisible, false);
+  assert.deepEqual(state.row.communityLinks, links);
+  assert.equal(saved.settings.communityLinks.length, 6);
+  assert.deepEqual(state.audits[0].details.changes.communityVisible, { from: true, to: false });
+  assert.deepEqual(state.audits[0].details.changes.communityLinks.to, links);
+  const reloaded = await createSettingsService(database, { environment: null }).current();
+  assert.equal(reloaded.settings.communityVisible, false);
+  assert.equal(reloaded.settings.communityLinks.find(link => link.type === "instagram").enabled, false);
+  assert.equal(reloaded.settings.communityLinks.find(link => link.type === "whatsapp-group").url, links[0].url);
+});
+
 test("the settings endpoint accepts bounded UTF-8 template settings larger than ordinary admin bodies", async () => {
   const { database, service, state } = harness();
   const templates = structuredClone(defaultMessageTemplates);

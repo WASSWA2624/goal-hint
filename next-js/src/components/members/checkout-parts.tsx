@@ -85,8 +85,9 @@ export const CheckoutScreenshot = styled.div`
   button { min-block-size: var(--form-control-height); padding: var(--gh-spacing-1_5) var(--gh-spacing-2_5); font-size: var(--gh-font-body); }
   svg { inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); }
   p { margin: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-body); line-height: var(--gh-size-4_5); }
-  [data-screenshot-actions] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-2); }
-  [data-screenshot-actions] > button { inline-size: 100%; min-inline-size: 0; }
+  [data-screenshot-actions] { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gh-spacing-2); }
+  [data-screenshot-actions] > button { inline-size: 100%; min-inline-size: 0; padding-inline: var(--gh-spacing-1_5); font-size: var(--gh-font-secondary); white-space: nowrap; }
+  @media (max-width: ${({ theme }) => theme.viewport[25]}) { [data-screenshot-actions] > button > svg { display: none; } }
   [data-screenshot-preview] { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: var(--gh-spacing-2); }
   [data-screenshot-preview] > button:last-child { flex: none; min-block-size: var(--form-control-height); padding: var(--gh-spacing-1) var(--gh-spacing-2); }
   ${focusTreatment}

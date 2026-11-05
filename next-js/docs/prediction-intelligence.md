@@ -175,6 +175,33 @@ local `.mjs` authority exports `authorizeDataset`, `verifyHistory`, and optional
 label, source URL or hash alone cannot authenticate a historical forecast. No
 credentials, application environment or live source are loaded by the command.
 
+## Reproducible real-data pilot
+
+The [5 November local accuracy report](reports/local-accuracy-285.md) records a
+small fixed-vintage LaLiga experiment: 41 pre-published fixtures, 3,699 archived
+historical results, unchanged model defaults and a 24-hour forecast horizon.
+The contributed Zenodo archive establishes an April 2023 availability bound;
+later ESPN observations are used only as labels. Raw downloads and the generated
+verifier stay in ignored local storage. Model coverage and operational eligibility
+are distinct from calibration or publication qualification.
+
+From `next-js`, the preparation command explicitly downloads only free public
+archive endpoints. Existing pinned artifacts are reused without network calls:
+
+```powershell
+npm run intelligence:prepare -- --directory .tmp/local-accuracy-285/zenodo-7831873
+npm run intelligence:report -- --dataset .tmp/local-accuracy-285/zenodo-7831873/dataset.json --authority .tmp/local-accuracy-285/zenodo-7831873/verifier.mjs --directory .tmp/local-accuracy-285/results
+npm run intelligence:accuracy -- --bundle <report-archive.json> --hash <report-command-hash>
+```
+
+The generated verifier pins the acquisition manifest, checks each raw source,
+reconstructs exact fixture/team/timestamp mappings and rejects changed datasets.
+The accuracy summary verifies the report seals, replays the unchanged local fits,
+and compares the local model and league-frequency baseline on identical fixtures.
+It does not approve data provenance independently of the original verifier.
+The observed results were mixed and do not authorize activation; see the report
+for source limitations, calibration, missing comparisons and local artifact paths.
+
 ## Migration, rollback and release
 
 Apply the additive migration only to an explicitly owned local development or

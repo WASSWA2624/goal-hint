@@ -7,7 +7,7 @@ import { checkoutEvidenceSchema, checkoutOpenStatuses, checkoutRules, checkoutSe
   type CheckoutQuote, type CheckoutRequest, type CheckoutSelection, type CheckoutView, type ReceiptInput } from "../../domain/checkout.ts";
 import { formatPaymentReference, parseTransactionId, transactionKey } from "../../domain/payment.ts";
 import { validMobilePhone } from "../../domain/phone-mobile.ts";
-import { checkoutEvidenceWarnings, receiptEvidenceValidation } from "../../domain/checkout-evidence.ts";
+import { checkoutEvidenceWarnings, paymentEvidenceSourceIssue, paymentMessageSource, receiptEvidenceValidation } from "../../domain/checkout-evidence.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
 import { manualPaymentProvider } from "../../domain/subscription-settings.ts";
 import { validTopUp } from "../../domain/wallet.ts";
@@ -116,18 +116,21 @@ export function createCheckout({ database, config, now = Date.now }: {
   }
 
   async function attach(tx: Tx, row: PaymentSubmission, input: ReceiptInput, image: Buffer | null, at: Date): Promise<Result<{ id: string; duplicate: boolean }>> {
+    const messageSource = paymentMessageSource(input.original.extracted);
+    const screenshotText = image && typeof input.original.extracted.screenshotText === "string" ? input.original.extracted.screenshotText : "";
+    const sourceIssue = paymentEvidenceSourceIssue({ messageSource, screenshotText, hasImage: !!image });
+    if (sourceIssue) return fail(sourceIssue, "evidence-source");
     if (!image && !input.original.text.trim()) return fail("Add a transaction message or screenshot for this payment.");
     const transactionId = parseTransactionId(input.transactionId), payerPhone = validMobilePhone(input.payerPhone), paidAt = new Date(input.paidAt);
     if (!transactionId || !payerPhone || +paidAt > +at + 300_000 || !["mtn", "airtel"].includes(row.method ?? "")) return fail("Check the transaction details.");
     const provider = row.method!, key = transactionKey(transactionId);
     const settings = await lockSettings(tx, "checkout", at);
     const numbers = { mtn: settings.mtnNumber, airtel: settings.airtelNumber, [provider]: row.receivingNumber ?? (provider === "mtn" ? settings.mtnNumber : settings.airtelNumber) };
-    const screenshotText = image && typeof input.original.extracted.screenshotText === "string" ? input.original.extracted.screenshotText : "";
-    const warnings = checkoutEvidenceWarnings({ text: input.original.text, screenshotText, hasImage: !!image, transactionId, amountUgx: String(input.amountUgx) }, provider as "mtn" | "airtel", numbers);
+    const warnings = checkoutEvidenceWarnings({ text: input.original.text, screenshotText, messageSource, hasImage: !!image, transactionId, amountUgx: String(input.amountUgx) }, provider as "mtn" | "airtel", numbers);
     if (warnings.length && !input.warningsAccepted) return fail("Review the payment details and choose Confirm before submitting.", "evidence-warning");
-    const fingerprint = createHash("sha256").update(JSON.stringify([provider, transactionId, input.amountUgx, payerPhone, input.paidAt, input.original.text, screenshotText,
+    const fingerprint = createHash("sha256").update(JSON.stringify([provider, transactionId, input.amountUgx, payerPhone, input.paidAt, input.original.text, screenshotText, messageSource,
       image ? createHash("sha256").update(image).digest("hex") : null, warnings])).digest("hex");
-    const original = { ...input.original, extracted: { ...input.original.extracted, validationVersion: 1, selectedProvider: provider,
+    const original = { ...input.original, extracted: { ...input.original.extracted, messageSource, validationVersion: 1, selectedProvider: provider,
       validationWarnings: JSON.stringify(warnings), validationFingerprint: fingerprint, validationAcknowledgedAt: warnings.length ? at.toISOString() : null } };
     let receipt = await tx.paymentReceipt.findUnique({ where: { provider_transactionKey: { provider, transactionKey: key } } });
     if (!receipt) {
