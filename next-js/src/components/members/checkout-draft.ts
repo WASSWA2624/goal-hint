@@ -8,7 +8,8 @@ export type CheckoutDraft = { requestKey: string; step: 0 | 1 | 2 | 3; purpose: 
   usePackage?: boolean; mobileMethod?: "mtn" | "airtel" | undefined;
   method: CheckoutSelection["method"] | ""; useWallet: boolean; useReferral: boolean; walletUgx: string; referralDays: string; topUpUgx: string;
   transactionId: string; amountUgx: string; payerPhone: string; paidAt: string; text: string;
-  extracted: Record<string, string | number | null>; originalText: string; accepted: boolean; attachingId: string | null; screenshot?: ScreenshotMetadata | null };
+  extracted: Record<string, string | number | null>; originalText: string; accepted: boolean; attachingId: string | null; screenshot?: ScreenshotMetadata | null;
+  editedEvidence?: readonly ("transactionId" | "amountUgx" | "payerPhone")[] };
 
 export function restoredCheckoutStep(step: CheckoutDraft["step"], { validPackage, methodAvailable, external, evidencePresent }:
   { validPackage: boolean; methodAvailable: boolean; external: boolean; evidencePresent: boolean }): CheckoutDraft["step"] {
