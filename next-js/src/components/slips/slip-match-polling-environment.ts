@@ -1,6 +1,7 @@
 "use client";
 
 import type { SlipMatchPollingEnvironment } from "@/domain/slip-match-polling";
+import { changesPendingNavigation } from "../../domain/navigation-mutations.ts";
 
 /** Phone browsers/WebViews may freeze or cache a page before reporting a visibility change. */
 export function slipMatchPollingEnvironment(): SlipMatchPollingEnvironment {
@@ -18,7 +19,7 @@ export function slipMatchPollingEnvironment(): SlipMatchPollingEnvironment {
         if (!event.persisted) return;
         suspended = false; previous = available(); callback();
       };
-      const navigation = new MutationObserver(changed);
+      const navigation = new MutationObserver(records => { if (changesPendingNavigation(records)) changed(); });
       navigation.observe(document.documentElement, { attributes: true, attributeFilter: ["data-navigation-pending"], childList: true, subtree: true });
       document.addEventListener("visibilitychange", changed);
       document.addEventListener("freeze", pause); document.addEventListener("resume", resume);

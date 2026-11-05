@@ -207,7 +207,26 @@ async function activePointer() {
 }
 const validCacheName = (name) => typeof name === "string" && new RegExp(`^${BUNDLE_PREFIX}[a-f0-9]{64}$`).test(name);
 
+// A page requests many static assets together. Share only pending validation;
+// later reads still detect eviction, corruption and expiry in durable storage.
+const bundleReads = new Map();
 async function readBundle(cacheName, complete = true) {
+  const key = `${complete ? "complete" : "metadata"}:${cacheName}`;
+  let pending = bundleReads.get(key);
+  if (!pending) {
+    pending = readBundleFromCache(cacheName, complete).finally(() => bundleReads.delete(key));
+    bundleReads.set(key, pending);
+  }
+  const bundle = await pending;
+  // A slow complete check can cross the retention boundary while callers wait.
+  if (bundle.snapshot.expiresAt <= Date.now()) {
+    await caches.delete(cacheName).catch(() => {});
+    fail("expired");
+  }
+  return bundle;
+}
+
+async function readBundleFromCache(cacheName, complete) {
   if (!validCacheName(cacheName)) fail("corrupt-cache");
   if (!(await caches.keys()).includes(cacheName)) fail("cache-unavailable");
   const cache = await caches.open(cacheName), response = await cache.match(absolute(RECORD_KEY));

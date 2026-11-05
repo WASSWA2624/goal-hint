@@ -1,12 +1,12 @@
 import { z } from "zod";
 
 export const communityDestinations = [
-  { type: "whatsapp-group", label: "WhatsApp Group", description: "Join the conversation", homeUrl: "https://www.whatsapp.com/", action: "Join", placeholder: "https://chat.whatsapp.com/…" },
-  { type: "whatsapp-channel", label: "WhatsApp Channel", description: "Follow our updates", homeUrl: "https://www.whatsapp.com/", action: "Follow", placeholder: "https://www.whatsapp.com/channel/…" },
-  { type: "telegram-channel", label: "Telegram", description: "Join us on Telegram", homeUrl: "https://telegram.org/", action: "Join", placeholder: "https://t.me/…" },
-  { type: "tiktok", label: "TikTok", description: "Follow our videos", homeUrl: "https://www.tiktok.com/", action: "Follow", placeholder: "https://www.tiktok.com/@…" },
-  { type: "x", label: "X", description: "Follow our posts", homeUrl: "https://x.com/", action: "Follow", placeholder: "https://x.com/…" },
-  { type: "instagram", label: "Instagram", description: "Follow our updates", homeUrl: "https://www.instagram.com/", action: "Follow", placeholder: "https://www.instagram.com/…" },
+  { type: "whatsapp-group", label: "WhatsApp Group", description: "Join the conversation", action: "Join", placeholder: "https://chat.whatsapp.com/…" },
+  { type: "whatsapp-channel", label: "WhatsApp Channel", description: "Follow our updates", action: "Follow", placeholder: "https://www.whatsapp.com/channel/…" },
+  { type: "telegram-channel", label: "Telegram", description: "Join us on Telegram", action: "Join", placeholder: "https://t.me/…" },
+  { type: "tiktok", label: "TikTok", description: "Follow our videos", action: "Follow", placeholder: "https://www.tiktok.com/@…" },
+  { type: "x", label: "X", description: "Follow our posts", action: "Follow", placeholder: "https://x.com/…" },
+  { type: "instagram", label: "Instagram", description: "Follow our updates", action: "Follow", placeholder: "https://www.instagram.com/…" },
 ] as const;
 export type CommunityType = (typeof communityDestinations)[number]["type"];
 export type CommunityLink = Readonly<{ type: CommunityType; url: string; enabled: boolean }>;
@@ -58,7 +58,7 @@ export const communityLinksSchema = z.array(z.object({
 }).strict().refine(link => link.url === "" || validCommunityUrl(link.type, link.url), "Enter a valid HTTPS link for this platform."))
   .max(communityDestinations.length).refine(links => new Set(links.map(link => link.type)).size === links.length, "Each destination can appear once.");
 
-/** Missing configuration shows platform homepages. Invalid saved configuration never becomes public. */
+/** Missing configuration keeps channels visible as coming soon. Invalid saved configuration never becomes public. */
 export function publicCommunityLinks(value: unknown): readonly CommunityLink[] {
   const parsed = communityLinksSchema.safeParse(value ?? []);
   return parsed.success ? communityLinksWithDefaults(parsed.data).filter(link => link.enabled) : [];

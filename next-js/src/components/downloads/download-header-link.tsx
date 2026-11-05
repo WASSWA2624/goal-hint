@@ -4,7 +4,7 @@ import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { compactHeaderControl, compactHeaderIconControl } from "@/components/ui/header-controls";
 import { DownloadIcon } from "@/components/ui/icons";
-import { appDownloadsHref, isNewerAppRelease } from "@/domain/app-downloads";
+import { appDownloadsHref, isNewerAppRelease } from "@/domain/app-download-presentation";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import { useAppDownloads } from "./app-downloads-provider";

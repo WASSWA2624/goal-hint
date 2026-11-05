@@ -3,13 +3,13 @@
 import { useId, useSyncExternalStore } from "react";
 import styled from "styled-components";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
-import { ChevronRightIcon } from "@/components/ui/icons";
+import { ChevronRightIcon, GroupIcon } from "@/components/ui/icons";
 import { CommunityIcon } from "@/components/ui/community-icon";
 import { communityDestinations, communityLinksSchema, type CommunityLink } from "@/domain/community";
 import { startRequestDeadline } from "@/domain/request-deadline";
 
 type CommunitySnapshot = Readonly<{ visible: boolean; links: readonly CommunityLink[] }>;
-// Resolve public visibility before publishing any links, including the empty-link fallbacks.
+// Resolve public visibility before showing channels, including those awaiting a link.
 const initial: CommunitySnapshot = { visible: false, links: [] };
 let snapshot = initial, loading = false, refreshPending = false, checkedAt = 0;
 let timer: ReturnType<typeof setInterval> | undefined;
@@ -59,31 +59,36 @@ export function useCommunitySettings() { return useSyncExternalStore(subscribe, 
 export function CommunityDialog({ open, links, onClose }: { open: boolean; links: readonly CommunityLink[]; onClose: () => void }) {
   const id = useId();
   if (!open) return null;
-  return <CriteriaDialog id={id} open title="Community" onCancel={onClose} closeLabel="Close community" footer={null} hideFooter>
+  return <CriteriaDialog id={id} open title={<CommunityHeading><GroupIcon />Join our community</CommunityHeading>} onCancel={onClose} closeLabel="Close community" footer={null} hideFooter>
     <Destinations data-community-destinations>
       {links.length === 0 && <p>No community links are available right now.</p>}
       {communityDestinations.map(destination => {
         const link = links.find(link => link.type === destination.type);
         if (!link) return null;
         const configured = link.url !== "";
-        return <a key={link.type} data-community-type={link.type} href={configured ? link.url : destination.homeUrl} target="_blank" rel="noopener noreferrer">
+        const content = <>
           <CommunityIcon type={link.type} />
-          <span><strong>{destination.label}</strong><small>{configured ? destination.description : "Link not added yet"}</small></span>
-          <span data-community-action>{configured ? destination.action : "Open website"}<ChevronRightIcon /></span>
-        </a>;
+          <span><strong>{destination.label}</strong><small>{configured ? destination.description : "Coming soon"}</small></span>
+          {configured && <span data-community-action>{destination.action}<ChevronRightIcon /></span>}
+        </>;
+        return configured
+          ? <a key={link.type} data-community-type={link.type} href={link.url} target="_blank" rel="noopener noreferrer">{content}</a>
+          : <div key={link.type} data-community-type={link.type}>{content}</div>;
       })}
     </Destinations>
   </CriteriaDialog>;
 }
+const CommunityHeading = styled.span`
+  display: inline-flex; align-items: center; gap: ${({ theme }) => theme.space.sm};
+  > svg { flex: none; }
+`;
 const Destinations = styled.div`
   display: grid; min-inline-size: 0;
   > p { margin: 0; color: ${({ theme }) => theme.color.mutedText}; }
-  a {
+  > [data-community-type] {
     display: flex; align-items: center; gap: ${({ theme }) => theme.space.sm}; min-block-size: var(--form-control-height);
     padding: ${({ theme }) => theme.space.sm}; color: ${({ theme }) => theme.color.text}; text-decoration: none;
     border-radius: ${({ theme }) => theme.radius.none};
-    &:hover { background: ${({ theme }) => theme.color.rowHover}; }
-    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.link}; outline-offset: calc(-1 * ${({ theme }) => theme.border.focusWidth}); }
     > svg { flex: none; font-size: var(--gh-font-section); }
     > span { min-inline-size: 0; overflow-wrap: anywhere; }
     strong, small { display: block; }
@@ -95,4 +100,6 @@ const Destinations = styled.div`
       > svg { flex: none; }
     }
   }
+  > a:hover { background: ${({ theme }) => theme.color.rowHover}; }
+  > a:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.link}; outline-offset: calc(-1 * ${({ theme }) => theme.border.focusWidth}); }
 `;

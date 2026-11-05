@@ -12,6 +12,16 @@ npm ci
 npm run dev -- --hostname 0.0.0.0 --port 3000
 ```
 
+Development uses the pinned Next.js version's default Turbopack compiler in both
+demo and live modes. This reduces cold route compilation and compiler memory;
+normal hot reload, environment restarts and authorization remain unchanged.
+Use `npm run dev -- --webpack` (or `npm run dev:live -- --webpack`) for the explicit
+Webpack fallback. The earlier instrumentation hang was not reproduced in the
+November audit's actual-application checks; see [measurements and qualification](reports/ui-performance-287.md).
+First visits still compile development routes. Keep builds and other expensive
+verification sequential on memory-constrained machines; production response times
+are a separate measurement from development compilation.
+
 The launcher checks Next.js and loads Prisma's configuration dependencies before
 starting or replacing any development services. If an interrupted or incomplete
 install leaves packages such as `effect` missing, restore the lockfile's full

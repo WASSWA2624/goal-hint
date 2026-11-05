@@ -246,6 +246,18 @@ class DevelopmentRestartTests(unittest.TestCase):
             self.assertEqual(MODULE.run_web(["--port", "3000"], {}, 3000), 1)
         spawn.assert_called_once()
 
+    def test_explicit_bundler_fallback_reaches_next_without_conflicting_defaults(self):
+        for flags in ([], ["--webpack"], ["--turbopack"]):
+            child = MagicMock()
+            child.stdout = io.StringIO("Ready\n")
+            child.wait.return_value = 0
+            child.poll.return_value = 0
+            with self.subTest(flags=flags), patch.object(MODULE.subprocess, "Popen", return_value=child) as spawn, \
+                    patch.object(MODULE, "release_port"):
+                self.assertEqual(MODULE.run_web([*flags, "--port", "3000"], {}, 3000), 0)
+            command = spawn.call_args.args[0]
+            self.assertEqual([value for value in command if value in ("--webpack", "--turbopack")], flags)
+
     def test_repeated_binding_races_have_a_bounded_restart_count(self):
         children = []
         for _ in range(3):

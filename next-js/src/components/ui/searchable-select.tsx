@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
+import { memo, useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
 import styled from "styled-components";
 import { searchFilterOptions } from "@/domain/filter-option-search";
+import { indexSelectOptions } from "@/domain/select-options";
 import { CheckIcon, ChevronDownIcon } from "./icons";
 import { FloatingOutline } from "./floating-outline";
 import { FloatingField } from "./floating-field";
@@ -30,13 +31,24 @@ const Detail = styled.span`
 const Empty = styled.p`
   margin: 0; padding: var(--gh-spacing-2); color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary);
 `;
-const sameValues = (left: readonly string[], right: readonly string[]) => left.length === right.length && left.every(value => right.includes(value));
+const emptyValues: readonly string[] = [];
 const subscribe = () => () => {};
 const browserSnapshot = () => true, serverSnapshot = () => false;
 
+/** Moving keyboard/pointer focus updates only the two affected rows, even in large league/team lists. */
+const SearchableOption = memo(function SearchableOption({ option, id, selected, blocked, active, onChoose, onActive }: {
+  option: SearchableSelectOption; id: string; selected: boolean; blocked: boolean; active: boolean;
+  onChoose: (value: string) => void; onActive: (value: string) => void;
+}) {
+  return <li id={id} role="option" aria-selected={selected} aria-disabled={blocked || undefined}
+    data-active={active || undefined} data-select-option={option.value}
+    onPointerDown={event => event.preventDefault()} onPointerMove={event => { if (event.pointerType === "mouse") onActive(option.value); }}
+    onClick={() => onChoose(option.value)}><Detail>{option.icon}<span>{option.label}{option.detail && <small>{option.detail}</small>}</span></Detail><CheckIcon /></li>;
+});
+
 /** One-click multi-selection with native form values, searchable options and local keyboard focus. */
 export function SearchableSelect({ label, values, options, onValuesChange, allLabel, searchLabel, emptyLabel, name,
-  maximum = Infinity, minimum = 0, allValues = [], searchable = true, disabled = false }: {
+  maximum = Infinity, minimum = 0, allValues = emptyValues, searchable = true, disabled = false }: {
   label: string; values: readonly string[]; options: readonly SearchableSelectOption[]; onValuesChange: (values: string[]) => void;
   allLabel: string; searchLabel: string; emptyLabel: string; name?: string; maximum?: number; minimum?: number;
   allValues?: readonly string[]; searchable?: boolean; disabled?: boolean;
@@ -48,15 +60,28 @@ export function SearchableSelect({ label, values, options, onValuesChange, allLa
   const close = useCallback(() => setOpen(false), []);
   useOutsideDismiss({ enabled: open, root, onDismiss: close });
   useAnchoredPanel({ open, anchor: trigger, panel: popup });
-  const available = useMemo<readonly SearchableSelectOption[]>(() => [...options, ...values.filter(value => !options.some(option => option.value === value))
-    .map(value => ({ value, label: value }))], [options, values]);
+  const optionsByValue = useMemo(() => indexSelectOptions(options), [options]);
+  const available = useMemo<readonly SearchableSelectOption[]>(() => {
+    const missing = values.filter(value => !optionsByValue.has(value)).map(value => ({ value, label: value }));
+    return missing.length ? [...options, ...missing] : options;
+  }, [options, optionsByValue, values]);
+  const availableByValue = useMemo(() => available === options ? optionsByValue : indexSelectOptions(available), [available, options, optionsByValue]);
+  const selectedValues = useMemo(() => new Set(values), [values]);
+  const allSelected = useMemo(() => {
+    const all = new Set(allValues);
+    return values.length === allValues.length && values.every(value => all.has(value));
+  }, [allValues, values]);
   const matches = useMemo(() => searchFilterOptions(available, search), [available, search]);
-  const shown = [...matches.exact, ...matches.similar];
-  const blocked = (value: string) => value !== "" && (values.includes(value) ? values.length <= minimum : values.length >= maximum);
-  const enabled = ["", ...shown.filter(option => !blocked(option.value)).map(option => option.value)];
-  const activeValue = active !== null && enabled.includes(active) ? active : search ? enabled[1] ?? "" : "";
-  const display = sameValues(values, allValues) ? allLabel : values.map(value => available.find(option => option.value === value)?.label ?? value).join(", ");
-  const optionId = (value: string) => `${id}-option-${value === "" ? 0 : available.findIndex(option => option.value === value) + 1}`;
+  const shown = useMemo(() => [...matches.exact, ...matches.similar], [matches]);
+  const blocked = useCallback((value: string) => value !== "" && (selectedValues.has(value) ? values.length <= minimum : values.length >= maximum),
+    [maximum, minimum, selectedValues, values.length]);
+  const enabled = useMemo(() => ["", ...shown.filter(option => !blocked(option.value)).map(option => option.value)], [blocked, shown]);
+  const enabledValues = useMemo(() => new Set(enabled), [enabled]);
+  const activeValue = active !== null && enabledValues.has(active) ? active : search ? enabled[1] ?? "" : "";
+  const display = useMemo(() => allSelected ? allLabel : values.map(value => availableByValue.get(value)?.option.label ?? value).join(", "),
+    [allLabel, allSelected, availableByValue, values]);
+  const optionId = (value: string) => `${id}-option-${value === "" ? 0 : (availableByValue.get(value)?.index ?? -1) + 1}`;
+  const allOption = useMemo<SearchableSelectOption>(() => ({ value: "", label: allLabel }), [allLabel]);
   useLayoutEffect(() => { if (open && searchable) popup.current?.querySelector("input")?.focus({ preventScroll: true }); }, [open, searchable]);
   useLayoutEffect(() => {
     const item = list.current?.querySelector<HTMLElement>('[data-active="true"]'), panel = list.current;
@@ -65,10 +90,10 @@ export function SearchableSelect({ label, values, options, onValuesChange, allLa
     if (bounds.bottom > viewport.bottom) panel.scrollTop += bounds.bottom - viewport.bottom;
     else if (bounds.top < viewport.top) panel.scrollTop -= viewport.top - bounds.top;
   }, [open, activeValue]);
-  function choose(value: string) {
+  const choose = useCallback((value: string) => {
     if (disabled || blocked(value)) return;
-    onValuesChange(value === "" ? [...allValues] : values.includes(value) ? values.filter(item => item !== value) : [...values, value].sort());
-  }
+    onValuesChange(value === "" ? [...allValues] : selectedValues.has(value) ? values.filter(item => item !== value) : [...values, value].sort());
+  }, [allValues, blocked, disabled, onValuesChange, selectedValues, values]);
   function keyboard(event: KeyboardEvent) {
     if (event.key === "Escape" && open) { event.preventDefault(); event.stopPropagation(); close(); trigger.current?.focus(); return; }
     if (!open) {
@@ -102,13 +127,9 @@ export function SearchableSelect({ label, values, options, onValuesChange, allLa
         aria-autocomplete="list" aria-controls={`${id}-list`} aria-activedescendant={optionId(activeValue)}
         onChange={event => { setSearch(event.target.value); setActive(null); }} /></Search>}
       <List $inline ref={list} id={`${id}-list`} role="listbox" aria-label={label} aria-multiselectable="true">
-        {([{ value: "", label: allLabel }, ...shown] as readonly SearchableSelectOption[]).map(option => {
-          const selected = option.value === "" ? sameValues(values, allValues) : values.includes(option.value);
-          return <li key={option.value} id={optionId(option.value)} role="option" aria-selected={selected} aria-disabled={blocked(option.value) || undefined}
-            data-active={activeValue === option.value || undefined} data-select-option={option.value}
-            onPointerDown={event => event.preventDefault()} onPointerMove={event => { if (event.pointerType === "mouse") setActive(option.value); }}
-            onClick={() => choose(option.value)}><Detail>{option.icon}<span>{option.label}{option.detail && <small>{option.detail}</small>}</span></Detail><CheckIcon /></li>;
-        })}
+        {[allOption, ...shown].map(option => <SearchableOption key={option.value} option={option} id={optionId(option.value)}
+          selected={option.value === "" ? allSelected : selectedValues.has(option.value)} blocked={blocked(option.value)}
+          active={activeValue === option.value} onChoose={choose} onActive={setActive} />)}
         {shown.length === 0 && <li role="presentation"><Empty>{emptyLabel}</Empty></li>}
       </List>
     </Popup>}

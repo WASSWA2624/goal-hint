@@ -93,6 +93,37 @@ test('detail history preserves requested order while batching hydration and hono
   assert.deepEqual(calls, { revisions: 1, markets: 1, cycles: 1, schedules: 1 });
 });
 
+test('current detail reads its active cycle once per transaction and observes the next request afresh', async () => {
+  const entry = slipForecastFixture();
+  entry.cycle.currentSetId = null;
+  const { tx, calls } = transaction([entry]), at = entry.at;
+  const fixture = { ...entry.fixture, dataVersion: 1n, retrievedAt: new Date(at),
+    homeTeam: { id: entry.fixture.homeTeamId, name: 'Home', code: 'HOM', logoUrl: null },
+    awayTeam: { id: entry.fixture.awayTeamId, name: 'Away', code: 'AWY', logoUrl: null },
+    season: { competition: { id: 'league-1', name: 'League', country: 'England', countryFlagUrl: null, logoUrl: null } } };
+  tx.footballFixture = { findUnique: async () => fixture, findUniqueOrThrow: async () => fixture };
+  tx.footballImport = { findMany: async () => [] };
+  tx.dailyRunImport = { findMany: async () => [] };
+  tx.dailyRun = { findUnique: async () => null, findMany: async () => [] };
+  tx.predictionSet = { findFirst: async () => null, findMany: async () => [] };
+  tx.predictionCycle = { findFirst: async () => null, findMany: async () => [],
+    findUnique: async () => { calls.cycles++; return entry.cycle; } };
+  tx.predictionSchedule.findUnique = async () => { calls.schedules++; return entry.schedule; };
+  tx.predictionRefreshResult = { findFirst: async () => null };
+  tx.runFixture = { findFirst: async () => null };
+  const service = createMatchDetailService({ database: { transaction: async read => read(tx) },
+    clock: { now: () => at }, providerOdds: false, allowLiveMatch: false });
+  const initial = await service.query(fixture.id);
+  assert.equal(initial.fixture.cycle.ordinal, 1);
+  assert.equal(initial.selectedCycle.ordinal, 1);
+  assert.deepEqual(calls, { revisions: 0, markets: 0, cycles: 1, schedules: 1 });
+  entry.cycle.ordinal = 2;
+  const next = await service.query(fixture.id);
+  assert.equal(next.fixture.cycle.ordinal, 2);
+  assert.equal(next.selectedCycle.ordinal, 2);
+  assert.deepEqual(calls, { revisions: 0, markets: 0, cycles: 2, schedules: 2 }, 'sharing never survives the request snapshot');
+});
+
 for (const [name, mutate] of [
   ['revision seal', (entry) => { entry.row.validIntegrity = 0; }],
   ['market seal', (entry) => { entry.marketRows[0].validIntegrity = 0; }],
