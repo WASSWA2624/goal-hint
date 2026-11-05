@@ -117,8 +117,9 @@ export function createCheckout({ database, config, now = Date.now }: {
 
   async function attach(tx: Tx, row: PaymentSubmission, input: ReceiptInput, image: Buffer | null, at: Date): Promise<Result<{ id: string; duplicate: boolean }>> {
     const messageSource = paymentMessageSource(input.original.extracted);
+    const screenshotOcr = input.original.extracted.screenshotOcr;
     const screenshotText = image && typeof input.original.extracted.screenshotText === "string" ? input.original.extracted.screenshotText : "";
-    const sourceIssue = paymentEvidenceSourceIssue({ messageSource, screenshotText, hasImage: !!image });
+    const sourceIssue = paymentEvidenceSourceIssue({ messageSource, screenshotText, screenshotOcr, hasImage: !!image });
     if (sourceIssue) return fail(sourceIssue, "evidence-source");
     if (!image && !input.original.text.trim()) return fail("Add a transaction message or screenshot for this payment.");
     const transactionId = parseTransactionId(input.transactionId), payerPhone = validMobilePhone(input.payerPhone), paidAt = new Date(input.paidAt);
@@ -126,9 +127,10 @@ export function createCheckout({ database, config, now = Date.now }: {
     const provider = row.method!, key = transactionKey(transactionId);
     const settings = await lockSettings(tx, "checkout", at);
     const numbers = { mtn: settings.mtnNumber, airtel: settings.airtelNumber, [provider]: row.receivingNumber ?? (provider === "mtn" ? settings.mtnNumber : settings.airtelNumber) };
-    const warnings = checkoutEvidenceWarnings({ text: input.original.text, screenshotText, messageSource, hasImage: !!image, transactionId, amountUgx: String(input.amountUgx) }, provider as "mtn" | "airtel", numbers);
+    const warnings = checkoutEvidenceWarnings({ text: input.original.text, screenshotText, screenshotOcr, messageSource, hasImage: !!image, transactionId, amountUgx: String(input.amountUgx) }, provider as "mtn" | "airtel", numbers);
     if (warnings.length && !input.warningsAccepted) return fail("Review the payment details and choose Confirm before submitting.", "evidence-warning");
     const fingerprint = createHash("sha256").update(JSON.stringify([provider, transactionId, input.amountUgx, payerPhone, input.paidAt, input.original.text, screenshotText, messageSource,
+      ...(screenshotOcr === undefined ? [] : [screenshotOcr]),
       image ? createHash("sha256").update(image).digest("hex") : null, warnings])).digest("hex");
     const original = { ...input.original, extracted: { ...input.original.extracted, messageSource, validationVersion: 1, selectedProvider: provider,
       validationWarnings: JSON.stringify(warnings), validationFingerprint: fingerprint, validationAcknowledgedAt: warnings.length ? at.toISOString() : null } };

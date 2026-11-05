@@ -2,6 +2,7 @@ import { paymentDestination, paymentEvidence } from "./payment-sms.ts";
 import { normalizePhone, localUgandaPhone, type MobileNetwork } from "./phone.ts";
 import { parseTransactionId, transactionKey } from "./payment.ts";
 import { validMobilePhone } from "./phone-mobile.ts";
+import { parseScreenshotOcr, screenshotOcrNeedsReview, screenshotOcrUncertainFields } from "./payment-screenshot.ts";
 
 type Numbers = Readonly<Record<MobileNetwork, string | null>>;
 const names = { mtn: "MTN Mobile Money", airtel: "Airtel Money" };
@@ -20,14 +21,16 @@ export function paymentMessageSource(extracted?: Readonly<Record<string, unknown
   const source = extracted?.messageSource;
   return source === undefined || source === "message" ? "message" : source === "image" ? "image" : "invalid";
 }
-export type EvidenceComparison = Readonly<{ text: string; screenshotText: string; hasImage: boolean; messageSource?: unknown; transactionId?: string; amountUgx?: string }>;
+export type EvidenceComparison = Readonly<{ text: string; screenshotText: string; hasImage: boolean; messageSource?: unknown; screenshotOcr?: unknown; transactionId?: string; amountUgx?: string }>;
 
 /** An editable image transcript remains part of its image, including after corrections. */
-export function paymentEvidenceSourceIssue(input: Pick<EvidenceComparison, "hasImage" | "screenshotText" | "messageSource">): string | null {
+export function paymentEvidenceSourceIssue(input: Pick<EvidenceComparison, "hasImage" | "screenshotText" | "messageSource" | "screenshotOcr">): string | null {
   const source = paymentMessageSource({ messageSource: input.messageSource });
+  const ocr = parseScreenshotOcr(input.screenshotOcr);
   if (source === "invalid") return "Check the transaction message source. Paste the original message or read the payment image again.";
-  if (source === "image" && !input.hasImage) return "This text came from a payment image. Reattach the image or paste the original transaction message before continuing.";
-  if (source === "image" && !input.screenshotText.trim()) return "Read the payment image again before continuing. Its original extracted text is missing.";
+  if (input.screenshotOcr !== undefined && !ocr) return "Read the payment image again before continuing. Its recognition details are invalid.";
+  if ((source === "image" || ocr) && !input.hasImage) return "This text came from a payment image. Reattach the image or paste the original transaction message before continuing.";
+  if (source === "image" && !input.screenshotText.trim() && !ocr) return "Read the payment image again before continuing. Its original extracted text is missing.";
   return null;
 }
 
@@ -46,6 +49,15 @@ export function checkoutEvidenceWarnings(input: EvidenceComparison, provider: Mo
     return { ...source, destination, network, evidence: paymentEvidence(source.text, numbers, { bare: false }) };
   });
   const warnings: PaymentEvidenceWarning[] = [], money = (amount: number) => `UGX ${amount.toLocaleString("en-UG")}`;
+  const ocr = parseScreenshotOcr(input.screenshotOcr);
+  if (input.hasImage && ocr) {
+    const uncertain = screenshotOcrUncertainFields(input.screenshotText, ocr);
+    for (const field of uncertain) warnings.push({ id: `screenshot.ocr-${field}`, message: field === "transactionId"
+      ? "The image reader could not reliably read the transaction ID. Check the entered ID against the original image; the admin must verify the incoming transfer."
+      : "The image reader could not reliably read the amount paid. Check the entered amount against the original image; the admin must verify the incoming transfer." });
+    if (!uncertain.length && screenshotOcrNeedsReview(input.screenshotText, ocr)) warnings.push({ id: "screenshot.ocr-confidence",
+      message: "The image reader is uncertain about this text. Check it against the original image; recognition does not verify payment." });
+  }
   for (const source of sources) {
     const mismatch = paymentDestinationMismatch(source.text, provider, numbers, source.label);
     if (mismatch) warnings.push({ id: `${source.id}.method`, message: mismatch });
@@ -111,7 +123,7 @@ export function paymentDestinationMismatch(text: string, provider: MobileNetwork
 
 /** Run for both entry and final submission; edits and restored drafts must not bypass evidence checks. */
 export function checkoutDetailsIssue(input: { text: string; screenshotText: string; hasImage: boolean; screenshotReady: boolean;
-  transactionId: string; amountUgx: string; payerPhone: string; messageSource?: unknown }): string | null {
+  transactionId: string; amountUgx: string; payerPhone: string; messageSource?: unknown; screenshotOcr?: unknown }): string | null {
   const sourceIssue = paymentEvidenceSourceIssue(input);
   if (sourceIssue) return sourceIssue;
   if (input.hasImage && !input.screenshotReady) return "Recheck or remove the saved screenshot before continuing.";

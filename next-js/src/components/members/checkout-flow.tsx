@@ -10,10 +10,10 @@ import { AmountInput } from "@/components/ui/amount-input";
 import { CriteriaDialogButton } from "@/components/ui/criteria-dialog";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { randomId } from "@/components/ui/random-id";
-import { AlertIcon, CheckIcon, ClipboardIcon, CloseIcon, CopyIcon, DocumentIcon } from "@/components/ui/icons";
+import { CheckIcon, ClipboardIcon, CloseIcon, CopyIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { checkoutLabels, checkoutMethodAvailable, checkoutOpenStatuses, duplicateReceiptMessage, fundingAmounts, type CheckoutEvidenceCheck, type CheckoutQuote, type CheckoutRequest, type CheckoutSelection, type CheckoutView } from "@/domain/checkout";
-import type { ScreenshotMetadata } from "@/domain/payment-screenshot";
+import { parseScreenshotOcr, screenshotOcrNeedsReview, screenshotOcrUncertainFields, type ScreenshotMetadata } from "@/domain/payment-screenshot";
 import { formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { PublicSubscriptionSettings } from "@/domain/public-subscription-settings";
 import { manualPaymentProvider } from "@/domain/subscription-settings";
@@ -28,7 +28,8 @@ import { formatNationalPhone, splitPhoneValue } from "@/domain/phone-countries";
 import { refreshMemberSession } from "./member-session";
 import { PaymentWizard, WizardActions, WizardNotice, WizardReview } from "./payment-wizard";
 import { PackageSelection } from "./package-selection";
-import { CheckoutMessageField, CheckoutTransactionFields, CheckoutTranscriptionStatus } from "./checkout-details-styles";
+import { CheckoutMessageField, CheckoutTransactionFields } from "./checkout-details-styles";
+import { PaymentTranscriptionStatus } from "./payment-transcription-status";
 import { CheckoutPay, CheckoutPayTransfer } from "./checkout-pay";
 import { EarnedDaysRedemption } from "./checkout-pay-styles";
 import { CheckoutActions, CheckoutChoices, CheckoutDialog, CheckoutFundingInput, CheckoutMessage, CheckoutPanel, CheckoutPayee, CheckoutPaySummary, CheckoutProviderMark, CheckoutSupport, FundingBreakdown } from "./checkout-parts";
@@ -234,19 +235,28 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     ...(quote?.method === receiptProvider && quote.recipient ? { [receiptProvider]: quote.recipient } : {}) }),
   [settings.mtnNumber, settings.airtelNumber, quote?.method, quote?.recipient, receiptProvider]);
   const screenshotText = image && typeof draft.extracted.screenshotText === "string" ? draft.extracted.screenshotText : "";
+  const screenshotOcr = image ? draft.extracted.screenshotOcr : undefined;
+  const ocr = useMemo(() => parseScreenshotOcr(screenshotOcr), [screenshotOcr]);
+  const uncertainFields = useMemo(() => ocr ? screenshotOcrUncertainFields(screenshotText, ocr) : [], [screenshotText, ocr]);
   const hasImage = !!image;
   const messageSource = paymentMessageSource(draft.extracted);
-  const warnings = useMemo(() => external ? checkoutEvidenceWarnings({ text: draft.text, screenshotText, hasImage, messageSource,
+  const warnings = useMemo(() => external ? checkoutEvidenceWarnings({ text: draft.text, screenshotText, screenshotOcr, hasImage, messageSource,
     transactionId: draft.transactionId, amountUgx: draft.amountUgx }, receiptProvider, numbers) : [],
-  [external, draft.text, screenshotText, hasImage, messageSource, draft.transactionId, draft.amountUgx, receiptProvider, numbers]);
-  const warningKey = JSON.stringify([draft.requestKey, receiptProvider, numbers, draft.text, screenshotText, messageSource, draft.screenshot?.imageSha256, draft.transactionId, draft.amountUgx]);
-  const sourceKey = JSON.stringify([draft.requestKey, receiptProvider, numbers, draft.originalText, screenshotText, messageSource, hasImage]);
+  [external, draft.text, screenshotText, screenshotOcr, hasImage, messageSource, draft.transactionId, draft.amountUgx, receiptProvider, numbers]);
+  const warningKey = JSON.stringify([draft.requestKey, receiptProvider, numbers, draft.text, screenshotText, screenshotOcr, messageSource, draft.screenshot?.imageSha256, draft.transactionId, draft.amountUgx]);
+  const sourceKey = JSON.stringify([draft.requestKey, receiptProvider, numbers, draft.originalText, screenshotText, screenshotOcr, messageSource, hasImage]);
+  const ocrNeedsReview = useMemo(() => !!ocr && screenshotOcrNeedsReview(screenshotText, ocr), [screenshotText, ocr]);
+  const transcriptionWarning = ocrNeedsReview
+    ? !screenshotText.trim() ? "No text was read. Enter the details from the image or choose a clearer photo."
+      : uncertainFields.length ? "Check the marked fields and correct unclear text against the image." : "Check unclear text against the image before continuing."
+    : warnings[0]?.message;
   const transcriptionNeedsReview = warnings.length > 0 || !draft.transactionId || !Number(draft.amountUgx) || !validMobilePhone(draft.payerPhone)
+    || ocrNeedsReview
     || messageSource === "image" && draft.text.trim() !== screenshotText.trim();
   useEffect(() => {
     if (!loaded || draft.step !== 2 || !external || busy || readingActive || error || notice || warningDialog || draft.text !== draft.originalText) return;
-    // Missing branding alone needs one confirmation at Next, rather than interrupting evidence entry.
-    if (!warnings.some(warning => !warning.id.endsWith(".unknown-provider")) || warningsAccepted === warningKey) { autoWarningKey.current = sourceKey; return; }
+    // Let members correct uncertain OCR before confirming its advisory warnings at Next.
+    if (!warnings.some(warning => !warning.id.endsWith(".unknown-provider") && !warning.id.startsWith("screenshot.ocr")) || warningsAccepted === warningKey) { autoWarningKey.current = sourceKey; return; }
     if (autoWarningKey.current === sourceKey) return;
     const timer = setTimeout(() => { autoWarningKey.current = sourceKey; setWarningDialog({ warnings, key: warningKey }); }, 0);
     return () => clearTimeout(timer);
@@ -259,7 +269,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     return true;
   }
   function detailsIssue() {
-    return external ? checkoutDetailsIssue({ ...draft, screenshotText, hasImage, screenshotReady, messageSource }) : null;
+    return external ? checkoutDetailsIssue({ ...draft, screenshotText, screenshotOcr, hasImage, screenshotReady, messageSource }) : null;
   }
   function review(event: FormEvent) {
     event.preventDefault();
@@ -324,16 +334,22 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       const preserveMessage = source === "image" && !!current.text.trim() && currentSource !== "image";
       const canFill = (field: "transactionId" | "amountUgx" | "payerPhone") => !current[field] || !preserveMessage
         && (current.editedEvidence ? !current.editedEvidence.includes(field) : current[field] === String(current.extracted[field] ?? ""));
+      const resetImagePayer = source === "image" && !preserveMessage && !extracted.payerPhone && canFill("payerPhone")
+        && typeof current.extracted.payerPhone === "string" && current.payerPhone === current.extracted.payerPhone;
+      const retainedExtraction = { ...current.extracted };
+      if (source === "image") delete retainedExtraction.screenshotOcr;
       return normalizeDraft({ ...current, accepted: false, ...(!preserveMessage ? { text, originalText: text } : {}), ...(screenshot ? { screenshot } : {}),
-        extracted: { ...current.extracted, ...extracted, ...(source === "image" ? { screenshotText: text } : {}),
+        extracted: { ...retainedExtraction, ...extracted, ...(source === "image" ? { screenshotText: text,
+          ...(screenshot?.ocr ? { screenshotOcr: JSON.stringify(screenshot.ocr) } : {}) } : {}),
           messageSource: preserveMessage ? currentSource : source === "message" ? "message" : "image" },
-        ...(evidence.transactionId && canFill("transactionId") ? { transactionId: evidence.transactionId } : {}),
-        ...(evidence.amount !== null && canFill("amountUgx") ? { amountUgx: String(evidence.amount) } : {}),
-        ...(extracted.payerPhone && canFill("payerPhone") ? { payerPhone: extracted.payerPhone } : {}), ...(paidAt ? { paidAt } : {}) });
+        ...(canFill("transactionId") && (evidence.transactionId || source === "image") ? { transactionId: evidence.transactionId ?? "" } : {}),
+        ...(canFill("amountUgx") && (evidence.amount !== null || source === "image") ? { amountUgx: evidence.amount === null ? "" : String(evidence.amount) } : {}),
+        ...(extracted.payerPhone && canFill("payerPhone") ? { payerPhone: extracted.payerPhone }
+          : resetImagePayer ? { payerPhone: account.phone } : {}), ...(paidAt ? { paidAt } : {}) });
     });
     setError("");
     setReading(evidence.transactionId || evidence.amount ? "Details extracted. Check and correct every field below." : "");
-    if (!evidence.transactionId && !evidence.amount) setError("We couldn’t find transaction details in this message. Paste the complete payment message, or check and enter its transaction details below.");
+    if (source === "message" && !evidence.transactionId && !evidence.amount) setError("We couldn’t find transaction details in this message. Paste the complete payment message, or check and enter its transaction details below.");
   }
   function editEvidence(field: "transactionId" | "amountUgx" | "payerPhone", value: string) {
     update({ [field]: value, editedEvidence: [...new Set([...(draft.editedEvidence ?? []), field])] });
@@ -469,20 +485,18 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
                 if (draft.text && draft.text !== draft.originalText) extract(draft.text, messageSource === "image" ? "transcript" : "message");
               }} />
           </CheckoutMessageField>
-          {screenshotReady && <CheckoutTranscriptionStatus role="status" data-transcription-status={transcriptionNeedsReview ? "review" : "extracted"}>
-            <strong>{transcriptionNeedsReview ? <AlertIcon /> : <DocumentIcon />}{transcriptionNeedsReview ? "Needs review" : "Text extracted — check details"}</strong>
-            {transcriptionNeedsReview && <p>{warnings[0]?.message ?? "Check the transaction ID, amount and number used to pay against the image."}</p>}
-            {messageSource !== "image" && <details><summary>Text from image</summary><p>{screenshotText}</p></details>}
-          </CheckoutTranscriptionStatus>}
+          {screenshotReady && <PaymentTranscriptionStatus ocr={ocr} needsReview={transcriptionNeedsReview}
+            warning={transcriptionWarning} imageText={screenshotText} showImageText={messageSource !== "image"} />}
           <PaymentScreenshot image={image} metadata={draft.screenshot ?? null} provider={receiptProvider} optional={messageSource === "message" && !!draft.text.trim()}
             submissionId={attaching?.id ?? null} disabled={busy} requirementId={`${evidenceId}-requirement`} onBusyChange={setReadingActive}
             onPasteMessage={() => messageInput.current?.focus()} onAccept={(screenshot, metadata, text) => { setImage(screenshot); extract(text, "image", metadata); }}
             onRemove={removeScreenshot} />
           {reading && <VisuallyHidden role="status">{reading}</VisuallyHidden>}
           <CheckoutTransactionFields>
-            <FloatingField label="Transaction ID"><InputControl $invalid={false} required disabled={readingActive} maxLength={40} autoComplete="off" autoCapitalize="characters" spellCheck={false}
+            <FloatingField label="Transaction ID" hint={uncertainFields.includes("transactionId") ? "Uncertain reading — check image" : undefined}><InputControl $invalid={false} required disabled={readingActive} maxLength={40} autoComplete="off" autoCapitalize="characters" spellCheck={false}
               value={draft.transactionId} onChange={e => editEvidence("transactionId", normalizeTransactionId(e.target.value))} /></FloatingField>
-            <AmountInput label="Amount paid (UGX)" required disabled={readingActive} value={draft.amountUgx} onValueChange={amountUgx => editEvidence("amountUgx", amountUgx)} />
+            <AmountInput label="Amount paid (UGX)" hint={uncertainFields.includes("amountUgx") ? "Uncertain reading — check image" : undefined}
+              required disabled={readingActive} value={draft.amountUgx} onValueChange={amountUgx => editEvidence("amountUgx", amountUgx)} />
           </CheckoutTransactionFields>
           <PhoneInput label="Number used to pay" formatValue required disabled={readingActive} value={draft.payerPhone} onValueChange={payerPhone => editEvidence("payerPhone", payerPhone)} />
         </>}

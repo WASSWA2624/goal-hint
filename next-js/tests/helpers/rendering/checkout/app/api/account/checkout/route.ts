@@ -10,6 +10,7 @@ export async function POST(request: Request) {
   if (body.action === "confirm") {
     const image = form.get("image"), proof = body.proof;
     const warnings = proof ? checkoutEvidenceWarnings({ text: proof.original.text, screenshotText: typeof proof.original.extracted.screenshotText === "string" ? proof.original.extracted.screenshotText : "",
+      messageSource: proof.original.extracted.messageSource, screenshotOcr: proof.original.extracted.screenshotOcr,
       hasImage: image instanceof File, transactionId: proof.transactionId, amountUgx: String(proof.amountUgx) }, body.selection.method,
     { mtn: settings.mtnNumber, airtel: settings.airtelNumber }) : [];
     if (warnings.length && !proof.warningsAccepted) return Response.json({ message: "Review the evidence warning before continuing." }, { status: 409 });
