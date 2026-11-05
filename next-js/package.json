@@ -47,6 +47,8 @@
     "trial:football": "python scripts/football-provider-trial.py",
     "evaluation:report": "python scripts/forecast-evaluation.py",
     "intelligence:report": "node --conditions=react-server scripts/intelligence-report.mjs",
+    "intelligence:prepare": "node --conditions=react-server scripts/acquire-intelligence-pilot.mjs",
+    "intelligence:accuracy": "node --conditions=react-server scripts/intelligence-accuracy-summary.mjs",
     "intelligence:benchmark": "python scripts/benchmark-local-pages.py",
     "test:intelligence": "node --conditions=react-server --test --test-concurrency=1 tests/local-goals-model.test.mjs tests/forecast-validator.test.mjs tests/walk-forward-evaluation.test.mjs tests/contextual-review.test.mjs tests/intelligence-*.test.mjs tests/conservative-joint-model.test.mjs tests/shadow-slip-*.test.mjs",
     "test:intelligence:mysql": "node --conditions=react-server scripts/test-intelligence-mysql.mjs",

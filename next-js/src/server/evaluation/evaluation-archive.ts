@@ -82,6 +82,18 @@ async function immutableFile(directory: string, filename: string, content: strin
   }
 }
 
+/** Shared local acquisition boundary: refuse links before creating artifacts. */
+export async function prepareEvaluationDirectory(value: string): Promise<string> {
+  return directoryAt(value, true);
+}
+
+/** Write one immutable, bounded artifact without following file or directory links. */
+export async function writeImmutableEvaluationFile(directory: string, filename: string, content: string,
+  maxBytes = MAX_EVALUATION_BYTES): Promise<boolean> {
+  if (typeof filename !== "string" || !/^[a-z0-9][a-z0-9.-]*$/u.test(filename)) throw new EvaluationArchiveError("unsafe-path");
+  return immutableFile(directory, filename, content, maximum(maxBytes));
+}
+
 /** The codec is restricted to the one native bigint field in evaluation fixtures. */
 export function parseEvaluationJson(text: string, kind: "protocol" | "dataset" | "report", maxBytes = MAX_EVALUATION_BYTES): unknown {
   try {
