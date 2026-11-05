@@ -303,7 +303,7 @@ export const en = {
   "account.resetAccepted": "Verification accepted for +{phone}. Set a new password to finish logging in.",
   "account.resetMessage": "Hello, please reset my Goal Hint password.",
   "account.contactAdmin": "Contact the admin for help",
-  "account.registerHelp": "Use the number you pay from. Next, verify your number by SMS or WhatsApp.",
+  "account.registerHelp": "Register and verify your number by SMS or WhatsApp",
   "account.verifyAccount": "Verify phone",
   "account.verifyCode": "Verify",
   "account.verificationHelp": "Choose how to receive your verification code.",

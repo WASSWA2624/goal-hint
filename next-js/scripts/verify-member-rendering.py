@@ -423,7 +423,7 @@ def main():
         match(r'autoComplete="new-password"', register.text)
         register_html = authentication_form(visible_html(register.text), "register", "Register")
         phone_field(register_html)
-        match("Use the number you pay from", register_html)
+        match("Register and verify your number by SMS or WhatsApp", register_html)
         no_match(r'Use 8–128 characters|By logging in|You can stay logged in on two devices', register_html)
         login = visible_html(request(server.origin, "/en/account?return=%2Fen%2Fmatches").text)
         match(r'href="/en/account\?view=forgot&amp;return=%2Fen%2Fmatches"', login)
