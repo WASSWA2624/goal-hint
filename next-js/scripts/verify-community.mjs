@@ -12,8 +12,10 @@ async function scenario(page, origin, values) {
 
 async function openCommunity(page, width) {
   const navigation = page.locator(`[data-responsive-navigation="${width < 1024 ? "mobile" : "desktop"}"]`).first();
-  await navigation.locator("[data-nav-more] summary").click();
-  await navigation.locator("[data-community-entry]").click();
+  const community = navigation.locator("[data-community-entry]");
+  await community.waitFor({ state: "attached" });
+  if (!await community.isVisible()) await navigation.locator("[data-nav-more] summary").click();
+  await community.click();
   const dialog = page.getByRole("dialog", { name: "Join our community" });
   await dialog.waitFor({ state: "visible" });
   assert.equal(await dialog.getByRole("heading", { name: "Join our community" }).locator("svg").count(), 1, "community heading includes its icon");
@@ -197,8 +199,12 @@ export async function verifyCommunity(page, origin, { widths = [320, 390, 1440],
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(`${origin}/navigation-fit`, { waitUntil: "domcontentloaded" });
     const shortNavigation = page.locator("[data-community-short-navigation]");
-    await shortNavigation.locator("[data-nav-more] summary").click();
-    await shortNavigation.locator("[data-community-entry]").click();
+    const inlineCommunity = shortNavigation.locator("[data-community-entry]");
+    await inlineCommunity.waitFor({ state: "visible" });
+    assert.equal(await shortNavigation.locator("[data-nav-more]").count(), 0,
+      "More is unnecessary when every destination, including Community, fits");
+    assert.equal(await inlineCommunity.evaluate(element => element.tagName), "BUTTON");
+    await inlineCommunity.click();
     assert.equal(await page.getByRole("dialog", { name: "Join our community" }).locator("div[data-community-type]").count(), 6,
       "Community remains available when every normal navigation item fits");
     assert.ok(intercepted.length >= widths.length * 2, "platform navigation was exercised");
