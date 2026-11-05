@@ -568,7 +568,7 @@ export const en = {
   "slips.state.no-qualifying.title": "No qualifying matches",
   "slips.state.no-qualifying.description": "No upcoming matches have current predictions and published odds that meet these criteria.",
   "slips.state.no-combinations.title": "No qualifying slips",
-  "slips.state.no-combinations.description": "Qualifying matches are available, but no examined combination meets the total odds and selection limits.",
+  "slips.state.no-combinations.description": "Qualifying matches are available, but we couldn’t build a slip within your set filters. Adjust the filters and try again.",
   "slips.state.odds-unavailable.title": "Odds unavailable",
   "slips.state.odds-unavailable.description": "Slips need published bookmaker prices. Public odds are currently unavailable, so no slips can be built yet.",
   "slips.state.model-unavailable.title": "Combined estimate unavailable",
