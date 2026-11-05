@@ -2,8 +2,8 @@
 
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { PerformanceSummary } from "@/components/performance/performance-summary";
-import { Button } from "@/components/ui/controls";
-import { Inline, Stack } from "@/components/ui/layout";
+import { TextButton } from "@/components/ui/controls";
+import { Stack } from "@/components/ui/layout";
 import { checkedFeedPerformance, feedPerformanceApiHref, performanceFeedQuery, retainedFeedPerformance, selectFeedSummaryResult, type FeedPerformanceSeed } from "@/domain/feed-performance-summary";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { getFeedToday, type FeedQuery } from "@/domain/feed-query";
@@ -86,8 +86,9 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
     <PerformanceSummary counts={summaryCounts} locale={query.locale} kind="matches"
       {...summaryLabels({ query, data })} activeResult={query.result} disabled={!enabled}
       onResult={(result) => onApply(selectFeedSummaryResult(query, result))} showCoverage={false} showAll compactHeader />
-    {failed && <Inline><FeedNote role="status">{messages.text("performance.summary.unavailable")}</FeedNote>
-      <Button type="button" variant="secondary" disabled={!enabled} onClick={() => retry((value) => value + 1)}>{messages.text("feed.retry")}</Button>
-    </Inline>}
+    {failed && <FeedNote data-performance-unavailable>
+      <span role="status">{messages.text("performance.summary.unavailable")}</span>{" "}
+      <TextButton disabled={!enabled} data-performance-retry onClick={() => retry((value) => value + 1)}>{messages.text("feed.retry")}</TextButton>
+    </FeedNote>}
   </Stack>;
 }

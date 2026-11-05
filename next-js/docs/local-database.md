@@ -448,3 +448,15 @@ Before DDL, a write-fenced logical checkpoint preserved all 121 prior base table
 The local target now has **61 completed migrations, none pending or failed**, 124 base tables and all **123 application models readable**. `npm run db:status`, `npm run db:verify` and `npm run db:health` pass, with health **ready** and no schema drift. The application has SELECT/INSERT/UPDATE/DELETE on `PaymentReviewEvent`, `PaymentAlertEndpoint` and `PaymentAlertDelivery`, recorded in the real private grants file. Zero-row transaction probes passed; application DDL remains denied.
 
 Account, session, payment, receipt, access and ledger counts matched the checkpoint. No synthetic rows were retained. New alert tables are empty; outbound alerts remain disabled and community URLs unconfigured. The temporary native helper task was removed and `GoalHintMySQL84` preserved. Hosted/MariaDB migrations, application deployment and device/provider qualification remain separate; see [alert setup and verification](payment-review-alerts.md).
+
+## 5 November 2026 all-pending migration update
+
+The owner's request applied all six pending source migrations through the existing separate migration role, from `20261103180000_shared_slip_trigger_blocks` through `20261105120000_contact_page_settings`. Native configuration-handle and SQL identity checks matched the existing MySQL 8.4.11 instance on port 3307.
+
+A private encrypted checkpoint authenticated successfully and restored on a separate disposable MySQL instance, matching all 124 prior table counts and 61 completed migrations. Ordinary application writes were fenced during the operation, including SharedSlip trigger replacement. The original write mode and migration privileges were restored; no credential, startup configuration or applied history changed.
+
+The configured local target now has **67 completed migration records** (66 source migrations plus the recorded adopted legacy migration), **none pending or unfinished**, and **127 base tables**. Existing table row counts are unchanged. Status, schema-drift verification, readiness and a repeated no-op deployment pass. Application access to the new contact/community/provider/trial fields and three empty shadow tables is verified; narrow shadow permissions were added without DELETE or DDL. Shadow processing remains disabled.
+
+The active repository-owned development demo at port 53124 also received its only pending Contact migration and now has all 66 source migrations applied. Its original settings, accounts and subscriptions were retained without restarting or reseeding. The running Contact page passes its HTML, query-isolation and policy-link checks. The demo's existing extra sharing table and legacy SharedSlip shape still produce schema differences; they were preserved rather than reset.
+
+The temporary native task was removed and the normal startup task preserved. Private checkpoint/key/grants artifacts remain outside Git. Hosted production and the separate XAMPP database are unchanged. See [operation evidence and scope](../dev-plan/296-all-pending-local-migrations.md).

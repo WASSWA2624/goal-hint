@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 
 /** Check real desktop access targets, their geometry and unchanged authorized metrics. */
 export async function verifyDesktopPredictionAccess(page, {
-  signedIn = false, expectedLocked, expectedUnlocked, expectedOdds = [], expectedProbabilities = [],
+  signedIn = false, expired = false, expectedLocked, expectedUnlocked, expectedOdds = [], expectedProbabilities = [],
 } = {}) {
   const rows = page.locator('[data-desktop-row]');
   assert.ok(await rows.count(), 'Desktop match rows are rendered.');
@@ -15,6 +15,7 @@ export async function verifyDesktopPredictionAccess(page, {
       const area = element.querySelector('[data-row-unlock]');
       const button = area?.querySelector('a[data-unlock-button]');
       const areaBounds = area?.getBoundingClientRect(), buttonBounds = button?.getBoundingClientRect();
+      const labelBounds = button?.querySelector('span')?.getBoundingClientRect();
       const teams = element.querySelector('[data-row-teams]')?.getBoundingClientRect();
       const status = element.querySelector('[data-row-status]')?.getBoundingClientRect();
       const hit = buttonBounds ? document.elementFromPoint(buttonBounds.left + buttonBounds.width / 2,
@@ -28,6 +29,10 @@ export async function verifyDesktopPredictionAccess(page, {
         label: button?.textContent.trim(), href: button?.getAttribute('href'), inSlip: Boolean(slip), headerHref: headerButton?.getAttribute('href'),
         buttons: area?.querySelectorAll('a, button').length,
         decorativeIcon: button?.querySelector('svg')?.getAttribute('aria-hidden') === 'true',
+        labelFits: Boolean(buttonBounds && labelBounds && labelBounds.left >= buttonBounds.left - 1
+          && labelBounds.right <= buttonBounds.right + 1 && labelBounds.top >= buttonBounds.top - 1
+          && labelBounds.bottom <= buttonBounds.bottom + 1 && button.scrollWidth <= button.clientWidth + 1
+          && button.scrollHeight <= button.clientHeight + 1),
         fillsArea: Boolean(areaBounds && buttonBounds && Math.abs(areaBounds.width - buttonBounds.width) < 1),
         spansMetrics: Boolean(areaBounds && teams && status && Math.abs(areaBounds.left - teams.right - gap) < 1
           && Math.abs(status.left - areaBounds.right - gap) < 1),
@@ -52,7 +57,8 @@ export async function verifyDesktopPredictionAccess(page, {
   }
   for (const card of locked) {
     assert.equal(card.buttons, 1, 'One access target replaces the protected metrics.');
-    assert.equal(card.label, 'Unlock prediction');
+    assert.equal(card.label, !signedIn ? 'Log in or register to unlock' : expired ? 'Renew to unlock' : 'Subscribe to unlock');
+    assert.ok(card.labelFits, 'The complete action label fits without clipping or overflow.');
     assert.ok(card.decorativeIcon, 'A decorative lock icon accompanies the accessible button text.');
     assert.equal(card.metricCount, 0, 'Market, odds and probability are replaced, including placeholders.');
     assert.ok(card.fillsArea && card.spansMetrics, 'The access target fills the former three-column region.');

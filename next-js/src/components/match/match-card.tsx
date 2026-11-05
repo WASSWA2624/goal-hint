@@ -643,7 +643,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       {...(position !== undefined ? { position } : {})} {...(titleNote ? { titleNote } : {})}
       {...(!offline && interactive && !gated ? { analysisHref: detailHref } : {})}
       {...(gated && !offline ? { predictionAction: <UnlockButton locale={locale} signedIn={signedIn}
-        returnTo={accessReturnTo ?? detailHref} label={messages.text("paywall.unlockPrediction")} /> } : {})}
+        returnTo={accessReturnTo ?? detailHref} actionSpecific /> } : {})}
       {...(snapshotPick ? { matchState: "snapshot", savedScore: true } : {})}
       offline={offline} interactive={interactive} eagerLogos={eagerLogos} {...(!gated && !offline ? { marketFamily: shownFamily } : {})}
       {...(marketDescription ? { marketDescription } : {})}

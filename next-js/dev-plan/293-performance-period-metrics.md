@@ -8,6 +8,7 @@
 - Best Slips reuses the selected-period aggregate before outcome filtering. Status clicks retain dates and odds, clearing only list page/cursor. Applying odds preserves the selected period.
 - Results & performance status cards filter the published-slip history without changing its period statistics or return metrics. History links retain the status; cancelled slips have their own category. Streamed status/pagination updates retain the confirmed history metrics and rows, with busy controls, until the next result arrives. Prediction summaries without a corresponding list remain read-only.
 - Shared performance presentation, percentage denominators, entitlement checks and foreground progress behavior remain in place.
+- Overall-performance recovery places an underlined text-style retry action inline with the unavailable message. It shares link styling and theme tokens, keeps native button semantics and keyboard focus, and retains the shared control height.
 
 ## Existing limits
 

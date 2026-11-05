@@ -23,6 +23,7 @@ export type ButtonLinkProps = ComponentPropsWithRef<typeof Link> & {
 };
 
 export type TextLinkProps = ComponentPropsWithRef<typeof Link>;
+export type TextButtonProps = ComponentPropsWithRef<"button">;
 
 type FieldContent = {
   label: ReactNode;
@@ -130,7 +131,7 @@ const ButtonAnchor = styled(Link)<{ $variant: ButtonVariant; $large?: boolean }>
   ${buttonTreatment}
 `;
 
-const TextAnchor = styled(Link)`
+const textActionTreatment = css`
   display: inline-flex;
   align-items: center;
   ${controlHeight}
@@ -146,6 +147,24 @@ const TextAnchor = styled(Link)`
   }
 
   ${focusTreatment}
+`;
+
+const TextAnchor = styled(Link)`${textActionTreatment}`;
+
+const TextButtonControl = styled.button`
+  padding: 0;
+  border: 0;
+  border-radius: ${({ theme }) => theme.radius.none};
+  background: transparent;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  ${textActionTreatment}
+
+  &:disabled {
+    color: ${({ theme }) => theme.color.disabledText};
+    cursor: not-allowed;
+  }
 `;
 
 export const Field = styled.div.attrs<{ "data-control-field"?: string }>({ "data-control-field": "" })`
@@ -285,6 +304,11 @@ export function ButtonLink({ variant = "primary", size = "normal", ...props }: B
 
 export function TextLink(props: TextLinkProps) {
   return <TextAnchor {...props} />;
+}
+
+/** Link-styled actions retain native button activation and disabled behavior. */
+export function TextButton({ type = "button", ...props }: TextButtonProps) {
+  return <TextButtonControl {...props} type={type} />;
 }
 
 export function TextInput({ label, hint, error, leading, trailing, type = "text", ...props }: TextInputProps) {
