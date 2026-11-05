@@ -4,7 +4,7 @@ import styled from "styled-components";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { SectionHeader, sectionHeaderMetadata } from "@/components/ui/section-header";
-import { createPredictionWindow, toUtcIsoString, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
+import { createPredictionWindow, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import { resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-query";
 import { feedHeading } from "@/domain/feed-presentation";
 import { publicPolicy } from "@/domain/public-policy";
@@ -47,7 +47,7 @@ const TitleLine = styled.div`
     margin-inline-end: var(--gh-spacing-1_5);
   }
 `;
-const PublishedAt = styled.time`
+const ResultsPeriod = styled.span`
   ${sectionHeaderMetadata}
 `;
 const ResultCount = styled.p`
@@ -67,22 +67,26 @@ const AvailabilityNote = styled(FeedNote)`
   margin: 0;
 `;
 
-/** One header follows the visible results and their actual stored prediction publication. */
+/** The heading names the applied match dates; publication history stays in the tooltip. */
 export function ResultsToolbar({ query, today, total, first, last, publishedAt = null }: {
   query: FeedQuery; today: ReportingDate; total: number | null; first: number; last: number; publishedAt?: number | null;
 }) {
   const messages = createMessages(query.locale, undefined, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone);
-  const outsidePredictionWindow = resolveFeedDates(query, today).endDate > createPredictionWindow(today).lastDate;
+  const range = resolveFeedDates(query, today);
+  const outsidePredictionWindow = range.endDate > createPredictionWindow(today).lastDate;
+  const period = messages.reportingDateRangeCompact(range.startDate, range.endDate);
+  const weekday = range.dayCount === 1 ? `${messages.reportingDayParts(range.startDate).weekday.toUpperCase()} ` : "";
   const instant = publishedAt === null ? null : utcInstantFromEpochMilliseconds(publishedAt);
   const publication = instant === null ? null : messages.predictionPublication(instant);
   const values = { shown: total === 0 || last < first ? "0" : `${messages.number(first)}–${messages.number(last)}`, total: total === null ? "" : messages.number(total) };
   return <ResultsBar data-results-header>
     <TitleLine>
       <h2><span data-header-mobile>{messages.text("navigation.matches")}</span><span data-header-desktop>{messages.text("feed.results.title")}</span></h2>{" "}
-      {instant !== null && <PublishedAt dateTime={toUtcIsoString(instant)} data-prediction-publication
-        title={messages.text("feed.results.latestPublication", { time: publication! })}>
-        <span data-header-mobile>{messages.predictionPublication(instant, "numeric")}</span><span data-header-desktop>{publication}</span>
-      </PublishedAt>}
+      <ResultsPeriod data-results-period data-from={range.startDate} data-to={range.endDate}
+        title={publication === null ? undefined : messages.text("feed.results.latestPublication", { time: publication })}>
+        <span data-header-mobile>{messages.reportingDateRangeCompact(range.startDate, range.endDate, "numeric")}</span>
+        <span data-header-desktop>{weekday}{period}</span>
+      </ResultsPeriod>
     </TitleLine>
     {total !== null && <ResultCount data-match-count aria-label={messages.text("feed.results.showing", values)}>
       <span data-desktop-count>{messages.text("feed.results.showing", values)}</span>

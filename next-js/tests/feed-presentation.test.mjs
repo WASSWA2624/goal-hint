@@ -45,7 +45,7 @@ test("row numbers continue across pages", () => {
   assert.equal(feedRowNumber(3, 10, 9), 30);
 });
 
-test("the results timestamp uses the latest visible publication, including locked and gated forecasts", () => {
+test("publication metadata uses the latest visible publication, including locked and gated forecasts", () => {
   assert.equal(latestPredictionPublication([]), null);
   assert.equal(latestPredictionPublication([{ forecast: null, kickoffAt: 9999999 }]), null);
   const published = { forecast: { publishedAt: 10 } }, gated = { forecast: { gated: true, publishedAt: 20 } };

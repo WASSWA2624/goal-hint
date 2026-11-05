@@ -131,3 +131,15 @@ test("numeric publication labels preserve the selected date, time and zone on mo
   assert.equal(messages.predictionPublication(parseUtcInstant("2026-12-31T21:56:00Z"), "numeric"), "01-01-2027 00:56 EAT");
   for (const invalid of [NaN, Infinity, 0.5]) assert.throws(() => messages.predictionPublication(invalid, "numeric"), CalendarValidationError);
 });
+
+test("match date ranges retain their civil dates in numeric and abbreviated headings", () => {
+  for (const zone of ["Africa/Kampala", "America/Los_Angeles", "Asia/Kolkata"]) {
+    const messages = createMessages("en", undefined, zone);
+    const label = (from, to = from, format = "numeric") => messages.reportingDateRangeCompact(parseReportingDate(from), parseReportingDate(to), format);
+    assert.equal(label("2026-11-05"), "05-11-2026");
+    assert.equal(label("2026-11-05", "2026-11-07"), "05–07-11-2026");
+    assert.equal(label("2026-10-31", "2026-11-05"), "31-10 – 05-11-2026");
+    assert.equal(label("2026-12-31", "2027-01-01"), "31-12-2026 – 01-01-2027");
+    assert.equal(label("2026-11-05", "2026-11-05", "short"), "05-Nov-2026");
+  }
+});

@@ -97,10 +97,10 @@ function buildMessages(language: string, translations: Partial<MessageCatalog>, 
   const { numbers, plurals, dates, instants, days, instantDays, times, shortTimes, mediumDates, spans, months, zones, publicationDates, numericDates } = formatters(language, timeZone);
   const zoneName = (value: UtcInstant): string => timeZone === publicPolicy.reportingTimeZone ? "EAT"
     : zones.formatToParts(value).find((part) => part.type === "timeZoneName")!.value;
-  const compactReportingDate = (value: ReportingDate) => {
+  const compactReportingDate = (value: ReportingDate, format: "short" | "numeric" = "short") => {
     const parts = mediumDates.formatToParts(getReportingDayBounds(value).startInclusive);
     const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(item => item.type === type)!.value;
-    const day = part("day").padStart(2, "0"), month = part("month"), year = part("year").padStart(4, "0");
+    const day = part("day").padStart(2, "0"), month = format === "numeric" ? value.slice(5, 7) : part("month"), year = part("year").padStart(4, "0");
     return { day, month, label: `${day}-${month}-${year}` };
   };
 
@@ -147,10 +147,10 @@ function buildMessages(language: string, translations: Partial<MessageCatalog>, 
       return mediumDates.format(getReportingDayBounds(value).startInclusive);
     },
     /** Reporting dates stay on their named civil day, independently of the display clock. */
-    reportingDateRangeCompact(from: ReportingDate, to: ReportingDate): string {
-      const start = compactReportingDate(from);
+    reportingDateRangeCompact(from: ReportingDate, to: ReportingDate, format: "short" | "numeric" = "short"): string {
+      const start = compactReportingDate(from, format);
       if (from === to) return start.label;
-      const end = compactReportingDate(to);
+      const end = compactReportingDate(to, format);
       if (from.slice(0, 7) === to.slice(0, 7)) return `${start.day}–${end.label}`;
       const first = from.slice(0, 4) === to.slice(0, 4) ? `${start.day}-${start.month}` : start.label;
       return `${first} – ${end.label}`;
