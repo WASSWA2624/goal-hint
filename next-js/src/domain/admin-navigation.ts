@@ -1,5 +1,5 @@
-/** Successful administrator sign-in starts with payments awaiting review. */
-export const adminLandingPath = "/admin/payments";
+/** Dashboard navigation and successful administrator sign-in start at Overview. */
+export const adminLandingPath = "/admin";
 
 /** Fixed destinations shared by the admin page switcher and its no-script fallback. */
 export const adminSections = [

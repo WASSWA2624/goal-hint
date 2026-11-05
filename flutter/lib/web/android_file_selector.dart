@@ -1,9 +1,20 @@
 import 'package:file_selector/file_selector.dart';
+import 'package:image_picker/image_picker.dart' as camera;
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
-/// Connects ordinary HTML file inputs to Android's system document picker.
-/// Capture hints fall back to this picker; no camera/storage permission is added.
-Future<List<String>> selectAndroidFiles(FileSelectorParams parameters) async {
+typedef AndroidDocumentPicker =
+    Future<List<XFile>> Function({
+      required bool multiple,
+      required List<XTypeGroup> acceptedTypeGroups,
+    });
+
+/// Honors explicit still-image capture while ordinary uploads keep Android's
+/// document picker. Images continue through the shared web validation flow.
+Future<List<String>> selectAndroidFiles(
+  FileSelectorParams parameters, {
+  Future<XFile?> Function()? capturePhoto,
+  AndroidDocumentPicker? chooseDocuments,
+}) async {
   if (parameters.mode == FileSelectorMode.save) return const [];
   final types = parameters.acceptTypes
       .expand((value) => value.split(','))
@@ -27,19 +38,55 @@ Future<List<String>> selectAndroidFiles(FileSelectorParams parameters) async {
         ];
   try {
     final List<XFile> files;
-    if (parameters.mode == FileSelectorMode.openMultiple) {
-      files = await openFiles(acceptedTypeGroups: groups);
+    final imageCapture =
+        parameters.isCaptureEnabled &&
+        parameters.mode == FileSelectorMode.open &&
+        types.isNotEmpty &&
+        types.every(
+          (type) =>
+              type.startsWith('image/') ||
+              const {
+                '.jpg',
+                '.jpeg',
+                '.png',
+                '.webp',
+                '.heic',
+                '.heif',
+                '.bmp',
+                '.gif',
+              }.contains(type),
+        );
+    if (imageCapture) {
+      final image = await (capturePhoto ?? _capturePhoto)();
+      files = image == null ? const [] : [image];
     } else {
-      final file = await openFile(acceptedTypeGroups: groups);
-      files = file == null ? const [] : [file];
+      files = await (chooseDocuments ?? _chooseDocuments)(
+        multiple: parameters.mode == FileSelectorMode.openMultiple,
+        acceptedTypeGroups: groups,
+      );
     }
-    // The endorsed Android picker copies selected content into its private
-    // cache and returns that path. WebView expects URI strings, not bare paths.
+    // Both endorsed pickers return a private cache path. WebView expects URIs.
     return files
         .map((file) => Uri.file(file.path, windows: false).toString())
         .toList();
   } on Exception {
-    // Cancellation or an unavailable picker must resolve the native callback.
+    // Cancellation, denied access or an unavailable camera/picker must resolve
+    // the native callback without replacing the web application's current image.
     return const [];
   }
+}
+
+Future<XFile?> _capturePhoto() => camera.ImagePicker().pickImage(
+  source: camera.ImageSource.camera,
+  preferredCameraDevice: camera.CameraDevice.rear,
+  requestFullMetadata: false,
+);
+
+Future<List<XFile>> _chooseDocuments({
+  required bool multiple,
+  required List<XTypeGroup> acceptedTypeGroups,
+}) async {
+  if (multiple) return openFiles(acceptedTypeGroups: acceptedTypeGroups);
+  final file = await openFile(acceptedTypeGroups: acceptedTypeGroups);
+  return file == null ? const [] : [file];
 }

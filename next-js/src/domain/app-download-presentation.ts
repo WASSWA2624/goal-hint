@@ -1,4 +1,4 @@
-import { homeHref } from "./navigation-paths.ts";
+import { localePath } from "./navigation-paths.ts";
 
 /** Browser-facing identity and display rules do not need the release-catalog validation runtime. */
 export const appPlatforms = ["android", "windows"] as const;
@@ -50,7 +50,7 @@ export function shouldOfferAppDownload(channel: AppChannel, release: AppDownload
   return memory.dismissed !== key || typeof memory.dismissedAt !== "number" || now - memory.dismissedAt >= appPromptCooldown;
 }
 
-export function appDownloadsHref(locale: string): string { return `${homeHref(locale)}/download`; }
+export function appDownloadsHref(locale: string): string { return `${localePath(locale)}/download`; }
 
 export function checkedPlayStoreUrl(value: string | undefined): string | null {
   if (!value?.trim()) return null;

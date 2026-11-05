@@ -52,7 +52,7 @@ export async function verifyAppLoading(page, origin) {
     for (const theme of ['light', 'dark']) {
       await page.setViewportSize({ width: 390, height: 900 });
       await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
-      await page.goto(`${origin}/en`, { waitUntil: 'commit' });
+      await page.goto(`${origin}/en/best-slips`, { waitUntil: 'commit' });
       await page.locator('[data-best-slips-loading]').waitFor({ state: 'visible' });
       assert(await page.getByRole('progressbar', { name: /loading/i }).count() === 1, 'Pending Best Slips uses one header progress bar');
       assert(await page.locator('[data-slip-skeleton]').count() === 0, 'Pending Best Slips has no separate skeleton');

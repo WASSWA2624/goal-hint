@@ -25,12 +25,11 @@ const { createBestSlipsRoute } = await import('../src/app/_components/best-slips
 const { default: OwnerLayout } = await import('../src/app/(owner)/layout.tsx');
 const props = query => ({ params: Promise.resolve({ locale: 'en' }), searchParams: Promise.resolve(query ?? {}) });
 
-test('the home route permanently redirects legacy feed queries before access or data reads and streams its valid shell', async () => {
+test('the dedicated Best Slips route streams its valid shell before access or data reads', async () => {
   const calls = [];
   const route = createBestSlipsRoute({ access: async () => { calls.push('access'); return { tier: 'free', signedIn: false }; },
     read: async () => { calls.push('read'); return null; } });
-  await assert.rejects(route.Page(props({ page: '2' })), error => error.digest === 'NEXT_REDIRECT;replace;/en/matches?page=2;308;');
-  assert.deepEqual(calls, []);
+  // Root and locale-home redirects are exercised by home-routes.test.mjs.
   const shell = await route.Page(props());
   const boundary = shell.props.children;
   assert.equal(boundary.type, Symbol.for('react.suspense'));

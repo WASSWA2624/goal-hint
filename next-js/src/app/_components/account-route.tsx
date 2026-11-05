@@ -19,8 +19,7 @@ import { ApprovalRefresh, PaymentNotice } from "@/components/members/payment-sta
 import { ButtonLink } from "@/components/ui/controls";
 import { Stack } from "@/components/ui/layout";
 import { SignOutIcon } from "@/components/ui/icons";
-import { memberNextPath, memberReturnPath } from "@/domain/member-navigation";
-import { adminLandingPath } from "@/domain/admin-navigation";
+import { memberLandingPath, memberNextPath, memberReturnPath } from "@/domain/member-navigation";
 import { publicSupportContactSettings } from "@/domain/public-subscription-settings";
 import { formatSubscriptionExpiry } from "@/domain/subscription-expiry";
 import { accountSection, accountSectionHref } from "@/domain/account-navigation";
@@ -34,7 +33,8 @@ import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { getAnalyticsServices } from "@/server/analytics/analytics-http";
 import { getMemberServices, type MemberServicesSource } from "@/server/members/member-http";
 import { createPlansService } from "@/server/members/plans";
-import { memberCookieName, type MemberIdentity } from "@/server/members/member-sessions";
+import { memberCookieName } from "@/server/members/member-sessions";
+import { readMemberPageSession } from "@/server/members/member-page-session";
 import { PublicShell } from "./public-shell";
 
 async function readPlans() {
@@ -48,7 +48,11 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     locale: string; searchParams: Promise<Record<string, string | string[] | undefined>>;
   }) {
     const messages = createMessages(locale), parameters = await searchParams;
-    const resolved = await services(), settings = resolved.settings.settings;
+    const resolved = await services().catch(() => null);
+    if (!resolved) return <PublicShell locale={locale} showAccount><Stack $gap="md">
+      <MemberNavigationRecovery /><p role="status">{messages.text("account.unavailable")}</p>
+    </Stack></PublicShell>;
+    const settings = resolved.settings.settings;
     const token = (await cookies()).get(memberCookieName(resolved.config.production))?.value;
     const returnTo = memberReturnPath(parameters.return);
     const section = accountSection(parameters.section), summarySection = section === "overview" || section === "subscription";
@@ -56,23 +60,20 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     // Old reset links enter the same code-based recovery flow.
     const authView: AccountAuthView = parameters.view === "register" ? "register" : parameters.view === "forgot" || parameters.view === "reset" ? "forgot" : "login";
     const mode = settings?.paywallMode;
-    let currentMember: MemberIdentity | null = null, unavailable = mode === undefined || !resolved.sessions;
-    if (resolved.sessions) {
-      try { currentMember = await resolved.sessions.verify(token); }
-      catch { unavailable = true; }
-    }
+    const session = await readMemberPageSession(resolved, token);
+    if (session.kind === "unavailable") return <PublicShell locale={locale} showAccount><Stack $gap="md">
+      <MemberNavigationRecovery /><p role="status">{messages.text("account.unavailable")}</p>
+    </Stack></PublicShell>;
+    const member = session.kind === "member" ? session.member : null;
+    const unavailable = mode === undefined;
     // Administrator sign-in is independent of subscription settings and every account subview.
-    const administrator = !!currentMember && !currentMember.blocked && !!currentMember.administrator;
-    if (administrator) redirect(adminLandingPath);
-    const member = currentMember;
-    const resetPromise = resolved.auth?.passwordResetSession(token).catch(() => null);
-    const verificationPromise = resolved.auth?.verificationSession(token).catch(() => null);
-    const reset = await resetPromise;
-    if (reset) return <PublicShell locale={locale} showAccount><ResetPasswordForm locale={locale} phone={reset.phone} returnTo={returnTo} contact={contact} /></PublicShell>;
+    if (member && !member.blocked && member.administrator) redirect(memberLandingPath(true, returnTo));
+    if (session.kind === "reset") return <PublicShell locale={locale} showAccount><MemberNavigationRecovery expectedPhone={null} /><ResetPasswordForm locale={locale} phone={session.phone} returnTo={returnTo} contact={contact} /></PublicShell>;
+    if (session.kind === "verification") return <PublicShell locale={locale} showAccount><MemberNavigationRecovery expectedPhone={null} /><AccountVerificationForm locale={locale} phone={session.phone} returnTo={returnTo} contact={contact} /></PublicShell>;
     if (authView === "forgot" && member && !member.blocked) redirect(accountSectionHref(locale, "password", returnTo));
-    if (authView === "forgot" && !member) return <PublicShell locale={locale} showAccount><AccountAuthForm locale={locale} view="forgot" returnTo={returnTo} contact={contact} /></PublicShell>;
-    const verification = await verificationPromise;
-    if (verification) return <PublicShell locale={locale} showAccount><AccountVerificationForm locale={locale} phone={verification.phone} returnTo={returnTo} contact={contact} /></PublicShell>;
+    if (authView === "forgot" && !member) return <PublicShell locale={locale} showAccount><MemberNavigationRecovery expectedPhone={null} /><AccountAuthForm locale={locale} view="forgot" returnTo={returnTo} contact={contact} /></PublicShell>;
+    if (member && !member.blocked && typeof parameters.view === "string" && ["login", "register", "verify", "new-password"].includes(parameters.view))
+      redirect(memberLandingPath(false, returnTo));
     const now = new Date();
     const [view, paymentView, subscription, dashboard, referrals, notifications, referralReviews] = member && !member.blocked ? await Promise.all([
       member.codeEnteredAt && (summarySection || section === "devices") ? resolved.codes?.accountView(member).catch(() => null) ?? null : null,
@@ -100,7 +101,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const reports = paymentView ? [status, paymentView.otherStatus ?? null].filter((report) => report && report.purpose !== "topup") : null;
     const viewPayment = reports ? reports.some((report) => ["pending", "superseded", "rejected", "reversed"].includes(report!.status)) : !!subscription?.paymentPending;
     if (member && !member.blocked) return <PublicShell locale={locale} showAccount workspace>
-      <MemberNavigationRecovery />
+      <MemberNavigationRecovery expectedPhone={member.phone} expectedAdministrator={false} />
       <ApprovalRefresh waiting={waiting || !!dashboard?.activity.some(entry => entry.kind === "payment" && entry.status === "pending")} refreshAt={refreshAt} />
       <AccountWorkspace locale={locale} current={section} phone={member.phone} returnTo={returnTo}>
         <AccountPageHead><h1>{messages.text(section === "overview" ? "account.title" : `account.section.${section}`)}</h1>
@@ -153,8 +154,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
       </AccountWorkspace>
     </PublicShell>;
     return <PublicShell locale={locale} showAccount><Stack $gap="md">
-      <MemberNavigationRecovery />
-      {unavailable && <p role="status">{messages.text("account.unavailable")}</p>}
+      <MemberNavigationRecovery expectedPhone={null} />
       {!member ? <>
         {parameters.status === "signed-out" && <p role="status">{messages.text("account.signedOut")}</p>}
         <AccountAuthForm key={authView} locale={locale} view={authView} returnTo={returnTo} contact={contact} />

@@ -33,3 +33,14 @@ export const CheckoutMessageField = styled(FloatingField)`
     margin: 0 var(--gh-spacing-0_75) var(--gh-spacing-0_75);
   }
 `;
+
+export const CheckoutTranscriptionStatus = styled.div`
+  display: grid; gap: var(--gh-spacing-1); min-inline-size: 0;
+  color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-reading);
+  > strong { display: flex; align-items: center; gap: var(--gh-spacing-1_5); color: ${({ theme }) => theme.color.text}; }
+  svg { inline-size: var(--gh-size-4); block-size: var(--gh-size-4); flex: none; }
+  p { margin: 0; overflow-wrap: anywhere; }
+  details { min-inline-size: 0; }
+  summary { cursor: pointer; }
+  details p { white-space: pre-wrap; margin-block-start: var(--gh-spacing-2); }
+`;

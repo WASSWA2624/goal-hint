@@ -58,7 +58,7 @@ class ProductionSeoTests(unittest.TestCase):
         if path == '/sitemap-index.xml':
             return sitemap(['/sitemap.xml', '/sitemap-matches-0.xml', '/sitemap-archive-0.xml'], index=True)
         if path == '/sitemap.xml':
-            return sitemap(['/en', '/en/matches'])
+            return sitemap(['/en/best-slips', '/en/matches'])
         if path == '/sitemap-matches-0.xml':
             return sitemap([MATCH])
         if path == '/sitemap-archive-0.xml':
@@ -93,12 +93,12 @@ class ProductionSeoTests(unittest.TestCase):
         self.assertIn('/en/matches', self.seen)
 
     def test_suspension_has_safe_actionable_diagnostic_and_stops(self):
-        self.overrides['/en'] = response('Private response body', 302,
+        self.overrides['/en/best-slips'] = response('Private response body', 302,
             Location='/cgi-sys/suspendedpage.cgi?private=value')
         with self.assertRaisesRegex(CommandError, 'Hosting suspension') as caught:
             self.verify()
         self.assertNotIn('private', str(caught.exception).lower())
-        self.assertEqual(self.seen, ['/en'])
+        self.assertEqual(self.seen, ['/en/best-slips'])
 
     def test_non_success_robots_and_sitemaps_cannot_pass_with_valid_body(self):
         for path in ('/robots.txt', '/sitemap-index.xml', '/sitemap-matches-0.xml'):
@@ -115,13 +115,13 @@ class ProductionSeoTests(unittest.TestCase):
                 '<meta name="description" content="Duplicate.">',
                 '<link rel="canonical" href="https://goalhint.com/wrong">'):
             with self.subTest(extra=extra):
-                valid = page('/en')
-                self.overrides['/en'] = Response(200, valid.headers, valid.text.replace('</head>', extra + '</head>'))
+                valid = page('/en/best-slips')
+                self.overrides['/en/best-slips'] = Response(200, valid.headers, valid.text.replace('</head>', extra + '</head>'))
                 with self.assertRaises(AssertionError):
                     self.verify()
 
     def test_title_and_main_heading_must_be_unique_and_server_rendered(self):
-        valid = page('/en')
+        valid = page('/en/best-slips')
         for before, after in (('<title>Synthetic page | Goal Hint</title>', ''),
                 ('<title>Synthetic page | Goal Hint</title>', '<title> </title>'),
                 ('</head>', '<title>Duplicate title</title></head>'),
@@ -132,13 +132,13 @@ class ProductionSeoTests(unittest.TestCase):
                     '<script>const shell = "<h1>Client-only heading</h1>";</script>'),
                 ('<h1>Synthetic <span>fixture</span></h1>', '<template><h1>Inert heading</h1></template>')):
             with self.subTest(after=after):
-                self.overrides['/en'] = Response(200, valid.headers, valid.text.replace(before, after))
+                self.overrides['/en/best-slips'] = Response(200, valid.headers, valid.text.replace(before, after))
                 with self.assertRaises(AssertionError):
                     self.verify()
 
     def test_svg_titles_and_inert_descendants_do_not_conflict_with_document_metadata(self):
-        valid = page('/en')
-        self.overrides['/en'] = Response(200, valid.headers, valid.text.replace(
+        valid = page('/en/best-slips')
+        self.overrides['/en/best-slips'] = Response(200, valid.headers, valid.text.replace(
             '<h1>Synthetic <span>fixture</span></h1>',
             '<h1><svg><title>Decorative icon</title></svg>'
             '<template><h1>Ignored heading</h1><title>Ignored title</title></template>Visible heading</h1>'))
@@ -148,14 +148,14 @@ class ProductionSeoTests(unittest.TestCase):
         for url in ('https://other.example/en', 'http://goalhint.com/en', '//goalhint.com/en',
                 'https://www.goalhint.com/en', ORIGIN + '/en?status=live', ORIGIN + '/en#section'):
             with self.subTest(url=url):
-                invalid = sitemap(['/en'])
+                invalid = sitemap(['/en/best-slips'])
                 self.overrides['/sitemap.xml'] = Response(200, invalid.headers,
-                    invalid.text.replace(ORIGIN + '/en', escape(url)))
+                    invalid.text.replace(ORIGIN + '/en/best-slips', escape(url)))
                 with self.assertRaises(AssertionError):
                     self.verify()
 
     def test_wrong_sitemap_document_missing_locations_and_duplicates_fail(self):
-        for invalid in (sitemap(['/en'], index=True), sitemap(['/en', '/en']),
+        for invalid in (sitemap(['/en/best-slips'], index=True), sitemap(['/en/best-slips', '/en/best-slips']),
                 response('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
                     '<url xmlns=""><loc>https://other.example/en</loc></url></urlset>', Content_Type='application/xml'),
                 response('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url/></urlset>',
@@ -166,8 +166,8 @@ class ProductionSeoTests(unittest.TestCase):
                     self.verify()
 
     def test_private_unpublished_and_missing_landing_pages_cannot_pass_sitemap_checks(self):
-        for paths in (['/en'], ['/en', '/en/matches', '/en/account'], ['/en', '/en/matches', '/admin/payments'],
-                ['/en', '/en/matches', '/en/privacy'], ['/en', '/en/matches', '/en/terms']):
+        for paths in (['/en/best-slips'], ['/en/best-slips', '/en/matches', '/en/account'], ['/en/best-slips', '/en/matches', '/admin/payments'],
+                ['/en/best-slips', '/en/matches', '/en/privacy'], ['/en/best-slips', '/en/matches', '/en/terms']):
             with self.subTest(paths=paths):
                 self.overrides['/sitemap.xml'] = sitemap(paths)
                 with self.assertRaises(AssertionError):
@@ -176,19 +176,19 @@ class ProductionSeoTests(unittest.TestCase):
     def test_all_header_directives_are_checked_case_insensitively(self):
         for directive in ('NOINDEX, FOLLOW', 'none', 'googlebot: NoIndex'):
             with self.subTest(directive=directive):
-                invalid = page('/en')
+                invalid = page('/en/best-slips')
                 invalid.headers['X-Robots-Tag'] = directive
                 invalid.headers['X-Robots-Tag'] = 'index, follow'
-                self.overrides['/en'] = invalid
+                self.overrides['/en/best-slips'] = invalid
                 with self.assertRaises(AssertionError):
                     self.verify()
 
     def test_crawler_specific_metadata_cannot_override_indexable_claim(self):
         for name, directive in (('Googlebot', 'NOINDEX'), ('bingbot', 'none')):
             with self.subTest(name=name):
-                valid = page('/en')
+                valid = page('/en/best-slips')
                 extra = f'<meta name="{name}" content="{directive}">'
-                self.overrides['/en'] = Response(200, valid.headers, valid.text.replace('</head>', extra + '</head>'))
+                self.overrides['/en/best-slips'] = Response(200, valid.headers, valid.text.replace('</head>', extra + '</head>'))
                 with self.assertRaises(AssertionError):
                     self.verify()
 

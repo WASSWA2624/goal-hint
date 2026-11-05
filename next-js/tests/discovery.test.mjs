@@ -192,7 +192,7 @@ test('sitemap shards preserve stored lastmod, advertise each bounded shard and p
     'https://goalhint.com/sitemap-archive-0.xml']);
   assert.match(index, /^<\?xml version="1\.0" encoding="UTF-8"\?>\n<sitemapindex xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
   const urls = (await routes.sitemap()).map(row => row.url);
-  assert.deepEqual(urls, ['https://goalhint.com/en', 'https://goalhint.com/en/matches', 'https://goalhint.com/en/help', 'https://goalhint.com/en/contact']);
+  assert.deepEqual(urls, ['https://goalhint.com/en/matches', 'https://goalhint.com/en/best-slips', 'https://goalhint.com/en/help', 'https://goalhint.com/en/contact']);
   for (const id of ['-1', '01', '1.xml', '9999999999', 'x']) {
     assert.throws(() => sitemapPage(id), RangeError);
     await assert.rejects(routes.matches({ id: Promise.resolve(id) }), RangeError);
@@ -249,9 +249,9 @@ test('home identity and breadcrumb structured data use canonical URLs and visibl
   const home = homeStructuredData();
   assert.equal(home['@context'], 'https://schema.org');
   const [organization, website] = home['@graph'];
-  assert.deepEqual(organization, { '@type': 'Organization', '@id': 'https://goalhint.com/en#organization', name: 'Goal Hint',
-    url: 'https://goalhint.com/en', logo: 'https://goalhint.com/brand/goal-hint-app-icon-512.png' });
-  assert.equal(website['@type'], 'WebSite'); assert.equal(website.url, 'https://goalhint.com/en');
+  assert.deepEqual(organization, { '@type': 'Organization', '@id': 'https://goalhint.com/en/matches#organization', name: 'Goal Hint',
+    url: 'https://goalhint.com/en/matches', logo: 'https://goalhint.com/brand/goal-hint-app-icon-512.png' });
+  assert.equal(website['@type'], 'WebSite'); assert.equal(website.url, 'https://goalhint.com/en/matches');
   assert.deepEqual(website.publisher, { '@id': organization['@id'] });
   assert.throws(() => breadcrumbStructuredData([{ name: 'Only' }]), RangeError);
   assert.throws(() => breadcrumbStructuredData([{ name: 'Home', path: 'https://evil.example/' }, { name: 'Here' }]), RangeError);
@@ -259,7 +259,7 @@ test('home identity and breadcrumb structured data use canonical URLs and visibl
   const crumbs = matchStructuredData({ fixture }, 'en');
   assert.equal(crumbs['@type'], 'BreadcrumbList');
   assert.deepEqual(crumbs.itemListElement.map(item => item.position), [1, 2, 3]);
-  assert.deepEqual(crumbs.itemListElement[0], { '@type': 'ListItem', position: 1, name: 'Goal Hint', item: 'https://goalhint.com/en' });
+  assert.deepEqual(crumbs.itemListElement[0], { '@type': 'ListItem', position: 1, name: 'Goal Hint', item: 'https://goalhint.com/en/matches' });
   assert.match(crumbs.itemListElement[1].item, /^https:\/\/goalhint\.com\/en\/predictions\/\d{4}-\d{2}-\d{2}$/);
   assert.match(crumbs.itemListElement[1].name, /^Predictions for /);
   assert.deepEqual(crumbs.itemListElement[2], { '@type': 'ListItem', position: 3, name: 'Example Home FC v Example Away FC' });

@@ -12,9 +12,8 @@ import { createMessages } from "@/i18n/messages";
 import { resolveViewerAccessFresh } from "@/server/members/viewer-access";
 import { gateBestSlips, readBestSlips } from "@/server/slips/best-slips";
 import { bestSlipsMetadata } from "@/server/seo/metadata";
-import { homeBrowseLinks, redirectLegacyFeedQuery } from "@/server/seo/home-query";
+import { homeBrowseLinks } from "@/server/seo/home-query";
 import { getDiscoveryPolicy } from "@/server/seo/policy";
-import { homeStructuredData, serializeStructuredData } from "@/domain/discovery";
 import { getShellDate, PublicShell } from "./public-shell";
 
 type Props = Readonly<{ params: Promise<{ locale: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }>;
@@ -30,7 +29,6 @@ export function createBestSlipsRoute({ read = readBestSlips, access = resolveVie
     const result = gateBestSlips(published, viewer);
     const browse = homeBrowseLinks(result, locale);
     return <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(homeStructuredData()) }} />
       <Stack $gap="sm">
         <BestSlips result={result} locale={locale} signedIn={viewer.signedIn} />
         {browse.length > 0 && <CriteriaPanel as="nav" aria-labelledby="browse-predictions"><Stack $gap="sm">
@@ -45,9 +43,8 @@ export function createBestSlipsRoute({ read = readBestSlips, access = resolveVie
       const [{ locale }, query] = await Promise.all([params, searchParams]);
       return bestSlipsMetadata(locale, query, policy);
     },
-    async Page({ params, searchParams }: Props) {
+    async Page({ params }: Props) {
       const { locale } = await params;
-      redirectLegacyFeedQuery(locale, await searchParams);
       const today = await getShellDate();
       return <PublicShell locale={locale} today={today} current="best-slips" app compact>
         <Suspense fallback={<BestSlipsLoading locale={locale} today={today} />}>

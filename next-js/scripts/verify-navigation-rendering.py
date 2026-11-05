@@ -20,8 +20,11 @@ def main() -> None:
 
     root = anonymous("/")
     assert root.status == 308
-    assert urlsplit(urljoin(origin, root.headers.get("location"))).path == "/en"
-    paths = ["/en", "/en/matches", "/en/slips", today_path, results_path, "/en/matches?status=live",
+    assert urlsplit(urljoin(origin, root.headers.get("location"))).path == "/en/matches"
+    locale_home = anonymous("/en")
+    assert locale_home.status == 308
+    assert urlsplit(urljoin(origin, locale_home.headers.get("location"))).path == "/en/matches"
+    paths = ["/en/best-slips", "/en/matches", "/en/slips", today_path, results_path, "/en/matches?status=live",
         "/en/matches?sort=kickoff", "/en/matches?from=2026-10-09&to=2026-10-16",
         "/en/matches?when=tomorrow&status=scheduled&market=total-goals&sort=kickoff",
         "/en/predictions/2020-02-29?to=2020-03-06&q=Synthetic&league=league-a&page=2&pageSize=40",
@@ -39,7 +42,7 @@ def main() -> None:
         assert 0 <= html.find("data-styled=") < html.find("<header"), f"{path}: initial shell CSS"
         visible = unescape(visible_html(html, comments=False))
         assert_navigation_overflow(visible,
-            primary=["/en", "/en/matches", "/en/slips"],
+            primary=["/en/best-slips", "/en/matches", "/en/slips"],
             overflow=["/en/performance", *[f"/en/{page}" for page in information_pages]],
             footer=[f"/en/{page}" for page in information_pages])
         target = urlsplit(path)
@@ -56,13 +59,13 @@ def main() -> None:
                         "A live match result prediction remains Pending"]:
                     assert phrase in visible
                 no_match(r'data-stored-performance|data-performance-cell|action="[^"\s]*#performance', visible)
-        elif target.path == "/en":
-            assert_navigation(visible, primary="/en", mobile="/en")
+        elif target.path == "/en/best-slips":
+            assert_navigation(visible, primary="/en/best-slips", mobile="/en/best-slips")
         elif target.path == "/en/slips":
             assert_navigation(visible, primary="/en/slips", mobile="/en/slips")
         else:
             assert_navigation(visible, primary="/en/matches", mobile="/en/matches")
-        assert 'href="/en"' in visible, f"{path}: Best Slips home target"
+        assert 'href="/en/best-slips"' in visible, f"{path}: Best Slips target"
         no_match(r'data-nav-key="(?:live|results)"', visible)
         assert 'href="/en/slips"' in visible, f"{path}: Slips target"
         assert 'href="/en/account"' in visible and 'href="/en/subscribe"' in visible

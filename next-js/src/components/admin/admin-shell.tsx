@@ -3,6 +3,7 @@ import "server-only";
 import type { ComponentProps } from "react";
 import { HeaderBrand } from "@/components/ui/brand";
 import { AccountLinks } from "@/components/members/account-link";
+import { MemberNavigationRecovery } from "@/components/members/member-controls";
 import { NavigationProgress } from "@/components/navigation/navigation-progress";
 import { DesktopNav, Header, HeaderActions, HomeLink, SkipLink, TabBar } from "@/components/navigation/shell-styles";
 import { ResponsiveNavigation } from "@/components/navigation/responsive-navigation";
@@ -21,6 +22,7 @@ export async function AdminShell({ username, ...props }: ComponentProps<typeof A
   const destinations = [...navigationDestinations(await getShellDate(), "en"), dashboardDestination(messages.text("navigation.dashboard"))];
   return (
     <AdminShellFrame data-admin-shell>
+      <MemberNavigationRecovery expectedAdministrator />
       <SkipLink href="#main-content">{messages.text("navigation.skip")}</SkipLink>
       <Header>
         <AdminHeaderContent>

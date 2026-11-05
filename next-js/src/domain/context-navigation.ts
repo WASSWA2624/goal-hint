@@ -7,7 +7,7 @@ export function navigationSurface(url: URL): string | null {
   }
   if (/^\/en\/matches\/[\w-]+\/[a-z0-9-]+$/u.test(url.pathname)) return url.pathname;
   if (/^\/s\/[a-f0-9]{32}$/u.test(url.pathname)) return "shared-slip";
-  if (/^\/en(?:\/(?:matches|subscribe|slips|performance|help|privacy|terms|contact|download|how-it-works|predictions\/\d{4}-\d{2}-\d{2}|best-slips\/\d{4}-\d{2}-\d{2}\/\d+))?$/u.test(url.pathname)) return url.pathname;
+  if (/^\/en(?:\/(?:matches|subscribe|slips|performance|help|privacy|terms|contact|download|how-it-works|predictions\/\d{4}-\d{2}-\d{2}|best-slips(?:\/\d{4}-\d{2}-\d{2}\/\d+)?))?$/u.test(url.pathname)) return url.pathname;
   return null;
 }
 

@@ -185,6 +185,39 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     const valid = await submit(who, selection, { ...proof(), original: { text: "Unreadable transaction message; fields corrected manually", extracted: {} } });
     assert.equal(valid.status, "pending");
   });
+  await t.test("image transcripts require their image and cannot corroborate their own OCR", async () => {
+    const who = await member(), selection = select(), quoted = await checkout.quote(who, selection);
+    const receipt = proof(), raw = `Paid UGX 5,000. Transaction ID: ${receipt.transactionId}`;
+    const original = { text: `MTN. ${raw}`, extracted: { messageSource: "image", screenshotText: raw } };
+    const imageProof = { ...receipt, original, warningsAccepted: false };
+    const orphan = await checkout.confirm(who, selection, randomUUID(), quoted.value.quoteKey, true, imageProof);
+    assert.equal(orphan.ok, false); assert.equal(orphan.code, "evidence-source");
+    const missingRaw = await checkout.confirm(who, selection, randomUUID(), quoted.value.quoteKey, true,
+      { ...imageProof, original: { ...original, extracted: { messageSource: "image" } } }, jpeg());
+    assert.equal(missingRaw.ok, false); assert.equal(missingRaw.code, "evidence-source");
+    const malformed = await checkout.confirm(who, selection, randomUUID(), quoted.value.quoteKey, true,
+      { ...imageProof, original: { ...original, extracted: { ...original.extracted, messageSource: null } } }, jpeg());
+    assert.equal(malformed.ok, false);
+    const unacknowledged = await checkout.confirm(who, selection, randomUUID(), quoted.value.quoteKey, true, imageProof, jpeg());
+    assert.equal(unacknowledged.ok, false); assert.equal(unacknowledged.code, "evidence-warning");
+    assert.equal(await database.query(tx => tx.paymentSubmission.count({ where: { accountId: who.accountId } })), 0);
+
+    const saved = await checkout.confirm(who, selection, randomUUID(), quoted.value.quoteKey, true, { ...imageProof, warningsAccepted: true }, jpeg());
+    assert.equal(saved.ok, true); assert.equal(saved.value.status, "pending");
+    const detail = await review.detail(saved.value.id), claim = detail.claims[0];
+    assert.equal(claim.original.text, original.text);
+    assert.equal(claim.original.extracted.screenshotText, raw);
+    assert.equal(claim.original.extracted.messageSource, "image");
+    assert.deepEqual(claim.validation.warnings.map(warning => warning.id), ["screenshot.unknown-provider"]);
+    assert.equal(claim.validation.reviewed, false);
+    assert.equal(await database.query(tx => tx.accessCode.count({ where: { accountId: who.accountId } })), 0);
+
+    const detached = await checkout.attach(who, saved.value.id, { ...imageProof, warningsAccepted: true });
+    assert.equal(detached.ok, false); assert.equal(detached.code, "evidence-source");
+    const after = await review.detail(saved.value.id);
+    assert.deepEqual(after.claims[0].original, claim.original, "Rejected detachment preserves the original evidence");
+    assert.equal(after.revision, detail.revision);
+  });
   await t.test("evidence checks find reused IDs privately, scope images to their owner and preserve one photo", async () => {
     const a = await member(), b = await member(), image = jpeg(), receipt = proof(), selection = select();
     const quote = await checkout.quote(a, selection);

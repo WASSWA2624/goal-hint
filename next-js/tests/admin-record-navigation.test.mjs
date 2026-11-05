@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { adminLandingPath, adminSections, isRecordAdminSection } from "../src/domain/admin-navigation.ts";
 
-test("record workflows follow Payments, followed by other tools and separate Analytics", () => {
-  assert.equal(adminLandingPath, "/admin/payments");
+test("administrator entry opens Overview while record tools keep their dedicated routes", () => {
+  assert.equal(adminLandingPath, "/admin");
+  assert.equal(adminSections.find(item => item.key === "payments").href, "/admin/payments");
   assert.deepEqual(adminSections.map(item => item.key), ["overview", "payments", "codes", "subscribers", "referrals", "plans", "audit", "settings", "analytics"]);
   assert.equal(new Set(adminSections.map(item => item.href)).size, adminSections.length);
 });

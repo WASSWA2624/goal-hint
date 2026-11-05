@@ -10,7 +10,7 @@ import styled, { css } from "styled-components";
 import { NavigationProgress } from "@/components/navigation/navigation-progress";
 import type { MatchDetailResponse } from "@/domain/match-detail";
 import type { InsightsPreview } from "@/domain/match-insights";
-import { feedReturnStorageKey, homeHref, matchesHref } from "@/domain/navigation";
+import { feedReturnStorageKey, homeHref, localePath, matchesHref } from "@/domain/navigation";
 import { useMessages } from "@/i18n/use-messages";
 import { media } from "@/styles/theme";
 import { contentGutter } from "@/components/ui/layout";
@@ -103,7 +103,7 @@ function readFeedReturn(): string | null {
 /** The stored feed URL resolves after hydration inside this link alone, not across the whole page. */
 function useBackHref(locale: string) {
   const stored = useSyncExternalStore(subscribeNever, readFeedReturn, () => null);
-  return stored && stored.startsWith(homeHref(locale)) && !stored.includes("//") ? stored : matchesHref(locale);
+  return stored && stored.startsWith(`${localePath(locale)}/`) && !stored.includes("//") ? stored : matchesHref(locale);
 }
 function DesktopBackLink() {
   const { locale, messages } = useStableDetails();

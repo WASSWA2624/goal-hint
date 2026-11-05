@@ -42,7 +42,7 @@ test("member password sign-in preserves phone normalization, bounds/whitelists i
     assert.equal(response.status, 200, input);
     assert.equal(calls.signIn.at(-1)[0], input.includes("254") ? "254712345678" : "256772123456");
     const body = await response.json();
-    assert.equal(body.next, "/en");
+    assert.equal(body.next, "/en/matches");
     assert.doesNotMatch(body.next, /256772|254712/);
     assert.match(response.headers.getSetCookie()[0], /^goal-hint-member=t{43}; Path=\/; HttpOnly; SameSite=Lax; Max-Age=34560000$/);
   }
@@ -60,7 +60,7 @@ test("member password sign-in preserves phone normalization, bounds/whitelists i
   for (const path of ["https://evil.test", "//evil.test", "/en?phone=256772123456", "/en#code=x", "/en/matches/a/b?x=1", "/en/matches/a/%2f", "/en/../admin"]) {
     assert.equal(memberReturnPath(path), null, path);
     const response = await handler(memberRequest({ phone: "0772123456", password: "test password", destination: path, return: path }, { json: false }));
-    assert.equal((await response.json()).next, "/en");
+    assert.equal((await response.json()).next, "/en/matches");
   }
 });
 
@@ -95,6 +95,22 @@ test("shared logout clears both identities during storage and service outages, w
     }
     assert.ok(calls.some(value => Array.isArray(value) && value[0] === "legacy" && value[1] === "legacy-token"));
     if (failure !== "member-source") assert.ok(calls.some(value => Array.isArray(value) && value[0] === "member" && value[1] === "member-token"));
+  }
+});
+
+test("abandoning verification clears its session and returns to Login without accepting arbitrary redirects", async () => {
+  for (const json of [false, true]) for (const destination of ["login", "https://other.test", "//other.test", "/admin", "subscribe", ""]) {
+    const fixture = memberFixture();
+    const parameters = new URLSearchParams({ destination, return: "https://other.test" });
+    const request = new Request(`http://localhost:3000/api/account/sign-out?${parameters}`, { method: "POST",
+      headers: { "sec-fetch-site": "same-origin", cookie: "goal-hint-member=pending-verification-token", ...(json ? { accept: "application/json" } : {}) } });
+    const response = await createMemberSignOutHandler(fixture.resolve)(request);
+    const next = destination === "login" ? "/en/account?view=login" : "/en/matches";
+    assert.equal(response.status, json ? 200 : 303);
+    if (json) assert.equal((await response.json()).next, next); else assert.equal(response.headers.get("location"), next);
+    assert.deepEqual(fixture.calls.signOut, ["pending-verification-token"]);
+    assert.match(response.headers.getSetCookie().find(value => value.startsWith("goal-hint-member=")), /Max-Age=0/u);
+    assert.equal(response.headers.get("clear-site-data"), '"cache"');
   }
 });
 
@@ -178,7 +194,7 @@ test("a changed payment number clears its tested shortcut unless the same save s
 
 test("provider controls, payment identity, support contacts and message templates are protected", () => {
   assert.deepEqual([...protectedSettingFields].sort(), ["airtelEnabled", "airtelMenuShortcut", "airtelName", "airtelNumber", "contactPhone", "mtnEnabled", "mtnMenuShortcut", "mtnName",
-    "mtnNumber", "whatsappPhone", "supportContacts", "messageTemplates", "communityLinks", "paymentAlertsEnabled"].sort());
+    "mtnNumber", "whatsappPhone", "supportContacts", "messageTemplates", "communityVisible", "communityLinks", "paymentAlertsEnabled"].sort());
   assert.ok(protectedSettingFields.every((field) => editableSettingFields.includes(field)));
 });
 

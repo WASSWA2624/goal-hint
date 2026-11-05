@@ -8,7 +8,7 @@ import { privacyNotice } from "../../domain/privacy-notice.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
 import { contactNotice } from "../../domain/contact-notice.ts";
 import { createMessages } from "../../i18n/messages.ts";
-import { homeHref, type InformationPage } from "../../domain/navigation.ts";
+import { bestSlipsHref, type InformationPage } from "../../domain/navigation.ts";
 import type { FeedPageResult } from "../matches/feed-page.ts";
 import { getDiscoveryPolicy } from "./policy.ts";
 
@@ -51,11 +51,11 @@ export function informationPublicationReady(page: InformationPage): boolean {
     : contactNotice.releaseReady;
 }
 
-/** Like information pages, home query variants (shared ?ref= links; feed bookmarks redirect first) keep the /en canonical but are noindex. */
+/** Best Slips query variants retain their own canonical collection but stay noindex. */
 export function bestSlipsMetadata(locale: string, query: Readonly<Record<string, unknown>> = {}, policy = getDiscoveryPolicy): Metadata {
   const messages = createMessages(locale);
   return pageMetadata({ title: messages.text("bestSlips.metadataTitle"), description: messages.text("bestSlips.metadataDescription"),
-    path: homeHref(locale), index: policy().index && Object.keys(query).length === 0 });
+    path: bestSlipsHref(locale), index: policy().index && Object.keys(query).length === 0 });
 }
 
 /** Missing addresses: noindex, no canonical, and their own social tags instead of the root layout's feed defaults. */

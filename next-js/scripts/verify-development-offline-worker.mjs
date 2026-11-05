@@ -73,8 +73,8 @@ export async function verifyDevelopmentOfflineWorker(page, { origin = "http://lo
 
   await page.goto(origin, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.locator("[data-app-header]").waitFor();
-  assert.equal(new URL(page.url()).pathname, "/en");
-  assert.match(await page.title(), /Best Slips/);
+  assert.equal(new URL(page.url()).pathname, "/en/matches");
+  assert.match(await page.title(), /Goal Hint/);
   assert.equal(await page.getByRole("heading", { name: "Saved matches", exact: true }).count(), 0);
   assert.equal(await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length), 0);
   return { passed: true, reproducedSavedPage: true, recoveredWithoutAppJavaScript: true,

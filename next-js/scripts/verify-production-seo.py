@@ -84,7 +84,7 @@ def verify(origin, *, today=None):
         checks += 1
         return response
 
-    page('/en', '/en', True)
+    page('/en/best-slips', '/en/best-slips', True)
     page('/en/matches', '/en/matches', True)
     page('/en/matches?q=Arsenal', '/en/matches?q=Arsenal', False)
     page('/en/matches?tz=America%2FLos_Angeles', '/en/matches?tz=America%2FLos_Angeles', False)
@@ -110,7 +110,7 @@ def verify(origin, *, today=None):
             crawl_rules.append(line)
     rules.parse(crawl_rules)
     for crawler in ('Googlebot', 'Bingbot'):
-        for path in ('/en', '/en/matches'):
+        for path in ('/en/best-slips', '/en/matches'):
             assert rules.can_fetch(crawler, ORIGIN + path), 'Public landing pages are blocked by robots.txt.'
     checks += 1
 
@@ -146,7 +146,7 @@ def verify(origin, *, today=None):
         assert urlsplit(url).netloc == 'goalhint.com' and urlsplit(url).path.count('/') == 1, url
         urls = locations(urlsplit(url).path)
         if url == ORIGIN + '/sitemap.xml':
-            assert {ORIGIN + '/en', ORIGIN + '/en/matches'} <= set(urls), 'Public landing pages are missing from the sitemap.'
+            assert {ORIGIN + '/en/best-slips', ORIGIN + '/en/matches'} <= set(urls), 'Public landing pages are missing from the sitemap.'
         if '/sitemap-matches-' in url and urls:
             path = urlsplit(urls[0]).path
             page(path, path, True)

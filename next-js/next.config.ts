@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
       { key: "Referrer-Policy", value: "same-origin" },
     ];
     const privateSources = ["/analytics", "/api/analytics/:path*", "/admin", "/admin/:path*", "/api/admin/:path*",
-      "/en/account", "/en/subscribe", "/en/best-slips/:path*", "/api/account/:path*", "/api/slips/:path*", "/r/:path*", "/s/:path*", "/payment-review/:path*"];
+      "/en/account", "/en/subscribe", "/en/best-slips/:date/:number", "/api/account/:path*", "/api/slips/:path*", "/r/:path*", "/s/:path*", "/payment-review/:path*"];
     const publicCache = [["/flags/:file*", "public, max-age=2592000, stale-while-revalidate=86400"],
       ["/brand/:file*", "public, max-age=86400, stale-while-revalidate=604800"],
       ["/sounds/:file*", "public, max-age=31536000, immutable"]] as const;
@@ -45,13 +45,12 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
-      // Resolve both the host and default locale in one hop. Config redirects also
-      // retain the query string, unlike the root page's parameterless redirect.
+      // Resolve both the host and canonical Matches home in one hop, retaining queries.
       { source: "/", has: [{ type: "host", value: "www.goalhint.com" }],
-        destination: "https://goalhint.com/en", permanent: true },
+        destination: "https://goalhint.com/en/matches", permanent: true },
       { source: "/:path*", has: [{ type: "host", value: "www.goalhint.com" }],
         destination: "https://goalhint.com/:path*", permanent: true },
-      { source: "/", destination: "/en", permanent: true },
+      { source: "/", destination: "/en/matches", permanent: true },
     ];
   },
   async rewrites() {

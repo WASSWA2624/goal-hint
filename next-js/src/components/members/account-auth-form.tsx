@@ -6,6 +6,7 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { InfoIcon, UserIcon } from "@/components/ui/icons";
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
+import { memberAuthPath } from "@/domain/member-navigation";
 import type { AdminContact } from "./admin-contact";
 import { MemberForm } from "./member-controls";
 import { AccountCard, AccountCardBody, AccountError, AccountFormFooter, AccountLink, AccountNote, AccountPrimary, AccountSecondaryActions, AccountSessionInfo } from "./account-styles";
@@ -21,7 +22,7 @@ export function AccountAuthForm({ locale, view = "login", returnTo, contact }: {
   const [password, setPassword] = useState("");
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const base = `/${resolveLocale(locale)}`;
-  const href = (next: AccountAuthView) => `${base}/account?${new URLSearchParams({ view: next, ...(returnTo ? { return: returnTo } : {}) })}`;
+  const href = (next: AccountAuthView) => memberAuthPath(next, returnTo);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (busy) return;
     setBusy(true); setError("");

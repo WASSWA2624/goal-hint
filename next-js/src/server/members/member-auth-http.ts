@@ -1,10 +1,8 @@
 import { authCopy } from "../../i18n/messages/auth.ts";
 import "server-only";
-import { reviewReturnPath } from "../../domain/payment-alerts.ts";
 import { readReferralAttribution, referralCookieName } from "./referral-attribution.ts";
 
-import { memberReturnPath, sharedSlipReturnPath } from "../../domain/member-navigation.ts";
-import { adminLandingPath } from "../../domain/admin-navigation.ts";
+import { memberAuthPath, memberLandingPath, memberReturnPath } from "../../domain/member-navigation.ts";
 import { noCredit, type SubscriptionSummary } from "../../domain/subscription-summary.ts";
 import { clientAddress, cookie, isSameOrigin, json, readCookie, readLimitedBody } from "../http/private-http.ts";
 import { getMemberServices, type MemberServices, type MemberServicesSource } from "./member-http.ts";
@@ -73,11 +71,10 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
         : await services.auth.changePassword(body.password, binding);
       if (result.status !== "authenticated") return failure(result);
       // Shared-slip journeys return to their canonical token; ordinary sign-ins still finish at home.
-      const returnTo = ["register", "login", "verify", "reset"].includes(action) ? sharedSlipReturnPath(body.return) ?? "/en" : memberReturnPath(body.return);
-      const restrictedPath = (view: string) => `/en/account?${new URLSearchParams({ view, ...(returnTo ? { return: returnTo } : {}) })}`;
-      const next = result.requiresPasswordChange ? restrictedPath("new-password")
-        : result.requiresVerification ? restrictedPath("verify")
-        : result.administrator ? reviewReturnPath(body.return) ?? adminLandingPath
+      const returnTo = ["register", "login", "verify", "reset"].includes(action) ? memberLandingPath(false, body.return) : memberReturnPath(body.return);
+      const next = result.requiresPasswordChange ? memberAuthPath("new-password", returnTo)
+        : result.requiresVerification ? memberAuthPath("verify", returnTo)
+        : result.administrator ? memberLandingPath(true, body.return)
         : returnTo ?? (action === "phone" ? "/en/account?status=phone-changed"
         : action === "password" ? "/en/account?status=password-changed" : "/en/account");
       const response = json({ next, phone: result.phone, ...(result.requiresPasswordChange ? { requiresPasswordChange: true } : {}),

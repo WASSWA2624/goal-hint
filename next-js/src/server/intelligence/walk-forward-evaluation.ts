@@ -27,7 +27,7 @@ export type WalkForwardCell = Readonly<{
   metrics: EvaluationMetrics; pricedSelections: number; illustrativeUnitStakeRoi: number | null;
 }>;
 
-function baseline(history: readonly BaselineResult[], fixture: IntelligenceFixture, configuration?: Partial<LocalGoalConfiguration>) {
+export function estimateLeagueFrequency(history: readonly BaselineResult[], fixture: IntelligenceFixture, configuration?: Partial<LocalGoalConfiguration>) {
   const rows = history.filter((row) => row.fixtureId !== fixture.fixtureId && row.competitionId === fixture.competitionId &&
     row.availableAt <= fixture.forecastAt && row.kickoffAt < fixture.forecastAt &&
     row.kickoffAt >= fixture.forecastAt - (configuration?.lookbackMs ?? 730 * 86_400_000));
@@ -98,7 +98,7 @@ export function evaluateIntelligenceWalkForward(input: Readonly<{
       .filter((family) => ensemble.families[family].status === "estimated" && providerUsable && provider.probabilities[family])
       .map((family) => [family, validation.probabilities![family]])) as Partial<Pick<IntelligenceProbabilities, SourceGroup>> : null;
     const candidates = { local: local.probabilities, provider: providerUsable ? provider.probabilities : null,
-      ensemble: learnedProbabilities, "league-frequency": baseline(history, fixture, input.configuration) };
+      ensemble: learnedProbabilities, "league-frequency": estimateLeagueFrequency(history, fixture, input.configuration) };
     for (const system of systems) {
       const candidate = candidates[system];
       // Reuse canonical market/settlement metrics. The legacy domain has no local
