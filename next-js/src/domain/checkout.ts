@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { manualPaymentProvider, type ManualPaymentSettings } from "./subscription-settings.ts";
 import { paymentMessageSource } from "./checkout-evidence.ts";
+import { parseScreenshotOcr } from "./payment-screenshot.ts";
 
 export const checkoutRules = Object.freeze({ reservationMs: 48 * 3_600_000, pageSize: 30, maximumUgx: 2_000_000_000 });
 export const checkoutOpenStatuses = ["pending", "remaining", "disputed", "correction", "reconfirm"] as const;
@@ -23,7 +24,9 @@ export const receiptInputSchema = z.object({
   original: z.object({ text: z.string().max(12_000), extracted: z.record(z.string(), z.union([z.string(), z.number(), z.null()]))
     .refine(fields => paymentMessageSource(fields) !== "invalid", { message: "Invalid transaction message source." })
     .refine(fields => fields.screenshotText === undefined || typeof fields.screenshotText === "string" && fields.screenshotText.length <= 12_000,
-      { message: "Extracted screenshot text must contain at most 12,000 characters.", path: ["screenshotText"] }) }).strict(),
+      { message: "Extracted screenshot text must contain at most 12,000 characters.", path: ["screenshotText"] })
+    .refine(fields => fields.screenshotOcr === undefined || typeof fields.screenshotText === "string" && parseScreenshotOcr(fields.screenshotOcr) !== null,
+      { message: "Recognition details require valid bounded metadata and the original extracted text.", path: ["screenshotOcr"] }) }).strict(),
 }).strict();
 export type ReceiptInput = z.infer<typeof receiptInputSchema>;
 export const checkoutEvidenceSchema = z.object({ provider: z.enum(["mtn", "airtel"]), transactionId: z.string().trim().min(4).max(40),

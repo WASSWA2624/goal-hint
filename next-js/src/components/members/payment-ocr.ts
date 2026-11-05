@@ -1,3 +1,6 @@
+import { needsPaymentOcrEnhancement, paymentOcrResult, selectPaymentOcrResult, type PaymentOcrResult } from "../../domain/payment-ocr-result.ts";
+import { enhancePaymentOcrImage, preparePaymentOcrImage, type PaymentOcrEnhancement } from "./payment-ocr-image.ts";
+
 /**
  * Reads the text of a payment screenshot on this device with tesseract.js, loaded from this site's /ocr/ files (copied by
  * scripts/ocr-assets.mjs) only when a member picks an image. The image is not sent anywhere to be read, and nothing is kept in
@@ -7,22 +10,25 @@
 const simdProbe = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11]);
 // Restarted on every progress message. The first use downloads the core (about 2.9 MB) and the language data (about 3 MB)
 // in steps that report no progress; at 20 KB/s the larger takes about 150 s, so a step may run 240 s before the read ends.
-const stallMs = 240_000;
+const stallMs = 240_000, recognitionBudgetMs = 60_000;
 
 /** "preparing" loads the reader (a download the first time); "reading" recognizes the text. progress is 0–100 within it. */
-export type ScreenshotProgress = Readonly<{ stage: "preparing" | "reading"; progress: number }>;
+export type ScreenshotProgress = Readonly<{ stage: "preparing" | "reading"; progress: number; attempt?: number }>;
 // Where each loading step sits in the preparing bar; the language data is the large first-time download.
 const preparingSteps: Readonly<Record<string, readonly [number, number]>> = {
   "loading tesseract core": [0, 30], "initializing tesseract": [30, 35], "loading language traineddata": [35, 90], "initializing api": [90, 100],
 };
 
 /** Always settles: a worker error, a stall or `signal` rejects, and the Web Worker is closed whichever way the read ends. */
-export async function readScreenshotText(image: Blob, onProgress: (progress: ScreenshotProgress) => void = () => {}, signal?: AbortSignal): Promise<string> {
-  let fail: (reason: Error) => void = () => {}, timer: ReturnType<typeof setTimeout> | undefined, spawned: Worker | undefined;
+export async function readPaymentScreenshot(image: Blob, onProgress: (progress: ScreenshotProgress) => void = () => {}, signal?: AbortSignal): Promise<PaymentOcrResult> {
+  let fail: (reason: Error) => void = () => {}, timer: ReturnType<typeof setTimeout> | undefined, budget: ReturnType<typeof setTimeout> | undefined;
+  let spawned: Worker | undefined, source: HTMLCanvasElement | undefined, attempt = 1;
+  const readings: PaymentOcrResult[] = [];
+  const cancelled = new AbortController();
   const failure = new Promise<never>((_, reject) => { fail = reject; });
   void failure.catch(() => {});
   const stall = () => { clearTimeout(timer); timer = setTimeout(() => fail(new Error("Reading the screenshot stalled.")), stallMs); };
-  const stop = () => fail(new Error("Reading the screenshot was stopped."));
+  const stop = () => { cancelled.abort(); fail(new Error("Reading the screenshot was stopped.")); };
   if (signal?.aborted) throw new Error("Reading the screenshot was stopped.");
   signal?.addEventListener("abort", stop, { once: true });
   stall(); onProgress({ stage: "preparing", progress: 0 });
@@ -41,16 +47,42 @@ export async function readScreenshotText(image: Blob, onProgress: (progress: Scr
         logger: ({ status, progress }) => {
           stall();
           const share = Math.min(1, Math.max(0, progress || 0)), step = preparingSteps[status];
-          if (status === "recognizing text") onProgress({ stage: "reading", progress: Math.round(share * 100) });
+          if (status === "recognizing text") onProgress({ stage: "reading", progress: Math.round(share * 100), attempt });
           else if (step) onProgress({ stage: "preparing", progress: Math.round(step[0] + (step[1] - step[0]) * share) });
         } });
     } finally { globalThis.Worker = NativeWorker; }
     void starting.catch(() => {});
     const worker = await Promise.race([starting, failure]);
-    return (await Promise.race([worker.recognize(image), failure])).data.text;
+    budget = setTimeout(() => { cancelled.abort(); fail(new Error("Image reading reached its time limit.")); }, recognitionBudgetMs);
+    source = await Promise.race([preparePaymentOcrImage(image, cancelled.signal), failure]);
+    const recognize = async (input: HTMLCanvasElement, enhanced: boolean) => {
+      const page = (await Promise.race([worker.recognize(input, { rotateAuto: true }, { text: true, blocks: true }), failure])).data;
+      const words = page.blocks?.flatMap(block => block.paragraphs.flatMap(paragraph => paragraph.lines.flatMap(line => line.words))) ?? [];
+      readings.push(paymentOcrResult({ text: page.text, confidence: page.confidence, words }, enhanced));
+    };
+    await recognize(source, false);
+    for (const mode of ["contrast", "threshold"] satisfies PaymentOcrEnhancement[]) {
+      if (!needsPaymentOcrEnhancement(selectPaymentOcrResult(readings))) break;
+      attempt++;
+      onProgress({ stage: "reading", progress: 0, attempt });
+      const enhanced = await Promise.race([enhancePaymentOcrImage(source, mode, cancelled.signal), failure]);
+      try { await recognize(enhanced, true); }
+      finally { enhanced.width = 0; enhanced.height = 0; }
+    }
+    return selectPaymentOcrResult(readings);
+  } catch (error) {
+    // Failed optional enhancement does not discard a completed reading. Cancellation never accepts it.
+    if (readings.length && !signal?.aborted) return selectPaymentOcrResult(readings);
+    throw error;
   } finally {
-    clearTimeout(timer); signal?.removeEventListener("abort", stop);
+    clearTimeout(timer); clearTimeout(budget); cancelled.abort(); signal?.removeEventListener("abort", stop);
+    if (source) { source.width = 0; source.height = 0; }
     // Ending the Web Worker directly also covers a start that failed or never finished; a second terminate is a no-op.
     spawned?.terminate();
   }
+}
+
+/** Compatibility for older entry points that only display the recognized text. */
+export async function readScreenshotText(image: Blob, onProgress?: (progress: ScreenshotProgress) => void, signal?: AbortSignal): Promise<string> {
+  return (await readPaymentScreenshot(image, onProgress, signal)).text;
 }

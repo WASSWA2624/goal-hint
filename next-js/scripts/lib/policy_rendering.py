@@ -79,7 +79,7 @@ class _NavigationParser(HTMLParser):
             self.icons.pop()
 
 
-def assert_navigation(visible: str, *, primary: str, mobile: str | None, footer: str | None = None) -> None:
+def assert_navigation(visible: str, *, primary: str | None, mobile: str | None, footer: str | None = None) -> None:
     parser = _NavigationParser()
     parser.feed(visible)
     for label, expected in [("Main navigation", primary), ("Information", footer), ("App sections", mobile)]:
@@ -91,7 +91,7 @@ def assert_navigation(visible: str, *, primary: str, mobile: str | None, footer:
 
 
 def assert_navigation_overflow(visible: str, *, primary: list[str], overflow: list[str], footer: list[str]) -> None:
-    """Desktop starts with three links; phones start with one and keep every other destination in More."""
+    """Initial HTML starts with three desktop links or one phone link; Community awaits client visibility."""
     assert len(primary) == 3 and len(set(primary + overflow)) == len(primary + overflow), "Distinct navigation destinations"
     parser = _NavigationParser()
     parser.feed(visible)
