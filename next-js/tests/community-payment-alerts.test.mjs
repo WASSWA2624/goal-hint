@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
-import { communityLinksSchema, publicCommunityLinks, validCommunityUrl } from "../src/domain/community.ts";
+import { communityLinksSchema, defaultCommunityLinks, publicCommunityLinks, validCommunityUrl } from "../src/domain/community.ts";
 import { alertRegistrationSchema, retryDelay, reviewReturnPath, validWebPushEndpoint } from "../src/domain/payment-alerts.ts";
 import { defaultSubscriptionSettings, parseSettingsChanges } from "../src/domain/subscription-settings.ts";
 import { createReviewTransports, fcmReviewMessage } from "../src/server/admin/payment-alert-transports.ts";
@@ -13,15 +13,15 @@ test("community links are public configuration with exact platform validation", 
     { type: "whatsapp-group", url: "", enabled: false },
   ];
   assert.equal(communityLinksSchema.safeParse(links).success, true);
-  assert.deepEqual(publicCommunityLinks(links), links.slice(0, 1));
-  assert.deepEqual(publicCommunityLinks(null), []);
+  assert.deepEqual(publicCommunityLinks(links), [links[0], ...defaultCommunityLinks.filter(link => ["tiktok", "x", "instagram"].includes(link.type))]);
+  assert.deepEqual(publicCommunityLinks(null), defaultCommunityLinks);
   assert.equal(parseSettingsChanges({ communityLinks: links }).ok, true);
   for (const url of ["http://t.me/test", "javascript:alert(1)", "https://t.me.evil.test/channel", "https://t.me@evil.test/test", "https://t.me:444/test", "https://t.me/test?redirect=evil", "https://t.me/test#fragment", "https://t.me\\@evil.test/test", "https://127.0.0.1/test"]) {
     assert.equal(validCommunityUrl("telegram-channel", url), false, url);
   }
   assert.equal(validCommunityUrl("whatsapp-group", "https://whatsapp.com/channel/TEST"), false);
   assert.equal(communityLinksSchema.safeParse([...links, links[0]]).success, false);
-  assert.equal(communityLinksSchema.safeParse([{ ...links[2], enabled: true }]).success, false);
+  assert.equal(communityLinksSchema.safeParse([{ ...links[2], enabled: true }]).success, true);
 });
 
 test("payment alert controls default off, validate repeats and reject unsafe endpoints", () => {

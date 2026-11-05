@@ -8,6 +8,7 @@ import Link from "next/link";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { MobileMoneyLogo } from "@/components/members/mobile-money-logo";
 import { TextInput } from "@/components/ui/controls";
+import { refreshCommunitySettings } from "@/components/navigation/community";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { CardIcon, ChatIcon, CheckIcon, ChevronDownIcon, DocumentIcon, Icon, LockIcon, ShieldIcon, type IconProps } from "@/components/ui/icons";
 import { formatPhone, normalizePhone } from "@/domain/phone";
@@ -23,7 +24,7 @@ import { SettingsSupportEditor } from "./settings-support-editor";
 import { SettingsMessageEditor } from "./settings-message-editor";
 import { SettingsCommunityEditor } from "./settings-community-editor";
 import { PaymentAlertControls } from "./payment-alert-controls";
-import type { CommunityLink } from "@/domain/community";
+import { communityLinksWithDefaults, type CommunityLink } from "@/domain/community";
 import { useAdminRefresh } from "./use-admin-refresh";
 import { ConfirmBox, DialField, DialRow, ManagedBadge, ManagedFact, ManagedNote, ModeTile, ModeTiles, NarrowField, NetworkGrid, NetworkTitle,
   RequirementBox, RequirementList, SectionPanel, SettingsHint, TwoUp,
@@ -32,13 +33,14 @@ import { ConfirmBox, DialField, DialRow, ManagedBadge, ManagedFact, ManagedNote,
 type ScalarSettingField = Exclude<EditableSettingField, "supportContacts" | "messageTemplates" | "communityLinks">;
 type Draft = Record<ScalarSettingField, string>;
 const scalarFields = editableSettingFields.filter((field): field is ScalarSettingField => field !== "supportContacts" && field !== "messageTemplates" && field !== "communityLinks");
-type Section = "payments" | "support" | "access" | "display" | "messages";
+type Section = "payments" | "support" | "community" | "access" | "display" | "messages";
 type Status = Readonly<{ tone: "info" | "error" | "warning"; text: string; list?: readonly string[] }> | null;
 /** A successful save may omit refreshed availability when that subsequent read fails. */
 type SavedReply = Omit<SettingsPageData, "source" | "requirements"> & Partial<Pick<SettingsPageData, "source" | "requirements">> & { cleared?: string[] };
 const UndoIcon = (props: IconProps) => <Icon {...props}><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></Icon>;
 const sections = [
   { key: "payments", label: "Payments", Icon: CardIcon }, { key: "support", label: "Support", Icon: ChatIcon },
+  { key: "community", label: "Community", Icon: ChatIcon },
   { key: "access", label: "Access", Icon: ShieldIcon }, { key: "display", label: "Display", Icon: DocumentIcon },
   { key: "messages", label: "Messages", Icon: ChatIcon },
 ] as const;
@@ -48,7 +50,7 @@ const sectionOf: Record<EditableSettingField, Section> = {
   contactPhone: "support", whatsappPhone: "support", trialDays: "access", screenshotRetentionDays: "access", maxUnlockedDevices: "access",
   copyFormat: "display", paymentNote: "display", reviewTime: "display",
   supportContacts: "support", messageTemplates: "messages",
-  communityLinks: "support", paymentAlertsEnabled: "payments", paymentAlertRepeats: "payments",
+  communityLinks: "community", communityVisible: "community", paymentAlertsEnabled: "payments", paymentAlertRepeats: "payments",
 };
 const phoneFields = new Set<EditableSettingField>(["mtnNumber", "airtelNumber", "contactPhone", "whatsappPhone"]);
 const shortcutFields = new Set<EditableSettingField>(["mtnMenuShortcut", "airtelMenuShortcut"]);
@@ -69,7 +71,7 @@ const protectedNames: Record<ProtectedSettingField, string> = {
   airtelEnabled: "Airtel payment availability", airtelNumber: "Airtel number", airtelName: "Airtel registered name", airtelMenuShortcut: "Airtel dial code",
   contactPhone: "support number", whatsappPhone: "WhatsApp number",
   supportContacts: "support contacts", messageTemplates: "message templates",
-  communityLinks: "community links", paymentAlertsEnabled: "payment alerts",
+  communityLinks: "community links", communityVisible: "community visibility", paymentAlertsEnabled: "payment alerts",
 };
 
 function draftOf(settings: SubscriptionSettings): Draft {
@@ -81,7 +83,7 @@ function draftOf(settings: SubscriptionSettings): Draft {
 
 /** Normalize before comparison; invalid values still reach the server's field validation. */
 function valueOf(field: ScalarSettingField, text: string): SubscriptionSettings[ScalarSettingField] | string {
-  if (field === "paymentAlertsEnabled" || field === "mtnEnabled" || field === "airtelEnabled") return text === "true";
+  if (field === "communityVisible" || field === "paymentAlertsEnabled" || field === "mtnEnabled" || field === "airtelEnabled") return text === "true";
   if (phoneFields.has(field)) return text.trim() === "" ? null : normalizePhone(text) ?? text;
   if (shortcutFields.has(field)) return text.replace(/\s+/gu, "") || null;
   if (numberFields.has(field)) return /^\d+$/u.test(text.trim()) ? Number(text.trim()) : text;
@@ -98,7 +100,7 @@ function changesOf(draft: Draft, settings: SubscriptionSettings, managed: readon
 
 function passwordReason(fields: readonly ProtectedSettingField[]) {
   if (fields.length === 0) return "Needed to confirm this save.";
-  if (fields.length > 2) return `Needed because ${fields.length} payment and support details changed.`;
+  if (fields.length > 2) return `Needed because ${fields.length} protected settings changed.`;
   return `Needed because the ${fields.map(field => protectedNames[field]).join(" and ")} changed.`;
 }
 
@@ -112,7 +114,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   const [draft, setDraft] = useState<Draft>(() => draftOf(initial.settings));
   const [contacts, setContacts] = useState<readonly SupportContact[]>(() => initial.settings.supportContacts ?? supportContactsOf(initial.settings));
   const [messages, setMessages] = useState<MessageTemplateSettings>(() => initial.settings.messageTemplates ?? structuredClone(defaultMessageTemplates));
-  const [community, setCommunity] = useState<readonly CommunityLink[]>(initial.settings.communityLinks ?? []);
+  const [community, setCommunity] = useState<readonly CommunityLink[]>(() => communityLinksWithDefaults(initial.settings.communityLinks ?? []));
   const [section, setSection] = useState<Section>("payments");
   const { detailOpen, openDetail, closeDetail } = useRecordView();
   const [advanced, setAdvanced] = useState<Record<string, boolean>>({});
@@ -132,7 +134,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   const changes = { ...changesOf(draft, settings, managed),
     ...(JSON.stringify(contacts) === JSON.stringify(savedContacts) ? {} : { supportContacts: contacts }),
     ...(JSON.stringify(messages) === JSON.stringify(settings.messageTemplates ?? defaultMessageTemplates) ? {} : { messageTemplates: messages }),
-    ...(JSON.stringify(community) === JSON.stringify(settings.communityLinks ?? []) ? {} : { communityLinks: community }),
+    ...(JSON.stringify(community) === JSON.stringify(communityLinksWithDefaults(settings.communityLinks ?? [])) ? {} : { communityLinks: community }),
   };
   const changed = Object.keys(changes) as EditableSettingField[];
   const needsPassword = !sessionAuthorized && (askPassword || changed.some(isProtectedSettingField));
@@ -176,7 +178,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   function resolve(key: EditableSettingField) { navigate(sectionOf[key], managed.includes(key) ? "settings-section" : `setting-${key}`); }
   function cancelMode() { pendingFocus.current = `setting-mode-${settings.paywallMode}`; setArmed(null); }
   function undo() { setDraft(draftOf(settings)); setContacts(settings.supportContacts ?? supportContactsOf(settings));
-    setCommunity(settings.communityLinks ?? []);
+    setCommunity(communityLinksWithDefaults(settings.communityLinks ?? []));
     setMessages(settings.messageTemplates ?? structuredClone(defaultMessageTemplates)); setErrors({}); setStatus(null); setArmed(null);
     setPassword(""); setAskPassword(false); }
 
@@ -186,12 +188,13 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
       ...(next.environmentFields ? { environmentFields: next.environmentFields } : {}),
       ...(next.requirements ? { source: next.source ?? shown.source, requirements: next.requirements } : {}) }));
     if (resetForm) { setDraft(draftOf(next.settings)); setContacts(next.settings.supportContacts ?? supportContactsOf(next.settings));
-      setCommunity(next.settings.communityLinks ?? []);
+      setCommunity(communityLinksWithDefaults(next.settings.communityLinks ?? []));
       setMessages(next.settings.messageTemplates ?? structuredClone(defaultMessageTemplates)); setErrors({}); setPassword(""); setAskPassword(false); }
     const cleared = (next.cleared ?? []).map(field => settingLabels[field as EditableSettingField] ?? field);
     const notes = [message, ...(cleared.length ? [`${cleared.join(" and ")} cleared after the number changed.`] : []),
       ...(next.requirements ? [] : ["Reload to update availability."])];
     setStatus({ tone: notes.length > 1 ? "warning" : "info", text: notes.join(" ") });
+    if (resetForm && (changed.includes("communityLinks") || changed.includes("communityVisible"))) refreshCommunitySettings();
     refreshAdmin();
   }
 
@@ -314,8 +317,10 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
           {section === "support" && <><MobileOnly><PanelBody>{hasSupportDirectory || locked("contactPhone", "whatsappPhone")
             ? <><ManagedNote><LockIcon />{hasSupportDirectory ? "Edit the support directory on desktop." : "Managed outside this page"}</ManagedNote>{facts([["contactPhone", "Phone support"], ["whatsappPhone", "WhatsApp"]])}</>
             : <TwoUp>{phone("contactPhone", "Phone support")}{phone("whatsappPhone", "WhatsApp")}</TwoUp>}</PanelBody></MobileOnly>
-            <DesktopOnly><SettingsSupportEditor contacts={contacts} disabled={busy} error={errors.supportContacts} onChange={setContacts} /></DesktopOnly>
-            <SettingsCommunityEditor value={community} disabled={busy} error={errors.communityLinks} onChange={setCommunity} /></>}
+            <DesktopOnly><SettingsSupportEditor contacts={contacts} disabled={busy} error={errors.supportContacts} onChange={setContacts} /></DesktopOnly></>}
+          {section === "community" && <SettingsCommunityEditor value={community} visible={draft.communityVisible === "true"}
+            disabled={busy} error={errors.communityLinks} visibilityError={errors.communityVisible} onChange={setCommunity}
+            onVisibleChange={visible => update("communityVisible", String(visible))} />}
           {section === "access" && <PanelBody>
             <ModeTiles disabled={busy}><legend>Paid access</legend><div>{paywallModes.map(mode => <ModeTile key={mode} data-mode-tile>
               <input id={`setting-mode-${mode}`} type="radio" name="paid-access-mode" value={mode} checked={selectedMode === mode} disabled={busy}

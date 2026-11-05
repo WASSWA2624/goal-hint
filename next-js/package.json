@@ -129,6 +129,7 @@
     "test:notifications": "node --conditions=react-server --test --test-concurrency=1 tests/account-notifications.test.mjs tests/account-notifications.integration.mjs",
     "payments:notifications": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/payment-notifications.ts",
     "payments:alerts": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/payment-review-alerts.ts",
+    "test:community": "node --conditions=react-server --test tests/community.test.mjs tests/community.integration.mjs tests/navigation.test.mjs",
     "test:payment-alerts": "node --conditions=react-server --test --test-concurrency=1 tests/community-payment-alerts.test.mjs tests/payment-review-alerts.integration.mjs",
     "test:payment-outbox": "node --conditions=react-server --test --test-concurrency=1 tests/payment-outbox.test.mjs tests/payment-outbox.integration.mjs",
     "analytics:purge": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/analytics.ts purge",

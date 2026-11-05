@@ -2216,6 +2216,7 @@ model AccountMove {
 // numbers are the owner's own payment, contact and WhatsApp numbers (canonical digits) with registered names, entered on
 // the dashboard; never a subscriber's.
 model SubscriptionSettings {
+  communityVisible        Boolean @default(true)
   communityLinks          Json?
   paymentAlertsEnabled    Boolean @default(false)
   paymentAlertRepeats      Int @default(1) @db.UnsignedTinyInt

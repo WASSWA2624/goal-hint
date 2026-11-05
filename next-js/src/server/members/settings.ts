@@ -1,5 +1,5 @@
 import "server-only";
-import { communityLinksSchema } from "../../domain/community.ts";
+import { communityLinksSchema, communityLinksWithDefaults } from "../../domain/community.ts";
 
 import { privacyNotice } from "../../domain/privacy-notice.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
@@ -47,7 +47,7 @@ export function settingsFromRow(row: SettingsRow): SubscriptionSettings {
   const contacts = row.supportContacts == null ? null : parseSupportContacts(row.supportContacts);
   const messages = row.messageTemplates == null ? null : parseMessageTemplates(row.messageTemplates);
   const community = communityLinksSchema.safeParse(row.communityLinks ?? []);
-  if (!community.success) throw new RangeError("Stored community settings are invalid.");
+  if (!community.success || typeof row.communityVisible !== "boolean") throw new RangeError("Stored community settings are invalid.");
   if (contacts && !contacts.ok || messages && !messages.ok) throw new RangeError("Stored settings contain invalid contacts or message templates.");
   return Object.freeze({
     paywallMode: row.paywallMode as PaywallMode,
@@ -57,7 +57,8 @@ export function settingsFromRow(row: SettingsRow): SubscriptionSettings {
     contactPhone: row.contactPhone, whatsappPhone: row.whatsappPhone,
     supportContacts: contacts?.ok ? contacts.contacts : null,
     messageTemplates: messages?.ok ? messages.settings : defaultMessageTemplates,
-    communityLinks: community.data, paymentAlertsEnabled: row.paymentAlertsEnabled ?? false, paymentAlertRepeats: row.paymentAlertRepeats ?? 1,
+    communityVisible: row.communityVisible, communityLinks: communityLinksWithDefaults(community.data),
+    paymentAlertsEnabled: row.paymentAlertsEnabled ?? false, paymentAlertRepeats: row.paymentAlertRepeats ?? 1,
     paymentNote: row.paymentNote, reviewTime: row.reviewTime,
     maxUnlockedDevices: row.maxUnlockedDevices, trialDays: row.trialDays, screenshotRetentionDays: row.screenshotRetentionDays,
     paymentNumbersChangedAt: instant(row.paymentNumbersChangedAt), lastMembersPurgeAt: instant(row.lastMembersPurgeAt),

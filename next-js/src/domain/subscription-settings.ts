@@ -1,5 +1,5 @@
 import { authCopy } from "../i18n/messages/auth.ts";
-import { communityLinksSchema, type CommunityLink } from "./community.ts";
+import { communityLinksSchema, defaultCommunityLinks, type CommunityLink } from "./community.ts";
 import { normalizePhone, outsideUgandaHint, phoneHint } from "./phone.ts";
 import { validMobilePhone } from "./phone-mobile.ts";
 import { supportContactsOf, type SupportContact } from "./support-contacts.ts";
@@ -49,6 +49,7 @@ export type SubscriptionSettings = Readonly<{
   /** Null keeps the legacy/configured support numbers until the owner saves a contact list. */
   supportContacts: readonly SupportContact[] | null;
   messageTemplates: MessageTemplateSettings;
+  communityVisible: boolean;
   communityLinks: readonly CommunityLink[];
   paymentAlertsEnabled: boolean;
   paymentAlertRepeats: number;
@@ -71,7 +72,7 @@ export const defaultSubscriptionSettings: SubscriptionSettings = Object.freeze({
   copyFormat: "international",
   contactPhone: null, whatsappPhone: null,
   supportContacts: null, messageTemplates: defaultMessageTemplates,
-  communityLinks: [], paymentAlertsEnabled: false, paymentAlertRepeats: 1,
+  communityVisible: true, communityLinks: defaultCommunityLinks, paymentAlertsEnabled: false, paymentAlertRepeats: 1,
   paymentNote: null, reviewTime: null,
   maxUnlockedDevices: settingsRules.maxUnlockedDevices.default,
   trialDays: settingsRules.trialDays.default,
@@ -82,7 +83,7 @@ export const defaultSubscriptionSettings: SubscriptionSettings = Object.freeze({
 /** The fields the Settings form saves; the mode has its own two-tap control. */
 export const editableSettingFields = Object.freeze(["mtnEnabled", "mtnNumber", "mtnName", "mtnMenuShortcut", "airtelEnabled", "airtelNumber", "airtelName",
   "airtelMenuShortcut", "copyFormat", "contactPhone", "whatsappPhone", "paymentNote", "reviewTime", "maxUnlockedDevices", "trialDays",
-  "screenshotRetentionDays", "supportContacts", "messageTemplates", "communityLinks", "paymentAlertsEnabled", "paymentAlertRepeats"] as const);
+  "screenshotRetentionDays", "supportContacts", "messageTemplates", "communityVisible", "communityLinks", "paymentAlertsEnabled", "paymentAlertRepeats"] as const);
 export type EditableSettingField = (typeof editableSettingFields)[number];
 export type SettingsChanges = Partial<Pick<SubscriptionSettings, EditableSettingField>>;
 
@@ -92,7 +93,7 @@ export type SettingsChanges = Partial<Pick<SubscriptionSettings, EditableSetting
  */
 export const identitySettingFields = Object.freeze(["mtnNumber", "mtnName", "mtnMenuShortcut", "airtelNumber", "airtelName",
   "airtelMenuShortcut", "contactPhone", "whatsappPhone"] as const);
-export const protectedSettingFields = Object.freeze([...identitySettingFields, "mtnEnabled", "airtelEnabled", "supportContacts", "messageTemplates", "communityLinks", "paymentAlertsEnabled"] as const);
+export const protectedSettingFields = Object.freeze([...identitySettingFields, "mtnEnabled", "airtelEnabled", "supportContacts", "messageTemplates", "communityVisible", "communityLinks", "paymentAlertsEnabled"] as const);
 export type ProtectedSettingField = (typeof protectedSettingFields)[number];
 export const isProtectedSettingField = (field: string): field is ProtectedSettingField =>
   (protectedSettingFields as readonly string[]).includes(field);
@@ -111,6 +112,7 @@ export const settingLabels: Readonly<Record<EditableSettingField, string>> = Obj
   whatsappPhone: "WhatsApp number",
   supportContacts: "Support contacts",
   messageTemplates: "Message templates",
+  communityVisible: "Show Community to the public",
   communityLinks: "Community links",
   paymentAlertsEnabled: "Payment alerts",
   paymentAlertRepeats: "Foreground sound repeats",
@@ -176,7 +178,10 @@ export function parseSettingsChanges(input: unknown): ParsedChanges {
     if (key === "communityLinks") {
       const parsed = communityLinksSchema.safeParse(value);
       if (parsed.success) changes[key] = parsed.data;
-      else errors[key] = "Use unique, valid HTTPS community destinations; disable empty links.";
+      else errors[key] = "Use a valid HTTPS link for each platform, or leave it blank.";
+    } else if (key === "communityVisible") {
+      if (typeof value === "boolean") changes[key] = value;
+      else errors[key] = "Choose whether Community is visible to everyone.";
     } else if (key === "paymentAlertsEnabled" || key === "mtnEnabled" || key === "airtelEnabled") {
       if (typeof value === "boolean") changes[key] = value;
       else errors[key] = key === "paymentAlertsEnabled" ? "Choose whether to enable payment alerts." : "Choose whether to enable this payment method.";

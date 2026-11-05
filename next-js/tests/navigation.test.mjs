@@ -48,6 +48,16 @@ test("mobile navigation moves destinations into More instead of squeezing three 
   assert.equal(fitNavigationItems({ ...dimensions, equalColumns: false, availableWidth: 120 }), 1);
 });
 
+test("Community reserves More even when every ordinary destination fits", () => {
+  const dimensions = { widths: [60, 60], moreWidth: 60, reserveMore: true };
+  for (const equalColumns of [false, true]) {
+    assert.equal(fitNavigationItems({ ...dimensions, equalColumns, availableWidth: 180 }), 2);
+    assert.equal(fitNavigationItems({ ...dimensions, equalColumns, availableWidth: 120 }), 1);
+    assert.equal(fitNavigationItems({ ...dimensions, equalColumns, availableWidth: 60 }), 0);
+    assert.equal(fitNavigationItems({ ...dimensions, equalColumns, availableWidth: 120, reserveMore: false }), 2);
+  }
+});
+
 test("enlarged desktop links can all move into More without forcing three overflowing destinations", () => {
   const dimensions = { widths: [200, 180, 150, 170, 160], moreWidth: 120, activeMoreWidth: 140, gap: 8 };
   assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 674 }), 3);
