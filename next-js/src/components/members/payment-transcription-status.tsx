@@ -8,7 +8,7 @@ const score = (value: number | null) => value === null ? "Unavailable" : `${Math
 
 /** Reading scores always describe the retained OCR, never the member's corrections. */
 export function PaymentTranscriptionStatus({ ocr, needsReview, warning, imageText, showImageText }: {
-  ocr: PaymentOcrQuality | null; needsReview: boolean; warning?: string; imageText: string; showImageText: boolean;
+  ocr: PaymentOcrQuality | null; needsReview: boolean; warning?: string | undefined; imageText: string; showImageText: boolean;
 }) {
   return <CheckoutTranscriptionStatus role="status" data-transcription-status={needsReview ? "review" : "extracted"}>
     <strong>{needsReview ? <AlertIcon /> : <DocumentIcon />}{needsReview ? "Needs review" : "Text extracted"}
