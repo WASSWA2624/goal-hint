@@ -12,7 +12,7 @@ It combines a responsive website with a Flutter host for the same experience. Be
 
 Foreground navigation and app work use the shared progress bar beneath the header. Existing content can stay visible while it updates. Background polling and lazy media load quietly.
 
-Desktop and mobile share this menu order: Matches (home), Slips, Builder, Community, Invite friends, Performance, Download app, Contact, Help, Privacy, Terms. Slips, Builder and Performance are menu labels for the existing Best Slips, Slip Builder and Results & performance pages; routes remain unchanged. Community uses the shared group-of-people icon and follows its visibility setting. Items that do not fit move into More. More dismisses on outside touch/click, focus leaving, Escape, destination selection and navigation changes. The information footer follows Contact, Help, Privacy, Terms.
+Desktop and mobile share this menu order: Matches (home), Slips, Builder, Community, Invite friends, Performance, Download app, Contact, Help, Privacy, Terms. Slips, Builder and Performance are menu labels for the existing Best Slips, Slip Builder and Results & performance pages; routes remain unchanged. Builder uses a wrench icon, while Slips keeps its document icon. Community uses the shared group-of-people icon and follows its visibility setting. Items that do not fit move into More. More dismisses on outside touch/click, focus leaving, Escape, destination selection and navigation changes. The information footer follows Contact, Help, Privacy, Terms.
 
 Contextual Back controls and browser history return to the originating screen. Checkout restores safe choices and steps where possible. Unsent payment evidence stays in memory and may need to be reattached after refresh.
 

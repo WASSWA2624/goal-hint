@@ -13,7 +13,7 @@ export function navigationDestinations(today: ReportingDate, locale: string, zon
   return [
     { key: "today", href: zone ? deviceFeedEntryHref("today", today, zone, locale) : homeHref(locale), label: messages.text("navigation.matches"), tab: messages.text("navigation.matches"), icon: "matches", tone: "teal" },
     { key: "best-slips", href: bestSlipsHref(locale), label: messages.text("navigation.bestSlips"), tab: messages.text("navigation.bestSlips"), icon: "slips", tone: "teal" },
-    { key: "slips", href: slipsHref(locale), label: messages.text("navigation.slips"), tab: messages.text("navigation.slips"), icon: "slips", tone: "teal" },
+    { key: "slips", href: slipsHref(locale), label: messages.text("navigation.slips"), tab: messages.text("navigation.slips"), icon: "builder", tone: "teal" },
     { key: "community", label: messages.text("navigation.community"), tab: messages.text("navigation.community"), icon: "community", tone: "blue" },
     { key: "invite-friends", href: accountSectionHref(locale, "referrals"), label: messages.text("referrals.invite"), tab: messages.text("referrals.invite"), icon: "invite", tone: "blue" },
     { key: "performance", href: performanceHref(locale), label: messages.text("navigation.performance"), tab: messages.text("navigation.performance"), icon: "results", tone: "violet" },

@@ -50,6 +50,7 @@ export const LiveIcon = (props: IconProps) => <Icon {...props}>
 export const ResultsIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="12" r="9" /><path d="m8 12.5 2.75 2.75L16.5 9.5" /></Icon>;
 /** A selection slip: square paper with compact checked rows. */
 export const SlipIcon = (props: IconProps) => <Icon {...props}><path d="M5 3h14v18H5zM8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5" /></Icon>;
+export const WrenchIcon = (props: IconProps) => <Icon {...props}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-8 8l-7 7a2.1 2.1 0 0 1-3-3l7-7a6 6 0 0 1 8-8l-3.8 3.8Z" /></Icon>;
 export const MoreIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" /></Icon>;
 /** Get access page: copy a wallet number, call/chat for help, paste an SMS, attach a screenshot. */
 export const CopyIcon = (props: IconProps) => <Icon {...props}><rect x="9" y="9" width="12" height="12" /><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" /></Icon>;

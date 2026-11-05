@@ -5,14 +5,14 @@ import { createPortal } from "react-dom";
 import styled from "styled-components";
 import { TextLink } from "@/components/ui/controls";
 import { CommunityDialog, useCommunitySettings } from "./community";
-import { DashboardIcon, DocumentIcon, DownloadIcon, GiftIcon, GroupIcon, HelpIcon, HomeIcon, LiveIcon, MailIcon, MoreIcon, ResultsIcon, ShieldIcon, SlipIcon } from "@/components/ui/icons";
+import { DashboardIcon, DocumentIcon, DownloadIcon, GiftIcon, GroupIcon, HelpIcon, HomeIcon, LiveIcon, MailIcon, MoreIcon, ResultsIcon, ShieldIcon, SlipIcon, WrenchIcon } from "@/components/ui/icons";
 import type { NavigationLocation } from "@/domain/navigation";
 import { normalizeNavigationLocation } from "@/domain/navigation-paths";
 import type { AccentName } from "@/styles/theme";
 import { fitNavigationItems, minimumPrimaryDestinations } from "./navigation-fit";
 import { MoreList, MoreMenu, TabButton, TabLink, TabList, TabMeasure, TopNavButton, TopNavLink, TopNavList, TopNavMeasure } from "./shell-styles";
 
-const icons = { matches: HomeIcon, live: LiveIcon, results: ResultsIcon, slips: SlipIcon,
+const icons = { matches: HomeIcon, live: LiveIcon, results: ResultsIcon, slips: SlipIcon, builder: WrenchIcon,
   help: HelpIcon, privacy: ShieldIcon, terms: DocumentIcon, contact: MailIcon, dashboard: DashboardIcon, invite: GiftIcon, download: DownloadIcon, community: GroupIcon };
 export type NavigationDestination = Readonly<{
   label: string; tab: string; icon: keyof typeof icons; tone: AccentName;
