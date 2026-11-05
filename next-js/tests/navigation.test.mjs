@@ -11,9 +11,9 @@ import { dashboardDestination, navigationDestinations } from "../src/components/
 
 test("regular and admin headers share complete destinations, with Dashboard added for administrators", () => {
   const date = parseReportingDate("2026-10-25"), destinations = navigationDestinations(date, "en");
-  assert.deepEqual(destinations.map(item => item.key), ["best-slips", "today", "slips", "performance", "help", "privacy", "terms", "contact", "invite-friends", "download"]);
-  assert.deepEqual(destinations.map(item => item.href), ["/en/best-slips", "/en/matches", "/en/slips", "/en/performance", "/en/help", "/en/privacy", "/en/terms", "/en/contact", "/en/account?section=referrals", "/en/download"]);
-  assert.equal(destinations.at(-1).label, "Download app");
+  assert.deepEqual(destinations.map(item => item.key), ["today", "best-slips", "slips", "community", "invite-friends", "performance", "download", "contact", "privacy", "terms"]);
+  assert.deepEqual(destinations.map(item => item.href), [homeHref("en"), "/en/best-slips", "/en/slips", undefined, "/en/account?section=referrals", "/en/performance", "/en/download", "/en/contact", "/en/privacy", "/en/terms"]);
+  assert.equal(destinations.find(item => item.key === "download").label, "Download app");
   const ownerDestinations = [...destinations, dashboardDestination("Dashboard")];
   assert.deepEqual(ownerDestinations.slice(0, -1), destinations);
   assert.deepEqual(ownerDestinations.at(-1), { key: "dashboard", href: "/admin", label: "Dashboard", tab: "Dashboard", icon: "dashboard", tone: "blue" });
@@ -48,7 +48,7 @@ test("mobile navigation moves destinations into More instead of squeezing three 
   assert.equal(fitNavigationItems({ ...dimensions, equalColumns: false, availableWidth: 120 }), 1);
 });
 
-test("Community reserves More even when every ordinary destination fits", () => {
+test("callers can explicitly reserve More for extra actions", () => {
   const dimensions = { widths: [60, 60], moreWidth: 60, reserveMore: true };
   for (const equalColumns of [false, true]) {
     assert.equal(fitNavigationItems({ ...dimensions, equalColumns, availableWidth: 180 }), 2);

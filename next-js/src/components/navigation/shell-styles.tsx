@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "@/components/navigation/navigation-link";
-import { useCallback, useId, useRef, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import styled, { css } from "styled-components";
 import { TextLink } from "@/components/ui/controls";
 import { controlBodyHeight } from "@/components/ui/control-layout";
@@ -9,6 +10,7 @@ import { Container, contentGutter, desktopContentPadding } from "@/components/ui
 import { compactHeaderBrand, compactHeaderRow, compactHeaderSurface } from "@/components/ui/header-controls";
 import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { media, type AccentName } from "@/styles/theme";
+import { watchNavigationMenu } from "./navigation-menu-dismissal";
 
 const desktop = media.desktop;
 const mobileTabHeight = "var(--form-control-height)";
@@ -183,6 +185,10 @@ const topLink = css<{ $tone?: AccentName }>`
   ${headerFocus}
 `;
 export const TopNavLink = styled(Link)<{ $tone?: AccentName }>`${topLink}`;
+export const TopNavButton = styled.button<{ $tone?: AccentName }>`
+  font: inherit; border: 0; background: transparent; padding: 0; cursor: pointer;
+  ${topLink}
+`;
 /** Noninteractive intrinsic-width measurements reuse the actual link typography and padding. */
 export const TopNavMeasure = styled.span<{ $tone?: AccentName }>`flex: none; ${topLink}`;
 
@@ -228,26 +234,36 @@ const MoreMenuDetails = styled.details<{ $tone?: AccentName; $mobile?: boolean }
   &[open] > summary:not([aria-current="page"]) { color: ${({ theme }) => theme.header.text}; }
 `;
 
-/** Keep native summary toggling, with the same dismissal behavior as the filter popovers. */
+function MenuRouteDismissal({ onDismiss }: { onDismiss: () => void }) {
+  const pathname = usePathname(), search = useSearchParams().toString();
+  const route = `${pathname}?${search}`, previous = useRef(route);
+  useEffect(() => {
+    if (previous.current !== route) onDismiss();
+    previous.current = route;
+  }, [route, onDismiss]);
+  return null;
+}
+
+/** Keep native summary toggling; navigation overlays also dismiss on touch, focus and route changes. */
 export function MoreMenu({ children, label, current = false, $tone = "blue", $mobile = false }: {
   children: ReactNode; label: ReactNode; current?: boolean; $tone?: AccentName; $mobile?: boolean;
 }) {
   const root = useRef<HTMLDetailsElement>(null);
   const popupId = useId();
   const [open, setOpen] = useState(false);
-  const dismiss = useCallback(() => closeDetails(root.current, () => setOpen(false)), []);
-  useOutsideDismiss({ enabled: open, root, onDismiss: dismiss });
+  const dismiss = useCallback((restoreFocus = false) => {
+    if (root.current?.open) closeDetails(root.current, () => setOpen(false), { restoreFocus });
+  }, []);
+  // Native details state is authoritative even before React receives its deferred toggle event.
+  useOutsideDismiss({ enabled: true, root, onDismiss: dismiss, pointerDown: true });
+  useEffect(() => {
+    if (root.current) return watchNavigationMenu(root.current, dismiss);
+  }, [dismiss]);
   return <MoreMenuDetails ref={root} $tone={$tone} $mobile={$mobile} onToggle={(event) => setOpen(event.currentTarget.open)}
-    onKeyDown={(event) => {
-      if (event.key !== "Escape" || !root.current?.open) return;
-      event.preventDefault();
-      event.stopPropagation();
-      dismiss();
-      root.current.querySelector("summary")?.focus({ preventScroll: true });
-    }}
     onClick={(event) => { if (event.target instanceof Element && event.target.closest("a")) dismiss(); }}>
     <summary aria-controls={popupId} aria-current={current ? "page" : undefined}>{label}</summary>
     <div id={popupId}>{children}</div>
+    {open && <Suspense fallback={null}><MenuRouteDismissal onDismiss={dismiss} /></Suspense>}
   </MoreMenuDetails>;
 }
 export const MoreList = styled.ul<{ $mobile?: boolean }>`
@@ -320,6 +336,10 @@ export const TabList = styled.ul`
 `;
 /** Compact phone targets keep primary destinations and More easy to tap. */
 export const TabLink = styled(Link)<{ $tone: AccentName }>`${tabLink}`;
+export const TabButton = styled.button<{ $tone: AccentName }>`
+  font: inherit; border: 0; background: transparent; padding: 0; cursor: pointer; inline-size: 100%;
+  ${tabLink}
+`;
 
 /** Footer clearance matches the phone tab targets, border and safe area. */
 export const Footer = styled.footer.attrs<{ "data-app-footer"?: string }>({ "data-app-footer": "" })`

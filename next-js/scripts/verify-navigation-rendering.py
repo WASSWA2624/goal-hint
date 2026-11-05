@@ -42,14 +42,15 @@ def main() -> None:
         assert 0 <= html.find("data-styled=") < html.find("<header"), f"{path}: initial shell CSS"
         visible = unescape(visible_html(html, comments=False))
         assert_navigation_overflow(visible,
-            primary=["/en/best-slips", "/en/matches", "/en/slips"],
-            overflow=["/en/performance", *[f"/en/{page}" for page in information_pages]],
+            primary=["/en/matches", "/en/best-slips", "/en/slips"],
+            overflow=["/en/account?section=referrals", "/en/performance", "/en/download", "/en/contact", "/en/privacy", "/en/terms"],
             footer=[f"/en/{page}" for page in information_pages])
         target = urlsplit(path)
         information = next((page for page in information_pages if target.path == f"/en/{page}"), None)
         if information:
             expected = f"/en/{information}"
-            assert_navigation(visible, primary=expected, footer=expected, mobile=expected)
+            navigation_target = None if information == "help" else expected
+            assert_navigation(visible, primary=navigation_target, footer=expected, mobile=navigation_target)
             if information == "help":
                 for section in ["access", "dates", "filters", "browsing", "cards", "predictions", "updates", "results"]:
                     assert f'id="{section}"' in visible

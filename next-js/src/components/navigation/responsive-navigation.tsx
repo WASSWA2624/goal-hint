@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { createPortal } from "react-dom";
 import styled from "styled-components";
 import { TextLink } from "@/components/ui/controls";
 import { ChatIcon } from "@/components/ui/icons";
@@ -10,13 +11,13 @@ import type { NavigationLocation } from "@/domain/navigation";
 import { normalizeNavigationLocation } from "@/domain/navigation-paths";
 import type { AccentName } from "@/styles/theme";
 import { fitNavigationItems, minimumPrimaryDestinations } from "./navigation-fit";
-import { MoreList, MoreMenu, TabLink, TabList, TabMeasure, TopNavLink, TopNavList, TopNavMeasure } from "./shell-styles";
+import { MoreList, MoreMenu, TabButton, TabLink, TabList, TabMeasure, TopNavButton, TopNavLink, TopNavList, TopNavMeasure } from "./shell-styles";
 
 const icons = { matches: HomeIcon, live: LiveIcon, results: ResultsIcon, slips: SlipIcon,
-  help: HelpIcon, privacy: ShieldIcon, terms: DocumentIcon, contact: MailIcon, dashboard: DashboardIcon, invite: GiftIcon, download: DownloadIcon };
+  help: HelpIcon, privacy: ShieldIcon, terms: DocumentIcon, contact: MailIcon, dashboard: DashboardIcon, invite: GiftIcon, download: DownloadIcon, community: ChatIcon };
 export type NavigationDestination = Readonly<{
-  key: NavigationLocation; href: string; label: string; tab: string; icon: keyof typeof icons; tone: AccentName;
-}>;
+  label: string; tab: string; icon: keyof typeof icons; tone: AccentName;
+} & ({ key: NavigationLocation; href: string } | { key: "community"; href?: never })>;
 const Layout = styled.div`position: relative; min-inline-size: 0; inline-size: 100%; block-size: 100%;`;
 const Measurements = styled.div`
   position: absolute; inline-size: 0; block-size: 0; overflow: hidden; visibility: hidden; pointer-events: none;
@@ -44,21 +45,41 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
 }) {
   const current = normalizeNavigationLocation(selected);
   const community = useCommunitySettings(), [communityOpen, setCommunityOpen] = useState(false);
+  const items = useMemo(() => destinations.filter(({ key }) => key !== "community" || community.visible), [destinations, community.visible]);
   if (communityOpen && !community.visible) setCommunityOpen(false);
   const root = useRef<HTMLDivElement>(null), measurements = useRef<HTMLDivElement>(null), list = useRef<HTMLUListElement>(null);
   const [count, setCount] = useState(Math.min(mobile ? 1 : minimumPrimaryDestinations, destinations.length));
   const pendingFocus = useRef<{ target: FocusTarget; previous: Element | null } | null>(null);
-  const lastFocus = useRef<FocusTarget | null>(null);
-  const visible = destinations.slice(0, count), overflow = destinations.slice(count);
+  const lastFocus = useRef<{ target: FocusTarget; element: Element } | null>(null);
+  const visible = items.slice(0, count), overflow = items.slice(count);
   const overflowCurrent = overflow.some(({ key }) => key === current);
+  useEffect(() => {
+    if (!communityOpen) return;
+    return () => { requestAnimationFrame(() => {
+      const container = root.current;
+      if (!container || container.ownerDocument.activeElement !== container.ownerDocument.body) return;
+      // The original dialog opener may have moved into More or into the hidden navigation copy.
+      const navigation = container.getBoundingClientRect().width > 0 ? container
+        : container.ownerDocument.querySelector<HTMLElement>(`[data-responsive-navigation="${mobile ? "desktop" : "mobile"}"]`);
+      const action = navigation?.querySelector<HTMLElement>("[data-community-entry]");
+      const target = action?.getClientRects().length ? action
+        : navigation?.querySelector<HTMLElement>("[data-nav-more] summary") ?? navigation?.querySelector<HTMLElement>("a[data-nav-key]");
+      target?.focus({ preventScroll: true });
+    }); };
+  }, [communityOpen, mobile]);
   useLayoutEffect(() => {
     const pending = pendingFocus.current, container = root.current;
     pendingFocus.current = null;
-    if (!pending || !container) return;
+    if (!container) return;
     const active = container.ownerDocument.activeElement;
-    if (active !== pending.previous && active !== container.ownerDocument.body) return;
-    restoreTarget(container, pending.target);
-  }, [count]);
+    if (pending) {
+      if (active === pending.previous || active === container.ownerDocument.body) restoreTarget(container, pending.target);
+    } else {
+      const previous = lastFocus.current;
+      // A visibility update can move a focused action across the More boundary before remeasurement.
+      if (previous && !previous.element.isConnected && active === container.ownerDocument.body) restoreTarget(container, previous.target);
+    }
+  }, [items, count]);
   useEffect(() => {
     const container = root.current, pool = measurements.current, navigation = list.current;
     if (!container || !pool || !navigation) return;
@@ -70,18 +91,17 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
       if (width <= 0) {
         if (lastFocus.current && (container.contains(active) || active === container.ownerDocument.body)) {
           const other = container.ownerDocument.querySelector<HTMLElement>(`[data-responsive-navigation="${mobile ? "desktop" : "mobile"}"]`);
-          if (other && other.getBoundingClientRect().width > 0) restoreTarget(other, lastFocus.current);
+          if (other && other.getBoundingClientRect().width > 0) restoreTarget(other, lastFocus.current.target);
           lastFocus.current = null;
         }
         return;
       }
-      const items = Array.from(pool.querySelectorAll<HTMLElement>("[data-nav-measure]"));
-      const widths = items.map((item) => item.getBoundingClientRect().width);
+      const widths = Array.from(pool.querySelectorAll<HTMLElement>("[data-nav-measure]"), item => item.getBoundingClientRect().width);
       const moreWidth = pool.querySelector<HTMLElement>('[data-more-measure="default"]')?.getBoundingClientRect().width ?? 0;
       const activeMoreWidth = pool.querySelector<HTMLElement>('[data-more-measure="active"]')?.getBoundingClientRect().width ?? moreWidth;
       const gap = Number.parseFloat(getComputedStyle(navigation).columnGap) || 0;
-      const next = fitNavigationItems({ widths, moreWidth, activeMoreWidth, currentIndex: destinations.findIndex(({ key }) => key === current),
-        availableWidth: width, gap, equalColumns: mobile, reserveMore: community.visible });
+      const next = fitNavigationItems({ widths, moreWidth, activeMoreWidth, currentIndex: items.findIndex(({ key }) => key === current),
+        availableWidth: width, gap, equalColumns: mobile });
       setCount((previous) => {
         if (previous === next) return previous;
         const target = container.contains(active) ? focusTarget(active) : null;
@@ -98,31 +118,38 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
     fonts.addEventListener("loadingdone", schedule);
     schedule();
     return () => { cancelled = true; observer.disconnect(); cancelAnimationFrame(frame); fonts.removeEventListener("loadingdone", schedule); };
-  }, [destinations, current, mobile, community.visible]);
+  }, [items, current, mobile]);
 
-  const List = mobile ? TabList : TopNavList, Primary = mobile ? TabLink : TopNavLink, Measure = mobile ? TabMeasure : TopNavMeasure;
+  const List = mobile ? TabList : TopNavList, Primary = mobile ? TabLink : TopNavLink, Action = mobile ? TabButton : TopNavButton, Measure = mobile ? TabMeasure : TopNavMeasure;
+  const openCommunity = (event: MouseEvent<HTMLButtonElement>) => {
+    const menu = event.currentTarget.closest("details");
+    if (menu) { menu.open = false; menu.querySelector("summary")?.focus({ preventScroll: true }); }
+    setCommunityOpen(true);
+  };
   return <Layout ref={root} data-responsive-navigation={mobile ? "mobile" : "desktop"}
-    onFocusCapture={(event) => { lastFocus.current = focusTarget(event.target); }}
+    onFocusCapture={(event) => {
+      const target = focusTarget(event.target);
+      lastFocus.current = target ? { target, element: event.target } : null;
+    }}
     onBlurCapture={(event) => {
       if (event.relatedTarget ? !event.currentTarget.contains(event.relatedTarget) : event.currentTarget.getBoundingClientRect().width > 0) lastFocus.current = null;
     }}>
     <List ref={list}>
       {visible.map(({ key, href, label, tab, icon, tone }) => {
         const Icon = icons[icon];
+        if (key === "community") return <li key={key}><Action type="button" $tone={tone} data-nav-key={key}
+          data-community-entry aria-haspopup="dialog" onClick={openCommunity}><Icon /><span>{mobile ? tab : label}</span></Action></li>;
         // Only Slips has a loading boundary that is safe to prefetch before query/status validation.
         return <li key={key}><Primary href={href} prefetch={key === "slips" ? null : false} $tone={tone} data-nav-key={key}
           aria-current={current === key ? "page" : undefined}><Icon /><span>{mobile ? tab : label}</span></Primary></li>;
       })}
-      {(overflow.length > 0 || community.visible) && <li data-nav-more>
+      {overflow.length > 0 && <li data-nav-more>
         <MoreMenu $mobile={mobile} current={overflowCurrent} label={<><MoreIcon /><span>{moreLabel}</span></>}>
           <MoreList $mobile={mobile}>
-            {community.visible && <li><button type="button" data-community-entry aria-haspopup="dialog" onClick={event => {
-              const menu = event.currentTarget.closest("details");
-              if (menu) { menu.open = false; menu.querySelector("summary")?.focus({ preventScroll: true }); }
-              setCommunityOpen(true);
-            }}><ChatIcon /><span>Community</span></button></li>}
             {overflow.map(({ key, href, label, icon }) => {
             const Icon = icons[icon];
+            if (key === "community") return <li key={key}><button type="button" data-nav-key={key} data-community-entry
+              aria-haspopup="dialog" onClick={openCommunity}><Icon /><span>{label}</span></button></li>;
             return <li key={key}><TextLink href={href} prefetch={key === "slips" ? null : false} data-nav-key={key}
               aria-current={current === key ? "page" : undefined}><Icon /><span>{label}</span></TextLink></li>;
           })}</MoreList>
@@ -130,7 +157,7 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
       </li>}
     </List>
     <Measurements ref={measurements} aria-hidden="true" inert><div>
-      {destinations.map(({ key, label, tab, icon, tone }) => {
+      {items.map(({ key, label, tab, icon, tone }) => {
         const Icon = icons[icon];
         return <Measure key={key} $tone={tone} data-nav-measure aria-current={current === key ? "page" : undefined}>
           <Icon /><span>{mobile ? tab : label}</span>
@@ -139,6 +166,7 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
       <Measure $tone="blue" data-more-measure="default"><MoreIcon /><span>{moreLabel}</span></Measure>
       <Measure $tone="blue" data-more-measure="active" aria-current="page"><MoreIcon /><span>{moreLabel}</span></Measure>
     </div></Measurements>
-    <CommunityDialog open={communityOpen && community.visible} links={community.links} onClose={() => setCommunityOpen(false)} />
+    {communityOpen && community.visible && createPortal(
+      <CommunityDialog open links={community.links} onClose={() => setCommunityOpen(false)} />, document.body)}
   </Layout>;
 }
