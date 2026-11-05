@@ -61,10 +61,11 @@ const Results = styled(FeedStack)`
 const PreviousNote = styled(FeedNote)`${media.desktop} { color: inherit; }`;
 
 /** Memoized with stable callbacks, so header and filter state changes skip the list. */
-const FeedResults = memo(function FeedResults({ data: initial, query, today, enabled, onStatus, onApply, startingPriceUgx, summary }: {
+const FeedResults = memo(function FeedResults({ data: initial, query, today, enabled, onStatus, onApply, startingPriceUgx, summary, confirmed, onConfirmed }: {
   data: MatchFeedResponse; query: FeedQuery; today: ReportingDate; enabled: boolean;
   startingPriceUgx: number | null;
   summary?: Promise<FeedPerformanceSeed> | undefined;
+  confirmed: FeedPerformanceSeed | null; onConfirmed: (seed: FeedPerformanceSeed) => void;
   onStatus: (href: string, message: string) => void; onApply: (query: FeedQuery) => void;
 }) {
   const messages = createMessages(query.locale, undefined, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone);
@@ -85,7 +86,7 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
     aria-busy={phase !== null} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
     <PerformanceSection data-feed-performance-section><Suspense fallback={<FeedPerformancePlaceholder query={query} data={data} />}>
       <ServerThemeUntilHydrated><FeedPerformanceSummary query={query} today={today} data={data} enabled={enabled} onApply={onApply}
-        initial={summary} /></ServerThemeUntilHydrated>
+        initial={summary} confirmed={confirmed} onConfirmed={onConfirmed} /></ServerThemeUntilHydrated>
     </Suspense></PerformanceSection>
     <MatchResults data-feed-match-results>
       <ResultsToolbar query={query} today={today} total={data.total} first={first}
@@ -128,6 +129,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
   const [paginationStatus, setPaginationStatus] = useState<{ href: string; message: string } | null>(null);
   const onPaginationStatus = useCallback((href: string, message: string) => { setPaginationStatus({ href, message }); }, []);
   const [previous, setPrevious] = useState(result.data ? { query, today, data: result.data } : null);
+  const [confirmed, setConfirmed] = useState<FeedPerformanceSeed | null>(null);
   if (result.data && previous?.data !== result.data) setPrevious({ query, today, data: result.data });
   const visible = result.data ? { query, today, data: result.data } : previous;
   const messages = createMessages(query.locale);
@@ -168,7 +170,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
       </Stack>}
       {visible && <FeedResults key={feedQueryHref(visible.query, visible.today) + ":" + resolveFeedDates(visible.query, visible.today).startDate + ":" + visible.data.access.tier + ":" + visible.data.access.signedIn}
         data={visible.data} query={visible.query} today={visible.today} enabled={!pending && !result.error} onStatus={onPaginationStatus} onApply={apply}
-        startingPriceUgx={startingPriceUgx} summary={summary} />}
+        startingPriceUgx={startingPriceUgx} summary={summary} confirmed={confirmed} onConfirmed={setConfirmed} />}
       {!result.error && pagination}
     </Results>
   </FeedStack>;

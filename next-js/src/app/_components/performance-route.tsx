@@ -24,13 +24,15 @@ export function createPerformanceRoute({ read = readPublicPerformance, history =
       let parsed;
       try { parsed = parsePerformancePageQuery(await searchParams, getReportingDate(at)); }
       catch (error) { if (error instanceof MatchFeedError && error.code === "invalid-query") notFound(); throw error; }
-      const { query, parameters, page } = parsed;
+      const { query, parameters, page, slipStatus } = parsed;
       // Valid query/status first; independent sections then stream without holding the page shell.
       const predictions = read(parameters, { now: () => at }).catch(() => null);
-      const publications = history({ from: query.range.startDate, to: query.range.endDate, page, pageSize: performancePageSize }).catch(() => null);
+      const publications = history({ from: query.range.startDate, to: query.range.endDate, page, pageSize: performancePageSize,
+        ...(slipStatus ? { status: slipStatus } : {}) }).catch(() => null);
       return <PublicShell locale={locale} today={getReportingDate(at)} current="performance" app compact>
         <PerformanceDashboard key={parameters.toString()} locale={locale} filters={{ from: query.range.startDate, to: query.range.endDate,
-          market: query.market, source: query.source, model: query.model, version: query.version, leaguePage: query.leaguePage }}
+          market: query.market, source: query.source, model: query.model, version: query.version, leaguePage: query.leaguePage,
+          ...(slipStatus ? { slipStatus } : {}) }}
           report={null} history={null} reportPromise={predictions} historyPromise={publications} historyPage={page} />
       </PublicShell>;
     },

@@ -8,15 +8,21 @@ import { predictionResults } from '../src/domain/performance-summary.ts';
 import { resetFeedFilters } from '../src/domain/feed-controls.ts';
 
 const today = parseReportingDate('2026-11-03');
-test('every Best Slips result chip retains its odds band, selects today and restarts pagination', () => {
+test('every Best Slips result chip retains its period and odds band and restarts pagination', () => {
   for (const oddsBand of ['1.5-5', '5-10', '10-20', '20-50', '50-100']) for (const status of predictionResults) {
     const applied = { ...defaultBestSlipsQuery(), oddsBand, page: 4 };
     const selected = selectSlipSummaryResult(applied, status);
     assert.deepEqual(selected, { period: 'today', oddsBand, status, page: 1 });
     assert.deepEqual(selectSlipSummaryResult(selected, 'all'), { period: 'today', oddsBand, status: 'all', page: 1 });
   }
-  const custom = { period: 'custom', oddsBand: '1.5-5', from: today, to: today, status: 'all', page: 8 };
-  assert.deepEqual(selectSlipSummaryResult(custom, 'void'), { period: 'today', oddsBand: custom.oddsBand, status: 'void', page: 1 });
+  const custom = { period: 'custom', oddsBand: '1.5-5', from: '2026-10-01', to: today, status: 'all', page: 8 };
+  assert.deepEqual(selectSlipSummaryResult(custom, 'void'), { ...custom, status: 'void', page: 1 });
+  for (const period of ['yesterday', 'tomorrow', 'last3', 'last7', 'last30', 'next3', 'next7', 'next30', 'all']) {
+    const applied = { period, oddsBand: '5-10', status: 'lost', page: 3 };
+    assert.deepEqual(selectSlipSummaryResult(applied, 'won'), { ...applied, status: 'won', page: 1 });
+  }
+  const archive = { period: 'all', status: 'pending', oddsBand: '5-10', page: 4, cursor: '2026-10-28:3' };
+  assert.deepEqual(selectSlipSummaryResult(archive, 'all'), { period: 'all', status: 'all', oddsBand: '5-10', page: 1 });
 });
 
 test('Matches summary links retain their cohort filters and select the actual result before paging', () => {
@@ -32,7 +38,7 @@ test('Matches summary links retain their cohort filters and select the actual re
     assert.equal(href.searchParams.get('result'), result); assert.equal(href.searchParams.get('when'), 'today');
     const restored = parseFeedQuery(serializeFeedQuery(next, today), { today });
     assert.equal(restored.result, result); assert.deepEqual(restored.dates, next.dates); assert.equal(restored.zone, next.zone);
-    assert.deepEqual(performanceFeedQuery(next), { ...original, result, page: 1 });
+    assert.deepEqual(performanceFeedQuery(next), { ...original, page: 1 });
     assert.equal(resetFeedFilters(next).result, undefined);
   }
 });

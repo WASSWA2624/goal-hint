@@ -9,6 +9,7 @@ import type { ReportingDate } from "../../domain/calendar.ts";
 import { publishedSlipRules, type PublishedSlipHistory, type PublishedSlipHistoryQuery } from "../../domain/published-slips.ts";
 import { completedSlipFixtureIds, indexSlipResults, slipCompleted, slipSnapshotOutcome, slipSnapshotStatus, slipSnapshotSchema, slipResultView } from "../../domain/slip-snapshot.ts";
 import { slipStatusCategory } from "../../domain/slip-status.ts";
+import { predictionResults } from "../../domain/performance-summary.ts";
 import { summarizeSlipPerformance } from "../../domain/slip-performance.ts";
 import { slipMatchStatesFromResults } from "../../domain/slip-match-state.ts";
 import { compareSlipDisplayProbability } from "../../domain/slip-pagination.ts";
@@ -27,6 +28,7 @@ const hash = z.string().regex(/^[a-f0-9]{64}$/u), instant = z.number().int().pos
 const modelSchema = z.strictObject({ id: hash, calibrationReference: z.string().trim().min(1).max(512),
   correlationReference: z.string().trim().min(1).max(512), validFrom: instant, validUntil: instant });
 const oddsBandSchema = z.enum(bestSlipOddsBands.map(band => band.id));
+const historyStatusSchema = z.enum(["all", ...predictionResults]);
 const publicationSchema = z.strictObject({ version: z.union([z.literal(1), z.literal(2)]), oddsBand: oddsBandSchema.optional(), day: z.string().refine((value) => {
   try { parseReportingDate(value); return true; } catch { return false; }
 }), publishedAt: instant, model: modelSchema, criteria: z.string().max(2048),
@@ -73,7 +75,8 @@ export function parsePublishedSlipHistoryQuery(input: PublishedSlipHistoryQuery)
     validateReportingDateRange(input.from, input.to, publishedSlipRules.maximumDays);
     if (!Number.isSafeInteger(input.page) || input.page < 1 || input.page > 9999 || !Number.isSafeInteger(input.pageSize)
       || input.pageSize < 1 || input.pageSize > publishedSlipRules.maximumPageSize) fail("invalid-input");
-    return { ...input, oddsBand: oddsBandSchema.parse(input.oddsBand ?? defaultBestSlipOddsBand) };
+    return { ...input, oddsBand: oddsBandSchema.parse(input.oddsBand ?? defaultBestSlipOddsBand),
+      status: historyStatusSchema.parse(input.status ?? "all") };
   } catch { return fail("invalid-input"); }
 }
 
@@ -332,10 +335,12 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           if (completedOnly && !slipCompleted(snapshot.slip, slipResults)) continue;
           const publishedAt = new Date(parent.publishedAt).toISOString();
           const view = slipResultView(row.id, publishedAt, snapshot.slip, slipResults);
+          const outcome = view?.outcome ?? slipSnapshotOutcome(snapshot.slip, slipResults);
+          const status = view?.status ?? slipSnapshotStatus(snapshot.slip, slipResults, outcome);
           samples.push({ id: row.id, publishedAt: parent.publishedAt, rank: publicRank(parent, row.rank),
-            totalOdds: view ? snapshot.slip.totalOdds : "", outcome: view?.outcome ?? slipSnapshotOutcome(snapshot.slip, slipResults) });
+            totalOdds: view ? snapshot.slip.totalOdds : "", outcome, status });
           // Until every original cycle has ended, no selections, quote or probabilities leave this boundary.
-          if (view) records.push({ ...view, publicationDay: parent.day, publishedAt, modelId: parent.model.id,
+          if (view && (query.status === "all" || slipStatusCategory(status) === query.status)) records.push({ ...view, publicationDay: parent.day, publishedAt, modelId: parent.model.id,
             rank: publicRank(parent, row.rank), estimatedProbability: snapshot.estimatedProbability });
         }
         records.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt) || a.rank - b.rank);

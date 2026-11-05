@@ -4,6 +4,7 @@ import { parseReportingDate } from "../src/domain/calendar.ts";
 import { performancePageHref } from "../src/domain/performance-page.ts";
 import { performanceHref } from "../src/domain/navigation.ts";
 import { parsePerformancePageQuery } from "../src/server/performance/performance-page.ts";
+import { predictionResults } from "../src/domain/performance-summary.ts";
 
 const today = parseReportingDate("2026-10-25");
 const filters = { from: "2026-10-01", to: "2026-10-25", market: "double-chance", source: "ai", model: "a".repeat(64), version: "model-v1" };
@@ -50,4 +51,25 @@ test("league and publication pagination preserve the same period, source, market
   assert.equal(parsed.query.source, "ai"); assert.equal(parsed.query.model, filters.model);
   assert.equal(parsePerformancePageQuery({ from: filters.from, to: filters.to, source: "ai" }, today).query.leaguePage, 1);
   for (const leaguePage of [0, 1.5, 10000, NaN]) assert.throws(() => performancePageHref({ ...filters, leaguePage }), RangeError);
+});
+
+test("slip status filters preserve the selected period without reaching the prediction report", () => {
+  for (const slipStatus of predictionResults) {
+    const href = performancePageHref({ ...filters, leaguePage: 2, slipStatus }, 3);
+    const url = new URL(href, "https://example.test");
+    const parsed = parsePerformancePageQuery(Object.fromEntries(url.searchParams), today);
+    assert.equal(parsed.slipStatus, slipStatus);
+    assert.equal(parsed.page, 3);
+    assert.equal(parsed.query.leaguePage, 2);
+    assert.equal(parsed.parameters.has("slipStatus"), false);
+    assert.equal(parsed.parameters.has("page"), false);
+    assert.deepEqual(parsed.query, parsePerformancePageQuery({ ...filters, leaguePage: "2" }, today).query);
+    assert.equal(parsed.query.range.startDate, filters.from);
+    assert.equal(parsed.query.range.endDate, filters.to);
+  }
+  for (const slipStatus of ["all", "incorrect", "", ["won", "lost"]]) {
+    assert.throws(() => parsePerformancePageQuery({ ...filters, slipStatus }, today), error => error.code === "invalid-query");
+  }
+  assert.throws(() => performancePageHref({ ...filters, slipStatus: "incorrect" }), RangeError);
+  assert.equal(new URL(performancePageHref({ ...filters, slipStatus: undefined }), "https://example.test").searchParams.has("slipStatus"), false);
 });

@@ -4,7 +4,7 @@ import { use, useEffect, useMemo, useRef, useState } from "react";
 import { PerformanceSummary } from "@/components/performance/performance-summary";
 import { Button } from "@/components/ui/controls";
 import { Inline, Stack } from "@/components/ui/layout";
-import { checkedFeedPerformance, feedPerformanceApiHref, performanceFeedQuery, selectFeedSummaryResult, type FeedPerformanceSeed } from "@/domain/feed-performance-summary";
+import { checkedFeedPerformance, feedPerformanceApiHref, performanceFeedQuery, retainedFeedPerformance, selectFeedSummaryResult, type FeedPerformanceSeed } from "@/domain/feed-performance-summary";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { getFeedToday, type FeedQuery } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
@@ -38,14 +38,15 @@ export function FeedPerformancePlaceholder(props: Presentation) {
 type Reply = { key: string; attempt: number; asOf: number; refreshAfter: number; counts: NonNullable<MatchFeedResponse["performance"]> | null; failed: boolean };
 
 /** The initial audit streams from the server; later list polls retain the last confirmed figures. */
-export function FeedPerformanceSummary({ query, today, data, enabled, onApply, initial }: Presentation & {
+export function FeedPerformanceSummary({ query, today, data, enabled, onApply, initial, confirmed, onConfirmed }: Presentation & {
   today: ReportingDate; enabled: boolean; onApply: (query: FeedQuery) => void; initial?: Promise<FeedPerformanceSeed> | undefined;
+  confirmed?: FeedPerformanceSeed | null | undefined; onConfirmed?: ((seed: FeedPerformanceSeed) => void) | undefined;
 }) {
-  const seed = initial ? use(initial) : null;
   const href = feedPerformanceApiHref(performanceFeedQuery(query), today);
+  const seed = retainedFeedPerformance(confirmed, href, data) ?? (initial ? use(initial) : null);
   const dispatch = useAppDispatch(), messages = createMessages(query.locale);
   const [attempt, retry] = useState(0);
-  const key = `${href}:${data.paginationVersion}:${data.total}:${data.access.tier}:${data.access.signedIn}`;
+  const key = `${href}:${data.performanceVersion}:${data.access.tier}:${data.access.signedIn}`;
   const [reply, setReply] = useState<Reply | null>(() => {
     if (seed?.href !== href) return null;
     if (!seed.reply) return { key, attempt: 0, counts: null, asOf: data.asOf, refreshAfter: Infinity, failed: true };
@@ -58,6 +59,11 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
   });
   const latest = useRef({ query, today, data });
   useEffect(() => { latest.current = { query, today, data }; }, [data, query, today]);
+  const { tier, signedIn } = data.access;
+  useEffect(() => {
+    if (reply?.key === key && reply.counts && !reply.failed) onConfirmed?.({ href,
+      reply: { performance: reply.counts, paginationVersion: data.performanceVersion, asOf: reply.asOf, access: { tier, signedIn } } });
+  }, [data.performanceVersion, href, key, onConfirmed, reply, signedIn, tier]);
   const needsRead = enabled && (reply?.key !== key || reply.attempt !== attempt || data.asOf >= reply.refreshAfter);
   useEffect(() => {
     if (!needsRead) return;

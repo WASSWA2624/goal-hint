@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createMatchFeedService } from '../src/server/matches/feed-service.ts';
+import { createMatchFeedService, parseMatchFeedQuery, storedFeedVersions } from '../src/server/matches/feed-service.ts';
+import { getReportingDate, validateReportingDateRange } from '../src/domain/calendar.ts';
 import { createMatchFeedSummaryService } from '../src/server/matches/feed-summary-service.ts';
 import { createMatchFeedSummaryHandler } from '../src/server/matches/feed-summary-http.ts';
 import { fullAccess } from './helpers/full-access.ts';
@@ -9,6 +10,28 @@ import { createGatedFeedSummary } from '../src/server/matches/feed-summary-read.
 const at = Date.parse('2026-10-09T08:00:00Z'), clock = { now: () => at };
 const counts = { total: 80, won: 0, lost: 0, pending: 20, void: 10, unavailable: 50 };
 const parameters = new URLSearchParams('date=2026-10-09&page=4&country=England&status=finished&market=match-result&prob=20-90');
+
+test('period versions survive table selections but change with filters and source generations', async () => {
+  let generation = '1';
+  const tx = { publicCacheTag: { findMany: async () => [{ tag: 'global:catalog', generation }] } };
+  const today = getReportingDate(at), range = validateReportingDateRange(today, today, 1);
+  const query = parseMatchFeedQuery(parameters, today);
+  const version = q => storedFeedVersions(tx, q, today, range, [39]);
+  const baseline = await version(query);
+  for (const result of ['won', 'lost', 'pending', 'void', 'cancelled']) {
+    const selected = await version({ ...query, result, page: 9, pageSize: 100, sort: { by: 'probability', direction: 'asc' } });
+    assert.equal(selected.performanceVersion, baseline.performanceVersion);
+    assert.notEqual(selected.paginationVersion, baseline.paginationVersion);
+  }
+  for (const change of [{ search: 'Club' }, { countries: ['France'] }, { markets: ['total-goals'] },
+    { dates: { kind: 'date', date: '2026-10-08' } }]) {
+    assert.notEqual((await version({ ...query, ...change })).performanceVersion, baseline.performanceVersion);
+  }
+  generation = '2';
+  const changed = await version(query);
+  assert.notEqual(changed.paginationVersion, baseline.paginationVersion);
+  assert.notEqual(changed.performanceVersion, baseline.performanceVersion);
+});
 
 function database({ summaryOnly = false, cancelled = 0n } = {}) {
   const statements = [], ancillary = [];
@@ -41,7 +64,7 @@ test('lean summaries retain exact feed counts, query filters, cohort versions an
   assert.deepEqual(summary.performance, { ...fullResult.performance, cancelled: 0 });
   assert.deepEqual(summary.performance, { ...counts, cancelled: 0 });
   assert.equal(summary.total, fullResult.total);
-  assert.equal(summary.paginationVersion, fullResult.paginationVersion);
+  assert.equal(summary.paginationVersion, fullResult.performanceVersion);
   assert.equal(summary.asOf, fullResult.asOf);
   assert.deepEqual(descriptors[1].tags, descriptors[0].tags);
   assert.equal(descriptors[1].deadlineAt, descriptors[0].deadlineAt);
@@ -68,7 +91,7 @@ test('cancelled predictions have their own category and are excluded from pendin
   assert.match(count.sql, /m.available=TRUE AND c.state='void' AND f.status='canceled'/);
 });
 
-test('summary cache identity ignores the discarded page but changes with filters', async () => {
+test('summary identity ignores status selections, ordering and pagination but changes with period filters', async () => {
   const keys = [], db = database({ summaryOnly: true });
   const service = createMatchFeedSummaryService({ database: db.runtime, competitionIds: [39], clock,
     cache: { read: async (descriptor, read) => { keys.push(descriptor.key); return read(); } } });
@@ -77,6 +100,14 @@ test('summary cache identity ignores the discarded page but changes with filters
   await service.query(nextPage);
   const nextFilter = new URLSearchParams(nextPage); nextFilter.set('country', 'France');
   await service.query(nextFilter);
+  const baseline = await service.query(parameters);
+  for (const result of ['won', 'lost', 'pending', 'void', 'cancelled']) {
+    const selected = new URLSearchParams(parameters);
+    selected.set('result', result); selected.set('sort', 'probability'); selected.set('dir', 'asc'); selected.set('pageSize', '100');
+    const summary = await service.query(selected);
+    assert.deepEqual(summary, baseline);
+    assert.equal(keys.at(-1), keys[0]);
+  }
   assert.equal(keys[0], keys[1]); assert.notEqual(keys[1], keys[2]);
 });
 

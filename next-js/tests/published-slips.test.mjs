@@ -17,7 +17,7 @@ function slip(last = 1) {
       competition: base.competition, family: 'match-result', selection: 'home-win', probability: 0.7, odds: '4.00', oddsBasis: 'bookmaker' }] };
 }
 function fixture() {
-  const parents = [], rows = [], legs = [], bound = [], outcomes = new Map(), fixtureCompletion = new Map();
+  const parents = [], rows = [], legs = [], bound = [], outcomes = new Map(), fixtureCompletion = new Map(), fixtureStatuses = new Map();
   let at = now, corrupted = false, ignored = false, normalized = false, afterMembership = () => {};
   const databaseSnapshot = json => {
     const snapshot = JSON.parse(json);
@@ -62,13 +62,13 @@ function fixture() {
     async resolveResults(_tx, selections) {
       return selections.map(item => ({ fixtureId: item.fixtureId, family: item.family, selection: item.selection, forecast: item.forecast,
         completed: outcomes.has(item.fixtureId), fixtureCompleted: fixtureCompletion.get(item.fixtureId) ?? outcomes.has(item.fixtureId),
-        status: outcomes.get(item.fixtureId) === 'void' ? 'canceled' : 'finished-regulation',
+        status: fixtureStatuses.get(item.fixtureId) ?? (outcomes.get(item.fixtureId) === 'void' ? 'canceled' : 'finished-regulation'),
         regulationVerified: true, regulationHome: outcomes.get(item.fixtureId) === 'lost' ? 0 : 2, regulationAway: 1 }));
     },
   });
   const publish = (changes = {}) => store.publish({ day: today, slips: [slip()], model,
     searchLimited: false, partialCoverage: false, verifyModel: () => true, verifyPublicOdds: () => true, ...changes });
-  return { store, publish, parents, rows, legs, bound, outcomes, fixtureCompletion, advance(value) { at = value; }, corrupt() { corrupted = true; },
+  return { store, publish, parents, rows, legs, bound, outcomes, fixtureCompletion, fixtureStatuses, advance(value) { at = value; }, corrupt() { corrupted = true; },
     ignoreInsert() { ignored = true; }, normalizeNumbers() { normalized = true; }, afterMembership(callback) { afterMembership = callback; } };
 }
 const query = { from: today, to: today, page: 1, pageSize: 1 };
@@ -182,9 +182,31 @@ test('pagination uses the whole publication-period denominator and retains void 
   const page = await f.store.history({ ...query, page: 2 });
   assert.equal(page.records.length, 1); assert.equal(page.records[0].rank, 2); assert.equal(page.total, 3);
   assert.equal(page.statistics.total, 3); assert.equal(page.statistics.returnsSampleCount, 2);
-  assert.equal(page.statistics.roi, 1); assert.equal(page.statistics.void, 1);
+  assert.equal(page.statistics.roi, 1); assert.equal(page.statistics.cancelled, 1); assert.equal(page.statistics.void, 0);
   assert.equal((await f.store.history({ ...query, page: 3 })).records[0].outcome, 'void');
   assert.equal((await f.store.history({ ...query, page: 4 })).records.length, 0);
+});
+
+test('history status filters only visible records and pagination, retaining the full selected-period metrics', async () => {
+  const f = fixture(); await f.publish({ slips: [slip(1), slip(2), slip(3), slip(4), slip(5)] });
+  f.outcomes.set(fixtureId(1), 'won'); f.outcomes.set(fixtureId(2), 'lost');
+  f.outcomes.set(fixtureId(3), 'void'); f.outcomes.set(fixtureId(4), 'void');
+  f.fixtureStatuses.set(fixtureId(4), 'abandoned');
+  const all = await f.store.history(query);
+  assert.equal(all.total, 4); assert.equal(all.statistics.total, 5);
+  assert.equal(all.statistics.won, 1); assert.equal(all.statistics.lost, 1);
+  assert.equal(all.statistics.void, 1); assert.equal(all.statistics.cancelled, 1); assert.equal(all.statistics.pending, 1);
+  for (const status of ['won', 'lost', 'pending', 'void', 'cancelled']) {
+    const filtered = await f.store.history({ ...query, status });
+    assert.deepEqual(filtered.statistics, all.statistics, status);
+    assert.equal(filtered.total, status === 'pending' ? 0 : 1, status);
+    assert.equal(filtered.records.length, filtered.total, status);
+    if (filtered.records.length) assert.equal(filtered.records[0].status, status);
+    assert.equal((await f.store.history({ ...query, status, page: 2 })).records.length, 0);
+    const publicAll = await f.store.history(query, true), publicFiltered = await f.store.history({ ...query, status }, true);
+    assert.deepEqual(publicFiltered.statistics, publicAll.statistics, `public ${status}`);
+  }
+  assert.throws(() => parsePublishedSlipHistoryQuery({ ...query, status: 'incorrect' }));
 });
 
 test('public performance and daily counts filter canonical unfinished fixtures before pagination', async () => {

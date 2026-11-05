@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock } from "../../domain/calendar.ts";
 import { getDayBoundsInTimeZone } from "../../domain/device-calendar.ts";
-import { feedPerformanceReplySchema } from "../../domain/feed-performance-summary.ts";
+import { feedPerformanceReplySchema, performanceFeedQuery } from "../../domain/feed-performance-summary.ts";
 import { feedQueryRules, getFeedToday, maximumCompetitionScope, resolveFeedDates, type FeedParameters } from "../../domain/feed-query.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
@@ -13,10 +13,9 @@ import { freezeEvidence } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import { feedPerformanceCacheKey, readFeedPerformance } from "./feed-performance.ts";
-import { filterFeedResult } from "./feed-result-filter.ts";
 import { feedSql } from "./feed-read.ts";
 import { storedFeedSearch } from "./feed-search.ts";
-import { parseMatchFeedQuery, storedFeedPaginationVersion, type MatchFeedReadContext } from "./feed-service.ts";
+import { parseMatchFeedQuery, storedFeedVersions, type MatchFeedReadContext } from "./feed-service.ts";
 import { createMysqlPublicSearchLimiter } from "./search-limit.ts";
 
 const storedSummarySchema = feedPerformanceReplySchema.omit({ access: true }).extend({
@@ -33,7 +32,7 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
   const providerOdds = options.providerOdds ?? publicPolicy.features.providerOdds;
   return Object.freeze({ async query(input: FeedParameters, context: MatchFeedReadContext = {}) {
     const asOf = clock.now(), reportingToday = getReportingDate(asOf);
-    const query = parseMatchFeedQuery(input, reportingToday, { ...context, providerOdds, asOf });
+    const query = performanceFeedQuery(parseMatchFeedQuery(input, reportingToday, { ...context, providerOdds, asOf }));
     const today = getFeedToday(query, asOf), range = resolveFeedDates(query, today);
     const sourceRange = validateReportingDateRange(getReportingDate(range.window.startInclusive),
       getReportingDate(utcInstantFromEpochMilliseconds(range.window.endExclusive - 1)), feedQueryRules.maximumDays + 2);
@@ -41,10 +40,9 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
       await prepareDemoRange(database, sourceRange, asOf);
       if (query.search) await createMysqlPublicSearchLimiter(database).consume();
       const read = () => database.transaction(async (tx) => {
-        const paginationVersion = await storedFeedPaginationVersion(tx, query, today, sourceRange, competitionIds, context.completedOnly);
+        const { performanceVersion: paginationVersion } = await storedFeedVersions(tx, query, today, sourceRange, competitionIds, context.completedOnly);
         const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale, context.completedOnly);
-        const baseSql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly);
-        const sql = query.result ? await filterFeedResult(tx, baseSql, query.result) : baseSql;
+        const sql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly);
         const [matching] = await tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null; void: bigint | Prisma.Decimal | null; cancelled: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
           SELECT STRAIGHT_JOIN COUNT(*) AS total, SUM(CASE WHEN m.available=TRUE THEN 1 ELSE 0 END) AS available,
             SUM(CASE WHEN m.available=TRUE AND c.state='void' AND f.status<>'canceled' THEN 1 ELSE 0 END) AS void,
@@ -58,7 +56,7 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 90_000 });
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, page: 1, projection: "feed-summary-v5", completedOnly: context.completedOnly === true, today, dates: { from: range.startDate, to: range.endDate } },
+        query: { ...query, projection: "feed-summary-v6", completedOnly: context.completedOnly === true, today, dates: { from: range.startDate, to: range.endDate } },
         scope: [...competitionIds].sort((a, b) => a - b), parse: (value) => storedSummarySchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;

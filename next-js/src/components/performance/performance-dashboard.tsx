@@ -2,13 +2,15 @@
 
 import { DateTimeField } from "@/components/ui/date-time-field";
 
-import { Suspense, use, type ReactNode } from "react";
+import { Suspense, use, useTransition, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { ServerThemeUntilHydrated } from "@/styles/provider";
 import { LoadingTheme } from "@/styles/loading-theme";
 import type { PerformanceCell, PerformanceLeague, PerformanceResponse } from "@/domain/performance";
 import type { PublishedSlipHistory } from "@/domain/published-slips";
 import type { SlipPerformanceSummary } from "@/domain/slip-performance";
 import type { PickPerformanceSummary } from "@/domain/pick-performance";
+import type { PredictionResult } from "@/domain/performance-summary";
 import { performancePageHref, type PerformancePageFilters } from "@/domain/performance-page";
 import { performanceHref } from "@/domain/navigation";
 import { isMarketSelection } from "@/domain/markets";
@@ -118,10 +120,15 @@ function LeagueCard({ league, locale }: { league: PerformanceLeague; locale: str
     </Stack>
   </details></Surface>;
 }
-function SlipMetrics({ summary, locale, period }: { summary: SlipPerformanceSummary; locale: string; period: string }) {
+function SlipMetrics({ summary, locale, period, activeResult, onResult, disabled }: {
+  summary: SlipPerformanceSummary; locale: string; period: string; activeResult?: PredictionResult | undefined;
+  onResult: (result: PredictionResult | undefined) => void; disabled: boolean;
+}) {
   const m = createMessages(locale);
   return <Surface><Stack $gap="sm">
-    <PerformanceSummary counts={summary} locale={locale} kind="slips" period={period} headingLevel={3} />
+    <PerformanceSummary counts={summary} locale={locale} kind="slips" period={period} headingLevel={3}
+      activeResult={activeResult} onResult={onResult} disabled={disabled}
+      resultAttributes={result => ({ "data-slip-history-result": result ?? "all" })} />
     <Metrics values={[
       { label: m.text("performance.slipSettled"), value: m.number(summary.settled) },
       { label: m.text("performance.slipWinRate"), value: percent(summary.winRate, m) },
@@ -143,6 +150,7 @@ export function PerformanceDashboard({ locale, filters, report, history, reportP
     <DesktopInset><PageHeading>{m.text("performance.title")}</PageHeading><BodyText>{m.text("performance.description")}</BodyText></DesktopInset>
     <PerformanceFilterPanel><Stack $gap="sm">
       <PerformanceFilters action={performanceHref(locale)} method="get" aria-label={m.text("performance.filters")}>
+        {filters.slipStatus && <input type="hidden" name="slipStatus" value={filters.slipStatus} />}
         <DateTimeField label={m.text("performance.from")} name="from" required defaultValue={filters.from} />
         <DateTimeField label={m.text("performance.to")} name="to" required defaultValue={filters.to} />
         <SelectInput label={m.text("performance.market")} name="market" defaultValue={filters.market}>
@@ -202,13 +210,18 @@ function PredictionSections({ locale, filters, report, page, loading = false }: 
 function HistorySection({ locale, filters, history, loading = false }: SectionProps & {
   history: PublishedSlipHistory | null; loading?: boolean;
 }) {
+  const router = useRouter(), [pending, startTransition] = useTransition();
   const m = createMessages(locale), pages = history ? Math.ceil(history.total / history.pageSize) : 0;
   const outOfRange = Boolean(history && history.page > Math.max(1, pages));
   const href = (page: number) => performancePageHref(filters, page, locale);
+  const selectResult = (slipStatus: PredictionResult | undefined) => {
+    startTransition(() => router.push(performancePageHref({ ...filters, slipStatus }, 1, locale), { scroll: false }));
+  };
   return (
-    <DesktopInset as="section" aria-labelledby="published-performance"><Stack>
+    <DesktopInset as="section" aria-labelledby="published-performance" aria-busy={pending || loading} data-slip-history><Stack>
       <SectionHeading id="published-performance">{m.text("performance.slipHeading")}</SectionHeading><MutedText>{m.text("performance.slipBasis")}</MutedText>
-      {loading ? <PerformanceSummary counts={null} locale={locale} kind="slips" period={performancePeriod(m, filters)} /> : history?.statistics ? <SlipMetrics summary={history.statistics} locale={locale} period={performancePeriod(m, filters)} /> : <MutedText>{m.text("performance.statisticsUnavailable")}</MutedText>}
+      {loading ? <PerformanceSummary counts={null} locale={locale} kind="slips" period={performancePeriod(m, filters)} /> : history?.statistics ? <SlipMetrics summary={history.statistics} locale={locale} period={performancePeriod(m, filters)}
+        activeResult={filters.slipStatus} onResult={selectResult} disabled={pending} /> : <MutedText>{m.text("performance.statisticsUnavailable")}</MutedText>}
       {loading ? null : history?.records.length ? <SlipList $inset={false} data-slip-list>{history.records.map((item) => <article key={item.id} data-published-slip={item.id}>
         <SlipCard slip={item.slip} index={item.rank - 1} estimatedProbability={item.estimatedProbability} results={item.results} locale={locale}
           publishedAt={Date.parse(item.publishedAt)} outcome={item.outcome} {...(item.status ? { status: item.status } : {})} />

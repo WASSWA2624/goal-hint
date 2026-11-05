@@ -1,4 +1,5 @@
 import { bestSlipsRules } from "./best-slips.ts";
+import { slipStatusCategory, type SlipStatus } from "./slip-status.ts";
 
 /** Descriptive publication outcomes, separate from forecast-quality claims and bookmaker payouts. */
 export type SlipPerformanceSample = Readonly<{
@@ -6,6 +7,7 @@ export type SlipPerformanceSample = Readonly<{
   publishedAt: number;
   totalOdds: string;
   outcome: "won" | "lost" | "void" | "pending";
+  status?: SlipStatus;
   rank?: number;
 }>;
 
@@ -16,6 +18,7 @@ export type SlipPerformanceSummary = Readonly<{
   won: number;
   lost: number;
   void: number;
+  cancelled: number;
   pending: number;
   settled: number;
   winRate: number | null;
@@ -36,16 +39,19 @@ export type SlipPerformanceSummary = Readonly<{
 export function summarizeSlipPerformance(samples: readonly SlipPerformanceSample[]): SlipPerformanceSummary {
   const ids = new Set<string>();
   for (const sample of samples) {
+    const category = sample.status === undefined ? sample.outcome : slipStatusCategory(sample.status);
     if (!sample.id || ids.has(sample.id) || !Number.isSafeInteger(sample.publishedAt) ||
       sample.rank !== undefined && (!Number.isInteger(sample.rank) || sample.rank < 1 || sample.rank > bestSlipsRules.count) ||
-      !["won", "lost", "void", "pending"].includes(sample.outcome)) throw new RangeError("Invalid slip performance cohort.");
+      !["won", "lost", "void", "pending"].includes(sample.outcome) || (category === "cancelled" ? "void" : category) !== sample.outcome) {
+      throw new RangeError("Invalid slip performance cohort.");
+    }
     ids.add(sample.id);
   }
-  let won = 0, lost = 0, voidCount = 0, pending = 0, priced = 0, excluded = 0;
+  let won = 0, lost = 0, voidCount = 0, cancelled = 0, pending = 0, priced = 0, excluded = 0;
   let returnHundredths = 0n, oddsHundredths = 0n, longest = 0, streak = 0;
   const ordered = [...samples].sort((a, b) => a.publishedAt - b.publishedAt || (a.rank ?? 0) - (b.rank ?? 0) || a.id.localeCompare(b.id, "en"));
   for (const sample of ordered) {
-    if (sample.outcome === "void") { voidCount++; streak = 0; continue; }
+    if (sample.outcome === "void") { if (sample.status === "cancelled") cancelled++; else voidCount++; streak = 0; continue; }
     if (sample.outcome === "pending") { pending++; streak = 0; continue; }
     if (sample.outcome === "won") { won++; streak = 0; }
     else { lost++; streak++; longest = Math.max(longest, streak); }
@@ -62,7 +68,7 @@ export function summarizeSlipPerformance(samples: readonly SlipPerformanceSample
     throw new RangeError("Slip performance cohort exceeds exact arithmetic bounds.");
   }
   return { basis: "one-unit-per-binary-slip-original-quoted-odds", streakBasis: "publication-time-rank-id-in-period-void-and-pending-interrupt",
-    total: samples.length, won, lost, void: voidCount, pending, settled, winRate: settled ? won / settled : null,
+    total: samples.length, won, lost, void: voidCount, cancelled, pending, settled, winRate: settled ? won / settled : null,
     returnsSampleCount: priced, excludedQuoteCount: excluded, stakeUnits: priced,
     returnUnits: Number(returnHundredths) / 100, profitUnits: Number(profitHundredths) / 100,
     roi: priced ? Number(profitHundredths) / Number(stakeHundredths) : null,

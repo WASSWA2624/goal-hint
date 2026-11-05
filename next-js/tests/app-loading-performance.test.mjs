@@ -65,6 +65,17 @@ test('invalid performance URLs retain their 404 before starting reports; failed 
   assert.deepEqual(await Promise.all([dashboard.reportPromise, dashboard.historyPromise]), [null, null]);
 });
 
+test('performance status clicks scope the slip list while prediction reads and period metrics retain their cohort', async () => {
+  const predictionQueries = [], historyQueries = [];
+  const route = createPerformanceRoute({ read: async parameters => { predictionQueries.push(parameters.toString()); return null; },
+    history: async query => { historyQueries.push(query); return null; } });
+  const dashboard = (await route.Page(props({ from: '2026-10-20', to: '2026-11-03', slipStatus: 'won', page: '2' }))).props.children.props;
+  await Promise.all([dashboard.reportPromise, dashboard.historyPromise]);
+  assert.equal(dashboard.filters.slipStatus, 'won');
+  assert.equal(new URLSearchParams(predictionQueries[0]).has('slipStatus'), false);
+  assert.deepEqual(historyQueries, [{ from: '2026-10-20', to: '2026-11-03', status: 'won', page: 2, pageSize: 20 }]);
+});
+
 test('the owner layout authenticates before rendering its shared workspace loading boundary', async () => {
   globalThis.loadingAdmin = { owner: null, services: {} };
   await assert.rejects(OwnerLayout({ children: 'private' }), /login-required/);

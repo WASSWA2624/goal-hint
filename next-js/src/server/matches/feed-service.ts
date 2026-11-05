@@ -18,6 +18,7 @@ import { storedFeedSearch } from "./feed-search.ts";
 import { storedFeedFixtures } from "./fixture-read.ts";
 import { feedPerformanceCacheKey, readFeedPerformance } from "./feed-performance.ts";
 import { filterFeedResult } from "./feed-result-filter.ts";
+import { performanceFeedQuery } from "../../domain/feed-performance-summary.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
 import { readPublicCacheGenerations } from "../cache/mysql-public-cache.ts";
 import { prepareDemoRange } from "../demo/read-seed.ts";
@@ -39,12 +40,14 @@ function pageLink(query: FeedQuery, today: ReportingDate, number: number | null)
     ? { kind: "date", date: dates.startDate } : { kind: "range", from: dates.startDate, to: dates.endDate } }, today)}`;
 }
 
-/** Lists and deferred counts must describe the same committed cohort. */
-export async function storedFeedPaginationVersion(tx: Prisma.TransactionClient, query: FeedQuery, today: ReportingDate,
-  sourceRange: ReportingDateRange, competitionIds: readonly number[], completedOnly = false): Promise<string> {
+/** List membership and period totals share a source snapshot, with independent filter identities. */
+export async function storedFeedVersions(tx: Prisma.TransactionClient, query: FeedQuery, today: ReportingDate,
+  sourceRange: ReportingDateRange, competitionIds: readonly number[], completedOnly = false) {
   const tags = ["global:catalog", ...Array.from({ length: sourceRange.dayCount }, (_, day) => `date:${addReportingDays(sourceRange.startDate, day)}`)];
-  return evidenceFingerprint({ contract: "feed-pagination-v5", completedOnly, query: feedQueryKey(query, today),
-    scope: [...competitionIds].sort((a, b) => a - b), generations: await readPublicCacheGenerations(tx, tags) });
+  const generations = await readPublicCacheGenerations(tx, tags), scope = [...competitionIds].sort((a, b) => a - b);
+  const version = (query: FeedQuery) => evidenceFingerprint({ contract: "feed-pagination-v5", completedOnly,
+    query: feedQueryKey(query, today), scope, generations });
+  return { paginationVersion: version(query), performanceVersion: version(performanceFeedQuery(query)) };
 }
 
 export type MatchFeedReadContext = Readonly<{ locale?: string; routeDate?: string; completedOnly?: boolean }>;
@@ -72,7 +75,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       const read = () => database.transaction(async (tx) => {
         // Source writes and these generations commit atomically. Progress-only
         // changes do not reorder a cohort; catalog/date changes conservatively do.
-        const paginationVersion = await storedFeedPaginationVersion(tx, query, today, sourceRange, competitionIds, context.completedOnly);
+        const versions = await storedFeedVersions(tx, query, today, sourceRange, competitionIds, context.completedOnly);
         const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale, context.completedOnly);
         const baseSql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly);
         const sql = query.result ? await filterFeedResult(tx, baseSql, query.result) : baseSql;
@@ -115,7 +118,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           : total === 0 ? "no-filter-matches" : records.length === 0 ? "page-out-of-range" : matchingWithMarket === 0 ? "insufficient-data" : "ready";
         const keys: Partial<Record<typeof state, TextKey>> = { "data-unavailable": "feed.dataUnavailable", "no-fixtures": "feed.noFixtures",
           "no-filter-matches": "feed.noFilterMatches", "page-out-of-range": "feed.pageOutOfRange", "insufficient-data": "feed.insufficientData" };
-        const response = storedMatchFeedResponseSchema.parse({ performance, paginationVersion, leagues, records, page: query.page, nextPage, previousPage, pageSize: query.pageSize, total, totalPages,
+        const response = storedMatchFeedResponseSchema.parse({ performance, ...versions, leagues, records, page: query.page, nextPage, previousPage, pageSize: query.pageSize, total, totalPages,
           links: { next: pageLink(query, today, nextPage), previous: pageLink(query, today, previousPage) }, asOf, today,
           range: { from: range.startDate, to: range.endDate, ...range.window }, state, message: keys[state] ? messages.text(keys[state]!) : null,
           coverage: { partial, knownFixtures, matchingWithMarket, dates }, run,
@@ -125,7 +128,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: 18, completedOnly: context.completedOnly === true, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
+        query: { ...query, projection: 19, completedOnly: context.completedOnly === true, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => storedMatchFeedResponseSchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;

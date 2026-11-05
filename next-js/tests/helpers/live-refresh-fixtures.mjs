@@ -27,7 +27,7 @@ export function liveRun(overrides = {}) {
 export function liveFeed(records = [liveRecord()], overrides = {}) {
   const range = resolveFeedDates(query(), today);
   return matchFeedResponseSchema.parse({ access: { tier: "full", signedIn: false }, records, page: 1, nextPage: null, previousPage: null, pageSize: feedQueryRules.pageSize,
-    paginationVersion: 'a'.repeat(64), total: records.length, totalPages: records.length ? 1 : 0, links: { next: null, previous: null },
+    paginationVersion: 'a'.repeat(64), performanceVersion: 'a'.repeat(64), total: records.length, totalPages: records.length ? 1 : 0, links: { next: null, previous: null },
     asOf: now, today, range: { from: today, to: today, ...range.window }, state: records.length ? 'ready' : 'no-fixtures', message: null,
     coverage: { partial: false, knownFixtures: records.length, matchingWithMarket: records.length,
       dates: [{ date: today, status: 'complete', observedAt: now, authoritative: true }] }, run: liveRun(), ...overrides });

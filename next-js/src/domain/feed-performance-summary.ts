@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { contentAccessSchema } from "./content-access.ts";
 import { FeedPaginationError, feedPageApiHref } from "./feed-pagination.ts";
-import type { FeedQuery } from "./feed-query.ts";
+import { feedQueryRules, type FeedQuery } from "./feed-query.ts";
 import type { ReportingDate } from "./calendar.ts";
 import { feedPerformanceSchema, type MatchFeedResponse } from "./match-feed.ts";
 
@@ -15,7 +15,7 @@ export type FeedPerformanceReply = z.infer<typeof feedPerformanceReplySchema>;
 export type FeedPerformanceSeed = Readonly<{ href: string; reply: FeedPerformanceReply | null }>;
 
 export function feedPerformanceApiHref(query: FeedQuery, today: ReportingDate): string {
-  return feedPageApiHref(query, today, query.page).replace("/api/matches?", "/api/matches/summary?");
+  return feedPageApiHref(performanceFeedQuery(query), today, 1).replace("/api/matches?", "/api/matches/summary?");
 }
 
 /** A late aggregate must still belong to the visible cohort and viewer. */
@@ -23,16 +23,24 @@ export function checkedFeedPerformance(value: unknown, data: MatchFeedResponse):
   const parsed = feedPerformanceReplySchema.safeParse(value);
   if (!parsed.success) throw new FeedPaginationError("invalid-response");
   const reply = parsed.data;
-  if (reply.performance.total !== data.total || reply.paginationVersion !== data.paginationVersion
+  if (reply.paginationVersion === null || reply.paginationVersion !== data.performanceVersion
     || reply.access.tier !== data.access.tier || reply.access.signedIn !== data.access.signedIn) {
     throw new FeedPaginationError("changed");
   }
   return reply;
 }
 
-/** Aggregate the applied cohort across every page. */
+/** A status navigation can retain confirmed metrics only for the same period snapshot and viewer. */
+export function retainedFeedPerformance(seed: FeedPerformanceSeed | null | undefined, href: string, data: MatchFeedResponse): FeedPerformanceSeed | null {
+  if (seed?.href !== href || !seed.reply) return null;
+  try { checkedFeedPerformance(seed.reply, data); return seed; } catch { return null; }
+}
+
+/** Outcome selection and list ordering never narrow the period metrics. */
 export function performanceFeedQuery(query: FeedQuery): FeedQuery {
-  return { ...query, page: 1 };
+  const scope = { ...query };
+  delete scope.result;
+  return { ...scope, page: 1, pageSize: feedQueryRules.pageSize, sort: { by: "kickoff", direction: "desc" } };
 }
 
 /** Drill into the cohort represented by the figures, retaining its other filters. */

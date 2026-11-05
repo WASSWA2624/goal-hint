@@ -1,4 +1,3 @@
-import { defaultBestSlipOddsBand } from "../../domain/best-slip-odds-bands.ts";
 import "server-only";
 
 import type { BestSlipsResult } from "../../domain/best-slips.ts";
@@ -37,13 +36,10 @@ export function createBestSlipsBrowseService({ read = readPublishedBestSlips, pr
         hasMore: false, nextCursor: null, ...dates } } as const;
     if (!providerOdds) return { ...empty, state: "odds-unavailable" };
     try {
-      const representsToday = dates.from === day && dates.to === day;
-      const [result, todaySummary] = await Promise.all([
-        read(query, day, _locale, false),
-        representsToday ? null : read({ period: "today", status: "all", oddsBand: query.oddsBand ?? defaultBestSlipOddsBand, page: 1 }, day, _locale, false).catch(() => null),
-      ]);
-      const summary = representsToday ? result : todaySummary;
-      return gateBestSlips({ ...result, summary: { asOf, from: day, to: day, statistics: summary?.statistics ?? null } }, access);
+      // The browse reader aggregates the entire selected period before outcome
+      // filtering and pagination. Reuse that snapshot for both list and summary.
+      const result = await read(query, day, _locale, false);
+      return gateBestSlips({ ...result, summary: { asOf, ...dates, statistics: result.statistics ?? null } }, access);
     }
     catch { return { ...empty, state: "data-unavailable" }; }
   };

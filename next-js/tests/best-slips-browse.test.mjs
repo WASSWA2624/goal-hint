@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { addReportingDays, parseReportingDate } from '../src/domain/calendar.ts';
-import { bestSlipsQueryRules, parseBestSlipsQuery } from '../src/domain/best-slips-query.ts';
+import { bestSlipsQueryRules, parseBestSlipsQuery, resolveBestSlipsDates } from '../src/domain/best-slips-query.ts';
 import { createBestSlipsBrowseService } from '../src/server/slips/best-slips-browse.ts';
 import { createPublishedSlips, slipPublicationIdentity } from '../src/server/slips/published-slips.ts';
 import { gateBestSlips } from '../src/server/slips/best-slips.ts';
@@ -214,8 +214,27 @@ test('the browse service retains public counts and releases complete original se
   assert.equal(gated.slips[0].publicationDay, today); assert.equal(gated.slips[0].outcome, 'won');
   assert.equal(gated.slips.find(view => view.rank === 3).preview[0].pick, null);
   const read = createBestSlipsBrowseService({ read: async (selected, day, _locale, completedOnly) => f.store.browse(selected, day, completedOnly), providerOdds: true, now: () => now });
-  assert.deepEqual(await read(free, query()), { ...gated, summary: { asOf: now, from: today, to: today, statistics: result.statistics } });
-  assert.deepEqual(await read(full, query()), { ...gateBestSlips(result, full), summary: { asOf: now, from: today, to: today, statistics: result.statistics } });
+  const dates = resolveBestSlipsDates(query(), today);
+  assert.deepEqual(await read(free, query()), { ...gated, summary: { asOf: now, ...dates, statistics: result.statistics } });
+  assert.deepEqual(await read(full, query()), { ...gateBestSlips(result, full), summary: { asOf: now, ...dates, statistics: result.statistics } });
+});
+
+test('selected-period summaries retain every outcome while drilldowns change only the list', async () => {
+  const f = fixture(7, 8);
+  const read = createBestSlipsBrowseService({ read: (selected, day, _locale, completedOnly) => f.store.browse(selected, day, completedOnly),
+    providerOdds: true, now: () => now });
+  const selected = query({ period: 'custom', from: addReportingDays(today, -6), to: today });
+  const baseline = await read(full, selected);
+  assert.equal(baseline.summary.statistics.total, 56);
+  for (const status of ['all', 'won', 'lost', 'pending', 'void', 'cancelled']) {
+    const result = await read(full, { ...selected, status, page: 99 });
+    assert.deepEqual(result.summary, baseline.summary);
+    assert.equal(result.browse.total, status === 'all' ? 56 : baseline.summary.statistics[status]);
+    assert.deepEqual(result.slips, [], 'an empty list page does not erase the period metrics');
+  }
+  const archive = await read(full, query({ period: 'all', status: 'won' }));
+  assert.deepEqual(archive.summary, { asOf: now, from: null, to: null, statistics: null },
+    'a bounded archive scan never substitutes today or claims complete archive metrics');
 });
 
 test('a replacement cycle on the same fixture cannot overwrite the original published outcome or row state', async () => {
@@ -232,7 +251,7 @@ test('invalid ranges, unsealed publications and read failures fail closed; disab
   const service = createBestSlipsBrowseService({ read: async () => { reads++; throw new Error('private database detail'); }, providerOdds: true, now: () => now });
   const failure = await service(full, query()); assert.equal(failure.state, 'data-unavailable'); assert.deepEqual(failure.slips, []);
   const off = createBestSlipsBrowseService({ read: async () => { reads++; throw new Error('must not read'); }, providerOdds: false, now: () => now });
-  assert.equal((await off(full, query())).state, 'odds-unavailable'); assert.equal(reads, 2);
+  assert.equal((await off(full, query())).state, 'odds-unavailable'); assert.equal(reads, 1);
   assert.doesNotMatch(JSON.stringify(failure), /private database detail/);
 });
 

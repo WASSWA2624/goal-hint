@@ -23,6 +23,20 @@ test("void and pending never assume refunds or reveal their quoted odds through 
   assert.equal(result.total, 4); assert.equal(result.void, 1); assert.equal(result.pending, 1);
 });
 
+test("cancelled slips have a separate card count while preserving void return and streak rules", () => {
+  const original = [sample("1", "lost"), { ...sample("2", "void"), status: "cancelled" }, sample("3", "void"), sample("4", "pending")];
+  const result = summarizeSlipPerformance(original);
+  assert.equal(result.total, 4); assert.equal(result.cancelled, 1); assert.equal(result.void, 1);
+  assert.equal(result.lost, 1); assert.equal(result.pending, 1); assert.equal(result.currentLosingStreak, 0);
+  assert.equal(result.returnsSampleCount, 1); assert.equal(result.profitUnits, -1);
+  for (const status of ["not-started", "in-progress", "pending"]) {
+    assert.equal(summarizeSlipPerformance([{ ...sample("1", "pending"), status }]).pending, 1);
+  }
+  for (const status of ["cancelled", "invalid", "pending"]) {
+    assert.throws(() => summarizeSlipPerformance([{ ...sample("1", "won"), status }]), RangeError);
+  }
+});
+
 test("losses, empty samples and absent usable quotes remain distinct", () => {
   const empty = summarizeSlipPerformance([]);
   assert.equal(empty.winRate, null); assert.equal(empty.roi, null); assert.equal(empty.meanQuotedOdds, null);

@@ -28,9 +28,11 @@ export const dailyRunProgressSchema = z.strictObject({ id: z.uuid().nullable(), 
   .refine((run) => run.completed + run.failed === run.terminal && (run.total === null || run.terminal <= run.total && run.published <= run.total),
     { message: "Incoherent daily-run counts." }).nullable();
 const storedFeedBaseSchema = z.strictObject({
-  /** One shown pick per matching fixture, across the complete filtered cohort before pagination. */
+  /** Inline audit of the filtered list. The independently streamed period summary uses performanceVersion. */
   performance: feedPerformanceSchema.nullable().default(null),
   paginationVersion: z.string().regex(/^[a-f0-9]{64}$/u).nullable().default(null),
+  /** Period aggregate identity, independent of selected outcome and list pagination/order. */
+  performanceVersion: z.string().regex(/^[a-f0-9]{64}$/u).nullable().default(null),
   leagues: z.array(z.strictObject({ id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u),
     name: z.string().max(256).nullable(), country: z.string().max(128).nullable(),
     logoUrl: z.string().refine(isSafeRemoteImageUrl, "Unsafe logo URL.").nullable().default(null),

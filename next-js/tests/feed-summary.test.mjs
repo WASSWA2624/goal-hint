@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { checkedFeedPerformance, feedPerformanceApiHref } from '../src/domain/feed-performance-summary.ts';
+import { checkedFeedPerformance, feedPerformanceApiHref, retainedFeedPerformance } from '../src/domain/feed-performance-summary.ts';
 import { createMatchFeedSummaryHandler } from '../src/server/matches/feed-summary-http.ts';
 import { makeStore } from '../src/state/store.ts';
 import { consumeRefresh, refreshApi } from '../src/state/refresh-api.ts';
@@ -10,25 +10,29 @@ import { liveFeed, liveRecord, query, today, now } from './helpers/live-refresh-
 const counts = { total: 1, won: 0, lost: 0, pending: 1, void: 0, unavailable: 0 };
 const data = () => liveFeed([liveRecord()], { performance: counts });
 const summary = (feed = data()) => ({ performance: feed.performance, asOf: feed.asOf,
-  paginationVersion: feed.paginationVersion, access: feed.access });
+  paginationVersion: feed.performanceVersion, access: feed.access });
 const stored = () => { const feed = data(); Reflect.deleteProperty(feed, "access"); return feed; };
 
-test('deferred summaries retain the exact date, timezone, filters and page while rejecting another cohort or viewer', () => {
+test('deferred summaries retain period filters, exclude table outcomes and pagination, and reject another cohort or viewer', () => {
   const applied = query('when=last-7-days&status=finished&tz=Africa%2FKampala&picks=only&page=2');
   const href = new URL(feedPerformanceApiHref(applied, today), 'https://example.test');
   assert.equal(href.pathname, '/api/matches/summary');
   assert.equal(href.searchParams.get('status'), 'finished');
-  assert.equal(href.searchParams.get('page'), '2');
+  assert.equal(href.searchParams.has('page'), false);
   assert.equal(href.searchParams.get('tz'), 'Africa/Kampala');
   assert.equal(href.searchParams.has('when'), false, 'relative dates are pinned for a pending request');
   const feed = data(), value = summary(feed);
   assert.deepEqual(checkedFeedPerformance(value, feed), value);
   for (const invalid of [{ ...value, paginationVersion: 'b'.repeat(64) },
     { ...value, access: { tier: 'free', signedIn: false } },
-    { ...value, access: { tier: 'full', signedIn: true } },
-    { ...value, performance: { ...counts, total: 2, pending: 2 } }]) {
+    { ...value, access: { tier: 'full', signedIn: true } }]) {
     assert.throws(() => checkedFeedPerformance(invalid, feed), error => error.code === 'changed');
   }
+  assert.deepEqual(checkedFeedPerformance({ ...value, performance: { ...counts, total: 20, pending: 20 } }, feed).performance,
+    { ...counts, total: 20, pending: 20 }, 'full-period counts can exceed a status-filtered table');
+  assert.deepEqual(checkedFeedPerformance(value, { ...feed, paginationVersion: 'b'.repeat(64), total: 0 }), value);
+  const result = { ...applied, result: 'won', page: 5, pageSize: 100, sort: { by: 'probability', direction: 'asc' } };
+  assert.equal(feedPerformanceApiHref(result, today), feedPerformanceApiHref(applied, today));
   assert.throws(() => checkedFeedPerformance({ ...value, performance: { ...counts, won: 1 } }, feed), error => error.code === 'invalid-response');
 });
 
@@ -45,6 +49,15 @@ test('summary HTTP uses the ordinary gated feed boundary and returns only comple
   assert.deepEqual(value, summary());
   assert.equal(reads, 1);
   assert.doesNotMatch(JSON.stringify(value), /fixtureId|forecast|prices|revisionId|records/);
+});
+
+test('confirmed metrics survive an empty status table and cannot cross a period, source version or viewer change', () => {
+  const feed = data(), href = feedPerformanceApiHref(query(), today), seed = { href, reply: summary(feed) };
+  assert.equal(retainedFeedPerformance(seed, href, { ...feed, total: 0, paginationVersion: 'b'.repeat(64) }), seed);
+  assert.equal(retainedFeedPerformance(seed, `${href}&country=France`, feed), null);
+  assert.equal(retainedFeedPerformance(seed, href, { ...feed, performanceVersion: 'b'.repeat(64) }), null);
+  assert.equal(retainedFeedPerformance(seed, href, { ...feed, access: { tier: 'free', signedIn: false } }), null);
+  assert.equal(retainedFeedPerformance({ href, reply: null }, href, feed), null);
 });
 
 test('missing audits and private filter oracles fail explicitly instead of producing invented zero outcomes', async () => {

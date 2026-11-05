@@ -96,7 +96,9 @@ export function serializeBestSlipsQuery(query: BestSlipsQuery): URLSearchParams 
   return result;
 }
 
-/** Today's performance drilldowns retain their odds band and restart pagination. */
+/** Outcome drilldowns retain the selected period and odds band, restarting pagination. */
 export function selectSlipSummaryResult(applied: BestSlipsQuery, status: BestSlipsStatus): BestSlipsQuery {
-  return { period: "today", status, oddsBand: applied.oddsBand ?? defaultBestSlipOddsBand, page: 1 };
+  const scope = { ...applied };
+  delete scope.cursor;
+  return { ...scope, status, oddsBand: applied.oddsBand ?? defaultBestSlipOddsBand, page: 1 };
 }
