@@ -38,6 +38,8 @@ test("genuine payment identities, receipt claims and wallet links block all clea
   for (const mutate of [
     (state) => { state.payments[0].id = randomUUID(); },
     (state) => { state.payments[0].claimedTxnKey = "REAL123"; },
+    (state) => { state.payments[0].transactionRef = "REAL123"; },
+    (state) => { state.payments[0].approvedTxnKey = "mtn:REAL123"; },
     (state) => { state.receipts[0].transactionKey = "REAL123"; },
     (state) => { state.receipts[0].claims[0].submissionId = randomUUID(); },
     (state) => { state.wallets[0].accessCodeId = state.codes[0].id; },

@@ -30,7 +30,8 @@ const notificationKeys = (paymentIds: readonly string[], codeIds: readonly strin
 async function readState(tx: Prisma.TransactionClient) {
   const plans = await tx.subscriptionPlan.findMany({ select: { id: true, name: true, active: true, durationDays: true }, orderBy: { id: "asc" } });
   const payments = await tx.paymentSubmission.findMany({ where: { planId: { in: [...legacyDemoPlanIds] } },
-    select: { id: true, accountId: true, planId: true, source: true, claimedTxnKey: true, walletUgx: true } });
+    select: { id: true, accountId: true, planId: true, source: true, claimedTxnKey: true,
+      transactionRef: true, approvedTxnKey: true, walletUgx: true } });
   const paymentIds = payments.map((payment) => payment.id);
   const codes = await tx.accessCode.findMany({ where: { OR: [
     { planId: { in: [...legacyDemoPlanIds] } }, { paymentSubmissionId: { in: paymentIds } },
@@ -80,7 +81,9 @@ export function inspectDemoSubscriptionReset(state: ResetState) {
   for (const payment of state.payments) {
     const fixture = paymentsById.get(payment.id);
     if (!fixture || payment.accountId !== fixture.accountId || payment.source !== "report"
-      || payment.claimedTxnKey?.toLowerCase() !== fixture.transactionKey || payment.walletUgx !== 0) {
+      || payment.claimedTxnKey?.toLowerCase() !== fixture.transactionKey || payment.walletUgx !== 0
+      || payment.transactionRef != null && payment.transactionRef.toLowerCase() !== fixture.transactionKey
+      || payment.approvedTxnKey != null && payment.approvedTxnKey.toLowerCase().split(":").at(-1) !== fixture.transactionKey) {
       blockers.push("A demo plan has payment activity that is not a recognized synthetic fixture.");
     }
   }
