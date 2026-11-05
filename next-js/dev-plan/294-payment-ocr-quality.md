@@ -1,4 +1,4 @@
-# 290 — Payment photo reading and confidence
+# 294 — Payment photo reading and confidence
 
 ## Approved scope
 
