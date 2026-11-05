@@ -25,9 +25,12 @@ in the footer.
 
 ## Verification
 
-- The 25 focused navigation/community/dismissal tests passed. Scoped ESLint and
-  the shared theme-token contract passed; final type checking and changed-file
-  lint follow the browser teardown to avoid host memory contention.
+- The 25 focused navigation/community/dismissal tests passed, including after
+  rebasing onto the performance changes in `main`. Scoped ESLint, the shared
+  theme-token contract and full-project TypeScript checking passed on Node
+  24.18.1. Checks were serialized after browser teardown to reduce host memory
+  contention. Final lint and focused tests also passed after tightening the
+  dialog cleanup's connected-element guard.
 - Twelve browser groups passed at 320, 390 and 1440px in both themes, with zero
   page errors. They cover order, home routing, Community visibility/dialog,
   outside pointer/touch, toggle, Escape/focus, query/link/history/hash navigation,

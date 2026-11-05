@@ -54,10 +54,10 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
   const visible = items.slice(0, count), overflow = items.slice(count);
   const overflowCurrent = overflow.some(({ key }) => key === current);
   useEffect(() => {
-    if (!communityOpen) return;
+    const container = root.current;
+    if (!communityOpen || !container) return;
     return () => { requestAnimationFrame(() => {
-      const container = root.current;
-      if (!container || container.ownerDocument.activeElement !== container.ownerDocument.body) return;
+      if (!container.isConnected || container.ownerDocument.activeElement !== container.ownerDocument.body) return;
       // The original dialog opener may have moved into More or into the hidden navigation copy.
       const navigation = container.getBoundingClientRect().width > 0 ? container
         : container.ownerDocument.querySelector<HTMLElement>(`[data-responsive-navigation="${mobile ? "desktop" : "mobile"}"]`);
