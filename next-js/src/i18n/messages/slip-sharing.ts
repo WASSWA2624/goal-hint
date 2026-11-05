@@ -5,6 +5,7 @@ export const slipSharingMessages = {
   "slipShare.title": "Share slip",
   "slipShare.close": "Close sharing",
   "slipShare.preparing": "Preparing your slip…",
+  "slipShare.preparingHint": "Creating an image you can download or share.",
   "slipShare.preparingImages": "Preparing image {page} of {pages}…",
   "slipShare.preparingLogos": "Loading logos {done} of {total}…",
   "slipShare.logosInvalid": "A logo for this slip could not be prepared. Refresh the slip and try again.",

@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AppLoading, NavigationProgress } from "@/components/navigation/navigation-progress";
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon, ShareIcon } from "@/components/ui/icons";
+import { BodyText, MutedText, Stack } from "@/components/ui/layout";
 import { type NativeShareImage } from "@/components/members/invitation-share";
 import { prepareNativeSlipImages, shareSlipImages } from "./slip-share-native";
 import { publicPolicy } from "@/domain/public-policy";
@@ -28,6 +30,7 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, createdA
   const [error, setError] = useState<TextKey | null>(null), [feedback, setFeedback] = useState<TextKey | null>(null);
   const [page, setPage] = useState(0);
   const [sharing, setSharing] = useState(false);
+  const preparing = !prepared && !error;
 
   useEffect(() => {
     const element = dialog.current;
@@ -125,9 +128,17 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, createdA
 
   return <Drawer id={id} ref={dialog} aria-labelledby={`${id}-title`} data-slip-share-drawer
     onCancel={(event) => { event.preventDefault(); onClose(); }}>
-    <DrawerHeader><h2 id={`${id}-title`}>{m.text("slipShare.title")}</h2>
-      <DrawerButton type="button" variant="quiet" aria-label={m.text("slipShare.close")} onClick={onClose}><CloseIcon /></DrawerButton></DrawerHeader>
-    <DrawerBody aria-busy={sharing || !prepared && !error}>
+    <AppLoading active={preparing || sharing} />
+    <DrawerHeader><h2 id={`${id}-title`}><ShareIcon aria-hidden="true" />{m.text("slipShare.title")}</h2>
+      <DrawerButton type="button" variant="quiet" aria-label={m.text("slipShare.close")} onClick={onClose}><CloseIcon /></DrawerButton>
+      {preparing && <NavigationProgress label={m.text("slipShare.preparing")} />}
+    </DrawerHeader>
+    <DrawerBody>
+      {preparing && <Stack $gap="sm" data-share-preparing role="status" aria-live="polite" aria-atomic="true">
+        <BodyText><strong>{m.text("slipShare.preparing")}</strong></BodyText>
+        <MutedText>{m.text("slipShare.preparingHint")}</MutedText>
+      </Stack>}
+      <div data-share-preview aria-busy={preparing || sharing}>
       {error ? <div role="alert" data-share-error><p>{m.text(error)}</p><DrawerButton type="button" variant="secondary"
         onClick={() => { setError(null); setAttempt((current) => current + 1); }}>{m.text("slipShare.retry")}</DrawerButton></div>
         : prepared && <>
@@ -149,6 +160,7 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, createdA
             <a href={publicPolicy.origin} target="_blank" rel="noopener noreferrer">{new URL(publicPolicy.origin).host}</a></div>
           {prepared.shared.url && <p data-share-public-note>{m.text("slipShare.publicHint")}</p>}
         </>}
+      </div>
     </DrawerBody>
     <DrawerFooter>
       <div data-share-actions><DrawerButton type="button" variant="secondary" disabled={!prepared || sharing} onClick={() => { void saveImage(); }}><DownloadIcon />{m.text(prepared && prepared.files.length > 1 ? "slipShare.saveImages" : "slipShare.saveImage")}</DrawerButton>

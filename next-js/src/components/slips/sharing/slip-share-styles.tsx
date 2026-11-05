@@ -35,9 +35,10 @@ export const Drawer = styled.dialog`
 
 export const DrawerHeader = styled.header`
   ${dialogHeaderSurface}
-  display: flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-3); flex: none;
+  position: relative; display: flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-3); flex: none;
   ${dialogChromePadding} border-block-end: 0;
-  h2 { font-size: var(--gh-font-reading); line-height: var(--gh-leading-label); margin: 0; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  h2 { display: flex; align-items: center; gap: var(--gh-spacing-2); min-inline-size: 0; font-size: var(--gh-font-reading); line-height: var(--gh-leading-label); margin: 0; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  h2 > svg { flex: none; }
 `;
 
 export const DrawerButton = styled(Button)`
