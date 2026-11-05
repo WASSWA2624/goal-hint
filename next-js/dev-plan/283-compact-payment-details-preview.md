@@ -82,3 +82,19 @@ continues to use NavigationProgress and aria-busy.
 - The requested trial-notice removal passed live browser checks at 390px and
   1440px in light/dark themes: no notice element, no reserved gap above Details,
   and the evidence instruction and form remain present. Scoped lint passed.
+
+## Uploaded screenshot refinement
+
+- Use a reusable compact thumbnail option on the Details upload preview. Its
+  square frame and contained image follow the shared 40/44px button height on
+  desktop and phones, keeping the added attachment row compact.
+- Preserve the full preview dialog, close/focus behavior, image removal, and
+  normal thumbnail sizing on Review and admin screens.
+- Original filenames are not retained by the prepared image Blob; no filename
+  state is introduced for this presentation-only change.
+- Browser checks passed at 390px and 1440px in both themes with fine/coarse
+  pointers (8 combinations). Thumbnail, image, attachment row and Choose image
+  measured exactly 40px or 44px; no horizontal overflow occurred. Full preview,
+  close/focus restoration and removal passed in both pointer contexts, with no
+  JavaScript errors or payment submissions. Screenshots were visually inspected.
+- Scoped ESLint, TypeScript, shared theme contract and whitespace checks passed.

@@ -128,7 +128,7 @@ export function PaymentScreenshot({ image, metadata, provider, submissionId, dis
     <CheckoutScreenshot role="group" tabIndex={0} aria-label={`Choose or paste a payment screenshot${optional ? " (optional)" : ""}`} aria-describedby={requirementId} onPaste={onPaste}>
       <div data-screenshot-actions><Button variant="secondary" disabled={busy} onClick={() => input.current?.click()}><ImageIcon />Choose image</Button>
         <Button variant="quiet" disabled={busy} onClick={() => void paste()}><ClipboardIcon />Paste image</Button></div>
-      {image && <div data-screenshot-preview><PaymentImagePreview image={image} disabled={busy} />
+      {image && <div data-screenshot-preview><PaymentImagePreview image={image} disabled={busy} compact />
         <Button variant="quiet" disabled={busy} onClick={onRemove}><TrashIcon />Remove screenshot</Button></div>}
       {image && !ready && !processing && <Button variant="secondary" disabled={disabled} onClick={() => void prepare(new File([image], "Saved screenshot", { type: image.type }), true)}>Recheck saved screenshot</Button>}
       {cancellable && <Button variant="quiet" onClick={() => abort.current?.abort()}>Cancel reading</Button>}
