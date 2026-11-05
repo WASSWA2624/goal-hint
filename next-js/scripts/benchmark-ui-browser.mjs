@@ -52,8 +52,8 @@ async function main() {
       await writeFile(path.join(values.output, 'comparison.json'), JSON.stringify(comparison, null, 2) + '\n');
     }
     console.log(JSON.stringify(comparison.profiles.map(profile => ({ theme: profile.theme, width: profile.width,
-      before: profile.before.results.map(({ samples, ...summary }) => summary),
-      after: profile.after.results.map(({ samples, ...summary }) => summary) }))));
+      before: profile.before.results.map(result => ({ ...result, samples: undefined })),
+      after: profile.after.results.map(result => ({ ...result, samples: undefined })) }))));
   } finally { await browser.close(); }
 }
 
