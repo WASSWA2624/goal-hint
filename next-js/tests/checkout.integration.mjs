@@ -239,6 +239,49 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     assert.equal(await database.query(tx => tx.paymentSubmission.count({ where: { accountId: b.accountId } })), 0);
     assert.equal(await database.query(tx => tx.accessCode.count({ where: { paymentSubmissionId: saved.value.id } })), 0);
   });
+  await t.test("completed weak OCR accepts manual corrections only as unverified evidence with fresh warning consent", async () => {
+    const who = await member(), selection = select(), quoted = await checkout.quote(who, selection), image = jpeg();
+    const receipt = proof(), quality = { confidence: 100, fieldConfidence: { transactionId: 100, amountUgx: 100 },
+      uncertainFields: [], attempts: 1, enhanced: false };
+    const imageProof = { ...receipt, warningsAccepted: false, original: { text: `MTN. Paid UGX 5,000. Transaction ID: ${receipt.transactionId}`,
+      extracted: { messageSource: "image", screenshotText: "", screenshotOcr: JSON.stringify(quality) } } };
+    const unacknowledged = await checkout.confirm(who, selection, randomUUID(), quoted.value.quoteKey, true, imageProof, image);
+    assert.equal(unacknowledged.ok, false); assert.equal(unacknowledged.code, "evidence-warning");
+    const detached = await checkout.confirm(who, selection, randomUUID(), quoted.value.quoteKey, true, { ...imageProof, warningsAccepted: true });
+    assert.equal(detached.ok, false); assert.equal(detached.code, "evidence-source");
+    const saved = await checkout.confirm(who, selection, randomUUID(), quoted.value.quoteKey, true, { ...imageProof, warningsAccepted: true }, image);
+    assert.equal(saved.ok, true); assert.equal(saved.value.status, "pending"); assert.equal(saved.value.verifiedUgx, 0);
+    let detail = await review.detail(saved.value.id), claim = detail.claims[0];
+    assert.equal(claim.receipt.verifiedAt, null); assert.equal(claim.validation.reviewed, false);
+    assert.equal(claim.original.extracted.screenshotText, "");
+    for (const id of ["screenshot.ocr-transactionId", "screenshot.ocr-amountUgx"])
+      assert.ok(claim.validation.warnings.some(warning => warning.id === id), "Claimed perfect confidence cannot erase missing raw evidence");
+    assert.equal(await database.query(tx => tx.accessCode.count({ where: { accountId: who.accountId } })), 0);
+    assert.equal((await checkout.checkEvidence(who, { provider: "mtn", transactionId: receipt.transactionId })).value.reuse, "own");
+    await reviewWarnings(saved.value.id, claim);
+    const reviewed = await review.detail(saved.value.id);
+    assert.equal(reviewed.claims[0].validation.reviewed, true);
+    const corrected = { ...imageProof, warningsAccepted: true, original: { ...imageProof.original,
+      extracted: { ...imageProof.original.extracted, screenshotOcr: JSON.stringify({ ...quality, confidence: 50, attempts: 2, enhanced: true }) } } };
+    const correction = await checkout.attach(who, saved.value.id, corrected, image);
+    assert.equal(correction.ok, true);
+    detail = await review.detail(saved.value.id); claim = detail.claims[0];
+    assert.notEqual(claim.validation.fingerprint, reviewed.claims[0].validation.fingerprint);
+    assert.equal(claim.validation.reviewed, false, "Changed recognition evidence requires fresh admin review");
+    assert.equal(claim.receipt.verifiedAt, null);
+    const malformed = await checkout.attach(who, saved.value.id, { ...corrected, original: { ...corrected.original,
+      extracted: { ...corrected.original.extracted, screenshotOcr: JSON.stringify({ ...quality, confidence: 101 }) } } }, image);
+    assert.equal(malformed.ok, false);
+    assert.equal((await review.detail(saved.value.id)).revision, detail.revision);
+
+    const other = await member(), complete = proof(), otherQuote = await checkout.quote(other, selection);
+    const text = `MTN. Paid UGX 5,000 to 0700000901. Transaction ID: ${complete.transactionId}`;
+    const highConfidence = await checkout.confirm(other, selection, randomUUID(), otherQuote.value.quoteKey, true,
+      { ...complete, warningsAccepted: false, original: { text, extracted: { messageSource: "image", screenshotText: text, screenshotOcr: JSON.stringify(quality) } } }, image);
+    assert.equal(highConfidence.ok, true); assert.equal(highConfidence.value.status, "pending"); assert.equal(highConfidence.value.verifiedUgx, 0);
+    const highClaim = (await review.detail(highConfidence.value.id)).claims[0];
+    assert.deepEqual(highClaim.validation.warnings, []); assert.equal(highClaim.receipt.verifiedAt, null, "Recognition confidence never verifies payment");
+  });
   await t.test("evidence warnings require customer acknowledgement and a separate admin review before approval", async () => {
     const who = await member(); await fund(who, 1000, 1);
     const selection = select({ method: "airtel", walletUgx: 1000, referralDays: 1 }), quote = await checkout.quote(who, selection);

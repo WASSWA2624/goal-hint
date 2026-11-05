@@ -5,11 +5,11 @@ import { CriteriaDialogButton } from "@/components/ui/criteria-dialog";
 import { CameraIcon, ClipboardIcon, ImageIcon, TrashIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import type { CheckoutEvidenceCheck } from "@/domain/checkout";
-import { inspectPaymentScreenshot, unreadableScreenshotMessage, type ScreenshotMetadata } from "@/domain/payment-screenshot";
+import { inspectPaymentScreenshot, screenshotOcrUncertainFields, unreadableScreenshotMessage, type ScreenshotMetadata } from "@/domain/payment-screenshot";
 import { CheckoutDialog, CheckoutEvidenceField, CheckoutScreenshot } from "./checkout-parts";
 import { Preview } from "./subscribe-styles";
 import { preparePaymentImage } from "./payment-image";
-import { readScreenshotText } from "./payment-ocr";
+import { readPaymentScreenshot } from "./payment-ocr";
 import { sendCheckout } from "./checkout-client";
 import { PaymentImagePreview } from "./payment-image-preview";
 import { PaymentCamera } from "./payment-camera";
@@ -17,7 +17,7 @@ import { PaymentCamera } from "./payment-camera";
 export async function screenshotDigest(blob: Blob) {
   return [...new Uint8Array(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer()))].map(byte => byte.toString(16).padStart(2, "0")).join("");
 }
-type Candidate = { image: Blob; sourceSha256: string; imageSha256: string };
+type Candidate = { image: Blob; ocrImage: Blob; sourceSha256: string; imageSha256: string };
 type Picked = { file: File; url: string };
 type Dialog = { title: string; message: string; kind: "error" | "duplicate" | "replace" | "pick" | "reuse";
   candidate?: Candidate; text?: string; metadata?: ScreenshotMetadata; files?: Picked[] };
@@ -49,15 +49,20 @@ export function PaymentScreenshot({ image, metadata, provider, submissionId, dis
     setCancellable(true);
     let checking = false;
     try {
-      const text = (await readScreenshotText(candidate.image, undefined, controller.signal)).slice(0, 12000);
+      const { text, ...ocr } = await readPaymentScreenshot(candidate.ocrImage, undefined, controller.signal);
       if (controller.signal.aborted || !mounted.current) return;
-      const checked = inspectPaymentScreenshot(text);
+      const checked = inspectPaymentScreenshot(text, ocr);
       if (!checked.ok) { failure(checked.message); return; }
+      const transactionId = checked.evidence.transactionId ?? "";
+      const meta: ScreenshotMetadata = { version: 1, provider, sourceSha256: candidate.sourceSha256,
+        imageSha256: candidate.imageSha256, transactionId, ocr };
+      // A partial reading can be corrected in Details. The final entered ID and
+      // image hash still pass duplicate/ownership checks before submission.
+      if (!transactionId || screenshotOcrUncertainFields(text, ocr).includes("transactionId")) { accept(candidate, meta, text); return; }
       checking = true;
-      const result = await sendCheckout<CheckoutEvidenceCheck>({ action: "check-evidence", evidence: { provider, transactionId: checked.evidence.transactionId,
+      const result = await sendCheckout<CheckoutEvidenceCheck>({ action: "check-evidence", evidence: { provider, transactionId,
         submissionId, imageSha256: candidate.imageSha256 } });
       if (controller.signal.aborted || !mounted.current) return;
-      const meta: ScreenshotMetadata = { version: 1, provider, sourceSha256: candidate.sourceSha256, imageSha256: candidate.imageSha256, transactionId: checked.evidence.transactionId! };
       if (result.reuse === "own") {
         setDialog({ kind: "duplicate", title: "Payment already reported", message: `This transaction is already linked to your request ${result.reference ?? ""}. Use that existing request; it cannot be paid into your account twice.` }); return;
       }
@@ -87,7 +92,9 @@ export function PaymentScreenshot({ image, metadata, provider, submissionId, dis
       const prepared = await preparePaymentImage(file), imageSha256 = await screenshotDigest(prepared);
       if (!mounted.current) return;
       if (!recheck && image && imageSha256 === (metadata?.imageSha256 ?? await screenshotDigest(image))) { duplicate(); return; }
-      candidate = { image: prepared, sourceSha256, imageSha256 };
+      // OCR reads the source before upload compression; only the prepared image
+      // is retained in checkout evidence after the reading finishes.
+      candidate = { image: prepared, ocrImage: file, sourceSha256, imageSha256 };
       if (image && !recheck) {
         setDialog({ kind: "replace", title: "Replace screenshot?", message: "Only one screenshot can be attached to this transaction. Your current screenshot stays until the replacement passes its checks.", candidate }); return;
       }
