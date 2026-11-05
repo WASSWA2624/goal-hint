@@ -48,7 +48,9 @@ export const FilterButton = styled.button`
 /** An embedded summary action stretches to the card row; its minimum uses shared control metrics. */
 export const AdvancedFiltersButton = styled(FilterButton)`
   display: inline-flex; align-items: center; justify-content: center; gap: var(--gh-spacing-1_5);
-  block-size: auto; align-self: stretch; white-space: nowrap;
+  /* Keep row sizing above the shared button rule, including after style reinsertion. */
+  && { block-size: auto; align-self: stretch; }
+  white-space: nowrap;
   > svg { flex: none; font-size: var(--gh-font-emphasis); }
 `;
 
