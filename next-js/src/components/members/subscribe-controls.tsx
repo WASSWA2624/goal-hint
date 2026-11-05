@@ -2,7 +2,7 @@
 
 import { AppLoading } from "@/components/navigation/navigation-progress";
 
-import { useEffect, useEffectEvent, useId, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useEffectEvent, useId, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { trackEvent } from "@/components/analytics/tracker";
 import { useRouter } from "next/navigation";
@@ -79,9 +79,9 @@ function SubscribeSignIn({ locale, returnTo, settings }: { locale: string; retur
   return <AccountAuthForm locale={locale} view="login" returnTo={returnTo} contact={settings} />;
 }
 /** startWithTopUp opens the form on Add credit (the account page's link); a signed-out visitor always sees plans. */
-export function SubscribeFlow(props: Parameters<typeof LegacySubscribeFlow>[0]) {
+export function SubscribeFlow(props: Parameters<typeof LegacySubscribeFlow>[0] & { noticeBeforeCheckout?: ReactNode }) {
   return props.account && props.view?.checkout ? <CheckoutFlow locale={props.locale} settings={props.settings} plans={props.plans}
-    account={props.account} initialView={props.view.checkout} topUp={props.startWithTopUp ?? false} /> : <LegacySubscribeFlow {...props} />;
+    account={props.account} initialView={props.view.checkout} topUp={props.startWithTopUp ?? false} noticeBeforeCheckout={props.noticeBeforeCheckout} /> : <LegacySubscribeFlow {...props} />;
 }
 function LegacySubscribeFlow({ locale, settings, plans, account, view, returnTo, userAgent, startWithTopUp = false }: {
   locale: string; settings: PublicSubscriptionSettings; plans: readonly SubscriptionPlanView[];

@@ -2,7 +2,7 @@
 
 import { AppLoading } from "@/components/navigation/navigation-progress";
 import { backToWorkflowStep, workflowPage, workflowStep, writeWorkflowStep } from "@/components/navigation/workflow-history";
-import { useEffect, useEffectEvent, useId, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
+import { useEffect, useEffectEvent, useId, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { Button, InputControl } from "@/components/ui/controls";
 import { FloatingField } from "@/components/ui/floating-field";
@@ -14,7 +14,7 @@ import { CardIcon, CheckIcon, ClipboardIcon, CloseIcon, CopyIcon } from "@/compo
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { checkoutLabels, checkoutMethodAvailable, checkoutOpenStatuses, duplicateReceiptMessage, fundingAmounts, type CheckoutEvidenceCheck, type CheckoutQuote, type CheckoutRequest, type CheckoutSelection, type CheckoutView } from "@/domain/checkout";
 import type { ScreenshotMetadata } from "@/domain/payment-screenshot";
-import { formatPlanLength, formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
+import { formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { PublicSubscriptionSettings } from "@/domain/public-subscription-settings";
 import { manualPaymentProvider } from "@/domain/subscription-settings";
 import { paymentEvidence } from "@/domain/payment-sms";
@@ -26,8 +26,8 @@ import { normalizeTransactionId } from "@/domain/payment";
 import { localUgandaPhone } from "@/domain/phone";
 import { formatNationalPhone, splitPhoneValue } from "@/domain/phone-countries";
 import { refreshMemberSession } from "./member-session";
-import { PaymentWizard, WizardActions, WizardNotice, WizardPlans, WizardReview } from "./payment-wizard";
-import { Plan, PlanName, PlanPrice } from "./subscribe-styles";
+import { PaymentWizard, WizardActions, WizardNotice, WizardReview } from "./payment-wizard";
+import { PackageSelection } from "./package-selection";
 import { CheckoutActions, CheckoutChoices, CheckoutDialog, CheckoutFundingFields, CheckoutFundingInput, CheckoutMessage, CheckoutPanel, CheckoutPayee, CheckoutPaySummary, CheckoutProviderMark, CheckoutSupport, FundingBreakdown } from "./checkout-parts";
 import { PaymentScreenshot, screenshotDigest } from "./payment-screenshot";
 import { PaymentImagePreview } from "./payment-image-preview";
@@ -47,9 +47,10 @@ function formatReviewPhone(value: string) {
   return `+${parts.callingCode} ${formatNationalPhone(parts)}`.trim();
 }
 
-export function CheckoutFlow({ locale, settings, plans, account, initialView, topUp = false }: {
+export function CheckoutFlow({ locale, settings, plans, account, initialView, topUp = false, noticeBeforeCheckout }: {
   locale: string; settings: PublicSubscriptionSettings; plans: readonly SubscriptionPlanView[];
   account: { id: string; phone: string; draftScope?: string }; initialView: CheckoutView; topUp?: boolean;
+  noticeBeforeCheckout?: ReactNode;
 }) {
   const router = useRouter(), [view, setView] = useState(initialView ?? emptyView);
   const initial = (): CheckoutDraft => ({ requestKey: "", step: 0, purpose: topUp ? "topup" : "plan", planId: plans[0]?.id ?? "",
@@ -72,6 +73,9 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   const selectedPlanPrice = plans.find(plan => plan.id === draft.planId)?.priceUgx ?? 0;
   const walletMaximum = Math.min(view.availableWalletUgx, selectedPlanPrice);
   const networkAvailable = (method: string) => checkoutMethodAvailable(method, view, settings);
+  // Old referral-only drafts must select a package when returning to the simplified first step.
+  const packageSelection = (value: CheckoutDraft) => value.step === 0 && !topUp && !value.attachingId
+    ? chooseCheckoutPackage(value, true, view, plans) : value;
   function validStep(target: CheckoutDraft["step"], value: CheckoutDraft, screenshot: Blob | null) {
     const attaching = !!value.attachingId && view.requests.some(r => r.id === value.attachingId &&
       (checkoutOpenStatuses as readonly string[]).includes(r.status));
@@ -105,7 +109,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       }
     }
     writeWorkflowStep(restored.requestKey, restored.step, "replace");
-    setDraft(restored);
+    setDraft(packageSelection(restored));
     setLoaded(true);
   });
   useEffect(() => {
@@ -121,7 +125,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     if (step === 0 && draft.attachingId) { setShowNew(false); resetCheckout(); }
     else {
       if (target !== step || entryStep === null) writeWorkflowStep(draft.requestKey, step, "replace");
-      setDraft(current => ({ ...current, step, accepted: false }));
+      setDraft(current => packageSelection({ ...current, step, accepted: false }));
     }
     setWarningDialog(null); setNotice(null); setError("");
   });
@@ -149,7 +153,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     document.addEventListener("visibilitychange", update);
     return () => { alive = false; clearInterval(timer); window.removeEventListener("focus", update); window.removeEventListener("online", update); document.removeEventListener("visibilitychange", update); };
   }, [plans, router]);
-  const update = (values: Partial<CheckoutDraft>) => { setDraft(d => capCheckoutFunding({ ...d, ...values, accepted: values.accepted ?? false }, view, plans)); setError(""); };
+  const update = (values: Partial<CheckoutDraft>) => { setDraft(d => capCheckoutFunding(packageSelection({ ...d, ...values, accepted: values.accepted ?? false }), view, plans)); setError(""); };
   function goTo(step: CheckoutDraft["step"], mode: "push" | "replace" = "push") {
     if (page.current !== workflowPage(window.location.href)) return;
     writeWorkflowStep(draft.requestKey, step, mode);
@@ -165,9 +169,6 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   }
   const chooseMethod = (method: CheckoutSelection["method"], selected: boolean) => {
     setDraft(current => chooseCheckoutMethod(current, method, selected, view, plans)); setError("");
-  };
-  const choosePackage = (selected: boolean) => {
-    setDraft(current => chooseCheckoutPackage(current, selected, view, plans)); setError("");
   };
   const selection = (): CheckoutSelection => ({ purpose: draft.purpose, planId: draft.purpose === "plan" ? draft.planId : null,
     method: draft.method as CheckoutSelection["method"], walletUgx: Number(draft.walletUgx), referralDays: Number(draft.referralDays), topUpUgx: Number(draft.topUpUgx) });
@@ -195,8 +196,8 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   async function next() {
     setError("");
     if (draft.step === 0) {
-      if (!topUp && draft.purpose === "referral" && (!draft.useReferral || Number(draft.referralDays) < 1)) {
-        setError("Choose a package or select at least one available referral day to redeem."); return;
+      if (!topUp && !plans.some(plan => plan.id === draft.planId)) {
+        setError("Choose an available package to continue."); return;
       }
       goTo(1); return;
     }
@@ -332,6 +333,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   const active = view.requests.filter(r => (checkoutOpenStatuses as readonly string[]).includes(r.status));
   const visibleRequests = view.requests.slice(0, 5);
   const showForm = loaded && (showNew || active.length === 0 || !!attaching);
+  const packageStep = !topUp && draft.step === 0;
   const summary = effectiveQuote && <FundingBreakdown quote={effectiveQuote} {...(external && draft.amountUgx !== "" ? { reportedUgx: Number(draft.amountUgx) + (attaching?.verifiedUgx ?? 0) } : {})} />;
   function startReceipt(request: CheckoutRequest) {
     setQuote(null); setShowNew(true); setImage(null);
@@ -341,6 +343,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       method: request.method as CheckoutDraft["method"], attachingId: request.id });
   }
   return <>
+    {loaded && (!showForm || !packageStep) && noticeBeforeCheckout}
     <AppLoading active={!loaded || busy || readingActive || !!reviewQuoteKey && finishedQuote !== reviewQuoteKey} />
     {warningDialog && <PaymentEvidenceWarning warnings={warningDialog.warnings} onCancel={() => setWarningDialog(null)}
       {...(!attaching ? { onChangeMethod: () => { setWarningDialog(null); goBack(1); } } : {})}
@@ -385,21 +388,13 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       <p>{error || notice?.message}</p>
     </CheckoutDialog>}
     {!loaded && <p role="status">Restoring checkout…</p>}
-    {showForm && <PaymentWizard locale={locale} step={draft.step} totalSteps={4} inlineLabels labels={["Package", "Pay", "Details", "Review"]} hideTitle title={["Choose package", "Choose Payment Methods", "Payment details", "Review payment"][draft.step]!} headingRef={heading}>
+    {showForm && <PaymentWizard locale={locale} step={draft.step} totalSteps={4} inlineLabels labels={["Package", "Pay", "Details", "Review"]}
+      variant={packageStep ? "package" : "default"} hideTitle={!packageStep}
+      title={["Choose your package", "Choose Payment Methods", "Payment details", "Review payment"][draft.step]!} headingRef={heading}>
       {draft.step === 0 && <>
-        {topUp ? <AmountInput label="Wallet top-up (UGX)" value={draft.topUpUgx} onValueChange={topUpUgx => update({ topUpUgx })} />
-          : <>
-            <CheckoutChoices><VisuallyHidden as="legend">Access options</VisuallyHidden>
-              <label><input type="checkbox" name="checkout-buy-package" checked={draft.purpose === "plan"} disabled={busy} onChange={event => choosePackage(event.target.checked)} />
-                <CardIcon /><span data-method-text>Buy a package</span></label>
-              <CheckoutReferralChoice locale={locale} availableDays={view.availableReferralDays} checked={draft.useReferral} disabled={busy} onChange={selected => chooseMethod("referral", selected)} />
-            </CheckoutChoices>
-            {draft.purpose === "plan" && <WizardPlans $columns={1} aria-label="Packages">{plans.map(plan => <Plan key={plan.id}><input type="radio" name="checkout-package" checked={draft.planId === plan.id} onChange={() => update({ planId: plan.id })} />
-              <PlanName>{plan.name} · {formatPlanLength(plan.durationDays)}</PlanName><PlanPrice>{formatUgx(plan.priceUgx)}</PlanPrice></Plan>)}</WizardPlans>}
-            {draft.useReferral && view.availableReferralDays > 0 && <CheckoutFundingFields><CheckoutFundingInput label="Referral days to redeem" maxLabel="Use max referral days" disabled={busy}
-              maximum={Math.min(365, view.availableReferralDays)} value={draft.referralDays} onValueChange={referralDays => update({ referralDays, useReferral: true })} /></CheckoutFundingFields>}
-          </>}
-        <WizardActions><Button disabled={busy} onClick={next}>Next</Button></WizardActions>
+        {topUp ? <><AmountInput label="Wallet top-up (UGX)" value={draft.topUpUgx} onValueChange={topUpUgx => update({ topUpUgx })} />
+          <WizardActions><Button disabled={busy} onClick={next}>Next</Button></WizardActions></>
+          : <PackageSelection plans={plans} selectedPlanId={draft.planId} disabled={busy} onSelect={planId => update({ planId })} onContinue={() => void next()} />}
       </>}
       {draft.step === 1 && <>
         <CheckoutChoices><VisuallyHidden as="legend">Payment method</VisuallyHidden>{(["mtn", "airtel", "wallet"] as const).filter(method => topUp ? method !== "wallet" : draft.purpose === "plan").map(method => {
