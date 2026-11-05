@@ -3,7 +3,7 @@ import { deviceFeedEntryHref } from "../../domain/device-feed.ts";
 import { adminLandingPath } from "../../domain/admin-navigation.ts";
 import { accountSectionHref } from "../../domain/account-navigation.ts";
 import { appDownloadsHref } from "../../domain/app-downloads.ts";
-import { bestSlipsHref, homeHref, informationHref, performanceHref, slipsHref } from "../../domain/navigation.ts";
+import { bestSlipsHref, homeHref, informationHref, informationPages, performanceHref, slipsHref } from "../../domain/navigation.ts";
 import { createMessages } from "../../i18n/messages.ts";
 import type { NavigationDestination } from "./responsive-navigation";
 
@@ -12,13 +12,13 @@ export function navigationDestinations(today: ReportingDate, locale: string, zon
   const messages = createMessages(locale);
   return [
     { key: "today", href: zone ? deviceFeedEntryHref("today", today, zone, locale) : homeHref(locale), label: messages.text("navigation.matches"), tab: messages.text("navigation.matches"), icon: "matches", tone: "teal" },
-    { key: "best-slips", href: bestSlipsHref(locale), label: messages.text("bestSlips.title"), tab: messages.text("bestSlips.title"), icon: "slips", tone: "teal" },
+    { key: "best-slips", href: bestSlipsHref(locale), label: messages.text("navigation.bestSlips"), tab: messages.text("navigation.bestSlips"), icon: "slips", tone: "teal" },
     { key: "slips", href: slipsHref(locale), label: messages.text("navigation.slips"), tab: messages.text("navigation.slips"), icon: "slips", tone: "teal" },
-    { key: "community", label: "Community", tab: "Community", icon: "community", tone: "blue" },
+    { key: "community", label: messages.text("navigation.community"), tab: messages.text("navigation.community"), icon: "community", tone: "blue" },
     { key: "invite-friends", href: accountSectionHref(locale, "referrals"), label: messages.text("referrals.invite"), tab: messages.text("referrals.invite"), icon: "invite", tone: "blue" },
-    { key: "performance", href: performanceHref(locale), label: messages.text("performance.title"), tab: messages.text("performance.title"), icon: "results", tone: "violet" },
+    { key: "performance", href: performanceHref(locale), label: messages.text("navigation.performance"), tab: messages.text("navigation.performance"), icon: "results", tone: "violet" },
     { key: "download", href: appDownloadsHref(locale), label: messages.text("downloads.header"), tab: messages.text("downloads.header"), icon: "download", tone: "blue" },
-    ...(["contact", "privacy", "terms"] as const).map(page => ({ key: page, href: informationHref(page, locale), label: messages.text(`navigation.${page}`), tab: messages.text(`navigation.${page}`), icon: page, tone: "blue" as const })),
+    ...informationPages.map(page => ({ key: page, href: informationHref(page, locale), label: messages.text(`navigation.${page}`), tab: messages.text(`navigation.${page}`), icon: page, tone: "blue" as const })),
   ];
 }
 

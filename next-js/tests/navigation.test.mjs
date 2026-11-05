@@ -11,8 +11,14 @@ import { dashboardDestination, navigationDestinations } from "../src/components/
 
 test("regular and admin headers share complete destinations, with Dashboard added for administrators", () => {
   const date = parseReportingDate("2026-10-25"), destinations = navigationDestinations(date, "en");
-  assert.deepEqual(destinations.map(item => item.key), ["today", "best-slips", "slips", "community", "invite-friends", "performance", "download", "contact", "privacy", "terms"]);
-  assert.deepEqual(destinations.map(item => item.href), [homeHref("en"), "/en/best-slips", "/en/slips", undefined, "/en/account?section=referrals", "/en/performance", "/en/download", "/en/contact", "/en/privacy", "/en/terms"]);
+  assert.deepEqual(destinations.map(item => item.key), ["today", "best-slips", "slips", "community", "invite-friends", "performance", "download", "contact", "help", "privacy", "terms"]);
+  assert.deepEqual(destinations.map(item => item.href), [homeHref("en"), "/en/best-slips", "/en/slips", undefined, "/en/account?section=referrals", "/en/performance", "/en/download", "/en/contact", "/en/help", "/en/privacy", "/en/terms"]);
+  const labels = ["Matches", "Slips", "Builder", "Community", "Invite friends", "Performance", "Download app", "Contact", "Help", "Privacy", "Terms"];
+  assert.deepEqual(destinations.map(item => item.label), labels);
+  assert.deepEqual(destinations.map(item => item.tab), labels, "desktop and mobile share menu names and order");
+  assert.equal(createMessages("en").text("bestSlips.title"), "Best Slips", "menu labels leave page titles intact");
+  assert.equal(createMessages("en").text("performance.title"), "Results & performance");
+  assert.equal(createMessages("en").text("slips.title"), "Slip builder");
   assert.equal(destinations.find(item => item.key === "download").label, "Download app");
   const ownerDestinations = [...destinations, dashboardDestination("Dashboard")];
   assert.deepEqual(ownerDestinations.slice(0, -1), destinations);
@@ -155,7 +161,7 @@ test("malformed dates and ambiguous or unsupported statuses cannot produce feed 
 });
 
 test("match and information links preserve locale-neutral IDs and route conventions", () => {
-  assert.deepEqual(informationPages, ["help", "privacy", "terms", "contact"]);
+  assert.deepEqual(informationPages, ["contact", "help", "privacy", "terms"]);
   assert.equal(informationHref("help", "fr"), "/en/help");
   assert.equal(informationHref("contact", "fr"), "/en/contact");
   assert.equal(matchHref("fixture-123", "home-v-away"), "/en/matches/fixture-123/home-v-away");
