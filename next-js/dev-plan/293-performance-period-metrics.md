@@ -6,7 +6,7 @@
 - Lists and summaries share source generations with separate version identities. Late summaries are checked against the period version and viewer rather than the filtered row total.
 - Confirmed Matches metrics survive status navigation while its result list updates. Changing period, cohort filters, source version or viewer invalidates the retained summary.
 - Best Slips reuses the selected-period aggregate before outcome filtering. Status clicks retain dates and odds, clearing only list page/cursor. Applying odds preserves the selected period.
-- Results & performance status cards filter the published-slip history without changing its period statistics or return metrics. History links retain the status; cancelled slips have their own category. Prediction summaries without a corresponding list remain read-only.
+- Results & performance status cards filter the published-slip history without changing its period statistics or return metrics. History links retain the status; cancelled slips have their own category. Streamed status/pagination updates retain the confirmed history metrics and rows, with busy controls, until the next result arrives. Prediction summaries without a corresponding list remain read-only.
 - Shared performance presentation, percentage denominators, entitlement checks and foreground progress behavior remain in place.
 
 ## Existing limits
@@ -16,4 +16,4 @@
 
 ## Verification
 
-Focused query, aggregate, response validation, navigation, history and rendering checks cover every outcome, empty lists, pagination, period changes, source invalidation and viewer changes. Browser verification uses the local demonstration server in both themes. Production deployment is separate from source integration.
+All 171 focused query, aggregate, response validation, navigation and history regression tests passed across the integrated source. Checks cover every outcome, empty lists, pagination, period changes, source invalidation and viewer changes. Targeted and full lint and integrated type checking passed. Browser verification uses the local demonstration server in both themes. Production deployment is separate from source integration.

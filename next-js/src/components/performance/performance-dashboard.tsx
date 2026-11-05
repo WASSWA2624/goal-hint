@@ -2,7 +2,7 @@
 
 import { DateTimeField } from "@/components/ui/date-time-field";
 
-import { Suspense, use, useTransition, type ReactNode } from "react";
+import { Suspense, use, useCallback, useEffect, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ServerThemeUntilHydrated } from "@/styles/provider";
 import { LoadingTheme } from "@/styles/loading-theme";
@@ -146,6 +146,10 @@ type SectionProps = Pick<PerformanceDashboardProps, "locale" | "filters">;
 /** Independent reads stream into their existing positions; filters and headings render immediately. */
 export function PerformanceDashboard({ locale, filters, report, history, reportPromise, historyPromise, historyPage }: PerformanceDashboardProps) {
   const m = createMessages(locale), page = historyPage ?? history?.page ?? 1;
+  const [confirmedHistory, setConfirmedHistory] = useState(history);
+  const rememberHistory = useCallback((resolved: PublishedSlipHistory | null) => {
+    if (resolved !== null) setConfirmedHistory(resolved);
+  }, []);
   return <PerformanceSections $gap="lg" data-performance-dashboard>
     <DesktopInset><PageHeading>{m.text("performance.title")}</PageHeading><BodyText>{m.text("performance.description")}</BodyText></DesktopInset>
     <PerformanceFilterPanel><Stack $gap="sm">
@@ -168,8 +172,8 @@ export function PerformanceDashboard({ locale, filters, report, history, reportP
     {reportPromise ? <Suspense fallback={<LoadingTheme><PredictionSections locale={locale} filters={filters} report={null} page={page} loading /></LoadingTheme>}>
       <ServerThemeUntilHydrated><StreamedPredictions locale={locale} filters={filters} read={reportPromise} page={page} /></ServerThemeUntilHydrated>
     </Suspense> : <PredictionSections locale={locale} filters={filters} report={report} page={page} />}
-    {historyPromise ? <Suspense fallback={<LoadingTheme><HistorySection locale={locale} filters={filters} history={null} loading /></LoadingTheme>}>
-      <ServerThemeUntilHydrated><StreamedHistory locale={locale} filters={filters} read={historyPromise} /></ServerThemeUntilHydrated>
+    {historyPromise ? <Suspense fallback={<LoadingTheme><HistorySection locale={locale} filters={filters} history={confirmedHistory} loading /></LoadingTheme>}>
+      <ServerThemeUntilHydrated><StreamedHistory locale={locale} filters={filters} read={historyPromise} onResolved={rememberHistory} /></ServerThemeUntilHydrated>
     </Suspense> : <HistorySection locale={locale} filters={filters} history={history} />}
     <DesktopInset><MutedText>{m.text("performance.noGuarantee")}</MutedText></DesktopInset>
   </PerformanceSections>;
@@ -178,8 +182,12 @@ export function PerformanceDashboard({ locale, filters, report, history, reportP
 function StreamedPredictions({ read, ...props }: SectionProps & { read: Promise<PerformanceResponse | null>; page: number }) {
   return <PredictionSections {...props} report={use(read)} />;
 }
-function StreamedHistory({ read, ...props }: SectionProps & { read: Promise<PublishedSlipHistory | null> }) {
-  return <HistorySection {...props} history={use(read)} />;
+function StreamedHistory({ read, onResolved, ...props }: SectionProps & {
+  read: Promise<PublishedSlipHistory | null>; onResolved: (history: PublishedSlipHistory | null) => void;
+}) {
+  const history = use(read);
+  useEffect(() => { onResolved(history); }, [history, onResolved]);
+  return <HistorySection {...props} history={history} />;
 }
 function PredictionSections({ locale, filters, report, page, loading = false }: SectionProps & {
   report: PerformanceResponse | null; page: number; loading?: boolean;
@@ -220,12 +228,13 @@ function HistorySection({ locale, filters, history, loading = false }: SectionPr
   return (
     <DesktopInset as="section" aria-labelledby="published-performance" aria-busy={pending || loading} data-slip-history><Stack>
       <SectionHeading id="published-performance">{m.text("performance.slipHeading")}</SectionHeading><MutedText>{m.text("performance.slipBasis")}</MutedText>
-      {loading ? <PerformanceSummary counts={null} locale={locale} kind="slips" period={performancePeriod(m, filters)} /> : history?.statistics ? <SlipMetrics summary={history.statistics} locale={locale} period={performancePeriod(m, filters)}
-        activeResult={filters.slipStatus} onResult={selectResult} disabled={pending} /> : <MutedText>{m.text("performance.statisticsUnavailable")}</MutedText>}
-      {loading ? null : history?.records.length ? <SlipList $inset={false} data-slip-list>{history.records.map((item) => <article key={item.id} data-published-slip={item.id}>
+      {history?.statistics ? <SlipMetrics summary={history.statistics} locale={locale} period={performancePeriod(m, filters)}
+        activeResult={filters.slipStatus} onResult={selectResult} disabled={pending || loading} />
+        : loading ? <PerformanceSummary counts={null} locale={locale} kind="slips" period={performancePeriod(m, filters)} /> : <MutedText>{m.text("performance.statisticsUnavailable")}</MutedText>}
+      {history?.records.length ? <SlipList $inset={false} data-slip-list>{history.records.map((item) => <article key={item.id} data-published-slip={item.id}>
         <SlipCard slip={item.slip} index={item.rank - 1} estimatedProbability={item.estimatedProbability} results={item.results} locale={locale}
           publishedAt={Date.parse(item.publishedAt)} outcome={item.outcome} {...(item.status ? { status: item.status } : {})} />
-      </article>)}</SlipList> : <EmptyState headingLevel={3} title={m.text(history === null ? "performance.historyUnavailable" : outOfRange ? "performance.pageUnavailable" : "performance.historyEmpty")}
+      </article>)}</SlipList> : loading && history === null ? null : <EmptyState headingLevel={3} title={m.text(history === null ? "performance.historyUnavailable" : outOfRange ? "performance.pageUnavailable" : "performance.historyEmpty")}
         {...(outOfRange ? { action: <ButtonLink href={href(1)}>{m.text("performance.firstPage")}</ButtonLink> } : {})} />}
       {pages > 1 && !outOfRange && <NumberedPagination page={history!.page} pages={pages} labels={numberedPaginationLabels(m, m.text("performance.historyPagination"))} href={href} />}
     </Stack></DesktopInset>
