@@ -2231,6 +2231,8 @@ model SubscriptionSettings {
   copyFormat              String    @default("international") @db.VarChar(16)
   contactPhone            String?   @db.VarChar(15)
   whatsappPhone           String?   @db.VarChar(15)
+  contactPageEmail        String?   @default("wasswawilon0002@gmail.com") @db.VarChar(254)
+  contactPageEmailVisible Boolean   @default(true)
   supportContacts         Json?
   messageTemplates        Json?
   paymentNote             String?   @db.VarChar(300)

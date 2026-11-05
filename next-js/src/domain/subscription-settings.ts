@@ -5,6 +5,8 @@ import { validMobilePhone } from "./phone-mobile.ts";
 import { supportContactsOf, type SupportContact } from "./support-contacts.ts";
 import { parseSupportContacts } from "./support-contacts-input.ts";
 import { defaultMessageTemplates, parseMessageTemplates, type MessageTemplateSettings } from "./message-templates.ts";
+import { parseContactPageEmail } from "./contact-page-email.ts";
+import { contactNotice } from "./contact-notice.ts";
 
 /**
  * Paid-access settings the owner edits on /admin/settings (prompts/monetization.md 5.7). They live in one row, id = 1, of
@@ -46,6 +48,8 @@ export type SubscriptionSettings = Readonly<{
   copyFormat: CopyFormat;
   contactPhone: string | null;
   whatsappPhone: string | null;
+  contactPageEmail: string | null;
+  contactPageEmailVisible: boolean;
   /** Null keeps the legacy/configured support numbers until the owner saves a contact list. */
   supportContacts: readonly SupportContact[] | null;
   messageTemplates: MessageTemplateSettings;
@@ -71,6 +75,7 @@ export const defaultSubscriptionSettings: SubscriptionSettings = Object.freeze({
   airtelEnabled: false, airtelNumber: null, airtelName: null, airtelMenuShortcut: null,
   copyFormat: "international",
   contactPhone: null, whatsappPhone: null,
+  contactPageEmail: contactNotice.email, contactPageEmailVisible: true,
   supportContacts: null, messageTemplates: defaultMessageTemplates,
   communityVisible: true, communityLinks: defaultCommunityLinks, paymentAlertsEnabled: false, paymentAlertRepeats: 1,
   paymentNote: null, reviewTime: null,
@@ -83,7 +88,7 @@ export const defaultSubscriptionSettings: SubscriptionSettings = Object.freeze({
 /** The fields the Settings form saves; the mode has its own two-tap control. */
 export const editableSettingFields = Object.freeze(["mtnEnabled", "mtnNumber", "mtnName", "mtnMenuShortcut", "airtelEnabled", "airtelNumber", "airtelName",
   "airtelMenuShortcut", "copyFormat", "contactPhone", "whatsappPhone", "paymentNote", "reviewTime", "maxUnlockedDevices", "trialDays",
-  "screenshotRetentionDays", "supportContacts", "messageTemplates", "communityVisible", "communityLinks", "paymentAlertsEnabled", "paymentAlertRepeats"] as const);
+  "screenshotRetentionDays", "supportContacts", "messageTemplates", "communityVisible", "communityLinks", "paymentAlertsEnabled", "paymentAlertRepeats", "contactPageEmail", "contactPageEmailVisible"] as const);
 export type EditableSettingField = (typeof editableSettingFields)[number];
 export type SettingsChanges = Partial<Pick<SubscriptionSettings, EditableSettingField>>;
 
@@ -93,7 +98,7 @@ export type SettingsChanges = Partial<Pick<SubscriptionSettings, EditableSetting
  */
 export const identitySettingFields = Object.freeze(["mtnNumber", "mtnName", "mtnMenuShortcut", "airtelNumber", "airtelName",
   "airtelMenuShortcut", "contactPhone", "whatsappPhone"] as const);
-export const protectedSettingFields = Object.freeze([...identitySettingFields, "mtnEnabled", "airtelEnabled", "supportContacts", "messageTemplates", "communityVisible", "communityLinks", "paymentAlertsEnabled"] as const);
+export const protectedSettingFields = Object.freeze([...identitySettingFields, "mtnEnabled", "airtelEnabled", "supportContacts", "messageTemplates", "communityVisible", "communityLinks", "paymentAlertsEnabled", "contactPageEmail", "contactPageEmailVisible"] as const);
 export type ProtectedSettingField = (typeof protectedSettingFields)[number];
 export const isProtectedSettingField = (field: string): field is ProtectedSettingField =>
   (protectedSettingFields as readonly string[]).includes(field);
@@ -110,6 +115,8 @@ export const settingLabels: Readonly<Record<EditableSettingField, string>> = Obj
   copyFormat: "Copy number format",
   contactPhone: "Contact phone (calls)",
   whatsappPhone: "WhatsApp number",
+  contactPageEmail: "Contact page email",
+  contactPageEmailVisible: "Show email on contact page",
   supportContacts: "Support contacts",
   messageTemplates: "Message templates",
   communityVisible: "Show Community to the public",
@@ -175,7 +182,14 @@ export function parseSettingsChanges(input: unknown): ParsedChanges {
   for (const [field, value] of Object.entries(input)) {
     if (!(editableSettingFields as readonly string[]).includes(field)) { errors.changes = `Unknown setting: ${field.slice(0, 40)}.`; continue; }
     const key = field as EditableSettingField;
-    if (key === "communityLinks") {
+    if (key === "contactPageEmail") {
+      const parsed = parseContactPageEmail(value);
+      if (parsed.ok) changes[key] = parsed.email;
+      else errors[key] = parsed.error;
+    } else if (key === "contactPageEmailVisible") {
+      if (typeof value === "boolean") changes[key] = value;
+      else errors[key] = "Choose whether to show email on the contact page.";
+    } else if (key === "communityLinks") {
       const parsed = communityLinksSchema.safeParse(value);
       if (parsed.success) changes[key] = parsed.data;
       else errors[key] = "Use a valid HTTPS link for each platform, or leave it blank.";

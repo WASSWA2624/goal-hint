@@ -9,16 +9,18 @@ import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { MobileMoneyLogo } from "@/components/members/mobile-money-logo";
 import { TextInput } from "@/components/ui/controls";
 import { refreshCommunitySettings } from "@/components/navigation/community";
+import { refreshContactPageSettings } from "@/components/members/contact-page";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { CardIcon, ChatIcon, CheckIcon, ChevronDownIcon, DocumentIcon, Icon, LockIcon, ShieldIcon, type IconProps } from "@/components/ui/icons";
 import { formatPhone, normalizePhone } from "@/domain/phone";
 import { publicPolicy } from "@/domain/public-policy";
+import { contactPageRules } from "@/domain/contact-page";
 import { supportContactsOf, type SupportContact } from "@/domain/support-contacts";
 import { defaultMessageTemplates, type MessageTemplateSettings } from "@/domain/message-templates";
 import { editableSettingFields, isProtectedSettingField, paywallModes, settingLabels, settingsRules, type EditableSettingField,
   type ModeRequirement, type PaywallMode, type ProtectedSettingField, type SettingsPageData, type SubscriptionSettings } from "@/domain/subscription-settings";
 import { ActionButton, FieldBlock, FieldError, Hint, postAdmin, replyErrors, replyMessage, Requirements, type AdminReply } from "./admin-form";
-import { Drawer, FactList, PanelBody } from "./desk-styles";
+import { Drawer, PanelBody } from "./desk-styles";
 import { RecordBack, RecordCard, RecordDetailHead, RecordDetails, RecordFeedback, RecordItem, RecordList, RecordListScroll, RecordRowContent, RecordScroll, useRecordView } from "./record-workspace";
 import { SettingsSupportEditor } from "./settings-support-editor";
 import { SettingsMessageEditor } from "./settings-message-editor";
@@ -26,9 +28,9 @@ import { SettingsCommunityEditor } from "./settings-community-editor";
 import { PaymentAlertControls } from "./payment-alert-controls";
 import { communityLinksWithDefaults, type CommunityLink } from "@/domain/community";
 import { useAdminRefresh } from "./use-admin-refresh";
-import { ConfirmBox, DialField, DialRow, ManagedBadge, ManagedFact, ManagedNote, ModeTile, ModeTiles, NarrowField, NetworkGrid, NetworkTitle,
+import { ConfirmBox, DialField, DialRow, ManagedBadge, ManagedFact, ModeTile, ModeTiles, NarrowField, NetworkGrid, NetworkTitle,
   RequirementBox, RequirementList, SectionPanel, SettingsHint, TwoUp,
-  DesktopOnly, DesktopSettingItem, MobileOnly, SettingsFooter, SettingsForm, SettingsWorkspace } from "./settings-styles";
+  DesktopOnly, DesktopSettingItem, SettingsFooter, SettingsForm, SettingsWorkspace } from "./settings-styles";
 
 type ScalarSettingField = Exclude<EditableSettingField, "supportContacts" | "messageTemplates" | "communityLinks">;
 type Draft = Record<ScalarSettingField, string>;
@@ -47,7 +49,8 @@ const sections = [
 const sectionOf: Record<EditableSettingField, Section> = {
   mtnEnabled: "payments", mtnNumber: "payments", mtnName: "payments", mtnMenuShortcut: "payments",
   airtelEnabled: "payments", airtelNumber: "payments", airtelName: "payments", airtelMenuShortcut: "payments",
-  contactPhone: "support", whatsappPhone: "support", trialDays: "access", screenshotRetentionDays: "access", maxUnlockedDevices: "access",
+  contactPhone: "support", whatsappPhone: "support", contactPageEmail: "support", contactPageEmailVisible: "support",
+  trialDays: "access", screenshotRetentionDays: "access", maxUnlockedDevices: "access",
   copyFormat: "display", paymentNote: "display", reviewTime: "display",
   supportContacts: "support", messageTemplates: "messages",
   communityLinks: "community", communityVisible: "community", paymentAlertsEnabled: "payments", paymentAlertRepeats: "payments",
@@ -69,7 +72,7 @@ const requirementLabels: Record<ModeRequirement["key"], string> = {
 const protectedNames: Record<ProtectedSettingField, string> = {
   mtnEnabled: "MTN payment availability", mtnNumber: "MTN number", mtnName: "MTN registered name", mtnMenuShortcut: "MTN dial code",
   airtelEnabled: "Airtel payment availability", airtelNumber: "Airtel number", airtelName: "Airtel registered name", airtelMenuShortcut: "Airtel dial code",
-  contactPhone: "support number", whatsappPhone: "WhatsApp number",
+  contactPhone: "support number", whatsappPhone: "WhatsApp number", contactPageEmail: "public email", contactPageEmailVisible: "public email visibility",
   supportContacts: "support contacts", messageTemplates: "message templates",
   communityLinks: "community links", communityVisible: "community visibility", paymentAlertsEnabled: "payment alerts",
 };
@@ -83,7 +86,7 @@ function draftOf(settings: SubscriptionSettings): Draft {
 
 /** Normalize before comparison; invalid values still reach the server's field validation. */
 function valueOf(field: ScalarSettingField, text: string): SubscriptionSettings[ScalarSettingField] | string {
-  if (field === "communityVisible" || field === "paymentAlertsEnabled" || field === "mtnEnabled" || field === "airtelEnabled") return text === "true";
+  if (field === "communityVisible" || field === "contactPageEmailVisible" || field === "paymentAlertsEnabled" || field === "mtnEnabled" || field === "airtelEnabled") return text === "true";
   if (phoneFields.has(field)) return text.trim() === "" ? null : normalizePhone(text) ?? text;
   if (shortcutFields.has(field)) return text.replace(/\s+/gu, "") || null;
   if (numberFields.has(field)) return /^\d+$/u.test(text.trim()) ? Number(text.trim()) : text;
@@ -128,7 +131,6 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   const [armed, setArmed] = useState<PaywallMode | null>(null);
   const pendingFocus = useRef<string | null>(null);
   const settings = view.settings;
-  const hasSupportDirectory = settings.supportContacts != null;
   const managed: readonly string[] = view.environmentFields ?? [];
   const savedContacts = settings.supportContacts ?? supportContactsOf(settings);
   const changes = { ...changesOf(draft, settings, managed),
@@ -195,6 +197,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
       ...(next.requirements ? [] : ["Reload to update availability."])];
     setStatus({ tone: notes.length > 1 ? "warning" : "info", text: notes.join(" ") });
     if (resetForm && (changed.includes("communityLinks") || changed.includes("communityVisible"))) refreshCommunitySettings();
+    if (resetForm && changed.some(key => sectionOf[key] === "support")) refreshContactPageSettings();
     refreshAdmin();
   }
 
@@ -253,11 +256,6 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   const fact = (key: EditableSettingField, label: string, value?: ReactNode) => <ManagedFact data-settings-managed="true"><div>
     <dt>{label}{badge}</dt><dd>{shown(key, value)}</dd>
   </div></ManagedFact>;
-  /** A group whose every field is managed reads as one fact list under a single badge instead of a badge per field. */
-  const facts = (rows: readonly (readonly [EditableSettingField, string, ReactNode?])[]) => <FactList data-settings-managed="true">
-    {rows.map(([key, label, value]) => <div key={key}><dt>{label}</dt><dd>{shown(key, value)}</dd></div>)}
-  </FactList>;
-  const locked = (...keys: EditableSettingField[]) => keys.every(key => managed.includes(key));
   const phone = (key: ScalarSettingField, label: string) => managed.includes(key) ? fact(key, label)
     : <PhoneInput id={`setting-${key}`} label={label} value={draft[key]} disabled={busy} error={errors[key]} onValueChange={value => update(key, value)} />;
   const text = (key: ScalarSettingField, label: string, maximum: number, placeholder?: string) => managed.includes(key) ? fact(key, label)
@@ -314,10 +312,13 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
             <FieldBlock label="Foreground sound repeats" description={error("paymentAlertRepeats")}><select {...field("paymentAlertRepeats")}>
               {[1, 2, 3].map(value => <option key={value} value={value}>{value}</option>)}</select></FieldBlock>
           </TwoUp><PaymentAlertControls /></PanelBody></>}
-          {section === "support" && <><MobileOnly><PanelBody>{hasSupportDirectory || locked("contactPhone", "whatsappPhone")
-            ? <><ManagedNote><LockIcon />{hasSupportDirectory ? "Edit the support directory on desktop." : "Managed outside this page"}</ManagedNote>{facts([["contactPhone", "Phone support"], ["whatsappPhone", "WhatsApp"]])}</>
-            : <TwoUp>{phone("contactPhone", "Phone support")}{phone("whatsappPhone", "WhatsApp")}</TwoUp>}</PanelBody></MobileOnly>
-            <DesktopOnly><SettingsSupportEditor contacts={contacts} disabled={busy} error={errors.supportContacts} onChange={setContacts} /></DesktopOnly></>}
+          {section === "support" && <><PanelBody><h2>Contact page</h2><TwoUp>
+            <FieldBlock label="Public email" description={error("contactPageEmail")}><input {...field("contactPageEmail")} type="email" inputMode="email"
+              autoComplete="off" spellCheck={false} maxLength={contactPageRules.emailMaxLength} /></FieldBlock>
+            <FieldBlock label="Show email on Contact page" description={error("contactPageEmailVisible")}><select {...field("contactPageEmailVisible")}>
+              <option value="true">Visible</option><option value="false">Hidden</option></select></FieldBlock>
+          </TwoUp><SettingsHint>Saved details update the Contact page automatically.</SettingsHint></PanelBody>
+            <SettingsSupportEditor contacts={contacts} disabled={busy} error={errors.supportContacts} onChange={setContacts} /></>}
           {section === "community" && <SettingsCommunityEditor value={community} visible={draft.communityVisible === "true"}
             disabled={busy} error={errors.communityLinks} visibilityError={errors.communityVisible} onChange={setCommunity}
             onVisibleChange={visible => update("communityVisible", String(visible))} />}
@@ -333,9 +334,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
               <RequirementList>{selectedRequirements.map(({ key }) => <li key={key}><LockIcon />{key === "plan" ? <Link href="/admin/plans">{requirementLabels[key]}</Link>
                 : key === "payment-number" || key === "contact" ? <button type="button" onClick={() => {
                   if (key === "payment-number") resolve("mtnNumber");
-                  else if (window.matchMedia(media.desktop.replace("@media ", "")).matches) navigate("support", "setting-supportContacts");
-                  else if (hasSupportDirectory) navigate("support", "settings-section");
-                  else resolve("contactPhone");
+                  else navigate("support", "setting-supportContacts");
                 }}>{requirementLabels[key]}</button>
                   : <span>{requirementLabels[key]}</span>}</li>)}</RequirementList></RequirementBox>}
             {armed && <ConfirmBox><strong>Switch to {modeLabels[armed]}?</strong><div>

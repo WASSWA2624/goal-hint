@@ -12,7 +12,7 @@ export const FeatureBody = styled.div`
   input:not([type="checkbox"], [type="radio"]), select, textarea { ${adminControl} }
 `;
 export const FeatureHeading = styled.div`
-  display: flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-3); min-inline-size: 0;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--gh-spacing-3); min-inline-size: 0;
   > div { display: grid; gap: var(--gh-spacing-0_75); }
   > button { flex: none; }
 `;
@@ -29,6 +29,7 @@ export const ContactFields = styled.div`
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(var(--gh-size-28), .6fr) minmax(0, 1.2fr); gap: var(--gh-spacing-3); align-items: start;
   > * { min-inline-size: 0; }
   @container (max-width: ${({ theme }) => theme.viewport[44]}) { grid-template-columns: minmax(0, 1fr) minmax(var(--gh-size-28), .65fr); > :last-child { grid-column: 1 / -1; } }
+  @container (max-width: ${({ theme }) => theme.viewport[24]}) { grid-template-columns: minmax(0, 1fr); > :last-child { grid-column: auto; } }
 `;
 export const ContactOptions = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-1_5) var(--gh-spacing-4_5); min-inline-size: 0;

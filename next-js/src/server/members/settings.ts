@@ -8,6 +8,7 @@ import { applySettingsChanges, copyFormats, defaultSubscriptionSettings, modeReq
   type ShortcutField, type SubscriptionSettings } from "../../domain/subscription-settings.ts";
 import { supportContactsOf } from "../../domain/support-contacts.ts";
 import { parseSupportContacts } from "../../domain/support-contacts-input.ts";
+import { parseContactPageEmail } from "../../domain/contact-page-email.ts";
 import { defaultMessageTemplates, parseMessageTemplates } from "../../domain/message-templates.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
 import { auditTextErrors, writeOwnerAudit } from "../admin/audit.ts";
@@ -45,16 +46,19 @@ export function settingsFromRow(row: SettingsRow): SubscriptionSettings {
   }
   const instant = (value: Date | null) => value?.toISOString() ?? null;
   const contacts = row.supportContacts == null ? null : parseSupportContacts(row.supportContacts);
+  const email = parseContactPageEmail(row.contactPageEmail);
   const messages = row.messageTemplates == null ? null : parseMessageTemplates(row.messageTemplates);
   const community = communityLinksSchema.safeParse(row.communityLinks ?? []);
   if (!community.success || typeof row.communityVisible !== "boolean") throw new RangeError("Stored community settings are invalid.");
   if (contacts && !contacts.ok || messages && !messages.ok) throw new RangeError("Stored settings contain invalid contacts or message templates.");
+  if (!email.ok || typeof row.contactPageEmailVisible !== "boolean") throw new RangeError("Stored contact-page settings are invalid.");
   return Object.freeze({
     paywallMode: row.paywallMode as PaywallMode,
     mtnEnabled: row.mtnEnabled, mtnNumber: row.mtnNumber, mtnName: row.mtnName, mtnMenuShortcut: row.mtnMenuShortcut,
     airtelEnabled: row.airtelEnabled, airtelNumber: row.airtelNumber, airtelName: row.airtelName, airtelMenuShortcut: row.airtelMenuShortcut,
     copyFormat: row.copyFormat as CopyFormat,
     contactPhone: row.contactPhone, whatsappPhone: row.whatsappPhone,
+    contactPageEmail: email.email, contactPageEmailVisible: row.contactPageEmailVisible,
     supportContacts: contacts?.ok ? contacts.contacts : null,
     messageTemplates: messages?.ok ? messages.settings : defaultMessageTemplates,
     communityVisible: row.communityVisible, communityLinks: communityLinksWithDefaults(community.data),
@@ -201,6 +205,12 @@ export function createSettingsService(database: DatabaseRuntime,
         void pending.finally(() => { if (loading === pending) loading = null; });
       }
       return loading;
+    },
+
+    /** Contact visibility reads bypass process caches, so other servers observe saved changes on the next poll. */
+    async currentFresh(): Promise<SettingsState> {
+      try { return await stored(); }
+      catch { return { settings: null, source: "unavailable" }; }
     },
 
     /** The owner's Settings page: the stored row, uncached, with what still stops `test` and `on`. Throws when unreadable. */

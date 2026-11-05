@@ -2,15 +2,17 @@
 
 Settings presents one section list and one draft. Desktop shows the selected
 section beside the list. Phones open a section with a Back action. Undo, Save
-changes and save status share a footer. Messages and the structured support
-directory are edited on desktop.
+changes and save status share a footer. Messages are edited on desktop; the
+structured support directory and Contact-page settings work on both layouts.
 
 ## Support contacts
 
 Support accepts up to eight labelled phone numbers with MTN, Airtel or Other
-network labels. Choose calls, WhatsApp, or both, customer visibility and an optional
-primary number. Reorder or remove contacts. Duplicate numbers must be combined in
-one contact. Customer desktop screens show every enabled contact with its methods.
+network labels. Choose calls, WhatsApp, or both, customer visibility, independent
+Contact-page visibility and an optional primary number. Reorder or remove
+contacts. Duplicate numbers must be combined in one contact. Customer desktop
+support screens show every enabled contact with its methods; the brief public
+Contact page uses its own published subset on phones and desktops.
 
 A null directory uses the existing configured call and WhatsApp numbers. The first
 explicit directory save makes the stored directory authoritative for support, while
@@ -18,9 +20,11 @@ payment receiving details retain their environment configuration. Primary capabl
 contacts supply the legacy compact/mobile links and message placeholders. An
 explicit empty list has no fallback. While subscriptions are open, the settings
 service refuses removal of the last usable contact.
-The phone Settings view shows the effective call and WhatsApp numbers when a
-directory is saved. Installations using legacy support settings can still edit
-those fields on phones when they are writable.
+Both Settings layouts edit the same directory. Legacy numbers seed its initial
+draft and are only migrated when that directory changes. The public Contact-page
+email is editable with a separate visibility control. Saved contact changes reach
+open Contact pages through quiet refresh and same-browser notifications; see
+[Contact page](contact-page.md) for deployment and update behavior.
 
 ## Access and display
 

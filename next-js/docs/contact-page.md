@@ -1,57 +1,23 @@
-# Contact page and correction reporting
+# Contact page
 
-`/en/contact` uses the existing reusable information/public shell, semantic headings
-and square components. Its canonical remains `https://goalhint.com/en/contact`.
+`/en/contact` uses the shared public shell and contains one short introduction plus the email, Call and WhatsApp links published in **Admin → Settings → Support**. It works on phones and desktops in both themes. The canonical URL remains `https://goalhint.com/en/contact`; existing release and indexing gates remain in place.
 
-## Confirmed contact facts
+## Administration and visibility
 
-On **12 October 2026**, the owner confirmed Wilson Wasswa, Uganda, as Goal Hint's
-operator and the person responsible for general questions, privacy requests,
-corrections and disputes. The intended audience is worldwide English-speaking
-football fans aged 18+. These shared facts live in `src/domain/public-operator.ts`.
+The public email is editable and has its own visibility control. Its initial database default preserves the owner-approved address `wasswawilon0002@gmail.com`. A blank or hidden email is omitted. Only one mailbox is accepted; no subject, body, additional recipients or mail headers can be supplied. The destination opens the visitor's email application.
 
-The exact owner-approved public email is **wasswawilon0002@gmail.com**. Preserve
-that spelling. `contactNotice` records `publication: available`, `releaseReady:
-true` and the fixed bare `mailto:` destination. The Contact page opens the visitor's
-email application; no contact form, mailbox creation, email backend, test message
-or delivery guarantee is added. There is no promised response deadline.
+Support numbers reuse the existing directory, labels, ordering, primary selection and Call/WhatsApp methods. Each number has a separate **Show on Contact page** checkbox. Existing records without this flag remain visible by default. The existing **Visible to customers** checkbox still controls all support surfaces; page-specific hiding leaves checkout and account support available. Both contact editing and page visibility controls work on mobile and desktop. Existing paid-access rules still require a usable support number while subscriptions are open.
 
-These new facts supersede the earlier OP-25/27/28 deferrals for contact identity,
-responsibility and destination. The owner confirmed the destination for public
-use; a successful delivery test is not claimed. Contact readiness alone cannot
-enable indexing: privacy, terms and the overall release gate remain incomplete.
-The intended launch is 1 November 2026; no automatic release is scheduled here.
+## Automatic updates
 
-## Reporting and policy integration
+Initial rendering and `/api/contact` use the same allowlisted public projection and a fresh database settings read. Hidden contacts, a hidden email and private admin fields are omitted server-side, including from serialized page props. The endpoint is uncached.
 
-Reports should include the match/revision URL, observed issue or proposed
-correction and a supporting public source when available. Sensitive personal
-information is unnecessary. Wilson reviews reports against the available evidence.
-Verified result corrections preserve the immutable locked forecast and can leave
-an outcome pending while verified settlement is resolved. Reports themselves do
-not mutate stored results or forecasts; no automatic correction is promised.
+Visible contact pages quietly refresh every 15 seconds, and immediately when focused or returned to the foreground. Saving support settings triggers a same-page refresh and a browser-storage notification for other open tabs. With a working connection, published changes appear within 30 seconds without a manual reload or rebuild. Passive refresh leaves the page visible and does not trigger navigation progress.
 
-Existing Privacy, Terms and Help links and anchors remain in place. Privacy and
-Terms now identify the responsible person and direct requests to this page.
+A failed refresh preserves the last confirmed public snapshot until a successful read. With no initial snapshot the page shows a brief unavailable message; an intentionally empty published directory shows an empty state. A database failure never restores the hardcoded/default email or hidden numbers. Requests time out and polling is cleaned up on unmount.
 
-## Link and input boundary
+## Deployment and verification
 
-The mailto is a source-owned constant, not built from visitor input. It contains
-only the approved email with no subject, body, additional recipient, query or
-fragment. Query fields such as email, operator, destination, subject, body and
-returnTo never alter the link or visible operator information. All other links
-remain fixed same-origin navigation.
+Deploy `20261105120000_contact_page_settings` before running the updated application. It adds the public email and visibility columns; per-number page visibility stays in the existing contacts JSON. Source implementation does not establish production deployment status.
 
-## Local acceptance
-
-After a production build, run `npm run test:contact:html -- http://127.0.0.1:PORT`
-alongside privacy, terms and navigation verifiers. The contact verifier checks the
-single exact mailto, no mail headers, query-injection isolation, owner facts,
-no forms, canonical/noindex behavior and contextual policy links, without sending
-an email. Synthetic approved-production SEO checks include Contact in discovery;
-actual production discovery remains disabled by unfinished global release gates.
-
-
-## Paid access (066)
-
-Contact points to Get access for subscriber plans, reports and codes when open. It stays static without database reads; contactNotice.releaseReady remains true to preserve its existing indexing behavior.
+Run the contact settings, support contacts and HTTP tests plus `npm run typecheck` and lint. `python scripts/verify-contact-page-rendering.py --serve` provides an isolated production contact/admin fixture using invented details. Check both themes at phone and desktop widths, saved visibility, open-page polling, cross-tab saves and temporary read failures. `npm run test:contact:html -- http://127.0.0.1:PORT` verifies the actual contact page, safe links, query isolation and contextual policy links without contacting recipients.

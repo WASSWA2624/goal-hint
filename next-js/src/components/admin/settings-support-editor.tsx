@@ -20,6 +20,7 @@ export function SettingsSupportEditor({ contacts, disabled, error, onChange }: {
     <FeatureHeading><div><h2>Support numbers</h2><p>Let customers choose the network and contact method that suits them.</p></div>
       <ActionButton type="button" disabled={disabled || contacts.length >= supportContactRules.max} onClick={() => onChange([...contacts, {
         id: crypto.randomUUID(), label: "", network: "other", phone: "256", calls: true, whatsapp: false, enabled: true, primary: contacts.length === 0,
+        showOnContactPage: true,
       }])}>+ Add support number</ActionButton>
     </FeatureHeading>
     {error && <FieldError id="setting-supportContacts-error" role="alert">{error}</FieldError>}
@@ -39,6 +40,8 @@ export function SettingsSupportEditor({ contacts, disabled, error, onChange }: {
         <label><input type="checkbox" checked={contact.calls} disabled={disabled} onChange={event => update(contact.id, { calls: event.target.checked })} />Calls</label>
         <label><input type="checkbox" checked={contact.whatsapp} disabled={disabled} onChange={event => update(contact.id, { whatsapp: event.target.checked })} />WhatsApp</label>
         <label><input type="checkbox" checked={contact.enabled} disabled={disabled} onChange={event => update(contact.id, { enabled: event.target.checked, ...(!event.target.checked ? { primary: false } : {}) })} />Visible to customers</label>
+        <label><input type="checkbox" checked={contact.showOnContactPage !== false} disabled={disabled || !contact.enabled}
+          onChange={event => update(contact.id, { showOnContactPage: event.target.checked })} />Show on Contact page</label>
         <label><input type="radio" name="support-primary" checked={contact.primary} disabled={disabled || !contact.enabled}
           onChange={() => update(contact.id, { primary: true })} />Primary</label>
         <div>
@@ -48,6 +51,6 @@ export function SettingsSupportEditor({ contacts, disabled, error, onChange }: {
         </div>
       </ContactOptions>
     </ContactRow>)}</ContactList>
-    <Hint>The primary number is used in messages and compact support links. Additional numbers appear as labelled desktop contact options.</Hint>
+    <Hint>Visible to customers enables a number across support screens. Show on Contact page controls its listing there. The primary number is used in messages and compact support links.</Hint>
   </FeatureBody>;
 }

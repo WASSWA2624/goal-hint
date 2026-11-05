@@ -20,9 +20,10 @@ export const DesktopSupportContent = styled.div`
   ${media.desktop} { display: contents; }
 `;
 
-const ContactList = styled.div<{ $compact: boolean }>`
+const ContactList = styled.div<{ $compact: boolean; $allViewports: boolean }>`
   display: none;
   ${media.desktop} { display: grid; gap: var(--gh-spacing-2); min-inline-size: 0; inline-size: 100%; }
+  ${({ $allViewports }) => $allViewports && css`display: grid; gap: var(--gh-spacing-2); min-inline-size: 0; inline-size: 100%;`}
   ${({ $compact }) => $compact && css`display: grid; gap: var(--gh-spacing-3); min-inline-size: 0; inline-size: 100%;`}
 `;
 const ContactRow = styled.div<{ $compact: boolean }>`
@@ -51,10 +52,17 @@ const ContactTextLink = styled(TextLink)`
 export function DesktopSupportContacts({ locale, contact, text, appearance = "buttons", compact = false }: {
   locale: string; contact: SupportContactSettings; text?: string | undefined; appearance?: "buttons" | "text"; compact?: boolean;
 }) {
+  return <SupportContactLinks locale={locale} contact={contact} text={text} appearance={appearance} compact={compact} desktopOnly />;
+}
+
+/** Shared contact rows can also appear on public pages at every viewport size. */
+export function SupportContactLinks({ locale, contact, text, appearance = "buttons", compact = false, desktopOnly = false }: {
+  locale: string; contact: SupportContactSettings; text?: string | undefined; appearance?: "buttons" | "text"; compact?: boolean; desktopOnly?: boolean;
+}) {
   const contacts = supportContactsOf(contact), m = createMessages(locale);
   if (!contacts.length) return null;
   const Link = compact ? FormSupportLink : appearance === "text" ? ContactTextLink : ActionLink;
-  return <ContactList data-desktop-support $compact={compact}>{contacts.map(item => <ContactRow key={item.id} $compact={compact}>
+  return <ContactList data-support-contacts data-desktop-support={desktopOnly || undefined} $compact={compact} $allViewports={!desktopOnly}>{contacts.map(item => <ContactRow key={item.id} $compact={compact}>
     <ContactIdentity><strong>{item.network === "other" || item.label.toLowerCase().includes(item.network) ? item.label
       : `${item.network === "mtn" ? "MTN" : "Airtel"} · ${item.label}`}</strong><span>+{formatPhone(item.phone)}</span></ContactIdentity>
     <ContactActions $compact={compact}>

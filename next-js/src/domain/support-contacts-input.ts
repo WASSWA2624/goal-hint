@@ -1,7 +1,7 @@
 import { validMobilePhone } from "./phone-mobile.ts";
 import { supportContactRules, type SupportContact } from "./support-contacts.ts";
 
-const fields = new Set(["id", "label", "network", "phone", "calls", "whatsapp", "enabled", "primary"]);
+const fields = new Set(["id", "label", "network", "phone", "calls", "whatsapp", "enabled", "primary", "showOnContactPage"]);
 type ParsedSupportContacts = Readonly<{ ok: true; contacts: readonly SupportContact[] }> | Readonly<{ ok: false; error: string }>;
 
 /** Save only complete, canonical contacts; one number carries all of its available contact methods. */
@@ -27,11 +27,13 @@ export function parseSupportContacts(input: unknown): ParsedSupportContacts {
     if (!phone) return invalid("enter a valid mobile number with its country code.");
     if (numbers.has(phone)) return invalid("this phone number is already listed; combine its contact methods in one row.");
     if (["calls", "whatsapp", "enabled", "primary"].some(key => typeof contact[key] !== "boolean")) return invalid("choose the contact methods and availability.");
+    if (Object.hasOwn(contact, "showOnContactPage") && typeof contact.showOnContactPage !== "boolean") return invalid("choose whether to show this contact on the contact page.");
     if (!contact.calls && !contact.whatsapp) return invalid("enable calls, WhatsApp, or both.");
     if (contact.enabled && contact.primary && ++primaryCount > 1) return invalid("only one enabled contact can be the primary number.");
     ids.add(contact.id); numbers.add(phone);
     contacts.push(Object.freeze({ id: contact.id, label, network: contact.network, phone, calls: contact.calls as boolean,
-      whatsapp: contact.whatsapp as boolean, enabled: contact.enabled as boolean, primary: contact.primary as boolean }));
+      whatsapp: contact.whatsapp as boolean, enabled: contact.enabled as boolean, primary: contact.primary as boolean,
+      ...(typeof contact.showOnContactPage === "boolean" ? { showOnContactPage: contact.showOnContactPage } : {}) }));
   }
   return { ok: true, contacts: Object.freeze(contacts) };
 }

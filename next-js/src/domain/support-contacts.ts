@@ -7,6 +7,8 @@ export type SupportContact = Readonly<{
   whatsapp: boolean;
   enabled: boolean;
   primary: boolean;
+  /** Missing on existing contacts means visible; independent of global customer availability. */
+  showOnContactPage?: boolean;
 }>;
 
 export type SupportContactSettings = Readonly<{

@@ -1,5 +1,6 @@
 // Server-only page prose (see ../content-messages.ts); page metadata lives in en.ts.
 export const contactMessages = {
+  "contact.brief": "For support, questions or corrections, contact us below.",
   "contact.intro": "{operator} operates Goal Hint from {country} and handles general questions, privacy requests, corrections and disputes. Goal Hint is intended for {audience} aged {minimumAge} and over.",
   "contact.reviewed": "Technical review: {date}.",
   "contact.reviewScope": "This date records the owner-supplied contact details and a review of the application. It is not a delivery test or a response-time commitment.",
