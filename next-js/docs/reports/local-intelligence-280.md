@@ -35,7 +35,7 @@ production-readiness claim follows from the implementation.
 | --- | --- |
 | Baseline prediction/evaluation/worker/slip tests | 250 passed, zero failed/skipped; 34.1 seconds |
 | Independent baseline slips/performance tests | 73 passed, zero failed/skipped |
-| Final combined new-feature suite | 77 passed, zero failed/skipped; 13.17 seconds |
+| Final combined new-feature suite | 77 passed, zero failed/skipped; integrated rerun 15.75 seconds |
 | Final durable job / shadow-state coverage | Eight job tests and eleven shadow-state tests passed, included in the combined suite |
 | Joint selection/evaluation tests after review | 19 passed; targeted lint clean |
 | Contextual extraction/review tests | 8 passed, including final identity, freshness and actual budget-reservation hardening |
@@ -48,7 +48,8 @@ production-readiness claim follows from the implementation.
 | Authorized unrelated regression repairs | Final combined rerun: 24 passed, zero failed/skipped; 9.87 seconds |
 | Isolated dependency-layout reruns | Seven boundary/render tests passed from primary dependency layout; no test assertions changed |
 | Full application TypeScript | Production build passed; final `tsc --noEmit` also passed after freshness/archive fixes |
-| Full application production build | Passed with Webpack; compile 64 seconds, TypeScript 2.7 minutes, 28 static pages, offline bundle with 35 pinned assets |
+| Integrated repair/checkout regression | 45 passed, zero failed/skipped (28 audit/rank/loading/provider tests plus 17 checkout tests) |
+| Full application production build | Final integrated build passed with Webpack; compile 34.6 seconds, TypeScript 24.8 seconds, 28 static pages, offline bundle with 35 pinned assets |
 
 New MySQL testing proved concurrent two-connection retry deduplication, unchanged
 check/no-version behavior, recovery eligibility, database cutoff rollback and
@@ -96,6 +97,17 @@ checkout's real dependency layout. Source code and test assertions were unchange
 The production fixture/full application builds use Webpack in the isolated
 worktree for that reason. The one full-suite skip checks POSIX permission bits
 on Windows; it does not hide a failed implementation test.
+
+## Coordinated integration
+
+Implementation commit `de99e3a4` was integrated with main through `29c80ff3`,
+preserving the independently approved Package, Pay, Details and progress-indicator
+work, documentation and obsolete Claude-configuration removal. Shared overview
+edits merged cleanly. The final integrated feature/regression checks and full
+application production build passed before the primary checkout was advanced.
+Existing stashes, detached worktree files and the unrelated untracked
+`payment-screenshots/` directory are preserved. No generated evidence or private
+configuration is included in the implementation's 45-file inventory.
 
 ## Measured local page behavior
 
