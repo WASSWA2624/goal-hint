@@ -338,7 +338,7 @@ export const en = {
   "account.newHere": "New to GoalHint?",
   "account.alreadyRegistered": "Already have an account?",
   "account.accessSettings": "Subscription & access",
-  "account.description": `${authLabels.signIn} to your Goal Hint account with your phone number and password.`,
+  "account.description": `${authLabels.signIn} with your registered phone number and password.`,
   "account.signInAssent": "By logging in you confirm you are 18+ and accept the",
   "account.closed": "Subscriptions are not open yet.",
   "account.unavailable": "Member access is unavailable. Try again later.",
