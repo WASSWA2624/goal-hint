@@ -40,9 +40,10 @@ def prepare():
     directory = create_fixture("app-loading")
     # Reuse actual populated slip views and APIs alongside the actual feed routes.
     shutil.copytree(ROOT / "tests/helpers/rendering/slips/app", directory / "app", dirs_exist_ok=True)
-    for relative in ("en/page.tsx", "en/matches/page.tsx"):
+    for relative in ("en/page.tsx", "en/best-slips/page.tsx", "en/matches/page.tsx"):
         path = directory / "app" / relative
-        path.write_text(path.read_text(encoding="utf-8").replace("setTimeout(resolve, 1_800)", "setTimeout(resolve, 0)"), encoding="utf-8")
+        if path.is_file():
+            path.write_text(path.read_text(encoding="utf-8").replace("setTimeout(resolve, 1_800)", "setTimeout(resolve, 0)"), encoding="utf-8")
     result = run_node(["--conditions=react-server", "--input-type=module", "--eval",
         "import {performancePageScenarios as performance} from './tests/helpers/performance-page-fixtures.mjs';"
         "import {liveFeed} from './tests/helpers/live-refresh-fixtures.mjs';"

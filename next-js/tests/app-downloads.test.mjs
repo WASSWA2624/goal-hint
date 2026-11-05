@@ -3,7 +3,7 @@ import test from 'node:test';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { appPromptCooldown, appReleaseKey, checkedPlayStoreUrl, detectAppPlatform, nativeAppIdentity, isNewerAppRelease, shouldOfferAppDownload } from '../src/domain/app-downloads.ts';
+import { appDownloadsHref, appPromptCooldown, appReleaseKey, checkedPlayStoreUrl, detectAppPlatform, nativeAppIdentity, isNewerAppRelease, shouldOfferAppDownload } from '../src/domain/app-downloads.ts';
 import { appVersionSchema } from '../src/domain/app-downloads.ts';
 import * as presentation from '../src/domain/app-download-presentation.ts';
 import { getAppDownloads, readAppFileReleases } from '../src/server/downloads/catalog.ts';
@@ -11,6 +11,12 @@ import { appDownloadResponse } from '../src/server/downloads/file-response.ts';
 
 const release = { platform: 'windows', version: '1.2.3', build: 7, kind: 'file', href: '/api/downloads/windows', size: 10, sha256: 'a'.repeat(64) };
 const native = { platform: 'windows', channel: 'development', version: '1.2.3', build: 6 };
+test('download links use the canonical locale route independently of the Matches home page', () => {
+  for (const locale of ['en', 'fr', '', 'en/../privacy']) {
+    assert.equal(presentation.appDownloadsHref(locale), '/en/download');
+    assert.equal(appDownloadsHref(locale), '/en/download');
+  }
+});
 test('browser presentation preserves catalog version validation and compatibility exports', () => {
   assert.equal(nativeAppIdentity, presentation.nativeAppIdentity);
   assert.equal(shouldOfferAppDownload, presentation.shouldOfferAppDownload);
