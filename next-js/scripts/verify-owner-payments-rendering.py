@@ -268,9 +268,16 @@ def plans_api(origin):
         assert next(row for row in action({"action": "deactivate", "id": custom["id"]})["plans"] if row["id"] == custom["id"])["active"] is False
         assert next(row for row in action({"action": "activate", "id": custom["id"]})["plans"] if row["id"] == custom["id"])["active"] is True
         action({"action": "delete", "id": custom["id"]}, 400)
+        assert action({"action": "usage", "id": custom["id"]})["usage"] == {"payments": 0, "accessCodes": 0, "autoRenewals": 0}
+        assert action({"action": "usage", "id": original["id"]})["usage"] == {"payments": 1, "accessCodes": 1, "autoRenewals": 0}
+        assert action({"action": "delete", "id": original["id"], "confirmed": True}, 409)["error"] == "in-use"
+        remaining = action({"action": "delete", "id": custom["id"], "confirmed": True})["plans"]
+        assert [row["id"] for row in remaining] == [original["id"]]
+        action({"action": "usage", "id": custom["id"]}, 404)
+        action({"action": "delete", "id": custom["id"], "confirmed": True}, 404)
         action({"action": "edit", "id": "00000000-0000-4000-8000-000000000999", "plan": {"name": "Missing"}}, 404)
         audits = fixture_json(origin, state_path)[1]["audits"]
-        for event in ["plan_created", "plan_updated", "plans_reordered", "plan_deactivated", "plan_activated"]:
+        for event in ["plan_created", "plan_updated", "plans_reordered", "plan_deactivated", "plan_activated", "plan_deleted"]:
             assert any(row["action"] == event for row in audits), event
         assert fixture_json(origin, endpoint, headers={"Cookie": ""})[0] == 401
         for headers, expected in [({"Cookie": ""}, 401), ({"Sec-Fetch-Site": "cross-site"}, 403)]:

@@ -36,7 +36,7 @@ const tables = ["MemberAccount", "MemberSession", "MemberVerification", "Subscri
   "SubscriptionSettings", "RateLimitBucket", "OwnerAuditEvent", "WalletEntry", "AccountMove", "PaymentNotificationOutbox"];
 // docs/local-database.md: SELECT, INSERT and UPDATE on the paid-access tables; DELETE only where a purge or sign-out removes
 // rows. The credit ledger and number-change history are append-only: SELECT and INSERT only.
-const deletable = new Set(["MemberAccount", "MemberSession", "MemberVerification", "PaymentScreenshot", "RateLimitBucket", "PaymentNotificationOutbox"]);
+const deletable = new Set(["MemberAccount", "MemberSession", "MemberVerification", "SubscriptionPlan", "PaymentScreenshot", "RateLimitBucket", "PaymentNotificationOutbox"]);
 const appendOnly = new Set(["WalletEntry", "AccountMove"]);
 const DENIED = 1142, DUPLICATE = 1062, NO_PARENT = 1452, HAS_CHILDREN = 1451, CHECK = 3819;
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -212,7 +212,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
         "a session cannot move to another account with its unlock");
     });
 
-    await t.test("the application role never deletes payments, codes, plans, settings or audit rows", async () => {
+    await t.test("the application role retains history and settings without their separate deletion grants", async () => {
       for (const table of tables.filter((name) => !deletable.has(name))) {
         await refused(app.query(`DELETE FROM ${table} WHERE 1 = 0`), DENIED, table);
       }
@@ -381,7 +381,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.equal((await settings.save("owner", { mtnName: "OTHER PAYEE" }, reentry(right, "198.51.100.42"))).status, "saved", "Another address still works.");
       assert.equal((await audits("settings_password_refused")).length, 6, "Counted refusals are audited; refusals during a lock are not.");
 
-      // Plans: the owner enters them; nothing is seeded. Never deleted.
+      // Plans: the owner enters them; nothing is seeded. Referenced history remains protected.
       const created = [];
       for (const plan of [{ name: "Daily", durationDays: 1, priceUgx: 1000 }, { name: "Weekly", durationDays: 7, priceUgx: 5000 }, { name: "Monthly", durationDays: 30, priceUgx: 20000 }]) {
         clock.now += 1_000;
@@ -440,9 +440,12 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       await Promise.all([settings.save("owner", { paymentNote: "Note from one tab" }, reentry(null)), settings.save("owner", { reviewTime: "Within 30 minutes" }, reentry(null))]);
       assert.deepEqual([(await stored()).paymentNote, (await stored()).reviewTime], ["Note from one tab", "Within 30 minutes"]);
 
-      // Plans are never deleted: the role cannot, and every plan ever created is still there.
-      await refused(app.query("DELETE FROM SubscriptionPlan WHERE id = ?", [daily]), DENIED, "plan delete");
-      assert.equal((await plans.list()).length, everyPlan.length);
+      // Only unused plans are deleted, with confirmation and a durable audit record.
+      assert.equal((await plans.remove("owner", weeklyPlan, false)).status, "invalid");
+      assert.equal((await plans.remove("owner", weeklyPlan, true)).status, "saved");
+      assert.equal((await plans.list()).length, everyPlan.length - 1);
+      assert.deepEqual((await audits("plan_deleted")).at(-1).details,
+        { name: "Weekly", durationDays: 7, priceUgx: 5500, active: false });
 
       // Environment support fallback cannot replace stored receiving details.
       const blankIdentity = { contactPhone: null, whatsappPhone: null };

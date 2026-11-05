@@ -222,7 +222,7 @@ test("retired login routes redirect without credential checks or audits; logout 
 const postJson = (route, body, headers = {}) => request(route, "POST", { ...signedIn, ...sameOrigin, "content-type": "application/json", ...headers },
   JSON.stringify(body));
 
-test("Plans and Settings: reads expose managed support settings, writes are JSON only, and plans cannot be deleted", async () => {
+test("Plans and Settings: reads expose managed support settings, writes are JSON only, and plan deletion requires confirmation", async () => {
   const plans = await import(pathToFileURL(path.join(root, plansRoute)).href);
   const settings = await import(pathToFileURL(path.join(root, settingsRoute)).href);
   for (const handlers of [plans, settings]) assert.deepEqual(Object.keys(handlers).filter((name) => methods.includes(name)).sort(), ["GET", "POST"]);
@@ -244,7 +244,7 @@ test("Plans and Settings: reads expose managed support settings, writes are JSON
   assert.equal(form.status, 415, "Owner actions are JSON, which a cross-site form cannot send without a preflight.");
   assert.equal((await plans.POST(request(plansRoute, "POST", { ...signedIn, ...sameOrigin, "content-type": "application/json" }, "[1,2]"))).status, 400);
   const deletion = await plans.POST(postJson(plansRoute, { action: "delete", id: "00000000-0000-4000-8000-000000000000" }));
-  assert.equal(deletion.status, 400); assert.match((await deletion.json()).message, /never deleted/);
+  assert.equal(deletion.status, 400); assert.match((await deletion.json()).errors.confirmation, /Confirm permanently deleting/);
   const invalid = await plans.POST(postJson(plansRoute, { action: "create", plan: { name: "", durationDays: 0, priceUgx: 50 } }));
   assert.equal(invalid.status, 400); assert.deepEqual(Object.keys((await invalid.json()).errors).sort(), ["durationDays", "name", "priceUgx"]);
   const confirms = calls.confirm.length;

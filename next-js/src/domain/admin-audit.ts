@@ -44,6 +44,7 @@ const descriptions: Readonly<Record<string, ActionDescription>> = Object.freeze(
   plan_updated: { label: "Plan updated", category: "plans" },
   plan_activated: { label: "Plan activated", category: "plans" },
   plan_deactivated: { label: "Plan deactivated", category: "plans" },
+  plan_deleted: { label: "Plan deleted", category: "plans" },
   plans_reordered: { label: "Plans reordered", category: "plans" },
   code_created: { label: "Access period created", category: "access" },
   code_revoked: { label: "Access revoked", category: "access" },

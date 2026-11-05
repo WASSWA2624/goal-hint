@@ -11,8 +11,9 @@ test("payment events open the exact report before considering its subscriber", (
   assert.deepEqual(auditEventLink(event({ accountId: null })), auditEventLink(event()));
 });
 
-test("plan records open that plan, while a reorder opens the plan directory", () => {
+test("plan records open that plan, while deletion and reorder open the plan directory", () => {
   assert.deepEqual(auditEventLink(event({ targetType: "plan", action: "plan_updated" })), { href: `/admin/plans?planId=${targetId}`, label: "View plan" });
+  assert.deepEqual(auditEventLink(event({ targetType: "plan", action: "plan_deleted" })), { href: "/admin/plans", label: "View plans" });
   assert.deepEqual(auditEventLink(event({ targetType: "plan", targetId: "order", action: "plans_reordered" })), { href: "/admin/plans", label: "View plans" });
   assert.equal(auditEventLink(event({ targetType: "plan", targetId: "missing", action: "plan_updated" })), null);
 });

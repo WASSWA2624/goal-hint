@@ -1,7 +1,7 @@
 /**
  * Subscription plans. Daily, Weekly and Monthly start at the documented prices; the owner can edit them on /admin/plans.
  * Every plan unlocks every feature, so a plan is only a name, a length and a price. `durationDays` counts 24-hour blocks
- * from payment confirmation, never calendar days. Plans are never deleted: submissions and codes keep their snapshots.
+ * from payment confirmation, never calendar days. Only unused plans may be deleted; purchased plans retain their history.
  */
 export const planRules = Object.freeze({
   nameMaxLength: 40,
@@ -21,6 +21,8 @@ export type SubscriptionPlanView = Readonly<{
 }>;
 
 export type PlanFields = Readonly<{ name: string; durationDays: number; priceUgx: number }>;
+/** References that prevent permanent deletion, including disabled automatic-renewal selections. */
+export type PlanUsage = Readonly<{ payments: number; accessCodes: number; autoRenewals: number }>;
 type PlanErrors = Partial<Record<keyof PlanFields | "plan", string>>;
 const controlCharacters = /[\u0000-\u001f\u007f]/u;
 

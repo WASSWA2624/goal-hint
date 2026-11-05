@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { parsePlanFields, type PlanFields, type SubscriptionPlanView } from "../../domain/subscription-plans.ts";
+import { parsePlanFields, type PlanFields, type PlanUsage, type SubscriptionPlanView } from "../../domain/subscription-plans.ts";
 import type { ModeRequirement, PaywallMode } from "../../domain/subscription-settings.ts";
 import { auditTextErrors, writeOwnerAudit } from "../admin/audit.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
@@ -9,9 +9,8 @@ import type { Prisma, SubscriptionPlan as PlanRow } from "../generated/prisma/cl
 import { decide, lockSettings } from "./settings.ts";
 
 /**
- * Subscription plans (prompts/monetization.md 5.1 and 5.6): create, edit, deactivate, reactivate and reorder. There is no
- * delete, here or in the application grants: submissions and codes reference plans and keep their own snapshots, so an
- * edit never rewrites history. Every change commits with its audit row.
+ * Subscription plans: create, edit, deactivate, reactivate, reorder and permanently delete unused plans. Submissions,
+ * access codes and automatic-renewal selections prevent deletion. Every change commits with its audit row.
  */
 const transactionOptions = { isolationLevel: "ReadCommitted", timeout: 10_000 } as const;
 type PlanErrors = Readonly<Partial<Record<string, string>>>;
@@ -20,7 +19,10 @@ export type PlanOutcome =
   | Readonly<{ status: "saved"; plans: readonly SubscriptionPlanView[] }>
   | Readonly<{ status: "invalid"; errors: PlanErrors }>
   | Readonly<{ status: "not-found" }>
+  | Readonly<{ status: "in-use"; usage: PlanUsage }>
   | Readonly<{ status: "requirements"; mode: PaywallMode; missing: readonly ModeRequirement[] }>;
+
+export type PlanUsageOutcome = Readonly<{ status: "usage"; usage: PlanUsage }> | Readonly<{ status: "not-found" }>;
 
 export function planView(row: PlanRow): SubscriptionPlanView {
   return Object.freeze({ id: row.id, name: row.name, durationDays: row.durationDays, priceUgx: row.priceUgx, active: row.active,
@@ -39,11 +41,51 @@ export function createPlansService(database: DatabaseRuntime, { now = Date.now }
     const [found] = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM SubscriptionPlan WHERE id = ${id} FOR UPDATE`;
     return found ? tx.subscriptionPlan.findUniqueOrThrow({ where: { id } }) : null;
   };
+  const usageOf = async (client: Pick<Prisma.TransactionClient, "paymentSubmission" | "accessCode" | "memberAccount">, id: string): Promise<PlanUsage> => {
+    const [payments, accessCodes, autoRenewals] = await Promise.all([
+      client.paymentSubmission.count({ where: { planId: id } }),
+      client.accessCode.count({ where: { planId: id } }),
+      client.memberAccount.count({ where: { autoRenewPlanId: id } }),
+    ]);
+    return { payments, accessCodes, autoRenewals };
+  };
 
   return Object.freeze({
     /** Every plan, active or not, in the owner's order. */
     list(): Promise<readonly SubscriptionPlanView[]> {
       return database.query(all);
+    },
+
+    /** Confirmation preview only; deletion rechecks these references under the plan's exclusive lock. */
+    async usage(id: unknown): Promise<PlanUsageOutcome> {
+      if (!isPlanId(id)) return { status: "not-found" };
+      return database.query<PlanUsageOutcome>(async (client) => {
+        if (!await client.subscriptionPlan.findUnique({ where: { id }, select: { id: true } })) return { status: "not-found" };
+        return { status: "usage", usage: await usageOf(client, id) };
+      });
+    },
+
+    /** Permanent deletion never cascades through a member's payment, access or renewal history. */
+    async remove(actor: string, id: unknown, confirmed: unknown): Promise<PlanOutcome> {
+      if (!isPlanId(id)) return { status: "not-found" };
+      if (confirmed !== true) return { status: "invalid", errors: { confirmation: "Confirm permanently deleting this plan." } };
+      const at = new Date(now());
+      return decide<PlanOutcome>(database, async (tx, rollback) => {
+        const settings = await lockSettings(tx, actor, at);
+        // Foreign-key writers require a shared parent lock, so no new reference can arrive between the count and delete.
+        const plan = await lockPlan(tx, id);
+        if (!plan) return rollback({ status: "not-found" });
+        const usage = await usageOf(tx, id);
+        if (usage.payments || usage.accessCodes || usage.autoRenewals) return rollback({ status: "in-use", usage });
+        if (plan.active && settings.paywallMode !== "off" && await tx.subscriptionPlan.count({ where: { active: true, id: { not: id } } }) === 0) {
+          return rollback({ status: "requirements", mode: settings.paywallMode, missing: [{ key: "plan",
+            message: "Paid access needs an active plan. Add or activate another plan before deleting this one, or switch paid access off." }] });
+        }
+        await tx.subscriptionPlan.delete({ where: { id } });
+        await writeOwnerAudit(tx, { at, actor, action: "plan_deleted", targetType: "plan", targetId: id,
+          details: { name: plan.name, durationDays: plan.durationDays, priceUgx: plan.priceUgx, active: plan.active } });
+        return { status: "saved", plans: await all(tx) };
+      });
     },
 
     /** A new active plan at the end of the order. */

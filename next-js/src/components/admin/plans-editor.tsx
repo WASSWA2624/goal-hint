@@ -14,6 +14,7 @@ import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { ActionButton, Badge, FieldBlock, FieldError, Hint, postAdmin, replyErrors, replyMessage } from "./admin-form";
 import { TextAction } from "./desk-styles";
 import { FloatingField } from "./floating-field";
+import { PlanDeleteDialog } from "./plan-delete-dialog";
 import { RecordFormDialog, RecordPrimaryAction, RecordToolbar } from "./record-toolbar";
 import { useAdminRefresh } from "./use-admin-refresh";
 import { RecordBack, RecordBody, RecordCard, RecordDetailHead, RecordDetails, RecordEmpty, RecordFeedback, RecordFooter, RecordItem,
@@ -37,7 +38,7 @@ const firstInvalid = (prefix: string, errors: Record<string, string>) => {
 };
 
 /**
- * The Plans page: add, edit, deactivate, reactivate and reorder. Plans are never deleted. Every action is one JSON POST
+ * The Plans page: add, edit, deactivate, reactivate, reorder and delete unused plans. Every change is one JSON POST
  * to `/api/admin/plans`, whose reply carries the whole list, so the page always shows what is stored.
  */
 export function PlansEditor({ initialPlans, initialSelectedId }: { initialPlans: readonly SubscriptionPlanView[]; initialSelectedId?: string }) {
@@ -53,6 +54,7 @@ export function PlansEditor({ initialPlans, initialSelectedId }: { initialPlans:
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<Readonly<{ id: string; draft: Draft; errors: Record<string, string> }> | null>(null);
+  const [removing, setRemoving] = useState<SubscriptionPlanView | null>(null);
   const [selectedId, setSelectedId] = useState(initialSelectedId ?? initialPlans[0]?.id ?? ""), [adding, setAdding] = useState(false), [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false), [planStatus, setPlanStatus] = useState("all"), [draftStatus, setDraftStatus] = useState("all");
   const listedPlans = plans.filter(plan => {
@@ -132,6 +134,8 @@ export function PlansEditor({ initialPlans, initialSelectedId }: { initialPlans:
       <Square id={controlId(`${plan.id}:up`)} type="button" disabled={busy || index === 0} onClick={() => move(index, -1)} aria-label={`Move ${plan.name} up`}><ArrowUpIcon /></Square>
       <Square id={controlId(`${plan.id}:down`)} type="button" disabled={busy || index === plans.length - 1} onClick={() => move(index, 1)} aria-label={`Move ${plan.name} down`}><ArrowDownIcon /></Square>
       <TextAction id={controlId(`${plan.id}:toggle`)} type="button" disabled={busy} onClick={() => toggle(plan)}>{plan.active ? "Deactivate" : "Activate"}</TextAction>
+      <TextAction id={controlId(`${plan.id}:delete`)} type="button" $tone="danger" disabled={busy} aria-haspopup="dialog"
+        onClick={() => { setStatus(null); setRemoving(plan); }}>Delete</TextAction>
     </PlanActions>;
   }
 
@@ -201,6 +205,18 @@ export function PlansEditor({ initialPlans, initialSelectedId }: { initialPlans:
         {notice}
       </AddForm>
     </RecordFormDialog>}
+    {removing && <PlanDeleteDialog plan={removing} onClose={() => {
+      const deletedId = removing.id;
+      setRemoving(null);
+      refocus.current = () => controlFor(`${deletedId}:delete`) ?? document.getElementById("plan-list");
+    }} onDeleted={next => {
+      const nextId = next[Math.min(plans.indexOf(removing), next.length - 1)]?.id ?? "";
+      setPlans(next); setSelectedId(nextId); setEditing(null); setRemoving(null);
+      if (!desktop) closeDetail();
+      setStatus({ tone: "info", text: `${removing.name} deleted.` });
+      refreshAdmin();
+      refocus.current = () => (desktop && controlFor(`${nextId}:edit`)) || document.getElementById("plan-list");
+    }} />}
   </RecordWorkspace>;
 }
 

@@ -4,90 +4,18 @@ import { createHash } from "node:crypto";
 import { getReportingDate, getReportingDayBounds, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { analyticsChannels, analyticsGoals } from "../../domain/analytics.ts";
 import { screenBucket } from "../../domain/analytics-classify.ts";
-import { writeOwnerAudit } from "../admin/audit.ts";
-import { hashPassword } from "../analytics/analytics-password.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
-import { hashCode } from "../members/access-codes.ts";
-import { appendWalletEntry } from "../members/wallet.ts";
 import { demoId } from "./forecast.ts";
-import { assertDemoDatabase, demoMember } from "./member.ts";
+import { assertDemoDatabase } from "./member.ts";
 
-const demoWorkspaceAccount = Object.freeze({ phone: "256700000099" });
-const dayMs = 86_400_000, workspaceMarker = "development-demo-workspace-v1";
+const dayMs = 86_400_000;
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
-const planDefinitions = [
-  { name: "Demo daily access", durationDays: 1, priceUgx: 1000, active: true },
-  { name: "Demo weekly access", durationDays: 7, priceUgx: 5000, active: true },
-  { name: "Demo monthly access", durationDays: 30, priceUgx: 15000, active: true },
-  { name: "Demo retired offer", durationDays: 14, priceUgx: 8000, active: false },
-] as const;
 
-/** Application-owned examples complement the provider data; no such fields enter raw API-Football envelopes.
- * Initial records are inserted once. Subsequent starts preserve edits, decisions, balances and sign-outs. */
+/** Synthetic football and analytics remain available without generating financial or subscriber examples. */
 export async function seedDemoWorkspace(database: DatabaseRuntime, nowMs = Date.now()): Promise<void> {
   assertDemoDatabase();
   const [identity] = await database.query((tx) => tx.$queryRaw<{ name: string }[]>`SELECT DATABASE() AS name`);
   if (!identity || !/^goal_hint_demo(?:_[a-z0-9_]+)?$/u.test(identity.name)) throw new Error("Demo workspace records require the isolated database.");
-  const at = new Date(nowMs);
-  const marker = await database.query((tx) => tx.analyticsSetting.findUnique({ where: { key: workspaceMarker } }));
-  if (!marker) {
-    const passwordHash = await hashPassword(demoMember.password);
-    await database.transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM SubscriptionSettings WHERE id=1 FOR UPDATE`;
-      if (await tx.analyticsSetting.findUnique({ where: { key: workspaceMarker } })) return;
-      const plans = planDefinitions.map((plan, index) => ({ ...plan, id: demoId("workspace-plan", index), sortOrder: index + 1,
-        createdAt: new Date(nowMs - 60 * dayMs), updatedAt: at }));
-      await tx.subscriptionPlan.createMany({ data: plans });
-      // Keep the established identity without granting it administrator privileges.
-      await tx.memberAccount.create({ data: { id: demoId("workspace-admin", 0), phone: demoWorkspaceAccount.phone,
-        createdAt: at, lastSignInAt: at, ownerNote: "Synthetic development account; administrator access follows the private configuration." } });
-      for (let index = 0; index < 48; index++) {
-        const id = demoId("workspace-member", index), phone = `25670000${String(index + 1000).padStart(4, "0")}`;
-        const createdAt = new Date(nowMs - (index + 2) * dayMs), plan = plans[index % 3]!;
-        await tx.memberAccount.create({ data: { id, phone, passwordHash, phoneVerifiedAt: createdAt,
-          passwordChangedAt: createdAt, createdAt, lastSignInAt: new Date(nowMs - index * 1_800_000),
-          ownerNote: `Synthetic development member ${index + 1}`, blockedAt: index % 19 === 0 ? at : null,
-          blockedReason: index % 19 === 0 ? "Synthetic blocked-account example" : null,
-          trialRequestedAt: index % 11 === 0 ? at : null } });
-        const status = (["pending", "approved", "approved", "rejected", "superseded", "reversed"] as const)[index % 6]!;
-        const approved = status === "approved" || status === "reversed", network = index % 2 === 0 ? "mtn" : "airtel";
-        const paymentId = demoId("workspace-payment", index), submittedAt = new Date(nowMs - (index % 28) * dayMs - 3_600_000);
-        const decidedAt = approved || status === "rejected" || status === "superseded" ? new Date(submittedAt.getTime() + 1_200_000) : null;
-        const transactionRef = `DEMO${String(index + 1).padStart(6, "0")}`;
-        await tx.paymentSubmission.create({ data: { id: paymentId, reference: `D${String(index + 100).padStart(3, "0")}`,
-          source: "report", accountId: id, purpose: "plan", planId: plan.id, planName: plan.name,
-          durationDays: plan.durationDays, priceUgx: plan.priceUgx, payerPhone: phone, claimedNetwork: network,
-          claimedTxnRef: transactionRef, claimedTxnKey: transactionRef.toLowerCase(), claimedAmountUgx: plan.priceUgx,
-          status, submittedAt, decidedAt, decidedBy: decidedAt ? "development-demo" : null,
-          rejectReason: status === "rejected" ? "amount-mismatch" : null,
-          rejectText: status === "rejected" ? "Synthetic review example: the received amount differs from the selected plan." : null,
-          network: approved ? network : null, transactionRef: approved ? transactionRef : null,
-          amountReceivedUgx: approved ? plan.priceUgx : null,
-          approvedTxnKey: approved ? `${network}:${transactionRef.toLowerCase()}` : null,
-          reversedAt: status === "reversed" ? at : null, reverseReason: status === "reversed" ? "network-reversal" : null } });
-        if (approved || index % 5 === 0) {
-          const salt = new Uint8Array(createHash("sha256").update(id).digest().subarray(0, 16));
-          const startsAt = approved ? decidedAt! : createdAt, endsAt = new Date(startsAt.getTime() + plan.durationDays * dayMs);
-          await tx.accessCode.create({ data: { id: demoId("workspace-access", index), accountId: id,
-            codeSalt: salt, codeHash: hashCode(salt, `DEVS2026${String(index).padStart(4, "0")}`), reference: `A${String(index + 100).padStart(3, "0")}`,
-            source: approved ? "payment" : "manual", paymentSubmissionId: approved ? paymentId : null,
-            planId: plan.id, planName: plan.name, durationDays: plan.durationDays, priceUgx: approved ? plan.priceUgx : 0,
-            amountReceivedUgx: approved ? plan.priceUgx : 0, createdAt: startsAt, createdBy: "development-demo", activatedAt: startsAt,
-            startsAt, endsAt, revokedAt: status === "reversed" ? at : null,
-            revokedReason: status === "reversed" ? "payment-reversed" : null, note: "Synthetic development access example" } });
-        }
-        await appendWalletEntry(tx, id, { kind: "adjustment", amountUgx: (index % 5 + 1) * 5000, actor: "admin", at: createdAt,
-          requestKey: `development-demo-wallet-${index}`, note: "Synthetic development credit" });
-        if (status === "reversed") await writeOwnerAudit(tx, { at: decidedAt!, actor: "development-demo", accountId: id,
-          action: "payment_approved", targetType: "payment", targetId: paymentId, details: { synthetic: true, amountUgx: plan.priceUgx } });
-        await writeOwnerAudit(tx, { at: status === "reversed" ? at : decidedAt ?? submittedAt, actor: "development-demo", accountId: id,
-          action: status === "approved" ? "payment_approved" : status === "rejected" ? "payment_rejected"
-            : status === "reversed" ? "payment_reversed" : "payment_submitted",
-          targetType: "payment", targetId: paymentId, details: { synthetic: true, status, amountUgx: plan.priceUgx } });
-      }
-      await tx.analyticsSetting.create({ data: { key: workspaceMarker, value: "complete", updatedAt: at } });
-    }, { isolationLevel: "ReadCommitted", timeout: 60_000 });
-  }
   await seedDemoAnalytics(database, nowMs);
 }
 
