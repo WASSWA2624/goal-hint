@@ -20,6 +20,7 @@ import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public
 import { storedLiveMatchSnapshot } from "../live-match/live-match-read.ts";
 import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { prepareDemoFixture } from "../demo/read-seed.ts";
+import { createSettlementProjectionReader } from "../settlement/settlement-read.ts";
 
 export { canonicalMatchSlug } from "../../domain/match-slug.ts";
 
@@ -37,6 +38,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
       await prepareDemoFixture(options.database, id, asOf);
       const read = () => options.database.transaction(async (tx) => {
         try {
+          const readSettlement = createSettlementProjectionReader(tx);
           const known = await tx.footballFixture.findUnique({ where: { id }, select: { id: true, kickoff: true, activeCycleId: true } });
           if (!known) throw new MatchFeedError("not-found");
           const date = known.kickoff ? getReportingDate(utcInstantFromEpochMilliseconds(known.kickoff.getTime())) : today;
@@ -45,7 +47,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
           // The card projection and full current detail share this transaction's
           // verified cycle/revision instead of reading the same archive twice.
           const currentDisplay = known.activeCycleId ? await storedCycleDisplay(tx, known.activeCycleId) : null;
-          const fixture = await storedFeedFixture(tx, id, !coverage[0]?.authoritative, window, "en", { prices: providerOdds, display: currentDisplay });
+          const fixture = await storedFeedFixture(tx, id, !coverage[0]?.authoritative, window, "en", { prices: providerOdds, display: currentDisplay, readSettlement });
           // Market-implied odds groups are mutable observation data, read outside the immutable revision cache.
           const odds = await storedFixtureOddsGroups(tx, id, providerOdds);
           const currentRevisionId = fixture.forecast?.revisionId ?? null;
@@ -68,7 +70,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
           if (revision && (!evidence || evidence.snapshot.hash !== revision.evidenceHash || evidence.snapshot.context.fixtureId !== id)) throw new MatchFeedError("unavailable");
           if (evidence) permissionDeadline = Math.min(permissionDeadline, ...evidence.snapshot.sources
             .filter((source) => source.reuse.retainUntil >= asOf).map((source) => source.reuse.retainUntil + 1));
-          const snapshot = revision && display ? await publicDetailSnapshot(tx, revision, display.cycle, currentRevisionId, evidence!.snapshot, asOf, options.cache) : null;
+          const snapshot = revision && display ? await publicDetailSnapshot(tx, revision, display.cycle, currentRevisionId, evidence!.snapshot, asOf, options.cache, readSettlement) : null;
           const latestRevision = query.revisionAnchor === null ? await tx.predictionSet.findFirst({ where: { fixtureId: id }, orderBy: { fixtureRevision: "desc" }, select: { fixtureRevision: true } }) : null;
           const latestCycle = query.cycleAnchor === null ? await tx.predictionCycle.findFirst({ where: { fixtureId: id }, orderBy: { ordinal: "desc" }, select: { ordinal: true } }) : null;
           const anchors = { revision: query.revisionAnchor ?? latestRevision?.fixtureRevision ?? 0, cycle: query.cycleAnchor ?? latestCycle?.ordinal ?? 0 };

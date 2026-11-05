@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getLiveReportSnapshot, getLiveVisitorsSnapshot, getServerLiveSnapshot, refreshLiveReport,
+import { getLivePagesSnapshot, getLiveReportSnapshot, getLiveVisitorsSnapshot, getServerLiveSnapshot, refreshLiveReport,
   subscribeLiveReport } from "../src/components/analytics/dashboard/live-report.ts";
 
 const live = (visitors = 2) => ({ visitors, visits: visitors, pages: [{ path: "/en", title: "Matches", visitors }],
@@ -85,6 +85,34 @@ test("live polling pauses when hidden, resumes once and never overlaps requests"
   assert.equal(getLiveVisitorsSnapshot(), 3);
 });
 
+test("live pages retain unchanged branches while report clocks and subscriber notifications remain fresh", async t => {
+  const view = browserFor(t);
+  const snapshots = [];
+  view.subscribe(() => snapshots.push(getLiveReportSnapshot()));
+  const body = { ...live(), pages: [...live().pages, { path: "/en/slips", title: "Slips", visitors: 1 }] };
+  await view.reply(body);
+  const first = getLiveReportSnapshot(), pages = getLivePagesSnapshot();
+  const refreshed = { ...body, generatedAt: "2026-10-25T08:00:15.000Z" };
+  await view.reply(refreshed);
+  assert.notEqual(getLiveReportSnapshot(), first, "the full report advances with the fresh server timestamp");
+  assert.deepEqual(getLiveReportSnapshot(), refreshed);
+  assert.equal(getLivePagesSnapshot(), pages, "timestamp-only polls do not replace the active-pages snapshot");
+  assert.equal(snapshots.length, 2, "full-report listeners are notified for each accepted response");
+  assert.equal(snapshots.at(-1), getLiveReportSnapshot());
+  const current = getLiveReportSnapshot();
+  await view.reply(refreshed);
+  assert.equal(getLiveReportSnapshot(), current, "an entirely unchanged report keeps its snapshot identity");
+  assert.equal(snapshots.length, 3, "subscription notification behavior stays unchanged");
+  const changed = { ...refreshed, pages: [body.pages[0], { ...body.pages[1], title: "Slip results", visitors: 3 }] };
+  await view.reply(changed);
+  assert.deepEqual(getLiveReportSnapshot(), changed);
+  assert.notEqual(getLivePagesSnapshot(), pages);
+  assert.equal(getLivePagesSnapshot()[0], pages[0], "untouched pages retain their existing reference");
+  assert.notEqual(getLivePagesSnapshot()[1], pages[1]);
+  await view.reply({ ...changed, pages: [] });
+  assert.deepEqual(getLivePagesSnapshot(), [], "an empty response clears previously active pages");
+});
+
 test("unmount aborts polling, clears private values and ignores late response parsing after a remount", async t => {
   const view = browserFor(t);
   const unsubscribe = view.subscribe();
@@ -96,6 +124,7 @@ test("unmount aborts polling, clears private values and ignores late response pa
   unsubscribe();
   assert.equal(view.requests[0].options.signal.aborted, true);
   assert.equal(getLiveReportSnapshot(), null);
+  assert.equal(getLivePagesSnapshot(), null);
   t.mock.timers.tick(60_000);
   assert.equal(view.requests.length, 1);
   view.subscribe();
@@ -113,6 +142,7 @@ test("temporary failures retain live values while session expiry clears them and
   assert.equal(getLiveVisitorsSnapshot(), 5);
   await view.reply({ message: "Log in to view analytics." }, 401);
   assert.equal(getLiveReportSnapshot(), null);
+  assert.equal(getLivePagesSnapshot(), null);
   assert.equal(view.reloads(), 1);
   const before = view.requests.length;
   t.mock.timers.tick(60_000);

@@ -8,7 +8,7 @@ import type { StoredCycle, StoredRevision } from "../predictions/history-contrac
 import type { Prisma } from "../generated/prisma/client.ts";
 import type { EvidenceSnapshot } from "../evidence/evidence-contract.ts";
 import { isSafeEvidenceUrl } from "../evidence/evidence-network.ts";
-import { storedSettlementProjection } from "../settlement/settlement-read.ts";
+import { storedSettlementProjection, type SettlementProjectionReader } from "../settlement/settlement-read.ts";
 import { publicVoidReason } from "./fixture-read.ts";
 import { storedDetailSnapshotSchema } from "../../domain/match-detail.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
@@ -53,7 +53,8 @@ export function publicRevisionAnalysis(revision: StoredRevision, evidence: Evide
 }
 
 export async function publicDetailSnapshot(tx: Prisma.TransactionClient, revision: StoredRevision, cycle: StoredCycle,
-  currentRevisionId: string | null, evidence: EvidenceSnapshot, asOf: number, cache?: PublicResponseCache): Promise<StoredDetailSnapshot> {
+  currentRevisionId: string | null, evidence: EvidenceSnapshot, asOf: number, cache?: PublicResponseCache,
+  readSettlement: SettlementProjectionReader = (fixtureId, cycleId) => storedSettlementProjection(tx, fixtureId, cycleId)): Promise<StoredDetailSnapshot> {
   const historical = revision.id !== currentRevisionId;
   const applicability = cycle.state === "void" ? "void" : cycle.lockedSetId === revision.id ? "locked" : historical ? "historical" : "current";
   const load = async () => {
@@ -76,7 +77,7 @@ export async function publicDetailSnapshot(tx: Prisma.TransactionClient, revisio
   const { markets, unavailableMarkets, analysis } = cache ? await cache.read(publicCacheDescriptor({ kind: "revision", locale: "en", now: asOf,
     query: { revisionId: revision.id, evidenceHash: evidence.hash, permissionEpoch: evidence.sources.map((s) => [s.id, s.reuse.retainUntil >= asOf]) },
     deadlineAt, parse: (value) => revisionPayloadSchema.parse(value) }), load) : await load();
-  const settlement = cycle.lockedSetId === revision.id ? await storedSettlementProjection(tx, revision.fixtureId, cycle.id) : null;
+  const settlement = cycle.lockedSetId === revision.id ? await readSettlement(revision.fixtureId, cycle.id) : null;
   const outcomes: StoredDetailSnapshot["outcomes"] = applicability === "historical" ? [] : markets.map(({ market }) => {
     const entry = settlement?.cycles[0]?.markets.find((m) => m.base.family === market.family), recorded = entry?.previous;
     const current = recorded && entry?.inputHash === recorded.inputHash && recorded.lockedSetId === revision.id;

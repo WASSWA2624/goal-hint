@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readPerformanceQuotes, verifiedQuotePolicy } from '../src/server/performance/performance-quotes.ts';
+import { preparePerformanceQuotes, readPerformanceQuotes, verifiedQuotePolicy } from '../src/server/performance/performance-quotes.ts';
 import { preparePredictionQuotes } from '../src/server/predictions/prediction-quote-store.ts';
 import { historyCandidate } from './helpers/prediction-history-fixtures.mjs';
 
@@ -17,7 +17,7 @@ function quoteRow(overrides={}) {
   return { ...quote, body:quote,validIntegrity:1n,displayHundredths:235,quotedAt:new Date(publishedAt-2000),recordedAt:new Date(publishedAt),snapshotId:'a'.repeat(64),...overrides};
 }
 function database(rows,bytes=2000n) {
-  const calls=[];return {calls,$queryRaw:async sql=>{calls.push(sql);return calls.length===1?[{bytes,total:BigInt(rows.length)}]:rows;}};
+  const calls=[];return {calls,$queryRaw:async sql=>{calls.push(sql);return sql.strings.join(' ').includes('SUM(OCTET_LENGTH')?[{bytes,total:BigInt(rows.length)}]:rows;}};
 }
 test('historical quote binding requires synchronous approval and bounded bookmaker/age policy',()=>{
   assert.deepEqual(verifiedQuotePolicy({...policy,verifyPublicDisplay:()=>true}),policy);
@@ -46,4 +46,52 @@ test('bookmaker grants, original cycle opening and age bounds independently with
   assert.equal((await run({}, {...policy,maximumAgeMs:1000})).size,0);
   assert.equal((await run({openedAt:publishedAt-1000})).size,0);
   await assert.rejects(run({publishedAt:publishedAt+1}));await assert.rejects(run({cycleId:'foreign'}));
+});
+
+test('prepared quotes reserve bytes once before payload reads and preserve the independent reader result', async () => {
+  const tx = database([quoteRow()]), budget = { remainingBytes: 5000 };
+  const read = await preparePerformanceQuotes(tx, [target.revisionId], budget);
+  assert.equal(tx.calls.length, 1, 'preflight does not load quote bodies');
+  assert.equal(budget.remainingBytes, 3000);
+  const expected = await readPerformanceQuotes(database([quoteRow()]), [target], policy, { remainingBytes: 5000 });
+  assert.deepEqual(await read([target], policy), expected);
+  assert.equal(tx.calls.length, 2);
+  assert.equal(tx.calls.filter(call => call.strings.join(' ').includes('SUM(OCTET_LENGTH')).length, 1);
+  assert.equal(budget.remainingBytes, 3000, 'the same bytes are not reserved again');
+});
+
+test('prepared quotes reject changed, missing, repeated or expanded revision cohorts before loading bodies', async () => {
+  const tx = database([quoteRow()]), ids = [target.revisionId];
+  const read = await preparePerformanceQuotes(tx, ids, { remainingBytes: 5000 });
+  ids[0] = 'foreign';
+  for (const targets of [[], [{ ...target, revisionId: 'foreign' }], [target, target]]) {
+    await assert.rejects(read(targets, policy), error => error.code === 'unavailable');
+  }
+  assert.equal(tx.calls.length, 1);
+  assert.equal((await read([target], policy)).size, 1);
+  const empty = database([]), noQuotes = await preparePerformanceQuotes(empty, [], { remainingBytes: 0 });
+  await assert.rejects(noQuotes([target], policy), error => error.code === 'unavailable');
+  assert.equal(empty.calls.length, 0);
+});
+
+test('deferred quote loading retains count, seal, fixture/cycle, timing and policy checks', async () => {
+  const rows = [quoteRow()], tx = database(rows), read = await preparePerformanceQuotes(tx, [target.revisionId], { remainingBytes: 5000 });
+  rows.length = 0;
+  await assert.rejects(read([target], policy), error => error.code === 'unavailable');
+  for (const [row, selected] of [[quoteRow({ validIntegrity: 0n }), target],
+    [quoteRow(), { ...target, fixtureId: 'foreign' }], [quoteRow(), { ...target, cycleId: 'foreign' }],
+    [quoteRow(), { ...target, publishedAt: publishedAt + 1 }]]) {
+    const planned = await preparePerformanceQuotes(database([row]), [target.revisionId], { remainingBytes: 5000 });
+    await assert.rejects(planned([selected], policy));
+  }
+  const planned = await preparePerformanceQuotes(database([quoteRow()]), [target.revisionId], { remainingBytes: 5000 });
+  assert.equal((await planned([target], { ...policy, bookmakerId: 9 })).size, 0);
+  assert.equal((await planned([target], { ...policy, maximumAgeMs: 1000 })).size, 0);
+});
+
+test('prepared quote cohorts are order independent but preserve repeated-identity counts', async () => {
+  const second = { ...target, revisionId: '20000000-0000-4000-8000-000000000004' };
+  const read = await preparePerformanceQuotes(database([]), [target.revisionId, second.revisionId], { remainingBytes: 5000 });
+  assert.equal((await read([second, target], policy)).size, 0);
+  await assert.rejects(read([target, target], policy), error => error.code === 'unavailable');
 });

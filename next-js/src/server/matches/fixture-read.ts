@@ -12,7 +12,7 @@ import { Prisma } from "../generated/prisma/client.ts";
 import { cycleFromRows, historyTime, revisionFromRows, storedCycleDisplay, type HistoryRow } from "../predictions/history-read.ts";
 import { historyFail, type CycleDisplay } from "../predictions/history-contract.ts";
 import { refreshResultFromRow, storedRefreshResult } from "../predictions/publication-read.ts";
-import { projectSettlementCycle, settlementRevisionFromRow, storedSettlementProjection } from "../settlement/settlement-read.ts";
+import { projectSettlementCycle, settlementRevisionFromRow, storedSettlementProjection, type SettlementProjectionReader } from "../settlement/settlement-read.ts";
 import type { SettlementRevision } from "../settlement/settlement-contract.ts";
 import { fixtureResultFromRow, fixtureResultMatchesCanonical, resultStatus, storedFixtureResult, type StoredFixtureResult } from "../results/result-read.ts";
 import { fixturePricesFromRows, storedFixturePrices, type FixturePriceRow } from "../odds/odds-read.ts";
@@ -40,14 +40,15 @@ export function publicVoidReason(reason: string | null, locale = "en") {
 /** `prices` defaults to publicPolicy.features.providerOdds; prices come from the same snapshot as the feed SQL.
  * A supplied display must have been verified in this transaction, never retained across requests. */
 export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string, partialCoverage: boolean, window: InstantWindow, locale: string,
-  options: Readonly<{ prices?: boolean; source?: FeedFixtureSource; display?: CycleDisplay | null }> = {}): Promise<StoredMatchFeedRecord> {
+  options: Readonly<{ prices?: boolean; source?: FeedFixtureSource; display?: CycleDisplay | null; readSettlement?: SettlementProjectionReader }> = {}): Promise<StoredMatchFeedRecord> {
   const fixture = options.source?.fixture ?? await tx.footballFixture.findUniqueOrThrow({ where: { id }, include: fixtureInclude });
   const messages = createMessages(locale), display = options.source ? options.source.display
     : options.display !== undefined ? options.display : fixture.activeCycleId ? await storedCycleDisplay(tx, fixture.activeCycleId) : null;
   const cycle = display?.cycle ?? null, revision = display?.revision ?? null;
   if (fixture.id !== id || (options.source || options.display !== undefined) &&
     ((cycle?.id ?? null) !== fixture.activeCycleId || cycle && cycle.fixtureId !== id)) return historyFail("invalid-state");
-  const settlement = options.source ? options.source.settlement : cycle?.lockedSetId ? await storedSettlementProjection(tx, id, cycle.id) : null;
+  const settlement = options.source ? options.source.settlement : cycle?.lockedSetId
+    ? await (options.readSettlement ?? ((fixtureId, cycleId) => storedSettlementProjection(tx, fixtureId, cycleId)))(id, cycle.id) : null;
   const result = options.source ? options.source.result
     : settlement?.result ?? (fixture.resultState?.resultId ? await storedFixtureResult(tx, id, fixture.resultState.resultId) : null);
   const latest = !options.source && cycle ? await tx.predictionRefreshResult.findFirst({ where: { fixtureId: id, cycleId: cycle.id }, orderBy: [{ runSequence: "desc" }, { fixtureVersion: "desc" }], select: { id: true } }) : null;

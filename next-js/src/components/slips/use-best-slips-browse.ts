@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { SlipsBrowseResult } from "@/domain/best-slips";
 import { bestSlipsQueryRules, defaultBestSlipsQuery, serializeBestSlipsQuery, type BestSlipsQuery } from "@/domain/best-slips-query";
 import { slipBrowseScope } from "@/domain/slip-browse-window";
+import { shareUnchanged } from "@/domain/structural-sharing";
 
 import { singleSlipPage } from "@/domain/slip-pagination";
 
@@ -49,7 +50,7 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
       const result = await read(intent.query);
       if (controller.signal.aborted) return;
       if (intent.mode === "replace" && intent.scroll) root.current?.scrollIntoView({ block: "start" });
-      setContent(result);
+      setContent((current) => shareUnchanged(current, result));
     })().catch(() => { if (active) setFailed(true); }).finally(() => {
       clearTimeout(deadline); if (pending.current === controller) pending.current = null; if (active) { lock.current = false; setBusy(false); }
     });

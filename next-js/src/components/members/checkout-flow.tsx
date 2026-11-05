@@ -24,6 +24,7 @@ import { formatPeriodEnd } from "@/domain/subscription-period";
 import { validMobilePhone } from "@/domain/phone-mobile";
 import { normalizeTransactionId } from "@/domain/payment";
 import { localUgandaPhone } from "@/domain/phone";
+import { shareUnchanged } from "@/domain/structural-sharing";
 import { formatNationalPhone, splitPhoneValue } from "@/domain/phone-countries";
 import { refreshMemberSession } from "./member-session";
 import { PaymentWizard, WizardActions, WizardNotice, WizardReview } from "./payment-wizard";
@@ -37,6 +38,7 @@ import { PaymentScreenshot, screenshotDigest } from "./payment-screenshot";
 import { PaymentImagePreview } from "./payment-image-preview";
 import { PaymentEvidenceWarning } from "./payment-evidence-warning";
 import { sendCheckout as send } from "./checkout-client";
+import { createCheckoutRefresh, revalidateCheckout } from "./checkout-refresh";
 import { MobileMoneyLogo } from "./mobile-money-logo";
 import { capCheckoutFunding, chooseCheckoutMethod, chooseCheckoutPackage, loadCheckoutDraft, restoredCheckoutStep, saveCheckoutDraft, withCheckoutProvider, type CheckoutDraft } from "./checkout-draft";
 import { clearProtectedDrafts } from "./draft-storage";
@@ -70,6 +72,8 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   const [showNew, setShowNew] = useState(false), submitting = useRef(false), heading = useRef<HTMLHeadingElement>(null);
   const [quoteEpoch, setQuoteEpoch] = useState(0), lastQuoteKey = useRef<string | null>(null);
   const payQuote = useRef<DisplayedQuote | null>(null);
+  const backgroundRefresh = useRef<ReturnType<typeof createCheckoutRefresh> | null>(null);
+  const foregroundRefreshes = useRef(0);
   const evidenceId = useId(), messageInput = useRef<HTMLTextAreaElement>(null);
   const pasteGeneration = useRef(0);
   const invalidatePaste = useCallback(() => { pasteGeneration.current++; }, []);
@@ -86,7 +90,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     const purchase = value.step === 0 && !topUp && !value.attachingId ? chooseCheckoutPackage(value, true, balances, plans) : value;
     const separated = purchase.step <= 1 && purchase.purpose === "plan" && (purchase.useReferral || Number(purchase.referralDays) > 0)
       ? { ...purchase, useReferral: false, referralDays: "0", accepted: false } : purchase;
-    return withCheckoutProvider(capCheckoutFunding(separated, balances, plans), settings, balances.lastMethod);
+    return shareUnchanged(value, withCheckoutProvider(capCheckoutFunding(separated, balances, plans), settings, balances.lastMethod));
   }, [plans, settings, topUp, view]);
   function validStep(target: CheckoutDraft["step"], value: CheckoutDraft, screenshot: Blob | null) {
     const attaching = !!value.attachingId && view.requests.some(r => r.id === value.attachingId &&
@@ -142,23 +146,31 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     return () => window.removeEventListener("popstate", onPop);
   }, []);
   async function refresh() {
-    const response = await fetch("/api/account/checkout", { cache: "no-store", credentials: "same-origin" });
-    if (!response.ok) throw new Error("Status could not refresh. Your request is kept.");
-    const next: CheckoutView = await response.json(); setView(next); setDraft(current => normalizeDraft(current, next));
-    if (next.requests.some(r => r.status === "approved")) { void refreshMemberSession(); router.refresh(); }
-    return next;
+    return revalidateCheckout({
+      pause() {
+        foregroundRefreshes.current++;
+        const resume = backgroundRefresh.current?.pause();
+        return () => { foregroundRefreshes.current--; resume?.(); };
+      },
+      accept(next) {
+        setView(current => shareUnchanged(current, next)); setDraft(current => normalizeDraft(current, next));
+        if (next.requests.some(r => r.status === "approved")) { void refreshMemberSession(); router.refresh(); }
+      },
+    });
   }
   useEffect(() => {
-    let alive = true;
-    const update = () => { if (document.visibilityState === "visible") void fetch("/api/account/checkout", { cache: "no-store" }).then(async r => {
-      if (!alive) return;
-      if (r.status === 401 || r.status === 403) { clearProtectedDrafts(); void refreshMemberSession(); router.refresh(); return; }
-      if (!r.ok) return; const next: CheckoutView = await r.json();
-      if (alive) { setView(next); setDraft(current => normalizeDraft(current, next)); void refreshMemberSession(); }
-    }).catch(() => {}); };
+    const polling = createCheckoutRefresh({
+      accept(next) { setView(current => shareUnchanged(current, next)); setDraft(current => normalizeDraft(current, next)); void refreshMemberSession(); },
+      unauthorized() { clearProtectedDrafts(); void refreshMemberSession(); router.refresh(); },
+    });
+    backgroundRefresh.current = polling;
+    const update = () => { if (!foregroundRefreshes.current && document.visibilityState === "visible") void polling.refresh(); };
     const timer = setInterval(update, 20_000); window.addEventListener("focus", update); window.addEventListener("online", update);
     document.addEventListener("visibilitychange", update);
-    return () => { alive = false; clearInterval(timer); window.removeEventListener("focus", update); window.removeEventListener("online", update); document.removeEventListener("visibilitychange", update); };
+    return () => {
+      polling.stop(); if (backgroundRefresh.current === polling) backgroundRefresh.current = null;
+      clearInterval(timer); window.removeEventListener("focus", update); window.removeEventListener("online", update); document.removeEventListener("visibilitychange", update);
+    };
   }, [normalizeDraft, router]);
   const update = (values: Partial<CheckoutDraft>) => { setDraft(d => normalizeDraft({ ...d, ...values, accepted: values.accepted ?? false })); setError(""); };
   function goTo(step: CheckoutDraft["step"], mode: "push" | "replace" = "push") {

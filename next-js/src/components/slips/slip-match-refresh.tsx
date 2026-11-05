@@ -6,18 +6,9 @@ import type { SlipMatchState } from "@/domain/slip-match-state";
 import { slipMatchSelectionKey, uniqueSlipMatchWatches } from "@/domain/slip-match-refresh";
 import { readSlipMatchObservations, startSlipMatchPolling } from "@/domain/slip-match-polling";
 import { slipMatchPollingEnvironment } from "./slip-match-polling-environment";
+import { createSlipMatchObservationStore } from "./slip-match-observations";
 
 const Observations = createContext<readonly SlipMatchState[] | undefined>(undefined);
-type ObservationSnapshot = Readonly<{ states: readonly SlipMatchState[]; revoked: boolean }> | null;
-
-function observationStore(cohort: string) {
-  let snapshot: ObservationSnapshot = null;
-  const listeners = new Set<() => void>();
-  return { cohort, getSnapshot: () => snapshot,
-    subscribe(callback: () => void) { listeners.add(callback); return () => { listeners.delete(callback); }; },
-    publish(value: Exclude<ObservationSnapshot, null>) { snapshot = value; listeners.forEach((notify) => notify()); },
-  };
-}
 
 /** One observation loop per enabled slip list on desktop or phones; immutable picks and disclosures stay mounted. */
 export function SlipMatchRefreshProvider({ slips, initialStates = [], enabled, onAccessRevoked, accessFallback = null, children }: {
@@ -31,7 +22,7 @@ export function SlipMatchRefreshProvider({ slips, initialStates = [], enabled, o
       .map(({ watch }) => watch);
     return JSON.stringify({ selections: watches });
   }, [slips]);
-  const store = useMemo(() => observationStore(body), [body]);
+  const store = useMemo(() => createSlipMatchObservationStore(body), [body]);
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const revoked = useRef(onAccessRevoked);
   useEffect(() => { revoked.current = onAccessRevoked; }, [onAccessRevoked]);

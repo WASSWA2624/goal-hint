@@ -78,6 +78,23 @@ async function bundle({ name = "one", data = snapshot(), badAsset = false, polic
   return { manifest, data, responses, entryBody, assetBody };
 }
 
+async function populatedBundle(assetCount) {
+  const initial = await bundle();
+  for (let index = 1; index < assetCount; index++) {
+    const url = `/_next/static/chunks/part-${String(index).padStart(3, "0")}.js`;
+    const body = `window.syntheticPart${index} = true;`, bytes = encode(body);
+    initial.manifest.assets.push({ url, sha256: await hash(bytes), bytes: bytes.byteLength });
+    initial.responses.set(url, new Response(body, { headers: { "cache-control": "public", "content-type": "application/javascript" } }));
+  }
+  initial.manifest.assets.sort((left, right) => left.url < right.url ? -1 : left.url > right.url ? 1 : 0);
+  const { schemaVersion, entry, assets } = initial.manifest;
+  initial.manifest.version = await hash(encode({ schemaVersion, entry, assets }));
+  initial.responses.set("/offline-manifest.json", new Response(JSON.stringify(initial.manifest), {
+    headers: { "cache-control": "public", "content-type": "application/json", "x-goalhint-offline-manifest": "1" },
+  }));
+  return initial;
+}
+
 function worker({ storage = new MemoryStorage(), current, now = at + 1000, locks = storage.locks, clients, timerCap = Infinity, cryptography = webcrypto } = {}) {
   const events = new Map(), calls = [];
   const clock = { now };
@@ -182,6 +199,68 @@ test("concurrent cached assets share only their pending bundle validation and re
   assert.deepEqual({ records, snapshots, assetReads, hashes }, { records: 1, snapshots: 1, assetReads: 12, hashes: 15 });
   await host.request(initial.manifest.assets[0].url);
   assert.equal(snapshots, 2, "A settled validation cannot suppress the next cache read.");
+});
+
+test("cold complete reads bound parallel integrity work and wait for every asset before serving", { timeout: 5_000 }, async t => {
+  const initial = await populatedBundle(12), warm = worker({ current: initial });
+  assert.equal((await warm.message()).ok, true);
+  const entries = [initial.manifest.entry, ...initial.manifest.assets];
+  const assetHashes = new Set(entries.map(entry => entry.sha256));
+  const waves = Array.from({ length: Math.ceil(entries.length / 4) }, () => ({ started: deferred(), release: deferred() }));
+  let checks = 0, active = 0, peak = 0, pendingBytes = 0, peakBytes = 0, completed = false;
+  const cold = worker({ storage: warm.storage, cryptography: { subtle: { async digest(algorithm, bytes) {
+    const result = await webcrypto.subtle.digest(algorithm, bytes);
+    if (!assetHashes.has(Buffer.from(result).toString("hex"))) return result;
+    const wave = waves[Math.floor(checks++ / 4)];
+    active++; pendingBytes += bytes.byteLength;
+    peak = Math.max(peak, active); peakBytes = Math.max(peakBytes, pendingBytes);
+    if (checks % 4 === 0 || checks === entries.length) wave.started.resolve();
+    try { await wave.release.promise; return result; }
+    finally { active--; pendingBytes -= bytes.byteLength; }
+  } } } });
+  cold.network.offline = true;
+  const pending = Promise.all([cold.message("STATUS"), cold.request("/offline-cache/snapshot"),
+    cold.request("/en/matches", { mode: "navigate" })]).then(results => { completed = true; return results; });
+  try {
+    for (const [index, wave] of waves.entries()) {
+      await wave.started.promise;
+      assert.equal(checks, Math.min((index + 1) * 4, entries.length));
+      assert.equal(completed, false, "No caller may receive an incompletely verified bundle.");
+      wave.release.resolve();
+    }
+    const [status, snapshotResponse, document] = await pending;
+    assert.equal(status.ok, true);
+    assert.deepEqual(await snapshotResponse.json(), initial.data);
+    assert.equal(await document.text(), initial.entryBody);
+    assert.equal(checks, entries.length, "Concurrent complete reads share one verification without skipping assets.");
+    assert.equal(peak, 4);
+    assert.equal(active, 0);
+    assert.equal(pendingBytes, 0);
+    assert.ok(peakBytes <= entries.map(entry => entry.bytes).sort((a, b) => b - a).slice(0, 4).reduce((sum, bytes) => sum + bytes, 0));
+    t.diagnostic(JSON.stringify({ verifiedEntries: checks, verificationWaves: waves.length, peakIntegrityChecks: peak, peakIntegrityBytes: peakBytes }));
+  } finally { for (const wave of waves) wave.release.resolve(); }
+});
+
+test("complete verification rejects damaged later batches, stops further work and recovers after repair", async () => {
+  for (const missing of [false, true]) {
+    const initial = await populatedBundle(12), host = worker({ current: initial });
+    await host.message();
+    const entries = [initial.manifest.entry, ...initial.manifest.assets], target = entries[7];
+    const cache = await host.storage.open((await host.storage.keys()).find(name => name.includes("bundle")));
+    const saved = await cache.match(absolute(target.url)), match = cache.match.bind(cache), reads = [];
+    const paths = new Set(entries.map(entry => absolute(entry.url)));
+    cache.match = async key => { if (paths.has(key)) reads.push(key); return match(key); };
+    if (missing) await cache.delete(absolute(target.url));
+    else await cache.put(absolute(target.url), new Response("damaged"));
+    const [status, snapshotResponse] = await Promise.all([host.message("STATUS"), host.request("/offline-cache/snapshot")]);
+    assert.deepEqual(status, { ok: false, error: missing ? "corrupt-cache" : "integrity-failure" });
+    assert.equal(snapshotResponse.status, 503);
+    assert.deepEqual(reads, entries.slice(0, 8).map(entry => absolute(entry.url)), "No later batch should begin after failed integrity.");
+    await cache.put(absolute(target.url), saved);
+    reads.length = 0;
+    assert.equal((await host.message("STATUS")).ok, true, "Failed pending verification must not poison later reads.");
+    assert.equal(reads.length, entries.length);
+  }
 });
 
 test("concurrent asset reads cannot replace a complete status integrity check and recover after snapshot corruption", async () => {

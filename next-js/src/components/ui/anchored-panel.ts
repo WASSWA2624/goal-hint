@@ -9,9 +9,9 @@ export const anchoredPanel = css`
   --anchored-panel-gap: var(--gh-spacing-1_5);
   position: absolute;
   inset-block-start: calc(100% + var(--anchored-panel-gap));
-  left: var(--anchored-panel-left, 0px);
+  left: 0px;
   right: auto;
-  max-inline-size: var(--anchored-panel-width, calc(100vw - 2 * var(--anchored-panel-edge)));
+  max-inline-size: calc(100vw - 2 * var(--anchored-panel-edge));
   &[data-panel-above] {
     inset-block-start: auto;
     inset-block-end: calc(100% + var(--anchored-panel-gap));
@@ -53,7 +53,8 @@ export function useAnchoredPanel({ open, anchor, panel }: {
           right = Math.min(right, bounds.left + ancestor.clientLeft + ancestor.clientWidth - edge);
         }
       }
-      popup.style.setProperty("--anchored-panel-width", `${Math.max(0, right - left)}px`);
+      // Panel-only geometry must not invalidate inherited custom properties on every option row.
+      popup.style.setProperty("max-inline-size", `${Math.max(0, right - left)}px`);
       popup.style.removeProperty("--anchored-panel-space");
       popup.removeAttribute("data-panel-above");
       const triggerBounds = trigger.getBoundingClientRect();
@@ -68,7 +69,7 @@ export function useAnchoredPanel({ open, anchor, panel }: {
       const x = Math.max(left, Math.min(desired, right - bounds.width));
       const parent = popup.offsetParent;
       const origin = parent ? parent.getBoundingClientRect().left + parent.clientLeft - parent.scrollLeft : 0;
-      popup.style.setProperty("--anchored-panel-left", `${x - origin}px`);
+      popup.style.setProperty("left", `${x - origin}px`);
     };
     const schedule = (event?: Event) => {
       if (event?.type === "resize") above = null;

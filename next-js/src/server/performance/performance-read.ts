@@ -11,7 +11,7 @@ import { settlementRevisionFromRow, projectSettlementCycle } from "../settlement
 import { modelVersionFromRow } from "../predictor/predictor-mysql-store.ts";
 import type { MarketFamily } from "../../domain/markets.ts";
 import type { PerformanceQuery } from "./performance-query.ts";
-import { readPerformanceQuotes, type PerformanceQuotePolicy } from "./performance-quotes.ts";
+import { preparePerformanceQuotes, type PerformanceQuotePolicy } from "./performance-quotes.ts";
 
 type Tx = Prisma.TransactionClient;
 type PerformanceReadBudget = { remainingBytes: number; overflow?: () => never };
@@ -125,8 +125,7 @@ async function readPerformanceBatch(tx: Tx, query: PerformanceQuery, ids: string
     Prisma.sql`r.integrity=SHA2(CAST(r.body AS CHAR),256)`, cycleIds.length * 4) : null;
   const modelPlan = modelIds.length ? await preflightJsonRows(Prisma.sql`FROM ModelVersion r WHERE r.id IN (${Prisma.join(modelIds)})`, Prisma.sql`r.configurationJson`,
     Prisma.sql`r.integrity=SHA2(CONCAT(r.id,':',CAST(r.configurationJson AS CHAR)),256)`, modelIds.length) : null;
-  const quotePlan = quotedLocks.length ? await preflightJsonRows(Prisma.sql`FROM PredictionQuote r WHERE r.revisionId IN (${Prisma.join(quotedLocks)})`, Prisma.sql`r.body`,
-    Prisma.sql`r.integrity=SHA2(CAST(r.body AS CHAR),256)`, quotedLocks.length * 4) : null;
+  const readQuotes = quotedLocks.length ? await preparePerformanceQuotes(tx, quotedLocks, budget) : null;
 
   const setRows = setPlan ? await setPlan.load() : [];
   const marketRows = marketPlan ? await marketPlan.load() : [];
@@ -155,12 +154,9 @@ async function readPerformanceBatch(tx: Tx, query: PerformanceQuery, ids: string
     const previous = cycle ? settlementMap.get(cycle.id) ?? new Map() : new Map();
     return { fixture, cycle, revision, result, projection: cycle ? projectSettlementCycle(fixture, result, fixture.lifecycleState?.issue ?? null, cycle, revision, previous) : null };
   });
-  const quotes = new Map(quotePolicy ? await readPerformanceQuotes(tx, records.flatMap(({ fixture, cycle, revision }) =>
+  const quotes = new Map(quotePolicy && readQuotes ? await readQuotes(records.flatMap(({ fixture, cycle, revision }) =>
     cycle?.state === "closed" && revision ? [{ fixtureId: fixture.id, cycleId: cycle.id, revisionId: revision.id, openedAt: cycle.openedAt,
-      publishedAt: revision.publishedAt, cutoffAt: cycle.cutoffAt, kickoffAt: cycle.kickoffAt }] : []), quotePolicy,
-    // The independent quote reader retains its own count, seal and authority
-    // checks against the exact bytes already reserved in this read snapshot.
-    { remainingBytes: quotePlan?.bytes ?? 0 }) : []);
+      publishedAt: revision.publishedAt, cutoffAt: cycle.cutoffAt, kickoffAt: cycle.kickoffAt }] : []), quotePolicy) : []);
   const delta = calendarRules.cutoffSecondsBeforeKickoff * 1000;
   const historical = includeHistorical ? await tx.$queryRaw<{ voidReason: string }[]>(Prisma.sql`SELECT c.voidReason FROM PredictionCycle c
     JOIN FootballFixture f ON f.id=c.fixtureId WHERE c.state='void'

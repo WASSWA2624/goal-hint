@@ -80,11 +80,16 @@ export function MatchTabNavigation({ selected, allowed, onSelect }: { selected: 
     const container = root.current, list = strip.current, pool = measurements.current;
     if (!container || !list || !pool) return;
     let mounted = true;
+    const measureEdges = () => {
+      if (!mounted) return;
+      const left = list.scrollLeft > 1, right = list.scrollLeft + list.clientWidth < list.scrollWidth - 1;
+      setEdges(previous => previous.left === left && previous.right === right ? previous : { left, right });
+    };
     const measure = () => {
       if (!mounted) return;
-      const widths = Array.from(pool.querySelectorAll<HTMLElement>("[data-tab-measure]")).map(item => item.getBoundingClientRect().width);
-      const moreWidth = (pool.querySelector<HTMLElement>("[data-more-measure]")?.getBoundingClientRect().width ?? 65) + 4;
       if (wide) {
+        const widths = Array.from(pool.querySelectorAll<HTMLElement>("[data-tab-measure]")).map(item => item.getBoundingClientRect().width);
+        const moreWidth = (pool.querySelector<HTMLElement>("[data-more-measure]")?.getBoundingClientRect().width ?? 65) + 4;
         const next = fitNavigationItems({ widths, moreWidth, availableWidth: container.clientWidth, maximumVisible: matchDetailTabs.length });
         if (next !== count) {
           const active = container.ownerDocument.activeElement, key = active?.closest<HTMLElement>("[data-match-tab]")?.dataset.matchTab;
@@ -92,17 +97,17 @@ export function MatchTabNavigation({ selected, allowed, onSelect }: { selected: 
           setCount(next);
         }
       }
-      const left = list.scrollLeft > 1, right = list.scrollLeft + list.clientWidth < list.scrollWidth - 1;
-      setEdges(previous => previous.left === left && previous.right === right ? previous : { left, right });
+      measureEdges();
     };
     const observer = new ResizeObserver(measure);
     observer.observe(container); observer.observe(list);
-    list.addEventListener("scroll", measure, { passive: true });
+    // Scrolling changes only the arrow state; desktop label widths belong to layout changes.
+    list.addEventListener("scroll", measureEdges, { passive: true });
     const fonts = container.ownerDocument.fonts;
     fonts.addEventListener("loadingdone", measure);
     void fonts.ready.then(measure); measure();
-    return () => { mounted = false; observer.disconnect(); list.removeEventListener("scroll", measure); fonts.removeEventListener("loadingdone", measure); };
-  }, [wide, selected, count]);
+    return () => { mounted = false; observer.disconnect(); list.removeEventListener("scroll", measureEdges); fonts.removeEventListener("loadingdone", measure); };
+  }, [wide, selected, count, allowed, messages]);
   useLayoutEffect(() => {
     if (wide) return;
     const list = strip.current, target = list?.querySelector<HTMLElement>(`[data-match-tab="${selected}"]`);

@@ -8,6 +8,8 @@ import { parsePerformanceQuery } from "../src/server/performance/performance-que
 import { readPerformanceBatches, readPerformanceSnapshot } from "../src/server/performance/performance-read.ts";
 import { aggregatePerformance, createPerformanceAccumulator, createPerformanceService } from "../src/server/performance/performance-service.ts";
 import { performanceRecord, performanceSnapshot, performanceProtocol } from "./helpers/performance-fixtures.mjs";
+import { slipForecastFixture } from "./helpers/slip-forecast-fixtures.mjs";
+import { modelVersion } from "./helpers/predictor-fixtures.mjs";
 
 const asOf = Date.parse("2026-10-28T09:00:00Z");
 const query = parsePerformanceQuery(new URLSearchParams("from=2026-09-29&to=2026-10-28"), parseReportingDate("2026-10-28"));
@@ -126,6 +128,43 @@ test("a final quote-byte overflow rejects the entire batch before any earlier JS
   await assert.rejects(readPerformanceSnapshot(tx, query, [39], { bookmakerId: 8, maximumAgeMs: 300_000 }), error => error.code === "unavailable");
   assert.deepEqual(preflightTables, ["PredictionSet", "MarketPrediction", "FixtureResult", "MarketSettlementRevision", "ModelVersion", "PredictionQuote"]);
   assert.deepEqual(loaded, []);
+});
+
+test("a quote-enabled batch scans quote sizes once before decoding any stored payload", async () => {
+  const entry = slipForecastFixture(), model = modelVersion(), reads = [];
+  Object.assign(entry.cycle, { state: "closed", lockedSetId: entry.row.id,
+    closedAt: entry.cycle.cutoffAt, lockedAt: entry.cycle.cutoffAt });
+  const modelRow = { ...model, configurationJson: model, validIntegrity: 1,
+    calibrationKind: model.calibration.kind, calibrationVersion: model.calibration.version,
+    evaluationStatus: model.evaluation.status, evaluationVersion: model.evaluation.version,
+    ...Object.fromEntries(Object.entries(model.windows).flatMap(([name, window]) =>
+      [[`${name}StartsAt`, window ? new Date(window.startsAt) : null], [`${name}EndsAt`, window ? new Date(window.endsAt) : null]])) };
+  const rows = { PredictionSet: [entry.row], MarketPrediction: entry.marketRows, MarketSettlementRevision: [],
+    ModelVersion: [modelRow], PredictionQuote: [] };
+  const tx = {
+    footballFixture: { findMany: async () => [{ ...entry.fixture,
+      homeTeam: { name: "Home" }, awayTeam: { name: "Away" },
+      season: { competitionId: idFor(100), competition: { name: "League", country: "Uganda" } } }] },
+    predictionCycle: { findMany: async () => [entry.cycle] },
+    predictionSchedule: { findMany: async () => [entry.schedule] },
+    predictionSet: { findMany: async () => [{ id: entry.row.id, modelVersionId: entry.row.modelVersionId }] },
+    $queryRaw: async sql => {
+      const text = sql.strings.join(" ");
+      if (text.includes("SELECT f.id")) return [{ id: entry.fixture.id }];
+      const table = text.match(/FROM ([A-Za-z]+)/u)?.[1], records = rows[table];
+      if (!records) return [];
+      const preflight = text.includes("SUM(OCTET_LENGTH");
+      reads.push({ table, preflight });
+      return preflight ? [{ bytes: BigInt(records.length * 1000), total: BigInt(records.length) }] : records;
+    },
+  };
+  const snapshot = await readPerformanceSnapshot(tx, query, [39], { bookmakerId: 8, maximumAgeMs: 300_000 });
+  assert.equal(snapshot.records.length, 1);
+  assert.equal(snapshot.quotes.size, 0, "missing captured prices stay unpriced");
+  assert.equal(reads.filter(read => read.table === "PredictionQuote" && read.preflight).length, 1);
+  assert.equal(reads.filter(read => read.table === "PredictionQuote" && !read.preflight).length, 1);
+  const quotePreflight = reads.findIndex(read => read.table === "PredictionQuote" && read.preflight);
+  assert.ok(reads.findIndex(read => !read.preflight) > quotePreflight);
 });
 
 test("a corrupt later batch prevents the public service from returning partial period counts", async () => {

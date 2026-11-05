@@ -15,6 +15,7 @@ const MAX_SNAPSHOT_BYTES = 128 * 1024;
 const MAX_MANIFEST_BYTES = 64 * 1024;
 const MAX_RECORD_BYTES = 96 * 1024;
 const MAX_ASSETS = 256;
+const ASSET_CONCURRENCY = 4;
 const RETENTION_MS = 86_400_000;
 const CLOCK_SKEW_MS = 300_000;
 const FETCH_TIMEOUT_MS = 8_000;
@@ -246,10 +247,19 @@ async function readBundleFromCache(cacheName, complete) {
     if (error instanceof CacheFailure && error.code === "expired") await caches.delete(cacheName).catch(() => {});
     throw error;
   }
-  if (complete) for (const entry of [manifest.entry, ...manifest.assets]) {
-    const asset = await cache.match(absolute(entry.url));
-    if (!asset) fail("corrupt-cache");
-    await checkedBytes(asset, entry);
+  if (complete) {
+    const entries = [manifest.entry, ...manifest.assets];
+    // Cache reads and integrity checks are independent. Keep their working set
+    // bounded like downloads without serializing the entire offline startup.
+    for (let index = 0; index < entries.length; index += ASSET_CONCURRENCY) {
+      const results = await Promise.allSettled(entries.slice(index, index + ASSET_CONCURRENCY).map(async (entry) => {
+        const asset = await cache.match(absolute(entry.url));
+        if (!asset) fail("corrupt-cache");
+        await checkedBytes(asset, entry);
+      }));
+      const rejected = results.find((result) => result.status === "rejected");
+      if (rejected) throw rejected.reason;
+    }
   }
   return { cache, cacheName, manifest, snapshot };
 }
@@ -351,9 +361,9 @@ async function prepareBundle(job) {
     await candidate.put(absolute(SNAPSHOT_KEY), storedResponse(bytes, response));
     await downloadEntry(candidate, manifest.entry, true, deadline, previous, signal);
     // Bounded concurrency prevents a large build from opening hundreds of fetches.
-    for (let index = 0; index < manifest.assets.length; index += 4) {
+    for (let index = 0; index < manifest.assets.length; index += ASSET_CONCURRENCY) {
       await preparationCheckpoint(job, deadline);
-      const results = await Promise.allSettled(manifest.assets.slice(index, index + 4).map((entry) => downloadEntry(candidate, entry, false, deadline, previous, signal)));
+      const results = await Promise.allSettled(manifest.assets.slice(index, index + ASSET_CONCURRENCY).map((entry) => downloadEntry(candidate, entry, false, deadline, previous, signal)));
       const rejected = results.find((result) => result.status === "rejected");
       if (rejected) throw rejected.reason;
     }

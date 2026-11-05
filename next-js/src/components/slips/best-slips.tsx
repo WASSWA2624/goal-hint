@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useTransition } from "react";
+import { memo, useCallback, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
 import { TextLink } from "@/components/ui/controls";
@@ -19,6 +19,8 @@ import { slipViewKey } from "@/domain/slip-browse-window";
 import { FilterButton } from "./best-slips-filter-styles";
 import { useBestSlipsBrowse } from "./use-best-slips-browse";
 
+const MemoBestSlipCard = memo(BestSlipCard);
+
 export function BestSlips({ result, locale, signedIn = false }: { result: SlipsBrowseResult; locale: string; signedIn?: boolean }) {
   const m = createMessages(locale), router = useRouter();
   const desktop = useDesktopLayout();
@@ -26,8 +28,8 @@ export function BestSlips({ result, locale, signedIn = false }: { result: SlipsB
   const recheckAccess = useCallback(() => { startRefresh(() => router.refresh()); }, [router]);
   const { root, ...browse } = useBestSlipsBrowse(result, recheckAccess, "/api/best-slips");
   const content = browse.result;
-  const watchedSlips = useMemo(() => content?.slips.flatMap((view) => view.slip ? [view.slip] : []) ?? [], [content]);
-  const initialStates = useMemo(() => content?.slips.flatMap((view) => view.matchStates ?? []) ?? [], [content]);
+  const watchedSlips = useMemo(() => content.slips.flatMap((view) => view.slip ? [view.slip] : []), [content.slips]);
+  const initialStates = useMemo(() => content.slips.flatMap((view) => view.matchStates ?? []), [content.slips]);
   return <SlipStack data-best-slips-page>
     <AppBrandBar locale={locale} />
     <VisuallyHidden as="h1">{m.text("bestSlips.title")}</VisuallyHidden>
@@ -56,7 +58,7 @@ export function BestSlips({ result, locale, signedIn = false }: { result: SlipsB
       {(content.searchLimited || content.partialCoverage) && <Note role="status">{m.text("bestSlips.partial")}</Note>}
       <SlipMatchRefreshProvider slips={watchedSlips} initialStates={initialStates} enabled={desktop && browse.entitled} onAccessRevoked={browse.revokeAccess}>
       <div ref={root} tabIndex={-1}><SlipList data-slip-list>{content.slips.map(view => <div key={slipViewKey(view)} data-slip-key={slipViewKey(view)}>
-        <BestSlipCard view={view} day={content.day} locale={locale} signedIn={content.access?.signedIn ?? signedIn} />
+        <MemoBestSlipCard view={view} day={content.day} locale={locale} signedIn={content.access?.signedIn ?? signedIn} />
       </div>)}</SlipList></div>
       </SlipMatchRefreshProvider>
     </>}

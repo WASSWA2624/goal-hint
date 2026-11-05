@@ -1,5 +1,6 @@
 import type { LiveReport } from "../../../domain/analytics.ts";
 import { startRequestDeadline } from "../../../domain/request-deadline.ts";
+import { shareUnchanged } from "../../../domain/structural-sharing.ts";
 
 /** The three live displays share one private poll without rerendering the report charts and tables. */
 let report: LiveReport | null = null;
@@ -11,11 +12,12 @@ let timer: ReturnType<typeof setInterval> | undefined;
 const listeners = new Set<() => void>();
 
 export const getLiveReportSnapshot = (): LiveReport | null => report;
+export const getLivePagesSnapshot = (): LiveReport["pages"] | null => report?.pages ?? null;
 export const getLiveVisitorsSnapshot = (): number | null => report?.visitors ?? null;
 export const getServerLiveSnapshot = (): null => null;
 
 function publish(value: LiveReport | null) {
-  report = value;
+  report = shareUnchanged(report, value);
   for (const listener of listeners) listener();
 }
 

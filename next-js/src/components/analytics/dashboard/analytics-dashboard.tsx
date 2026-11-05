@@ -15,7 +15,7 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { AppLoading } from "@/components/navigation/navigation-progress";
 import { BarList, ColumnChart, EmptyChart, Heatmap, SplitBar, TrendChart } from "./charts";
 import { DataTable } from "./data-table";
-import { getLiveReportSnapshot, getLiveVisitorsSnapshot, getServerLiveSnapshot, subscribeLiveReport } from "./live-report";
+import { getLivePagesSnapshot, getLiveVisitorsSnapshot, getServerLiveSnapshot, subscribeLiveReport } from "./live-report";
 import { Card, CardValue, Cards, Chip, Chips, Definitions, Delta, Field, FilterBar, Grid, LiveList,
   Muted, Notice, PageTitle, Panel, PanelHeader, ReportUpdated, SegmentButton, Segmented, SeriesTable, SettingsRow, Tab, Tabs, ToolButton,
   WidePanel } from "./dashboard-styles";
@@ -299,8 +299,8 @@ function LiveVisitorCount() {
 }
 
 function LivePages() {
-  const live = useSyncExternalStore(subscribeLiveReport, getLiveReportSnapshot, getServerLiveSnapshot);
-  return live && live.pages.length > 0 ? <LiveList>{live.pages.map((page) => <li key={page.path}>
+  const pages = useSyncExternalStore(subscribeLiveReport, getLivePagesSnapshot, getServerLiveSnapshot);
+  return pages && pages.length > 0 ? <LiveList>{pages.map((page) => <li key={page.path}>
     <span title={page.path}>{page.title ?? page.path}</span><strong>{count(page.visitors)}</strong></li>)}</LiveList>
     : <EmptyChart>Nobody is active right now.</EmptyChart>;
 }

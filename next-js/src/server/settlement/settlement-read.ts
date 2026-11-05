@@ -3,9 +3,9 @@ import "server-only";
 import { MARKET_RULE_VERSION, marketSelections, type AcceptedMarket, type MarketFamily } from "../../domain/markets.ts";
 import { settleMarketSelection, type CycleEligibility, type SettlementContext } from "../../domain/market-settlement.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
-import type { FootballFixture, Prisma } from "../generated/prisma/client.ts";
+import { Prisma, type FootballFixture } from "../generated/prisma/client.ts";
 import { historyFail, type StoredCycle, type StoredRevision } from "../predictions/history-contract.ts";
-import { assertHistorySeal, historyJson, historyTime, storedCycle, storedRevision, type HistoryRow } from "../predictions/history-read.ts";
+import { assertHistorySeal, historyJson, historyTime, storedCycles, storedRevisions, type HistoryRow } from "../predictions/history-read.ts";
 import { fixtureResultMatchesCanonical, resultStatus, storedFixtureResult, type StoredFixtureResult } from "../results/result-read.ts";
 import { settlementRevisionSchema, type SettlementRevision } from "./settlement-contract.ts";
 
@@ -37,15 +37,65 @@ export async function storedSettlementProjection(tx: Tx, fixtureId: string, cycl
   const result = resultState?.resultId ? await storedFixtureResult(tx, fixtureId, resultState.resultId) : null;
   const rows = await tx.predictionCycle.findMany({ where: { fixtureId, ...(cycleId ? { id: cycleId } : {}) }, orderBy: { ordinal: "asc" }, select: { id: true } });
   const cycles = [];
-  for (const row of rows) {
-    const cycle = (await storedCycle(tx, row.id))!;
-    const lock = cycle.lockedSetId ? await storedRevision(tx, cycle.lockedSetId) : null;
-    const previous = new Map<MarketFamily, SettlementRevision>();
-    const pointers = await tx.marketSettlement.findMany({ where: { cycleId: cycle.id } });
-    for (const pointer of pointers) previous.set(pointer.family as MarketFamily, await storedSettlementRevision(tx, pointer.revisionId));
-    cycles.push(projectSettlementCycle(fixture, result, cursor?.issue ?? null, cycle, lock, previous));
+  // Hydrate a bounded group within the caller's snapshot. A settled cycle has
+  // four immutable market revisions; reading each separately adds four serial
+  // round trips to every card/detail projection and every historical cycle.
+  for (let offset = 0; offset < rows.length; offset += 100) {
+    const ids = rows.slice(offset, offset + 100).map((row) => row.id);
+    const stored = await storedCycles(tx, ids);
+    const locks = await storedRevisions(tx, [...stored.values()].flatMap((cycle) => cycle.lockedSetId ? [cycle.lockedSetId] : []));
+    const pointers = await tx.marketSettlement.findMany({ where: { cycleId: { in: ids } } });
+    const revisions = new Map<string, SettlementRevision>();
+    const revisionIds = [...new Set(pointers.map((pointer) => pointer.revisionId))];
+    for (let start = 0; start < revisionIds.length; start += 100) {
+      const requested = new Set(revisionIds.slice(start, start + 100));
+      const records = await tx.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT *,
+        integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity FROM MarketSettlementRevision WHERE id IN (${Prisma.join([...requested])})`);
+      for (const record of records) {
+        const revision = settlementRevisionFromRow(record);
+        if (!requested.has(revision.id) || revisions.has(revision.id)) return historyFail("invalid-state");
+        revisions.set(revision.id, revision);
+      }
+    }
+    const byCycle = new Map<string, Map<MarketFamily, SettlementRevision>>();
+    for (const pointer of pointers) {
+      const revision = revisions.get(pointer.revisionId);
+      if (!stored.has(pointer.cycleId) || !revision) return historyFail("invalid-state");
+      const previous = byCycle.get(pointer.cycleId) ?? new Map<MarketFamily, SettlementRevision>();
+      previous.set(pointer.family as MarketFamily, revision); byCycle.set(pointer.cycleId, previous);
+    }
+    for (const id of ids) {
+      const cycle = stored.get(id);
+      if (!cycle) return historyFail("invalid-state");
+      const lock = cycle.lockedSetId ? locks.get(cycle.lockedSetId) ?? null : null;
+      cycles.push(projectSettlementCycle(fixture, result, cursor?.issue ?? null, cycle, lock, byCycle.get(id) ?? new Map()));
+    }
   }
   return { fixture, result, cycles };
+}
+
+export type SettlementProjectionReader = (fixtureId: string, cycleId?: string) => ReturnType<typeof storedSettlementProjection>;
+
+/** Share verified projections only inside one read-only transaction. Create a
+ * fresh reader for each snapshot; a writer must read again after mutations. */
+export function createSettlementProjectionReader(tx: Tx): SettlementProjectionReader {
+  const pending = new Map<string, ReturnType<typeof storedSettlementProjection>>();
+  return (fixtureId, cycleId) => {
+    const key = JSON.stringify([fixtureId, cycleId ?? null]);
+    let projection = pending.get(key);
+    if (!projection) {
+      projection = storedSettlementProjection(tx, fixtureId, cycleId).then((value) => {
+        if (value.fixture.id !== fixtureId || value.cycles.some(({ cycle }) => cycle.fixtureId !== fixtureId ||
+          cycleId !== undefined && cycle.id !== cycleId)) return historyFail("invalid-state");
+        return value;
+      }).catch((error: unknown) => {
+        pending.delete(key);
+        throw error;
+      });
+      pending.set(key, projection);
+    }
+    return projection;
+  };
 }
 
 /** Shared void-reason eligibility for the four-family, goal-market and market-implied settlement paths. */
