@@ -17,8 +17,10 @@
 - Browser checks exercise the confirmation, cancellation, success and failure paths on desktop and mobile in light and dark themes.
 - Run lint and TypeScript checks; integrate and verify on main while preserving other active worktrees and existing stashes.
 
-## Deployment
-
 Verified on 5 November 2026: TypeScript and changed-file ESLint passed; 51 backend/audit unit tests, 88 demo unit tests, four MySQL plan-deletion tests and the MySQL reset integration passed. Browser checks passed in both themes at 1440, 390 and 320px, including 40px fine-pointer and 44px coarse-pointer controls, cancellation/focus, foreground progress, refusal, failure/retry and successful deletion. QA servers and browsers were stopped after verification.
 
+## Deployment
+
 Local demo cleanup is a separate operator action with a verified target and backup. Production data is not reset by deploying this source. Restricted application targets need the documented plan DELETE grant before using permanent deletion.
+
+Applied to the verified owned development demo on 5 November 2026 after a full SQL backup: removed five demo offers, 48 test submissions, 32 demo access periods and their 49 receipt/claim records; cleared UGX 805,000 of synthetic spendable credit through 49 ledger corrections. All 52 accounts, the unrelated registration trial and the six standard plan rows were retained. Their saved comparison hashes matched after cleanup. The ordinary preview returned HTTP 200, reseeding restored no financial examples, and a repeat reset preview had zero work remaining. Final integrated focused tests passed 27/27. Existing immutable ledger/audit history and other worktrees/stashes were retained.
