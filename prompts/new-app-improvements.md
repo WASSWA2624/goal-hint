@@ -59,4 +59,25 @@
 - Logged out: **Invite friends** in the app menu opens the device share UI with the app website link and a short advertising message.
 - Logged in: share the user’s referral link. Completing registration via that link earns the inviter points (24 hours of access).
 
-## Results & performance
+## Results and Performance
+
+- Add the logo to the **Results and Performance** section title.
+- Keep the filters section (from date, to date, prediction market, prediction source), revised as follows:
+  - Date filter: include time with the date — both **From** and **To** have date and time.
+  - Prediction markets: replace the current dropdown/dialog with a button labeled **Prediction Markets** that opens a dialog listing the different markets.
+  - Prediction source: three sources — API Football, Local Engine, and AI.
+  - Rename **Apply Periods** to **Apply** (applies periods, predictions, and source).
+- Remove the helper text below that filter section (e.g. “choose up to 30 days” and similar).
+
+### Individual Predictions
+
+- **Individual Predictions** is a title on its own.
+- Remove the existing words in that area — specifically lines like “only say one log section per market here” and similar, and remove “Fixtures, individuals, 600” and related items.
+- Reuse the tab component already implemented on the match details page, used the same way on mobile and desktop. Each tab represents a market.
+- Markets include: match results, double chance, under, over, both teams to score, and so on (the different markets available).
+- Each tab’s content holds the details for that market’s individual prediction analysis.
+
+### Results by League
+
+- Each league is represented by a single tab.
+- Reuse the same tab pattern as the match-details tabs, used the same way on mobile and desktop.
