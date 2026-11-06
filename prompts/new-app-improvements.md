@@ -58,3 +58,5 @@
 
 - Logged out: **Invite friends** in the app menu opens the device share UI with the app website link and a short advertising message.
 - Logged in: share the user’s referral link. Completing registration via that link earns the inviter points (24 hours of access).
+
+## Results & performance
