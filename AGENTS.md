@@ -18,6 +18,7 @@
   Mark pending content with `aria-busy` or use `AppLoading` for a fallback
   without a content container. Keep existing content and control labels visible
   when possible. Keep passive polling and lazy media loading quiet.
+- Keep constant chrome and value-only components from full remounts app-wide: do not reload UI that is unchanged across pages; update values in place when layout is fixed. Preserve UI and app logic; keep rendering efficient.
 
 ## App overview
 
