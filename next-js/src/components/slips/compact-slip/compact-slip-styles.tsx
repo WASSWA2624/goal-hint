@@ -39,28 +39,26 @@ export const CompactCard = styled.article`
   ${slipHeaderActionMetrics}
   --slip-header-action-gap: var(--gh-spacing-2_5);
   --slip-edge: ${({ theme }) => theme.phoneCardFrame.mobileHeader};
-  --slip-inner-radius: ${({ theme }) => `max(0px, calc(${theme.radius.surface} - ${theme.phoneCardFrame.ruleWidth}))`};
-  --slip-inner-radius-end: ${({ theme }) => `max(0px, calc(${theme.radius.surface} - ${theme.border.strong}))`};
+  --slip-frame: ${({ theme }) => theme.spacing[2]};
+  --slip-inner-radius: ${({ theme }) => `max(0px, calc(${theme.radius.surface} - ${theme.spacing[2]}))`};
   min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.phoneCardFrame.inset};
-  border-style: solid;
-  border-block-start: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};
-  border-inline: ${({ theme }) => theme.border.strong} solid var(--slip-edge);
-  border-block-end: ${({ theme }) => theme.border.strong} solid var(--slip-edge);
+  border: var(--slip-frame) solid var(--slip-edge);
   border-radius: ${({ theme }) => theme.radius.surface};
   container: compact-slip / inline-size;
   /* Paint joined headers inside the outer curve without clipping focus or tooltips. */
   > details { border-radius: var(--slip-inner-radius); }
   /* Native disclosure slots do not reliably inherit non-inherited corner properties. */
-  [data-slip-summary] { border-start-start-radius: var(--slip-inner-radius); border-start-end-radius: var(--slip-inner-radius); }
-  > details:not([open]) > [data-slip-summary], > header[data-slip-summary], [data-slip-content] {
-    border-end-start-radius: var(--slip-inner-radius-end); border-end-end-radius: var(--slip-inner-radius-end);
+  [data-slip-summary] {
+    border-start-start-radius: var(--slip-inner-radius); border-start-end-radius: var(--slip-inner-radius);
+    border-end-start-radius: ${({ theme }) => theme.radius.none}; border-end-end-radius: ${({ theme }) => theme.radius.none};
   }
+  [data-slip-content] { border-end-start-radius: var(--slip-inner-radius); border-end-end-radius: var(--slip-inner-radius); }
   details { min-inline-size: 0; }
   [data-slip-summary]:not([data-mobile-slip-header]) {
     position: relative; display: grid; align-items: center; min-inline-size: 0; min-block-size: var(--gh-size-11);
     grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "identity identity count" "odds average average";
     gap: var(--gh-spacing-1) var(--gh-spacing-2_5); padding: var(--gh-spacing-2) var(--gh-spacing-6_75) var(--gh-spacing-2) var(--gh-spacing-2_25); cursor: pointer; list-style: none; font-size: var(--gh-font-caption); line-height: var(--gh-leading-label);
-    background: ${({ theme }) => theme.color.cardHeader}; overflow-wrap: anywhere;
+    background: var(--slip-edge); overflow-wrap: anywhere;
     &::-webkit-details-marker { display: none; }
     &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
     > * { min-inline-size: 0; }

@@ -120,14 +120,16 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
           if (element.matches("[data-floating-outline]")) return ["Top", "Right", "Bottom", "Left"].some(edge => Number.parseFloat(style[`border${edge}Width`]) > 2);
           const edges = ["Top", "Right", "Bottom", "Left"];
           if (element.matches("[data-compact-slip]")) {
-            const strongWidth = rootStyle.getPropertyValue("--gh-stroke-strong").trim();
-            const slipHeader = roleColor("slipHeader");
-            return edges.some(edge => edge === "Top"
-              ? style.borderTopWidth !== ruleWidth
-              : style[`border${edge}Width`] !== strongWidth || style[`border${edge}Color`] !== slipHeader);
+            const frameWidth = rootStyle.getPropertyValue("--gh-spacing-2").trim();
+            const slipHeader = roleColor(window.innerWidth < 1024 ? "mobileSlipHeader" : "slipHeader");
+            return edges.some(edge => style[`border${edge}Width`] !== frameWidth || style[`border${edge}Color`] !== slipHeader);
           }
           if (element.matches("[data-slip-selections] > [data-slip-selection] + [data-slip-selection]")) {
-            const separator = getComputedStyle(element.closest("[data-compact-slip]")).borderTopColor;
+            const separatorProbe = document.createElement("span");
+            separatorProbe.style.color = "var(--gh-theme-phoneCardFrame-separator)";
+            document.body.append(separatorProbe);
+            const separator = getComputedStyle(separatorProbe).color;
+            separatorProbe.remove();
             return edges.some(edge => style[`border${edge}Width`] !== (edge === "Top" ? ruleWidth : "0px")) || style.borderTopColor !== separator;
           }
           if (element.matches("[data-match-list] > li:has(> article:only-child), [data-match-list] > li:has(> [data-desktop-row]:only-child)")) {

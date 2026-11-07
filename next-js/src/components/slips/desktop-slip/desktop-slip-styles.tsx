@@ -48,8 +48,8 @@ export const DesktopSlipBase = styled.div`
   }
   [data-slip-header-action] {
     position: absolute;
-    inset-inline-end: calc(var(--slip-header-end) + var(--review-status-width, var(--gh-size-28)) + var(--slip-header-gap) + ${({ theme }) => theme.border.width});
-    inset-block-start: calc(var(--slip-header-action-inset) + ${({ theme }) => theme.phoneCardFrame.ruleWidth});
+    inset-inline-end: calc(var(--slip-header-end) + var(--review-status-width, var(--gh-size-28)) + var(--slip-header-gap) + ${({ theme }) => theme.spacing[2]});
+    inset-block-start: calc(var(--slip-header-action-inset) + ${({ theme }) => theme.spacing[2]});
     block-size: var(--slip-header-action-size); display: flex; align-items: center;
     z-index: var(--gh-layer-raised);
   }
@@ -96,14 +96,14 @@ export const DesktopSlipLayout = styled(DesktopSlipBase)`
       border-radius: ${({ theme }) => theme.frame.desktopCardRadius};
     }
     [data-slip-content] {
-      border-end-start-radius: var(--slip-inner-radius-end);
-      border-end-end-radius: var(--slip-inner-radius-end);
+      border-end-start-radius: var(--slip-inner-radius);
+      border-end-end-radius: var(--slip-inner-radius);
     }
     &&& [data-slip-disclosure]:not([open]) > [data-slip-summary],
     &&& [data-compact-slip] > header[data-slip-summary] {
       min-block-size: var(--form-control-height);
       color: ${({ theme }) => theme.color.text};
-      background: ${({ theme }) => theme.phoneCardFrame.header};
+      background: var(--slip-edge);
       [data-summary-identity] > span:first-child { font-size: var(--gh-font-reading); font-weight: var(--gh-weight-bold); }
       [data-summary-odds] strong, [data-summary-average] strong {
         color: ${({ theme }) => theme.color.accent.blue.text}; font-size: var(--gh-font-reading); font-weight: var(--gh-weight-bold);
@@ -113,7 +113,6 @@ export const DesktopSlipLayout = styled(DesktopSlipBase)`
       [data-rank] { color: ${({ theme }) => theme.color.accent.blue.text}; }
       [data-slip-status] { font-size: var(--gh-font-body); font-weight: var(--gh-weight-semibold); }
       &:focus-visible { outline-color: ${({ theme }) => theme.color.accent.blue.text}; }
-      ${media.hover} { &:hover { background: color-mix(in srgb, ${({ theme }) => theme.phoneCardFrame.header} 94%, ${({ theme }) => theme.color.surface}); } }
     }
     &:not(:has([data-slip-disclosure][open])) {
       [data-share-slip] {

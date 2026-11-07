@@ -88,9 +88,9 @@ unrelated layouts retain their established geometry.
 
 Production components use filled surfaces without accent rails or inset-shadow
 frames. `border.width` and `border.accentWidth` are zero in every theme. Slips
-have a deliberate exception: `phoneCardFrame.ruleWidth` provides a 1px top
-edge and selection separators, both using `phoneCardFrame.separator`. The left,
-right, and bottom edges use `border.strong` in the slip header fill.
+have a deliberate exception: selection separators use `phoneCardFrame.ruleWidth`
+and `phoneCardFrame.separator`. The slip perimeter uses `spacing[2]` in the
+slip header fill on every edge.
 `phoneCardFrame.inset` controls the slip body independently. Editable
 text inputs and textareas use `textField.background`, `textField.hoverBackground`,
 and `textField.borderWidth`, with `color.controlBorder` for their boundary.

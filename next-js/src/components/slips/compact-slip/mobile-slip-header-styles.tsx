@@ -16,7 +16,7 @@ export const MobileHeaderRow = styled.summary`
   /* Override the card's generic narrow summary spacing without affecting its match rows. */
   && { gap: 0; padding: 0 var(--gh-spacing-0_5); }
   box-sizing: border-box; list-style: none; cursor: pointer;
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.phoneCardFrame.mobileHeader};
+  color: ${({ theme }) => theme.color.text}; background: var(--slip-edge);
   font-size: var(--gh-font-caption); line-height: var(--gh-leading-control); white-space: nowrap; font-variant-numeric: tabular-nums;
   &::-webkit-details-marker { display: none; }
   &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
@@ -69,7 +69,7 @@ export const MobileHeaderRow = styled.summary`
     --header-height: var(--gh-size-11);
     grid-template-columns: minmax(0, 1fr) min(var(--gh-size-24), var(--gh-size-24)) var(--slip-header-action-size);
     grid-template-rows: minmax(var(--gh-size-8), auto) auto;
-    background: ${({ theme }) => theme.phoneCardFrame.mobileHeader};
+    background: var(--slip-edge);
     [data-header-chevron] {
       ${slipDisclosureIndicator}
       position: absolute; inset-inline-end: var(--gh-spacing-1_5); inset-block-start: var(--gh-spacing-2);
