@@ -27,18 +27,3 @@
 - Keep the overview concise, complete, and accurate: cover critical implemented
   behavior and remaining limitations, replace outdated descriptions, and
   distinguish source implementation from deployment status.
-
-## Git workflow
-
-- Start each chat by checking Git status, linked worktrees, and active sessions
-  for this repo. Coordinate file ownership before editing overlapping paths.
-- After executing each prompt, commit the intended changes and push them to GitHub.
-- Consolidate branch work into `main`, verify the integrated result, and push `main`.
-- After verifying their work is included in `main`, delete all other local and
-  remote branches. Finish with the primary checkout on `main`.
-- Inspect linked worktrees before changing or deleting their branches. Preserve
-  uncommitted work first and keep their files intact when detaching a worktree.
-- Preserve existing Git stashes for later unless the user asks to apply or remove
-  them. Do not discard work as part of branch cleanup.
-- Keep private configuration, credentials, dependencies, and generated output out
-  of commits. Report actual verification results and any remaining limitations.
