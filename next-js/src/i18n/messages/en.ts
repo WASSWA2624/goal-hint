@@ -49,7 +49,6 @@ export const en = {
   "bestSlips.partial": "Fewer than ten qualifying slips or limited coverage is available. These are the best slips found within the search limits.",
   "bestSlips.browseMatches": "Browse matches",
   "bestSlips.subscriberMatches": "The matches and selections in this slip are for subscribers.",
-  "bestSlips.disclaimer": "Estimates are not guarantees. A slip wins only if every selection wins.",
   "subscribe.title": "Subscribe",
   "subscribe.wizard.package": "Package",
   "subscribe.wizard.pay": "Pay",

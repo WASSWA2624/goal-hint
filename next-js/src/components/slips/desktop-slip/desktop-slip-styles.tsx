@@ -91,10 +91,13 @@ export const DesktopSlipLayout = styled(DesktopSlipBase)`
       border-radius: ${({ theme }) => theme.frame.desktopCardRadius};
       pointer-events: none;
     }
-    [data-compact-slip] {  border-radius: ${({ theme }) => theme.frame.desktopCardRadius}; }
+    [data-compact-slip] {
+      --slip-edge: ${({ theme }) => theme.phoneCardFrame.header};
+      border-radius: ${({ theme }) => theme.frame.desktopCardRadius};
+    }
     [data-slip-content] {
-      border-end-start-radius: var(--slip-inner-radius);
-      border-end-end-radius: var(--slip-inner-radius);
+      border-end-start-radius: var(--slip-inner-radius-end);
+      border-end-end-radius: var(--slip-inner-radius-end);
     }
     &&& [data-slip-disclosure]:not([open]) > [data-slip-summary],
     &&& [data-compact-slip] > header[data-slip-summary] {

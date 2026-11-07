@@ -76,7 +76,7 @@ export const MobileHeaderRow = styled.summary`
       inline-size: var(--slip-header-action-size); block-size: var(--slip-header-action-size);
       border-radius: ${({ theme }) => theme.radius.control}; transform: none;
     }
-    /* Match badges end after the selection list's 6px gutter, 1px frame and 8px padding. */
+    /* Match badges end after the selection list's gutter, side frame and inner padding. */
     gap: var(--gh-spacing-1) var(--gh-spacing-1_5); padding: var(--gh-spacing-1_5) var(--gh-spacing-1_5) var(--gh-spacing-1_5) var(--gh-spacing-2_25); block-size: auto; white-space: normal;
     > h3, > h3[data-dense-identity] {
       grid-column: 1; grid-row: 1; flex-wrap: wrap; gap: var(--gh-spacing-0_25) var(--gh-spacing-1_25); align-items: baseline;

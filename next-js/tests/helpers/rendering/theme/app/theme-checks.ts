@@ -36,6 +36,8 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   ruleProbe.style.borderTop = `${theme.phoneCardFrame.ruleWidth} solid`;
   document.body.append(ruleProbe);
   const ruleWidth = getComputedStyle(ruleProbe).borderTopWidth;
+  ruleProbe.style.borderTop = `${theme.border.strong} solid`;
+  const strongWidth = getComputedStyle(ruleProbe).borderTopWidth;
   const fieldBorderWidth = Number.parseFloat(theme.textField.borderWidth) === 0 ? "0px" : ruleWidth;
   ruleProbe.remove();
   const checkRadius = (selector: string, expected: string | Record<"borderTopLeftRadius" | "borderTopRightRadius" | "borderBottomLeftRadius" | "borderBottomRightRadius", string>) => {
@@ -58,11 +60,12 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   checkRadius("#theme-slips [data-slip-id]", phone ? theme.radius.surface : theme.frame.desktopCardRadius);
   for (const summary of [...document.querySelectorAll("#theme-slips summary[data-slip-summary]")].filter(visible)) {
     const innerRadius = `${Math.max(0, Number.parseFloat(theme.radius.surface) - Number.parseFloat(theme.phoneCardFrame.ruleWidth))}px`;
+    const innerEndRadius = `${Math.max(0, Number.parseFloat(theme.radius.surface) - Number.parseFloat(theme.border.strong))}px`;
     const expanded = summary.parentElement?.hasAttribute("open");
     checkRadius("#theme-slips summary[data-slip-summary]", {
       borderTopLeftRadius: innerRadius, borderTopRightRadius: innerRadius,
-      borderBottomLeftRadius: expanded ? theme.radius.none : innerRadius,
-      borderBottomRightRadius: expanded ? theme.radius.none : innerRadius,
+      borderBottomLeftRadius: expanded ? theme.radius.none : innerEndRadius,
+      borderBottomRightRadius: expanded ? theme.radius.none : innerEndRadius,
     });
     const indicator = summary.querySelector("[data-header-chevron], [data-toggle-chevron]");
     assert(!!indicator && visible(indicator), "Collapsible slips retain a visible disclosure indicator");
@@ -206,15 +209,17 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
     const target = element.id || element.tagName.toLowerCase();
     for (const edge of ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"] as const) {
       const frame = element.matches("[data-compact-slip]");
+      const slipSide = frame && edge !== "borderTopWidth";
       const matchFrame = element.matches("[data-match-list] > li:has(> article:only-child), [data-match-list] > li:has(> [data-desktop-row]:only-child)");
       const matchFrameEdge = matchFrame && (edge !== "borderTopWidth" || element.matches(":first-child"));
       const separator = (element.matches("[data-slip-selections] > [data-slip-selection] + [data-slip-selection], [data-feed-pagination]")
         ) && edge === "borderTopWidth";
       const floating = element.matches("[data-floating-outline], [data-floating-control], [data-select-trigger]") || !!element.closest("[data-floating-control]");
       const field = element.matches(textFieldSelector + ", select, [data-text-field-frame]");
-      const expected = frame || matchFrameEdge || separator ? ruleWidth : field ? fieldBorderWidth : "0px";
+      const expected = slipSide ? strongWidth : frame || matchFrameEdge || separator ? ruleWidth : field ? fieldBorderWidth : "0px";
       assert(floating ? Number.parseFloat(style[edge]) <= 2 : style[edge] === expected || field && style[edge] === "0px", `${target}: unexpected ${edge}`);
-      if (frame) assert(style.borderTopColor === normalize(theme.phoneCardFrame.separator), "Slip frames retain their semantic theme color");
+      if (frame && edge === "borderTopWidth") assert(style.borderTopColor === normalize(theme.phoneCardFrame.separator), "Slip frames retain their semantic theme color");
+      if (slipSide) assert(style[edge.replace("Width", "Color") as "borderRightColor"] === normalize(phone ? theme.phoneCardFrame.mobileHeader : theme.phoneCardFrame.header), "Slip side and bottom edges use the slip header fill");
     }
   }
   for (const button of document.querySelectorAll<HTMLElement>("[data-feed-search-submit]")) {

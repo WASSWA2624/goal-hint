@@ -38,9 +38,14 @@ export const MatchRow = styled.div`
 export const CompactCard = styled.article`
   ${slipHeaderActionMetrics}
   --slip-header-action-gap: var(--gh-spacing-2_5);
+  --slip-edge: ${({ theme }) => theme.phoneCardFrame.mobileHeader};
   --slip-inner-radius: ${({ theme }) => `max(0px, calc(${theme.radius.surface} - ${theme.phoneCardFrame.ruleWidth}))`};
+  --slip-inner-radius-end: ${({ theme }) => `max(0px, calc(${theme.radius.surface} - ${theme.border.strong}))`};
   min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.phoneCardFrame.inset};
-  border: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};
+  border-style: solid;
+  border-block-start: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};
+  border-inline: ${({ theme }) => theme.border.strong} solid var(--slip-edge);
+  border-block-end: ${({ theme }) => theme.border.strong} solid var(--slip-edge);
   border-radius: ${({ theme }) => theme.radius.surface};
   container: compact-slip / inline-size;
   /* Paint joined headers inside the outer curve without clipping focus or tooltips. */
@@ -48,7 +53,7 @@ export const CompactCard = styled.article`
   /* Native disclosure slots do not reliably inherit non-inherited corner properties. */
   [data-slip-summary] { border-start-start-radius: var(--slip-inner-radius); border-start-end-radius: var(--slip-inner-radius); }
   > details:not([open]) > [data-slip-summary], > header[data-slip-summary], [data-slip-content] {
-    border-end-start-radius: var(--slip-inner-radius); border-end-end-radius: var(--slip-inner-radius);
+    border-end-start-radius: var(--slip-inner-radius-end); border-end-end-radius: var(--slip-inner-radius-end);
   }
   details { min-inline-size: 0; }
   [data-slip-summary]:not([data-mobile-slip-header]) {

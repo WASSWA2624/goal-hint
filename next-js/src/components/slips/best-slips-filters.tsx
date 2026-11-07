@@ -45,7 +45,7 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
   const asOf = summary?.asOf === undefined ? null : utcInstantFromEpochMilliseconds(summary.asOf);
   const desktopPerformancePeriod = asOf === null ? performancePeriod : `${performanceDates} · ${m.reportingTime(asOf)} EAT`;
   const browsingDates = appliedQuery.period === "all" ? scannedDates : bounds;
-  const currentRange = browsingDates?.from && browsingDates.to ? `${m.reportingDateRangeCompact(browsingDates.from, browsingDates.to)} · EAT` : null;
+  const currentRange = browsingDates?.from && browsingDates.to ? m.reportingDateRangeCompact(browsingDates.from, browsingDates.to) : null;
   const oddsLabel = bestSlipOddsBands.find(band => band.id === (appliedQuery.oddsBand ?? defaultBestSlipOddsBand))!.label;
   return <FiltersPanel aria-label={m.text("bestSlips.filters.title")} aria-busy={busy} data-best-slips-filters>
     <PerformanceSummary locale={locale} kind="slips" title={m.text(bounds.from === today && bounds.to === today ? "bestSlips.performance.today" : "performance.summary.title")} counts={statistics ?? null} period={desktop ? desktopPerformancePeriod : performancePeriod}

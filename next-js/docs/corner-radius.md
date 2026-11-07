@@ -71,8 +71,12 @@ mapped to `control` (4px). Slip selections use the same scale on mobile and
 desktop, with rounded top corners only on the first match and rounded bottom
 corners only on the last. Middle rows have square corners; a single match has
 all four corners rounded. Selection wrappers touch, with a 1px separator in
-`theme.phoneCardFrame.separator`. The slip perimeter uses the same thin rule. Slip header
-fills use the outer radius minus `theme.phoneCardFrame.ruleWidth`; analysis
+`theme.phoneCardFrame.separator`. The slip's top edge stays that thin separator.
+Its left, right, and bottom edges use `theme.border.strong` in the slip header
+fill: `phoneCardFrame.mobileHeader` on mobile and `phoneCardFrame.header` on
+desktop. Slip header fills use the outer radius minus
+`theme.phoneCardFrame.ruleWidth` on the top corners and minus `theme.border.strong`
+on the bottom corners. Analysis
 links inherit their match row's corners so keyboard focus follows the shape.
 Only the inner chevron rotates: right when collapsed, down when expanded.
 Share and disclosure use matching embedded frames derived from the shared control

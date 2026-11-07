@@ -8,7 +8,7 @@ import { yesterday } from "@/domain/browse-period";
 import type { ReportingDate } from "@/domain/calendar";
 import { createMessages } from "@/i18n/messages";
 import { BestSlipsFilters } from "./best-slips-filters";
-import { Note, SlipStack } from "./slip-styles";
+import { SlipStack } from "./slip-styles";
 import { LoadingTheme } from "@/styles/loading-theme";
 
 const ignoreChange = () => {};
@@ -24,6 +24,5 @@ export function BestSlipsLoading({ locale, today }: { locale: string; today: Rep
     <VisuallyHidden as="h1">{messages.text("bestSlips.title")}</VisuallyHidden>
     <div inert aria-busy="true"><BestSlipsFilters query={defaultBestSlipsQuery()} today={today} locale={locale} busy
       statistics={null} summary={{ from: date, to: date, statistics: null }} onChange={ignoreChange} /></div>
-    <Note>{messages.text("bestSlips.disclaimer")}</Note>
   </LoadingStack></LoadingTheme>;
 }

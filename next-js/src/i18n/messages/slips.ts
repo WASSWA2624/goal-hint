@@ -108,7 +108,6 @@ export const slipsMessages = {
   "bestSlips.filters.emptyPageHint": "Choose Next slips to continue to earlier dates.",
   "bestSlips.filters.showing": "{first}–{last} of {total} slips",
   "bestSlips.filters.shown": "{count} slips shown",
-  "bestSlips.filters.end": "All slips in this selection are shown.",
   "bestSlips.filters.previous": "Previous slips",
   "bestSlips.filters.next": "Next slips",
   "bestSlips.filters.page": "Page {page}",

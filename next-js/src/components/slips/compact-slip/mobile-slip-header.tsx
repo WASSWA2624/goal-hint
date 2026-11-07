@@ -43,7 +43,6 @@ export function MobileSlipHeader({ totalOdds, averageProbability, selectionCount
       aria-describedby={noteId}>
       <h3 id={headingId ?? `${id}-heading`} data-header-identity data-dense-identity={index >= 99 ? "" : undefined}>
         {variant ? slipTitle : <span data-header-slip-number>
-          <span data-header-title-prefix aria-hidden="true">{m.text("slips.slipTitle", { number: "" }).trim()} </span>
           <span data-header-number aria-hidden="true">{number}</span>
           <VisuallyHidden>{slipTitle}</VisuallyHidden>
         </span>}

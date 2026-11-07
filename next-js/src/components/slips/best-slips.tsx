@@ -10,7 +10,7 @@ import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { matchesHref } from "@/domain/navigation";
 import type { SlipsBrowseResult } from "@/domain/best-slips";
 import { createMessages } from "@/i18n/messages";
-import { CriteriaPanel, Note, SlipList, SlipStack } from "./slip-styles";
+import { CriteriaPanel, SlipList, SlipStack } from "./slip-styles";
 import { BestSlipCard } from "./best-slip-card";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { BestSlipsFilters } from "./best-slips-filters";
@@ -62,10 +62,8 @@ export function BestSlips({ result, locale, signedIn = false }: { result: SlipsB
       </div>)}</SlipList></div>
       </SlipMatchRefreshProvider>
     </>}
-    {content.browse && !content.browse.hasMore && content.slips.length > 0 && <Note>{m.text("bestSlips.filters.end")}</Note>}
     {content?.browse?.total !== null && content?.browse?.total !== undefined && <BestSlipsPagination onPage={browse.goToPage}
       total={content.browse.total} page={browse.displayQuery.page}
       busy={browse.navigating || browse.retained} locale={locale} />}
-    <Note>{m.text("bestSlips.disclaimer")}</Note>
   </SlipStack>;
 }
