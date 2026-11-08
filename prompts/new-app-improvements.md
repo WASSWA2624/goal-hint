@@ -14,11 +14,6 @@
 
 ## Slips page
 
-- Remove `EAT` from the overall slips title.Example: `Browsing: 06-Nov-2026 · EAT All slips Total odds: 2.50–5.00` → `Browsing: 06-Nov-2026 All slips Total odds: 2.50–5.00`
-- On mobile, remove the word `Slip` from the slip number in the slip header.
-- Thicken the left, right, and bottom borders of the slip; they should use the same background as the slip header.
-- Remove these texts: `All slips in this selection are shown.` and `Estimates are not guarantees. A slip wins only if every selection wins.`
-
 ## Footer
 
 - On desktop, reduce the footer’s vertical padding so it uses less vertical space.
