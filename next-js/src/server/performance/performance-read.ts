@@ -78,7 +78,8 @@ export async function readPerformanceSnapshot(tx: Tx, query: PerformanceQuery, c
 async function readPerformanceBatch(tx: Tx, query: PerformanceQuery, ids: string[], budget: PerformanceReadBudget, includeHistorical: boolean,
   quotePolicy: PerformanceQuotePolicy | null) {
   const fixtures = await tx.footballFixture.findMany({ where: { id: { in: ids } },
-    include: { homeTeam: { select: { name: true } }, awayTeam: { select: { name: true } },
+    select: { id: true, dataVersion: true, activeCycleId: true, status: true, regulationHome: true, regulationAway: true,
+      regulationVerifiedAt: true, regulationEvidenceRef: true, homeTeam: { select: { name: true } }, awayTeam: { select: { name: true } },
       season: { select: { competitionId: true, competition: { select: { name: true, country: true } } } },
       lifecycleState: { select: { issue: true } }, resultState: { select: { resultId: true } } },
     orderBy: [{ kickoff: "asc" }, { id: "asc" }] });

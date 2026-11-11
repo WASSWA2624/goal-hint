@@ -41,6 +41,9 @@ export function publicRevisionAnalysis(revision: StoredRevision, evidence: Evide
       url: isSafeEvidenceUrl(m.provenance.source.sourceUrl) ? m.provenance.source.sourceUrl : null,
       publishedAt: null, retrievedAt: m.timestamps.retrievedAt, providerUpdatedAt: m.timestamps.providerUpdatedAt });
   }
+  const local = available.find((market) => market.provenance.kind === "local-engine");
+  if (local) sources.push({ id: "local-engine", publisher: "Goal Hint", title: "Local statistical forecast",
+    url: null, publishedAt: null, retrievedAt: local.timestamps.retrievedAt, providerUpdatedAt: null });
   const permittedUrls = new Set(sources.flatMap((s) => s.url === null ? [] : [s.url]));
   const explain = (item: StoredRevision["candidate"]["uncertainty"]) => ({ text: item.text, sourceUrls: [...item.sourceUrls] });
   // The resolver retains URLs rather than claim references. If any AI source has
@@ -63,9 +66,10 @@ export async function publicDetailSnapshot(tx: Prisma.TransactionClient, revisio
       market: m.market, reasons: [], uncertainty: null, timestamps: { ...m.timestamps },
       alternatives: marketSelections[m.market.family].filter((s) => s !== m.market.selection).map((selection) => ({ selection,
         probability: (m.market.probabilities as Readonly<Record<string, number>>)[selection]! })),
-      source: { kind: m.provenance.kind, provisional: m.provenance.kind === "api-football" || m.provenance.provisional,
+      source: { kind: m.provenance.kind, provisional: m.provenance.kind !== "ai" || m.provenance.provisional,
         fallbackReason: m.fallback?.reason ?? null, sourceIds: m.provenance.kind === "api-football" ? ["api-football"]
-          : m.provenance.sources.filter((s) => analysis.sources.some((a) => a.id === s.sourceId)).map((s) => s.sourceId) },
+          : m.provenance.kind === "local-engine" ? ["local-engine"]
+            : m.provenance.sources.filter((s) => analysis.sources.some((a) => a.id === s.sourceId)).map((s) => s.sourceId) },
     }));
     const unavailableMarkets: StoredDetailSnapshot["unavailableMarkets"] = (Object.keys(marketSelections) as MarketFamily[]).flatMap((family) => {
       const m = revision.candidate.markets[family];

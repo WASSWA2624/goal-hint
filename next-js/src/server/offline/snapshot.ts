@@ -4,7 +4,7 @@ import { getReportingDate, utcInstantFromEpochMilliseconds, type Clock } from ".
 import { offlineRules, offlineSnapshotSchema, type OfflineSnapshot } from "../../domain/offline.ts";
 import type { MatchFeedResponse } from "../../domain/match-feed.ts";
 import { createGatedReads } from "../members/gated-reads.ts";
-import { readPublicMatchFeed } from "../matches/public-feed.ts";
+import { readOfflineFixtureFeed } from "../matches/public-feed.ts";
 
 const headers = Object.freeze({ "cache-control": "public, max-age=0, must-revalidate",
   "x-goalhint-offline-snapshot": "1", "x-content-type-options": "nosniff" });
@@ -22,8 +22,8 @@ export function projectOfflineSnapshot(feed: MatchFeedResponse): OfflineSnapshot
 }
 
 /** This endpoint deliberately never resolves the request's cookies, query or viewer. */
-export function createOfflineSnapshotHandler({ readFeed = readPublicMatchFeed,
-  clock = { now: () => utcInstantFromEpochMilliseconds(Date.now()) } }: { readFeed?: typeof readPublicMatchFeed; clock?: Clock } = {}) {
+export function createOfflineSnapshotHandler({ readFeed = readOfflineFixtureFeed,
+  clock = { now: () => utcInstantFromEpochMilliseconds(Date.now()) } }: { readFeed?: typeof readOfflineFixtureFeed; clock?: Clock } = {}) {
   const reads = createGatedReads({ readFeed, resolveAccess: async () => ({ tier: "free", signedIn: false, mode: "free" }) });
   return async function GET(): Promise<Response> {
     try {

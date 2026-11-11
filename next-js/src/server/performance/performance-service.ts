@@ -6,7 +6,7 @@ import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, ty
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { maximumCompetitionScope } from "../../domain/feed-query.ts";
 import { matchFeedRules } from "../../domain/match-feed.ts";
-import { performanceFamilies, performanceResponseSchema, performanceRules, type PerformanceCell, type PerformanceCoverage, type PerformanceLeague, type PerformanceResponse, type PerformanceSource } from "../../domain/performance.ts";
+import { performanceFamilies, performanceResponseSchema, performanceRules, performanceSources, type PerformanceCell, type PerformanceCoverage, type PerformanceLeague, type PerformanceResponse, type PerformanceSource } from "../../domain/performance.ts";
 import type { MarketFamily } from "../../domain/markets.ts";
 import { canonicalMatchSlug } from "../../domain/match-slug.ts";
 import { matchHref } from "../../domain/navigation.ts";
@@ -49,6 +49,8 @@ function versionFor(record: Record, family: MarketFamily, models: PerformanceSna
   if (!item?.available) return null;
   if (item.provenance.kind === "api-football") return { source: "api-football", provider: "api-football", model: null,
     modelVersionId: null, version: item.provenance.source.contractVersion, calibrationVersion: null };
+  if (item.provenance.kind === "local-engine") return { source: "local-engine", provider: "goal-hint", model: "Local Engine",
+    modelVersionId: null, version: item.provenance.modelVersion, calibrationVersion: null };
   const model = models.get(item.provenance.modelVersionId);
   if (!model || model.id !== record.revision?.modelVersionId) throw new MatchFeedError("unavailable");
   return { source: "ai", provider: model.provider, model: model.model, modelVersionId: model.id,
@@ -88,7 +90,8 @@ function createCellAccumulator(query: PerformanceQuery, family: MarketFamily, so
     if (!matchesFilters(query, source, item, version)) {
       coverage.filteredOut++; return;
     }
-    coverage.available++; coverage.sources[item.market.source]++;
+    coverage.available++;
+    coverage.sources[item.market.source] = (coverage.sources[item.market.source] ?? 0) + 1;
     versions.set(evidenceFingerprint(version), version);
     const settledOutcome = coherent && result?.regulation.verified && (previous.status === "correct" || previous.status === "incorrect")
       ? previous.status === "correct" ? "won" : "lost" : "pending";
@@ -96,7 +99,7 @@ function createCellAccumulator(query: PerformanceQuery, family: MarketFamily, so
       quotedOdds: quotes?.get(`${performanceQuoteKey(revision!.id, family)}:${item.market.selection}`) ?? null }, shared);
     const knownHorizon = protocol?.horizons.find((h) => horizonMs! >= h.minimumMs && horizonMs! < h.maximumMs);
     if (knownHorizon) observedHorizons.add(knownHorizon.id); else outOfPolicy = true;
-    if (!protocol?.competitionIds.includes(record.fixture.season?.competitionId ?? "") ||
+    if (!protocol?.competitionIds.includes(record.fixture.season?.competitionId ?? "") || version.source === "local-engine" ||
       version.source === "ai" && version.modelVersionId !== protocol?.candidateModel?.id ||
       version.source === "api-football" && version.version !== protocol?.providerContractVersion) outOfPolicy = true;
     if (links.length < performanceRules.maximumEvidenceLinks) links.push({ fixtureId: record.fixture.id, cycleId: cycle!.id,
@@ -135,7 +138,8 @@ function createCellAccumulator(query: PerformanceQuery, family: MarketFamily, so
           calibrationError: evaluated.calibrationError, confidenceZ: protocol.confidenceZ, calibration: evaluated.calibration });
       }
     }
-    return { family, source, label: source === "combined" ? "Combined AI / API-Football fallback" : source === "ai" ? "AI" : "API-Football fallback",
+    return { family, source, label: source === "combined" ? "All forecast sources"
+      : source === "ai" ? "AI" : source === "local-engine" ? "Local Engine" : "API-Football",
       horizon, coverage, metrics, versions: [...versions.values()].sort((a, b) => `${a.source}:${a.modelVersionId}:${a.version}`.localeCompare(`${b.source}:${b.modelVersionId}:${b.version}`, "en")),
       returns: summarizePickPerformance(returnSamples), evidence: { total: coverage.available, truncated: coverage.available > links.length, links } };
   }
@@ -148,7 +152,7 @@ function createCellAccumulator(query: PerformanceQuery, family: MarketFamily, so
 export function createPerformanceAccumulator(query: PerformanceQuery, asOf: number, protocol: EvaluationProtocol | null) {
   const families = query.market === "all" ? performanceFamilies : [query.market];
   const cells = families.flatMap((family) => [null, ...(protocol?.horizons ?? [])].flatMap((horizon) =>
-    (["combined", "ai", "api-football"] as const).map((source) => createCellAccumulator(query, family, source, horizon, protocol))));
+    performanceSources.map((source) => createCellAccumulator(query, family, source, horizon, protocol))));
   const groups = new Map<string | null, { competition: PerformanceLeague["competition"]; fixtureCount: number;
     cells: ReturnType<typeof createCellAccumulator>[] }>();
   const fixtureHash = createHash("sha256"), settlementIds: string[] = [];
@@ -161,7 +165,8 @@ export function createPerformanceAccumulator(query: PerformanceQuery, asOf: numb
     fixtureCount += snapshot.records.length;
     if (fixtureCount > performanceRules.maximumCohortFixtures) throw new MatchFeedError("unavailable");
     for (const record of snapshot.records) {
-      fixtureHash.update(evidenceSerialize({ id: record.fixture.id, version: record.fixture.dataVersion, cycle: record.cycle, result: record.result?.id ?? null }) + "\n");
+      fixtureHash.update(evidenceSerialize({ id: record.fixture.id, version: record.fixture.dataVersion, cycle: record.cycle,
+        result: record.result?.id ?? null }) + "\n");
       for (const cell of cells) cell.add(record, snapshot.models, snapshot.quotes, shared);
       const candidate = record.fixture.season?.competitionId, id = competitionIdentity.safeParse(candidate).success ? candidate : null;
       let group = groups.get(id);
@@ -259,7 +264,7 @@ export function createPerformanceService(options: Readonly<{ database: DatabaseR
         // bounded snapshot for its full month while production keeps its budget.
         timeout: demo ? 240_000 : 30_000 });
       const descriptor = publicCacheDescriptor({ kind: "performance", locale: "en", now: asOf,
-        query: { projection: 7, ...query }, range: query.range, scope: { competitionIds: [...configured.data].sort((a, b) => a - b), protocol, quotePolicy },
+        query: { projection: 8, ...query }, range: query.range, scope: { competitionIds: [...configured.data].sort((a, b) => a - b), protocol, quotePolicy },
         parse: (value) => performanceResponseSchema.parse(value) });
       let response: PerformanceResponse;
       if (demo && options.cache) {

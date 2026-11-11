@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getReportingDate, type Clock } from "../../domain/calendar.ts";
-import { defaultPagePicks, parseFeedQuery, resolveFeedDates } from "../../domain/feed-query.ts";
+import { parseFeedQuery, resolveFeedDates, type PicksFilter } from "../../domain/feed-query.ts";
 import { feedPerformanceSchema } from "../../domain/match-feed.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { feedPerformanceCacheKey } from "../matches/feed-performance.ts";
@@ -12,11 +12,12 @@ import { readPublicMatchFeedSummary } from "../matches/public-feed.ts";
  * One captured clock keeps later preparation from invalidating earlier fills. */
 export async function warmDemoFeedSummaries(clock: Clock, competitionIds: readonly number[],
   read: typeof readPublicMatchFeedSummary = readPublicMatchFeedSummary,
-  pagePicks = defaultPagePicks("all")): Promise<void> {
+  pagePicks: PicksFilter = "only"): Promise<void> {
   const asOf = clock.now(), today = getReportingDate(asOf), warmClock = { now: () => asOf }, seen = new Set<string>();
   for (const parameters of [new URLSearchParams({ picks: pagePicks }), new URLSearchParams()]) {
     const query = parseFeedQuery(parameters, { today, asOf, providerOdds: publicPolicy.features.providerOdds });
-    const key = feedPerformanceCacheKey(feedSql(query, resolveFeedDates(query, today), competitionIds), query.locale, publicPolicy.features.providerOdds);
+    const key = feedPerformanceCacheKey(feedSql(query, resolveFeedDates(query, today), competitionIds,
+      publicPolicy.features.providerOdds, null, false, true), query.locale, publicPolicy.features.providerOdds);
     if (seen.has(key)) continue;
     const result = await read(parameters, { locale: query.locale }, warmClock);
     const performance = feedPerformanceSchema.safeParse(result.performance);

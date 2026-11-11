@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { PredictionResult } from "../../domain/performance-summary.ts";
 import type { feedPerformanceSchema } from "../../domain/match-feed.ts";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
-import { MARKET_RULE_VERSION, isMarketFamily, isMarketSelection, type MarketFamily, type MarketSelection } from "../../domain/markets.ts";
+import { MARKET_RULE_VERSION, isMarketFamily, isMarketSelection, type MarketFamily, type MarketSelection, type MarketSource } from "../../domain/markets.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { assertHistorySeal, historyJson, type HistoryRow } from "../predictions/history-read.ts";
@@ -35,7 +35,7 @@ type Sample = HistoryRow & Readonly<{
   fixtureStatus: SettlementFixture["status"]; fixtureRegulationHome: number | null; fixtureRegulationAway: number | null;
   fixtureRegulationVerifiedAt: Date | null; fixtureRegulationEvidenceRef: string | null;
   currentLockedSetId: string; currentVoidReason: string | null; currentResultId: string | null; issue: string | null;
-  currentFamily: MarketFamily; currentSelection: MarketSelection; currentSource: "ai" | "api-football"; currentProbability: number;
+  currentFamily: MarketFamily; currentSelection: MarketSelection; currentSource: MarketSource; currentProbability: number;
   storedSelection: MarketSelection; storedProbability: number;
   marketPayload: unknown; marketValidIntegrity: unknown;
 }>;
@@ -97,7 +97,7 @@ export async function readFeedPerformance(tx: Prisma.TransactionClient, sql: Ret
       JOIN MarketSettlement p ON p.fixtureId=f.id AND p.cycleId=c.id AND p.family=m.family
       JOIN MarketSettlementRevision r ON r.id=p.revisionId AND r.fixtureId=p.fixtureId AND r.cycleId=p.cycleId AND r.family=p.family
       LEFT JOIN FixtureResultState rs ON rs.fixtureId=f.id LEFT JOIN FixtureLifecycleState ls ON ls.fixtureId=f.id
-      WHERE ${sql.where} AND f.id IN (${Prisma.join(ids)}) AND m.available=TRUE AND c.state='closed'
+      WHERE ${sql.where} AND f.id IN (${Prisma.join(ids)}) AND ${sql.pickAvailable} AND c.state='closed'
       ORDER BY f.kickoff,f.id`);
     const resultIds = [...new Set(rows.flatMap((row) => row.currentResultId ? [row.currentResultId] : []))];
     const resultRows = resultIds.length ? await tx.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT r.*,

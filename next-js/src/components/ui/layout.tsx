@@ -95,7 +95,7 @@ export const PageMain = styled.main<{ $app?: boolean; $compact?: boolean; $compa
   min-inline-size: 0;
   ${({ $compact }) => $compact && css`
     ${media.belowDesktop} {
-      padding-block: var(--gh-spacing-2) var(--gh-spacing-3);
+      padding-block: var(--app-phone-content-top, var(--gh-spacing-2)) var(--gh-spacing-3);
       background: ${({ theme }) => theme.color.page};
     }
   `}

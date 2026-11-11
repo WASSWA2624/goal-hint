@@ -13,7 +13,7 @@ import { getDateInTimeZone } from "@/domain/device-calendar";
 import { resetFeedFilters, selectFeedStatus } from "@/domain/feed-controls";
 import { compileFeedFilterDraft, feedFilterDraft, feedFilterDraftIssues, type FeedFilterDraft } from "@/domain/feed-filter-draft";
 import { countryOptions, leagueOptions } from "@/domain/feed-presentation";
-import { defaultPagePicks, feedQueryRules, matchFeedPageDefaults, panelFilterCount, serializeFeedQuery, type FeedQuery } from "@/domain/feed-query";
+import { defaultPageSort, feedQueryRules, feedSortLabelKey, matchFeedPageDefaults, panelFilterCount, serializeFeedQuery, type FeedQuery } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { matchesHref } from "@/domain/navigation";
 import { publicPolicy } from "@/domain/public-policy";
@@ -45,10 +45,11 @@ export function FeedFilters({ query, today, leagues, onApply, subscriberOnly = f
   if (draft.zone !== deviceZone) setDraft({ ...feedFilterDraft(compileFeedFilterDraft(draft, today) ?? draft.query, today, deviceZone), probability: draft.probability });
   const leagueList = useMemo(() => leagueOptions(leagues, createMessages(query.locale).text("match.competitionUnknown")), [leagues, query.locale]);
   const countryList = useMemo(() => countryOptions(leagues), [leagues]);
+  const defaultSort = defaultPageSort(query.dates);
   const count = panelFilterCount(query) + Number(query.status !== "all") + Number(!!query.result)
     + Number(query.dates.kind !== matchFeedPageDefaults.dates.kind)
-    + Number(query.picks !== defaultPagePicks(query.status, subscriberOnly, query.dates))
-    + Number(query.sort.by !== matchFeedPageDefaults.sort.by || query.sort.direction !== matchFeedPageDefaults.sort.direction);
+    + Number(query.picks !== matchFeedPageDefaults.picks)
+    + Number(query.sort.by !== defaultSort.by || query.sort.direction !== defaultSort.direction);
   const locked = subscriberOnly && draft.query.status !== "finished", live = draft.query.status === "live";
   const allMarkets = draft.query.markets.length === publicPolicy.markets.length;
   const issues = feedFilterDraftIssues(draft);
@@ -77,7 +78,7 @@ export function FeedFilters({ query, today, leagues, onApply, subscriberOnly = f
   }
   function reset() {
     const day = getDateInTimeZone(utcInstantFromEpochMilliseconds(Date.now()), deviceZone);
-    setDraft(feedFilterDraft(resetFeedFilters({ ...draft.query, zone: deviceZone }, subscriberOnly), day, deviceZone));
+    setDraft(feedFilterDraft(resetFeedFilters({ ...draft.query, zone: deviceZone }), day, deviceZone));
     setMarketsOpen(true);
   }
   const probabilityInput = (field: "min" | "max") => <FloatingField label={messages.text(field === "min" ? "feed.filters.minProbability" : "feed.filters.maxProbability")}
@@ -117,7 +118,7 @@ export function FeedFilters({ query, today, leagues, onApply, subscriberOnly = f
             const sort = feedSortOptions.find(value => `${value.by}-${value.direction}` === event.target.value);
             if (sort) setDraft(current => ({ ...current, query: { ...current.query, sort } }));
           }}>{feedSortOptions.map(sort => <option key={`${sort.by}-${sort.direction}`} value={`${sort.by}-${sort.direction}`}>
-            {messages.text(`feed.sort.${sort.by}-${sort.direction}`)}
+            {messages.text(feedSortLabelKey(sort))}
           </option>)}</select></FloatingField>
         </div>
         <div>

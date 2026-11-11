@@ -4,18 +4,21 @@ import { getPublicationDeadline, utcInstantFromEpochMilliseconds, type Clock } f
 import type { ApiFootballBounds, ApiFootballFallbackWorkflow } from "../football/api-football-contract.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { PredictorResult } from "../predictor/predictor-service.ts";
-import type { FallbackContext, FallbackResolutionAuthority, FallbackResolutionResult, ForecastSelectionPolicy, ForecastSourceOrder, ProviderFallbackResult, ResolvedForecastCandidate } from "./fallback-contract.ts";
-import { FallbackInputError, parseFallbackAiResult, parseFallbackContext, parseProviderFallbackResult } from "./fallback-input.ts";
+import { LIVE_FORECAST_CASCADE, type FallbackContext, type FallbackResolutionAuthority, type FallbackResolutionResult,
+  type ForecastSelectionPolicy, type ForecastSourceOrder, type ProviderFallbackResult, type ResolvedForecastCandidate } from "./fallback-contract.ts";
+import { FallbackInputError, parseFallbackAiResult, parseFallbackContext, parseProviderFallbackResult, parseResolvedForecastCandidate } from "./fallback-input.ts";
 import { isProviderFallbackCurrent, parseProviderFallbackRequest, type createProviderFallbackAdapter } from "./fallback-adapter.ts";
 import { isPredictorForecastCurrent } from "../predictor/predictor-output.ts";
 import { synchronous } from "../shared/authority-proof.ts";
 import { fallbackRequestedGroups, resolveFallbackCandidate } from "./fallback-resolution.ts";
 import { forecastSourceReceipts, type ForecastSourceReceipts } from "./source-receipts.ts";
+import type { createLiveLocalEngine } from "../intelligence/live-local-engine.ts";
 
 export type FallbackRefreshRequest = Readonly<{
   requestId: string; expected: FallbackContext; ai: PredictorResult; bounds: ApiFootballBounds | null; maxElapsedMs: number;
-  /** A frozen source order always requests every provider group, even beside a complete AI candidate. */
+  /** Legacy ordered requests collect both source receipts. The cascade collects the first usable source. */
   order?: ForecastSourceOrder;
+  sourceCascade?: typeof LIVE_FORECAST_CASCADE;
 }>;
 export type FallbackRefreshReason = "invalid-request" | "not-authorized" | "ineligible-refresh" | "timeout" |
   "clock-regression" | "unavailable" | "invalid-timing" | "conflicting-request" | "capacity-exhausted";
@@ -33,26 +36,29 @@ class RefreshFailure extends Error {
 export function parseFallbackRefreshRequest(input: unknown): FallbackRefreshRequest {
   try {
     if (input === null || typeof input !== "object" || Object.keys(input).some((key) =>
-      !["requestId", "expected", "ai", "bounds", "maxElapsedMs", "order"].includes(key))) throw new Error();
+      !["requestId", "expected", "ai", "bounds", "maxElapsedMs", "order", "sourceCascade"].includes(key))) throw new Error();
     const value = input as FallbackRefreshRequest, expected = parseFallbackContext(value.expected), ai = parseFallbackAiResult(value.ai);
     if (typeof value.requestId !== "string" || !/^[a-f0-9]{64}$/u.test(value.requestId) ||
       !Number.isSafeInteger(value.maxElapsedMs) || value.maxElapsedMs < 1 || value.maxElapsedMs > 2_147_483_647 ||
-      value.order !== undefined && value.order !== "provider-first" && value.order !== "ai-first") throw new Error();
+      value.order !== undefined && value.order !== "provider-first" && value.order !== "ai-first" ||
+      value.sourceCascade !== undefined && (value.sourceCascade !== LIVE_FORECAST_CASCADE || value.order === "provider-first")) throw new Error();
     const bounds = value.bounds === null ? null : parseProviderFallbackRequest({ context: expected.context,
       jobId: expected.jobId, requestedGroups: ["match-result", "total-goals", "both-teams-to-score"], bounds: value.bounds }).bounds;
     // Preserve the original AI object for trusted invocation/output ownership proof.
     return Object.freeze({ requestId: value.requestId, expected, ai, bounds, maxElapsedMs: value.maxElapsedMs,
-      ...(value.order === undefined ? {} : { order: value.order }) });
+      ...(value.order === undefined ? {} : { order: value.order }),
+      ...(value.sourceCascade === undefined ? {} : { sourceCascade: value.sourceCascade }) });
   } catch { throw new RefreshFailure("invalid-request"); }
 }
 
-/** Resolves one completed AI attempt and one bounded provider collection.
+/** Resolves the owning AI attempt, optional stored local results and bounded provider fallback.
  * It creates no public revision and never reads an old market. */
 export function createFallbackService(options: Readonly<{
   fallback: Pick<ReturnType<typeof createProviderFallbackAdapter>, "collect"> | null;
   authority: FallbackResolutionAuthority; clock?: Clock; maxInflight: number;
   /** A private binding, never visitor input. Defaults to optional AI precedence with an independently retained baseline. */
   selectionPolicy?: ForecastSelectionPolicy;
+  localEngine?: ReturnType<typeof createLiveLocalEngine>;
   /** Binds the owning refresh, AI receipt, original job deadline and quota allowance. */
   verifyRequest(request: FallbackRefreshRequest): boolean;
 }>) {
@@ -64,11 +70,19 @@ export function createFallbackService(options: Readonly<{
   const inflight = new Map<string, Readonly<{ fingerprint: string; promise: Promise<FallbackRefreshResult> }>>();
   const denied = (reason: FallbackRefreshReason, requestsDispatched = 0, requestCountUnknown = false): FallbackRefreshResult =>
     Object.freeze({ status: "denied", reason, requestsDispatched, requestCountUnknown });
+  function withCascade(result: FallbackResolutionResult, request: FallbackRefreshRequest,
+    localStatus: NonNullable<ResolvedForecastCandidate["audit"]["localStatus"]>): FallbackResolutionResult {
+    if (result.status === "denied" || request.sourceCascade === undefined) return result;
+    return { ...result, candidate: parseResolvedForecastCandidate({ ...result.candidate, audit: {
+      ...result.candidate.audit, sourceCascade: request.sourceCascade, localStatus,
+      ...(request.order === undefined ? {} : { sourceOrder: request.order }),
+    } }) };
+  }
   async function execute(request: FallbackRefreshRequest, enteredNow: number, startedAt: number, parent?: ApiFootballFallbackWorkflow): Promise<FallbackRefreshResult> {
     const cutoff = getPublicationDeadline(request.expected.context.kickoffAt);
     if (enteredNow >= cutoff) return denied("ineligible-refresh");
     const deadlineAt = utcInstantFromEpochMilliseconds(Math.min(enteredNow + request.maxElapsedMs, cutoff,
-      request.bounds?.deadlineAt ?? Infinity));
+      request.bounds?.deadlineAt ?? Infinity, parent?.deadlineAt ?? Infinity));
     const allowanceMs = Math.min(request.maxElapsedMs, deadlineAt - enteredNow), remainingMs = allowanceMs - (performance.now() - startedAt);
     if (remainingMs <= 0) return denied("timeout");
     const controller = new AbortController();
@@ -107,7 +121,51 @@ export function createFallbackService(options: Readonly<{
     try {
       check();
       if (selectionPolicy === "provider-baseline" && request.order === "ai-first") return denied("not-authorized");
-      // A frozen order captures the provider beside a complete AI candidate; the job's reviewed fallback allowance covers it.
+      const cascade = request.sourceCascade === LIVE_FORECAST_CASCADE;
+      const authority: FallbackResolutionAuthority = Object.freeze({
+        authorize(expected) { if (evidenceFingerprint(expected) !== evidenceFingerprint(request.expected)) throw new Error(); check(); },
+        verifyContext: options.authority.verifyContext, verifyAi: options.authority.verifyAi, verifyProvider: options.authority.verifyProvider,
+      });
+      const order = request.order === undefined ? {} : { order: request.order };
+      const finishEarly = (candidate: ResolvedForecastCandidate): FallbackRefreshResult => freezeEvidence({
+        status: "candidate", candidate, requestsDispatched: 0, requestCountUnknown: false,
+        ...(request.order === undefined ? {} : { sources: forecastSourceReceipts({ ai: request.ai, provider: null, audit: candidate.audit, order: request.order }) }),
+      });
+      if (cascade) {
+        const aiOnly = withCascade(resolveFallbackCandidate({ expected: request.expected, ai: request.ai, provider: null, now: now(), ...order },
+          authority, "legacy-ai-primary"), request, "not-requested");
+        if (aiOnly.status === "denied") return denied(aiOnly.reason);
+        check();
+        if (aiOnly.status === "candidate" && request.ai.status === "candidate" &&
+          isPredictorForecastCurrent(request.ai.output, now())) return finishEarly(aiOnly.candidate);
+        const engine = options.localEngine;
+        if (engine) {
+          let localTimer: ReturnType<typeof setTimeout> | undefined;
+          const localLimit = Math.min(3000, allowanceMs - (performance.now() - startedAt) - (request.bounds?.timeoutMs ?? 0));
+          let local: ResolvedForecastCandidate | null = null;
+          if (localLimit > 0) {
+            try {
+              const output = await Promise.race([
+                wait(() => engine(request.expected, { aiStatus: request.ai.status,
+                  aiReason: request.ai.status === "candidate" && !isPredictorForecastCurrent(request.ai.output, now())
+                    ? "invalid-timing" : aiOnly.candidate.audit.aiReason }, now, check)),
+                new Promise<null>((resolve) => { localTimer = setTimeout(() => resolve(null), localLimit); }),
+              ]);
+              if (output) {
+                const parsed = parseResolvedForecastCandidate({ ...output, audit: { ...output.audit,
+                  ...(request.order === undefined ? {} : { sourceOrder: request.order }) } });
+                if (parsed.audit.localStatus === "candidate" && evidenceFingerprint(parsed.context) === evidenceFingerprint(request.expected))
+                  local = parsed;
+              }
+            } catch (error) {
+              if (error instanceof RefreshFailure) throw error;
+            } finally { clearTimeout(localTimer); }
+          }
+          check();
+          if (local) return finishEarly(local);
+        }
+      }
+      // Legacy frozen orders capture the provider beside AI. Cascades only reach this stage when neither earlier source was usable.
       const groups = request.order === undefined && selectionPolicy !== "optional-ai-primary" ? fallbackRequestedGroups(request.ai, now(), selectionPolicy)
         : ["match-result", "total-goals", "both-teams-to-score"] as const;
       let provider: ProviderFallbackResult | null = null;
@@ -137,12 +195,10 @@ export function createFallbackService(options: Readonly<{
         }
       }
       check();
-      const authority: FallbackResolutionAuthority = Object.freeze({
-        authorize(expected) { if (evidenceFingerprint(expected) !== evidenceFingerprint(request.expected)) throw new Error(); check(); },
-        verifyContext: options.authority.verifyContext, verifyAi: options.authority.verifyAi, verifyProvider: options.authority.verifyProvider,
-      });
-      const order = request.order === undefined ? {} : { order: request.order };
-      let result = resolveFallbackCandidate({ expected: request.expected, ai: request.ai, provider, now: now(), ...order }, authority, selectionPolicy);
+      const resolve = (at: ReturnType<typeof now>) => withCascade(resolveFallbackCandidate({
+        expected: request.expected, ai: request.ai, provider, now: at, ...(cascade ? {} : order),
+      }, authority, cascade ? "cascade-provider" : selectionPolicy), request, "unavailable");
+      let result = resolve(now());
       check();
       if (result.status === "denied") return denied(result.reason, requestsDispatched, requestCountUnknown);
       timeCheck();
@@ -154,7 +210,7 @@ export function createFallbackService(options: Readonly<{
       if (staleAi || staleProvider) {
         if (staleProvider) provider = Object.freeze({ status: "denied", reason: "stale", requestsDispatched, requestCountUnknown });
         // One bounded recomposition drops newly expired source groups while retaining the other source.
-        result = resolveFallbackCandidate({ expected: request.expected, ai: request.ai, provider, now: utcInstantFromEpochMilliseconds(lastNow), ...order }, authority, selectionPolicy);
+        result = resolve(utcInstantFromEpochMilliseconds(lastNow));
         check();
         if (result.status === "denied") return denied(result.reason, requestsDispatched, requestCountUnknown);
         selected = Object.values(result.candidate.markets).filter((market) => market.available);
@@ -164,7 +220,7 @@ export function createFallbackService(options: Readonly<{
         selected.some((market) => market.market.source === "api-football") && provider?.status === "candidate" &&
         !isProviderFallbackCurrent(provider.candidate, request.expected.context, request.expected.jobId, utcInstantFromEpochMilliseconds(lastNow)))
         return denied("invalid-timing", requestsDispatched, requestCountUnknown);
-      const baseline = selectionPolicy === "optional-ai-primary" ? resolveFallbackCandidate({ expected: request.expected, ai: request.ai, provider, now: utcInstantFromEpochMilliseconds(lastNow), order: "provider-first" }, authority, "provider-baseline") : null;
+      const baseline = !cascade && selectionPolicy === "optional-ai-primary" ? resolveFallbackCandidate({ expected: request.expected, ai: request.ai, provider, now: utcInstantFromEpochMilliseconds(lastNow), order: "provider-first" }, authority, "provider-baseline") : null;
       return freezeEvidence({ ...result, requestsDispatched, requestCountUnknown, ...(baseline === null || baseline.status === "denied" ? {} : { baseline: baseline.candidate }), ...(request.order === undefined ? {} : {
         sources: forecastSourceReceipts({ ai: request.ai, provider, audit: result.candidate.audit, order: request.order }) }) });
     } catch (error) {
@@ -181,8 +237,9 @@ export function createFallbackService(options: Readonly<{
         if (selectionPolicy === "provider-baseline" && request.order === "ai-first") return denied("not-authorized");
         if (synchronous(options.verifyRequest(request)) !== true) return denied("not-authorized");
         const provider: ProviderFallbackResult = { status: "denied", reason: "provider-unavailable", requestsDispatched: 0, requestCountUnknown: true };
-        const result = resolveFallbackCandidate({ expected: request.expected, ai: request.ai, now: now(), provider,
-          ...(request.order === undefined ? {} : { order: request.order }) }, options.authority, selectionPolicy);
+        const result = withCascade(resolveFallbackCandidate({ expected: request.expected, ai: request.ai, now: now(), provider,
+          ...(request.order === undefined ? {} : { order: request.order }) }, options.authority,
+        request.sourceCascade === undefined ? selectionPolicy : "legacy-ai-primary"), request, "not-requested");
         return freezeEvidence({ ...result, requestsDispatched: 0, requestCountUnknown: true,
           ...(request.order === undefined || result.status === "denied" ? {} : {
             sources: forecastSourceReceipts({ ai: request.ai, provider, audit: result.candidate.audit, order: request.order }) }) });

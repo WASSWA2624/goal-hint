@@ -31,6 +31,7 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const providerOdds = options.providerOdds ?? publicPolicy.features.providerOdds;
   return Object.freeze({ async query(input: FeedParameters, context: MatchFeedReadContext = {}) {
+    const publishedOnly = context.publishedOnly === true;
     const asOf = clock.now(), reportingToday = getReportingDate(asOf);
     const query = performanceFeedQuery(parseMatchFeedQuery(input, reportingToday, { ...context, providerOdds, asOf }));
     const today = getFeedToday(query, asOf), range = resolveFeedDates(query, today);
@@ -40,13 +41,13 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
       await prepareDemoRange(database, sourceRange, asOf);
       if (query.search) await createMysqlPublicSearchLimiter(database).consume();
       const read = () => database.transaction(async (tx) => {
-        const { performanceVersion: paginationVersion } = await storedFeedVersions(tx, query, today, sourceRange, competitionIds, context.completedOnly);
+        const { performanceVersion: paginationVersion } = await storedFeedVersions(tx, query, today, sourceRange, competitionIds, context.completedOnly, publishedOnly);
         const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale, context.completedOnly);
-        const sql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly);
+        const sql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly, publishedOnly);
         const [matching] = await tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null; void: bigint | Prisma.Decimal | null; cancelled: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
-          SELECT STRAIGHT_JOIN COUNT(*) AS total, SUM(CASE WHEN m.available=TRUE THEN 1 ELSE 0 END) AS available,
-            SUM(CASE WHEN m.available=TRUE AND c.state='void' AND f.status<>'canceled' THEN 1 ELSE 0 END) AS void,
-            SUM(CASE WHEN m.available=TRUE AND c.state='void' AND f.status='canceled' THEN 1 ELSE 0 END) AS cancelled
+          SELECT STRAIGHT_JOIN COUNT(*) AS total, SUM(CASE WHEN ${sql.pickAvailable} THEN 1 ELSE 0 END) AS available,
+            SUM(CASE WHEN ${sql.pickAvailable} AND c.state='void' AND f.status<>'canceled' THEN 1 ELSE 0 END) AS void,
+            SUM(CASE WHEN ${sql.pickAvailable} AND c.state='void' AND f.status='canceled' THEN 1 ELSE 0 END) AS cancelled
           ${sql.countJoins} ${sql.searchJoin} WHERE ${sql.where}`);
         if (!matching) throw new MatchFeedError("unavailable");
         const total = Number(matching.total);
@@ -56,7 +57,7 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 90_000 });
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: "feed-summary-v8", completedOnly: context.completedOnly === true, today, dates: { from: range.startDate, to: range.endDate } },
+        query: { ...query, projection: "feed-summary-v9", completedOnly: context.completedOnly === true, publishedOnly, today, dates: { from: range.startDate, to: range.endDate } },
         scope: [...competitionIds].sort((a, b) => a - b), parse: (value) => storedSummarySchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;

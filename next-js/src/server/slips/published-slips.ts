@@ -14,7 +14,7 @@ import { predictionResults } from "../../domain/performance-summary.ts";
 import { summarizeSlipPerformance } from "../../domain/slip-performance.ts";
 import { slipMatchStatesFromResults } from "../../domain/slip-match-state.ts";
 import { compareSlipDisplayProbability } from "../../domain/slip-pagination.ts";
-import { parseSlipCriteria, serializeSlipCriteria, type BuiltSlip, type SlipCriteria } from "../../domain/slip-builder.ts";
+import { parseSlipCriteria, serializeSlipCriteria, slipBuilderRules, type BuiltSlip, type SlipCriteria } from "../../domain/slip-builder.ts";
 import { getDatabase, type DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
@@ -109,8 +109,9 @@ export function createPublishedSlips(database: DatabaseRuntime, {
       const proposed = [...input.slips].sort(compareBestSlips).map(({ estimatedProbability, ...slip }) => {
         const snapshot = slipSnapshotSchema.parse(slip);
         if (jointSlipProbability(input.model, snapshot as BuiltSlip) !== estimatedProbability) fail("invalid-input");
-        const denominator = 100n ** BigInt(snapshot.selections.length);
-        const product = snapshot.selections.reduce((value, selection) => value * BigInt(selection.odds.replace(".", "")), 1n);
+        const denominator = 10_000n ** BigInt(snapshot.selections.length);
+        const product = snapshot.selections.reduce((value, selection) =>
+          value * (parseDecimalOdds(selection.odds) ?? fail("invalid-input")).scaled, 1n);
         const quoted = BigInt(snapshot.totalOdds.replace(".", ""));
         const rounded = (product * 200n + denominator) / (2n * denominator);
         const criteria = bestSlipBandCriteria(input.day, oddsBand);
@@ -120,8 +121,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           || criteria.totalMax !== undefined && product * 100n > BigInt(criteria.totalMax) * denominator
           || Math.abs(average - snapshot.averageProbability) > Number.EPSILON * snapshot.selections.length * 2) fail("invalid-input");
         for (const selection of snapshot.selections) {
-          if (parseDecimalOdds(selection.odds) === null || ids.has(selection.fixtureId)
-            || getReportingDate(utcInstantFromEpochMilliseconds(selection.kickoffAt)) !== input.day) fail("invalid-input");
+          if (ids.has(selection.fixtureId) || getReportingDate(utcInstantFromEpochMilliseconds(selection.kickoffAt)) !== input.day) fail("invalid-input");
           ids.add(selection.fixtureId);
         }
         return { slip: snapshot as BuiltSlip, estimatedProbability };
@@ -134,6 +134,8 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         const existingDay = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM DailySlipPublication
           WHERE eatDate=${new Date(`${input.day}T00:00:00Z`)} AND oddsBand IN ('legacy',${oddsBand})`;
         if (existingDay.length) return "already-published";
+        if (proposed.some(({ slip }) => slip.selections.some(({ probability }) => probability < slipBuilderRules.minimumPickPercent / 100)))
+          return fail("invalid-input");
         const fixtureIds = [...ids].sort();
         for (const fixtureId of fixtureIds) await tx.$queryRaw`SELECT id FROM FootballFixture WHERE id=${fixtureId} FOR SHARE`;
         const snapshots: z.infer<typeof snapshotSchema>[] = [];

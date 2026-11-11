@@ -27,7 +27,7 @@ test('every Best Slips result chip retains its period and odds band and restarts
 
 test('Matches summary links retain their cohort filters and select the actual result before paging', () => {
   const input = new URLSearchParams('q=Club&country=England&market=total-goals&status=finished&tz=Africa%2FKampala&page=5');
-  const original = applyFeedPageDefaults(parseFeedQuery(input, { today }), input, true);
+  const original = applyFeedPageDefaults(parseFeedQuery(input, { today }), input);
   for (const result of predictionResults) {
     const next = selectFeedSummaryResult(original, result);
     assert.equal(next.result, result); assert.equal(next.summary, undefined); assert.equal(next.page, 1);
@@ -38,7 +38,7 @@ test('Matches summary links retain their cohort filters and select the actual re
     assert.equal(href.searchParams.get('result'), result); assert.equal(href.searchParams.get('when'), 'today');
     const restored = parseFeedQuery(serializeFeedQuery(next, today), { today });
     assert.equal(restored.result, result); assert.deepEqual(restored.dates, next.dates); assert.equal(restored.zone, next.zone);
-    assert.deepEqual(performanceFeedQuery(next), { ...original, page: 1 });
+    assert.deepEqual(performanceFeedQuery(next), { ...original, page: 1, sort: { by: 'kickoff', direction: 'desc' } });
     assert.equal(resetFeedFilters(next).result, undefined);
   }
 });

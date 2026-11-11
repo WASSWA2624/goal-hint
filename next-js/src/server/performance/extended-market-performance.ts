@@ -32,7 +32,7 @@ const count = z.union([z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGE
 const rowSchema = z.strictObject({ source: z.enum(extendedMarketSources), marketKey,
   ruleVersion: z.string().min(1).max(64), status: z.enum(extendedSettlementStatuses), count, binaryCount: count,
 }).refine((row) => row.binaryCount <= row.count && (row.binaryCount === 0 || ["correct", "incorrect"].includes(row.status)) &&
-  (row.source === "ai-score-distribution" ? row.marketKey.startsWith("goal:") : row.marketKey.startsWith("implied:")));
+  (row.source === "market-implied" ? row.marketKey.startsWith("implied:") : row.marketKey.startsWith("goal:")));
 
 /** Every qualified market and source retains its own denominator; correction chains are not additional predictions. */
 export function extendedMarketPerformanceFromRows(rows: readonly ExtendedMarketPerformanceRow[]): readonly ExtendedMarketPerformance[] {
@@ -95,7 +95,7 @@ export function createExtendedMarketPerformanceService(options: Readonly<{ datab
                 AND fr.status=f.status AND fr.regulationVerified=TRUE
                 AND fr.regulationHome <=> f.regulationHome AND fr.regulationAway <=> f.regulationAway
                 AND JSON_EXTRACT(r.body, '$.resultUsable')=JSON_EXTRACT('true', '$')
-                AND (r.source='ai-score-distribution' OR JSON_UNQUOTE(JSON_EXTRACT(r.body, '$.evidenceId'))=(
+                AND (r.source IN ('ai-score-distribution','local-poisson') OR JSON_UNQUOTE(JSON_EXTRACT(r.body, '$.evidenceId'))=(
                   SELECT evidence.id FROM ImpliedMarketResultEvidence evidence WHERE evidence.fixtureId=r.fixtureId AND evidence.resultId=r.resultId
                   ORDER BY evidence.sequence DESC LIMIT 1))))
           GROUP BY r.source, r.marketKey, JSON_UNQUOTE(JSON_EXTRACT(r.body, '$.ruleVersion')),

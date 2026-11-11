@@ -40,8 +40,9 @@ test('slip snapshots preserve long slips and exact uncapped totals within indepe
 
 test('completed slips expose original odds and picks without account identity, adjudicated from verified regulation scores', () => {
   assert.ok(slipSnapshotSchema.safeParse(slip).success);
-  const won = slipResultView('snapshot-id', new Date(now).toISOString(), slip, [result]);
-  assert.equal(won.outcome, 'won'); assert.deepEqual(won.slip, slip); assert.equal('accountId' in won, false);
+  const exact = { ...slip, selections: [{ ...slip.selections[0], odds: '2.0049', bookmaker: { id: 8, name: 'Example book' } }] };
+  const won = slipResultView('snapshot-id', new Date(now).toISOString(), JSON.parse(JSON.stringify(exact)), [result]);
+  assert.equal(won.outcome, 'won'); assert.deepEqual(won.slip, exact); assert.equal('accountId' in won, false);
   assert.equal(slipResultView('snapshot-id', '', slip, [{ ...result, regulationHome: 0 }]).outcome, 'lost');
   const unverified = slipResultView('snapshot-id', '', slip, [{ ...result, regulationVerified: false }]);
   assert.equal(unverified.outcome, 'pending'); assert.equal(unverified.results[0].home, null);

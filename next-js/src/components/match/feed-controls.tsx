@@ -2,7 +2,7 @@
 
 import styled from "styled-components";
 import { MutedText } from "@/components/ui/layout";
-import { formatProbabilityValue, isAnyMarkets, panelFilterCount, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
+import { feedSortLabelKey, formatProbabilityValue, isAnyMarkets, panelFilterCount, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
 import type { ReportingDate } from "@/domain/calendar";
 import { formatOddsRange } from "@/domain/odds";
 import type { MatchFeedResponse } from "@/domain/match-feed";
@@ -140,7 +140,7 @@ export function FeedAppliedSummary({ query, leagues }: { query: FeedQuery; leagu
     {messages.text("feed.filters.applied")}: {isAnyMarkets(query.markets) ? messages.text("feed.filters.any")
       : query.markets.map((family) => messages.text(`market.family.${family}`)).join(", ")}
     {" · "}{messages.text(`feed.status.${query.status}`)}
-    {" · "}{messages.text(`feed.sort.${query.sort.by}-${query.sort.direction}`)}
+    {" · "}{messages.text(feedSortLabelKey(query.sort))}
     {leagueNames.length > 0 && <> · {leagueNames.join(", ")}</>}
     {query.countries.length > 0 && <> · {query.countries.join(", ")}</>}
     {(query.probability.min !== 0 || query.probability.max !== 100) && <> · {messages.text("feed.filters.percentRange",

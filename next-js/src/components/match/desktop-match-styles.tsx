@@ -41,8 +41,7 @@ export const desktopMatchBaseStyles = css`
   [data-ellipsis-text] { display: block; min-inline-size: 0; max-inline-size: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   [data-truncation]:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
   [data-team-logo] { --gh-logo-size: var(--gh-size-3_25); --gh-logo-font: var(--gh-size-1_75); --gh-logo-radius: 0; flex: none; }
-  [data-row-league] [data-team-logo] { --gh-logo-size: var(--gh-size-3); }
-  [data-country-flag] { flex: none; inline-size: var(--gh-size-4_5); block-size: var(--gh-size-3); object-fit: contain; }
+  [data-row-league] [data-competition-logo] { --gh-league-mark-size: var(--gh-size-3); }
   [data-row-market] { gap: var(--gh-spacing-1_25); }
   [data-row-market] > strong { color: ${({ theme }) => theme.color.link}; font-size: var(--gh-font-body); }
   [data-desktop-row] [data-market-label], [data-desktop-row] [data-number-label] { color: ${({ theme }) => theme.color.mutedText}; }

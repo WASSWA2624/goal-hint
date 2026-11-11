@@ -7,6 +7,7 @@ import { parseCostJob, parseCostRequest } from "../cost-control/cost-input.ts";
 import { parseCatalogImportRequest, parseCatalogEvidenceRef } from "../football/catalog-input.ts";
 import { createModelPin } from "../predictor/predictor-input.ts";
 import { parseProviderFallbackRequest } from "../fallback/fallback-adapter.ts";
+import { LIVE_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
 import { refreshFail, type RefreshMember, type RefreshPlan } from "./refresh-contract.ts";
 import { goalMarketDefinitionSchema } from "../../domain/score-distribution-markets.ts";
 import { parseImpliedMarketExtensionInput } from "../predictions/implied-market-contract.ts";
@@ -28,14 +29,15 @@ export function parseRefreshPlan(input: RefreshPlan, member: RefreshMember): Ref
       observation: z.strictObject({ bounds: z.unknown(), maxAgeMs: z.number() }), publicationReserveMs: z.number(),
       footballRequestLimit: z.number().int().positive().max(4_294_967_295),
       goalDefinitions: z.array(goalMarketDefinitionSchema).max(256).optional(), impliedExtension: z.unknown().optional(),
-      sourceOrder: z.enum(["provider-first", "ai-first"]).optional(), recommendationPolicy: z.unknown().optional() });
+      sourceOrder: z.enum(["provider-first", "ai-first"]).optional(), sourceCascade: z.literal(LIVE_FORECAST_CASCADE).optional(),
+      recommendationPolicy: z.unknown().optional() });
     shape.parse(input);
     if (input.recommendationPolicy !== undefined && evidenceFingerprint(input.recommendationPolicy) !== evidenceFingerprint(recommendationPolicy)) throw new Error();
     // Provider-fallback-only plans omit both the model and its AI allocation, and keep their reviewed shape without an order.
     if ((input.ai === null) !== (input.modelVersionId === null) || input.sourceOrder !== undefined && input.ai === null) throw new Error();
     // AI joint-distribution extension markets are never published beside a provider match result.
-    if (input.goalDefinitions !== undefined && input.sourceOrder === "provider-first") throw new Error();
-    if (input.goalDefinitions !== undefined && (input.ai === null ||
+    if ((input.goalDefinitions !== undefined || input.sourceCascade !== undefined) && input.sourceOrder === "provider-first") throw new Error();
+    if (input.goalDefinitions !== undefined && (input.ai === null && input.sourceCascade !== LIVE_FORECAST_CASCADE ||
         new Set(input.goalDefinitions.map(({ key }) => key)).size !== input.goalDefinitions.length)) throw new Error();
     const evidence = parseEvidenceCollectionRequest(input.evidence);
     const ai = input.ai === null ? null : { job: parseCostJob(input.ai.job), request: parseCostRequest(input.ai.request), maxElapsedMs: input.ai.maxElapsedMs };

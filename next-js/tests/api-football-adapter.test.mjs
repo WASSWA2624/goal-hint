@@ -1054,6 +1054,17 @@ test("invalid odds queries and missing bookmakers fail before any reservation", 
   assert.equal(state.network.length, 0);
 });
 
+test("an explicit all-bookmaker date sweep retains both bookmakers on the same counted page", async () => {
+  const fixture = oddsRow();
+  fixture.bookmakers.push(oddsRow(1, { bookmakerId: 6 }).bookmakers[0]);
+  const state = setup({ respond: (url) => jsonResponse(url, [fixture]) });
+  const result = await state.adapter.odds.prices({ date: "2026-10-08", allBookmakers: true }, bounds({ priority: "enrichment" }));
+  assert.equal(result.status, "complete");
+  assert.deepEqual(result.data[0].bookmakers.map(({ id }) => id), [6, 8]);
+  assert.equal(result.requestsDispatched, 1);
+  assert.deepEqual(Object.fromEntries(state.network[0].url.searchParams), { date: "2026-10-08", page: "1", timezone: "Africa/Kampala" });
+});
+
 test("odds pagination follows the documented 10-row page, reserving every page", async () => {
   const state = setup({ respond: (url) => {
     const current = Number(url.searchParams.get("page"));

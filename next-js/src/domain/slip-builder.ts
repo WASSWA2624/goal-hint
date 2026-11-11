@@ -6,12 +6,14 @@ import { isMarketFamily, isMarketSelection, marketSelections, type MarketFamily,
 import { formatOddsHundredths, oddsRules, parseDecimalOdds } from "./odds.ts";
 import { publicPolicy } from "./public-policy.ts";
 import type { SlipForecastReference } from "./slip-forecast-reference.ts";
+import type { SlipBookmaker } from "./slip-quote.ts";
 export type { SlipForecastReference } from "./slip-forecast-reference.ts";
 
 const maximumCandidates = 800;
 /** Builder criteria and operational search limits. */
 export const slipBuilderRules = Object.freeze({
   maximumDays: 31, maximumSelections: maximumCandidates, maximumSlips: 100,
+  minimumPickPercent: 75,
   minimumOddsHundredths: oddsRules.minimumHundredths, maximumOddsHundredths: Number.MAX_SAFE_INTEGER,
   maximumTotalOddsHundredths: Number.MAX_SAFE_INTEGER,
   maximumCandidates, maximumSearchNodes: 100_000, maximumSearchWork: 100_000,
@@ -35,11 +37,13 @@ export const slipInputFields = ["dateFrom", "dateTo", "timeFrom", "timeTo", "tot
   "probMin", "probMax", "totalProbMin", "totalProbMax", "teamsMin", "teamsMax", "slips"] as const;
 export type SlipInputs = Partial<Record<typeof slipInputFields[number], string>>;
 /** Slip-only approved outcome prices leave the ordinary selected-pick feed contract intact. */
-export type SlipMatchRecord = StoredMatchFeedRecord & Readonly<{ selectionPrices?: readonly StoredMatchFeedRecord["prices"][number][] }>;
+export type SlipSelectionPrice = StoredMatchFeedRecord["prices"][number] & Readonly<{ bookmaker?: SlipBookmaker | undefined }>;
+export type SlipMatchRecord = StoredMatchFeedRecord & Readonly<{ selectionPrices?: readonly SlipSelectionPrice[] }>;
 export type SlipSelection = Readonly<{
   fixtureId: string; kickoffAt: number;
   homeTeam: StoredMatchFeedRecord["homeTeam"]; awayTeam: StoredMatchFeedRecord["awayTeam"]; competition: StoredMatchFeedRecord["competition"];
   family: MarketFamily; selection: MarketSelection; probability: number; odds: string; oddsBasis: "bookmaker" | "median";
+  bookmaker?: SlipBookmaker;
   forecast?: SlipForecastReference;
 }>;
 export type BuiltSlip = Readonly<{
@@ -76,7 +80,7 @@ export function defaultSlipCriteria(today: string): SlipCriteria {
   const from = parseReportingDate(today);
   return { dateFrom: from, dateTo: from, timeFrom: "", timeTo: "", markets: [...publicPolicy.markets],
     totalMin: 500, totalMax: 1000, oddsMin: slipBuilderRules.minimumOddsHundredths,
-    probMin: 75, probMax: 100, teamsMin: 1, slips: 5, reuse: false };
+    probMin: slipBuilderRules.minimumPickPercent, probMax: 100, teamsMin: 1, slips: 5, reuse: false };
 }
 const outcomeKeys = new Map(publicPolicy.markets.map((family) => [`picks.${family}`, family]));
 const keys = new Set(["dateFrom", "dateTo", "timeFrom", "timeTo", "markets", "totalMin", "totalMax", "oddsMin", "oddsMax",
@@ -337,7 +341,8 @@ function compatibleBatch(combinations: readonly Combination[], requested: number
 
 /** Uses only public, current, pre-cutoff published outcome probabilities and their own approved fresh prices.
  * No provider calls, synthetic prices, score guesses, stored slip writes or joint-probability assumptions. */
-export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRecord[], asOf: number, ranking?: SlipRanking): SlipBuildResult {
+export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRecord[], asOf: number, ranking?: SlipRanking,
+  options: Readonly<{ allowPublishedFallback?: boolean }> = {}): SlipBuildResult {
   serializeSlipCriteria(criteria); utcInstantFromEpochMilliseconds(asOf);
   if (hasJointProbabilityBounds(criteria) && !ranking?.probability) throw new RangeError("Whole-slip probability bounds require a qualified joint estimator.");
   const range = validateReportingDateRange(criteria.dateFrom, criteria.dateTo, slipBuilderRules.maximumDays);
@@ -345,7 +350,11 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
     { from: criteria.timeFrom, to: criteria.timeTo, zone: publicPolicy.reportingTimeZone });
   const candidates: Candidate[] = [], seen = new Set<string>(), qualifying = new Set<string>();
   let excludedMissingOdds = 0, excludedMissingForecast = 0, searchLimited = false;
-  const minimumProbability = probabilityFraction(criteria.probMin), maximumProbability = probabilityFraction(criteria.probMax);
+  const minimumProbability = probabilityFraction(criteria.probMin);
+  const maximumProbability = probabilityFraction(criteria.probMax);
+  const minimumOdds = BigInt(criteria.oddsMin) * 100n;
+  const maximumOdds = Math.min(criteria.oddsMax ?? Infinity, criteria.totalMax ?? Infinity);
+  const maximumScaledOdds = Number.isFinite(maximumOdds) ? BigInt(maximumOdds) * 100n : null;
   for (const record of records) {
     if (seen.has(record.fixtureId)) continue;
     seen.add(record.fixtureId);
@@ -355,30 +364,44 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
       || timeWindows && !timeWindows.some((window) => kickoff >= window.start && kickoff < window.end)) continue;
     const forecast = record.forecast;
     if (record.cycle?.state !== "open" || record.cycle.mode !== "current" || record.update.prediction !== "current"
-      || !forecast || record.cycleId === null || forecast.provisional || forecast.updateDelayed || forecast.publishedAt > asOf
+      || !forecast || record.cycleId === null || forecast.provisional && (!options.allowPublishedFallback || ranking !== undefined)
+      || forecast.updateDelayed || forecast.publishedAt > asOf
       || forecast.publishedAt >= kickoff - calendarRules.cutoffSecondsBeforeKickoff * 1000) { excludedMissingForecast++; continue; }
+    const requiredProbability = forecast.provisional ? Math.max(minimumProbability, slipBuilderRules.minimumPickPercent / 100) : minimumProbability;
+    const quotes: readonly SlipSelectionPrice[] = record.selectionPrices ?? record.prices;
     let hasRequestedForecast = false, missingOdds = false;
     for (const { market, outcome } of forecast.markets) {
-      if (!criteria.markets.includes(market.family) || outcome && outcome.status !== "pending") continue;
+      if (!criteria.markets.includes(market.family) || outcome && outcome.status !== "pending"
+        || forecast.provisional && market.source === "ai") continue;
       hasRequestedForecast = true;
       // The feed's featured recommendation does not constrain this custom search.
       const requested = criteria.outcomes?.[market.family] ?? marketSelections[market.family];
       for (const selection of requested) {
         const probability = (market.probabilities as Readonly<Record<string, number>>)[selection];
         if (!isMarketSelection(market.family, selection) || probability === undefined || !Number.isFinite(probability)
-          || probability < 0 || probability > 1 || probability < minimumProbability || probability > maximumProbability) continue;
-        const price = (record.selectionPrices ?? record.prices).find((item) => item.family === market.family && item.selection === selection);
-        const odds = price && price.basis === "bookmaker" && price.retrievedAt <= asOf && (price.providerUpdatedAt === null || price.providerUpdatedAt <= asOf)
-          ? parseDecimalOdds(price.price) : null;
-        if (!price || !odds) { missingOdds = true; continue; }
-        if (odds.scaled < BigInt(criteria.oddsMin) * 100n
-          || criteria.oddsMax !== undefined && odds.scaled > BigInt(criteria.oddsMax) * 100n) continue;
+          || probability < requiredProbability || probability > maximumProbability) continue;
+        let chosen: { quote: SlipSelectionPrice; scaled: bigint } | null = null, priced = false;
+        for (const quote of quotes) {
+          if (quote.family !== market.family || quote.selection !== selection || quote.basis !== "bookmaker" ||
+            quote.retrievedAt > asOf || quote.providerUpdatedAt !== null && quote.providerUpdatedAt > asOf) continue;
+          const odds = parseDecimalOdds(quote.price);
+          if (!odds) continue;
+          priced = true;
+          if (odds.scaled < minimumOdds || maximumScaledOdds !== null && odds.scaled > maximumScaledOdds) continue;
+          if (!chosen || odds.scaled > chosen.scaled || odds.scaled === chosen.scaled &&
+            (quote.bookmaker?.id ?? 0) < (chosen.quote.bookmaker?.id ?? 0)) chosen = { quote, scaled: odds.scaled };
+        }
+        if (!priced) missingOdds = true;
+        if (!chosen) continue;
+        const { quote, scaled } = chosen;
         const reference: SlipForecastReference = { cycleId: record.cycleId, revisionId: forecast.revisionId, publishedAt: forecast.publishedAt };
-        const key = `${record.fixtureId}:${market.family}:${selection}:${probability}:${price.price}`
-          + `:${reference.cycleId}:${reference.revisionId}:${reference.publishedAt}`;
-        candidates.push({ key, scaledOdds: odds.scaled, selection: { fixtureId: record.fixtureId, kickoffAt: kickoff,
+        const key = `${record.fixtureId}:${market.family}:${selection}:${probability}:${quote.price}`
+          + `:${reference.cycleId}:${reference.revisionId}:${reference.publishedAt}`
+          + (quote.bookmaker ? `:${quote.bookmaker.id}` : "");
+        candidates.push({ key, scaledOdds: scaled, selection: { fixtureId: record.fixtureId, kickoffAt: kickoff,
           homeTeam: record.homeTeam, awayTeam: record.awayTeam, competition: record.competition, family: market.family,
-          selection, probability, odds: price.price, oddsBasis: price.basis, forecast: reference } });
+          selection, probability, odds: quote.price, oddsBasis: quote.basis, forecast: reference,
+          ...(quote.bookmaker ? { bookmaker: quote.bookmaker } : {}) } });
         qualifying.add(record.fixtureId);
       }
     }

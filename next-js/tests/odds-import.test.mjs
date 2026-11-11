@@ -174,16 +174,29 @@ const PRO = Object.freeze({ floor: 6_639, spare: 861, reserve: 750 });
 const day = (used, oddsUsed = 0, remaining = 7_500 - used) => ({ remaining, used, oddsUsed });
 function oddsJobHarness(options = {}) {
   const calls = [], usages = [];
-  const state = { enabled: true, usage: day(0), at: NOW + HOUR, summary: oddsSummary(), failure: null, ...options };
+  const state = { enabled: true, usage: day(0), at: NOW + HOUR, summary: oddsSummary(), failure: null, policy: oddsPolicy(), ...options };
   const answer = async (request) => { calls.push(request); if (state.failure) throw state.failure; return state.summary; };
   const service = { importDate: answer, importCatalog: answer, expire: async () => 0 };
-  const [importJob, catalogJob] = createOddsJobDefinitions({ service, policy: () => oddsPolicy(), enabled: () => state.enabled,
+  const [importJob, catalogJob] = createOddsJobDefinitions({ service, policy: () => state.policy, enabled: () => state.enabled,
     usage: async () => state.usage, allowance: PRO, maxRequests: (kind) => kind === 'prices' ? 154 : 3, now: () => state.at });
   const context = { lease: { jobId: oddsHash('job'), attemptId: oddsHash('attempt') }, signal: new AbortController().signal,
     checkpoint: async () => {}, recordUsage: async (usage) => { usages.push(usage); } };
   return { calls, usages, state, importJob, catalogJob, context };
 }
 const EXPIRED = { status: 'failed', reason: 'eligibility-expired', retryable: false };
+
+test('the scope change starts one new bounded sweep and expires queued jobs for the former scope', async () => {
+  const standard = oddsImportEnvelope(NOW, DATE, 0), broader = oddsImportEnvelope(NOW, DATE, 0, 'all');
+  assert.notEqual(broader.idempotencyKey, standard.idempotencyKey);
+  assert.equal(broader.idempotencyKey, oddsImportEnvelope(NOW, DATE, 0, 'all').idempotencyKey);
+  assert.equal(broader.timeoutMs, standard.timeoutMs);
+  const h = oddsJobHarness({ policy: oddsPolicy({ bookmakerScope: 'all' }) });
+  assert.deepEqual(await h.importJob.handle(standard.payload, h.context), EXPIRED);
+  assert.equal(h.calls.length, 0);
+  assert.equal((await h.importJob.handle(broader.payload, h.context)).status, 'succeeded');
+  assert.equal(h.calls.length, 1);
+  assert.equal(oddsScopeKey(h.calls[0]), `date:${DATE}:bookmakers:all`);
+});
 
 test('disabled odds jobs expire without a provider call; the definitions stay registered so queues drain', async () => {
   const h = oddsJobHarness({ enabled: false }), payload = { slot: NOW, date: DATE };

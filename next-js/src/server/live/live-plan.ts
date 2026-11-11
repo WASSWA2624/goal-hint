@@ -3,14 +3,17 @@ import { recommendationPolicy } from "../../domain/recommendation.ts";
 
 import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
 import { marketRules } from "../../domain/markets.ts";
+import { liveGoalMarketDefinitions } from "../../domain/goal-market-definitions.ts";
 import { operatingRules, type RuntimePolicy } from "../config/runtime-policy.ts";
 import type { EvidencePolicy } from "../evidence/evidence-contract.ts";
 import type { ProviderFallbackPolicy } from "../fallback/fallback-adapter.ts";
+import { LIVE_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
 import { ODDS_CONTRACT_VERSION, type ApiFootballBounds } from "../football/api-football-contract.ts";
 import { DE_MARGIN_METHOD } from "../../domain/odds.ts";
 import { ODDS_MAPPING_VERSION } from "../../domain/odds-markets.ts";
 import type { OddsImportKind, OddsPolicy } from "../odds/odds-contract.ts";
 import { ODDS_SWEEP_MS } from "../odds/odds-jobs.ts";
+import { preMatchOddsFreshMs } from "../odds/odds-contract.ts";
 import { TEAM_CODES_REQUESTS_PER_SEASON } from "../teams/team-code-jobs.ts";
 import type { JobEnvelope } from "../jobs/job-contract.ts";
 import type { CutoffPolicy } from "../predictions/cutoff-contract.ts";
@@ -37,7 +40,7 @@ export const ENRICHMENT_QUOTA_SHARE = 0.10;
 /** Pages per odds date sweep (10 fixtures per page, per the documented contract). */
 export const ODDS_MAX_PAGES = 150;
 /** OP-07 default for odds: a price must be reconfirmed within 12 hours before kickoff. */
-export const ODDS_FRESHNESS_MS = 12 * 60 * 60_000;
+export const ODDS_FRESHNESS_MS = preMatchOddsFreshMs;
 /** OP-08/OP-31 default: normalized snapshots are retained until kickoff plus 30 days (no purge job exists). */
 export const ODDS_RETAIN_AFTER_KICKOFF_MS = 30 * 24 * 60 * 60_000;
 const clamp = (value: number, minimum: number, maximum: number) => Math.min(maximum, Math.max(minimum, value));
@@ -126,10 +129,11 @@ export function liveReferences(policy: RuntimePolicy): LiveReferences {
     odds: `${freshness}#odds`, oddsRights: choices.odds.rightsRef });
 }
 /** The exact odds policy for this plan, or null when no documented bookmaker is configured. */
-export function oddsPolicy(policy: RuntimePolicy, refs: LiveReferences, workload: LiveWorkload): OddsPolicy | null {
+export function oddsPolicy(policy: RuntimePolicy, refs: LiveReferences, workload: LiveWorkload, localFootball = false): OddsPolicy | null {
   const bookmakerId = policy.choices.odds.bookmakerId;
   if (bookmakerId === null) return null;
   return Object.freeze({ version: 1, evidenceRef: refs.odds, retentionEvidenceRef: refs.retention, basis: "bookmaker", bookmakerId,
+    ...(localFootball ? { bookmakerScope: "all" as const } : {}),
     method: DE_MARGIN_METHOD, mappingVersion: ODDS_MAPPING_VERSION, contractVersion: ODDS_CONTRACT_VERSION, freshnessMs: ODDS_FRESHNESS_MS,
     retainAfterKickoffMs: ODDS_RETAIN_AFTER_KICKOFF_MS, horizonDays: workload.odds.dates, sweepMs: workload.odds.sweepMs });
 }
@@ -201,7 +205,12 @@ export function lifecyclePolicy(refs: LiveReferences): LifecyclePolicy {
 export function publicationPolicy(refs: LiveReferences): PublicationPolicy {
   return Object.freeze({ version: 1, evidenceRef: refs.freshness, maxObservationAgeMs: 2 * MINUTE, sources: {
     ai: { maxAgeMs: 6 * HOUR, basis: "retrieved", unknownGeneration: "allow-flagged", unknownUpdate: "allow-flagged" },
+    "local-engine": { maxAgeMs: HOUR, basis: "generated", unknownGeneration: "reject", unknownUpdate: "allow-flagged" },
     "api-football": { maxAgeMs: HOUR, basis: "retrieved", unknownGeneration: "allow-flagged", unknownUpdate: "allow-flagged" } } } as const);
+}
+export function liveCascadePlan(plan: RefreshPlan, localFootball: boolean): RefreshPlan {
+  return { ...plan, sourceCascade: LIVE_FORECAST_CASCADE,
+    ...(localFootball ? { goalDefinitions: liveGoalMarketDefinitions } : {}) };
 }
 export function evidencePolicy(refs: LiveReferences): EvidencePolicy {
   const freshness = { maxAgeMs: 7 * DAY, basis: "retrieved", unknownTimestamp: "exclude", conflicts: "preserve" } as const;

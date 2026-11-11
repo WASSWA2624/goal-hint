@@ -5,7 +5,7 @@ import { AppBrandBar } from "@/components/navigation/app-brand-bar";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { SectionHeader, sectionHeaderMetadata } from "@/components/ui/section-header";
 import { createPredictionWindow, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
-import { resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-query";
+import { matchFeedPageDefaults, resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-query";
 import { feedHeading } from "@/domain/feed-presentation";
 import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
@@ -23,6 +23,7 @@ export function FeedHeader({ query, today, showAccount = false }: {
 }
 
 export const feedSortOptions: readonly FeedSort[] = [
+  matchFeedPageDefaults.sort,
   { by: "probability", direction: "desc" }, { by: "probability", direction: "asc" },
   { by: "kickoff", direction: "asc" }, { by: "kickoff", direction: "desc" },
 ];

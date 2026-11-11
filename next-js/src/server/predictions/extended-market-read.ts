@@ -1,6 +1,6 @@
 import "server-only";
 
-import { publicExtendedMarketSchema, type PublicExtendedMarket, type PublicExtendedMarketSnapshot } from "../../domain/extended-markets.ts";
+import { extendedMarketSourceLabels, publicExtendedMarketSchema, type PublicExtendedMarket, type PublicExtendedMarketSnapshot } from "../../domain/extended-markets.ts";
 import { predictionRuleLabel } from "../../domain/prediction-label.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
@@ -27,7 +27,7 @@ export function publicGoalMarketExtension(extension: StoredGoalMarketExtension,
         recorded.marketKey !== definition.key || recorded.ruleVersion !== market.ruleVersion ||
         recorded.selectedProbability !== market.selectedProbability || recorded.source !== market.source)) return historyFail("invalid-state");
     return [publicExtendedMarketSchema.parse({ key: definition.key, label: definition.label, code: definition.code, period: definition.period,
-      ruleVersion: market.ruleVersion, source: market.source, sourceLabel: "AI score distribution",
+      ruleVersion: market.ruleVersion, source: market.source, sourceLabel: extendedMarketSourceLabels[market.source],
       probabilityBasis: definition.group === "payout" ? "model-positive-payout" : "model-event",
       selection: selected.key, selectionLabel: predictionRuleLabel(selected.rule), selectedProbability: selected.winProbability,
       selections: market.selections.map(({ key, rule, winProbability, outcomes }) => ({ key, label: predictionRuleLabel(rule), probability: winProbability,

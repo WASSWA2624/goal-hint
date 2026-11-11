@@ -4,17 +4,17 @@ import { utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calend
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import type { ApiFootballBounds, ApiFootballResult } from "../football/api-football-contract.ts";
 import type { NormalizedFixtureOdds, NormalizedOddsCatalogEntry } from "../football/api-football-normalize.ts";
-import type { OddsQuery } from "../football/api-football-adapter.ts";
+import type { OddsSweepQuery } from "../football/api-football-adapter.ts";
 import { provenTrue as verified } from "../shared/authority-proof.ts";
 import { oddsFail, type OddsAuthority, type OddsBatchBody, type OddsFixtureOutcome, type OddsImportRequest,
   type OddsImportSummary, type ValidatedOddsObservation } from "./odds-contract.ts";
 import { assertValidatedOdds, authorizeOddsRequest, validateOddsObservation } from "./odds-input.ts";
-import { oddsValuesHash } from "./odds-mysql-store.ts";
+import { fixtureQuoteManifests } from "./odds-mysql-store.ts";
 import type { MysqlOddsStore, OddsFixtureTarget } from "./odds-mysql-store.ts";
 
 /** The odds namespace of the API-Football adapter; it is separate from evidence and fallback. */
 export type OddsProvider = Readonly<{
-  prices(query: OddsQuery, bounds: ApiFootballBounds): Promise<ApiFootballResult<NormalizedFixtureOdds>>;
+  prices(query: OddsSweepQuery, bounds: ApiFootballBounds): Promise<ApiFootballResult<NormalizedFixtureOdds>>;
   bets(bounds: ApiFootballBounds): Promise<ApiFootballResult<NormalizedOddsCatalogEntry>>;
   bookmakers(bounds: ApiFootballBounds): Promise<ApiFootballResult<NormalizedOddsCatalogEntry>>;
 }>;
@@ -54,20 +54,19 @@ export function createOddsImportService(options: Readonly<{
     return options.store.saveBatch({ id: evidenceFingerprint(content), ...content } as OddsBatchBody);
   }
   return Object.freeze({
-    /** One EAT date for the one documented bookmaker. Returns counts only; prices stay in the store. */
+    /** One bounded EAT date sweep. Returns counts only; prices stay in the store. */
     async importDate(input: OddsImportRequest, signal?: AbortSignal): Promise<OddsImportSummary> {
       const request = authorizeOddsRequest(input, options.authority);
       if (request.kind !== "prices" || request.date === null) return oddsFail("invalid-request");
       const bounds = options.bounds(request);
-      const result = await options.adapter.prices({ date: request.date, bookmakerId: request.policy.bookmakerId }, bounds);
+      const result = await options.adapter.prices(request.policy.bookmakerScope === "all"
+        ? { date: request.date, allBookmakers: true } : { date: request.date, bookmakerId: request.policy.bookmakerId }, bounds);
       // Authorization, policy and retention are re-verified after I/O, inside validation.
       const observation = validateOddsObservation(request, result, bounds, options.authority, clock);
       const targets = await options.store.resolveFixtures(observation.rows.map((row) => row.fixtureId));
       const classified = observation.rows.map((row) => ({ row, target: targets.get(row.fixtureId), outcome: classifyOddsRow(row, targets.get(row.fixtureId)) }));
       const batch = await receipt(observation, classified.map(({ row, outcome }) => ({ externalId: row.fixtureId, outcome,
-        observationHash: evidenceFingerprint(row), quoteManifest: { bookmakerId: request.policy.bookmakerId, kickoffAt: row.kickoff,
-          bets: (row.bookmakers.find((bookmaker) => bookmaker.id === request.policy.bookmakerId)?.bets ?? [])
-            .map((bet) => ({ betId: bet.id, betName: bet.name, valuesHash: oddsValuesHash(bet.values) })) } })));
+        observationHash: evidenceFingerprint(row), ...fixtureQuoteManifests(row, request.policy.bookmakerId) })));
       const outcomes = emptyOutcomes();
       for (const { outcome } of classified) outcomes[outcome]++;
       const publicDisplay = verified(() => options.authority.verifyPublicDisplay());

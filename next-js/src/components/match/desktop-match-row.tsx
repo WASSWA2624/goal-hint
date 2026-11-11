@@ -1,24 +1,23 @@
 "use client";
 
 import { useId, type ReactNode } from "react";
-import Image from "next/image";
 import Link from "@/components/navigation/navigation-link";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { toUtcIsoString, type UtcInstant } from "@/domain/calendar";
 import { countryDisplayName } from "@/domain/country-code";
-import { countryFlagAsset } from "@/domain/country-flag";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import { isPlayedFinalStatus } from "@/domain/market-settlement";
 import type { MarketFamily } from "@/domain/markets";
 import { createMessages, type Messages } from "@/i18n/messages";
 import type { OutcomeTone } from "@/styles/theme";
 import { TeamLogo } from "./team-logo";
+import { CompetitionCountryFlag, CompetitionLogo } from "./competition-media";
 import { TruncatedText } from "./truncated-text";
 import { MatchStatus } from "./match-status";
 import { MatchClockText, ScoreFigures, Scoreline } from "./score-presentation";
 
 type RowTeam = Readonly<Pick<FixtureSnapshot["homeTeam"], "name" | "logoUrl">>;
-type RowCompetition = Readonly<Pick<FixtureSnapshot["competition"], "name" | "country" | "logoUrl">>;
+type RowCompetition = Readonly<Pick<FixtureSnapshot["competition"], "name" | "country" | "logoUrl" | "countryFlagUrl">>;
 
 export type DesktopMatchRowProps = Readonly<{
   fixtureId: string; locale: string; kickoffAt: UtcInstant | null;
@@ -56,7 +55,6 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
   const home = homeTeam.name?.trim() || m.text("match.homeUnknown"), away = awayTeam.name?.trim() || m.text("match.awayUnknown");
   const title = `${home} ${m.text("match.versus")} ${away}`;
   const league = competition.name?.trim() || m.text("match.competitionUnknown"), country = countryDisplayName(competition.country) || "—";
-  const flag = offline ? null : countryFlagAsset(competition.country);
   const detailsHref = offline ? undefined : analysisHref;
   const iso = kickoffAt === null ? undefined : toUtcIsoString(kickoffAt);
   const scoreDescription = suppliedScoreDescription ?? (score ? m.text("match.scoreline", {
@@ -86,8 +84,8 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
       : <time data-row-date id={`${id}-date`} dateTime={iso} title={kickoffTitle}>{m.shortKickoffDate(kickoffAt)}</time>}
     {kickoffAt === null ? <span data-row-time id={`${id}-time`} hidden>—</span>
       : <time data-row-time id={`${id}-time`} dateTime={iso}>{m.reportingTime(kickoffAt)} {m.timeZone(kickoffAt)}</time>}
-    <span data-row-country id={`${id}-country`}>{flag && <Image data-country-flag src={flag} alt="" width={18} height={12} loading="lazy" unoptimized />}<TruncatedText interactive={interactive} text={country} href={detailsHref} /></span>
-    <span data-row-league id={`${id}-league`}><TeamLogo name={league} url={offline ? undefined : competition.logoUrl ?? undefined} eager={eagerLogos} size={14} /><TruncatedText interactive={interactive} text={league} href={detailsHref} /></span>
+    <span data-row-country id={`${id}-country`}><CompetitionCountryFlag country={competition.country} url={competition.countryFlagUrl} offline={offline} /><TruncatedText interactive={interactive} text={country} href={detailsHref} /></span>
+    <span data-row-league id={`${id}-league`}><CompetitionLogo country={competition.country} url={offline ? undefined : competition.logoUrl} eager={eagerLogos} size={14} /><TruncatedText interactive={interactive} text={league} href={detailsHref} /></span>
     <Heading data-row-teams id={`${id}-teams`} aria-label={titleNote ? `${title}, ${titleNote}` : title}>
       {position !== undefined && <VisuallyHidden data-row-number>{m.number(position)}. </VisuallyHidden>}
       <span data-home><TruncatedText interactive={interactive} text={home} href={detailsHref} /><TeamLogo name={home} url={offline ? undefined : homeTeam.logoUrl ?? undefined} eager={eagerLogos} size={14} /></span>

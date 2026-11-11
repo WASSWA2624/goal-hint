@@ -19,13 +19,16 @@ export function canonicalUrl(path: string): string {
 
 export function feedDiscovery(query: FeedQuery, today: ReportingDate) {
   const range = resolveFeedDates(query, today);
-  const filtered = Boolean(query.zone) || activeFeedFilterCount(query) > 0 || query.sort.by !== "kickoff" || query.sort.direction !== defaultSortDirection.kickoff ||
+  const defaultOrder = query.sort.direction === defaultSortDirection.kickoff
+    && (query.sort.by === "kickoff" || query.dates.kind === "today" && query.sort.by === "live-first");
+  const filtered = Boolean(query.zone) || activeFeedFilterCount(query) > 0 || !defaultOrder ||
     query.pageSize !== feedQueryRules.pageSize || range.dayCount !== 1 && query.dates.kind !== defaultFeedDatePreset;
   // The rolling default collection keeps its own pagination: pinning its 30-day
   // range would point an indexable page at a deliberately noindex multiday archive.
   // Single-day aliases still pin to a dated collection.
   const home = query.dates.kind === defaultFeedDatePreset && query.page === 1;
-  const canonicalQuery: FeedQuery = filtered || query.dates.kind === defaultFeedDatePreset ? query : { ...query, dates: pinnedDateSelection(range) };
+  const canonicalQuery: FeedQuery = filtered || query.dates.kind === defaultFeedDatePreset ? query
+    : { ...query, dates: pinnedDateSelection(range), sort: { by: "kickoff", direction: defaultSortDirection.kickoff } };
   return { path: feedQueryHref(canonicalQuery, today), eligible: !filtered, home, range };
 }
 

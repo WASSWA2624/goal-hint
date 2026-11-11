@@ -12,11 +12,11 @@ import type { createMessages } from "../i18n/messages.ts";
  * The shown pick mirrors feed SQL: highest unrounded probability, then exact fresh public odds,
  * then policy order. Ordering and filters therefore refer to the pick the card actually shows.
  */
-export function bestCardFamily(fixture: Pick<FixtureSnapshot, "forecast" | "prices">, markets: readonly MarketFamily[]): MarketFamily | null {
+export function bestCardFamily(fixture: Pick<FixtureSnapshot, "forecast" | "prices">, markets: readonly MarketFamily[], preferRecommendation = true): MarketFamily | null {
   if (fixture.forecast && "gated" in fixture.forecast) return fixture.forecast.families.find((family) => markets.includes(family)) ?? null;
-  const authoritative = recommendationFamily(fixture.forecast?.recommendation, markets);
+  const authoritative = preferRecommendation ? recommendationFamily(fixture.forecast?.recommendation, markets) : undefined;
   if (authoritative !== undefined) return authoritative;
-  return bestPublishedFamily(fixture.forecast?.markets, fixture.forecast?.recommendation ? [] : fixture.prices ?? [], markets);
+  return bestPublishedFamily(fixture.forecast?.markets, fixture.prices ?? [], markets);
 }
 
 export type NoPickReason = "market" | "outside" | "updating" | "unselected" | "closed" | "failed" | "awaiting";

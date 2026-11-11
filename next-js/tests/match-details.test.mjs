@@ -212,6 +212,23 @@ test('detail odds match the current or locked publication and exact selection wi
   assert.equal(selectedDetailPrice(detail([]), 'match-result'), null);
 });
 
+test('live detail shows only an available in-play quote for the exact published selection', () => {
+  const item = market('total-goals', 'over-2.5', { 'over-2.5': 0.7, 'under-2.5': 0.3 });
+  const data = detail([item]);
+  data.fixture.status = 'live';
+  data.fixture.cycleId = 'c';
+  data.fixture.forecast = { revisionId: 'r', markets: [item] };
+  data.fixture.prices = [{ family: 'total-goals', selection: 'over-2.5', price: '1.85' }];
+  data.snapshot.applicability = 'locked';
+  assert.equal(selectedDetailPrice(data, 'total-goals'), null, 'no closing quote is shown as live');
+  data.inPlayOdds = { prices: { state: 'available', markets: [{ family: 'total-goals', selections: [
+    { selection: 'over-2.5', price: '2.1' }, { selection: 'under-2.5', price: '1.7' },
+  ] }] } };
+  assert.equal(selectedDetailPrice(data, 'total-goals'), '2.10');
+  data.inPlayOdds = { prices: { state: 'suspended', markets: [] } };
+  assert.equal(selectedDetailPrice(data, 'total-goals'), null);
+});
+
 test('market categories and search reach every supported family; unsupported categories are honestly empty', () => {
   const label = (family) => ({ 'match-result': 'Match result 1X2', 'double-chance': 'Double chance DC', 'total-goals': 'Over/Under 2.5 O/U 2.5',
     'both-teams-to-score': 'Both teams to score BTTS' })[family];

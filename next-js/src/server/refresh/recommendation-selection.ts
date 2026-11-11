@@ -74,9 +74,10 @@ export function selectRecommendation(input: Readonly<{
     return best;
   }
   const ai = pool(input.candidate, "ai");
+  const local = pool(input.candidate, "local-engine");
   const baselineCandidate = input.baseline ?? input.candidate;
   const baseline = pool(baselineCandidate, "api-football");
-  const selected = ai ?? baseline;
+  const selected = ai ?? local ?? baseline;
   const fallbackReason = ai !== null ? null : input.candidate.audit.aiReason ?? "ai-no-qualified-recommendation";
   const support = selected && decisions.find((entry) => entry.eligible && entry.source === selected.source &&
     entry.family === selected.family && entry.selection === selected.selection)?.evidence;
@@ -90,7 +91,7 @@ export function selectRecommendation(input: Readonly<{
     analysisAt: context.analysisAt, evidenceSnapshotId: input.evidenceSnapshotId ?? input.snapshot.id, evidenceHash: input.snapshot.hash,
     status: selected === null ? "no-qualified-recommendation" : "selected", selected, decisions, fallbackReason,
     explanation: selected === null ? "No selection met the minimum probability, football evidence and permitted fresh quote requirements."
-      : `${selected.source === "ai" ? "AI" : "API-Football baseline"} ${selected.family} ${selected.selection}: estimated winning probability ${selected.probability}; highest eligible decimal odds ${selected.quote.decimal}.${historyExplanation}${supportExplanation} Historical evidence passed the versioned eligibility rules. Availability and news may be incomplete; no outcome is guaranteed.` });
-  const candidate = ai !== null ? input.candidate : baselineCandidate;
+      : `${selected.source === "ai" ? "AI" : selected.source === "local-engine" ? "Local Engine" : "API-Football baseline"} ${selected.family} ${selected.selection}: estimated winning probability ${selected.probability}; highest eligible decimal odds ${selected.quote.decimal}.${historyExplanation}${supportExplanation} Historical evidence passed the versioned eligibility rules. Availability and news may be incomplete; no outcome is guaranteed.` });
+  const candidate = ai !== null || local !== null ? input.candidate : baselineCandidate;
   return freezeEvidence({ candidate: { ...candidate, audit: { ...candidate.audit, recommendation: decision } }, decision });
 }

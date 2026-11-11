@@ -6,7 +6,12 @@ import { gateDetailResponse, gateFixture } from "../src/domain/paywall.ts";
 import { matchDetailResponseSchema } from "../src/domain/match-detail.ts";
 import { canonicalMatchSlug } from "../src/domain/match-slug.ts";
 import { cardFixture } from "./helpers/match-card-fixtures.mjs";
+import { liveDetail } from "./helpers/live-refresh-fixtures.mjs";
 import { scenarios } from "./helpers/paywall-fixtures.mjs";
+import { liveGoalMarketDefinitions } from "../src/domain/goal-market-definitions.ts";
+import { exactTotal15Odds } from "../src/server/odds/odds-mysql-store.ts";
+import { publicGoalMarketExtension } from "../src/server/predictions/extended-market-read.ts";
+import { prepareGoalMarketExtension } from "../src/server/predictions/goal-market-store.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const anonymous = { tier: "free", signedIn: false }, member = { tier: "free", signedIn: true }, full = { tier: "full", signedIn: true };
@@ -155,13 +160,48 @@ test("published probabilities are visible without promoting them to a recommende
     { fixture: detail.fixture, analysisSlug: slug },
     { fixture: gateFixture(stored.fixture, anonymous), gated: true, analysisSlug: slug },
   ], details: [detail] });
-  assert.match(subscriber, /Forecast available/u);
-  assert.match(subscriber, /No recommended pick/u);
-  assert.doesNotMatch(subscriber, /data-pick-selection=/u);
+  assert.match(subscriber, /data-forecast-source=/u);
+  assert.doesNotMatch(subscriber, /No recommended pick/u);
+  assert.match(subscriber, /data-pick-selection=/u);
+  assert.match(subscriber, /data-probability-meter=/u);
   assert.equal(pickState(guest), "subscriber");
   assert.doesNotMatch(guest, /No recommended pick/u);
-  assert.match(rendered.verdict, /Forecast available/u);
+  assert.doesNotMatch(rendered.verdict, /No recommended pick/u);
+  assert.doesNotMatch(rendered.verdict, /data-featured-pick="none"/u);
   assert.match(rendered.markets, /[1-4] of 4 published/u);
+});
+
+test("an unpublished fixture card omits bookmaker odds and predictions", () => {
+  const fixture = structuredClone(scenarios.scheduled.detail.fixture);
+  fixture.status = "live";
+  fixture.forecast = null;
+  fixture.prices = [];
+  fixture.marketOdds = { kind: "in-play", checkedAt: fixture.kickoffAt + 60_000,
+    prices: { state: "available", markets: [{ family: "match-result", selections: [
+      { selection: "home-win", price: "2.15" }, { selection: "draw", price: "3.25" }, { selection: "away-win", price: "4.1" },
+    ] }] } };
+  const { cards: [subscriber, guest] } = render({ cards: [
+    { fixture, analysisSlug: slug },
+    { fixture: gateFixture(fixture, anonymous), gated: true, analysisSlug: slug },
+  ] });
+  assert.doesNotMatch(subscriber, /data-standalone-market|2\.15|4\.10/u);
+  assert.doesNotMatch(subscriber, /data-pick-selection|data-probability-meter/u);
+  assert.doesNotMatch(guest, /data-standalone-market|2\.15/u);
+});
+
+test("the existing market list renders Over 1.5 with its source and positive exact-price value", () => {
+  const detail = liveDetail();
+  const { fixtureId } = detail.fixture, { revisionId, cycleId, publishedAt } = detail.snapshot;
+  const prepared = prepareGoalMarketExtension({ localPoisson: { home: 1.6, away: 1 }, definitions: liveGoalMarketDefinitions });
+  const markets = publicGoalMarketExtension({ ...prepared, fixtureId, revisionId, cycleId, recordedAt: publishedAt });
+  const extendedMarkets = { version: 1, fixtureId, revisionId, cycleId, publishedAt, mode: "current", markets };
+  const extendedOdds = exactTotal15Odds([{ label: "Over 1.5", odd: "1.5" }, { label: "Under 1.5", odd: "3" }], detail.asOf);
+  const validated = matchDetailResponseSchema.parse({ ...detail, extendedMarkets, extendedOdds });
+  const html = render({ details: [validated] }).details[0].markets;
+  assert.match(html, /data-extended-market="goal:full-time:totals:total:1\.5:binary"/u);
+  assert.match(html, /Over 1\.5/u);
+  assert.match(html, /data-forecast-source="local-engine"[^>]*>Local Engine/u);
+  assert.equal([...html.matchAll(/data-positive-value=/gu)].length, 1);
 });
 
 test("the match page locks the verdict, markets and analysis only over a published forecast", () => {
@@ -181,7 +221,7 @@ test("the match page locks the verdict, markets and analysis only over a publish
   }
   assert.match(guest.verdict, /data-featured-pick="none"/u);
   assert.match(guest.verdict, /No prediction published/u);
-  assert.match(guest.verdict, /Awaiting prediction/u);
+  assert.doesNotMatch(guest.verdict, /Awaiting prediction|Prediction failed/u);
   assert.match(guest.markets, /data-section="markets"/u);
   assert.match(guest.markets, /0 of 4 published/u);
   assert.match(guest.analysis, /No prediction analysis is available for this cycle\./u);

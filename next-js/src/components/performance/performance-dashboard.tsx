@@ -163,6 +163,7 @@ export function PerformanceDashboard({ locale, filters, report, history, reportP
         </SelectInput>
         <SelectInput label={m.text("performance.source")} name="source" defaultValue={filters.source}>
           <option value="combined">{m.text("performance.combined")}</option><option value="ai">{m.text("performance.ai")}</option>
+          <option value="local-engine">{m.text("market.source.short.local-engine")}</option>
           <option value="api-football">{m.text("performance.provider")}</option>
         </SelectInput>
         <Button type="submit">{m.text("performance.apply")}</Button>

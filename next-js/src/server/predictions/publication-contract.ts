@@ -21,7 +21,7 @@ export type PublicationFreshness = Readonly<{
 }>;
 export type PublicationPolicy = Readonly<{
   version: 1; evidenceRef: string; maxObservationAgeMs: number;
-  sources: Readonly<{ ai: PublicationFreshness; "api-football": PublicationFreshness }>;
+  sources: Readonly<{ ai: PublicationFreshness; "api-football": PublicationFreshness; "local-engine"?: PublicationFreshness | undefined }>;
 }>;
 /** Original provider observation, never the time a cache entry was read. */
 export type PublicationObservation = Readonly<{

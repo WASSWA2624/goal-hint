@@ -91,7 +91,6 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
     <MatchResults data-feed-match-results>
       <ResultsToolbar query={query} today={today} total={data.total} first={first}
         last={first + records.length - 1} publishedAt={latestPredictionPublication(records)} />
-      {/* Fixtures without the selected market still list; each row states why it has no pick. */}
       {data.state !== "ready" && data.state !== "insufficient-data" && <EmptyState title={messages.text(`feed.state.${data.state}`)} description={data.message} />}
       {/* Logos stay lazy: an eager image would be hoisted as a third-party preload ahead of the page's own assets. */}
       {records.length > 0 && <MatchCardList aria-label={messages.text("feed.matchList")} locale={query.locale} rowNumberMaximum={first + records.length - 1}>
@@ -101,7 +100,7 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
             note={data.search?.exact === 0 ? messages.text("feed.search.noExact", { query: query.search }) : null} />}
           <li>
             <MatchCard fixture={fixture} gated={data.access.tier === "free"} signedIn={data.access.signedIn} analysisSlug={canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name)}
-              markets={query.markets} locale={query.locale} position={first + index} startingPriceUgx={startingPriceUgx}
+              markets={query.markets} publishedMarket={query.picks !== "only"} locale={query.locale} position={first + index} startingPriceUgx={startingPriceUgx}
               titleNote={similarFrom !== null && first + index >= similarFrom ? messages.text("feed.search.similarItem") : undefined} />
           </li>
         </Fragment>)}

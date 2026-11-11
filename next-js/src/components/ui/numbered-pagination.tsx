@@ -290,7 +290,7 @@ export function NumberedPagination({ page, pages, labels, compact = false, class
   const spacer = (amount: number, key: string) => amount > 0 ? <li key={key} role="presentation" aria-hidden="true" data-pagination-spacer
     style={{ flexBasis: `calc(var(--pagination-step) * ${amount} - var(--pagination-gap))` }} /> : null;
   return <Frame $compact={compact} className={className} aria-label={labels.navigation} data-numbered-pagination data-page-count={count}
-    data-current-page={current} aria-busy={disabled || undefined} style={{ "--pagination-digits": String(count).length } as CSSProperties}>
+    data-current-page={current} style={{ "--pagination-digits": String(count).length } as CSSProperties}>
     <EndControl target={1} current={current} label={labels.first} icon={<FirstPageIcon />} href={href} onPage={onPage} disabled={disabled} />
     <ScrollButton type="button" onClick={(event) => clickScroll(-1, event.detail)} disabled={!bounds.backward} aria-label={labels.backward} title={labels.backward}
       onPointerDown={(event) => startHold(event, -1)} onPointerUp={endHold} onPointerCancel={endHold} onLostPointerCapture={endHold}

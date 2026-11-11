@@ -98,6 +98,11 @@ test('SQL filters matching fixtures before pagination and ranks exact, then wide
   assert.throws(() => feedSql(query, range, [39], false, { ...search, query: 'other' }), unavailable);
   const ordinary = feedSql(parseFeedQuery({ date: '2026-10-09' }, { today: '2026-10-09' }), range, [39]);
   assert.equal(ordinary.order.sql, 'f.kickoff DESC, f.id DESC');
+  const liveFirst = feedSql(parseFeedQuery({ date: '2026-10-09', sort: 'live-first' }, { today: '2026-10-09' }), range, [39]);
+  assert.equal(liveFirst.order.sql, "(f.status='live') DESC, f.kickoff DESC, f.id DESC");
+  assert.equal(liveFirst.pageJoins, liveFirst.cohortJoins);
+  const scheduled = feedSql(parseFeedQuery({ date: '2026-10-09', sort: 'live-first', status: 'scheduled' }, { today: '2026-10-09' }), range, [39]);
+  assert.equal(scheduled.order.sql, ordinary.order.sql);
   const earliest = feedSql({ ...query, search: '', sort: { by: 'kickoff', direction: 'asc' } }, range, [39]);
   assert.equal(earliest.order.sql, 'f.kickoff ASC, f.id ASC');
 });

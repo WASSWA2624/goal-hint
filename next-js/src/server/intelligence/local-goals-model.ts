@@ -63,7 +63,7 @@ export function estimateLocalGoals(input: LocalGoalInput): LocalGoalForecast {
     !Array.isArray(input.history) || input.history.length > 100_000) throw new Error("Invalid local model input.");
   const cutoffAt = Math.min(fixture.forecastAt, fixture.kickoffAt - lockMs), seen = new Set<string>();
   for (const row of input.history) {
-    if (![row.fixtureId, row.cycleId, row.competitionId, row.homeTeamId, row.awayTeamId, row.evidenceRef].every(validId) ||
+    if (![row.fixtureId, row.competitionId, row.homeTeamId, row.awayTeamId, row.evidenceRef].every(validId) ||
       row.homeTeamId === row.awayTeamId || !instant(row.kickoffAt) || !instant(row.availableAt) || row.availableAt < row.kickoffAt ||
       ![row.homeGoals, row.awayGoals].every((value) => Number.isInteger(value) && value >= 0 && value <= 100) ||
       row.period !== marketRules.period || !/^[a-f0-9]{64}$/u.test(row.observationHash) || seen.has(row.fixtureId)) throw new Error("Invalid or duplicate result evidence.");

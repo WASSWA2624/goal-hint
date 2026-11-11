@@ -32,10 +32,11 @@ const plans = [{ id: 'active', active: true }, { id: 'inactive', active: false }
 const payment = { acceptedTerms: true, status: null, credit: null };
 const props = { locale: 'en', searchParams: Promise.resolve({}) };
 const nodes = element => !element || typeof element !== 'object' ? [] : [element, ...[element.props?.children].flat().flatMap(nodes)];
-function route({ identity = member, mode = 'test', status = async () => subscription, offers = async () => plans, view = async () => payment } = {}) {
+function route({ identity = member, mode = 'test', status = async () => subscription, offers = async () => plans, view = async () => payment, checkout } = {}) {
   return createSubscribeRoute({ plans: offers, services: async () => ({ config: { production: false },
     settings: { settings: { paywallMode: mode } }, sessions: { verify: async () => identity },
     codes: { subscriptionStatus: status }, payments: { view },
+    ...(checkout ? { checkout: { read: checkout } } : {}),
   }) });
 }
 
@@ -52,6 +53,20 @@ test('subscription, plans and payment reads start together after verified identi
   assert.deepEqual(flow.props.plans, [plans[0]]);
   assert.deepEqual(flow.props.view, payment);
   assert.equal(flow.props.account.id, member.accountId);
+});
+
+test('wallet top-ups open checkout independently of subscription packages and link back to Wallet', async () => {
+  const checkout = { availableWalletUgx: 0, availableReferralDays: 0, lastMethod: null, requests: [] };
+  const topUpProps = { locale: 'en', searchParams: Promise.resolve({ add: 'credit', return: '/en/matches' }) };
+  const tree = nodes(await route({ checkout: async () => checkout, offers: async () => assert.fail('Top-ups do not need packages') })(topUpProps));
+  const flow = tree.find(node => node.type?.name === 'SubscribeFlow');
+  assert.equal(flow.props.startWithTopUp, true);
+  assert.deepEqual(flow.props.plans, []);
+  assert.deepEqual(flow.props.view, { ...payment, checkout });
+  assert.ok(tree.some(node => node.type?.name === 'ButtonLink' && node.props.href === '/en/account?section=wallet&return=%2Fen%2Fmatches'));
+
+  const legacy = nodes(await route()(topUpProps)).find(node => node.type?.name === 'SubscribeFlow');
+  assert.deepEqual(legacy.props.plans, [plans[0]]);
 });
 
 test('subscription reads retain signed-out, blocked, closed and administrator guards', async () => {

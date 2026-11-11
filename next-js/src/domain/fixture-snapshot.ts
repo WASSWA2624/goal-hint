@@ -6,6 +6,7 @@ import { publicPolicy } from "./public-policy.ts";
 import { isSafeRemoteImageUrl } from "./remote-image.ts";
 import { teamCodePattern } from "./team-name.ts";
 import { publicRecommendationSchema } from "./recommendation-view.ts";
+import { marketOddsObservationSchema } from "./in-play-odds.ts";
 
 import { parseFixtureVersion } from "./fixture-version.ts";
 export { maximumFixtureVersion, parseFixtureVersion, compareFixtureVersions } from "./fixture-version.ts";
@@ -162,6 +163,7 @@ const fixtureSnapshotBaseSchema = z.strictObject({
   scorePeriod: z.enum(["regulation", "live"]).nullable().optional(),
   liveClock: liveClockSchema.nullable().optional(),
   prices: z.array(fixturePriceSchema).max(4).optional(),
+  marketOdds: marketOddsObservationSchema.nullable().optional(),
 });
 export const publishedFamiliesSchema = z.array(marketFamilySchema).max(4).refine((families) => families.join() === publicPolicy.markets.filter((family) => families.includes(family)).join(), "Families must be unique and in policy order.");
 /** Public chance only: neither a selection nor the complete group from which it could be reconstructed. */
@@ -183,6 +185,9 @@ function refineFixture(value: z.infer<typeof wireFixtureBaseSchema>, context: z.
     }
   }
   if (value.liveClock && value.status !== "live") context.addIssue({ code: "custom", message: "A live clock requires a live fixture." });
+  if (value.marketOdds && value.status !== (value.marketOdds.kind === "in-play" ? "live" : "scheduled")) {
+    context.addIssue({ code: "custom", message: "Current odds must match the fixture phase." });
+  }
   if (value.forecast !== null && value.cycleId === null) context.addIssue({ code: "custom", message: "A revision must belong to a cycle." });
   if (forecast?.markets.some((item) => item.outcome && item.outcome.cycleId !== value.cycleId)) {
     context.addIssue({ code: "custom", message: "Outcome must refer to this fixture cycle." });

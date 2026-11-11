@@ -36,8 +36,8 @@ export function publicationEligibility(input: Readonly<{
   if (input.status !== "scheduled" || observation.status !== "scheduled") return "status-ineligible";
   return null;
 }
-export function publicationSourceIsFresh(timestamps: ForecastTimestamps, policy: PublicationFreshness, now: UtcInstant): boolean {
-  if (timestamps.retrievedAt > now || timestamps.generatedAt === null && policy.unknownGeneration === "reject" ||
+export function publicationSourceIsFresh(timestamps: ForecastTimestamps, policy: PublicationFreshness | undefined, now: UtcInstant): boolean {
+  if (!policy || timestamps.retrievedAt > now || timestamps.generatedAt === null && policy.unknownGeneration === "reject" ||
     timestamps.providerUpdatedAt === null && policy.unknownUpdate === "reject") return false;
   const at = policy.basis === "generated" ? timestamps.generatedAt : policy.basis === "provider-updated" ? timestamps.providerUpdatedAt : timestamps.retrievedAt;
   const basis = at ?? timestamps.retrievedAt;

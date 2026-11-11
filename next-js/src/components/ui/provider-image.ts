@@ -1,6 +1,7 @@
 import { isOptimizableProviderLogo } from "../../domain/provider-logo.ts";
 import { isLocalCountryFlagAsset } from "../../domain/country-flag.ts";
 import { isSafeRemoteImageUrl } from "../../domain/remote-image.ts";
+import { isLocalFootballDevelopment } from "../../domain/development-demo.ts";
 
 /** First-party retina crests and bundled flags; other approved images stay direct. */
 export function providerImageSource(source: string, size: number): string {
@@ -12,6 +13,8 @@ export function providerImageSource(source: string, size: number): string {
     if (flag && isLocalCountryFlagAsset(flag)) return flag;
   }
   if (!isOptimizableProviderLogo(source)) return source;
+  // Keep thumbnail downloads and decoding off the loopback development server.
+  if (isLocalFootballDevelopment()) return source;
   const [, kind, id] = new URL(source).pathname.match(/\/football\/(teams|leagues)\/(\d+)\.png$/u)!;
   const width = [32, 48, 64, 96, 128].find(value => value >= size * 2) ?? 128;
   return `/badges/${kind}/${id}/${width}.webp`;

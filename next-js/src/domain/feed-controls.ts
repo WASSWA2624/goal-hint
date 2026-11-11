@@ -1,5 +1,5 @@
 import type { ReportingDate } from "./calendar.ts";
-import { anyProbability, defaultFeedDatePreset, defaultMarkets, defaultPagePicks, matchFeedPageDefaults, parseFeedQuery, parseProbabilityValue, resolveFeedDates, serializeFeedQuery, validProbabilityRange,
+import { anyProbability, defaultFeedDatePreset, defaultMarkets, matchFeedPageDefaults, parseFeedQuery, parseProbabilityValue, resolveFeedDates, serializeFeedQuery, validProbabilityRange,
   type DateSelection, type FeedDatePreset, type FeedQuery, type FeedStatus, type ProbabilityRange } from "./feed-query.ts";
 
 const upcomingPeriods: Partial<Record<FeedDatePreset, FeedDatePreset>> = {
@@ -77,11 +77,10 @@ export function resetFeedFilterSection(draft: FeedQuery, section: FeedFilterSect
 }
 
 /** Restore every page filter and fifty-item limit, retaining the browsing zone. */
-export function resetFeedFilters(query: FeedQuery, subscriberOnly = false): FeedQuery {
+export function resetFeedFilters(query: FeedQuery): FeedQuery {
   const reset = { ...query };
   delete reset.time; delete reset.result; delete reset.summary;
   delete reset.interval;
   return { ...reset, ...matchFeedPageDefaults, status: "all", search: "", leagues: [], countries: [], markets: [...defaultMarkets], probability: anyProbability, odds: null,
-    picks: defaultPagePicks("all", subscriberOnly, matchFeedPageDefaults.dates),
     page: 1 };
 }

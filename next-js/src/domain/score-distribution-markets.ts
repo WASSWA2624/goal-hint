@@ -46,6 +46,7 @@ export const goalMarketDefinitionSchema = z.strictObject({
   }
 });
 export type GoalMarketDefinition = Readonly<z.infer<typeof goalMarketDefinitionSchema>>;
+export const localPoissonRatesSchema = z.strictObject({ home: z.number().finite().min(0.05).max(6), away: z.number().finite().min(0.05).max(6) });
 export type GoalGrade = ExtendedMarketGrade;
 const grades: readonly GoalGrade[] = ["win", "half-win", "push", "half-loss", "loss"];
 export type GoalSelectionProbabilities = Readonly<{
@@ -53,13 +54,28 @@ export type GoalSelectionProbabilities = Readonly<{
   outcomes: Readonly<Record<GoalGrade, number>>;
 }>;
 export type DerivedGoalMarket = Readonly<{
-  ruleVersion: typeof GOAL_MARKET_RULE_VERSION; source: "ai-score-distribution";
+  ruleVersion: typeof GOAL_MARKET_RULE_VERSION; source: "ai-score-distribution" | "local-poisson";
   definition: GoalMarketDefinition; selections: readonly GoalSelectionProbabilities[];
   selection: string; selectedProbability: number;
 }>;
 export type GoalDerivationResult = Readonly<{ available: true; market: DerivedGoalMarket }> |
   Readonly<{ available: false; reason: "invalid-definition" | "invalid-distribution" | "unrepresented-score-mass" |
     "missing-half-time-distribution" | "incomplete-partition" }>;
+
+/** The sum of the local model's independent regulation goal counts is Poisson.
+ * Compute P(0)+P(1) exactly for this reviewed market, including the full tail. */
+export function deriveLocalPoissonTotal15(rates: z.infer<typeof localPoissonRatesSchema>, definition: GoalMarketDefinition): DerivedGoalMarket {
+  const total = rates.home + rates.away, under = Math.exp(-total) * (1 + total);
+  const selections = definition.selections.map((selection, index) => {
+    const winProbability = index === 0 ? 1 - under : under;
+    return Object.freeze({ ...selection, winProbability, outcomes: Object.freeze({
+      win: winProbability, loss: 1 - winProbability, "half-win": 0, "half-loss": 0, push: 0,
+    }) });
+  });
+  const selected = selections.reduce((best, item) => item.winProbability > best.winProbability ? item : best);
+  return Object.freeze({ ruleVersion: GOAL_MARKET_RULE_VERSION, source: "local-poisson", definition,
+    selections: Object.freeze(selections), selection: selected.key, selectedProbability: selected.winProbability });
+}
 
 function score(state: ScoreState, period: GoalMarketPeriod): Readonly<{ home: number; away: number }> | null {
   if (period === "full-time") return state;

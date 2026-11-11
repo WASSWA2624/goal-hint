@@ -82,7 +82,10 @@ export function refreshMemberSession(): Promise<void> {
         session.phone !== null && typeof session.phone !== "string") return;
       if (session.phone === null || phone !== null && phone !== session.phone) clearProtectedDrafts();
       const nextAdministrator = "administrator" in session && session.administrator === true;
-      const nextSubscription = readSubscription("subscription" in session ? session.subscription : null);
+      const rawSubscription = "subscription" in session ? session.subscription : undefined;
+      // Null is a storage failure for an otherwise verified account. Expiry still runs from the known deadline.
+      const nextSubscription = rawSubscription === null && session.phone !== null && phone === session.phone
+        && administrator === nextAdministrator ? subscription : readSubscription(rawSubscription);
       confirmedAt = Date.now();
       if (phone === session.phone && administrator === nextAdministrator
         && subscription?.activeUntil === nextSubscription?.activeUntil
@@ -103,6 +106,14 @@ export function refreshMemberSession(): Promise<void> {
   return pending;
 }
 
+/** Reuse the confirmed display on route mounts. Focus, expiry and explicit actions still revalidate. */
+export function ensureMemberSession(): Promise<void> {
+  const now = Date.now();
+  if (confirmedAt === null || now < confirmedAt || now - confirmedAt >= navigationReuseMs
+    || subscription?.activeUntil && Date.parse(subscription.activeUntil) <= now) return refreshMemberSession();
+  return pending ?? Promise.resolve();
+}
+
 const recheckSession = () => { void refreshMemberSession(); };
 const onRestore = (event: PageTransitionEvent) => { if (event.persisted) recheckSession(); };
 const onVisible = () => { if (document.visibilityState === "visible") recheckSession(); };
@@ -114,11 +125,8 @@ export function subscribeMemberSession(listener: () => void): () => void {
     browser.addEventListener("focus", recheckSession);
     browser.addEventListener("pageshow", onRestore);
     if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVisible);
-    // Route shells remount during navigation. Reuse only a recent confirmed header
-    // display; explicit refresh, focus, restoration and server authorization stay fresh.
-    if (confirmedAt === null || Date.now() < confirmedAt || Date.now() - confirmedAt >= navigationReuseMs
-      || subscription?.activeUntil && Date.parse(subscription.activeUntil) <= Date.now()) recheckSession();
-    else scheduleRefresh();
+    void ensureMemberSession();
+    scheduleRefresh();
   }
   return () => {
     if (!listeners.delete(listener) || listeners.size) return;

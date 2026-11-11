@@ -62,8 +62,8 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
   for(const table of ['DailySlipPublication','PublishedSlip','PublishedSlipLeg','SharedSlip']) await assert.rejects(root.query(`DELETE FROM ${table}`),/append-only|permanent/);
   const kickoffAt=Date.parse(`${day}T20:59:00Z`);
   if(kickoffAt-at<600000){t.diagnostic('Cleanup and legacy checks passed; live publication skipped at the EAT day cutoff.');return;}
-  const current={...slip,estimatedProbability:0.7,selections:slip.selections.map(selection=>({...selection,kickoffAt,forecast:{...selection.forecast,publishedAt:at-1000}}))};
-  const input={day,slips:[current],searchLimited:false,partialCoverage:false,model:{...model,estimate:()=>0.7},verifyModel:()=>true,verifyPublicOdds:()=>true};
+  const current={...slip,averageProbability:0.75,estimatedProbability:0.75,selections:slip.selections.map(selection=>({...selection,probability:0.75,kickoffAt,forecast:{...selection.forecast,publishedAt:at-1000}}))};
+  const input={day,slips:[current],searchLimited:false,partialCoverage:false,model:{...model,estimate:()=>0.75},verifyModel:()=>true,verifyPublicOdds:()=>true};
   const upper = { ...current, totalOdds: '150.00', selections: current.selections.map(selection => ({ ...selection, odds: '150.00' })) };
   assert.deepEqual((await Promise.all([store.publish({ ...input, slips: [upper], oddsBand: '100-200' }),
     store.publish({ ...input, slips: [upper], oddsBand: '100-200' })])).sort(), ['already-published', 'published']);

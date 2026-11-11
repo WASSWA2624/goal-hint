@@ -70,6 +70,7 @@ export const DialpadIcon = (props: IconProps) => <Icon {...props}><path d="M6 5h
 export const LockIcon = (props: IconProps) => <Icon {...props}><rect x="4" y="11" width="16" height="10" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></Icon>;
 export const KeyIcon = (props: IconProps) => <Icon {...props}><circle cx="7.5" cy="15.5" r="5.5" /><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3" /></Icon>;
 export const CardIcon = (props: IconProps) => <Icon {...props}><rect x="3" y="5" width="18" height="14" /><path d="M3 10h18M7 15h4" /></Icon>;
+export const WalletIcon = (props: IconProps) => <Icon {...props}><path d="M3 7a2 2 0 0 1 2-2h13v2M3 7h18v12H3Zm18 4h-5a2 2 0 0 0 0 4h5m-4-2h.01" /></Icon>;
 export const TicketIcon = (props: IconProps) => <Icon {...props}><path d="M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4V7ZM14 7v10" /></Icon>;
 export const LayersIcon = (props: IconProps) => <Icon {...props}><path d="m12 3 9 5-9 5-9-5 9-5ZM3 13l9 5 9-5" /></Icon>;
 export const ListIcon = (props: IconProps) => <Icon {...props}><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" /></Icon>;

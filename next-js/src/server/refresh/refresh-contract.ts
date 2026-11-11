@@ -3,7 +3,7 @@ import "server-only";
 import type { EvidenceCollectionRequest } from "../evidence/evidence-service.ts";
 import type { CostJobPolicy, CostRequest } from "../cost-control/cost-contract.ts";
 import type { ApiFootballBounds } from "../football/api-football-contract.ts";
-import type { ForecastSourceOrder } from "../fallback/fallback-contract.ts";
+import type { ForecastSourceOrder, LIVE_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
 import type { ModelPin } from "../predictor/predictor-contract.ts";
 import type { SelectionEntry, SelectionManifest } from "../selection/selection-contract.ts";
 import type { StoredCycle } from "../predictions/history-contract.ts";
@@ -42,6 +42,8 @@ export type RefreshPlan = Readonly<{
    * without contemporaneous capture. With it, the provider is always requested and both source receipts are sealed
    * in the fallback stage. */
   sourceOrder?: ForecastSourceOrder;
+  /** The first accepted source owns the fixture. Earlier sealed intents retain their original resolution. */
+  sourceCascade?: typeof LIVE_FORECAST_CASCADE;
   /** Absent on historical plans. New jobs freeze probability/evidence/price selection independently of family argmax. */
   recommendationPolicy?: RecommendationPolicy;
 }>;

@@ -13,6 +13,7 @@ import { slipMatchStateForSelection, type SlipMatchState } from "@/domain/slip-m
 import { createMessages } from "@/i18n/messages";
 import { formatSlipProbability } from "../slip-format";
 import { SlipMatchNumber } from "../slip-match-number";
+import { SlipSelectionOdds } from "../slip-selection-odds";
 
 export { TruncatedText } from "@/components/match/truncated-text";
 
@@ -39,7 +40,7 @@ export function DesktopSlipRow({ selection, locale, result, matchStates, analysi
       marketDescription={`${family}: ${description}`}
       market={<><span data-market-label data-row-market-label aria-hidden="true">{shortMarkets[selection.family]}</span>
         <strong data-pick-label aria-hidden="true">{predictionLabel(m, selection.selection)}</strong><VisuallyHidden>{family}: {description}</VisuallyHidden></>}
-      odds={selection.odds} probability={formatSlipProbability(selection.probability, m)}
+      odds={<SlipSelectionOdds selection={selection} />} probability={formatSlipProbability(selection.probability, m)}
       {...(analysisLinks ? { analysisHref: matchHref(selection.fixtureId, canonicalMatchSlug(selection.homeTeam.name, selection.awayTeam.name), locale) } : {})} />
   </li>;
 }

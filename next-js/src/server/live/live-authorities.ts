@@ -1,11 +1,13 @@
 import "server-only";
 
 import { utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
+import { liveGoalMarketDefinitions } from "../../domain/goal-market-definitions.ts";
 import { assertOperationAllowed, type EvidenceVerifier, type RuntimePolicy } from "../config/runtime-policy.ts";
 import type { EvidenceAuthority } from "../evidence/evidence-contract.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import type { ProviderFallbackAuthority, ProviderFallbackPolicy } from "../fallback/fallback-adapter.ts";
-import type { FallbackContext, FallbackResolutionAuthority, ForecastSourceOrder } from "../fallback/fallback-contract.ts";
+import { LIVE_FORECAST_CASCADE, type FallbackContext, type FallbackResolutionAuthority, type ForecastSourceOrder } from "../fallback/fallback-contract.ts";
+import { localGoalModelVersion } from "../intelligence/local-goals-model.ts";
 import type { FallbackRefreshRequest } from "../fallback/fallback-service.ts";
 import { API_FOOTBALL_CONTRACT_VERSION, type ApiFootballEndpoint, type ApiFootballResult } from "../football/api-football-contract.ts";
 import type { NormalizedFixture, RegulationScoreCandidate } from "../football/api-football-normalize.ts";
@@ -27,7 +29,7 @@ import type { ResultSyncAuthority, ResultSyncPolicy } from "../results/result-sy
 import type { LiveMatchAuthority, LiveMatchPolicy } from "../live-match/live-match-contract.ts";
 import type { SelectionAuthority, SelectionPolicy } from "../selection/selection-contract.ts";
 import { parseSelectionPolicy } from "../selection/selection-input.ts";
-import { cutoffPolicy, evidencePolicy, fallbackRefreshPlan, lifecyclePolicy, providerFallbackPolicy, providerStatusMappings,
+import { cutoffPolicy, evidencePolicy, fallbackRefreshPlan, liveCascadePlan, lifecyclePolicy, providerFallbackPolicy, providerStatusMappings,
   publicationPolicy, type LiveReferences, type RefreshPacing } from "./live-plan.ts";
 
 /** Clock skew tolerated between provider retrieval stamps and this process. */
@@ -61,6 +63,7 @@ export function createLiveAuthorities(options: Readonly<{
   sourceOrder?: ForecastSourceOrder;
   verifyPrimary?(result: PredictorResult, context: FallbackContext): boolean;
   verifyPrimaryCandidate?(candidate: ResolvedForecastCandidate): boolean;
+  verifyPrimaryGoals?(candidate: ResolvedForecastCandidate, distribution: unknown): boolean;
 }>) {
   const { policy, verify, refs } = options;
   const now = () => options.clock?.now() ?? utcInstantFromEpochMilliseconds(Date.now());
@@ -74,6 +77,8 @@ export function createLiveAuthorities(options: Readonly<{
   const verifyScore = (candidate: RegulationScoreCandidate) => candidate.sourceField === "score.fulltime" &&
     candidate.period === "regulation-including-stoppage-time" && ["FT", "AET", "PEN"].includes(candidate.providerStatus) &&
     [candidate.home, candidate.away].every((goals) => Number.isSafeInteger(goals) && goals >= 0 && goals <= 99);
+  const cascadeEnabled = options.sourceOrder !== "provider-first";
+  const localModelVersion = localGoalModelVersion();
 
   const catalog: CatalogAuthority = Object.freeze({
     authorize(request) { football(); if (request.retentionEvidenceRef !== refs.retention) throw new Error("Unapproved retention."); },
@@ -132,6 +137,9 @@ export function createLiveAuthorities(options: Readonly<{
         if (!market.available) return true;
         if (market.provenance.kind === "api-football") return market.provenance.policyVersion === expected.fallback.version &&
           market.provenance.policyEvidenceRef === expected.fallback.evidenceRef;
+        if (market.provenance.kind === "local-engine") return cascadeEnabled &&
+          input.candidate.audit.sourceCascade === LIVE_FORECAST_CASCADE && market.provenance.modelVersion === localModelVersion &&
+          market.provenance.evidenceHash === input.candidate.context.evidenceHash && verify(refs.retention, "football-private-use");
         return policy.capabilities.ai && options.aiModel !== undefined &&
           market.provenance.modelVersionId === options.aiModel.id &&
           same(market.provenance.pin, input.candidate.context.pin) &&
@@ -139,6 +147,14 @@ export function createLiveAuthorities(options: Readonly<{
           verify(`${refs.evidence}#openai-transmission`, "evidence-policy") &&
           options.verifyPrimaryCandidate?.(input.candidate) === true;
       });
+    },
+    verifyGoalExtension: ({ candidate, goalExtension }) => {
+      if (!options.localFootball || !goalExtension || !same(goalExtension.definitions, liveGoalMarketDefinitions)) return false;
+      if ("localPoisson" in goalExtension) return cascadeEnabled && candidate.audit.sourceCascade === LIVE_FORECAST_CASCADE &&
+        Object.values(candidate.markets).some((market) => market.available && market.provenance.kind === "local-engine" &&
+          same(market.provenance.rates, goalExtension.localPoisson));
+      return options.verifyPrimaryCandidate?.(candidate) === true &&
+        options.verifyPrimaryGoals?.(candidate, goalExtension.scoreDistribution) === true;
     },
   });
   const evidence: EvidenceAuthority = Object.freeze({
@@ -170,7 +186,8 @@ export function createLiveAuthorities(options: Readonly<{
   });
   const verifyFallbackRequest = (request: FallbackRefreshRequest) =>
     (request.expected.pin === null ? unconfiguredAi(request.ai) : options.verifyPrimary?.(request.ai, request.expected) === true) &&
-    request.bounds !== null && request.bounds.priority === "near-kickoff-fallback";
+    request.bounds !== null && request.bounds.priority === "near-kickoff-fallback" &&
+    (request.sourceCascade === undefined || cascadeEnabled);
   const refresh: RefreshAuthority = Object.freeze({
     authorize() { publish(); },
     verifyPlan: (plan, member: RefreshMember) => {
@@ -182,6 +199,8 @@ export function createLiveAuthorities(options: Readonly<{
             plan.evidence.cachedSources as import("../evidence/evidence-contract.ts").EvidenceSource[], options.refreshPacing,
             (plan.recommendationPolicy === undefined ? plan.sourceOrder : options.sourceOrder) ?? "ai-first");
         if (reviewed === null) return false;
+        if (plan.sourceCascade !== undefined) return cascadeEnabled &&
+          same(plan, parseRefreshPlan(liveCascadePlan(reviewed, options.localFootball === true), member));
         if (same(plan, parseRefreshPlan(reviewed, member))) return true;
         if (plan.modelVersionId === null && same(plan, parseRefreshPlan(baseline, member))) return true;
         // Old sealed intents predate recommendation selection and reserved only the two publication calls.

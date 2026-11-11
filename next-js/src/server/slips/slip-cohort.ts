@@ -18,7 +18,8 @@ import { parseMatchFeedQuery } from "../matches/feed-service.ts";
 import { storedFeedFixtures } from "../matches/fixture-read.ts";
 import { storedSlipPricePools } from "./price-read.ts";
 
-export type SlipCohortReader = (parameters: FeedParameters, context: Readonly<{ locale?: string }>, clock: Clock) => Promise<SlipCohort>;
+export type SlipCohortReader = (parameters: FeedParameters,
+  context: Readonly<{ locale?: string; primaryBookmakerOnly?: boolean }>, clock: Clock) => Promise<SlipCohort>;
 
 /** Reuses the production feed's exact filtering, order, record projection and approved price rules.
  * One repeatable-read snapshot covers ordered IDs, forecasts and all prices. No page re-probes or
@@ -40,7 +41,8 @@ export function createStoredSlipCohort(options: Readonly<{
     if (isDevelopmentDemo()) await prepareDemoRange(database, sourceRange, asOf);
     return database.transaction(async (tx) => {
       const search = await storedFeedSearch(tx, query.search, range, configured, query.locale);
-      const sql = feedSql(query, range, configured, enabled, search);
+      const primaryOnly = context.primaryBookmakerOnly === true;
+      const sql = feedSql(query, range, configured, primaryOnly && enabled, search, false, !primaryOnly);
       const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT f.id ${sql.joins} ${sql.searchJoin} WHERE ${sql.where}
         ORDER BY ${sql.order} LIMIT ${slipCohortRules.maximumRecords + 1}`);
       if (rows.length > slipCohortRules.maximumRecords + 1 || new Set(rows.map((row) => row.id)).size !== rows.length) {
@@ -56,9 +58,11 @@ export function createStoredSlipCohort(options: Readonly<{
       const { window } = await storedFeedRunContext(tx, reportingToday, range);
       const selected = rows.slice(0, slipCohortRules.maximumRecords), records: StoredMatchFeedRecord[] = [];
       const selectionPrices: SlipCohort["selectionPrices"] = {};
-      for (let offset = 0; offset < selected.length; offset += slipCohortRules.hydrationBatchSize) {
-        const ids = selected.slice(offset, offset + slipCohortRules.hydrationBatchSize).map(({ id }) => id);
-        const hydrated = await storedFeedFixtures(tx, ids, false, window, query.locale, { prices: enabled });
+      const batchSize = primaryOnly ? slipCohortRules.hydrationBatchSize : feedQueryRules.maximumPageSize;
+      for (let offset = 0; offset < selected.length; offset += batchSize) {
+        const ids = selected.slice(offset, offset + batchSize).map(({ id }) => id);
+        const hydrated = await storedFeedFixtures(tx, ids, false, window, query.locale, { prices: primaryOnly && enabled,
+          preferRecommendation: primaryOnly });
         const batch = hydrated.map((record, index) => {
           if (record.fixtureId !== ids[index]) throw new MatchFeedError("unavailable");
           const date = record.kickoffAt === null ? null : getReportingDate(record.kickoffAt);
@@ -66,8 +70,9 @@ export function createStoredSlipCohort(options: Readonly<{
           return storedMatchFeedRecordSchema.parse(record);
         });
         records.push(...batch);
-        Object.assign(selectionPrices, await storedSlipPricePools(tx, batch, enabled));
+        if (primaryOnly) Object.assign(selectionPrices, await storedSlipPricePools(tx, batch, asOf, { enabled, primaryBookmakerOnly: true }));
       }
+      if (!primaryOnly) Object.assign(selectionPrices, await storedSlipPricePools(tx, records, asOf, { enabled, families: query.markets }));
       return freezeEvidence(slipCohortSchema.parse({ records, selectionPrices, asOf, today,
         range: { from: range.startDate, to: range.endDate, ...range.window }, searchLimited: rows.length > selected.length, partialCoverage }));
     }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 60_000 });

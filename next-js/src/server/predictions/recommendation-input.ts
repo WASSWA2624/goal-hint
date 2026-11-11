@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
+import { marketSelections, marketSources, type MarketFamily } from "../../domain/markets.ts";
 import { parseRecordedDecimalOdds } from "../../domain/odds.ts";
 import { recommendationPolicy, type RecommendationDecision } from "../../domain/recommendation.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
@@ -19,11 +19,11 @@ const quote = z.strictObject({ fixtureId: id, fixtureVersion: version, homeTeamI
   observationReceiptId: hash.optional(),
   providerUpdatedAt: instant.nullable(), permitted: z.boolean(), suspended: z.boolean() });
 const pick = z.strictObject({ family, selection, period: z.literal(publicPolicy.matchPeriod), line: z.number().nullable(),
-  source: z.enum(["ai", "api-football"]), probability, forecastTimestamps: timing, quote });
+  source: z.enum(marketSources), probability, forecastTimestamps: timing, quote });
 export const recommendationDecisionSchema = z.strictObject({ version: z.literal(1), policyVersion: z.string().min(1).max(128),
   fixtureId: id, fixtureVersion: version, homeTeamId: id, awayTeamId: id, analysisAt: instant, evidenceSnapshotId: hash, evidenceHash: hash,
   status: z.enum(["selected", "no-qualified-recommendation"]), selected: pick.nullable(),
-  decisions: z.array(z.strictObject({ source: z.enum(["ai", "api-football"]), family, selection, probability: z.number(),
+  decisions: z.array(z.strictObject({ source: z.enum(marketSources), family, selection, probability: z.number(),
     eligible: z.boolean(), reasons: z.array(z.string().min(1).max(128)).max(32), evidence: z.record(z.string(), z.unknown()) })).max(64),
   fallbackReason: z.string().max(512).nullable(), explanation: z.string().min(1).max(4096),
 }).superRefine((value, ctx) => {

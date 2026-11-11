@@ -5,16 +5,16 @@ import { UnlockButton } from "@/components/members/prediction-unlock";
 import { subscriberHref } from "@/domain/subscriber-navigation";
 
 import Link from "@/components/navigation/navigation-link";
-import { memo, useContext, useId, useState, type ComponentProps, type ReactNode } from "react";
+import { memo, useContext, useId, type ComponentProps, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { toUtcIsoString } from "@/domain/calendar";
 import { countryCode, countryDisplayName, countryShortName } from "@/domain/country-code";
-import { countryFlagAsset } from "@/domain/country-flag";
 import { compactLeagueName, compactMarketName } from "@/domain/compact-fixture-label";
 import { bestCardFamily, noPickReason } from "@/domain/feed-presentation";
-import { hasPublishedForecastWithoutPick } from "@/domain/recommendation-view";
 import { defaultMarkets } from "@/domain/feed-query";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
+import { marketOddsPrice } from "@/domain/in-play-odds";
+import { forecastExpectedReturn } from "@/domain/forecast-value";
 import { cardResultStatus, hasFinalScoreStatus, sameCardFixture, selectedCardPrediction, selectedCardPrice, snapshotCardPrediction, type CardSnapshotPick } from "@/domain/match-card";
 import { liveClockLabel } from "@/domain/match-clock";
 import type { MarketFamily } from "@/domain/markets";
@@ -27,11 +27,12 @@ import { useMessages } from "@/i18n/use-messages";
 import { resolveLocale } from "@/i18n/locales";
 import { media, type OutcomeTone } from "@/styles/theme";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { ChevronIcon, FlagIcon, GlobeIcon, TrophyIcon } from "./match-icons";
+import { ChevronIcon } from "./match-icons";
+import { CompetitionCountryFlag, CompetitionLogo } from "./competition-media";
+import { ForecastSourceLabel, ForecastValueLabel } from "./forecast-labels";
 import { teamStackStyles } from "./team-stack-styles";
 import { matchTableColumns, matchTableGap } from "./match-columns";
 import { TeamLogo } from "./team-logo";
-import { providerImageSource } from "@/components/ui/provider-image";
 import { ProbabilityBar } from "./prediction-presentation";
 import { DesktopMatchRow } from "./desktop-match-row";
 import { MatchCardLayoutContext } from "./match-card-layout";
@@ -55,6 +56,8 @@ export type MatchCardProps = {
   analysisSlug: string;
   /** Show the most likely available pick among these eligible families. */
   markets?: readonly MarketFamily[];
+  /** Public browsing shows the best published market rather than the separate recommendation. */
+  publishedMarket?: boolean;
   selectedFamily?: MarketFamily;
   locale?: string;
   headingLevel?: 2 | 3 | 4;
@@ -154,14 +157,13 @@ const League = styled.p`
   align-items: center;
   gap: var(--gh-spacing-1_5);
   min-inline-size: 0;
-  > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; }
   > span { ${ellipsis} }
   /* Tile: league crest and short name, then country flag and code, at the extreme right. */
   ${tile} {
     justify-content: flex-end;
     gap: var(--gh-spacing-1);
     color: inherit;
-    > img, > svg { order: 1; inline-size: var(--gh-size-2_5); block-size: var(--gh-size-2_5); }
+    > [data-competition-logo] { order: 1; --gh-league-mark-size: var(--gh-size-2_5); }
     > [data-country] { order: 3; margin-inline-start: var(--gh-spacing-0_75); }
   }
   /* Table: the crest leads the league name the way the flag leads the country, in a column as wide as the flag. */
@@ -174,17 +176,9 @@ const League = styled.p`
     align-self: stretch;
     gap: var(--gh-spacing-0_5) var(--gh-spacing-1);
     > [data-country] { grid-column: 1 / -1; grid-row: 1; }
-    > img, > svg { grid-column: 1; grid-row: 2; }
-    > svg { font-size: var(--gh-font-section); }
+    > [data-competition-logo] { grid-column: 1; grid-row: 2; }
     > span { white-space: nowrap; }
   }
-`;
-const LeagueLogo = styled.img`
-  flex: none;
-  inline-size: var(--gh-size-3);
-  block-size: var(--gh-size-3);
-  object-fit: contain;
-  ${table} { inline-size: var(--gh-size-4); block-size: var(--gh-size-4); }
 `;
 const When = styled.time`
   display: flex;
@@ -233,29 +227,13 @@ const CountryDetails = styled.span`
   > span { flex: none; }
   /* One line: a long recognized country uses its short form; anything still too wide ends in an ellipsis. */
   > [data-country-name] { flex: 1; ${ellipsis} }
+  > [data-country-flag] { margin-inline-end: var(--gh-spacing-1); }
   ${tile} { && { gap: 0; font-size: inherit; line-height: inherit; } }
+  ${tile} {
+    > [data-country-flag] { --gh-flag-width: var(--gh-size-3_75); --gh-flag-height: var(--gh-size-2_5); margin-inline-end: var(--gh-spacing-0_75); }
+  }
 `;
 const CountryName = styled.span``;
-const FlagImage = styled.img`
-  flex: none;
-  inline-size: var(--gh-size-4);
-  block-size: var(--gh-size-2_75);
-  margin-inline-end: var(--gh-spacing-1);
-  object-fit: cover;
-  border-radius: ${({ theme }) => theme.radius.small};
-  box-shadow: none;
-  ${tile} { inline-size: var(--gh-size-3_75); block-size: var(--gh-size-2_5); margin-inline-end: var(--gh-spacing-0_75); border-radius: ${({ theme }) => theme.radius.none}; box-shadow: none; }
-`;
-const FlagFallback = styled.span`
-  display: grid;
-  flex: none;
-  place-items: center;
-  inline-size: var(--gh-size-4);
-  block-size: var(--gh-size-2_75);
-  margin-inline-end: var(--gh-spacing-1);
-  font-size: var(--gh-font-caption);
-  ${tile} { inline-size: var(--gh-size-3_75); block-size: var(--gh-size-2_5); margin-inline-end: var(--gh-spacing-0_75); font-size: var(--gh-font-micro); }
-`;
 
 const Teams = styled.div`
   --gh-logo-size: var(--gh-size-4);
@@ -469,6 +447,13 @@ const Open = styled(Link)`
 
 type LiveClock = ReturnType<typeof liveClockLabel>;
 
+const OddsGroup = styled.span`
+  display: grid; gap: var(--gh-spacing-0_25); line-height: var(--gh-leading-label);
+  font-size: var(--gh-font-caption); white-space: normal;
+  > span { display: flex; gap: var(--gh-spacing-0_75); justify-content: space-between; }
+  small:not([data-positive-value]) { color: ${({ theme }) => theme.color.mutedText}; font: inherit; font-weight: var(--gh-weight-body); }
+`;
+
 /** `lead` names the winner of a decided final score; live phase and minute stay beside the score. */
 function MatchState({ fixture, home, away, lead, clock, messages, snapshot = false }: {
   fixture: FixtureSnapshot; home: string; away: string; lead: number; clock: LiveClock | null; messages: Messages; snapshot?: boolean;
@@ -516,26 +501,6 @@ function CardTeam({ team, side, name, eager, result, standing }: {
   </Team>;
 }
 
-function CompetitionLogo({ url }: { url: string | null | undefined }) {
-  const [failed, setFailed] = useState(false);
-  return url && !failed && isSafeRemoteImageUrl(url)
-    ? <LeagueLogo src={providerImageSource(url, 14)} alt="" width={14} height={14} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(true)} />
-    : <TrophyIcon />;
-}
-
-/** Decorative country flag for the tile line; a missing, unsafe or failed image shows a neutral flag glyph (a globe
- * for API-Football's international "World"). Keyed by URL where used, so a replacement URL gets a fresh attempt. */
-function CountryFlag({ url, country }: { url: string | null | undefined; country: string | undefined }) {
-  const [failedUrls, setFailedUrls] = useState<readonly string[]>([]);
-  const local = countryFlagAsset(country);
-  const source = [local, isSafeRemoteImageUrl(url) ? url : null].find((candidate) => candidate && !failedUrls.includes(candidate));
-  if (source) {
-    return <FlagImage src={source} alt="" width={16} height={12} loading="lazy" decoding="async" referrerPolicy="no-referrer"
-      onError={() => setFailedUrls((previous) => [...previous, source])} />;
-  }
-  return <FlagFallback>{countryCode(country) === "INT" ? <GlobeIcon /> : <FlagIcon />}</FlagFallback>;
-}
-
 
 /** Only timestamps subscribe to the device clock; the rest of a card stays unchanged. */
 function CardKickoff({ kickoff, locale }: { kickoff: FixtureSnapshot["kickoffAt"]; locale: string }) {
@@ -572,7 +537,7 @@ function DesktopCard(props: ComponentProps<typeof DesktopMatchRow>) {
   return <DesktopMatchRow {...props} messages={messages} />;
 }
 
-function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, markets, selectedFamily, locale: requestedLocale,
+function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, markets, publishedMarket = false, selectedFamily, locale: requestedLocale,
   headingLevel = 2, eagerLogos = false, position, titleNote, offline = false, snapshotPick, lockedPrediction = false, signedIn = false, interactive = true, accessReturnTo }: MatchCardProps) {
   const locale = resolveLocale(requestedLocale);
   const messages = createMessages(locale);
@@ -582,7 +547,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const gatedForecast = fixture.forecast !== null && "gated" in fixture.forecast ? fixture.forecast : null;
   // Only a published eligible family is locked: forecast null means none was published, and the gated families already
   // name the published markets, so a filter outside them shows the subscriber's no-prediction reason.
-  const best = snapshotPick?.family ?? bestCardFamily(fixture, eligible);
+  const best = snapshotPick?.family ?? bestCardFamily(fixture, eligible, !publishedMarket);
   const gated = lockedPrediction || (snapshotPick ? requiresAccess || gatedForecast !== null
     : !isCompletedFixtureStatus(fixture.status) && best !== null && (requiresAccess || gatedForecast !== null));
   const detailHref = matchHref(fixture.fixtureId, analysisSlug, locale);
@@ -597,8 +562,23 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const country = fixture.competition.country?.trim();
   const countryName = countryDisplayName(country);
   const flagUrl = countryFlagUrl(fixture);
-  const prediction = offline || gated ? null : snapshotPick ? snapshotCardPrediction(snapshotPick) : selectedCardPrediction(fixture, shownFamily);
-  const price = prediction ? snapshotPick ? { price: snapshotPick.odds } : selectedCardPrice(fixture, shownFamily) : null;
+  const prediction = offline || gated ? null : snapshotPick ? snapshotCardPrediction(snapshotPick) : selectedCardPrediction(fixture, shownFamily, !publishedMarket);
+  const observation = !prediction || snapshotPick || fixture.marketOdds?.kind !== (fixture.status === "live" ? "in-play" : "pre-match")
+    ? null : fixture.marketOdds;
+  const selection = prediction?.item.market.selection;
+  const livePrice = selection && observation?.kind === "in-play" ? marketOddsPrice(observation, shownFamily, selection) : null;
+  const preMatchPrice = selection && fixture.status === "scheduled" && observation?.kind === "pre-match"
+    ? marketOddsPrice(observation, shownFamily, selection) : null;
+  const price = !selection ? null : snapshotPick ? { price: snapshotPick.odds }
+    : fixture.status === "live" ? (livePrice ? { price: livePrice } : null)
+      : preMatchPrice ? { price: preMatchPrice } : selectedCardPrice(fixture, shownFamily, !publishedMarket);
+  const oddsLabel = messages.text(observation?.kind === "in-play" ? "touchline.inPlayOdds" :
+    observation?.kind === "pre-match" ? "touchline.preMatchOdds" : "details.odds");
+  const market = prediction?.item.market;
+  const expectedReturn = market?.source ? forecastExpectedReturn(market.selectedProbability, preMatchPrice) : null;
+  const source = prediction?.item.market.source;
+  const sourceLabel = source ? <ForecastSourceLabel source={source} messages={messages} /> : null;
+  const valueLabel = <ForecastValueLabel expectedReturn={expectedReturn} messages={messages} />;
   const family = messages.text(`market.family.${shownFamily}`);
   const locked = fixture.cycle?.state === "closed";
   const outcome = prediction?.status ?? "unavailable";
@@ -607,7 +587,6 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     ? messages.text("probability.percent", { percent: messages.number(prediction.probability.roundedPercent, snapshotPick
       ? { minimumFractionDigits: 1, maximumFractionDigits: 1 } : undefined) })
     : messages.text(prediction.probability.labelKey === "probability.less-than-one" ? "probability.compact.less-than-one" : "probability.compact.more-than-ninety-nine"));
-  const selection = prediction?.item.market.selection;
   const final = hasFinalScoreStatus(fixture.status);
   const regulationOnly = final && fixture.status !== "finished-regulation" && fixture.scorePeriod === "regulation";
   const showScore = fixture.score !== null && (fixture.status === "live" || final);
@@ -620,22 +599,21 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const showProgress = !offline && (showScore || final || clock !== null || snapshotPick !== undefined && fixture.score !== null
     || fixture.status !== "scheduled" && fixture.status !== "unknown" && fixture.status !== result);
   const missing = gated || prediction ? null : noPickReason(fixture);
-  const forecastAvailable = !!missing && !offline && hasPublishedForecastWithoutPick(fixture.forecast, eligible);
-  const noPickLabel = messages.text(forecastAvailable ? "match.forecastAvailable" : "match.noPick");
-  const reason = forecastAvailable ? messages.text("match.noRecommendedPick") : missing ? messages.text(`match.noPickReason.${missing}`) : null;
+  const noPickLabel = messages.text("match.noPick");
+  const reason = missing ? messages.text(`match.noPickReason.${missing}`) : null;
   const pickState = gated ? "subscriber" : !prediction ? "none" : settledOutcome(outcome) ? "settled" : "open";
   if (desktop) {
     const marketDescription = offline ? "Predictions are unavailable in the saved view."
       : gated ? messages.text("paywall.card")
       : selection ? `${family}: ${predictionDescription(messages, selection)}` : reason ?? undefined;
-    const publication = prediction && [prediction.item.market.source ? messages.text(`market.source.${prediction.item.market.source}`) : null,
+    const publication = prediction && [source ? messages.text(`market.source.${source}`) : null,
       prediction.provisional ? messages.text("match.provisional") : null,
       prediction.publishedAt !== null ? `${messages.text("match.published")}: ${messages.reportingInstant(prediction.publishedAt)}` : null].filter(Boolean).join(" · ");
     return <DesktopCard fixtureId={fixture.fixtureId} locale={locale} kickoffAt={fixture.kickoffAt}
       homeTeam={{ name: fixture.homeTeam.name, logoUrl: isSafeRemoteImageUrl(fixture.homeTeam.logoUrl) ? fixture.homeTeam.logoUrl : null }}
       awayTeam={{ name: fixture.awayTeam.name, logoUrl: isSafeRemoteImageUrl(fixture.awayTeam.logoUrl) ? fixture.awayTeam.logoUrl : null }}
       competition={{ name: fixture.competition.name, country: fixture.competition.country,
-        logoUrl: isSafeRemoteImageUrl(fixture.competition.logoUrl) ? fixture.competition.logoUrl : null }}
+        logoUrl: fixture.competition.logoUrl, countryFlagUrl: flagUrl }}
       status={fixture.status} score={showScore || snapshotPick ? fixture.score : null} liveClock={offline ? null : fixture.liveClock ?? null}
       regulationOnly={regulationOnly}
       {...(fixture.score && (showScore || snapshotPick) ? { scoreDescription: messages.text("match.scoreline", {
@@ -651,12 +629,15 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       offline={offline} interactive={interactive} eagerLogos={eagerLogos} {...(!gated && !offline ? { marketFamily: shownFamily } : {})}
       {...(marketDescription ? { marketDescription } : {})}
       market={offline ? <span>Unavailable offline</span> : gated ? <><SubscriberIcon /><span data-subscriber-notice>{messages.text("paywall.unlock")}</span></> : <>
-        {!forecastAvailable && <span data-market-label aria-hidden="true">{compactMarketName(shownFamily)}</span>}
+        {prediction && <span data-market-label aria-hidden="true">{compactMarketName(shownFamily)}</span>}
         <strong data-pick-label data-no-pick={missing ?? undefined} title={publication || undefined}>
           {selection ? <span data-pick-selection>{predictionLabel(messages, selection)}</span> : noPickLabel}
+          {sourceLabel}
         </strong>
       </>}
-      odds={<span data-card-odds data-pick-price={prediction ? "" : undefined}>{price?.price ?? "—"}</span>}
+      odds={<span data-card-odds data-pick-price={prediction ? "" : undefined} data-odds-kind={observation?.kind}
+        title={oddsLabel}>{livePrice ? <OddsGroup><small>{oddsLabel}</small>{livePrice}</OddsGroup>
+          : <>{price?.price ?? "—"}{expectedReturn !== null && expectedReturn > 0 && <> {valueLabel}</>}</>}</span>}
       probability={gated ? <span data-public-probability>{publicChanceLabel}</span> : <span data-pick-value>{prediction ? percent : "—"}</span>}
       details={offline ? <VisuallyHidden>Predictions are unavailable in the saved view.</VisuallyHidden>
         : !gated && !prediction && reason ? <span data-no-pick-reason>{reason}</span> : null}
@@ -670,10 +651,10 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       <CardKickoff kickoff={fixture.kickoffAt} locale={locale} />
       <League title={country ?? undefined} data-ledger-competition>
         <CountryDetails data-country data-ledger-country aria-hidden="true">
-          {offline ? <FlagFallback><FlagIcon /></FlagFallback> : <CountryFlag key={`${country}:${flagUrl}`} url={flagUrl} country={country} />}
+          <CompetitionCountryFlag url={flagUrl} country={country} offline={offline} />
           <CountryName data-country-name title={countryName || undefined}><span data-mobile-only>{countryCode(country) || "–"}</span><span data-desktop-only>{countryShortName(country) || "–"}</span></CountryName>
         </CountryDetails>
-        <CompetitionLogo key={fixture.competition.logoUrl} url={fixture.competition.logoUrl} /><LeagueName title={competition}><span data-mobile-only data-ledger-name>{compactLeagueName(competition)}</span><span data-desktop-only>{competition}</span></LeagueName>
+        <CompetitionLogo url={offline ? null : fixture.competition.logoUrl} country={country} /><LeagueName title={competition}><span data-mobile-only data-ledger-name>{compactLeagueName(competition)}</span><span data-desktop-only>{competition}</span></LeagueName>
         {country && <VisuallyHidden>, {country}</VisuallyHidden>}</League>
     </Meta>
     <Teams data-ledger-teams>
@@ -697,24 +678,27 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
         <span data-match-metrics><Odds data-ledger-field="odds" aria-hidden="true">—</Odds>
         <Probability data-ledger-field="probability" data-stack-label={messages.text("match.columns.probabilityShort")} aria-label={messages.text("details.probability")}><Percent data-public-probability>{publicChanceLabel}</Percent></Probability></span>
       </> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale}>
-        <PickShort $family={shownFamily} $available={prediction !== null} data-ledger-field="prediction" aria-hidden="true" data-no-pick={missing ?? undefined}>
-          {selection ? <span data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection)}>{predictionLabel(messages, selection)}</span></span> : <>
+        <PickShort $family={shownFamily} $available={prediction !== null} data-ledger-field="prediction" aria-hidden="true"
+          data-no-pick={missing ?? undefined}>
+          {selection ? <span data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection)}>{predictionLabel(messages, selection)}</span>{sourceLabel}</span> : <>
             <b data-mobile-only="">{noPickLabel}</b>
-            <span data-pick-value="" data-mobile-only="">{messages.text(forecastAvailable ? "match.noRecommendedPick" : `match.noPickReason.short.${missing!}`)}</span>
+            <span data-pick-value="" data-mobile-only="">{messages.text(`match.noPickReason.short.${missing!}`)}</span>
             <span data-pick-value="" data-desktop-only="">{noPickLabel}</span>
           </>}
         </PickShort>
-        <span data-match-metrics><Odds data-ledger-field="odds" data-stack-label={messages.text("details.odds")} aria-hidden="true" data-card-odds data-pick-price={prediction ? "" : undefined}>{price?.price ?? "—"}</Odds>
+        <span data-match-metrics><Odds data-ledger-field="odds" data-stack-label={oddsLabel} aria-hidden={expectedReturn === null || expectedReturn <= 0}
+          data-card-odds data-odds-kind={observation?.kind} data-pick-price={prediction ? "" : undefined}>{price?.price ?? "—"}{expectedReturn !== null && expectedReturn > 0 && <> {valueLabel}</>}</Odds>
         <Probability data-ledger-field="probability" data-stack-label={messages.text("match.columns.probabilityShort")} aria-hidden="true">
           {prediction && <ProbabilityBar $family={shownFamily} data-probability-meter=""><span style={{ inlineSize: `${Math.max(2, prediction.probability.roundedPercent)}%` }} /></ProbabilityBar>}
           <Percent data-pick-value="">{prediction ? percent : "—"}</Percent>
         </Probability></span>
         {prediction && selection ? <VisuallyHidden>{messages.text("match.pickLabel", { market: family, selection: predictionDescription(messages, selection),
           probability: messages.text(prediction.probability.labelKey, { percent: messages.number(prediction.probability.roundedPercent) }) })}
+          {source && `. ${messages.text(`market.source.${source}`)}`}
           {locked && `. ${messages.text("match.lockedPrediction")}`}
         </VisuallyHidden> : <VisuallyHidden>{messages.text("match.noPickLabel", { market: family })}: {reason}</VisuallyHidden>}
       </PredictionCell>}
-      {prediction && <VisuallyHidden>{messages.text("details.odds")}: {price?.price ?? messages.text("outcome.unavailable")}</VisuallyHidden>}
+      {prediction && <VisuallyHidden>{oddsLabel}: {price?.price ?? messages.text("outcome.unavailable")}</VisuallyHidden>}
     </Pick>
     {gated && !offline && <MobileUnlockArea data-mobile-unlock-area>
       <UnlockButton locale={locale} signedIn={signedIn} returnTo={detailHref} />

@@ -5,6 +5,7 @@ import { resolveFeedDates, parseFeedQuery } from "../src/domain/feed-query.ts";
 import { storedMatchFeedResponseSchema } from "../src/domain/match-feed.ts";
 import { slipCohortSchema } from "../src/domain/slip-cohort.ts";
 import { defaultSlipCriteria } from "../src/domain/slip-builder.ts";
+import { marketRules, validateMarketSnapshot } from "../src/domain/markets.ts";
 import { createSlipBuildService } from "../src/server/slips/slip-service.ts";
 import { liveRecord, now, today } from "./helpers/live-refresh-fixtures.mjs";
 
@@ -13,8 +14,12 @@ const criteria = { ...defaultSlipCriteria(today), dateTo: today, markets: ["matc
   teamsMin: 2, teamsMax: 2, totalMin: 300, totalMax: 600 };
 function record(id) {
   const value = liveRecord({ fixtureId: id, kickoffAt: now + 3_600_000 });
+  const snapshot = validateMarketSnapshot({ "match-result": { source: "ai", period: marketRules.period,
+    probabilities: { "home-win": 0.75, draw: 0.1, "away-win": 0.15 } } });
   return { ...value, homeTeam: { id: `${id}-home`, name: `${id} home` }, awayTeam: { id: `${id}-away`, name: `${id} away` },
-    forecast: { ...value.forecast, provisional: false, updateDelayed: false },
+    forecast: { ...value.forecast, provisional: false, updateDelayed: false,
+      markets: Object.values(snapshot.markets).filter(entry => entry.available)
+        .map(entry => ({ market: entry.market, reasons: [], uncertainty: null })) },
     prices: [{ family: "match-result", selection: "home-win", price: "2.00", basis: "bookmaker", retrievedAt: now - 1000, providerUpdatedAt: null }] };
 }
 function cohort(parameters, records, overrides = {}) {
@@ -113,14 +118,14 @@ test("production cohort uses one RR snapshot, a501-ID probe and bounded ordered 
       return {...value,dataVersion:String(source.version),forecast:{...value.forecast,provisional:false,updateDelayed:false},
         prices:[{family:'match-result',selection:'home-win',price:'2.00',basis:'bookmaker',retrievedAt:now-1000,providerUpdatedAt:null}]};
     }))}});
-    mock.module('./src/server/slips/price-read.ts',{namedExports:{storedSlipPricePools:async(source,records)=>{
-      assert.equal(source,tx);assert.ok(records.length<=10);priceReads++;
+    mock.module('./src/server/slips/price-read.ts',{namedExports:{storedSlipPricePools:async(source,records,asOf,options)=>{
+      assert.equal(source,tx);assert.equal(asOf,now);assert.equal(records.length,500);assert.equal(options.primaryBookmakerOnly,undefined);priceReads++;
       return Object.fromEntries(records.map(record=>[record.fixtureId,[{...record.prices[0],price:source.version===1?'2.00':'9.99'}]]));
     }}});
     const {createStoredSlipCohort}=await import('./src/server/slips/slip-cohort.ts');
     const read=createStoredSlipCohort({database:()=>database,competitionIds:()=>[39],providerOdds:true});
     const result=await read(new URLSearchParams({date:today,status:'scheduled',sort:'probability',dir:'desc',pageSize:'100'}),{locale:'en'},{now:()=>now});
-    assert.equal(transactions,1);assert.equal(hydrates,500);assert.equal(priceReads,50);assert.equal(peak,10);
+    assert.equal(transactions,1);assert.equal(hydrates,500);assert.equal(priceReads,1);assert.equal(peak,100);
     assert.equal(globalVersion,2);assert.equal(result.searchLimited,true);assert.equal(result.records.length,500);
     assert.equal(result.records[0].fixtureId,'fixture-0000');assert.equal(result.records.at(-1).fixtureId,'fixture-0499');
     assert.ok(result.records.every(record=>record.dataVersion==='1'));

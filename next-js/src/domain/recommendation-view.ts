@@ -1,13 +1,13 @@
 import { z } from "zod";
 import type { FixtureSnapshot } from "./fixture-snapshot.ts";
-import { isMarketSelection, marketSelections, type AcceptedMarket, type MarketFamily } from "./markets.ts";
+import { isMarketSelection, marketSelections, marketSources, type AcceptedMarket, type MarketFamily } from "./markets.ts";
 import { publicPolicy } from "./public-policy.ts";
 import type { RecommendationDecision } from "./recommendation.ts";
 
 /** Subscriber forecast projection: private bookmaker, price, receipt and eligibility audits never leave the server. */
 export const publicRecommendationSchema = z.strictObject({ status: z.enum(["selected", "no-qualified-recommendation"]),
   selected: z.strictObject({ family: z.enum(publicPolicy.markets), selection: z.enum(Object.values(marketSelections).flat()),
-    probability: z.number().gt(0).lt(1), source: z.enum(["ai", "api-football"]),
+    probability: z.number().gt(0).lt(1), source: z.enum(marketSources),
     period: z.literal(publicPolicy.matchPeriod), line: z.number().nullable() }).nullable(),
 }).refine((value) => (value.status === "selected") === (value.selected !== null) &&
   (value.selected === null || isMarketSelection(value.selected.family, value.selected.selection) &&
@@ -34,12 +34,10 @@ export function recommendationMarket(market: AcceptedMarket, recommendation?: Pu
   return { ...market, selection: pick.selection, selectedProbability: pick.probability, presentationOf: market } as DisplayedMarketPick;
 }
 
-export function recommendationFamily(recommendation: PublicRecommendation | undefined, eligible: readonly MarketFamily[]): MarketFamily | null | undefined {
-  if (recommendation === undefined) return undefined;
-  const pick = recommendation.selected;
+export function recommendationFamily(recommendation: PublicRecommendation | undefined, eligible: readonly MarketFamily[]): MarketFamily | undefined {
+  const pick = recommendation?.selected;
   if (pick && eligible.includes(pick.family)) return pick.family;
-  // An explicit family filter can still inspect probability-only family forecasts.
-  return eligible.length === publicPolicy.markets.length ? null : undefined;
+  return undefined;
 }
 
 export function hasPublishedForecastWithoutPick(forecast: FixtureSnapshot["forecast"],

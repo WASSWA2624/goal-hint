@@ -82,12 +82,15 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
       const checked = checkedFeedPerformance(value, latest.current.data);
       if (!controller.signal.aborted) setReply({ key, scope, attempt, asOf: checked.asOf, refreshAfter: latest.current.data.asOf + 60_000, counts: checked.performance, failed: false });
     }).catch(() => {
-      if (!controller.signal.aborted) setReply((previous) => ({ key, scope, attempt, asOf: previous?.key === key ? previous.asOf : latest.current.data.asOf, refreshAfter: Infinity,
-        counts: previous?.key === key ? previous.counts : null, failed: true }));
+      if (!controller.signal.aborted) setReply((previous) => {
+        const retained = previous?.scope === scope ? previous : null, asOf = latest.current.data.asOf;
+        return { key, scope, attempt, asOf: retained?.asOf ?? asOf, refreshAfter: retained?.counts ? asOf + 60_000 : Infinity,
+          counts: retained?.counts ?? null, failed: true };
+      });
     });
     return () => controller.abort();
   }, [attempt, dispatch, key, needsRead, scope]);
-  const counts = empty?.performance ?? current?.counts ?? null, failed = !empty && !loading && current?.failed;
+  const counts = empty?.performance ?? matchingScope?.counts ?? null, failed = !empty && !loading && !counts && current?.failed;
   const summaryCounts = useMemo(() => counts ? { ...counts, cancelled: counts.cancelled ?? 0 } : null, [counts]);
   return <Stack $gap="sm" data-feed-performance-state={loading ? "loading" : failed ? "unavailable" : counts ? "ready" : "unknown"}>
     <PerformanceSummary counts={summaryCounts} locale={query.locale} kind="matches"

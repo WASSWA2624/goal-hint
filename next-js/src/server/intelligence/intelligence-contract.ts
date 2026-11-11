@@ -14,7 +14,7 @@ export type LocalGoalConfiguration = Readonly<{
   ridge: number; maximumIterations: number; tolerance: number;
 }>;
 export type LocalGoalInput = Readonly<{
-  fixture: IntelligenceFixture; history: readonly BaselineResult[]; configuration?: Partial<LocalGoalConfiguration>;
+  fixture: IntelligenceFixture; history: readonly Omit<BaselineResult, "cycleId">[]; configuration?: Partial<LocalGoalConfiguration>;
 }>;
 export type LocalGoalForecast = Readonly<{
   source: "local"; modelVersion: string; hash: string; fixtureId: string; forecastAt: number; cutoffAt: number;

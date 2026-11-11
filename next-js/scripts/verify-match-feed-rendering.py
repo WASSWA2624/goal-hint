@@ -113,7 +113,7 @@ def verify_feed(origin, directory, scenarios):
         assert len(re.findall(r'\bdata-feed-dialog=', filter_form)) == 1
         assert len(re.findall(r'>Reset Filters</button>', filter_form)) == 1
         assert len(re.findall(r'>Apply Filters</button>', filter_form)) == 1
-        assert len(re.findall(r'Predictions only</label>', filter_form)) == 1
+        assert len(re.findall(r'Recommended picks only</label>', filter_form)) == 1
         no_match('role="slider"|With predictions|Any time|Specific time', visible)
         articles = re.findall(r'(<article\b[^>]*data-fixture-id="([^"]+)"[^>]*>)([\s\S]*?)</article>', visible)
         no_match("data-match-table-header", visible, name + ": shared match presentation replaces the former column header")

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   getAdminSessionSnapshot, getServerAdminSessionSnapshot,
-  getMemberSessionSnapshot, getServerMemberSessionSnapshot, refreshMemberSession, subscribeMemberSession,
+  ensureMemberSession, getMemberSessionSnapshot, getServerMemberSessionSnapshot, refreshMemberSession, subscribeMemberSession,
   getSubscriptionSnapshot, getServerSubscriptionSnapshot,
   getSlipSharingSnapshot,
 } from "../src/components/members/member-session.ts";
@@ -212,4 +212,35 @@ test("the subscribe offer is kept only when well formed, and a price change upda
     await refreshMemberSession();
     assert.deepEqual(getSubscriptionSnapshot(), base, `a malformed offer is dropped: ${JSON.stringify(offer)}`);
   }
+});
+
+test("route mounts reuse confirmed header state while transient subscription failures preserve its known expiry", async (t) => {
+  const previousWindow = globalThis.window, previousFetch = globalThis.fetch;
+  globalThis.window = new EventTarget();
+  t.after(() => {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+    globalThis.fetch = previousFetch;
+  });
+  const phone = "+256700000004", activeUntil = new Date(Date.now() + 60_000).toISOString();
+  let calls = 0;
+  let reply = { phone, administrator: false, subscription: { activeUntil, paymentPending: false, canSubscribe: true } };
+  globalThis.fetch = async () => { calls += 1; return Response.json(reply); };
+  await refreshMemberSession();
+  const before = getSubscriptionSnapshot();
+  const unmount = subscribeMemberSession(() => {});
+  await ensureMemberSession();
+  unmount();
+  const remount = subscribeMemberSession(() => {});
+  t.after(remount);
+  await ensureMemberSession();
+  assert.equal(calls, 1, "navigation recovery and re-mounted header share the same fresh session");
+  assert.equal(getSubscriptionSnapshot(), before);
+  reply = { ...reply, subscription: null };
+  await refreshMemberSession();
+  assert.equal(getSubscriptionSnapshot(), before, "a verified member with an unavailable subscription read retains its prior view");
+  reply = { phone: null, administrator: false, subscription: null };
+  await refreshMemberSession();
+  assert.equal(getSubscriptionSnapshot(), null);
+  assert.equal(getMemberSessionSnapshot(), null);
 });

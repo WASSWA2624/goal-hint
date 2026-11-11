@@ -7,7 +7,7 @@ import { memo, useRef } from "react";
 import styled from "styled-components";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { CountryLabel } from "@/components/ui/country-label";
-import { providerImageSource } from "@/components/ui/provider-image";
+import { CompetitionLogo } from "@/components/match/competition-media";
 import type { InsightResult, InsightSections } from "@/domain/match-insights";
 import { pageOf } from "@/domain/match-insight-presentation";
 import { fullDetailSnapshot } from "@/domain/detail-snapshot";
@@ -35,7 +35,6 @@ const NewsRow = styled(RowButton)`
 `;
 /** A team's last result: plain clicks open it in place, while the row stays a real link to its own match page. */
 const LastResultRow = styled(RowButton)`grid-template-columns: auto minmax(0, 1fr) auto; text-decoration: none;`;
-const SmallLogo = styled.img`flex: none; inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); object-fit: contain;`;
 const ExternalLink = styled.a`
   display: inline-flex;
   align-items: center;
@@ -145,7 +144,7 @@ export const ContextSection = memo(function ContextSection() {
     {record ? <RecordPanel record={record} /> : <div ref={list} style={{ display: "grid", gap: "var(--gh-spacing-2_5)" }}>
       <Facts>
         <dt>{messages.text("details.competition")}</dt><dd style={{ display: "flex", alignItems: "center", gap: "var(--gh-spacing-1_5)" }}>
-          {fixture.competition.logoUrl && <SmallLogo src={providerImageSource(fixture.competition.logoUrl, 18)} alt="" width={18} height={18} referrerPolicy="no-referrer" />}
+          <CompetitionLogo country={fixture.competition.country} url={fixture.competition.logoUrl} size={18} />
           {fixture.competition.name ?? messages.text("match.competitionUnknown")}</dd>
         <dt>{messages.text("details.country")}</dt><dd>{value?.competition.country ?? fixture.competition.country ? <CountryLabel country={value?.competition.country ?? fixture.competition.country} /> : messages.text("details.notAvailable")}</dd>
         <dt>{messages.text("details.round")}</dt><dd>{value?.competition.round ?? messages.text("details.notAvailable")}</dd>

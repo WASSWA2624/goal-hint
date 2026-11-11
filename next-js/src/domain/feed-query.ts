@@ -28,9 +28,13 @@ export type DateSelection =
   | Readonly<{ kind: FeedDatePreset }>
   | Readonly<{ kind: "date"; date: ReportingDate }>
   | Readonly<{ kind: "range"; from: ReportingDate; to: ReportingDate }>;
-export type FeedSortField = "kickoff" | "probability";
+const feedSortFields = ["live-first", "kickoff", "probability"] as const;
+export type FeedSortField = (typeof feedSortFields)[number];
 export type FeedSortDirection = "asc" | "desc";
 export type FeedSort = Readonly<{ by: FeedSortField; direction: FeedSortDirection }>;
+export function feedSortLabelKey({ by, direction }: FeedSort) {
+  return by === "live-first" ? "feed.sort.live-first-desc" : `feed.sort.${by}-${direction}` as const;
+}
 export type ProbabilityRange = Readonly<{ min: number; max: number }>;
 /** "only" keeps fixtures whose shown pick exists; "all" includes fixtures without a prediction. */
 export type PicksFilter = "all" | "only";
@@ -72,13 +76,18 @@ export const feedQueryRules = Object.freeze({ maximumDays: 366, maximumSearchLen
 /** Any market: each fixture shows its highest-probability available pick across all supported families. */
 export const defaultMarkets: readonly MarketFamily[] = publicPolicy.markets;
 export const anyProbability: ProbabilityRange = Object.freeze({ min: 0, max: 100 });
-export const defaultSortDirection: Readonly<Record<FeedSortField, FeedSortDirection>> = Object.freeze({ kickoff: "desc", probability: "desc" });
+export const defaultSortDirection: Readonly<Record<FeedSortField, FeedSortDirection>> = Object.freeze({ "live-first": "desc", kickoff: "desc", probability: "desc" });
+const kickoffSort = Object.freeze({ by: "kickoff", direction: "desc" } as const);
 /** Matches screen and Reset defaults; the public API keeps its existing date and sort defaults. */
 export const matchFeedPageDefaults = Object.freeze({
   dates: Object.freeze({ kind: "today" }),
-  sort: Object.freeze({ by: "kickoff", direction: "desc" }),
+  sort: Object.freeze({ by: "live-first", direction: "desc" }),
   pageSize: feedQueryRules.pageSize,
-} as const satisfies Pick<FeedQuery, "dates" | "sort" | "pageSize">);
+  picks: "all",
+} as const satisfies Pick<FeedQuery, "dates" | "sort" | "pageSize" | "picks">);
+export function defaultPageSort(dates: DateSelection): FeedSort {
+  return dates.kind === "today" ? matchFeedPageDefaults.sort : kickoffSort;
+}
 export const feedDefaults = Object.freeze({
   today: Object.freeze({ dayOffset: 0, status: "all" }),
   results: Object.freeze({ dayOffset: -1, status: "finished" }),
@@ -272,7 +281,8 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
   const picks = get("picks") ?? "all";
   if (picks !== "all" && picks !== "only") fail();
   const by = get("sort") ?? "kickoff", direction = get("dir");
-  if (by !== "kickoff" && by !== "probability" || direction !== undefined && direction !== "asc" && direction !== "desc") fail();
+  if (by !== "live-first" && by !== "kickoff" && by !== "probability" ||
+      direction !== undefined && direction !== "desc" && (direction !== "asc" || by === "live-first")) fail();
   return {
     locale: resolveLocale(context.locale), ...(summary ? { summary } : {}), ...(result && result !== "all" ? { result: result as PredictionResult } : {}), dates, search, ...(zone === undefined ? {} : { zone }), ...(time ? { time } : {}), ...(interval ? { interval } : {}),
     leagues, countries, status: parseFeedStatus(get("status")), markets,
@@ -286,24 +296,18 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
 const sameList = (left: readonly string[], right: readonly string[]) =>
   left.length === right.length && left.every((item, index) => item === right[index]);
 
-/** The Today entry includes the schedule while predictions are being published. */
-export function defaultPagePicks(status: FeedStatus, subscriberOnly = false, dates?: DateSelection): PicksFilter {
-  return (status === "all" && dates?.kind === "today") || (subscriberOnly && status !== "finished") ? "all" : "only";
-}
-
 /** Explicit filters and archive dates take precedence; dated archives retain their existing order. */
-export function applyFeedPageDefaults(query: FeedQuery, input: FeedParameters, subscriberOnly = false, { dated = false }: { dated?: boolean } = {}): FeedQuery {
+export function applyFeedPageDefaults(query: FeedQuery, input: FeedParameters, { dated = false }: { dated?: boolean } = {}): FeedQuery {
   const has = (key: string) => input instanceof URLSearchParams ? input.has(key) : input[key] !== undefined;
   const explicitDates = query.dates.kind === "date" || query.dates.kind === "range" || ["date", "from", "to", "when"].some(has);
   // A legacy summary-only link now sets the date for the entire view.
   const { summary, ...scope } = query;
   const dates: DateSelection = dated || explicitDates ? query.dates : summary ? { kind: summary } : matchFeedPageDefaults.dates;
-  const predictionScope = dated || has("market") || query.result || query.odds || !isAnyProbability(query.probability);
   return { ...scope,
     pageSize: matchFeedPageDefaults.pageSize,
     dates,
-    sort: dated || has("sort") || has("dir") ? query.sort : matchFeedPageDefaults.sort,
-    picks: has("picks") ? query.picks : defaultPagePicks(query.status, subscriberOnly, predictionScope ? undefined : dates),
+    sort: dated || has("sort") || has("dir") ? query.sort : defaultPageSort(dates),
+    picks: has("picks") ? query.picks : matchFeedPageDefaults.picks,
   };
 }
 
@@ -313,7 +317,7 @@ export function isAnyMarkets(markets: readonly MarketFamily[]): boolean {
 
 /** Canonical parameter order and omitted defaults make equivalent URLs share a key. */
 export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLSearchParams {
-  if (![...feedDatePresets, "date", "range"].includes(query.dates.kind) || !["kickoff", "probability"].includes(query.sort.by) ||
+  if (![...feedDatePresets, "date", "range"].includes(query.dates.kind) || !feedSortFields.includes(query.sort.by) ||
       !["asc", "desc"].includes(query.sort.direction)) fail();
   const result = new URLSearchParams();
   const dates = query.dates;
@@ -372,7 +376,7 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
 
 export function feedQueryHref(query: FeedQuery, today: ReportingDate): string {
   const parameters = serializeFeedQuery(query, today);
-  // Page defaults differ from the public API: retain an intentional opt-out on navigation.
+  // Keep the unrestricted recommendation choice explicit in existing page links.
   if (query.picks === "all") parameters.set("picks", "all");
   const dates = query.dates;
   let path = `/${resolveLocale(query.locale)}`;

@@ -1,18 +1,24 @@
 import { z } from "zod";
-import { fixturePriceSchema, type FixturePrice } from "./fixture-snapshot.ts";
+import { fixturePriceSchema } from "./fixture-snapshot.ts";
 import { storedMatchFeedResponseSchema, type StoredMatchFeedRecord, type StoredMatchFeedResponse } from "./match-feed.ts";
 import { isMarketSelection, marketSelections } from "./markets.ts";
+import type { SlipSelectionPrice } from "./slip-builder.ts";
+import { slipBookmakerSchema, slipQuoteOddsSchema } from "./slip-quote.ts";
 
 export const slipPricePageRules = Object.freeze({
   maximumPricesPerFixture: Object.values(marketSelections).reduce((total, selections) => total + selections.length, 0),
+  maximumBookmakersPerFixture: 200,
 });
 
 /** Supplemental prices for published alternatives. The ordinary feed's selected-pick prices remain unchanged.
  * Freshness and public display permission come from the stored projection, not a browser age heuristic. */
-export const slipSelectionPricesSchema = z.record(z.string(), z.array(fixturePriceSchema).max(slipPricePageRules.maximumPricesPerFixture));
+const slipSelectionPriceSchema = fixturePriceSchema.extend({ price: slipQuoteOddsSchema, bookmaker: slipBookmakerSchema.optional() })
+  .refine(({ basis, bookmaker }) => !bookmaker || basis === "bookmaker");
+export const slipSelectionPricesSchema = z.record(z.string(), z.array(slipSelectionPriceSchema)
+  .max(slipPricePageRules.maximumPricesPerFixture * slipPricePageRules.maximumBookmakersPerFixture));
 
 /** Identical outcome ownership, uniqueness and observation-cutoff checks for pages and atomic cohorts. */
-export function refineSlipPricePools(records: readonly StoredMatchFeedRecord[], selectionPrices: Readonly<Record<string, readonly FixturePrice[]>>,
+export function refineSlipPricePools(records: readonly StoredMatchFeedRecord[], selectionPrices: Readonly<Record<string, readonly SlipSelectionPrice[]>>,
   asOf: number, context: z.RefinementCtx) {
   const fixtures = new Map(records.map((record) => [record.fixtureId, record]));
   for (const record of records) {
@@ -29,10 +35,10 @@ export function refineSlipPricePools(records: readonly StoredMatchFeedRecord[], 
     const markets = new Map(record.forecast?.markets.map(({ market }) => [market.family, market]) ?? []);
     const seen = new Set<string>();
     prices.forEach((price, index) => {
-      const path = ["selectionPrices", fixtureId, index], key = `${price.family}\u0000${price.selection}`;
+      const path = ["selectionPrices", fixtureId, index], key = `${price.family}\u0000${price.selection}\u0000${price.bookmaker?.id ?? ""}`;
       const market = markets.get(price.family);
       if (seen.has(key)) {
-        context.addIssue({ code: "custom", path, message: "A family and selection may have only one price." });
+        context.addIssue({ code: "custom", path, message: "Each bookmaker may offer one price for a family and selection." });
       }
       seen.add(key);
       if (!market || !isMarketSelection(price.family, price.selection) || !Object.hasOwn(market.probabilities, price.selection)) {
@@ -51,5 +57,5 @@ export const slipPricePageSchema = z.strictObject({
 
 export type SlipPricePage = Readonly<{
   feed: StoredMatchFeedResponse;
-  selectionPrices: Readonly<Record<string, readonly FixturePrice[]>>;
+  selectionPrices: Readonly<Record<string, readonly SlipSelectionPrice[]>>;
 }>;

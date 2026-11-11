@@ -10,7 +10,8 @@ import { evidenceFingerprint, evidenceSerialize, freezeEvidence, isSafeEvidenceL
 import { parseModelPin } from "../predictor/predictor-input.ts";
 import { fourDigitYearInstant as instant } from "../shared/utc-instant.ts";
 import type { PredictorResult } from "../predictor/predictor-service.ts";
-import type { FallbackContext, ForecastTimestamps, ProviderFallbackCandidate, ProviderFallbackResult, ResolvedForecastCandidate } from "./fallback-contract.ts";
+import { LIVE_FORECAST_CASCADE, type FallbackContext, type ForecastTimestamps, type ProviderFallbackCandidate,
+  type ProviderFallbackResult, type ResolvedForecastCandidate } from "./fallback-contract.ts";
 
 export class FallbackInputError extends Error {
   readonly reason = "invalid-request";
@@ -154,6 +155,11 @@ const resolvedProvenance = z.discriminatedUnion("kind", [
     kind: z.literal("ai"), pin: z.unknown(), transportEvidenceRef: text }),
   z.object({ kind: z.literal("api-football"), source: providerCandidate.shape.provenance,
     policyVersion: text, policyEvidenceRef: text }).strict(),
+  z.strictObject({ kind: z.literal("local-engine"), modelVersion: text, historyHash: identity, evidenceHash: identity,
+    rates: z.strictObject({ home: z.number().min(0.05).max(6), away: z.number().min(0.05).max(6) }),
+    sample: z.strictObject({ matches: z.number().int().positive().max(1500),
+      homeEffectiveMatches: z.number().positive().max(1500), awayEffectiveMatches: z.number().positive().max(1500) })
+      .refine(({ matches, homeEffectiveMatches, awayEffectiveMatches }) => homeEffectiveMatches <= matches && awayEffectiveMatches <= matches) }),
 ]);
 const resolvedMarket = z.discriminatedUnion("available", [
   z.object({ available: z.literal(true), market: z.unknown(), timestamps, flags, provenance: resolvedProvenance,
@@ -168,7 +174,9 @@ const resolvedCandidate = z.object({ context: z.unknown(), markets: z.object({
   reasons: z.array(publicExplanation).min(2).max(4), uncertainty: publicExplanation,
   audit: z.object({ aiStatus: z.enum(["candidate", "denied"]), aiReason: text.nullable(),
     providerStatus: z.enum(["candidate", "denied", "not-requested"]), providerReason: z.enum(fallbackProviderReasons).nullable(),
-    sourceOrder: z.enum(forecastSourceOrders).optional(), recommendation: z.unknown().optional() }).strict(),
+    sourceOrder: z.enum(forecastSourceOrders).optional(), sourceCascade: z.literal(LIVE_FORECAST_CASCADE).optional(),
+    localStatus: z.enum(["candidate", "unavailable", "not-requested"]).optional(),
+    recommendation: z.unknown().optional() }).strict(),
 }).strict();
 
 /** Archive validation, not provider/ownership authorization or publication eligibility. */
@@ -197,6 +205,11 @@ export function parseResolvedForecastCandidate(value: unknown): ResolvedForecast
         if (context.pin === null || pin.id !== context.pin.id || provenance.modelVersionId !== pin.modelVersionId ||
           provenance.evidenceHash !== context.evidenceHash || item.fallback !== null ||
           provenance.provisional !== (provenance.evaluation.status !== "evaluated")) throw new Error();
+      } else if (provenance.kind === "local-engine") {
+        if (parsed.audit.sourceCascade !== LIVE_FORECAST_CASCADE || parsed.audit.localStatus !== "candidate" ||
+          parsed.audit.providerStatus !== "not-requested" ||
+          provenance.evidenceHash !== context.evidenceHash || item.fallback !== null || item.timestamps.generatedAt !== item.timestamps.retrievedAt ||
+          item.timestamps.providerUpdatedAt !== null) throw new Error();
       } else {
         if (item.fallback === null || provenance.source.jobId !== context.jobId ||
           provenance.source.externalFixtureId !== context.context.externalFixtureId) throw new Error();
@@ -206,6 +219,15 @@ export function parseResolvedForecastCandidate(value: unknown): ResolvedForecast
       }
     }
     const result = parsed.markets["match-result"], chance = parsed.markets["double-chance"];
+    const available = Object.values(parsed.markets).filter((item) => item.available);
+    if (parsed.audit.sourceCascade === LIVE_FORECAST_CASCADE &&
+      (parsed.audit.sourceOrder === "provider-first" || new Set(available.map((item) => item.provenance.kind)).size > 1)) throw new Error();
+    const local = available.find((item) => item.provenance.kind === "local-engine");
+    if ((parsed.audit.sourceCascade !== undefined) !== (parsed.audit.localStatus !== undefined) ||
+      (parsed.audit.localStatus === "candidate") !== !!local) throw new Error();
+    if (local && (available.length !== Object.keys(parsed.markets).length || available.some((item) =>
+      evidenceFingerprint(item.provenance) !== evidenceFingerprint(local.provenance) ||
+      evidenceFingerprint(item.timestamps) !== evidenceFingerprint(local.timestamps)))) throw new Error();
     if (result.available && chance.available) {
       for (const key of ["provenance", "timestamps", "flags", "fallback"] as const)
         if (evidenceFingerprint(result[key]) !== evidenceFingerprint(chance[key])) throw new Error();

@@ -6,9 +6,11 @@ import { marketSelections, type MarketFamily, type MarketSelection } from "./mar
 import { publicPolicy } from "./public-policy.ts";
 import { bestPublishedFamily } from "./market-ranking.ts";
 import { selectedCardPrice } from "./match-card.ts";
-import { isPlayedFinalStatus, selectionOccurred } from "./market-settlement.ts";
+import { selectionOccurred } from "./market-settlement.ts";
+import { displayMarketOddsPrice, marketOddsPrice } from "./in-play-odds.ts";
+import { bookmakerMarketPrice } from "./bookmaker-odds.ts";
+import { forecastExpectedReturn } from "./forecast-value.ts";
 import { resultFor } from "./match-insight-presentation.ts";
-import { recommendationFamily, recommendationMarket } from "./recommendation-view.ts";
 
 /**
  * Pure presentation rules for the match-details screen. Every value is read from the stored
@@ -35,23 +37,21 @@ export const marketCategoryMembers: Readonly<Record<MarketCategory, readonly Mar
 /** The market row for one family in the applicable revision, or why it is missing. */
 export function marketRow(data: MatchDetailResponse, family: MarketFamily) {
   const snapshot = fullDetailSnapshot(data);
-  const original = snapshot?.markets.find((entry) => entry.market.family === family) ?? null;
-  const selected = original && recommendationMarket(original.market, snapshot?.recommendation);
-  const item = original && selected && selected.selection !== original.market.selection ? { ...original, market: selected,
-    alternatives: marketSelections[family].filter((selection) => selection !== selected.selection).map((selection) => ({ selection,
-      probability: (selected.probabilities as Readonly<Record<string, number>>)[selection]! })) } : original;
+  const item = snapshot?.markets.find((entry) => entry.market.family === family) ?? null;
   const reason = (snapshot?.unavailableMarkets ?? data.fixture.unavailableMarkets ?? []).find((entry) => entry.family === family)?.reason ?? "not-published";
-  let outcome = item && snapshot ? snapshot.outcomes.find((entry) => entry.family === family && entry.selection === item.market.selection &&
+  const outcome = item && snapshot ? snapshot.outcomes.find((entry) => entry.family === family && entry.selection === item.market.selection &&
     entry.revisionId === snapshot.revisionId && entry.cycleId === snapshot.cycleId) ?? null : null;
-  const originalOutcome = original && snapshot?.outcomes.find((entry) => entry.family === family && entry.selection === original.market.selection &&
-    entry.revisionId === snapshot.revisionId && entry.cycleId === snapshot.cycleId);
-  if (!outcome && item && snapshot?.applicability === "locked" && originalOutcome &&
-    ["correct", "incorrect"].includes(originalOutcome.status) && data.fixture.forecast?.revisionId === snapshot.revisionId &&
-    data.fixture.scorePeriod === "regulation" && data.fixture.score && isPlayedFinalStatus(data.fixture.status)) {
-    outcome = { ...originalOutcome, selection: item.market.selection,
-      status: selectionOccurred(item.market.selection, data.fixture.score.home, data.fixture.score.away) ? "correct" : "incorrect" };
-  }
   return { family, item, outcome, reason };
+}
+
+export function detailMarketValue(data: MatchDetailResponse, family: MarketFamily): number | null {
+  const { fixture } = data, snapshot = fullDetailSnapshot(data);
+  if (fixture.status !== "scheduled" || snapshot?.applicability !== "current"
+    || fixture.forecast?.revisionId !== snapshot.revisionId || fixture.cycleId !== snapshot.cycleId) return null;
+  const market = snapshot.markets.find((entry) => entry.market.family === family)?.market;
+  return market ? forecastExpectedReturn(market.selectedProbability,
+    marketOddsPrice(fixture.marketOdds?.kind === "pre-match" ? fixture.marketOdds : null, family, market.selection) ??
+    bookmakerMarketPrice(data.bookmakerOdds?.kind === "pre-match" ? data.bookmakerOdds : null, family, market.selection)) : null;
 }
 
 /** Current public odds for the exact displayed pick; historical publications never inherit live prices. */
@@ -61,8 +61,12 @@ export function selectedDetailPrice(data: MatchDetailResponse, family: MarketFam
     fixture.forecast?.revisionId !== snapshot.revisionId || fixture.cycleId !== snapshot.cycleId) return null;
   const item = marketRow(data, family).item;
   if (!item) return null;
-  const price = selectedCardPrice(fixture, family);
-  return (price?.selection === item.market.selection ? price.price : null) ?? data.odds?.find((group) => group.family === family)
+  if (fixture.status === "live") return marketOddsPrice(data.inPlayOdds, family, item.market.selection);
+  const bookmaker = bookmakerMarketPrice(data.bookmakerOdds, family, item.market.selection);
+  return marketOddsPrice(fixture.marketOdds?.kind === "pre-match" ? fixture.marketOdds : null, family, item.market.selection) ??
+    (bookmaker ? displayMarketOddsPrice(bookmaker) : null) ??
+    selectedCardPrice(fixture, family, false)?.price ??
+    data.odds?.find((group) => group.family === family)
     ?.selections.find((price) => price.selection === item.market.selection)?.price ?? null;
 }
 
@@ -70,8 +74,6 @@ export function selectedDetailPrice(data: MatchDetailResponse, family: MarketFam
 export function featuredFamily(data: MatchDetailResponse): MarketFamily | null {
   const snapshot = fullDetailSnapshot(data);
   if (!snapshot) return null;
-  const authoritative = recommendationFamily(snapshot.recommendation, publicPolicy.markets);
-  if (authoritative !== undefined) return authoritative;
   // The fixture carries applicable-pick prices; the complete detail envelope also covers historical selections.
   const prices = [...(data.fixture.prices ?? []), ...(data.odds ?? []).flatMap((group) => group.selections.map((price) => ({
     family: group.family, selection: price.selection, price: price.price,

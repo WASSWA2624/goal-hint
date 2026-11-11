@@ -21,7 +21,8 @@ export function feedPerformanceApiHref(query: FeedQuery, today: ReportingDate): 
 /** A list with no available picks has no outcomes to audit. Use its own count and generation.
  * A selected outcome narrows the list and therefore cannot establish the period total. */
 export function emptyFeedPerformanceReply(query: FeedQuery, data: MatchFeedResponse): FeedPerformanceReply | null {
-  if (query.result || data.state === "data-unavailable" || data.coverage.matchingWithMarket !== 0 || !data.performanceVersion) return null;
+  const picks = data.coverage.matchingWithPerformancePick ?? data.coverage.matchingWithMarket;
+  if (query.result || data.state === "data-unavailable" || picks !== 0 || !data.performanceVersion) return null;
   return { performance: { total: data.total, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0, unavailable: data.total },
     paginationVersion: data.performanceVersion, asOf: data.asOf, access: data.access };
 }

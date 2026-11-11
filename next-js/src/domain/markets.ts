@@ -3,7 +3,8 @@ import { publicPolicy } from "./public-policy.ts";
 export const MARKET_RULE_VERSION = "regulation-markets-v1";
 export const PROBABILITY_DISPLAY_VERSION = "probability-display-v1";
 export type MarketFamily = typeof publicPolicy.markets[number];
-export type MarketSource = "ai" | "api-football";
+export const marketSources = ["ai", "local-engine", "api-football"] as const;
+export type MarketSource = typeof marketSources[number];
 export type SourceGroup = Exclude<MarketFamily, "double-chance">;
 
 export const marketSelections = Object.freeze({
@@ -178,7 +179,7 @@ export function validateMarketGroup(family: unknown, candidate: unknown): GroupV
   if (candidate === undefined) return reject("missing-group");
   if (!isRecord(candidate) || Object.keys(candidate).some((key) =>
     !["source", "period", "probabilities", "line"].includes(key))) return reject("invalid-candidate");
-  if (candidate.source !== "ai" && candidate.source !== "api-football") return reject("invalid-source");
+  if (candidate.source !== "ai" && candidate.source !== "local-engine" && candidate.source !== "api-football") return reject("invalid-source");
   if (candidate.period !== marketRules.period) return reject("unsupported-period");
   if (family === "total-goals" ? candidate.line !== marketRules.totalGoalsLine : Object.hasOwn(candidate, "line")) {
     return reject("unsupported-line");
@@ -302,7 +303,7 @@ export function presentMarketProbabilities(market: AcceptedMarket): ProbabilityP
   }
   const checked = readDistribution(market.family, market.probabilities);
   if (!checked.valid) throw new MarketValidationError("Presentation requires complete valid probabilities.");
-  if (market.period !== marketRules.period || (market.source !== "ai" && market.source !== "api-football") ||
+  if (market.period !== marketRules.period || !marketSources.includes(market.source) ||
       market.selection !== chooseMarketSelection(market.family, market.probabilities) ||
       market.selectedProbability !== checked.probabilities[market.selection] ||
       (market.family === "total-goals" ? market.line !== marketRules.totalGoalsLine : Object.hasOwn(market, "line")) ||

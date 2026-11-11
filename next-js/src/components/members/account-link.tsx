@@ -18,8 +18,8 @@ import { accountSectionIcons } from "./account-navigation";
 import { media } from "@/styles/theme";
 import { MemberSignOut } from "./member-controls";
 import { getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot, subscribePendingPayments } from "@/components/admin/pending-payments";
-import { getAdminSessionSnapshot, getMemberSessionSnapshot, getServerAdminSessionSnapshot, getServerMemberSessionSnapshot,
-  refreshMemberSession, subscribeMemberSession } from "./member-session";
+import { ensureMemberSession, getAdminSessionSnapshot, getMemberSessionSnapshot, getServerAdminSessionSnapshot, getServerMemberSessionSnapshot,
+  subscribeMemberSession } from "./member-session";
 
 const Actions = styled.div`
   display: flex;
@@ -127,10 +127,15 @@ const SignOut = styled(MemberSignOut)`
 
 function AccountMenu({ locale, phone, administratorName }: { locale: string; phone: string | null; administratorName?: string }) {
   const messages = createMessages(locale);
+  const pathname = usePathname(), previousPathname = useRef(pathname);
   const root = useRef<HTMLDetailsElement>(null);
   const popupId = useId();
   const [open, setOpen] = useState(false);
   const dismiss = useCallback(() => closeDetails(root.current, () => setOpen(false)), []);
+  useEffect(() => {
+    if (previousPathname.current !== pathname) dismiss();
+    previousPathname.current = pathname;
+  }, [dismiss, pathname]);
   useOutsideDismiss({ enabled: open, root, onDismiss: dismiss });
   return <Disclosure ref={root} data-account-menu onToggle={(event) => setOpen(event.currentTarget.open)}
     onKeyDown={(event) => {
@@ -172,16 +177,18 @@ export function AccountLinks({ locale = "en", administratorName }: { locale?: st
   const pathname = usePathname();
   const phone = useSyncExternalStore(subscribeMemberSession, getMemberSessionSnapshot, getServerMemberSessionSnapshot);
   const administrator = useSyncExternalStore(subscribeMemberSession, getAdminSessionSnapshot, getServerAdminSessionSnapshot);
-  useEffect(() => { void refreshMemberSession(); }, [pathname]);
+  useEffect(() => { void ensureMemberSession(); }, [pathname]);
   const messages = createMessages(locale);
   const adminIdentity = administratorName ?? (administrator ? messages.text("navigation.dashboard") : undefined);
+  const signedIn = !!(phone || adminIdentity);
   return <Actions data-account-actions>
     {(administratorName || administrator) && <AdminPaymentsLink />}
     <DownloadHeaderLink locale={locale} />
-    {phone || adminIdentity ? <><ThemeToggle locale={locale} /><AccountMenu key={pathname} locale={locale} phone={phone} {...(adminIdentity ? { administratorName: adminIdentity } : {})} /></> : <>
+    {!signedIn && <>
       <AuthLink href={memberAuthPath("login")} prefetch={false} data-header-auth="login"><SignInIcon /><span>{messages.text("auth.signIn")}</span></AuthLink>
       <AuthLink href={memberAuthPath("register")} prefetch={false} $primary aria-label={messages.text("auth.signUp")} data-header-auth="register"><UserPlusIcon /><span>{messages.text("auth.signUp")}</span></AuthLink>
-      <ThemeToggle locale={locale} />
     </>}
+    <ThemeToggle locale={locale} />
+    {signedIn && <AccountMenu locale={locale} phone={phone} {...(adminIdentity ? { administratorName: adminIdentity } : {})} />}
   </Actions>;
 }

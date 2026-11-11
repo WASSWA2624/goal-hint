@@ -3,10 +3,12 @@ import "server-only";
 import type { FixturePrice } from "../../domain/fixture-snapshot.ts";
 import type { DetailOddsGroup } from "../../domain/match-detail.ts";
 import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
-import { formatOddsHundredths, oddsRules } from "../../domain/odds.ts";
+import { marketOddsObservationSchema } from "../../domain/in-play-odds.ts";
+import { formatOddsHundredths, oddsRules, parseDecimalOdds } from "../../domain/odds.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { historyTime } from "../predictions/history-read.ts";
+import { preMatchOddsFreshMs } from "./odds-contract.ts";
 
 type Tx = Prisma.TransactionClient;
 // Compare the stored decimal before rounding: an old 1.0099 quote displays as 1.01.
@@ -18,11 +20,12 @@ export const oddsPriceJoin = Prisma.sql`LEFT JOIN FixtureOddsPrice op ON op.fixt
 
 export type FixturePriceRow = { marketKey: string; selection: string; basis: string; displayHundredths: unknown; impliedProbability: string;
   overround: string; method: string; snapshotId: string | null; retrievedAt: Date; providerUpdatedAt: Date | null };
+const priceFields = Prisma.sql`p.marketKey,p.selection,p.basis,p.displayHundredths,CAST(p.impliedProbability AS CHAR) AS impliedProbability,
+  CAST(p.overround AS CHAR) AS overround,p.method,p.snapshotId,p.retrievedAt,p.providerUpdatedAt`;
 async function freshRows(tx: Tx, fixtureId: string): Promise<FixturePriceRow[]> {
-  return tx.$queryRaw<FixturePriceRow[]>`SELECT marketKey, selection, basis, displayHundredths, CAST(impliedProbability AS CHAR) AS impliedProbability,
-    CAST(overround AS CHAR) AS overround, method, snapshotId, retrievedAt, providerUpdatedAt
-    FROM FixtureOddsPrice WHERE fixtureId = ${fixtureId} AND stale = FALSE AND priceDecimal>=${minimumFixturePrice}
-    ORDER BY marketKey, selection`;
+  return tx.$queryRaw<FixturePriceRow[]>`SELECT ${priceFields} FROM FixtureOddsPrice p
+    WHERE p.fixtureId = ${fixtureId} AND p.stale = FALSE AND p.priceDecimal>=${minimumFixturePrice}
+    ORDER BY p.marketKey,p.selection`;
 }
 const isBasis = (value: string): value is FixturePrice["basis"] => value === "bookmaker" || value === "median";
 
@@ -48,22 +51,59 @@ export function fixturePricesFromRows(rows: readonly FixturePriceRow[], picks: r
 
 /** Complete market-implied groups for the detail page, outside the immutable revision cache. A group appears only
  * when every selection of its family is fresh and from one snapshot. */
-export async function storedFixtureOddsGroups(tx: Tx, fixtureId: string,
-  enabled: boolean = publicPolicy.features.providerOdds): Promise<DetailOddsGroup[]> {
-  if (!enabled) return [];
-  const rows = await freshRows(tx, fixtureId), groups: DetailOddsGroup[] = [];
-  for (const family of publicPolicy.markets) {
+function completePriceGroups<T extends FixturePriceRow>(rows: readonly T[]) {
+  return publicPolicy.markets.flatMap((family) => {
     const selections = marketSelections[family] as readonly string[];
     const members = selections.map((selection) => rows.find((row) => row.marketKey === family && row.selection === selection));
     const first = members[0];
-    if (!first || members.some((row) => !row || row.snapshotId !== first.snapshotId || row.overround !== first.overround ||
-      row.basis !== first.basis || row.retrievedAt.getTime() !== first.retrievedAt.getTime()) || !isBasis(first.basis)) continue;
-    groups.push({ label: "market-implied", family, basis: first.basis, method: first.method, overround: first.overround,
+    if (!first || !isBasis(first.basis) || !members.every((row): row is T => row !== undefined && row.snapshotId === first.snapshotId
+      && row.overround === first.overround && row.basis === first.basis && row.retrievedAt.getTime() === first.retrievedAt.getTime())) return [];
+    return [{ family, first, basis: first.basis, members }];
+  });
+}
+
+export async function storedFixtureOddsGroups(tx: Tx, fixtureId: string,
+  enabled: boolean = publicPolicy.features.providerOdds): Promise<DetailOddsGroup[]> {
+  if (!enabled) return [];
+  return completePriceGroups(await freshRows(tx, fixtureId)).map(({ family, first, basis, members }) =>
+    ({ label: "market-implied", family, basis, method: first.method, overround: first.overround,
       retrievedAt: historyTime(first.retrievedAt), providerUpdatedAt: first.providerUpdatedAt === null ? null : historyTime(first.providerUpdatedAt),
-      selections: members.map((row) => ({ selection: row!.selection, price: formatOddsHundredths(Number(row!.displayHundredths)),
-        impliedProbability: row!.impliedProbability })) });
+      selections: members.map((row) => ({ selection: row.selection, price: formatOddsHundredths(Number(row.displayHundredths)),
+        impliedProbability: row.impliedProbability })) }));
+}
+
+type UpcomingPriceRow = FixturePriceRow & { fixtureId: string; kickoff: Date; checkedAt: Date; priceDecimal: string };
+/** Read only scheduled, confirmed quotes for the current page. A closing price stays in history. */
+export async function storedUpcomingOddsForFixtures(tx: Tx, ids: readonly string[], asOf: number) {
+  if (!ids.length) return [];
+  const at = new Date(asOf);
+  const rows = await tx.$queryRaw<UpcomingPriceRow[]>(Prisma.sql`SELECT ${priceFields},p.fixtureId,f.kickoff,
+    s.lastRetrievedAt AS checkedAt,CAST(p.priceDecimal AS CHAR) AS priceDecimal
+    FROM FixtureOddsPrice p JOIN FixtureOddsState s ON s.fixtureId=p.fixtureId
+    JOIN FootballFixture f ON f.id=p.fixtureId WHERE p.fixtureId IN (${Prisma.join(ids)})
+      AND f.status='scheduled' AND f.kickoff>${at} AND p.stale=FALSE AND s.withdrawnAt IS NULL
+      AND p.priceDecimal>=${minimumFixturePrice} AND p.retrievedAt<=s.lastRetrievedAt
+      AND s.lastRetrievedAt BETWEEN ${new Date(asOf - preMatchOddsFreshMs)} AND ${at}`);
+  const byFixture = new Map<string, UpcomingPriceRow[]>();
+  for (const row of rows) {
+    const group = byFixture.get(row.fixtureId);
+    if (group) group.push(row);
+    else byFixture.set(row.fixtureId, [row]);
   }
-  return groups;
+  return [...byFixture].flatMap(([fixtureId, group]) => {
+    const markets = completePriceGroups(group).flatMap(({ family, members }) => {
+      const selections = members.flatMap(({ selection, priceDecimal }) => {
+        const price = parseDecimalOdds(priceDecimal);
+        return price ? [{ selection, price: price.text }] : [];
+      });
+      return selections.length === members.length ? [{ family, selections }] : [];
+    });
+    const first = group[0]!;
+    if (!markets.length) return [];
+    const observation = marketOddsObservationSchema.safeParse({ kind: "pre-match", checkedAt: first.checkedAt.getTime(),
+      prices: { state: "available", markets } });
+    return observation.success ? [{ fixtureId, kickoffAt: first.kickoff.getTime(), observation: observation.data }] : [];
+  });
 }
 
 export type QuoteSourceRow = Readonly<{ marketKey: string; selection: string; basis: string; bookmakerId: number | null; displayHundredths: unknown; priceDecimal: string;

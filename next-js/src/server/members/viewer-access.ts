@@ -13,11 +13,14 @@ import { accessMode, settingsServiceFor, type SettingsState } from "./settings.t
 import { developmentMemberToken } from "../demo/member.ts";
 
 export type ViewerAccess = Readonly<{ tier: "full" | "free"; signedIn: boolean; mode: PaywallMode | "free" }>;
+export class ViewerAccessUnavailable extends Error {
+  constructor() { super("Viewer access is temporarily unavailable."); }
+}
 type AccessRow = { accountId: string; phone: string; passwordHash: string | null; blockedAt: Date | null;
   adminPasswordVersion: string | null; lastSeenAt: Date; entitled: number | bigint; canRenew: number | bigint | null; chainEnd: Date | null };
 
-export function createViewerAccess({ services = getAnalyticsServices, settings, now = Date.now }: {
-  services?: () => Promise<AnalyticsServices>; settings?: () => Promise<SettingsState>; now?: () => number;
+export function createViewerAccess({ services = getAnalyticsServices, settings, now = Date.now, failOnUnavailable = false }: {
+  services?: () => Promise<AnalyticsServices>; settings?: () => Promise<SettingsState>; now?: () => number; failOnUnavailable?: boolean;
 } = {}) {
   return async (cookieValue: (name: string) => string | undefined): Promise<ViewerAccess> => {
     let mode: ViewerAccess["mode"] = "free";
@@ -27,8 +30,11 @@ export function createViewerAccess({ services = getAnalyticsServices, settings, 
       mode = accessMode(state);
       const owner = cookieValue(resolved.config.cookies.session);
       if (owner && await resolved.auth?.verify(owner, { touch: false })) return { tier: "full", signedIn: false, mode };
-      if (!resolved.database) return { tier: "free", signedIn: false, mode };
       const token = developmentMemberToken(cookieValue(memberCookieName(resolved.config.production))), at = new Date(now());
+      if (!resolved.database) {
+        if (failOnUnavailable && validMemberToken(token)) throw new ViewerAccessUnavailable();
+        return { tier: "free", signedIn: false, mode };
+      }
       let row: AccessRow | undefined;
       if (validMemberToken(token)) {
         const hash = memberTokenHash(token), database = resolved.database;
@@ -59,15 +65,21 @@ export function createViewerAccess({ services = getAnalyticsServices, settings, 
         }
       }
       const administrator = !!row && !row.blockedAt && isMemberAdminPhone(row.phone);
+      if (failOnUnavailable && row?.entitled && !administrator && !state.settings) throw new ViewerAccessUnavailable();
       return { tier: administrator || state.settings && row?.entitled ? "full" : "free", signedIn: !!row, mode };
-    } catch { return { tier: "free", signedIn: false, mode }; }
+    } catch {
+      if (failOnUnavailable) throw new ViewerAccessUnavailable();
+      return { tier: "free", signedIn: false, mode };
+    }
   };
 }
 
 const resolve = createViewerAccess();
+// Polls retain their accepted screen through a 503. A real sign-out still returns a confirmed free projection.
+const resolveRequest = createViewerAccess({ failOnUnavailable: true });
 export const resolveViewerAccessFresh = async (): Promise<ViewerAccess> => {
   const jar = await cookies();
   return resolve((name) => jar.get(name)?.value);
 };
 export const resolveViewerAccess = cache(resolveViewerAccessFresh);
-export const viewerAccessFromRequest = (request: Request) => resolve((name) => readCookie(request, name));
+export const viewerAccessFromRequest = (request: Request) => resolveRequest((name) => readCookie(request, name));

@@ -2,8 +2,10 @@ import "server-only";
 
 import { z } from "zod";
 import { settledExtendedStatuses as settledStatuses } from "../../domain/extended-markets.ts";
+import { liveGoalMarketDefinitions } from "../../domain/goal-market-definitions.ts";
 import { scoreDistributionSchema, type ScoreDistribution } from "../../domain/score-distribution.ts";
-import { deriveGoalMarket, goalMarketDefinitionSchema, GOAL_MARKET_RULE_VERSION, settleGoalSelection,
+import { deriveGoalMarket, deriveLocalPoissonTotal15, goalMarketDefinitionSchema, GOAL_MARKET_RULE_VERSION,
+  localPoissonRatesSchema, settleGoalSelection,
   type GoalDerivationResult, type GoalMarketDefinition, type GoalSettlementContext } from "../../domain/score-distribution-markets.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
@@ -15,21 +17,25 @@ import { assertHistorySeal, historyJson, historyTime, storedCycle, type HistoryR
 
 type Tx = Prisma.TransactionClient;
 export const goalMarketStorageLimits = Object.freeze({ definitions: 256, bytes: 4 * 1024 * 1024 });
-const inputSchema = z.strictObject({ scoreDistribution: scoreDistributionSchema,
-  definitions: z.array(goalMarketDefinitionSchema).max(goalMarketStorageLimits.definitions),
-}).superRefine(({ definitions }, context) => {
+const definitionsSchema = z.array(goalMarketDefinitionSchema).max(goalMarketStorageLimits.definitions);
+const inputSchema = z.union([
+  z.strictObject({ scoreDistribution: scoreDistributionSchema, definitions: definitionsSchema }),
+  z.strictObject({ localPoisson: localPoissonRatesSchema, definitions: definitionsSchema }),
+]).superRefine((value, context) => {
+  const { definitions } = value;
   if (new Set(definitions.map(({ key }) => key)).size !== definitions.length ||
-      definitions.some(({ key, period }) => !key.startsWith(`goal:${period}:`))) {
+      definitions.some(({ key, period }) => !key.startsWith(`goal:${period}:`)) ||
+      "localPoisson" in value && evidenceFingerprint(definitions) !== evidenceFingerprint(liveGoalMarketDefinitions)) {
     context.addIssue({ code: "custom", message: "Goal market definitions require unique period-qualified identities." });
   }
 });
-export type GoalMarketExtensionInput = Readonly<{
-  scoreDistribution: ScoreDistribution; definitions: readonly GoalMarketDefinition[];
-}>;
+type GoalMarketModel = Readonly<{ scoreDistribution: ScoreDistribution }> |
+  Readonly<{ localPoisson: Readonly<z.infer<typeof localPoissonRatesSchema>> }>;
+export type GoalMarketExtensionInput = GoalMarketModel & Readonly<{ definitions: readonly GoalMarketDefinition[] }>;
 export type PreparedGoalMarketExtension = Readonly<{
-  version: 1; ruleVersion: typeof GOAL_MARKET_RULE_VERSION; scoreDistribution: ScoreDistribution;
+  version: 1; ruleVersion: typeof GOAL_MARKET_RULE_VERSION;
   markets: readonly Readonly<{ definition: GoalMarketDefinition; derivation: GoalDerivationResult }>[];
-}>;
+}> & GoalMarketModel;
 export type StoredGoalMarketExtension = PreparedGoalMarketExtension & Readonly<{
   revisionId: string; cycleId: string; fixtureId: string; recordedAt: number; contentHash: string;
 }>;
@@ -42,9 +48,10 @@ export function parseGoalMarketExtensionInput(input: unknown): GoalMarketExtensi
 }
 /** Model probabilities are derived locally; callers cannot supply a precomputed or independently published market. */
 export function prepareGoalMarketExtension(input: unknown): PreparedGoalMarketExtension {
-  const { scoreDistribution, definitions } = parseGoalMarketExtensionInput(input);
-  const prepared: PreparedGoalMarketExtension = freezeEvidence({ version: 1 as const, ruleVersion: GOAL_MARKET_RULE_VERSION, scoreDistribution,
-    markets: definitions.map((definition) => ({ definition, derivation: deriveGoalMarket(scoreDistribution, definition) })) });
+  const { definitions, ...model } = parseGoalMarketExtensionInput(input);
+  const prepared: PreparedGoalMarketExtension = freezeEvidence({ version: 1 as const, ruleVersion: GOAL_MARKET_RULE_VERSION, ...model,
+    markets: definitions.map((definition) => ({ definition, derivation: "localPoisson" in model
+      ? { available: true as const, market: deriveLocalPoissonTotal15(model.localPoisson, definition) } : deriveGoalMarket(model.scoreDistribution, definition) })) });
   if (Buffer.byteLength(evidenceSerialize(prepared)) > goalMarketStorageLimits.bytes) return historyFail("invalid-request");
   return prepared;
 }
@@ -58,7 +65,7 @@ export function goalMarketExtensionFromRow(row: HistoryRow): StoredGoalMarketExt
     fixtureId: body?.fixtureId, recordedAt: body?.recordedAt });
   if (!identity.success || !Array.isArray(body.markets)) return historyFail("invalid-state");
   let prepared;
-  try { prepared = prepareGoalMarketExtension({ scoreDistribution: body.scoreDistribution,
+  try { prepared = prepareGoalMarketExtension({ ...("localPoisson" in body ? { localPoisson: body.localPoisson } : { scoreDistribution: body.scoreDistribution }),
     definitions: body.markets.map((entry) => (entry as { definition?: unknown })?.definition) }); }
   catch { return historyFail("invalid-state"); }
   const contentHash = evidenceFingerprint(prepared), expected = { ...prepared, ...identity.data, contentHash };
@@ -79,9 +86,9 @@ export async function readGoalMarketExtension(tx: Tx, revisionId: string): Promi
 export async function appendGoalMarketExtension(tx: Tx, input: GoalMarketExtensionInput & Readonly<{
   revisionId: string; cycleId: string; fixtureId: string; recordedAt: number;
 }>): Promise<StoredGoalMarketExtension> {
-  const identity = identitySchema.parse({ revisionId: input.revisionId, cycleId: input.cycleId,
-    fixtureId: input.fixtureId, recordedAt: input.recordedAt });
-  const prepared = prepareGoalMarketExtension({ scoreDistribution: input.scoreDistribution, definitions: input.definitions });
+  const { revisionId, cycleId, fixtureId, recordedAt, ...marketInput } = input;
+  const identity = identitySchema.parse({ revisionId, cycleId, fixtureId, recordedAt });
+  const prepared = prepareGoalMarketExtension(marketInput);
   const contentHash = evidenceFingerprint(prepared), known = await readGoalMarketExtension(tx, identity.revisionId);
   if (known) {
     if (known.contentHash !== contentHash || known.cycleId !== identity.cycleId || known.fixtureId !== identity.fixtureId)
@@ -104,7 +111,7 @@ export async function appendGoalMarketExtension(tx: Tx, input: GoalMarketExtensi
 
 const settlementBaseSchema = z.strictObject({
   fixtureId: historyId, cycleId: historyId, predictionRevisionId: historyId,
-  marketKey: z.string().min(1).max(128), source: z.literal("ai-score-distribution"), ruleVersion: z.literal(GOAL_MARKET_RULE_VERSION),
+  marketKey: z.string().min(1).max(128), source: z.enum(["ai-score-distribution", "local-poisson"]), ruleVersion: z.literal(GOAL_MARKET_RULE_VERSION),
   selection: z.string().min(1).max(64).nullable(), selectedProbability: z.number().finite().min(0).max(1).nullable(),
   resultId: historyHash.nullable(), resultUsable: z.boolean(),
   status: z.enum([...settledStatuses, "pending", "void", "unavailable"]), reason: z.string().min(1).max(128),
@@ -154,15 +161,16 @@ export function projectGoalMarketSettlements(extension: StoredGoalMarketExtensio
       cycle.lockedSetId !== extension.revisionId || context.cycleEligibility.eligible !== (cycle.state !== "void")) return historyFail("invalid-state");
   return freezeEvidence(extension.markets.map(({ definition, derivation }) => {
     const market = derivation.available ? derivation.market : null, previous = recorded.get(definition.key) ?? null;
+    const source = "localPoisson" in extension ? "local-poisson" : "ai-score-distribution";
     if (previous && (previous.predictionRevisionId !== extension.revisionId || previous.fixtureId !== extension.fixtureId ||
-        previous.cycleId !== cycle.id || previous.marketKey !== definition.key || previous.selection !== (market?.selection ?? null)))
+        previous.cycleId !== cycle.id || previous.marketKey !== definition.key || previous.source !== source || previous.selection !== (market?.selection ?? null)))
       return historyFail("invalid-state");
     const outcome = market ? settleGoalSelection(definition, market.selection, context)
       : { status: "unavailable" as const, reason: derivation.available ? "unsupported-market" : derivation.reason };
     // Once a historical cycle is void its retained result evidence stays fixed, as in the four-family store.
     const historicalVoid = previous?.cycleState === "void" && cycle.state === "void";
     const base: GoalSettlementBase = { fixtureId: extension.fixtureId, cycleId: cycle.id, predictionRevisionId: extension.revisionId,
-      marketKey: definition.key, source: "ai-score-distribution", ruleVersion: GOAL_MARKET_RULE_VERSION, selection: market?.selection ?? null,
+      marketKey: definition.key, source, ruleVersion: GOAL_MARKET_RULE_VERSION, selection: market?.selection ?? null,
       selectedProbability: market?.selectedProbability ?? null, resultId: historicalVoid ? previous.resultId : market ? resultId : null,
       resultUsable: historicalVoid ? previous.resultUsable : market ? resultUsable : false, status: outcome.status,
       reason: outcome.reason, cycleState: cycle.state as "closed" | "void", voidReason: cycle.voidReason };

@@ -15,7 +15,7 @@ const freshness = z.strictObject({ maxAgeMs: z.number().int().nonnegative().max(
   unknownUpdate: z.enum(["reject", "allow-flagged"]) });
 const policy = z.strictObject({ version: z.literal(1), evidenceRef: ref,
   maxObservationAgeMs: z.number().int().positive().max(2_147_483_647),
-  sources: z.strictObject({ ai: freshness, "api-football": freshness }) });
+  sources: z.strictObject({ ai: freshness, "api-football": freshness, "local-engine": freshness.optional() }) });
 const observation = z.strictObject({ provider: z.literal("api-football"), fixtureId: historyId,
   externalFixtureId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), cycleId: historyId, kickoffAt: historyInstant,
   status: z.enum(settlementStatuses),

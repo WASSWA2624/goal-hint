@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { getDayBoundsInTimeZone } from "../../domain/device-calendar.ts";
+import { isLocalFootballDevelopment } from "../../domain/development-demo.ts";
 import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock, type ReportingDate, type ReportingDateRange } from "../../domain/calendar.ts";
 import { feedQueryKey, getFeedToday, parseFeedQuery, resolveFeedDates, serializeFeedQuery, feedQueryRules, maximumCompetitionScope, type FeedParameters, type FeedQuery } from "../../domain/feed-query.ts";
 import { matchFeedRules, storedMatchFeedResponseSchema, type StoredMatchFeedResponse } from "../../domain/match-feed.ts";
@@ -18,6 +19,7 @@ import { storedFeedSearch } from "./feed-search.ts";
 import { storedFeedFixtures } from "./fixture-read.ts";
 import { feedPerformanceCacheKey, readFeedPerformance } from "./feed-performance.ts";
 import { filterFeedResult } from "./feed-result-filter.ts";
+import { withCurrentFeedOdds } from "./feed-odds.ts";
 import { performanceFeedQuery } from "../../domain/feed-performance-summary.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
 import { readPublicCacheGenerations } from "../cache/mysql-public-cache.ts";
@@ -42,26 +44,28 @@ function pageLink(query: FeedQuery, today: ReportingDate, number: number | null)
 
 /** List membership and period totals share a source snapshot, with independent filter identities. */
 export async function storedFeedVersions(tx: Prisma.TransactionClient, query: FeedQuery, today: ReportingDate,
-  sourceRange: ReportingDateRange, competitionIds: readonly number[], completedOnly = false) {
+  sourceRange: ReportingDateRange, competitionIds: readonly number[], completedOnly = false, publishedOnly = false) {
   const tags = ["global:catalog", ...Array.from({ length: sourceRange.dayCount }, (_, day) => `date:${addReportingDays(sourceRange.startDate, day)}`)];
   const generations = await readPublicCacheGenerations(tx, tags), scope = [...competitionIds].sort((a, b) => a - b);
-  const version = (query: FeedQuery) => evidenceFingerprint({ contract: "feed-pagination-v7", completedOnly,
+  const version = (query: FeedQuery) => evidenceFingerprint({ contract: "feed-pagination-v8", completedOnly, publishedOnly,
     query: feedQueryKey(query, today), scope, generations });
   return { paginationVersion: version(query), performanceVersion: version(performanceFeedQuery(query)) };
 }
 
-export type MatchFeedReadContext = Readonly<{ locale?: string; routeDate?: string; completedOnly?: boolean }>;
+export type MatchFeedReadContext = Readonly<{ locale?: string; routeDate?: string; completedOnly?: boolean; publishedOnly?: boolean }>;
 
 /** `providerOdds` defaults to publicPolicy.features.providerOdds (off until odds display rights are recorded);
  * isolated tests may enable it to exercise the odds filter and prices. */
 export function createMatchFeedService(options: Readonly<{ database: DatabaseRuntime; competitionIds: readonly number[]; clock?: Clock; cache?: PublicResponseCache;
-  providerOdds?: boolean; includePerformance?: boolean }>) {
+  providerOdds?: boolean; includePerformance?: boolean; allowInPlayOdds?: boolean }>) {
   const parsedIds = z.array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER)).min(1).max(maximumCompetitionScope).safeParse(options.competitionIds);
   if (!parsedIds.success || new Set(parsedIds.data).size !== parsedIds.data.length) throw new MatchFeedError("unavailable");
   const { database } = options, competitionIds = Object.freeze(parsedIds.data), limiter = createMysqlPublicSearchLimiter(database);
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const providerOdds = options.providerOdds ?? publicPolicy.features.providerOdds;
+  const allowInPlayOdds = options.allowInPlayOdds ?? isLocalFootballDevelopment();
   return Object.freeze({ async query(input: FeedParameters, context: MatchFeedReadContext = {}): Promise<StoredMatchFeedResponse> {
+    const publishedOnly = context.publishedOnly === true;
     const asOf = clock.now(), reportingToday = getReportingDate(asOf);
     const query = parseMatchFeedQuery(input, reportingToday, { ...context, providerOdds, asOf });
     const today = getFeedToday(query, asOf), range = resolveFeedDates(query, today);
@@ -75,9 +79,9 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       const read = () => database.transaction(async (tx) => {
         // Source writes and these generations commit atomically. Progress-only
         // changes do not reorder a cohort; catalog/date changes conservatively do.
-        const versions = await storedFeedVersions(tx, query, today, sourceRange, competitionIds, context.completedOnly);
+        const versions = await storedFeedVersions(tx, query, today, sourceRange, competitionIds, context.completedOnly, publishedOnly);
         const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale, context.completedOnly);
-        const baseSql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly);
+        const baseSql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly, publishedOnly);
         const sql = query.result ? await filterFeedResult(tx, baseSql, query.result) : baseSql;
         // Start with the indexed date cohort. Choosing the competition/season
         // join first scans its entire archive before applying the date window.
@@ -89,15 +93,18 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           GROUP BY l.id, l.name, l.country, l.logoUrl ORDER BY l.name, l.country, l.id LIMIT 1001`);
         const leagues = leagueRows.map((row) => ({ id: row.id, name: row.name, country: row.country,
           logoUrl: isSafeRemoteImageUrl(row.logoUrl) ? row.logoUrl : null, fixtures: Number(row.fixtures) }));
-        const [matching] = await tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null; void: bigint | Prisma.Decimal | null; exact: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
+        const [matching] = await tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null; performanceAvailable: bigint | Prisma.Decimal | null;
+          void: bigint | Prisma.Decimal | null; exact: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
           SELECT STRAIGHT_JOIN COUNT(*) AS total, SUM(CASE WHEN m.available=TRUE THEN 1 ELSE 0 END) AS available,
-            SUM(CASE WHEN m.available=TRUE AND c.state='void' THEN 1 ELSE 0 END) AS void,
+            SUM(CASE WHEN ${sql.pickAvailable} THEN 1 ELSE 0 END) AS performanceAvailable,
+            SUM(CASE WHEN ${sql.pickAvailable} AND c.state='void' THEN 1 ELSE 0 END) AS void,
             ${sql.exact ? Prisma.sql`SUM(CASE WHEN ${sql.exact} THEN 1 ELSE 0 END)` : Prisma.sql`NULL`} AS exact
           ${sql.countJoins} ${sql.searchJoin} WHERE ${sql.where}`);
         if (!matching) throw new MatchFeedError("unavailable");
         const total = Number(matching.total), knownFixtures = Number(leagueRows[0]?.knownFixtures ?? 0), matchingWithMarket = Number(matching.available ?? 0);
+        const matchingWithPerformancePick = Number(matching.performanceAvailable ?? 0);
         const performance = options.includePerformance === false ? null
-          : await readFeedPerformance(tx, sql, { total, available: matchingWithMarket, void: Number(matching.void ?? 0) }, options.cache ? {
+          : await readFeedPerformance(tx, sql, { total, available: matchingWithPerformancePick, void: Number(matching.void ?? 0) }, options.cache ? {
             key: feedPerformanceCacheKey(sql, query.locale, providerOdds), nowMs: asOf } : undefined);
         // Exact matches precede similar results, so a record's position on its page tells which kind it is.
         const exactMatches = sql.exact ? Number(matching.exact ?? 0) : null;
@@ -106,7 +113,8 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         const dates = await storedFeedCoverage(tx, sourceRange), partial = dates.some((date) => !date.authoritative);
         const { run, window } = await storedFeedRunContext(tx, reportingToday, range);
         if (run?.phase === "updating") run.message = messages.text("feed.updating");
-        const records = await storedFeedFixtures(tx, rows.map(({ id }) => id), false, window, query.locale, { prices: providerOdds });
+        const records = await storedFeedFixtures(tx, rows.map(({ id }) => id), false, window, query.locale,
+          { prices: providerOdds, preferRecommendation: !publishedOnly || query.picks === "only" });
         for (const record of records) {
           const date = record.kickoffAt === null ? null : getReportingDate(record.kickoffAt);
           record.partialCoverage = dates.find((entry) => entry.date === date)?.authoritative !== true;
@@ -121,15 +129,16 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         const response = storedMatchFeedResponseSchema.parse({ performance, ...versions, leagues, records, page: query.page, nextPage, previousPage, pageSize: query.pageSize, total, totalPages,
           links: { next: pageLink(query, today, nextPage), previous: pageLink(query, today, previousPage) }, asOf, today,
           range: { from: range.startDate, to: range.endDate, ...range.window }, state, message: keys[state] ? messages.text(keys[state]!) : null,
-          coverage: { partial, knownFixtures, matchingWithMarket, dates }, run,
+          coverage: { partial, knownFixtures, matchingWithMarket, matchingWithPerformancePick, dates }, run,
           search: query.search ? { exact: exactMatches ?? 0, similar: total - (exactMatches ?? 0) } : null });
         if (Buffer.byteLength(JSON.stringify(response), "utf8") > matchFeedRules.maximumResponseBytes) throw new MatchFeedError("unavailable");
         return freezeEvidence(response);
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
-      return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
+      const response = options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: 21, completedOnly: context.completedOnly === true, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
+        query: { ...query, projection: 22, completedOnly: context.completedOnly === true, publishedOnly, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => storedMatchFeedResponseSchema.parse(value) }), read) : await read();
+      return providerOdds ? await withCurrentFeedOdds(database, response, asOf, allowInPlayOdds) : response;
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;
       throw new MatchFeedError("unavailable");

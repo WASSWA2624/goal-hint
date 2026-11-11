@@ -44,7 +44,7 @@ const storedFeedBaseSchema = z.strictObject({
   asOf: at, today: date, range: z.strictObject({ from: date, to: date, startInclusive: at, endExclusive: at }),
   state: z.enum(["ready", "no-fixtures", "no-filter-matches", "insufficient-data", "data-unavailable", "page-out-of-range"]),
   message: z.string().max(512).nullable(),
-  coverage: z.strictObject({ partial: z.boolean(), knownFixtures: count, matchingWithMarket: count,
+  coverage: z.strictObject({ partial: z.boolean(), knownFixtures: count, matchingWithMarket: count, matchingWithPerformancePick: count.optional(),
     dates: z.array(z.strictObject({ date, status: z.enum(["complete", "partial", "degraded", "failed", "unknown", "pending"]),
       observedAt: at.nullable(), authoritative: z.boolean() })).min(1).max(feedQueryRules.maximumDays + 2) }),
   run: dailyRunProgressSchema,
@@ -61,6 +61,7 @@ function refineFeed(value: Omit<z.infer<typeof storedFeedBaseSchema>, "records">
     (value.links.next === null) !== (value.nextPage === null) || (value.links.previous === null) !== (value.previousPage === null) ||
     value.coverage.partial !== value.coverage.dates.some((entry) => !entry.authoritative) ||
     value.coverage.dates.some((entry) => entry.authoritative !== (entry.status === "complete")) ||
+    (value.coverage.matchingWithPerformancePick ?? 0) > value.coverage.matchingWithMarket ||
     value.coverage.matchingWithMarket > value.total || value.total > value.coverage.knownFixtures ||
     value.search !== null && value.search.exact + value.search.similar !== value.total ||
     value.performance !== null && value.performance.total !== value.total) {
@@ -71,7 +72,7 @@ export const storedMatchFeedResponseSchema = storedFeedBaseSchema.superRefine(re
 export const matchFeedResponseSchema = z.strictObject({ ...storedFeedBaseSchema.shape,
   records: z.array(matchFeedRecordSchema).max(feedQueryRules.maximumPageSize), access: contentAccessSchema,
 }).superRefine(refineFeed).refine((value) => value.access.tier === "full" || value.records.every((record) =>
-  isCompletedFixtureStatus(record.status) || (!record.prices?.length && (record.forecast === null || "gated" in record.forecast))),
+  isCompletedFixtureStatus(record.status) || (!record.prices?.length && record.marketOdds == null && (record.forecast === null || "gated" in record.forecast))),
 "Unfinished public matches must not contain prices or predictions.");
 export type StoredMatchFeedResponse = z.infer<typeof storedMatchFeedResponseSchema>;
 export type StoredMatchFeedRecord = z.infer<typeof storedMatchFeedRecordSchema>;

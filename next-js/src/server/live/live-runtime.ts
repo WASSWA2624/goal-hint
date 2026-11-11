@@ -18,6 +18,7 @@ import { createFootballCatalogImporter } from "../football/catalog-service.ts";
 import { quotaPriorities } from "../football/quota-contract.ts";
 import { createPolicyQuotaGateway } from "../football/quota-gateway.ts";
 import { createMysqlQuotaStore } from "../football/quota-mysql-store.ts";
+import { createLiveLocalEngine } from "../intelligence/live-local-engine.ts";
 import { createMysqlJobQueue } from "../jobs/job-mysql-store.ts";
 import { createJobRegistry, defineJob, type JobDefinition } from "../jobs/job-registry.ts";
 import { ModelRegistryError } from "../predictor/predictor-registry.ts";
@@ -44,7 +45,7 @@ import { createLiveFootballPreparation, fitLiveFootballSources, readLiveFootball
 import { createLiveResearchRuntime } from "./live-research.ts";
 import { liveAiEvidencePolicy } from "./live-ai-plan.ts";
 import { canRunLiveRefresh } from "./live-refresh-quota.ts";
-import { fallbackRefreshPlan, LIVE_REFRESH_TYPE, liveReferences, liveWorkload,
+import { fallbackRefreshPlan, LIVE_REFRESH_TYPE, liveCascadePlan, liveReferences, liveWorkload,
   resultSyncPolicy, selectionPolicy, cutoffPolicy, lifecyclePolicy, providerFallbackPolicy, publicationPolicy,
   oddsPolicy, oddsImportBounds, oddsCatalogBounds, oddsMaxRequests, ODDS_FRESHNESS_MS, teamCodeBounds, teamCodeImportsEnabled,
   refreshEnvelopeFor } from "./live-plan.ts";
@@ -111,7 +112,7 @@ export type LiveRuntimeOverrides = Readonly<{
   localFootball?: boolean;
   onPollerState?: (kind: "results" | "match-details", state: string) => void;
 }>;
-/** Composes the pinned primary and provider fallback pipeline on shared durable stores. */
+/** Composes the prediction cascade on shared durable stores. */
 export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: LiveRuntimeOverrides = {}) {
   const verify = liveReadiness(inputPolicy, overrides.approvals), policy = liveOptionalPolicy(inputPolicy, verify), refs = liveReferences(policy);
   const localFootball = overrides.localFootball === true;
@@ -137,15 +138,17 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     let results: ResultSyncPolicy | null = null;
     let liveDetailsPolicy: LiveMatchPolicy | null = null;
     // Odds use the same workload inputs as their authority, so a policy can never verify against a different plan.
-    const odds = oddsPolicy(policy, refs, workload);
+    const odds = oddsPolicy(policy, refs, workload, localFootball);
     let aiModel: ReturnType<typeof liveAiModel> | null = null;
     if (policy.capabilities.ai) try { aiModel = liveAiModel(policy); } catch { /* An unsupported optional model leaves the baseline active. */ }
-    // Freeze the reviewed source order beside the optional model for every new intent.
-    const sourceOrder = aiModel === null ? null : liveSourceOrder(policy);
+    // Owned development follows the current cascade; hosted runs retain the explicit rollback setting.
+    const sourceOrder = localFootball ? "ai-first" : liveSourceOrder(policy);
     let ai: LiveAiRuntime | null = null;
     const authorities = createLiveAuthorities({ policy, verify, refs, selection, statusEvidenceRef, resultPolicy: () => results, localFootball,
-      refreshPacing: workload.pacing, oddsPolicy: odds, liveMatchPolicy: () => liveDetailsPolicy,
-      ...(aiModel === null || sourceOrder === null ? {} : { aiModel, sourceOrder, verifyPrimary: (...args) => ai?.verifyAi(...args) === true, verifyPrimaryCandidate: (candidate) => ai?.verifyPublishedCandidate(candidate) === true }) });
+      refreshPacing: workload.pacing, oddsPolicy: odds, liveMatchPolicy: () => liveDetailsPolicy, sourceOrder,
+      ...(aiModel === null ? {} : { aiModel, verifyPrimary: (...args) => ai?.verifyAi(...args) === true,
+        verifyPrimaryCandidate: (candidate) => ai?.verifyPublishedCandidate(candidate) === true,
+        verifyPrimaryGoals: (candidate, distribution) => ai?.verifyPublishedGoalDistribution(candidate, distribution) === true }) });
     const gateway = createPolicyQuotaGateway({ limiter: quota.limiter, policy, verifyEvidence: verify });
     // The adapter identity is the stable provider account; daily limiter accounts sit behind the router.
     const adapter = createApiFootballAdapter({ accountId: day.status.accountKey, credential: { read: () => policy.secrets.footballKey?.read() ?? "" },
@@ -170,11 +173,12 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     const providerFallback = createProviderFallbackAdapter({ adapter, catalog, policy: providerFallbackPolicy(refs),
       authority: authorities.providerFallback, maxJobs: 1000 });
     const fallback = createFallbackService({ fallback: providerFallback, authority: authorities.fallback, maxInflight: 100,
+      localEngine: createLiveLocalEngine(database),
       selectionPolicy: sourceOrder === "provider-first" ? "provider-baseline" : "optional-ai-primary", verifyRequest: authorities.verifyFallbackRequest });
     const refreshStore = createMysqlRefreshStore(database, queue);
     if (aiModel !== null) try { ai = await createLiveAiRuntime({ policy, verify, refs, model: aiModel, database, store: refreshStore,
       evidenceAuthority: authorities.evidence, pacing: workload.pacing, fallbackReserveMs: refreshEnvelopeFor(workload.pacing, true).fallbackReserveMs,
-      ...(sourceOrder === null ? {} : { sourceOrder }),
+      sourceOrder,
       ...(overrides.aiFetcher === undefined ? {} : { fetcher: overrides.aiFetcher }) }); } catch { /* Optional AI startup/accounting failure preserves baseline publication. */ }
     let research: Awaited<ReturnType<typeof createLiveResearchRuntime>> | null = null;
     if (ai !== null && aiModel !== null && policy.capabilities.research) try { research = await createLiveResearchRuntime({ policy, verify, refs, model: aiModel,
@@ -196,9 +200,10 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         const stage = await refreshStore.stage(member.jobId, "preparation", "completed");
         const extra = (stage?.value as { sources?: import("../evidence/evidence-contract.ts").EvidenceSource[] } | undefined)?.sources ?? [];
         const sources = fitLiveFootballSources(member.context, liveAiEvidencePolicy(refs), authorities.evidence, history, extra);
-        if (ai !== null) return ai.configure(member, sources);
         const base = fallbackRefreshPlan(member, refs, workload.pacing);
-        return { ...base, evidence: { ...base.evidence, policy: liveAiEvidencePolicy(refs), cachedSources: sources } };
+        const reviewed = ai?.configure(member, sources) ??
+          { ...base, evidence: { ...base.evidence, policy: liveAiEvidencePolicy(refs), cachedSources: sources } };
+        return sourceOrder === "ai-first" ? liveCascadePlan(reviewed, localFootball) : reviewed;
       },
       models: ai?.models ?? { async resolve() { throw new ModelRegistryError("unavailable"); } },
       predictor: ai?.predictor ?? { async predict() { return { status: "denied", reason: "unconfigured", requestsDispatched: 0, requestCountUnknown: false }; } },
@@ -209,7 +214,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
           authorities.odds.verifyPolicy(odds) === true && authorities.odds.verifyRetention({ evidenceRef: refs.retention,
             purpose: "structured-odds-history", rawPayloadsStored: false }) === true }) },
       observation: createRefreshObservationCollector({ adapter: adapter.evidence, evidenceRef: statusEvidenceRef, verifyResponse: authorities.verifyStatusResponse }) });
-    const settlement = createMarketSettlementService({ database, queue });
+    const settlement = createMarketSettlementService({ database, queue, extendedMarketsEnabled: localFootball });
     const cache = createMysqlPublicCacheStore(database);
 
     // Only remaining outbound calls consume the reserve kept for selection and result checks.
@@ -356,7 +361,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       return detailPoller;
     }
     return Object.freeze({ policy, database, queue, quota, workload, registry, settlement, cache, catalog: importer, resultPoller, liveMatchPoller, inPlayOdds, day,
-      odds: Object.freeze({ enabled: oddsEnabled, registry: oddsRegistry, horizonDays: workload.odds.dates, requalifyLocal: requalifyLocalOdds,
+      odds: Object.freeze({ enabled: oddsEnabled, registry: oddsRegistry, horizonDays: workload.odds.dates, bookmakerScope: odds?.bookmakerScope,
+        requalifyLocal: requalifyLocalOdds,
         // Write-time staleness needs no provider call, so it runs even while imports are off.
         expire: (limit: number) => oddsService.expire(odds?.freshnessMs ?? ODDS_FRESHNESS_MS, limit) }),
       teamCodes: Object.freeze({ enabled: teamCodesEnabled, registry: teamCodesRegistry }),

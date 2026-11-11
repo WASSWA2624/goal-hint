@@ -18,6 +18,9 @@ test('period versions survive table selections but change with filters and sourc
   const query = parseMatchFeedQuery(parameters, today);
   const version = q => storedFeedVersions(tx, q, today, range, [39]);
   const baseline = await version(query);
+  const published = await storedFeedVersions(tx, query, today, range, [39], false, true);
+  assert.notEqual(published.performanceVersion, baseline.performanceVersion);
+  assert.notEqual(published.paginationVersion, baseline.paginationVersion);
   for (const result of ['won', 'lost', 'pending', 'void', 'cancelled']) {
     const selected = await version({ ...query, result, page: 9, pageSize: 100, sort: { by: 'probability', direction: 'asc' } });
     assert.equal(selected.performanceVersion, baseline.performanceVersion);
@@ -39,7 +42,9 @@ function database({ summaryOnly = false, cancelled = 0n } = {}) {
     publicCacheTag: { findMany: async () => [] },
     async $queryRaw(statement) {
       statements.push(statement);
-      if (statement.sql.includes('SUM(CASE WHEN m.available=TRUE')) return [{ total: 80n, available: 30n, void: 10n, cancelled, exact: null }];
+      if (statement.sql.includes('SUM(CASE WHEN m.available=TRUE')) return [{
+        total: 80n, available: 30n, performanceAvailable: 30n, void: 10n, cancelled, exact: null,
+      }];
       if (statement.sql.includes('SELECT STRAIGHT_JOIN f.id,f.kickoff')) return [];
       if (summaryOnly) throw new Error('A summary attempted to hydrate the discarded page.');
       if (statement.sql.includes('GROUP BY l.id')) return [{ id: 'league-1', name: 'Example', country: 'England', logoUrl: null, fixtures: 100n, knownFixtures: 100n }];

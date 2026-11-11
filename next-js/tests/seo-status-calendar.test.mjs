@@ -112,29 +112,29 @@ test('Matches page defaults reach the stored read while retaining viewer eligibi
       const rendered = view(await page.Page(props({}, parameters)), 'MatchFeedPage');
       assert.deepEqual(storedQuery, rendered.query, 'The rendered controls and stored read use the same effective query.');
       assert.deepEqual(storedQuery.dates, { kind: parameters.when ?? 'today' });
-      assert.deepEqual(storedQuery.sort, { by: parameters.sort ?? 'kickoff', direction: 'desc' });
-      assert.equal(storedQuery.picks, parameters.picks ?? (parameters.status === 'finished' ? 'only' : 'all'));
+      assert.deepEqual(storedQuery.sort, { by: parameters.sort ?? 'live-first', direction: 'desc' });
+      assert.equal(storedQuery.picks, parameters.picks ?? 'all');
       assert.equal(rendered.result.error, 'rate-limited');
     }
   }
 });
 
-test('today reads stored fixtures beside partial predictions without overriding explicit prediction filters', async () => {
+test('only an explicit recommendation filter narrows the page and streamed summary to recommended picks', async () => {
   for (const [parameters, predicted, expected] of [
-    [{}, 0, 'all'], [{ country: 'England' }, 34, 'all'], [{ page: '2' }, 0, 'all'],
-    [{ picks: 'only' }, 34, 'only'], [{ market: 'total-goals' }, 0, 'only'],
-    [{ result: 'won' }, 0, 'only'], [{ when: 'yesterday' }, 0, 'only'],
+    [{}, 34, 'all'], [{ country: 'England' }, 34, 'all'], [{ page: '2' }, 34, 'all'],
+    [{ picks: 'only' }, 0, 'only'], [{ market: 'total-goals' }, 0, 'all'],
+    [{ result: 'won' }, 0, 'all'], [{ when: 'yesterday' }, 0, 'all'],
   ]) {
     const queries = [], summaries = [];
     const page = createFeedRoute({ instant: async () => at, policy: closed, document: fullDocument,
       resolveAccess: fullAccess, read: async (input) => {
         queries.push(input);
-        const total = input.has('picks') ? predicted : 192;
+        const total = predicted;
         return { records: [], total, state: total ? 'ready' : 'no-filter-matches', coverage: { knownFixtures: 192 } };
       }, readSummary: async (scope) => { summaries.push(scope); throw new Error('test stream'); } });
     const rendered = view(await page.Page(props({}, parameters)), 'MatchFeedPage');
     assert.equal(rendered.query.picks, expected);
-    assert.equal(rendered.result.data.total, expected === 'all' ? 192 : predicted);
+    assert.equal(rendered.result.data.total, predicted);
     assert.deepEqual(queries.map((input) => input.get('picks')), [expected === 'only' ? 'only' : null]);
     assert.equal(queries.at(-1).get('country'), parameters.country ?? null);
     const seed = await rendered.summary;
@@ -148,8 +148,9 @@ test('the list can seed zero pick outcomes for its own generation when no outcom
   const page = createFeedRoute({ instant: async () => at, policy: closed, document: fullDocument,
     resolveAccess: fullAccess, read: async (input) => {
       const imported = input.get('when') !== 'tomorrow', total = imported && !input.has('result') ? 192 : 0;
-      return { records: [], total, state: !imported ? 'data-unavailable' : total ? 'insufficient-data' : 'no-filter-matches',
-        coverage: { knownFixtures: imported ? 192 : 0, matchingWithMarket: 0 }, performanceVersion, asOf: at, access };
+      return { records: [], total, state: !imported ? 'data-unavailable' : total ? 'ready' : 'no-filter-matches',
+        coverage: { knownFixtures: imported ? 192 : 0, matchingWithMarket: total ? 34 : 0, matchingWithPerformancePick: 0 },
+        performanceVersion, asOf: at, access };
     }, readSummary: async () => { throw new Error('audit unavailable'); } });
   const feed = view(await page.Page(props({})), 'MatchFeedPage');
   const seed = await feed.summary;

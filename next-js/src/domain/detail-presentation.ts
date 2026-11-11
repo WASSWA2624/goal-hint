@@ -12,10 +12,7 @@ export function detailRecordNotices(data: MatchDetailResponse): readonly TextKey
     for (const source of new Set(snapshot.markets.map((item) => item.source.kind))) notices.push(`market.source.${source}`);
     if (snapshot.markets.some((item) => item.source.provisional)) notices.push("match.provisional");
     notices.push(`history.status.${snapshot.applicability}`);
-  } else if (fixture.cycle?.state === "closed") notices.push("detail.noLockedPrediction");
-  const refresh = fixture.update?.prediction;
-  if ((!snapshot || snapshot.applicability === "current") &&
-    (refresh === "delayed" || refresh === "updating" || refresh === "outside-window")) notices.push(`detail.refresh.${refresh}`);
+  }
   if (fixture.partialCoverage) notices.push("match.partialCoverage");
   return notices;
 }

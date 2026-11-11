@@ -28,12 +28,14 @@ test("the Any default selects the highest-probability available family and keeps
   assert.equal(prices.find((entry) => entry.family === family)?.price, "1.30");
   assert.equal(bestCardFamily({ forecast: { markets: items.filter((entry) => entry.market.family !== family) }, prices }, query.markets), "both-teams-to-score");
   const sql = feedSql(query, validateReportingDateRange("2026-10-14", "2026-10-14", 31), [39], true);
-  assert.match(sql.joins.sql, /ORDER BY b.selectedProbability DESC,\s+CASE WHEN .*? THEN NULL ELSE bp.displayHundredths END DESC/su);
+  assert.match(sql.joins.sql, /ORDER BY b.selectedProbability DESC,\s+bp.displayHundredths DESC/u);
+  assert.match(sql.pickAvailable.sql, /rp\.feedRecommendation IS NOT NULL[\s\S]*\$\.family/u,
+    "published fallback markets stay separate from full-market recommendation coverage");
   assert.match(sql.joins.sql, /op.marketKey=m.family\s+AND op.selection=CASE WHEN/u);
   assert.doesNotMatch(sql.where.sql, /op.displayHundredths BETWEEN/u);
   assert.doesNotMatch(sql.countJoins.sql, /ROW_NUMBER|FixtureOddsPrice|selectedProbability DESC/u,
     'availability counts do not rank every match or fetch prices');
-  assert.equal(sql.pageJoins.sql, sql.countJoins.sql, 'ordinary kickoff pagination uses the same availability projection');
+  assert.equal(sql.pageJoins, sql.cohortJoins, 'ordinary kickoff pagination skips market work when no market constraint applies');
 });
 
 test("only exact probability ties use the highest available price for the published family and selection", () => {
@@ -42,6 +44,21 @@ test("only exact probability ties use the highest available price for the publis
   assert.equal(bestPublishedFamily(tied, [prices[0], price("total-goals", "under-2.5", "9.99")], families), "match-result", "another selection's odds do not qualify");
   assert.equal(bestPublishedFamily(tied, [price("both-teams-to-score", "yes", "9.99")], families), "match-result", "another family's odds do not qualify");
   assert.equal(bestPublishedFamily(tied, [prices[0], price("total-goals", "over-2.5", "2.100")], families), "match-result", "invalid hand-built prices are ignored");
+});
+
+test("public forecast rows require a published market without applying the recommendation decision", () => {
+  const today = parseReportingDate("2026-10-14"), range = validateReportingDateRange(today, today, 1);
+  const query = parseFeedQuery({ sort: "live-first" }, { today });
+  const published = feedSql(query, range, [39], true, null, false, true);
+  assert.match(published.where.sql, /AND m\.available=TRUE$/u);
+  assert.equal(published.pickAvailable.sql, "m.available=TRUE");
+  assert.doesNotMatch(published.joins.sql, /feedRecommendation/u);
+  assert.match(published.order.sql, /^\(f.status='live'\) DESC/u);
+  assert.equal(published.pageJoins, published.countJoins);
+
+  const recommended = feedSql({ ...query, picks: "only" }, range, [39], true, null, false, true);
+  assert.match(recommended.where.sql, /m\.available=TRUE[\s\S]+feedRecommendation/u);
+  assert.match(recommended.joins.sql, /feedRecommendation/u);
 });
 
 test("missing or equal prices retain deterministic policy order and selected-family eligibility", () => {
@@ -68,7 +85,7 @@ test("feed SQL ranks the candidate's exact fresh price only when provider odds a
   const query = parseFeedQuery(new URLSearchParams("market=match-result,total-goals&prob=60-100&odds=1.50-3.00&sort=probability"), { today, providerOdds: true });
   const enabled = feedSql(query, range, [39], true);
   assert.match(enabled.joins.sql, /LEFT JOIN FixtureOddsPrice bp ON bp.fixtureId=f.id\s+AND bp.marketKey=b.family AND bp.selection=b.selection AND bp.stale=FALSE/u);
-  assert.match(enabled.joins.sql, /ROW_NUMBER\(\) OVER \(PARTITION BY f.id ORDER BY b.selectedProbability DESC,\s+CASE WHEN .*? THEN NULL ELSE bp.displayHundredths END DESC, FIELD\(b.family,/su);
+  assert.match(enabled.joins.sql, /ROW_NUMBER\(\) OVER \(PARTITION BY f.id ORDER BY b.selectedProbability DESC,\s+bp.displayHundredths DESC, FIELD\(b.family,/u);
   assert.match(enabled.joins.sql, /op.marketKey=m.family\s+AND op.selection=CASE WHEN/u);
   assert.match(enabled.where.sql, /ELSE m.selectedProbability END>=\?/u);
   assert.match(enabled.where.sql, /ELSE m.selectedProbability END<=\?/u);

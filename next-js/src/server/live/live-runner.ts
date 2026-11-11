@@ -68,7 +68,7 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
         const slot = latestOddsSlot(now);
         if (slot !== oddsScheduled) {
           try {
-            const envelopes = oddsScheduleEnvelopes(now, runtime.odds.horizonDays);
+            const envelopes = oddsScheduleEnvelopes(now, runtime.odds.horizonDays, runtime.odds.bookmakerScope);
             for (const envelope of envelopes) await runtime.queue.enqueue(envelope);
             oddsScheduled = slot; log({ event: "odds-scheduled", slot: new Date(slot).toISOString(), dates: envelopes.length - 1 });
           } catch (error) { log({ event: "odds-schedule-failed", reason: reason(error) }); }

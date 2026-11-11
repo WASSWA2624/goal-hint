@@ -6,18 +6,16 @@ import { memo } from "react";
 import styled from "styled-components";
 import { PredictionOdds, PredictionOutcome } from "@/components/match/prediction-presentation";
 import { predictionDescription } from "@/domain/prediction-label";
-import { noPickReason } from "@/domain/feed-presentation";
-import { fullDetailSnapshot } from "@/domain/detail-snapshot";
-import { hasPublishedForecastWithoutPick } from "@/domain/recommendation-view";
 import { detailRecordNotices } from "@/domain/detail-presentation";
-import { featuredFamily, liveStanding, marketRow, selectedDetailPrice } from "@/domain/match-details";
+import { detailMarketValue, featuredFamily, liveStanding, marketRow, selectedDetailPrice } from "@/domain/match-details";
+import { ForecastValueLabel } from "../forecast-labels";
 import { toUtcIsoString } from "@/domain/calendar";
 import { openDetailTab } from "@/domain/match-detail-tabs";
 import type { MarketFamily } from "@/domain/markets";
 import { media } from "@/styles/theme";
 import { contentGutter, desktopContentPadding } from "@/components/ui/layout";
 import { DetailOutcome } from "./match-banner";
-import { Note, Standing, desktop, focusRing, size, useStableDetails } from "./details-ui";
+import { Standing, desktop, focusRing, size, useStableDetails } from "./details-ui";
 import { marketName, percent } from "./labels";
 
 /** Between the scoreboard and market rows, following the same page rails at every width. */
@@ -67,10 +65,12 @@ const Pick = styled.button<{ $family: MarketFamily }>`
   > span[data-chance] > small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; }
   ${media.hover} { &:hover > span[data-pick] > strong { color: ${({ theme }) => theme.color.link}; } }
 `;
-const Publication = styled(Note)`
+const Publication = styled.p`
   display: flex;
   flex-wrap: wrap;
   gap: 0 var(--gh-spacing-1);
+  margin: 0;
+  color: ${({ theme }) => theme.color.mutedText};
   font-size: ${size("caption")};
   line-height: var(--gh-leading-reading);
   > time { white-space: nowrap; }
@@ -96,28 +96,28 @@ function PredictionRecord() {
 export const Verdict = memo(function Verdict() {
   const { data, messages, update, locale } = useStableDetails();
   const fixture = data.fixture, snapshot = data.snapshot;
-  // Locked only over a published forecast; without one, every viewer reads the same no-prediction reason.
+  // A published forecast can require access independently of the public fixture details.
   if ("gated" in data.history && snapshot) {
     return <Box><UnlockPanel locale={locale} signedIn={data.access.signedIn} returnTo={data.route.path} /></Box>;
   }
   const featured = featuredFamily(data), row = featured ? marketRow(data, featured) : null;
-  const forecastAvailable = hasPublishedForecastWithoutPick(fullDetailSnapshot(data));
   if (!featured || !row?.item) return <Box aria-labelledby="verdict-title" data-featured-pick="none">
     <Eyebrow><h2 id="verdict-title">{messages.text("details.verdict")}</h2></Eyebrow>
-    <strong>{messages.text(forecastAvailable ? "match.forecastAvailable" : "details.noPick")}</strong>
-    <Note>{messages.text(forecastAvailable ? "match.noRecommendedPick" : `match.noPickReason.${noPickReason(fixture)}`)}</Note>
-    <PredictionRecord />
+    <strong>{messages.text("details.noPick")}</strong>
   </Box>;
   const item = row.item, price = selectedDetailPrice(data, featured), standing = liveStanding(data, featured);
   const pick = predictionDescription(messages, item.market.selection), chance = percent(messages, item.market.selectedProbability);
   const settled = snapshot?.applicability === "historical" ? null : row.outcome?.status ?? (snapshot?.applicability === "void" ? "void" : null);
+  const oddsLabel = messages.text(fixture.status === "live" ? "touchline.inPlayOdds" : "details.odds");
   return <Box aria-labelledby="verdict-title" data-verdict={featured} data-featured-pick={featured}>
     <Eyebrow><h2 id="verdict-title">{messages.text("details.verdict")}</h2>
       {standing ? <Standing standing={standing} /> : settled && settled !== "pending" ? <DetailOutcome status={settled} /> : null}</Eyebrow>
     <Pick type="button" $family={featured} onClick={() => update((current) => ({ ...openDetailTab(current, "markets"), market: featured }))}
       aria-label={[messages.text("details.featuredOpen", { market: marketName(messages, featured), pick, probability: chance }),
-        price ? `${messages.text("details.odds")}: ${price}` : null].filter(Boolean).join(". ")}>
-      <span data-pick><strong><PredictionOutcome messages={messages} selection={item.market.selection} /></strong><small>{marketName(messages, featured)}<PredictionOdds odds={price} /></small></span>
+        price ? `${oddsLabel}: ${price}` : null].filter(Boolean).join(". ")}>
+      <span data-pick><strong><PredictionOutcome messages={messages} selection={item.market.selection} /></strong><small>{marketName(messages, featured)}
+        {price && fixture.status === "live" ? <> · {oddsLabel} {price}</> : <PredictionOdds odds={price} />}</small>
+        <ForecastValueLabel expectedReturn={detailMarketValue(data, featured)} messages={messages} /></span>
       <span data-chance><b>{chance}</b><small>{messages.text("details.probability")}</small></span>
     </Pick>
     <PredictionRecord />

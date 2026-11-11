@@ -21,7 +21,7 @@ const providerIdentity = z.number().int().positive().max(Number.MAX_SAFE_INTEGER
 const reference = z.string().trim().min(1).max(512).regex(/^[^\p{Cc}]+$/u);
 const policySchema = z.strictObject({
   version: z.literal(1), evidenceRef: reference, retentionEvidenceRef: reference, basis: z.literal("bookmaker"),
-  bookmakerId: identity, method: z.literal(DE_MARGIN_METHOD), mappingVersion: z.literal(ODDS_MAPPING_VERSION),
+  bookmakerId: identity, bookmakerScope: z.literal("all").optional(), method: z.literal(DE_MARGIN_METHOD), mappingVersion: z.literal(ODDS_MAPPING_VERSION),
   contractVersion: z.literal(ODDS_CONTRACT_VERSION),
   freshnessMs: z.number().int().min(60_000).max(7 * DAY), retainAfterKickoffMs: z.number().int().min(DAY).max(400 * DAY),
   horizonDays: z.number().int().min(1).max(7), sweepMs: z.number().int().min(15 * 60_000).max(DAY),
@@ -65,7 +65,9 @@ const endpointOf = { prices: "odds", bets: "oddsBets", bookmakers: "oddsBookmake
 
 export function parseOddsPolicy(value: unknown): OddsPolicy {
   const parsed = policySchema.safeParse(value);
-  return parsed.success ? freezeEvidence(parsed.data) : oddsFail("invalid-request");
+  if (!parsed.success) return oddsFail("invalid-request");
+  const { bookmakerScope, ...policy } = parsed.data;
+  return freezeEvidence({ ...policy, ...(bookmakerScope === undefined ? {} : { bookmakerScope }) });
 }
 export function parseOddsRequest(value: unknown): OddsImportRequest {
   const parsed = requestSchema.safeParse(value);
@@ -75,12 +77,15 @@ export function parseOddsRequest(value: unknown): OddsImportRequest {
 }
 export const oddsPolicyHash = (policy: OddsPolicy) => evidenceFingerprint(parseOddsPolicy(policy));
 export function oddsScopeKey(request: Pick<OddsImportRequest, "kind" | "date" | "policy">): string {
-  return request.kind === "prices" ? `date:${request.date}:bookmaker:${request.policy.bookmakerId}` : request.kind;
+  if (request.kind !== "prices") return request.kind;
+  return request.policy.bookmakerScope === "all" ? `date:${request.date}:bookmakers:all` : `date:${request.date}:bookmaker:${request.policy.bookmakerId}`;
 }
 /** Exact provider selectors for one request; every non-timezone selector is echoed by the provider. */
 export function oddsRequestParameters(request: OddsImportRequest): Readonly<Record<string, string>> {
-  return request.kind === "prices" ? Object.freeze({ bookmaker: String(request.policy.bookmakerId), date: request.date!, timezone: "Africa/Kampala" })
-    : Object.freeze({});
+  if (request.kind !== "prices") return Object.freeze({});
+  const selectors: Record<string, string> = { date: request.date!, timezone: "Africa/Kampala" };
+  if (request.policy.bookmakerScope !== "all") selectors.bookmaker = String(request.policy.bookmakerId);
+  return Object.freeze(selectors);
 }
 /** The authority accepts the request, its exact policy and the retention purpose before any provider call. */
 export function authorizeOddsRequest(input: OddsImportRequest, authority: OddsAuthority): OddsImportRequest {
@@ -131,7 +136,8 @@ export function validateOddsObservation(input: OddsImportRequest, result: ApiFoo
       const row = oddsRowSchema.safeParse(raw);
       if (!row.success || seen.has(row.data.fixtureId) || !sourceValid(row.data.source, "/odds") || row.data.kickoff === null ||
         getReportingDate(utcInstantFromEpochMilliseconds(row.data.kickoff)) !== request.date ||
-        !row.data.bookmakers.every((bookmaker) => bookmaker.id === request.policy.bookmakerId) ||
+        request.policy.bookmakerScope !== "all" && !row.data.bookmakers.every((bookmaker) => bookmaker.id === request.policy.bookmakerId) ||
+        new Set(row.data.bookmakers.map((bookmaker) => bookmaker.id)).size !== row.data.bookmakers.length ||
         row.data.bookmakers.some((bookmaker) => new Set(bookmaker.bets.map((bet) => bet.id)).size !== bookmaker.bets.length ||
           bookmaker.bets.some((bet) => new Set(bet.values.map((value) => value.label)).size !== bet.values.length))) {
         rejected++; reasons.add("invalid-row-or-scope"); continue;

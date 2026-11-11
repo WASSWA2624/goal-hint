@@ -52,21 +52,28 @@ export type LaunchOddsGroup = Readonly<{
   selections: readonly LaunchOddsSelection[];
 }>;
 
+/** Current bookmaker quotes can be used independently of a complete market-implied distribution. */
+export function launchOddsQuotes(mapping: LaunchOddsMapping, bet: OddsBetObservation | undefined, catalogName: string | undefined):
+  readonly Readonly<{ selection: MarketSelection; price: DecimalOdds }>[] {
+  if (!bet || bet.betId !== mapping.betId || bet.betName !== mapping.betName || catalogName !== mapping.betName) return [];
+  return (Object.entries(mapping.selections) as [MarketSelection, string][]).flatMap(([selection, label]) => {
+    const matches = bet.values.filter((value) => value.label === label);
+    const price = matches.length === 1 ? parseDecimalOdds(matches[0]!.odd) : null;
+    return price ? [{ selection, price }] : [];
+  });
+}
+
 /** A complete, de-margined launch group from ONE bookmaker's latest snapshot of ONE bet, or null.
  * Prices are never borrowed from another line, bet, bookmaker or family. */
 export function launchOddsGroup(mapping: LaunchOddsMapping, bet: OddsBetObservation | undefined,
   catalogName: string | undefined): LaunchOddsGroup | null {
-  if (!bet || bet.betId !== mapping.betId || bet.betName !== mapping.betName || catalogName !== mapping.betName) return null;
-  const entries = Object.entries(mapping.selections) as [MarketSelection, string][];
-  const prices: (DecimalOdds | null)[] = entries.map(([, label]) => {
-    const matches = bet.values.filter((value) => value.label === label);
-    return matches.length === 1 ? parseDecimalOdds(matches[0]!.odd) : null;
-  });
-  const implied = deMargin(prices, mapping.coverage);
+  const quotes = launchOddsQuotes(mapping, bet, catalogName);
+  if (quotes.length !== Object.keys(mapping.selections).length) return null;
+  const implied = deMargin(quotes.map(({ price }) => price), mapping.coverage);
   // DECIMAL(13,12) storage: an implausible overround of 10 or more is not a usable book.
   if (implied === null || !/^\d\./u.test(implied.overround)) return null;
   return Object.freeze({ family: mapping.family, betId: mapping.betId, line: mapping.line, method: DE_MARGIN_METHOD,
     mappingVersion: ODDS_MAPPING_VERSION, overround: implied.overround,
-    selections: Object.freeze(entries.map(([selection], index) => Object.freeze({ selection, price: prices[index]!,
-      displayHundredths: oddsDisplayHundredths(prices[index]!), impliedProbability: implied.probabilities[index]! }))) });
+    selections: Object.freeze(quotes.map(({ selection, price }, index) => Object.freeze({ selection, price,
+      displayHundredths: oddsDisplayHundredths(price), impliedProbability: implied.probabilities[index]! }))) });
 }

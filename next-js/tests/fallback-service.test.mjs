@@ -1,15 +1,84 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { marketRules } from "../src/domain/markets.ts";
-import { evidenceSerialize } from "../src/server/evidence/evidence-input.ts";
+import { evidenceFingerprint, evidenceSerialize } from "../src/server/evidence/evidence-input.ts";
 import { assertProviderFallbackCandidate } from "../src/server/fallback/fallback-adapter.ts";
+import { LIVE_FORECAST_CASCADE } from "../src/server/fallback/fallback-contract.ts";
 import { parseForecastSourceReceipts } from "../src/server/fallback/source-receipts.ts";
 import { API_FOOTBALL_CONTRACT_VERSION } from "../src/server/football/api-football-contract.ts";
+import { createLiveLocalEngine } from "../src/server/intelligence/live-local-engine.ts";
 import { evidenceHash } from "./helpers/evidence-fixtures.mjs";
 import { FALLBACK_NOW, fallbackPolicy, fallbackRawPrediction, fallbackResponse } from "./helpers/fallback-adapter-fixtures.mjs";
 import { fallbackFixture, fallbackAiDenied } from "./helpers/fallback-fixtures.mjs";
 import { fallbackServiceSetup } from "./helpers/fallback-service-fixtures.mjs";
+import { intelligenceHistory, INTELLIGENCE_NOW } from "./helpers/intelligence-fixtures.mjs";
 import { modelVersion } from "./helpers/predictor-fixtures.mjs";
+
+function storedLocalResults(context) {
+  const offset = context.cutoffAt - INTELLIGENCE_NOW;
+  const team = (id) => id === "team-0" ? context.home.teamId : id === "team-1" ? context.away.teamId : id;
+  return intelligenceHistory().map((item, index) => {
+    const regulation = { home: item.homeGoals, away: item.awayGoals, verified: true, evidenceRef: item.evidenceRef };
+    const reportedGoals = { home: regulation.home, away: regulation.away }, empty = { home: null, away: null };
+    const content = { status: "finished-regulation", providerStatus: "FT", elapsedMinutes: 90, reportedGoals,
+      extraTimeScore: empty, penaltyScore: empty, regulation };
+    const observedAt = item.availableAt + offset;
+    const body = { ...content, id: item.observationHash, fixtureId: `dd000000-0000-4000-8000-${String(index).padStart(12, "0")}`, fixtureVersion: 1n,
+      previousId: null, observationId: evidenceHash(item.fixtureId), observedAt, providerUpdatedAt: null,
+      regulationVerifiedAt: observedAt };
+    return { id: body.id, fixtureId: body.fixtureId, fixtureVersion: 1n, observedAt: new Date(observedAt), status: body.status,
+      regulationVerified: true, regulationHome: regulation.home, regulationAway: regulation.away,
+      contentHash: evidenceFingerprint(content), validIntegrity: 1, body: evidenceSerialize(body),
+      competitionId: item.competitionId, kickoff: new Date(item.kickoffAt + offset),
+      homeTeamId: team(item.homeTeamId), awayTeamId: team(item.awayTeamId) };
+  });
+}
+
+const cascade = (setup) => setup.request({ order: "ai-first", sourceCascade: LIVE_FORECAST_CASCADE,
+  bounds: { ...setup.request().bounds, timeoutMs: 1000, deadlineAt: FALLBACK_NOW + 10_000 }, maxElapsedMs: 5000 });
+
+test("live cascade keeps a usable AI forecast and spends no local reads or provider predictions", async () => {
+  const setup = fallbackServiceSetup({ output: partialOutput });
+  let reads = 0;
+  const service = setup.makeService({ localEngine: async () => { reads++; return null; } });
+  const value = await service.resolve(cascade(setup));
+  assert.equal(selected(value, "total-goals").market.source, "ai");
+  assert.equal(value.candidate.markets["match-result"].available, false);
+  assert.equal(value.candidate.audit.localStatus, "not-requested");
+  assert.equal(value.requestsDispatched, 0);
+  assert.equal(reads, 0);
+  assert.equal(setup.collected.length, 0);
+});
+
+test("live cascade publishes a coherent local forecast using stored verified results before provider fallback", async () => {
+  const setup = fallbackServiceSetup({ reason: "unconfigured" });
+  const rows = storedLocalResults(setup.expected.context);
+  let reads = 0;
+  const localEngine = createLiveLocalEngine({ query: async (operation) => operation({ $queryRaw: async () => { reads++; return rows; } }) });
+  const value = await setup.makeService({ localEngine }).resolve(cascade(setup));
+  const match = selected(value, "match-result"), chance = selected(value, "double-chance");
+  assert.equal(match.market.source, "local-engine");
+  assert.deepEqual(match.provenance, chance.provenance);
+  assert.equal(chance.market.probabilities["home-or-draw"], match.market.probabilities["home-win"] + match.market.probabilities.draw);
+  assert.equal(value.candidate.audit.aiReason, "unconfigured");
+  assert.equal(value.candidate.audit.localStatus, "candidate");
+  assert.equal(value.candidate.audit.sourceOrder, "ai-first");
+  assert.equal(value.requestsDispatched, 0);
+  assert.equal(reads, 1);
+  assert.equal(setup.collected.length, 0);
+});
+
+test("live cascade requests API-Football only after stored history falls short", async () => {
+  const setup = fallbackServiceSetup({ reason: "unconfigured" });
+  const localEngine = createLiveLocalEngine({ query: async () => [] });
+  const value = await setup.makeService({ localEngine }).resolve(cascade(setup));
+  const match = selected(value, "match-result");
+  assert.equal(match.market.source, "api-football");
+  assert.equal(match.fallback.detail, "unconfigured");
+  assert.equal(value.candidate.audit.localStatus, "unavailable");
+  assert.equal(value.requestsDispatched, 1);
+  assert.equal(setup.collected.length, 1);
+});
 
 const total = (over = 0.6) => ({ period: marketRules.period, line: 2.5, probabilities: { "over-2.5": over, "under-2.5": 1 - over } });
 const btts = (yes = 0.6) => ({ period: marketRules.period, probabilities: { yes, no: 1 - yes } });

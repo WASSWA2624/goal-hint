@@ -391,7 +391,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       {field("oddsMin", messages.text("slips.minimum"), { ...oddsOptions, "aria-label": messages.text("slips.oddsMin") })}
       {field("oddsMax", messages.text("slips.maximum"), { ...oddsOptions, "aria-label": messages.text("slips.oddsMax") })}
     </Fields></fieldset>
-    <fieldset><legend>{messages.text("slips.probabilityPercent")}</legend><Fields>
+    <fieldset><legend>{messages.text("slips.probabilityPercent", { minimum: messages.number(slipBuilderRules.minimumPickPercent) })}</legend><Fields>
       {field("probMin", messages.text("slips.minimum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.probMin") })}
       {field("probMax", messages.text("slips.maximum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.probMax") })}
     </Fields></fieldset>

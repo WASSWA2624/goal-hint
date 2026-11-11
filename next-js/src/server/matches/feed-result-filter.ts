@@ -15,7 +15,7 @@ export async function filterFeedResult(tx: Prisma.TransactionClient, sql: Return
   for (;;) {
     const rows: { id: string; kickoff: Date; cycleState: string; fixtureStatus: string }[] = await tx.$queryRaw(Prisma.sql`
       SELECT STRAIGHT_JOIN f.id,f.kickoff,c.state AS cycleState,f.status AS fixtureStatus
-      ${sql.countJoins} ${sql.searchJoin} WHERE ${sql.where} AND m.available=TRUE
+      ${sql.countJoins} ${sql.searchJoin} WHERE ${sql.where} AND ${sql.pickAvailable}
       ${after ? Prisma.sql`AND (f.kickoff>${after.kickoff} OR (f.kickoff=${after.kickoff} AND f.id>${after.id}))` : Prisma.empty}
       ORDER BY f.kickoff,f.id LIMIT 500`);
     for (const row of rows) {

@@ -96,6 +96,7 @@ test('canonical origin is fixed and genuine pagination retains its dated page id
   assert.equal(feedDiscovery(query({}), today).path, '/en/matches?picks=all&when=last-30-days&sort=kickoff');
   assert.equal(feedDiscovery(query({ page: '2' }), today).path, '/en/matches?page=2&picks=all&when=last-30-days&sort=kickoff');
   assert.equal(feedDiscovery(query({ when: 'today' }), today).path, '/en/predictions/2026-10-09?picks=all');
+  assert.deepEqual(feedDiscovery(query({ when: 'today', sort: 'live-first' }), today), feedDiscovery(query({ when: 'today' }), today));
   assert.equal(feedDiscovery(query({ when: 'tomorrow', page: '3' }), today).path, '/en/predictions/2026-10-10?page=3&picks=all');
   assert.equal(feedDiscovery(query({ date: '2026-10-08' }), today).path, '/en/predictions/2026-10-08?picks=all');
   for (const values of [{ q: '<script>' }, { league: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }, { status: 'live' },

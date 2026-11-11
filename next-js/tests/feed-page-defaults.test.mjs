@@ -3,46 +3,40 @@ import test from "node:test";
 import { parseReportingDate } from "../src/domain/calendar.ts";
 import { applyFeedDraft, resetFeedFilters } from "../src/domain/feed-controls.ts";
 import { deviceFeedEntryHref } from "../src/domain/device-feed.ts";
-import { applyFeedPageDefaults, defaultMarkets, defaultPagePicks, feedQueryHref, getFeedToday, parseFeedQuery, resolveFeedDates, serializeFeedQuery } from "../src/domain/feed-query.ts";
+import { applyFeedPageDefaults, defaultMarkets, feedQueryHref, getFeedToday, parseFeedQuery, resolveFeedDates, serializeFeedQuery } from "../src/domain/feed-query.ts";
 
 const today = parseReportingDate("2026-10-27");
 const parse = (parameters = "") => parseFeedQuery(new URLSearchParams(parameters), { today });
-const page = (parameters = "", subscriberOnly = false) => {
+const page = (parameters = "") => {
   const input = new URLSearchParams(parameters);
-  return applyFeedPageDefaults(parseFeedQuery(input, { today }), input, subscriberOnly);
+  return applyFeedPageDefaults(parseFeedQuery(input, { today }), input);
 };
 
-test("page defaults include today's schedule without changing unrestricted API reads", () => {
+test("page defaults leave recommendations unrestricted across date and status filters", () => {
   assert.equal(parse().picks, "all");
   assert.equal(serializeFeedQuery(parse(), today).toString(), "");
   assert.equal(serializeFeedQuery(page(), today).has("picks"), false, "The page default must reach the real feed read");
-  assert.equal(serializeFeedQuery(page("", true), today).has("picks"), false, "Guest reads retain the unrestricted API default");
   for (const status of ["all", "live", "finished"]) {
-    assert.equal(defaultPagePicks(status), "only");
-    assert.equal(page(`status=${status}`).picks, status === "all" ? "all" : "only");
-    assert.equal(defaultPagePicks(status, true), status === "finished" ? "only" : "all");
-    assert.equal(page(`status=${status}`, true).picks, status === "finished" ? "only" : "all");
+    assert.equal(page(`status=${status}&market=match-result`).picks, "all");
   }
 });
 
-test("Matches opens with today newest first and 50 items", () => {
-  for (const subscriberOnly of [false, true]) {
-    const query = page("", subscriberOnly);
-    assert.equal(query.status, "all");
-    assert.deepEqual(query.dates, { kind: "today" });
-    assert.deepEqual(query.sort, { by: "kickoff", direction: "desc" });
-    assert.deepEqual(query.markets, defaultMarkets);
-    assert.equal(query.search, "");
-    assert.deepEqual(query.leagues, []);
-    assert.deepEqual(query.countries, []);
-    assert.deepEqual(query.probability, { min: 0, max: 100 });
-    assert.equal(query.odds, null);
-    assert.equal(query.time, undefined);
-    assert.equal(query.page, 1); assert.equal(query.pageSize, 50); assert.equal(query.summary, undefined);
-    const parameters = serializeFeedQuery(query, today);
-    assert.equal(parameters.get("when"), "today");
-    assert.equal(parameters.get("sort"), null);
-  }
+test("Matches opens with today's live games first and 50 items", () => {
+  const query = page();
+  assert.equal(query.status, "all");
+  assert.deepEqual(query.dates, { kind: "today" });
+  assert.deepEqual(query.sort, { by: "live-first", direction: "desc" });
+  assert.deepEqual(query.markets, defaultMarkets);
+  assert.equal(query.search, "");
+  assert.deepEqual(query.leagues, []);
+  assert.deepEqual(query.countries, []);
+  assert.deepEqual(query.probability, { min: 0, max: 100 });
+  assert.equal(query.odds, null);
+  assert.equal(query.time, undefined);
+  assert.equal(query.page, 1); assert.equal(query.pageSize, 50); assert.equal(query.summary, undefined);
+  const parameters = serializeFeedQuery(query, today);
+  assert.equal(parameters.get("when"), "today");
+  assert.equal(parameters.get("sort"), "live-first");
   assert.deepEqual(parse().dates, { kind: "last-30-days" });
   assert.deepEqual(parse().sort, { by: "kickoff", direction: "desc" });
 });
@@ -60,13 +54,17 @@ test("explicit dates and sorting survive Matches navigation, including API defau
     }
   }
   assert.deepEqual(page("dir=asc").sort, { by: "kickoff", direction: "asc" });
+  assert.deepEqual(page("when=yesterday").sort, { by: "kickoff", direction: "desc" });
+  assert.deepEqual(page("when=today").sort, { by: "live-first", direction: "desc" });
+  assert.throws(() => parse("sort=live-first&dir=asc"));
   for (const parameters of ["date=2026-10-26", "from=2026-10-20&to=2026-10-26"]) {
     assert.deepEqual(page(parameters).dates, parse(parameters).dates);
   }
   const archived = parseFeedQuery({}, { today, routeDate: "2026-10-20" });
-  const result = applyFeedPageDefaults(archived, {}, false, { dated: true });
+  const result = applyFeedPageDefaults(archived, {}, { dated: true });
   assert.deepEqual(result.dates, archived.dates);
   assert.deepEqual(result.sort, archived.sort);
+  assert.equal(result.picks, "all");
 });
 
 test("Today uses the browsing time zone without adding a kickoff constraint", () => {
@@ -82,9 +80,7 @@ test("Today uses the browsing time zone without adding a kickoff constraint", ()
 });
 
 test("explicit picks choices survive page defaults and navigation", () => {
-  for (const subscriberOnly of [false, true]) {
-    for (const picks of ["all", "only"]) assert.equal(page(`picks=${picks}`, subscriberOnly).picks, picks);
-  }
+  for (const picks of ["all", "only"]) assert.equal(page(`picks=${picks}`).picks, picks);
   const original = page("when=last-7-days&picks=all&q=Club&page=3");
   const href = feedQueryHref(original, today);
   const parameters = new URL(href, "https://example.test").searchParams;
@@ -95,22 +91,19 @@ test("explicit picks choices survive page defaults and navigation", () => {
   assert.equal(applyFeedPageDefaults(parse(), {}).picks, "all");
 });
 
-test("Reset restores today's schedule for both viewers", () => {
+test("Reset restores today's forecasts without a recommendation filter", () => {
   const original = page("picks=only&q=Club&page=3");
   assert.equal(resetFeedFilters(original).picks, "all");
-  assert.equal(resetFeedFilters(original, true).picks, "all");
-  const resetCompleted = resetFeedFilters({ ...original, status: "finished" }, true);
+  const resetCompleted = resetFeedFilters({ ...original, status: "finished" });
   assert.equal(resetCompleted.status, "all");
   assert.equal(resetCompleted.picks, "all", "Reset returns to All, where guests cannot request subscriber predictions");
   assert.equal(resetFeedFilters(original).search, "");
   assert.equal(resetFeedFilters(original).page, 1);
   const changed = page("when=next-7-days&status=scheduled&picks=all&q=Club&league=one&country=England&market=total-goals&prob=50-90&sort=kickoff&dir=asc&timeFrom=12:00&timeTo=18:00&tz=Africa%2FKampala&page=3&pageSize=40");
-  for (const subscriberOnly of [false, true]) {
-    const reset = resetFeedFilters(changed, subscriberOnly);
-    assert.deepEqual(reset, page("tz=Africa%2FKampala&pageSize=40", subscriberOnly));
-    assert.deepEqual(resetFeedFilters(reset, subscriberOnly), reset);
-    assert.deepEqual(page(new URL(feedQueryHref(reset, today), "https://example.test").searchParams.toString(), subscriberOnly), reset);
-  }
+  const reset = resetFeedFilters(changed);
+  assert.deepEqual(reset, page("tz=Africa%2FKampala&pageSize=40"));
+  assert.deepEqual(resetFeedFilters(reset), reset);
+  assert.deepEqual(page(new URL(feedQueryHref(reset, today), "https://example.test").searchParams.toString()), reset);
 });
 
 test("fresh device navigation leaves the picks choice to the page default", () => {

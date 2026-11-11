@@ -107,9 +107,11 @@ export function resolveFallbackCandidate(value: Readonly<{
   expected: FallbackContext; ai: PredictorResult; provider: ProviderFallbackResult | null; now: UtcInstant;
   /** Absent keeps the original AI-first resolution and an audit without a source order. */
   order?: ForecastSourceOrder;
-}>, authority: FallbackResolutionAuthority, policy: ForecastSelectionPolicy = "legacy-ai-primary"): FallbackResolutionResult {
+}>, authority: FallbackResolutionAuthority, policy: ForecastSelectionPolicy | "cascade-provider" = "legacy-ai-primary"): FallbackResolutionResult {
   const denied = (reason: "invalid-request" | "not-authorized" | "ineligible-refresh"): FallbackResolutionResult => Object.freeze({ status: "denied", reason });
-  if (policy !== "legacy-ai-primary" && policy !== "provider-baseline" && policy !== "optional-ai-primary" || policy === "provider-baseline" && value?.order === "ai-first") return denied("invalid-request");
+  const providerOnly = policy === "provider-baseline" || policy === "cascade-provider";
+  if (!providerOnly && policy !== "legacy-ai-primary" && policy !== "optional-ai-primary" ||
+    providerOnly && value?.order === "ai-first") return denied("invalid-request");
   let expected: FallbackContext, ai: PredictorResult, provider: ProviderFallbackResult | null, now: UtcInstant;
   const order = value?.order;
   try {
@@ -145,7 +147,7 @@ export function resolveFallbackCandidate(value: Readonly<{
     const chosen: Partial<Record<SourceGroup, MarketAvailability>> = {};
     for (const family of groups) {
       const aiMarket = validAi.markets[family], providerMarket = supplied?.markets.markets[family];
-      if (policy === "provider-baseline") { if (providerMarket?.available) chosen[family] = providerMarket; }
+      if (providerOnly) { if (providerMarket?.available) chosen[family] = providerMarket; }
       else if (providerFirst && providerMarket?.available) chosen[family] = providerMarket;
       else if (aiMarket.available) chosen[family] = aiMarket;
       else if (providerMarket?.available) chosen[family] = providerMarket;

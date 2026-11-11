@@ -56,7 +56,7 @@ export type BestSlipsResult = SlipsBrowseResult<BestSlipView>;
 export function bestSlipCriteria(today: string, target: Readonly<{ minimumTotal: number; maximumTotal: number; count: number }>
   = { ...bestSlipBand(defaultBestSlipOddsBand), count: bestSlipBandLimit }): SlipCriteria {
   return { ...defaultSlipCriteria(today), dateTo: today, totalMin: target.minimumTotal, totalMax: target.maximumTotal,
-    oddsMin: oddsRules.minimumHundredths, oddsMax: oddsRules.maximumHundredths, probMin: 0, teamsMax: 8, slips: target.count, reuse: false };
+    oddsMin: oddsRules.minimumHundredths, oddsMax: oddsRules.maximumHundredths, teamsMax: 8, slips: target.count, reuse: false };
 }
 
 export function bestSlipBandCriteria(today: string, band: BestSlipOddsBand): SlipCriteria {

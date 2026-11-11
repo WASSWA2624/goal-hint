@@ -7,7 +7,7 @@ import { buildSlips, defaultSlipCriteria } from '../src/domain/slip-builder.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 import { readPublicSlipBuild } from '../src/server/slips/public-slips.ts';
 import { createSlipBuildService, slipReadRules } from '../src/server/slips/slip-service.ts';
-import { storedSlipPricePools } from '../src/server/slips/price-read.ts';
+import { slipPricesFromBookmakers, storedSlipPricePools } from '../src/server/slips/price-read.ts';
 import { liveRecord, now, today } from './helpers/live-refresh-fixtures.mjs';
 
 const clock = { now: () => now }, token = 'a'.repeat(64);
@@ -15,10 +15,14 @@ function criteria(overrides = {}) {
   return { ...defaultSlipCriteria(today), dateTo: today, probMin: 50, oddsMin: 101, oddsMax: 100000,
     totalMin: 300, totalMax: 600, teamsMin: 2, teamsMax: 2, ...overrides };
 }
-function record(id, overrides = {}) {
+function record(id, overrides = {}, homeProbability = 0.75) {
   const value = liveRecord({ fixtureId: id, kickoffAt: now + 3600000 });
+  const snapshot = validateMarketSnapshot({ 'match-result': { source: 'ai', period: marketRules.period,
+    probabilities: { 'home-win': homeProbability, draw: 0.1, 'away-win': Number((0.9 - homeProbability).toFixed(6)) } } });
   return { ...value, homeTeam: { id: `${id}-home`, name: `${id} home` }, awayTeam: { id: `${id}-away`, name: `${id} away` },
-    forecast: { ...value.forecast, provisional: false, updateDelayed: false },
+    forecast: { ...value.forecast, provisional: false, updateDelayed: false,
+      markets: Object.values(snapshot.markets).filter(entry => entry.available)
+        .map(entry => ({ market: entry.market, reasons: [], uncertainty: null })) },
     prices: [{ family: 'match-result', selection: 'home-win', price: '2.00', basis: 'bookmaker', retrievedAt: now - 1000, providerUpdatedAt: null }], ...overrides };
 }
 function page(parameters, records, overrides = {}) {
@@ -36,6 +40,22 @@ function page(parameters, records, overrides = {}) {
 function service(read, overrides = {}) {
   return createSlipBuildService({ read, consume: async () => {}, providerOdds: true, clock, ...overrides });
 }
+
+test('individual picks require at least 75 percent before display rounding', async () => {
+  const records = [record('below', {}, 0.74999), record('boundary')];
+  const reader = service(async parameters => page(parameters, records));
+  const input = criteria({ probMin: 0, totalMin: 200, teamsMin: 1, teamsMax: 1, markets: ['match-result'] });
+  const result = await reader.query(input);
+  assert.equal(result.state, 'generated');
+  assert.equal(result.data.qualifyingMatches, 1);
+  assert.deepEqual(result.data.slips.map(slip => slip.selections.map(({ fixtureId, probability }) => [fixtureId, probability])),
+    [[['boundary', 0.75]]]);
+  for (const bounds of [{ probMax: 74.999 }, { probMin: 75.001 }]) {
+    const empty = await reader.query({ ...input, ...bounds });
+    assert.equal(empty.state, 'no-qualifying');
+    assert.deepEqual(empty.data.slips, []);
+  }
+});
 
 test('combined filters without a verified joint model fail before cohort reads or budget charges', async () => {
   let reads = 0, consumes = 0;
@@ -57,7 +77,7 @@ test('custom service rechecks joint approval after the scan and after estimating
     validFrom: now - 1, validUntil: now + 1000, estimate: () => 0.5 };
   const input = criteria({ totalProbMin: 45, totalProbMax: 55 });
   const success = await service(async parameters => page(parameters, records), { jointModel: { model, verifyModel: () => true } }).query(input);
-  assert.equal(success.state, 'generated'); assert.equal(success.data.slips[0].averageProbability, 0.6);
+  assert.equal(success.state, 'generated'); assert.equal(success.data.slips[0].averageProbability, 0.75);
   assert.equal(success.data.jointProbabilities[success.data.slips[0].id], 0.5);
   let approved = true;
   const revokedWhileReading = await service(async parameters => { approved = false; return page(parameters, records); },
@@ -103,11 +123,11 @@ test('whole-slip bounds without a current qualified model are unavailable before
 
 test('a current qualified model ranks and bounds custom builds with a separate whole-slip estimate', async () => {
   const records = [record('fixture-1'), record('fixture-2')], read = async parameters => page(parameters, records);
-  const result = await service(read, { jointModel: () => ({ model: jointModel, verifyModel: () => true }) }).query(criteria({ totalProbMin: 50 }));
+  const result = await service(read, { jointModel: () => ({ model: jointModel, verifyModel: () => true }) }).query(criteria({ totalProbMin: 65 }));
   assert.equal(result.state, 'generated'); assert.equal(result.data.excludedUnestimated, 0);
-  assert.ok(result.data.slips.length > 0 && result.data.slips.every(slip => Math.abs(result.data.jointProbabilities[slip.id] - 0.55) < 1e-12));
-  assert.equal(result.data.slips[0].averageProbability, 0.6);
-  assert.equal((await service(read, { jointModel: () => ({ model: jointModel, verifyModel: () => true }) }).query(criteria({ totalProbMin: 60 }))).state, 'no-combinations');
+  assert.ok(result.data.slips.length > 0 && result.data.slips.every(slip => Math.abs(result.data.jointProbabilities[slip.id] - 0.7) < 1e-12));
+  assert.equal(result.data.slips[0].averageProbability, 0.75);
+  assert.equal((await service(read, { jointModel: () => ({ model: jointModel, verifyModel: () => true }) }).query(criteria({ totalProbMin: 71 }))).state, 'no-combinations');
 });
 
 test('a model expiring during the bounded read withholds the build', async () => {
@@ -146,7 +166,7 @@ test('build uses one EAT stored cohort, all requested families, one budget charg
   }, { consume: async () => { consumes++; } }).query(supplied);
   assert.equal(consumes, 1); assert.equal(reads, 2); assert.equal(result.state, 'generated');
   assert.equal(result.examined, 2); assert.equal(result.searchLimited, false);
-  assert.equal(result.data.slips[0].totalOdds, '4.00'); assert.equal(result.data.slips[0].averageProbability, 0.6);
+  assert.equal(result.data.slips[0].totalOdds, '4.00'); assert.equal(result.data.slips[0].averageProbability, 0.75);
   assert.deepEqual(result.data.slips[0].selections[0].forecast, { cycleId: records[0].cycleId,
     revisionId: records[0].forecast.revisionId, publishedAt: records[0].forecast.publishedAt });
 });
@@ -257,16 +277,16 @@ test('outages and rate-limit refusal remain distinct and never expose private di
   assert.equal(result.state, 'rate-limited'); assert.equal(reads, 0); assert.equal(result.retryAfterSeconds, 7);
 });
 
-function alternativeRecord(id) {
-  const value = record(id), snapshot = validateMarketSnapshot({ 'match-result': { source: 'ai', period: marketRules.period,
-    probabilities: { 'home-win': 0.2, draw: 0.1, 'away-win': 0.7 } } });
+function alternativeRecord(id, source = 'ai') {
+  const value = record(id), snapshot = validateMarketSnapshot({ 'match-result': { source, period: marketRules.period,
+    probabilities: { 'home-win': 0.72, draw: 0.13, 'away-win': 0.15 } } });
   return { ...value, forecast: { ...value.forecast, markets: Object.values(snapshot.markets).filter(entry => entry.available)
     .map(entry => ({ market: entry.market, reasons: [], uncertainty: null })) },
-    prices: [{ ...value.prices[0], selection: 'away-win', price: '1.30' }] };
+    prices: [{ ...value.prices[0], family: 'double-chance', selection: 'home-or-away', price: '1.30' }] };
 }
 function alternativePrices() {
-  return [['home-win', '2.00'], ['draw', '3.00'], ['away-win', '1.30']].map(([selection, price]) => ({
-    family: 'match-result', selection, price, basis: 'bookmaker', retrievedAt: now - 1000, providerUpdatedAt: null,
+  return [['home-or-draw', '2.00'], ['away-or-draw', '3.00'], ['home-or-away', '1.30']].map(([selection, price]) => ({
+    family: 'double-chance', selection, price, basis: 'bookmaker', retrievedAt: now - 1000, providerUpdatedAt: null,
   }));
 }
 
@@ -274,30 +294,57 @@ test('manual alternatives use the own published outcome probability and suppleme
   const records = [alternativeRecord('fixture-1'), alternativeRecord('fixture-2')];
   const reader = async parameters => ({ feed: page(parameters, records),
     selectionPrices: Object.fromEntries(records.map(value => [value.fixtureId, alternativePrices()])) });
-  const result = await service(reader).query(criteria({ markets: ['match-result'], probMin: 0,
-    outcomes: { 'match-result': ['home-win'] } }));
-  assert.equal(result.state, 'generated'); assert.equal(result.data.slips[0].averageProbability, 0.2);
+  const result = await service(reader).query(criteria({ markets: ['double-chance'], probMin: 0,
+    outcomes: { 'double-chance': ['home-or-draw'] } }));
+  assert.equal(result.state, 'generated'); assert.equal(result.data.slips[0].averageProbability, 0.85);
   assert.equal(result.data.slips[0].totalOdds, '4.00');
-  assert.ok(result.data.slips[0].selections.every(value => value.selection === 'home-win' && value.probability === 0.2 && value.odds === '2.00'));
-  assert.ok(records.every(value => value.forecast.markets.find(item => item.market.family === 'match-result').market.selection === 'away-win'));
-  const automatic = await service(reader).query(criteria({ markets: ['match-result'], probMin: 0, totalMin: 101 }));
-  assert.equal(automatic.data.slips[0].averageProbability, 0.7);
-  assert.ok(automatic.data.slips[0].selections.every(value => value.selection === 'away-win'));
+  assert.ok(result.data.slips[0].selections.every(value => value.selection === 'home-or-draw' && value.probability === 0.85 && value.odds === '2.00'));
+  assert.ok(records.every(value => value.forecast.markets.find(item => item.market.family === 'double-chance').market.selection === 'home-or-away'));
+  const automatic = await service(reader).query(criteria({ markets: ['double-chance'], probMin: 0, totalMin: 101 }));
+  assert.equal(automatic.data.slips[0].averageProbability, 0.87);
+  assert.ok(automatic.data.slips[0].selections.every(value => value.selection === 'home-or-away'));
+});
+
+test('custom slips choose the best exact in-range price for a published fallback forecast and preserve the bookmaker', async () => {
+  for (const source of ['api-football', 'local-engine', 'ai']) {
+    const value = alternativeRecord('fixture-1', source);
+    const fixture = { ...value, forecast: { ...value.forecast, provisional: true } };
+    const selected = alternativePrices()[0];
+    const selectionPrices = { [fixture.fixtureId]: [
+      { ...selected, price: '2.001', bookmaker: { id: 8, name: 'Outside bounds' } },
+      { ...selected, price: '1.9905', bookmaker: { id: 6, name: 'Second book' } },
+      { ...selected, price: '1.9989', bookmaker: { id: 2, name: 'Best book' } },
+    ] };
+    const read = async parameters => ({ feed: page(parameters, [fixture]), selectionPrices });
+    const input = criteria({ markets: ['double-chance'], outcomes: { 'double-chance': ['home-or-draw'] }, probMin: 0,
+      oddsMax: 200, totalMin: 101, totalMax: 300, teamsMin: 1, teamsMax: 1 });
+    const result = await service(read).query(input);
+    if (source === 'ai') {
+      assert.equal(result.state, 'no-qualifying');
+      continue;
+    }
+    assert.equal(result.state, 'generated');
+    assert.equal(result.data.slips[0].selections[0].odds, '1.9989');
+    assert.deepEqual(result.data.slips[0].selections[0].bookmaker, { id: 2, name: 'Best book' });
+    assert.equal(result.data.slips[0].selections[0].probability, 0.85);
+    const reviewed = await service(read, { jointModel: { model: jointModel, verifyModel: () => true } }).query(input);
+    assert.equal(reviewed.state, 'no-qualifying');
+  }
 });
 
 test('stored generation meets all custom limits when the recommended pick does not qualify', async () => {
   const records = ['fixture-1', 'fixture-2', 'fixture-3', 'fixture-4'].map(id => {
     const value = alternativeRecord(id);
     return { ...value, forecast: { ...value.forecast, recommendation: { status: 'selected', selected: {
-      family: 'match-result', selection: 'away-win', probability: 0.7, source: 'ai', period: marketRules.period, line: null,
+      family: 'double-chance', selection: 'home-or-away', probability: 0.87, source: 'ai', period: marketRules.period, line: null,
     } } } };
   });
   const original = structuredClone(records);
   let consumes = 0;
   const result = await service(async parameters => ({ feed: page(parameters, records),
     selectionPrices: Object.fromEntries(records.map(value => [value.fixtureId, alternativePrices()])) }),
-  { consume: async () => { consumes++; } }).query(criteria({ markets: ['match-result'],
-    oddsMin: 150, oddsMax: 250, probMin: 10, probMax: 30, totalMin: 400, totalMax: 400,
+  { consume: async () => { consumes++; } }).query(criteria({ markets: ['double-chance'],
+    oddsMin: 150, oddsMax: 250, probMin: 80, probMax: 86, totalMin: 400, totalMax: 400,
     teamsMin: 2, teamsMax: 2, slips: 2, reuse: false }));
   assert.equal(result.state, 'generated');
   assert.equal(result.data.slips.length, 2);
@@ -308,8 +355,8 @@ test('stored generation meets all custom limits when the recommended pick does n
     return slip.selections;
   });
   assert.equal(new Set(selections.map(selection => selection.fixtureId)).size, 4);
-  assert.ok(selections.every(selection => selection.family === 'match-result' && selection.selection === 'home-win'
-    && selection.odds === '2.00' && selection.probability === 0.2));
+  assert.ok(selections.every(selection => selection.family === 'double-chance' && selection.selection === 'home-or-draw'
+    && selection.odds === '2.00' && selection.probability === 0.85));
   assert.deepEqual(records, original);
 });
 
@@ -322,7 +369,7 @@ test('supplementary price-pool drift or a future observation rejects the entire 
       if (kind === 'future') prices[0].retrievedAt = now + 1;
       if (kind === 'drift' && reads === 2) prices[0].price = '2.10';
       return { feed: page(parameters, records), selectionPrices: Object.fromEntries(records.map(value => [value.fixtureId, prices])) };
-    }).query(criteria({ markets: ['match-result'], probMin: 0, outcomes: { 'match-result': ['home-win'] } }));
+    }).query(criteria({ markets: ['double-chance'], probMin: 0, outcomes: { 'double-chance': ['home-or-draw'] } }));
     assert.equal(result.state, 'data-unavailable', kind); assert.equal(result.data, null); assert.equal(result.examined, 0);
   }
 });
@@ -336,26 +383,46 @@ test('alternative-price projection respects the odds policy and reuses only comp
     basis: 'bookmaker', impliedProbability: '0.5', overround: '1.1', method: 'proportional-v1', snapshotId: 'synthetic-snapshot',
     retrievedAt: at, providerUpdatedAt: null, bookmakerExternalId: 'private-identifier' }));
   const tx = { $queryRaw: async () => { reads++; return rows; } }, source = record('fixture-1');
-  const disabled = await storedSlipPricePools(tx, [source], false);
+  const disabled = await storedSlipPricePools(tx, [source], now, { enabled: false, primaryBookmakerOnly: true });
   assert.deepEqual(disabled, { 'fixture-1': [] }); assert.equal(reads, 0);
-  const enabled = await storedSlipPricePools(tx, [source], true);
+  const enabled = await storedSlipPricePools(tx, [source], now, { enabled: true, primaryBookmakerOnly: true });
   assert.equal(reads, 1); assert.deepEqual(enabled['fixture-1'].map(price => price.selection), ['home-win', 'draw', 'away-win']);
   assert.ok(enabled['fixture-1'].every(price => price.family === 'match-result'));
   assert.doesNotMatch(JSON.stringify(enabled), /private-identifier|bookmakerExternalId|impliedProbability|overround|snapshotId/);
   rows[1].snapshotId = 'different-snapshot';
-  assert.deepEqual(await storedSlipPricePools(tx, [source], true), { 'fixture-1': source.prices });
+  assert.deepEqual(await storedSlipPricePools(tx, [source], now, { enabled: true, primaryBookmakerOnly: true }), { 'fixture-1': source.prices });
 });
 
 test('enabled price pools preserve standalone approved selected quotes and prefer complete supplemental quotes', async () => {
   const source = record('fixture-1', { prices: [{ family: 'match-result', selection: 'home-win', price: '1.80', basis: 'bookmaker',
     retrievedAt: now - 2000, providerUpdatedAt: null }] });
-  assert.deepEqual(await storedSlipPricePools({ $queryRaw: async () => [] }, [source], true), { 'fixture-1': source.prices });
+  const settings = { enabled: true, primaryBookmakerOnly: true };
+  assert.deepEqual(await storedSlipPricePools({ $queryRaw: async () => [] }, [source], now, settings), { 'fixture-1': source.prices });
   const rows = [['home-win', 210], ['draw', 300], ['away-win', 400]].map(([selection, displayHundredths]) => ({
     marketKey: 'match-result', selection, displayHundredths, basis: 'bookmaker', impliedProbability: '0.5', overround: '1.1',
     method: 'proportional-v1', snapshotId: 'complete-snapshot', retrievedAt: new Date(now - 1000), providerUpdatedAt: null,
   }));
-  const prices = await storedSlipPricePools({ $queryRaw: async () => rows }, [source], true);
+  const prices = await storedSlipPricePools({ $queryRaw: async () => rows }, [source], now, settings);
   assert.equal(prices['fixture-1'].length, 3); assert.equal(prices['fixture-1'].find(price => price.selection === 'home-win').price, '2.10');
   assert.equal(prices['fixture-1'].find(price => price.selection === 'home-win').retrievedAt, now - 1000);
-  assert.deepEqual(await storedSlipPricePools({ $queryRaw: async () => rows }, [source], false), { 'fixture-1': [] });
+  assert.deepEqual(await storedSlipPricePools({ $queryRaw: async () => rows }, [source], now, { ...settings, enabled: false }), { 'fixture-1': [] });
+});
+
+test('custom slip pools expose partial Double Chance quotes across books without stale recommendation prices', () => {
+  const fixture = alternativeRecord('fixture-1', 'api-football');
+  const current = { fixtureId: fixture.fixtureId, kickoffAt: fixture.kickoffAt, checkedAt: now - 200, primaryBookmakerId: 8, bookmakers: [
+    { bookmakerId: 8, bookmakerName: 'Primary book', offers: [
+      { betId: 12, betName: 'Double Chance', values: [{ label: 'Home/Draw', odd: '1.9019' }], providerUpdatedAt: now - 1000 },
+      { betId: 5, betName: 'Goals Over/Under', values: [{ label: 'Over 1.5', odd: '1.12' }], providerUpdatedAt: null },
+    ] },
+    { bookmakerId: 2, bookmakerName: 'Other book', offers: [
+      { betId: 12, betName: 'Double Chance', values: [{ label: 'Home/Draw', odd: '2.10' }, { label: 'Home/Away', odd: '1.50' },
+        { label: 'Home/Away', odd: '1.51' }], providerUpdatedAt: null },
+    ] },
+  ] };
+  const prices = slipPricesFromBookmakers(fixture, current);
+  assert.deepEqual(prices.map(({ family, selection, price, bookmaker }) => [family, selection, price, bookmaker.id]), [
+    ['double-chance', 'home-or-draw', '1.9019', 8], ['double-chance', 'home-or-draw', '2.10', 2],
+  ]);
+  assert.deepEqual(slipPricesFromBookmakers(fixture, { ...current, kickoffAt: current.kickoffAt + 1000 }), []);
 });

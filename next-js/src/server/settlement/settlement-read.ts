@@ -131,7 +131,7 @@ export function settlementInputFor(fixtureId: string, cycle: Pick<StoredCycle, "
 }
 
 /** Shared audit projection for individual reads and bounded reporting batches. */
-export function projectSettlementCycle(fixture: FootballFixture, result: StoredFixtureResult | null, issue: string | null,
+export function projectSettlementCycle(fixture: SettlementFixture & Pick<FootballFixture, "id">, result: StoredFixtureResult | null, issue: string | null,
   cycle: StoredCycle, lock: StoredRevision | null, recorded: ReadonlyMap<MarketFamily, SettlementRevision>) {
   const fixtureId = fixture.id, context = settlementContextFor(fixture, result, issue, cycle);
   const resultUsable = fixtureResultMatchesCanonical(fixture, result, issue);

@@ -69,7 +69,7 @@ test('no samples, insufficient samples, missing source policy, quality failure a
 test('filters account for nonmatching versions separately and retain unattributed coverage', () => {
   const records = [performanceRecord(), performanceRecord({ source: 'api-football' }), performanceRecord({ state: 'open' })];
   const filtered = report(records, null, `market=match-result&model=${modelVersion().id}`);
-  assert.equal(filtered.cells.length, 3); assert.equal(cell(filtered).coverage.available, 1); assert.equal(cell(filtered).coverage.filteredOut, 1);
+  assert.equal(filtered.cells.length, 4); assert.equal(cell(filtered).coverage.available, 1); assert.equal(cell(filtered).coverage.filteredOut, 1);
   assert.equal(cell(filtered).coverage.unavailable, 1);
   assert.equal(cell(report(records, null, 'version=no-such-version')).coverage.available, 0);
   assert.equal(cell(report(records, null, 'source=api-football')).coverage.sources.ai, 0);

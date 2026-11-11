@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { parseReportingDate } from "./calendar.ts";
 import { marketFamilySchema, publicForecastSchema } from "./fixture-snapshot.ts";
-import { marketSelections } from "./markets.ts";
+import { marketSelections, marketSources } from "./markets.ts";
 
 export const performanceRules = Object.freeze({ maximumDays: 31, defaultDays: 30, maximumFixtures: 1000, maximumCohortFixtures: 31_000,
   maximumStoredBytes: 16_777_216, maximumEvidenceLinks: 20, leaguePageSize: 10, maximumLeaguePage: 9999 });
 export const performanceFamilies = Object.keys(marketSelections) as (keyof typeof marketSelections)[];
-export const performanceSourceSchema = z.enum(["combined", "ai", "api-football"]);
+export const performanceSources = ["combined", ...marketSources] as const;
+export const performanceSourceSchema = z.enum(performanceSources);
 const family = marketFamilySchema;
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const instant = publicForecastSchema.shape.publishedAt;
@@ -15,9 +16,9 @@ const label = z.string().min(1).max(256);
 const date = z.string().refine((v) => { try { parseReportingDate(v); return true; } catch { return false; } });
 const probability = z.number().min(0).max(1);
 export const performanceCoverageSchema = z.strictObject({ total: count, available: count, unavailable: count, void: count,
-  filteredOut: count, pending: count, settled: count, sources: z.strictObject({ ai: count, "api-football": count }) }).refine((v) =>
+  filteredOut: count, pending: count, settled: count, sources: z.strictObject({ ai: count, "api-football": count, "local-engine": count.optional() }) }).refine((v) =>
   v.total === v.available + v.unavailable + v.void + v.filteredOut && v.available === v.pending + v.settled &&
-  v.available === v.sources.ai + v.sources["api-football"]);
+  v.available === v.sources.ai + v.sources["api-football"] + (v.sources["local-engine"] ?? 0));
 const metrics = z.strictObject({ state: z.enum(["available", "unavailable", "insufficient-sample", "quality-gate-failed"]),
   reasons: z.array(label).max(64), minimumSamples: count.min(1).nullable(), denominator: count, correct: count, incorrect: count,
   hitRate: probability.nullable(), brier: z.number().min(0).max(2).nullable(), logLoss: z.number().nonnegative().nullable(),
@@ -28,7 +29,7 @@ const metrics = z.strictObject({ state: z.enum(["available", "unavailable", "ins
 }).refine((v) => v.denominator === v.correct + v.incorrect && (v.state === "available"
   ? v.denominator > 0 && v.hitRate !== null && v.brier !== null && v.logLoss !== null && v.calibrationError !== null && v.confidenceZ !== null
   : v.hitRate === null && v.brier === null && v.logLoss === null && v.calibrationError === null && v.confidenceZ === null && v.calibration.length === 0));
-const version = z.strictObject({ source: z.enum(["ai", "api-football"]), modelVersionId: hash.nullable(),
+const version = z.strictObject({ source: z.enum(marketSources), modelVersionId: hash.nullable(),
   provider: label, model: label.nullable(), version: label, calibrationVersion: label.nullable() });
 export const pickPerformanceSummarySchema = z.strictObject({
   basis: z.literal("one-unit-per-binary-locked-pick-stored-pre-publication-quote"),
@@ -44,7 +45,7 @@ export const performanceCellSchema = z.strictObject({ family, source: performanc
   horizon: z.strictObject({ id: label, minimumMs: count, maximumMs: count }).nullable(),
   coverage: performanceCoverageSchema, metrics, returns: pickPerformanceSummarySchema, versions: z.array(version).max(performanceRules.maximumFixtures),
   evidence: z.strictObject({ total: count, truncated: z.boolean(), links: z.array(z.strictObject({ fixtureId: z.uuid(), cycleId: z.uuid(),
-    revisionId: z.uuid(), source: z.enum(["ai", "api-football"]), evidenceCutoffAt: instant, forecastAt: instant, forecastHorizonMs: count,
+    revisionId: z.uuid(), source: z.enum(marketSources), evidenceCutoffAt: instant, forecastAt: instant, forecastHorizonMs: count,
     href: z.string().max(160).regex(/^\/api\/matches\/[a-f0-9-]{36}\?revision=[a-f0-9-]{36}$/u),
     matchLabel: z.string().min(1).max(1050),
     pageHref: z.string().max(512).regex(/^\/en\/matches\/[a-f0-9-]{36}\/[a-z0-9]+(?:-[a-z0-9]+)*\?revision=[a-f0-9-]{36}#revision-history$/u),
@@ -67,7 +68,7 @@ export const performanceResponseSchema = z.strictObject({ asOf: instant,
     filterAccounting: z.literal("nonmatching-available-forecasts-are-filtered-out;unattributed-unavailable-and-void-remain"),
     horizonBasis: z.literal("scheduled-kickoff-minus-locked-publication;horizon-cells-only-known-locks") }),
   policy: z.strictObject({ id: hash.nullable(), state: z.enum(["unapproved", "verified"]), publicClaimAuthorized: z.literal(false), provisional: z.literal(true) }),
-  cells: z.array(performanceCellSchema).max(396),
+  cells: z.array(performanceCellSchema).max(528),
   leagues: z.strictObject({ basis: z.literal("same-current-fixture-cohort-grouped-by-competition"),
     totalGroups: count.max(performanceRules.maximumCohortFixtures), page: count.min(1).max(performanceRules.maximumLeaguePage),
     pageSize: z.literal(performanceRules.leaguePageSize), records: z.array(performanceLeagueSchema).max(performanceRules.leaguePageSize),

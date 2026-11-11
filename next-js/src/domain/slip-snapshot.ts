@@ -5,6 +5,7 @@ import { marketFamilySchema } from "./fixture-snapshot.ts";
 import { completedFixtureStatuses, isCompletedFixtureStatus, isPlayedFinalStatus, settleMarketSelection, type CycleEligibility, type SettlementStatus } from "./market-settlement.ts";
 import { slipBuilderRules, type BuiltSlip, type SlipForecastReference } from "./slip-builder.ts";
 import { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
+import { slipBookmakerSchema, slipQuoteOddsSchema } from "./slip-quote.ts";
 import type { SlipMatchProgress } from "./slip-match-state.ts";
 import { slipOutcome } from "./slip-outcome.ts";
 import { slipStatus, type SlipStatus } from "./slip-status.ts";
@@ -21,10 +22,11 @@ export const slipSnapshotRules = Object.freeze({
 const selection = z.strictObject({
   fixtureId: z.uuid(), kickoffAt: z.number().int().positive(), homeTeam: record.homeTeam, awayTeam: record.awayTeam,
   competition: record.competition, family: marketFamilySchema, selection: z.string().max(64),
-  probability: z.number().min(0).max(1), odds: z.string().regex(/^[1-9]\d{0,3}\.\d{2}$/u),
+  probability: z.number().min(0).max(1), odds: slipQuoteOddsSchema,
   oddsBasis: z.enum(["bookmaker", "median"]),
+  bookmaker: slipBookmakerSchema.optional(),
   forecast: slipForecastReferenceSchema.optional(),
-}).refine((value) => isMarketSelection(value.family, value.selection), "Invalid slip selection.");
+}).refine((value) => isMarketSelection(value.family, value.selection) && (!value.bookmaker || value.oddsBasis === "bookmaker"), "Invalid slip selection.");
 
 /** Neutral slip data shared by transient builders, image exports and editorial publications. */
 export const slipSnapshotSchema = z.strictObject({

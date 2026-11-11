@@ -7,6 +7,8 @@ import { parseFeedQuery } from '../src/domain/feed-query.ts';
 import { mergeLiveDetail } from '../src/domain/live-refresh.ts';
 import { appendFeedPage, initialLoadedFeed, replaceFeedPages } from '../src/domain/feed-pagination.ts';
 import { createGatedReads } from '../src/server/members/gated-reads.ts';
+import { createViewerAccess } from '../src/server/members/viewer-access.ts';
+import { defaultSubscriptionSettings } from '../src/domain/subscription-settings.ts';
 import { createMatchFeedHandler } from '../src/server/matches/feed-http.ts';
 import { publicMatchFailure } from '../src/server/matches/public-http.ts';
 import { sameCardFixture } from '../src/domain/match-card.ts';
@@ -85,6 +87,27 @@ test('oracle requests return nonrecoverable private 403 before any raw read', as
     const body = await response.json(); assert.equal(body.error.code, 'subscription-required'); assert.equal(body.error.recoverable, false);
   }
   assert.equal(publicMatchFailure(new MatchFeedError('subscription-required')).status, 403);
+});
+test('an unavailable member lookup returns a quiet, recoverable 503 instead of a subscription denial', async () => {
+  let failed = true;
+  const resolve = createViewerAccess({ failOnUnavailable: true,
+    services: async () => ({ config: { production: false, cookies: { session: 'owner' } }, auth: null,
+      database: { query: async () => {
+        if (failed) throw new Error('private storage unavailable');
+        return [];
+      } } }),
+    settings: async () => ({ settings: defaultSubscriptionSettings, source: 'stored' }),
+  });
+  const handler = createMatchFeedHandler(async () => { assert.fail('oracle read'); }, { now: () => now },
+    () => resolve(name => name === 'goal-hint-member' ? 'a'.repeat(43) : undefined));
+  const request = new Request('https://example.test/api/matches?picks=only');
+  const unavailable = await handler(request);
+  assert.equal(unavailable.status, 503);
+  assert.equal((await unavailable.json()).error.code, 'unavailable');
+  failed = false;
+  const signedOut = await handler(request);
+  assert.equal(signedOut.status, 403);
+  assert.equal((await signedOut.json()).error.code, 'subscription-required');
 });
 test('free and failing resolvers never read slips and malformed gated bodies fail closed', async () => {
   for (const resolveAccess of [async () => free, async () => { throw Error('private'); }]) {

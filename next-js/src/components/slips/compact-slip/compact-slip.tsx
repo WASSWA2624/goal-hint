@@ -25,6 +25,7 @@ import { MobileSlipHeader } from "./mobile-slip-header";
 import { SlipHeaderDate, SlipStatusBadge, type SlipHeaderPublication } from "../slip-header-meta";
 import { useRefreshedSlipMatchStates } from "../slip-match-refresh";
 import { slipHeaderState } from "../slip-header-outcome";
+import { SlipSelectionOdds } from "../slip-selection-odds";
 
 function SelectionRow({ selection, position, locale, result, matchStates, analysisLinks, showLogos }: {
   selection: SlipSelection; position: number; locale: string; result: SlipResultView["results"][number] | undefined; analysisLinks: boolean; showLogos: boolean;
@@ -62,7 +63,7 @@ function SelectionRow({ selection, position, locale, result, matchStates, analys
         <span data-market-label>{family}</span><strong data-pick-label title={`${family}: ${description}`} aria-hidden="true">{predictionLabel(messages, selection.selection)}</strong>
         <VisuallyHidden>{description}</VisuallyHidden>
       </span>
-      <span data-leg-odds id={`${id}-odds`}><span data-number-label>{messages.text("slips.odds")}</span><strong>{selection.odds}</strong></span>
+      <span data-leg-odds id={`${id}-odds`}><span data-number-label>{messages.text("slips.odds")}</span><strong><SlipSelectionOdds selection={selection} /></strong></span>
       <span data-leg-probability id={`${id}-probability`}><span data-number-label>{messages.text("slips.probability")}</span><strong>{formatSlipProbability(selection.probability, messages)}</strong></span>
       <span data-result id={`${id}-result`}>
         <MatchStatus status={status} outcome={outcome} messages={messages} snapshot={!state && result?.fixtureId === selection.fixtureId} />

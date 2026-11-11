@@ -4,9 +4,10 @@ import { UnlockPanel } from "@/components/members/prediction-unlock";
 import { memo } from "react";
 import styled from "styled-components";
 import { ChevronRightIcon } from "@/components/ui/icons";
-import { featuredFamily, liveStanding, marketRow, selectedDetailPrice } from "@/domain/match-details";
+import { detailMarketValue, featuredFamily, liveStanding, marketRow, selectedDetailPrice } from "@/domain/match-details";
 import { hasMatchPredictionAccess, openDetailTab } from "@/domain/match-detail-tabs";
 import { detailRecordNotices } from "@/domain/detail-presentation";
+import { ForecastValueLabel } from "../forecast-labels";
 import { PredictionOutcome } from "../prediction-presentation";
 import { DetailOutcome } from "./match-banner";
 import { ResultIcon } from "./details-icons";
@@ -60,7 +61,8 @@ export const TouchlineFeatured = memo(function TouchlineFeatured() {
       <strong>{marketName(messages, family)} · <span><PredictionOutcome messages={messages} selection={item.market.selection} /></span></strong>
       <p data-prediction-record>{[data.snapshot ? messages.text("details.publishedAt", { time: messages.reportingInstant(data.snapshot.publishedAt) }) : messages.text("touchline.featuredHint"), ...notices].join(" · ")}</p></div></Lead>
     <Numbers><div><b>{percent(messages, chance)}</b><small>{messages.text("details.estimatedProbability")}</small><i style={{ inlineSize: `${chance * 100}%` }} /></div>
-      {price !== null && <div><b>{price}</b><small>{messages.text("details.odds")}</small></div>}</Numbers>
+      {price !== null && <div><b>{price}</b><small>{messages.text(data.fixture.status === "live" ? "touchline.inPlayOdds" : "details.odds")}</small>
+        <ForecastValueLabel expectedReturn={detailMarketValue(data, family)} messages={messages} /></div>}</Numbers>
     <Actions>{standing ? <Standing standing={standing} /> : outcome && outcome !== "pending" ? <DetailOutcome status={outcome} /> : null}
       <TouchlineLinkButton type="button" onClick={() => update(current => openDetailTab(current, "analysis"))}>
         {messages.text("touchline.why")}<ChevronRightIcon aria-hidden="true" /></TouchlineLinkButton></Actions>

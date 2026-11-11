@@ -6,6 +6,9 @@ import type { ODDS_MAPPING_VERSION } from "../../domain/odds-markets.ts";
 import type { ApiFootballPageProvenance, ApiFootballResult, ODDS_CONTRACT_VERSION } from "../football/api-football-contract.ts";
 import type { NormalizedFixtureOdds, NormalizedOddsCatalogEntry } from "../football/api-football-normalize.ts";
 
+/** OP-07 default for ordinary pre-match quotes in the live worker. */
+export const preMatchOddsFreshMs = 12 * 60 * 60_000;
+
 /** Owner-approved odds import policy (prompt 052). Fingerprinted into every receipt and fixture state. */
 export type OddsPolicy = Readonly<{
   version: 1;
@@ -14,7 +17,10 @@ export type OddsPolicy = Readonly<{
   /** Private-use reference that must cover structured odds history. */
   retentionEvidenceRef: string;
   basis: "bookmaker";
+  /** Keep this bookmaker for the reviewed recommendation and feed price projections. */
   bookmakerId: number;
+  /** Optional date-sweep scope for retaining other observed bookmaker prices. */
+  bookmakerScope?: "all";
   method: typeof DE_MARGIN_METHOD;
   mappingVersion: typeof ODDS_MAPPING_VERSION;
   contractVersion: typeof ODDS_CONTRACT_VERSION;
@@ -82,6 +88,9 @@ export type ValidatedOddsObservation = Readonly<{
 }>;
 /** Per-fixture receipt outcome decided before any price is applied. */
 export type OddsFixtureOutcome = "apply" | "unknown-fixture" | "after-kickoff" | "kickoff-mismatch" | "not-scheduled";
+export type OddsBookmakerManifest = Readonly<{ bookmakerId: number; kickoffAt: UtcInstant | null;
+  bets: readonly Readonly<{ betId: number; betName: string | null; valuesHash: string }>[];
+}>;
 export type OddsBatchBody = Readonly<{
   id: string;
   accountId: string;
@@ -101,8 +110,8 @@ export type OddsBatchBody = Readonly<{
   /** Outcomes and a content hash per provider fixture; prices are never retained here. */
   fixtures: readonly Readonly<{ externalId: number; outcome: OddsFixtureOutcome; observationHash: string;
     /** Availability/content manifest only; exact prices remain in the private immutable snapshots. */
-    quoteManifest?: Readonly<{ bookmakerId: number; kickoffAt: UtcInstant | null;
-      bets: readonly Readonly<{ betId: number; betName: string | null; valuesHash: string }>[] }>
+    quoteManifest?: OddsBookmakerManifest;
+    additionalQuoteManifests?: readonly OddsBookmakerManifest[];
   }>[];
   /** /odds/bets or /odds/bookmakers catalog names (not prices). */
   catalog: readonly Readonly<{ id: number; name: string }>[];

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/controls";
 import { Surface } from "@/components/ui/layout";
 import { resetReviewAlerts } from "@/components/admin/payment-alert-sound";
 import { nativePaymentAlerts } from "@/domain/native-payment-alerts";
-import { getAdminSessionSnapshot, getMemberSessionSnapshot, getSubscriptionSnapshot, hasConfirmedMemberSession, refreshMemberSession, subscribeMemberSession } from "./member-session";
+import { ensureMemberSession, getAdminSessionSnapshot, getMemberSessionSnapshot, getSubscriptionSnapshot, hasConfirmedMemberSession, refreshMemberSession, subscribeMemberSession } from "./member-session";
 import { clearProtectedDrafts } from "./draft-storage";
 
 /** Compact information-page treatment with a readable single column and phone-sized actions. */
@@ -43,7 +43,9 @@ export function MemberNavigationRecovery({ expectedPhone, expectedAdministrator 
     };
     const unsubscribe = subscribeMemberSession(reconcile);
     // The session store suppresses unchanged snapshots, so reconcile the initial read explicitly too.
-    void refreshMemberSession().then(reconcile);
+    const mismatch = confirmed && (expectedPhone !== undefined && expectedPhone !== previousPhone
+      || expectedAdministrator !== undefined && expectedAdministrator !== previousAdmin);
+    void (mismatch ? refreshMemberSession() : ensureMemberSession()).then(reconcile);
     return () => { active = false; unsubscribe(); };
   }, [router, expectedPhone, expectedAdministrator]);
   useEffect(() => {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeInPlayOdds } from "../src/server/football/api-football-normalize.ts";
+import { marketOddsPrice, sameMarketOdds } from "../src/domain/in-play-odds.ts";
 import { mapInPlayOdds, reviewedInPlayCatalog } from "../src/server/odds/in-play-odds-mapping.ts";
 
 const now = Date.parse("2026-11-11T15:00:00Z");
@@ -42,4 +43,18 @@ test("a blocked fixture and a suspended primary price cannot leak stale alternat
   const blocked = normal(bets, { stopped: false, blocked: true, finished: false });
   assert.equal(blocked.valid, true);
   assert.deepEqual(mapInPlayOdds(blocked.data, catalogue), { state: "suspended", markets: [] });
+});
+
+test("exact current prices keep their precision and suspended markets do not borrow prices", () => {
+  const odds = { kind: "in-play", checkedAt: now, prices: mapInPlayOdds(normal([
+    { id: 59, name: "Fulltime Result", values: [price("Home", "1.975"), price("Draw", "4"), price("Away", "7")] },
+  ]).data, catalogue) };
+  assert.equal(marketOddsPrice(odds, "match-result", "home-win"), "1.975");
+  assert.equal(marketOddsPrice(odds, "match-result", "draw"), "4.00");
+  assert.equal(marketOddsPrice(odds, "double-chance", "home-or-draw"), null);
+  const suspended = { ...odds, prices: { state: "suspended", markets: [] } };
+  assert.equal(marketOddsPrice(suspended, "match-result", "home-win"), null);
+  assert.equal(sameMarketOdds(odds, { ...odds, checkedAt: now + 30_000 }), true);
+  assert.equal(sameMarketOdds(odds, suspended), false);
+  assert.equal(sameMarketOdds(odds, null), false);
 });

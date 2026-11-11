@@ -4,7 +4,7 @@ import { memo, type ComponentPropsWithoutRef } from "react";
 import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { OutcomeBadge } from "@/components/match/prediction-presentation";
-import { providerImageSource } from "@/components/ui/provider-image";
+import { CompetitionLogo } from "@/components/match/competition-media";
 import { formLetters } from "@/domain/match-details";
 import type { MarketFamily } from "@/domain/markets";
 import { toUtcIsoString } from "@/domain/calendar";
@@ -80,15 +80,14 @@ const Context = styled.p`
   line-height: var(--gh-leading-compact);
   text-align: center;
   text-wrap: balance;
-  > img { display: inline-block; inline-size: var(--gh-size-4); block-size: var(--gh-size-4); margin-inline-end: var(--gh-spacing-1_5); object-fit: contain; vertical-align: calc(-1 * var(--gh-size-0_75)); }
+  > [data-competition-logo] { margin-inline-end: var(--gh-spacing-1_5); vertical-align: calc(-1 * var(--gh-size-0_75)); }
   > span { white-space: nowrap; }
   /* Desktop clips the one line; the padding, taken back by the margin, keeps the day link's focus ring inside the clip. */
   ${desktop} {
     min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding-block: var(--gh-spacing-1_5); margin-block: calc(-1 * var(--gh-spacing-1_5));
-    font-size: ${size("body")}; > img { inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); vertical-align: calc(-1 * var(--gh-size-1)); }
+    font-size: ${size("body")}; > [data-competition-logo] { --gh-league-mark-size: var(--gh-size-4_5); vertical-align: calc(-1 * var(--gh-size-1)); }
   }
 `;
-const CompetitionLogo = styled.img``;
 /** The kickoff day links to that EAT day's predictions in the line's own colour; hover and focus show it is a link. */
 const DayLink = styled(Link)`
   color: inherit;
@@ -178,7 +177,7 @@ export const MatchBanner = memo(function MatchBanner({ touchline = false }: { to
   const competition = [fixture.competition.name || messages.text("match.competitionUnknown"), context?.competition.round].filter(Boolean).join("\u00a0· ");
   return <Box $touchline={touchline} id="current-match-summary" aria-labelledby="match-banner-title">
     <Context title={competition}>
-      {fixture.competition.logoUrl && <CompetitionLogo src={providerImageSource(fixture.competition.logoUrl, 16)} alt="" width={16} height={16} referrerPolicy="no-referrer" />}
+      <CompetitionLogo country={fixture.competition.country} url={fixture.competition.logoUrl} />
       {competition}{"\u00a0· "}
       {fixture.kickoffAt !== null ? <span><DayLink href={matchArchiveHref(fixture.kickoffAt, locale)!} prefetch={false}>
         <time dateTime={toUtcIsoString(fixture.kickoffAt)}>{messages.reportingDay(fixture.kickoffAt)}</time></DayLink>

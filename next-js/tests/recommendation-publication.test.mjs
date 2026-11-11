@@ -28,31 +28,35 @@ function card() {
   return parseFixtureSnapshot(fixture);
 }
 
-test('cards and detail use the immutable non-argmax recommendation while keeping complete family forecasts', () => {
+test('the explicit recommendation and the strongest published forecast preserve their distinct selections', () => {
   const fixture = card(), original = structuredClone(fixture.forecast.markets);
   assert.equal(bestCardFamily(fixture, publicPolicy.markets), 'double-chance');
   const prediction = selectedCardPrediction(fixture, 'double-chance');
   assert.equal(prediction.item.market.selection, 'home-or-away'); assert.equal(prediction.probability.roundedPercent, 72);
   assert.equal(probabilityEntry(prediction.item.market).roundedPercent, 72);
   const data = { fixture, snapshot: { ...fixture.forecast, cycleId: fixture.cycleId, outcomes: [], unavailableMarkets: [] } };
-  assert.equal(featuredFamily(data), 'double-chance'); assert.equal(marketRow(data, 'double-chance').item.market.selection, 'home-or-away');
-  const displayed = marketRow(data, 'double-chance').item.market;
-  assert.equal(probabilityEntry(displayed).roundedPercent, 72, 'ProbabilityLabel accepts the explicit recommendation presentation');
-  const { presentationOf: _original, ...unmarked } = displayed;
+  assert.equal(featuredFamily(data), 'double-chance');
+  assert.equal(marketRow(data, 'double-chance').item.market.selection, 'home-or-draw');
+  assert.equal(selectedCardPrediction(fixture, 'double-chance', false).probability.roundedPercent, 82);
+  const { presentationOf: _original, ...unmarked } = prediction.item.market;
   assert.equal(_original.selection, 'home-or-draw');
   assert.throws(() => probabilityEntry(unmarked), /consistent accepted market/u, 'raw family argmax metadata stays strictly validated');
-  assert.throws(() => probabilityEntry({ ...displayed, selectedProbability: 0.99 }), /preserve its original forecast/u);
+  assert.throws(() => probabilityEntry({ ...prediction.item.market, selectedProbability: 0.99 }), /preserve its original forecast/u);
   fixture.prices = [{ family: 'total-goals', selection: 'under-2.5', price: '999.99' }];
   assert.equal(bestCardFamily(fixture, publicPolicy.markets), 'double-chance'); assert.equal(featuredFamily(data), 'double-chance');
   assert.deepEqual(fixture.forecast.markets, original);
   assert.equal(fixture.forecast.markets.find(({ market }) => market.family === 'double-chance').market.selection, 'home-or-draw');
 });
 
-test('new explicit abstentions suppress the default recommendation without deleting probability-only families', () => {
+test('an explicit abstention still displays the leading published probability without a recommendation', () => {
   const fixture = card(); fixture.forecast.recommendation = { status: 'no-qualified-recommendation', selected: null };
-  assert.equal(bestCardFamily(fixture, publicPolicy.markets), null);
-  assert.equal(selectedCardPrediction(fixture), null);
-  assert.equal(featuredFamily({ fixture, snapshot: { ...fixture.forecast } }), null);
+  const family = bestCardFamily(fixture, publicPolicy.markets);
+  assert.equal(family, 'double-chance');
+  const shown = selectedCardPrediction(fixture, family);
+  assert.equal(shown.item.market.selection, 'home-or-draw');
+  assert.equal(shown.probability.roundedPercent, 82);
+  assert.equal(featuredFamily({ fixture, snapshot: { ...fixture.forecast } }), family);
+  assert.equal(fixture.forecast.recommendation.selected, null);
   assert.equal(fixture.forecast.markets.length, 4);
 });
 

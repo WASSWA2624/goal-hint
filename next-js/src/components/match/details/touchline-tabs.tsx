@@ -18,7 +18,7 @@ import { Explanation, MarketsCard } from "./markets-card";
 import { TouchlineBody, TouchlineEmpty, TouchlineSurface } from "./touchline-ui";
 import { TouchlineStandings } from "./touchline-venue";
 import { MatchTabNavigation } from "./match-tab-navigation";
-import { InPlayOddsPanel } from "./in-play-odds";
+import { BookmakerOddsPanel, MarketOddsPanel } from "./in-play-odds";
 
 const embeddedDisclosure = { open: true, byDefault: false, reveal: 0, embedded: true, toggle: () => {} };
 const untitledDisclosure = { ...embeddedDisclosure, hideHeading: true };
@@ -100,8 +100,12 @@ export function TouchlineTabs({ view }: { view: MatchView }) {
         {selected === "lineups" && <Section section="lineups" view={view} heading={false}><LineupsSection /></Section>}
         {selected === "players" && <Section section="players" view={view} heading={false}><PlayersSection /></Section>}
         {selected === "markets" && <>
-          <InPlayOddsPanel observation={data.inPlayOdds} messages={messages} />
           <ViewProvider value={{ ...view, marketsOpen: true }}><DisclosureProvider value={embeddedDisclosure}><MarketsCard embedded /></DisclosureProvider></ViewProvider>
+          {data.selection === "applicable" && <>
+            <MarketOddsPanel kind="in-play" observation={data.inPlayOdds} messages={messages} search={view.marketSearch} />
+            {data.bookmakerOdds ? <BookmakerOddsPanel observation={data.bookmakerOdds} messages={messages} search={view.marketSearch} />
+              : <MarketOddsPanel kind="pre-match" observation={data.fixture.marketOdds} messages={messages} />}
+          </>}
         </>}
         {selected === "events" && <Observations kind="events" />}
         {selected === "venue" && <Section section="context" view={view} heading={false}><ContextSection /></Section>}

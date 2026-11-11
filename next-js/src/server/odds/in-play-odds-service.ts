@@ -94,7 +94,7 @@ async function storePrices(database: DatabaseRuntime, rows: readonly NormalizedI
         && prior.homeTeamId === fixture.homeTeamId && prior.awayTeamId === fixture.awayTeamId;
       if (sameOccurrence && (prior.checkedAt.getTime() > retrievedAt || prior.providerUpdatedAt !== null
         && (update === null || update < prior.providerUpdatedAt.getTime()))) continue;
-      const body = mapInPlayOdds(row, catalog);
+      const body = mapInPlayOdds(row, catalog, true);
       if (body.state === "unavailable" && !prior) continue;
       const hash = evidenceFingerprint(body);
       const material = !sameOccurrence || prior.semanticHash !== hash;

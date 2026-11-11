@@ -24,6 +24,7 @@ import { slipSelectionCard } from "@/domain/slip-card";
 import { slipMatchStateForSelection, type SlipMatchState } from "@/domain/slip-match-state";
 import { useMessages } from "@/i18n/use-messages";
 import { formatSlipProbability } from "../slip-format";
+import { SlipSelectionOdds } from "../slip-selection-odds";
 import { CleanLedgerRow } from "./clean-ledger-styles";
 import { SlipMatchNumber } from "../slip-match-number";
 
@@ -109,7 +110,7 @@ export function CleanLedgerSelection({ selection, locale, result, matchStates, a
         <span data-field-label aria-hidden="true">Pick</span><strong data-field-value data-pick-label title={`${family}: ${description}`} aria-hidden="true">{predictionLabel(m, selection.selection)}</strong>
         <VisuallyHidden>{description}</VisuallyHidden></span>
       <span data-match-metrics>
-        <span data-ledger-field="odds" data-mobile-field="odds" data-leg-odds><span data-field-label data-number-label>{m.text("slips.odds")}</span><strong data-field-value>{selection.odds}</strong></span>
+        <span data-ledger-field="odds" data-mobile-field="odds" data-leg-odds><span data-field-label data-number-label>{m.text("slips.odds")}</span><strong data-field-value><SlipSelectionOdds selection={selection} /></strong></span>
         <span data-ledger-field="probability" data-mobile-field="probability" data-leg-probability><span data-field-label data-number-label aria-hidden="true">{m.text("match.columns.probabilityShort")}</span><VisuallyHidden>{m.text("slips.probability")}: </VisuallyHidden>
           <strong data-field-value>{formatSlipProbability(selection.probability, m)}</strong></span>
       </span>

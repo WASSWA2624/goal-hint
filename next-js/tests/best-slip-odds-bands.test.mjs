@@ -24,13 +24,13 @@ test('odds bands have unambiguous boundaries and preserve their scope through da
 });
 test('publisher fills missing bands only, publishes no more than twenty and resumes without duplicating prior cohorts', async () => {
   const published=new Set(['1.5-5']), calls=[], record=liveRecord();
-  const model={calibrationReference:'test',correlationReference:'test',validFrom:now-1000,validUntil:now+86400000,estimate:()=>0.7};
+  const model={calibrationReference:'test',correlationReference:'test',validFrom:now-1000,validUntil:now+86400000,estimate:()=>0.75};
   const options={database:{},competitionIds:[],model,providerOdds:true,now:()=>now,verifyModel:()=>true,verifyPublicOdds:()=>true,
     store:{publishedBands:async()=>[...published],publish:async(input)=>{calls.push(input);published.add(input.oddsBand);return 'published';}},
-    read:async(criteria)=>{const price=(criteria.totalMin/100).toFixed(2);return {state:'generated',searchLimited:false,partialCoverage:false,
-      data:{slips:[{id:'single',totalOdds:price,oddsBasis:'bookmaker',averageProbability:0.7,estimatedProbability:0.7,
+    read:async(criteria)=>{assert.equal(criteria.probMin,75);const price=(criteria.totalMin/100).toFixed(2);return {state:'generated',searchLimited:false,partialCoverage:false,
+      data:{slips:[{id:'single',totalOdds:price,oddsBasis:'bookmaker',averageProbability:0.75,estimatedProbability:0.75,
         selections:[{fixtureId:record.fixtureId,kickoffAt:now+3600000,homeTeam:record.homeTeam,awayTeam:record.awayTeam,competition:record.competition,
-          family:'match-result',selection:'home-win',odds:price,oddsBasis:'bookmaker',probability:0.7}]}]}};}};
+          family:'match-result',selection:'home-win',odds:price,oddsBasis:'bookmaker',probability:0.75}]}]}};}};
   const publisher=createDailySlipPublisher(options);
   assert.equal((await publisher.publish()).status,'published'); assert.equal(calls.length,5);
   assert.deepEqual(calls.map(input=>input.oddsBand),bestSlipOddsBands.slice(1).map(band=>band.id));

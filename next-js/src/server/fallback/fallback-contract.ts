@@ -36,6 +36,7 @@ export type FallbackTrigger = "ai-failure" | "ai-timeout" | "ai-insufficient-evi
   "ai-missing-group" | "ai-invalid-group" | "provider-first" | "provider-baseline";
 /** Frozen per AI refresh intent. Absent means the original AI-first resolution without contemporaneous capture. */
 export type ForecastSourceOrder = "provider-first" | "ai-first";
+export const LIVE_FORECAST_CASCADE = "ai-local-provider";
 /** Versioned runtime source policy; legacy baseline remains readable for historical jobs. */
 export type ForecastSelectionPolicy = "legacy-ai-primary" | "provider-baseline" | "optional-ai-primary";
 export type FallbackReason = Readonly<{ reason: FallbackTrigger; detail: string }>;
@@ -46,6 +47,10 @@ export type ForecastProvenance = Readonly<{
   evidence: PredictorCalibratedOutput["evidence"]; outputTiming: PredictorCalibratedOutput["outputTiming"];
 }> | Readonly<{
   kind: "api-football"; source: ProviderFallbackProvenance; policyVersion: string; policyEvidenceRef: string;
+}> | Readonly<{
+  kind: "local-engine"; modelVersion: string; historyHash: string; evidenceHash: string;
+  rates: Readonly<{ home: number; away: number }>;
+  sample: Readonly<{ matches: number; homeEffectiveMatches: number; awayEffectiveMatches: number }>;
 }>;
 export type ResolvedForecastMarket = Readonly<{
   available: true; market: AcceptedMarket; fallback: FallbackReason | null;
@@ -59,6 +64,8 @@ export type ResolvedForecastCandidate = Readonly<{
     providerStatus: ProviderFallbackResult["status"] | "not-requested"; providerReason: ProviderFallbackReason | null;
     /** Present only when the refresh plan froze a source order. */
     sourceOrder?: ForecastSourceOrder;
+    sourceCascade?: typeof LIVE_FORECAST_CASCADE;
+    localStatus?: "candidate" | "unavailable" | "not-requested";
     /** Immutable decision and private quote provenance, sealed in candidateJson with the revision. */
     recommendation?: RecommendationDecision }>;
 }>;

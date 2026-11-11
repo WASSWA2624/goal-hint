@@ -16,7 +16,8 @@ const families = (items: readonly { market: { family: (typeof publicPolicy.marke
 export function gateFixture<T extends StoredFixtureSnapshot>(fixture: T, access: ContentAccess): Omit<T, "forecast"> & Pick<FixtureSnapshot, "forecast"> {
   if (access.tier === "full" || isCompletedFixtureStatus(fixture.status)) return fixture;
   const forecast = fixture.forecast;
-  return { ...fixture, prices: [], forecast: forecast ? { gated: true, runId: forecast.runId, revisionId: forecast.revisionId,
+  return { ...fixture, prices: [], ...(fixture.marketOdds === undefined ? {} : { marketOdds: null }),
+    forecast: forecast ? { gated: true, runId: forecast.runId, revisionId: forecast.revisionId,
     publishedAt: forecast.publishedAt, families: families(forecast.markets), probabilities: [],
     ...(forecast.runSequence !== undefined ? { runSequence: forecast.runSequence } : {}),
     ...(forecast.provisional !== undefined ? { provisional: forecast.provisional } : {}),
@@ -29,8 +30,8 @@ export function gateFeedResponse(response: StoredMatchFeedResponse, access: Cont
 
 export function gateDetailResponse(response: StoredMatchDetailResponse, access: ContentAccess): MatchDetailResponse {
   if (access.tier === "full" || isCompletedFixtureStatus(response.fixture.status)) return { ...response, access: wireAccess(access) };
-  const { odds: _odds, inPlayOdds: _inPlayOdds, ...rest } = response;
-  void _odds; void _inPlayOdds;
+  const { odds: _odds, inPlayOdds: _inPlayOdds, bookmakerOdds: _bookmakerOdds, extendedMarkets: _extendedMarkets, extendedOdds: _extendedOdds, ...rest } = response;
+  void _odds; void _inPlayOdds; void _bookmakerOdds; void _extendedMarkets; void _extendedOdds;
   const snapshot = response.snapshot;
   return { ...rest, ...(response.liveMatch !== undefined ? { liveMatch: null } : {}), fixture: gateFixture(response.fixture, access), history: { gated: true },
     snapshot: snapshot ? { gated: true, revisionId: snapshot.revisionId, cycleId: snapshot.cycleId, historical: snapshot.historical,

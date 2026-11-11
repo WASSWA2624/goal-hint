@@ -203,6 +203,26 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       await publish(3006, 0.45, 0.65);
       await publish(3007, 0.43, 0.65); await publish(3008, 0.5, 0.6, false, 'api-football');
     });
+    await t.test('published-only pages count and rank stored forecasts without a minimum probability', async () => {
+      const context = { publishedOnly: true };
+      const result = await service.query({ date: '2026-10-09', picks: 'all', sort: 'live-first', pageSize: '2' }, context);
+      assert.equal(result.total, 9);
+      assert.equal(result.coverage.knownFixtures, 72);
+      assert.equal(result.coverage.matchingWithMarket, result.total);
+      assert.equal(result.performance.pending, result.total);
+      assert.equal(result.performance.unavailable, 0);
+      assert.ok(result.records.every(item => item.forecast?.markets.length > 0));
+      assert.ok(result.links.next);
+      const next = await service.query(new URL(result.links.next, 'http://localhost').searchParams, context);
+      assert.equal(next.total, result.total);
+      assert.equal(next.paginationVersion, (await service.query({ date: '2026-10-09', sort: 'live-first', pageSize: '2', page: '2' }, context)).paginationVersion);
+      assert.notEqual(result.performanceVersion, (await query()).performanceVersion);
+      assert.equal(new Set([...result.records, ...next.records].map(item => item.fixtureId)).size, 4);
+      const low = await service.query({ date: '2026-10-09', market: 'match-result', prob: '40-50' }, context);
+      assert.ok(low.records.some(item => item.fixtureId === published.get(3007).fixture.id
+        && item.forecast.markets.some(market => market.market.selectedProbability === 0.43)));
+      assert.equal((await service.query({ date: '2026-10-10' }, context)).total, 0);
+    });
     await t.test('anonymous HTTP shares the card snapshot, references and real sync timestamps', async () => {
       // Inspect the earliest published fixture without assuming it belongs to the default Latest first page.
       const response = await createMatchFeedHandler((parameters) => service.query(parameters), undefined, fullAccess)(new Request('http://localhost/api/matches?date=2026-10-09&dir=asc'));

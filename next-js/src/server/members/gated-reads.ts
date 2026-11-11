@@ -12,12 +12,16 @@ import { readPublicMatchDetail } from "../matches/public-detail.ts";
 import { readPublicMatchFeed } from "../matches/public-feed.ts";
 import { readPublicMatchInsights } from "../matches/public-insights.ts";
 import { readPublicSlipBuild } from "../slips/public-slips.ts";
-import { resolveViewerAccess, type ViewerAccess } from "./viewer-access.ts";
+import { resolveViewerAccess, ViewerAccessUnavailable, type ViewerAccess } from "./viewer-access.ts";
 import { readPublicMatchStatus } from "../matches/public-insights.ts";
 
 export type AccessResolver = () => Promise<ViewerAccess>;
 export async function contentAccess(resolve: AccessResolver): Promise<ViewerAccess> {
-  try { return await resolve(); } catch { return { tier: "free", signedIn: false, mode: "free" }; }
+  try { return await resolve(); }
+  catch (error) {
+    if (error instanceof ViewerAccessUnavailable) throw new MatchFeedError("unavailable");
+    return { tier: "free", signedIn: false, mode: "free" };
+  }
 }
 
 /** Raw caches stay viewer-independent. Every page/API factory injects only raw readers into this boundary. */

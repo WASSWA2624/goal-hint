@@ -23,8 +23,9 @@ export type FixtureQuery = Readonly<{ date?: string; competitionId?: number; sea
 export type TeamQuery = Readonly<{ teamId: number }> | Readonly<{ competitionId: number; season: number }>;
 export type CompetitionQuery = Readonly<{ competitionId?: number; season?: number }>;
 export type PlayerStatisticsQuery = Readonly<{ competitionId: number; season: number; teamId?: number }>;
-/** One documented bookmaker, by Kampala reporting date or by fixture. */
 export type OddsQuery = Readonly<{ date: string; bookmakerId: number }> | Readonly<{ fixtureId: number; bookmakerId: number }>;
+/** Only a Kampala date sweep can request every bookmaker. */
+export type OddsSweepQuery = OddsQuery | Readonly<{ date: string; allBookmakers: true }>;
 export type ApiFootballAdapterOptions = Readonly<{
   accountId: string;
   credential: Readonly<{ read(): string }>;
@@ -89,9 +90,14 @@ function queryParams(query: FixtureQuery): Params | null {
   }
   return Object.keys(params).length > 1 ? params : null;
 }
-/** Odds are always requested for one documented bookmaker; a null result fails before any reservation. */
-function oddsParams(query: OddsQuery): Params | null {
-  if (!record(query) || !positive(query.bookmakerId)) return null;
+/** A null result fails before any reservation. */
+function oddsParams(query: OddsSweepQuery): Params | null {
+  if (!record(query)) return null;
+  if ("allBookmakers" in query) {
+    if (query.allBookmakers !== true || !keysAllowed(query, ["date", "allBookmakers"]) || typeof query.date !== "string") return null;
+    try { return { date: parseReportingDate(query.date), timezone: "Africa/Kampala" }; } catch { return null; }
+  }
+  if (!positive(query.bookmakerId)) return null;
   const params: Record<string, string> = { bookmaker: String(query.bookmakerId), timezone: "Africa/Kampala" };
   if (keysAllowed(query, ["fixtureId", "bookmakerId"]) && "fixtureId" in query) {
     if (!positive(query.fixtureId)) return null;
@@ -135,7 +141,7 @@ function matchesScope(endpoint: ApiFootballEndpoint, params: Params, row: unknow
     if (params.fixture && odds.fixtureId !== Number(params.fixture)) return false;
     // A null kickoff cannot be placed on the requested Kampala date.
     if (params.date && (odds.kickoff === null || getReportingDate(odds.kickoff) !== params.date)) return false;
-    if (!odds.bookmakers.every((bookmaker) => bookmaker.id === Number(params.bookmaker))) return false;
+    if (params.bookmaker && !odds.bookmakers.every((bookmaker) => bookmaker.id === Number(params.bookmaker))) return false;
   }
   return true;
 }
@@ -563,7 +569,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
       positive(fixtureId) ? [{ fixture: String(fixtureId) }] : null, bounds, normalizeFallbackPrediction, undefined, workflow) }),
     // Kept outside evidence and fallback so bookmaker prices never reach AI or fallback forecasts.
     odds: Object.freeze({
-      prices: (query: OddsQuery, bounds: ApiFootballBounds) => { const params = oddsParams(query); return run("odds", params ? [params] : null, bounds, normalizeOdds); },
+      prices: (query: OddsSweepQuery, bounds: ApiFootballBounds) => { const params = oddsParams(query); return run("odds", params ? [params] : null, bounds, normalizeOdds); },
       bets: (bounds: ApiFootballBounds) => run("oddsBets", [{}], bounds, normalizeOddsCatalogEntry),
       bookmakers: (bounds: ApiFootballBounds) => run("oddsBookmakers", [{}], bounds, normalizeOddsCatalogEntry),
       inPlay: (bounds: ApiFootballBounds) => run("inPlayOdds", [{}], bounds, normalizeInPlayOdds),

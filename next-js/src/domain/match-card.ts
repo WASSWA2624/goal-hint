@@ -2,6 +2,7 @@ import { isMarketSelection, presentMarketProbabilities, type AcceptedMarket, typ
 import type { FixtureSnapshot, liveClockPhases } from "./fixture-snapshot.ts";
 import { isCompletedFixtureStatus, isPlayedFinalStatus, selectionOccurred, type SettlementOutcomeStatus } from "./market-settlement.ts";
 import { recommendationMarket, type DisplayedMarketPick } from "./recommendation-view.ts";
+import { sameMarketOdds } from "./in-play-odds.ts";
 import type { UtcInstant } from "./calendar.ts";
 
 /** An original saved selection has one probability, not a complete current forecast distribution. */
@@ -49,13 +50,12 @@ export function probabilityEntry(market: AcceptedMarket | DisplayedMarketPick, s
 }
 
 /** Present supplied facts only; the card never adjudicates a score or combines families. */
-export function selectedCardPrediction(fixture: FixtureSnapshot, family: MarketFamily = "match-result") {
+export function selectedCardPrediction(fixture: FixtureSnapshot, family: MarketFamily = "match-result", preferRecommendation = true) {
   const forecast = fixture.forecast;
   if (forecast && "gated" in forecast) return null;
-  if (forecast?.recommendation?.status === "no-qualified-recommendation") return null;
   const item = forecast?.markets.find((entry) => entry.market.family === family);
   if (!forecast || !item) return null;
-  const selected = recommendationMarket(item.market, forecast.recommendation);
+  const selected = preferRecommendation ? recommendationMarket(item.market, forecast.recommendation) : item.market;
   const probability = probabilityEntry(item.market, selected.selection);
   const supplied = item.outcome;
   const matched = supplied && supplied.cycleId === fixture.cycleId && supplied.revisionId === forecast.revisionId &&
@@ -88,7 +88,8 @@ export function sameCardFixture(previous: FixtureSnapshot, next: FixtureSnapshot
     !!(previous.forecast && "gated" in previous.forecast) === !!(next.forecast && "gated" in next.forecast) &&
     previous.partialCoverage === next.partialCoverage && previous.availabilityMessage === next.availabilityMessage &&
     previous.update?.prediction === next.update?.prediction && previous.update?.result === next.update?.result &&
-    previous.forecast?.updateDelayed === next.forecast?.updateDelayed && samePrices(previous.prices, next.prices);
+    previous.forecast?.updateDelayed === next.forecast?.updateDelayed && samePrices(previous.prices, next.prices) &&
+    sameMarketOdds(previous.marketOdds, next.marketOdds);
 }
 function samePrices(previous: FixtureSnapshot["prices"], next: FixtureSnapshot["prices"]): boolean {
   const left = previous ?? [], right = next ?? [];
@@ -101,12 +102,11 @@ function samePrices(previous: FixtureSnapshot["prices"], next: FixtureSnapshot["
 
 /** The market price for exactly the shown pick's family and selection (052). Never falls back to another
  * family, line or selection: no price means none is shown. */
-export function selectedCardPrice(fixture: FixtureSnapshot, family: MarketFamily) {
+export function selectedCardPrice(fixture: FixtureSnapshot, family: MarketFamily, preferRecommendation = true) {
   if (fixture.forecast && "gated" in fixture.forecast) return null;
   const pick = fixture.forecast?.markets.find((entry) => entry.market.family === family);
-  const price = fixture.prices?.find((entry) => entry.family === family);
-  const selected = pick && recommendationMarket(pick.market, fixture.forecast?.recommendation);
-  return selected && price && price.selection === selected.selection ? price : null;
+  const selected = pick && (preferRecommendation ? recommendationMarket(pick.market, fixture.forecast?.recommendation) : pick.market);
+  return selected ? fixture.prices?.find((entry) => entry.family === family && entry.selection === selected.selection) ?? null : null;
 }
 
 export type LiveClock = { phase: (typeof liveClockPhases)[number]; minute: number | null; stoppageMinutes?: number | null };

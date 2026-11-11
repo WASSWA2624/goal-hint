@@ -2,6 +2,7 @@ import "server-only";
 
 import { getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock } from "../../domain/calendar.ts";
 import { storedMatchDetailResponseSchema, type StoredMatchDetailResponse } from "../../domain/match-detail.ts";
+import { total15MarketKey, type Total15Odds } from "../../domain/extended-markets.ts";
 import { matchFeedRules } from "../../domain/match-feed.ts";
 import { matchHref } from "../../domain/navigation.ts";
 import { canonicalMatchSlug } from "../../domain/match-slug.ts";
@@ -9,9 +10,12 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import { createMysqlEvidenceStore } from "../evidence/evidence-mysql-store.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
 import { runFromRow, storedCycles, storedCycleDisplay, storedRevision, storedRevisions } from "../predictions/history-read.ts";
+import { readExtendedMarketSnapshot } from "../predictions/extended-market-read.ts";
 import { storedFeedFixture } from "./fixture-read.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
-import { storedFixtureOddsGroups } from "../odds/odds-read.ts";
+import { storedFixtureOddsGroups, storedUpcomingOddsForFixtures } from "../odds/odds-read.ts";
+import { storedClosingBookmakerQuotes, storedCurrentBookmakerQuotes, total15OddsForBookmaker } from "../odds/odds-mysql-store.ts";
+import { projectBookmakerOdds } from "../odds/bookmaker-odds-read.ts";
 import { storedInPlayOdds } from "../odds/in-play-odds-read.ts";
 import { isLocalFootballDevelopment } from "../../domain/development-demo.ts";
 import { storedFeedCoverage, storedFeedRunContext } from "./feed-read.ts";
@@ -28,11 +32,12 @@ export { canonicalMatchSlug } from "../../domain/match-slug.ts";
 
 /** `providerOdds` defaults to publicPolicy.features.providerOdds; isolated tests may enable it. */
 export function createMatchDetailService(options: Readonly<{ database: DatabaseRuntime; clock?: Clock; cache?: PublicResponseCache;
-  providerOdds?: boolean; allowLiveMatch?: boolean; allowInPlayOdds?: boolean }>) {
+  providerOdds?: boolean; allowLiveMatch?: boolean; allowInPlayOdds?: boolean; extendedMarketsEnabled?: boolean }>) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const providerOdds = options.providerOdds ?? publicPolicy.features.providerOdds;
   const allowLiveMatch = options.allowLiveMatch ?? publicPolicy.features.liveMatchDetails;
   const allowInPlayOdds = options.allowInPlayOdds ?? isLocalFootballDevelopment();
+  const extendedMarketsEnabled = options.extendedMarketsEnabled ?? isLocalFootballDevelopment();
   const evidenceStore = createMysqlEvidenceStore(options.database);
   return Object.freeze({ async query(id: string, parameters = new URLSearchParams()): Promise<StoredMatchDetailResponse> {
     const query = parseMatchDetailQuery(id, parameters), asOf = clock.now(), today = getReportingDate(asOf);
@@ -52,8 +57,6 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
           // verified cycle/revision instead of reading the same archive twice.
           const currentDisplay = known.activeCycleId ? await storedCycleDisplay(tx, known.activeCycleId) : null;
           const fixture = await storedFeedFixture(tx, id, !coverage[0]?.authoritative, window, "en", { prices: providerOdds, display: currentDisplay, readSettlement });
-          // Market-implied odds groups are mutable observation data, read outside the immutable revision cache.
-          const odds = await storedFixtureOddsGroups(tx, id, providerOdds);
           const currentRevisionId = fixture.forecast?.revisionId ?? null;
           // History selections replace the detail snapshot; the card keeps the active cycle.
           let display = !query.cycle && !query.revision ? currentDisplay : null;
@@ -75,6 +78,12 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
           if (evidence) permissionDeadline = Math.min(permissionDeadline, ...evidence.snapshot.sources
             .filter((source) => source.reuse.retainUntil >= asOf).map((source) => source.reuse.retainUntil + 1));
           const snapshot = revision && display ? await publicDetailSnapshot(tx, revision, display.cycle, currentRevisionId, evidence!.snapshot, asOf, options.cache, readSettlement) : null;
+          const [odds, extendedMarkets] = await Promise.all([
+            storedFixtureOddsGroups(tx, id, providerOdds && !!snapshot?.markets.length),
+            extendedMarketsEnabled && revision && display && snapshot?.applicability === display.mode && display.revision?.id === revision.id &&
+              (display.cycle.state === "open" ? display.cycle.currentSetId : display.cycle.lockedSetId) === revision.id
+              ? readExtendedMarketSnapshot(tx, display, { enabled: true }) : null,
+          ]);
           const latestRevision = query.revisionAnchor === null ? await tx.predictionSet.findFirst({ where: { fixtureId: id }, orderBy: { fixtureRevision: "desc" }, select: { fixtureRevision: true } }) : null;
           const latestCycle = query.cycleAnchor === null ? await tx.predictionCycle.findFirst({ where: { fixtureId: id }, orderBy: { ordinal: "desc" }, select: { ordinal: true } }) : null;
           const anchors = { revision: query.revisionAnchor ?? latestRevision?.fixtureRevision ?? 0, cycle: query.cycleAnchor ?? latestCycle?.ordinal ?? 0 };
@@ -107,6 +116,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
           const slug = canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name);
           const response = storedMatchDetailResponseSchema.parse({ fixture, asOf, run, odds, route: { fixtureId: id, slug, path: matchHref(id, slug, "en") },
             currentRevisionId, selection: query.revision ? "revision" : query.cycle ? "cycle" : "applicable", selectedCycle: display ? publicDetailCycle(display.cycle) : null, snapshot,
+            ...(extendedMarketsEnabled ? { extendedMarkets } : {}),
             history: { limit: query.limit, revisions: { anchor: anchors.revision, entries: revisions,
               next: detailHistoryLink(id, parameters, anchors, "revision", rows.length > query.limit ? revisions.at(-1)!.fixtureRevision : null) },
             cycles: { anchor: anchors.cycle, entries: cycleHistory,
@@ -116,22 +126,46 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
         } catch (error) { if (error instanceof MatchFeedError) refused = error; throw error; }
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       const descriptor = publicCacheDescriptor({ kind: "detail", locale: "en", now: asOf, fixtureId: id,
-        query: { id, projection: 10, ...query }, parse: (value) => storedMatchDetailResponseSchema.parse(value) });
+        query: { id, projection: 11, extendedMarketsEnabled, ...query }, parse: (value) => storedMatchDetailResponseSchema.parse(value) });
       const response = options.cache ? await options.cache.read({ ...descriptor, validUntil: () => permissionDeadline }, read) : await read();
-      if (!allowLiveMatch && !allowInPlayOdds) return response;
+      const historical = response.selection !== "applicable", kickoffAt = response.fixture.kickoffAt;
+      const total15Available = response.extendedMarkets?.markets.some(({ key, source }) => key === total15MarketKey && source !== "market-implied");
+      if (providerOdds && !historical && response.fixture.status === "scheduled") {
+        const [[entry], quotes] = kickoffAt !== null && kickoffAt > asOf ? await Promise.all([
+          options.database.query((tx) => storedUpcomingOddsForFixtures(tx, [id], asOf)).catch(() => []),
+          options.database.transaction((tx) => storedCurrentBookmakerQuotes(tx, [{ fixtureId: id, kickoffAt }], asOf),
+            { isolationLevel: "RepeatableRead", maxWait: 2_000, timeout: 5_000 }).then((read) => read.get(id)).catch(() => undefined),
+        ]) : [[], null] as const;
+        const marketOdds = entry?.kickoffAt === kickoffAt ? entry.observation : null;
+        const extendedOdds = total15Available ? total15OddsForBookmaker(quotes) : null;
+        const compact = { ...response, asOf, fixture: { ...response.fixture, marketOdds },
+          ...(extendedOdds ? { extendedOdds } : {}) };
+        const bookmakerOdds = projectBookmakerOdds(quotes, "pre-match", matchFeedRules.maximumResponseBytes - Buffer.byteLength(JSON.stringify(compact), "utf8"));
+        const projected = storedMatchDetailResponseSchema.parse({ ...compact, bookmakerOdds });
+        return freezeEvidence(Buffer.byteLength(JSON.stringify(projected), "utf8") <= matchFeedRules.maximumResponseBytes ? projected : compact);
+      }
+      if (!allowLiveMatch && !allowInPlayOdds && !providerOdds) return response;
       // The live envelope bypasses the revision/detail cache; repeated visitor reads only read this bounded stored row.
-      const historical = response.selection !== "applicable";
       if (!historical && response.fixture.status !== "live" && !isPlayedFinalStatus(response.fixture.status) && response.fixture.status !== "abandoned") return response;
-      const kickoffAt = response.fixture.kickoffAt;
-      const [liveMatch, inPlayOdds] = await Promise.all([
+      const [liveMatch, inPlayOdds, closingQuotes] = await Promise.all([
         allowLiveMatch ? options.database.query((tx) => storedLiveMatchSnapshot(tx, { fixtureId: id, asOf, historical,
           cycleId: historical ? response.selectedCycle?.id ?? null : response.fixture.cycleId,
           kickoffAt: historical ? response.selectedCycle?.kickoffAt ?? null : kickoffAt })).catch(() => null) : undefined,
         allowInPlayOdds && !historical && response.fixture.status === "live" && kickoffAt !== null
           ? options.database.query((tx) => storedInPlayOdds(tx, { fixtureId: id, kickoffAt, asOf })).catch(() => null) : undefined,
+        providerOdds && !historical && kickoffAt !== null
+          ? options.database.transaction((tx) => storedClosingBookmakerQuotes(tx, { fixtureId: id, kickoffAt }, asOf),
+            { isolationLevel: "RepeatableRead", maxWait: 2_000, timeout: 5_000 }).catch(() => null) : null,
       ]);
-      const projected = storedMatchDetailResponseSchema.parse({ ...response, asOf,
-        ...(allowLiveMatch ? { liveMatch } : {}), ...(allowInPlayOdds ? { inPlayOdds: inPlayOdds ?? null } : {}) });
+      const extendedOdds: Total15Odds | null = total15Available && inPlayOdds?.prices.total15Prices
+        ? { marketKey: total15MarketKey, kind: "in-play", checkedAt: inPlayOdds.checkedAt, selections: inPlayOdds.prices.total15Prices } : null;
+      const compact = { ...response, asOf,
+        ...(allowLiveMatch ? { liveMatch } : {}),
+        ...(allowInPlayOdds ? { inPlayOdds: inPlayOdds ?? null } : {}),
+        ...(extendedOdds ? { extendedOdds } : {}) };
+      const bookmakerOdds = providerOdds && !historical ? projectBookmakerOdds(closingQuotes, "closing",
+        matchFeedRules.maximumResponseBytes - Buffer.byteLength(JSON.stringify(compact), "utf8")) : undefined;
+      const projected = storedMatchDetailResponseSchema.parse({ ...compact, ...(bookmakerOdds !== undefined ? { bookmakerOdds } : {}) });
       // A large optional observation cannot make an otherwise valid forecast response exceed its wire bound.
       return freezeEvidence(Buffer.byteLength(JSON.stringify(projected), "utf8") <= matchFeedRules.maximumResponseBytes
         ? projected : { ...response, asOf, ...(allowLiveMatch ? { liveMatch: null } : {}), ...(allowInPlayOdds ? { inPlayOdds: null } : {}) });

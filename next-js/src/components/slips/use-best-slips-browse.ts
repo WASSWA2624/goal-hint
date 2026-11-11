@@ -8,7 +8,7 @@ import { shareUnchanged } from "@/domain/structural-sharing";
 
 import { singleSlipPage } from "@/domain/slip-pagination";
 
-type Intent = { query: BestSlipsQuery; mode: "replace" | "refresh"; revision: number; scroll: boolean };
+type Intent = { query: BestSlipsQuery; mode: "replace" | "refresh" | "background"; revision: number; scroll: boolean };
 /** Both slip collections share paging, pinned dates, cancellation and access-safe refreshes. */
 export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: () => void, endpoint = "/api/best-slips") {
   const initial = useMemo(() => singleSlipPage(input), [input]);
@@ -51,43 +51,57 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
       if (controller.signal.aborted) return;
       if (intent.mode === "replace" && intent.scroll) root.current?.scrollIntoView({ block: "start" });
       setContent((current) => shareUnchanged(current, result));
-    })().catch(() => { if (active) setFailed(true); }).finally(() => {
-      clearTimeout(deadline); if (pending.current === controller) pending.current = null; if (active) { lock.current = false; setBusy(false); }
+    })().catch(() => {
+      if (active && pending.current === controller && intent.mode !== "background") setFailed(true);
+    }).finally(() => {
+      clearTimeout(deadline);
+      if (pending.current === controller) { pending.current = null; lock.current = false; if (active) setBusy(false); }
     });
-    return () => { active = false; clearTimeout(deadline); controller.abort(); if (pending.current === controller) pending.current = null; lock.current = false; };
+    return () => {
+      active = false; clearTimeout(deadline); controller.abort();
+      if (pending.current === controller) { pending.current = null; lock.current = false; }
+    };
   }, [endpoint, initial.day, intent, onAccessChanged, seedKey]);
   const request = useCallback((query: BestSlipsQuery, mode: Intent["mode"], scroll = false) => {
     if (lock.current) return;
-    lock.current = true; setBusy(true); setFailed(false);
+    lock.current = true; setBusy(true);
+    if (mode !== "background") setFailed(false);
     setIntent((current) => ({ query, mode, scroll, revision: current.revision + 1 }));
   }, []);
   useEffect(() => {
+    if (failed) return;
     const timer = setInterval(() => {
-      if (latest.current.browse?.query.period !== "all" && !lock.current && document.visibilityState === "visible" && navigator.onLine) request(latest.current.browse?.query ?? defaultBestSlipsQuery(), "refresh");
+      if (latest.current.browse?.query.period !== "all" && !lock.current && document.visibilityState === "visible" && navigator.onLine) request(latest.current.browse?.query ?? defaultBestSlipsQuery(), "background");
     }, 60_000);
     return () => clearInterval(timer);
-  }, [request]);
+  }, [failed, request]);
+  const cancel = useCallback(() => {
+    pending.current?.abort(); pending.current = null; lock.current = false;
+  }, []);
   const change = useCallback((query: BestSlipsQuery) => {
-    pending.current?.abort(); lock.current = false;
+    cancel();
     request(query, "replace");
-  }, [request]);
+  }, [cancel, request]);
   const goToPage = (page: number) => {
     const browse = latest.current.browse;
     if (!browse || browse.total == null || !Number.isSafeInteger(page) || page < 1
       || page > Math.min(bestSlipsQueryRules.maximumPage, Math.ceil(browse.total / bestSlipsQueryRules.pageSize))) return;
-    pending.current?.abort(); lock.current = false;
+    cancel();
     request({ ...browse.query, page }, "replace", true);
   };
   const revokeAccess = useCallback(() => {
-    pending.current?.abort(); lock.current = false; setBusy(false);
+    cancel(); setBusy(false);
     setContent((current) => ({ ...current, slips: [], entitled: false,
       access: { tier: "free", signedIn: current.access?.signedIn ?? false } }));
     onAccessChanged();
-  }, [onAccessChanged]);
+  }, [cancel, onAccessChanged]);
   const applied = accepted.browse?.query ?? defaultBestSlipsQuery();
   return { root, query: intent.query, displayQuery: applied, change, goToPage,
     entitled: accepted.entitled === true, revokeAccess, retained: slipBrowseScope(applied) !== slipBrowseScope(intent.query),
-    result: accepted, loading: false, updating: busy, navigating: busy && intent.mode === "replace", failed,
-    retry: () => request(intent.query, intent.mode),
+    result: accepted, loading: false, updating: busy && intent.mode !== "background", navigating: busy && intent.mode === "replace", failed,
+    retry: () => {
+      if (intent.mode === "background") cancel();
+      request(intent.query, intent.mode === "replace" ? "replace" : "refresh");
+    },
   };
 }

@@ -589,8 +589,11 @@ def verify(origin, directory):
     member_overrides = {"slips": "2", "teamsMin": "2", "teamsMax": "2"}
     member_query = [(name, member_overrides.get(name, value)) for name, value in query if name != "reuse"] + [("reuse", "0")]
     member = inspect(origin, "/member?" + urlencode(member_query), directory, "route-member-build", "generated", 2)
+    assert "Probability (75% minimum)" in member.text, "The existing probability controls explain the slip floor"
     verify_generated_limits(member, total_min="3", total_max="6", odds_min="1.25", odds_max="2.60",
-        prob_min="70", prob_max="100", selections=2, reuse=False)
+        prob_min="75", prob_max="100", selections=2, reuse=False)
+    below_floor = [(name, "74.999" if name == "probMax" else value) for name, value in member_query]
+    inspect(origin, "/member?" + urlencode(below_floor), directory, "route-member-below-floor", "no-qualifying", 0)
     tighter = {"slips": "1", "totalMax": "4", "oddsMax": "2", "probMin": "85"}
     regenerated_query = [(name, tighter.get(name, value)) for name, value in member_query]
     regenerated = inspect(origin, "/member?" + urlencode(regenerated_query), directory, "route-member-regenerated", "generated", 1)

@@ -180,6 +180,10 @@ export async function createLiveAiRuntime(options: {
           same(item.market, result.output.markets.markets[family as keyof typeof result.output.markets.markets].available
             ? (result.output.markets.markets[family as keyof typeof result.output.markets.markets] as { market: unknown }).market : null));
     },
+    verifyPublishedGoalDistribution(candidate: ResolvedForecastCandidate, distribution: unknown) {
+      const output = accepted.get(candidate.context.jobId)?.output;
+      return output?.scoreDistribution !== undefined && same(output.scoreDistribution, distribution);
+    },
     release(jobId: string) { work.delete(jobId); accepted.delete(jobId); },
   });
 }

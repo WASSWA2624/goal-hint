@@ -21,11 +21,18 @@ import { publicPolicy } from "../../domain/public-policy.ts";
 import { formatOddsHundredths, oddsDisplayHundredths, parseDecimalOdds } from "../../domain/odds.ts";
 
 const families = Object.keys(marketSelections) as MarketFamily[];
-const fixtureInclude = { homeTeam: true, awayTeam: true, season: { include: { competition: true } },
-  resultState: true, lifecycleState: true } satisfies Prisma.FootballFixtureInclude;
-type FeedFixture = Prisma.FootballFixtureGetPayload<{ include: typeof fixtureInclude }>;
+const feedTeam = { select: { id: true, name: true, code: true, logoUrl: true } } as const;
+const fixtureSelect = {
+  id: true, dataVersion: true, kickoff: true, retrievedAt: true, status: true, activeCycleId: true,
+  regulationHome: true, regulationAway: true, regulationVerifiedAt: true, regulationEvidenceRef: true,
+  homeTeam: feedTeam, awayTeam: feedTeam,
+  season: { select: { competition: { select: { id: true, name: true, country: true, logoUrl: true, countryFlagUrl: true } } } },
+  resultState: { select: { resultId: true, lastSyncAt: true, delayReason: true } }, lifecycleState: { select: { issue: true } },
+} satisfies Prisma.FootballFixtureSelect;
+type FeedFixture = Prisma.FootballFixtureGetPayload<{ select: typeof fixtureSelect }>;
+type FeedPriceOptions = Readonly<{ prices?: boolean; preferRecommendation?: boolean }>;
 type FeedFixtureSource = Readonly<{ fixture: FeedFixture; display: CycleDisplay | null; result: StoredFixtureResult | null;
-  settlement: Awaited<ReturnType<typeof storedSettlementProjection>> | null;
+  settlement: Pick<Awaited<ReturnType<typeof storedSettlementProjection>>, "result" | "cycles"> | null;
   refresh: Awaited<ReturnType<typeof storedRefreshResult>>; jobState: string | null; priceRows: readonly FixturePriceRow[] }>;
 const text = (value: string | null) => value?.normalize("NFC").replace(/\p{Cc}/gu, " ").trim() || null;
 const voidKeys = { "formal-postponement": "outcome.postponement", "fixture-canceled": "outcome.cancellation",
@@ -40,8 +47,8 @@ export function publicVoidReason(reason: string | null, locale = "en") {
 /** `prices` defaults to publicPolicy.features.providerOdds; prices come from the same snapshot as the feed SQL.
  * A supplied display must have been verified in this transaction, never retained across requests. */
 export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string, partialCoverage: boolean, window: InstantWindow, locale: string,
-  options: Readonly<{ prices?: boolean; source?: FeedFixtureSource; display?: CycleDisplay | null; readSettlement?: SettlementProjectionReader }> = {}): Promise<StoredMatchFeedRecord> {
-  const fixture = options.source?.fixture ?? await tx.footballFixture.findUniqueOrThrow({ where: { id }, include: fixtureInclude });
+  options: FeedPriceOptions & Readonly<{ source?: FeedFixtureSource; display?: CycleDisplay | null; readSettlement?: SettlementProjectionReader }> = {}): Promise<StoredMatchFeedRecord> {
+  const fixture = options.source?.fixture ?? await tx.footballFixture.findUniqueOrThrow({ where: { id }, select: fixtureSelect });
   const messages = createMessages(locale), display = options.source ? options.source.display
     : options.display !== undefined ? options.display : fixture.activeCycleId ? await storedCycleDisplay(tx, fixture.activeCycleId) : null;
   const cycle = display?.cycle ?? null, revision = display?.revision ?? null;
@@ -79,12 +86,13 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
     return { family, reason } as StoredMatchFeedRecord["unavailableMarkets"][number];
   });
   const recommendation = publicRecommendation(revision?.candidate.audit.recommendation);
+  const priceRecommendation = options.preferRecommendation === false ? undefined : recommendation;
   const picks = markets.map((item) => {
-    const selected = recommendationMarket(item.market, recommendation);
+    const selected = recommendationMarket(item.market, priceRecommendation);
     return { family: selected.family, selection: selected.selection };
   });
   const prices = options.source ? fixturePricesFromRows(options.source.priceRows, picks) : await storedFixturePrices(tx, id, picks, options.prices);
-  const chosen = revision?.candidate.audit.recommendation?.selected;
+  const chosen = options.preferRecommendation === false ? undefined : revision?.candidate.audit.recommendation?.selected;
   if ((options.prices ?? publicPolicy.features.providerOdds) && chosen) {
     const quote = chosen.quote, decimal = parseDecimalOdds(quote.decimal);
     // The recommended pick keeps its original publication quote; later odds updates do not replace it.
@@ -135,10 +143,10 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
  * Every statement is scoped to the selected fixture/cycle IDs; query count does
  * not grow with the number of matches or whether their predictions are locked. */
 export async function storedFeedFixtures(tx: Prisma.TransactionClient, ids: readonly string[], partialCoverage: boolean,
-  window: InstantWindow, locale: string, options: Readonly<{ prices?: boolean }> = {}): Promise<StoredMatchFeedRecord[]> {
+  window: InstantWindow, locale: string, options: FeedPriceOptions = {}): Promise<StoredMatchFeedRecord[]> {
   if (!ids.length) return [];
   if (ids.length > 100 || new Set(ids).size !== ids.length) return historyFail("invalid-state");
-  const fixtures = await tx.footballFixture.findMany({ where: { id: { in: [...ids] } }, include: fixtureInclude });
+  const fixtures = await tx.footballFixture.findMany({ where: { id: { in: [...ids] } }, select: fixtureSelect });
   const fixtureMap = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
   if (fixtureMap.size !== ids.length || ids.some((id) => !fixtureMap.has(id))) return historyFail("invalid-state");
   const cycleIds = fixtures.flatMap((fixture) => fixture.activeCycleId ? [fixture.activeCycleId] : []);
@@ -221,7 +229,7 @@ export async function storedFeedFixtures(tx: Prisma.TransactionClient, ids: read
     if (display && display.cycle.fixtureId !== id) return historyFail("invalid-state");
     const result = fixture.resultState?.resultId ? results.get(fixture.resultState.resultId)! : null;
     if (result && result.fixtureId !== id) return historyFail("invalid-state");
-    const settlement = display?.cycle.lockedSetId ? { fixture, result, cycles: [projectSettlementCycle(fixture, result,
+    const settlement = display?.cycle.lockedSetId ? { result, cycles: [projectSettlementCycle(fixture, result,
       fixture.lifecycleState?.issue ?? null, display.cycle, display.revision, settlements.get(display.cycle.id) ?? new Map())] } : null;
     return storedFeedFixture(tx, id, partialCoverage, window, locale, { ...options, source: { fixture, display, result, settlement,
       refresh: fixture.activeCycleId ? refreshes.get(fixture.activeCycleId) ?? null : null,

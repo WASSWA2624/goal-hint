@@ -25,6 +25,11 @@ async function read<Value>(tx: Transaction, table: Table, jobId: string, phase?:
   if (![true, 1, 1n].includes(rows[0].sealed as boolean | number | bigint)) return refreshFail("unavailable");
   return freezeEvidence(refreshArchiveJson(rows[0].body) as Value);
 }
+export async function storedRefreshStage(tx: Transaction, jobId: string, phase: RefreshPhase, kind: Stage["kind"]) {
+  const value = await read<Stage>(tx, "PredictionRefreshStage", jobId, phase, kind);
+  if (value && (value.jobId !== jobId || value.phase !== phase || value.kind !== kind)) return refreshFail("unavailable");
+  return value;
+}
 async function insert(tx: Transaction, table: Table, jobId: string, body: unknown, phase?: RefreshPhase, kind?: Stage["kind"]) {
   const encoded = evidenceSerialize(body);
   if (Buffer.byteLength(encoded) > 8_388_608) return refreshFail("invalid-request");
@@ -98,11 +103,7 @@ export function createMysqlRefreshStore(database: DatabaseRuntime, queue: JobQue
       if (intent.member.jobId !== lease.jobId) return refreshFail("invalid-request");
       await insert(tx, "PredictionRefreshIntent", lease.jobId, intent); return intent;
     }),
-    stage: (jobId: string, phase: RefreshPhase, kind: Stage["kind"]) => transact(async (tx) => {
-      const value = await read<Stage>(tx, "PredictionRefreshStage", jobId, phase, kind);
-      if (value && (value.jobId !== jobId || value.phase !== phase || value.kind !== kind)) return refreshFail("unavailable");
-      return value;
-    }),
+    stage: (jobId: string, phase: RefreshPhase, kind: Stage["kind"]) => transact((tx) => storedRefreshStage(tx, jobId, phase, kind)),
     start: (lease: JobLease, phase: RefreshPhase) => transact(async (tx) => {
       const at = await queue.assertOwned(tx, lease);
       if (await read(tx, "PredictionRefreshStage", lease.jobId, phase, "started")) return false;

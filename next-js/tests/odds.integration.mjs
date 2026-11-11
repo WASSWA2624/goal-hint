@@ -7,7 +7,7 @@ import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
 import { createFootballCatalogImporter } from '../src/server/football/catalog-service.ts';
 import { OddsError } from '../src/server/odds/odds-contract.ts';
 import { oddsPolicyHash } from '../src/server/odds/odds-input.ts';
-import { createMysqlOddsStore, oddsValuesHash } from '../src/server/odds/odds-mysql-store.ts';
+import { createMysqlOddsStore, oddsValuesHash, storedCurrentBookmakerQuotes } from '../src/server/odds/odds-mysql-store.ts';
 import { storedFixtureOddsGroups, storedFixturePrices } from '../src/server/odds/odds-read.ts';
 import { createOddsImportService } from '../src/server/odds/odds-service.ts';
 import { catalogFixture, catalogRequest, createSyntheticCatalogAdapter } from './helpers/catalog-fixtures.mjs';
@@ -28,8 +28,9 @@ const kickoffs = {
   A: Date.parse('2026-10-13T09:00:00Z'), B: Date.parse('2026-10-13T12:00:00Z'), C: Date.parse('2026-10-13T15:00:00Z'),
   M: Date.parse('2026-10-13T17:00:00Z'), P: Date.parse('2026-10-13T18:00:00Z'),
   S: Date.parse('2026-10-13T22:00:00Z'), E: Date.parse('2026-10-14T18:00:00Z'),
+  G: Date.parse('2026-10-16T18:00:00Z'),
 };
-const ids = { A: 52001, B: 52002, C: 52003, M: 52004, P: 52005, S: 52010, E: 52011 };
+const ids = { A: 52001, B: 52002, C: 52003, M: 52004, P: 52005, S: 52010, E: 52011, G: 52012 };
 const UNKNOWN = 59999;
 const denied = (reason) => (error) => error instanceof OddsError && error.reason === reason;
 const violates = (pattern) => (error) => pattern.test(`${error.stderr ?? ''}${error.message ?? ''}`);
@@ -483,6 +484,32 @@ test('odds import persistence on isolated genuine MySQL', { timeout: 300_000 }, 
         await assert.rejects(sql(`UPDATE OddsImportBatch SET integrity = REPEAT('a', 64) WHERE id = '${privateBatch}'`), violates(/OddsImportBatch_shape_check/u));
         await assert.rejects(sql(`UPDATE OddsBetObservation SET name = CONCAT(' ', name) WHERE betExternalId = 1`), violates(/OddsBetObservation_shape_check/u));
         assert.deepEqual(await prices('E'), before); assert.deepEqual(await state('E'), stateBefore);
+      });
+
+      await t.test('one counted page seals current quotes for separate bookmakers and a later receipt withdraws an absent book', async () => {
+        const multiPolicy = oddsPolicy({ bookmakerScope: 'all' });
+        const multi = createOddsImportService({ adapter: odds.adapter.odds, store, authority: oddsAuthority(display, multiPolicy),
+          accountId: () => accountId, bounds: () => oddsBounds(p.now()), clock });
+        p.setTime(Date.parse('2026-10-16T10:00:00Z'));
+        const fixture = row('G');
+        fixture.bookmakers.push(row('G', { bookmakerId: 6, bookmakerName: 'Synthetic second bookmaker', bets: launchBets({ home: '2.1003' }) }).bookmakers[0]);
+        odds.state.rows = [fixture];
+        const refresh = () => multi.importDate(oddsRequest('prices', slot(), { date: '2026-10-16', policy: multiPolicy,
+          id: oddsHash(`all-books:${p.now()}`) }));
+        const result = await refresh();
+        assert.equal(result.status, 'complete');
+        assert.equal(result.requestsDispatched, 1);
+        const offers = () => a.query(tx => storedCurrentBookmakerQuotes(tx, [{ fixtureId: F.G.id, kickoffAt: kickoffs.G }], p.now(), [1]));
+        const current = (await offers()).get(F.G.id);
+        assert.equal(current.primaryBookmakerId, ODDS_BOOKMAKER);
+        assert.deepEqual(current.bookmakers.map(bookmaker => [bookmaker.bookmakerId, bookmaker.offers[0].values.find(value => value.label === 'Home').odd]).sort(),
+          [[6, '2.1003'], [ODDS_BOOKMAKER, '1.85']]);
+        assert.ok((await prices('G')).every(price => price.bookmakerExternalId === ODDS_BOOKMAKER));
+        advance(HOUR);
+        odds.state.rows = [row('G', { bookmakerId: 6, bookmakerName: 'Synthetic second bookmaker', bets: launchBets({ home: '2.1003' }) })];
+        assert.equal((await refresh()).status, 'complete');
+        assert.deepEqual((await offers()).get(F.G.id).bookmakers.map(bookmaker => bookmaker.bookmakerId), [6]);
+        assert.ok((await prices('G')).every(price => price.stale));
       });
 
       await t.test('odds never touch catalog versions, imports, change events or the network', async () => {

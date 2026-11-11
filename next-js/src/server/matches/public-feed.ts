@@ -10,19 +10,24 @@ import { createMatchFeedSummaryService } from "./feed-summary-service.ts";
 
 /** Pages and HTTP reads share the same stored projection, scope and cache. */
 export function readPublicMatchFeed(parameters: FeedParameters, context: MatchFeedReadContext = {}, clock?: Clock) {
-  return readStoredFeed(parameters, context, clock, true);
+  return readStoredFeed(parameters, { ...context, publishedOnly: true }, clock, true);
+}
+
+/** The offline snapshot contains fixtures and scores independently of forecast availability. */
+export function readOfflineFixtureFeed(parameters: FeedParameters, context: MatchFeedReadContext = {}, clock?: Clock) {
+  return readStoredFeed(parameters, { ...context, publishedOnly: false }, clock, false);
 }
 
 /** Match cards and their exact pagination do not wait for a historical audit. */
 export function readPublicMatchFeedList(parameters: FeedParameters, context: MatchFeedReadContext = {}, clock?: Clock) {
-  return readStoredFeed(parameters, context, clock, false);
+  return readStoredFeed(parameters, { ...context, publishedOnly: true }, clock, false);
 }
 
 /** Independently bounded aggregate request; list navigation keeps its 30s limit. */
 export function readPublicMatchFeedSummary(parameters: FeedParameters, context: MatchFeedReadContext = {}, clock?: Clock) {
   const database = getDatabase();
   return createMatchFeedSummaryService({ database, cache: createMysqlPublicResponseCache(database), ...(clock ? { clock } : {}),
-    competitionIds: getRuntimePolicy().choices.competitionIds ?? [] }).query(parameters, context);
+    competitionIds: getRuntimePolicy().choices.competitionIds ?? [] }).query(parameters, { ...context, publishedOnly: true });
 }
 
 function readStoredFeed(parameters: FeedParameters, context: MatchFeedReadContext, clock: Clock | undefined, includePerformance: boolean) {

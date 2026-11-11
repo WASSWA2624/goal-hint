@@ -49,10 +49,20 @@ export function mergeLiveDetail(previous: MatchDetailResponse, next: MatchDetail
       ? newSnapshot.revisionId === oldSnapshot.revisionId && oldSnapshot.analysis.state === "available" && newSnapshot.analysis.state === "withheld"
         ? { ...oldSnapshot, analysis: newSnapshot.analysis } : oldSnapshot
       : next.snapshot;
+    const extendedMarkets = next.extendedMarkets?.revisionId === snapshot?.revisionId ? next.extendedMarkets ?? null : null;
+    const oldBookmaker = previous.bookmakerOdds, newBookmaker = next.bookmakerOdds;
+    const bookmakerOdds = oldBookmaker && newBookmaker && oldBookmaker.version === newBookmaker.version
+      && oldBookmaker.kind === newBookmaker.kind && oldBookmaker.kickoffAt === newBookmaker.kickoffAt ? oldBookmaker : newBookmaker ?? null;
+    const oldLiveOdds = previous.inPlayOdds, newLiveOdds = next.inPlayOdds;
+    const inPlayOdds = oldLiveOdds?.version && oldLiveOdds.version === newLiveOdds?.version
+      && oldLiveOdds.kickoffAt === newLiveOdds.kickoffAt ? oldLiveOdds : newLiveOdds ?? null;
     // Odds groups (052) are observation data outside the revision: take the newer envelope's groups.
     return { ...previous, fixture: mergeFixtureObservation(previous.fixture, next.fixture), snapshot, asOf: next.asOf, run: next.run,
       ...(next.odds === undefined ? {} : { odds: next.odds }),
-      ...("inPlayOdds" in previous || "inPlayOdds" in next ? { inPlayOdds: next.inPlayOdds ?? null } : {}),
+      ...("inPlayOdds" in previous || "inPlayOdds" in next ? { inPlayOdds } : {}),
+      ...("bookmakerOdds" in previous || "bookmakerOdds" in next ? { bookmakerOdds } : {}),
+      ...("extendedMarkets" in previous || "extendedMarkets" in next ? { extendedMarkets } : {}),
+      ...("extendedOdds" in previous || "extendedOdds" in next ? { extendedOdds: extendedMarkets ? next.extendedOdds ?? null : null } : {}),
       ...liveEnvelope };
   }
   return liveMatch === next.liveMatch ? next : { ...next, liveMatch };

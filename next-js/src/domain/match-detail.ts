@@ -1,10 +1,13 @@
 import { z } from "zod";
 import { marketFamilySchema, publicForecastSchema, publicVoidReasonSchema, publishedFamiliesSchema, publicChanceSchema } from "./fixture-snapshot.ts";
-import { isCompletedFixtureStatus } from "./market-settlement.ts";
+import { isCompletedFixtureStatus, isPlayedFinalStatus } from "./market-settlement.ts";
 import { dailyRunProgressSchema, matchFeedRecordSchema, storedMatchFeedRecordSchema } from "./match-feed.ts";
 import { contentAccessSchema } from "./content-access.ts";
 import { liveMatchSnapshotSchema } from "./live-match.ts";
 import { inPlayOddsObservationSchema } from "./in-play-odds.ts";
+import { publicExtendedMarketSnapshotSchema, total15OddsSchema } from "./extended-markets.ts";
+import { marketSources } from "./markets.ts";
+import { preMatchBookmakerOddsSchema } from "./bookmaker-odds.ts";
 
 /** Why API-Football supplied a published market; "provider-first" is the reviewed baseline order with AI enabled. */
 export const detailFallbackReasons = ["ai-failure", "ai-timeout", "ai-insufficient-evidence", "ai-budget-exhausted", "ai-missing-group",
@@ -21,14 +24,14 @@ export const detailRevisionSchema = z.strictObject({ revisionId: id, cycleId: id
   fixtureRevision: sequence, cycleRevision: sequence, fixtureDataVersion: matchFeedRecordSchema.shape.dataVersion,
   evidenceCutoffAt: at, generationCompletedAt: at, publishedAt: at });
 export const detailPublicationSchema = detailRevisionSchema.extend({
-  runDate: z.iso.date(), sources: z.array(z.enum(["ai", "api-football"])).min(1).max(2), cycle: detailCycleSchema,
+  runDate: z.iso.date(), sources: z.array(z.enum(marketSources)).min(1).max(marketSources.length), cycle: detailCycleSchema,
 }).refine((v) => v.cycleId === v.cycle.id && v.runSequence === v.runDate.replaceAll("-", "") && new Set(v.sources).size === v.sources.length,
   { message: "Incoherent publication provenance." });
 export const storedDetailSnapshotSchema = publicForecastSchema.safeExtend({
   ...detailRevisionSchema.shape, historical: z.boolean(), applicability: z.enum(["current", "locked", "void", "historical"]), cycle: detailCycleSchema,
   markets: z.array(publicForecastSchema.shape.markets.element.safeExtend({
     alternatives: z.array(z.strictObject({ selection: z.string().max(32), probability: z.number().gt(0).lt(1) })).max(2),
-    source: z.strictObject({ kind: z.enum(["ai", "api-football"]), provisional: z.boolean(),
+    source: z.strictObject({ kind: z.enum(marketSources), provisional: z.boolean(),
       fallbackReason: z.enum(detailFallbackReasons).nullable(),
       sourceIds: z.array(z.string().max(128)).max(500) }),
     timestamps: z.strictObject({ generatedAt: at.nullable(), retrievedAt: at, providerUpdatedAt: at.nullable() }),
@@ -74,6 +77,9 @@ const storedDetailBaseSchema = z.strictObject({ fixture: storedMatchFeedRecordSc
   /** Mutable match observations are independent of the immutable pre-match forecast. Undefined disables the feature. */
   liveMatch: liveMatchSnapshotSchema.nullable().optional(),
   inPlayOdds: inPlayOddsObservationSchema.nullable().optional(),
+  bookmakerOdds: preMatchBookmakerOddsSchema.nullable().optional(),
+  extendedMarkets: publicExtendedMarketSnapshotSchema.nullable().optional(),
+  extendedOdds: total15OddsSchema.nullable().optional(),
   route: z.strictObject({ fixtureId: id, slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u).max(160), path: z.string().max(512) }),
   currentRevisionId: id.nullable(), selection: z.enum(["applicable", "revision", "cycle"]), selectedCycle: detailCycleSchema.nullable(), snapshot: storedDetailSnapshotSchema.nullable(),
   history: z.strictObject({ limit: z.number().int().min(1).max(matchDetailRules.maximumLimit),
@@ -110,6 +116,21 @@ function refineDetail(v: z.infer<typeof wireDetailBaseSchema>, ctx: z.Refinement
     || v.inPlayOdds.fixtureId !== v.fixture.fixtureId || v.inPlayOdds.kickoffAt !== v.fixture.kickoffAt
     || v.inPlayOdds.checkedAt > v.asOf))
     ctx.addIssue({ code: "custom", message: "In-play prices must belong to the current live fixture." });
+  const bookmaker = v.bookmakerOdds;
+  if (bookmaker && (v.selection !== "applicable" || bookmaker.fixtureId !== v.fixture.fixtureId ||
+    bookmaker.kickoffAt !== v.fixture.kickoffAt || bookmaker.checkedAt > v.asOf || (bookmaker.kind === "pre-match"
+      ? v.fixture.status !== "scheduled" || v.asOf >= bookmaker.kickoffAt
+      : v.asOf < bookmaker.kickoffAt || !(v.fixture.status === "live" || v.fixture.status === "abandoned" || isPlayedFinalStatus(v.fixture.status)))))
+    ctx.addIssue({ code: "custom", message: "Bookmaker prices must belong to the displayed fixture occurrence." });
+  if (v.extendedMarkets && (!v.snapshot || "gated" in v.snapshot || v.extendedMarkets.fixtureId !== v.fixture.fixtureId ||
+    v.extendedMarkets.revisionId !== v.snapshot.revisionId || v.extendedMarkets.cycleId !== v.snapshot.cycleId ||
+    v.extendedMarkets.publishedAt !== v.snapshot.publishedAt || v.extendedMarkets.mode !== v.snapshot.applicability))
+    ctx.addIssue({ code: "custom", message: "Extended markets must belong to the displayed forecast." });
+  const extendedOdds = v.extendedOdds;
+  if (extendedOdds && (v.selection !== "applicable" || extendedOdds.checkedAt > v.asOf ||
+    v.fixture.status !== (extendedOdds.kind === "in-play" ? "live" : "scheduled") ||
+    !v.extendedMarkets?.markets.some(({ key, source }) => key === extendedOdds.marketKey && source !== "market-implied")))
+    ctx.addIssue({ code: "custom", message: "Extended prices must belong to a current forecast market." });
 }
 export const storedMatchDetailResponseSchema = storedDetailBaseSchema.superRefine((v, ctx) => refineDetail({ ...v, access: { tier: "full", signedIn: false } }, ctx));
 export const matchDetailResponseSchema = wireDetailBaseSchema.superRefine(refineDetail).superRefine((v, ctx) => {
@@ -117,7 +138,8 @@ export const matchDetailResponseSchema = wireDetailBaseSchema.superRefine(refine
   if (gated ? !("gated" in v.history) || v.odds !== undefined || v.snapshot !== null && !("gated" in v.snapshot)
     || v.fixture.forecast !== null && (!("gated" in v.fixture.forecast) || v.fixture.forecast.probabilities.length !== 0)
     || v.snapshot !== null && "gated" in v.snapshot && v.snapshot.probabilities.length !== 0
-    || v.liveMatch != null || v.inPlayOdds != null || v.fixture.prices.length !== 0
+    || v.liveMatch != null || v.inPlayOdds != null || v.bookmakerOdds != null || v.extendedMarkets != null || v.extendedOdds != null
+    || v.fixture.marketOdds != null || v.fixture.prices.length !== 0
     : "gated" in v.history || v.snapshot !== null && "gated" in v.snapshot || v.fixture.forecast !== null && "gated" in v.fixture.forecast) {
     ctx.addIssue({ code: "custom", message: "Detail content must match its access tier and fixture status." });
   }

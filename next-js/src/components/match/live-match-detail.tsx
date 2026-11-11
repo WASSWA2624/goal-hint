@@ -30,7 +30,14 @@ function DeferredPreview({ promise, resolve }: { promise: Promise<InsightsPrevie
 }
 
 /** Everything the page shows: the read clock and sync time change on every poll without changing the view. */
-const shown = (detail: MatchDetailResponse) => JSON.stringify({ ...detail, asOf: 0, fixture: { ...detail.fixture, syncedAt: 0 } });
+const shown = (detail: MatchDetailResponse) => JSON.stringify({ ...detail, asOf: 0,
+  fixture: { ...detail.fixture, syncedAt: 0, marketOdds: detail.fixture.marketOdds && {
+    kind: detail.fixture.marketOdds.kind, prices: detail.fixture.marketOdds.prices,
+  } },
+  bookmakerOdds: detail.bookmakerOdds && { kind: detail.bookmakerOdds.kind, version: detail.bookmakerOdds.version },
+  inPlayOdds: detail.inPlayOdds && (detail.inPlayOdds.version ?? detail.inPlayOdds.prices),
+  extendedOdds: detail.extendedOdds && { kind: detail.extendedOdds.kind, selections: detail.extendedOdds.selections },
+});
 
 function LiveDetail({ initial, today, locale, children, preview: initialPreview = null, previewPromise, historyRequested = false, showAccount = false, offer = null }: LiveDetailProps) {
   const [data, setData] = useState(initial), [asOf, setAsOf] = useState(initial.asOf);

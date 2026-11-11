@@ -367,6 +367,7 @@ export const PublicShellFrame = styled(ShellFrame)<{ $workspace: boolean }>`
   > ${Header}, > ${Footer} { padding-inline: var(--app-shell-edge-inset); }
   > ${Footer}, > ${TabBar} { background: var(--public-frame-surface); }
   ${media.belowDesktop} { --app-phone-header-outset: var(--public-frame-band); }
+  &[data-app-navigation="slips"], &[data-app-navigation="best-slips"] { --app-phone-content-top: var(--gh-spacing-1_5); }
   ${desktop} {
     --public-frame-surface: ${({ theme }) => theme.header.desktopBackground};
     ${({ $workspace }) => $workspace && css`

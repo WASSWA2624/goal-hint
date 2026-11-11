@@ -11,7 +11,7 @@ const free = { tier: 'free', signedIn: false, mode: 'off' }, full = { tier: 'ful
 // Synthetic test evidence only: this fixture is never bound to the production service.
 const model = { calibrationReference: 'synthetic-test-calibration', correlationReference: 'synthetic-test-joint-outcomes',
   validFrom: now - 1000, validUntil: now + 60_000, estimate: selections => Math.min(...selections.map(s => s.probability)) - (selections.length > 1 ? 0.1 : 0) };
-function record(id, probability = 0.7, odds = '2.20') {
+function record(id, probability = 0.75, odds = '2.20') {
   const snapshot = validateMarketSnapshot({ 'match-result': { source: 'ai', period: marketRules.period,
     probabilities: { 'home-win': probability, draw: (1 - probability) / 2, 'away-win': (1 - probability) / 2 } } });
   return liveRecord({ fixtureId: id, status: 'scheduled', kickoffAt: now + 3600_000,
@@ -19,7 +19,7 @@ function record(id, probability = 0.7, odds = '2.20') {
       markets: Object.values(snapshot.markets).filter(entry => entry.available).map(({ market }) => ({ market, reasons: [], uncertainty: null })) },
     prices: [{ family: 'match-result', selection: 'home-win', price: odds, basis: 'bookmaker', retrievedAt: now - 1000, providerUpdatedAt: null }] });
 }
-const records = Array.from({ length: 20 }, (_, index) => record(`private-fixture-${index}`, 0.65 + index * 0.01));
+const records = Array.from({ length: 20 }, (_, index) => record(`private-fixture-${index}`, 0.75 + index * 0.005));
 // The generator also supports explicit historical/custom targets independently of today's default band.
 const bestSlipCriteria = (day, target = { minimumTotal: 450, maximumTotal: 550, count: 100 }) => currentBestSlipCriteria(day, target);
 const generate = (criteria = bestSlipCriteria(today), data = records, joint = model) => bestSlipBuilder(joint)(criteria, data, now);
@@ -40,13 +40,13 @@ test('daily target returns every available disjoint slip up to its capacity with
   assert.deepEqual(generate().slips, result.slips);
   const criteria = bestSlipCriteria(today, { minimumTotal: 480, maximumTotal: 490, count: 10 });
   assert.equal(criteria.dateTo, today); assert.equal(criteria.totalMin, 480); assert.equal(criteria.reuse, false);
-  assert.equal(criteria.probMin, 0, 'daily publication keeps its probability policy independent of builder defaults');
+  assert.equal(criteria.probMin, 75);
   assert.equal(bestSlipCriteria(today).slips, 100); assert.equal(bestSlipsRules.count, 120);
 });
 
 test('daily capacity supports one hundred single-match and two-match slips without reusing fixtures', () => {
   for (const [count, odds, matchCount] of [[100, '5.00', 1], [200, '2.20', 2]]) {
-    const cohort = Array.from({ length: count }, (_, index) => record(`large-${String(index).padStart(3, '0')}`, 0.65 + index / 2000, odds));
+    const cohort = Array.from({ length: count }, (_, index) => record(`large-${String(index).padStart(3, '0')}`, 0.75 + index / 2000, odds));
     const result = generate(bestSlipCriteria(today), cohort);
     assert.equal(result.slips.length, 100);
     const fixtures = result.slips.flatMap(slip => slip.selections.map(selection => selection.fixtureId));
@@ -86,18 +86,19 @@ test('diversification returns fewer daily slips when the qualifying cohort canno
 });
 
 test('joint probability takes priority; tied estimates prefer more matches then higher odds', () => {
-  const data = [record('single', 0.60, '5.00'), record('pair-a', 0.75), record('pair-b', 0.75), record('higher-odds', 0.60, '5.20')];
+  const data = [record('single', 0.75, '5.00'), record('pair-a', 0.86), record('pair-b', 0.86), record('higher-odds', 0.75, '5.20'),
+    record('below-floor', 0.74999, '5.50')];
   const result = generate(bestSlipCriteria(today), data);
-  assert.equal(result.slips[0].selections.length, 2); assert.equal(result.slips[0].estimatedProbability, 0.65);
+  assert.equal(result.slips[0].selections.length, 2); assert.equal(result.slips[0].estimatedProbability, 0.76);
   assert.deepEqual(result.slips.slice(1).map(slip => slip.totalOdds), ['5.20', '5.00']);
-  const tied = generate(bestSlipCriteria(today), data, { ...model, estimate: () => 0.60 });
+  const tied = generate(bestSlipCriteria(today), data, { ...model, estimate: () => 0.75 });
   assert.deepEqual(tied.slips.map(slip => slip.selections.length), [2, 1, 1]);
 });
 
 test('Best Slips order is the shared joint ranking used by custom builds', () => {
-  const criteria = bestSlipCriteria(today), data = [record('single', 0.60, '5.00'), record('pair-a', 0.75), record('pair-b', 0.75), record('higher-odds', 0.60, '5.20')];
+  const criteria = bestSlipCriteria(today), data = [record('single', 0.75, '5.00'), record('pair-a', 0.86), record('pair-b', 0.86), record('higher-odds', 0.75, '5.20')];
   for (const [slips, joint] of [[generate().slips, model], [generate(criteria, data).slips, model],
-    [generate(criteria, data, { ...model, estimate: () => 0.60 }).slips, { ...model, estimate: () => 0.60 }]]) {
+    [generate(criteria, data, { ...model, estimate: () => 0.75 }).slips, { ...model, estimate: () => 0.75 }]]) {
     assert.deepEqual([...slips].sort(jointSlipRanking(joint).ranking.compare), slips);
   }
 });

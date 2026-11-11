@@ -30,6 +30,7 @@ import { provenTrue } from "../shared/authority-proof.ts";
 import { usesScoreDistribution } from "../predictor/predictor-prompt.ts";
 import { legacyMarketsFromScoreDistribution } from "../../domain/score-distribution-legacy.ts";
 import { validatePublishedRecommendation } from "./recommendation-publication.ts";
+import { storedRefreshStage } from "../refresh/refresh-mysql-store.ts";
 
 type Transaction = Prisma.TransactionClient;
 async function serverNow(tx: Transaction) {
@@ -133,18 +134,30 @@ export function createRevisionPublicationService(options: Readonly<{
               evidenceFingerprint(snapshot.snapshot.context) !== evidenceFingerprint(context)) return publicationFail("invalid-request");
             const model = candidate.context.pin === null ? null : await models.findInTransaction(tx, candidate.context.pin.modelVersionId);
             if (candidate.context.pin !== null && model === null) return publicationFail("invalid-request");
-            if (input.goalExtension !== undefined) {
+            if (Object.values(candidate.markets).some((item) => item.available && item.provenance.kind === "local-engine")) {
+              const stage = await storedRefreshStage(tx, jobId, "fallback", "completed");
+              const selected = stage?.value as { status?: unknown; candidate?: unknown } | undefined;
+              if (stage?.at !== input.generationCompletedAt || selected?.status !== "candidate" ||
+                evidenceFingerprint(selected.candidate) !== evidenceFingerprint(candidate)) return publicationFail("invalid-request");
+            }
+            const goalExtension = input.goalExtension;
+            if (goalExtension && "localPoisson" in goalExtension) {
+              const local = Object.values(candidate.markets).filter((item) => item.available);
+              if (!local.length || local.some((item) => item.provenance.kind !== "local-engine" ||
+                evidenceFingerprint(item.provenance.rates) !== evidenceFingerprint(goalExtension.localPoisson)))
+                return publicationFail("invalid-request");
+            } else if (goalExtension) {
               if (!model || !usesScoreDistribution(model) || model.calibration.kind !== "none" || candidate.audit.aiStatus !== "candidate")
                 return publicationFail("invalid-request");
-              const derived = legacyMarketsFromScoreDistribution(input.goalExtension.scoreDistribution);
+              const derived = legacyMarketsFromScoreDistribution(goalExtension.scoreDistribution);
               for (const [family, item] of Object.entries(candidate.markets)) if (item.available && item.market.source === "ai" &&
                   evidenceFingerprint(derived.markets[family as keyof typeof derived.markets]) !==
                     evidenceFingerprint({ available: true, market: item.market })) return publicationFail("invalid-request");
             }
             for (const [family, item] of Object.entries(candidate.markets)) if (item.available) {
-              if (item.provenance.kind === "ai" ? candidate.audit.aiStatus !== "candidate"
-                : candidate.audit.providerStatus !== "candidate" || !item.provenance.source.supportEvidenceRefs[
-                  (family === "double-chance" ? "match-result" : family) as "match-result" | "total-goals" | "both-teams-to-score"])
+              if (item.provenance.kind === "ai" && candidate.audit.aiStatus !== "candidate" ||
+                item.provenance.kind === "api-football" && (candidate.audit.providerStatus !== "candidate" || !item.provenance.source.supportEvidenceRefs[
+                  (family === "double-chance" ? "match-result" : family) as "match-result" | "total-goals" | "both-teams-to-score"]))
                 return publicationFail("invalid-request");
             }
             for (const item of Object.values(candidate.markets)) if (item.available && item.provenance.kind === "ai") {

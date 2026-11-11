@@ -1,24 +1,13 @@
 import "server-only";
 import type { ReactNode } from "react";
-import { HeaderBrand, BrandMark } from "@/components/ui/brand";
-import { AccountLinks } from "@/components/members/account-link";
-import { MemberNavigationRecovery } from "@/components/members/member-controls";
+import { BrandMark } from "@/components/ui/brand";
 import { navigationDestinations } from "@/components/navigation/navigation-destinations";
-import { SessionNavigation } from "@/components/navigation/session-navigation";
-import { NavigationProgress } from "@/components/navigation/navigation-progress";
+import { PublicHeader, PublicShellBoundary, PublicTabs } from "@/components/navigation/public-shell-chrome";
 import { Container, PageMain } from "@/components/ui/layout";
-import {
-  homeHref, informationHref, informationPages,
-  type NavigationLocation,
-} from "@/domain/navigation";
+import { informationHref, informationPages, type NavigationLocation } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
-import { FallbackStyleProvider } from "@/styles/provider";
-import {
-  DesktopNav, Footer, FooterBrand, FooterContent, FooterLink, FooterLinks, FooterNote, Header, HeaderActions, HeaderContent, HomeLink,
-  PublicShellFrame, SkipLink, TabBar,
-  WorkspaceHeaderContent,
-} from "@/components/navigation/shell-styles";
+import { Footer, FooterBrand, FooterContent, FooterLink, FooterLinks, FooterNote } from "@/components/navigation/shell-styles";
 
 import { getShellDate } from "./shell-time";
 export { getShellDate, getShellInstant } from "./shell-time";
@@ -45,24 +34,12 @@ export async function PublicShell({ children, locale, current, today: reportingD
   const messages = createMessages(language);
   const today = reportingDate ?? await getShellDate();
   const destinations = navigationDestinations(today, language, zone);
-  const ContentHeader = workspace ? WorkspaceHeaderContent : HeaderContent;
+  const navigation = { locale: language, current, destinations };
 
   return (
-    <FallbackStyleProvider><PublicShellFrame $workspace={workspace}>
-      {app && <MemberNavigationRecovery />}
-      <SkipLink href="#main-content">{messages.text("navigation.skip")}</SkipLink>
-      <Header $app={app}>
-        <ContentHeader $wide={app || wide || workspace}>
-          <HomeLink href={homeHref(language)} aria-label={messages.text("navigation.home")} prefetch={false}>
-            <HeaderBrand alt="" />
-          </HomeLink>
-          <DesktopNav aria-label={messages.text("navigation.primary")}>
-            <SessionNavigation destinations={destinations} dashboardLabel={messages.text("navigation.dashboard")} moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />
-          </DesktopNav>
-          <HeaderActions><AccountLinks locale={language} showAccount={showAccount} {...(administratorName ? { administratorName } : {})} /></HeaderActions>
-        </ContentHeader>
-        <NavigationProgress label={messages.text("navigation.loading")} />
-      </Header>
+    <PublicShellBoundary app={app} locale={language} workspace={workspace}
+      header={<PublicHeader {...navigation} app={app} wide={wide} workspace={workspace} showAccount={showAccount} administratorName={administratorName} />}
+      tabs={<PublicTabs {...navigation} />}>
       <PageMain id="main-content" tabIndex={-1} $app={app} $compact={compact} $compactTop={current === "best-slips"} $dashboard={current === "dashboard"} $workspace={workspace}>
         <Container $wide={app || wide}>{children}</Container>
       </PageMain>
@@ -87,9 +64,6 @@ export async function PublicShell({ children, locale, current, today: reportingD
           <FooterNote>{messages.text("navigation.footerNote")}</FooterNote>
         </FooterContent>
       </Footer>}
-      <TabBar aria-label={messages.text("navigation.tabs")}>
-        <SessionNavigation mobile destinations={destinations} dashboardLabel={messages.text("navigation.dashboard")} moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />
-      </TabBar>
-    </PublicShellFrame></FallbackStyleProvider>
+    </PublicShellBoundary>
   );
 }

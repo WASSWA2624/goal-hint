@@ -231,8 +231,8 @@ export function createPredictionRefreshService(options: Readonly<{
       const request: FallbackRefreshRequest = { requestId: refreshReference(lease.jobId, "fallback"),
         expected: { context: evidence.snapshot.context, jobId: lease.jobId, pin: saved.pin, evidenceHash: evidence.snapshot.hash },
         ai, bounds: plan.fallback.bounds, maxElapsedMs: plan.fallback.maxElapsedMs,
-        // A frozen order always requests the provider; the sealed fallback stage then holds both source receipts.
-        ...(plan.sourceOrder === undefined ? {} : { order: plan.sourceOrder }) };
+        ...(plan.sourceOrder === undefined ? {} : { order: plan.sourceOrder }),
+        ...(plan.sourceCascade === undefined ? {} : { sourceCascade: plan.sourceCascade }) };
       const snapshot = evidence.snapshot;
       function qualified(result: FallbackRefreshResult, quotes: readonly RecommendationQuote[]): FallbackRefreshResult {
         if (result.status === "denied" || plan.recommendationPolicy === undefined) return result;
@@ -262,9 +262,16 @@ export function createPredictionRefreshService(options: Readonly<{
       if (fallback.status === "denied") return finish("failed", `fallback:${fallback.reason}`);
       if (fallback.candidate.audit.providerReason !== null) phases.fallback = fallback.candidate.audit.providerReason;
       const candidate = parseResolvedForecastCandidate(fallback.candidate);
-      const aiSelected = Object.values(candidate.markets).some((market) => market.available && market.market.source === "ai");
-      const goalExtension = aiSelected && ai.status === "candidate" && ai.output.scoreDistribution && plan.goalDefinitions !== undefined
-        ? parseGoalMarketExtensionInput({ scoreDistribution: ai.output.scoreDistribution, definitions: plan.goalDefinitions }) : undefined;
+      const selectedSource = Object.values(candidate.markets).find((market) => market.available)?.provenance;
+      let goalExtension;
+      if (plan.goalDefinitions !== undefined) {
+        if (selectedSource?.kind === "local-engine") goalExtension = parseGoalMarketExtensionInput({
+          localPoisson: selectedSource.rates, definitions: plan.goalDefinitions,
+        });
+        else if (Object.values(candidate.markets).some((market) => market.available && market.market.source === "ai") &&
+          ai.status === "candidate" && ai.output.scoreDistribution && ai.output.scoreDistribution.unrepresentedProbability === 0)
+          goalExtension = parseGoalMarketExtensionInput({ scoreDistribution: ai.output.scoreDistribution, definitions: plan.goalDefinitions });
+      }
       const generationCompletedAt = utcInstantFromEpochMilliseconds((await options.store.stage(lease.jobId, "fallback", "completed"))!.at);
       const observation = await phase<Observation | null>("observation", plan.observation.bounds.timeoutMs * plan.observation.bounds.maxRequests,
         plan.publicationReserveMs, (workflow) => options.observation.collect(saved.member, plan.observation.bounds, workflow), () => null);

@@ -55,7 +55,9 @@ export function createSlipBuildService(options: Readonly<SlipReadSource & {
       let first: StoredMatchFeedResponse | null = null, partialCoverage = false, searchLimited = false;
       if (options.readCohort) {
         readStage = "read-cohort";
-        const cohort = slipCohortSchema.parse(await options.readCohort(parameters, { locale }, pinnedClock));
+        const cohort = slipCohortSchema.parse(await options.readCohort(parameters, {
+          locale, ...(joint || options.build ? { primaryBookmakerOnly: true } : {}),
+        }, pinnedClock));
         readStage = "validate-cohort";
         if (cohort.asOf !== asOf || cohort.today !== today || cohort.range.from !== range.startDate || cohort.range.to !== range.endDate
           || cohort.range.startInclusive !== range.window.startInclusive || cohort.range.endExclusive !== range.window.endExclusive) {
@@ -124,7 +126,13 @@ export function createSlipBuildService(options: Readonly<SlipReadSource & {
       const current = records.filter((record) => record.kickoffAt === null || completedAt < getPublicationDeadline(record.kickoffAt));
       if (joint && !approvedSlipJointModel(joint, completedAt)) return { ...base, state: "model-unavailable" };
       readStage = "build";
-      const data = (joint ? jointSlipBuilder(joint.model) : options.build ?? buildSlips)(criteria, current, asOf);
+      const minimum = slipBuilderRules.minimumPickPercent;
+      const canQualify = criteria.probMax >= minimum;
+      const buildCriteria = canQualify && criteria.probMin < minimum ? { ...criteria, probMin: minimum } : criteria;
+      const buildRecords = canQualify ? current : [];
+      const build = joint ? jointSlipBuilder(joint.model) : options.build;
+      const data = build ? build(buildCriteria, buildRecords, asOf)
+        : buildSlips(buildCriteria, buildRecords, asOf, undefined, { allowPublishedFallback: true });
       // Estimator callbacks cannot retain approval or validity revoked during generation.
       const returnedAt = joint ? clock.now() : completedAt;
       if (joint && !approvedSlipJointModel(joint, returnedAt)) return { ...base, state: "model-unavailable" };

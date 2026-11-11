@@ -37,6 +37,8 @@ export function goalTotalsMarket(line: number, metric: "total" | "home" | "away"
     .map((direction) => selected(direction, `${direction === "over" ? "Over" : "Under"} ${line}`,
       { kind: payout === "asian" ? "asian-total" : "total", metric, direction, line })), payout === "asian" ? "payout" : "partition");
 }
+export const liveGoalMarketDefinitions: readonly GoalMarketDefinition[] = Object.freeze([goalTotalsMarket(1.5)]);
+
 function binaryMarket(kind: string, period: GoalMarketPeriod, label: string, code: string,
   rule: (yes: boolean) => GoalRule): GoalMarketDefinition {
   return definition(kind, period, label, code, [selected("yes", "Yes", rule(true)), selected("no", "No", rule(false))]);

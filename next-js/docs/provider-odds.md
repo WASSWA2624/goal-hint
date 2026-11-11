@@ -1,9 +1,10 @@
 # Provider odds import
 
-Prompt 052 imports API-Football pre-match odds for **one documented bookmaker**,
-keeps every bet that bookmaker publishes, and derives market-implied
-probabilities for the four launch families. Odds are third-party information
-only: no bet slips, bookmaker links, affiliate links or "value" wording.
+The pre-match importer retains every verified bet and price in its
+API-Football date sweep. Owned local development requests all bookmakers in
+the same bounded date batches. The configured primary bookmaker supplies the
+reviewed four-family projection. Hosted imports continue to use that bookmaker
+under the hosted odds policy.
 
 This runbook covers storage, import semantics and grants. The adapter contract
 is in [api-football-adapter.md](api-football-adapter.md), the counted odds trial
@@ -33,6 +34,18 @@ market. A complete response withdraws offers it no longer contains, and prices
 expire after 90 seconds without confirmation. In-play prices live in their own
 current projection, so they cannot alter pre-match recommendations or sealed
 closing quotes.
+
+Matches reads current offers for the visible published forecasts in batches.
+The match detail Markets tab lists verified bookmaker groups and selections,
+including markets that have only a price. It labels pre-match, closing and
+in-play offers separately. Custom Builder selects exact current quotes across
+verified bookmakers for supported published outcomes at 75% or higher.
+
+Each local date sweep records the bookmaker scope in its job and stores
+the observed books and bet hashes in the sealed fixture receipt. The existing
+quota gate and page ceiling apply to that sweep. Current reads accept only
+offers reconfirmed by the latest receipt. A complete sweep can withdraw absent
+fixtures and prices, while a partial sweep preserves fixtures it did not see.
 
 The pre-match catalog can contain an explicitly unnamed ID. The importer
 records its missing name and keeps it out of the mapping. Duplicate IDs still

@@ -10,7 +10,7 @@ const schema = z.strictObject({ market: z.enum(["all", ...performanceFamilies]).
   from: z.string().optional(), to: z.string().optional(), source: performanceSourceSchema.default("combined"),
   model: z.string().regex(/^[a-f0-9]{64}$/u).optional(), version: z.string().trim().min(1).max(128).regex(/^[\w.:/-]+$/u).optional(),
   leaguePage: z.string().regex(/^[1-9]\d{0,3}$/u).default("1").transform(Number),
-}).refine((v) => (v.from === undefined) === (v.to === undefined) && !(v.model && v.source === "api-football"));
+}).refine((v) => (v.from === undefined) === (v.to === undefined) && (!v.model || v.source === "ai" || v.source === "combined"));
 export function parsePerformanceQuery(parameters: URLSearchParams, today: ReportingDate) {
   try {
     if (Buffer.byteLength(parameters.toString(), "utf8") > matchFeedRules.maximumQueryBytes) throw new Error();

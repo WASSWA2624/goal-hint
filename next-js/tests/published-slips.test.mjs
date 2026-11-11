@@ -9,12 +9,12 @@ import { liveRecord, now, today } from './helpers/live-refresh-fixtures.mjs';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
 
 const base = liveRecord(), model = { calibrationReference: 'synthetic-calibration', correlationReference: 'synthetic-correlation',
-  validFrom: now - 1000, validUntil: now + 86_400_000, estimate: () => 0.7 };
+  validFrom: now - 1000, validUntil: now + 86_400_000, estimate: () => 0.75 };
 const fixtureId = (last) => `10000000-0000-4000-8000-${String(last).padStart(12, '0')}`;
 function slip(last = 1) {
-  return { id: `original-${last}`, totalOdds: '4.00', oddsBasis: 'bookmaker', averageProbability: 0.7, estimatedProbability: 0.7,
+  return { id: `original-${last}`, totalOdds: '4.00', oddsBasis: 'bookmaker', averageProbability: 0.75, estimatedProbability: 0.75,
     selections: [{ fixtureId: fixtureId(last), kickoffAt: now + 3_600_000, homeTeam: base.homeTeam, awayTeam: base.awayTeam,
-      competition: base.competition, family: 'match-result', selection: 'home-win', probability: 0.7, odds: '4.00', oddsBasis: 'bookmaker' }] };
+      competition: base.competition, family: 'match-result', selection: 'home-win', probability: 0.75, odds: '4.00', oddsBasis: 'bookmaker' }] };
 }
 function fixture() {
   const parents = [], rows = [], legs = [], bound = [], outcomes = new Map(), fixtureCompletion = new Map(), fixtureStatuses = new Map();
@@ -77,7 +77,17 @@ test('sealed publication identities survive database JSON number normalization',
   const f = fixture(); f.normalizeNumbers(); await f.publish();
   const day = await f.store.day(today);
   assert.equal(day.slips.length, 1);
-  assert.equal(day.slips[0].estimatedProbability, 0.7 - Number.EPSILON);
+  assert.equal(day.slips[0].estimatedProbability, 0.75 - Number.EPSILON);
+});
+
+test('daily publication rejects a 74.999 percent leg and accepts exactly 75 percent', async () => {
+  const f = fixture(), below = 0.74999, original = slip();
+  await assert.rejects(() => f.publish({ model: { ...model, estimate: () => below }, slips: [{ ...original,
+    averageProbability: below, estimatedProbability: below, selections: [{ ...original.selections[0], probability: below }] }] }),
+  /invalid-input/u);
+  assert.deepEqual(f.parents, []);
+  assert.deepEqual(f.bound, []);
+  assert.equal(await f.publish(), 'published');
 });
 
 test('six bands publish twenty slips each, remain idempotent and retain stable public ranks', async () => {
@@ -100,12 +110,12 @@ test('six bands publish twenty slips each, remain idempotent and retain stable p
 });
 
 test('publication assigns probability order before sealing snapshot ranks', async () => {
-  const f = fixture(), probabilities = [0.65, 0.8, 0.7];
+  const f = fixture(), probabilities = [0.75, 0.8, 0.78];
   const slips = probabilities.map((probability, index) => ({ ...slip(index + 1), averageProbability: probability,
     estimatedProbability: probability, selections: slip(index + 1).selections.map(selection => ({ ...selection, probability })) }));
   await f.publish({ slips, model: { ...model, estimate: selections => selections[0].probability } });
-  assert.deepEqual(f.rows.map(row => row.snapshotJson.estimatedProbability), [0.8, 0.7, 0.65]);
-  assert.deepEqual((await f.store.day(today)).slips.map(view => view.estimatedProbability), [0.8, 0.7, 0.65]);
+  assert.deepEqual(f.rows.map(row => row.snapshotJson.estimatedProbability), [0.8, 0.78, 0.75]);
+  assert.deepEqual((await f.store.day(today)).slips.map(view => view.estimatedProbability), [0.8, 0.78, 0.75]);
 });
 
 test('historical 100.00 quotes move to the sixth filter without rewriting snapshots or public ranks', async () => {
@@ -152,7 +162,7 @@ test('first qualified publication preserves quotes, model evidence and original 
   const day = await f.store.day(today);
   assert.equal(day.slips[0].slip.totalOdds, '4.00');
   const publicViews = bestSlipViews(day.slips.map(view => view.slip), false);
-  assert.deepEqual(publicViews, [{ rank: 1, matchCount: 1, totalOdds: '4.00', estimatedProbability: 0.7, averageProbability: 0.7 }]);
+  assert.deepEqual(publicViews, [{ rank: 1, matchCount: 1, totalOdds: '4.00', estimatedProbability: 0.75, averageProbability: 0.75 }]);
   const gated = gateBestSlips(day, { tier: 'free', signedIn: false, mode: 'off' });
   assert.equal(gated.slips.length, 1);
   assert.equal(gated.slips[0].slip, undefined);

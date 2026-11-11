@@ -5,6 +5,8 @@ import { createFootballCatalogImporter } from "../src/server/football/catalog-se
 import { normalizeInPlayOdds } from "../src/server/football/api-football-normalize.ts";
 import { createInPlayOddsPoller } from "../src/server/odds/in-play-odds-service.ts";
 import { storedInPlayOdds } from "../src/server/odds/in-play-odds-read.ts";
+import { withCurrentFeedOdds } from "../src/server/matches/feed-odds.ts";
+import { gateFeedResponse } from "../src/domain/paywall.ts";
 import { catalogFixture, catalogRequest, createSyntheticCatalogAdapter } from "./helpers/catalog-fixtures.mjs";
 import { catalogSelectionAuthority } from "./helpers/selection-fixtures.mjs";
 import { withPredictionPipeline } from "./prediction-pipeline.mjs";
@@ -50,6 +52,13 @@ test("one shared live odds slot updates only changed prices and withdraws missin
     assert.equal(catalogCalls, 1); assert.equal(liveCalls, 1);
     const observation = () => a.query((tx) => storedInPlayOdds(tx, { fixtureId: fixture.id, kickoffAt, asOf: pipeline.now() }));
     assert.equal((await observation()).prices.markets[0].selections[0].price, "1.89");
+    const base = { records: [{ fixtureId: fixture.id, kickoffAt, status: "live", forecast: null }] };
+    const feedOdds = () => withCurrentFeedOdds(a, base, pipeline.now(), true);
+    const feed = await feedOdds();
+    assert.equal(feed.records[0].marketOdds.kind, "in-play");
+    assert.equal(feed.records[0].marketOdds.prices.markets[0].selections[0].price, "1.89");
+    assert.equal(feed.records[0].forecast, null);
+    assert.equal(gateFeedResponse(feed, { tier: "free", signedIn: false }).records[0].marketOdds, null);
     const stored = () => a.query((tx) => tx.$queryRaw`SELECT changedAt, checkedAt FROM FixtureInPlayOdds WHERE fixtureId = ${fixture.id}`);
     const [before] = await stored();
     pipeline.setTime(start + 30_000);
@@ -65,6 +74,7 @@ test("one shared live odds slot updates only changed prices and withdraws missin
     pipeline.setTime(start + 90_000);
     assert.equal((await first.poll()).changed, 1);
     assert.equal(await observation(), null);
+    assert.equal((await feedOdds()).records[0].marketOdds, undefined);
     assert.equal(await a.query((tx) => tx.fixtureOddsPrice.count()), 0);
     assert.equal(catalogCalls, 1); assert.equal(liveCalls, 4);
   }, { migrationTimeoutMs: 180_000 });
