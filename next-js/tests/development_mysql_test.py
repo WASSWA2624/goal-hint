@@ -146,6 +146,27 @@ class DevelopmentMysqlOwnershipTests(unittest.TestCase):
         with patch.object(module, "ROOT", self.root):
             self.assertIsNone(instance._previous_launcher([current], []))
 
+    def test_stdin_launcher_requires_both_recorded_identities_and_its_exact_owned_mysql_child(self):
+        instance = self.make_instance()
+        launcher = record(600, 500, '"C:/Python Runtime/python.exe" -u -')
+        mysql = self.mysql(instance)
+        state = {"version": 1, "root": str(self.root), "launcher": instance._identity(launcher), "mysql": instance._identity(mysql)}
+        other_datadir = {**mysql, "command": "mysqld --datadir=C:/installed/mysql/data --port=3306"}
+        for name, records, saved, expected in [
+            ("owned wrapper", [launcher, mysql], state, launcher),
+            ("no launcher metadata", [launcher, mysql], {**state, "launcher": None}, None),
+            ("different checkout", [launcher, mysql], {**state, "root": str(self.root / "other")}, None),
+            ("reused launcher PID", [{**launcher, "started": "new"}, mysql], state, None),
+            ("unrecorded MySQL", [launcher, mysql], {**state, "mysql": None}, None),
+            ("reused MySQL PID", [launcher, {**mysql, "started": "new"}], state, None),
+            ("unrelated MySQL parent", [launcher, {**mysql, "ppid": 501}], state, None),
+            ("other database", [launcher, other_datadir], state, None),
+            ("arbitrary inline Python", [{**launcher, "command": 'python -c "print(1)"'}, mysql], state, None),
+        ]:
+            with self.subTest(name=name), patch.object(module, "ROOT", self.root):
+                instance.state_file.write_text(json.dumps(saved), encoding="utf-8")
+                self.assertEqual(instance._previous_launcher(records, instance._owned_mysql(records)), expected)
+
     def test_non_object_state_is_ignored(self):
         instance = self.make_instance()
         for value in ([], "stale", 1, None):

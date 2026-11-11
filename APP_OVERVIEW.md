@@ -14,6 +14,8 @@ Foreground navigation and app work use the shared progress bar beneath the heade
 
 Best Slips reads the published snapshot once and checks current viewer access before rendering selections. Live match views refresh scores and statuses from stored results. The browser clock estimates `MM:SS` between provider observations for up to two minutes and pauses at reported breaks. Desktop rows show it on its own line above the score with more space.
 
+The owned local football launcher warms Matches and its browser scripts during startup, using the stored snapshot over loopback.
+
 The minimum decimal odds are `1.01` for current quotes and for individual and total odds bounds in Builder. Builder and its Advanced Filters preserve numeric edits, show minimum and maximum warnings while typing, and validate values on blur and submission. Saved presets load any older below-floor odds bounds at `1.01`. Published history retains the original recorded odds.
 
 New Builder and Best Slips selections require at least 75% estimated probability per match. Custom Builder accepts current published fallback forecasts and matching exact prices from any verified stored bookmaker for its supported selections. Automated and reviewed joint slips retain their evidence requirements. Published slips retain their original selections.

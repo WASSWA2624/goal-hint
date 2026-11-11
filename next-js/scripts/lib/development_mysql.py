@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import socket
 import subprocess
@@ -160,12 +161,30 @@ class DevelopmentMysql:
         return record and record["name"].lower().startswith(("python", "py.exe")) and re.search(
             r"(?:^|[/\\\s])development\.py(?:[\"'\s]|$)", record["command"])
 
+    @staticmethod
+    def _is_python_stdin(record):
+        if not record["name"].lower().startswith(("python", "py.exe")):
+            return False
+        try:
+            arguments = shlex.split(record["command"], posix=os.name != "nt")[1:]
+        except ValueError:
+            return False
+        return arguments in (["-"], ["-u", "-"])
+
     def _previous_launcher(self, records, mysql):
         state = self._read_state()
         recorded = state.get("launcher")
         current = process_record(recorded.get("pid"), records) if isinstance(recorded, dict) else None
-        if self._is_launcher(current) and process_matches(recorded, current):
-            return current
+        if process_matches(recorded, current):
+            if self._is_launcher(current):
+                return current
+            # Stdin wrappers have no script name in the process command. Accept
+            # only the recorded Python owner with its recorded owned MySQL child.
+            recorded_mysql = state.get("mysql")
+            if self._is_python_stdin(current) and isinstance(recorded_mysql, dict) and any(
+                server["ppid"] == current["pid"] and process_matches(recorded_mysql, server) for server in mysql
+            ):
+                return current
         # Migration from the old launcher, which recorded no PID: only follow
         # ancestry of mysqld with this exact owned datadir, never a process name.
         for server in mysql:

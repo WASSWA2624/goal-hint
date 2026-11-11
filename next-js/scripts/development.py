@@ -11,6 +11,7 @@ import threading
 
 from lib.development_mysql import DevelopmentMysql, LocalFootballMysql
 from lib.development_process import process_record, process_snapshot, release_port, stop_process
+from lib.development_warmup import warm_football_matches
 from lib.runtime import CommandError, ROOT, hidden_process, main_guard, node_binary
 from lib.app_downloads import prepare_app_downloads
 
@@ -187,7 +188,7 @@ def release_development_web(port):
             stop_process(process, tree=True)
 
 
-def run_web(args, env, port, *, live=False):
+def run_web(args, env, port, *, live=False, warm_matches=False):
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     command = [development_node_binary(), str(ROOT / "node_modules/nodemon/bin/nodemon.js"), *args] if live else [
@@ -197,10 +198,14 @@ def run_web(args, env, port, *, live=False):
         child = subprocess.Popen(command, cwd=ROOT, env=env, creationflags=hidden_process(), stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
         address_in_use = False
+        warming = False
         try:
             for line in child.stdout:
                 print(line, end="", flush=True)
                 address_in_use |= "EADDRINUSE" in line or "address already in use" in line.lower()
+                if warm_matches and not warming and "Ready in " in line:
+                    warming = True
+                    threading.Thread(target=warm_football_matches, args=(port,), daemon=True).start()
             code = child.wait()
         finally:
             if child.poll() is None:
@@ -291,7 +296,7 @@ def run_local_football(args, *, prepare):
                 worker = football_worker(instance.directory, env)
             release_development_web(port)
             print(f"Serving stored API-Football fixtures from the local snapshot ({len(ids)} competitions).", flush=True)
-            return run_web(args, env, port)
+            return run_web(args, env, port, warm_matches=worker is not None)
         finally:
             if worker is not None and worker.poll() is None:
                 worker.terminate()
