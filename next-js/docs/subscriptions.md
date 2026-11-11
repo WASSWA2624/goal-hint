@@ -88,7 +88,23 @@ They follow the existing subscription/password migrations. Grant the application
 
 ## Account credit
 
-Credit is a plan-only, non-refundable balance on an account. It comes only from payments the owner approves: a top-up report (**Add credit** on Get access, UGX 1,000–500,000), or what a plan payment received above its plan's price (up to UGX 500,000). It is spent without approval: **Pay from credit** on Get access buys the chosen plan at once, and auto-renewal (turned on per plan on Account, which accepts the current terms; renewed periods record that version) renews the plan from credit within an hour of the access period ending. Turning auto-renewal off works even while sales are closed (the credit endpoint refuses only buying and turning it on then). A renewal the owner revokes is not bought again for the same period end, and the account then no longer shows "Renews from credit". Renewal runs from the members worker (`npm run members:renew`, every cron slot), the live runner and owner page loads, and on the member's own visit; each renewal is keyed by the period end it renews, so none of these can charge twice. The background job renews only lapses under a day old; after a longer outage the member's next visit renews and the new period starts then. A renewal atomically queues the same minimal account-update SMS; Account shows the expiry and remaining credit. Apply the additive `20261025230000_payment_notification_outbox` migration and grants before deploying, and supervise the [private SMS worker](yoola-messaging.md#payment-decision-notifications).
+**Account → Wallet** shows the balance, any credit held for pending payments,
+top-up status and recent wallet activity. **Top up** opens the existing MTN
+MoMo/Airtel checkout for UGX 1,000–500,000. Credit is added after approval. An
+approved plan payment can also credit eligible excess. Wallet credit pays for
+subscriptions and cannot be withdrawn.
+
+Members with available credit can choose a plan and turn on auto-renewal in
+Wallet. It uses the current terms and charges only when available credit
+covers the plan. Turning it off works even while sales are closed. A revoked
+renewal is never charged again for the same period end. The members worker,
+live runner, owner page loads and member visits can trigger renewal within
+an hour of the period ending. The period-end key prevents a duplicate
+charge. The background job catches lapses under a day old. After a longer
+lapse, the member's next visit can start the new period. A renewal queues a
+minimal account-update SMS atomically. Apply the additive
+`20261025230000_payment_notification_outbox` migration and grants before
+deploying, and supervise the [private SMS worker](yoola-messaging.md#payment-decision-notifications).
 
 `WalletEntry` is the ledger: one row per change, with the amount, the resulting balance and the payment or access period it names, under the account's row lock. `MemberAccount.creditUgx` caches the newest balance. The application role can only SELECT and INSERT ledger rows; triggers refuse updates and deletes. Reversing a payment whose credit was already spent takes the balance below zero, which blocks spending until a top-up clears it. A number change moves credit and auto-renewal with the access (it is refused while a top-up waits for review, since reports never change account), and records an `AccountMove` row (from, to, the old account's newest ledger entry number, time; ordered by an auto-increment sequence, exact because moves touching one account serialize on its lock). A later reversal's debt goes where that payment's credit went: from its ledger entry, along the first move recorded at or after it and then each later move out of the account it reached, to the account holding it now (paired transfer rows; the reversal row itself stays on the paying account). Credit an old account received after its move is taken back there. `AccountMove` is append-only (SELECT and INSERT for the application role; triggers refuse updates and deletes) and its foreign keys RESTRICT, so an account in a number change can be erased but not permanently deleted: Delete account refuses with a message to erase instead. An erased account records no reversal debt, since erasure already forfeited its credit. Erasing personal data forfeits a positive balance (a recorded correction); permanent deletion removes the ledger with the account. Admin → Subscribers → Credit shows the balance and history, corrects credit with a reason, and can turn auto-renewal off. The Overview shows credit held by members, which is owed in plans and is already counted in revenue from the payments that added it.
 

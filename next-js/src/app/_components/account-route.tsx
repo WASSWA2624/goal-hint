@@ -7,6 +7,7 @@ import { AccountAuthForm, type AccountAuthView } from "@/components/members/acco
 import { AccountActionLink, AccountFine, AccountFlash } from "@/components/members/account-overview";
 import { AccountSecurityForm, ResetPasswordForm } from "@/components/members/account-security";
 import { AccountFacts, AccountPageHead, AccountPanel, AccountWorkspace } from "@/components/members/account-workspace";
+import { AccountWallet } from "@/components/members/account-wallet";
 import { AccountDevices, AccountPaymentHistory, AccountQuickActions, AccountSubscriptionPanel } from "@/components/members/account-panels";
 import { AccountNotificationPreferences } from "@/components/members/account-notification-preferences";
 import { AccountNotifications } from "@/components/members/account-notifications";
@@ -14,13 +15,14 @@ import { AccountActivity } from "@/components/members/account-activity";
 import { AccountReferrals, AccountReferralSummary } from "@/components/members/account-referrals";
 import { AccountReferralReviews } from "@/components/members/account-referral-reviews";
 import { AccountVerificationForm } from "@/components/members/account-verification";
-import { CreditSection } from "@/components/members/credit-controls";
 import { ApprovalRefresh, PaymentNotice } from "@/components/members/payment-status";
 import { ButtonLink } from "@/components/ui/controls";
 import { Stack } from "@/components/ui/layout";
 import { SignOutIcon } from "@/components/ui/icons";
 import { memberLandingPath, memberNextPath, memberReturnPath } from "@/domain/member-navigation";
 import { publicSupportContactSettings } from "@/domain/public-subscription-settings";
+import { manualPaymentProvider } from "@/domain/subscription-settings";
+import { checkoutOpenStatuses } from "@/domain/checkout";
 import { formatSubscriptionExpiry } from "@/domain/subscription-expiry";
 import { accountSection, accountSectionHref } from "@/domain/account-navigation";
 import { notificationCursor } from "@/domain/account-notifications";
@@ -56,6 +58,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const token = (await cookies()).get(memberCookieName(resolved.config.production))?.value;
     const returnTo = memberReturnPath(parameters.return);
     const section = accountSection(parameters.section), summarySection = section === "overview" || section === "subscription";
+    const walletSection = section === "wallet";
     const contact = { ...publicSupportContactSettings(settings), reviewTime: settings?.reviewTime ?? null };
     // Old reset links enter the same code-based recovery flow.
     const authView: AccountAuthView = parameters.view === "register" ? "register" : parameters.view === "forgot" || parameters.view === "reset" ? "forgot" : "login";
@@ -77,8 +80,8 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const now = new Date();
     const [view, paymentView, subscription, dashboard, referrals, notifications, referralReviews] = member && !member.blocked ? await Promise.all([
       member.codeEnteredAt && (summarySection || section === "devices") ? resolved.codes?.accountView(member).catch(() => null) ?? null : null,
-      settings && (summarySection || section === "payments") ? resolved.payments?.view(member).catch(() => null) ?? null : null,
-      summarySection || section === "payments" ? resolved.codes?.subscriptionStatus(member).catch(() => null) ?? null : null,
+      (walletSection || settings && (summarySection || section === "payments")) ? resolved.payments?.view(member).catch(() => null) ?? null : null,
+      summarySection || section === "payments" || walletSection ? resolved.codes?.subscriptionStatus(member).catch(() => null) ?? null : null,
       summarySection || section === "payments" || section === "activity" ? resolved.dashboard?.read(member).catch(() => null) ?? null : null,
       summarySection || section === "referrals" ? resolved.referrals?.read(member).catch(() => null) ?? null : null,
       section === "notifications" ? resolved.notifications?.read(member, parameters.before).catch(() => null) ?? null : null,
@@ -87,15 +90,18 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const queued = view?.codes.filter((code) => codeStatus(code, now) === "queued") ?? [];
     const last = view?.codes.filter((code) => codeStatus(code, now) === "expired").at(-1);
     const status = paymentView?.status ?? null;
+    const topUpStatus = paymentView?.topUpStatus ?? [status, paymentView?.otherStatus].find((report) => report?.purpose === "topup") ?? null;
     const activeUntil = subscription?.activeUntil ?? null;
     const refreshAt = subscription?.trial?.state === "active" ? subscription.trial.endsAt : activeUntil;
     const waiting = (subscription?.paymentPending ?? (!!status && ["pending", "superseded"].includes(status.status)))
-      || ["pending", "superseded"].includes(paymentView?.otherStatus?.status ?? "");
+      || ["pending", "superseded"].includes(paymentView?.otherStatus?.status ?? "")
+      || (walletSection && [...checkoutOpenStatuses, "superseded"].some(state => state === topUpStatus?.status));
     const salesOpen = !!settings && mode !== "off";
+    const topUpOpen = salesOpen && (manualPaymentProvider(settings, "mtn").reason === null || manualPaymentProvider(settings, "airtel").reason === null);
     // Plans are read only for an account with credit or auto-renewal to manage.
     const credit = paymentView?.credit ?? null;
-    const hasCredit = !!credit && (credit.balanceUgx !== 0 || credit.autoRenew || credit.history.length > 0);
-    const offers = section === "payments" && hasCredit && salesOpen ? await plans().catch(() => []) : [];
+    const offers = walletSection && salesOpen && credit && (credit.availableBalanceUgx > 0 || credit.autoRenew)
+      ? await plans().catch(() => []) : [];
     // A waiting, refused or reversed plan report sends the member back to it instead of to a second payment; a top-up has
     // its own notice and leaves Renew in place.
     const reports = paymentView ? [status, paymentView.otherStatus ?? null].filter((report) => report && report.purpose !== "topup") : null;
@@ -135,10 +141,12 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
             <div><dt>{messages.text("account.expiryLabel")}</dt><dd>{formatSubscriptionExpiry(code.endsAt)}</dd></div>
           </AccountFacts>)}
         </AccountPanel>}
+        {walletSection && <AccountWallet locale={locale} credit={credit} topUpStatus={topUpStatus} contact={contact}
+          phone={member.phone} returnTo={returnTo} topUpOpen={topUpOpen} salesOpen={salesOpen} plans={offers}
+          acceptedTerms={paymentView?.acceptedTerms === true} active={!!activeUntil} />}
         {section === "payments" && <>
           <PaymentNotice locale={locale} status={status} settings={contact} phone={member.phone} />
           {paymentView?.otherStatus && <PaymentNotice locale={locale} status={paymentView.otherStatus} settings={contact} phone={member.phone} />}
-          {credit && hasCredit && <AccountPanel title={messages.text("account.creditSettings")}><CreditSection locale={locale} credit={credit} plans={offers} salesOpen={salesOpen} acceptedTerms={!!paymentView?.acceptedTerms} active={!!activeUntil} /></AccountPanel>}
           <AccountPaymentHistory locale={locale} dashboard={dashboard} />
         </>}
         {(section === "phone" || section === "password") && <AccountPanel narrow title={messages.text(section === "phone" ? "account.phonePanel" : "account.passwordPanel")}>

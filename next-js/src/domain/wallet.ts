@@ -26,7 +26,8 @@ export type WalletKind = (typeof walletKinds)[number];
 export type WalletEntryView = Readonly<{ id: string; kind: WalletKind; amountUgx: number; balanceAfter: number; createdAt: string;
   actor: "admin" | "member" | "system"; note: string | null; payment: string | null; period: string | null }>;
 /** What a member sees of their credit: the balance, auto-renewal and recent history. */
-export type CreditView = Readonly<{ balanceUgx: number; autoRenew: boolean; autoRenewPlanId: string | null; history: readonly WalletEntryView[] }>;
+export type CreditView = Readonly<{ balanceUgx: number; availableBalanceUgx: number; autoRenew: boolean; autoRenewPlanId: string | null;
+  history: readonly WalletEntryView[] }>;
 
 export const validTopUp = (amount: unknown): amount is number =>
   typeof amount === "number" && Number.isSafeInteger(amount) && amount >= walletRules.topUpMinUgx && amount <= walletRules.topUpMaxUgx;

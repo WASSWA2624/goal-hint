@@ -10,7 +10,7 @@ const state = globalThis as typeof globalThis & { syntheticPayments?: Record<str
   syntheticCredit?: { balanceUgx: number; autoRenew: boolean; autoRenewPlanId: string | null; bought: number } };
 export const paymentScenarios = ["default", "signed-out", "signed-in", "active", "pending", "pending-active", "pending-terms-required",
   "pending-call-only", "pending-whatsapp-only", "pending-no-contact", "approved",
-  "rejected", "rejected-active", "rejected-fallback", "rejected-terms-required", "reversed", "reversed-terms-required", "reversed-active", "blocked", "off", "credit"] as const;
+  "rejected", "rejected-active", "rejected-fallback", "rejected-terms-required", "reversed", "reversed-terms-required", "reversed-active", "blocked", "off", "credit", "wallet-empty"] as const;
 export function fixtureScenarioFromHeaders(headers: Headers) {
   const scenario = headers.get("cookie")?.match(/(?:^|;\s*)payment-fixture-state=([^;]+)/u)?.[1];
   return paymentScenarios.find(value => value === scenario) ?? "default";
@@ -67,7 +67,7 @@ export function fixtureServices(scenario = "default"): MemberServices {
     contactPhone: ["pending-whatsapp-only", "pending-no-contact"].includes(scenario) ? null : settings.contactPhone,
     whatsappPhone: ["pending-call-only", "pending-no-contact"].includes(scenario) ? null : settings.whatsappPhone }, source: "stored" },
     sessions: {
-      async verify(token?: string) { return scenario === "signed-out" || !token && !["signed-in", "active", "blocked", "credit"].includes(scenario) && !hasReport ? null
+      async verify(token?: string) { return scenario === "signed-out" || !token && !["signed-in", "active", "blocked", "credit", "wallet-empty"].includes(scenario) && !hasReport ? null
         : { accountId: "00000000-0000-4000-8000-000000000100", tokenHash: "synthetic", phone: "256700000101", blocked: scenario === "blocked",
           codeEnteredAt: scenario === "active" || scenario === "credit" ? new Date() : null, accessCodeId: null, expiresAt: new Date(Date.now() + 86_400_000) }; },
       async signIn() { return { status: "signed-in", token: "p".repeat(43) }; }, async signOut() {},
@@ -89,8 +89,9 @@ export function fixtureServices(scenario = "default"): MemberServices {
       return { status: "saved", reference: "PTEST" };
     },
     async view() { return { acceptedTerms: acceptedTerms(), status: paymentStatus(),
-      credit: credit && { balanceUgx: credit.balanceUgx, autoRenew: credit.autoRenew, autoRenewPlanId: credit.autoRenewPlanId, history: [
+      credit: credit ? { balanceUgx: credit.balanceUgx, availableBalanceUgx: Math.max(0, credit.balanceUgx), autoRenew: credit.autoRenew, autoRenewPlanId: credit.autoRenewPlanId, history: [
         ...credit.bought ? [{ id: "synthetic-purchase", kind: "purchase" as const, amountUgx: -5000, balanceAfter: credit.balanceUgx, createdAt: now.toISOString(), actor: "member" as const, note: null, payment: null, period: "C-SYNTH" }] : [],
-        { id: "synthetic-topup", kind: "topup" as const, amountUgx: 12_000, balanceAfter: 12_000, createdAt: new Date(+now - 3_600_000).toISOString(), actor: "admin" as const, note: null, payment: "PCRED", period: null }] } }; } },
+        { id: "synthetic-topup", kind: "topup" as const, amountUgx: 12_000, balanceAfter: 12_000, createdAt: new Date(+now - 3_600_000).toISOString(), actor: "admin" as const, note: null, payment: "PCRED", period: null }] }
+        : scenario === "wallet-empty" ? { balanceUgx: 0, availableBalanceUgx: 0, autoRenew: false, autoRenewPlanId: null, history: [] } : null }; } },
   } as unknown as MemberServices;
 }

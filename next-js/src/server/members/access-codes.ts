@@ -21,7 +21,7 @@ import { decide, lockSettings } from "./settings.ts";
 import type { PaymentNotifications } from "./payment-notifications.ts";
 import { createQueuedPaymentNotifications } from "./payment-notification-outbox.ts";
 import { acceptedTerms } from "./member-terms.ts";
-import { appendWalletEntry, creditPath, InsufficientCredit, lastEntryNumber, lockedCredit, spendableCredit } from "./wallet.ts";
+import { appendWalletEntry, creditPath, InsufficientCredit, lastEntryNumber, lockedCredit, reservedWalletCredit, spendableCredit } from "./wallet.ts";
 import { rechainRewardPeriods } from "./referral-periods.ts";
 import { transferReferralReviewClaims } from "./referral-review-transfer.ts";
 import { checkoutOpenStatuses } from "../../domain/checkout.ts";
@@ -580,8 +580,8 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
     },
 
     /**
-     * Turns auto-renewal on for an active plan, or off. Turning it on needs the current terms accepted (now, or with an earlier
-     * report under them); renewals record that version. Turning it off needs nothing, even while sales are closed.
+     * Turns auto-renewal on for an active plan, or off. New enrollment requires spendable wallet credit. Opting in or
+     * changing the plan records acceptance of the current terms. Turning it off works even while sales are closed.
      */
     async setAutoRenew(member: MemberIdentity, input: { on: boolean; planId?: string; accepted?: boolean }): Promise<CodeOutcome> {
       if (typeof input.on !== "boolean" || input.on && (typeof input.planId !== "string" || !uuid.test(input.planId))) return invalid();
@@ -591,6 +591,9 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         if (input.on) {
           const plan = await tx.subscriptionPlan.findUnique({ where: { id: input.planId! } });
           if (!plan?.active || !await salesOpen(tx)) return rollback(invalid("Choose a plan to renew."));
+          if (!account.autoRenew && (await spendableCredit(tx, account.id) ?? 0) <= 0) {
+            return rollback(insufficient("Add wallet credit to turn on auto-renewal."));
+          }
           if (!input.accepted && !await acceptedTerms(tx, member, at)) return rollback(invalid("Accept the terms to continue."));
           await tx.memberAccount.update({ where: { id: account.id }, data: { autoRenew: true, autoRenewPlanId: plan.id, autoRenewTermsVersion: termsNotice.reviewedOn } });
         } else await tx.memberAccount.update({ where: { id: account.id }, data: { autoRenew: false } });
@@ -645,7 +648,7 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         const covered = autoRenew && !!autoRenewPlan?.active && creditUgx >= autoRenewPlan.priceUgx && !!end && end.source !== "trial"
           && !live.some(code => code.source === "referral");
         const renewsFromCredit = covered && !await tx.walletEntry.findUnique({ where: { requestKey: `renewal:${session.accountId}:${+end.endsAt}` }, select: { id: true } })
-          && await salesOpen(tx);
+          && await salesOpen(tx) && creditUgx - await reservedWalletCredit(tx, session.accountId) >= autoRenewPlan.priceUgx;
         // The newest report decides, unless an older report of the other purpose still waits (a plan and a top-up may both).
         const paymentPending = ["pending", "superseded"].includes(session.account.submissions[0]?.status ?? "")
           || !!session.account.submissions[0] && await tx.paymentSubmission.count({ where: { accountId: session.accountId, status: "pending" } }) > 0;

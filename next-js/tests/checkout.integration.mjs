@@ -341,6 +341,26 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     assert.equal(await database.query(tx => tx.walletEntry.count({ where: { paymentSubmissionId: request.id, kind: "overpayment" } })), 1);
     assert.equal(await database.query(tx => tx.paymentReceipt.count({ where: { allocatedSubmissionId: request.id } })), 2);
   });
+  await t.test("wallet top-ups credit verified funds once without granting access or replacing a pending subscription", async () => {
+    const who = await member(), selection = select({ purpose: "topup", planId: null, topUpUgx: 5000 });
+    for (const topUpUgx of [999, 500001]) assert.equal((await checkout.quote(who, { ...selection, topUpUgx })).ok, false);
+    const subscription = await submit(who), topUp = await submit(who, selection);
+    const pending = await checkout.read(who);
+    assert.equal(pending.availableWalletUgx, 0);
+    assert.equal(pending.requests.find(request => request.id === subscription.id).status, "pending");
+    assert.equal(pending.requests.find(request => request.id === topUp.id).status, "pending");
+
+    assert.equal((await verify(topUp.id, 5000)).ok, true);
+    assert.equal((await checkout.read(who)).availableWalletUgx, 0, "Verification alone does not credit the wallet");
+    assert.equal((await act(topUp.id, { action: "approve-checkout" })).ok, true);
+    assert.equal((await act(topUp.id, { action: "approve-checkout" })).ok, true);
+    const approved = await checkout.read(who);
+    assert.equal(approved.availableWalletUgx, 5000);
+    assert.equal(approved.requests.find(request => request.id === topUp.id).status, "approved");
+    assert.equal(approved.requests.find(request => request.id === subscription.id).status, "pending");
+    assert.equal(await database.query(tx => tx.walletEntry.count({ where: { paymentSubmissionId: topUp.id, kind: "topup" } })), 1);
+    assert.equal(await database.query(tx => tx.accessCode.count({ where: { accountId: who.accountId } })), 0);
+  });
   await t.test("duplicate same-customer receipts restore request; competing ownership blocks allocation and preserves approved access", async () => {
     const a = await member(), b = await member(), receipt = proof();
     const original = await submit(a, select(), receipt), duplicate = await submit(a, select(), receipt);

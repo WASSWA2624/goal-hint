@@ -13,7 +13,7 @@ import { imageDimensions } from "../images/image-format.ts";
 import { lockMemberAccount, newReference } from "./access-codes.ts";
 import type { MemberIdentity } from "./member-sessions.ts";
 import { acceptedTerms } from "./member-terms.ts";
-import { walletHistory } from "./wallet.ts";
+import { reservedWalletCredit, walletHistory } from "./wallet.ts";
 import { validTopUp } from "../../domain/wallet.ts";
 import { memberRateRules, takeMemberLimit } from "./rate-limit.ts";
 import { decide, lockSettings } from "./settings.ts";
@@ -21,6 +21,7 @@ import { enqueueMemberMessage } from "./payment-notification-outbox.ts";
 
 type Outcome = Readonly<{ status: "saved"; reference: string }> | Readonly<{ status: "busy" | "refused" | "invalid" | "duplicate" }>;
 type Bucket = { key: string; count: number; bytes: number };
+const unavailableView: PaymentView = Object.freeze({ acceptedTerms: false, status: null, otherStatus: null, credit: null, topUpStatus: null });
 export const duplicatePaymentMessage = "This transaction ID was already used. If you made this payment, call admin with the ID.";
 
 export function createPayments({ database, config, now = Date.now }: {
@@ -117,17 +118,22 @@ export function createPayments({ database, config, now = Date.now }: {
 
     /** Account-level: any authenticated, current session of an open account sees the account's latest report (068). */
     async view(member: MemberIdentity): Promise<PaymentView> {
-      return database.query(async (tx) => {
-        const reportOf = { accountId: member.accountId, account: { blockedAt: null, erasedAt: null,
-          sessions: { some: { tokenHash: member.tokenHash, authenticatedAt: { not: null }, expiresAt: { gt: new Date(now()) } } } } } as const;
+      if (member.blocked || member.administrator) return unavailableView;
+      return database.transaction(async (tx) => {
+        const at = new Date(now());
+        const account = await tx.memberAccount.findFirst({ where: { id: member.accountId, phone: member.phone,
+          passwordHash: { not: null }, phoneVerifiedAt: { not: null }, blockedAt: null, erasedAt: null,
+          sessions: { some: { tokenHash: member.tokenHash, authenticatedAt: { not: null }, passwordResetAt: null, expiresAt: { gt: at } } } },
+          select: { creditUgx: true, autoRenew: true, autoRenewPlanId: true } });
+        if (!account) return unavailableView;
+        const reportOf = { accountId: member.accountId };
         const shown = { reference: true, status: true, rejectText: true, rejectReason: true, planName: true, priceUgx: true, submittedAt: true, purpose: true,
           decidedAt: true, reversedAt: true, code: { select: { endsAt: true } } } as const;
-        const [account, terms, status, history] = await Promise.all([
-          tx.memberAccount.findUnique({ where: { id: member.accountId }, select: { creditUgx: true, autoRenew: true,
-            autoRenewPlanId: true, blockedAt: true, erasedAt: true } }),
-          acceptedTerms(tx, member, new Date(now())),
+        const [terms, status, history, reserved] = await Promise.all([
+          acceptedTerms(tx, member, at),
           tx.paymentSubmission.findFirst({ where: reportOf, orderBy: [{ submittedAt: "desc" }, { id: "desc" }], select: shown }),
           walletHistory(tx, member.accountId),
+          reservedWalletCredit(tx, member.accountId),
         ]);
         const hidden = status ? await tx.paymentSubmission.findFirst({ where: { ...reportOf, purpose: status.purpose === "topup" ? "plan" : "topup" },
           orderBy: [{ submittedAt: "desc" }, { id: "desc" }], select: shown }) : null;
@@ -139,11 +145,11 @@ export function createPayments({ database, config, now = Date.now }: {
         const decidedLater = (row: Shown) => +(row.reversedAt ?? row.decidedAt ?? 0) > +(status?.submittedAt ?? 0);
         const otherStatus = hidden && status && hidden.reference !== status.reference && (["pending", "superseded"].includes(hidden.status)
           || ["rejected", "reversed"].includes(hidden.status) && decidedLater(hidden)) ? view(hidden) : null;
-        // Credit is the account's, not a device's, so any current session of an open account sees it.
-        const credit = account && !account.blockedAt && !account.erasedAt
-          ? { balanceUgx: account.creditUgx, autoRenew: account.autoRenew, autoRenewPlanId: account.autoRenewPlanId, history } : null;
-        return { acceptedTerms: terms, credit, status: status ? view(status) : null, otherStatus };
-      });
+        const topUp = status?.purpose === "topup" ? status : hidden?.purpose === "topup" ? hidden : null;
+        const credit = { balanceUgx: account.creditUgx, availableBalanceUgx: Math.max(0, account.creditUgx - reserved),
+          autoRenew: account.autoRenew, autoRenewPlanId: account.autoRenewPlanId, history };
+        return { acceptedTerms: terms, credit, status: status ? view(status) : null, otherStatus, topUpStatus: topUp ? view(topUp) : null };
+      }, { isolationLevel: "RepeatableRead", timeout: 10_000 });
     },
   });
 }

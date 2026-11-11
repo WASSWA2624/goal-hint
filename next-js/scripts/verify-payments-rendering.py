@@ -1,10 +1,11 @@
 """Production-rendered payment steps and private headers with synthetic services only."""
 import re
+from argparse import ArgumentParser
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
-from lib.rendering import Server, build_fixture, create_fixture, environment, parse_args, request, visible_html
+from lib.rendering import Server, build_fixture, create_fixture, environment, request, visible_html
 from lib.runtime import ROOT, main_guard
 
 
@@ -169,8 +170,41 @@ def account_reports(origin):
         assert 'data-account-section="payments"' in html and 'data-payment-status' not in overview, "Payment details belong in their focused Account section."
 
 
+def account_wallet(origin):
+    """Wallet is private, reachable with zero credit, and uses the existing top-up path."""
+    for state, balance in [("credit", "UGX 12,000"), ("wallet-empty", "UGX 0")]:
+        response = request(origin, f"/en/account?state={state}&section=wallet")
+        html = visible_html(response.text)
+        text = " ".join(unescape(re.sub(r'<[^>]+>', " ", html)).split())
+        assert response.status == 200 and "no-store" in response.headers.get("Cache-Control", ""), state
+        assert 'data-account-section="wallet"' in html and "data-account-wallet-balance" in html, state
+        for label in ["Wallet balance", balance, "Auto-renewal", "Wallet activity"]:
+            assert label in text, (state, label)
+        assert re.search(r"cannot be withdrawn|withdrawals? (?:are|is) (?:unavailable|not (?:available|supported|permitted|allowed))", text, re.I), state
+        top_up = re.search(r'<a\b(?=[^>]*data-credit-add)[^>]*href="([^"]+)"[^>]*>([\s\S]*?)</a>', html)
+        assert top_up and "Top up" in top_up.group(2), state
+        destination = urlsplit(unescape(top_up.group(1)))
+        assert destination.path == "/en/subscribe" and parse_qs(destination.query).get("add") == ["credit"], state
+        for action in re.findall(r'<(?:a|button)\b[^>]*>([\s\S]*?)</(?:a|button)>', html):
+            assert "withdraw" not in re.sub(r'<[^>]+>', "", action).lower(), state
+        turn_on = re.search(r'<button\b(?=[^>]*data-credit-auto-renew="on")[^>]*>', html)
+        if state == "credit":
+            assert turn_on and "PCRED" in text, "Funded wallets can enable renewal and show earlier deposits."
+        else:
+            assert turn_on is None or re.search(r'\bdisabled(?:=|\s|>)', turn_on.group(0)), "An empty wallet cannot enable renewal."
+            assert "PCRED" not in text, "An empty wallet has no deposit history."
+    guest = visible_html(request(origin, "/en/account?state=signed-out&section=wallet").text)
+    assert "data-account-auth" in guest and "data-account-wallet-balance" not in guest, "Sign-in protects the wallet."
+    payments = visible_html(request(origin, "/en/account?state=credit&section=payments").text)
+    assert 'data-account-section="payments"' in payments and "data-account-wallet-balance" not in payments, "Wallet and Payments are separate Account sections."
+
+
 def main():
-    args = parse_args("payment steps", extra=("--fixture",))
+    parser = ArgumentParser(description="Verify production payment rendering.")
+    parser.add_argument("--fixture", help="Reuse a built acceptance fixture inside .tmp.")
+    parser.add_argument("--serve", action="store_true", help="Keep the fixture available for browser checks.")
+    parser.add_argument("--wallet-only", action="store_true", help="Run the Account Wallet acceptance cases.")
+    args = parser.parse_args()
     env = environment(GOAL_HINT_DATABASE_ENABLED="false")
     if args.fixture:
         directory = Path(args.fixture).resolve()
@@ -184,7 +218,12 @@ def main():
         config = directory / "next.config.mjs"
         config.write_text(config.read_text().replace("agentRules: false,", "agentRules: false, typescript: { ignoreBuildErrors: true },"))
         build_fixture(directory, env, timeout=240)
-    with Server(directory, env, ready="/en/subscribe") as server:
+    with Server(directory, env, ready="/fixture") as server:
+        if args.wallet_only:
+            account_wallet(server.origin)
+            print("PASS private Account Wallet, funded and empty balances, renewal eligibility, and the top-up entry point.", flush=True)
+            if args.serve: server.serve()
+            return
         for state in ["signed-out", "signed-in", "active", "approved", "blocked", "off"]:
             response = request(server.origin, f"/en/subscribe?state={state}")
             html = visible_html(response.text)
@@ -208,18 +247,15 @@ def main():
         assert 'data-subscription-summary="active"' in account and "Time left" in account and "Renew" in account
         assert re.search(r'<time\b[^>]*datetime="[^"]+"[^>]*>[^<]*\b\d{4}\b[^<]*\d{2}:\d{2} EAT</time>', account, re.I), "The active account must show its full expiry date and time."
         assert 'data-payment-status="approved"' not in account, "The account must not repeat its active subscription summary as an approval card."
-        # Account credit: pay for a plan from credit, add credit (a top-up report), and the account's balance, auto-renewal and history.
+        # Account credit: pay for a plan, top up, and manage the balance and renewal in Wallet.
         credit = visible_html(request(server.origin, "/en/subscribe?state=credit").text)
         package_step_rendering(credit, "credit")
         assert "Credit: UGX 12,000" not in credit and "Pay UGX 1,000 from credit" not in credit, \
             "The initial credit-member screen remains focused on package selection."
         add_credit_rendering(server.origin)
-        account_credit = visible_html(request(server.origin, "/en/account?state=credit&section=payments").text)
-        for label in ["data-account-credit", "Your credit is", "UGX 12,000", "Auto-renew from credit is off", "Turn on", "Top-up · PCRED", "Add credit"]:
-            assert label in account_credit, label
+        account_wallet(server.origin)
         account_reports(server.origin)
         assert "Add credit instead" not in visible_html(request(server.origin, "/en/subscribe?state=signed-out").text), "Signed-out visitors see sign-in only."
-        assert "data-account-credit" not in account, "An account without credit shows no credit section."
         for agent in ["Android Chrome", "iPhone Safari", "Android; wv) Chrome", "Android FBAN", "Android Instagram"]:
             html = visible_html(request(server.origin, "/en/subscribe?state=signed-in", headers={"User-Agent": agent}).text)
             package_step_rendering(html, agent)
@@ -235,7 +271,7 @@ def main():
         assert canonical_inputs and all('type="hidden"' in field for field in canonical_inputs)
         named_phone = [field for field in canonical_inputs if 'name="phone"' in field]
         assert len(named_phone) == 1, "The native form must submit its canonical phone field exactly once."
-        print("PASS server-rendered payment states, package-only wizard entry, shared sign-in without payment fields, compact pending/rejected/reversed status, contact fallbacks, unchanged credit/top-up paths, 5 user agents, package order and private headers. Later wizard stages require browser acceptance checks.", flush=True)
+        print("PASS server-rendered payment states, package-only wizard entry, shared sign-in without payment fields, compact pending/rejected/reversed status, contact fallbacks, private wallet and top-up paths, 5 user agents, package order and private headers. Later wizard stages require browser acceptance checks.", flush=True)
         if args.serve: server.serve()
 
 

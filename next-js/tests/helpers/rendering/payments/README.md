@@ -21,6 +21,18 @@ The server-rendering script verifies the first screen, private headers, package 
 - Final submission reaches pending status; `TESTFAIL` exercises a duplicate refusal while keeping the draft available for retry.
 - Credit purchase and the Add credit link work from the payment-method screen. They stay out of the package screen. `/en/subscribe?state=credit&add=credit` retains the existing three-stage top-up form and its confirmation dialog.
 
+## Account Wallet
+
+Run `python scripts/verify-payments-rendering.py --wallet-only --serve` for
+Wallet rendering and a browser fixture. Pass `--fixture .tmp/payments-<id>`
+to reuse a build from the same sources.
+
+Choose `credit` or `wallet-empty` on `/fixture`, start the scenario, and visit
+`/en/account?section=wallet`. The fixture session preserves the scenario when
+following **Top up** to Subscribe and when refreshing the wallet. The funded
+scenario supports selecting a renewal plan, turning renewal on and off, and
+reading a synthetic deposit. The zero-balance scenario still offers top-up.
+
 ## Payment status and corrections
 
 Reversed-payment previews:

@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { accountSection, accountSectionHref, accountSections } from "../src/domain/account-navigation.ts";
+import { accountSection, accountSectionHref, accountSections, walletTopUpHref } from "../src/domain/account-navigation.ts";
 
 test("account sections validate deep links and default unknown or repeated input to overview", () => {
   for (const section of accountSections) assert.equal(accountSection(section), section);
   for (const value of [undefined, null, [], ["password", "phone"], "constructor", "__proto__", "filters", "https://other.test", "PASSWORD"])
     assert.equal(accountSection(value), "overview");
+});
+
+test("the Wallet opens the top-up checkout and keeps only safe return destinations", () => {
+  assert.equal(walletTopUpHref("en"), "/en/subscribe?add=credit#plans");
+  assert.equal(walletTopUpHref("en", "/en/slips"), "/en/subscribe?add=credit&return=%2Fen%2Fslips#plans");
+  assert.equal(walletTopUpHref("bad-locale", "https://example.test"), "/en/subscribe?add=credit#plans");
 });
 
 test("section URLs retain only validated feed return destinations", () => {

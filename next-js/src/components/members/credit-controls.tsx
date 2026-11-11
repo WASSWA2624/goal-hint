@@ -2,7 +2,7 @@
 
 import { FloatingField } from "@/components/ui/floating-field";
 
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
@@ -10,10 +10,12 @@ import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { formatShortDay } from "@/domain/subscription-expiry";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
-import { formatCredit, type CreditView } from "@/domain/wallet";
+import type { CreditView } from "@/domain/wallet";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
-import { AccountAction, AccountActionLink, AccountBlock, AccountBlockActions, AccountBlockText, AccountFine } from "./account-overview";
+import { AccountAction, AccountBlock, AccountBlockActions, AccountBlockText, AccountFine } from "./account-overview";
+import { accountRequest } from "./account-request";
+import { AccountError } from "./account-styles";
 import { refreshMemberSession } from "./member-session";
 import { richText } from "./rich-text";
 import Link from "next/link";
@@ -109,66 +111,79 @@ function TermsAssent({ locale, checked, onChange, disabled = false }: { locale: 
     <span>{m.text("subscribe.assent")}{" "}<Link href="/en/terms">{m.text("account.terms")}</Link>.</span></Assent>;
 }
 
-/**
- * The account page's auto-renewal and credit, as two sentences with their actions. Turning auto-renewal on needs open sales,
- * a plan and the current terms; turning it off always works. active says the account has access now.
- */
-export function CreditSection({ locale, credit, plans, salesOpen, acceptedTerms, active }: {
+/** A member chooses a plan and consents before wallet funds can cover a renewal. */
+export function WalletAutoRenewal({ locale, credit, plans, salesOpen, acceptedTerms, active }: {
   locale: string; credit: CreditView; plans: readonly SubscriptionPlanView[]; salesOpen: boolean; acceptedTerms: boolean; active: boolean;
 }) {
-  const m = createMessages(locale), router = useRouter();
-  const [planId, setPlanId] = useState(() => plans.find((plan) => plan.id === credit.autoRenewPlanId)?.id ?? plans[0]?.id ?? "");
-  const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [accepted, setAccepted] = useState(false), [choosing, setChoosing] = useState(false);
+  const m = createMessages(locale), router = useRouter(), inFlight = useRef(false);
+  const [planId, setPlanId] = useState(credit.autoRenewPlanId ?? "");
+  const [saving, setSaving] = useState(false), [refreshing, startRefresh] = useTransition();
+  const [feedback, setFeedback] = useState<{ message: string; failed: boolean } | null>(null);
+  const [accepted, setAccepted] = useState(false), [choosing, setChoosing] = useState(false);
+  const busy = saving || refreshing;
   const on = credit.autoRenew, renewing = plans.find((plan) => plan.id === credit.autoRenewPlanId), ready = acceptedTerms || accepted;
-  // A plan is picked to turn auto-renewal on, to replace a withdrawn plan, or after Change plan.
-  const picking = salesOpen && plans.length > 0 && (!on || !renewing || choosing);
-  const planLabel = (plan: SubscriptionPlanView) => m.text("account.planPrice", { days: m.plural("paywall.days", plan.durationDays), price: m.number(plan.priceUgx) });
+  const hasCredit = credit.availableBalanceUgx > 0;
+  const selectedPlanId = plans.find((plan) => plan.id === planId)?.id ?? renewing?.id ?? plans[0]?.id ?? "";
+  const picking = salesOpen && !!selectedPlanId && (on || hasCredit) && (!on || !renewing || choosing);
+  const canSave = picking && ready && (!on || selectedPlanId !== credit.autoRenewPlanId);
+  const planLabel = (plan: SubscriptionPlanView) => m.text("credit.renewalPlanPrice", { plan: plan.name,
+    days: m.plural("paywall.days", plan.durationDays), price: m.number(plan.priceUgx) });
   async function save(next: boolean) {
-    if (busy) return;
-    setBusy(true); setMessage("");
+    if (busy || inFlight.current || (next ? !canSave : !on)) return;
+    inFlight.current = true;
+    setSaving(true); setFeedback(null);
     try {
-      const { ok, answer } = await postCredit(next ? { action: "auto-renew", on: next, planId, accepted: ready } : { action: "auto-renew", on: next });
-      setMessage(ok ? m.text("credit.saved") : typeof answer.message === "string" ? answer.message : m.text("account.unavailable"));
-      if (ok) { setChoosing(false); void refreshMemberSession(); router.refresh(); }
-    } catch { setMessage(m.text("account.unavailable")); }
-    finally { setBusy(false); }
+      const answer = await accountRequest<{ status: string }>("credit", next
+        ? { action: "auto-renew", on: true, planId: selectedPlanId, accepted: ready }
+        : { action: "auto-renew", on: false });
+      if (answer.status !== "saved") throw new Error(m.text("account.unavailable"));
+      setChoosing(false);
+      setFeedback({ message: m.text("credit.saved"), failed: false });
+      await refreshMemberSession();
+      startRefresh(() => router.refresh());
+    } catch (failure) {
+      setFeedback({ message: failure instanceof Error ? failure.message : m.text("account.unavailable"), failed: true });
+      startRefresh(() => router.refresh());
+    } finally {
+      inFlight.current = false;
+      setSaving(false);
+    }
   }
-  // Renewal runs only while the credit covers the plan; after access ends it waits for the member's next visit.
-  const sentence = !on ? m.text("account.autoRenewOff") : !salesOpen ? m.text("account.autoRenewPaused") : !renewing ? m.text("account.autoRenewPlanGone")
-    : richText(m.text(credit.balanceUgx < renewing.priceUgx ? "account.autoRenewShort" : active ? "account.autoRenewOn" : "account.autoRenewAfterEnd"),
+  const sentence = !on ? m.text(!salesOpen ? "account.autoRenewClosed" : !hasCredit ? "account.autoRenewNeedsCredit"
+    : !selectedPlanId ? "account.autoRenewNoPlans" : "account.autoRenewOff")
+    : !salesOpen ? m.text("account.autoRenewPaused") : !renewing ? m.text("account.autoRenewPlanGone")
+    : richText(m.text(credit.availableBalanceUgx < renewing.priceUgx ? "account.autoRenewShort" : active ? "account.autoRenewOn" : "account.autoRenewAfterEnd"),
       { plan: <strong>{planLabel(renewing)}</strong> });
-  return <>
-    {(salesOpen || on) && <AccountBlock data-credit-renewal aria-busy={busy}>
-      <AccountBlockText>
-        <p>{sentence}</p>
-        {picking && <PlanPicker label={m.text("credit.autoRenewPlan")}><select value={planId} disabled={busy} onChange={(event) => setPlanId(event.currentTarget.value)} data-credit-plan>
-          {plans.map((plan) => <option key={plan.id} value={plan.id}>{planLabel(plan)}</option>)}</select></PlanPicker>}
-        {picking && !acceptedTerms && <TermsAssent locale={locale} checked={accepted} disabled={busy} onChange={setAccepted} />}
-        {message && <AccountFine role="status">{message}</AccountFine>}
-      </AccountBlockText>
-      <AccountBlockActions>
-        {picking && <AccountAction disabled={busy || !ready || on && planId === credit.autoRenewPlanId} onClick={() => void save(true)} data-credit-auto-renew="on">
-          {m.text(on ? "credit.usePlan" : "credit.turnOn")}</AccountAction>}
-        {on && <AccountAction disabled={busy} onClick={() => void save(false)} data-credit-auto-renew="off">{m.text("credit.turnOff")}</AccountAction>}
-        {on && renewing && salesOpen && plans.length > 1 && (choosing
-          ? <AccountAction disabled={busy} onClick={() => { setChoosing(false); setPlanId(renewing.id); }}>{m.text("credit.cancel")}</AccountAction>
-          : <AccountAction onClick={() => setChoosing(true)}>{m.text("account.changePlan")}</AccountAction>)}
-      </AccountBlockActions>
-    </AccountBlock>}
-    <AccountBlock data-account-credit data-credit-section>
-      <AccountBlockText>
-        <p>{richText(m.text("account.creditIs"), { amount: <strong>{formatCredit(credit.balanceUgx)}</strong> })}{credit.balanceUgx < 0 && ` ${m.text("credit.negative")}`}</p>
-        {credit.history.length ? <History aria-label={m.text("credit.history")} data-credit-history>{credit.history.map((entry) => {
-          const at = new Date(entry.createdAt);
-          return <li key={entry.id}>
-            <time dateTime={entry.createdAt} title={formatPeriodEnd(at)}>{formatShortDay(at)}</time>
-            <span>{[m.text(`credit.kind.${entry.kind}`), entry.payment, entry.note].filter(Boolean).join(" · ")}</span>
-            <strong data-credit-change={entry.amountUgx < 0 ? "out" : "in"}>{entry.amountUgx < 0 ? "−" : "+"}{m.number(Math.abs(entry.amountUgx))}</strong>
-            <span>{m.text("credit.balanceAfter", { amount: m.number(entry.balanceAfter) })}</span>
-          </li>;
-        })}</History> : <AccountFine>{m.text("credit.noHistory")}</AccountFine>}
-      </AccountBlockText>
-      {salesOpen && <AccountBlockActions><AccountActionLink href="/en/subscribe?add=credit#plans" prefetch={false} data-credit-add>{m.text("credit.add")}</AccountActionLink></AccountBlockActions>}
-    </AccountBlock>
-  </>;
+  return <AccountBlock data-credit-renewal aria-busy={busy}>
+    <AccountBlockText>
+      <p>{sentence}</p>
+      {picking && <PlanPicker label={m.text("credit.autoRenewPlan")}><select value={selectedPlanId} disabled={busy} onChange={(event) => setPlanId(event.currentTarget.value)} data-credit-plan>
+        {plans.map((plan) => <option key={plan.id} value={plan.id}>{planLabel(plan)}</option>)}</select></PlanPicker>}
+      {picking && !acceptedTerms && <TermsAssent locale={locale} checked={accepted} disabled={busy} onChange={setAccepted} />}
+      {feedback && (feedback.failed ? <AccountError role="alert">{feedback.message}</AccountError>
+        : <AccountFine role="status">{feedback.message}</AccountFine>)}
+    </AccountBlockText>
+    <AccountBlockActions>
+      {picking && <AccountAction type="button" disabled={busy || !canSave} onClick={() => void save(true)} data-credit-auto-renew="on">
+        {m.text(on ? "credit.usePlan" : "credit.turnOn")}</AccountAction>}
+      {on && <AccountAction type="button" disabled={busy} onClick={() => void save(false)} data-credit-auto-renew="off">{m.text("credit.turnOff")}</AccountAction>}
+      {on && renewing && salesOpen && plans.length > 1 && (choosing
+        ? <AccountAction type="button" disabled={busy} onClick={() => { setChoosing(false); setPlanId(renewing.id); }}>{m.text("credit.cancel")}</AccountAction>
+        : <AccountAction type="button" disabled={busy} onClick={() => setChoosing(true)}>{m.text("account.changePlan")}</AccountAction>)}
+    </AccountBlockActions>
+  </AccountBlock>;
+}
+
+export function WalletHistory({ locale, credit }: { locale: string; credit: CreditView }) {
+  const m = createMessages(locale);
+  if (!credit.history.length) return <AccountFine>{m.text("credit.noHistory")}</AccountFine>;
+  return <History aria-label={m.text("credit.history")} data-credit-history>{credit.history.map((entry) => {
+    const at = new Date(entry.createdAt);
+    return <li key={entry.id}>
+      <time dateTime={entry.createdAt} title={formatPeriodEnd(at)}>{formatShortDay(at)}</time>
+      <span>{[m.text(`credit.kind.${entry.kind}`), entry.payment, entry.note].filter(Boolean).join(" · ")}</span>
+      <strong data-credit-change={entry.amountUgx < 0 ? "out" : "in"}>{entry.amountUgx < 0 ? "−" : "+"}{m.number(Math.abs(entry.amountUgx))}</strong>
+      <span>{m.text("credit.balanceAfter", { amount: m.number(entry.balanceAfter) })}</span>
+    </li>;
+  })}</History>;
 }

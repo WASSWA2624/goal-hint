@@ -91,6 +91,23 @@ test("account credit on restricted real MySQL", { timeout: 240000 }, async (t) =
     assert.deepEqual((await ledger(who.accountId)).map(e => e.entryNumber), [1, 2]);
   });
 
+  await t.test("new auto-renewal needs available wallet credit but opting in does not spend it", async () => {
+    const who = await member();
+    const optIn = () => codes.setAutoRenew(who, { on: true, planId: weekly, accepted: true });
+    assert.equal((await optIn()).status, "insufficient");
+    assert.equal((await payments.view(who)).credit.availableBalanceUgx, 0);
+    await topUp(who, 1000);
+    assert.equal((await optIn()).status, "saved", "positive credit is sufficient for enrollment");
+    assert.equal(await balance(who.accountId), 1000, "the renewal price is charged only when due");
+    assert.equal((await payments.view(who)).credit.availableBalanceUgx, 1000);
+    assert.equal((await payments.view({ ...who, tokenHash: randomUUID() })).credit, null, "wallet data requires a current session");
+    await buy(who, daily);
+    assert.equal(await balance(who.accountId), 0);
+    assert.equal((await codes.setAutoRenew(who, { on: true, planId: daily })).status, "saved", "an existing preference can be updated");
+    assert.equal((await codes.setAutoRenew(who, { on: false })).status, "saved", "turning off never requires credit");
+    assert.equal((await optIn()).status, "insufficient", "turning it back on requires credit again");
+  });
+
   await t.test("auto-renewal renews once per period end, from credit, and only within the lead", async () => {
     const who = await member(); await topUp(who, 3000);
     assert.equal((await buy(who, daily)).status, "created");
@@ -212,7 +229,10 @@ test("account credit on restricted real MySQL", { timeout: 240000 }, async (t) =
     assert.equal(view.status.purpose, "plan");
     assert.equal(view.otherStatus?.purpose, "topup"); assert.equal(view.otherStatus?.status, "pending"); assert.equal(view.otherStatus?.priceUgx, 4000);
     assert.equal((await codes.approvePayment(pendingTopUp.id, { network: "mtn", transactionRef: pendingTopUp.tid, amountReceivedUgx: 4000 }, "owner")).status, "credited");
-    assert.equal((await payments.view(who, { trialDays: 2 })).otherStatus, null, "an approved top-up needs no card: its credit shows");
+    view = await payments.view(who, { trialDays: 2 });
+    assert.equal(view.otherStatus, null, "an approved top-up needs no card on the subscription screen");
+    assert.equal(view.topUpStatus?.reference, `P${pendingTopUp.reference}`);
+    assert.equal(view.topUpStatus?.status, "approved", "the Wallet retains the latest top-up status beside its balance");
     // The other way round: a newer top-up must not hide the plan report still waiting behind it.
     clock += 60_000;
     await report(who, { purpose: "topup", topUpUgx: 2000 });

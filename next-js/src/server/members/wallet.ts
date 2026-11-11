@@ -25,12 +25,16 @@ export async function lockedCredit(tx: Prisma.TransactionClient, accountId: stri
   return row ? Number(row.creditUgx) : null;
 }
 
+/** Credit held for pending checkout requests. */
+export async function reservedWalletCredit(tx: Pick<Prisma.TransactionClient, "paymentSubmission">, accountId: string): Promise<number> {
+  const reserved = await tx.paymentSubmission.aggregate({ where: { accountId, reservationActive: true }, _sum: { walletUgx: true } });
+  return reserved._sum.walletUgx ?? 0;
+}
+
 /** Spendable credit under the account lock; ledger balances still record the full amount held. */
 export async function spendableCredit(tx: Prisma.TransactionClient, accountId: string): Promise<number | null> {
   const balance = await lockedCredit(tx, accountId);
-  if (balance === null) return null;
-  const reserved = await tx.paymentSubmission.aggregate({ where: { accountId, reservationActive: true }, _sum: { walletUgx: true } });
-  return balance - (reserved._sum.walletUgx ?? 0);
+  return balance === null ? null : balance - await reservedWalletCredit(tx, accountId);
 }
 
 /**
@@ -45,8 +49,8 @@ export async function appendWalletEntry(tx: Prisma.TransactionClient, accountId:
   if (balance === null) throw new Error("The account no longer exists.");
   const balanceAfter = balance + entry.amountUgx, entryNumber = await lastEntryNumber(tx, accountId) + 1, id = randomUUID();
   if (entry.amountUgx < 0 && ["purchase", "renewal"].includes(entry.kind)) {
-    const reserved = await tx.paymentSubmission.aggregate({ where: { accountId, reservationActive: true }, _sum: { walletUgx: true } });
-    if (balanceAfter < (reserved._sum.walletUgx ?? 0)) throw new InsufficientCredit(Math.max(0, balance - (reserved._sum.walletUgx ?? 0)));
+    const reserved = await reservedWalletCredit(tx, accountId);
+    if (balanceAfter < reserved) throw new InsufficientCredit(Math.max(0, balance - reserved));
   }
   if (entry.amountUgx < 0 && balanceAfter < 0 && !entry.allowNegative) throw new InsufficientCredit(balance);
   await tx.walletEntry.create({ data: { id, accountId, entryNumber, kind: entry.kind, amountUgx: entry.amountUgx, balanceAfter,

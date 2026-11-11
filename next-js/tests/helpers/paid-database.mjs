@@ -40,6 +40,7 @@ export async function paidDatabase({ seedPlans = false, beforeCheckout, database
     await root.query(await readFile(new URL("../../prisma/migrations/20261103170000_community_payment_alerts/migration.sql", import.meta.url), "utf8"));
     await root.query(await readFile(new URL("../../prisma/migrations/20261104140000_manual_providers_and_opt_in_trials/migration.sql", import.meta.url), "utf8"));
     await root.query(await readFile(new URL("../../prisma/migrations/20261105110000_public_community_channels/migration.sql", import.meta.url), "utf8"));
+    await root.query(await readFile(new URL("../../prisma/migrations/20261105120000_contact_page_settings/migration.sql", import.meta.url), "utf8"));
     const password = randomBytes(24).toString("hex");
     await root.query(`CREATE USER 'paid_application'@'127.0.0.1' IDENTIFIED BY '${password}'`);
     const deletable = new Set(["MemberAccount", "MemberSession", "MemberVerification", "SubscriptionPlan", "PaymentSubmission", "PaymentScreenshot", "AccessCode", "OwnerAuditEvent", "RateLimitBucket", "PaymentNotificationOutbox", "SlipConfiguration", "MemberNotification"]);

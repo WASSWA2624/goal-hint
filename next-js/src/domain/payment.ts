@@ -51,7 +51,7 @@ export type PaymentStatus = Readonly<{ reference: string; status: string; reject
  * latest report of the other purpose (a plan report behind a newer top-up, or the reverse) while it still waits, or once it
  * was refused or reversed after the newer report was sent.
  */
-export type PaymentView = Readonly<{ acceptedTerms: boolean; status: PaymentStatus | null; credit?: CreditView | null;
+export type PaymentView = Readonly<{ acceptedTerms: boolean; status: PaymentStatus | null; credit?: CreditView | null; topUpStatus?: PaymentStatus | null;
   checkout?: CheckoutView | null;
   otherStatus?: PaymentStatus | null }>;
 

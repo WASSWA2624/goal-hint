@@ -26,6 +26,8 @@ import { normalizeTransactionId } from "@/domain/payment";
 import { localUgandaPhone } from "@/domain/phone";
 import { shareUnchanged } from "@/domain/structural-sharing";
 import { formatNationalPhone, splitPhoneValue } from "@/domain/phone-countries";
+import { validTopUp, walletRules } from "@/domain/wallet";
+import { createMessages } from "@/i18n/messages";
 import { refreshMemberSession } from "./member-session";
 import { PaymentWizard, WizardActions, WizardNotice, WizardReview } from "./payment-wizard";
 import { PackageSelection } from "./package-selection";
@@ -57,7 +59,10 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   account: { id: string; phone: string; draftScope?: string }; initialView: CheckoutView; topUp?: boolean;
   noticeBeforeCheckout?: ReactNode;
 }) {
-  const router = useRouter(), [view, setView] = useState(initialView ?? emptyView);
+  const router = useRouter(), m = createMessages(locale), [view, setView] = useState(initialView ?? emptyView);
+  // A pending request in one journey must not hide the other journey's form.
+  const journeyRequests = view.requests.filter(request => (request.purpose === "topup") === topUp);
+  const topUpLimits = { min: m.number(walletRules.topUpMinUgx), max: m.number(walletRules.topUpMaxUgx) };
   const initial = (): CheckoutDraft => ({ requestKey: "", step: 0, purpose: topUp ? "topup" : "plan", planId: plans[0]?.id ?? "",
     method: "", usePackage: true, useWallet: false, useReferral: false, walletUgx: "0", referralDays: "0", topUpUgx: "", transactionId: "", amountUgx: "", payerPhone: account.phone,
     paidAt: localDate(), text: "", extracted: {}, originalText: "", editedEvidence: [], accepted: false, attachingId: null });
@@ -93,11 +98,12 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     return shareUnchanged(value, withCheckoutProvider(capCheckoutFunding(separated, balances, plans), settings, balances.lastMethod));
   }, [plans, settings, topUp, view]);
   function validStep(target: CheckoutDraft["step"], value: CheckoutDraft, screenshot: Blob | null) {
-    const attaching = !!value.attachingId && view.requests.some(r => r.id === value.attachingId &&
+    const attaching = !!value.attachingId && journeyRequests.some(r => r.id === value.attachingId &&
       (checkoutOpenStatuses as readonly string[]).includes(r.status));
     if (value.attachingId && !attaching) return 0;
     return restoredCheckoutStep(target, {
-      validPackage: attaching || value.purpose !== "plan" || plans.some(plan => plan.id === value.planId),
+      validPackage: attaching || (topUp ? validTopUp(Number(value.topUpUgx))
+        : value.purpose !== "plan" || plans.some(plan => plan.id === value.planId)),
       methodAvailable: attaching || !!value.method && networkAvailable(value.method),
       external: attaching || value.method === "mtn" || value.method === "airtel",
       evidencePresent: !!screenshot || !!value.text.trim(),
@@ -215,6 +221,9 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   async function next() {
     setError("");
     if (draft.step === 0) {
+      if (topUp && !validTopUp(Number(draft.topUpUgx))) {
+        setError(m.text("credit.amountInvalid", topUpLimits)); return;
+      }
       if (!topUp && !plans.some(plan => plan.id === draft.planId)) {
         setError("Choose an available package to continue."); return;
       }
@@ -239,7 +248,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   }
-  const attaching = view.requests.find(r => r.id === draft.attachingId);
+  const attaching = journeyRequests.find(r => r.id === draft.attachingId);
   const external = !!attaching || ["mtn", "airtel"].includes(draft.method);
   const receiptProvider = (attaching?.method ?? draft.method) === "airtel" ? "airtel" : "mtn";
   const screenshotReady = !!image && draft.screenshot?.version === 1;
@@ -392,11 +401,13 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     update({ text: "", originalText: "", extracted: { ...draft.extracted, messageSource: "message" } }); setReading("");
     requestAnimationFrame(() => messageInput.current?.focus());
   }
-  const active = view.requests.filter(r => (checkoutOpenStatuses as readonly string[]).includes(r.status));
-  const visibleRequests = view.requests.slice(0, 5);
-  const showForm = loaded && (showNew || active.length === 0 || !!attaching);
+  const active = journeyRequests.some(r => (checkoutOpenStatuses as readonly string[]).includes(r.status));
+  const visibleRequests = journeyRequests.slice(0, 5);
+  const showForm = loaded && (showNew || !active || !!attaching);
   const packageStep = !topUp && draft.step === 0;
   const payStep = !topUp && draft.step === 1;
+  const wizardTitle = topUp && draft.step < 2 ? m.text("credit.topUp")
+    : ["Choose your package", draft.purpose === "referral" ? "Redeem earned days" : "Pay for your package", "Payment Details", "Review payment"][draft.step]!;
   const summary = effectiveQuote && <FundingBreakdown quote={effectiveQuote} {...(external && draft.amountUgx !== "" ? { reportedUgx: Number(draft.amountUgx) + (attaching?.verifiedUgx ?? 0) } : {})} />;
   function startReceipt(request: CheckoutRequest) {
     setQuote(null); setShowNew(true); setImage(null);
@@ -416,7 +427,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       {request.status === "approved" ? <p>{request.purpose === "topup" ? "Wallet credited." : `Access until ${request.endsAt ? formatPeriodEnd(new Date(request.endsAt)) : "—"} (EAT).`}</p>
         : <><p>{request.planName} · {formatUgx(request.priceUgx)}</p>
           {request.verifiedUgx > 0 && <p>Verified: {formatUgx(request.verifiedUgx)} · Remaining: {formatUgx(request.remainingUgx)}</p>}
-          {request.status === "pending" && <p>Your subscription activates after the admin verifies enough incoming funds.</p>}</>}
+          {request.status === "pending" && <p>{topUp ? m.text("credit.pendingLead") : "Your subscription activates after the admin verifies enough incoming funds."}</p>}</>}
       {request.status !== "approved" && request.reportedUgx > 0 && request.verifiedUgx === 0 && <p>Amount paid: {formatUgx(request.reportedUgx)}.
         {request.reportedUgx < request.amountToSend ? ` If confirmed, ${formatUgx(request.amountToSend - request.reportedUgx)} remains.`
           : request.reportedUgx > request.amountToSend ? ` If confirmed, ${formatUgx(request.reportedUgx - request.amountToSend)} extra will be added to your wallet.` : " Awaiting verification."}</p>}
@@ -426,7 +437,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
         {!receipt.withdrawn && !receipt.verified && (checkoutOpenStatuses as readonly string[]).includes(request.status) && <Button variant="quiet" disabled={busy} onClick={async () => {
           setBusy(true); try { await send({ action: "withdraw", id: request.id, claimId: receipt.id }); await refresh(); }
           catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-        }}>Withdraw incorrect evidence</Button>}</li>)}</ul>}
+        }}>{topUp ? m.text("wallet.removeIncorrectEvidence") : "Withdraw incorrect evidence"}</Button>}</li>)}</ul>}
       <CheckoutActions>
         {([...(checkoutOpenStatuses as readonly string[]), "rejected", "cancelled", "superseded"]).includes(request.status) && <>
           {request.reservationUntil && request.status !== "disputed" && <Button variant="secondary" disabled={busy} onClick={() => startReceipt(request)}>Add payment / correction</Button>}
@@ -438,7 +449,9 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
           }}>{["rejected", "cancelled", "superseded"].includes(request.status) ? "Resubmit" : "Confirm"} {formatUgx(Math.min(request.walletUgx, view.availableWalletUgx))} wallet + {Math.min(request.referralDays, view.availableReferralDays)} earned days; cash {formatUgx(request.priceUgx - Math.min(request.walletUgx, view.availableWalletUgx))}</Button>}
           {(checkoutOpenStatuses as readonly string[]).includes(request.status) && <Button variant="quiet" disabled={busy} onClick={async () => { setBusy(true); try { await send({ action: "cancel", id: request.id }); await refresh(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}>Cancel request</Button>}
         </>}
-        {["rejected", "cancelled", "approved"].includes(request.status) && <Button variant="secondary" onClick={() => { setShowNew(true); resetCheckout(); }}>Start another purchase</Button>}
+        {["rejected", "cancelled", "approved"].includes(request.status) && <Button variant="secondary" onClick={() => { setShowNew(true); resetCheckout(); }}>
+          {topUp ? m.text("wallet.startAnotherTopUp") : "Start another purchase"}
+        </Button>}
       </CheckoutActions>
       <CheckoutSupport settings={settings} reference={request.reference} />
     </CheckoutPanel>)}
@@ -451,11 +464,11 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       <p>{error || notice?.message}</p>
     </CheckoutDialog>}
     {!loaded && <p role="status">Restoring checkout…</p>}
-    {showForm && <PaymentWizard locale={locale} step={draft.step} totalSteps={4} inlineLabels labels={["Package", "Pay", "Payment Details", "Review"]}
-      variant={packageStep ? "package" : payStep ? "pay" : draft.step === 2 ? "details" : "default"} hideTitle={!packageStep && !(payStep && draft.purpose === "referral")}
-      title={["Choose your package", draft.purpose === "referral" ? "Redeem earned days" : "Pay for your package", "Payment Details", "Review payment"][draft.step]!} headingRef={heading}>
+    {showForm && <PaymentWizard locale={locale} step={draft.step} totalSteps={4} inlineLabels labels={[topUp ? m.text("wallet.topUpStep") : "Package", "Pay", "Payment Details", "Review"]}
+      variant={packageStep ? "package" : payStep ? "pay" : draft.step === 2 ? "details" : "default"}
+      hideTitle={draft.step !== 0 && !(payStep && draft.purpose === "referral")} title={wizardTitle} headingRef={heading}>
       {draft.step === 0 && <>
-        {topUp ? <><AmountInput label="Wallet top-up (UGX)" value={draft.topUpUgx} onValueChange={topUpUgx => update({ topUpUgx })} />
+        {topUp ? <><AmountInput label={m.text("credit.amount")} hint={m.text("credit.amountHint", topUpLimits)} value={draft.topUpUgx} onValueChange={topUpUgx => update({ topUpUgx })} />
           <WizardActions><Button disabled={busy} onClick={next}>Next</Button></WizardActions></>
           : <PackageSelection plans={plans} selectedPlanId={draft.planId} disabled={busy} onSelect={planId => update({ planId })} onContinue={() => void next()} />}
       </>}

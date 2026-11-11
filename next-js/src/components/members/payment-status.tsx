@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDownIcon, ClockIcon, InfoIcon, ResetIcon } from "@/components/ui/icons";
 import type { PaymentStatus } from "@/domain/payment";
+import { walletTopUpHref } from "@/domain/account-navigation";
 import { formatPhone } from "@/domain/phone";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import type { SubscriptionSettings } from "@/domain/subscription-settings";
@@ -86,7 +87,7 @@ export function PaymentStatusCard({ locale, status, settings, phone, heading = "
   if (!status) return null;
   if (["remaining", "disputed", "correction", "reconfirm", "cancelled"].includes(status.status)) return <PaymentReviewBox data-payment-status={status.status}>
     <StatusTitle as={heading}>{checkoutLabels[status.status]}</StatusTitle><p>Request {status.reference}{status.rejectText ? ` · ${status.rejectText}` : ""}</p>
-    <a href={`/${locale}/subscribe`}>View payment status and corrections</a>
+    <a href={status.purpose === "topup" ? walletTopUpHref(locale) : `/${locale}/subscribe`}>View payment status and corrections</a>
   </PaymentReviewBox>;
   const pending = status.status === "pending" || status.status === "superseded", rejected = status.status === "rejected", reversed = status.status === "reversed";
   if (!pending && !rejected && !reversed) return null;
@@ -124,7 +125,8 @@ export function PaymentNotice({ locale, status, settings, phone }: { locale: str
   const m = createMessages(locale);
   if (!status) return null;
   if (["remaining", "disputed", "correction", "reconfirm", "cancelled"].includes(status.status)) return <AccountBlock $attention role="status" data-payment-status={status.status}>
-    <AccountBlockText><p>{checkoutLabels[status.status]} · {status.reference}</p></AccountBlockText><a href={`/${locale}/subscribe`}>View request</a>
+    <AccountBlockText><p>{checkoutLabels[status.status]} · {status.reference}</p></AccountBlockText>
+    <a href={status.purpose === "topup" ? walletTopUpHref(locale) : `/${locale}/subscribe`}>View request</a>
   </AccountBlock>;
   const pending = status.status === "pending" || status.status === "superseded", rejected = status.status === "rejected", reversed = status.status === "reversed";
   if (!pending && !rejected && !reversed) return null;
