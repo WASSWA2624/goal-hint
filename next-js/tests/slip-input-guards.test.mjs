@@ -2,14 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { defaultSlipCriteria, serializeSlipCriteria, slipBuilderRules } from '../src/domain/slip-builder.ts';
 import {
-  formatSlipMatchCount, guardSlipDateTime, guardSlipNumber, normalizeSlipMatchCount,
+  commitSlipNumber, guardSlipDateTime, guardSlipNumber, normalizeSlipMatchCount,
   slipDateBounds, slipNumberRangeIssue, slipNumericRule, stepSlipNumber,
 } from '../src/domain/slip-input-guards.ts';
 
 test('numeric rules retain approved build caps, exact odds steps, and unrestricted match counts', () => {
   assert.equal(slipNumericRule('slips').maximum, String(slipBuilderRules.maximumSlips));
   for (const field of ['totalMin', 'totalMax', 'oddsMin', 'oddsMax']) {
-    assert.equal(slipNumericRule(field).minimum, '0.01');
+    assert.equal(slipNumericRule(field).minimum, '1.01');
     assert.equal(slipNumericRule(field).precision, 2);
     assert.equal(slipNumericRule(field).step, '0.01');
   }
@@ -18,7 +18,7 @@ test('numeric rules retain approved build caps, exact odds steps, and unrestrict
   assert.equal(slipNumericRule('totalProbMax').precision, 3);
 });
 
-test('typing guards reject impossible pasted values and precision or ceiling violations', () => {
+test('numeric guards reject malformed values and precision or ceiling violations', () => {
   for (const field of ['slips', 'teamsMin', 'teamsMax', 'totalMin', 'oddsMax', 'probMin', 'totalProbMax']) {
     for (const raw of ['-1', '+1', '1e2', 'Infinity', 'NaN', '1 2', '1\n', '１２', '<script>', '1..2']) {
       assert.equal(guardSlipNumber(field, raw).accepted, false, `${field} rejects ${JSON.stringify(raw)}`);
@@ -51,7 +51,8 @@ test('intermediate decimal editing stays usable while commit validation enforces
   assert.equal(guardSlipNumber('slips', '', true).issue, 'minimum');
   assert.equal(guardSlipNumber('teamsMin', '0', true).issue, 'minimum');
   assert.equal(guardSlipNumber('totalMin', '0.00', true).issue, 'minimum');
-  assert.deepEqual(guardSlipNumber('totalMin', '1.', true), { accepted: true, value: '1.00', complete: true });
+  assert.deepEqual(guardSlipNumber('totalMin', '1.', true), { accepted: false, issue: 'minimum', limit: '1.01' });
+  assert.deepEqual(guardSlipNumber('totalMin', '1.01', true), { accepted: true, value: '1.01', complete: true });
   for (const field of ['teamsMin', 'teamsMax', 'totalMin', 'totalMax', 'oddsMax', 'probMin', 'probMax', 'totalProbMin']) {
     assert.deepEqual(guardSlipNumber(field, '', true), { accepted: true, value: '', complete: true }, `${field} preserves blank bounds`);
   }
@@ -67,35 +68,60 @@ test('total odds commit to two decimal places without rounding exact large value
   }
 });
 
+test('numeric commits validate raw edits and pasted text before using the criteria', () => {
+  assert.deepEqual(commitSlipNumber('totalMin', '0.01'), { accepted: false, issue: 'minimum', limit: '1.01' });
+  assert.deepEqual(commitSlipNumber('totalMin', ' 020.01 '), { accepted: true, value: '20.01', complete: true });
+  assert.deepEqual(commitSlipNumber('totalMax', '10.0'), { accepted: true, value: '10.00', complete: true });
+  assert.deepEqual(commitSlipNumber('totalMax', '10.'), { accepted: true, value: '10.00', complete: true });
+  assert.deepEqual(commitSlipNumber('oddsMin', '1.001'), { accepted: false, issue: 'precision', limit: '2' });
+  assert.deepEqual(commitSlipNumber('probMin', ' . '), { accepted: false, issue: 'number' });
+  assert.deepEqual(commitSlipNumber('probMax', '  '), { accepted: true, value: '', complete: true });
+  assert.deepEqual(commitSlipNumber('slips', '  '), { accepted: false, issue: 'minimum', limit: '1' });
+  assert.deepEqual(commitSlipNumber('teamsMax', ' 9,007,199,254,740,991 '), { accepted: true, value: '9007199254740991', complete: true });
+  assert.deepEqual(commitSlipNumber('teamsMax', '9,007,199,254,740,992'), { accepted: false, issue: 'maximum', limit: '9007199254740991' });
+  assert.deepEqual(commitSlipNumber('teamsMax', '1,00'), { accepted: false, issue: 'whole-number' });
+});
+
+test('probability commits and ranges preserve the precision supported by saved criteria', () => {
+  const tiny = `0.${'0'.repeat(70)}1`;
+  for (const value of ['72.0001', tiny]) {
+    assert.deepEqual(commitSlipNumber('probMin', value), { accepted: true, value, complete: true });
+  }
+  assert.equal(commitSlipNumber('probMax', '100.0001').accepted, false);
+  assert.equal(slipNumberRangeIssue('probMin', { probMin: '72.0001', probMax: '72.001' }), null);
+  assert.equal(slipNumberRangeIssue('totalProbMax', { totalProbMin: '72.001', totalProbMax: '72.0001' }), 'range');
+  assert.equal(slipNumberRangeIssue('probMin', { probMin: tiny, probMax: '0' }), 'range');
+});
+
 test('decimal and whole-number steppers remain exact and cannot cross hard limits', () => {
-  let value = '0.01';
+  let value = '1.01';
   for (let index = 0; index < 1000; index++) {
     const result = stepSlipNumber('totalMin', value, 1);
     assert.equal(result.accepted, true);
     value = result.value;
   }
-  assert.equal(value, '10.01');
-  assert.equal(stepSlipNumber('totalMin', '0.01', -1).issue, 'minimum');
-  assert.equal(stepSlipNumber('totalMin', '0.', 1).value, '0.01');
+  assert.equal(value, '11.01');
+  assert.equal(stepSlipNumber('totalMin', '1.01', -1).issue, 'minimum');
+  assert.equal(stepSlipNumber('totalMin', '0.', 1).issue, 'minimum');
   assert.equal(stepSlipNumber('totalMin', '1.', 1).value, '1.01');
   assert.equal(stepSlipNumber('totalMin', '90071992547409.90', 1).value, '90071992547409.91');
   assert.equal(stepSlipNumber('totalMin', '90071992547409.91', 1).issue, 'maximum');
   assert.equal(stepSlipNumber('slips', '100', 1).issue, 'maximum');
   assert.equal(stepSlipNumber('teamsMin', '999', 1).value, '1000');
+  assert.equal(stepSlipNumber('teamsMin', '1,000', -1).value, '999');
+  assert.equal(stepSlipNumber('teamsMin', '1,00', 1).issue, 'whole-number');
   assert.equal(stepSlipNumber('teamsMin', '1', -1).issue, 'minimum');
   assert.equal(stepSlipNumber('probMax', '99.999', 1).value, '100.000');
   assert.equal(stepSlipNumber('probMax', '100', 1).issue, 'maximum');
-  assert.equal(stepSlipNumber('oddsMax', '', -1).value, '0.01');
+  assert.equal(stepSlipNumber('oddsMax', '', -1).value, '1.01');
   assert.equal(stepSlipNumber('teamsMax', '', 1).value, '1');
 });
 
-test('match count formatting and copied grouped text never lose safe-integer precision', () => {
+test('copied match counts keep safe-integer precision', () => {
   for (const raw of ['', '1', '999', '1000', '99999', '9007199254740991']) {
-    const displayed = formatSlipMatchCount(raw);
-    assert.equal(normalizeSlipMatchCount(displayed), raw);
+    assert.equal(normalizeSlipMatchCount(raw), raw);
   }
-  assert.equal(formatSlipMatchCount('1000'), '1,000');
-  assert.equal(formatSlipMatchCount('9007199254740991'), '9,007,199,254,740,991');
+  assert.equal(normalizeSlipMatchCount('1,000'), '1000');
   assert.equal(normalizeSlipMatchCount('9,007,199,254,740,991'), '9007199254740991');
   for (const raw of [',100', '1,00', '1,,000', '1.000', '1 000', '1,000.00', '-1,000']) {
     assert.equal(normalizeSlipMatchCount(raw), null, raw);
@@ -107,6 +133,7 @@ test('pair ordering feedback uses exact decimal bounds and preserves blank Any c
   assert.equal(slipNumberRangeIssue('totalMax', { totalMin: '90071992547409.90', totalMax: '90071992547409.91' }), null);
   assert.equal(slipNumberRangeIssue('teamsMin', { teamsMin: '9007199254740991', teamsMax: '' }), null);
   assert.equal(slipNumberRangeIssue('teamsMin', { teamsMin: '2', teamsMax: '1' }), 'range');
+  assert.equal(slipNumberRangeIssue('teamsMax', { teamsMin: ' 1,001 ', teamsMax: '1,000' }), 'range');
   assert.equal(slipNumberRangeIssue('probMin', { probMin: '80', probMax: '75' }), 'range');
   assert.equal(slipNumberRangeIssue('probMin', { probMin: '', probMax: '0' }), null);
   assert.equal(slipNumberRangeIssue('totalMin', { totalMin: '.', totalMax: '10' }), null);
@@ -115,10 +142,12 @@ test('pair ordering feedback uses exact decimal bounds and preserves blank Any c
 test('range feedback uses configured defaults when a minimum is cleared and keeps explicit zero', () => {
   const defaults = Object.fromEntries(serializeSlipCriteria(defaultSlipCriteria('2026-10-29')));
   assert.equal(slipNumberRangeIssue('totalMax', { totalMin: '', totalMax: '4' }, defaults), 'range');
+  assert.equal(slipNumberRangeIssue('totalMax', { totalMin: '  ', totalMax: '4' }, defaults), 'range');
   assert.equal(slipNumberRangeIssue('totalMax', { totalMin: '', totalMax: '5' }, defaults), null);
   assert.equal(slipNumberRangeIssue('probMax', { probMin: '', probMax: '70' }, defaults), 'range');
   assert.equal(slipNumberRangeIssue('probMax', { probMin: '0', probMax: '70' }, defaults), null);
   assert.equal(slipNumberRangeIssue('totalMax', { totalMin: '20', totalMax: '' }, defaults), null);
+  assert.equal(slipNumberRangeIssue('totalMax', { totalMin: '20', totalMax: '  ' }, defaults), null);
 });
 
 test('date guards enforce real dates, ordering and the inclusive 31-day window without inventing a future-only rule', () => {

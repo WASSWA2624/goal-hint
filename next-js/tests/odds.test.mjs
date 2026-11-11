@@ -8,13 +8,13 @@ import { launchOddsGroup, launchOddsMapping, ODDS_MAPPING_VERSION } from "../src
 const odds = (value) => { const parsed = parseDecimalOdds(value); assert.notEqual(parsed, null, value); return parsed; };
 const sum = (values) => values.reduce((total, value) => total + BigInt(value.replace(".", "")), 0n);
 
-test("decimal odds are strict text, canonical without trailing zeros and strictly above 1", () => {
+test("decimal odds are strict text, canonical without trailing zeros, with an inclusive 1.01 floor", () => {
   assert.deepEqual(parseDecimalOdds("1.850"), { text: "1.85", scaled: 18_500n });
   assert.deepEqual(parseDecimalOdds("2.00"), { text: "2", scaled: 20_000n });
   assert.deepEqual(parseDecimalOdds("12"), { text: "12", scaled: 120_000n });
-  assert.deepEqual(parseDecimalOdds("1.0001"), { text: "1.0001", scaled: 10_001n });
+  assert.deepEqual(parseDecimalOdds("1.0100"), { text: "1.01", scaled: 10_100n });
   assert.deepEqual(parseDecimalOdds("99999.9999"), { text: "99999.9999", scaled: 999_999_999n });
-  for (const value of ["1", "1.0", "1.0000", "0.95", "01.50", "1.23456", "1e2", " 1.50", "1,50", "-2.00", "", "100000", 1.85, null]) {
+  for (const value of ["1", "1.0", "1.0000", "1.0001", "1.004", "1.0099", "0.95", "01.50", "1.23456", "1e2", " 1.50", "1,50", "-2.00", "", "100000", 1.85, null]) {
     assert.equal(parseDecimalOdds(value), null, String(value));
   }
 });
@@ -24,7 +24,7 @@ test("display hundredths round half-up once, and format with exactly two places"
   assert.equal(oddsDisplayHundredths(odds("1.8549")), 185);
   assert.equal(oddsDisplayHundredths(odds("1.85")), 185);
   assert.equal(oddsDisplayHundredths(odds("2.005")), 201);
-  assert.equal(oddsDisplayHundredths(odds("1.004")), 100);
+  assert.equal(oddsDisplayHundredths(odds("1.01")), 101);
   assert.equal(formatOddsHundredths(185), "1.85");
   assert.equal(formatOddsHundredths(2000), "20.00");
   assert.equal(formatOddsHundredths(100_000), "1000.00");
@@ -68,7 +68,7 @@ test("double chance is normalized within its own group so it sums to two, never 
 test("a missing or invalid selection, a single price or an under-round book are handled explicitly", () => {
   assert.equal(deMargin([odds("1.90"), null], 1), null);
   assert.equal(deMargin([odds("1.90")], 1), null);
-  assert.equal(deMargin([odds("1.90"), { text: "1", scaled: 10_000n }], 1), null);
+  assert.equal(deMargin([odds("1.90"), { text: "1.0099", scaled: 10_099n }], 1), null);
   assert.equal(deMargin([odds("1.90"), odds("1.90")], 3), null);
   // An overround below 1 (e.g. a stale or promotional price) is still normalized and recorded.
   const under = deMargin([odds("2.20"), odds("2.20")], 1);

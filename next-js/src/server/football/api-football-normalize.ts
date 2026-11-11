@@ -315,8 +315,6 @@ const inPlayOddsSchema = z.object({
 const inPlayValueSchema = oddsValueSchema.extend({
   handicap: z.string().max(24).nullable().optional(), main: optionalBoolean, suspended: z.boolean(),
 });
-/** Up to 99,999.9999 with at most four places; the domain rejects 1.00 and below. */
-const oddsDecimal = /^[1-9]\d{0,4}(?:\.\d{1,4})?$/u;
 const oddsLabel = /^[^\p{Cc}]{1,64}$/u;
 /** Stored name limits (ProviderOddsSnapshot columns and odds-input), in UTF-16 units like zod `max`. */
 const oddsNameLimits = Object.freeze({ bookmaker: 128, bet: 256 });
@@ -674,13 +672,6 @@ export function normalizeFallbackPrediction(raw: unknown, context: Normalization
     reportedPercentages: { home, draw, away }, source: source(context, missing) }, missing);
 }
 
-/** Canonical decimal text without trailing zeros, so equal prices hash equally. */
-function canonicalOdd(value: string): string | null {
-  if (!oddsDecimal.test(value)) return null;
-  const canonical = value.includes(".") ? value.replace(/0+$/u, "").replace(/\.$/u, "") : value;
-  // Strictly greater than 1: "1", "1.0" and "1.0000" are not prices.
-  return canonical === "1" ? null : canonical;
-}
 /** A usable stored name, or null: blank, over-long or control-character names stay unknown rather than
  * rejecting the whole fixture row downstream. Mappings require an exact name, so null never yields a price. */
 function oddsName(value: string | null | undefined, limit: number): string | null {
@@ -694,10 +685,10 @@ function oddsBet(raw: z.infer<typeof oddsBetSchema>): NormalizedOddsBet | null {
   for (const entry of raw.values) {
     const parsed = oddsValueSchema.safeParse(entry);
     if (!parsed.success) return null;
-    const label = parsed.data.value, odd = canonicalOdd(parsed.data.odd);
+    const label = parsed.data.value, odds = parseDecimalOdds(parsed.data.odd);
     // Labels are verbatim: untrimmed, control-character or over-long (64 UTF-16 units) labels quarantine the bet.
-    if (odd === null || label !== label.trim() || label.length > 64 || !oddsLabel.test(label) || labels.has(label)) return null;
-    labels.add(label); values.push({ label, odd });
+    if (odds === null || label !== label.trim() || label.length > 64 || !oddsLabel.test(label) || labels.has(label)) return null;
+    labels.add(label); values.push({ label, odd: odds.text });
   }
   return { id: raw.id, name: oddsName(raw.name, oddsNameLimits.bet), values };
 }

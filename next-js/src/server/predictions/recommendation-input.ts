@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
-import { parseDecimalOdds } from "../../domain/odds.ts";
+import { parseRecordedDecimalOdds } from "../../domain/odds.ts";
 import { recommendationPolicy, type RecommendationDecision } from "../../domain/recommendation.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import type { FallbackContext, ResolvedForecastMarket } from "../fallback/fallback-contract.ts";
@@ -15,7 +15,7 @@ const probability = z.number().finite().gt(0).lt(1);
 const timing = z.strictObject({ generatedAt: instant.nullable(), retrievedAt: instant, providerUpdatedAt: instant.nullable() });
 const quote = z.strictObject({ fixtureId: id, fixtureVersion: version, homeTeamId: id, awayTeamId: id,
   family, selection, period: z.literal(publicPolicy.matchPeriod), line: z.number().nullable(), bookmakerId: z.number().int().positive(),
-  decimal: z.string().refine((value) => parseDecimalOdds(value) !== null), snapshotId: hash, observedAt: instant,
+  decimal: z.string().refine((value) => parseRecordedDecimalOdds(value) !== null), snapshotId: hash, observedAt: instant,
   observationReceiptId: hash.optional(),
   providerUpdatedAt: instant.nullable(), permitted: z.boolean(), suspended: z.boolean() });
 const pick = z.strictObject({ family, selection, period: z.literal(publicPolicy.matchPeriod), line: z.number().nullable(),

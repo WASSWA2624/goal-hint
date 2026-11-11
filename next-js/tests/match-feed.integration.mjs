@@ -316,6 +316,19 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       assert.deepEqual(staleTie.prices, []);
       assert.equal(bestCardFamily(staleTie, ['total-goals', 'both-teams-to-score']), 'total-goals', 'withdrawn odds no longer break the probability tie');
       assert.equal((await read({ market: 'total-goals,both-teams-to-score', odds: '2.20-2.20' })).total, 0, 'the SQL filter also stops reading withdrawn prices');
+
+      const fixtureId = published.get(3000).fixture.id;
+      const setPrice = (price) => p.a.query((tx) => tx.$executeRaw`UPDATE FixtureOddsPrice
+        SET priceDecimal=CAST(${price} AS DECIMAL(10,4)), displayHundredths=101
+        WHERE fixtureId=${fixtureId} AND marketKey='match-result' AND selection='home-win'`);
+      const atMinimum = { market: 'match-result', odds: '1.01-1.01' };
+      await setPrice('1.0099');
+      assert.equal((await read(atMinimum)).total, 0, 'a legacy price below the minimum cannot qualify by rounding');
+      assert.equal(selectedCardPrice(record(3000, await read({ market: 'match-result' })), 'match-result'), null);
+      await setPrice('1.0100');
+      const boundary = await read(atMinimum);
+      assert.deepEqual(ids(boundary), new Set([3000]));
+      assert.equal(selectedCardPrice(record(3000, boundary), 'match-result').price, '1.01');
     });
     await t.test('run progress reflects durable job states instead of stale projected counters', async () => {
       const page = await query();

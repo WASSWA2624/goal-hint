@@ -104,11 +104,12 @@ test('generated slip identity retains the exact source cycle/revision/probabilit
 test('builder defaults and canonical native GET criteria round trip with two-place total odds', () => {
   const defaults = defaultSlipCriteria(today);
   assert.deepEqual(defaults, { dateFrom: today, dateTo: today, timeFrom: '', timeTo: '',
-    markets: ['match-result', 'double-chance', 'total-goals', 'both-teams-to-score'], totalMin: 500, totalMax: 1000, oddsMin: 1,
+    markets: ['match-result', 'double-chance', 'total-goals', 'both-teams-to-score'], totalMin: 500, totalMax: 1000, oddsMin: 101,
     probMin: 75, probMax: 100, teamsMin: 1, slips: 5, reuse: false });
   assert.deepEqual(parseSlipCriteria({}, today), defaults);
   const serialized = serializeSlipCriteria(defaults);
   assert.equal(serialized.get('totalMin'), '5.00'); assert.equal(serialized.get('totalMax'), '10.00');
+  assert.equal(serialized.get('oddsMin'), '1.01');
   assert.equal(serialized.get('probMin'), '75'); assert.equal(serialized.get('teamsMax'), '');
   assert.deepEqual(parseSlipCriteria(serialized, today), defaults);
   const repeated = parseSlipCriteria(new URLSearchParams('build=1&markets=total-goals&markets=match-result&reuse=0&reuse=1'), today);
@@ -142,7 +143,7 @@ test('default generation requests five slips within inclusive total odds and ind
 
 test('omitting reuse builds separate slips while an explicit opt-in still allows shared matches', () => {
   const records = [record('a', '2.00', 0.95), record('b', '2.00', 0.9), record('c', '2.00', 0.8), record('d', '2.00', 0.7)];
-  const parameters = { totalMin: '0.01', probMin: '0', teamsMin: '2', teamsMax: '2', slips: '2' };
+  const parameters = { totalMin: '1.01', probMin: '0', teamsMin: '2', teamsMax: '2', slips: '2' };
   const separate = buildSlips(parseSlipCriteria(parameters, today), records, asOf);
   assert.equal(separate.slips.length, 2);
   const chosen = separate.slips.flatMap(fixtureIds);
@@ -156,11 +157,11 @@ test('omitting reuse builds separate slips while an explicit opt-in still allows
 test('blank minimums use defaults while explicit blank maximums retain Any through serialization', () => {
   const parsed = parseSlipCriteria({ totalMin: '', totalMax: '', oddsMin: '', oddsMax: '', probMin: '' }, today);
   assert.equal(parsed.totalMin, 500); assert.equal(parsed.totalMax, undefined);
-  assert.equal(parsed.oddsMin, 1); assert.equal(parsed.oddsMax, undefined);
+  assert.equal(parsed.oddsMin, 101); assert.equal(parsed.oddsMax, undefined);
   assert.equal(parsed.probMin, 75);
   assert.equal(parseSlipCriteria({ totalMin: '' }, today).totalMax, 1000);
   assert.equal(parseSlipCriteria({ totalMax: '' }, today).totalMax, undefined);
-  assert.equal(parseSlipCriteria({ oddsMin: '' }, today).oddsMin, 1);
+  assert.equal(parseSlipCriteria({ oddsMin: '' }, today).oddsMin, 101);
   const serialized = serializeSlipCriteria(parsed);
   for (const field of ['totalMax', 'oddsMax', 'teamsMax']) assert.equal(serialized.get(field), '');
   assert.deepEqual(parseSlipCriteria(serialized, today), parsed);
@@ -187,10 +188,19 @@ test('Any maximum permits nine-match slips and prices/totals beyond the old filt
   assert.equal(buildSlips({ ...parsed, totalMax: 10_000_000 }, records, asOf).slips.length, 0);
 });
 
-test('a permissive criteria floor never makes invalid bookmaker prices eligible', () => {
-  for (const price of ['0.01', '0.50', '1.00']) {
+test('individual and total odds bounds accept 1.01 and reject values below it', () => {
+  const options = parseSlipCriteria({ totalMin: '1.01', totalMax: '1.01', oddsMin: '1.01', oddsMax: '1.01' }, today);
+  for (const field of ['totalMin', 'totalMax', 'oddsMin', 'oddsMax']) {
+    assert.equal(options[field], 101);
+    for (const value of ['0.01', '1.00']) {
+      assert.throws(() => parseSlipCriteria({ [field]: value }, today), { field, code: 'invalid-odds-range' });
+    }
+    assert.throws(() => serializeSlipCriteria({ ...options, [field]: 100 }), { field, code: 'invalid-odds-range' });
+  }
+  assert.equal(buildSlips(options, [record('minimum-price', '1.01')], asOf).slips[0].totalOdds, '1.01');
+  for (const price of ['0.01', '0.50', '1.00', '1.0099']) {
     const source = record('invalid-price');
-    const result = buildSlips(defaultSlipCriteria(today), [{ ...source, prices: [{ ...source.prices[0], price }] }], asOf);
+    const result = buildSlips(options, [{ ...source, prices: [{ ...source.prices[0], price }] }], asOf);
     assert.equal(result.qualifyingMatches, 0);
     assert.equal(result.slips.length, 0);
   }

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { canonicalSlipConfigurationParameters, slipConfigurationMutationSchema, slipConfigurationRules,
+import { canonicalSlipConfigurationParameters, slipConfigurationMutationSchema, slipConfigurationRules, storedSlipConfigurationParameters,
   type SlipConfiguration, type SlipConfigurationFailure, type SlipConfigurationMutation } from "../../domain/slip-configurations.ts";
 import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
 import type { Prisma, SlipConfiguration as ConfigurationRow } from "../generated/prisma/client.ts";
@@ -10,7 +10,7 @@ import type { MemberIdentity } from "../members/member-sessions.ts";
 type Outcome = Readonly<{ status: "saved"; configurations: readonly SlipConfiguration[] }>
   | Readonly<{ status: SlipConfigurationFailure }>;
 const order = [{ createdAt: "asc" }, { id: "asc" }] satisfies Prisma.SlipConfigurationOrderByWithRelationInput[];
-const view = (row: ConfigurationRow): SlipConfiguration => ({ id: row.id, name: row.name, parameters: canonicalSlipConfigurationParameters(row.parameters),
+const view = (row: ConfigurationRow): SlipConfiguration => ({ id: row.id, name: row.name, parameters: storedSlipConfigurationParameters(row.parameters),
   revision: row.revision, isDefault: row.isDefault === true, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() });
 
 /** Account locking protects the ten-item cap, single default, and session/erasure races across server processes. */

@@ -89,6 +89,29 @@ test("reading an existing dated save removes legacy dates without altering its t
   assert.equal(current.revision, saved.revision);
 });
 
+test("saved filters below the current odds minimum remain readable while writes require valid bounds", async () => {
+  const f = fixture(), member = f.first.member;
+  const saved = (await f.service.mutate(member, create("Legacy odds", true))).configurations[0];
+  const legacy = new URLSearchParams(saved.parameters);
+  legacy.set("totalMin", "0.50"); legacy.set("totalMax", "1.00");
+  legacy.set("oddsMin", "0.01"); legacy.set("oddsMax", "");
+  f.rows.get(saved.id).parameters = legacy.toString();
+
+  const current = (await f.restart().read(member)).configurations[0];
+  const filters = new URLSearchParams(current.parameters);
+  assert.equal(filters.get("totalMin"), "1.01"); assert.equal(filters.get("totalMax"), "1.01");
+  assert.equal(filters.get("oddsMin"), "1.01"); assert.equal(filters.get("oddsMax"), "");
+  assert.equal(filters.get("probMin"), "82.123"); assert.equal(current.isDefault, true);
+  assert.equal(current.revision, saved.revision);
+  assert.deepEqual(slipConfigurationCriteria(legacy.toString(), "2026-11-01"), slipConfigurationCriteria(current.parameters, "2026-11-01"));
+  assert.equal(slipConfigurationHref({ ...saved, parameters: legacy.toString() }, "en", "2026-11-01"),
+    slipConfigurationHref(current, "en", "2026-11-01"));
+
+  assert.equal((await f.service.mutate(member, { ...create("New invalid odds"), parameters: legacy.toString() })).status, "invalid");
+  assert.equal((await f.service.mutate(member, { action: "update", id: saved.id, revision: saved.revision, parameters: legacy.toString() })).status, "invalid");
+  assert.equal(f.rows.get(saved.id).parameters, legacy.toString());
+});
+
 test("concurrent saves never exceed ten per owner and deleting frees a slot", async () => {
   const f = fixture(), results = await Promise.all(Array.from({ length: 13 }, (_, i) => f.service.mutate(f.first.member, create(`Configuration ${i}`))));
   assert.equal(results.filter(result => result.status === "saved").length, 10);

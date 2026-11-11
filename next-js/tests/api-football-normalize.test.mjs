@@ -425,14 +425,15 @@ test("bet-level quarantine drops malformed prices, numeric values and duplicate 
     { id: 7, name: "Too many places", values: [{ value: "Yes", odd: "1.23456" }] },
     { id: 9, name: "Padded label", values: [{ value: " Yes", odd: "1.50" }] },
     { id: 10, name: "Empty", values: [] },
+    { id: 11, name: "Below floor", values: [{ value: "Yes", odd: "1.0099" }] },
     // Snapshots key bets by an unsigned 32-bit id; a larger id cannot be stored, so only that bet is dropped.
     { id: 4_294_967_296, name: "Beyond storage", values: [{ value: "Yes", odd: "1.50" }] },
   ];
   const result = normalizeOdds(oddsRow({ bookmakers: [{ id: 8, name: "Synthetic bookmaker", bets }] }), context("/odds"));
   const odds = data(result);
   assert.deepEqual(odds.bookmakers[0].bets.map((bet) => bet.id), [1]);
-  assert.deepEqual(odds.bookmakers[0].rejectedBets, [2, 3, 4, 6, 7, 9, 10, 4_294_967_296]);
-  for (const id of [2, 3, 4, 6, 7, 9, 10, 4_294_967_296]) assert.ok(result.missingCoverage.includes(`odds-bet-rejected:8:${id}`));
+  assert.deepEqual(odds.bookmakers[0].rejectedBets, [2, 3, 4, 6, 7, 9, 10, 11, 4_294_967_296]);
+  for (const id of [2, 3, 4, 6, 7, 9, 10, 11, 4_294_967_296]) assert.ok(result.missingCoverage.includes(`odds-bet-rejected:8:${id}`));
 });
 
 test("odds names beyond the stored limits stay unknown and over-long labels or value lists quarantine only their bet", () => {
@@ -470,8 +471,8 @@ test("odds rows without bookmakers or bets stay valid with explicit missing cove
   assert.ok(noSeason.missingCoverage.includes("competition-season"));
   // Canonical text strips only trailing fractional zeros.
   const prices = data(normalizeOdds(oddsRow({ bookmakers: [{ id: 8, name: "Synthetic bookmaker", bets: [{ id: 1, name: "Match Winner",
-    values: [{ value: "Home", odd: "10.50" }, { value: "Draw", odd: "100" }, { value: "Away", odd: "1.0001" }] }] }] }), context("/odds")));
-  assert.deepEqual(prices.bookmakers[0].bets[0].values.map((value) => value.odd), ["10.5", "100", "1.0001"]);
+    values: [{ value: "Home", odd: "10.50" }, { value: "Draw", odd: "100" }, { value: "Away", odd: "1.0100" }] }] }] }), context("/odds")));
+  assert.deepEqual(prices.bookmakers[0].bets[0].values.map((value) => value.odd), ["10.5", "100", "1.01"]);
 });
 
 test("odds catalog rows require a positive id and a clean name; unknown provider keys are stripped", () => {

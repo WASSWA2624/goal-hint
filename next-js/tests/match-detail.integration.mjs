@@ -102,8 +102,8 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
       assert.equal(summary.status, 'complete'); assert.equal(summary.outcomes.changed, 1);
       const rightsOff = storedMatchDetailResponseSchema.parse(await read(state));
       assert.deepEqual(rightsOff.odds, []); assert.deepEqual(rightsOff.fixture.prices, []);
-      const priced = storedMatchDetailResponseSchema.parse(await createMatchDetailService({ database: p.a, clock: { now: () => readAt }, providerOdds: true })
-        .query(state.fixture.id));
+      const detailWithOdds = createMatchDetailService({ database: p.a, clock: { now: () => readAt }, providerOdds: true });
+      const priced = storedMatchDetailResponseSchema.parse(await detailWithOdds.query(state.fixture.id));
       assert.deepEqual(priced.snapshot, rightsOff.snapshot, 'odds never enter the immutable revision');
       assert.deepEqual(priced.fixture.forecast, rightsOff.fixture.forecast, 'AI probabilities are not replaced by market-implied ones');
       assert.deepEqual(priced.odds.map((group) => group.family), ['match-result', 'double-chance', 'total-goals', 'both-teams-to-score']);
@@ -123,6 +123,20 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
         assert.equal(price.price, group.selections.find((item) => item.selection === pick.market.selection).price);
       }
       assert.doesNotMatch(JSON.stringify(priced), /Synthetic bookmaker|bookmakerExternalId|snapshotId|basisJson/u);
+
+      const selection = priced.fixture.prices.find((price) => price.family === 'match-result').selection;
+      const setPrice = (price) => p.a.query((tx) => tx.$executeRaw`UPDATE FixtureOddsPrice
+        SET priceDecimal=CAST(${price} AS DECIMAL(10,4)), displayHundredths=101
+        WHERE fixtureId=${state.fixture.id} AND marketKey='match-result' AND selection=${selection}`);
+      await setPrice('1.0099');
+      const legacy = await detailWithOdds.query(state.fixture.id);
+      assert.equal(legacy.fixture.prices.some((price) => price.family === 'match-result'), false);
+      assert.equal(legacy.odds.some((group) => group.family === 'match-result'), false, 'a partial market group remains hidden');
+      assert.deepEqual(legacy.snapshot, priced.snapshot);
+      await setPrice('1.0100');
+      const boundary = await detailWithOdds.query(state.fixture.id);
+      assert.equal(boundary.fixture.prices.find((price) => price.family === 'match-result').price, '1.01');
+      assert.equal(boundary.odds.find((group) => group.family === 'match-result').selections.find((item) => item.selection === selection).price, '1.01');
     });
     await t.test('provider fallback and mixed-family provenance stay in one coherent revision', async () => {
       const fallback = await publish(3002, { source: 'api-football' });

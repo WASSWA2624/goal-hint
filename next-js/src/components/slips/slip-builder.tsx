@@ -23,14 +23,14 @@ import { publicPolicy } from "@/domain/public-policy";
 import { fullDayKickoffTime } from "@/domain/kickoff-time";
 import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipBuilderRules, slipInputFields,
   type SlipCriteria, type SlipCriteriaErrorCode, type SlipInputs } from "@/domain/slip-builder";
-import { guardSlipNumber, slipDateBounds, slipNumberRangeIssue, type SlipDateTimeField, type SlipNumericField } from "@/domain/slip-input-guards";
+import { commitSlipNumber, slipDateBounds, slipNumberRangeIssue, type SlipDateTimeField, type SlipNumericField } from "@/domain/slip-input-guards";
 import { createMessages } from "@/i18n/messages";
 import type { SlipBuildPageResult } from "@/domain/slip-page";
 import { compareSlipDisplayProbability, slipPageSize } from "@/domain/slip-pagination";
 import { SlipCard } from "./slip-card";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
-import { SlipNumericInput } from "./slip-numeric-input";
+import { SlipNumericInput, slipNumberErrorMessage } from "./slip-numeric-input";
 import { SavedSlipConfigurations } from "./saved-slip-configurations";
 import { canonicalSlipConfigurationParameters, slipConfigurationCriteria, slipConfigurationHref, slipConfigurationIdSchema, type SlipConfiguration } from "@/domain/slip-configurations";
 import { UnlockPanel } from "@/components/members/prediction-unlock";
@@ -44,6 +44,7 @@ export function SlipAccessRequired({ locale, showAccount = false, signedIn = fal
 }
 
 export type SlipCriteriaIssue = Readonly<{ code: SlipCriteriaErrorCode; field: keyof SlipCriteria | "query" }>;
+type BuilderIssue = SlipCriteriaIssue | Readonly<{ field: SlipNumericField; message: string }>;
 type CriteriaGroup = "limits" | "kickoff" | "markets";
 /** Responsive copies keep the action's existing desktop structure and stable dimensions. */
 function SlipBuildActionLabel({ locale, restricted }: {
@@ -69,15 +70,28 @@ const subscribeNever = () => () => {};
 const clientReady = () => true;
 const serverReady = () => false;
 
-function issueGroup(issue: SlipCriteriaIssue | null): CriteriaGroup | null {
+function issueGroup(issue: BuilderIssue | null): CriteriaGroup | null {
   if (!issue) return null;
   if (groupFields.limits.some((field) => field === issue.field)) return "limits";
   if (groupFields.kickoff.some((field) => field === issue.field)) return "kickoff";
   return issue.field === "markets" || issue.field === "outcomes" ? "markets" : null;
 }
 
-function isNumericRange(name: typeof slipInputFields[number]): name is NumericRangeField {
+function isNumericRange(name: string): name is NumericRangeField {
   return name.endsWith("Min") || name.endsWith("Max");
+}
+
+/** Submit canonical values without changing the text in the controls. */
+function commitNumericParameters(parameters: URLSearchParams) {
+  for (const field of slipInputFields) {
+    if (isDateTimeField(field)) continue;
+    const raw = parameters.get(field);
+    if (raw === null) continue;
+    const result = commitSlipNumber(field, raw);
+    if (!result.accepted) return { field, result };
+    parameters.set(field, result.value);
+  }
+  return null;
 }
 
 function rangeValue(name: NumericRangeField, value: string | undefined, defaults: SlipCriteria) {
@@ -98,7 +112,7 @@ function criteriaDraft(criteria: SlipCriteria, inputs: SlipInputs = {}): SlipInp
       : name.startsWith("odds") || name.startsWith("total") ? /^(0|[1-9]\d*)(?:\.\d{1,2})?$/ : /^[1-9]\d*$/;
     if (name !== "dateFrom" && name !== "dateTo" && name !== "timeFrom" && name !== "timeTo" && numericFormat.test(value)) {
       if (name === "totalMin" || name === "totalMax") {
-        const checked = guardSlipNumber(name, value, true);
+        const checked = commitSlipNumber(name, value);
         if (checked.accepted) value = checked.value;
       } else value = name === "totalProbMin" && Number(value) === 0 ? ""
         : value.includes(".") ? value.replace(/0+$/u, "").replace(/\.$/u, "") : value;
@@ -120,7 +134,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   const messages = createMessages(locale), router = useRouter(), prefix = useId();
   const [clearedResult, setClearedResult] = useState<SlipBuildPageResult | null>(null);
   const result = clearedResult === receivedResult ? null : receivedResult;
-  const [pending, startTransition] = useTransition(), [error, setError] = useState(initialError);
+  const [pending, startTransition] = useTransition(), [error, setError] = useState<BuilderIssue | null>(initialError);
   const [pagination, setPagination] = useState({ result, page: 1 });
   if (pagination.result !== result) setPagination({ result, page: 1 });
   const desktop = useDesktopLayout();
@@ -146,15 +160,16 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   const dialogGroup = desktop ? "markets" : "advanced";
   const dialogId = `${prefix}-${dialogGroup}`;
   const currentParameters = useMemo(() => {
-    if (missingKickoff) return null;
+    if (!signedIn || missingKickoff) return null;
     try {
       const parameters = new URLSearchParams();
       for (const field of slipInputFields) parameters.set(field, draft[field] ?? "");
+      if (commitNumericParameters(parameters)) return null;
       parameters.set("markets", selectedMarkets.join(",")); parameters.set("reuse", reuse ? "1" : "0");
       for (const market of selectedMarkets) if (outcomes[market]?.length) parameters.set(`picks.${market}`, outcomes[market]!.join(","));
       return canonicalSlipConfigurationParameters(parameters.toString(), today);
     } catch { return null; }
-  }, [missingKickoff, draft, selectedMarkets, outcomes, reuse, today]);
+  }, [signedIn, missingKickoff, draft, selectedMarkets, outcomes, reuse, today]);
   const [dialogState, setDialogState] = useState<"open" | "mobile-error" | null>(() => {
     const group = issueGroup(initialError);
     return group === "markets" ? "open" : group ? "mobile-error" : null;
@@ -183,7 +198,10 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   }, []);
   useEffect(() => {
     if (!error) return;
-    const frame = requestAnimationFrame(() => errorRef.current?.focus());
+    const frame = requestAnimationFrame(() => {
+      if ("message" in error) formRef.current?.querySelector<HTMLInputElement>(`[data-slip-numeric-field="${error.field}"]`)?.focus();
+      else errorRef.current?.focus();
+    });
     return () => cancelAnimationFrame(frame);
   }, [error, dialogOpen]);
   function range(from: typeof slipInputFields[number], to: typeof slipInputFields[number], unit = "") {
@@ -243,11 +261,19 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
     setError((current) => dialogIssue(issueGroup(current)) ? null : current);
     snapshot.current = null; setDialogState(null);
   }
-  function validateCriteria(parameters: URLSearchParams, requireKickoff: boolean) {
+  function validateCriteria(parameters: URLSearchParams, requireKickoff: boolean): { criteria: SlipCriteria } | { issue: BuilderIssue } {
     if (requireKickoff && missingKickoff) {
-      throw new SlipCriteriaError(missingKickoff, missingKickoff.startsWith("time") ? "invalid-time-range" : "invalid-date-range");
+      return { issue: { field: missingKickoff, code: missingKickoff.startsWith("time") ? "invalid-time-range" : "invalid-date-range" } };
     }
-    return parseSlipCriteria(parameters, today);
+    const numeric = commitNumericParameters(parameters);
+    if (numeric) return { issue: { field: numeric.field, message: slipNumberErrorMessage(messages, numeric.result) } };
+    try {
+      return { criteria: parseSlipCriteria(parameters, today) };
+    } catch (issue) {
+      if (!(issue instanceof SlipCriteriaError)) throw issue;
+      return { issue: isNumericRange(issue.field) ? { field: issue.field, message: messages.text("slips.guard.range") }
+        : { field: issue.field, code: issue.code } };
+    }
   }
   function applyDialog() {
     const parameters = serializeSlipCriteria(resetCriteria);
@@ -256,15 +282,11 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
     selectedMarkets.forEach((market) => parameters.append("markets", market));
     for (const market of selectedMarkets) outcomes[market]?.forEach((value) => parameters.append(`picks.${market}`, value));
     parameters.set("reuse", reuse ? "1" : "0"); parameters.set("build", "1");
-    try {
-      validateCriteria(parameters, !desktop);
-      setError((current) => dialogIssue(issueGroup(current)) ? null : current);
-      setFeedbackKey((current) => current + 1);
-      snapshot.current = null; setDialogState(null);
-    } catch (issue) {
-      if (!(issue instanceof SlipCriteriaError)) throw issue;
-      setError({ code: issue.code, field: issue.field });
-    }
+    const validation = validateCriteria(parameters, !desktop);
+    if ("issue" in validation) { setError(validation.issue); return; }
+    setError((current) => dialogIssue(issueGroup(current)) ? null : current);
+    setFeedbackKey((current) => current + 1);
+    snapshot.current = null; setDialogState(null);
   }
   function reset() {
     setFeedbackKey((current) => current + 1);
@@ -287,25 +309,22 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
     new FormData(event.currentTarget).forEach((value, key) => { if (typeof value === "string") parameters.append(key, value); });
     const configuration = parameters.get("configuration");
     parameters.delete("configuration");
-    try {
-      const next = serializeSlipCriteria(validateCriteria(parameters, true));
-      setClearedResult(null);
-      if (slipConfigurationIdSchema.safeParse(configuration).success) next.set("configuration", configuration!);
-      next.set("build", "1"); setError(null); setFeedbackKey((current) => current + 1); trackEvent("slip_build");
-      const href = `${action}?${next}`;
-      startTransition(() => {
-        if (`${window.location.pathname}${window.location.search}` === href) router.refresh();
-        else router.push(href, { scroll: false });
-      });
-    } catch (issue) {
-      if (issue instanceof SlipCriteriaError) {
-        const nextError = { code: issue.code, field: issue.field };
-        setError(nextError);
-        if (dialogIssue(issueGroup(nextError))) openDialog();
-        else { snapshot.current = null; setDialogState(null); }
-      }
-      else throw issue;
+    const validation = validateCriteria(parameters, true);
+    if ("issue" in validation) {
+      setError(validation.issue);
+      if (dialogIssue(issueGroup(validation.issue))) openDialog();
+      else { snapshot.current = null; setDialogState(null); }
+      return;
     }
+    const next = serializeSlipCriteria(validation.criteria);
+    setClearedResult(null);
+    if (slipConfigurationIdSchema.safeParse(configuration).success) next.set("configuration", configuration!);
+    next.set("build", "1"); setError(null); setFeedbackKey((current) => current + 1); trackEvent("slip_build");
+    const href = `${action}?${next}`;
+    startTransition(() => {
+      if (`${window.location.pathname}${window.location.search}` === href) router.refresh();
+      else router.push(href, { scroll: false });
+    });
   }
 
   function updateField(name: typeof slipInputFields[number], value: string) {
@@ -315,22 +334,24 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       || isNumericRange(name) && current.field.toString().replace(/(?:Min|Max)$/u, "") === name.replace(/(?:Min|Max)$/u, "")) ? null : current);
   }
   function field(name: typeof slipInputFields[number], label: TextInputProps["label"], options: Omit<TextInputProps, "label" | "name"> = {}) {
-    const invalid = error?.field === name || (error?.field === "dateFrom" && name === "dateTo")
+    const numericMessage = error && "message" in error && error.field === name ? error.message : undefined;
+    const criteriaError = error && "code" in error ? error : null;
+    const invalid = Boolean(numericMessage) || criteriaError?.field === name || (error?.field === "dateFrom" && name === "dateTo")
       || (error?.field === "timeFrom" && name === "timeTo")
-      || (error?.field === "totalMin" && name === "totalMax") || (error?.field === "oddsMin" && name === "oddsMax")
-      || (error?.field === "probMin" && name === "probMax") || (error?.field === "totalProbMin" && name === "totalProbMax") || (error?.field === "teamsMin" && name === "teamsMax");
+      || (criteriaError?.field === "totalMin" && name === "totalMax") || (criteriaError?.field === "oddsMin" && name === "oddsMax")
+      || (criteriaError?.field === "probMin" && name === "probMax") || (criteriaError?.field === "totalProbMin" && name === "totalProbMax") || (criteriaError?.field === "teamsMin" && name === "teamsMax");
     const shared = { name, id: `${prefix}-${name}`, label,
       placeholder: isNumericRange(name) ? messages.text("slips.any") : undefined,
-      "aria-invalid": invalid || undefined, "aria-describedby": invalid && !isDateTimeField(name) ? errorId : undefined, ...options };
+      "aria-invalid": invalid || undefined, "aria-describedby": invalid && criteriaError && !isDateTimeField(name) ? errorId : undefined, ...options };
     if (!isDateTimeField(name)) return <SlipNumericInput {...shared} field={name as SlipNumericField} locale={locale}
-      feedbackKey={feedbackKey}
+      feedbackKey={feedbackKey} validationMessage={numericMessage}
       value={draft[name] ?? ""} onValueChange={(value) => updateField(name, value)}
-      onCommit={(value) => slipNumberRangeIssue(name, { ...draft, [name]: value }, resetDraft) ? messages.text("slips.guard.range") : undefined} />;
+      rangeError={(value) => slipNumberRangeIssue(name, { ...draft, [name]: value }, resetDraft) ? messages.text("slips.guard.range") : undefined} />;
     const date = name.startsWith("date");
     const bounds = date ? name === "dateFrom" ? { min: "0001-01-01", max: "9999-12-31" } : slipDateBounds("dateTo", draft)
       : { min: name === "timeTo" ? draft.timeFrom || fullDayKickoffTime.from : fullDayKickoffTime.from, max: fullDayKickoffTime.to };
     return <DateTimeField {...shared} locale={locale} mode={date ? "date" : "time"} {...bounds} required value={draft[name] ?? ""}
-      error={invalid && error ? messages.text(`slips.error.${error.code}`) : undefined}
+      error={invalid && criteriaError ? messages.text(`slips.error.${criteriaError.code}`) : undefined}
       onValueChange={value => updateField(name, value)} />;
   }
   function kickoffField(endpoint: "From" | "To") {
@@ -352,7 +373,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
     </>;
   }
   function errorMessage(group: CriteriaGroup | null) {
-    return error && errorGroup === group ? <CriteriaError id={errorId} ref={errorRef} tabIndex={-1} role="alert">{messages.text(`slips.error.${error.code}`)}</CriteriaError> : null;
+    return error && "code" in error && errorGroup === group ? <CriteriaError id={errorId} ref={errorRef} tabIndex={-1} role="alert">{messages.text(`slips.error.${error.code}`)}</CriteriaError> : null;
   }
   const oddsOptions = { min: slipBuilderRules.minimumOddsHundredths / 100, step: "0.01" };
   const data = result?.data, generated = result?.state === "generated" && data !== null && data !== undefined;

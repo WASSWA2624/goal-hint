@@ -12,23 +12,37 @@ export type DecimalOdds = Readonly<{ text: string; scaled: bigint }>;
 export type OddsRange = Readonly<{ min: number; max: number }>;
 
 export const oddsRules = Object.freeze({
-  /** 1.01: the lowest price a two-place filter can name; 1.00 is not a price. */
+  /** 1.01: the minimum for quotes and odds filters. */
   minimumHundredths: 101,
   /** 1000.00: the explicit cap behind the slider's "20.00+" top stop. */
   maximumHundredths: 100_000,
   /** The slider's top stop (20.00); a raised minimum with the top thumb there serializes 1000.00. */
   sliderMaximumHundredths: 2_000,
 });
+const minimumScaled = BigInt(oddsRules.minimumHundredths) * SCALE / 100n;
 
-/** Accepts up to four places and values strictly greater than 1; numbers and exponents are rejected. */
-export function parseDecimalOdds(value: string): DecimalOdds | null {
+function parsePrice(value: string, minimum: bigint): DecimalOdds | null {
   if (typeof value !== "string") return null;
   const match = decimalPattern.exec(value);
   if (!match) return null;
   const fraction = (match[2] ?? "").replace(/0+$/u, "");
   const scaled = BigInt(match[1]!) * SCALE + BigInt((fraction || "0").padEnd(4, "0"));
-  if (scaled <= SCALE) return null;
+  if (scaled < minimum) return null;
   return Object.freeze({ text: fraction ? `${match[1]}.${fraction}` : match[1]!, scaled });
+}
+
+/** Current quotes accept up to four places, with the minimum enforced before rounding. */
+export function parseDecimalOdds(value: string): DecimalOdds | null {
+  return parsePrice(value, minimumScaled);
+}
+
+/** Previously sealed quotes were recorded under the original floor of strictly above 1. */
+export function parseRecordedDecimalOdds(value: string): DecimalOdds | null {
+  return parsePrice(value, SCALE + 1n);
+}
+
+export function isDecimalOddsValue(value: number): boolean {
+  return Number.isFinite(value) && value >= oddsRules.minimumHundredths / 100;
 }
 
 /** Display and filter value: hundredths rounded half-up, computed once when a price is written. */
@@ -74,7 +88,7 @@ export function deMargin(group: readonly (DecimalOdds | null)[], coverage: 1 | 2
   if (!Array.isArray(group) || (coverage !== 1 && coverage !== 2) || group.length < 2 || group.length <= coverage) return null;
   const prices: bigint[] = [];
   for (const odds of group) {
-    if (odds === null || typeof odds !== "object" || typeof odds.scaled !== "bigint" || odds.scaled <= SCALE) return null;
+    if (odds === null || typeof odds !== "object" || typeof odds.scaled !== "bigint" || odds.scaled < minimumScaled) return null;
     prices.push(odds.scaled);
   }
   // sum(1/s_j) = numerator / product, with product = prod(s_j).

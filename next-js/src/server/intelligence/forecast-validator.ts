@@ -1,6 +1,7 @@
 import "server-only";
 
 import { checkMarketConsistency, marketSelections, type SourceGroup } from "../../domain/markets.ts";
+import { isDecimalOddsValue } from "../../domain/odds.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import { isIssuedLocalGoalForecast } from "./local-goals-model.ts";
 import { provenTrue } from "../shared/authority-proof.ts";
@@ -193,7 +194,7 @@ export function validateIntelligenceForecast(input: IntelligenceValidationInput)
   let oddsValue: ValidatedIntelligenceForecast["oddsValue"] = null;
   if (input.quote && probabilities && reasons.length === 0) {
     const quote = input.quote, probability = families.includes(quote.family) ? (probabilities[quote.family] as Readonly<Record<string, number>>)[quote.selection] : undefined;
-    if (probability !== undefined && Number.isFinite(quote.decimalOdds) && quote.decimalOdds > 1 && instant(quote.observedAt) &&
+    if (probability !== undefined && isDecimalOddsValue(quote.decimalOdds) && instant(quote.observedAt) &&
       quote.observedAt <= fixture.forecastAt && fixture.forecastAt - quote.observedAt <= maxAgeMs)
       oddsValue = { probability, impliedProbability: 1 / quote.decimalOdds, expectedUnitReturn: probability * quote.decimalOdds - 1 };
     else warnings.push("quote-unavailable-or-stale");

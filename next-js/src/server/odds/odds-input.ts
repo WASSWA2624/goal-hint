@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type Clock, type UtcInstant } from "../../domain/calendar.ts";
-import { DE_MARGIN_METHOD } from "../../domain/odds.ts";
+import { DE_MARGIN_METHOD, parseDecimalOdds } from "../../domain/odds.ts";
 import { ODDS_MAPPING_VERSION } from "../../domain/odds-markets.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import { API_FOOTBALL_CONTRACT_VERSION, ODDS_CONTRACT_VERSION, type ApiFootballBounds, type ApiFootballEndpoint,
@@ -38,7 +38,8 @@ const oddsRowSchema = z.strictObject({
   bookmakers: z.array(z.strictObject({
     id: identity, name: z.string().min(1).max(128).nullable(),
     bets: z.array(z.strictObject({ id: identity, name: z.string().min(1).max(256).nullable(),
-      values: z.array(z.strictObject({ label: z.string().min(1).max(64), odd: z.string().regex(/^[1-9]\d{0,4}(?:\.\d{0,3}[1-9])?$/u) }))
+      values: z.array(z.strictObject({ label: z.string().min(1).max(64),
+        odd: z.string().refine((value) => parseDecimalOdds(value)?.text === value) }))
         .min(1).max(1_000) })).max(1_000),
     // The normalizer quarantines a bet whose id does not fit storage, so a rejected id may exceed 32 bits.
     rejectedBets: z.array(providerIdentity).max(1_000),

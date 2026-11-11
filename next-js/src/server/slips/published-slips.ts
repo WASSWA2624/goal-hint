@@ -6,6 +6,7 @@ import { bestSlipBandCriteria, bestSlipViews, compareBestSlips, jointSlipProbabi
 import { bestSlipOddsBands, bestSlipBandLimit, bestSlipOddsBandFor, bestSlipPublicationBands, bestSlipPublicRank, defaultBestSlipOddsBand, type BestSlipOddsBand } from "../../domain/best-slip-odds-bands.ts";
 import { bestSlipsQueryRules, parseBestSlipsCursor, parseBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "../../domain/best-slips-query.ts";
 import type { ReportingDate } from "../../domain/calendar.ts";
+import { parseDecimalOdds } from "../../domain/odds.ts";
 import { publishedSlipRules, type PublishedSlipHistory, type PublishedSlipHistoryQuery } from "../../domain/published-slips.ts";
 import { completedSlipFixtureIds, indexSlipResults, slipCompleted, slipSnapshotOutcome, slipSnapshotStatus, slipSnapshotSchema, slipResultView } from "../../domain/slip-snapshot.ts";
 import { slipStatusCategory } from "../../domain/slip-status.ts";
@@ -119,7 +120,8 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           || criteria.totalMax !== undefined && product * 100n > BigInt(criteria.totalMax) * denominator
           || Math.abs(average - snapshot.averageProbability) > Number.EPSILON * snapshot.selections.length * 2) fail("invalid-input");
         for (const selection of snapshot.selections) {
-          if (ids.has(selection.fixtureId) || getReportingDate(utcInstantFromEpochMilliseconds(selection.kickoffAt)) !== input.day) fail("invalid-input");
+          if (parseDecimalOdds(selection.odds) === null || ids.has(selection.fixtureId)
+            || getReportingDate(utcInstantFromEpochMilliseconds(selection.kickoffAt)) !== input.day) fail("invalid-input");
           ids.add(selection.fixtureId);
         }
         return { slip: snapshot as BuiltSlip, estimatedProbability };

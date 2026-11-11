@@ -70,25 +70,25 @@ All fields remain uniquely named and associated with the same native GET form.
 Before JavaScript attaches, Advanced Filters renders inline with separate
 native date and time inputs. Hydration enables the modal and combined controls.
 
-All numeric controls progressively enhance to guarded spinbuttons. Typing,
-pasting and stepping reject signs, exponents, nonnumeric characters, excessive
-precision and values beyond the shared parser's limits, with accessible field
-warnings outside normal layout flow. Total slips accepts 1–100; odds step by
-0.01 with two decimal places; probabilities remain within 0–100 with up to
-three decimal places; matches step by one and display comma thousands grouping.
-The single named input per criterion keeps an unformatted canonical value for
-GET submission. Without JavaScript, the original native number inputs remain.
+Numeric fields preserve what the user types, deletes or pastes, including
+temporary values such as `0.01` while editing `10.01`. Values outside the
+allowed bounds and reversed ranges show warnings during editing. On blur,
+Apply or Build, the fields also check number format. Invalid values stay
+visible with an accessible message outside normal layout flow. The numeric
+keyboard and explicit step controls remain available. Total slips accepts
+1–100, odds accept two decimal places and step by 0.01, and probabilities range
+from 0 to 100 and step by 0.001. Match counts accept correctly grouped pasted
+numbers and step by one. Apply, Build and saving filters validate canonical
+values. The same named fields serve native GET submission without JavaScript.
 
-Empty numeric ranges stay editable as Any, with blank minima using their configured
-defaults. Decimal prefixes such as 0 and 0. remain editable while entering 0.01.
-Integer zero is rejected. Range ordering is checked on leaving a field and when
-applying/building, so both endpoints can be edited without trapping a range.
+Empty numeric ranges stay editable as Any, with blank minima using their
+configured defaults.
 Native dates retain calendar selection with valid supported years, an ordered
 date window of at most 31 days and valid ordered minute-resolution times.
 Incomplete date segments remain editable; field warnings and the existing
 shared parser prevent invalid windows being applied. The dialog triggers use
 right-facing chevrons. Both layouts use a 6px gap below the toolbar. Input
-guards, comma formatting, blank Any bounds and criteria defaults are shared.
+validation, grouped-count parsing, blank Any bounds and criteria defaults are shared.
 
 A validation error exposes its invalid optional group; essential target errors
 stay beside the visible controls. Draft values remain editable and retain their
@@ -107,16 +107,16 @@ browser-safe `src/domain/slip-builder.ts` contract:
 | Kickoff time range | Inclusive daily minutes in Africa/Kampala (EAT) | 00:00–23:59, all day |
 | Markets | One or more match result, double chance, total goals or both teams to score | All four |
 | Market outcomes | Automatic or one or more supported results within each selected family | Any (Automatic) |
-| Total odds | Inclusive minimum from 0.01; optional maximum | 5.00–10.00 |
-| Individual selection odds | Inclusive minimum from 0.01; optional maximum | 0.01–Any |
+| Total odds | Inclusive minimum from 1.01; optional maximum | 5.00–10.00 |
+| Individual selection odds | Inclusive minimum from 1.01; optional maximum | 1.01–Any |
 | Selection probability | Inclusive unrounded percentage bounds, 0–100 | 75–100% |
 | Combined probability | Optional `totalProbMin` / `totalProbMax`, inclusive percentage bounds, 0–100; requires a verified joint model | Blank (no joint filter) |
 | Selection count | Whole match counts, minimum 1; optional maximum | 1–Any |
 | Number of slips | 1–100 | 5 |
 | Reuse matches | Allow a fixture in multiple separate slips | Off |
 
-Total odds display 5.00–10.00 and retain two decimal places after editing.
-Individual minimum odds display 0.01, minimum matches displays 1, and probability
+Total odds default to 5.00–10.00 and submit with two decimal places.
+Individual minimum odds display 1.01, minimum matches displays 1, and probability
 displays 75–100. Individual odds and match-count maxima start blank with Any
 placeholders. Custom criteria retain their supplied values, including a 0% minimum.
 Reset restores these defaults, today's from/to dates, 00:00–23:59, all markets
@@ -125,10 +125,10 @@ including after loading a criteria query.
 Each dialog's Reset restores only that dialog's fields. Apply retains those
 defaults; Cancel restores the values from before the dialog opened.
 
-Blank numeric minima use their defaults: 5.00 total odds, 0.01 individual odds,
+Blank numeric minima use their defaults: 5.00 total odds, 1.01 individual odds,
 1 match, or 75% selection probability. An omitted total-odds maximum uses 10.00;
-an explicitly blank maximum means Any rather than a requested numeric ceiling. A 0.01 odds
-criterion does not change the approved bookmaker-price validation contract.
+an explicitly blank maximum means Any. Saved presets with older odds bounds
+below 1.01 load those bounds at 1.01.
 The pure criteria contract omits unrestricted total-odds, individual-odds, and
 match-count maxima; canonical GET serialization preserves them as blank fields.
 Explicit odds bounds use exact two-decimal hundredths within the safe-integer

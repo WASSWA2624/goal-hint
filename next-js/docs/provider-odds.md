@@ -143,6 +143,8 @@ on its own.
   with exact BigInt arithmetic rounded half-up to 12 places. Double chance uses
   coverage 2 within its own bet, so its probabilities sum to 2. An overround
   below 1 is still normalized and recorded.
+- The minimum provider price is 1.01 before rounding. Bets with a lower price
+  are quarantined, and older below-floor prices are excluded from current odds.
 - `priceDecimal` keeps the provider decimal exactly. `displayHundredths` is
   rounded half-up once, at write time. A `CHECK` requires it to equal
   `ROUND(priceDecimal * 100)`. Feed display and the `odds=` filter use that same

@@ -1,4 +1,5 @@
 import { addReportingDays, parseReportingDate, validateReportingDateRange } from "./calendar.ts";
+import { parseProbabilityValue } from "./feed-query.ts";
 import { slipBuilderRules, type SlipInputs, type slipInputFields } from "./slip-builder.ts";
 import { formatOddsHundredths } from "./odds.ts";
 
@@ -54,22 +55,37 @@ export function guardSlipNumber(field: SlipNumericField, raw: string, commit = f
   return { accepted: true, value, complete: aboveFloor && !value.endsWith(".") };
 }
 
-/** Decimal grouping never converts a safe-integer count through floating point. */
-export function formatSlipMatchCount(value: string): string {
-  return /^\d+$/u.test(value) ? value.replace(/\B(?=(\d{3})+(?!\d))/gu, ",") : value;
-}
-
 /** Accept either plain digits or correctly grouped copied text; reject ambiguous punctuation. */
 export function normalizeSlipMatchCount(value: string): string | null {
   if (value === "" || /^\d+$/u.test(value)) return value;
   return /^\d{1,3}(?:,\d{3})+$/u.test(value) ? value.replaceAll(",", "") : null;
 }
 
+function numericText(rule: SlipNumericRule, raw: string): string | null {
+  const value = raw.trim();
+  return rule.grouped ? normalizeSlipMatchCount(value) : value;
+}
+
+/** Validate and canonicalize the draft when the user leaves the field or applies the criteria. */
+export function commitSlipNumber(field: SlipNumericField, raw: string): SlipNumberGuardResult {
+  const rule = slipNumericRule(field), value = numericText(rule, raw);
+  if (value === null) return { accepted: false, issue: "whole-number" };
+  if (value === "." && rule.precision > 0) return { accepted: false, issue: "number" };
+  const result = guardSlipNumber(field, value, true);
+  // Criteria URLs and saved filters can hold more probability decimals than the stepper uses.
+  if (rule === probabilityRule && !result.accepted && (result.issue === "precision" || value.length > 64)
+    && value.length <= 256 && parseProbabilityValue(value) !== null) {
+    return { accepted: true, value, complete: true };
+  }
+  return result;
+}
+
 /** Exact decimal steps avoid binary drift and reject a step beyond either hard bound. */
 export function stepSlipNumber(field: SlipNumericField, raw: string, direction: 1 | -1): SlipNumberGuardResult {
-  const rule = slipNumericRule(field);
-  if (raw === "") return guardSlipNumber(field, rule.minimum, true);
-  const parsed = guardSlipNumber(field, raw);
+  const rule = slipNumericRule(field), text = numericText(rule, raw);
+  if (text === null) return { accepted: false, issue: "whole-number" };
+  if (text === "") return guardSlipNumber(field, rule.minimum, true);
+  const parsed = guardSlipNumber(field, text);
   if (!parsed.accepted) return parsed;
   const value = scaled(parsed.value, rule.precision) + BigInt(direction) * scaled(rule.step, rule.precision);
   if (value < scaled(rule.minimum, rule.precision)) return { accepted: false, issue: "minimum", limit: rule.minimum };
@@ -84,10 +100,13 @@ export function slipNumberRangeIssue(field: SlipNumericField, draft: SlipInputs,
   if (field === "slips") return null;
   const prefix = field.replace(/(?:Min|Max)$/u, "");
   const from = `${prefix}Min` as SlipNumericField, to = `${prefix}Max` as SlipNumericField;
-  const rule = slipNumericRule(field), lower = draft[from] || defaults[from] || rule.minimum, upper = draft[to];
+  const rule = slipNumericRule(field), lower = draft[from]?.trim() || defaults[from] || rule.minimum, upper = draft[to]?.trim();
   if (!upper) return null;
-  const minimum = guardSlipNumber(from, lower, true), maximum = guardSlipNumber(to, upper, true);
-  return minimum.accepted && maximum.accepted && scaled(minimum.value, rule.precision) > scaled(maximum.value, rule.precision) ? "range" : null;
+  const minimum = commitSlipNumber(from, lower), maximum = commitSlipNumber(to, upper);
+  if (!minimum.accepted || !maximum.accepted) return null;
+  const reversed = rule === probabilityRule ? Number(minimum.value) > Number(maximum.value)
+    : scaled(minimum.value, rule.precision) > scaled(maximum.value, rule.precision);
+  return reversed ? "range" : null;
 }
 
 export type SlipDateTimeGuardIssue = "required" | "date" | "date-order" | "date-window" | "time" | "time-order";

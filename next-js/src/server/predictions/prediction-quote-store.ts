@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { marketFamilySchema } from "../../domain/fixture-snapshot.ts";
 import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
-import { DE_MARGIN_METHOD, formatOddsHundredths, oddsDisplayHundredths, oddsRules, parseDecimalOdds } from "../../domain/odds.ts";
+import { DE_MARGIN_METHOD, formatOddsHundredths, oddsDisplayHundredths, oddsRules, parseDecimalOdds, parseRecordedDecimalOdds } from "../../domain/odds.ts";
 import { ODDS_MAPPING_VERSION } from "../../domain/odds-markets.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { ResolvedForecastCandidate } from "../fallback/fallback-contract.ts";
@@ -21,7 +21,7 @@ const priceSchema = z.strictObject({ display: z.string().regex(/^[1-9]\d{0,3}\.\
   method: z.literal(DE_MARGIN_METHOD), mappingVersion: z.literal(ODDS_MAPPING_VERSION),
   line: z.string().regex(/^\d{1,4}\.\d{2}$/u).nullable(), snapshotId: historyHash, retrievedAt: historyInstant,
   providerUpdatedAt: historyInstant.nullable(), stateRetrievedAt: historyInstant }).refine((value) => {
-    const parsed = parseDecimalOdds(value.decimal);
+    const parsed = parseRecordedDecimalOdds(value.decimal);
     return parsed !== null && oddsDisplayHundredths(parsed) === value.hundredths;
   });
 const quoteSchema = z.strictObject({ version: z.literal(1), revisionId: historyId, cycleId: historyId, fixtureId: historyId,
@@ -31,6 +31,7 @@ const quoteSchema = z.strictObject({ version: z.literal(1), revisionId: historyI
   (v.state === "quoted") === (v.reason === null) && (v.state === "quoted") === (v.price !== null) &&
   (v.price === null || v.price.display === formatOddsHundredths(v.price.hundredths) && v.price.line === (v.family === "total-goals" ? "2.50" : null) && v.price.retrievedAt <= v.recordedAt &&
     v.price.stateRetrievedAt <= v.recordedAt && (v.price.providerUpdatedAt === null || v.price.providerUpdatedAt <= v.price.retrievedAt)));
+const newQuoteSchema = quoteSchema.refine((value) => value.price === null || parseDecimalOdds(value.price.decimal) !== null);
 /** Sealed public price beside one published family prediction; `quoted` rows carry the price shown at publication. */
 export type PredictionQuote = Readonly<z.infer<typeof quoteSchema>>;
 const identitySchema = z.strictObject({ revisionId: historyId, cycleId: historyId, fixtureId: historyId, recordedAt: historyInstant,
@@ -65,7 +66,7 @@ export function preparePredictionQuotes(input: QuoteIdentity & Readonly<{ source
     const price = reason === null ? { display: formatOddsHundredths(hundredths), hundredths, decimal: row!.priceDecimal, basis: "bookmaker" as const, bookmakerId: row!.bookmakerId!,
       method: row!.method, mappingVersion: row!.mappingVersion, line: row!.line, snapshotId: row!.snapshotId!, retrievedAt: retrievedAt!,
       providerUpdatedAt, stateRetrievedAt: lastRetrievedAt! } : null;
-    const parsed = quoteSchema.safeParse({ ...base, state: price ? "quoted" : "unavailable", reason, price });
+    const parsed = newQuoteSchema.safeParse({ ...base, state: price ? "quoted" : "unavailable", reason, price });
     // A stored row whose shape this reader cannot certify is not a public price.
     quotes.push(freezeEvidence(parsed.success ? parsed.data : { ...base, state: "unavailable" as const, reason: "invalid-public-price" as const, price: null }));
   }
@@ -89,7 +90,7 @@ export function predictionQuoteFromRow(row: HistoryRow): PredictionQuote {
 /** Append-only persistence for already authorized, source-bound quote bodies.
  * Callers establish publication authority before this shared sealed writer runs. */
 export async function writePreparedPredictionQuotes(tx: Tx, incoming: readonly PredictionQuote[]): Promise<void> {
-  const quotes = incoming.map((quote) => quoteSchema.parse(quote)), identities = new Set<string>();
+  const quotes = incoming.map((quote) => newQuoteSchema.parse(quote)), identities = new Set<string>();
   for (const quote of quotes) {
     const key = `${quote.revisionId}:${quote.family}`;
     if (identities.has(key)) return historyFail("invalid-request");

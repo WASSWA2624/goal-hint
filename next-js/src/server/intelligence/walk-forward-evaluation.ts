@@ -2,6 +2,7 @@ import "server-only";
 
 import { marketSelections, marketRules, validateMarketSnapshot, type MarketFamily, type SourceGroup } from "../../domain/markets.ts";
 import { selectionOccurred, type SettlementContext } from "../../domain/market-settlement.ts";
+import { isDecimalOddsValue } from "../../domain/odds.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { BaselineResult, EvaluationMetrics, MetricObservation } from "../evaluation/evaluation-contract.ts";
 import { evaluateMarketMetrics } from "../evaluation/evaluation-metrics.ts";
@@ -123,7 +124,7 @@ export function evaluateIntelligenceWalkForward(input: Readonly<{
         cell.observations.push({ market: availability.market, result });
         if (entry.quote && entry.quote.family === family && entry.quote.selection === availability.market.selection &&
           entry.quote.observedAt <= fixture.forecastAt && fixture.forecastAt - entry.quote.observedAt <= 6 * 3_600_000 &&
-          Number.isFinite(entry.quote.decimalOdds) && entry.quote.decimalOdds > 1) cell.returns.push(
+          isDecimalOddsValue(entry.quote.decimalOdds)) cell.returns.push(
             selectionOccurred(availability.market.selection, entry.result.homeGoals, entry.result.awayGoals) ? entry.quote.decimalOdds - 1 : -1);
       }
     }

@@ -150,7 +150,7 @@ CRITERIA_GROUP_FIELDS = {
 
 NUMERIC_RANGE_DEFAULTS = {
     "totalMin": "5.00", "totalMax": "10.00", "teamsMin": "1", "teamsMax": "",
-    "oddsMin": "0.01", "oddsMax": "", "probMin": "75", "probMax": "100",
+    "oddsMin": "1.01", "oddsMax": "", "probMin": "75", "probMax": "100",
 }
 
 
@@ -330,7 +330,7 @@ def verify_defaults(document):
         assert len(controls) == 1 and fields[name] == value, f"Default {name}: expected {value!r}, found {fields.get(name)!r}"
         assert not controls[0].attrs.get("placeholder", "").strip(), f"Default {name}: floating labels replace visible placeholders"
         if name in ("totalMin", "totalMax", "oddsMin", "oddsMax"):
-            assert controls[0].attrs.get("min") == "0.01" and controls[0].attrs.get("step") == "0.01", f"{name}: hundredth odds steps and valid minimum"
+            assert controls[0].attrs.get("min") == "1.01" and controls[0].attrs.get("step") == "0.01", f"{name}: hundredth odds steps and valid minimum"
             assert controls[0].attrs.get("max") == "90071992547409.91", f"{name}: only the shared exact-number ceiling limits entry"
         if name in ("teamsMin", "teamsMax"):
             assert controls[0].attrs.get("min") == "1" and controls[0].attrs.get("step") == "1", f"{name}: positive whole-match steps"
@@ -578,7 +578,7 @@ def verify(origin, directory):
     quantity = next(node for node in required.nodes("input") if node.attrs.get("name") == "slips")
     assert quantity.attrs.get("value") == "" and "required" in quantity.attrs and quantity.attrs.get("aria-invalid") == "true", "The blank required quantity remains editable and invalid"
     native = native_inputs(idle)
-    overrides = {"totalMin": "0.01", "probMin": "0", "probMax": "30", "teamsMin": "1", "teamsMax": "1", "slips": "1"}
+    overrides = {"totalMin": "1.01", "probMin": "0", "probMax": "30", "teamsMin": "1", "teamsMax": "1", "slips": "1"}
     manual = [(name, overrides.get(name, value)) for name, value in native if name != "markets" or value == "match-result"]
     manual.extend([("picks.match-result", "home-win"), ("picks.total-goals", "under-2.5")])
     selected = inspect(origin, "/en/slips?" + urlencode(manual), directory, "route-native-manual", "generated", 1, selections_per_slip=1)

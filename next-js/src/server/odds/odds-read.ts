@@ -3,23 +3,26 @@ import "server-only";
 import type { FixturePrice } from "../../domain/fixture-snapshot.ts";
 import type { DetailOddsGroup } from "../../domain/match-detail.ts";
 import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
-import { formatOddsHundredths } from "../../domain/odds.ts";
+import { formatOddsHundredths, oddsRules } from "../../domain/odds.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { historyTime } from "../predictions/history-read.ts";
 
 type Tx = Prisma.TransactionClient;
+// Compare the stored decimal before rounding: an old 1.0099 quote displays as 1.01.
+export const minimumFixturePrice = Prisma.sql`CAST(${formatOddsHundredths(oddsRules.minimumHundredths)} AS DECIMAL(10,4))`;
 /** Feed join: 1:1 by the projection's primary key, on exactly the shown pick's family and selection, fresh rows only.
  * Aliases: f = FootballFixture, m = the shown MarketPrediction, op = its price. */
 export const oddsPriceJoin = Prisma.sql`LEFT JOIN FixtureOddsPrice op ON op.fixtureId=f.id AND op.marketKey=m.family
-      AND op.selection=m.selection AND op.stale=FALSE`;
+      AND op.selection=m.selection AND op.stale=FALSE AND op.priceDecimal>=${minimumFixturePrice}`;
 
 export type FixturePriceRow = { marketKey: string; selection: string; basis: string; displayHundredths: unknown; impliedProbability: string;
   overround: string; method: string; snapshotId: string | null; retrievedAt: Date; providerUpdatedAt: Date | null };
 async function freshRows(tx: Tx, fixtureId: string): Promise<FixturePriceRow[]> {
   return tx.$queryRaw<FixturePriceRow[]>`SELECT marketKey, selection, basis, displayHundredths, CAST(impliedProbability AS CHAR) AS impliedProbability,
     CAST(overround AS CHAR) AS overround, method, snapshotId, retrievedAt, providerUpdatedAt
-    FROM FixtureOddsPrice WHERE fixtureId = ${fixtureId} AND stale = FALSE ORDER BY marketKey, selection`;
+    FROM FixtureOddsPrice WHERE fixtureId = ${fixtureId} AND stale = FALSE AND priceDecimal>=${minimumFixturePrice}
+    ORDER BY marketKey, selection`;
 }
 const isBasis = (value: string): value is FixturePrice["basis"] => value === "bookmaker" || value === "median";
 

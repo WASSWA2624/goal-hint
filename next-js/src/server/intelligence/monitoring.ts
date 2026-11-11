@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isDecimalOddsValue } from "../../domain/odds.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 
 export type ContextClaim = Readonly<{
@@ -56,7 +57,7 @@ export function validateMonitoringObservation(observation: MonitoringObservation
       observation.confirmedMajorAbsences !== null && (!Array.isArray(observation.confirmedMajorAbsences) || observation.confirmedMajorAbsences.some((id) => typeof id !== "string" || !id)) ||
       observation.unexpectedLineup !== null && typeof observation.unexpectedLineup !== "boolean" ||
       observation.seriousSecurityIssue !== null && typeof observation.seriousSecurityIssue !== "boolean") return false;
-  if (observation.odds !== null && Object.values(observation.odds).some((n) => !Number.isFinite(n) || n <= 1) ||
+  if (observation.odds !== null && Object.values(observation.odds).some((value) => !isDecimalOddsValue(value)) ||
       observation.probabilities !== null && Object.values(observation.probabilities).some((n) => !Number.isFinite(n) || n < 0 || n > 1)) return false;
   const claims = new Map<string, string>();
   return observation.context === null || Array.isArray(observation.context) && observation.context.every((claim) => {

@@ -3,16 +3,16 @@ import { formatProbabilityValue, parseProbabilityValue, probabilityFraction, typ
 import { kickoffTimeWindows, validKickoffTime } from "./kickoff-time.ts";
 import type { StoredMatchFeedRecord } from "./match-feed.ts";
 import { isMarketFamily, isMarketSelection, marketSelections, type MarketFamily, type MarketSelection } from "./markets.ts";
-import { formatOddsHundredths, parseDecimalOdds } from "./odds.ts";
+import { formatOddsHundredths, oddsRules, parseDecimalOdds } from "./odds.ts";
 import { publicPolicy } from "./public-policy.ts";
 import type { SlipForecastReference } from "./slip-forecast-reference.ts";
 export type { SlipForecastReference } from "./slip-forecast-reference.ts";
 
 const maximumCandidates = 800;
-/** Criteria precision and operational search budgets are independent of bookmaker quote validation. */
+/** Builder criteria and operational search limits. */
 export const slipBuilderRules = Object.freeze({
   maximumDays: 31, maximumSelections: maximumCandidates, maximumSlips: 100,
-  minimumOddsHundredths: 1, maximumOddsHundredths: Number.MAX_SAFE_INTEGER,
+  minimumOddsHundredths: oddsRules.minimumHundredths, maximumOddsHundredths: Number.MAX_SAFE_INTEGER,
   maximumTotalOddsHundredths: Number.MAX_SAFE_INTEGER,
   maximumCandidates, maximumSearchNodes: 100_000, maximumSearchWork: 100_000,
   maximumCombinations: 2_000, maximumRetainedSelections: 16_000, maximumBatchNodes: 100_000,
@@ -215,7 +215,7 @@ export function serializeSlipCriteria(criteria: SlipCriteria): URLSearchParams {
   }
   for (const field of ["totalMin", "totalMax", "oddsMin", "oddsMax"] as const) {
     if (criteria[field] === undefined && field.endsWith("Max")) { result.set(field, ""); continue; }
-    if (!Number.isSafeInteger(criteria[field])) fail(field, "invalid-odds-range");
+    if (!Number.isSafeInteger(criteria[field]) || criteria[field]! < slipBuilderRules.minimumOddsHundredths) fail(field, "invalid-odds-range");
     result.set(field, formatOddsHundredths(criteria[field]!));
   }
   for (const field of ["probMin", "probMax"] as const) result.set(field, formatProbabilityValue(criteria[field]));

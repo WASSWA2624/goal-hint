@@ -67,7 +67,8 @@ test('median prices are an unsupported basis and malformed public rows are inval
     'unsupported-price-basis');
   for (const overrides of [{ bookmakerId: null }, { bookmakerId: -1 }, { retrievedAt: new Date(recordedAt - freshnessMs - 1) }, { snapshotId: null }, { snapshotId: 'not-a-hash' }, { displayHundredths: 100 }, { displayHundredths: 100_001 },
     { displayHundredths: 2.5 }, { retrievedAt: new Date(recordedAt + 1) }, { providerUpdatedAt: new Date(recordedAt - 60_000) },
-    { method: 'unreviewed method' }, { mappingVersion: 'future-odds-v2' }, { priceDecimal: '8.0000' }, { line: '1.50' }, { priceDecimal: '2.35' }]) {
+    { method: 'unreviewed method' }, { mappingVersion: 'future-odds-v2' }, { priceDecimal: '8.0000' }, { line: '1.50' }, { priceDecimal: '2.35' },
+    { priceDecimal: '1.0099', displayHundredths: 101 }]) {
     assert.equal(reasonOf({ state: freshState(), rows: [priceRow('match-result', overrides)] }, 'match-result'), 'invalid-public-price', JSON.stringify(overrides));
   }
 });
@@ -88,6 +89,8 @@ test('sealed rows parse only when every column matches the strict body', () => {
     displayHundredths: quote.price ? BigInt(quote.price.hundredths) : null, quotedAt: quote.price ? new Date(quote.price.retrievedAt) : null,
     recordedAt: new Date(quote.recordedAt), integrity: 'e'.repeat(64), body: evidenceSerialize(quote), validIntegrity: 1n, ...overrides });
   assert.deepEqual(predictionQuoteFromRow(row(quoted)), quoted);
+  const legacy = { ...quoted, price: { ...quoted.price, decimal: '1.0099', display: '1.01', hundredths: 101 } };
+  assert.deepEqual(predictionQuoteFromRow(row(legacy)), legacy);
   assert.deepEqual(predictionQuoteFromRow(row(missing)), missing);
   const invalid = (error) => error.reason === 'invalid-state';
   assert.throws(() => predictionQuoteFromRow(row(quoted, { validIntegrity: 0n })), invalid);

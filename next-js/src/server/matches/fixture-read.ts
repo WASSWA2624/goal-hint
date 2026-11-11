@@ -15,7 +15,7 @@ import { refreshResultFromRow, storedRefreshResult } from "../predictions/public
 import { projectSettlementCycle, settlementRevisionFromRow, storedSettlementProjection, type SettlementProjectionReader } from "../settlement/settlement-read.ts";
 import type { SettlementRevision } from "../settlement/settlement-contract.ts";
 import { fixtureResultFromRow, fixtureResultMatchesCanonical, resultStatus, storedFixtureResult, type StoredFixtureResult } from "../results/result-read.ts";
-import { fixturePricesFromRows, storedFixturePrices, type FixturePriceRow } from "../odds/odds-read.ts";
+import { fixturePricesFromRows, minimumFixturePrice, storedFixturePrices, type FixturePriceRow } from "../odds/odds-read.ts";
 import { publicRecommendation, recommendationMarket } from "../../domain/recommendation-view.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { formatOddsHundredths, oddsDisplayHundredths, parseDecimalOdds } from "../../domain/odds.ts";
@@ -88,9 +88,9 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
   if ((options.prices ?? publicPolicy.features.providerOdds) && chosen) {
     const quote = chosen.quote, decimal = parseDecimalOdds(quote.decimal);
     // The recommended pick keeps its original publication quote; later odds updates do not replace it.
+    const index = prices.findIndex((price) => price.family === chosen.family);
+    if (index >= 0) prices.splice(index, 1);
     if (decimal) {
-      const index = prices.findIndex((price) => price.family === chosen.family);
-      if (index >= 0) prices.splice(index, 1);
       prices.push({ family: chosen.family, selection: chosen.selection, price: formatOddsHundredths(oddsDisplayHundredths(decimal)),
         basis: "bookmaker", retrievedAt: utcInstantFromEpochMilliseconds(quote.observedAt),
         providerUpdatedAt: quote.providerUpdatedAt === null ? null : utcInstantFromEpochMilliseconds(quote.providerUpdatedAt) });
@@ -211,7 +211,8 @@ export async function storedFeedFixtures(tx: Prisma.TransactionClient, ids: read
   const priceRows = (options.prices ?? publicPolicy.features.providerOdds) ? await tx.$queryRaw<(FixturePriceRow & { fixtureId: string })[]>(Prisma.sql`
     SELECT fixtureId,marketKey,selection,basis,displayHundredths,CAST(impliedProbability AS CHAR) AS impliedProbability,
       CAST(overround AS CHAR) AS overround,method,snapshotId,retrievedAt,providerUpdatedAt
-    FROM FixtureOddsPrice WHERE fixtureId IN (${Prisma.join(ids)}) AND stale=FALSE ORDER BY fixtureId,marketKey,selection`) : [];
+    FROM FixtureOddsPrice WHERE fixtureId IN (${Prisma.join(ids)}) AND stale=FALSE AND priceDecimal>=${minimumFixturePrice}
+    ORDER BY fixtureId,marketKey,selection`) : [];
   const prices = new Map<string, FixturePriceRow[]>();
   for (const row of priceRows) { const members = prices.get(row.fixtureId) ?? []; members.push(row); prices.set(row.fixtureId, members); }
   return Promise.all(ids.map((id) => {
