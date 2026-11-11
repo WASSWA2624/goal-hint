@@ -9,7 +9,7 @@ export function createCheckoutHandlers(services: MemberServicesSource = getMembe
     GET: memberRoute(async ({ services, member }) => {
       const value = await services.checkout?.read(member!);
       return value ? json(value) : json({ message: "Checkout is unavailable." }, 503);
-    }, { services, access: "member" }),
+    }, { services, access: "account" }),
     POST: memberRoute(async ({ request, services, member }) => {
       if (member!.blocked || !services.checkout || !services.payments) return json({ message: "Checkout is unavailable." }, 403);
       if (!await services.checkout.allow(member!, clientAddress(request.headers))) return json({ message: "Too many checkout attempts. Your draft is kept; try later." }, 429);
@@ -46,6 +46,6 @@ export function createCheckoutHandlers(services: MemberServicesSource = getMembe
         default: return json({ message: "Unknown checkout action." }, 400);
       }
       return result.ok ? json(result.value) : json({ message: result.message, code: result.code }, 409);
-    }, { services, access: "member" }),
+    }, { services, access: "account" }),
   };
 }

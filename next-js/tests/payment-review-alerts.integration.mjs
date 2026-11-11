@@ -35,7 +35,7 @@ test("atomic reviewer events, endpoint security and retries on real MySQL", { ti
   await database.query(tx => tx.memberSession.update({ where: { tokenHash: admin.hash }, data: { adminPasswordVersion: config.key("admin-password-version", "plain:synthetic admin password only") } }));
   const customer = await member(), registry = createReviewAlertRegistry(database, config, now);
   const planId = randomUUID();
-  await database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", mtnEnabled: true, mtnNumber: "256700000901", mtnName: "TEST MTN", updatedAt: at(), updatedBy: "test" } }));
+  await database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "on", mtnEnabled: true, mtnNumber: "256700000901", mtnName: "TEST MTN", updatedAt: at(), updatedBy: "test" } }));
   await database.query(tx => tx.subscriptionPlan.create({ data: { id: planId, name: "Weekly", durationDays: 7, priceUgx: 5000, active: true, sortOrder: 1, createdAt: at(), updatedAt: at() } }));
   const registration = { transport: "fcm", subscription: { fid: "T".repeat(22) } };
   await assert.rejects(() => registry.register(customer.hash, registration), error => error.message === authCopy.administratorRequired);

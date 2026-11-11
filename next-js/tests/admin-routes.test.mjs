@@ -30,14 +30,14 @@ const memberRoutes = await find("src/app/api/account", "route.ts");
 const routes = await find("src/app/api/admin", "route.ts");
 const source = (file) => readFile(path.join(root, file), "utf8");
 
-test("member write routes use the shared factories; sign-in and devices enforce origin, mode and device unlock", async () => {
+test("member write routes use the shared factories; sign-in and device management enforce origin and authenticated account access", async () => {
   for (const [segment, factory] of [["sign-in", "createMemberSignInHandler"], ["sign-out", "createMemberSignOutHandler"], ["devices", "createMemberDevicesHandler"]]) {
     const route = `src/app/api/account/${segment}/route.ts`;
     assert.ok(memberRoutes.includes(route));
     assert.match(await source(route), new RegExp(`export const POST = ${factory}\\(\\);`));
   }
   for (const segment of ["payments", "checkout"]) assert.match(await source(`src/app/api/account/${segment}/route.ts`), /createCheckoutHandlers/);
-  for (const mode of ["off", "test", "on"]) for (const member of [null, { codeEnteredAt: null }, { codeEnteredAt: new Date(0), blocked: false }]) {
+  for (const mode of ["off", "on"]) for (const member of [null, { blocked: false }, { blocked: true }]) {
     const services = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, settings: { settings: { paywallMode: mode } },
     auth: { login: async (_phone, password) => password ? ({ status: "authenticated", token: "t".repeat(43), phone: "256700000101" }) : ({ status: "unauthorized", message: "Enter your password." }) }, sessions: {
       verify: async () => member, signIn: async () => ({ status: "signed-in", token: "t".repeat(43) }), signOutOthers: async () => true,
@@ -46,7 +46,7 @@ test("member write routes use the shared factories; sign-in and devices enforce 
       for (const site of ["same-origin", "cross-site"]) {
         const response = await factory(services)(new Request("http://localhost:3000/api/account/test", { method: "POST", headers: {
           "sec-fetch-site": site, "content-type": "application/json" }, body: JSON.stringify({ phone: "256700000101", password: "test password" }) }));
-        assert.equal(response.status, site === "cross-site" || devices && !member?.codeEnteredAt ? 403 : devices ? 303 : 200);
+        assert.equal(response.status, site === "cross-site" || devices && (!member || member.blocked) ? 403 : devices ? 303 : 200);
       }
     }
   }
@@ -233,10 +233,10 @@ test("Plans and Settings: reads expose managed support settings, writes are JSON
   const shown = await view.json();
   assert.equal(shown.source, "defaults");
   assert.equal(shown.settings.paywallMode, "off", "A missing row reads off.");
-  assert.equal(shown.settings.trialDays, 2, "A missing row offers the 2-day trial.");
+  assert.equal(shown.settings.trialDays, 2, "A missing row configures a 2-day trial for paid access.");
+  assert.equal(shown.settings.allowUnsubscribedMembers, false);
   assert.deepEqual(shown.environmentFields, ["contactPhone", "whatsappPhone"]);
-  assert.deepEqual(shown.requirements.test.map(({ key }) => key), ["plan", "payment-number", "contact"]);
-  assert.deepEqual(shown.requirements.on.map(({ key }) => key), ["plan", "payment-number", "contact", "privacy", "terms"]);
+  assert.deepEqual(shown.checkoutReadiness.map(({ key }) => key), ["plan", "payment-number", "contact", "privacy", "terms"]);
   assert.equal(shown.diagnostics.address, "unknown", "Raw forwarded headers cannot establish a trusted transport address.");
   assert.deepEqual(shown.diagnostics.headers.filter(({ value }) => value !== null), [{ name: "x-forwarded-for", value: "198.51.100.4, 203.0.113.8" },
     { name: "x-real-ip", value: "203.0.113.8" }]);
@@ -258,7 +258,10 @@ test("Plans and Settings: reads expose managed support settings, writes are JSON
   assert.equal(calls.confirm.length, confirms, "Supplying a password cannot override environment authority.");
   const unknown = await settings.POST(postJson(settingsRoute, { action: "save", changes: { paywallMode: "on" } }));
   assert.equal(unknown.status, 400, "The mode is never part of a save."); assert.match((await unknown.json()).errors.changes, /Unknown setting/);
-  const down = await settings.POST(postJson(settingsRoute, { action: "mode", mode: "test" }));
+  const obsoleteMode = await settings.POST(postJson(settingsRoute, { action: "mode", mode: "test" }));
+  assert.equal(obsoleteMode.status, 400);
+  assert.match((await obsoleteMode.json()).errors.mode, /Choose Off or On/u);
+  const down = await settings.POST(postJson(settingsRoute, { action: "mode", mode: "on" }));
   assert.equal(down.status, 503, "A mode change runs in a transaction; storage that is down answers 503, never 500.");
 });
 
@@ -266,7 +269,7 @@ test("Plans and Settings: reads expose managed support settings, writes are JSON
 test("payment writes guard origin, mode, session and blocked accounts before body or storage", async () => {
   const { createPaymentHandler } = await import("../src/server/members/payment-http.ts");
   const { paymentRequest } = await import("./helpers/payment-fixtures.mjs");
-  for (const mode of ["off", "test", "on"]) for (const member of [null, { codeEnteredAt: null, blocked: false }, { codeEnteredAt: new Date(), blocked: true }]) for (const site of ["same-origin", "cross-site"]) {
+  for (const mode of ["off", "on"]) for (const member of [null, { codeEnteredAt: null, blocked: false }, { codeEnteredAt: new Date(), blocked: true }]) for (const site of ["same-origin", "cross-site"]) {
     const services = async () => ({ config: { production: false }, settings: { settings: { paywallMode: mode } }, sessions: { verify: async () => member },
       payments: { begin: async () => true, submit: async () => ({ status: "saved", reference: "P-TEST" }) } });
     const denied = mode === "off" || !member || member.blocked || site === "cross-site";

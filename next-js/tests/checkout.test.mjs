@@ -225,7 +225,7 @@ test("evidence dates accept provider formats, EAT and explicit zones without nor
 test("checkout HTTP enforces identity, origin, upload content and rate limits with private responses", async () => {
   const member = { accountId: randomUUID(), tokenHash: "a".repeat(64), phone: "256700000123", blocked: false };
   let identity = member, allowed = true, called = 0, checked = 0;
-  const services = async () => ({ config: { production: false }, settings: { settings: { paywallMode: "test" } }, sessions: { async verify() { return identity; } }, payments: {},
+  const services = async () => ({ config: { production: false }, settings: { settings: { paywallMode: "on" } }, sessions: { async verify() { return identity; } }, payments: {},
     checkout: { async allow() { return allowed; }, async checkEvidence(_member, input) { checked++; assert.equal(input.provider, "mtn"); return { ok: true, value: { reuse: "available", imageRepeated: false } }; }, async confirm(_member, selection, requestKey, quoteKey, confirmed, proof, image) {
       called++; assert.equal(selection.purpose, "plan"); assert.equal(confirmed, true); assert.equal(proof.original.text, "original evidence"); assert.deepEqual(image, jpeg());
       return { ok: true, value: { requestKey, quoteKey } };

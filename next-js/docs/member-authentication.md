@@ -26,7 +26,7 @@ A phone-number account can have two authenticated, unexpired sessions. A success
 
 Incorrect credentials, blocked/throttled attempts and rolled-back login transactions preserve existing sessions. Restricted verification and reset-only sessions cannot evict authenticated sessions. Completing phone verification, changing a password/phone or completing password recovery still rotates authorization and revokes prior sessions for security. Separate browser profiles and in-app browsers count as separate sessions; tabs sharing a cookie share one session.
 
-The newly signed-in device inherits the account's current approved subscription without changing its expiry, subject to the independent unlocked-device cap. A paid-device eviction clears entitlement but does not sign out an otherwise valid session. Administrators and normal users use the same phone-and-password login form and the same two-session policy. Token hashing, 90-day rolling server expiry, daily touch and existing expired-row maintenance remain unchanged.
+Both signed-in devices inherit the account’s active subscription and share its expiry. Administrators and normal users use the same phone-and-password login form and the same two-session policy. Token hashing, 90-day rolling server expiry, daily touch and existing expired-row maintenance remain unchanged.
 
 ## Account verification
 

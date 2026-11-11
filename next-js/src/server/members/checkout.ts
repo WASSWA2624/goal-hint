@@ -16,6 +16,7 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import type { PaymentSubmission, Prisma } from "../generated/prisma/client.ts";
 import { accessCodeTransaction, createAccessPeriod, lockMemberAccount, newReference } from "./access-codes.ts";
 import type { MemberIdentity } from "./member-sessions.ts";
+import { subscriptionCheckoutPublished } from "./sales-readiness.ts";
 import { lockSettings } from "./settings.ts";
 import { appendWalletEntry, lockedCredit } from "./wallet.ts";
 import { takeMemberLimit, memberRateRules } from "./rate-limit.ts";
@@ -78,12 +79,14 @@ async function currentMember(tx: Tx, member: MemberIdentity, at: Date) {
 }
 
 export function createCheckout({ database, config, now = Date.now }: {
-  database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key">; now?: () => number;
+  database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key"> & Partial<Pick<AnalyticsConfig, "production">>; now?: () => number;
 }) {
   const run = <T>(fn: (tx: Tx, at: Date) => Promise<T>) => accessCodeTransaction(database, tx => fn(tx, new Date(now())));
+  const newCheckoutOpen = (settings: Awaited<ReturnType<typeof lockSettings>>, purpose: string) => purpose === "referral"
+    ? settings.paywallMode === "on" : subscriptionCheckoutPublished(settings, config.production === true);
   async function quote(tx: Tx, selection: CheckoutSelection, at: Date, accountId: string): Promise<Result<CheckoutQuote>> {
     const settings = await lockSettings(tx, "checkout", at);
-    if (settings.paywallMode === "off") return fail("Subscriptions are not open yet.");
+    if (!newCheckoutOpen(settings, selection.purpose)) return fail("Subscriptions are not open yet.");
     const balances = await checkoutBalances(tx, accountId);
     const plan = selection.purpose === "plan" && selection.planId ? await tx.subscriptionPlan.findUnique({ where: { id: selection.planId } }) : null;
     if (selection.purpose === "plan" && (!plan?.active || selection.topUpUgx !== 0)
@@ -303,9 +306,15 @@ export function createCheckout({ database, config, now = Date.now }: {
       if (!confirmed || ![walletUgx, referralDays, amountToSend].every(v => Number.isSafeInteger(v) && v >= 0)) return fail("Confirm your funding choices.");
       return run(async (tx, at) => {
         if (!await currentMember(tx, member, at)) return fail(authCopy.loginAgain);
-        await lockSettings(tx, "checkout", at); await expire(tx, member.accountId, at);
+        const settings = await lockSettings(tx, "checkout", at);
+        await expire(tx, member.accountId, at);
         const row = await tx.paymentSubmission.findUnique({ where: { id } });
         if (!row || row.workflowVersion !== 2 || row.accountId !== member.accountId || ![...checkoutOpenStatuses, "rejected", "cancelled", "superseded"].includes(row.status) || row.reservationActive) return fail("This request cannot be reconfirmed.");
+        if (!open(row.status) && !newCheckoutOpen(settings, row.purpose) && !await tx.paymentReceiptClaim.findFirst({
+          where: { submissionId: row.id, withdrawn: false, receipt: { verifiedAt: { not: null }, disputed: false,
+            intendedSubmissionId: row.id, allocatedSubmissionId: null } },
+          select: { id: true },
+        })) return fail("Subscriptions are not open yet.");
         const balances = await checkoutBalances(tx, member.accountId);
         if (walletUgx > balances.availableWalletUgx || walletUgx > row.priceUgx || referralDays > Math.min(365, balances.availableReferralDays)
           || row.priceUgx - walletUgx !== amountToSend || row.purpose === "referral" && (walletUgx !== 0 || referralDays < 1)
@@ -377,13 +386,13 @@ export async function allocateCheckout(tx: Tx, row: PaymentSubmission, at: Date,
     await paymentEvent(tx, row.id, "awaiting_remaining", actor, at, undefined, undefined, { remainingUgx: amounts.remainingUgx });
     return fail(`UGX ${amounts.remainingUgx.toLocaleString("en-UG")} remains. Verify another receipt before approval.`, "remaining");
   }
-  const settings = await lockSettings(tx, actor, at);
+  await lockSettings(tx, actor, at);
   // Release this request's reservation before its ledger debit. Other reservations still constrain spending.
   await tx.paymentSubmission.update({ where: { id: row.id }, data: { reservationActive: false } });
   const grant = row.purpose !== "topup" ? await createAccessPeriod(tx, account, { source: "payment", paymentSubmissionId: row.id, planId: row.planId,
     planName: row.planName, priceUgx: row.priceUgx, durationDays: row.durationDays || row.referralDays,
     extensionDays: row.durationDays ? row.referralDays : 0, termsVersion: row.termsVersion }, actor, at,
-    { maximum: settings.maxUnlockedDevices, prefer: row.submittedSessionHash ? [row.submittedSessionHash] : [], appendAfterCurrent: true }) : null;
+    { appendAfterCurrent: true }) : null;
   if (row.walletUgx) await appendWalletEntry(tx, row.accountId, { kind: "purchase", amountUgx: -row.walletUgx, actor: "member", at,
     accessCodeId: grant!.id, requestKey: `checkout:${row.id}` });
   if (row.referralDays) {

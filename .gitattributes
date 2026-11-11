@@ -15,3 +15,5 @@ next-js/prisma/migrations/20261104090000_six_best_slip_odds_bands/migration.sql 
 next-js/prisma/mariadb/20261104090000_six_best_slip_odds_bands.sql text eol=lf
 next-js/prisma/migrations/20261104140000_manual_providers_and_opt_in_trials/migration.sql text eol=lf
 next-js/prisma/mariadb/20261104140000_manual_providers_and_opt_in_trials.sql text eol=lf
+next-js/prisma/migrations/20261111171000_paid_access_settings/migration.sql text eol=lf
+next-js/prisma/mariadb/20261111171000_paid_access_settings.sql text eol=lf

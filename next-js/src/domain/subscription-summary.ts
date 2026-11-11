@@ -1,5 +1,6 @@
 import type { SubscriptionOffer } from "./subscription-offer.ts";
 import type { SubscriptionPeriod } from "./subscription-period.ts";
+import type { SubscriptionSettings } from "./subscription-settings.ts";
 
 /**
  * Private navigation state; never embed this account-specific summary in shared public HTML. creditUgx is the account's
@@ -13,6 +14,11 @@ export type TrialStatus = Readonly<{ state: "available" | "forfeited" }>
   | (Readonly<{ state: "active" }> | Readonly<{ state: "expired" }>) & Readonly<{ startsAt: string; endsAt: string }>;
 export type SubscriptionStatus = Pick<SubscriptionSummary, "activeUntil" | "paymentPending" | "creditUgx" | "autoRenew" | "renewsFromCredit" | "expired">
   & Readonly<{ trial?: TrialStatus }>;
+
+export function offeredTrialDays(settings: Pick<SubscriptionSettings, "paywallMode" | "allowUnsubscribedMembers" | "trialDays"> | null): number {
+  return settings?.paywallMode === "on" && !settings.allowUnsubscribedMembers ? settings.trialDays : 0;
+}
+
 /** An account with no credit or auto-renewal, as older servers and signed-out states report it. */
 export const noCredit = Object.freeze({ creditUgx: 0, autoRenew: false, renewsFromCredit: false });
 type Period = Pick<SubscriptionPeriod, "startsAt" | "endsAt" | "revokedAt">;

@@ -9,11 +9,12 @@ import { fixtureNotifications } from "./fixture-notifications";
 export function fixtureServices(state: string) {
   const scenario = state === "ended" ? "expired" : state === "signed-in" ? "free"
     : ["queued", "dashboard-unavailable", "subscription-unavailable", "referral-empty", "referral-unavailable", "notifications-empty", "notifications-unavailable"].includes(state) ? "active" : state;
-  const unlocked = ["active", "manual", "trial", "pending-renewal", "expired", "off-active", "registration-trial"].includes(scenario), at = Date.now();
+  const unlocked = ["active", "manual", "trial", "pending-renewal", "expired", "off-active", "registration-trial", "off-trial-active"].includes(scenario), at = Date.now();
   return async () => {
     const consent = (await cookies()).get("member-fixture-whatsapp")?.value;
     return { config: { production: false },
-    settings: { settings: state === "unavailable" ? null : { ...defaultSubscriptionSettings, paywallMode: scenario.startsWith("off") ? "off" : "test",
+    settings: { settings: state === "unavailable" ? null : { ...defaultSubscriptionSettings, paywallMode: scenario.startsWith("off") ? "off" : "on",
+      allowUnsubscribedMembers: scenario === "member-free", trialDays: scenario === "trial-disabled" ? 0 : 30,
       ...(state === "support" ? { supportContacts: [
         { id: "synthetic-support", label: "Account support", network: "other", phone: "256700000101", calls: true, whatsapp: true, enabled: true, primary: true },
         { id: "synthetic-secondary", label: "Registration and verification support", network: "other", phone: "256700000102", calls: true, whatsapp: false, enabled: true, primary: false },

@@ -23,7 +23,7 @@ export function fixtureBuild(criteria: SlipCriteria): SlipBuildPageResult {
 }
 export function viewer(cookie: string | null) {
   const eligible = !cookie?.includes("fixture-polling-viewer=guest");
-  return { tier: eligible ? "full" as const : "free" as const, signedIn: eligible, mode: "test" as const };
+  return { tier: eligible ? "full" as const : "free" as const, signedIn: eligible, mode: "on" as const };
 }
 export function observed(selections: readonly SlipMatchWatch[], cookie: string | null) {
   const phase = /fixture-polling-phase=([^;]+)/u.exec(cookie ?? "")?.[1] ?? "scheduled";

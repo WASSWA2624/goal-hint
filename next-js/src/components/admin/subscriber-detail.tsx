@@ -124,9 +124,8 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
       </Badges>
     </AccountTop>
     <AccountStats $columns={4} data-subscriber-stats>
-      <div><dt>Unlocked devices</dt><dd>{account.devices.length}</dd></div>
+      <div><dt>Signed-in devices</dt><dd>{account.devices.length}</dd></div>
       <div><dt>Access periods</dt><dd>{account.codes.length}</dd></div>
-      <div><dt>Unlocks · 30 days</dt><dd>{account.unlocks}</dd></div>
       <div><dt>Credit</dt><dd data-subscriber-credit>{formatCredit(account.creditUgx)}</dd></div>
     </AccountStats>
     {!dialogMode && accountActions}
@@ -177,7 +176,7 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
       </TabBody>}
       {tab === "devices" && (account.devices.length ? <RowList>{account.devices.map((device, index) => <RecordRow key={`${device.createdAt}-${index}`}><div>
         <RowTitle>Device {index + 1}</RowTitle><RowMeta>Last seen {formatPeriodEnd(new Date(device.lastSeenAt))} · Expires {formatPeriodEnd(new Date(device.expiresAt))}</RowMeta>
-      </div></RecordRow>)}</RowList> : <TabBody><MutedText>No unlocked devices.</MutedText></TabBody>)}
+      </div></RecordRow>)}</RowList> : <TabBody><MutedText>No signed-in devices.</MutedText></TabBody>)}
     </Panel>
     {tabs.filter(value => value !== tab).map(value => <div key={value} role="tabpanel" hidden id={`${id}-view-${value}`} aria-labelledby={`${id}-tab-${value}`} />)}
     <DrawerPanel as="div">

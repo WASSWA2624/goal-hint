@@ -9,7 +9,7 @@ from lib.rendering import ROOT, Server, build_fixture, create_fixture, environme
 from lib.runtime import main_guard
 
 SENTINELS = r"SENTINEL-|(?<![\d.])7\.73(?!\d)"
-VIEWERS = ["anonymous", "number-only", "entitled", "expired", "revoked", "blocked", "evicted", "test", "off"]
+VIEWERS = ["anonymous", "number-only", "entitled", "expired", "revoked", "blocked", "evicted", "verified-free", "off"]
 PUBLIC_SLIP_FIELDS = {"rank", "matchCount", "totalOdds", "estimatedProbability", "averageProbability", "outcome", "status", "completed", "slip", "matchStates"}
 # Slip aggregates and match identities are public previews; individual picks remain private.
 PRIVATE_SLIP_VALUES = SENTINELS + r"|0\.6173|61\.7%|0\.7027|70\.3%|home-win|under-2\.5"
@@ -72,7 +72,7 @@ def main():
         def verify_viewer(viewer):
             checks = 0
             headers = {"x-test-viewer": viewer}
-            full = viewer == "entitled"
+            full = viewer in {"entitled", "verified-free", "off"}
             for name, scenario in scenarios.items():
                 detail = scenario["detail"]
                 fixture_id, path = detail["fixture"]["fixtureId"], detail["route"]["path"]

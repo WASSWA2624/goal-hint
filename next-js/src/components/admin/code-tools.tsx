@@ -38,10 +38,9 @@ export function grantNotice(body: AdminReply["body"]): string | null {
   const credit = typeof body.creditAddedUgx === "number" && typeof body.balanceUgx === "number"
     ? `UGX ${body.creditAddedUgx.toLocaleString("en-UG")} added to credit (balance UGX ${body.balanceUgx.toLocaleString("en-UG")})` : "";
   if (body.status === "credited") return [`Approved · ${credit}`, paymentNotificationNotice(body.notification)].filter(Boolean).join(" · ");
-  if (typeof body.endsAt !== "string" || typeof body.devicesUnlocked !== "number") return null;
-  const n = body.devicesUnlocked, line = `${body.status === "approved" ? "Approved" : "Granted"} · access until ${formatPeriodEnd(new Date(body.endsAt))} · ${n} device${n === 1 ? "" : "s"} unlocked`;
-  const grant = n ? line : `${line}. ${authCopy.accessNextLogin}`;
-  return [grant, credit, paymentNotificationNotice(body.notification)].filter(Boolean).join(" · ");
+  if (typeof body.endsAt !== "string") return null;
+  const line = `${body.status === "approved" ? "Approved" : "Granted"} · access until ${formatPeriodEnd(new Date(body.endsAt))}`;
+  return [line, credit, paymentNotificationNotice(body.notification)].filter(Boolean).join(" · ");
 }
 export function useCodeAction(onChanged?: () => Promise<void>, options?: CodeActionOptions) {
   const router = useRouter(), [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [notice, setNotice] = useState(""), [duplicateId, setDuplicateId] = useState<string | null>(null);

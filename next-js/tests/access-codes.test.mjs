@@ -51,31 +51,57 @@ test("periods use exact 24-hour blocks, preserve history and rechain without ove
 
 test("viewer access resolves in order, avoids absent owner cookies, checks a member once, and fails closed", async () => {
   const calls = { owner: [], reads: 0 };
-  let mode = "on", row = undefined, fail = false;
+  let mode = "on", source = "stored", allowUnsubscribedMembers = false, row, fail = false;
   const config = { production: false, cookies: { session: "owner" } };
   const resolver = createViewerAccess({ now: () => Date.parse("2026-10-19T09:00:00Z"),
-    settings: async () => ({ settings: { ...defaultSubscriptionSettings, paywallMode: mode } }),
+    settings: async () => ({ source, settings: source === "unavailable" ? null
+      : { ...defaultSubscriptionSettings, paywallMode: mode, allowUnsubscribedMembers } }),
     services: async () => ({ config, auth: { verify: async (token, options) => { calls.owner.push(options); if (fail) throw Error(); return token === "yes" ? {} : null; } },
-      database: { query: async (run) => run({ $queryRaw: async () => { calls.reads++; if (fail) throw Error(); return row ? [row] : []; } }) } }) });
+      database: { query: async (run) => run({ $queryRaw: async (query) => {
+        calls.reads++;
+        assert.doesNotMatch(query.join(""), /codeEnteredAt|accessCodeId/u);
+        if (fail) throw Error();
+        return row ? [row] : [];
+      } }) } }) });
   const cookies = (values) => (key) => values[key];
-  assert.deepEqual(await resolver(cookies({})), { tier: "free", signedIn: false, mode: "on" });
+  const guest = () => resolver(cookies({}));
+  const member = () => resolver(cookies({ "goal-hint-member": "t".repeat(43) }));
+  assert.deepEqual(await guest(), { tier: "free", signedIn: false, mode: "on" });
   assert.equal(calls.owner.length, 0);
   assert.equal((await resolver(cookies({ owner: "yes" }))).tier, "full");
   assert.deepEqual(calls.owner, [{ touch: false }]);
-  mode = "test";
-  assert.equal((await resolver(cookies({}))).tier, "free");
+  const at = new Date("2026-10-19T09:00:00Z");
   row = { accountId: "account", phone: "256700000901", passwordHash: "stored-password-hash", blockedAt: null,
-    lastSeenAt: new Date("2026-10-19T09:00:00Z"), entitled: 0 };
-  assert.deepEqual(await resolver(cookies({ "goal-hint-member": "t".repeat(43) })), { tier: "free", signedIn: true, mode: "test" });
+    lastSeenAt: at, phoneVerifiedAt: at, entitled: 0 };
+  assert.deepEqual(await member(), { tier: "free", signedIn: true, mode: "on" });
   assert.equal(calls.reads, 1);
+  allowUnsubscribedMembers = true;
+  assert.equal((await guest()).tier, "free");
+  assert.deepEqual(await member(), { tier: "full", signedIn: true, mode: "on" });
+  source = "last-good";
+  assert.equal((await member()).tier, "free");
+  source = "stored";
+  row.blockedAt = at;
+  assert.equal((await member()).tier, "free");
+  row.blockedAt = null;
+  row.phoneVerifiedAt = null;
+  assert.deepEqual(await member(), { tier: "free", signedIn: false, mode: "on" });
+  row.phoneVerifiedAt = at;
+  allowUnsubscribedMembers = false;
   row.entitled = 1n;
-  assert.equal((await resolver(cookies({ "goal-hint-member": "t".repeat(43) }))).tier, "full");
+  assert.equal((await member()).tier, "full");
+  source = "unavailable";
+  assert.equal((await member()).tier, "free");
+  source = "stored";
   fail = true;
-  assert.equal((await resolver(cookies({ "goal-hint-member": "t".repeat(43) }))).tier, "free");
+  assert.equal((await member()).tier, "free");
   mode = "off";
-  assert.equal((await resolver(cookies({ owner: "yes" }))).tier, "free");
+  assert.equal((await member()).tier, "full");
   fail = false;
-  assert.equal((await resolver(cookies({}))).tier, "free");
-  assert.equal((await resolver(cookies({ "goal-hint-member": "t".repeat(43) }))).tier, "full");
+  row.entitled = 0;
+  assert.deepEqual(await guest(), { tier: "full", signedIn: false, mode: "off" });
+  assert.deepEqual(await member(), { tier: "full", signedIn: true, mode: "off" });
   assert.equal((await resolver(cookies({ owner: "yes" }))).tier, "full");
+  source = "last-good";
+  assert.deepEqual(await guest(), { tier: "free", signedIn: false, mode: "free" });
 });

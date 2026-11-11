@@ -156,6 +156,27 @@ test('rotating an invalid owner cookie cannot evade the stable entitled member b
   assert.equal(reads, slipMatchRefreshRules.requestsPerMinute);
 });
 
+test('public slip refresh uses an address budget for guests, even when they rotate cookies', async () => {
+  const budgets = [];
+  let count = 0;
+  const tx = { $queryRaw: async () => [{ at: new Date(at) }], $executeRaw: async (_query, key) => { budgets.push(key); count++; return 1; },
+    rateLimitBucket: { findUniqueOrThrow: async () => ({ count }) } };
+  const database = { transaction: async operation => operation(tx) };
+  const config = { production: false, cookies: { session: 'owner' }, key: (purpose, value) => `${purpose}:${value}` };
+  const read = createStoredSlipMatchStates({ services: async () => ({ database, config }), resolveResults: async () => [] });
+  const guest = { tier: 'full', signedIn: false, mode: 'off' };
+  const handler = createSlipMatchStatesHandler({ access: async () => guest, read });
+  const send = cookie => handler(request(undefined, { headers: {
+    'content-type': 'application/json', 'sec-fetch-site': 'same-origin', ...(cookie ? { cookie } : {}),
+  } }));
+  assert.equal((await send()).status, 200);
+  count = slipMatchRefreshRules.requestsPerMinute;
+  assert.equal((await send('owner=arbitrary')).status, 429);
+  assert.equal(budgets.length, 2);
+  assert.equal(budgets[0], budgets[1]);
+  assert.match(budgets[0], /^member-slip-match-refresh-address:/u);
+});
+
 test('implicit local demo credentials use the normal budget while explicit sign-out and production stay closed', async () => {
   const variables = ['NODE_ENV', 'NEXT_PUBLIC_GOAL_HINT_DEMO', 'GOAL_HINT_DEMO_MEMBER'];
   const previous = new Map(variables.map(name => [name, process.env[name]]));

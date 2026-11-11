@@ -112,7 +112,7 @@ def subscriber_mutations(origin):
 
 
 def settings_api(origin):
-    scenarios = ["writable", "managed", "missing", "requirements-race", "save-failed", "saved-without-requirements"]
+    scenarios = ["writable", "managed", "missing", "save-failed", "saved-without-checkout-readiness"]
     def api(scenario, body=None, path="/api/admin/settings"):
         return fixture_json(origin, path, body, headers={"X-Settings-Fixture-Scenario": scenario})
     def snapshot(scenario):
@@ -126,7 +126,7 @@ def settings_api(origin):
         reset(scenario)
     try:
         status, baseline = api("writable")
-        assert status == 200 and baseline["environmentFields"] == [] and baseline["requirements"] == {"test": [], "on": []}
+        assert status == 200 and baseline["environmentFields"] == [] and baseline["checkoutReadiness"] == []
         status, saved = api("writable", {"action": "save", "changes": {"paymentNote": "Synthetic saved note", "reviewTime": "Within 20 minutes", "trialDays": 3, "screenshotRetentionDays": 30}})
         assert status == 200 and saved["settings"]["trialDays"] == 3 and saved["settings"]["paymentNote"] == "Synthetic saved note"
         assert snapshot("writable")["auditCount"] == 1
@@ -136,13 +136,14 @@ def settings_api(origin):
         status, normalized = api("writable", {"action": "save", "changes": {"mtnNumber": "+256 700 000 905"}})
         assert status == 200 and normalized["settings"]["mtnNumber"] == "256700000905"
         assert normalized["cleared"] == ["mtnMenuShortcut"] and normalized["settings"]["mtnMenuShortcut"] is None
-        for mode in ["test", "on"]:
+        for mode in ["on", "off"]:
             status, changed = api("writable", {"action": "mode", "mode": mode})
             assert status == 200 and changed["settings"]["paywallMode"] == mode
         before = snapshot("writable")
-        status, refused = api("writable", {"action": "save", "changes": {"mtnNumber": None, "airtelNumber": None, "contactPhone": None, "whatsappPhone": None}})
-        assert status == 409 and {row["key"] for row in refused["missing"]} == {"payment-number", "contact"}
-        assert snapshot("writable") == before, "A refused settings change rolls back its row and audit."
+        status, obsolete = api("writable", {"action": "mode", "mode": "test"})
+        assert status == 400 and "mode" in obsolete["errors"] and snapshot("writable") == before
+        status, changed = api("writable", {"action": "save", "changes": {"mtnNumber": None, "airtelNumber": None, "contactPhone": None, "whatsappPhone": None}})
+        assert status == 200 and {row["key"] for row in changed["checkoutReadiness"]} == {"payment-number", "contact"}
         status, managed = api("managed")
         assert status == 200 and managed["environmentFields"] == ["contactPhone", "whatsappPhone"]
         before = snapshot("managed")
@@ -151,23 +152,20 @@ def settings_api(origin):
         status, saved = api("managed", {"action": "save", "changes": {"mtnEnabled": False}})
         assert status == 200 and saved["settings"]["mtnEnabled"] is False and saved["settings"]["airtelEnabled"] is True
         status, missing = api("missing")
-        assert status == 200 and {item["key"] for item in missing["requirements"]["test"]} == {"plan", "payment-number", "contact"}
-        status, refused = api("missing", {"action": "mode", "mode": "on"})
-        assert status == 409 and len(refused["missing"]) == 5 and snapshot("missing")["settings"]["paywallMode"] == "off"
-        status, ready = api("requirements-race")
-        assert status == 200 and ready["requirements"] == {"test": [], "on": []}
-        status, refused = api("requirements-race", {"action": "mode", "mode": "test"})
-        assert status == 409 and [item["key"] for item in refused["missing"]] == ["plan"]
+        assert status == 200 and {item["key"] for item in missing["checkoutReadiness"]} == {"plan", "payment-number", "contact", "privacy", "terms"}
+        status, changed = api("missing", {"action": "mode", "mode": "on"})
+        assert status == 200 and changed["checkoutReadiness"] == missing["checkoutReadiness"]
+        assert snapshot("missing")["settings"]["paywallMode"] == "on"
         before = snapshot("save-failed")
         status, failed = api("save-failed", {"action": "save", "changes": {"trialDays": 3}})
         assert status == 503 and "Synthetic settings storage failure" not in json.dumps(failed) and snapshot("save-failed") == before
-        status, committed = api("saved-without-requirements", {"action": "save", "changes": {"trialDays": 4}})
+        status, committed = api("saved-without-checkout-readiness", {"action": "save", "changes": {"trialDays": 4}})
         assert status == 200 and committed["settings"]["trialDays"] == 4
-        assert "source" not in committed and "requirements" not in committed
-        assert snapshot("saved-without-requirements")["settings"]["trialDays"] == 4
-        assert api("saved-without-requirements")[1]["requirements"] == {"test": [], "on": []}
-        status, committed_mode = api("saved-without-requirements", {"action": "mode", "mode": "test"})
-        assert status == 200 and committed_mode["settings"]["paywallMode"] == "test" and "requirements" not in committed_mode
+        assert "source" not in committed and "checkoutReadiness" not in committed
+        assert snapshot("saved-without-checkout-readiness")["settings"]["trialDays"] == 4
+        assert api("saved-without-checkout-readiness")[1]["checkoutReadiness"] == []
+        status, committed_mode = api("saved-without-checkout-readiness", {"action": "mode", "mode": "on"})
+        assert status == 200 and committed_mode["settings"]["paywallMode"] == "on" and "checkoutReadiness" not in committed_mode
         for headers, expected in [({"Cookie": "synthetic-owner=legacy-token"}, 401), ({"Sec-Fetch-Site": "cross-site"}, 403)]:
             status, _ = fixture_json(origin, "/api/admin/settings", {"action": "save", "changes": {"trialDays": 3}}, headers=headers)
             assert status == expected
@@ -184,7 +182,7 @@ def settings_rendering(origin):
         match(r'<form\b(?=[^>]*data-record-form)[^>]*data-settings-editor', html)
         match(r'<h2 id="settings-section-heading">Payments</h2>', html)
         navigation = match(r'<ol\b[^>]*data-settings-nav[^>]*>([\s\S]*?)</ol>', html).group(1)
-        assert re.findall(r'id="settings-tab-([^"]+)"', navigation) == ["payments", "support", "access", "display", "messages"]
+        assert re.findall(r'id="settings-tab-([^"]+)"', navigation) == ["payments", "support", "community", "access", "display", "messages"]
         assert len(re.findall(r'aria-current="true"', navigation)) == 1
         assert re.findall(r'data-settings-section="([^"]+)"', html) == ["payments"]
         assert len(re.findall(r'<button\b(?=[^>]*data-settings-save)', html)) == 1

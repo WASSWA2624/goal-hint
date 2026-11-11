@@ -16,7 +16,7 @@ export function fixture() { return shared.contactPageFixture ??= { settings: ini
 export function publicFixture() { return publicContactPageSettings(fixture().settings); }
 export function overview(): SettingsPageData {
   return { settings: fixture().settings, source: "stored", environmentFields: [], protectedFields: protectedSettingFields,
-    requirements: { test: [], on: [] }, diagnostics: { address: "127.0.0.1", headers: [] } };
+    checkoutReadiness: [], diagnostics: { address: "127.0.0.1", headers: [] } };
 }
 export function resetFixture() { shared.contactPageFixture = { settings: initial(), unavailable: false }; }
 export function updateFixture(changes: unknown) {

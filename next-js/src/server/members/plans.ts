@@ -2,7 +2,6 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { parsePlanFields, type PlanFields, type PlanUsage, type SubscriptionPlanView } from "../../domain/subscription-plans.ts";
-import type { ModeRequirement, PaywallMode } from "../../domain/subscription-settings.ts";
 import { auditTextErrors, writeOwnerAudit } from "../admin/audit.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma, SubscriptionPlan as PlanRow } from "../generated/prisma/client.ts";
@@ -19,8 +18,7 @@ export type PlanOutcome =
   | Readonly<{ status: "saved"; plans: readonly SubscriptionPlanView[] }>
   | Readonly<{ status: "invalid"; errors: PlanErrors }>
   | Readonly<{ status: "not-found" }>
-  | Readonly<{ status: "in-use"; usage: PlanUsage }>
-  | Readonly<{ status: "requirements"; mode: PaywallMode; missing: readonly ModeRequirement[] }>;
+  | Readonly<{ status: "in-use"; usage: PlanUsage }>;
 
 export type PlanUsageOutcome = Readonly<{ status: "usage"; usage: PlanUsage }> | Readonly<{ status: "not-found" }>;
 
@@ -71,16 +69,12 @@ export function createPlansService(database: DatabaseRuntime, { now = Date.now }
       if (confirmed !== true) return { status: "invalid", errors: { confirmation: "Confirm permanently deleting this plan." } };
       const at = new Date(now());
       return decide<PlanOutcome>(database, async (tx, rollback) => {
-        const settings = await lockSettings(tx, actor, at);
+        await lockSettings(tx, actor, at);
         // Foreign-key writers require a shared parent lock, so no new reference can arrive between the count and delete.
         const plan = await lockPlan(tx, id);
         if (!plan) return rollback({ status: "not-found" });
         const usage = await usageOf(tx, id);
         if (usage.payments || usage.accessCodes || usage.autoRenewals) return rollback({ status: "in-use", usage });
-        if (plan.active && settings.paywallMode !== "off" && await tx.subscriptionPlan.count({ where: { active: true, id: { not: id } } }) === 0) {
-          return rollback({ status: "requirements", mode: settings.paywallMode, missing: [{ key: "plan",
-            message: "Paid access needs an active plan. Add or activate another plan before deleting this one, or switch paid access off." }] });
-        }
         await tx.subscriptionPlan.delete({ where: { id } });
         await writeOwnerAudit(tx, { at, actor, action: "plan_deleted", targetType: "plan", targetId: id,
           details: { name: plan.name, durationDays: plan.durationDays, priceUgx: plan.priceUgx, active: plan.active } });
@@ -126,23 +120,16 @@ export function createPlansService(database: DatabaseRuntime, { now = Date.now }
       }, transactionOptions);
     },
 
-    /**
-     * Deactivates (hidden from Get access, kept for history) or reactivates a plan. While paid access is `test` or `on`, the
-     * last active plan cannot be deactivated: those modes need one. The settings row is locked first, as a mode switch does.
-     */
+    /** Deactivates a plan for future purchases or makes it available again. */
     async setActive(actor: string, id: unknown, active: boolean): Promise<PlanOutcome> {
       if (!isPlanId(id)) return { status: "not-found" };
       const at = new Date(now());
       return decide<PlanOutcome>(database, async (tx, rollback) => {
-        // Serialized with mode switches by the settings lock; the defaults row it may create commits only with a change.
-        const settings = await lockSettings(tx, actor, at);
+        // Serialize with checkout quotes and confirmations before changing plan availability.
+        await lockSettings(tx, actor, at);
         const plan = await lockPlan(tx, id);
         if (!plan) return rollback({ status: "not-found" });
         if (plan.active === active) return rollback({ status: "saved", plans: await all(tx) });
-        if (!active && settings.paywallMode !== "off" && await tx.subscriptionPlan.count({ where: { active: true, id: { not: id } } }) === 0) {
-          return rollback({ status: "requirements", mode: settings.paywallMode, missing: [{ key: "plan",
-            message: `Paid access is ${settings.paywallMode === "on" ? "on" : "in test mode"} and needs an active plan. Add or activate another plan first, or switch paid access off.` }] });
-        }
         await tx.subscriptionPlan.update({ where: { id }, data: { active, updatedAt: at } });
         await writeOwnerAudit(tx, { at, actor, action: active ? "plan_activated" : "plan_deactivated", targetType: "plan", targetId: id,
           details: { name: plan.name } });

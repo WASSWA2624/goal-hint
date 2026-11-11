@@ -7,7 +7,7 @@ const modules = {
   'next/headers': 'export const cookies = async () => ({ get() {} }); export const headers = async () => new Headers();',
   '@/components/members/member-controls': exportsFor(['MemberNavigationRecovery']),
   '@/components/members/subscribe-controls': exportsFor(['SubscribeFlow', 'SubscribeIntro', 'SubscribeLayout']),
-  '@/components/members/payment-status': exportsFor(['ApprovalRefresh']),
+  '@/components/members/payment-status': exportsFor(['ApprovalRefresh', 'PaymentStatusCard']),
   '@/components/members/subscription-summary-card': exportsFor(['SubscriptionSummaryCard']),
   '@/components/members/free-trial-control': exportsFor(['FreeTrialControl']),
   '@/components/ui/controls': exportsFor(['ButtonLink']),
@@ -32,7 +32,7 @@ const plans = [{ id: 'active', active: true }, { id: 'inactive', active: false }
 const payment = { acceptedTerms: true, status: null, credit: null };
 const props = { locale: 'en', searchParams: Promise.resolve({}) };
 const nodes = element => !element || typeof element !== 'object' ? [] : [element, ...[element.props?.children].flat().flatMap(nodes)];
-function route({ identity = member, mode = 'test', status = async () => subscription, offers = async () => plans, view = async () => payment, checkout } = {}) {
+function route({ identity = member, mode = 'on', status = async () => subscription, offers = async () => plans, view = async () => payment, checkout } = {}) {
   return createSubscribeRoute({ plans: offers, services: async () => ({ config: { production: false },
     settings: { settings: { paywallMode: mode } }, sessions: { verify: async () => identity },
     codes: { subscriptionStatus: status }, payments: { view },
@@ -70,8 +70,8 @@ test('wallet top-ups open checkout independently of subscription packages and li
 });
 
 test('subscription reads retain signed-out, blocked, closed and administrator guards', async () => {
-  for (const [identity, mode, expected] of [[null, 'test', []], [{ ...member, blocked: true }, 'test', ['plans']],
-    [member, 'off', ['subscription']], [{ ...member, administrator: true }, 'test', []]]) {
+  for (const [identity, mode, expected] of [[null, 'on', []], [{ ...member, blocked: true }, 'on', []],
+    [member, 'off', ['subscription', 'payments']], [{ ...member, administrator: true }, 'on', []]]) {
     const started = [];
     const read = (name, value) => async () => { started.push(name); return value; };
     const rendering = route({ identity, mode, status: read('subscription', subscription), offers: read('plans', plans), view: read('payments', payment) })(props);

@@ -54,19 +54,21 @@ function formatReviewPhone(value: string) {
   return `+${parts.callingCode} ${formatNationalPhone(parts)}`.trim();
 }
 
-export function CheckoutFlow({ locale, settings, plans, account, initialView, topUp = false, noticeBeforeCheckout }: {
+export function CheckoutFlow({ locale, settings, plans, account, initialView, topUp = false, salesOpen = true, referralsOpen = true, noticeBeforeCheckout }: {
   locale: string; settings: PublicSubscriptionSettings; plans: readonly SubscriptionPlanView[];
   account: { id: string; phone: string; draftScope?: string }; initialView: CheckoutView; topUp?: boolean;
-  noticeBeforeCheckout?: ReactNode;
+  salesOpen?: boolean; referralsOpen?: boolean; noticeBeforeCheckout?: ReactNode;
 }) {
   const router = useRouter(), m = createMessages(locale), [view, setView] = useState(initialView ?? emptyView);
   // A pending request in one journey must not hide the other journey's form.
   const journeyRequests = view.requests.filter(request => (request.purpose === "topup") === topUp);
+  const canRedeem = referralsOpen && !topUp && view.availableReferralDays > 0;
   const topUpLimits = { min: m.number(walletRules.topUpMinUgx), max: m.number(walletRules.topUpMaxUgx) };
   const initial = (): CheckoutDraft => ({ requestKey: "", step: 0, purpose: topUp ? "topup" : "plan", planId: plans[0]?.id ?? "",
     method: "", usePackage: true, useWallet: false, useReferral: false, walletUgx: "0", referralDays: "0", topUpUgx: "", transactionId: "", amountUgx: "", payerPhone: account.phone,
     paidAt: localDate(), text: "", extracted: {}, originalText: "", editedEvidence: [], accepted: false, attachingId: null });
   const [draft, setDraft] = useState(initial), [image, setImage] = useState<Blob | null>(null), [loaded, setLoaded] = useState(false);
+  const canStartDraft = salesOpen || canRedeem && draft.purpose === "referral";
   const [quote, setQuote] = useState<CheckoutQuote | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [finishedQuote, setFinishedQuote] = useState<string>();
   const [reading, setReading] = useState("");
@@ -133,7 +135,9 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     const frame = requestAnimationFrame(() => restore());
     return () => { cancelAnimationFrame(frame); page.current = ""; };
   }, [scope, kind]);
-  useEffect(() => { if (loaded) saveCheckoutDraft(scope, kind, { draft, image }); }, [scope, kind, loaded, draft, image]);
+  useEffect(() => {
+    if (loaded && (salesOpen || draft.attachingId || draft.purpose === "referral")) saveCheckoutDraft(scope, kind, { draft, image });
+  }, [scope, kind, loaded, draft, image, salesOpen]);
   const restoreEntry = useEffectEvent((event: PopStateEvent) => {
     if (!loaded || page.current !== workflowPage(window.location.href)) return;
     const entryStep = workflowStep(event.state, draft.requestKey, page.current);
@@ -192,13 +196,23 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     if (page.current === workflowPage(window.location.href)) writeWorkflowStep(start.requestKey, 0, "replace");
     setDraft(start); setImage(null); setQuote(null);
   }
+  function chooseRedemption() {
+    const redemption = { purpose: "referral", usePackage: false, method: "referral", useWallet: false, walletUgx: "0",
+      useReferral: true, referralDays: String(Math.min(365, view.availableReferralDays)) } satisfies Partial<CheckoutDraft>;
+    if (salesOpen) { update(redemption); return; }
+    if (page.current !== workflowPage(window.location.href)) return;
+    const start = normalizeDraft({ ...initial(), ...redemption, requestKey: randomId(), step: 1 });
+    writeWorkflowStep(start.requestKey, 1, "push");
+    lastQuoteKey.current = null;
+    setShowNew(true); setDraft(start); setImage(null); setQuote(null); setError("");
+  }
   const chooseMethod = (method: CheckoutSelection["method"], selected: boolean) => {
     setDraft(current => normalizeDraft(chooseCheckoutMethod(current, method, selected, view, plans))); setError("");
   };
   const selection = (): CheckoutSelection => ({ purpose: draft.purpose, planId: draft.purpose === "plan" ? draft.planId : null,
     method: draft.method as CheckoutSelection["method"], walletUgx: Number(draft.walletUgx), referralDays: Number(draft.referralDays), topUpUgx: Number(draft.topUpUgx) });
   const selectionKey = JSON.stringify(selection());
-  const reviewQuoteKey = loaded && draft.step >= 2 && !draft.attachingId ? `${quoteEpoch}:${draft.step}:${selectionKey}` : null;
+  const reviewQuoteKey = loaded && canStartDraft && draft.step >= 2 && !draft.attachingId ? `${quoteEpoch}:${draft.step}:${selectionKey}` : null;
   useEffect(() => {
     const retry = () => setQuoteEpoch(epoch => epoch + 1);
     window.addEventListener("online", retry);
@@ -403,7 +417,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   }
   const active = journeyRequests.some(r => (checkoutOpenStatuses as readonly string[]).includes(r.status));
   const visibleRequests = journeyRequests.slice(0, 5);
-  const showForm = loaded && (showNew || !active || !!attaching);
+  const showForm = loaded && (!!attaching || canStartDraft && (showNew || !active));
   const packageStep = !topUp && draft.step === 0;
   const payStep = !topUp && draft.step === 1;
   const wizardTitle = topUp && draft.step < 2 ? m.text("credit.topUp")
@@ -422,7 +436,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     {warningDialog && <PaymentEvidenceWarning warnings={warningDialog.warnings} onCancel={() => setWarningDialog(null)}
       {...(!attaching ? { onChangeMethod: () => { setWarningDialog(null); goBack(1); } } : {})}
       onContinue={() => { const action = warningDialog.continue; setWarningsAccepted(warningDialog.key); setWarningDialog(null); action?.(); }} />}
-    {visibleRequests.map(request => <CheckoutPanel key={request.id} data-checkout-status={request.status}>
+     {visibleRequests.map((request, index) => <CheckoutPanel key={request.id} id={index === 0 ? "report" : undefined} data-checkout-status={request.status}>
       <header role="status"><h2>{checkoutLabels[request.status] ?? request.status}</h2><p>Request ID: <strong>{request.reference}</strong></p></header>
       {request.status === "approved" ? <p>{request.purpose === "topup" ? "Wallet credited." : `Access until ${request.endsAt ? formatPeriodEnd(new Date(request.endsAt)) : "—"} (EAT).`}</p>
         : <><p>{request.planName} · {formatUgx(request.priceUgx)}</p>
@@ -441,7 +455,8 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       <CheckoutActions>
         {([...(checkoutOpenStatuses as readonly string[]), "rejected", "cancelled", "superseded"]).includes(request.status) && <>
           {request.reservationUntil && request.status !== "disputed" && <Button variant="secondary" disabled={busy} onClick={() => startReceipt(request)}>Add payment / correction</Button>}
-          {!request.reservationUntil && <Button disabled={busy} onClick={async () => {
+          {!request.reservationUntil && (request.verifiedUgx > 0 || (checkoutOpenStatuses as readonly string[]).includes(request.status)
+            || salesOpen || canRedeem && request.purpose === "referral") && <Button disabled={busy} onClick={async () => {
             setBusy(true); setError("");
             const walletUgx = Math.min(request.walletUgx, view.availableWalletUgx), referralDays = Math.min(request.referralDays, view.availableReferralDays);
             try { await send({ action: "reconfirm", id: request.id, walletUgx, referralDays, amountToSend: request.priceUgx - walletUgx, confirmed: true }); await refresh(); }
@@ -449,7 +464,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
           }}>{["rejected", "cancelled", "superseded"].includes(request.status) ? "Resubmit" : "Confirm"} {formatUgx(Math.min(request.walletUgx, view.availableWalletUgx))} wallet + {Math.min(request.referralDays, view.availableReferralDays)} earned days; cash {formatUgx(request.priceUgx - Math.min(request.walletUgx, view.availableWalletUgx))}</Button>}
           {(checkoutOpenStatuses as readonly string[]).includes(request.status) && <Button variant="quiet" disabled={busy} onClick={async () => { setBusy(true); try { await send({ action: "cancel", id: request.id }); await refresh(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}>Cancel request</Button>}
         </>}
-        {["rejected", "cancelled", "approved"].includes(request.status) && <Button variant="secondary" onClick={() => { setShowNew(true); resetCheckout(); }}>
+         {salesOpen && ["rejected", "cancelled", "approved"].includes(request.status) && <Button variant="secondary" onClick={() => { setShowNew(true); resetCheckout(); }}>
           {topUp ? m.text("wallet.startAnotherTopUp") : "Start another purchase"}
         </Button>}
       </CheckoutActions>
@@ -464,6 +479,9 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       <p>{error || notice?.message}</p>
     </CheckoutDialog>}
     {!loaded && <p role="status">Restoring checkout…</p>}
+    {loaded && !showForm && !salesOpen && canRedeem && <CheckoutActions>
+      <Button variant="secondary" onClick={chooseRedemption}>Redeem earned days</Button>
+    </CheckoutActions>}
     {showForm && <PaymentWizard locale={locale} step={draft.step} totalSteps={4} inlineLabels labels={[topUp ? m.text("wallet.topUpStep") : "Package", "Pay", "Payment Details", "Review"]}
       variant={packageStep ? "package" : payStep ? "pay" : draft.step === 2 ? "details" : "default"}
       hideTitle={draft.step !== 0 && !(payStep && draft.purpose === "referral")} title={wizardTitle} headingRef={heading}>
@@ -484,12 +502,15 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
         <CheckoutFundingInput label="Earned days to redeem" maxLabel="Use max earned days" disabled={busy || view.availableReferralDays === 0}
           maximum={Math.min(365, view.availableReferralDays)} value={draft.referralDays} onValueChange={referralDays => update({ referralDays, useReferral: true })} />
         <PaymentDestination selection={selection()} settings={settings} plans={plans} quoteEpoch={quoteEpoch} displayed={payQuote} onError={setError} />
-        <WizardActions><Button variant="secondary" disabled={busy} onClick={() => update({ purpose: "plan", usePackage: true, useReferral: false, referralDays: "0", method: "" })}>Back to Pay</Button>
+         <WizardActions><Button variant="secondary" disabled={busy} onClick={() => {
+           if (salesOpen) update({ purpose: "plan", usePackage: true, useReferral: false, referralDays: "0", method: "" });
+           else { setShowNew(false); resetCheckout(); }
+         }}>{salesOpen ? "Back to Pay" : "Back"}</Button>
           <Button disabled={busy || Number(draft.referralDays) < 1} onClick={next}>Review redemption</Button></WizardActions>
       </EarnedDaysRedemption> : <CheckoutPay plan={plans.find(plan => plan.id === draft.planId)} settings={settings} method={draft.method} useWallet={draft.useWallet}
         walletUgx={Number(draft.walletUgx)} availableWalletUgx={view.availableWalletUgx} availableEarnedDays={view.availableReferralDays}
         lastProvider={view.lastMethod} disabled={busy} onMethodChange={chooseMethod} onChangePackage={() => goBack(0)} onContinue={() => void next()}
-        onRedeem={() => update({ purpose: "referral", usePackage: false, method: "referral", useWallet: false, walletUgx: "0", useReferral: true, referralDays: String(Math.min(365, view.availableReferralDays)) })}>
+         onRedeem={chooseRedemption}>
         <PaymentDestination redesigned availableWalletUgx={view.availableWalletUgx} selection={selection()} settings={settings} plans={plans} quoteEpoch={quoteEpoch} displayed={payQuote} onError={setError} />
       </CheckoutPay>)}
       {draft.step === 2 && <form onSubmit={review} noValidate style={{ display: "grid", gap: "var(--gh-spacing-3)" }}>

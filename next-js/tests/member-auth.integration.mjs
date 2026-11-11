@@ -78,7 +78,7 @@ test("channel verification and self-service recovery limits persist on isolated 
   assert.equal(audits.length, 0, "Self-service recovery never issues an administrator temporary password.");
 });
 
-test("two active logins and concurrent oldest-session eviction preserve paid-device limits on MySQL", { timeout: 180_000 }, async t => {
+test("two active logins and concurrent oldest-session eviction preserve account access on MySQL", { timeout: 180_000 }, async t => {
   let f;
   try { f = await paidDatabase(); }
   catch (error) { if (!(error instanceof MysqlServerUnavailableError)) throw error; t.skip(error.message); return; }
@@ -91,15 +91,15 @@ test("two active logins and concurrent oldest-session eviction preserve paid-dev
     delivery: { async send(message) { messages.push(message); } } });
   const sessions = createMemberSessions({ database: f.database, config, now, adminPhone: () => false, adminPasswordHash: () => null });
   const codes = createAccessCodes({ database: f.database, config, now, notifications: silentPaymentNotifications });
-  await f.database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", maxUnlockedDevices: 1, updatedAt: at, updatedBy: "synthetic-owner" } }));
+  await f.database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "on", updatedAt: at, updatedBy: "synthetic-owner" } }));
   const viewer = createViewerAccess({ services: async () => ({ config, database: f.database, auth: null }), now,
-    settings: async () => ({ settings: { ...defaultSubscriptionSettings, paywallMode: "test", maxUnlockedDevices: 1 } }) });
+    settings: async () => ({ settings: { ...defaultSubscriptionSettings, paywallMode: "on" } }) });
   const access = token => viewer(name => name === "goal-hint-member" ? token : undefined);
   const registered = await auth.register(phone, password, { member: null }, address);
   await auth.requestVerification("sms", registered.token, address);
   const first = await auth.verifyAccount(messages.at(-1).code, registered.token, address), original = await sessions.verify(first.token);
   assert.ok(original);
-  const grant = await codes.manual({ phone, durationDays: 7, amountReceivedUgx: 0, note: "Synthetic one-device entitlement" }, "synthetic-owner");
+  const grant = await codes.manual({ phone, durationDays: 7, amountReceivedUgx: 0, note: "Synthetic account entitlement" }, "synthetic-owner");
   assert.equal(grant.status, "created"); assert.equal((await access(first.token)).tier, "full");
   assert.equal((await auth.login(phone, "wrong password", address, first.token)).status, "unauthorized");
   assert.ok(await sessions.verify(first.token)); assert.equal((await access(first.token)).tier, "full");
@@ -107,12 +107,12 @@ test("two active logins and concurrent oldest-session eviction preserve paid-dev
   const second = await auth.login(phone, password, "198.51.100.9");
   assert.equal(second.status, "authenticated"); assert.equal(second.otherDeviceSignedOut, false);
   assert.ok(await sessions.verify(first.token));
-  assert.deepEqual(await access(first.token), { tier: "free", signedIn: true, mode: "test" });
+  assert.deepEqual(await access(first.token), { tier: "full", signedIn: true, mode: "on" });
   assert.equal((await access(second.token)).tier, "full");
   time++;
   const third = await auth.login(phone, password, "198.51.100.10");
   assert.equal(third.otherDeviceSignedOut, true); assert.equal(await sessions.verify(first.token), null);
-  assert.deepEqual(await access(first.token), { tier: "free", signedIn: false, mode: "test" });
+  assert.deepEqual(await access(first.token), { tier: "free", signedIn: false, mode: "on" });
   assert.ok(await sessions.verify(second.token)); assert.ok(await sessions.verify(third.token));
   assert.equal((await auth.changePassword("stale device password", { member: original })).status, "unauthorized");
   time++;
@@ -125,7 +125,7 @@ test("two active logins and concurrent oldest-session eviction preserve paid-dev
   assert.equal(retained.filter(Boolean).length, 2, "Concurrent logins cannot exceed two active sessions, even at equal timestamps");
   const views = await Promise.all(completed.map(result => access(result.token)));
   assert.equal(views.filter(view => view.signedIn).length, 2);
-  assert.equal(views.filter(view => view.tier === "full").length, 1, "The paid-device cap still limits entitlement to one session");
+  assert.equal(views.filter(view => view.tier === "full").length, 2, "Both remaining sessions inherit the active account period");
   assert.equal(await f.database.query(tx => tx.memberSession.count({ where: { accountId: first.accountId, authenticatedAt: { not: null } } })), 2);
 
   await t.test("historical one-login migration remains unchanged and idempotent", async () => {
@@ -160,7 +160,7 @@ test("verified members can activate one configured trial atomically on MySQL", {
   t.after(() => f.close());
   let time = Date.parse("2026-10-26T09:00:00Z");
   const now = () => time, messages = [];
-  await f.database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", trialDays: 4, maxUnlockedDevices: 1,
+  await f.database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "on", trialDays: 4,
     updatedAt: new Date(time), updatedBy: "synthetic-owner" } }));
   const auth = createMemberAuth({ database: f.database, config: f.config, now, adminPhone: () => false, adminPasswordHash: () => null,
     delivery: { async send(message) { messages.push(message); } } });
@@ -168,7 +168,7 @@ test("verified members can activate one configured trial atomically on MySQL", {
   const codes = createAccessCodes({ database: f.database, config: f.config, now, notifications: silentPaymentNotifications });
   const config = { ...f.config, production: false, cookies: { session: "synthetic-owner" } };
   const viewer = createViewerAccess({ services: async () => ({ config, database: f.database, auth: null }), now,
-    settings: async () => ({ settings: { ...defaultSubscriptionSettings, paywallMode: "test" } }) });
+    settings: async () => ({ settings: { ...defaultSubscriptionSettings, paywallMode: "on" } }) });
   const access = token => viewer(name => name === "goal-hint-member" ? token : undefined);
   const registrations = await Promise.all([auth.register(phone, password, { member: null }, address), auth.register(phone, password, { member: null }, address)]);
   assert.deepEqual(registrations.map(result => result.status).sort(), ["authenticated", "conflict"]);
@@ -183,7 +183,7 @@ test("verified members can activate one configured trial atomically on MySQL", {
   assert.deepEqual(verifications.map(result => result.status).sort(), ["authenticated", "unauthorized"]);
   const verified = verifications.find(result => result.status === "authenticated");
   const identity = await sessions.verify(verified.token);
-  assert.equal(verified.trial, undefined); assert.equal(identity.codeEnteredAt, null);
+  assert.equal(verified.trial, undefined); assert.ok(identity);
   assert.equal((await access(verified.token)).tier, "free");
   assert.deepEqual((await codes.subscriptionStatus(identity)).trial, { state: "available" });
   await f.database.query(tx => tx.subscriptionSettings.update({ where: { id: 1 }, data: { trialDays: 0 } }));
@@ -198,16 +198,15 @@ test("verified members can activate one configured trial atomically on MySQL", {
   assert.equal(periods.length, 1); assert.equal(periods[0].source, "trial"); assert.equal(periods[0].priceUgx, 0); assert.equal(periods[0].amountReceivedUgx, 0);
   assert.equal(+periods[0].activatedAt, time); assert.equal(+periods[0].startsAt, time); assert.equal(+periods[0].endsAt - time, 3 * DAY);
   assert.equal((await access(verified.token)).tier, "full");
-  assert.equal((await sessions.verify(verified.token)).accessCodeId, periods[0].id);
   assert.equal(await f.database.query(tx => tx.accessCode.count({ where: { accountId: registered.accountId } })), 1);
   const logged = await auth.login(phone, password, address);
-  assert.equal((await sessions.verify(logged.token)).accessCodeId, periods[0].id);
-  assert.equal((await sessions.verify(verified.token)).codeEnteredAt, null, "The paid-device cap remains independent of the two-session limit");
+  assert.equal((await access(logged.token)).tier, "full");
+  assert.equal((await access(verified.token)).tier, "full");
   time += 3 * DAY;
   assert.equal((await access(logged.token)).tier, "free");
   const expired = await auth.login(phone, password, address);
   const expiredIdentity = await sessions.verify(expired.token);
-  assert.equal(expiredIdentity.codeEnteredAt, null);
+  assert.equal((await access(expired.token)).tier, "free");
   assert.equal((await codes.subscriptionStatus(expiredIdentity)).trial.state, "expired");
   assert.deepEqual(await codes.activateTrial(expiredIdentity), { state: "unavailable" });
   assert.equal(await f.database.query(tx => tx.accessCode.count({ where: { accountId: registered.accountId } })), 1, "Login cannot renew an expired trial");

@@ -16,6 +16,7 @@ import { acceptedTerms } from "./member-terms.ts";
 import { reservedWalletCredit, walletHistory } from "./wallet.ts";
 import { validTopUp } from "../../domain/wallet.ts";
 import { memberRateRules, takeMemberLimit } from "./rate-limit.ts";
+import { subscriptionCheckoutPublished } from "./sales-readiness.ts";
 import { decide, lockSettings } from "./settings.ts";
 import { enqueueMemberMessage } from "./payment-notification-outbox.ts";
 
@@ -25,7 +26,7 @@ const unavailableView: PaymentView = Object.freeze({ acceptedTerms: false, statu
 export const duplicatePaymentMessage = "This transaction ID was already used. If you made this payment, call admin with the ID.";
 
 export function createPayments({ database, config, now = Date.now }: {
-  database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key">; now?: () => number;
+  database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key"> & Partial<Pick<AnalyticsConfig, "production">>; now?: () => number;
 }) {
   async function bucket(tx: Prisma.TransactionClient, purpose: string, value: string, at: Date): Promise<Bucket> {
     const key = config.key(`member-${purpose}`, value), start = new Date(Math.floor(+at / memberRateRules.dayMs) * memberRateRules.dayMs);
@@ -80,7 +81,7 @@ export function createPayments({ database, config, now = Date.now }: {
           if (!current) return rollback({ status: "refused" });
           // Shares confirmation's global lock, so a simultaneous owner approval cannot slip past this lookup.
           const settings = await lockSettings(tx, "system", at);
-          if (settings.paywallMode === "off") return rollback({ status: "refused" });
+          if (!subscriptionCheckoutPublished(settings, config.production === true)) return rollback({ status: "refused" });
           const plan = topUp === null && fields.planId ? await tx.subscriptionPlan.findUnique({ where: { id: fields.planId } }) : null;
           if (topUp === null && !plan?.active || manualPaymentProvider(settings, fields.network).reason !== null
             || !fields.accepted && !await acceptedTerms(tx, member, at)) return rollback({ status: "invalid" });

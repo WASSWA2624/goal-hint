@@ -24,7 +24,7 @@ export function updateFixturePayment(scenario: string, action: "approve" | "rese
     if (scenario === "credit") delete state.syntheticCredit;
   }
 }
-export const settings = { ...defaultSubscriptionSettings, paywallMode: "test" as const,
+export const settings = { ...defaultSubscriptionSettings, paywallMode: "on" as const,
   mtnEnabled: true, mtnNumber: "256700000901", mtnName: "TEST MTN PAYEE",
   airtelEnabled: true, airtelNumber: "256700000902", airtelName: "TEST AIRTEL PAYEE", contactPhone: "256700000903", whatsappPhone: "256700000904",
   mtnMenuShortcut: "*000*{amount}#", airtelMenuShortcut: "*001*{amount}#", reviewTime: "a synthetic review interval", paymentNote: "Synthetic fixture: never send money." };
@@ -63,7 +63,7 @@ export function fixtureServices(scenario = "default"): MemberServices {
       return { status: "saved" };
     },
   };
-  return { config: { production: false, cookies: { secure: false } }, settings: { settings: { ...settings, paywallMode: scenario === "off" ? "off" : "test",
+  return { config: { production: false, cookies: { secure: false } }, settings: { settings: { ...settings, paywallMode: scenario === "off" ? "off" : "on",
     contactPhone: ["pending-whatsapp-only", "pending-no-contact"].includes(scenario) ? null : settings.contactPhone,
     whatsappPhone: ["pending-call-only", "pending-no-contact"].includes(scenario) ? null : settings.whatsappPhone }, source: "stored" },
     sessions: {

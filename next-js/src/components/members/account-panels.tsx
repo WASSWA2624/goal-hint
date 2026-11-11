@@ -45,7 +45,7 @@ export function AccountPaymentHistory({ locale, dashboard }: { locale: string; d
 
 export function AccountDevices({ locale, devices }: { locale: string; devices: readonly { at: string; current: boolean }[] | null }) {
   const m = createMessages(locale);
-  return <AccountPanel narrow title={m.text("account.unlockedDevices")} data-account-devices>
+  return <AccountPanel narrow title={m.text("account.signedInDevices")} data-account-devices>
     {devices === null ? <AccountFine role="status">{m.text("account.devicesUnavailable")}</AccountFine>
       : devices.length ? <>
         {devices.map((device, index) => <AccountFacts key={`${device.at}:${index}`} style={{ marginBlockEnd: "var(--gh-spacing-5)" }}>
@@ -53,7 +53,7 @@ export function AccountDevices({ locale, devices }: { locale: string; devices: r
           <div><dt>{m.text("account.lastUsed")}</dt><dd><time dateTime={device.at}>{formatSubscriptionExpiry(new Date(device.at))}</time></dd></div>
         </AccountFacts>)}
         <form method="post" action="/api/account/devices" data-analytics-ignore><Button type="submit" variant="secondary">{m.text("account.signOutOthers")}</Button></form>
-      </> : <AccountFine>{m.text("account.noUnlockedDevices")}</AccountFine>}
+      </> : <AccountFine>{m.text("account.noSignedInDevices")}</AccountFine>}
   </AccountPanel>;
 }
 

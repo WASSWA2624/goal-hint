@@ -69,7 +69,7 @@ test("registration captures attribution once; verification awards a full day wit
   assert.equal(summary.verified, 1); assert.equal(summary.earnedDays, 1); assert.equal(summary.availableDays, 1); assert.equal(summary.remainingMs, 0);
   assert.equal(summary.history[0].status, "rewarded"); assert.equal(summary.code, owner.summary.code);
   assert.equal(f.referralCredits.size, 1); assert.equal([...f.referralCredits.values()][0].days, 1);
-  assert.equal((await f.sessionService.verify(owner.token)).codeEnteredAt, null, "Earned days wait for explicit redemption");
+  assert.equal(f.accessCodes.size, 0, "Earned days wait for explicit redemption");
   assert.equal((await f.service.verifyAccount(otp, pending.token, address)).status, "unauthorized");
   assert.equal((await f.service.login(friend, password, address, result.token)).status, "authenticated");
   assert.equal(f.accessCodes.size, 0); assert.equal(f.referralCredits.size, 1, "Replayed verification and later logins never award again");
@@ -237,7 +237,7 @@ test("the real link, registration and verification HTTP handlers complete a refe
 
 test("auto-renew waits through the final reward instant, then debits credit exactly once", async () => {
   const f = fixture({ trialDays: 0 }), owner = await inviter(f);
-  f.settings.paywallMode = "test";
+  f.settings.paywallMode = "on";
   await verify(f, await register(f, owner.summary.code));
   await f.database.transaction(tx => createAccessPeriod(tx, f.accounts.get(owner.member.accountId), { source: "referral", planName: "Historical earned access", durationDays: 1, priceUgx: 0, amountReceivedUgx: 0 }, "historical", new Date(f.now()), { maximum: 2 }));
   const account = f.accounts.get(owner.member.accountId), planId = randomUUID(), entries = [];

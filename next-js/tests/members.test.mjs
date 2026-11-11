@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { formatPlanLength, formatUgx, parsePlanFields, planRules } from "../src/domain/subscription-plans.ts";
-import { applySettingsChanges, defaultSubscriptionSettings, editableSettingFields, modeRequirements, parseSettingsChanges,
+import { applySettingsChanges, checkoutReadiness, defaultSubscriptionSettings, editableSettingFields, parseSettingsChanges,
   protectedSettingFields } from "../src/domain/subscription-settings.ts";
 import { auditDetails, auditTextErrors, ownerSignInAudit, UnsafeAuditDetailsError, writeOwnerAudit } from "../src/server/admin/audit.ts";
 import { createSettingsHandlers } from "../src/server/admin/settings-http.ts";
@@ -21,7 +21,7 @@ const OWNER_MTN = "256700000901", OWNER_CONTACT = "256700000902";
 const settingsWith = (fields) => Object.freeze({ ...defaultSubscriptionSettings, ...fields });
 const ready = { activePlans: 1, privacyReleaseReady: true, termsReleaseReady: true };
 
-function memberFixture({ mode = "test", production = false, member = null } = {}) {
+function memberFixture({ mode = "on", production = false, member = null } = {}) {
   const calls = { signIn: [], signOut: [], devices: [] };
   const services = { config: { production, cookies: { secure: production, session: `${production ? "__Host-" : ""}goal-hint-analytics`, exclude: `${production ? "__Host-" : ""}goal-hint-analytics-exclude` } }, settings: { settings: { ...defaultSubscriptionSettings, paywallMode: mode } },
     auth: { async login(phone, password, ...args) { const normalized = normalizePhone(phone); if (!normalized || !password) return { status: "unauthorized", message: "Enter your phone and password." }; calls.signIn.push([normalized, password, ...args]); return { status: "authenticated", token: "t".repeat(43), phone: normalized }; } },
@@ -127,7 +127,6 @@ test("closed subscriptions allow password sign-in but never accept subscription 
 test("a subscription code cannot bypass password authentication or call legacy redemption", async () => {
   const fixture = memberFixture(), calls = [];
   fixture.services.codes = { async signInWithCode(...args) { calls.push(args); return { status: "accepted", token: "c".repeat(43) }; } };
-  fixture.services.settings.settings.maxUnlockedDevices = 2;
   let response = await createMemberSignInHandler(fixture.resolve)(memberRequest({ phone: "0772123456", code: "0123-4567-89AB", return: "/en" }));
   assert.equal(response.status, 400);
   assert.equal(fixture.calls.signIn.length, 0);
@@ -142,25 +141,25 @@ test("a subscription code cannot bypass password authentication or call legacy r
 test("settings fields parse to canonical numbers, tested shortcuts, trimmed text and in-range whole numbers", () => {
   const parsed = parseSettingsChanges({ mtnNumber: "0700 000 901", airtelNumber: "+256 700-000-903", contactPhone: "2560700000902",
     whatsappPhone: "447946000001", mtnName: "  TEST PAYEE  ", mtnMenuShortcut: " *165*3* {amount} # ", airtelName: "", copyFormat: "local",
-    paymentNote: "Line one\r\nLine two ", reviewTime: "Usually within 30 minutes", maxUnlockedDevices: 5, trialDays: 0, screenshotRetentionDays: 7 });
+    paymentNote: "Line one\r\nLine two ", reviewTime: "Usually within 30 minutes", allowUnsubscribedMembers: true, trialDays: 0, screenshotRetentionDays: 7 });
   assert.deepEqual(parsed, { ok: true, changes: { mtnNumber: OWNER_MTN, airtelNumber: "256700000903", contactPhone: OWNER_CONTACT,
     whatsappPhone: "447946000001", mtnName: "TEST PAYEE", mtnMenuShortcut: "*165*3*{amount}#", airtelName: null, copyFormat: "local",
-    paymentNote: "Line one\nLine two", reviewTime: "Usually within 30 minutes", maxUnlockedDevices: 5, trialDays: 0, screenshotRetentionDays: 7 } });
+    paymentNote: "Line one\nLine two", reviewTime: "Usually within 30 minutes", allowUnsubscribedMembers: true, trialDays: 0, screenshotRetentionDays: 7 } });
   assert.deepEqual(parseSettingsChanges({ mtnNumber: "", contactPhone: null }), { ok: true, changes: { mtnNumber: null, contactPhone: null } },
     "An empty number clears it.");
   const refused = parseSettingsChanges({ mtnNumber: "256254712345678", airtelNumber: "0201234567", mtnMenuShortcut: "*165*{price}#",
-    airtelMenuShortcut: "#".repeat(61), mtnName: "x".repeat(65), reviewTime: "two\nlines", copyFormat: "national", maxUnlockedDevices: 6,
-    trialDays: 8, screenshotRetentionDays: 6, paymentNote: "bell\u0007" });
+    airtelMenuShortcut: "#".repeat(61), mtnName: "x".repeat(65), reviewTime: "two\nlines", copyFormat: "national", allowUnsubscribedMembers: "true",
+    trialDays: 367, screenshotRetentionDays: 6, paymentNote: "bell\u0007" });
   assert.equal(refused.ok, false);
-  assert.deepEqual(Object.keys(refused.errors).sort(), ["airtelMenuShortcut", "airtelNumber", "copyFormat", "maxUnlockedDevices", "mtnMenuShortcut",
+  assert.deepEqual(Object.keys(refused.errors).sort(), ["airtelMenuShortcut", "airtelNumber", "copyFormat", "allowUnsubscribedMembers", "mtnMenuShortcut",
     "mtnName", "mtnNumber", "paymentNote", "reviewTime", "screenshotRetentionDays", "trialDays"].sort());
   assert.match(refused.errors.mtnNumber, /^For a number outside Uganda, delete 256/);
   assert.deepEqual(parseSettingsChanges({ whatsappPhone: "447700900001" }), { ok: false, errors: { whatsappPhone: "Enter a mobile number that is valid for its country." } },
     "A canonical number that is not a mobile number for its country is refused.");
-  for (const [field, values] of [["maxUnlockedDevices", [0, 1.5, "2"]], ["trialDays", [-1]], ["screenshotRetentionDays", [366]]]) {
+  for (const [field, values] of [["trialDays", [-1, 1.5, "2", 367]], ["screenshotRetentionDays", [366]]]) {
     for (const value of values) assert.equal(parseSettingsChanges({ [field]: value }).ok, false, `${field} = ${value}`);
   }
-  for (const [field, value] of [["maxUnlockedDevices", 1], ["trialDays", 7], ["screenshotRetentionDays", 365]]) {
+  for (const [field, value] of [["allowUnsubscribedMembers", false], ["trialDays", 366], ["screenshotRetentionDays", 365]]) {
     assert.equal(parseSettingsChanges({ [field]: value }).ok, true, `${field} = ${value}`);
   }
   assert.match(parseSettingsChanges({ paywallMode: "on" }).errors.changes, /Unknown setting: paywallMode/, "The mode is never saved with the form.");
@@ -198,17 +197,18 @@ test("provider controls, payment identity, support contacts and message template
   assert.ok(protectedSettingFields.every((field) => editableSettingFields.includes(field)));
 });
 
-test("test and on need an active plan, a named payment number and a contact; on also needs release-ready privacy and terms", () => {
-  const keys = (settings, mode, facts) => modeRequirements(settings, mode, facts).map(({ key }) => key);
-  assert.deepEqual(keys(defaultSubscriptionSettings, "off", { activePlans: 0, privacyReleaseReady: false, termsReleaseReady: false }), []);
-  assert.deepEqual(keys(defaultSubscriptionSettings, "test", { ...ready, activePlans: 0 }), ["plan", "payment-number", "contact"]);
-  const complete = settingsWith({ mtnNumber: OWNER_MTN, mtnName: "TEST PAYEE", whatsappPhone: OWNER_CONTACT });
-  assert.deepEqual(keys(complete, "test", ready), []);
-  assert.deepEqual(keys(settingsWith({ mtnNumber: OWNER_MTN, airtelName: "TEST PAYEE", contactPhone: OWNER_CONTACT }), "test", ready), ["payment-number"],
+test("checkout setup reports missing plans, enabled receiving accounts, support and released notices independently of paid access", () => {
+  const keys = (settings, facts) => checkoutReadiness(settings, facts).map(({ key }) => key);
+  assert.deepEqual(keys(defaultSubscriptionSettings, { activePlans: 0, privacyReleaseReady: false, termsReleaseReady: false }),
+    ["plan", "payment-number", "contact", "privacy", "terms"]);
+  const complete = settingsWith({ mtnEnabled: true, mtnNumber: OWNER_MTN, mtnName: "TEST PAYEE", whatsappPhone: OWNER_CONTACT });
+  assert.deepEqual(keys({ ...complete, mtnEnabled: false }, ready), ["payment-number"], "A disabled provider cannot take payments.");
+  assert.deepEqual(keys(settingsWith({ mtnEnabled: true, mtnNumber: OWNER_MTN, airtelName: "TEST PAYEE", contactPhone: OWNER_CONTACT }), ready), ["payment-number"],
     "A name must sit beside its own number.");
-  assert.deepEqual(keys(complete, "on", { ...ready, privacyReleaseReady: false }), ["privacy"]);
-  assert.deepEqual(keys(complete, "on", { ...ready, termsReleaseReady: false }), ["terms"]);
-  assert.deepEqual(keys(complete, "on", ready), []);
+  assert.deepEqual(keys(complete, { ...ready, privacyReleaseReady: false }), ["privacy"]);
+  assert.deepEqual(keys(complete, { ...ready, termsReleaseReady: false }), ["terms"]);
+  assert.deepEqual(keys(complete, ready), []);
+  assert.deepEqual(keys({ ...complete, paywallMode: "on" }, ready), []);
 });
 
 /** A database whose settings read is scripted: a row, null (missing), or an error. */
@@ -255,19 +255,19 @@ test("public reads cache settings for 30 s, serve the last good value on failure
   assert.deepEqual({ source: missing.source, mode: missing.settings.paywallMode, trialDays: missing.settings.trialDays }, { source: "defaults", mode: "off", trialDays: 2 },
     "A missing row reads off with a 2-day trial.");
   assert.equal(accessMode(missing), "off");
-  state.row = row({ paywallMode: "test" });
+  state.row = row({ paywallMode: "on" });
   clock.now += settingsCacheRules.freshMs - 1;
   assert.equal((await service.current()).settings.paywallMode, "off", "Within 30 s the cached value is served.");
   assert.equal(state.reads, 1);
   clock.now += 1;
   const [first, second] = await Promise.all([service.current(), service.current()]);
   assert.equal(first, second, "Concurrent readers share one query.");
-  assert.deepEqual([first.source, first.settings.paywallMode, state.reads], ["stored", "test", 2]);
+  assert.deepEqual([first.source, first.settings.paywallMode, state.reads], ["stored", "on", 2]);
   assert.equal(first.settings.updatedAt, "2026-10-19T07:00:00.000Z");
   state.failing = true;
   clock.now += settingsCacheRules.freshMs;
   const stale = await service.current();
-  assert.deepEqual([stale.source, accessMode(stale)], ["last-good", "test"], "A failed read keeps the last good value.");
+  assert.deepEqual([stale.source, accessMode(stale)], ["last-good", "on"], "A failed read keeps the last good value.");
   clock.now += settingsCacheRules.failureRetryMs - 1;
   await service.current();
   assert.equal(state.reads, 3, "A failure is retried after 5 s, not on every request.");
@@ -377,12 +377,11 @@ test("settings are retained and permanent deletion stays inside its reviewed ser
   }
 });
 
-test("settings answers: wrong-password locks are 429 with Retry-After, unmet requirements 409, failures 503", async () => {
+test("settings answers: wrong-password locks are 429 with Retry-After, storage failures 503", async () => {
   const owner = { username: "owner", expiresAt: new Date() };
   const outcomes = [
     [{ status: "password-refused", check: { status: "locked", retryAfterSeconds: 600, newlyLocked: true, ownerUsername: true } }, 429, "locked"],
     [{ status: "password-refused", check: { status: "unavailable" } }, 503, "unavailable"],
-    [{ status: "requirements", mode: "test", missing: [{ key: "plan", message: "Add an active plan on the Plans page." }] }, 409, "requirements"],
     [new Error("Too many connections"), 503, "unavailable"],
   ];
   for (const [outcome, status, error] of outcomes) {
@@ -399,13 +398,13 @@ test("settings answers: wrong-password locks are 429 with Retry-After, unmet req
 
 test("a committed save or mode switch answers saved even when the page data cannot be read again", async () => {
   const owner = { username: "owner", expiresAt: new Date() };
-  const stored = settingsWith({ paywallMode: "test", updatedAt: "2026-10-19T07:00:00.000Z", updatedBy: "owner" });
-  const requirements = { test: [], on: [{ key: "privacy", message: "The privacy notice is not release-ready yet." }] };
+  const stored = settingsWith({ paywallMode: "on", updatedAt: "2026-10-19T07:00:00.000Z", updatedBy: "owner" });
+  const readiness = [{ key: "privacy", message: "Publish the privacy notice" }];
   const saved = { status: "saved", settings: stored, changed: ["mtnMenuShortcut"], cleared: ["mtnMenuShortcut"] };
   for (const readable of [true, false]) {
-    for (const body of [{ action: "mode", mode: "test" }, { action: "save", changes: { mtnMenuShortcut: null } }]) {
+    for (const body of [{ action: "mode", mode: "on" }, { action: "save", changes: { mtnMenuShortcut: null } }]) {
       const service = () => ({ async save() { return saved; }, async setMode() { return saved; },
-        async overview() { if (!readable) throw new Error("Too many connections"); return { settings: stored, source: "stored", requirements }; } });
+        async overview() { if (!readable) throw new Error("Too many connections"); return { settings: stored, source: "stored", checkoutReadiness: readiness }; } });
       const { POST } = createSettingsHandlers({ service });
       const response = await POST({ owner, services: { database: {}, auth: null }, request: new Request("http://localhost:3000/api/admin/settings",
         { method: "POST", headers: { "content-type": "application/json", "x-real-ip": "203.0.113.8" }, body: JSON.stringify(body) }) });
@@ -415,7 +414,7 @@ test("a committed save or mode switch answers saved even when the page data cann
         [stored, ["mtnMenuShortcut"], ["mtnMenuShortcut"], [...protectedSettingFields], "unknown"]);
       assert.equal(reply.diagnostics.headers.find(header => header.name === "x-real-ip").value, "203.0.113.8",
         "The raw header remains a diagnostic, never authenticated transport provenance.");
-      assert.deepEqual([reply.source, reply.requirements], readable ? ["stored", requirements] : [undefined, undefined],
+      assert.deepEqual([reply.source, reply.checkoutReadiness], readable ? ["stored", readiness] : [undefined, undefined],
         "Requirements come only from a fresh read; the page keeps its own until a reload.");
     }
   }

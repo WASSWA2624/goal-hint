@@ -35,13 +35,12 @@ Focused browser checks:
 Settings previews use the real Settings page, HTTP adapter and settings service over transactional in-memory rows. Open `/api/fixture/session?page=settings&scenario=writable` to establish the synthetic member cookie and enter Settings. The collapsed **Synthetic settings controls** below the page switches scenarios and resets their saved data. Each scenario has independent state, including after refresh:
 
 - `writable`: complete payment/contact details; saves, phone normalization, shortcut clearing and mode changes work.
-- `managed`: the eight payment/contact identity fields are read-only; the server refuses changes to them.
-- `missing`: payment/contact details, an active plan and notice readiness are absent, so release requirements are shown.
-- `requirements-race`: initial requirements pass, but an active plan disappears during a mode switch; the server returns a requirement error.
+- `managed`: the environment manages the fallback support numbers. The payment account settings are editable.
+- `missing`: checkout setup lists the missing plan, receiving details, support and notices. The paid access switch works in this scenario.
 - `save-failed`: writes fail without changing the row or audit count.
-- `saved-without-requirements`: the write commits, but its follow-up overview read fails; the successful response contains saved values without requirements. A reload can read the overview again.
+- `saved-without-checkout-readiness`: the write commits and the follow-up overview read fails. The successful response carries saved values, and reload refreshes the checkout checklist.
 
-Check saving and Undo, inline validation, mode confirmation and refusal, managed details, refresh persistence, narrow layouts and both themes. `/api/fixture/settings` exposes the synthetic row and audit count for guarded harness checks; a same-origin POST resets the selected scenario. Its selector cookie and `X-Settings-Fixture-Scenario` header belong only to this isolated test application.
+Check saving and Undo, inline validation, Off/On confirmation with missing checkout setup, managed details, refresh persistence, narrow layouts and both themes. `/api/fixture/settings` exposes the synthetic row and audit count for guarded harness checks. A same-origin POST resets the selected scenario. Its selector cookie and `X-Settings-Fixture-Scenario` header belong only to this isolated test application.
 
 Audit previews open through `/api/fixture/session?page=audit`. The real page receives 17 synthetic events spanning payments, access, accounts, settings, plans, sign-ins and maintenance. They include configured-administrator actors, legacy/system/subscriber actors, opaque references, a device-session hash and an unknown event. The stub applies exact-action filtering before newest-first ordering and the 100-row limit; `/admin/audit?action=payment_approved` contains one row, while an unrecognized action restores the full loaded window.
 

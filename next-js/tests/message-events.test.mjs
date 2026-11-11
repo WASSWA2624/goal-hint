@@ -8,7 +8,7 @@ import { memberStore } from "./helpers/member-store.mjs";
 const instant = Date.parse("2026-10-29T12:00:00Z");
 function fixture() {
   const templates = structuredClone(defaultMessageTemplates); templates.events["payment-received"].enabled = true;
-  const f = memberStore({ instant, settings: { messageTemplates: templates, paywallMode: "test", mtnEnabled: true, mtnNumber: "256700000999", mtnName: "Synthetic" } });
+  const f = memberStore({ instant, settings: { messageTemplates: templates, paywallMode: "on", mtnEnabled: true, mtnNumber: "256700000999", mtnName: "Synthetic" } });
   const member = { accountId: f.account.id, tokenHash: "synthetic-session", phone: f.account.phone, blocked: false };
   f.state.memberSession.push({ accountId: f.account.id, tokenHash: member.tokenHash, authenticatedAt: new Date(instant), passwordResetAt: null,
     expiresAt: new Date(instant + 86_400_000) });

@@ -10,6 +10,8 @@ import type { AuthBinding, AuthFailure } from "./member-auth.ts";
 import { memberCookieName, memberSessionRules } from "./member-sessions.ts";
 import { adminSessionRules } from "../analytics/analytics-auth.ts";
 import { isMemberAdminPhone } from "./member-admin.ts";
+import { subscriptionCheckoutPublished } from "./sales-readiness.ts";
+import { allowsContentWithoutSubscription } from "./viewer-access.ts";
 
 type AuthAction = "register" | "login" | "phone" | "password" | "forgot" | "reset" | "verification" | "verify" | "reset-code";
 const fields: Readonly<Record<AuthAction, readonly string[]>> = {
@@ -99,8 +101,9 @@ export function createMemberSessionHandler(source: MemberServicesSource = getMem
       if (!services.sessions) return json({ phone: null, error: "unavailable" }, 503);
       const member = await services.sessions.verify(readCookie(request, memberCookieName(services.config.production)));
       const administrator = !!member && !member.blocked && member.administrator === true && isMemberAdminPhone(member.phone);
-      const identity = { phone: member?.phone ?? null, administrator };
-      const salesOpen = !!services.settings?.settings && services.settings.settings.paywallMode !== "off";
+      const identity = { phone: member?.phone ?? null, administrator,
+        freeContentAccess: allowsContentWithoutSubscription(services.settings, !!member && !member.blocked) };
+      const salesOpen = subscriptionCheckoutPublished(services.settings?.settings, services.config.production);
       const subscription: SubscriptionSummary = { activeUntil: null, paymentPending: false,
         canSubscribe: salesOpen && !member?.blocked && !administrator, ...noCredit };
       // Only a visitor or member without access who can subscribe reads the cheapest plan, for the access bar's offer.
@@ -111,12 +114,15 @@ export function createMemberSessionHandler(source: MemberServicesSource = getMem
       if (!member || member.blocked || administrator) return json({ ...identity, subscription: await withOffer(subscription) });
       if (!services.codes) return json({ ...identity, subscription: null });
       // A chain that ended (or ends within the lead) renews from credit on this request when auto-renewal is on.
-      try { await services.codes.renewDue(member.accountId, { prefer: [member.tokenHash] }); } catch { /* The summary below still answers. */ }
+      if (services.settings?.settings?.paywallMode === "on") {
+        try { await services.codes.renewDue(member.accountId); } catch { /* The summary below still answers. */ }
+      }
       const status = await services.codes.subscriptionStatus(member).catch(() => undefined);
       // An unavailable summary cannot grant access or override verified sign-in state.
       if (status === undefined) return json({ ...identity, subscription: null });
       // The verified session may have been removed or blocked while its subscription was being read.
-      if (!status) return json({ phone: null, administrator: false, subscription: { activeUntil: null, paymentPending: false, canSubscribe: false, ...noCredit } });
+      if (!status) return json({ phone: null, administrator: false, freeContentAccess: allowsContentWithoutSubscription(services.settings, false),
+        subscription: { activeUntil: null, paymentPending: false, canSubscribe: false, ...noCredit } });
       return json({ ...identity, subscription: await withOffer({ ...subscription, ...status }) });
     } catch { return json({ phone: null, error: "unavailable" }, 503); }
   };

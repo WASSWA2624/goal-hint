@@ -362,15 +362,19 @@ test("a failed replacement transaction restores the active device and issues no 
   assert.ok(await f.sessionService.verify(active.token)); assert.ok(await f.sessionService.verify(other.token)); assert.equal(f.sessions.size, 2);
 });
 
-test("subscription access moves to a new login when the unlocked-device cap is one", async () => {
-  const f = fixture(), first = await f.authenticate(), codeId = randomUUID();
-  await f.tx.accessCode.create({ data: { id: codeId, accountId: first.member.accountId, startsAt: new Date(f.now() - 1), endsAt: new Date(f.now() + DAY) } });
-  f.tx.subscriptionSettings.findUnique = async () => ({ maxUnlockedDevices: 1 });
-  await f.tx.memberSession.update({ where: { tokenHash: first.member.tokenHash }, data: { codeEnteredAt: new Date(f.now()), accessCodeId: codeId } });
+test("both signed-in devices can manage an account with an access period", async () => {
+  const f = fixture(), first = await f.authenticate();
+  const codes = createAccessCodes({ database: f.database, now: f.now });
+  await f.database.transaction(async tx => createAccessPeriod(tx, await lockMemberAccount(tx, first.member.accountId),
+    { source: "manual", planName: "Manual", durationDays: 1, priceUgx: 0 }, "test", new Date(f.now())));
   const second = await f.service.login(phone, password, "198.51.100.2"), member = await f.sessionService.verify(second.token);
-  assert.equal(second.status, "authenticated"); assert.ok(member.codeEnteredAt); assert.equal(member.accessCodeId, codeId);
-  assert.equal((await f.sessionService.verify(first.token)).codeEnteredAt, null, "Paid-device eviction does not sign out the account session");
-  assert.equal(f.sessions.size, 2);
+  assert.equal(second.status, "authenticated");
+  for (const identity of [first.member, member]) {
+    assert.equal((await codes.accountView(identity)).devices.length, 2);
+  }
+  assert.ok(await f.sessionService.signOutOthers(member));
+  assert.equal(await f.sessionService.verify(first.token), null);
+  assert.equal((await codes.accountView(member)).devices.length, 1);
 });
 
 test("restricted session requests cannot evict the authenticated device under a flood", async () => {
@@ -834,9 +838,9 @@ test("registration, verification and login leave the trial unused until an authe
   assert.equal(f.accessCodes.size, 0); assert.equal(f.messages.length, 0);
   assert.equal((await handler(request(registered.token))).status, 403);
   const verified = await verifyTrialRegistration(f, registered);
-  assert.equal(verified.trial, undefined); assert.equal((await f.sessionService.verify(verified.token)).codeEnteredAt, null);
+  assert.equal(verified.trial, undefined);
   const logged = await f.service.login(phone, password, address);
-  assert.equal((await f.sessionService.verify(logged.token)).codeEnteredAt, null); assert.equal(f.accessCodes.size, 0);
+  assert.ok(await f.sessionService.verify(logged.token)); assert.equal(f.accessCodes.size, 0);
   assert.equal((await handler(request(logged.token, "cross-site"))).status, 403);
   assert.equal((await handler(request())).status, 403);
   f.advance(DAY);
@@ -847,7 +851,7 @@ test("registration, verification and login leave the trial unused until an authe
   assert.equal(f.accessCodes.size, 1);
   const period = [...f.accessCodes.values()][0];
   assert.equal(period.source, "trial"); assert.equal(period.priceUgx, 0); assert.equal(period.amountReceivedUgx, 0);
-  assert.equal(+period.activatedAt, f.now()); assert.equal((await f.sessionService.verify(logged.token)).accessCodeId, period.id);
+  assert.equal(+period.activatedAt, f.now());
   assert.equal(f.sent.filter(row => row.action === "trial_activated").length, 1);
 });
 
@@ -857,12 +861,20 @@ test("disabled trials do not start and expiry, re-login and a changed duration c
   const verified = await verifyTrialRegistration(f, registered);
   assert.deepEqual(await codes.activateTrial(await f.sessionService.verify(verified.token)), { state: "disabled" });
   assert.equal(f.accessCodes.size, 0);
-  f.settings.trialDays = 1;
-  assert.equal((await codes.activateTrial(await f.sessionService.verify(verified.token))).state, "active");
-  f.advance(DAY); f.settings.trialDays = 7;
+  f.settings.trialDays = 14;
+  const verifiedMember = await f.sessionService.verify(verified.token);
+  f.settings.paywallMode = "off";
+  assert.deepEqual(await codes.activateTrial(verifiedMember), { state: "disabled" });
+  f.settings.paywallMode = "on";
+  f.settings.allowUnsubscribedMembers = true;
+  assert.deepEqual(await codes.activateTrial(verifiedMember), { state: "disabled" });
+  f.settings.allowUnsubscribedMembers = false;
+  const active = await codes.activateTrial(verifiedMember);
+  assert.equal(active.state, "active");
+  assert.equal(Date.parse(active.endsAt) - Date.parse(active.startsAt), 14 * DAY);
+  f.advance(14 * DAY); f.settings.trialDays = 7;
   const logged = await f.service.login(phone, password, address);
   const member = await f.sessionService.verify(logged.token);
-  assert.equal(member.codeEnteredAt, null);
   assert.deepEqual(await codes.activateTrial(member), { state: "unavailable" });
   assert.equal(f.accessCodes.size, 1);
   const legacy = fixture(), old = await legacy.authenticate();
@@ -913,7 +925,7 @@ test("the first paid grant forfeits an unused trial and a paid grant during a tr
     if (activateFirst) {
       await f.database.transaction(async tx => {
         const account = await lockMemberAccount(tx, member.accountId);
-        await createAccessPeriod(tx, account, { source: "payment", planName: "Referral days", durationDays: 1, priceUgx: 0 }, "test", new Date(f.now()), { maximum: 2, appendAfterCurrent: true });
+        await createAccessPeriod(tx, account, { source: "payment", planName: "Referral days", durationDays: 1, priceUgx: 0 }, "test", new Date(f.now()), { appendAfterCurrent: true });
       });
       f.advance(DAY / 2);
       assert.equal((await codes.activateTrial(member)).state, "active");
@@ -921,14 +933,14 @@ test("the first paid grant forfeits an unused trial and a paid grant during a tr
     const starts = f.now(), trialEnd = starts + 3 * DAY;
     if (activateFirst) await f.database.transaction(async tx => {
       const account = await lockMemberAccount(tx, member.accountId);
-      await createAccessPeriod(tx, account, { source: "referral", planName: "Earned day", durationDays: 1, priceUgx: 0 }, "test", new Date(f.now()), { maximum: 2 });
+      await createAccessPeriod(tx, account, { source: "referral", planName: "Earned day", durationDays: 1, priceUgx: 0 }, "test", new Date(f.now()));
     });
     f.advance(1);
     assert.equal(f.accounts.get(member.accountId).trialForfeitedAt, undefined);
     const paid = await f.database.transaction(async tx => {
       const account = await lockMemberAccount(tx, member.accountId);
       const payment = activateFirst ? { source: "payment" } : { source: "manual", amountReceivedUgx: 5_000 };
-      return createAccessPeriod(tx, account, { ...payment, planName: "Weekly", durationDays: 7, priceUgx: 5_000 }, "test", new Date(f.now()), { maximum: 2, appendAfterCurrent: true });
+      return createAccessPeriod(tx, account, { ...payment, planName: "Weekly", durationDays: 7, priceUgx: 5_000 }, "test", new Date(f.now()), { appendAfterCurrent: true });
     });
     assert.equal(+paid.startsAt, activateFirst ? trialEnd : f.now());
     assert.equal(+paid.endsAt - +paid.startsAt, 7 * DAY);
@@ -946,7 +958,7 @@ test("the first paid grant forfeits an unused trial and a paid grant during a tr
 });
 
 test("trial expiry does not spend wallet credit through auto-renewal", async () => {
-  const instant = Date.parse("2026-10-27T09:00:00Z"), f = memberStore({ instant, settings: { paywallMode: "test" } });
+  const instant = Date.parse("2026-10-27T09:00:00Z"), f = memberStore({ instant, settings: { paywallMode: "on" } });
   await f.tx.memberAccount.update({ where: { id: f.account.id }, data: { autoRenew: true, autoRenewPlanId: f.plan.id, creditUgx: f.plan.priceUgx } });
   await f.tx.accessCode.create({ data: { id: randomUUID(), accountId: f.account.id, source: "trial", startsAt: new Date(instant - DAY), endsAt: new Date(instant) } });
   const codes = createAccessCodes({ database: f.database, now: () => instant });

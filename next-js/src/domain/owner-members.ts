@@ -24,6 +24,6 @@ export type OwnerAccount = Readonly<{ id: string; phone: string | null; status: 
 export type OwnerSubscriber = Readonly<{ id: string; phone: string | null; blockedAt: string | null; blockedReason: string | null; ownerNote: string | null; erasedAt: string | null; lastSignInAt: string;
   codes: readonly OwnerCode[]; submissions: readonly Readonly<{ id: string; reference: string; status: string; purpose: "plan" | "topup"; planName: string; claimedAmountUgx: number;
     amountReceivedUgx: number | null; submittedAt: string }>[];
-  devices: readonly Readonly<{ createdAt: string; lastSeenAt: string; expiresAt: string }>[]; unlocks: number;
+  devices: readonly Readonly<{ createdAt: string; lastSeenAt: string; expiresAt: string }>[];
   creditUgx: number; autoRenew: boolean; autoRenewPlanName: string | null; wallet: readonly WalletEntryView[] }>;
 export type OwnerAuditRow = Readonly<{ id: string; at: string; actor: string; action: string; accountId: string | null; targetType: string; targetId: string }>;

@@ -6,6 +6,7 @@ import { clearProtectedDrafts, purgeLegacyDrafts } from "./draft-storage.ts";
 /** Client-only account state. Public page HTML and browser storage never contain it. */
 let phone: string | null = null;
 let administrator = false;
+let freeContentAccess = false;
 let subscription: SubscriptionSummary | null = null;
 let pending: Promise<void> | null = null;
 let confirmedAt: number | null = null;
@@ -20,8 +21,7 @@ export const getAdminSessionSnapshot = (): boolean => administrator;
 export const getServerAdminSessionSnapshot = (): false => false;
 export const getSubscriptionSnapshot = (): SubscriptionSummary | null => subscription;
 export const getServerSubscriptionSnapshot = (): null => null;
-/** Verified administrators and members with current access can share slips. */
-export const getSlipSharingSnapshot = (): boolean => phone !== null
+export const getSlipSharingSnapshot = (): boolean => freeContentAccess || phone !== null
   && (administrator || (!!subscription?.activeUntil && Date.parse(subscription.activeUntil) > Date.now()));
 
 function readSubscription(value: unknown): SubscriptionSummary | null {
@@ -82,12 +82,13 @@ export function refreshMemberSession(): Promise<void> {
         session.phone !== null && typeof session.phone !== "string") return;
       if (session.phone === null || phone !== null && phone !== session.phone) clearProtectedDrafts();
       const nextAdministrator = "administrator" in session && session.administrator === true;
+      const nextFreeContentAccess = "freeContentAccess" in session && session.freeContentAccess === true;
       const rawSubscription = "subscription" in session ? session.subscription : undefined;
       // Null is a storage failure for an otherwise verified account. Expiry still runs from the known deadline.
       const nextSubscription = rawSubscription === null && session.phone !== null && phone === session.phone
         && administrator === nextAdministrator ? subscription : readSubscription(rawSubscription);
       confirmedAt = Date.now();
-      if (phone === session.phone && administrator === nextAdministrator
+      if (phone === session.phone && administrator === nextAdministrator && freeContentAccess === nextFreeContentAccess
         && subscription?.activeUntil === nextSubscription?.activeUntil
         && subscription?.paymentPending === nextSubscription?.paymentPending
         && subscription?.expired === nextSubscription?.expired
@@ -98,6 +99,7 @@ export function refreshMemberSession(): Promise<void> {
         && subscription?.offer?.durationDays === nextSubscription?.offer?.durationDays) return;
       phone = session.phone;
       administrator = nextAdministrator;
+      freeContentAccess = nextFreeContentAccess;
       subscription = nextSubscription;
       publish();
     } catch { /* A temporary network failure preserves the last confirmed identity. */ }

@@ -125,6 +125,7 @@ export const en = {
   "subscribe.helpRejected": "My Goal Hint payment {reference} was not approved. My Goal Hint number: {phone}.",
   "subscribe.helpPaid": "I have paid UGX {price} for {plan}. My Goal Hint number: {phone}. Ref {reference}.",
   "subscribe.noPlans": "Plans are unavailable. Please try again later.",
+  "subscribe.salesPaused": "Subscription purchases are temporarily unavailable.",
   "subscribe.chooseImage": "Choose a screenshot of the payment or its SMS.",
   "subscribe.openMtn": "Open MoMo menu",
   "subscribe.openAirtel": "Open Airtel Money menu",

@@ -73,13 +73,22 @@ test("directory and templates require protected-save authorization and persist t
   assert.equal(state.audits.length, 1);
 });
 
-test("an open subscription cannot lose its last usable support contact", async () => {
-  const { state, service } = harness({ ...identity, paywallMode: "on", supportContacts: [contact("mtn", "256700000904")] });
+test("paid access switches independently of checkout readiness and settings are audited", async () => {
+  const { state, service } = harness({ ...identity, supportContacts: [contact("mtn", "256700000904")] });
+  assert.deepEqual((await service.overview()).checkoutReadiness.map(item => item.key), ["payment-number"]);
+  assert.equal((await service.setMode("owner", "on")).status, "saved");
+  assert.equal((await service.current()).settings.paywallMode, "on");
   const result = await service.save("owner", { supportContacts: [] }, authorized);
-  assert.equal(result.status, "requirements");
-  assert.deepEqual(result.missing.map(item => item.key), ["contact"]);
-  assert.equal(state.row.supportContacts.length, 1);
-  assert.equal(state.audits.length, 0);
+  assert.equal(result.status, "saved");
+  assert.deepEqual(state.row.supportContacts, []);
+  assert.deepEqual((await service.overview()).checkoutReadiness.map(item => item.key), ["payment-number", "contact"]);
+  const memberAccess = await service.save("owner", { allowUnsubscribedMembers: true, trialDays: 366 }, authorized);
+  assert.equal(memberAccess.settings.allowUnsubscribedMembers, true);
+  assert.equal(memberAccess.settings.trialDays, 366);
+  assert.deepEqual(state.audits[2].details.changes.allowUnsubscribedMembers, { from: false, to: true });
+  assert.equal((await service.setMode("owner", "off")).status, "saved");
+  assert.deepEqual(state.audits.filter(event => event.action === "paywall_mode_changed").map(event => event.details),
+    [{ from: "off", to: "on" }, { from: "on", to: "off" }]);
 });
 
 test("public community visibility and platform links require authorization, persist and retain an audit", async () => {

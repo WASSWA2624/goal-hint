@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { SettingsScenario } from "./fixture-settings";
 
-const scenarios = ["writable", "managed", "missing", "requirements-race", "save-failed", "saved-without-requirements"];
+const scenarios = ["writable", "managed", "missing", "save-failed", "saved-without-checkout-readiness"];
 export function SettingsFixtureControls({ scenario }: { scenario: SettingsScenario }) {
   const router = useRouter(), [busy, setBusy] = useState(false), [error, setError] = useState("");
   useEffect(() => { document.cookie = `owner-settings-scenario=${scenario}; Path=/; SameSite=Lax`; }, [scenario]);

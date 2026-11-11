@@ -33,11 +33,10 @@ test("plan usage previews and confirmed deletion carry the guarded actor and ret
   for (const response of [preview, removed]) assert.equal(response.headers.get("cache-control"), "no-store");
 });
 
-test("in-use references, active-plan requirements and missing plans return actionable refusals", async () => {
+test("in-use references and missing plans return actionable refusals", async () => {
   const usage = { payments: 1, accessCodes: 2, autoRenewals: 3 };
   for (const [outcome, status, error] of [
     [{ status: "in-use", usage }, 409, "in-use"],
-    [{ status: "requirements", mode: "test", missing: [{ key: "plan", message: "Keep an active plan." }] }, 409, "requirements"],
     [{ status: "not-found" }, 404, "not-found"],
     [{ status: "invalid", errors: { confirmation: "Confirm deletion." } }, 400, "invalid"],
     [new Error("Storage is down"), 503, "unavailable"],

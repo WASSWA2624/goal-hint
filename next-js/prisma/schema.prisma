@@ -2249,6 +2249,7 @@ model SubscriptionSettings {
   paymentAlertRepeats      Int @default(1) @db.UnsignedTinyInt
   id                      Int       @id @db.UnsignedTinyInt
   paywallMode             String    @default("off") @db.VarChar(8)
+  allowUnsubscribedMembers Boolean   @default(false)
   mtnEnabled              Boolean   @default(false)
   mtnNumber               String?   @db.VarChar(15)
   mtnName                 String?   @db.VarChar(64)
@@ -2266,8 +2267,7 @@ model SubscriptionSettings {
   messageTemplates        Json?
   paymentNote             String?   @db.VarChar(300)
   reviewTime              String?   @db.VarChar(60)
-  maxUnlockedDevices      Int       @default(2) @db.UnsignedTinyInt
-  trialDays               Int       @default(2) @db.UnsignedTinyInt
+  trialDays               Int       @default(2) @db.UnsignedSmallInt
   screenshotRetentionDays Int       @default(90) @db.UnsignedSmallInt
   paymentNumbersChangedAt DateTime? @db.DateTime(3)
   lastMembersPurgeAt      DateTime? @db.DateTime(3)

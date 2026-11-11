@@ -7,6 +7,7 @@ import { formatPaymentReference } from "../../domain/payment.ts";
 import { getAnalyticsConfig, type AnalyticsConfig } from "../analytics/analytics-config.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { lockMemberAccount, type CodeOutcome } from "../members/access-codes.ts";
+import { activeMemberSessionsWhere } from "../members/member-sessions.ts";
 import { decide } from "../members/settings.ts";
 import { appendWalletEntry, lockedCredit, walletHistory } from "../members/wallet.ts";
 import { createPaymentReview } from "./payment-review.ts";
@@ -79,18 +80,17 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
           creditUgx: true, autoRenew: true, autoRenewPlan: { select: { name: true } } } });
         if (!account) return null;
         const at = new Date(now());
-        const [codes, submissions, devices, unlocks, wallet] = await Promise.all([
+        const [codes, submissions, devices, wallet] = await Promise.all([
           createPaymentReview(database, now).codes("", "all", id),
           tx.paymentSubmission.findMany({ where: { accountId: id }, orderBy: { submittedAt: "desc" }, take: 100, select: { id: true, reference: true, status: true, purpose: true, planName: true, claimedAmountUgx: true, amountReceivedUgx: true, submittedAt: true } }),
-          tx.memberSession.findMany({ where: { accountId: id, codeEnteredAt: { not: null }, expiresAt: { gt: at } }, select: { createdAt: true, lastSeenAt: true, expiresAt: true }, orderBy: { lastSeenAt: "desc" } }),
-          tx.ownerAuditEvent.count({ where: { accountId: id, action: "device_unlocked", at: { gte: new Date(+at - 30 * 86_400_000), lte: at } } }),
+          tx.memberSession.findMany({ where: activeMemberSessionsWhere(id, at), select: { createdAt: true, lastSeenAt: true, expiresAt: true }, orderBy: { lastSeenAt: "desc" } }),
           walletHistory(tx, id, 100),
         ]);
         const { autoRenewPlan, ...rest } = account;
         return { ...rest, autoRenewPlanName: autoRenewPlan?.name ?? null, wallet,
           blockedAt: account.blockedAt?.toISOString() ?? null, erasedAt: account.erasedAt?.toISOString() ?? null, lastSignInAt: account.lastSignInAt.toISOString(), codes,
           submissions: submissions.map(r => ({ ...r, purpose: r.purpose === "topup" ? "topup" as const : "plan" as const, reference: formatPaymentReference(r.reference), submittedAt: r.submittedAt.toISOString() })),
-          devices: devices.map(r => ({ createdAt: r.createdAt.toISOString(), lastSeenAt: r.lastSeenAt.toISOString(), expiresAt: r.expiresAt.toISOString() })), unlocks };
+          devices: devices.map(r => ({ createdAt: r.createdAt.toISOString(), lastSeenAt: r.lastSeenAt.toISOString(), expiresAt: r.expiresAt.toISOString() })) };
       });
     },
     async action(id: string, action: string, value: unknown, actor: string): Promise<CodeOutcome> {

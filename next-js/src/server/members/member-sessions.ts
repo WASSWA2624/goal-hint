@@ -18,8 +18,12 @@ export const validMemberToken = (token: unknown): token is string => typeof toke
 export const memberCookieName = (production: boolean) => `${production ? "__Host-" : ""}goal-hint-member`;
 
 export type MemberIdentity = Readonly<{ tokenHash: string; accountId: string; phone: string; blocked: boolean;
-  codeEnteredAt: Date | null; accessCodeId: string | null; expiresAt: Date; administrator?: boolean; whatsappNotificationsAt?: Date | null }>;
+  expiresAt: Date; administrator?: boolean; whatsappNotificationsAt?: Date | null }>;
 export type MemberSignIn = Readonly<{ status: "signed-in"; token: string }> | Readonly<{ status: "busy" }>;
+
+export const activeMemberSessionsWhere = (accountId: string, at: Date) => ({
+  accountId, authenticatedAt: { not: null }, passwordResetAt: null, expiresAt: { gt: at },
+});
 
 /** Caller holds the account lock. A full login rotates its browser token and evicts the oldest excess active logins atomically. */
 export async function issueMemberSession(tx: Prisma.TransactionClient, accountId: string, at: Date, previous?: string, authenticated = false) {
@@ -29,8 +33,7 @@ export async function issueMemberSession(tx: Prisma.TransactionClient, accountId
     if (previousHash) await tx.memberSession.deleteMany({ where: { tokenHash: previousHash } });
     await tx.memberSession.deleteMany({ where: { accountId, OR: [{ expiresAt: { lte: at } },
       { authenticatedAt: null }, { passwordResetAt: { not: null } }] } });
-    const active = await tx.memberSession.findMany({ where: { accountId, authenticatedAt: { not: null }, passwordResetAt: null,
-      expiresAt: { gt: at } }, orderBy: [{ authenticatedAt: "asc" }, { createdAt: "asc" }, { tokenHash: "asc" }], select: { tokenHash: true } });
+    const active = await tx.memberSession.findMany({ where: activeMemberSessionsWhere(accountId, at), orderBy: [{ authenticatedAt: "asc" }, { createdAt: "asc" }, { tokenHash: "asc" }], select: { tokenHash: true } });
     const evict = active.slice(0, Math.max(0, active.length - memberSessionRules.maximumActiveSessions + 1));
     if (evict.length) otherDeviceSignedOut = (await tx.memberSession.deleteMany({ where: { accountId,
       tokenHash: { in: evict.map(row => row.tokenHash) } } })).count > 0;
@@ -38,12 +41,12 @@ export async function issueMemberSession(tx: Prisma.TransactionClient, accountId
     if (previousHash) await tx.memberSession.deleteMany({ where: { tokenHash: previousHash } });
     await tx.memberSession.deleteMany({ where: { accountId, expiresAt: { lte: at } } });
     const sessions = await tx.memberSession.findMany({ where: { accountId }, orderBy: [{ createdAt: "asc" }, { tokenHash: "asc" }],
-      select: { tokenHash: true, codeEnteredAt: true, authenticatedAt: true } });
+      select: { tokenHash: true, authenticatedAt: true } });
     const reports = await tx.paymentSubmission.findMany({ where: { accountId, status: { in: ["pending", "superseded"] },
       submittedSessionHash: { not: null } }, select: { submittedSessionHash: true } });
     const protectedHashes = new Set(reports.map((row) => row.submittedSessionHash));
     // Starting verification or recovery must not evict the account's authenticated device.
-    const candidates = sessions.filter((row) => row.codeEnteredAt === null && row.authenticatedAt === null);
+    const candidates = sessions.filter((row) => row.authenticatedAt === null);
     candidates.sort((a, b) => Number(protectedHashes.has(a.tokenHash)) - Number(protectedHashes.has(b.tokenHash)));
     const evict = candidates.slice(0, Math.max(0, sessions.length - memberSessionRules.maximumSessions + 1));
     if (sessions.length - evict.length >= memberSessionRules.maximumSessions) throw new Error("Session capacity is unavailable.");
@@ -95,7 +98,7 @@ export function createMemberSessions({ database, config, now = Date.now, adminPh
         data: { lastSeenAt: at, expiresAt: new Date(at.getTime() + memberSessionRules.expiryMs) } }));
       }
       return { tokenHash: hash, accountId: row.accountId, phone: row.account.phone, blocked: row.account.blockedAt !== null,
-        codeEnteredAt: row.codeEnteredAt, accessCodeId: row.accessCodeId, expiresAt: row.expiresAt,
+        expiresAt: row.expiresAt,
         whatsappNotificationsAt: row.account.whatsappNotificationsAt ?? null, ...(administrator ? { administrator: true } : {}) };
     },
 
@@ -109,7 +112,8 @@ export function createMemberSessions({ database, config, now = Date.now, adminPh
       return database.transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM MemberAccount WHERE id = ${member.accountId} FOR UPDATE`;
         const current = await tx.memberSession.findUnique({ where: { tokenHash: member.tokenHash }, include: { account: true } });
-        if (!current || current.expiresAt <= at || current.codeEnteredAt === null || current.account.blockedAt || current.account.erasedAt) return false;
+        if (!current || current.accountId !== member.accountId || !current.authenticatedAt || current.passwordResetAt
+          || current.expiresAt <= at || current.account.blockedAt || current.account.erasedAt) return false;
         await tx.memberSession.deleteMany({ where: { accountId: current.accountId, tokenHash: { not: current.tokenHash } } });
         return true;
       }, { isolationLevel: "ReadCommitted" });

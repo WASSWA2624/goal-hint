@@ -3,8 +3,8 @@ import { communityLinksSchema, communityLinksWithDefaults } from "../../domain/c
 
 import { privacyNotice } from "../../domain/privacy-notice.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
-import { applySettingsChanges, copyFormats, defaultSubscriptionSettings, modeRequirements, paywallModes, parseSettingsChanges,
-  type CopyFormat, type EditableSettingField, type ModeFacts, type ModeRequirement, type PaywallMode, type ProtectedSettingField,
+import { applySettingsChanges, checkoutReadiness, copyFormats, defaultSubscriptionSettings, paywallModes, parseSettingsChanges,
+  type CheckoutReadinessFacts, type CheckoutReadinessIssue, type CopyFormat, type EditableSettingField, type PaywallMode, type ProtectedSettingField,
   type ShortcutField, type SubscriptionSettings } from "../../domain/subscription-settings.ts";
 import { supportContactsOf } from "../../domain/support-contacts.ts";
 import { parseSupportContacts } from "../../domain/support-contacts-input.ts";
@@ -54,6 +54,7 @@ export function settingsFromRow(row: SettingsRow): SubscriptionSettings {
   if (!email.ok || typeof row.contactPageEmailVisible !== "boolean") throw new RangeError("Stored contact-page settings are invalid.");
   return Object.freeze({
     paywallMode: row.paywallMode as PaywallMode,
+    allowUnsubscribedMembers: row.allowUnsubscribedMembers,
     mtnEnabled: row.mtnEnabled, mtnNumber: row.mtnNumber, mtnName: row.mtnName, mtnMenuShortcut: row.mtnMenuShortcut,
     airtelEnabled: row.airtelEnabled, airtelNumber: row.airtelNumber, airtelName: row.airtelName, airtelMenuShortcut: row.airtelMenuShortcut,
     copyFormat: row.copyFormat as CopyFormat,
@@ -64,7 +65,7 @@ export function settingsFromRow(row: SettingsRow): SubscriptionSettings {
     communityVisible: row.communityVisible, communityLinks: communityLinksWithDefaults(community.data),
     paymentAlertsEnabled: row.paymentAlertsEnabled ?? false, paymentAlertRepeats: row.paymentAlertRepeats ?? 1,
     paymentNote: row.paymentNote, reviewTime: row.reviewTime,
-    maxUnlockedDevices: row.maxUnlockedDevices, trialDays: row.trialDays, screenshotRetentionDays: row.screenshotRetentionDays,
+    trialDays: row.trialDays, screenshotRetentionDays: row.screenshotRetentionDays,
     paymentNumbersChangedAt: instant(row.paymentNumbersChangedAt), lastMembersPurgeAt: instant(row.lastMembersPurgeAt),
     updatedAt: instant(row.updatedAt), updatedBy: row.updatedBy,
   });
@@ -72,8 +73,7 @@ export function settingsFromRow(row: SettingsRow): SubscriptionSettings {
 
 /**
  * Locks the settings row for the rest of the transaction, creating it with the defaults first when it is missing, and
- * returns it. Mode switches, saves and plan deactivation all take this lock first, so they never decide on a stale mode or
- * plan count.
+ * returns it. Mode switches and settings writes serialize on this row.
  */
 export async function lockSettings(tx: Prisma.TransactionClient, actor: string, at: Date): Promise<SubscriptionSettings> {
   await tx.$executeRaw`INSERT INTO SubscriptionSettings (id, updatedAt, updatedBy) VALUES (${settingsId}, ${at}, ${actor})
@@ -100,10 +100,10 @@ export async function decide<Outcome>(database: DatabaseRuntime,
 }
 
 export type ReleaseReadiness = () => Readonly<{ privacy: boolean; terms: boolean }>;
-/** `on` waits for both notices (`src/domain/privacy-notice.ts`, `terms-notice.ts`); tests inject their own answer. */
+/** Release status is shown in the checkout checklist. */
 export const noticeReadiness: ReleaseReadiness = () => ({ privacy: privacyNotice.releaseReady, terms: termsNotice.releaseReady });
 
-export async function modeFacts(client: Pick<Prisma.TransactionClient, "subscriptionPlan">, readiness: ReleaseReadiness): Promise<ModeFacts> {
+async function checkoutFacts(client: Pick<Prisma.TransactionClient, "subscriptionPlan">, readiness: ReleaseReadiness): Promise<CheckoutReadinessFacts> {
   const { privacy, terms } = readiness();
   return { activePlans: await client.subscriptionPlan.count({ where: { active: true } }), privacyReleaseReady: privacy, termsReleaseReady: terms };
 }
@@ -113,14 +113,12 @@ export type SettingsOutcome =
   | Readonly<{ status: "saved"; settings: SubscriptionSettings; changed: readonly EditableSettingField[]; cleared: readonly ShortcutField[] }>
   | Readonly<{ status: "invalid"; errors: SettingsErrors }>
   | Readonly<{ status: "password-required"; fields: readonly ProtectedSettingField[] }>
-  | Readonly<{ status: "password-refused"; check: LoginRefusal }>
-  | Readonly<{ status: "requirements"; mode: PaywallMode; missing: readonly ModeRequirement[] }>;
+  | Readonly<{ status: "password-refused"; check: LoginRefusal }>;
 export type SettingsOverview = Readonly<{
   settings: SubscriptionSettings;
   source: "stored" | "defaults";
   environmentFields: readonly ProtectedSettingField[];
-  /** What still stops each mode; empty when it can be switched on now. */
-  requirements: Readonly<Record<Exclude<PaywallMode, "off">, readonly ModeRequirement[]>>;
+  checkoutReadiness: readonly CheckoutReadinessIssue[];
 }>;
 
 /** Protected fields require owner password re-entry or an already verified administrative member session. */
@@ -213,17 +211,17 @@ export function createSettingsService(database: DatabaseRuntime,
       catch { return { settings: null, source: "unavailable" }; }
     },
 
-    /** The owner's Settings page: the stored row, uncached, with what still stops `test` and `on`. Throws when unreadable. */
+    /** The owner's Settings page reads the stored row and checkout setup without caching. */
     async overview(): Promise<SettingsOverview> {
       const { settings, source } = await stored();
-      const facts = await database.query((client) => modeFacts(client, readiness));
-      return { settings, source, environmentFields, requirements: { test: modeRequirements(settings, "test", facts), on: modeRequirements(settings, "on", facts) } };
+      const facts = await database.query((client) => checkoutFacts(client, readiness));
+      return { settings, source, environmentFields, checkoutReadiness: checkoutReadiness(settings, facts) };
     },
 
     /**
      * Saves the fields the form changed. Phones are stored as canonical digits. Protected fields need an authorized
      * member session or owner password re-entry before row locks; the change and its audit row (old and new values) commit
-     * together. While the mode is `test` or `on`, a save that would break one of its requirements is refused.
+     * together.
      */
     async save(actor: string, input: unknown, reentry: PasswordReentry): Promise<SettingsOutcome> {
       const parsed = parseSettingsChanges(input);
@@ -257,13 +255,6 @@ export function createSettingsService(database: DatabaseRuntime,
         const { change } = applied;
         if (change.changed.length === 0) return rollback({ status: "saved", settings: current, changed: [], cleared: [] });
         if (change.protectedChanged.length > 0 && !confirmed) return rollback({ status: "password-required", fields: change.protectedChanged });
-        if (current.paywallMode !== "off") {
-          // Only what this save breaks: a requirement already unmet (a notice withdrawn after switch-on) blocks nothing here.
-          const facts = await modeFacts(tx, readiness);
-          const before = new Set(modeRequirements(current, current.paywallMode, facts).map(({ key }) => key));
-          const missing = modeRequirements(change.next, current.paywallMode, facts).filter(({ key }) => !before.has(key));
-          if (missing.length > 0) return rollback({ status: "requirements", mode: current.paywallMode, missing });
-        }
         const row = await tx.subscriptionSettings.update({ where: { id: settingsId }, data: {
           ...Object.fromEntries(change.changed.map((field) => [field, change.next[field]])),
           ...(change.paymentNumbersChanged ? { paymentNumbersChangedAt: at } : {}),
@@ -280,18 +271,16 @@ export function createSettingsService(database: DatabaseRuntime,
       return outcome;
     },
 
-    /** Switches the mode (the form asks for a second tap first). `test` and `on` are refused until their requirements hold. */
+    /** Switches the mode after the dashboard confirmation. */
     async setMode(actor: string, mode: unknown): Promise<SettingsOutcome> {
       if (typeof mode !== "string" || !(paywallModes as readonly string[]).includes(mode)) {
-        return { status: "invalid", errors: { mode: "Choose off, test or on." } };
+        return { status: "invalid", errors: { mode: "Choose Off or On." } };
       }
       const next = mode as PaywallMode;
       const at = new Date(now());
       const outcome = await decide<SettingsOutcome>(database, async (tx, rollback) => {
         const current = effective(await lockSettings(tx, actor, at));
         if (current.paywallMode === next) return rollback({ status: "saved", settings: current, changed: [], cleared: [] });
-        const missing = modeRequirements(current, next, await modeFacts(tx, readiness));
-        if (missing.length > 0) return rollback({ status: "requirements", mode: next, missing });
         const row = await tx.subscriptionSettings.update({ where: { id: settingsId }, data: { paywallMode: next, updatedAt: at, updatedBy: actor } });
         await writeOwnerAudit(tx, { at, actor, action: "paywall_mode_changed", targetType: "settings", targetId: String(settingsId),
           details: { from: current.paywallMode, to: next } });

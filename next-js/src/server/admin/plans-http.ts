@@ -15,8 +15,6 @@ function answer(outcome: PlanOutcome | PlanUsageOutcome): Response {
     case "not-found": return json({ error: "not-found", message: "That plan does not exist. Reload the page." }, 404);
     case "in-use": return json({ error: "in-use", message: "This plan has payment, access or automatic-renewal records. Deactivate it to preserve that history.",
       usage: outcome.usage }, 409);
-    case "requirements": return json({ error: "requirements", message: outcome.missing[0]?.message ?? "Paid access needs an active plan.",
-      mode: outcome.mode, missing: outcome.missing }, 409);
   }
 }
 

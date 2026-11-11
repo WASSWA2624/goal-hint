@@ -21,6 +21,6 @@ export function setCommunityScenario(scenario: CommunityScenario) {
 export const scope = "a".repeat(64);
 export function settingsPage(): SettingsPageData {
   return { settings: fixture.settings, source: fixture.settings.updatedAt ? "stored" : "defaults", protectedFields: protectedSettingFields,
-    requirements: { test: [], on: [] }, diagnostics: { address: "synthetic", headers: [] } };
+    checkoutReadiness: [], diagnostics: { address: "synthetic", headers: [] } };
 }
 export const alertStatus = () => ({ scope, enabled: false, repeats: 1, events: [], endpoints: [], publicKey: null, transports: { web: false, fcm: false, windowsClosed: false } });

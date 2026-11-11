@@ -9,7 +9,7 @@ import { uploadPayment } from "../src/components/members/payment-image.ts";
 
 import { jpeg, paymentRequest, values } from "./helpers/payment-fixtures.mjs";
 const fixture = () => {
-  const calls = { begin: 0, submit: [] }, services = { config: { production: false }, settings: { settings: { paywallMode: "test" } },
+  const calls = { begin: 0, submit: [] }, services = { config: { production: false }, settings: { settings: { paywallMode: "on" } },
     sessions: { verify: async () => ({ accountId: "account", tokenHash: "hash", blocked: false }) }, payments: {
       begin: async () => { calls.begin++; return true; }, submit: async (...args) => { calls.submit.push(args); return { status: "saved", reference: "PTEST" }; } } };
   return { calls, services, handler: createPaymentHandler(async () => services, { deadlineMs: 30 }) };

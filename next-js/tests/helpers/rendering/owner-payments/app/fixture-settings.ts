@@ -4,7 +4,7 @@ import { createSettingsService, type SettingsService } from "@/server/members/se
 import type { DatabaseRuntime } from "@/server/database/client";
 import { seed } from "./fixture";
 
-export const settingsScenarios = ["writable", "managed", "missing", "requirements-race", "save-failed", "saved-without-requirements"] as const;
+export const settingsScenarios = ["writable", "managed", "missing", "save-failed", "saved-without-checkout-readiness"] as const;
 export type SettingsScenario = typeof settingsScenarios[number];
 type Row = Omit<SubscriptionSettings, "updatedAt" | "paymentNumbersChangedAt" | "lastMembersPurgeAt"> & {
   id: number; updatedAt: Date | null; paymentNumbersChangedAt: Date | null; lastMembersPurgeAt: Date | null;
@@ -31,31 +31,28 @@ function stateFor(scenario: SettingsScenario): State {
   if (scenario === "missing") Object.assign(row, { mtnNumber: null, mtnName: null, mtnMenuShortcut: null,
     airtelNumber: null, airtelName: null, airtelMenuShortcut: null, contactPhone: null, whatsappPhone: null });
   const state = { row, audits: [], queue: Promise.resolve() } as unknown as State;
-  let transaction = false, failOverview = false;
+  let failOverview = false;
   const client = { $executeRaw: async () => 0, $queryRaw: async () => [{ id: 1 }],
     subscriptionSettings: { findUnique: async () => state.row, findUniqueOrThrow: async () => state.row,
       update: async ({ data }: { data: Partial<Row> }) => { Object.assign(state.row, data); return state.row; } },
-    subscriptionPlan: { count: async () => scenario === "missing" || scenario === "requirements-race" && transaction ? 0 : 1 },
+    subscriptionPlan: { count: async () => scenario === "missing" ? 0 : 1 },
     ownerAuditEvent: { create: async ({ data }: { data: unknown }) => { state.audits.push(data); return data; } } };
   const database = { query: async (run: (tx: typeof client) => unknown) => run(client),
     transaction(run: (tx: typeof client) => unknown) {
       const result = state.queue.then(async () => {
         if (scenario === "save-failed") throw new Error("Synthetic settings storage failure.");
         const before = structuredClone(state.row), auditLength = state.audits.length;
-        transaction = true;
         try { return await run(client); } catch (error) { state.row = before; state.audits.length = auditLength; throw error; }
-        finally { transaction = false; }
       });
       state.queue = result.catch(() => {}); return result;
     } } as unknown as DatabaseRuntime;
   const service = createSettingsService(database, { environment: scenario === "managed" ? {
-    mtnNumber: row.mtnNumber, mtnName: row.mtnName, mtnMenuShortcut: row.mtnMenuShortcut, airtelNumber: row.airtelNumber,
-    airtelName: row.airtelName, airtelMenuShortcut: row.airtelMenuShortcut, contactPhone: row.contactPhone, whatsappPhone: row.whatsappPhone,
+    contactPhone: row.contactPhone, whatsappPhone: row.whatsappPhone,
   } : null, readiness: () => ({ privacy: scenario !== "missing", terms: scenario !== "missing" }) });
   state.service = { ...service,
     async overview() { if (failOverview) { failOverview = false; throw new Error("Synthetic post-commit read failure."); } return service.overview(); },
-    async save(...args: Parameters<SettingsService["save"]>) { const result = await service.save(...args); if (scenario === "saved-without-requirements" && result.status === "saved") failOverview = true; return result; },
-    async setMode(...args: Parameters<SettingsService["setMode"]>) { const result = await service.setMode(...args); if (scenario === "saved-without-requirements" && result.status === "saved") failOverview = true; return result; },
+    async save(...args: Parameters<SettingsService["save"]>) { const result = await service.save(...args); if (scenario === "saved-without-checkout-readiness" && result.status === "saved") failOverview = true; return result; },
+    async setMode(...args: Parameters<SettingsService["setMode"]>) { const result = await service.setMode(...args); if (scenario === "saved-without-checkout-readiness" && result.status === "saved") failOverview = true; return result; },
   };
   states.set(scenario, state); return state;
 }

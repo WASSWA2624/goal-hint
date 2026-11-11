@@ -19,7 +19,7 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
   const { database, config } = fixture;
   let instant = Date.parse("2026-11-01T09:00:00Z"), phone = 100;
   const now = () => instant, at = new Date(instant), planId = randomUUID();
-  await database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test",
+  await database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "on",
     mtnEnabled: true, mtnNumber: "256700000901", mtnName: "TEST MTN",
     airtelEnabled: true, airtelNumber: "256700000902", airtelName: "TEST AIRTEL", updatedAt: at, updatedBy: "test" } }));
   await database.query(tx => tx.subscriptionPlan.create({ data: { id: planId, name: "Weekly", durationDays: 7, priceUgx: 5000, active: true, sortOrder: 1, createdAt: at, updatedAt: at } }));
@@ -392,6 +392,15 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     const second = await submit(who, select({ walletUgx: 1000, referralDays: 1 }));
     assert.equal((await checkout.cancel(who, second.id)).ok, true);
     assert.equal((await checkout.read(who)).availableReferralDays, 2);
+    const settings = createSettingsService(database, { now });
+    try {
+      assert.equal((await settings.setMode("owner", "off")).status, "saved");
+      assert.equal((await checkout.quote(who, select())).ok, false);
+      assert.equal((await checkout.reconfirm(who, second.id, 1000, 1, 4000, true)).ok, false);
+      assert.equal((await checkout.reconfirm(who, request.id, 2000, 1, 3000, true)).ok, true);
+    } finally {
+      await settings.setMode("owner", "on");
+    }
   });
   await t.test("stale quotes and expired reservations require explicit confirmation", async () => {
     const who = await member(); await fund(who, 1000, 1);
@@ -454,7 +463,7 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     const who = await member(); await fund(who, 5000, 1);
     const reward = await database.transaction(async tx => createAccessPeriod(tx, await lockMemberAccount(tx, who.accountId), {
       source: "referral", planName: "Historical earned day", durationDays: 1, priceUgx: 0, amountReceivedUgx: 0,
-    }, "historical-fixture", new Date(now()), { maximum: 1 }));
+    }, "historical-fixture", new Date(now())));
     const request = await submit(who, select({ method: "wallet", walletUgx: 5000, referralDays: 1 }));
     const code = await database.query(tx => tx.accessCode.findUniqueOrThrow({ where: { paymentSubmissionId: request.id } }));
     assert.equal(+code.startsAt, +reward.endsAt); assert.equal(Date.parse(request.endsAt), +reward.endsAt + 8 * 86_400_000);
@@ -476,7 +485,7 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
         assert.equal(trial.state, "active");
         await database.transaction(async tx => createAccessPeriod(tx, await lockMemberAccount(tx, who.accountId), {
           source: "referral", planName: "Earned day", durationDays: 1, priceUgx: 0, amountReceivedUgx: 0,
-        }, "test", new Date(now()), { maximum: 2 }));
+        }, "test", new Date(now())));
         await fund(who, 0, 1);
         const redemption = await submit(who, select({ purpose: "referral", planId: null, method: "referral", referralDays: 1 }));
         assert.equal(redemption.status, "approved");

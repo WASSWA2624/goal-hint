@@ -6,7 +6,7 @@ import { createPayments } from "../src/server/members/payments.ts";
 import { jpeg } from "./helpers/payment-fixtures.mjs";
 
 const instant = Date.parse("2026-10-24T12:00:00Z"), at = new Date(instant);
-const settings = { ...defaultSubscriptionSettings, paywallMode: "test", mtnEnabled: true, mtnNumber: "256700000901", mtnName: "TEST MTN" };
+const settings = { ...defaultSubscriptionSettings, paywallMode: "on", mtnEnabled: true, mtnNumber: "256700000901", mtnName: "TEST MTN" };
 const fields = { planId: "plan", network: "mtn", payerPhone: "256700000101", transactionId: "NEW1234", screenshotAmount: 5000, accepted: false };
 
 // A small in-memory query adapter exercises the service's account, relation and consent filters without a database.
@@ -22,8 +22,8 @@ function matches(value, filter) {
   });
 }
 
-function fixture({ reports = [], codes = [], accountChange = {}, sessionChange = {} } = {}) {
-  const member = { accountId: "account", tokenHash: "session", phone: "256700000101", codeEnteredAt: null };
+function fixture({ reports = [], codes = [], accountChange = {}, sessionChange = {}, production = false } = {}) {
+  const member = { accountId: "account", tokenHash: "session", phone: "256700000101" };
   const session = { tokenHash: member.tokenHash, accountId: member.accountId, authenticatedAt: at, passwordResetAt: null,
     expiresAt: new Date(instant + 86_400_000), codeEnteredAt: null, ...sessionChange };
   const submissions = reports.map((row, index) => ({ id: `report-${index}`, accountId: member.accountId, source: "report", reference: "TEST",
@@ -31,7 +31,8 @@ function fixture({ reports = [], codes = [], accountChange = {}, sessionChange =
     rejectText: null, rejectReason: null, planName: "Weekly", priceUgx: 5000, code: null, ...row }));
   const periods = codes.map(row => ({ accountId: member.accountId, source: "manual", termsVersion: null,
     endsAt: new Date(instant - 1), revokedAt: at, ...row }));
-  const account = { id: member.accountId, phone: member.phone, blockedAt: null, erasedAt: null, trialRequestedAt: null, trialDismissedAt: null,
+  const account = { id: member.accountId, phone: member.phone, passwordHash: "fixture", phoneVerifiedAt: at,
+    blockedAt: null, erasedAt: null, creditUgx: 0, autoRenew: false, autoRenewPlanId: null,
     get sessions() { return session.accountId === member.accountId ? [session] : []; },
     get submissions() { return submissions.filter(row => row.accountId === member.accountId); },
     get codes() { return periods.filter(row => row.accountId === member.accountId); }, ...accountChange };
@@ -44,6 +45,7 @@ function fixture({ reports = [], codes = [], accountChange = {}, sessionChange =
     subscriptionPlan: { async findUnique() { return { id: "plan", name: "Weekly", durationDays: 7, priceUgx: 5000, active: true }; } },
     paymentSubmission: {
       async findFirst({ where }) { return submissions.find(row => matches({ ...row, account }, where)) ?? null; },
+      async aggregate() { return { _sum: { walletUgx: null } }; },
       async updateMany() { return { count: 0 }; },
       async create({ data }) { created.push(data); submissions.push(data); return data; },
     },
@@ -52,7 +54,7 @@ function fixture({ reports = [], codes = [], accountChange = {}, sessionChange =
     walletEntry: { async findMany() { return []; } },
   };
   const database = { query: run => run(tx), transaction: run => run(tx) };
-  const service = createPayments({ database, config: { key: (purpose, value) => `${purpose}:${value}` }, now: () => instant });
+  const service = createPayments({ database, config: { production, key: (purpose, value) => `${purpose}:${value}` }, now: () => instant });
   return { member, created, service, view: () => service.view(member, settings), submit: (accepted, image = jpeg()) => service.submit(member, { ...fields, accepted }, image) };
 }
 
@@ -66,7 +68,13 @@ test("optional screenshot reports persist pending without image or screenshot-de
   for (const key of ["screenshot", "imageSha256", "imageBytes"]) assert.equal(key in report, false, key);
 });
 
-test("current member-report consent survives every payment status and a locked or new device", async () => {
+test("production payments stay closed with draft notices even while paid access is on", async () => {
+  const f = fixture({ production: true });
+  assert.equal((await f.submit(true)).status, "refused");
+  assert.equal(f.created.length, 0);
+});
+
+test("current member-report consent survives every payment status on another device", async () => {
   for (const status of ["pending", "superseded", "approved", "rejected", "reversed"]) {
     const f = fixture({ reports: [{ status }] });
     assert.equal((await f.view()).acceptedTerms, true, status);

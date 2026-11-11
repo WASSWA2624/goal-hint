@@ -9,8 +9,6 @@ import { createAuthenticatedTestSessions as createMemberSessions } from "./helpe
 import { createPayments } from "../src/server/members/payments.ts";
 import { paidDatabase } from "./helpers/paid-database.mjs";
 import { jpeg } from "./helpers/payment-fixtures.mjs";
-import { grantSessionAccess } from "../src/server/members/device-grants.ts";
-import { lockMemberAccount } from "../src/server/members/access-codes.ts";
 import { MysqlServerUnavailableError } from "./helpers/mysql-instance.mjs";
 import { silentPaymentNotifications } from "./helpers/payment-notification-fixtures.mjs";
 
@@ -22,13 +20,13 @@ test("real MySQL payment transactions, budgets, snapshots, assent and retired tr
   let instant = Date.parse("2026-10-19T09:00:00Z"), serial = 100;
   const now = () => instant, at = new Date(instant), planId = randomUUID();
   const sessions = createMemberSessions({ database, config, now }), payments = createPayments({ database, config, now }), codes = createAccessCodes({ database, config, now, notifications: silentPaymentNotifications });
-  await database.query((tx) => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test",
+  await database.query((tx) => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "on",
     mtnEnabled: true, mtnNumber: "256700000901", mtnName: "TEST MTN",
     airtelEnabled: true, airtelNumber: "256700000902", airtelName: "TEST AIRTEL", updatedAt: at, updatedBy: "synthetic-owner" } }));
   await database.query((tx) => tx.subscriptionPlan.create({ data: { id: planId, name: "Weekly", durationDays: 7, priceUgx: 5000, active: true, sortOrder: 1, createdAt: at, updatedAt: at } }));
   async function member(phone) { const signed = await sessions.signIn(phone ?? `25670000${String(++serial).padStart(4, "0")}`, "unknown"); return sessions.verify(signed.token); }
   const fields = (overrides = {}) => ({ planId, payerPhone: "256700000101", network: "mtn", transactionId: `TEST-${++serial}`, screenshotAmount: 5000, accepted: true, ...overrides });
-  const settings = { ...defaultSubscriptionSettings, paywallMode: "test", trialDays: 2 };
+  const settings = { ...defaultSubscriptionSettings, paywallMode: "on", trialDays: 2 };
   const image = jpeg();
   async function report(who, values = fields(), screenshot = image) { assert.equal(await payments.begin(who, "unknown", screenshot?.length ?? 1), true); return payments.submit(who, values, screenshot); }
   const count = () => database.query((tx) => tx.paymentSubmission.count());
@@ -62,15 +60,16 @@ test("real MySQL payment transactions, budgets, snapshots, assent and retired tr
     const otherDevice = await payments.view(await member(first.phone), settings); assert.equal(otherDevice.status.reference, a.reference);
     const visible = await payments.view(first, settings); assert.equal(visible.status.reference, a.reference); assert.ok(visible.status.endsAt);
   });
-  await t.test("current account assent survives reversal and a new locked device", async () => {
+  await t.test("current account assent survives reversal and a new login", async () => {
     const who = await member(); assert.equal((await report(who, fields({ accepted: false }))).status, "invalid");
     const submitted = await report(who), row = await database.query((tx) => tx.paymentSubmission.findUniqueOrThrow({ where: { reference: submitted.reference.slice(1) } }));
     assert.equal((await payments.view(who, settings)).acceptedTerms, true, "The accepted report records consent before approval.");
     const approved = await codes.approvePayment(row.id, { planId, network: "mtn", transactionRef: fields().transactionId, amountReceivedUgx: 5000 }, "synthetic-owner"); assert.equal(approved.status, "created");
     assert.equal((await codes.reversePayment(row.id, "network-reversal", "synthetic-owner")).status, "saved");
-    const locked = await member(who.phone); assert.equal(locked.codeEnteredAt, null);
-    assert.equal((await payments.view(locked, settings)).acceptedTerms, true);
-    assert.equal((await report(locked, fields({ accepted: false }))).status, "saved");
+    const loggedIn = await member(who.phone);
+    assert.equal((await codes.subscriptionStatus(loggedIn)).activeUntil, null);
+    assert.equal((await payments.view(loggedIn, settings)).acceptedTerms, true);
+    assert.equal((await report(loggedIn, fields({ accepted: false }))).status, "saved");
   });
   await t.test("reports use the supplied payer and plan price and keep the screenshot's amount only as a hint; approval preserves the paid-for offer", async () => {
     const who = await member(), transactionId = `HINTED-${++serial}`, sent = await report(who, fields({ payerPhone: "0700000199", transactionId, screenshotAmount: 4000 }));
@@ -88,7 +87,7 @@ test("real MySQL payment transactions, budgets, snapshots, assent and retired tr
     assert.equal(after.priceUgx, 5000); assert.equal(after.durationDays, 7);
     await database.query((tx) => tx.subscriptionPlan.update({ where: { id: planId }, data: { priceUgx: 5000, durationDays: 7 } }));
     const again = await member(who.phone);
-    await database.transaction(async (tx) => { await lockMemberAccount(tx, again.accountId); assert.equal(await grantSessionAccess(tx, { accountId: again.accountId, tokenHash: again.tokenHash, at: new Date(instant), actor: "member" }), true); });
+    assert.equal((await codes.subscriptionStatus(again)).activeUntil, approved.grant.endsAt.toISOString());
   });
   await t.test("invalid IDs cannot replace a pending report, even when calling the service directly", async () => {
     const who = await member(), sent = await report(who), before = await count();

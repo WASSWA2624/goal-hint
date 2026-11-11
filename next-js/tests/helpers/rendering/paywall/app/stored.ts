@@ -15,8 +15,8 @@ import data from "./scenarios.json";
 type Scenario = { detail: StoredMatchDetailResponse; prior: StoredMatchDetailResponse; feed: StoredMatchFeedResponse; insights: StoredMatchInsights };
 export const scenarios = data as unknown as Record<string, Scenario>;
 export const at = parseUtcInstant("2026-10-09T09:00:00Z"), instant = async () => at;
-export const accessFor = (viewer: string | null): ViewerAccess => ({ tier: viewer === "entitled" ? "full" : "free",
-  signedIn: ![null, "anonymous", "off", "evicted"].includes(viewer), mode: viewer === "off" ? "off" : viewer === "test" ? "test" : "on" });
+export const accessFor = (viewer: string | null): ViewerAccess => ({ tier: viewer === "entitled" || viewer === "off" || viewer === "verified-free" ? "full" : "free",
+  signedIn: ![null, "anonymous", "off", "evicted"].includes(viewer), mode: viewer === "off" ? "off" : "on" });
 const viewerCookie = (token: string | undefined) => token === "f".repeat(43) ? "entitled" : token ?? null;
 export const resolveAccess = async () => accessFor((await headers()).get("x-test-viewer") ?? viewerCookie((await cookies()).get(memberCookieName(false))?.value));
 export const requestAccess = async (request: Request) => accessFor(request.headers.get("x-test-viewer") ?? viewerCookie(readCookie(request, memberCookieName(false))));

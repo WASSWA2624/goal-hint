@@ -2,7 +2,7 @@ import type { CheckoutEvidenceCheck, CheckoutQuote, CheckoutRequest, CheckoutSel
 import { fundingAmounts } from "@/domain/checkout";
 import { transactionKey } from "@/domain/payment";
 import { defaultSubscriptionSettings } from "@/domain/subscription-settings";
-export const settings = { ...defaultSubscriptionSettings, paywallMode: "test" as const,
+export const settings = { ...defaultSubscriptionSettings, paywallMode: "on" as const,
   mtnEnabled: true, mtnNumber: "256700000901", mtnName: "SYNTHETIC MTN PAYEE",
   airtelEnabled: true, airtelNumber: "256700000902", airtelName: "SYNTHETIC AIRTEL PAYEE", contactPhone: "256700000903", whatsappPhone: "256700000904" };
 const packageFixtures = [["Daily", 1, 1000], ["Weekly", 7, 5000], ["Monthly", 30, 20000],

@@ -56,7 +56,7 @@ export function createMemberAuthFixture({ admins = [], adminHash = null, send, t
       async deleteMany({ where }) { let count = 0; for (const [identifier, row] of rows) if (matches(row, where)) { rows.delete(identifier); count++; } return { count }; },
     };
   }
-  const settings = { ...defaultSubscriptionSettings, trialDays, updatedAt: new Date(time), updatedBy: "synthetic-owner" };
+  const settings = { ...defaultSubscriptionSettings, paywallMode: "on", trialDays, updatedAt: new Date(time), updatedBy: "synthetic-owner" };
   const tx = { memberAccount: table(accounts, "id", { passwordHash: null, phoneVerifiedAt: null, passwordChangedAt: null, blockedAt: null, erasedAt: null, referralCode: null }),
     memberSession: table(sessions, "tokenHash", { codeEnteredAt: null, accessCodeId: null, authenticatedAt: null, passwordResetAt: null }),
     memberReferral: table(referrals, "id", { rewardedAt: null, accessCodeId: null, inviterId: null, accountId: null, status: "pending" }),

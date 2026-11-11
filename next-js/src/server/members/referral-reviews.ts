@@ -10,7 +10,6 @@ import { auditTextErrors } from "../admin/audit.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma, ReferralReviewCase as CaseRow } from "../generated/prisma/client.ts";
 import { accessCodeTransaction, createAccessPeriod, lockMemberAccount } from "./access-codes.ts";
-import { liveAccessCode, unlockedDeviceLimit } from "./device-grants.ts";
 import { isMemberAdminPhone, memberAdminCredential } from "./member-admin.ts";
 import type { MemberIdentity } from "./member-sessions.ts";
 import { rechainRewardPeriods } from "./referral-periods.ts";
@@ -271,9 +270,6 @@ export function createReferralReviews({ database, config, now = Date.now, adminP
             await tx.referralGrantReversal.create({ data: { grantId: grant.id, caseId: row.id, accountId: grant.accountId, holderAccountId: grant.accountId, reversedMs: before, appliedAt: at } });
             await tx.accessCode.update({ where: { id: grant.id }, data: { revokedAt: at, revokedReason: "referral-review" } });
             await rechainRewardPeriods(tx, grant.accountId, at);
-            const live = await liveAccessCode(tx, grant.accountId, at);
-            await tx.memberSession.updateMany({ where: { accountId: grant.accountId, accessCodeId: grant.id },
-              data: live ? { accessCodeId: live.id } : { accessCodeId: null, codeEnteredAt: null } });
             await event(tx, row, "reversed", admin.accountId, at, before, 0);
             await notify(tx, grant.accountId, row, "reversed", "referral-reversed", at);
             status = "reversed";
@@ -286,7 +282,7 @@ export function createReferralReviews({ database, config, now = Date.now, adminP
           if (action.decision === "restore") {
             if (ledger.restoredGrantId) return failure("conflict");
             const compensation = await createAccessPeriod(tx, holder, { source: "referral", planName: "Restored earned access", durationDays: 1,
-              priceUgx: 0, amountReceivedUgx: 0 }, `referral-review:${row.id}`, at, { maximum: await unlockedDeviceLimit(tx) }, ledger.reversedMs);
+              priceUgx: 0, amountReceivedUgx: 0 }, `referral-review:${row.id}`, at, { exactRewardMs: ledger.reversedMs });
             await tx.referralGrantReversal.update({ where: { grantId: ledger.grantId }, data: { restoredGrantId: compensation.id, restoredAt: at } });
             await rechainRewardPeriods(tx, holder.id, at);
             await event(tx, row, "restored", admin.accountId, at, 0, ledger.reversedMs);

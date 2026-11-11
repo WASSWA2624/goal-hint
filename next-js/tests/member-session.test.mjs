@@ -102,11 +102,15 @@ test("header identity requests are private, deduplicated and refreshed after ano
   assert.equal(requests.length, beforeUnmount, "unmounted headers remove their browser listeners");
 });
 
-test("slip sharing requires a signed-in member and current access, not pending, expired or malformed access", async (t) => {
+test("slip sharing follows confirmed public or member access and current subscription periods", async (t) => {
   const previousFetch = globalThis.fetch;
   t.after(() => { globalThis.fetch = previousFetch; });
   const active = { activeUntil: new Date(Date.now() + 60_000).toISOString(), paymentPending: false, canSubscribe: true };
-  for (const [phone, subscription, expected] of [
+  for (const [phone, subscription, expected, freeContentAccess] of [
+    [null, null, true, true],
+    [null, null, false, false],
+    ["+256700000001", null, true, true],
+    ["+256700000001", null, false, false],
     [null, active, false],
     ["+256700000001", null, false],
     ["+256700000001", { ...active, activeUntil: null, paymentPending: true }, false],
@@ -115,7 +119,7 @@ test("slip sharing requires a signed-in member and current access, not pending, 
     ["+256700000001", active, true],
     [null, null, false],
   ]) {
-    globalThis.fetch = async () => Response.json({ phone, subscription });
+    globalThis.fetch = async () => Response.json({ phone, subscription, freeContentAccess });
     await refreshMemberSession();
     assert.equal(getSlipSharingSnapshot(), expected);
   }

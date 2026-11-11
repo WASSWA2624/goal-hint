@@ -13,8 +13,8 @@ import { contactNotice } from "./contact-notice.ts";
  * SubscriptionSettings; a missing row means these defaults, so paid access ships `off`. These rules are pure and shared by
  * the dashboard form and the server; the migration's CHECK constraints repeat them.
  */
-export const paywallModes = Object.freeze(["off", "test", "on"] as const);
-/** Every mode gates predictions by entitlement. `off` closes acquisition; `test` opens development flows; `on` is the released offer. */
+export const paywallModes = Object.freeze(["off", "on"] as const);
+/** Off opens public content. On restricts subscriber features to eligible accounts. */
 export type PaywallMode = (typeof paywallModes)[number];
 /** What the Copy number button copies; numbers are always shown as `256 772 123 456`. */
 export const copyFormats = Object.freeze(["international", "local"] as const);
@@ -25,9 +25,8 @@ export const settingsRules = Object.freeze({
   shortcutMaxLength: 60,
   paymentNoteMaxLength: 300,
   reviewTimeMaxLength: 60,
-  maxUnlockedDevices: Object.freeze({ min: 1, max: 5, default: 2 }),
-  /** 0 hides the free-trial offer (5.10). */
-  trialDays: Object.freeze({ min: 0, max: 7, default: 2 }),
+  /** Zero disables the new-account trial offer. */
+  trialDays: Object.freeze({ min: 0, max: 366, default: 2 }),
   screenshotRetentionDays: Object.freeze({ min: 7, max: 365, default: 90 }),
 });
 
@@ -37,6 +36,7 @@ export const menuShortcutPattern = /^(?:[0-9*#]|\{amount\})+$/u;
 /** Timestamps are ISO strings, so the same value serves the server, the API and the dashboard form. */
 export type SubscriptionSettings = Readonly<{
   paywallMode: PaywallMode;
+  allowUnsubscribedMembers: boolean;
   mtnEnabled: boolean;
   mtnNumber: string | null;
   mtnName: string | null;
@@ -59,7 +59,6 @@ export type SubscriptionSettings = Readonly<{
   paymentAlertRepeats: number;
   paymentNote: string | null;
   reviewTime: string | null;
-  maxUnlockedDevices: number;
   trialDays: number;
   screenshotRetentionDays: number;
   paymentNumbersChangedAt: string | null;
@@ -68,9 +67,10 @@ export type SubscriptionSettings = Readonly<{
   updatedBy: string | null;
 }>;
 
-/** What a missing row means: paid access off, no numbers, 2 devices, a 2-day trial and 90-day screenshot retention. */
+/** A missing row defaults to public access with a two-day trial configured for when paid access is on. */
 export const defaultSubscriptionSettings: SubscriptionSettings = Object.freeze({
   paywallMode: "off",
+  allowUnsubscribedMembers: false,
   mtnEnabled: false, mtnNumber: null, mtnName: null, mtnMenuShortcut: null,
   airtelEnabled: false, airtelNumber: null, airtelName: null, airtelMenuShortcut: null,
   copyFormat: "international",
@@ -79,7 +79,6 @@ export const defaultSubscriptionSettings: SubscriptionSettings = Object.freeze({
   supportContacts: null, messageTemplates: defaultMessageTemplates,
   communityVisible: true, communityLinks: defaultCommunityLinks, paymentAlertsEnabled: false, paymentAlertRepeats: 1,
   paymentNote: null, reviewTime: null,
-  maxUnlockedDevices: settingsRules.maxUnlockedDevices.default,
   trialDays: settingsRules.trialDays.default,
   screenshotRetentionDays: settingsRules.screenshotRetentionDays.default,
   paymentNumbersChangedAt: null, lastMembersPurgeAt: null, updatedAt: null, updatedBy: null,
@@ -87,7 +86,7 @@ export const defaultSubscriptionSettings: SubscriptionSettings = Object.freeze({
 
 /** The fields the Settings form saves; the mode has its own two-tap control. */
 export const editableSettingFields = Object.freeze(["mtnEnabled", "mtnNumber", "mtnName", "mtnMenuShortcut", "airtelEnabled", "airtelNumber", "airtelName",
-  "airtelMenuShortcut", "copyFormat", "contactPhone", "whatsappPhone", "paymentNote", "reviewTime", "maxUnlockedDevices", "trialDays",
+  "airtelMenuShortcut", "copyFormat", "contactPhone", "whatsappPhone", "paymentNote", "reviewTime", "allowUnsubscribedMembers", "trialDays",
   "screenshotRetentionDays", "supportContacts", "messageTemplates", "communityVisible", "communityLinks", "paymentAlertsEnabled", "paymentAlertRepeats", "contactPageEmail", "contactPageEmailVisible"] as const);
 export type EditableSettingField = (typeof editableSettingFields)[number];
 export type SettingsChanges = Partial<Pick<SubscriptionSettings, EditableSettingField>>;
@@ -105,12 +104,12 @@ export const isProtectedSettingField = (field: string): field is ProtectedSettin
 
 export const settingLabels: Readonly<Record<EditableSettingField, string>> = Object.freeze({
   mtnEnabled: "MTN MoMo payments",
-  mtnNumber: "MTN MoMo number",
-  mtnName: "MTN registered name",
+  mtnNumber: "MTN MoMo receiving number",
+  mtnName: "MTN MoMo registered account name",
   mtnMenuShortcut: "MTN menu shortcut",
   airtelEnabled: "Airtel Money payments",
-  airtelNumber: "Airtel Money number",
-  airtelName: "Airtel registered name",
+  airtelNumber: "Airtel Money receiving number",
+  airtelName: "Airtel Money registered account name",
   airtelMenuShortcut: "Airtel menu shortcut",
   copyFormat: "Copy number format",
   contactPhone: "Contact phone (calls)",
@@ -125,7 +124,7 @@ export const settingLabels: Readonly<Record<EditableSettingField, string>> = Obj
   paymentAlertRepeats: "Foreground sound repeats",
   paymentNote: "Extra payment note",
   reviewTime: "Typical review time",
-  maxUnlockedDevices: "Unlocked devices per account",
+  allowUnsubscribedMembers: "Allow access for verified members without a subscription",
   trialDays: authCopy.trialRegistrationDays,
   screenshotRetentionDays: "Keep screenshots after approval (days)",
 });
@@ -137,7 +136,6 @@ const shortcutFields = new Set<EditableSettingField>(["mtnMenuShortcut", "airtel
 export const shortcutOfNumber = Object.freeze({ mtnNumber: "mtnMenuShortcut", airtelNumber: "airtelMenuShortcut" } as const);
 export type ShortcutField = (typeof shortcutOfNumber)[keyof typeof shortcutOfNumber];
 const ranges = {
-  maxUnlockedDevices: settingsRules.maxUnlockedDevices,
   trialDays: settingsRules.trialDays,
   screenshotRetentionDays: settingsRules.screenshotRetentionDays,
 } as const;
@@ -196,6 +194,9 @@ export function parseSettingsChanges(input: unknown): ParsedChanges {
     } else if (key === "communityVisible") {
       if (typeof value === "boolean") changes[key] = value;
       else errors[key] = "Choose whether Community is visible to everyone.";
+    } else if (key === "allowUnsubscribedMembers") {
+      if (typeof value === "boolean") changes[key] = value;
+      else errors[key] = "Choose whether verified members can access subscriber features without a subscription.";
     } else if (key === "paymentAlertsEnabled" || key === "mtnEnabled" || key === "airtelEnabled") {
       if (typeof value === "boolean") changes[key] = value;
       else errors[key] = key === "paymentAlertsEnabled" ? "Choose whether to enable payment alerts." : "Choose whether to enable this payment method.";
@@ -226,7 +227,7 @@ export function parseSettingsChanges(input: unknown): ParsedChanges {
     } else if (key === "copyFormat") {
       if ((copyFormats as readonly unknown[]).includes(value)) changes[key] = value;
       else errors[key] = "Choose international or local.";
-    } else if (key === "maxUnlockedDevices" || key === "trialDays" || key === "screenshotRetentionDays") {
+    } else if (key === "trialDays" || key === "screenshotRetentionDays") {
       const { min, max } = ranges[key];
       if (typeof value === "number" && Number.isInteger(value) && value >= min && value <= max) changes[key] = value;
       else errors[key] = `Enter a whole number from ${min} to ${max}.`;
@@ -280,33 +281,27 @@ export function applySettingsChanges(current: SubscriptionSettings, changes: Set
   } };
 }
 
-export type ModeRequirement = Readonly<{ key: "plan" | "payment-number" | "contact" | "privacy" | "terms"; message: string }>;
-export type ModeFacts = Readonly<{ activePlans: number; privacyReleaseReady: boolean; termsReleaseReady: boolean }>;
+export type CheckoutReadinessIssue = Readonly<{ key: "plan" | "payment-number" | "contact" | "privacy" | "terms"; message: string }>;
+export type CheckoutReadinessFacts = Readonly<{ activePlans: number; privacyReleaseReady: boolean; termsReleaseReady: boolean }>;
 
-/**
- * What still stops a mode. `test` and `on` need an active plan, a payment number with its registered name, and a contact
- * or WhatsApp number; `on` also needs release-ready privacy and terms notices (OP-40 holds the rest of the launch gate).
- */
-export function modeRequirements(settings: SubscriptionSettings, mode: PaywallMode, facts: ModeFacts): readonly ModeRequirement[] {
-  if (mode === "off") return [];
-  const missing: ModeRequirement[] = [];
-  if (facts.activePlans < 1) missing.push({ key: "plan", message: "Add an active plan on the Plans page." });
-  if (!((settings.mtnNumber && settings.mtnName) || (settings.airtelNumber && settings.airtelName))) {
-    missing.push({ key: "payment-number", message: "Add an MTN MoMo or Airtel Money number with its registered name." });
+/** Setup for offering purchases to customers, independent of the paid access switch. */
+export function checkoutReadiness(settings: SubscriptionSettings, facts: CheckoutReadinessFacts): readonly CheckoutReadinessIssue[] {
+  const missing: CheckoutReadinessIssue[] = [];
+  if (facts.activePlans < 1) missing.push({ key: "plan", message: "Activate a subscription plan" });
+  if (manualPaymentProvider(settings, "mtn").reason !== null && manualPaymentProvider(settings, "airtel").reason !== null) {
+    missing.push({ key: "payment-number", message: "Set up a Mobile Money receiving account" });
   }
-  if (supportContactsOf(settings).length === 0) missing.push({ key: "contact", message: "Add a contact or WhatsApp number." });
-  if (mode === "on") {
-    if (!facts.privacyReleaseReady) missing.push({ key: "privacy", message: "The privacy notice is not release-ready yet." });
-    if (!facts.termsReleaseReady) missing.push({ key: "terms", message: "The terms are not release-ready yet." });
-  }
+  if (supportContactsOf(settings).length === 0) missing.push({ key: "contact", message: "Add a support contact" });
+  if (!facts.privacyReleaseReady) missing.push({ key: "privacy", message: "Publish the privacy notice" });
+  if (!facts.termsReleaseReady) missing.push({ key: "terms", message: "Publish the terms of use" });
   return missing;
 }
 
-/** What the owner's Settings page shows: the stored settings, what still stops each mode, and the address headers. */
+/** The owner's settings, outstanding checkout setup, and address diagnostics. */
 export type SettingsPageData = Readonly<{
   settings: SubscriptionSettings;
   source: "stored" | "defaults";
-  requirements: Readonly<Record<Exclude<PaywallMode, "off">, readonly ModeRequirement[]>>;
+  checkoutReadiness: readonly CheckoutReadinessIssue[];
   protectedFields: readonly string[];
   environmentFields?: readonly ProtectedSettingField[];
   diagnostics: Readonly<{ address: string; headers: readonly Readonly<{ name: string; value: string | null }>[] }>;

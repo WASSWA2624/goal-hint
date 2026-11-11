@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createLocalSlipShare, sharedSlipSchema, shareSlipSourceSchema } from '../src/domain/shared-slips.ts';
 import { createShareSlipHandler } from '../src/server/slips/shared-slips-http.ts';
+import { createSlipNumberHandler } from '../src/server/slips/slip-numbers-http.ts';
 import { slipShareCaption } from '../src/domain/slip-share-caption.ts';
 import { createSharedSlips } from '../src/server/slips/shared-slips.ts';
 import { liveRecord, now, today } from './helpers/live-refresh-fixtures.mjs';
@@ -13,12 +14,17 @@ const slip = { id: 'original', totalOdds: '2.00', averageProbability: 0.7, estim
 const source = { source: 'best', day: today, slipId: slip.id };
 const request = (body, origin = 'https://goalhint.com') => new Request('https://goalhint.com/api/slips/share', {
   method: 'POST', headers: { origin, host: 'goalhint.com', 'content-type': 'application/json' }, body: JSON.stringify(body) });
-function fixture(access = async () => ({ tier: 'full' })) {
+function fixture(access = async () => ({ tier: 'full' }), count = 1) {
   let reads = 0;
-  const handle = createShareSlipHandler({ access, members: async () => ({ config: { production: false }, settings: {settings:null}, sessions: { verify: async () => ({ accountId: 'member' }) } }),
-    services: async () => ({ database: {transaction: async run => run({$queryRaw: async () => [{number:1}]})} }), published: () => ({ day: async () => { reads++; return {
+  const keys = [], members = async () => ({ settings: { settings: null } });
+  const services = async () => ({ config: { key: (purpose, value) => `${purpose}:${value}` }, database: { transaction: async run => run({
+    $queryRaw: async () => [{ number: 1 }], $executeRaw: async (_query, key) => { keys.push(key); return 1; },
+    rateLimitBucket: { findUniqueOrThrow: async () => ({ count }) },
+  }) } });
+  const handle = createShareSlipHandler({ access, members, services, published: () => ({ day: async () => { reads++; return {
       slips: [{ id: 'a'.repeat(64), rank: 21, publicationDay: today, publishedAt: now, slip }] }; } }) });
-  return { handle, reads: () => reads };
+  const number = createSlipNumberHandler({ access, members, services, now: () => now });
+  return { handle, number, keys, reads: () => reads };
 }
 test('personal exports contain only an image snapshot in memory and no public token URL', () => {
   const shared = createLocalSlipShare(slip);
@@ -39,6 +45,23 @@ test('published sharing resolves an existing canonical link with only a minimal 
   assert.equal(response.status, 200); const shared = await response.json();
   assert.ok(shared.url.endsWith(`/en/best-slips/${today}/21`)); assert.equal(f.reads(), 1);
   assert.equal('estimatedProbability' in shared.slip, false);
+});
+test('public access permits anonymous published sharing and custom image numbering under address budgets', async () => {
+  const off = async () => ({ tier: 'full', signedIn: false, mode: 'off' });
+  const fingerprint = { fingerprint: 'a'.repeat(64) };
+  const open = fixture(off);
+  assert.equal((await open.handle(request(source))).status, 200);
+  assert.equal((await open.number(request(fingerprint))).status, 200);
+  assert.match(open.keys[0], /^member-slip-share-address:/u);
+  assert.match(open.keys[1], /^member-slip-number-address:/u);
+  const limited = fixture(off, 121);
+  assert.equal((await limited.handle(request(source))).status, 429);
+  assert.equal(limited.reads(), 0);
+  assert.equal((await limited.number(request(fingerprint))).status, 429);
+  const closed = fixture(async () => ({ tier: 'free', signedIn: false, mode: 'on' }));
+  assert.equal((await closed.handle(request(source))).status, 403);
+  assert.equal((await closed.number(request(fingerprint))).status, 403);
+  assert.equal(closed.keys.length, 0);
 });
 test('personal sources, foreign origins and expired access cannot export a public snapshot', async () => {
   const f = fixture();

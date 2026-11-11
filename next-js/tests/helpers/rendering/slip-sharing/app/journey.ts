@@ -5,7 +5,7 @@ export const fixturePlan = { id: "00000000-0000-4000-8000-000000000001", name: "
 export function journeyServices(viewer?: string): MemberServices {
   const signed = viewer === "member" || viewer === "eligible";
   return { config: { production: false, cookies: { secure: false, session: "synthetic-owner", exclude: "synthetic-exclude" } },
-    settings: { source: "stored", settings: { ...defaultSubscriptionSettings, paywallMode: "test", mtnEnabled: true, mtnNumber: "256700000901", mtnName: "SYNTHETIC ONLY" } },
+    settings: { source: "stored", settings: { ...defaultSubscriptionSettings, paywallMode: "on", mtnEnabled: true, mtnNumber: "256700000901", mtnName: "SYNTHETIC ONLY" } },
     sessions: { verify: async () => signed ? member : null },
     auth: { login: async (phone: string, password: string) => phone === member.phone && password === "SyntheticSharingPassword1!"
       ? { status: "authenticated", phone, token: "a".repeat(43) } : { status: "unauthorized", message: "Invalid synthetic credentials." } },

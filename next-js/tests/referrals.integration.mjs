@@ -40,7 +40,7 @@ test("referral award concurrency, paid precedence, immutable identity and deleti
   t.after(() => f.close());
   let time = Date.parse("2026-10-31T12:00:00Z");
   const DAY = 86_400_000, now = () => time, messages = [], password = "correct horse 47", phone = "256700001001", friend = "256700001002";
-  await f.database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", trialDays: 0, updatedAt: new Date(time), updatedBy: "synthetic-owner" } }));
+  await f.database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "on", trialDays: 0, updatedAt: new Date(time), updatedBy: "synthetic-owner" } }));
   const auth = createMemberAuth({ database: f.database, config: f.config, now, adminPhone: () => false, adminPasswordHash: () => null,
     delivery: { async send(message) { messages.push(message); } } });
   const sessions = createMemberSessions({ database: f.database, config: f.config, now, adminPhone: () => false, adminPasswordHash: () => null });

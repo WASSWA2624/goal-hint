@@ -230,6 +230,23 @@ def subscription_discovery(origin):
             "creditUgx": 0, "autoRenew": False, "renewsFromCredit": False}
 
 
+def trial_visibility(origin):
+    for route in ("account", "subscribe"):
+        for state in ("trial-eligible", "trial-disabled", "off-trial-eligible", "member-free", "off-trial-active"):
+            html = visible_html(request(origin, f"/en/{route}?state={state}").text)
+            if state == "trial-eligible":
+                match(r'data-free-trial="available"', html)
+                match("Get 30 days of full access", html)
+                match("Activate free trial", html)
+            else:
+                no_match("Activate free trial", html)
+                if state == "off-trial-active":
+                    match(r'data-free-trial="active"', html)
+                    match("Your free trial is active until", html)
+                else:
+                    no_match("data-free-trial", html)
+
+
 def subscriber_dashboard(origin):
     """Focused Account sections retain real auth/renewal paths without the old text stack."""
     for state, package in [("active", "Weekly"), ("trial", "Free trial"), ("off-active", "Weekly"),
@@ -415,8 +432,10 @@ def main():
                 match("Change phone", response.text)
                 match("Change password", response.text)
                 match("Log out", response.text)
-            if state in ("active", "ended"):
-                match("Log out others", request(server.origin, f"/en/account?state={state}&section=devices").text)
+            if state in ("signed-in", "active", "ended"):
+                devices = visible_html(request(server.origin, f"/en/account?state={state}&section=devices").text)
+                match("Signed-in devices", devices)
+                match("Log out others", devices)
         register = request(server.origin, "/en/account?view=register")
         match(r'<button[^>]*type="submit"[^>]*>Register</button>', register.text)
         match(r'<h1[^>]*>Register</h1>', register.text)
@@ -469,6 +488,7 @@ def main():
         unified_login(server.origin)
         subscription_discovery(server.origin)
         subscriber_dashboard(server.origin)
+        trial_visibility(server.origin)
         authentication_routes(server.origin)
         print("Member HTML and synthetic APIs: private subscription status, visible expiry and renewal summaries, shared member/admin login, private-page redirects and role gates, legacy endpoint redirects, restricted sessions, cookie clearing, phone/OTP controls and home destinations pass.", flush=True)
         if options.serve:

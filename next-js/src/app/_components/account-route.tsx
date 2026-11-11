@@ -30,6 +30,7 @@ import { referralReviewCursor } from "@/domain/referral-reviews";
 import { formatPhone } from "@/domain/phone";
 import { formatCredit } from "@/domain/wallet";
 import { codeStatus } from "@/domain/subscription-period";
+import { offeredTrialDays } from "@/domain/subscription-summary";
 import { createMessages } from "@/i18n/messages";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { getAnalyticsServices } from "@/server/analytics/analytics-http";
@@ -37,6 +38,7 @@ import { getMemberServices, type MemberServicesSource } from "@/server/members/m
 import { createPlansService } from "@/server/members/plans";
 import { memberCookieName } from "@/server/members/member-sessions";
 import { readMemberPageSession } from "@/server/members/member-page-session";
+import { subscriptionCheckoutPublished } from "@/server/members/sales-readiness";
 import { PublicShell } from "./public-shell";
 
 async function readPlans() {
@@ -79,7 +81,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
       redirect(memberLandingPath(false, returnTo));
     const now = new Date();
     const [view, paymentView, subscription, dashboard, referrals, notifications, referralReviews] = member && !member.blocked ? await Promise.all([
-      member.codeEnteredAt && (summarySection || section === "devices") ? resolved.codes?.accountView(member).catch(() => null) ?? null : null,
+      summarySection || section === "devices" ? resolved.codes?.accountView(member).catch(() => null) ?? null : null,
       (walletSection || settings && (summarySection || section === "payments")) ? resolved.payments?.view(member).catch(() => null) ?? null : null,
       summarySection || section === "payments" || walletSection ? resolved.codes?.subscriptionStatus(member).catch(() => null) ?? null : null,
       summarySection || section === "payments" || section === "activity" ? resolved.dashboard?.read(member).catch(() => null) ?? null : null,
@@ -96,8 +98,10 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const waiting = (subscription?.paymentPending ?? (!!status && ["pending", "superseded"].includes(status.status)))
       || ["pending", "superseded"].includes(paymentView?.otherStatus?.status ?? "")
       || (walletSection && [...checkoutOpenStatuses, "superseded"].some(state => state === topUpStatus?.status));
-    const salesOpen = !!settings && mode !== "off";
-    const topUpOpen = salesOpen && (manualPaymentProvider(settings, "mtn").reason === null || manualPaymentProvider(settings, "airtel").reason === null);
+    const salesOpen = mode === "on";
+    const checkoutPublished = subscriptionCheckoutPublished(settings, resolved.config.production);
+    const topUpOpen = checkoutPublished && settings !== null &&
+      (manualPaymentProvider(settings, "mtn").reason === null || manualPaymentProvider(settings, "airtel").reason === null);
     // Plans are read only for an account with credit or auto-renewal to manage.
     const credit = paymentView?.credit ?? null;
     const offers = walletSection && salesOpen && credit && (credit.availableBalanceUgx > 0 || credit.autoRenew)
@@ -111,7 +115,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
       <ApprovalRefresh waiting={waiting || !!dashboard?.activity.some(entry => entry.kind === "payment" && entry.status === "pending")} refreshAt={refreshAt} />
       <AccountWorkspace locale={locale} current={section} phone={member.phone} returnTo={returnTo}>
         <AccountPageHead><h1>{messages.text(section === "overview" ? "account.title" : `account.section.${section}`)}</h1>
-          {summarySection && subscription && salesOpen && <ButtonLink href={`${memberNextPath("subscribe", returnTo)}#${viewPayment ? "report" : "plans"}`} prefetch={false}>
+          {summarySection && subscription && (checkoutPublished || viewPayment) && <ButtonLink href={`${memberNextPath("subscribe", returnTo)}#${viewPayment ? "report" : "plans"}`} prefetch={false}>
             {messages.text(viewPayment ? "account.viewPayment" : activeUntil ? "account.renewLabel" : "account.subscribe")}
           </ButtonLink>}
         </AccountPageHead>
@@ -119,7 +123,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
         {parameters.status === "phone-changed" && <AccountFlash role="status">{messages.text("account.phoneChanged")}</AccountFlash>}
         {parameters.status === "password-changed" && <AccountFlash role="status">{messages.text("account.passwordChanged")}</AccountFlash>}
         {parameters.status === "devices-signed-out" && <AccountFlash role="status">{messages.text("account.devicesSignedOut")}</AccountFlash>}
-        {summarySection && <AccountSubscriptionPanel key={member.accountId} locale={locale} subscription={subscription} dashboard={dashboard} now={now.getTime()} trialDays={settings?.trialDays ?? 0} {...(last ? { lastEnd: last.endsAt } : {})} />}
+        {summarySection && <AccountSubscriptionPanel key={member.accountId} locale={locale} subscription={subscription} dashboard={dashboard} now={now.getTime()} trialDays={offeredTrialDays(settings)} {...(last ? { lastEnd: last.endsAt } : {})} />}
         {summarySection && <AccountReferralSummary locale={locale} summary={referrals} returnTo={returnTo} />}
         {section === "referrals" && <><AccountReferrals locale={locale} summary={referrals} /><AccountReferralReviews initial={referralReviews} locale={locale} older={!!referralReviewCursor(parameters.reviewBefore)} /></>}
         {section === "overview" && <>
@@ -127,7 +131,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
             actions={<AccountActionLink href={accountSectionHref(locale, "phone", returnTo)} prefetch={false}>{messages.text("account.editPhone")}</AccountActionLink>}>
             <AccountFacts $columns={4}>
               <div><dt>{messages.text("account.phoneLabel")}</dt><dd>+{formatPhone(member.phone)}</dd></div>
-              <div><dt>{messages.text("account.unlockedDevices")}</dt><dd>{view ? messages.plural("account.deviceCount", view.devices.length) : messages.text("account.unknownLabel")}</dd></div>
+              <div><dt>{messages.text("account.signedInDevices")}</dt><dd>{view ? messages.plural("account.deviceCount", view.devices.length) : messages.text("account.unknownLabel")}</dd></div>
               <div><dt>{messages.text("account.notificationsLabel")}</dt><dd>{messages.text(member.whatsappNotificationsAt ? "account.enabledLabel" : "account.disabledLabel")}</dd></div>
               <div><dt>{messages.text("account.creditLabel")}</dt><dd>{credit ? formatCredit(credit.balanceUgx) : subscription ? formatCredit(subscription.creditUgx) : messages.text("account.unknownLabel")}</dd></div>
             </AccountFacts>

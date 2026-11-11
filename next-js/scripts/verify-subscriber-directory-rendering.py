@@ -128,7 +128,7 @@ def directory_rendering(origin: str) -> None:
     assert detail.attributes.get("data-subscriber-presentation") == "compact-dialog"
     summary = detail.one(attribute="data-subscriber-summary")
     stats = summary.one(attribute="data-subscriber-stats")
-    assert [term.text() for term in stats.all("dt")] == ["Unlocked devices", "Access periods", "Unlocks · 30 days", "Credit"]
+    assert [term.text() for term in stats.all("dt")] == ["Signed-in devices", "Access periods", "Credit"]
     actions = detail.one(attribute="data-record-footer").one(attribute="data-subscriber-actions").all("button")
     assert not summary.all(attribute="data-subscriber-actions")
     assert [button.text() for button in actions] == ["Grant access", "Change number", "Block account", "Log out devices"]

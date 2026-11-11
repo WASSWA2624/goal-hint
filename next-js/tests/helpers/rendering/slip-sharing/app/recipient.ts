@@ -1,6 +1,6 @@
 import { sharedSlipIdSchema, sharedSlipUrl } from "@/domain/shared-slips";
 import { fixtureShared } from "./data";
-export const fixtureAccess = (viewer?: string) => ({ tier: viewer === "eligible" ? "full" as const : "free" as const, signedIn: viewer === "member" || viewer === "eligible", mode: "test" as const });
+export const fixtureAccess = (viewer?: string) => ({ tier: viewer === "eligible" ? "full" as const : "free" as const, signedIn: viewer === "member" || viewer === "eligible", mode: "on" as const });
 export async function fixtureLanding(id: string, viewer?: string) {
   const access = fixtureAccess(viewer);
   if (!sharedSlipIdSchema.safeParse(id).success || id === "0".repeat(32)) return { access, result: { state: "missing" as const } };

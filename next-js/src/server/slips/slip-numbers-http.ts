@@ -5,9 +5,9 @@ import { getAnalyticsServices } from "../analytics/analytics-http.ts";
 import { getMemberServices } from "../members/member-http.ts";
 import { memberCookieName } from "../members/member-sessions.ts";
 import { viewerAccessFromRequest } from "../members/viewer-access.ts";
-import { takeMemberLimit } from "../members/rate-limit.ts";
+import { memberRateRules, takeMemberLimit } from "../members/rate-limit.ts";
 import { lockMemberAccount } from "../members/access-codes.ts";
-import { isSameOrigin, json, readCookie, readLimitedBody } from "../http/private-http.ts";
+import { clientAddress, isSameOrigin, json, readCookie, readLimitedBody } from "../http/private-http.ts";
 import { ensureSlipNumber } from "./slip-numbers.ts";
 import { supportContactsOf } from "../../domain/support-contacts.ts";
 import { readSharedSlip } from "./shared-slips.ts";
@@ -22,7 +22,6 @@ export function createSlipNumberHandler({ services = getAnalyticsServices, membe
     try {
       const viewer = await access(request);
       const resolved = await members();
-      const member = await resolved.sessions?.verify(readCookie(request, memberCookieName(resolved.config.production)));
       let input;
       try {
         if (!/^application\/json(?:;|$)/iu.test(request.headers.get("content-type") ?? "")) return json({ error: "invalid-request" }, 400);
@@ -40,14 +39,24 @@ export function createSlipNumberHandler({ services = getAnalyticsServices, membe
         return json({ number, contacts });
       }
       if (viewer.tier !== "full") return json({ error: "subscription-required" }, 403);
-      if (!member) return json({ error: "sign-in-required" }, 401);
+      const member = viewer.signedIn ? await resolved.sessions?.verify(readCookie(request, memberCookieName(resolved.config.production))) : null;
+      const publicVisitor = viewer.mode === "off" && (!member || member.blocked);
+      if (!publicVisitor && !member) return json({ error: "sign-in-required" }, 401);
       const fingerprint = input.fingerprint;
       const result = await database.transaction(async tx => {
-        const account = await lockMemberAccount(tx, member.accountId), at = new Date(now());
-        const session = await tx.memberSession.findUnique({ where: { tokenHash: member.tokenHash } });
-        if (!account?.phone || account.blockedAt || account.erasedAt || session?.accountId !== account.id
-          || !session.authenticatedAt || session.passwordResetAt || session.expiresAt <= at) return null;
-        if (!await takeMemberLimit(tx, config, { purpose: "slip-number", value: account.id, maximum: 120, windowMs: 3_600_000 }, at)) return "limited";
+        const at = new Date(now());
+        let value: string;
+        if (publicVisitor) value = clientAddress(request.headers);
+        else {
+          if (!member) return null;
+          const account = await lockMemberAccount(tx, member.accountId);
+          const session = await tx.memberSession.findUnique({ where: { tokenHash: member.tokenHash } });
+          if (!account?.phone || account.blockedAt || account.erasedAt || session?.accountId !== account.id
+            || !session.authenticatedAt || session.passwordResetAt || session.expiresAt <= at) return null;
+          value = account.id;
+        }
+        if (!await takeMemberLimit(tx, config, { purpose: publicVisitor ? "slip-number-address" : "slip-number", value,
+          maximum: 120, windowMs: memberRateRules.hourMs }, at)) return "limited";
         return ensureSlipNumber(tx, fingerprint);
       }, { isolationLevel: "ReadCommitted", timeout: 30_000 });
       if ((await access(request)).tier !== "full") return json({ error: "subscription-required" }, 403);

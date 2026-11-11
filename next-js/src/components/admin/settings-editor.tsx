@@ -18,8 +18,8 @@ import { contactPageRules } from "@/domain/contact-page";
 import { supportContactsOf, type SupportContact } from "@/domain/support-contacts";
 import { defaultMessageTemplates, type MessageTemplateSettings } from "@/domain/message-templates";
 import { editableSettingFields, isProtectedSettingField, paywallModes, settingLabels, settingsRules, type EditableSettingField,
-  type ModeRequirement, type PaywallMode, type ProtectedSettingField, type SettingsPageData, type SubscriptionSettings } from "@/domain/subscription-settings";
-import { ActionButton, FieldBlock, FieldError, Hint, postAdmin, replyErrors, replyMessage, Requirements, type AdminReply } from "./admin-form";
+  type PaywallMode, type ProtectedSettingField, type SettingsPageData, type SubscriptionSettings } from "@/domain/subscription-settings";
+import { ActionButton, FieldBlock, FieldError, Hint, postAdmin, replyErrors, replyMessage, type AdminReply } from "./admin-form";
 import { Drawer, PanelBody } from "./desk-styles";
 import { RecordBack, RecordCard, RecordDetailHead, RecordDetails, RecordFeedback, RecordItem, RecordList, RecordListScroll, RecordRowContent, RecordScroll, useRecordView } from "./record-workspace";
 import { SettingsSupportEditor } from "./settings-support-editor";
@@ -28,17 +28,17 @@ import { SettingsCommunityEditor } from "./settings-community-editor";
 import { PaymentAlertControls } from "./payment-alert-controls";
 import { communityLinksWithDefaults, type CommunityLink } from "@/domain/community";
 import { useAdminRefresh } from "./use-admin-refresh";
-import { ConfirmBox, DialField, DialRow, ManagedBadge, ManagedFact, ModeTile, ModeTiles, NarrowField, NetworkGrid, NetworkTitle,
-  RequirementBox, RequirementList, SectionPanel, SettingsHint, TwoUp,
+import { CheckoutReadinessBox, CheckoutReadinessList, ConfirmBox, DialField, DialRow, ManagedBadge, ManagedFact, ModeTile, ModeTiles,
+  NarrowField, NetworkGrid, NetworkTitle, SectionPanel, SettingsHint, TwoUp,
   DesktopOnly, DesktopSettingItem, SettingsFooter, SettingsForm, SettingsWorkspace } from "./settings-styles";
 
 type ScalarSettingField = Exclude<EditableSettingField, "supportContacts" | "messageTemplates" | "communityLinks">;
 type Draft = Record<ScalarSettingField, string>;
 const scalarFields = editableSettingFields.filter((field): field is ScalarSettingField => field !== "supportContacts" && field !== "messageTemplates" && field !== "communityLinks");
 type Section = "payments" | "support" | "community" | "access" | "display" | "messages";
-type Status = Readonly<{ tone: "info" | "error" | "warning"; text: string; list?: readonly string[] }> | null;
+type Status = Readonly<{ tone: "info" | "error" | "warning"; text: string }> | null;
 /** A successful save may omit refreshed availability when that subsequent read fails. */
-type SavedReply = Omit<SettingsPageData, "source" | "requirements"> & Partial<Pick<SettingsPageData, "source" | "requirements">> & { cleared?: string[] };
+type SavedReply = Omit<SettingsPageData, "source" | "checkoutReadiness"> & Partial<Pick<SettingsPageData, "source" | "checkoutReadiness">> & { cleared?: string[] };
 const UndoIcon = (props: IconProps) => <Icon {...props}><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></Icon>;
 const sections = [
   { key: "payments", label: "Payments", Icon: CardIcon }, { key: "support", label: "Support", Icon: ChatIcon },
@@ -50,23 +50,18 @@ const sectionOf: Record<EditableSettingField, Section> = {
   mtnEnabled: "payments", mtnNumber: "payments", mtnName: "payments", mtnMenuShortcut: "payments",
   airtelEnabled: "payments", airtelNumber: "payments", airtelName: "payments", airtelMenuShortcut: "payments",
   contactPhone: "support", whatsappPhone: "support", contactPageEmail: "support", contactPageEmailVisible: "support",
-  trialDays: "access", screenshotRetentionDays: "access", maxUnlockedDevices: "access",
+  trialDays: "access", screenshotRetentionDays: "access", allowUnsubscribedMembers: "access",
   copyFormat: "display", paymentNote: "display", reviewTime: "display",
   supportContacts: "support", messageTemplates: "messages",
   communityLinks: "community", communityVisible: "community", paymentAlertsEnabled: "payments", paymentAlertRepeats: "payments",
 };
 const phoneFields = new Set<EditableSettingField>(["mtnNumber", "airtelNumber", "contactPhone", "whatsappPhone"]);
 const shortcutFields = new Set<EditableSettingField>(["mtnMenuShortcut", "airtelMenuShortcut"]);
-const numberFields = new Set<EditableSettingField>(["maxUnlockedDevices", "trialDays", "screenshotRetentionDays", "paymentAlertRepeats"]);
-const modeLabels: Record<PaywallMode, string> = { off: "Off", test: "Test", on: "On" };
+const numberFields = new Set<EditableSettingField>(["trialDays", "screenshotRetentionDays", "paymentAlertRepeats"]);
+const modeLabels: Record<PaywallMode, string> = { off: "Off", on: "On" };
 const modeExplanations: Record<PaywallMode, string> = {
-  off: "Payments are closed. Predictions require current access. New trials follow the trial duration setting.",
-  test: "Account and payment flows are open for testing. Predictions require current access.",
-  on: "Subscriptions are open. Visitors without access see the free view.",
-};
-const requirementLabels: Record<ModeRequirement["key"], string> = {
-  plan: "Add an active plan", "payment-number": "Add a payment number and name", contact: "Add a support number",
-  privacy: "Publish the privacy notice", terms: "Publish the terms",
+  off: "Everyone can view subscriber content, including visitors who are signed out.",
+  on: "Visitors see the free view. Signed-in members need current access unless free member access is enabled.",
 };
 /** Short names for the password reason line under the field. */
 const protectedNames: Record<ProtectedSettingField, string> = {
@@ -86,7 +81,8 @@ function draftOf(settings: SubscriptionSettings): Draft {
 
 /** Normalize before comparison; invalid values still reach the server's field validation. */
 function valueOf(field: ScalarSettingField, text: string): SubscriptionSettings[ScalarSettingField] | string {
-  if (field === "communityVisible" || field === "contactPageEmailVisible" || field === "paymentAlertsEnabled" || field === "mtnEnabled" || field === "airtelEnabled") return text === "true";
+  if (field === "communityVisible" || field === "contactPageEmailVisible" || field === "paymentAlertsEnabled" || field === "mtnEnabled"
+    || field === "airtelEnabled" || field === "allowUnsubscribedMembers") return text === "true";
   if (phoneFields.has(field)) return text.trim() === "" ? null : normalizePhone(text) ?? text;
   if (shortcutFields.has(field)) return text.replace(/\s+/gu, "") || null;
   if (numberFields.has(field)) return /^\d+$/u.test(text.trim()) ? Number(text.trim()) : text;
@@ -144,7 +140,6 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   const summary = changed.length ? `${changed.length} unsaved ${changed.length === 1 ? "change" : "changes"}`
     : settings.updatedAt ? `Saved ${savedTime(settings.updatedAt)} EAT` : "No changes";
   const selectedMode = armed ?? settings.paywallMode;
-  const selectedRequirements = selectedMode === "off" ? [] : view.requirements[selectedMode];
   const sectionTitle = sections.find(item => item.key === section)?.label ?? "Settings";
 
   useEffect(() => {
@@ -176,8 +171,6 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
     openDetail(trigger);
     setSection(next); setArmed(null);
   }
-  /** A requirement link opens the section and puts the cursor in the field that resolves it. */
-  function resolve(key: EditableSettingField) { navigate(sectionOf[key], managed.includes(key) ? "settings-section" : `setting-${key}`); }
   function cancelMode() { pendingFocus.current = `setting-mode-${settings.paywallMode}`; setArmed(null); }
   function undo() { setDraft(draftOf(settings)); setContacts(settings.supportContacts ?? supportContactsOf(settings));
     setCommunity(communityLinksWithDefaults(settings.communityLinks ?? []));
@@ -188,13 +181,13 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
     const next = reply.body as unknown as SavedReply;
     setView(shown => ({ ...shown, settings: next.settings, protectedFields: next.protectedFields, diagnostics: next.diagnostics,
       ...(next.environmentFields ? { environmentFields: next.environmentFields } : {}),
-      ...(next.requirements ? { source: next.source ?? shown.source, requirements: next.requirements } : {}) }));
+      ...(next.checkoutReadiness ? { source: next.source ?? shown.source, checkoutReadiness: next.checkoutReadiness } : {}) }));
     if (resetForm) { setDraft(draftOf(next.settings)); setContacts(next.settings.supportContacts ?? supportContactsOf(next.settings));
       setCommunity(communityLinksWithDefaults(next.settings.communityLinks ?? []));
       setMessages(next.settings.messageTemplates ?? structuredClone(defaultMessageTemplates)); setErrors({}); setPassword(""); setAskPassword(false); }
     const cleared = (next.cleared ?? []).map(field => settingLabels[field as EditableSettingField] ?? field);
     const notes = [message, ...(cleared.length ? [`${cleared.join(" and ")} cleared after the number changed.`] : []),
-      ...(next.requirements ? [] : ["Reload to update availability."])];
+      ...(next.checkoutReadiness ? [] : ["Reload to update checkout setup."])];
     setStatus({ tone: notes.length > 1 ? "warning" : "info", text: notes.join(" ") });
     if (resetForm && (changed.includes("communityLinks") || changed.includes("communityVisible"))) refreshCommunitySettings();
     if (resetForm && changed.some(key => sectionOf[key] === "support")) refreshContactPageSettings();
@@ -210,13 +203,12 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
     const first = editableSettingFields.find(key => nextErrors[key]);
     if (first) {
       navigate(sectionOf[first]);
-      if (shortcutFields.has(first) || first === "maxUnlockedDevices" || first === "screenshotRetentionDays") {
+      if (shortcutFields.has(first) || first === "screenshotRetentionDays") {
         setAdvanced(shown => ({ ...shown, [shortcutFields.has(first) ? first : "access"]: true }));
       }
     }
     setErrors(nextErrors);
-    const list = Array.isArray(body.missing) ? (body.missing as ModeRequirement[]).map(item => requirementLabels[item.key] ?? item.message) : undefined;
-    setStatus({ tone: "error", text: replyMessage(reply, "Changes were not saved."), ...(list ? { list } : {}) });
+    setStatus({ tone: "error", text: replyMessage(reply, "Changes were not saved.") });
   }
 
   async function save(event: FormEvent) {
@@ -232,16 +224,18 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   }
 
   async function confirmMode() {
-    if (inFlight.current || busy || !armed || armed === settings.paywallMode || (armed !== "off" && view.requirements[armed].length)) return;
+    if (inFlight.current || busy || !armed || armed === settings.paywallMode) return;
     inFlight.current = true;
     const mode = armed;
-    pendingFocus.current = `setting-mode-${mode}`;
-    setArmed(null); setSaving(true); setStatus(null);
+    setSaving(true); setStatus(null);
     const reply = await postAdmin("/api/admin/settings", { action: "mode", mode });
     inFlight.current = false;
     setSaving(false);
-    if (reply.ok) accept(reply, `Paid access: ${modeLabels[mode]}. Applies within 30 seconds.`, false);
-    else refuse(reply);
+    if (reply.ok) {
+      pendingFocus.current = `setting-mode-${mode}`;
+      setArmed(null);
+      accept(reply, `Paid access is ${mode}. Applies within 30 seconds.`, false);
+    } else refuse(reply);
   }
 
   const field = (key: ScalarSettingField, hinted = false) => {
@@ -271,8 +265,6 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
       {error(key)}
       <Hint id={`setting-${key}-hint`}>{changed.includes(number) && !changed.includes(key) && settings[key] ? "This code will clear when the number changes." : "Use a code tested on your phone. Android only."}</Hint>
     </DialField>);
-  const range = (key: "maxUnlockedDevices" | "trialDays", label: string, hint?: string) => <FieldBlock label={label} description={<>{error(key)}{hint && <Hint id={`setting-${key}-hint`}>{hint}</Hint>}</>}><select {...field(key, !!hint)}>{Array.from({ length: settingsRules[key].max - settingsRules[key].min + 1 }, (_, index) => settingsRules[key].min + index)
-      .map(value => <option key={value} value={value}>{key === "trialDays" ? value === 0 ? "Off" : `${value} ${value === 1 ? "day" : "days"}` : value}</option>)}</select></FieldBlock>;
   const network = (id: "mtn" | "airtel", title: string) => {
     const enabled = `${id}Enabled` as const, number = `${id}Number` as const;
     const name = `${id}Name` as const, code = `${id}MenuShortcut` as const;
@@ -280,15 +272,14 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
       <FieldBlock label={`Accept ${title} payments`} description={error(enabled)}><select {...field(enabled)}>
         <option value="false">Disabled</option><option value="true">Enabled</option>
       </select></FieldBlock>
-      {phone(number, "Phone number")}{text(name, "Registered name", settingsRules.nameMaxLength)}{shortcut(code, number)}
+      {phone(number, "Receiving number")}{text(name, "Registered account name", settingsRules.nameMaxLength)}
+      <SettingsHint>Customers send payments to this number and verify the recipient name in {title}.</SettingsHint>{shortcut(code, number)}
     </section>;
   };
   return <SettingsForm onSubmit={save} noValidate aria-busy={busy} data-analytics-ignore data-record-form data-settings-editor>
     <h1>Settings</h1>
     <SettingsWorkspace $compact $detailOpen={detailOpen}>
-        {status && <RecordFeedback><Notice as="div" $tone={status.tone} role={status.tone === "error" ? "alert" : "status"}>{status.text}
-          {status.list && <Requirements>{status.list.map(item => <li key={item}>{item}</li>)}</Requirements>}
-        </Notice></RecordFeedback>}
+        {status && <RecordFeedback><Notice as="div" $tone={status.tone} role={status.tone === "error" ? "alert" : "status"}>{status.text}</Notice></RecordFeedback>}
       <RecordList aria-label="Settings sections">
         <RecordListScroll data-settings-nav tabIndex={0}>{sections.map(({ key, label, Icon: SectionIcon }) => {
           const Item = key === "messages" ? DesktopSettingItem : "li";
@@ -325,28 +316,41 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
           {section === "access" && <PanelBody>
             <ModeTiles disabled={busy}><legend>Paid access</legend><div>{paywallModes.map(mode => <ModeTile key={mode} data-mode-tile>
               <input id={`setting-mode-${mode}`} type="radio" name="paid-access-mode" value={mode} checked={selectedMode === mode} disabled={busy}
-                aria-describedby={selectedMode === mode && selectedRequirements.length ? "settings-requirements" : undefined}
+                aria-describedby={selectedMode === mode ? "settings-mode-hint" : undefined}
                 data-settings-mode onChange={() => { setArmed(mode === settings.paywallMode ? null : mode); setStatus(null); }} />
               <span><strong>{modeLabels[mode]}</strong>{mode === settings.paywallMode && <em>Current</em>}</span>
             </ModeTile>)}</div></ModeTiles>
-            <SettingsHint>{modeExplanations[selectedMode]}</SettingsHint>
-            {selectedRequirements.length > 0 && <RequirementBox id="settings-requirements"><strong>Required for {modeLabels[selectedMode]}</strong>
-              <RequirementList>{selectedRequirements.map(({ key }) => <li key={key}><LockIcon />{key === "plan" ? <Link href="/admin/plans">{requirementLabels[key]}</Link>
-                : key === "payment-number" || key === "contact" ? <button type="button" onClick={() => {
-                  if (key === "payment-number") resolve("mtnNumber");
-                  else navigate("support", "setting-supportContacts");
-                }}>{requirementLabels[key]}</button>
-                  : <span>{requirementLabels[key]}</span>}</li>)}</RequirementList></RequirementBox>}
+            <SettingsHint id="settings-mode-hint">{modeExplanations[selectedMode]}</SettingsHint>
             {armed && <ConfirmBox><strong>Switch to {modeLabels[armed]}?</strong><div>
               <ActionButton type="button" disabled={busy} onClick={cancelMode}>Cancel</ActionButton>
-              <ActionButton type="button" $variant="primary" disabled={busy || selectedRequirements.length > 0} onClick={() => void confirmMode()}>Confirm switch</ActionButton>
+              <ActionButton type="button" $variant="primary" disabled={busy} onClick={() => void confirmMode()}>Confirm switch</ActionButton>
             </div></ConfirmBox>}
-            <NarrowField>{range("trialDays", "New account free trial")}</NarrowField>
-            {drawer("access", "Advanced access settings", <TwoUp>
+            <TwoUp>
+              <FieldBlock label="Verified members without a subscription" description={<>{error("allowUnsubscribedMembers")}
+                <Hint id="setting-allowUnsubscribedMembers-hint">Free access continues while the setting is enabled and the member is signed in.</Hint></>}>
+                <select {...field("allowUnsubscribedMembers", true)}>
+                  <option value="false">Require an active access period</option><option value="true">Allow free access</option>
+                </select>
+              </FieldBlock>
+              <FieldBlock label="New account free trial (days)" description={<>{error("trialDays")}
+                <Hint id="setting-trialDays-hint">Use 0 to disable trials. Applies when paid access is on and free member access is disabled.</Hint></>}>
+                <input {...field("trialDays", true)} type="number" inputMode="numeric" min={settingsRules.trialDays.min} max={settingsRules.trialDays.max} step={1} />
+              </FieldBlock>
+            </TwoUp>
+            {drawer("access", "Advanced access settings", <NarrowField>
               <FieldBlock label="Keep approved payment proofs · days" description={error("screenshotRetentionDays")}><input {...field("screenshotRetentionDays")} type="number" inputMode="numeric"
                 min={settingsRules.screenshotRetentionDays.min} max={settingsRules.screenshotRetentionDays.max} /></FieldBlock>
-              {range("maxUnlockedDevices", "Legacy grant device limit", "Member accounts use one active session.")}
-            </TwoUp>)}
+            </NarrowField>)}
+            {view.checkoutReadiness.length > 0 && <CheckoutReadinessBox aria-labelledby="settings-checkout-setup">
+              <strong id="settings-checkout-setup">Checkout setup</strong>
+              <SettingsHint>You can switch paid access now. Complete this setup before offering new purchases in production.</SettingsHint>
+              <CheckoutReadinessList>{view.checkoutReadiness.map(({ key, message }) => <li key={key}>
+                {key === "plan" ? <Link href="/admin/plans">{message}</Link>
+                  : key === "payment-number" ? <button type="button" onClick={() => navigate("payments", "setting-mtnEnabled")}>{message}</button>
+                  : key === "contact" ? <button type="button" onClick={() => navigate("support", "setting-supportContacts")}>{message}</button>
+                  : <span>{message}</span>}
+              </li>)}</CheckoutReadinessList>
+            </CheckoutReadinessBox>}
           </PanelBody>}
           {section === "display" && <PanelBody>
             <TwoUp><FieldBlock label={"Copied number format"} description={<>{error("copyFormat")}</>}><select {...field("copyFormat")}>

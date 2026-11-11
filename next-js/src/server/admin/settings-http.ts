@@ -8,7 +8,7 @@ import { clientAddress, clientAddressDiagnostics, json } from "../http/private-h
 import { settingsServiceFor, type SettingsOutcome, type SettingsService } from "../members/settings.ts";
 import { readJsonBody, type AdminContext } from "./admin-http.ts";
 
-/** What the Settings page and `/api/admin/settings` show: the stored settings, what stops each mode, and the address headers. */
+/** The stored settings, checkout setup, and address headers for the owner dashboard. */
 export async function settingsView(service: SettingsService, headers: Headers): Promise<SettingsPageData> {
   return { ...await service.overview(), protectedFields: protectedSettingFields, diagnostics: clientAddressDiagnostics(headers) };
 }
@@ -17,7 +17,7 @@ const unavailable = () => json({ error: "unavailable", message: "Settings storag
 
 /**
  * A saved change has already committed with its audit row, so the reply never calls it a failure. When the page data
- * cannot be read again, it carries the saved settings without `source` and `requirements`, and the page asks for a reload.
+ * cannot be read again, it carries the saved settings without checkout diagnostics, and the page asks for a reload.
  */
 async function savedReply(outcome: Extract<SettingsOutcome, { status: "saved" }>, service: SettingsService, headers: Headers): Promise<Response> {
   const saved = { changed: outcome.changed, cleared: outcome.cleared };
@@ -32,8 +32,6 @@ async function answer(outcome: SettingsOutcome, service: SettingsService, reques
     case "invalid": return json({ error: "invalid", message: "Check the highlighted settings.", errors: outcome.errors }, 400);
     case "password-required":
       return json({ error: "password-required", message: "Enter your owner password to change payment and contact details.", fields: outcome.fields }, 403);
-    case "requirements": return json({ error: "requirements", message: `Paid access cannot be ${outcome.mode === "test" ? "in test mode" : "on"} yet.`,
-      mode: outcome.mode, missing: outcome.missing }, 409);
     case "password-refused": {
       const { check } = outcome;
       if (check.status === "locked") {

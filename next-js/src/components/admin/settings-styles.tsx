@@ -170,7 +170,7 @@ export const ModeTiles = styled.fieldset`
   padding: 0;
   border: 0;
   > legend { padding: 0; margin-block-end: var(--gh-spacing-2); }
-  > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gh-spacing-2); min-inline-size: 0; }
+  > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-2); min-inline-size: 0; }
   ${media.desktop} { > div { gap: var(--gh-spacing-2_5); } }
 `;
 /** A whole-tile radio: the native input covers the tile, so clicks, arrows and focus stay native. */
@@ -248,7 +248,7 @@ export const SettingsHint = styled.p`
   line-height: var(--gh-leading-normal);
 `;
 
-export const RequirementBox = styled.div`
+export const CheckoutReadinessBox = styled.div`
   display: grid;
   gap: var(--gh-spacing-1);
   min-inline-size: 0;
@@ -256,14 +256,13 @@ export const RequirementBox = styled.div`
   border-radius: ${({ theme }) => theme.radius.surface};
   background: ${({ theme }) => theme.color.surfaceMuted};
 `;
-export const RequirementList = styled.ul`
+export const CheckoutReadinessList = styled.ul`
   display: grid;
   min-inline-size: 0;
   margin: 0;
   padding: 0;
   list-style: none;
   li { display: flex; align-items: center; gap: var(--gh-spacing-2); min-inline-size: 0; min-block-size: var(--form-control-height); font-size: ${({ theme }) => theme.typography.scale.body}; }
-  li > svg { flex: none; font-size: var(--gh-font-reading); color: ${({ theme }) => theme.color.mutedText}; }
   li > span { min-inline-size: 0; overflow-wrap: anywhere; }
   li > a, li > button {
     display: flex;

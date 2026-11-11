@@ -24,7 +24,7 @@ test("account credit on restricted real MySQL", { timeout: 240000 }, async (t) =
   const codes = createAccessCodes({ database: db, config, now, notifications }), sessions = createMemberSessions({ database: db, config, now });
   const payments = createPayments({ database: db, config, now }), subscribers = createSubscribers(db, now, config);
   const daily = randomUUID(), weekly = randomUUID();
-  await db.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", mtnEnabled: true, mtnNumber: "256700000901", mtnName: "TEST", airtelEnabled: true, airtelNumber: "256700000902",
+  await db.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "on", mtnEnabled: true, mtnNumber: "256700000901", mtnName: "TEST", airtelEnabled: true, airtelNumber: "256700000902",
     airtelName: "TEST AIRTEL", updatedAt: new Date(clock), updatedBy: "test" } }));
   for (const [id, name, durationDays, priceUgx] of [[daily, "Daily", 1, 1000], [weekly, "Weekly", 7, 5000]]) {
     await db.query(tx => tx.subscriptionPlan.create({ data: { id, name, durationDays, priceUgx, active: true, sortOrder: durationDays, createdAt: new Date(clock), updatedAt: new Date(clock) } }));
@@ -316,7 +316,7 @@ test("account credit on restricted real MySQL", { timeout: 240000 }, async (t) =
       assert.equal((await post({ action: "auto-renew", on: true, planId: daily, accepted: true })).status, 403);
       assert.equal((await post({ action: "auto-renew", on: false })).status, 200, "turning auto-renewal off works while sales are closed");
       assert.equal((await db.query(tx => tx.memberAccount.findUniqueOrThrow({ where: { id: who.accountId } }))).autoRenew, false);
-    } finally { await db.query(tx => tx.subscriptionSettings.update({ where: { id: 1 }, data: { paywallMode: "test" } })); }
+    } finally { await db.query(tx => tx.subscriptionSettings.update({ where: { id: 1 }, data: { paywallMode: "on" } })); }
   });
 
   await t.test("a correction's reason never holds a phone number, however it is written", async () => {

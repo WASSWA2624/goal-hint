@@ -65,7 +65,7 @@ function readOffer(database: DatabaseRuntime): Promise<SubscriptionOffer | null>
 
 export type MemberContext = Readonly<{ request: Request; services: MemberServices; member: MemberIdentity | null }>;
 /** "account" is "member" without the closed-sales refusal, for account settings a member must be able to change at any time. */
-type MemberRouteOptions = Readonly<{ services?: MemberServicesSource; access: "sign-in" | "member" | "account" | "unlocked" | "sign-out" }>;
+type MemberRouteOptions = Readonly<{ services?: MemberServicesSource; access: "sign-in" | "member" | "account" | "sign-out" }>;
 
 /** One same-origin and mode guard for member writes; sign-out can always clear the browser cookie. */
 export function memberRoute(handler: (context: MemberContext) => Promise<Response>, { services = getMemberServices, access }: MemberRouteOptions) {
@@ -77,7 +77,7 @@ export function memberRoute(handler: (context: MemberContext) => Promise<Respons
       if (resolved.settings.settings?.paywallMode === "off" && access === "member") return json({ error: "closed", message: "Subscriptions are not open yet." }, 403);
       if (!resolved.settings.settings || !resolved.sessions) return json({ error: "unavailable", message: "Member access is unavailable. Try again later." }, 503);
       const member = access === "sign-in" ? null : await resolved.sessions.verify(readCookie(request, memberCookieName(resolved.config.production)));
-      if (access !== "sign-in" && !member || access === "unlocked" && (!member?.codeEnteredAt || member.blocked)) return json({ error: "forbidden", message: memberRefusal }, 403);
+      if (access !== "sign-in" && !member) return json({ error: "forbidden", message: memberRefusal }, 403);
       return await handler({ request, services: resolved, member });
     } catch { return json({ error: "unavailable", message: "Member access is unavailable. Try again later." }, 503); }
   };
@@ -119,9 +119,9 @@ export function createMemberSignOutHandler(services: MemberServicesSource = getM
 
 export function createMemberDevicesHandler(services: MemberServicesSource = getMemberServices) {
   return memberRoute(async ({ services: resolved, member }) => {
-    if (!await resolved.sessions!.signOutOthers(member!)) return json({ error: "forbidden", message: memberRefusal }, 403);
+    if (member!.blocked || !await resolved.sessions!.signOutOthers(member!)) return json({ error: "forbidden", message: memberRefusal }, 403);
     return redirect("/en/account?status=devices-signed-out");
-  }, { services, access: "unlocked" });
+  }, { services, access: "account" });
 }
 
 // Page and API paths receive these headers from next.config.ts, including responses produced before a handler runs.

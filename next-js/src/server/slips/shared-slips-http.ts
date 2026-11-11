@@ -4,9 +4,9 @@ import { parseReportingDate } from "../../domain/calendar.ts";
 import { modelIndependentSlip } from "../../domain/slip-builder.ts";
 import { sharedSlipRules, shareSlipSourceSchema } from "../../domain/shared-slips.ts";
 import { getAnalyticsServices } from "../analytics/analytics-http.ts";
-import { isSameOrigin, json, readCookie, readLimitedBody } from "../http/private-http.ts";
+import { clientAddress, isSameOrigin, json, readLimitedBody } from "../http/private-http.ts";
 import { getMemberServices } from "../members/member-http.ts";
-import { memberCookieName } from "../members/member-sessions.ts";
+import { createMemberRateLimit, memberRateRules } from "../members/rate-limit.ts";
 import { viewerAccessFromRequest } from "../members/viewer-access.ts";
 import { createPublishedSlips } from "./published-slips.ts";
 import { readSharedSlip } from "./shared-slips.ts";
@@ -25,9 +25,6 @@ export function createShareSlipHandler({ members = getMemberServices, services =
     if (!isSameOrigin(request)) return json({ error: "forbidden" }, 403);
     try {
       const viewer = await access(request);
-      const resolved = await members();
-      const member = await resolved.sessions?.verify(readCookie(request, memberCookieName(resolved.config.production)));
-      if (viewer.tier === "full" && !member) return json({ error: "sign-in-required" }, 401);
       let input;
       try {
         if (!/^application\/json(?:;|$)/iu.test(request.headers.get("content-type") ?? "")) return json({ error: "invalid-request" }, 400);
@@ -35,15 +32,18 @@ export function createShareSlipHandler({ members = getMemberServices, services =
         if (!bytes) return json({ error: "invalid-request" }, 400);
         input = shareSlipSourceSchema.parse(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)));
       } catch { return json({ error: "invalid-request" }, 400); }
-      const { database } = await services();
+      const { database, config } = await services();
       if (!database) return json({ error: "unavailable" }, 503);
       let day;
       try { day = parseReportingDate(input.day); } catch { return json({ error: "invalid-request" }, 400); }
+      if (viewer.mode === "off" && !viewer.signedIn && !await createMemberRateLimit(database, config)({ purpose: "slip-share-address",
+        value: clientAddress(request.headers), maximum: 120, windowMs: memberRateRules.hourMs })) return json({ error: "limited" }, 429);
       const result = await published(database).day(day);
       const view = result?.slips.find(candidate => candidate.slip?.id === input.slipId);
       if (!view?.slip || !view.id || !view.publishedAt) return json({ error: "changed" }, 409);
       if (!view.completed && (viewer.tier !== "full" || (await access(request)).tier !== "full")) return json({ error: "subscription-required" }, 403);
       const number = await database.transaction(async tx => ensureSlipNumber(tx, await slipNumberFingerprint(view.slip!)));
+      const resolved = await members();
       if (!view.completed && (await access(request)).tier !== "full") return json({ error: "subscription-required" }, 403);
       const contacts = resolved.settings.settings ? supportContactsOf(resolved.settings.settings).slice(0, 2).map(contact => `${contact.label}: +${contact.phone}`) : [];
       return json({ id: view.id.slice(0, 32), number, contacts, status: view.status,

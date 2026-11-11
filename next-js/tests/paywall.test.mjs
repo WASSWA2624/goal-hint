@@ -96,7 +96,7 @@ test('an unavailable member lookup returns a quiet, recoverable 503 instead of a
         if (failed) throw new Error('private storage unavailable');
         return [];
       } } }),
-    settings: async () => ({ settings: defaultSubscriptionSettings, source: 'stored' }),
+    settings: async () => ({ settings: { ...defaultSubscriptionSettings, paywallMode: 'on' }, source: 'stored' }),
   });
   const handler = createMatchFeedHandler(async () => { assert.fail('oracle read'); }, { now: () => now },
     () => resolve(name => name === 'goal-hint-member' ? 'a'.repeat(43) : undefined));
@@ -108,6 +108,28 @@ test('an unavailable member lookup returns a quiet, recoverable 503 instead of a
   const signedOut = await handler(request);
   assert.equal(signedOut.status, 403);
   assert.equal((await signedOut.json()).error.code, 'subscription-required');
+});
+test('the same guest feed switches between full and redacted projections with the current policy', async () => {
+  let paywallMode = 'off', source = 'stored';
+  const resolve = createViewerAccess({
+    settings: async () => ({ settings: { ...defaultSubscriptionSettings, paywallMode }, source }),
+    services: async () => ({ config: { production: false, cookies: { session: 'owner' } },
+      database: { query: () => assert.fail('guest should not load a session') }, auth: null }),
+  });
+  const handler = createMatchFeedHandler(async () => scenarios.scheduled.feed, { now: () => now }, () => resolve(() => undefined));
+  const request = new Request('https://example.test/api/matches');
+  const open = await handler(request);
+  assert.equal(open.status, 200);
+  assert.equal(open.headers.get('cache-control'), 'private, no-store');
+  assert.deepEqual((await open.json()).access, { tier: 'full', signedIn: false });
+  for (const policy of [{ paywallMode: 'on', source: 'stored' }, { paywallMode: 'off', source: 'last-good' }]) {
+    ({ paywallMode, source } = policy);
+    const restricted = await handler(request);
+    assert.equal(restricted.status, 200);
+    const body = await restricted.json();
+    assert.deepEqual(body.access, { tier: 'free', signedIn: false });
+    assert.doesNotMatch(JSON.stringify(body), /SENTINEL-|7\.73|home-win/);
+  }
 });
 test('free and failing resolvers never read slips and malformed gated bodies fail closed', async () => {
   for (const resolveAccess of [async () => free, async () => { throw Error('private'); }]) {

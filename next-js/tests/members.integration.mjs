@@ -234,18 +234,15 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
 
     await t.test("settings default to off with a 2-day trial and keep the owner's ranges", async () => {
       await app.query("INSERT INTO SubscriptionSettings (id, updatedAt, updatedBy) VALUES (1, ?, 'owner')", [now]);
-      const [settings] = await app.query("SELECT * FROM SubscriptionSettings");
-      assert.deepEqual({ ...settings }, { id: 1, paywallMode: "off", mtnEnabled: 0, mtnNumber: null, mtnName: null, mtnMenuShortcut: null, airtelEnabled: 0, airtelNumber: null,
-        airtelName: null, airtelMenuShortcut: null, copyFormat: "international", contactPhone: null, whatsappPhone: null, paymentNote: null,
-        reviewTime: null, maxUnlockedDevices: 2, trialDays: 2, screenshotRetentionDays: 90, paymentNumbersChangedAt: null,
-        lastMembersPurgeAt: null, updatedAt: now, updatedBy: "owner" });
+      const [settings] = await app.query("SELECT id, paywallMode, allowUnsubscribedMembers, trialDays, screenshotRetentionDays FROM SubscriptionSettings");
+      assert.deepEqual({ ...settings }, { id: 1, paywallMode: "off", allowUnsubscribedMembers: 0, trialDays: 2, screenshotRetentionDays: 90 });
       await refused(app.query("INSERT INTO SubscriptionSettings (id, updatedAt, updatedBy) VALUES (2, ?, 'owner')", [now]), CHECK, "a second row");
-      for (const assignment of ["paywallMode = 'maybe'", "copyFormat = 'national'", "maxUnlockedDevices = 0", "maxUnlockedDevices = 6",
-        "trialDays = 8", "screenshotRetentionDays = 6", "screenshotRetentionDays = 366", "mtnNumber = '0700000001'",
+      for (const assignment of ["paywallMode = 'maybe'", "paywallMode = 'test'", "copyFormat = 'national'", "allowUnsubscribedMembers = 2",
+        "trialDays = 367", "screenshotRetentionDays = 6", "screenshotRetentionDays = 366", "mtnNumber = '0700000001'",
         "whatsappPhone = '+256700000001'", "contactPhone = '256600000001'", "mtnMenuShortcut = '*165#'"]) {
         await refused(app.query(`UPDATE SubscriptionSettings SET ${assignment} WHERE id = 1`), CHECK, assignment);
       }
-      await app.query("UPDATE SubscriptionSettings SET paywallMode = 'test', mtnNumber = '256700000001', mtnName = 'TEST PAYEE', mtnMenuShortcut = '*165*{amount}#', trialDays = 0 WHERE id = 1");
+      await app.query("UPDATE SubscriptionSettings SET paywallMode = 'on', mtnNumber = '256700000001', mtnName = 'TEST PAYEE', mtnMenuShortcut = '*165*{amount}#', trialDays = 366 WHERE id = 1");
       for (const shortcut of ["*165*1;", "*165*{price}#", "#".repeat(61)]) {
         await refused(app.query("UPDATE SubscriptionSettings SET mtnMenuShortcut = ? WHERE id = 1", [shortcut]), shortcut.length > 60 ? 1406 : CHECK, shortcut);
       }
@@ -301,7 +298,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.equal(await dashboard.read(member), null);
     });
 
-    await t.test("settings and plans services keep canonical numbers, protected payment fields, mode requirements and an audit of every change", async () => {
+    await t.test("settings and plans keep canonical numbers, protected payment fields and an audit independent of checkout readiness", async () => {
       // Re-entry runs the owner login's check and throttle, so the application role also needs the analytics login tables.
       await instance.executeAdmin(["AnalyticsLoginThrottle", "AnalyticsAdminSession"].map((table) =>
         `GRANT SELECT, INSERT, UPDATE, DELETE ON goal_hint_test.${table} TO 'members_application'@'127.0.0.1';`).join("\n"));
@@ -320,7 +317,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       // Read through Prisma, which writes and reads instants in UTC like the services.
       const stored = () => database.query((client) => client.subscriptionSettings.findUnique({ where: { id: 1 } }));
       const audits = (action) => database.query((client) => client.ownerAuditEvent.findMany({ where: { action }, orderBy: { id: "asc" } }));
-      const keys = (outcome) => outcome.missing.map(({ key }) => key);
+      const readinessKeys = async (service = settings) => (await service.overview()).checkoutReadiness.map(({ key }) => key);
       // Synthetic owner numbers, distinct from every member number above.
       const MTN = "256700000901", CONTACT = "256700000902", MOVED = "256700000904";
 
@@ -328,7 +325,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.deepEqual([fresh.source, fresh.settings.paywallMode, fresh.settings.trialDays, accessMode(fresh)], ["defaults", "off", 2, "off"],
         "A missing row reads off with the 2-day trial.");
       const refusedTest = await settings.setMode("owner", "test");
-      assert.deepEqual([refusedTest.status, keys(refusedTest)], ["requirements", ["plan", "payment-number", "contact"]]);
+      assert.equal(refusedTest.status, "invalid");
       assert.equal(await stored(), null, "A refused switch writes nothing, not even the defaults row.");
 
       clock.now += 60_000;
@@ -407,33 +404,31 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.deepEqual((await audits("plans_reordered")).at(-1).details, { from: everyPlan, to: order }, "Plan ids are audited as they are.");
       assert.equal((await plans.reorder("owner", [monthly, daily])).status, "invalid", "A reorder names every plan.");
 
-      // Requirements now hold, so test mode switches; another process sees it within the 30 s cache.
+      // The mode saves independently of checkout setup. Another process sees it within the 30 s cache.
       const otherProcess = createSettingsService(database, { environment: null, now });
       assert.equal((await otherProcess.current()).settings.paywallMode, "off");
       clock.now += 1_000;
-      assert.equal((await settings.setMode("owner", "test")).status, "saved");
-      assert.equal((await settings.current()).settings.paywallMode, "test", "This process sees its own change at once.");
+      assert.equal((await settings.setMode("owner", "on")).status, "saved");
+      assert.equal((await settings.current()).settings.paywallMode, "on", "This process sees its own change at once.");
       assert.equal((await otherProcess.current()).settings.paywallMode, "off", "Others keep their value until it is 30 s old.");
       clock.now += 30_000;
-      assert.equal((await otherProcess.current()).settings.paywallMode, "test");
-      assert.deepEqual((await audits("paywall_mode_changed")).map(({ details }) => details), [{ from: "off", to: "test" }]);
-      const notReady = await settings.setMode("owner", "on");
-      assert.deepEqual([notReady.status, keys(notReady)], ["requirements", ["privacy", "terms"]], "On waits for release-ready privacy and terms.");
+      assert.equal((await otherProcess.current()).settings.paywallMode, "on");
+      assert.deepEqual((await audits("paywall_mode_changed")).map(({ details }) => details), [{ from: "off", to: "on" }]);
+      assert.ok((await readinessKeys()).includes("terms"));
       const releaseReady = createSettingsService(database, { environment: null, now, readiness: () => ({ privacy: true, terms: true }) });
-      assert.equal((await releaseReady.setMode("owner", "on")).status, "saved");
 
-      // While on, the requirements keep holding: the last active plan and the last contact number cannot go.
+      // Plans and contact details can change without switching off access enforcement.
       assert.equal((await plans.setActive("owner", daily, false)).status, "saved");
       assert.equal((await plans.setActive("owner", weeklyPlan, false)).status, "saved");
       const lastPlan = await plans.setActive("owner", monthly, false);
-      assert.deepEqual([lastPlan.status, keys(lastPlan)], ["requirements", ["plan"]]);
+      assert.equal(lastPlan.status, "saved");
       const lastContact = await releaseReady.save("owner", { contactPhone: null, whatsappPhone: "" }, reentry(right, "198.51.100.42"));
-      assert.deepEqual([lastContact.status, keys(lastContact)], ["requirements", ["contact"]]);
-      assert.equal((await stored()).contactPhone, CONTACT);
+      assert.equal(lastContact.status, "saved");
+      assert.equal((await stored()).contactPhone, null);
+      assert.ok((await readinessKeys(releaseReady)).includes("plan"));
       const unrelated = await settings.save("owner", { reviewTime: "Within an hour" }, reentry(null));
-      assert.equal(unrelated.status, "saved", "A requirement that was already unmet (here the notices) never blocks an unrelated save.");
+      assert.equal(unrelated.status, "saved");
       assert.equal((await releaseReady.setMode("owner", "off")).status, "saved");
-      assert.equal((await plans.setActive("owner", monthly, false)).status, "saved", "With paid access off, every plan may be inactive.");
       assert.deepEqual((await audits("plan_deactivated")).length, 3);
 
       // Two saves of different fields at once both land: each applies its change to the locked row.
@@ -466,8 +461,8 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.equal(updated.settings.whatsappPhone, identity.whatsappPhone);
       assert.equal((await plans.setActive("owner", daily, true)).status, "saved");
       const noIdentity = createSettingsService(database, { environment: blankIdentity, now });
-      assert.deepEqual(keys(await noIdentity.setMode("owner", "test")), ["contact"], "Stored receiving details satisfy the payment requirement independently.");
-      assert.equal((await configured.setMode("owner", "test")).status, "saved");
+      assert.ok((await readinessKeys(noIdentity)).includes("contact"));
+      assert.equal((await configured.setMode("owner", "on")).status, "saved");
       assert.equal((await configured.current()).settings.airtelNumber, storedBefore.airtelNumber);
       const storedAfter = await stored();
       for (const key of Object.keys(identity)) assert.equal(storedAfter[key], storedBefore[key], `stored identity preserved: ${key}`);
@@ -495,7 +490,6 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       const other = await sessions.verify(results[1].token);
       assert.equal(first.accountId, other.accountId);
       assert.equal(await database.query((tx) => tx.memberAccount.count({ where: { phone: "256700000701" } })), 1, "Concurrent authenticated issuance keeps one account per phone");
-      assert.equal(first.codeEnteredAt, null);
       assert.equal(first.tokenHash, memberTokenHash(results[0].token));
       const row = () => database.query((tx) => tx.memberSession.findUniqueOrThrow({ where: { tokenHash: first.tokenHash } }));
       assert.equal((await row()).expiresAt.getTime(), instant + memberSessionRules.expiryMs);
@@ -537,8 +531,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.ok(await sessions.verify(tokens[2]));
       assert.equal(await sessions.verify(tokens[3]), null);
       assert.equal(await database.query((tx) => tx.memberSession.count({ where: { accountId: member.accountId } })), 10);
-      assert.equal(await sessions.signOutOthers(member), false);
-      assert.equal(await sessions.signOutOthers(await sessions.verify(tokens[2])), true, "an ended period can still sign out other devices");
+      assert.equal(await sessions.signOutOthers(await sessions.verify(tokens[2])), true, "a valid signed-in session can sign out other devices");
       assert.equal(await sessions.verify(tokens[0]), null);
       const replacement = await sessions.signIn(phone, "unknown", tokens[2]);
       assert.equal(await sessions.verify(tokens[2]), null, "sign-in replaces the previous browser token");
@@ -552,112 +545,55 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.equal(await sessions.verify(blockedSignIn.token), null);
     });
 
-    await t.test("confirmation chains concurrent codes, unlock rotates and caps devices, renewals retain entitlement, and wrong-code throttles never block a correct code", async () => {
+    await t.test("concurrent account periods keep both signed-in devices entitled until expiry", async () => {
       let instant = now.getTime();
-      const config = { production: false, cookies: { session: "owner" }, key: (purpose, value) => sha256(`${purpose}:${value}`) };
-      const sessions = createMemberSessions({ database, config, now: () => instant });
-      const codes = createAccessCodes({ database, config, now: () => instant, notifications: silentPaymentNotifications });
-      const phone = "256700000711", initial = await sessions.signIn(phone, "unknown"), member = await sessions.verify(initial.token);
-      assert.equal(await codes.accountView(member), null);
-      const first = await codes.manual({ phone, durationDays: 1, amountReceivedUgx: 0, note: "Synthetic daily" }, "owner");
-      assert.equal(first.status, "created");
-      const stored = () => database.query((tx) => tx.accessCode.findUniqueOrThrow({ where: { id: first.ready.id } }));
-      assert.deepEqual([(await stored()).startsAt, (await stored()).endsAt], [now, new Date(+now + day)]);
-      instant += day / 2;
-      const wrongLimit = createMemberRateLimit(database, config, () => instant);
-      for (let n = 0; n < 101; n++) await wrongLimit({ purpose: "wrong-codes", value: "locked-ip", maximum: 100, windowMs: 3_600_000 });
-      assert.equal((await codes.redeem(member, "ZZZZ-ZZZZ-ZZZZ", "locked-ip", 2, "2026-10-19")).status, "busy");
-      const unlocked = await codes.redeem(member, first.ready.code, "locked-ip", 2, "2026-10-19");
-      assert.equal(unlocked.status, "accepted");
-      assert.notEqual(unlocked.token, initial.token);
-      assert.equal(await sessions.verify(initial.token), null);
-      assert.deepEqual([(await stored()).startsAt, (await stored()).endsAt], [now, new Date(+now + day)]);
-      assert.equal((await stored()).termsVersion, "2026-10-19");
-      const memberUnlocked = await sessions.verify(unlocked.token);
-      const renewals = await Promise.all([1, 7].map((durationDays) => codes.manual({ phone, durationDays, amountReceivedUgx: 0, note: "Synthetic renewal" }, "owner")));
-      assert.ok(renewals.every((result) => result.status === "created"));
-      const periods = await database.query((tx) => tx.accessCode.findMany({ where: { accountId: member.accountId }, orderBy: { startsAt: "asc" } }));
+      const clock = () => instant;
+      const config = { production: false, cookies: { session: "owner" }, key: (purpose, value) => sha256(purpose + ":" + value) };
+      const sessions = createMemberSessions({ database, config, now: clock });
+      const codes = createAccessCodes({ database, config, now: clock, notifications: silentPaymentNotifications });
+      const phone = "256700000711";
+      const first = await sessions.signIn(phone, "unknown");
+      const member = await sessions.verify(first.token);
+      let mode = "on";
+      const resolve = createViewerAccess({ services: async () => ({ config, database, auth: null }), now: clock,
+        settings: async () => ({ settings: { ...defaultSubscriptionSettings, paywallMode: mode } }) });
+      const access = token => resolve(name => name === "goal-hint-member" ? token : undefined);
+      assert.equal((await access(first.token)).tier, "free");
+      mode = "off";
+      assert.equal((await access()).tier, "full");
+      mode = "on";
+      const grant = durationDays => codes.manual({ phone, durationDays, amountReceivedUgx: 0, note: "Synthetic access" }, "owner");
+      assert.equal((await grant(1)).status, "created");
+      assert.ok((await Promise.all([grant(1), grant(7)])).every(result => result.status === "created"));
+      const periods = await database.query(tx => tx.accessCode.findMany({ where: { accountId: member.accountId }, orderBy: { startsAt: "asc" } }));
       assert.equal(+periods[1].startsAt, +periods[0].endsAt);
       assert.equal(+periods[2].startsAt, +periods[1].endsAt);
-      let mode = "on";
-      const resolve = createViewerAccess({ services: async () => ({ config, database, auth: null }), now: () => instant,
-        settings: async () => ({ settings: { ...defaultSubscriptionSettings, paywallMode: mode } }) });
-      const access = (token) => resolve((name) => name === "goal-hint-member" ? token : undefined);
-      assert.deepEqual(await access(unlocked.token), { tier: "full", signedIn: true, mode: "on" });
-      instant = +now + day;
-      assert.equal((await access(unlocked.token)).tier, "full", "the entered code expired but the renewal keeps the device entitled");
-      assert.equal((await codes.accountView(memberUnlocked)).devices.length, 1);
-      const numberOnly = await sessions.signIn(phone, "unknown");
-      assert.equal((await access(numberOnly.token)).tier, "free");
-      mode = "test";
-      assert.equal((await access(numberOnly.token)).tier, "free");
-      assert.equal((await access(undefined)).tier, "free", "test mode keeps anonymous predictions gated");
-      mode = "off";
-      assert.equal((await access(undefined)).tier, "free", "closed subscriptions never bypass prediction gates");
-      assert.equal((await access(unlocked.token)).tier, "full", "existing unlocked periods remain valid until expiry");
-      mode = "test";
-      for (let n = 0; n < 2; n++) {
-        instant++;
-        const signedIn = await sessions.signIn(phone, "unknown");
-        assert.equal((await codes.redeem(await sessions.verify(signedIn.token), renewals[1].ready.code, "unknown", 2, "2026-10-19")).status, "accepted");
-      }
-      assert.equal((await sessions.verify(unlocked.token)).codeEnteredAt, null, "the oldest device loses its unlock");
-      assert.equal((await access(unlocked.token)).tier, "free");
-      const evictions = await database.query((tx) => tx.ownerAuditEvent.count({ where: { accountId: member.accountId, action: "device_evicted" } }));
-      assert.equal(evictions, 1);
-      const before = await database.query((tx) => tx.memberAccount.count());
-      const sessionsBefore = await database.query((tx) => tx.memberSession.count());
-      assert.equal((await codes.signInWithCode("256700000799", first.ready.code, "unknown", 2, "2026-10-19")).status, "not-recognized");
-      assert.equal(await database.query((tx) => tx.memberAccount.count()), before);
-      assert.equal(await database.query((tx) => tx.memberSession.count()), sessionsBefore);
-      const other = await sessions.signIn("256700000712", "unknown");
-      assert.equal((await codes.redeem(await sessions.verify(other.token), renewals[0].ready.code, "unknown", 2, "2026-10-19")).status, "not-recognized");
-      assert.equal((await codes.signInWithCode("256700000712", renewals[0].ready.code, "unknown", 2, "2026-10-19")).status, "not-recognized");
-      const direct = await codes.signInWithCode(phone, renewals[0].ready.code, "unknown", 2, "2026-10-19");
-      assert.equal(direct.status, "accepted");
-      assert.equal(await sessions.verify(direct.token), null, "Legacy subscription-code issuance cannot authenticate a password account");
-      assert.equal((await access(direct.token)).tier, "free");
-      const authenticated = await sessions.signIn(phone, "unknown");
-      const redeemed = await codes.redeem(await sessions.verify(authenticated.token), renewals[0].ready.code, "unknown", 2, "2026-10-19");
-      assert.equal((await access(redeemed.token)).tier, "full");
+      const second = await sessions.signIn(phone, "unknown");
+      instant = +periods[0].endsAt;
+      assert.equal((await access(first.token)).tier, "full");
+      assert.equal((await access(second.token)).tier, "full");
+      assert.equal((await codes.accountView(member)).devices.length, 2);
       await app.query("UPDATE MemberAccount SET blockedAt = ? WHERE id = ?", [new Date(instant), member.accountId]);
-      assert.equal((await access(redeemed.token)).tier, "free");
-      assert.equal((await codes.redeem(await sessions.verify(redeemed.token), renewals[0].ready.code, "unknown", 2, "2026-10-19")).status, "refused");
+      assert.equal((await access(second.token)).tier, "free");
       await app.query("UPDATE MemberAccount SET blockedAt = NULL WHERE id = ?", [member.accountId]);
       instant = +periods.at(-1).endsAt;
-      mode = "on";
-      assert.equal((await access(unlocked.token)).tier, "free");
-      assert.equal((await codes.redeem(memberUnlocked, first.ready.code, "unknown", 2, "2026-10-19")).status, "ended");
+      assert.equal((await access(first.token)).tier, "free");
     });
 
-    await t.test("extend and revoke move queued periods, and reissue copies the period and transfers unlocks without a payment FK", async () => {
-      const config = { key: (purpose, value) => sha256(`${purpose}:${value}`) };
+    await t.test("extension and revocation update the account’s queued periods", async () => {
       const instant = +now, phone = "256700000721";
-      const codes = createAccessCodes({ database, config, now: () => instant, notifications: silentPaymentNotifications });
-      const sessions = createMemberSessions({ database, config, now: () => instant });
-      const first = await codes.manual({ phone, durationDays: 1, amountReceivedUgx: 0, note: "Synthetic" }, "owner");
-      const second = await codes.manual({ phone, durationDays: 7, amountReceivedUgx: 0, note: "Synthetic" }, "owner");
-      const read = (id) => database.query((tx) => tx.accessCode.findUniqueOrThrow({ where: { id } }));
-      assert.equal((await codes.extend(first.ready.id, 2, "owner")).status, "saved");
-      assert.equal(+(await read(second.ready.id)).startsAt, instant + 3 * day);
-      const signed = await sessions.signIn(phone, "unknown");
-      const unlocked = await codes.redeem(await sessions.verify(signed.token), first.ready.code, "unknown", 2, "2026-10-19");
-      const replacement = await codes.reissue(first.ready.id, "owner");
-      assert.equal(replacement.status, "created");
-      assert.equal((await read(first.ready.id)).replacedById, replacement.ready.id);
-      const code = await read(replacement.ready.id);
-      assert.equal(code.paymentSubmissionId, null);
-      assert.equal(code.extensionDays, 2);
-      assert.equal(+code.startsAt, instant);
-      assert.equal(+code.endsAt, instant + 3 * day);
-      assert.equal((await sessions.verify(unlocked.token)).accessCodeId, code.id);
-      assert.equal((await codes.revoke(code.id, "owner-request", "owner")).status, "saved");
-      assert.equal((await sessions.verify(unlocked.token)).codeEnteredAt, null);
-      assert.equal(+(await read(second.ready.id)).startsAt, instant);
-      assert.equal((await codes.extend(code.id, 1, "owner")).status, "refused");
+      const codes = createAccessCodes({ database, now: () => instant, notifications: silentPaymentNotifications });
+      const grant = durationDays => codes.manual({ phone, durationDays, amountReceivedUgx: 0, note: "Synthetic" }, "owner");
+      const first = await grant(1), second = await grant(7);
+      const read = id => database.query(tx => tx.accessCode.findUniqueOrThrow({ where: { id } }));
+      assert.equal((await codes.extend(first.grant.id, 2, "owner")).status, "saved");
+      assert.equal(+(await read(second.grant.id)).startsAt, instant + 3 * day);
+      assert.equal((await codes.revoke(first.grant.id, "owner-request", "owner")).status, "saved");
+      assert.equal(+(await read(second.grant.id)).startsAt, instant);
+      assert.equal((await codes.extend(first.grant.id, 1, "owner")).status, "refused");
     });
 
-    await t.test("payment approvals race across spelling and network, and reversal follows reissue and number-change replacements", async () => {
+    await t.test("payment approvals race across spelling and network, and reversal follows number-change replacements", async () => {
       const config = { key: (purpose, value) => sha256(`${purpose}:${value}`) };
       let instant = +now;
       const codes = createAccessCodes({ database, config, now: () => instant, notifications: silentPaymentNotifications });
@@ -669,17 +605,16 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       ]);
       assert.deepEqual(outcomes.map((row) => row.status).sort(), ["created", "duplicate"]);
       const original = await codes.manual({ phone: "256700000733", planId: weekly, amountReceivedUgx: 5000, note: "Synthetic payment", network: "mtn", transactionRef: "REVERSE.100" }, "owner");
-      const paid = await database.query((tx) => tx.accessCode.findUniqueOrThrow({ where: { id: original.ready.id } }));
-      const reissued = await codes.reissue(paid.id, "owner");
+      const paid = await database.query((tx) => tx.accessCode.findUniqueOrThrow({ where: { id: original.grant.id } }));
       instant += (3 * 24 + 19) * 3_600_000;
       await codes.manual({ phone: "256700000733", planId: weekly, amountReceivedUgx: 0, note: "Synthetic queue" }, "owner");
       const transfer = await codes.changeNumber(paid.accountId, { newPhone: "256700000734", verifiedBy: "old-number" }, "owner");
       assert.equal(transfer.status, "created");
-      const live = await database.query((tx) => tx.accessCode.findUniqueOrThrow({ where: { id: transfer.ready.id } }));
+      const live = await database.query((tx) => tx.accessCode.findUniqueOrThrow({ where: { id: transfer.grant.id } }));
       assert.equal(live.durationDays, 11, "3 days 5 hours plus 7 days rounds to 11 days");
       assert.equal(remainingDays([live], new Date(instant)), 11);
       assert.notEqual(live.accountId, paid.accountId);
-      assert.equal((await database.query((tx) => tx.accessCode.findUniqueOrThrow({ where: { id: reissued.ready.id } }))).replacedById, live.id);
+      assert.equal((await database.query(tx => tx.accessCode.findUniqueOrThrow({ where: { id: paid.id } }))).replacedById, live.id);
       const reversed = await codes.reversePayment(paid.paymentSubmissionId, "wrong-account", "owner");
       assert.equal(reversed.status, "saved");
       assert.equal(reversed.carriedOtherDays, true);

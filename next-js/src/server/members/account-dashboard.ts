@@ -11,7 +11,7 @@ const paymentSelect = { id: true, reference: true, purpose: true, planName: true
   submittedAt: true, decidedAt: true, reversedAt: true } satisfies Prisma.PaymentSubmissionSelect;
 const accessSelect = { id: true, planName: true, createdAt: true, startsAt: true, endsAt: true, revokedAt: true } satisfies Prisma.AccessCodeSelect;
 
-/** Readable even after subscription expiry or sales close; paid-device unlock is not account authentication. */
+/** Account history stays available after subscription expiry or when checkout is paused. */
 export function createAccountDashboard({ database, now = Date.now }: { database: DatabaseRuntime; now?: () => number }) {
   return Object.freeze({
     async read(member: MemberIdentity): Promise<AccountDashboard | null> {

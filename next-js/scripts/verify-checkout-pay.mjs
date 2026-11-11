@@ -241,6 +241,28 @@ export async function verifyCheckoutPay(page, { origin, outputDirectory } = {}) 
     assert(await page.getByRole("button", { name: "Submit", exact: true }).isEnabled(), "Confirmed redemption must be reviewable and submittable.");
     assert(confirmationRequests === 0, "Choosing funding or reviewing must not submit a payment or debit balances.");
     checks.push({ check: "earned-day redemption path and explicit confirmation" });
+
+    for (const mode of ["light", "dark"]) {
+      scenario = { earnedDays: 3 };
+      await page.setViewportSize({ width: 390, height: 1100 });
+      await page.emulateMedia({ colorScheme: mode, reducedMotion: "reduce" });
+      await page.goto(`${address.origin}/en/subscribe?sales=paused&earnedDays=3&scenario=paused-${Date.now()}-${++sequence}`, { waitUntil: "domcontentloaded" });
+      await page.waitForFunction(theme => getComputedStyle(document.documentElement).colorScheme === theme, mode);
+      const redeem = page.getByRole("button", { name: "Redeem earned days", exact: true });
+      await redeem.click();
+      const days = page.getByRole("spinbutton", { name: "Earned days to redeem", exact: true });
+      await days.waitFor();
+      assert(!await page.locator("[data-package-selection], [data-checkout-pay]").count(), "Paused sales expose no paid purchase form.");
+      await days.fill("2");
+      await page.getByRole("button", { name: "Review redemption", exact: true }).click();
+      await page.locator('[data-payment-step="4"]').waitFor();
+      assert(await page.getByRole("button", { name: "Submit", exact: true }).isDisabled(), "Standalone redemption requires explicit confirmation.");
+      await page.getByRole("button", { name: "Back", exact: true }).click();
+      await days.waitFor();
+      await page.getByRole("button", { name: "Back", exact: true }).click();
+      await redeem.waitFor();
+      checks.push({ check: "standalone earned-day redemption during paused sales", mode });
+    }
     assert(errors.length === 0, `Browser errors: ${JSON.stringify(errors)}`);
     return { passed: true, checks, browserErrors: errors };
   } finally {

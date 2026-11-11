@@ -16,7 +16,7 @@ test("notification persistence, account isolation, races and exact reminders wor
   const first = randomUUID(), second = randomUUID(), passwordHash = await hashPassword("synthetic notification password");
   const firstHash = "a".repeat(64), secondHash = "b".repeat(64);
   await f.database.query(async tx => {
-    await tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", trialDays: 0, updatedAt: new Date(time), updatedBy: "synthetic" } });
+    await tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "on", trialDays: 0, updatedAt: new Date(time), updatedBy: "synthetic" } });
     for (const [id, phone, tokenHash] of [[first, "256700001101", firstHash], [second, "256700001102", secondHash]]) {
       await tx.memberAccount.create({ data: { id, phone, passwordHash, phoneVerifiedAt: new Date(time), createdAt: new Date(time), lastSignInAt: new Date(time) } });
       await tx.memberSession.create({ data: { tokenHash, accountId: id, createdAt: new Date(time), lastSeenAt: new Date(time), authenticatedAt: new Date(time), expiresAt: new Date(time + 30 * DAY) } });

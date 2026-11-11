@@ -27,7 +27,7 @@ function withDetail(record: SubscriberReviewRecord, detail: OwnerSubscriber, net
 
 function emptyAccount(accountId: string, phone: string): SubscriberReviewRecord {
   const detail: OwnerSubscriber = { id: accountId, phone, blockedAt: null, blockedReason: null, ownerNote: null, erasedAt: null,
-    lastSignInAt: stamp, codes: [], submissions: [], devices: [], unlocks: 0, creditUgx: 0, autoRenew: false, autoRenewPlanName: null, wallet: [] };
+    lastSignInAt: stamp, codes: [], submissions: [], devices: [], creditUgx: 0, autoRenew: false, autoRenewPlanName: null, wallet: [] };
   return { id: accountId, phone, status: "open", lastSignInAt: stamp, network: null, detail };
 }
 
@@ -61,7 +61,7 @@ function seedSubscribers(): SubscriberReviewRecord[] {
         status: state === 4 ? "pending" : "approved", purpose: "plan", planName: plan.name, claimedAmountUgx: plan.priceUgx,
         amountReceivedUgx: state === 4 ? null : plan.priceUgx, submittedAt: instant(-2 * subscriptionDayMs) }] : [],
       devices: Array.from({ length: deviceCount }, (_, device) => ({ createdAt: instant(-(device + 3) * subscriptionDayMs),
-        lastSeenAt: lastSignInAt, expiresAt: instant(60 * subscriptionDayMs) })), unlocks: deviceCount + index % 6,
+        lastSeenAt: lastSignInAt, expiresAt: instant(60 * subscriptionDayMs) })),
       creditUgx, autoRenew: !erased && !blocked && index % 4 === 0, autoRenewPlanName: !erased && !blocked && index % 4 === 0 ? plan.name : null,
       wallet: creditUgx ? [{ id: id(700 + index), kind: creditUgx < 0 ? "reversal" : "topup", amountUgx: creditUgx, balanceAfter: creditUgx,
         createdAt: instant(-subscriptionDayMs), actor: "admin", note: creditUgx < 0 ? "Reversed sample payment" : "Fictional credit top-up", payment: null, period: null }] : [] };

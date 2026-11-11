@@ -183,6 +183,7 @@ test("allowlisted authenticated members receive full content without a subscript
   process.env.GOAL_HINT_ADMIN_PHONES = "[]";
   assert.deepEqual(await resolver(cookies), { tier: "free", signedIn: false, mode: "on" });
   row.passwordHash = "registered password";
+  row.phoneVerifiedAt = at;
   assert.deepEqual(await resolver(cookies), { tier: "free", signedIn: true, mode: "on" });
   row.entitled = 1n;
   assert.equal((await resolver(cookies)).tier, "full", "Ordinary paid access is preserved");

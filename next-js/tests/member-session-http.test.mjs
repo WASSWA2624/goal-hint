@@ -17,7 +17,7 @@ test("navigation role and phone come from the same verified member, ignoring leg
     } }, codes: { async subscriptionStatus() { return { activeUntil: null, paymentPending: false }; } } }));
     const response = await handler(new Request("http://localhost/api/account/session", { headers: { Cookie: `goal-hint-member=${token}${owner}` } }));
     assert.equal(response.status, 200); assert.match(response.headers.get("cache-control"), /no-store/u);
-    assert.deepEqual(await response.json(), { phone: member?.phone ?? null, administrator,
+    assert.deepEqual(await response.json(), { phone: member?.phone ?? null, administrator, freeContentAccess: false,
       subscription: { activeUntil: null, paymentPending: false, canSubscribe: false, creditUgx: 0, autoRenew: false, renewsFromCredit: false } });
   }
 });
@@ -71,10 +71,10 @@ test("only a confirmed ended non-revoked period marks inactive access as expired
 });
 
 test("subscription purchase availability respects sales mode and blocked accounts while retaining active expiry", async () => {
-  for (const mode of ["on", "test", "off", null]) {
+  for (const mode of ["on", "off", null]) {
     const response = await subscriptionFixture({ mode, periods: [period(-1, 1)] }).request();
     assert.deepEqual((await response.json()).subscription, { activeUntil: new Date(instant + hour).toISOString(), paymentPending: false,
-      canSubscribe: mode === "on" || mode === "test", creditUgx: 0, autoRenew: false, renewsFromCredit: false });
+      canSubscribe: mode === "on", creditUgx: 0, autoRenew: false, renewsFromCredit: false });
   }
   const blocked = subscriptionFixture({ blocked: true, periods: [period(-1, 1)], status: "pending" });
   assert.deepEqual((await (await blocked.request()).json()).subscription, { activeUntil: null, paymentPending: false, canSubscribe: false, creditUgx: 0, autoRenew: false, renewsFromCredit: false });
@@ -87,6 +87,23 @@ test("guests can discover open subscriptions and administrators never receive a 
       sessions: { async verify() { return member; } }, codes: { async subscriptionStatus() { assert.fail("No private subscription read is needed."); } } }));
     const body = await (await handler(new Request("http://localhost/api/account/session"))).json();
     assert.deepEqual(body.subscription, { activeUntil: null, paymentPending: false, canSubscribe: !member, creditUgx: 0, autoRenew: false, renewsFromCredit: false });
+  }
+});
+
+test("free content access is independent of subscription status and requires a confirmed policy", async () => {
+  const member = { phone: "256700000101", blocked: false };
+  const request = new Request("http://localhost/api/account/session");
+  for (const [mode, allowUnsubscribedMembers, identity, source, expected] of [
+    ["off", false, null, "stored", true], ["off", false, null, "last-good", false],
+    ["on", true, member, "stored", true], ["on", true, member, "last-good", false],
+    ["on", true, null, "stored", false], ["on", true, { ...member, blocked: true }, "stored", false],
+    ["on", false, member, "stored", false],
+  ]) {
+    const handle = createMemberSessionHandler(async () => ({ config: { production: false },
+      settings: { source, settings: { paywallMode: mode, allowUnsubscribedMembers } }, sessions: { async verify() { return identity; } } }));
+    const response = await handle(request);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).freeContentAccess, expected);
   }
 });
 
@@ -128,7 +145,7 @@ test("a subscription storage failure keeps verified identity without claiming su
     const response = await f.request();
     assert.equal(response.status, 200);
     assert.match(response.headers.get("cache-control"), /no-store/u);
-    assert.deepEqual(await response.json(), { phone: f.member.phone, administrator: false, subscription: null });
+    assert.deepEqual(await response.json(), { phone: f.member.phone, administrator: false, freeContentAccess: false, subscription: null });
   }
 });
 

@@ -10,7 +10,6 @@ import { hashPassword, isPasswordHash, verifyPassword } from "../analytics/analy
 import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
 import type { AccessCode, MemberAccount, Prisma } from "../generated/prisma/client.ts";
 import { accessCodeTransaction, lockMemberAccount } from "./access-codes.ts";
-import { grantSessionAccess } from "./device-grants.ts";
 import { issueMemberSession, memberTokenHash, validMemberToken, type MemberIdentity } from "./member-sessions.ts";
 import { isMemberAdminPhone, memberAdminCredential, verifyMemberAdminCredential } from "./member-admin.ts";
 import { passwordRecoveryRules } from "./password-recovery.ts";
@@ -81,18 +80,13 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
     return await verifyPassword(password, stored ?? await dummyHash()) && stored ? stored : wrongPassword();
   }
 
-  async function rotate(tx: Prisma.TransactionClient, account: MemberAccount, binding: AuthBinding, at: Date, trial?: AccessCode | null): Promise<AuthSuccess> {
-    const old = binding.member ? await tx.memberSession.findUnique({ where: { tokenHash: binding.member.tokenHash } }) : null;
+  async function rotate(tx: Prisma.TransactionClient, account: MemberAccount, at: Date, trial?: AccessCode | null): Promise<AuthSuccess> {
     await tx.memberSession.deleteMany({ where: { accountId: account.id } });
     const verified = !!account.phoneVerifiedAt;
-    const { token, session } = await issueMemberSession(tx, account.id, at, undefined, verified);
-    // A profile change keeps this device's paid access; otherwise a live period unlocks the new device under the cap.
-    if (verified && old?.codeEnteredAt && old.accessCodeId) await tx.memberSession.update({ where: { tokenHash: session.tokenHash },
-      data: { codeEnteredAt: old.codeEnteredAt, accessCodeId: old.accessCodeId } });
-    const unlocked = verified && await grantSessionAccess(tx, { accountId: account.id, tokenHash: session.tokenHash, at, actor: "member" });
+    const { token } = await issueMemberSession(tx, account.id, at, undefined, verified);
     return { status: "authenticated", token, accountId: account.id, phone: account.phone!, ...(!verified ? { requiresVerification: true } : {}),
       ...(trial ? { trial: { days: trial.durationDays, startsAt: trial.startsAt.toISOString(), endsAt: trial.endsAt.toISOString(),
-        active: !!unlocked && !trial.revokedAt && trial.startsAt <= at && trial.endsAt > at } } : {}) };
+        active: verified && !trial.revokedAt && trial.startsAt <= at && trial.endsAt > at } } : {}) };
   }
 
   async function pendingAccount(tx: Prisma.TransactionClient, token: string | undefined, at: Date): Promise<MemberAccount | null> {
@@ -132,7 +126,6 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
         if (administrator) await tx.memberSession.update({ where: { tokenHash: session.tokenHash },
           data: { adminPasswordVersion: config.key("admin-password-version", stored) } });
         await tx.memberAccount.update({ where: { id: current.id }, data: { lastSignInAt: at } });
-        if (!administrator && verified) await grantSessionAccess(tx, { accountId: current.id, tokenHash: session.tokenHash, at, actor: "member" });
         return { status: "authenticated", token, accountId: current.id, phone, ...(administrator ? { administrator: true } : {}),
           ...(verified ? { otherDeviceSignedOut } : { requiresVerification: true }) };
       });
@@ -154,7 +147,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
           const account = await tx.memberAccount.create({ data: { id: randomUUID(), phone, passwordHash, createdAt: at, lastSignInAt: at, trialEligibleAt: at } });
           await ensureReferralCode(tx, { id: account.id, referralCode: null });
           await recordReferralRegistration(tx, config, account, at, referralCode);
-          return rotate(tx, account, binding, at);
+          return rotate(tx, account, at);
         });
       } catch (error) { if (error instanceof DatabaseOperationError && error.code === "constraint") return conflict(); throw error; }
     },
@@ -190,7 +183,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
         await rememberRegistrationPhone(tx, config, verified.phone!, at);
         await enqueueMemberMessage(tx, { accountId: account.id, targetType: "member", targetId: account.id, decision: "welcome", at });
         const trial = await tx.accessCode.findFirst({ where: { accountId: account.id, source: "trial", revokedAt: null, endsAt: { gt: at } }, orderBy: { createdAt: "asc" } });
-        return rotate(tx, verified, { member: null }, at, trial);
+        return rotate(tx, verified, at, trial);
       });
     },
 
@@ -252,7 +245,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
         const updated = await tx.memberAccount.update({ where: { id: account.id }, data: { passwordHash, phoneVerifiedAt: account.phoneVerifiedAt ?? at,
           passwordChangedAt: at, lastSignInAt: at } });
         await tx.memberVerification.updateMany({ where: { accountId: account.id, consumedAt: null }, data: { consumedAt: at } });
-        return rotate(tx, updated, { member: null }, at);
+        return rotate(tx, updated, at);
       });
     },
 
@@ -275,7 +268,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
           if (existing && existing.id !== account.id) return conflict();
           if (phone !== account.phone) await tx.memberVerification.updateMany({ where: { accountId: account.id, consumedAt: null }, data: { consumedAt: at } });
           const updated = await tx.memberAccount.update({ where: { id: account.id }, data: { phone, ...(phone !== account.phone ? { phoneVerifiedAt: null, whatsappNotificationsAt: null } : {}) } });
-          return rotate(tx, updated, binding, at);
+          return rotate(tx, updated, at);
         });
       } catch (error) { if (error instanceof DatabaseOperationError && error.code === "constraint") return conflict(); throw error; }
     },
@@ -301,7 +294,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
         if (!canChangePassword(account, at)) return passwordLimit();
         await tx.memberAccount.update({ where: { id: account.id }, data: { passwordHash, passwordChangedAt: at, lastSignInAt: at } });
         await tx.memberVerification.updateMany({ where: { accountId: account.id, consumedAt: null }, data: { consumedAt: at } });
-        return rotate(tx, account, binding, at);
+        return rotate(tx, account, at);
       });
     },
   });
