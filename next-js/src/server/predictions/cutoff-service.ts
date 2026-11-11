@@ -16,6 +16,8 @@ import { cutoffResult, storedCutoffOperation } from "./cutoff-read.ts";
 import { createMysqlPredictionHistoryStore, type PredictionHistoryWriter } from "./history-mysql-store.ts";
 import { historyId } from "./history-input.ts";
 import { historyTime, storedCycle, storedRevision } from "./history-read.ts";
+import type { LifecycleObservation } from "./lifecycle-contract.ts";
+import { lifecycleObservationSchema } from "./lifecycle-input.ts";
 import { recordPublicationBarrier } from "./publication-barrier.ts";
 import type { PublicationObservation } from "./publication-contract.ts";
 import { observationShowsPlay, statusShowsPlay } from "./publication-eligibility.ts";
@@ -165,6 +167,47 @@ export function createCutoffLockingService(options: Readonly<{
       return result;
     }, existingTransaction);
   }
+  async function voidCycle(input: VoidLockedCycleInput, existingTransaction?: Transaction, observation?: LifecycleObservation): Promise<CutoffResult> {
+    const action = parseCutoffVoid(input), target = { fixtureId: action.fixtureId, cycleId: action.cycleId };
+    if (observation) {
+      const status = observation.status;
+      const expectedReason = status === "postponed" ? "formal-postponement"
+        : status === "canceled" || status === "abandoned" || status === "awarded" ? `fixture-${status}` : null;
+      if (observation.fixtureId !== action.fixtureId || observation.actor !== action.actor || observation.evidenceRef !== action.evidenceRef ||
+        action.reason !== expectedReason && action.reason !== "locked-cutoff-invalidated") return cutoffFail("unauthorized");
+    }
+    const verifyLifecycleVoid = authority.verifyLifecycleVoid;
+    const authorizeVoid = () => observation && verifyLifecycleVoid
+      ? authorize("observe-void", target, () => verifyLifecycleVoid.call(authority, action, observation))
+      : authorize("void", target, () => authority.verifyVoid(action));
+    return mutate(target, async (writer, tx) => {
+      authorizeVoid();
+      const previous = await storedCutoffOperation(tx, target.cycleId, "void");
+      if (previous) {
+        if (previous.fixtureId !== target.fixtureId) return cutoffFail("wrong-cycle");
+        return cutoffResult(tx, previous);
+      }
+      const cycle = await storedCycle(tx, target.cycleId);
+      if (!cycle || cycle.fixtureId !== target.fixtureId || cycle.state === "void") return cutoffFail("wrong-cycle");
+      if (observation) {
+        const fixture = await tx.footballFixture.findUniqueOrThrow({ where: { id: target.fixtureId }, select: { activeCycleId: true } });
+        if (fixture.activeCycleId !== cycle.id || action.reason === "locked-cutoff-invalidated" && (cycle.state !== "closed" || !cycle.lockedSetId))
+          return cutoffFail("wrong-cycle");
+      }
+      const now = await serverNow(tx), id = evidenceFingerprint({ cycleId: cycle.id, kind: "void" });
+      const next = await writer.changeCycle({ actor: action.actor, reason: action.reason, evidenceRef: action.evidenceRef,
+        cycleId: cycle.id, expectedVersion: cycle.version, eventKey: id, at: now,
+        next: { state: "void", currentSetId: cycle.currentSetId, lockedSetId: cycle.lockedSetId, closedAt: cycle.closedAt ?? now,
+          lockedAt: cycle.lockedAt, voidedAt: now, voidReason: action.reason } });
+      const version = (await tx.footballFixture.findUniqueOrThrow({ where: { id: target.fixtureId }, select: { dataVersion: true } })).dataVersion;
+      const result = await save(tx, freezeEvidence({ id, ...target, kind: "void", fixtureVersion: version, at: now,
+        effectiveCloseAt: cycle.closedAt ?? now, actor: action.actor, reason: action.reason, evidenceRef: action.evidenceRef,
+        scheduleHash: evidenceFingerprint(await schedules(tx, target)), cycle: next }));
+      authorizeVoid();
+      if (await serverNow(tx) < now) return cutoffFail("unavailable");
+      return result;
+    }, existingTransaction);
+  }
   const service = Object.freeze({ scheduleCycle, close,
     async voidLockedCycle(input: VoidLockedCycleInput): Promise<CutoffResult> {
       const action = parseCutoffVoid(input);
@@ -192,30 +235,12 @@ export function createCutoffLockingService(options: Readonly<{
       const recovery = parseCutoffRecovery(input);
       return scheduleCycle({ fixtureId: recovery.fixtureId, cycleId: recovery.cycleId }, recovery);
     },
-    async voidCycle(input: VoidLockedCycleInput, existingTransaction?: Transaction): Promise<CutoffResult> {
-      const action = parseCutoffVoid(input), target = { fixtureId: action.fixtureId, cycleId: action.cycleId };
-      return mutate(target, async (writer, tx) => {
-        authorize("void", target, () => authority.verifyVoid(action));
-        const previous = await storedCutoffOperation(tx, target.cycleId, "void");
-        if (previous) {
-          if (previous.fixtureId !== target.fixtureId) return cutoffFail("wrong-cycle");
-          return cutoffResult(tx, previous);
-        }
-        const cycle = await storedCycle(tx, target.cycleId);
-        if (!cycle || cycle.fixtureId !== target.fixtureId || cycle.state === "void") return cutoffFail("wrong-cycle");
-        const now = await serverNow(tx), id = evidenceFingerprint({ cycleId: cycle.id, kind: "void" });
-        const next = await writer.changeCycle({ actor: action.actor, reason: action.reason, evidenceRef: action.evidenceRef,
-          cycleId: cycle.id, expectedVersion: cycle.version, eventKey: id, at: now,
-          next: { state: "void", currentSetId: cycle.currentSetId, lockedSetId: cycle.lockedSetId, closedAt: cycle.closedAt ?? now,
-            lockedAt: cycle.lockedAt, voidedAt: now, voidReason: action.reason } });
-        const version = (await tx.footballFixture.findUniqueOrThrow({ where: { id: target.fixtureId }, select: { dataVersion: true } })).dataVersion;
-        const result = await save(tx, freezeEvidence({ id, ...target, kind: "void", fixtureVersion: version, at: now,
-          effectiveCloseAt: cycle.closedAt ?? now, actor: action.actor, reason: action.reason, evidenceRef: action.evidenceRef,
-          scheduleHash: evidenceFingerprint(await schedules(tx, target)), cycle: next }));
-        authorize("void", target, () => authority.verifyVoid(action));
-        if (await serverNow(tx) < now) return cutoffFail("unavailable");
-        return result;
-      }, existingTransaction);
+    voidCycle(input: VoidLockedCycleInput, existingTransaction?: Transaction) {
+      return voidCycle(input, existingTransaction);
+    },
+    async voidObservedCycle(input: VoidLockedCycleInput, observation: LifecycleObservation, existingTransaction: Transaction) {
+      if (!existingTransaction) return cutoffFail("invalid-request");
+      return voidCycle(input, existingTransaction, parseCutoff(lifecycleObservationSchema, observation));
     },
   });
   return service;

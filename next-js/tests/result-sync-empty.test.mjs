@@ -3,7 +3,7 @@ import test from "node:test";
 import { parseUtcInstant } from "../src/domain/calendar.ts";
 import { evidenceFingerprint } from "../src/server/evidence/evidence-input.ts";
 import { createResultSyncService } from "../src/server/results/result-sync-service.ts";
-import { parseResultSyncPolicy } from "../src/server/results/result-sync-policy.ts";
+import { parseResultSyncPolicy, resultRecoveryMatchesPolicy } from "../src/server/results/result-sync-policy.ts";
 import { resultHash, resultPolicy, resultAuthority, resultProvider } from "./helpers/result-sync-fixtures.mjs";
 import { catalogFixture, catalogResponse } from "./helpers/catalog-fixtures.mjs";
 
@@ -101,6 +101,26 @@ test("a batch with fixture observations stays policy bound during recovery", asy
   assert.deepEqual(state.pending, [batch]);
   assert.equal(state.applied.length, 0);
   assert.equal(state.provider.network.length, 0);
+});
+
+test("authorized recovery resumes a sealed batch after unrelated coverage changes", async () => {
+  const observation = { actor: "fixture-result-sync", evidenceRef: resultPolicy().evidenceRef,
+    competitionExternalId: 39, season: 2026 };
+  const batch = { id: resultHash("older-verified-coverage"), accountId, policyHash: resultHash("previous-policy"),
+    channel: "ids", date: null, receivedAt: NOW - 60_000, requestedIds: [101], observations: [observation],
+    error: null, requestsDispatched: 1 };
+  const authorized = setup({ pending: [batch], authority: { verifyRecovery: resultRecoveryMatchesPolicy } });
+  assert.equal(await authorized.service.runOnce(), true);
+  assert.deepEqual(authorized.applied, [batch]);
+  assert.equal(authorized.order[0], `apply:${batch.id}`);
+  for (const change of [{ actor: "catalog" }, { evidenceRef: "other-reference" }, { competitionExternalId: 40 }, { season: 2025 }]) {
+    const outOfScope = { ...batch, observations: [observation, { ...observation, ...change }] };
+    const blocked = setup({ pending: [outOfScope], authority: { verifyRecovery: resultRecoveryMatchesPolicy } });
+    assert.equal(await blocked.service.runOnce(), false);
+    assert.deepEqual(blocked.pending, [outOfScope]);
+    assert.equal(blocked.applied.length, 0);
+    assert.equal(blocked.provider.network.length, 0);
+  }
 });
 
 test("an empty poll still requires response authority and the final schedule's lease fence", async () => {

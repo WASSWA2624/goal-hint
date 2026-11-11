@@ -26,6 +26,7 @@ import type { PredictorResult } from "../predictor/predictor-service.ts";
 import { liveAiEvidencePolicy, liveAiRefreshPlan } from "./live-ai-plan.ts";
 import { verifyLiveFootballSource } from "./live-ai-evidence.ts";
 import type { ResultSyncAuthority, ResultSyncPolicy } from "../results/result-sync-contract.ts";
+import { resultRecoveryMatchesPolicy } from "../results/result-sync-policy.ts";
 import type { LiveMatchAuthority, LiveMatchPolicy } from "../live-match/live-match-contract.ts";
 import type { SelectionAuthority, SelectionPolicy } from "../selection/selection-contract.ts";
 import { parseSelectionPolicy } from "../selection/selection-input.ts";
@@ -103,20 +104,25 @@ export function createLiveAuthorities(options: Readonly<{
       action.evidenceRef === `${refs.degradation}:${runDate}`,
     verifyCycleEligibility: () => false,
   });
+  const verifyLifecycleObservation: LifecycleAuthority["verifyObservation"] = (observation) =>
+    observation.endpoint.startsWith("/fixtures") && observation.retrievedAt <= now() + SKEW_MS &&
+    (observation.providerStatus === null ? observation.status === "unknown" : statuses.get(observation.providerStatus) === observation.status) &&
+    (observation.regulationScore === null || observation.regulationScore.verified === true);
   const cutoff: CutoffAuthority = Object.freeze({
     authorize(action) { if (action === "void" || action === "recover") throw new Error("Manual cutoff operation."); },
     verifyPolicy: (value) => same(value, expected.cutoff),
     verifyObservation: (observation) => observation.provider === "api-football" && observation.retrievedAt <= now() + SKEW_MS &&
       observation.evidenceRef.length > 0,
     verifyVoid: () => false,
+    verifyLifecycleVoid: (_action, observation) => verifyLifecycleObservation(observation) &&
+      (observation.actor === "fixture-result-sync" && observation.evidenceRef === refs.results ||
+        observation.actor === "catalog-schedule-lifecycle" && observation.evidenceRef.startsWith("catalog-import:")),
     verifyRecovery: () => false,
   });
   const lifecycle: LifecycleAuthority = Object.freeze({
     authorize() { /* Observation ingestion records stored provider evidence and dispatches nothing. */ },
     verifyPolicy: (value) => same(value, expected.lifecycle),
-    verifyObservation: (observation) => observation.endpoint.startsWith("/fixtures") && observation.retrievedAt <= now() + SKEW_MS &&
-      (observation.providerStatus === null ? observation.status === "unknown" : statuses.get(observation.providerStatus) === observation.status) &&
-      (observation.regulationScore === null || observation.regulationScore.verified === true),
+    verifyObservation: verifyLifecycleObservation,
   });
   const publication: PublicationAuthority = Object.freeze({
     authorize() { publish(); },
@@ -225,6 +231,10 @@ export function createLiveAuthorities(options: Readonly<{
     authorize() { football(); },
     verifyPolicy: (value) => { const current = options.resultPolicy(); return current !== null && same(value, current); },
     verifyResponse: (response) => pages(response, "fixtures", now()),
+    verifyRecovery: (batch, value) => {
+      const current = options.resultPolicy();
+      return current !== null && same(value, current) && resultRecoveryMatchesPolicy(batch, current);
+    },
   });
   const verifyStatusResponse = (result: ApiFootballResult<NormalizedFixture>, member: RefreshMember) => pages(result, "fixtures", now()) &&
     result.data.length <= 1 && result.data.every((row) => row.id === member.context.externalFixtureId);

@@ -3,6 +3,7 @@ import "server-only";
 import type { UtcInstant } from "../../domain/calendar.ts";
 import type { JobEnvelope } from "../jobs/job-contract.ts";
 import type { HistoryActor, StoredCycle, StoredRevision } from "./history-contract.ts";
+import type { LifecycleObservation } from "./lifecycle-contract.ts";
 import type { PublicationObservation } from "./publication-contract.ts";
 
 export class CutoffLockingError extends Error {
@@ -20,10 +21,11 @@ export type CutoffPolicy = Readonly<{ version: 1; evidenceRef: string;
 export type VoidLockedCycleInput = CutoffTarget & HistoryActor;
 export type CutoffRecoveryInput = CutoffTarget & HistoryActor & Readonly<{ recoveryKey: string }>;
 export type CutoffAuthority = Readonly<{
-  authorize(action: "schedule" | "close" | "observe-play" | "void" | "recover", target: CutoffTarget): void;
+  authorize(action: "schedule" | "close" | "observe-play" | "observe-void" | "void" | "recover", target: CutoffTarget): void;
   verifyPolicy(policy: CutoffPolicy): boolean;
   verifyObservation(observation: PublicationObservation): boolean;
   verifyVoid(input: VoidLockedCycleInput): boolean;
+  verifyLifecycleVoid?(input: VoidLockedCycleInput, observation: LifecycleObservation): boolean;
   verifyRecovery(input: CutoffRecoveryInput): boolean;
 }>;
 export type CutoffOperation = Readonly<{

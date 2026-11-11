@@ -3,8 +3,10 @@ import test from 'node:test';
 import { reconstructCutoff, revisionEligibleForLock } from '../src/server/predictions/cutoff-eligibility.ts';
 import { CutoffLockingError } from '../src/server/predictions/cutoff-contract.ts';
 import { cutoffEnvelope, parseCutoffPolicy } from '../src/server/predictions/cutoff-input.ts';
-import { createCutoffJob } from '../src/server/predictions/cutoff-service.ts';
-import { cutoffPolicy } from './helpers/cutoff-fixtures.mjs';
+import { createCutoffJob, createCutoffLockingService } from '../src/server/predictions/cutoff-service.ts';
+import { parseLifecycleInput } from '../src/server/predictions/lifecycle-input.ts';
+import { cutoffAuthority, cutoffPolicy } from './helpers/cutoff-fixtures.mjs';
+import { lifecycleInput } from './helpers/lifecycle-fixtures.mjs';
 
 const start = Date.parse('2026-10-09T08:00:00Z'), deadline = start + 3_600_000;
 const cycle = { id: '10000000-0000-4000-8000-000000000001', fixtureId: '10000000-0000-4000-8000-000000000002',
@@ -64,6 +66,21 @@ test('close envelopes are stable per accepted schedule and remain claimable afte
   assert.deepEqual(first, second); assert.equal(first.notBefore, cycle.cutoffAt); assert.equal(first.refresh, null);
   assert.ok(first.expiresAt > deadline + 365 * 86_400_000);
   assert.notEqual(cutoffEnvelope({ ...cycle, scheduleVersion: 2 }, cutoffPolicy()).idempotencyKey, first.idempotencyKey);
+});
+test('an observed void requires an enclosing transaction and binds its reason to fixture evidence', async () => {
+  const observation = parseLifecycleInput(lifecycleInput({ cycle, fixture: { id: cycle.fixtureId, externalId: 101 } },
+    deadline + 1, { status: 'AWD' }));
+  const input = { fixtureId: cycle.fixtureId, cycleId: cycle.id, actor: observation.actor,
+    reason: 'fixture-awarded', evidenceRef: observation.evidenceRef };
+  const service = createCutoffLockingService({ database: {}, queue: {}, policy: cutoffPolicy(), authority: cutoffAuthority() });
+  await assert.rejects(service.voidObservedCycle(input, observation), error => error.reason === 'invalid-request');
+  for (const mismatch of [
+    { fixtureId: '10000000-0000-4000-8000-000000000003' }, { actor: 'different-actor' },
+    { evidenceRef: 'different-evidence' }, { reason: 'fixture-canceled' },
+  ]) {
+    await assert.rejects(service.voidObservedCycle({ ...input, ...mismatch }, observation, {}),
+      error => error.reason === 'unauthorized');
+  }
 });
 test('superseded close jobs schedule the accepted cutoff instead of closing early', async () => {
   let scheduled = 0;

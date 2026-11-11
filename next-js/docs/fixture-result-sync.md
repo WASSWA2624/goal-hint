@@ -88,10 +88,12 @@ Reserve the next cadence before dispatch. Save `ResultSyncBatch` before applying
 fixtures. Its sealed body retains normalized lifecycle projections, original
 retrieval/update clocks, policy hash, requested IDs/date, request count and error.
 No raw payloads or secrets are stored. Only `completedAt` is mutable. Recovery
-drains pending batches before new requests. A different policy hash holds
-recovery of batches with fixture observations for reviewed configuration.
-An empty sealed receipt can be completed after a policy change because it has
-no fixture observations to apply.
+drains pending batches before new requests. An empty sealed receipt can be
+completed after a policy change because it has no fixture observations to apply.
+The live worker also authorizes older sealed observations when their actor,
+evidence reference and exact competition-seasons still match the active policy.
+Recovery outside that scope requires reviewed configuration. Fixture identity,
+lifecycle authorization and idempotent application still apply to each observation.
 
 A trusted, complete, error-free response with no in-scope lifecycle observations
 does not create an empty `ResultSyncBatch`. There are no fixture effects to
@@ -110,6 +112,9 @@ identity checks, schedule/start/conflict decisions and cutoff handling. Its
 receipt, result, observation, state and events commit together. An interruption
 between fixtures replays committed observations without duplicate results/events.
 Response-loss retries recover original records and clocks.
+
+Verified lifecycle decisions can void a cycle inside the same fixture transaction.
+The live worker still rejects manual void and recovery requests.
 
 `ResultProviderObservation` retains unchanged/stale/conflicting supplied evidence
 with a composite FK to the same fixture's lifecycle receipt. Unknown fixtures

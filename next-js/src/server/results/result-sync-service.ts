@@ -45,7 +45,8 @@ export function createResultSyncService(options: Readonly<{
         if (signal?.aborted) return false;
         // Empty failure receipts have no fixture writes to authorize. Close the
         // sealed receipt even if coverage changed while the poll was in flight.
-        if (batch.observations.length > 0 && batch.policyHash !== policyHash) return resultSyncFail("policy-required");
+        if (batch.observations.length > 0 && batch.policyHash !== policyHash && authority.verifyRecovery?.(batch, policy) !== true)
+          return resultSyncFail("policy-required");
         await renew(); await store.apply(lease!, batch);
         remaining--;
       }

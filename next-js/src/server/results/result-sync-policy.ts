@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { maximumCompetitionScope } from "../../domain/feed-query.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
-import { resultSyncFail, type ResultSyncPolicy, type TrackedResultFixture } from "./result-sync-contract.ts";
+import { resultSyncFail, type ResultSyncBatch, type ResultSyncPolicy, type TrackedResultFixture } from "./result-sync-contract.ts";
 
 const duration = z.number().int().positive().max(2_147_483_647);
 const tiers = z.array(z.strictObject({ untilAgeMs: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
@@ -30,6 +30,13 @@ const schema = z.strictObject({ version: z.literal(1), evidenceRef: z.string().t
 export function parseResultSyncPolicy(value: unknown): ResultSyncPolicy {
   const parsed = schema.safeParse(value);
   return parsed.success ? freezeEvidence(parsed.data) : resultSyncFail("policy-required");
+}
+
+/** Compatible stored observations retain their original seal, clocks, and receipt identity. */
+export function resultRecoveryMatchesPolicy(batch: ResultSyncBatch, policy: ResultSyncPolicy): boolean {
+  return batch.observations.every((observation) => observation.actor === "fixture-result-sync" &&
+    observation.evidenceRef === policy.evidenceRef && policy.coverage.some(({ competitionId, season }) =>
+      competitionId === observation.competitionExternalId && season === observation.season));
 }
 const specCadence = Object.freeze({ liveMs: 15_000, dateMs: 60_000, activeMs: 60_000 });
 export function resultCadence(policy: ResultSyncPolicy): NonNullable<ResultSyncPolicy["cadence"]> { return policy.cadence ?? specCadence; }

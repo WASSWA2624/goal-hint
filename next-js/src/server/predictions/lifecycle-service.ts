@@ -127,7 +127,7 @@ export function createScheduleLifecycleService(options: Readonly<{
             if (locked.publishedAt >= Math.min(cutoffAt, actualStartedAt ?? Infinity)) voidReason = "locked-cutoff-invalidated";
           }
           if (voidReason) {
-            await cutoff.voidCycle({ ...target, actor: observation.actor, reason: voidReason, evidenceRef: observation.evidenceRef }, tx);
+            await cutoff.voidObservedCycle({ ...target, actor: observation.actor, reason: voidReason, evidenceRef: observation.evidenceRef }, observation, tx);
             material = true;
           } else if (cycle.state === "open") {
             // close() reconstructs every earlier deadline before a later delay.

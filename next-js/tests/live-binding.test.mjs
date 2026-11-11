@@ -36,6 +36,23 @@ const refsEnv = {
   GOAL_HINT_QUALITY_QUALIFICATION_REF: 'synthetic-quality', GOAL_HINT_RELEASE_APPROVAL_REF: 'synthetic-release',
 };
 
+test('the live worker authorizes a verified fixture void without enabling manual voids', () => {
+  const policy = parseRuntimePolicy(refsEnv), refs = liveReferences(policy);
+  const selection = selectionPolicy(policy, refs, liveWorkload(150000, 12, 'Mega', 900));
+  const { cutoff } = createLiveAuthorities({ policy, verify: () => true, refs, selection, statusEvidenceRef: `${refs.freshness}#status`,
+    resultPolicy: () => null, clock: { now: () => NOW } });
+  const target = { fixtureId: '0ae713f1-54af-45e1-814c-8902e59ae2f6', cycleId: 'cfe189b5-82b6-4f14-9479-917ca029ba09' };
+  const action = { ...target, actor: 'fixture-result-sync', reason: 'fixture-awarded', evidenceRef: refs.results };
+  const observation = { ...action, endpoint: '/fixtures', retrievedAt: NOW, status: 'awarded', providerStatus: 'AWD', regulationScore: null };
+  assert.throws(() => cutoff.authorize('void', target), /Manual cutoff operation/);
+  assert.equal(cutoff.verifyVoid(action), false);
+  assert.doesNotThrow(() => cutoff.authorize('observe-void', target));
+  assert.equal(cutoff.verifyLifecycleVoid(action, observation), true);
+  assert.equal(cutoff.verifyLifecycleVoid(action, { ...observation, actor: 'operator' }), false);
+  assert.equal(cutoff.verifyLifecycleVoid(action, { ...observation, evidenceRef: 'other-results' }), false);
+  assert.equal(cutoff.verifyLifecycleVoid(action, { ...observation, providerStatus: 'FT' }), false);
+});
+
 function memoryQuotaStore(clock) {
   const accounts = new Map(), periods = new Map(), attempts = new Map();
   return { periods, async transaction(accountId, operation) {

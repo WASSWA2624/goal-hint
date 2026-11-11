@@ -32,6 +32,8 @@ export type ResultSyncAuthority = Readonly<{
   authorize(): void;
   verifyPolicy(policy: ResultSyncPolicy): boolean;
   verifyResponse(response: ApiFootballResult<NormalizedFixture>): boolean;
+  /** Optional authorization to replay a sealed receipt after configuration changes. */
+  verifyRecovery?(batch: ResultSyncBatch, policy: ResultSyncPolicy): boolean;
 }>;
 export type PollChannel = "live" | "date" | "ids";
 export type PollLease = Readonly<{
