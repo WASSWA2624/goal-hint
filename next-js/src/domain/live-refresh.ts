@@ -51,7 +51,9 @@ export function mergeLiveDetail(previous: MatchDetailResponse, next: MatchDetail
       : next.snapshot;
     // Odds groups (052) are observation data outside the revision: take the newer envelope's groups.
     return { ...previous, fixture: mergeFixtureObservation(previous.fixture, next.fixture), snapshot, asOf: next.asOf, run: next.run,
-      ...(next.odds === undefined ? {} : { odds: next.odds }), ...liveEnvelope };
+      ...(next.odds === undefined ? {} : { odds: next.odds }),
+      ...("inPlayOdds" in previous || "inPlayOdds" in next ? { inPlayOdds: next.inPlayOdds ?? null } : {}),
+      ...liveEnvelope };
   }
   return liveMatch === next.liveMatch ? next : { ...next, liveMatch };
 }

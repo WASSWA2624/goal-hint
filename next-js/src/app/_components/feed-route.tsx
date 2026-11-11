@@ -9,7 +9,7 @@ import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
 import { applyFeedPageDefaults, getFeedToday, isFeedDatePreset, serializeFeedQuery } from "@/domain/feed-query";
 import { feedQueryHref } from "@/domain/feed-query";
-import { feedPerformanceApiHref, performanceFeedQuery, type FeedPerformanceSeed } from "@/domain/feed-performance-summary";
+import { emptyFeedPerformanceReply, feedPerformanceApiHref, performanceFeedQuery, type FeedPerformanceSeed } from "@/domain/feed-performance-summary";
 import { synchronizeFeedStatusDates } from "@/domain/feed-controls";
 import { withoutSubscriberFeedOracle } from "@/domain/paywall";
 import { emptyArchiveIsMissing } from "@/domain/feed-date-navigation";
@@ -72,6 +72,10 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
       }
       result = await load(serializeFeedQuery(query, today).toString(), route.locale, at);
       if (result.error === "subscription-required") redirect(feedQueryHref(withoutSubscriberFeedOracle(query), today));
+      if (includeSummary && result.data) {
+        const reply = emptyFeedPerformanceReply(query, result.data);
+        if (reply) summary = Promise.resolve({ href: feedPerformanceApiHref(query, today), reply });
+      }
     } catch (error) { if (error instanceof MatchFeedError && error.code === "invalid-query") notFound(); throw error; }
     const discovery = feedDiscovery(query, today);
     // An empty day beyond the archive window is not a page; the day's cohort count ignores every filter. Strip,

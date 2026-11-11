@@ -30,16 +30,19 @@ async function pause(ms: number, signal: AbortSignal) { await sleep(ms, undefine
 
 /** Maintenance cadence: provider-day rollover, the daily selection schedule, result
  * polling ownership, settlement and cache recovery. Visitor requests trigger none of it. */
-async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () => void, log: (event: LiveEvent) => void) {
+async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () => void, log: (event: LiveEvent) => void,
+  localFootball: boolean) {
   let accountCheckedAt = Date.now(), scheduled = 0, pollerCheckedAt = 0, oddsScheduled = 0, teamCodesScheduled = 0;
   type Poller = Readonly<{ controller: AbortController; done: Promise<void>; policy: unknown }>;
   const owned: { poller: Poller | null; details: Poller | null } = { poller: null, details: null };
   const plan = runtime.day.status.plan, dailyLimit = runtime.day.status.dailyLimit;
   try {
     while (!signal.aborted) {
-      membersPurgeFor(runtime.database).maybePurge();
-      autoRenewFor(runtime.database).maybeSweep();
-      accountNotificationsFor(runtime.database).maybeSweep();
+      if (!localFootball) {
+        membersPurgeFor(runtime.database).maybePurge();
+        autoRenewFor(runtime.database).maybeSweep();
+        accountNotificationsFor(runtime.database).maybeSweep();
+      }
       const now = Date.now(), day = runtime.quota.current();
       if (!day || now - accountCheckedAt >= 10 * MINUTE) {
         try {
@@ -88,6 +91,10 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
         const expired = await runtime.odds.expire(500);
         if (expired > 0) log({ event: "odds-expired", fixtures: expired });
       } catch (error) { log({ event: "odds-expire-failed", reason: reason(error) }); }
+      try {
+        const inPlay = await runtime.inPlayOdds?.poll();
+        if (inPlay && (inPlay.requests > 0 || inPlay.changed > 0)) log({ event: "in-play-odds", ...inPlay });
+      } catch (error) { log({ event: "in-play-odds-failed", reason: reason(error) }); }
       if (now - pollerCheckedAt >= 5 * MINUTE) {
         pollerCheckedAt = now;
         try {
@@ -139,10 +146,16 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
 }
 
 /** Long-lived private process: one per shared provider account. */
-export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (event: LiveEvent) => void) {
+export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (event: LiveEvent) => void,
+  { localFootball = false }: { localFootball?: boolean } = {}) {
   while (!signal.aborted) {
     let runtime: LiveRuntime;
-    try { runtime = await createLiveRuntime(policy); }
+    const pollerStates = new Map<string, string>();
+    try { runtime = await createLiveRuntime(policy, { localFootball, ...(localFootball ? { onPollerState: (kind, state) => {
+      if (pollerStates.get(kind) === state) return;
+      pollerStates.set(kind, state);
+      log({ event: "poller-state", kind, state });
+    } } : {}) }); }
     catch (error) {
       if (error instanceof LiveConfigurationError) throw error;
       const why = reason(error);
@@ -150,15 +163,18 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
       log({ event: "start-delayed", reason: why }); await pause(why === "settling" ? 30_000 : MINUTE, signal); continue;
     }
     const epoch = new AbortController(), stop = AbortSignal.any([signal, epoch.signal]), { workload } = runtime;
+    // The snapshot uses the same local MySQL server for reads, collection and publication.
+    // Bound background claim concurrency so browsing can share it during a large catch-up.
+    const workersPerRun = localFootball ? Math.min(2, workload.workers) : workload.workers;
     log({ event: "ready", plan: runtime.day.status.plan, dailyLimit: workload.dailyLimit, usedToday: runtime.day.status.usedToday,
-      refreshCapacity: workload.refreshCapacity, workers: workload.workers, liveMs: workload.cadence.liveMs, dateMs: workload.cadence.dateMs,
+      refreshCapacity: workload.refreshCapacity, workers: workersPerRun, liveMs: workload.cadence.liveMs, dateMs: workload.cadence.dateMs,
       // `oddsSwitch` true with `odds` false means the owner enabled imports but this plan is not eligible; the same
       // holds for `teamCodesSwitch` and `teamCodes`, which share the odds spare.
       odds: runtime.odds.enabled, oddsSwitch: policy.choices.odds.enabled, oddsSpare: workload.odds.spare,
       teamCodes: runtime.teamCodes.enabled, teamCodesSwitch: policy.choices.teamCodes.enabled,
       liveDetails: workload.liveDetails.eligible, liveDetailsSwitch: policy.choices.liveDetails.enabled,
       liveDetailsRequests: workload.liveDetails.requests });
-    const workers = Array.from({ length: workload.workers }, () => createJobWorker({ queue: runtime.queue, registry: runtime.registry,
+    const workers = Array.from({ length: workersPerRun }, () => createJobWorker({ queue: runtime.queue, registry: runtime.registry,
       ownerId: randomBytes(32).toString("hex"), onEvent: (event) => {
         if (event.kind !== "claimed") log({ event: `job-${event.kind}`, jobId: event.jobId?.slice(0, 12) ?? null, reason: event.reason });
       } }).run(stop));
@@ -170,7 +186,7 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
         if (event.kind !== "claimed") log({ event: `enrichment-job-${event.kind}`, jobId: event.jobId?.slice(0, 12) ?? null, reason: event.reason });
       } }).run(stop);
     try {
-      await Promise.all([...workers, enrichmentWorker, maintain(runtime, stop, () => epoch.abort(), log).finally(() => epoch.abort())]);
+      await Promise.all([...workers, enrichmentWorker, maintain(runtime, stop, () => epoch.abort(), log, localFootball).finally(() => epoch.abort())]);
     } finally { await runtime.close().catch(() => {}); }
   }
 }

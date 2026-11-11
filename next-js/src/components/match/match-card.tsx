@@ -12,6 +12,7 @@ import { countryCode, countryDisplayName, countryShortName } from "@/domain/coun
 import { countryFlagAsset } from "@/domain/country-flag";
 import { compactLeagueName, compactMarketName } from "@/domain/compact-fixture-label";
 import { bestCardFamily, noPickReason } from "@/domain/feed-presentation";
+import { hasPublishedForecastWithoutPick } from "@/domain/recommendation-view";
 import { defaultMarkets } from "@/domain/feed-query";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import { cardResultStatus, hasFinalScoreStatus, sameCardFixture, selectedCardPrediction, selectedCardPrice, snapshotCardPrediction, type CardSnapshotPick } from "@/domain/match-card";
@@ -619,7 +620,9 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const showProgress = !offline && (showScore || final || clock !== null || snapshotPick !== undefined && fixture.score !== null
     || fixture.status !== "scheduled" && fixture.status !== "unknown" && fixture.status !== result);
   const missing = gated || prediction ? null : noPickReason(fixture);
-  const reason = missing ? messages.text(`match.noPickReason.${missing}`) : null;
+  const forecastAvailable = !!missing && !offline && hasPublishedForecastWithoutPick(fixture.forecast, eligible);
+  const noPickLabel = messages.text(forecastAvailable ? "match.forecastAvailable" : "match.noPick");
+  const reason = forecastAvailable ? messages.text("match.noRecommendedPick") : missing ? messages.text(`match.noPickReason.${missing}`) : null;
   const pickState = gated ? "subscriber" : !prediction ? "none" : settledOutcome(outcome) ? "settled" : "open";
   if (desktop) {
     const marketDescription = offline ? "Predictions are unavailable in the saved view."
@@ -648,9 +651,9 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       offline={offline} interactive={interactive} eagerLogos={eagerLogos} {...(!gated && !offline ? { marketFamily: shownFamily } : {})}
       {...(marketDescription ? { marketDescription } : {})}
       market={offline ? <span>Unavailable offline</span> : gated ? <><SubscriberIcon /><span data-subscriber-notice>{messages.text("paywall.unlock")}</span></> : <>
-        <span data-market-label aria-hidden="true">{compactMarketName(shownFamily)}</span>
+        {!forecastAvailable && <span data-market-label aria-hidden="true">{compactMarketName(shownFamily)}</span>}
         <strong data-pick-label data-no-pick={missing ?? undefined} title={publication || undefined}>
-          {selection ? <span data-pick-selection>{predictionLabel(messages, selection)}</span> : messages.text("match.noPick")}
+          {selection ? <span data-pick-selection>{predictionLabel(messages, selection)}</span> : noPickLabel}
         </strong>
       </>}
       odds={<span data-card-odds data-pick-price={prediction ? "" : undefined}>{price?.price ?? "—"}</span>}
@@ -696,9 +699,9 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       </> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale}>
         <PickShort $family={shownFamily} $available={prediction !== null} data-ledger-field="prediction" aria-hidden="true" data-no-pick={missing ?? undefined}>
           {selection ? <span data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection)}>{predictionLabel(messages, selection)}</span></span> : <>
-            <b data-mobile-only="">{messages.text("match.noPick")}</b>
-            <span data-pick-value="" data-mobile-only="">{messages.text(`match.noPickReason.short.${missing!}`)}</span>
-            <span data-pick-value="" data-desktop-only="">{messages.text("match.noPick")}</span>
+            <b data-mobile-only="">{noPickLabel}</b>
+            <span data-pick-value="" data-mobile-only="">{messages.text(forecastAvailable ? "match.noRecommendedPick" : `match.noPickReason.short.${missing!}`)}</span>
+            <span data-pick-value="" data-desktop-only="">{noPickLabel}</span>
           </>}
         </PickShort>
         <span data-match-metrics><Odds data-ledger-field="odds" data-stack-label={messages.text("details.odds")} aria-hidden="true" data-card-odds data-pick-price={prediction ? "" : undefined}>{price?.price ?? "—"}</Odds>

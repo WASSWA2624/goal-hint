@@ -7,7 +7,7 @@ import { interceptContextBack, rememberContextArrival, rememberContextOrigin } f
 /** Uses the router's real lifecycle, including cancelled and superseded navigations. */
 function PendingNavigation() {
   const { pending } = useLinkStatus();
-  return <span hidden data-navigation-pending={pending ? "" : undefined} />;
+  return pending ? <span hidden data-navigation-pending /> : null;
 }
 
 function ContextArrival() {

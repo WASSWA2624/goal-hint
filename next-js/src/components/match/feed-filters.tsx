@@ -47,7 +47,7 @@ export function FeedFilters({ query, today, leagues, onApply, subscriberOnly = f
   const countryList = useMemo(() => countryOptions(leagues), [leagues]);
   const count = panelFilterCount(query) + Number(query.status !== "all") + Number(!!query.result)
     + Number(query.dates.kind !== matchFeedPageDefaults.dates.kind)
-    + Number(query.picks !== defaultPagePicks(query.status, subscriberOnly))
+    + Number(query.picks !== defaultPagePicks(query.status, subscriberOnly, query.dates))
     + Number(query.sort.by !== matchFeedPageDefaults.sort.by || query.sort.direction !== matchFeedPageDefaults.sort.direction);
   const locked = subscriberOnly && draft.query.status !== "finished", live = draft.query.status === "live";
   const allMarkets = draft.query.markets.length === publicPolicy.markets.length;

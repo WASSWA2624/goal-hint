@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { appendFeedPage, checkedFeedPage, feedPageApiHref, feedPageHref, initialLoadedFeed, replaceFeedPages } from '../src/domain/feed-pagination.ts';
+import { appendFeedPage, applyServerFeedPage, checkedFeedPage, feedPageApiHref, feedPageHref, initialLoadedFeed, replaceFeedPages } from '../src/domain/feed-pagination.ts';
 import { feedCheckpointSchema, matchingFeedCheckpoint, readFeedCheckpoints, restorationRules, writeFeedCheckpoint } from '../src/domain/feed-navigation.ts';
 import { resolveFeedDates, feedQueryKey } from '../src/domain/feed-query.ts';
 import { matchFeedResponseSchema } from '../src/domain/match-feed.ts';
@@ -53,6 +53,15 @@ test('rebasing replaces ordered membership atomically and never rolls whole snap
   changed.records[1]=record('a','8','Older'); assert.throws(()=>replaceFeedPages(old,[changed,second]),e=>e.code==='stale-data');
   assert.throws(()=>replaceFeedPages(old,[first,page(2,['b','c'],version)]),e=>e.code==='changed');
   assert.equal(old.records.length,4);
+});
+test('a same-route server refresh shows new fixtures in place and ignores an older poll', () => {
+  const previous = initialLoadedFeed(page(1, ['a', 'b']));
+  const serverPage = page(1, ['a', 'c'], otherVersion, { asOf: now + 10 });
+  const updated = applyServerFeedPage(previous, serverPage);
+  assert.deepEqual(updated.records.map(row => row.fixtureId), ['a', 'c']);
+  assert.equal(updated.data.asOf, now + 10);
+  assert.equal(applyServerFeedPage(updated, previous.data), updated);
+  assert.throws(() => replaceFeedPages(updated, [previous.data]), error => error.code === 'stale-data');
 });
 test('continuous browsing retains a bounded page window and can restore that window after navigation', () => {
   const batch = (number) => page(number, [`a-${number}`, `b-${number}`], version, {

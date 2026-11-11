@@ -16,11 +16,31 @@ prices only after independently estimated probabilities and football evidence
 qualify. New sealed per-fixture quote manifests record bet hashes and original
 kickoff; the immutable recommendation keeps the exact quote and observation
 receipt. Older receipts remain readable but cannot establish a newly priced
-recommendation until a permitted observation supplies a manifest. Public odds
+recommendation until a permitted observation supplies a manifest. Hosted odds
 display remains disabled. Acquisition, internal retention/use and public display
 retain separate permission checks.
 
-## Current status
+## In-play odds in local development
+
+The isolated local worker uses one shared `/odds/live` request per 30-second
+slot while a stored fixture is live or near kickoff. A MySQL fence prevents
+two workers from spending on the same slot. The worker verifies the separate
+`/odds/live/bets` catalog daily and shares the normal enrichment quota.
+
+The Markets & Odds tab displays current prices for verified live market IDs
+under its existing access rules. A suspended primary price withholds its
+market. A complete response withdraws offers it no longer contains, and prices
+expire after 90 seconds without confirmation. In-play prices live in their own
+current projection, so they cannot alter pre-match recommendations or sealed
+closing quotes.
+
+The pre-match catalog can contain an explicitly unnamed ID. The importer
+records its missing name and keeps it out of the mapping. Duplicate IDs still
+make a catalog incomplete. The local worker's `--qualify-odds` mode requests
+only missing daily catalogs and rebuilds eligible prices from sealed local
+snapshots without repeating a fixture sweep.
+
+## Hosted configuration
 
 - **Imports are off.** `GOAL_HINT_ODDS_IMPORT_ENABLED` defaults to `false`, and
   the runner also requires a plan with spare ordinary quota. The Free plan is

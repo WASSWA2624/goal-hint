@@ -14,6 +14,8 @@ export const quotaPriorities = Object.freeze({
 } as const);
 
 export type QuotaPriority = keyof typeof quotaPriorities;
+/** Endpoint paths only, without request parameters or credentials. */
+export const quotaEndpointPattern = /^\/(?:[a-z][a-z0-9-]*)(?:\/[a-z][a-z0-9-]*){0,2}$/u;
 /** The essential reserve is 20,000 of the 120,000-request ceiling. Smaller verified
  * plans keep the same one-sixth share, so ordinary daily work still has capacity. */
 export function essentialReserveFor(dayLimit: number): number {
@@ -31,6 +33,8 @@ export type QuotaPeriodEvidence = Readonly<{
   secondLimit: number;
   minuteLimit: number;
   evidenceRef: string;
+  /** Time of an exact provider account usage observation, when available. */
+  observedAt?: UtcInstant;
 }>;
 export type QuotaEvidenceVerifier = (
   evidence: QuotaPeriodEvidence,
@@ -67,6 +71,7 @@ export type QuotaPeriodState = {
   observationRevision: number;
   /** Durable dispatch counts; absent only in periods created before this contract. */
   priorityUsed?: Partial<Record<QuotaPriority, number>> | undefined;
+  providerUsage?: { observedAt: UtcInstant; limit: number; remaining: number } | undefined;
 };
 export type QuotaRequest = Readonly<{
   requestId: string;
@@ -74,6 +79,8 @@ export type QuotaRequest = Readonly<{
   priority: QuotaPriority;
   deadlineAt: UtcInstant;
   timeoutMs: number;
+  endpoint?: string;
+  retry?: boolean;
 }>;
 export type QuotaAttempt = {
   id: string;
@@ -93,6 +100,8 @@ export type QuotaAttempt = {
   responseKind: QuotaFeedback["kind"] | null;
   launchedAt: UtcInstant | null;
   observationRevision: number;
+  endpoint?: string | undefined;
+  retry?: boolean | undefined;
 };
 export type QuotaFeedback = Readonly<{
   kind: "success" | "uncertain" | "rate-limited" | "credential-failure" | "subscription-expired" | "provider-error";

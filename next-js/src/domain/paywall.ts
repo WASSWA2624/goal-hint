@@ -29,8 +29,8 @@ export function gateFeedResponse(response: StoredMatchFeedResponse, access: Cont
 
 export function gateDetailResponse(response: StoredMatchDetailResponse, access: ContentAccess): MatchDetailResponse {
   if (access.tier === "full" || isCompletedFixtureStatus(response.fixture.status)) return { ...response, access: wireAccess(access) };
-  const { odds: _odds, ...rest } = response;
-  void _odds;
+  const { odds: _odds, inPlayOdds: _inPlayOdds, ...rest } = response;
+  void _odds; void _inPlayOdds;
   const snapshot = response.snapshot;
   return { ...rest, ...(response.liveMatch !== undefined ? { liveMatch: null } : {}), fixture: gateFixture(response.fixture, access), history: { gated: true },
     snapshot: snapshot ? { gated: true, revisionId: snapshot.revisionId, cycleId: snapshot.cycleId, historical: snapshot.historical,

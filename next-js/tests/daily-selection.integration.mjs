@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { execFile } from "./helpers/command-runtime.mjs";
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
 import test from 'node:test';
-import { getReportingDate } from '../src/domain/calendar.ts';
+import { getReportingDate, getReportingDayBounds } from '../src/domain/calendar.ts';
 import { parseRuntimePolicy } from '../src/server/config/runtime-policy.ts';
 import { createDatabase } from '../src/server/database/client.ts';
 import { createFootballCatalogStore } from '../src/server/football/catalog-mysql-store.ts';
@@ -19,24 +19,28 @@ import { selectionDateState } from '../src/server/selection/selection-read.ts';
 import { createDailySelectionService } from '../src/server/selection/selection-service.ts';
 import { catalogFixture as rawCatalogFixture, catalogRequest, catalogResponse, createSyntheticCatalogAdapter } from './helpers/catalog-fixtures.mjs';
 import { jobTestEnvironment } from './helpers/job-fixtures.mjs';
-import { selectionPolicy, selectionAuthority, catalogSelectionAuthority, degradedAction, selectionHash, SELECTION_FOR } from './helpers/selection-fixtures.mjs';
+import { selectionPolicy, selectionAuthority, catalogSelectionAuthority, degradedAction, selectionHash } from './helpers/selection-fixtures.mjs';
 import { MysqlServerUnavailableError, startIsolatedMysql } from './helpers/mysql-instance.mjs';
 
 const execute = promisify(execFile), workspace = fileURLToPath(new URL('../', import.meta.url));
 const script = fileURLToPath(new URL('../scripts/database.py', import.meta.url));
+const prisma = fileURLToPath(new URL('../node_modules/prisma/build/index.js', import.meta.url));
 const denied = (reason) => (error) => error instanceof DailySelectionError && error.reason === reason;
 // Import receipts and audits are append-only, matching the application role.
 const catalogAppendOnly = ['FootballFixtureAudit', 'FootballImport'];
 const catalogTables = ['FootballCatalogLock','FootballTeam','FootballTeamProvider','FootballTeamAlias','FootballCompetition',
   'FootballCompetitionProvider','FootballCompetitionAlias','FootballSeason','FootballFixture','FootballIdentityReview', ...catalogAppendOnly];
 const day = 86_400_000;
-const occurrence = (offset) => SELECTION_FOR + offset * day;
+// The integration uses the real MySQL clock to enforce publication cutoffs.
+const firstOccurrence = getReportingDayBounds(getReportingDate(Date.now())).startInclusive;
+const occurrence = (offset) => firstOccurrence + offset * day;
+const reportingDate = (offset) => getReportingDate(occurrence(offset));
 const kickoff = (offset, hours = 12) => new Date(occurrence(offset) + hours * 3_600_000).toISOString();
 const actor = { actor: 'synthetic-lifecycle', reason: 'Synthetic formal lifecycle decision', evidenceRef: 'synthetic-formal-lifecycle-proof' };
 const catalogFixture = (id, options = {}) => rawCatalogFixture(id, { competitionId: id < 1100 ? 39 : Math.floor(id / 100) + 30, ...options });
 const policyFor = (rows) => selectionPolicy({ competitionIds: [rows[0]?.league.id ?? 39] });
 
-test('daily selection manifests and recovery on isolated genuine MySQL', { timeout: 300_000 }, async (t) => {
+test('daily selection manifests and recovery on isolated genuine MySQL', { timeout: 420_000 }, async (t) => {
   let instance;
   try { instance = await startIsolatedMysql(); }
   catch (error) { if (!(error instanceof MysqlServerUnavailableError)) throw error; t.skip(`${error.message} Selection acceptance remains pending.`); return; }
@@ -50,7 +54,8 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
     await instance.executeAdmin(`CREATE USER 'selection_app'@'127.0.0.1' IDENTIFIED BY '${applicationPassword}';
       CREATE USER 'selection_migration'@'127.0.0.1' IDENTIFIED BY '${migrationPassword}';
       GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, TRIGGER ON goal_hint_test.* TO 'selection_migration'@'127.0.0.1';`);
-    try { await execute(process.execPath, ['--conditions=react-server', script, 'deploy'], { cwd: workspace, env, windowsHide: true, timeout: 90_000 }); }
+    // This harness owns the isolated URL. Allow the full migration set more time on busy development hosts.
+    try { await execute(process.execPath, [prisma, 'migrate', 'deploy'], { cwd: workspace, env, windowsHide: true, timeout: 240_000 }); }
     catch (error) {
       const diagnostic = await instance.executeAdmin("SELECT migration_name, LEFT(logs, 1800) FROM _prisma_migrations WHERE finished_at IS NULL");
       t.diagnostic(diagnostic.stdout); throw error;
@@ -117,7 +122,7 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
       const second = await setup({ rows, policy }).service.run(occurrence(0)); assert.equal(second.status, 'busy'); release();
       const result = await first; assert.equal(result.total, 2); assert.equal(state.provider.network.length, 7);
       const manifest = (await store.inspect(result.runId)).manifest;
-      assert.equal(manifest.partial, false); assert.equal(manifest.sequence, '20261009'); assert.equal(manifest.coverage.length, 7);
+      assert.equal(manifest.partial, false); assert.equal(manifest.sequence, reportingDate(0).replaceAll('-', '')); assert.equal(manifest.coverage.length, 7);
       assert.deepEqual(manifest.exclusions.map((entry) => entry.reason).sort(), ['competition-ineligible','status-ineligible']);
       assert.ok(manifest.entries[0].kickoffAt < manifest.entries[1].kickoffAt);
       assert.equal(manifest.entries[0].envelope.priority, 255); assert.equal(manifest.entries[1].envelope.priority, 254);
@@ -130,12 +135,12 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
     await t.test('pagination failure retries without dispatch; restart resumes only incomplete dates and keeps receipts', async () => {
       let fail = true; const row = catalogFixture(1101, { kickoff: kickoff(2) });
       const state = setup({ rows: [row], respond: (url) => catalogResponse(url, getReportingDate(Date.parse(row.fixture.date)) === url.searchParams.get('date') ? [row] : [],
-        fail && url.searchParams.get('date') === '2026-10-12' ? { paging: { current: 1, total: 2 } } : {}) });
+        fail && url.searchParams.get('date') === reportingDate(3) ? { paging: { current: 1, total: 2 } } : {}) });
       await assert.rejects(state.service.run(occurrence(1)), denied('incomplete-import'));
       const id = await runId(occurrence(1)), before = await store.inspect(id);
       assert.equal(before.manifest, null); assert.equal(await database.query((tx) => tx.durableJob.count({ where: { refreshRunId: id } })), 0);
-      assert.equal(state.provider.network.filter((entry) => entry.url.searchParams.get('date') === '2026-10-12').length, 2);
-      assert.ok(before.coverage.find((entry) => entry.date === '2026-10-12').status !== 'complete');
+      assert.equal(state.provider.network.filter((entry) => entry.url.searchParams.get('date') === reportingDate(3)).length, 2);
+      assert.ok(before.coverage.find((entry) => entry.date === reportingDate(3)).status !== 'complete');
       const calls = state.provider.network.length; fail = false;
       const restarted = createDailySelectionService({ cutoff: { scheduleRun: async () => {} }, policy: state.policy, authority: selectionAuthority(), store: createMysqlDailySelectionStore(replica(), queue), importer: state.importer });
       assert.equal((await restarted.run(occurrence(1))).total, 1);
@@ -144,13 +149,13 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
     });
     await t.test('explicit partial finalization records its action and missing date, never false empty; late discoveries cannot join', async () => {
       const row = catalogFixture(1201, { kickoff: kickoff(3) });
-      const state = setup({ rows: [row], respond: (url) => url.searchParams.get('date') === '2026-10-13'
+      const state = setup({ rows: [row], respond: (url) => url.searchParams.get('date') === reportingDate(4)
         ? catalogResponse(url, [], { status: 500 }) : catalogResponse(url,
           getReportingDate(Date.parse(row.fixture.date)) === url.searchParams.get('date') ? [row] : []) });
       await assert.rejects(state.service.run(occurrence(2)), denied('incomplete-import'));
       const result = await state.service.run(occurrence(2), degradedAction), snapshot = (await store.inspect(result.runId)).manifest;
       assert.equal(snapshot.partial, true); assert.deepEqual(snapshot.degradedAction, degradedAction);
-      assert.equal(selectionDateState(snapshot, '2026-10-13').state, 'data-unavailable');
+      assert.equal(selectionDateState(snapshot, reportingDate(4)).state, 'data-unavailable');
       const late = catalogFixture(1202, { kickoff: kickoff(4) });
       const lateProvider = createSyntheticCatalogAdapter({ rows: [late] });
       await createFootballCatalogImporter({ adapter: lateProvider.adapter, store: catalog, authority: catalogSelectionAuthority, clock: lateProvider.clock })
@@ -172,7 +177,7 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
     await t.test('crash after a catalog receipt but before run receipt completion reuses the original import without fetching', async () => {
       const state = setup({ rows: [catalogFixture(1301, { kickoff: kickoff(5) })] }), policy = parseSelectionPolicy(state.policy);
       const lease = await store.acquire(selectionWindow(occurrence(4)).runDate, policy, selectionHash('crashed-import-owner'));
-      const pending = await store.beginImport(lease, '2026-10-13', policy); await state.importer.import(pending.request);
+      const pending = await store.beginImport(lease, reportingDate(4), policy); await state.importer.import(pending.request);
       await instance.executeAdmin(`UPDATE DailyRun SET leaseExpiresAt = UTC_TIMESTAMP(3) - INTERVAL 1 SECOND WHERE id = '${lease.runId}'`);
       const before = state.provider.network.length; const result = await state.service.run(occurrence(4));
       assert.equal(result.total, 1); assert.equal(state.provider.network.length - before, 6);
@@ -280,7 +285,11 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
       await assert.rejects(database.query((tx) => tx.runFixture.update({ where: { runId_fixtureId_cycleId: {
         runId: id, fixtureId: original.fixtureId, cycleId: original.cycleId } },
         data: { jobId: unrelated.id, jobState: 'pending', terminalReason: null } })));
-      await assert.rejects(setup({ policy: selectionPolicy({ competitionIds: [40] }) }).service.run(occurrence(0)), denied('conflicting-request'));
+      const committed = (await store.inspect(id)).manifest;
+      const changed = setup({ policy: selectionPolicy({ competitionIds: [40] }), respond() { assert.fail('committed policy must be reused'); } });
+      assert.equal((await changed.service.run(occurrence(0))).runId, id);
+      assert.equal(changed.provider.network.length, 0);
+      assert.deepEqual((await store.inspect(id)).manifest, committed);
     });
     await t.test('refresh capacity keeps the nearest kickoffs and records later fixtures as deferred without cycles', async () => {
       // Provider IDs deliberately invert kickoff order so ID order cannot satisfy the budget.
@@ -313,6 +322,39 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
       assert.deepEqual(manifest.coverage.map((entry) => entry.status), ['complete', 'complete', 'failed', 'failed', 'failed', 'failed', 'failed']);
       assert.ok(manifest.coverage.slice(2).every((entry) => entry.missingCoverage.includes('date-not-retrieved')));
       assert.throws(() => parseSelectionPolicy({ ...policy, importDays: 8 }));
+    });
+    await t.test('a large stored cohort commits one sealed selection without reimporting its fixtures', async (t) => {
+      const fixture = catalogFixture(2501, { kickoff: kickoff(27) });
+      const policy = { ...policyFor([fixture]), maxFixtures: 3000, refreshCapacity: 2000 };
+      const { state, lease, parsed } = await stage(26, [fixture], policy);
+      const seed = await database.query((tx) => tx.footballFixture.findUniqueOrThrow({
+        where: { provider_externalId: { provider: 'api-football', externalId: 2501n } },
+      }));
+      for (let offset = 0; offset < 2049; offset += 500) {
+        await database.query((tx) => tx.footballFixture.createMany({ data: Array.from({ length: Math.min(2049 - offset, 500) }, (_, index) => ({
+          ...seed, id: randomUUID(), externalId: BigInt(70_000 + offset + index),
+        })) }));
+      }
+      const calls = state.provider.network.length;
+      for (let offset = 26; offset < 33; offset++) assert.equal(await store.beginImport(lease, reportingDate(offset), parsed), null);
+      const started = Date.now(), manifest = await store.commit(lease, parsed, null);
+      t.diagnostic(`Committed ${manifest.entries.length} stored fixtures in ${Date.now() - started} ms.`);
+      assert.equal(state.provider.network.length, calls);
+      assert.equal(manifest.entries.length, 2000);
+      assert.equal(manifest.exclusions.filter((entry) => entry.reason === 'refresh-capacity').length, 50);
+      assert.equal(await database.query((tx) => tx.runFixture.count({ where: { runId: manifest.runId } })), 2000);
+      for (const entry of [manifest.entries[0], manifest.entries.at(-1)]) {
+        const cycle = await history.findCycle(entry.cycleId);
+        assert.equal(cycle.fixtureId, entry.fixtureId);
+        assert.equal(cycle.ordinal, 1);
+        const audit = await database.query((tx) => tx.$queryRaw`SELECT kind,
+          integrity = SHA2(CONCAT(eventKey, ':', requestHash, ':', CAST(beforeJson AS CHAR), ':', CAST(afterJson AS CHAR)), 256) AS sealed
+          FROM PredictionAudit WHERE cycleId = ${cycle.id}`);
+        assert.equal(audit[0].kind, 'cycle-created');
+        assert.equal(Number(audit[0].sealed), 1);
+      }
+      assert.deepEqual(await store.commit(lease, parsed, null), manifest);
+      await store.release(lease);
     });
   } finally {
     await Promise.all(databases.map((db) => db.disconnect().catch(() => {}))); await instance.stop();

@@ -67,3 +67,11 @@ export function replaceFeedPages(previous: LoadedFeed, pages: readonly MatchFeed
   });
   return { ...next, records };
 }
+
+/** A same-route server refresh replaces the visible page in place. */
+export function applyServerFeedPage(previous: LoadedFeed, page: MatchFeedResponse): LoadedFeed {
+  if (page === previous.data || page.page !== previous.firstPage) return previous;
+  if (page.access.tier !== previous.data.access.tier || page.access.signedIn !== previous.data.access.signedIn) return initialLoadedFeed(page);
+  try { return replaceFeedPages(previous, [page]); }
+  catch (error) { if (error instanceof FeedPaginationError && error.code === "stale-data") return previous; throw error; }
+}

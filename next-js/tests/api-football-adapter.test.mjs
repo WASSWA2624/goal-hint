@@ -208,13 +208,16 @@ test("authorization, unavailable quota state and joined shared work never reach 
 });
 
 test("failed durable completion withholds the fetched value and prevents it from entering the cache", async () => {
+  let observedPages = 0;
   const state = setup({ respond: (url) => jsonResponse(url, [fixture()]),
+    options: { observeFixturePage: () => { observedPages++; } },
     completionDecision: { status: "denied", reason: "storage-unavailable" } });
   const input = bounds({ cacheMaxAgeMs: 10_000 });
   for (let attempt = 0; attempt < 2; attempt++) {
     const result = await state.adapter.evidence.fixtures({ fixtureId: 1 }, input);
     assert.equal(result.status, "failed");
     assert.equal(result.error.reason, "quota-denied");
+    assert.equal(observedPages, 0);
     assert.equal(result.error.quotaReason, "storage-unavailable");
     assert.equal(result.data.length, 0);
   }
@@ -286,6 +289,9 @@ test("bounded retries acquire fresh attempts, retain canonical work identity and
   assert.equal(state.reservations.length, 2);
   assert.notEqual(state.reservations[0].requestId, state.reservations[1].requestId);
   assert.equal(state.reservations[0].workKey, state.reservations[1].workKey);
+  assert.deepEqual(state.reservations.map(({ endpoint, retry }) => ({ endpoint, retry })), [
+    { endpoint: "/fixtures", retry: false }, { endpoint: "/fixtures", retry: true },
+  ]);
   assert.deepEqual(state.completions.map(({ feedback }) => feedback.kind), ["rate-limited", "success"]);
 });
 
@@ -1131,6 +1137,19 @@ test("odds catalogs are single unpaginated pages of unique, named entries", asyn
   assert.equal((await wrongEndpoint.adapter.odds.bookmakers(bounds())).error.reason, "schema-error");
 });
 
+test("explicitly unnamed pre-match catalog placeholders cannot hide a conflicting ID", async () => {
+  for (const method of ["bets", "bookmakers"]) {
+    const named = { id: 1, name: "Reviewed name" };
+    const state = setup({ respond: (url) => jsonResponse(url, [named, { id: 2, name: null }]) });
+    const result = await state.adapter.odds[method](bounds());
+    assert.equal(result.status, "complete");
+    assert.deepEqual(result.data.map(({ id, name }) => ({ id, name })), [named]);
+    assert.ok(result.completeness.missingCoverage.includes("odds-catalog-name:2"));
+    const ambiguous = setup({ respond: (url) => jsonResponse(url, [{ id: 1, name: null }, named]) });
+    assert.equal((await ambiguous.adapter.odds[method](bounds())).error.reason, "schema-error");
+  }
+});
+
 test("odds are never served from the structured cache, even when a verifier would allow it", async () => {
   const state = setup({ respond: (url) => jsonResponse(url, [oddsRow(7)]) });
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -1147,4 +1166,19 @@ test("an empty odds page means no price coverage, never zero or inherited prices
   assert.equal(result.status, "complete");
   assert.deepEqual(result.data, []);
   assert.ok(result.completeness.missingCoverage.includes("odds-coverage-not-established"));
+});
+
+test("one shared live odds envelope uses a counted request and distinct live catalog", async () => {
+  const row = { fixture: { id: 1 }, league: { id: 39, season: 2026 }, teams: { home: { id: 10 }, away: { id: 20 } },
+    status: { stopped: false, blocked: false, finished: false }, update: new Date(NOW - 1000).toISOString(),
+    odds: [{ id: 59, name: "Fulltime Result", values: [{ value: "Home", odd: "1.975", suspended: false }] }] };
+  const state = setup({ respond: (url) => jsonResponse(url, url.pathname.endsWith("/bets") ? [{ id: 59, name: "Fulltime Result" }] : [row]) });
+  const result = await state.adapter.odds.inPlay(bounds());
+  const liveCatalog = await state.adapter.odds.inPlayBets(bounds());
+  assert.equal(result.status, "complete");
+  assert.equal(result.data[0].bets[0].values[0].odd, "1.975");
+  assert.equal(result.data[0].source.providerUpdatedAt, NOW - 1000);
+  assert.equal(liveCatalog.data[0].id, 59);
+  assert.deepEqual(state.network.map(({ url }) => url.pathname + url.search), ["/odds/live", "/odds/live/bets"]);
+  assert.equal(state.reservations.length, 2);
 });

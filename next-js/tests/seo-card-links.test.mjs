@@ -145,6 +145,25 @@ test("a delivered forecast stays locked for free viewers, and completed matches 
   assert.match(canceled, /data-pick-selection=/u);
 });
 
+test("published probabilities are visible without promoting them to a recommended pick", () => {
+  const stored = structuredClone(scenarios.scheduled.detail);
+  const recommendation = { status: "no-qualified-recommendation", selected: null };
+  stored.fixture.forecast.recommendation = recommendation;
+  stored.snapshot.recommendation = recommendation;
+  const detail = matchDetailResponseSchema.parse(gateDetailResponse(stored, full));
+  const { cards: [subscriber, guest], details: [rendered] } = render({ cards: [
+    { fixture: detail.fixture, analysisSlug: slug },
+    { fixture: gateFixture(stored.fixture, anonymous), gated: true, analysisSlug: slug },
+  ], details: [detail] });
+  assert.match(subscriber, /Forecast available/u);
+  assert.match(subscriber, /No recommended pick/u);
+  assert.doesNotMatch(subscriber, /data-pick-selection=/u);
+  assert.equal(pickState(guest), "subscriber");
+  assert.doesNotMatch(guest, /No recommended pick/u);
+  assert.match(rendered.verdict, /Forecast available/u);
+  assert.match(rendered.markets, /[1-4] of 4 published/u);
+});
+
 test("the match page locks the verdict, markets and analysis only over a published forecast", () => {
   const gate = (detail, access) => matchDetailResponseSchema.parse(gateDetailResponse(detail, access));
   const published = gate(scenarios.scheduled.detail, anonymous), none = gate(scenarios["prior-cycle"].detail, anonymous);

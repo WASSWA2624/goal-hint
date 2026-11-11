@@ -1,7 +1,7 @@
 # Development football demo
 
-`npm run dev` starts the regular Next application with synthetic football data
-and its own persistent local MySQL database. Install the repository's pinned
+By default, `npm run dev` starts the regular Next application with synthetic
+football data and its own persistent local MySQL database. Install the repository's pinned
 Node/npm versions, Python 3.11+, and genuine MySQL 8.4+ first. The launcher finds
 MySQL on PATH, a standard Windows installation, or the portable installation in
 `%LOCALAPPDATA%/GoalHint/mysql-*/`. Alternatively set
@@ -79,6 +79,44 @@ Use `npm run dev:live` to use the existing configured development services. This
 explicit opt-out preserves their existing configuration and authorization rules.
 `GOAL_HINT_DEMO=false npm run dev` is equivalent on shells supporting that syntax.
 Production and tests never select the development demo.
+
+## Local API-Football snapshot
+
+From `next-js/`, run `python scripts/development.py --prepare-local-football`
+to start a separate loopback MySQL instance and apply the application migrations.
+Keep the command running during import and database verification. Its ignored
+`.goal-hint/local-football-2026-11/target.env` identifies the listener and owned
+data directory for the importer. This preparation can run alongside the demo.
+
+From another terminal, download and load the November 2026 snapshot.
+
+```sh
+node --conditions=react-server --env-file=.env.local --env-file=.env.operations --env-file=.goal-hint/local-football-2026-11/target.env scripts/fetch-football-snapshot.mjs 2026-11-01 2026-11-30 2026-11-11
+node --conditions=react-server --env-file=.goal-hint/local-football-2026-11/target.env scripts/import-local-football.mjs .goal-hint/real-football-import/2026-11-01_2026-11-30/fixtures.ndjson 2026-11-01 2026-11-30 2026-11-11
+```
+
+The downloader saves completed request pages in the ignored snapshot directory.
+The importer uses committed date receipts to resume the same snapshot.
+
+After verifying the imported fixtures, create the empty file
+`.goal-hint/local-football-2026-11/active` and run `npm run dev` to serve the
+stored snapshot. The launcher reads its competition IDs from the imported
+fixtures and uses the usual private administrator configuration.
+
+The local `.goal-hint/local-football-2026-11/live` marker starts the football
+worker with the web app. The worker verifies the owned MySQL listener, uses
+the configured API-Football account, and keeps the web app on `127.0.0.1`.
+It refreshes the schedule and results, collects match details in fixture
+batches, and keeps pre-match and in-play prices separate. Bookmaker 8 is the
+local pre-match default when `GOAL_HINT_ODDS_BOOKMAKER_ID` is unset. Use
+`npm run live:usage -- --watch` in another terminal to monitor the provider
+day. Remove the `live` marker and restart development to browse the saved
+snapshot offline. The worker stops with the launcher.
+
+The local `.goal-hint/development-demo-retired` marker retires the old synthetic
+database and blocks development commands that would recreate it. Preserved
+member and payment records live in the local football database. The private
+restore archive is stored under the ignored `.goal-hint/` directory.
 
 ## Coverage and storage
 

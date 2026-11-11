@@ -13,6 +13,7 @@ import type { createApiFootballAdapter } from "../football/api-football-adapter.
 import { API_FOOTBALL_CONTRACT_VERSION, type ApiFootballBounds, type ApiFootballFallbackWorkflow,
   type ApiFootballResult } from "../football/api-football-contract.ts";
 import type { NormalizedEvent, NormalizedStatistics } from "../football/api-football-normalize.ts";
+import type { NormalizedFixtureMatchDetails } from "../football/fixture-match-details.ts";
 import { provenTrue, synchronous } from "../shared/authority-proof.ts";
 import { deepFreeze } from "../shared/deep-freeze.ts";
 import { LiveMatchError, liveMatchFail, type LiveMatchAuthority, type LiveMatchLease, type LiveMatchPolicy,
@@ -21,11 +22,12 @@ import { LiveMatchError, liveMatchFail, type LiveMatchAuthority, type LiveMatchL
 const integer = z.number().int().positive();
 const policySchema = z.strictObject({ version: z.literal(1), evidenceRef: z.string().trim().min(1).max(256),
   coverage: z.array(z.strictObject({ competitionId: integer, season: integer.max(9999) })).min(1).max(maximumCompetitionScope),
+  stopAfterFinal: z.literal(true).exactOptional(),
   intervalMs: integer.min(60_000).max(86_400_000), finalIntervalMs: integer.min(60_000).max(86_400_000),
   finalWindowMs: integer.max(7 * 86_400_000), staleAfterMs: integer.min(60_000).max(86_400_000),
   leaseMs: integer.min(10_000).max(600_000), tickMs: integer.min(1000).max(60_000), maxFixturesPerTick: integer.max(50),
   requestWindowMs: integer.max(60_000), request: z.strictObject({ timeoutMs: integer.max(60_000), maxRequests: z.literal(1),
-    maxPages: z.literal(1), maxRows: integer.max(500), maxResponseBytes: integer.max(1_000_000),
+    maxPages: z.literal(1), maxRows: integer.max(500), maxResponseBytes: integer.max(8_000_000),
     retry: z.strictObject({ maxAttempts: integer.max(8), baseDelayMs: z.number().int().nonnegative().max(2000), maxDelayMs: z.number().int().nonnegative().max(2000) }),
     cacheMaxAgeMs: z.literal(0) }),
 }).superRefine((v, ctx) => {
@@ -68,9 +70,18 @@ export function liveStatistics(response: ApiFootballResult<NormalizedStatistics>
   const source = usable(response, "statistics", target, now);
   if (!source || !response || response.status !== "complete" || !response.completeness.complete || response.error !== null)
     return retained(target.previous?.statistics, response?.error?.reason === "schema-error" ? "invalid-response" : "provider-error");
-  if (response.data.length > 2 || response.data.some((row) => ![target.homeExternalId, target.awayExternalId].includes(row.team.id)) ||
-    new Set(response.data.map((row) => row.team.id)).size !== response.data.length) return retained(target.previous?.statistics, "invalid-response");
-  const home = response.data.find((row) => row.team.id === target.homeExternalId), away = response.data.find((row) => row.team.id === target.awayExternalId);
+  return projectMatchStatistics(response.data, target, source);
+}
+
+type MatchSides = Pick<LiveMatchTarget, "homeExternalId" | "awayExternalId" | "previous">;
+type MatchSourceTime = Pick<LiveMatchStatistics, "retrievedAt" | "providerUpdatedAt">;
+
+/** Project correlated fixture statistics from either the detail poller or a stored fixture batch. */
+export function projectMatchStatistics(data: readonly NormalizedStatistics[], target: MatchSides & Pick<LiveMatchTarget, "statisticsCoverage">,
+  source: MatchSourceTime): LiveMatchStatistics {
+  if (data.length > 2 || data.some((row) => ![target.homeExternalId, target.awayExternalId].includes(row.team.id)) ||
+    new Set(data.map((row) => row.team.id)).size !== data.length) return retained(target.previous?.statistics, "invalid-response");
+  const home = data.find((row) => row.team.id === target.homeExternalId), away = data.find((row) => row.team.id === target.awayExternalId);
   const items: LiveMatchStatistics["items"] = [];
   for (const metric of liveMatchMetrics) {
     const homeStat = home?.statistics.find((row) => row.supported && row.metric === metric);
@@ -89,11 +100,17 @@ export function liveEvents(response: ApiFootballResult<NormalizedEvent> | null, 
   const source = usable(response, "events", target, now);
   if (!source || !response || response.status !== "complete" || !response.completeness.complete || response.error !== null)
     return retained(target.previous?.events, response?.error?.reason === "schema-error" ? "invalid-response" : "provider-error");
-  if (response.data.some((row) => ![target.homeExternalId, target.awayExternalId].includes(row.teamId))) return retained(target.previous?.events, "invalid-response");
-  const supported = response.data.filter((row) => row.type !== "unsupported");
-  if (response.data.length === 0 && target.eventsCoverage !== true)
+  return projectMatchEvents(response.data, target, source);
+}
+
+/** Project correlated fixture events without asserting which endpoint returned them. */
+export function projectMatchEvents(data: readonly NormalizedEvent[], target: MatchSides & Pick<LiveMatchTarget, "eventsCoverage">,
+  source: MatchSourceTime): LiveMatchEvents {
+  if (data.some((row) => ![target.homeExternalId, target.awayExternalId].includes(row.teamId))) return retained(target.previous?.events, "invalid-response");
+  const supported = data.filter((row) => row.type !== "unsupported");
+  if (data.length === 0 && target.eventsCoverage !== true)
     return { ...unavailable("coverage-unknown"), ...source } as LiveMatchEvents;
-  const partial = supported.length !== response.data.length || supported.some((row) => row.elapsed === null);
+  const partial = supported.length !== data.length || supported.some((row) => row.elapsed === null);
   return { state: partial ? "partial" : "available", ...source, reason: partial ? "incomplete-response" : null,
     items: supported.map((row, index) => ({ sequence: index + 1, elapsed: row.elapsed, extra: row.extra,
       team: row.teamId === target.homeExternalId ? "home" : "away", type: row.type as "goal" | "card" | "substitution" | "var",
@@ -104,6 +121,7 @@ export function liveEvents(response: ApiFootballResult<NormalizedEvent> | null, 
 export function createLiveMatchService(options: Readonly<{
   accountKey: string; ownerId?: string; policy: unknown; authority: LiveMatchAuthority; store: LiveMatchStore;
   adapter: Pick<ReturnType<typeof createApiFootballAdapter>["evidence"], "statistics" | "events">;
+  batchDetails?: ReturnType<typeof createApiFootballAdapter>["evidence"]["matchDetails"];
   clock?: Clock; onState?: (state: "active" | "idle" | "delayed" | "standby") => void;
 }>) {
   const policy = parseLiveMatchPolicy(options.policy), { authority, store, adapter } = options;
@@ -123,27 +141,33 @@ export function createLiveMatchService(options: Readonly<{
     if (lease.accountKey !== options.accountKey || lease.ownerId !== ownerId || lease.fence <= 0n || !Number.isSafeInteger(lease.until) || lease.until <= clock.now())
       return liveMatchFail("lost-lease");
   }
+  async function request<T>(read: (bounds: ApiFootballBounds, workflow: ApiFootballFallbackWorkflow) => Promise<ApiFootballResult<T>>,
+    signal?: AbortSignal): Promise<ApiFootballResult<T> | null> {
+    if (signal?.aborted) return null;
+    await renew();
+    const controller = new AbortController(), requestedAt = clock.now();
+    const deadlineAt = utcInstantFromEpochMilliseconds(Math.min(requestedAt + policy.requestWindowMs, lease!.until - policy.tickMs));
+    const timer = setTimeout(() => controller.abort(), Math.min(policy.requestWindowMs, Math.max(1, monotonicUntil - performance.now() - policy.tickMs)));
+    const requestSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+    const check = () => { authorize(); if (!lease || requestSignal.aborted || clock.now() >= deadlineAt || performance.now() >= monotonicUntil - policy.tickMs) return liveMatchFail("lost-lease"); };
+    const workflow: ApiFootballFallbackWorkflow = { signal: requestSignal, deadlineAt, check, beforeReserve: check, beforeDispatch: check };
+    const bounds: ApiFootballBounds = { ...policy.request, priority: "live-details", deadlineAt };
+    try { check(); const response = await read(bounds, workflow); check(); return response; }
+    catch (error) { if (error instanceof LiveMatchError) throw error; return null; }
+    finally { clearTimeout(timer); }
+  }
   async function collect(target: LiveMatchTarget, signal?: AbortSignal) {
     if (target.status !== "live" && target.status !== "abandoned" && !isPlayedFinalStatus(target.status)) return;
     const start = clock.now(), interval = target.status === "live" ? policy.intervalMs : policy.finalIntervalMs;
     await renew(); await store.schedule(lease!, target, start + interval);
-    async function call<T extends NormalizedStatistics | NormalizedEvent>(kind: "statistics" | "events"): Promise<ApiFootballResult<T> | null> {
-      if (signal?.aborted || (kind === "statistics" ? target.statisticsCoverage : target.eventsCoverage) === false) return null;
-      await renew();
-      const controller = new AbortController(), requestedAt = clock.now();
-      const deadlineAt = utcInstantFromEpochMilliseconds(Math.min(requestedAt + policy.requestWindowMs, lease!.until - policy.tickMs));
-      const timer = setTimeout(() => controller.abort(), Math.min(policy.requestWindowMs, Math.max(1, monotonicUntil - performance.now() - policy.tickMs)));
-      const requestSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
-      const check = () => { authorize(); if (!lease || requestSignal.aborted || clock.now() >= deadlineAt || performance.now() >= monotonicUntil - policy.tickMs) return liveMatchFail("lost-lease"); };
-      const workflow: ApiFootballFallbackWorkflow = { signal: requestSignal, deadlineAt, check, beforeReserve: check, beforeDispatch: check };
-      const bounds: ApiFootballBounds = { ...policy.request, priority: "live-details", deadlineAt };
-      try {
-        check(); const response = await adapter[kind](target.externalId, bounds, workflow); check();
-        return provenTrue(() => authority.verifyResponse(response)) ? response as ApiFootballResult<T> : null;
-      } catch (error) { if (error instanceof LiveMatchError) throw error; return null; }
-      finally { clearTimeout(timer); }
+    async function call<T extends NormalizedStatistics | NormalizedEvent>(coverage: boolean | null,
+      read: (bounds: ApiFootballBounds, workflow: ApiFootballFallbackWorkflow) => Promise<ApiFootballResult<T>>): Promise<ApiFootballResult<T> | null> {
+      if (signal?.aborted || coverage === false) return null;
+      const response = await request(read, signal);
+      return response && provenTrue(() => authority.verifyResponse(response)) ? response : null;
     }
-    const statistics = await call<NormalizedStatistics>("statistics"), events = await call<NormalizedEvent>("events");
+    const statistics = await call(target.statisticsCoverage, (bounds, workflow) => adapter.statistics(target.externalId, bounds, workflow));
+    const events = await call(target.eventsCoverage, (bounds, workflow) => adapter.events(target.externalId, bounds, workflow));
     if (signal?.aborted) return;
     await renew(); const now = clock.now();
     const snapshot: LiveMatchSnapshot = liveMatchSnapshotSchema.parse({ version: 1, fixtureId: target.fixtureId,
@@ -154,6 +178,65 @@ export function createLiveMatchService(options: Readonly<{
     const delay = failed ? Math.min(3_600_000, interval * 2 ** Math.min(4, failures - 1)) : interval;
     authorize(); await store.save(lease!, target, snapshot, now + delay, failures);
   }
+
+  function correlate(target: LiveMatchTarget, detail: NormalizedFixtureMatchDetails | undefined) {
+    return detail && detail.kickoff === target.kickoffAt && detail.homeTeam.id === target.homeExternalId
+      && detail.awayTeam.id === target.awayExternalId ? detail : null;
+  }
+
+  async function collectBatch(targets: readonly LiveMatchTarget[], read: NonNullable<typeof options.batchDetails>, signal?: AbortSignal) {
+    await renew();
+    const ready = [];
+    for (const target of targets) {
+      if (signal?.aborted) return;
+      try {
+        await store.schedule(lease!, target, clock.now() + (target.status === "live" ? policy.intervalMs : policy.finalIntervalMs));
+        ready.push(target);
+      } catch (error) {
+        // A result can move this fixture to a new occurrence while the batch is prepared.
+        if (!(error instanceof LiveMatchError) || error.reason !== "invalid-request") throw error;
+      }
+    }
+    if (ready.length === 0) return;
+    const ids = [...new Set(ready.map((target) => target.externalId))].sort((a, b) => a - b);
+    const response = await request((bounds, workflow) => read(ids, bounds, workflow), signal);
+    if (signal?.aborted) return;
+    const page = response?.provenance[0];
+    const accepted = response && page && page.endpoint === "fixtures" && !page.fromCache
+      && page.currentPage === 1 && page.totalPages === 1 && page.requestParameters.ids === ids.join("-")
+      && provenTrue(() => authority.verifyResponse(response));
+    const details = new Map(accepted ? response.data.map((row) => [row.id, row] as const) : []);
+    await renew();
+    for (const target of ready) {
+      if (signal?.aborted) return;
+      const now = clock.now(), detail = correlate(target, details.get(target.externalId));
+      const source = detail ? { retrievedAt: detail.source.retrievedAt, providerUpdatedAt: detail.source.providerUpdatedAt } : null;
+      const statistics = detail?.matchStatistics && source
+        ? projectMatchStatistics(detail.matchStatistics, target, source)
+        : retained(target.previous?.statistics, "provider-error");
+      const events = detail?.matchEvents && source
+        ? projectMatchEvents(detail.matchEvents, target, source)
+        : retained(target.previous?.events, "provider-error");
+      const snapshot = liveMatchSnapshotSchema.parse({ version: 1, fixtureId: target.fixtureId, cycleId: target.cycleId,
+        kickoffAt: target.kickoffAt, status: target.status, collectedAt: now, staleAfterMs: policy.staleAfterMs,
+        statistics: statistics.state === "unavailable" && target.previous?.statistics.items.length
+          ? retained(target.previous.statistics, "incomplete-response") : statistics,
+        events: events.state === "unavailable" && target.previous?.events.items.length
+          ? retained(target.previous.events, "incomplete-response") : events });
+      const observed = detail !== null && source !== null && source.retrievedAt <= now
+        && (detail.matchStatistics !== null || detail.matchEvents !== null);
+      const failures = observed ? 0 : Math.min(16, target.failures + 1);
+      const interval = target.status === "live" ? policy.intervalMs
+        : observed || failures >= 3 ? policy.finalWindowMs + policy.finalIntervalMs : policy.finalIntervalMs;
+      try {
+        authorize();
+        await store.save(lease!, target, snapshot, now + interval, failures,
+          detail ? { values: detail.facts, retrievedAt: detail.source.retrievedAt } : undefined);
+      } catch (error) {
+        if (!(error instanceof LiveMatchError) || error.reason !== "invalid-request") throw error;
+      }
+    }
+  }
   async function runOnce(signal?: AbortSignal): Promise<boolean> {
     if (busy || signal?.aborted) return false; busy = true;
     try {
@@ -162,7 +245,14 @@ export function createLiveMatchService(options: Readonly<{
       await renew(); const parsed = z.array(targetSchema).max(policy.maxFixturesPerTick).safeParse(await store.due(policy, clock.now(), policy.maxFixturesPerTick));
       if (!parsed.success || new Set(parsed.data.map((target) => target.occurrenceId)).size !== parsed.data.length) return liveMatchFail("unavailable");
       const targets = parsed.data;
-      for (const target of targets) { if (signal?.aborted) break; await collect(target, signal); }
+      if (options.batchDetails) {
+        for (let offset = 0; offset < targets.length; offset += 20) {
+          if (signal?.aborted) break;
+          await collectBatch(targets.slice(offset, offset + 20), options.batchDetails, signal);
+        }
+      } else {
+        for (const target of targets) { if (signal?.aborted) break; await collect(target, signal); }
+      }
       emit(targets.length ? "active" : "idle"); return true;
     } catch (error) {
       const previous = lease; lease = null;

@@ -1,5 +1,18 @@
 # Private operations monitoring
 
+Run `npm run live:usage` from `next-js/` while the isolated local football
+database is running. Add `-- --watch` to refresh every 30 seconds, or
+`-- --days 8 --json` for the current provider day and the previous seven days.
+Each API-Football provider day resets at 03:00 Kampala time.
+
+The account-wide figures come from the last successful account status check
+stored by the live worker. Local launches come from its MySQL quota ledger and
+are grouped by endpoint and workload. The report separates retries,
+rate-limited responses, provider errors, and unresolved attempts, and shows
+result backlog and recent football data observations. Imports recorded before
+endpoint tracking are labelled `unattributed`. The command reads the verified
+local database without making API-Football requests.
+
 Optional verified storage evidence now supports `storage-cap` and `storage-growth`
 through the same bounded outbox. The private `npm run db:storage` command measures
 current engine allocation and sampled football/audit JSON sizes, and can record

@@ -286,9 +286,9 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
 const sameList = (left: readonly string[], right: readonly string[]) =>
   left.length === right.length && left.every((item, index) => item === right[index]);
 
-/** Pages default to predictions where that filter is available; API defaults remain unrestricted. */
-export function defaultPagePicks(status: FeedStatus, subscriberOnly = false): PicksFilter {
-  return subscriberOnly && status !== "finished" ? "all" : "only";
+/** The Today entry includes the schedule while predictions are being published. */
+export function defaultPagePicks(status: FeedStatus, subscriberOnly = false, dates?: DateSelection): PicksFilter {
+  return (status === "all" && dates?.kind === "today") || (subscriberOnly && status !== "finished") ? "all" : "only";
 }
 
 /** Explicit filters and archive dates take precedence; dated archives retain their existing order. */
@@ -297,11 +297,13 @@ export function applyFeedPageDefaults(query: FeedQuery, input: FeedParameters, s
   const explicitDates = query.dates.kind === "date" || query.dates.kind === "range" || ["date", "from", "to", "when"].some(has);
   // A legacy summary-only link now sets the date for the entire view.
   const { summary, ...scope } = query;
+  const dates: DateSelection = dated || explicitDates ? query.dates : summary ? { kind: summary } : matchFeedPageDefaults.dates;
+  const predictionScope = dated || has("market") || query.result || query.odds || !isAnyProbability(query.probability);
   return { ...scope,
     pageSize: matchFeedPageDefaults.pageSize,
-    dates: dated || explicitDates ? query.dates : summary ? { kind: summary } : matchFeedPageDefaults.dates,
+    dates,
     sort: dated || has("sort") || has("dir") ? query.sort : matchFeedPageDefaults.sort,
-    picks: has("picks") ? query.picks : defaultPagePicks(query.status, subscriberOnly),
+    picks: has("picks") ? query.picks : defaultPagePicks(query.status, subscriberOnly, predictionScope ? undefined : dates),
   };
 }
 

@@ -50,6 +50,8 @@ export function createLiveAuthorities(options: Readonly<{
   policy: RuntimePolicy; verify: EvidenceVerifier; refs: LiveReferences; selection: SelectionPolicy;
   resultPolicy: () => ResultSyncPolicy | null; statusEvidenceRef: string; clock?: Clock;
   liveMatchPolicy?: () => LiveMatchPolicy | null;
+  /** The verified loopback snapshot can display private prices during development. */
+  localFootball?: boolean;
   /** The same verified plan pacing used to configure refresh requests. */
   refreshPacing: RefreshPacing;
   /** The exact odds policy configured from the same workload as the runtime, or null without a bookmaker. */
@@ -215,7 +217,9 @@ export function createLiveAuthorities(options: Readonly<{
     },
     verifyResponse(response) {
       const endpoint = response.provenance[0]?.endpoint;
-      return response.provenance.length === 1 && (endpoint === "statistics" || endpoint === "events") && pages(response, endpoint, now());
+      return response.provenance.length === 1 &&
+        (endpoint === "statistics" || endpoint === "events" || options.localFootball === true && endpoint === "fixtures") &&
+        pages(response, endpoint, now());
     },
   });
   // Odds (052): private structured retention under the private-use reference; public projection only under
@@ -233,7 +237,8 @@ export function createLiveAuthorities(options: Readonly<{
       const { page: _page, ...selectors } = page.requestParameters;
       void _page; return same(selectors, oddsRequestParameters(request));
     }),
-    verifyPublicDisplay: () => refs.oddsRights !== null && verify(refs.oddsRights, "football-odds-rights"),
+    verifyPublicDisplay: () => options.localFootball === true ||
+      refs.oddsRights !== null && verify(refs.oddsRights, "football-odds-rights"),
   });
   return Object.freeze({ catalog, selection, cutoff, lifecycle, publication, evidence, providerFallback, fallback, verifyFallbackRequest,
     refresh, results, verifyStatusResponse, odds, liveMatch });

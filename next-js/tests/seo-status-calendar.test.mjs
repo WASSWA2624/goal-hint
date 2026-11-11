@@ -113,10 +113,52 @@ test('Matches page defaults reach the stored read while retaining viewer eligibi
       assert.deepEqual(storedQuery, rendered.query, 'The rendered controls and stored read use the same effective query.');
       assert.deepEqual(storedQuery.dates, { kind: parameters.when ?? 'today' });
       assert.deepEqual(storedQuery.sort, { by: parameters.sort ?? 'kickoff', direction: 'desc' });
-      assert.equal(storedQuery.picks, parameters.picks ?? (tier === 'free' && parameters.status !== 'finished' ? 'all' : 'only'));
+      assert.equal(storedQuery.picks, parameters.picks ?? (parameters.status === 'finished' ? 'only' : 'all'));
       assert.equal(rendered.result.error, 'rate-limited');
     }
   }
+});
+
+test('today reads stored fixtures beside partial predictions without overriding explicit prediction filters', async () => {
+  for (const [parameters, predicted, expected] of [
+    [{}, 0, 'all'], [{ country: 'England' }, 34, 'all'], [{ page: '2' }, 0, 'all'],
+    [{ picks: 'only' }, 34, 'only'], [{ market: 'total-goals' }, 0, 'only'],
+    [{ result: 'won' }, 0, 'only'], [{ when: 'yesterday' }, 0, 'only'],
+  ]) {
+    const queries = [], summaries = [];
+    const page = createFeedRoute({ instant: async () => at, policy: closed, document: fullDocument,
+      resolveAccess: fullAccess, read: async (input) => {
+        queries.push(input);
+        const total = input.has('picks') ? predicted : 192;
+        return { records: [], total, state: total ? 'ready' : 'no-filter-matches', coverage: { knownFixtures: 192 } };
+      }, readSummary: async (scope) => { summaries.push(scope); throw new Error('test stream'); } });
+    const rendered = view(await page.Page(props({}, parameters)), 'MatchFeedPage');
+    assert.equal(rendered.query.picks, expected);
+    assert.equal(rendered.result.data.total, expected === 'all' ? 192 : predicted);
+    assert.deepEqual(queries.map((input) => input.get('picks')), [expected === 'only' ? 'only' : null]);
+    assert.equal(queries.at(-1).get('country'), parameters.country ?? null);
+    const seed = await rendered.summary;
+    assert.equal(new URL(seed.href, 'https://example.test').searchParams.get('picks'), expected === 'only' ? 'only' : null);
+    assert.equal(summaries.at(-1).get('picks'), expected === 'only' ? 'only' : null);
+  }
+});
+
+test('the list can seed zero pick outcomes for its own generation when no outcome filter narrows it', async () => {
+  const access = { tier: 'full', signedIn: false }, performanceVersion = 'a'.repeat(64);
+  const page = createFeedRoute({ instant: async () => at, policy: closed, document: fullDocument,
+    resolveAccess: fullAccess, read: async (input) => {
+      const imported = input.get('when') !== 'tomorrow', total = imported && !input.has('result') ? 192 : 0;
+      return { records: [], total, state: !imported ? 'data-unavailable' : total ? 'insufficient-data' : 'no-filter-matches',
+        coverage: { knownFixtures: imported ? 192 : 0, matchingWithMarket: 0 }, performanceVersion, asOf: at, access };
+    }, readSummary: async () => { throw new Error('audit unavailable'); } });
+  const feed = view(await page.Page(props({})), 'MatchFeedPage');
+  const seed = await feed.summary;
+  assert.deepEqual(seed.reply, { performance: { total: 192, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0, unavailable: 192 },
+    paginationVersion: performanceVersion, asOf: at, access });
+  const filtered = view(await page.Page(props({}, { result: 'won' })), 'MatchFeedPage');
+  assert.equal((await filtered.summary).reply, null);
+  const missingCoverage = view(await page.Page(props({}, { when: 'tomorrow' })), 'MatchFeedPage');
+  assert.equal((await missingCoverage.summary).reply, null);
 });
 
 test('the paginated browsing feed keeps its retry and noindex metadata when a stored read fails', async () => {
@@ -131,9 +173,14 @@ test('the paginated browsing feed keeps its retry and noindex metadata when a st
   }
 });
 
+test('the default Today collection uses its indexable document recovery', async () => {
+  await assert.rejects(feed().Page(props({})), failed);
+  await assert.rejects(feed().generateMetadata(props({})), failed);
+});
+
 test('client navigations, non-indexing deployments, variants and busy searches keep the 200 in-page retry', async () => {
   for (const [options, query] of [[{ document: rscRequest }, { picks: 'all' }], [{ document: async () => false }, { picks: 'all' }], [{ policy: closed }, { picks: 'all' }],
-    [{}, {}], [{}, { status: 'finished' }], [{}, { from: '2026-10-20', to: '2026-10-22' }]]) {
+    [{}, { picks: 'only' }], [{}, { status: 'finished' }], [{}, { from: '2026-10-20', to: '2026-10-22' }]]) {
     const page = feed(options), element = await page.Page(props({}, query));
     assert.equal(view(element, 'MatchFeedPage').result.error, 'unavailable', JSON.stringify(query));
     assert.equal((await page.generateMetadata(props({}, query))).robots.index, false);

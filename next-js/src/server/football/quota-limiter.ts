@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
 import { operatingRules } from "../config/runtime-policy.ts";
 import {
-  essentialReserveFor, quotaPriorities,
+  essentialReserveFor, quotaEndpointPattern, quotaPriorities,
   type QuotaAccountState, type QuotaAttempt, type QuotaDecision, type QuotaDenialReason,
   type QuotaEvidenceVerifier, type QuotaFeedback, type QuotaPeriodEvidence,
   type QuotaPeriodState, type QuotaPermit, type QuotaRequest, type QuotaStore, type QuotaTransaction, type QuotaAdmission,
@@ -34,7 +34,9 @@ const spacing = (period: QuotaPeriodState): number =>
 function validRequest(request: QuotaRequest): boolean {
   return !!request && identifier.test(request.requestId) && identifier.test(request.workKey) &&
     Object.hasOwn(quotaPriorities, request.priority) && validInstant(request.deadlineAt) &&
-    integer(request.timeoutMs, 1);
+    integer(request.timeoutMs, 1) && (request.endpoint === undefined || typeof request.endpoint === "string" &&
+      request.endpoint.length <= 64 && quotaEndpointPattern.test(request.endpoint)) &&
+    (request.retry === undefined || typeof request.retry === "boolean");
 }
 function validEvidence(evidence: QuotaPeriodEvidence, accountId: string): boolean {
   return !!evidence && evidence.accountId === accountId && identifier.test(evidence.periodId) &&
@@ -43,12 +45,19 @@ function validEvidence(evidence: QuotaPeriodEvidence, accountId: string): boolea
     integer(evidence.providerDailyLimit, 1) && integer(evidence.dailyRemaining) &&
     evidence.dailyRemaining <= evidence.providerDailyLimit && integer(evidence.secondLimit, 1) &&
     integer(evidence.minuteLimit, 1) && typeof evidence.evidenceRef === "string" &&
-    evidence.evidenceRef.length > 0 && evidence.evidenceRef.length <= 512;
+    evidence.evidenceRef.length > 0 && evidence.evidenceRef.length <= 512 &&
+    (evidence.observedAt === undefined || validInstant(evidence.observedAt) && evidence.observedAt >= evidence.startsAt &&
+      evidence.observedAt < evidence.endsAt);
+}
+function recordProviderUsage(period: QuotaPeriodState, evidence: QuotaPeriodEvidence): void {
+  if (evidence.observedAt !== undefined && (period.providerUsage === undefined || evidence.observedAt >= period.providerUsage.observedAt)) {
+    period.providerUsage = { observedAt: evidence.observedAt, limit: evidence.providerDailyLimit, remaining: evidence.dailyRemaining };
+  }
 }
 function newPeriod(evidence: QuotaPeriodEvidence, kind: QuotaPeriodState["kind"]): QuotaPeriodState {
   const dayLimit = Math.min(limits.requestsPerProviderDay, evidence.providerDailyLimit);
   const used = kind === "candidate" ? 0 : evidence.providerDailyLimit - evidence.dailyRemaining;
-  return {
+  const period: QuotaPeriodState = {
     id: evidence.periodId, kind, startsAt: evidence.startsAt, endsAt: evidence.endsAt,
     subscriptionExpiresAt: evidence.subscriptionExpiresAt, providerDailyLimit: evidence.providerDailyLimit,
     secondLimit: Math.min(limits.requestsPerRollingSecond, evidence.secondLimit),
@@ -57,6 +66,8 @@ function newPeriod(evidence: QuotaPeriodEvidence, kind: QuotaPeriodState["kind"]
     minuteRemaining: null, minuteFloorUntil: null, probeRequestId: null,
     evidenceRef: evidence.evidenceRef, observationRevision: 0, priorityUsed: {},
   };
+  if (kind === "confirmed") recordProviderUsage(period, evidence);
+  return period;
 }
 function permitFor(attempt: QuotaAttempt, period: QuotaPeriodState): QuotaPermit {
   return {
@@ -126,7 +137,8 @@ export function createQuotaLimiter(options: {
     if (existing) {
       if (existing.state === "queued") {
         if (existing.workKey !== request.workKey ||
-            existing.deadlineAt !== request.deadlineAt || existing.timeoutMs !== request.timeoutMs) return denied("invalid-request");
+            existing.deadlineAt !== request.deadlineAt || existing.timeoutMs !== request.timeoutMs ||
+            existing.endpoint !== request.endpoint || existing.retry !== request.retry) return denied("invalid-request");
         await promote(tx, existing, request);
         return existing;
       }
@@ -150,6 +162,8 @@ export function createQuotaLimiter(options: {
       essential: priority.essential, queuedAt: now, deadlineAt: request.deadlineAt, timeoutMs: request.timeoutMs,
       state: "queued", dispatchedAt: null, leaseUntil: null, periodId: null, sequence: null,
       ownerToken: null, responseKind: null, launchedAt: null, observationRevision: 0,
+      ...(request.endpoint === undefined ? {} : { endpoint: request.endpoint }),
+      ...(request.retry === undefined ? {} : { retry: request.retry }),
     };
     await tx.saveAttempt(attempt);
     return attempt;
@@ -236,6 +250,7 @@ export function createQuotaLimiter(options: {
           period.dayRemaining = Math.max(0, Math.min(period.dayRemaining, evidence.dailyRemaining - unresolved, period.dayLimit - period.used));
           period.observationRevision += 1;
           period.evidenceRef = evidence.evidenceRef;
+          recordProviderUsage(period, evidence);
           existing.lastNow = now;
           if (now >= period.subscriptionExpiresAt) existing.status = "subscription-expired";
           if (period.secondLimit > 0 && period.minuteLimit > 0) existing.nextDispatchAt = instant(Math.max(existing.nextDispatchAt, existing.lastLaunchedAt + spacing(period)));

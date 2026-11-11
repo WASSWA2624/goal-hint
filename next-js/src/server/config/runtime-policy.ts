@@ -121,7 +121,9 @@ const environmentSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development")
     .describe("Use development, test or production."),
   NEXT_PUBLIC_GOAL_HINT_DEMO: optional(z.enum(["true", "false"]))
-    .describe("Only this nonsecret public flag selects development demo controls; production always ignores it."),
+    .describe("This nonsecret public flag selects development demo controls."),
+  NEXT_PUBLIC_GOAL_HINT_LOCAL_FOOTBALL: optional(z.enum(["true", "false"]))
+    .describe("This nonsecret public flag enables prices in the owned loopback development app."),
   GOAL_HINT_DEMO: optional(z.enum(["true", "false"]))
     .describe("Use true or false to select the isolated development launcher."),
   GOAL_HINT_DEMO_MEMBER: optional(z.enum(["true", "false"]))
@@ -346,7 +348,7 @@ export function parseRuntimePolicy(env: Environment): RuntimePolicy {
   const issues: PolicyIssue[] = [];
   const shape = environmentSchema.shape;
   for (const key of Object.keys(env)) {
-    if (key.startsWith("NEXT_PUBLIC_") && key !== "NEXT_PUBLIC_GOAL_HINT_DEMO") {
+    if (key.startsWith("NEXT_PUBLIC_") && key !== "NEXT_PUBLIC_GOAL_HINT_DEMO" && key !== "NEXT_PUBLIC_GOAL_HINT_LOCAL_FOOTBALL") {
       issues.push({ field: "NEXT_PUBLIC_*", reason: "Runtime settings must stay server-owned; public settings come from publicPolicy." });
     } else if (key.startsWith("GOAL_HINT_") && !(key in shape) && !retiredSetting.test(key)) {
       issues.push({ field: "GOAL_HINT_*", reason: "Unknown policy setting; use the documented environment contract." });

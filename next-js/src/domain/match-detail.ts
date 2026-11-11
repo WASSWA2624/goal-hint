@@ -4,6 +4,7 @@ import { isCompletedFixtureStatus } from "./market-settlement.ts";
 import { dailyRunProgressSchema, matchFeedRecordSchema, storedMatchFeedRecordSchema } from "./match-feed.ts";
 import { contentAccessSchema } from "./content-access.ts";
 import { liveMatchSnapshotSchema } from "./live-match.ts";
+import { inPlayOddsObservationSchema } from "./in-play-odds.ts";
 
 /** Why API-Football supplied a published market; "provider-first" is the reviewed baseline order with AI enabled. */
 export const detailFallbackReasons = ["ai-failure", "ai-timeout", "ai-insufficient-evidence", "ai-budget-exhausted", "ai-missing-group",
@@ -72,6 +73,7 @@ const storedDetailBaseSchema = z.strictObject({ fixture: storedMatchFeedRecordSc
   odds: z.array(detailOddsGroupSchema).max(4).default([]),
   /** Mutable match observations are independent of the immutable pre-match forecast. Undefined disables the feature. */
   liveMatch: liveMatchSnapshotSchema.nullable().optional(),
+  inPlayOdds: inPlayOddsObservationSchema.nullable().optional(),
   route: z.strictObject({ fixtureId: id, slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u).max(160), path: z.string().max(512) }),
   currentRevisionId: id.nullable(), selection: z.enum(["applicable", "revision", "cycle"]), selectedCycle: detailCycleSchema.nullable(), snapshot: storedDetailSnapshotSchema.nullable(),
   history: z.strictObject({ limit: z.number().int().min(1).max(matchDetailRules.maximumLimit),
@@ -104,13 +106,18 @@ function refineDetail(v: z.infer<typeof wireDetailBaseSchema>, ctx: z.Refinement
     if (v.liveMatch.fixtureId !== v.fixture.fixtureId || v.liveMatch.cycleId !== cycleId || v.liveMatch.kickoffAt !== kickoffAt || v.liveMatch.collectedAt > v.asOf)
       ctx.addIssue({ code: "custom", message: "Match observations must belong to the displayed occurrence." });
   }
+  if (v.inPlayOdds && (v.selection !== "applicable" || v.fixture.status !== "live"
+    || v.inPlayOdds.fixtureId !== v.fixture.fixtureId || v.inPlayOdds.kickoffAt !== v.fixture.kickoffAt
+    || v.inPlayOdds.checkedAt > v.asOf))
+    ctx.addIssue({ code: "custom", message: "In-play prices must belong to the current live fixture." });
 }
 export const storedMatchDetailResponseSchema = storedDetailBaseSchema.superRefine((v, ctx) => refineDetail({ ...v, access: { tier: "full", signedIn: false } }, ctx));
 export const matchDetailResponseSchema = wireDetailBaseSchema.superRefine(refineDetail).superRefine((v, ctx) => {
   const gated = v.access.tier === "free" && !isCompletedFixtureStatus(v.fixture.status);
   if (gated ? !("gated" in v.history) || v.odds !== undefined || v.snapshot !== null && !("gated" in v.snapshot)
     || v.fixture.forecast !== null && (!("gated" in v.fixture.forecast) || v.fixture.forecast.probabilities.length !== 0)
-    || v.snapshot !== null && "gated" in v.snapshot && v.snapshot.probabilities.length !== 0 || v.liveMatch != null || v.fixture.prices.length !== 0
+    || v.snapshot !== null && "gated" in v.snapshot && v.snapshot.probabilities.length !== 0
+    || v.liveMatch != null || v.inPlayOdds != null || v.fixture.prices.length !== 0
     : "gated" in v.history || v.snapshot !== null && "gated" in v.snapshot || v.fixture.forecast !== null && "gated" in v.fixture.forecast) {
     ctx.addIssue({ code: "custom", message: "Detail content must match its access tier and fixture status." });
   }

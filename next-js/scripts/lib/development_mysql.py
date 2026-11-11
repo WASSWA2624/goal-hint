@@ -1,4 +1,4 @@
-"""Persistent, exclusively owned loopback MySQL for the development demo."""
+"""Persistent, exclusively owned loopback MySQL for local development."""
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -49,24 +49,38 @@ def _startup_guard(directory, *, timeout=120):
 class DevelopmentMysql:
     """Never connects to an installed service or removes a database directory."""
 
+    directory_name = "development-demo"
+    database_name = "goal_hint_demo"
+    ownership_marker = "goal-hint-development-demo-v1\n"
+    database_label = "development demo"
+    retirement_marker = "development-demo-retired"
+
     def __init__(self, *, replace_running=False):
         self.child = None
         self.mysql_process = None
         self.lock = None
         self.locked = False
         self.launcher = None
-        self.directory = (ROOT / ".goal-hint" / "development-demo").resolve()
-        if self.directory.parent.parent != ROOT.resolve():
-            raise CommandError("The development demo directory must stay inside this application.")
+        self.directory = ROOT.resolve() / ".goal-hint" / self.directory_name
+        self.assert_not_retired()
+        if self.directory.resolve() != self.directory:
+            raise CommandError(f"The {self.database_label} directory must stay inside this application.")
         self.directory.mkdir(parents=True, exist_ok=True)
         self.datadir = self.directory / "mysql"
+        if self.datadir.resolve() != self.datadir:
+            raise CommandError(f"The {self.database_label} MySQL files must stay inside their owned directory.")
         self.binary = self.discover_binary()
         suffix = ".exe" if os.name == "nt" else ""
         self.client = self.binary.with_name("mysql" + suffix)
         self.admin = self.binary.with_name("mysqladmin" + suffix)
         self.state_file = self.directory / "launcher.json"
         with _startup_guard(self.directory):
+            self.assert_not_retired()
             self._acquire_and_start(replace_running)
+
+    def assert_not_retired(self):
+        if self.retirement_marker and (self.directory.parent / self.retirement_marker).exists():
+            raise CommandError("The synthetic development demo has been retired. Use the local football snapshot.")
 
     def _acquire_and_start(self, replace_running):
         self.lock = (self.directory / "server.lock").open("a+b")
@@ -78,7 +92,7 @@ class DevelopmentMysql:
         try:
             acquired = self._try_lock()
             if not acquired and not replace_running:
-                raise CommandError("The development demo database is already in use by another launcher.")
+                raise CommandError(f"The {self.database_label} database is already in use by another launcher.")
             if replace_running:
                 self._replace_previous(lock_held=not acquired)
             if not self.locked:
@@ -167,7 +181,7 @@ class DevelopmentMysql:
     def _replace_previous(self, *, lock_held):
         marker = self.directory / "owner.txt"
         if marker.exists():
-            if marker.read_text(encoding="utf-8") != "goal-hint-development-demo-v1\n":
+            if marker.read_text(encoding="utf-8") != self.ownership_marker:
                 raise CommandError("The demo database ownership marker is invalid; no process was stopped.")
         elif self.datadir.exists():
             raise CommandError("An unowned demo database directory exists; no process was stopped.")
@@ -200,7 +214,7 @@ class DevelopmentMysql:
                 time.sleep(0.2)
         if not mysql and not launcher:
             return
-        print("Restarting the previous development demo; preserving its database…", flush=True)
+        print(f"Restarting the previous {self.database_label}; preserving its database…", flush=True)
         if launcher:
             mysql_ids = {row["pid"] for row in mysql}
             for child in records:
@@ -279,7 +293,7 @@ class DevelopmentMysql:
 
     def start(self):
         marker = self.directory / "owner.txt"
-        expected = "goal-hint-development-demo-v1\n"
+        expected = self.ownership_marker
         if marker.exists():
             if marker.read_text(encoding="utf-8") != expected:
                 raise CommandError("The demo database ownership marker is invalid; its files were preserved.")
@@ -288,14 +302,14 @@ class DevelopmentMysql:
         else:
             marker.write_text(expected, encoding="utf-8")
         if not self.datadir.exists():
-            print("Initializing the private development demo MySQL directory…", flush=True)
+            print(f"Initializing the private {self.database_label} MySQL directory…", flush=True)
             run(self.binary, ["--no-defaults", "--initialize-insecure", f"--datadir={self.datadir}"], 90)
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
             self.port = probe.getsockname()[1]
         self.connection = ["--no-defaults", "--no-login-paths", "--protocol=TCP", "--host=127.0.0.1",
                            f"--port={self.port}", "--user=root"]
-        self.url = f"mysql://root@127.0.0.1:{self.port}/goal_hint_demo"
+        self.url = f"mysql://root@127.0.0.1:{self.port}/{self.database_name}"
         self.child = subprocess.Popen([str(self.binary), "--no-defaults", f"--datadir={self.datadir}",
             f"--port={self.port}", "--bind-address=127.0.0.1", "--mysqlx=OFF", "--skip-log-bin",
             "--innodb-flush-log-at-trx-commit=2", "--innodb-buffer-pool-size=512M",
@@ -314,7 +328,12 @@ class DevelopmentMysql:
                     raise CommandError("The demo MySQL server did not become ready within 60 seconds.") from None
                 time.sleep(0.25)
         self.assert_ownership()
-        run(self.client, [*self.connection, "--execute=CREATE DATABASE IF NOT EXISTS goal_hint_demo CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"])
+        self.query(f"CREATE DATABASE IF NOT EXISTS `{self.database_name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci", database=False)
+
+    def query(self, statement, *, database=True):
+        self.assert_ownership()
+        selector = [f"--database={self.database_name}"] if database else []
+        return run(self.client, [*self.connection, *selector, "--batch", "--skip-column-names", f"--execute={statement}"]).stdout.strip()
 
     def assert_ownership(self):
         if self.child is None or self.child.poll() is not None:
@@ -359,3 +378,11 @@ class DevelopmentMysql:
 
     def __exit__(self, *_):
         self.stop()
+
+
+class LocalFootballMysql(DevelopmentMysql):
+    directory_name = "local-football-2026-11"
+    database_name = "goal_hint_football_202611"
+    ownership_marker = "goal-hint-local-football-2026-11-v1\n"
+    database_label = "local football snapshot"
+    retirement_marker = None

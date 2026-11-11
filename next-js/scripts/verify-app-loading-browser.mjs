@@ -65,14 +65,34 @@ export async function verifyAppLoading(page, origin) {
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Homepage viewport overflow');
       results.push({ screen: 'home', theme, width: 390, immediateFilters: true });
     }
-    summaryRequests = 0;
-    await page.goto(`${origin}/en/matches?fail=1`);
-    await page.locator('[data-feed-performance-state="unavailable"]').waitFor();
-    assert(await page.locator('[data-performance-summary="matches"] [data-summary-result="won"]').isDisabled(), 'Unknown result counts cannot be selected');
-    await page.getByRole('button', { name: 'Try again', exact: true }).click();
-    await page.locator('[data-feed-performance-state="ready"]').waitFor();
-    assert(summaryRequests === 1, 'A failed server summary retries exactly once through the current endpoint');
-    results.push({ screen: 'matches', retry: true, requests: summaryRequests });
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
+      summaryRequests = 0;
+      await page.goto(`${origin}/en/matches?fail=1`);
+      await page.locator('[data-feed-performance-state="unavailable"]').waitFor();
+      await page.waitForFunction(mode => document.querySelector('meta[name="color-scheme"]')?.content === mode, theme);
+      const progress = page.getByRole('progressbar', { name: /loading/i });
+      await progress.waitFor({ state: 'hidden' });
+      assert(await page.locator('[data-performance-summary="matches"] [data-summary-result="won"]').isDisabled(), 'Unknown result counts cannot be selected');
+      let release;
+      const hold = new Promise(resolve => { release = resolve; });
+      const summaryUrl = /\/api\/matches\/summary(?:\?|$)/u;
+      const delay = async route => { await hold; await route.continue(); };
+      await page.route(summaryUrl, delay);
+      try {
+        await page.getByRole('button', { name: 'Try again', exact: true }).click();
+        await progress.waitFor({ state: 'visible' });
+        assert(await page.locator('[data-feed-performance-state="loading"]').isVisible(), 'An explicit retry marks the summary busy');
+        assert(await page.getByRole('button', { name: 'Try again', exact: true }).isDisabled(), 'The retry stays visible and cannot be submitted twice');
+      } finally {
+        release();
+        await page.unroute(summaryUrl, delay);
+      }
+      await page.locator('[data-feed-performance-state="ready"]').waitFor();
+      await progress.waitFor({ state: 'hidden' });
+      assert(summaryRequests === 1, 'A failed server summary retries exactly once through the current endpoint');
+      results.push({ screen: 'matches', theme, retry: true, requests: summaryRequests });
+    }
     assert(failures.length === 0, failures.join('\n'));
     return { passed: results.length, results, hydrationErrors: failures };
   } finally {

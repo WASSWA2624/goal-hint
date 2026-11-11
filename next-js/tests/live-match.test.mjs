@@ -88,6 +88,32 @@ test("dedicated timeline uses one counted fixture request, keeps same-team event
   assert.equal(provider.network.length, 1);
 });
 
+test("local live detail batches live and final fixtures and ends routine polling after final detail", async () => {
+  const requests = [];
+  const detail = (id) => ({ id, kickoff: NOW - 3_600_000, homeTeam: { id: 10 }, awayTeam: { id: 20 },
+    source: source("batch"), matchStatistics: [statistic(10), statistic(20)], matchEvents: [event()],
+    facts: { events: [], statistics: [], lineups: [], players: [] } });
+  const state = setup({ options: {
+    policy: policy({ stopAfterFinal: true }),
+    async batchDetails(ids, bounds, workflow) {
+      workflow.check();
+      requests.push({ ids, maxRequests: bounds.maxRequests });
+      return response("fixtures", ids.map(detail), { provenance: [{
+        ...response("fixtures").provenance[0], requestParameters: { ids: ids.join("-"), timezone: "Africa/Kampala" },
+      }] });
+    },
+  } });
+  state.targets.push(target({ externalId: 102, occurrenceId: hash("second occurrence"),
+    fixtureId: "99c67cdc-19c7-4d2b-bf77-649572dbbfcf", status: "finished-regulation" }));
+  assert.equal(await state.service.runOnce(), true);
+  assert.deepEqual(requests, [{ ids: [101, 102], maxRequests: 1 }]);
+  assert.equal(state.calls.length, 0);
+  assert.equal(state.saved[0].nextAt, NOW + policy().intervalMs);
+  assert.ok(state.saved[1].nextAt > NOW + policy().finalWindowMs);
+  assert.deepEqual(state.saved.map(({ snapshot }) => snapshot.statistics.items[0].home), [0, 0]);
+  await state.service.stop();
+});
+
 test("quota pacing may wait before launch but a failed provider dispatch cannot be repeated", async () => {
   let now = NOW, attempts = 0;
   const clock = { now: () => now };

@@ -20,6 +20,8 @@ export const matchTouchlineMessages = {
   "touchline.tab.lineups": "Lineups",
   "touchline.lineupsAvailability": "Lineups",
   "touchline.tab.markets": "Markets & Odds",
+  "touchline.inPlayOdds": "In-play odds",
+  "touchline.inPlayOddsSuspended": "In-play odds are temporarily suspended.",
   "touchline.tab.events": "Match events",
   "touchline.tab.venue": "Match Info",
   "touchline.tab.analysis": "Analysis",

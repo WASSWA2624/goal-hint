@@ -20,6 +20,8 @@ export const apiFootballEndpoints = Object.freeze({
   odds: Object.freeze({ path: "/odds", paginated: true, pageSize: 10 }),
   oddsBets: Object.freeze({ path: "/odds/bets", paginated: false }),
   oddsBookmakers: Object.freeze({ path: "/odds/bookmakers", paginated: false }),
+  inPlayOdds: Object.freeze({ path: "/odds/live", paginated: false }),
+  inPlayOddsBets: Object.freeze({ path: "/odds/live/bets", paginated: false }),
 } as const);
 export type ApiFootballEndpoint = keyof typeof apiFootballEndpoints;
 /** Fixed rows per non-final page for paginated endpoints; null when no size is documented. */

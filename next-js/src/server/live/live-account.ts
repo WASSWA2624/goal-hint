@@ -95,7 +95,8 @@ export function createQuotaRouter(options: Readonly<{ store: QuotaStore; readSta
     return Object.freeze({ accountId, periodId: hash(`${accountId}:period`), startsAt, endsAt,
       subscriptionExpiresAt: utcInstantFromEpochMilliseconds(Math.min(status.expiresAt ?? endsAt, 253_402_300_799_000)),
       providerDailyLimit: status.dailyLimit, dailyRemaining: Math.max(0, status.dailyLimit - status.usedToday),
-      secondLimit: status.secondLimit, minuteLimit: status.minuteLimit, evidenceRef: `api-football-status:${status.retrievedAt}` });
+      secondLimit: status.secondLimit, minuteLimit: status.minuteLimit, evidenceRef: `api-football-status:${status.retrievedAt}`,
+      observedAt: status.retrievedAt });
   }
   const routed: GatewayQuotaLimiter = Object.freeze({
     reserve: async (request: QuotaRequest) => {

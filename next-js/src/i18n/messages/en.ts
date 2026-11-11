@@ -880,6 +880,8 @@ export const en = {
   "match.regulationScoreNote": "Score after 90 minutes",
   "match.scoreline": "{label}: {home} {homeScore}, {away} {awayScore}",
   "match.noPick": "No prediction",
+  "match.forecastAvailable": "Forecast available",
+  "match.noRecommendedPick": "No recommended pick",
   "match.noPickReason.market": "Not available for this market",
   "match.noPickReason.outside": "Predictions start within 7 days",
   "match.noPickReason.updating": "Prediction updating",

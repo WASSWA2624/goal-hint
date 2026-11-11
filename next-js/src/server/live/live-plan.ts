@@ -222,21 +222,23 @@ export function providerFallbackPolicy(refs: LiveReferences): ProviderFallbackPo
     sourceUrl: "https://www.api-football.com/documentation-v3" });
 }
 export function resultSyncPolicy(refs: LiveReferences, workload: LiveWorkload,
-  coverage: ResultSyncPolicy["coverage"]): ResultSyncPolicy {
+  coverage: ResultSyncPolicy["coverage"], local = false): ResultSyncPolicy {
   return Object.freeze({ version: 1, evidenceRef: refs.results, coverage, approachMs: 15 * MINUTE, activeWindowMs: 3 * HOUR,
-    unresolved: workload.unresolved, corrections: workload.corrections, cadence: workload.cadence, leaseMs: MINUTE, tickMs: 5 * SECOND,
+    unresolved: workload.unresolved, corrections: workload.corrections,
+    cadence: local ? { ...workload.cadence, dateMs: 5 * MINUTE } : workload.cadence,
+    ...(local ? { skipConfirmedFinals: true as const } : {}), leaseMs: MINUTE, tickMs: 5 * SECOND,
     maxBatchesPerTick: workload.maxBatchesPerTick, failureBaseMs: MINUTE, failureMaxMs: HOUR, requestWindowMs: 30 * SECOND,
     request: { timeoutMs: 20 * SECOND, maxRequests: 1, maxPages: 1, maxRows: 5000, maxResponseBytes: 40_000_000,
       retry: { maxAttempts: 4, baseDelayMs: 500, maxDelayMs: 5 * SECOND }, cacheMaxAgeMs: 0 } });
 }
 
-/** Dedicated one-fixture endpoints; no batching or provider update timestamp is inferred. */
-export function liveMatchPolicy(refs: LiveReferences, workload: LiveWorkload, coverage: LiveMatchPolicy["coverage"]): LiveMatchPolicy {
+export function liveMatchPolicy(refs: LiveReferences, workload: LiveWorkload, coverage: LiveMatchPolicy["coverage"], batch = false): LiveMatchPolicy {
   return Object.freeze({ version: 1, evidenceRef: `${refs.freshness}#live-match-details`, coverage,
+    ...(batch ? { stopAfterFinal: true as const } : {}),
     intervalMs: workload.liveDetails.intervalMs, finalIntervalMs: workload.liveDetails.finalIntervalMs,
     finalWindowMs: workload.liveDetails.finalWindowMs, staleAfterMs: 5 * MINUTE,
-    leaseMs: MINUTE, tickMs: 5 * SECOND, maxFixturesPerTick: workload.liveDetails.maxFixturesPerTick, requestWindowMs: 25 * SECOND,
-    request: { timeoutMs: 20 * SECOND, maxRequests: 1, maxPages: 1, maxRows: 500, maxResponseBytes: 1_000_000,
+    leaseMs: MINUTE, tickMs: 5 * SECOND, maxFixturesPerTick: batch ? 20 : workload.liveDetails.maxFixturesPerTick, requestWindowMs: 25 * SECOND,
+    request: { timeoutMs: 20 * SECOND, maxRequests: 1, maxPages: 1, maxRows: 500, maxResponseBytes: batch ? 8_000_000 : 1_000_000,
       retry: { maxAttempts: 8, baseDelayMs: 250, maxDelayMs: 2 * SECOND }, cacheMaxAgeMs: 0 } });
 }
 

@@ -227,12 +227,18 @@ export async function storedFeedRunContext(tx: Tx, today: ReportingDate, range: 
   if (!row) return result({ id: null, sequence: null, date: today, phase: "not-started", total: null, completed: 0, terminal: 0, failed: 0, published: 0, partialCoverage: false, message: null });
   const manifest = await storedSelectionManifest(tx, row);
   if (!manifest) return result({ id: row.id, sequence: String(row.sequence), date: today, phase: "selecting", total: null, completed: 0, terminal: 0, failed: 0, published: 0, partialCoverage: false, message: null });
-  const entries = await tx.runFixture.findMany({ where: { runId: row.id }, select: { fixtureId: true, cycleId: true, job: { select: { state: true } } } });
+  // The composite job relation can expand thousands of lookup predicates in Prisma.
+  // Read the same exact relation with one indexed join and retain the manifest check.
+  const entries = await tx.$queryRaw<{ fixtureId: string; cycleId: string; jobState: string | null }[]>(Prisma.sql`
+    SELECT rf.fixtureId,rf.cycleId,j.state AS jobState FROM RunFixture rf
+    LEFT JOIN DurableJob j ON j.id=rf.jobId AND j.refreshRunId=rf.runId
+      AND j.refreshFixtureId=rf.fixtureId AND j.refreshCycleId=rf.cycleId
+    WHERE rf.runId=${row.id}`);
   const membership = new Set(manifest.entries.map((item) => `${item.fixtureId}:${item.cycleId}`));
   if (entries.length !== manifest.entries.length || new Set(entries.map((item) => `${item.fixtureId}:${item.cycleId}`)).size !== entries.length ||
     entries.some((item) => !membership.has(`${item.fixtureId}:${item.cycleId}`))) throw new MatchFeedError("unavailable");
-  const completed = entries.filter((item) => item.job?.state === "succeeded").length;
-  const failed = entries.filter((item) => item.job && ["failed", "expired"].includes(item.job.state)).length;
+  const completed = entries.filter((item) => item.jobState === "succeeded").length;
+  const failed = entries.filter((item) => item.jobState === "failed" || item.jobState === "expired").length;
   const terminal = completed + failed;
   const published = await tx.predictionRefreshResult.count({ where: { runId: row.id, outcome: "published" } });
   return result({ id: row.id, sequence: String(row.sequence), date: today, phase: terminal < entries.length ? "updating" : manifest.partial || failed > 0 ? "partial" : "complete",

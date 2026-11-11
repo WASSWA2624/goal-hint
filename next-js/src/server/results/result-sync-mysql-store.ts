@@ -1,7 +1,8 @@
 import "server-only";
 
 import { z } from "zod";
-import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { getReportingDate, getReportingDayBounds, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { isPlayedFinalStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
@@ -16,6 +17,11 @@ import { ResultSyncError, resultSyncFail, type PollLease, type ResultSyncStore }
 import { storedFixtureResult } from "./result-read.ts";
 
 type Tx = Prisma.TransactionClient;
+type TrackedFixtureRow = Readonly<{
+  fixtureId: string; externalId: bigint; competitionId: bigint; season: number; kickoff: Date | null;
+  status: string; retrievedAt: Date; createdAt: Date; regulationVerifiedAt: Date | null;
+  firstTrackedAt: Date | null; firstFinalAt: Date | null; lastSyncAt: Date | null; nextCheckAt: Date | null; failures: bigint | number | null;
+}>;
 const batchSchema = z.strictObject({ id: historyHash, accountId: historyHash, policyHash: historyHash,
   receivedAt: historyInstant, channel: z.enum(["date", "live", "ids"]), date: z.string().nullable(),
   requestedIds: z.array(z.number().int().positive()), observations: z.array(lifecycleObservationSchema),
@@ -86,17 +92,44 @@ export function createMysqlResultSyncStore(options: Readonly<{
     },
     tracked(policy, at) {
       return database.query(async (tx) => {
-        const fixtures = await tx.footballFixture.findMany({ where: { provider: "api-football", season: { OR: policy.coverage.map((entry) => ({
-          year: entry.season, competition: { providers: { some: { provider: "api-football", externalId: BigInt(entry.competitionId) } } } } )) } },
-          include: { resultState: true, season: { include: { competition: { include: { providers: true } } } } } });
-        return freezeEvidence(fixtures.map((fixture) => ({ fixtureId: fixture.id, externalId: Number(fixture.externalId),
-          competitionId: Number(fixture.season.competition.providers.find((mapping) => mapping.provider === "api-football")!.externalId),
-          season: fixture.season.year, kickoffAt: fixture.kickoff?.getTime() ?? null, status: fixture.status, retrievedAt: fixture.retrievedAt.getTime(),
-          firstTrackedAt: fixture.resultState?.firstTrackedAt.getTime() ?? Math.min(at, fixture.createdAt.getTime()),
-          firstFinalAt: fixture.resultState?.firstFinalAt?.getTime() ?? (finalStatus(fixture.status) ? fixture.retrievedAt.getTime() : null),
-          lastSyncAt: fixture.resultState?.lastSyncAt?.getTime() ?? null,
-          nextCheckAt: fixture.resultState ? fixture.resultState.nextCheckAt?.getTime() ?? null : 0,
-          failures: fixture.resultState?.failures ?? 0 })));
+        const day = getReportingDayBounds(getReportingDate(at));
+        const lower = new Date(at - policy.activeWindowMs - (policy.unresolved.at(-1)?.untilAgeMs ?? 0));
+        const upper = new Date(at + policy.approachMs);
+        const scope = JSON.stringify(policy.coverage);
+        // A single relation join per table supports large competition lists.
+        // Group provider aliases before joining fixtures to avoid duplicates.
+        const fixtures = await tx.$queryRaw<TrackedFixtureRow[]>`
+          WITH coveredSeasons AS (
+            SELECT s.id, s.year, MIN(cp.externalId) AS competitionId
+            FROM JSON_TABLE(${scope}, '$[*]' COLUMNS (competitionId BIGINT PATH '$.competitionId', season INTEGER PATH '$.season')) wanted
+            JOIN FootballCompetitionProvider cp ON cp.provider = 'api-football' AND cp.externalId = wanted.competitionId
+            JOIN FootballSeason s ON s.competitionId = cp.competitionId AND s.year = wanted.season
+            GROUP BY s.id, s.year
+          )
+          SELECT f.id AS fixtureId, f.externalId, s.competitionId, s.year AS season, f.kickoff, f.status, f.retrievedAt,
+            f.createdAt, f.regulationVerifiedAt, r.firstTrackedAt, r.firstFinalAt, r.lastSyncAt, r.nextCheckAt, r.failures
+          FROM FootballFixture f JOIN coveredSeasons s ON s.id = f.seasonId
+          LEFT JOIN FixtureResultState r ON r.fixtureId = f.id
+          WHERE f.provider = 'api-football' AND (
+            ${policy.skipConfirmedFinals !== true}
+            OR (f.kickoff >= ${new Date(day.startInclusive)} AND f.kickoff < ${new Date(day.endExclusive)})
+            OR (f.kickoff BETWEEN ${lower} AND ${upper}
+              AND f.status NOT IN ('finished-regulation', 'finished-extra-time', 'finished-penalties', 'canceled', 'abandoned', 'awarded'))
+            OR (f.kickoff BETWEEN ${lower} AND ${upper} AND f.regulationVerifiedAt IS NULL
+              AND f.status IN ('finished-regulation', 'finished-extra-time', 'finished-penalties'))
+            OR (f.kickoff IS NULL AND f.createdAt >= ${lower}
+              AND f.status NOT IN ('finished-regulation', 'finished-extra-time', 'finished-penalties', 'canceled', 'abandoned', 'awarded'))
+          )`;
+        return freezeEvidence(fixtures.map((fixture) => ({ fixtureId: fixture.fixtureId, externalId: Number(fixture.externalId),
+          competitionId: Number(fixture.competitionId), season: fixture.season, kickoffAt: fixture.kickoff?.getTime() ?? null,
+          status: fixture.status, retrievedAt: fixture.retrievedAt.getTime(),
+          firstTrackedAt: fixture.firstTrackedAt?.getTime() ?? Math.min(at, fixture.createdAt.getTime()),
+          firstFinalAt: fixture.firstFinalAt?.getTime() ?? (finalStatus(fixture.status) ? fixture.retrievedAt.getTime() : null),
+          lastSyncAt: fixture.lastSyncAt?.getTime() ?? null,
+          nextCheckAt: fixture.firstTrackedAt === null ? 0 : fixture.nextCheckAt?.getTime() ?? null,
+          failures: Number(fixture.failures ?? 0),
+          ...(policy.skipConfirmedFinals ? { finalConfirmed: finalStatus(fixture.status) &&
+            (!isPlayedFinalStatus(fixture.status as SettlementStatus) || fixture.regulationVerifiedAt !== null) } : {}) })));
       });
     },
     pending(lease) {

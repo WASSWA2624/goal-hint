@@ -12,6 +12,8 @@ import { runFromRow, storedCycles, storedCycleDisplay, storedRevision, storedRev
 import { storedFeedFixture } from "./fixture-read.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { storedFixtureOddsGroups } from "../odds/odds-read.ts";
+import { storedInPlayOdds } from "../odds/in-play-odds-read.ts";
+import { isLocalFootballDevelopment } from "../../domain/development-demo.ts";
 import { storedFeedCoverage, storedFeedRunContext } from "./feed-read.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import { detailHistoryLink, parseMatchDetailQuery } from "./detail-query.ts";
@@ -25,10 +27,12 @@ import { createSettlementProjectionReader } from "../settlement/settlement-read.
 export { canonicalMatchSlug } from "../../domain/match-slug.ts";
 
 /** `providerOdds` defaults to publicPolicy.features.providerOdds; isolated tests may enable it. */
-export function createMatchDetailService(options: Readonly<{ database: DatabaseRuntime; clock?: Clock; cache?: PublicResponseCache; providerOdds?: boolean; allowLiveMatch?: boolean }>) {
+export function createMatchDetailService(options: Readonly<{ database: DatabaseRuntime; clock?: Clock; cache?: PublicResponseCache;
+  providerOdds?: boolean; allowLiveMatch?: boolean; allowInPlayOdds?: boolean }>) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const providerOdds = options.providerOdds ?? publicPolicy.features.providerOdds;
   const allowLiveMatch = options.allowLiveMatch ?? publicPolicy.features.liveMatchDetails;
+  const allowInPlayOdds = options.allowInPlayOdds ?? isLocalFootballDevelopment();
   const evidenceStore = createMysqlEvidenceStore(options.database);
   return Object.freeze({ async query(id: string, parameters = new URLSearchParams()): Promise<StoredMatchDetailResponse> {
     const query = parseMatchDetailQuery(id, parameters), asOf = clock.now(), today = getReportingDate(asOf);
@@ -112,19 +116,25 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
         } catch (error) { if (error instanceof MatchFeedError) refused = error; throw error; }
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       const descriptor = publicCacheDescriptor({ kind: "detail", locale: "en", now: asOf, fixtureId: id,
-        query: { id, projection: 8, ...query }, parse: (value) => storedMatchDetailResponseSchema.parse(value) });
+        query: { id, projection: 9, ...query }, parse: (value) => storedMatchDetailResponseSchema.parse(value) });
       const response = options.cache ? await options.cache.read({ ...descriptor, validUntil: () => permissionDeadline }, read) : await read();
-      if (!allowLiveMatch) return response;
+      if (!allowLiveMatch && !allowInPlayOdds) return response;
       // The live envelope bypasses the revision/detail cache; repeated visitor reads only read this bounded stored row.
       const historical = response.selection !== "applicable";
       if (!historical && response.fixture.status !== "live" && !isPlayedFinalStatus(response.fixture.status) && response.fixture.status !== "abandoned") return response;
-      const liveMatch = await options.database.query((tx) => storedLiveMatchSnapshot(tx, { fixtureId: id, asOf, historical,
-        cycleId: historical ? response.selectedCycle?.id ?? null : response.fixture.cycleId,
-        kickoffAt: historical ? response.selectedCycle?.kickoffAt ?? null : response.fixture.kickoffAt })).catch(() => null);
-      const projected = storedMatchDetailResponseSchema.parse({ ...response, asOf, liveMatch });
+      const kickoffAt = response.fixture.kickoffAt;
+      const [liveMatch, inPlayOdds] = await Promise.all([
+        allowLiveMatch ? options.database.query((tx) => storedLiveMatchSnapshot(tx, { fixtureId: id, asOf, historical,
+          cycleId: historical ? response.selectedCycle?.id ?? null : response.fixture.cycleId,
+          kickoffAt: historical ? response.selectedCycle?.kickoffAt ?? null : kickoffAt })).catch(() => null) : undefined,
+        allowInPlayOdds && !historical && response.fixture.status === "live" && kickoffAt !== null
+          ? options.database.query((tx) => storedInPlayOdds(tx, { fixtureId: id, kickoffAt, asOf })).catch(() => null) : undefined,
+      ]);
+      const projected = storedMatchDetailResponseSchema.parse({ ...response, asOf,
+        ...(allowLiveMatch ? { liveMatch } : {}), ...(allowInPlayOdds ? { inPlayOdds: inPlayOdds ?? null } : {}) });
       // A large optional observation cannot make an otherwise valid forecast response exceed its wire bound.
       return freezeEvidence(Buffer.byteLength(JSON.stringify(projected), "utf8") <= matchFeedRules.maximumResponseBytes
-        ? projected : { ...response, asOf, liveMatch: null });
+        ? projected : { ...response, asOf, ...(allowLiveMatch ? { liveMatch: null } : {}), ...(allowInPlayOdds ? { inPlayOdds: null } : {}) });
     } catch (error) {
       if (refused) throw refused;
       if (error instanceof MatchFeedError) throw error;

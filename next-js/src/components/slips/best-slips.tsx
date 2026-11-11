@@ -10,7 +10,7 @@ import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { matchesHref } from "@/domain/navigation";
 import type { SlipsBrowseResult } from "@/domain/best-slips";
 import { createMessages } from "@/i18n/messages";
-import { CriteriaPanel, SlipList, SlipStack } from "./slip-styles";
+import { CriteriaPanel, Note, SlipList, SlipStack } from "./slip-styles";
 import { BestSlipCard } from "./best-slip-card";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { BestSlipsFilters } from "./best-slips-filters";

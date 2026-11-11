@@ -82,6 +82,6 @@ export function resetFeedFilters(query: FeedQuery, subscriberOnly = false): Feed
   delete reset.time; delete reset.result; delete reset.summary;
   delete reset.interval;
   return { ...reset, ...matchFeedPageDefaults, status: "all", search: "", leagues: [], countries: [], markets: [...defaultMarkets], probability: anyProbability, odds: null,
-    picks: defaultPagePicks("all", subscriberOnly),
+    picks: defaultPagePicks("all", subscriberOnly, matchFeedPageDefaults.dates),
     page: 1 };
 }

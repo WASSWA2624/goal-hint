@@ -6,9 +6,11 @@ import { addReportingDays, createPredictionWindow, getPublicationDeadline, isInW
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import { parseCatalogImportRequest } from "../football/catalog-input.ts";
-import type { Prisma } from "../generated/prisma/client.ts";
+import { lockCatalog } from "../football/catalog-mysql-store.ts";
+import { Prisma } from "../generated/prisma/client.ts";
 import type { JobQueue } from "../jobs/job-contract.ts";
 import { durableJobId, jobHash, parseJobEnvelope } from "../jobs/job-input.ts";
+import type { CreateCycleInput } from "../predictions/history-contract.ts";
 import { createMysqlPredictionHistoryStore } from "../predictions/history-mysql-store.ts";
 import { DailySelectionError, selectionFail, type CycleSelectionEligibility, type DegradedSelectionAction,
   type SelectionAuthority, type SelectionCoverage, type SelectionEntry, type SelectionImport,
@@ -34,6 +36,27 @@ async function assertOwned(tx: Transaction, lease: SelectionLease) {
   const row = await lockRun(tx, lease.runId), now = await serverNow(tx);
   if (row.ownerId !== lease.ownerId || row.fence !== lease.fence || row.leaseExpiresAt === null || row.leaseExpiresAt.getTime() <= now) return selectionFail("lost-lease");
   return { row, now };
+}
+async function selectionFixtures(tx: Transaction, ids: readonly string[]) {
+  const select = {
+    id: true, kickoff: true, status: true,
+    season: { select: { competition: { select: {
+      providers: { where: { provider: "api-football" }, select: { externalId: true } },
+    } } } },
+    activeCycle: { select: { id: true, state: true, version: true, kickoffAt: true, cutoffAt: true } },
+    lifecycleState: { select: { issue: true } },
+    _count: { select: { predictionCycles: true } },
+  } satisfies Prisma.FootballFixtureSelect;
+  const rows: Prisma.FootballFixtureGetPayload<{ select: typeof select }>[] = [];
+  if (ids.length === 0) return rows;
+  await lockCatalog(tx);
+  for (let offset = 0; offset < ids.length; offset += 500) {
+    const batch = ids.slice(offset, offset + 500);
+    // Lock in the catalog's order before reading the fields used for eligibility.
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM FootballFixture WHERE id IN (${Prisma.join(batch)}) ORDER BY id FOR UPDATE`);
+    rows.push(...await tx.footballFixture.findMany({ where: { id: { in: batch } }, select, orderBy: { id: "asc" } }));
+  }
+  return rows.length === ids.length ? rows : selectionFail("unavailable");
 }
 export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue: JobQueue) {
   const history = createMysqlPredictionHistoryStore(database);
@@ -172,7 +195,7 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
     },
     async commit(lease: SelectionLease, policy: SelectionPolicy, degradedAction: DegradedSelectionAction | null): Promise<SelectionManifest> {
       return transact(async (tx) => {
-        const { row, now } = await assertOwned(tx, lease), known = await storedSelectionManifest(tx, row);
+        const { row } = await assertOwned(tx, lease), known = await storedSelectionManifest(tx, row);
         if (known) return known;
         if (row.selectionHash !== evidenceFingerprint(policy)) return selectionFail("conflicting-request");
         const runDate = row.eatDate.toISOString().slice(0, 10), window = selectionRunWindow(row);
@@ -181,49 +204,46 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
         const ids = [...new Set(dates.flatMap((date) => date.fixtureIds))].sort();
         if (ids.length > policy.maxFixtures) return selectionFail("capacity-exceeded");
         const entries: Omit<SelectionEntry, "rank" | "envelope">[] = [], exclusions: { fixtureId: string; reason: string }[] = [];
-        const capacity = policy.refreshCapacity;
-        let ordered = ids;
-        if (capacity !== undefined) {
-          // Budgeted runs visit nearest kickoffs first so deferral never displaces an earlier match.
-          const kickoffs = new Map((await tx.footballFixture.findMany({ where: { id: { in: ids } }, select: { id: true, kickoff: true } }))
-            .map((row) => [row.id, row.kickoff?.getTime() ?? Number.MAX_SAFE_INTEGER]));
-          ordered = [...ids].sort((a, b) => (kickoffs.get(a) ?? Number.MAX_SAFE_INTEGER) - (kickoffs.get(b) ?? Number.MAX_SAFE_INTEGER) || a.localeCompare(b));
-        }
-        for (const fixtureId of ordered) {
-          await history.withFixtureTransaction(fixtureId, async (writer, nested) => {
-            const fixture = await nested.footballFixture.findUniqueOrThrow({ where: { id: fixtureId }, include: {
-              season: { include: { competition: { include: { providers: true } } } }, activeCycle: true,
-              lifecycleState: true, _count: { select: { predictionCycles: true } } } });
-            const exclude = (reason: string) => { exclusions.push({ fixtureId, reason }); };
-            const competition = fixture.season.competition.providers.some((mapping) => mapping.provider === "api-football" && policy.competitionIds.includes(Number(mapping.externalId)));
-            if (!competition) return exclude("competition-ineligible");
-            if (fixture.lifecycleState?.issue) return exclude("lifecycle-conflict");
-            if (!policy.eligibleStatuses.includes(fixture.status as "scheduled")) return exclude("status-ineligible");
-            if (fixture.kickoff === null || !isInWindow(utcInstantFromEpochMilliseconds(fixture.kickoff.getTime()), window)) return exclude("outside-window");
-            const kickoffAt = utcInstantFromEpochMilliseconds(fixture.kickoff.getTime());
-            if (getPublicationDeadline(kickoffAt) <= now) return exclude("cutoff-passed");
-            if (policy.refreshLeadMs !== undefined && getPublicationDeadline(kickoffAt) <= now + policy.refreshLeadMs) return exclude("cutoff-too-close");
-            if (capacity !== undefined && entries.length >= capacity) return exclude("refresh-capacity");
-            let cycle = fixture.activeCycle;
-            if (!cycle && fixture._count.predictionCycles > 0) return exclude("no-active-cycle");
-            if (cycle?.state !== "open" && cycle) {
-              const eligible = await nested.selectionCycleEligibility.findUnique({ where: { previousCycleId: cycle.id } });
-              if (!eligible || eligible.consumedRunId !== null || eligible.previousVersion !== cycle.version ||
-                eligible.eligibleAfter !== null && eligible.eligibleAfter.getTime() >= window.startInclusive ||
-                eligible.kickoffAt.getTime() !== kickoffAt || (eligible.state === "void" ? cycle.state !== "void" : cycle.state !== "closed")) return exclude("closed-cycle");
-              const next = await writer.createCycle({ fixtureId, creationKey: evidenceFingerprint({ eligibility: eligible.id }), kickoffAt, openedAt: now,
-                activate: true, actor: "daily-selection", reason: "Recorded eligible rescheduled cycle", evidenceRef: eligible.evidenceRef });
-              cycle = await nested.predictionCycle.findUniqueOrThrow({ where: { id: next.id } });
-              await nested.selectionCycleEligibility.update({ where: { id: eligible.id }, data: { consumedRunId: row.id } });
-            } else if (!cycle) {
-              const initial = await writer.createCycle({ fixtureId, creationKey: evidenceFingerprint({ fixtureId, kind: "initial-selection-cycle" }),
-                kickoffAt, openedAt: now, activate: true, actor: "daily-selection", reason: "Initial daily selection", evidenceRef: policy.evidenceRef });
-              cycle = await nested.predictionCycle.findUniqueOrThrow({ where: { id: initial.id } });
-            }
-            if (cycle.kickoffAt.getTime() !== kickoffAt || cycle.cutoffAt.getTime() <= now) return exclude("cycle-schedule-ineligible");
+        const capacity = policy.refreshCapacity, competitions = new Set(policy.competitionIds), initial: CreateCycleInput[] = [];
+        const fixtures = await selectionFixtures(tx, ids);
+        // Budgeted runs visit nearest kickoffs first so deferral never displaces an earlier match.
+        if (capacity !== undefined) fixtures.sort((a, b) => (a.kickoff?.getTime() ?? Number.MAX_SAFE_INTEGER) -
+          (b.kickoff?.getTime() ?? Number.MAX_SAFE_INTEGER) || a.id.localeCompare(b.id));
+        const { now: selectedAt } = await assertOwned(tx, lease);
+        for (const fixture of fixtures) {
+          const fixtureId = fixture.id;
+          const exclude = (reason: string) => exclusions.push({ fixtureId, reason });
+          if (!fixture.season.competition.providers.some((mapping) => competitions.has(Number(mapping.externalId)))) { exclude("competition-ineligible"); continue; }
+          if (fixture.lifecycleState?.issue) { exclude("lifecycle-conflict"); continue; }
+          if (!policy.eligibleStatuses.includes(fixture.status as "scheduled")) { exclude("status-ineligible"); continue; }
+          if (fixture.kickoff === null || !isInWindow(utcInstantFromEpochMilliseconds(fixture.kickoff.getTime()), window)) { exclude("outside-window"); continue; }
+          const kickoffAt = utcInstantFromEpochMilliseconds(fixture.kickoff.getTime()), cutoffAt = getPublicationDeadline(kickoffAt);
+          if (cutoffAt <= selectedAt) { exclude("cutoff-passed"); continue; }
+          if (policy.refreshLeadMs !== undefined && cutoffAt <= selectedAt + policy.refreshLeadMs) { exclude("cutoff-too-close"); continue; }
+          if (capacity !== undefined && entries.length + initial.length >= capacity) { exclude("refresh-capacity"); continue; }
+          const cycle = fixture.activeCycle;
+          if (!cycle) {
+            if (fixture._count.predictionCycles > 0) { exclude("no-active-cycle"); continue; }
+            initial.push({ fixtureId, creationKey: evidenceFingerprint({ fixtureId, kind: "initial-selection-cycle" }), kickoffAt,
+              openedAt: selectedAt, activate: true, actor: "daily-selection", reason: "Initial daily selection", evidenceRef: policy.evidenceRef });
+          } else if (cycle.state === "open") {
+            if (cycle.kickoffAt.getTime() !== kickoffAt || cycle.cutoffAt.getTime() <= selectedAt) { exclude("cycle-schedule-ineligible"); continue; }
             entries.push({ fixtureId, cycleId: cycle.id, kickoffAt });
-          }, tx);
+          } else {
+            const eligible = await tx.selectionCycleEligibility.findUnique({ where: { previousCycleId: cycle.id } });
+            if (!eligible || eligible.consumedRunId !== null || eligible.previousVersion !== cycle.version ||
+              eligible.eligibleAfter !== null && eligible.eligibleAfter.getTime() >= window.startInclusive ||
+              eligible.kickoffAt.getTime() !== kickoffAt || (eligible.state === "void" ? cycle.state !== "void" : cycle.state !== "closed")) { exclude("closed-cycle"); continue; }
+            const next = await history.withFixtureTransaction(fixtureId, (writer) => writer.createCycle({
+              fixtureId, creationKey: evidenceFingerprint({ eligibility: eligible.id }), kickoffAt, openedAt: selectedAt,
+              activate: true, actor: "daily-selection", reason: "Recorded eligible rescheduled cycle", evidenceRef: eligible.evidenceRef,
+            }), tx);
+            await tx.selectionCycleEligibility.update({ where: { id: eligible.id }, data: { consumedRunId: row.id } });
+            entries.push({ fixtureId, cycleId: next.id, kickoffAt });
+          }
         }
+        for (const cycle of await history.createInitialCyclesInTransaction(tx, initial, selectedAt))
+          entries.push({ fixtureId: cycle.fixtureId, cycleId: cycle.id, kickoffAt: cycle.kickoffAt });
         entries.sort((a, b) => a.kickoffAt - b.kickoffAt || a.fixtureId.localeCompare(b.fixtureId));
         // Kickoff-ordered visits restore the original identifier order for the manifest.
         if (capacity !== undefined) exclusions.sort((a, b) => a.fixtureId < b.fixtureId ? -1 : a.fixtureId > b.fixtureId ? 1 : 0);
@@ -235,15 +255,16 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
             priority: 255 - Math.min(rank, 255) });
           return { ...entry, rank, envelope };
         });
-        const manifest: SelectionManifest = { version: 1, runId: row.id, runDate, sequence: String(row.sequence), selectionHash: row.selectionHash!,
-          startInclusive: window.startInclusive, endExclusive: window.endExclusive, committedAt: now, partial,
-          degradedAction: partial ? degradedAction : null, coverage: dates, exclusions, entries: selected };
-        for (const entry of selected) await tx.runFixture.create({ data: { runId: row.id, fixtureId: entry.fixtureId,
-          cycleId: entry.cycleId, rank: entry.rank, kickoffAt: new Date(entry.kickoffAt), envelopeJson: json(entry.envelope) } });
+        for (let offset = 0; offset < selected.length; offset += 200)
+          await tx.runFixture.createMany({ data: selected.slice(offset, offset + 200).map((entry) => ({ runId: row.id, fixtureId: entry.fixtureId,
+            cycleId: entry.cycleId, rank: entry.rank, kickoffAt: new Date(entry.kickoffAt), envelopeJson: json(entry.envelope) })) });
         // Check ownership again after potentially long fixture work; all effects roll back on expiry.
-        await assertOwned(tx, lease);
+        const { now: committedAt } = await assertOwned(tx, lease);
+        const manifest: SelectionManifest = { version: 1, runId: row.id, runDate, sequence: String(row.sequence), selectionHash: row.selectionHash!,
+          startInclusive: window.startInclusive, endExclusive: window.endExclusive, committedAt, partial,
+          degradedAction: partial ? degradedAction : null, coverage: dates, exclusions, entries: selected };
         await tx.dailyRunManifest.create({ data: { runId: row.id, manifestHash: evidenceFingerprint(manifest), manifestJson: json(manifest) } });
-        await tx.dailyRun.update({ where: { id: row.id }, data: { committedAt: new Date(now), partial, totalJobs: selected.length } });
+        await tx.dailyRun.update({ where: { id: row.id }, data: { committedAt: new Date(committedAt), partial, totalJobs: selected.length } });
         return freezeEvidence(manifest);
       });
     },
@@ -272,19 +293,20 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
       return transact(async (tx) => {
         const row = await lockRun(tx, runId), manifest = await storedSelectionManifest(tx, row);
         if (!manifest) return selectionFail("incomplete-import");
-        const entries = await tx.runFixture.findMany({ where: { runId }, include: { job: true } });
-        if (entries.length !== manifest.entries.length) return selectionFail("unavailable");
-        let completed = 0, terminal = 0;
-        for (const entry of entries) {
-          if (!entry.job) continue;
-          const state = entry.job.state;
-          if (state === "succeeded") completed++;
-          if (["succeeded", "failed", "expired"].includes(state)) terminal++;
-          if (entry.jobState !== state || entry.terminalReason !== entry.job.terminalReason)
-            await tx.runFixture.update({ where: { runId_fixtureId_cycleId: { runId, fixtureId: entry.fixtureId, cycleId: entry.cycleId } },
-              data: { jobState: state, terminalReason: entry.job.terminalReason } });
-        }
-        await tx.dailyRun.update({ where: { id: runId }, data: { completedJobs: completed, terminalJobs: terminal } });
+        // Match all four durable-job identity columns while avoiding per-job hydration and writes.
+        const linkage = Prisma.sql`job.id = entry.jobId AND job.refreshRunId = entry.runId
+          AND job.refreshFixtureId = entry.fixtureId AND job.refreshCycleId = entry.cycleId`;
+        await tx.$executeRaw(Prisma.sql`UPDATE RunFixture entry JOIN DurableJob job ON ${linkage}
+          SET entry.jobState = job.state, entry.terminalReason = job.terminalReason
+          WHERE entry.runId = ${runId} AND NOT (entry.jobState <=> job.state AND entry.terminalReason <=> job.terminalReason)`);
+        const [counts] = await tx.$queryRaw<{ total: bigint; completed: bigint; terminal: bigint }[]>(Prisma.sql`
+          SELECT COUNT(*) AS total, COALESCE(SUM(job.id IS NOT NULL AND entry.jobState = 'succeeded'), 0) AS completed,
+            COALESCE(SUM(job.id IS NOT NULL AND entry.jobState IN ('succeeded', 'failed', 'expired')), 0) AS terminal
+          FROM RunFixture entry LEFT JOIN DurableJob job ON ${linkage} WHERE entry.runId = ${runId}`);
+        if (!counts || Number(counts.total) !== manifest.entries.length) return selectionFail("unavailable");
+        const completed = Number(counts.completed), terminal = Number(counts.terminal);
+        if (row.completedJobs !== completed || row.terminalJobs !== terminal)
+          await tx.dailyRun.update({ where: { id: runId }, data: { completedJobs: completed, terminalJobs: terminal } });
         return freezeEvidence({ total: row.totalJobs, completed, terminal });
       });
     },

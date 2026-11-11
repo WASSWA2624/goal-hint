@@ -8,6 +8,7 @@ import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evide
 import type { NormalizedFixtureOdds } from "../football/api-football-normalize.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { assertHistorySeal, historyJson } from "../predictions/history-read.ts";
+import { provenTrue } from "../shared/authority-proof.ts";
 import { OddsError, oddsFail, type OddsApplyResult, type OddsBatchBody, type OddsPolicy } from "./odds-contract.ts";
 
 type Tx = Prisma.TransactionClient;
@@ -41,6 +42,8 @@ export type OddsFixtureTarget = Readonly<{ fixtureId: string; externalId: number
 type PriceRow = Readonly<{ marketKey: string; selection: string; basis: string; bookmakerExternalId: number | null; line: string | null;
   priceDecimal: string; displayHundredths: number; impliedProbability: string; overround: string; method: string; mappingVersion: string;
   snapshotId: string | null; retrievedAt: number; providerUpdatedAt: number | null; stale: boolean }>;
+type ProjectionOffer = Readonly<{ betId: number; betName: string | null; values: readonly Readonly<{ label: string; odd: string }>[];
+  id: string; retrievedAt: number; providerUpdatedAt: number | null }>;
 
 /** A sealed receipt, verified once and indexed for per-fixture provenance checks. */
 type VerifiedBatch = Readonly<{ batch: OddsBatchBody; fixtures: ReadonlyMap<number, OddsBatchBody["fixtures"][number]>; pages: ReadonlySet<number> }>;
@@ -167,6 +170,34 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
   async function staleAll(tx: Tx, fixtureId: string): Promise<number> {
     return tx.$executeRaw`UPDATE FixtureOddsPrice SET stale = TRUE WHERE fixtureId = ${fixtureId} AND stale = FALSE`;
   }
+  async function projectPrices(tx: Tx, fixtureId: string, bookmakerId: number, catalog: ReadonlyMap<number, string> | null,
+    offers: readonly ProjectionOffer[]): Promise<number> {
+    const existing = await prices(tx, fixtureId), desired = new Map<string, PriceRow>();
+    for (const mapping of launchOddsMapping) {
+      const offer = offers.find(({ betId }) => betId === mapping.betId);
+      const group = offer ? launchOddsGroup(mapping, offer, catalog?.get(mapping.betId)) : null;
+      if (!group || !offer) continue;
+      for (const selection of group.selections) desired.set(`${mapping.family}\u0000${selection.selection}`, Object.freeze({
+        marketKey: mapping.family, selection: selection.selection, basis: "bookmaker", bookmakerExternalId: bookmakerId,
+        line: group.line === null ? null : places(group.line, 2), priceDecimal: places(selection.price.text, 4),
+        displayHundredths: selection.displayHundredths, impliedProbability: selection.impliedProbability, overround: group.overround,
+        method: group.method, mappingVersion: group.mappingVersion, snapshotId: offer.id, retrievedAt: offer.retrievedAt,
+        providerUpdatedAt: offer.providerUpdatedAt, stale: false,
+      }));
+    }
+    let changed = 0;
+    for (const [key, next] of desired) {
+      const previous = existing.get(key);
+      if (previous && sameRow(previous, next)) continue;
+      await upsertPrice(tx, fixtureId, next); changed++;
+    }
+    // A family missing or incomplete in this observation keeps no fresh price; nothing is borrowed.
+    for (const [key, previous] of existing) {
+      if (desired.has(key) || previous.stale) continue;
+      await upsertPrice(tx, fixtureId, { ...previous, stale: true }); changed++;
+    }
+    return changed;
+  }
   async function bumpState(tx: Tx, fixtureId: string, fields: Readonly<{ latestBatchId?: string; withdrawnAt?: Date }>, publicChanged: boolean) {
     const state = await lockState(tx, fixtureId);
     if (!state) return oddsFail("invalid-state");
@@ -233,6 +264,59 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
         const batch = await sealedBatch(tx, row.id);
         return batch ? new Map(batch.catalog.map((entry) => [entry.id, entry.name])) : null;
       });
+    },
+    async hasCompleteCatalog(kind: "bets" | "bookmakers", since: number): Promise<boolean> {
+      return read(async (tx) => {
+        const [row] = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM OddsImportBatch WHERE scopeKey = ${kind}
+          AND kind = ${kind} AND status = 'complete' AND receivedAt >= ${new Date(since)} LIMIT 1`;
+        return row !== undefined && await sealedBatch(tx, row.id) !== null;
+      });
+    },
+    /** Recover the public projection after a catalog gap, using only still-current sealed quotes. */
+    async projectRetainedPrices(input: Readonly<{ policy: OddsPolicy; policyHash: string; catalog: ReadonlyMap<number, string>;
+      limit: number; verify(): boolean }>): Promise<Readonly<{ scanned: number; updated: number }>> {
+      if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 1_000 || !provenTrue(input.verify)) return oddsFail("invalid-request");
+      const { policy, policyHash, catalog } = input;
+      const candidates = await read(async (tx) => {
+        const at = await now(tx);
+        return tx.$queryRaw<{ id: string }[]>`SELECT f.id FROM FootballFixture f JOIN FixtureOddsState s ON s.fixtureId = f.id
+          WHERE f.provider = 'api-football' AND f.status = 'scheduled' AND f.kickoff > ${new Date(at)}
+            AND s.policyHash = ${policyHash} AND s.withdrawnAt IS NULL AND s.lastRetrievedAt >= ${new Date(at - policy.freshnessMs)}
+            AND NOT EXISTS (SELECT 1 FROM FixtureOddsPrice p WHERE p.fixtureId = f.id AND p.stale = FALSE)
+          ORDER BY f.kickoff, f.id LIMIT ${input.limit}`;
+      });
+      let updated = 0;
+      for (const candidate of candidates) {
+        if (!provenTrue(input.verify)) return oddsFail("invalid-request");
+        updated += await write(async (tx) => {
+          const at = await now(tx), state = await lockState(tx, candidate.id);
+          if (!state || state.policyHash !== policyHash || state.withdrawnAt !== null
+            || state.lastRetrievedAt.getTime() < at - policy.freshnessMs) return 0;
+          const [fixture] = await tx.$queryRaw<{ externalId: bigint; kickoff: Date | null; status: string }[]>`
+            SELECT externalId, kickoff, status FROM FootballFixture WHERE id = ${candidate.id} AND provider = 'api-football'`;
+          if (!fixture?.kickoff || fixture.kickoff.getTime() <= at || fixture.status !== "scheduled") return 0;
+          const receipt = verifiedBatches.get(state.latestBatchId) ?? remember(await sealedBatch(tx, state.latestBatchId));
+          const entry = receipt?.fixtures.get(Number(fixture.externalId)), manifest = entry?.quoteManifest;
+          if (!receipt || receipt.batch.kind !== "prices" || receipt.batch.policyHash !== policyHash
+            || !receipt.pages.has(state.lastRetrievedAt.getTime()) || entry?.outcome !== "apply"
+            || !manifest || manifest.bookmakerId !== policy.bookmakerId || manifest.kickoffAt !== fixture.kickoff.getTime()) return 0;
+          const heads = await tx.$queryRaw<{ id: string }[]>`
+            SELECT s.id FROM ProviderOddsSnapshot s LEFT JOIN ProviderOddsSnapshot next ON next.previousId = s.id
+            WHERE s.fixtureId = ${candidate.id} AND s.bookmakerExternalId = ${policy.bookmakerId}
+              AND s.betExternalId IN (${Prisma.join(launchOddsMapping.map(({ betId }) => betId))}) AND next.id IS NULL`;
+          const snapshots = [...(await sealedSnapshots(tx, heads.map(({ id }) => id))).values()];
+          const offers = snapshots.filter((snapshot) => snapshot.fixtureId === candidate.id && snapshot.bookmakerId === policy.bookmakerId
+            && snapshot.retainUntil >= at && snapshot.retrievedAt <= state.lastRetrievedAt.getTime()
+            && (snapshot.providerUpdatedAt === null || snapshot.providerUpdatedAt <= snapshot.retrievedAt)
+            && snapshot.valuesHash === oddsValuesHash(snapshot.values)
+            && manifest.bets.some((bet) => bet.betId === snapshot.betId && bet.betName === snapshot.betName && bet.valuesHash === snapshot.valuesHash));
+          if (!offers.length || !provenTrue(input.verify)) return 0;
+          const changes = await projectPrices(tx, candidate.id, policy.bookmakerId, catalog, offers);
+          if (changes > 0) await bumpState(tx, candidate.id, {}, true);
+          return changes > 0 ? 1 : 0;
+        });
+      }
+      return { scanned: candidates.length, updated };
     },
     /** Applies one validated fixture observation in one short transaction. New chained snapshots are written only for
      * changed values; the public projection is recomputed from this observation's complete launch groups. The receipt
@@ -309,33 +393,12 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
           current.set(body.betId, { id: body.id, retrievedAt, providerUpdatedAt });
         }
         const snapshots = pending.length;
-        const existing = await prices(tx, input.fixtureId);
-        let publicChanges = 0;
-        if (input.publicDisplay) {
-          const desired = new Map<string, PriceRow>();
-          for (const mapping of launchOddsMapping) {
-            const bet = bookmaker?.bets.find((entry) => entry.id === mapping.betId), snapshot = bet ? current.get(bet.id) : undefined;
-            const group = bet && snapshot ? launchOddsGroup(mapping, { betId: bet.id, betName: bet.name, values: bet.values },
-              input.catalog?.get(mapping.betId)) : null;
-            if (!group || !snapshot) continue;
-            for (const selection of group.selections) desired.set(`${mapping.family}\u0000${selection.selection}`, Object.freeze({
-              marketKey: mapping.family, selection: selection.selection, basis: "bookmaker", bookmakerExternalId: policy.bookmakerId,
-              line: group.line === null ? null : places(group.line, 2), priceDecimal: places(selection.price.text, 4),
-              displayHundredths: selection.displayHundredths, impliedProbability: selection.impliedProbability, overround: group.overround,
-              method: group.method, mappingVersion: group.mappingVersion, snapshotId: snapshot.id, retrievedAt: snapshot.retrievedAt,
-              providerUpdatedAt: snapshot.providerUpdatedAt, stale: false }));
-          }
-          for (const [key, next] of desired) {
-            const previous = existing.get(key);
-            if (previous && sameRow(previous, next)) continue;
-            await upsertPrice(tx, input.fixtureId, next); publicChanges++;
-          }
-          // A family missing or incomplete in this observation keeps no fresh price; nothing is borrowed.
-          for (const [key, previous] of existing) {
-            if (desired.has(key) || previous.stale) continue;
-            await upsertPrice(tx, input.fixtureId, { ...previous, stale: true }); publicChanges++;
-          }
-        } else publicChanges = await staleAll(tx, input.fixtureId);
+        const offers = (bookmaker?.bets ?? []).flatMap((bet) => {
+          const snapshot = current.get(bet.id);
+          return snapshot ? [{ ...snapshot, betId: bet.id, betName: bet.name, values: bet.values }] : [];
+        });
+        const publicChanges = input.publicDisplay ? await projectPrices(tx, input.fixtureId, policy.bookmakerId, input.catalog, offers)
+          : await staleAll(tx, input.fixtureId);
         const version = asNumber(state.publicVersion) + (publicChanges > 0 ? 1 : 0);
         await tx.$executeRaw`UPDATE FixtureOddsState SET latestBatchId = ${input.batchId}, policyHash = ${input.policyHash},
           lastRetrievedAt = ${new Date(retrievedAt)}, lastProviderUpdatedAt = ${providerUpdatedAt === null ? null : new Date(providerUpdatedAt)},

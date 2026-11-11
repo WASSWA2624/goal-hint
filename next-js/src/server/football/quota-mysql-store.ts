@@ -5,6 +5,7 @@ import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/c
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import {
+  quotaEndpointPattern,
   quotaPriorities,
   type QuotaAccountState,
   type QuotaAttempt,
@@ -45,7 +46,10 @@ const periodSchema = z.object({
   evidenceRef: z.string().min(1).max(512),
   observationRevision: counter,
   priorityUsed: z.record(z.string(), counter).refine((value) => Object.keys(value).every((key) => Object.hasOwn(quotaPriorities, key))).optional(),
+  providerUsage: z.object({ observedAt: instant, limit: z.number().int().positive(), remaining: counter }).optional(),
 }).refine((value) => value.startsAt < value.endsAt && value.ordinaryUsed <= value.used &&
+  (value.providerUsage === undefined || value.providerUsage.remaining <= value.providerUsage.limit &&
+    value.providerUsage.observedAt >= value.startsAt && value.providerUsage.observedAt < value.endsAt) &&
   Object.values(value.priorityUsed ?? {}).reduce((sum, count) => sum + count, 0) <= value.used);
 // Reuse the canonical durable-state contract for read-only private monitoring.
 export { accountSchema as quotaAccountStateSchema, periodSchema as quotaPeriodStateSchema };
@@ -71,6 +75,8 @@ const attemptSchema = z.object({
   ]).nullable(),
   launchedAt: instant.nullable(),
   observationRevision: counter,
+  endpoint: z.string().max(64).regex(quotaEndpointPattern).optional(),
+  retry: z.boolean().optional(),
 }).refine((value) => {
   const priority = quotaPriorities[value.priority];
   if (value.rank !== priority.rank || value.essential !== priority.essential) return false;

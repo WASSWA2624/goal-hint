@@ -7,6 +7,8 @@ import styled from "styled-components";
 import { PredictionOdds, PredictionOutcome } from "@/components/match/prediction-presentation";
 import { predictionDescription } from "@/domain/prediction-label";
 import { noPickReason } from "@/domain/feed-presentation";
+import { fullDetailSnapshot } from "@/domain/detail-snapshot";
+import { hasPublishedForecastWithoutPick } from "@/domain/recommendation-view";
 import { detailRecordNotices } from "@/domain/detail-presentation";
 import { featuredFamily, liveStanding, marketRow, selectedDetailPrice } from "@/domain/match-details";
 import { toUtcIsoString } from "@/domain/calendar";
@@ -99,10 +101,11 @@ export const Verdict = memo(function Verdict() {
     return <Box><UnlockPanel locale={locale} signedIn={data.access.signedIn} returnTo={data.route.path} /></Box>;
   }
   const featured = featuredFamily(data), row = featured ? marketRow(data, featured) : null;
+  const forecastAvailable = hasPublishedForecastWithoutPick(fullDetailSnapshot(data));
   if (!featured || !row?.item) return <Box aria-labelledby="verdict-title" data-featured-pick="none">
     <Eyebrow><h2 id="verdict-title">{messages.text("details.verdict")}</h2></Eyebrow>
-    <strong>{messages.text("details.noPick")}</strong>
-    <Note>{messages.text(`match.noPickReason.${noPickReason(fixture)}`)}</Note>
+    <strong>{messages.text(forecastAvailable ? "match.forecastAvailable" : "details.noPick")}</strong>
+    <Note>{messages.text(forecastAvailable ? "match.noRecommendedPick" : `match.noPickReason.${noPickReason(fixture)}`)}</Note>
     <PredictionRecord />
   </Box>;
   const item = row.item, price = selectedDetailPrice(data, featured), standing = liveStanding(data, featured);

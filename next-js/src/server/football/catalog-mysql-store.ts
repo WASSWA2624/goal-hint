@@ -93,7 +93,8 @@ export type CatalogMutationCoordinator = (mutation: Readonly<{
   retain(): Promise<CatalogFixtureSnapshot>;
 }>) => Promise<unknown>;
 
-async function lockCatalog(transaction: Prisma.TransactionClient) {
+/** Take this lock before fixture locks when coordinating writes with the catalog. */
+export async function lockCatalog(transaction: Prisma.TransactionClient) {
   await transaction.$executeRaw`INSERT INTO FootballCatalogLock (provider) VALUES (${PROVIDER})
     ON DUPLICATE KEY UPDATE provider = VALUES(provider)`;
   await transaction.$queryRaw`SELECT provider FROM FootballCatalogLock WHERE provider = ${PROVIDER} FOR UPDATE`;

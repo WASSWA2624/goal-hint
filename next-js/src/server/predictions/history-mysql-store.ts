@@ -6,8 +6,9 @@ import { MARKET_RULE_VERSION, marketSelections, type MarketFamily } from "../../
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
 import { createFootballCatalogStore, type FootballCatalogStore } from "../football/catalog-mysql-store.ts";
+import { Prisma } from "../generated/prisma/client.ts";
 import { PredictionHistoryError, historyFail, type AppendRevisionInput, type ChangeCycleInput, type CreateCycleInput,
-  type HistoryActor, type StoredCycle, type StoredHistoryAudit, type StoredRevision, type StoredRun } from "./history-contract.ts";
+  type HistoryActor, type HistoryAuditSnapshot, type StoredCycle, type StoredHistoryAudit, type StoredRevision, type StoredRun } from "./history-contract.ts";
 import { historyId, historyInstant, historyVersion, nextHistoryVersion, parseAppendRevision, parseChangeCycle,
   parseCreateCycle, parseHistory, parseHistoryAuditSnapshot } from "./history-input.ts";
 import { assertHistorySeal, historyDate, historyJson, historyTime, runFromRow, storedCycle, storedCycleDisplay, storedRevision,
@@ -18,6 +19,68 @@ export type PredictionHistoryWriter = Readonly<{
   appendRevision(input: AppendRevisionInput): Promise<StoredRevision>;
   changeCycle(input: ChangeCycleInput): Promise<StoredCycle>;
 }>;
+
+function newCycle(request: CreateCycleInput, ordinal: number, creationHash: string): StoredCycle {
+  return freezeEvidence({ id: randomUUID(), fixtureId: request.fixtureId, creationKey: request.creationKey, creationHash,
+    ordinal, version: 1, scheduleVersion: 1, kickoffAt: request.kickoffAt,
+    cutoffAt: getPublicationDeadline(request.kickoffAt), openedAt: request.openedAt,
+    state: "open", currentSetId: null, lockedSetId: null, closedAt: null, lockedAt: null, voidedAt: null, voidReason: null });
+}
+
+function cycleInsert(value: StoredCycle): Prisma.PredictionCycleCreateManyInput {
+  return { id: value.id, fixtureId: value.fixtureId, creationKey: value.creationKey, creationHash: value.creationHash,
+    ordinal: value.ordinal, scheduleVersion: value.scheduleVersion, kickoffAt: new Date(value.kickoffAt),
+    cutoffAt: new Date(value.cutoffAt), openedAt: new Date(value.openedAt) };
+}
+
+function scheduleInsert(value: StoredCycle, at: number, actor: HistoryActor,
+  observation: ChangeCycleInput["schedule"] = { kickoffAt: value.kickoffAt, providerObservedAt: null, actualStartedAt: null }): Prisma.PredictionScheduleCreateManyInput {
+  return { id: randomUUID(), fixtureId: value.fixtureId, cycleId: value.id, version: value.scheduleVersion,
+    kickoffAt: new Date(value.kickoffAt), cutoffAt: new Date(value.cutoffAt), observedAt: new Date(at),
+    providerObservedAt: historyDate(observation.providerObservedAt), actualStartedAt: historyDate(observation.actualStartedAt),
+    actor: actor.actor, reason: actor.reason, evidenceRef: actor.evidenceRef };
+}
+
+function auditInsert(value: StoredCycle, eventKey: string, requestHash: string, kind: string, at: number,
+  actor: HistoryActor, before: HistoryAuditSnapshot, after: HistoryAuditSnapshot) {
+  const beforeJson = evidenceSerialize(before), afterJson = evidenceSerialize(after);
+  return Prisma.sql`(${randomUUID()}, ${value.fixtureId}, ${value.id}, ${value.version}, ${eventKey}, ${requestHash}, ${kind}, ${new Date(at)},
+    ${actor.actor}, ${actor.reason}, ${actor.evidenceRef}, JSON_EXTRACT(${beforeJson}, '$'), JSON_EXTRACT(${afterJson}, '$'),
+    SHA2(CONCAT(${eventKey}, ':', ${requestHash}, ':', COALESCE(CAST(JSON_EXTRACT(${beforeJson}, '$') AS CHAR), 'null'), ':',
+      CAST(JSON_EXTRACT(${afterJson}, '$') AS CHAR)), 256))`;
+}
+
+async function insertAudits(transaction: HistoryTransaction, values: readonly Prisma.Sql[]) {
+  await transaction.$executeRaw(Prisma.sql`INSERT INTO PredictionAudit
+    (id, fixtureId, cycleId, version, eventKey, requestHash, kind, recordedAt, actor, reason, evidenceRef, beforeJson, afterJson, integrity)
+    VALUES ${Prisma.join(values)}`);
+}
+
+/** Store first cycles in batches while the caller holds the catalog and fixture locks.
+ * A failed batch rolls back with the selection manifest. Later cycles use the fenced history writer. */
+async function createInitialCyclesInTransaction(transaction: HistoryTransaction, inputs: readonly CreateCycleInput[], at: number) {
+  const requests = inputs.map(parseCreateCycle);
+  if (new Set(requests.map((request) => request.fixtureId)).size !== requests.length ||
+    requests.some((request) => !request.activate || request.openedAt > at)) return historyFail("invalid-request");
+  const cycles: StoredCycle[] = [];
+  for (let offset = 0; offset < requests.length; offset += 200) {
+    const batch = requests.slice(offset, offset + 200).map((request) => ({ request, cycle: newCycle(request, 1, evidenceFingerprint(request)) }));
+    const fixtureIds = batch.map(({ cycle }) => cycle.fixtureId);
+    const empty = await transaction.footballFixture.count({ where: { id: { in: fixtureIds }, activeCycleId: null, predictionCycles: { none: {} } } });
+    if (empty !== batch.length) return historyFail("invalid-state");
+    await transaction.predictionCycle.createMany({ data: batch.map(({ cycle }) => cycleInsert(cycle)) });
+    await transaction.predictionSchedule.createMany({ data: batch.map(({ request, cycle }) => scheduleInsert(cycle, request.openedAt, request)) });
+    const changed = await transaction.$executeRaw(Prisma.sql`UPDATE FootballFixture f
+      JOIN PredictionCycle c ON c.fixtureId = f.id AND c.id IN (${Prisma.join(batch.map(({ cycle }) => cycle.id))})
+      SET f.activeCycleId = c.id, f.dataVersion = f.dataVersion + 1, f.updatedAt = UTC_TIMESTAMP(3)
+      WHERE f.activeCycleId IS NULL`);
+    if (changed !== batch.length) return historyFail("invalid-state");
+    await insertAudits(transaction, batch.map(({ request, cycle }) => auditInsert(cycle, cycle.creationKey, cycle.creationHash, "cycle-created",
+      at, request, { cycle: null, activeCycleId: null, revisionId: null }, { cycle, activeCycleId: cycle.id, revisionId: null })));
+    cycles.push(...batch.map(({ cycle }) => cycle));
+  }
+  return cycles;
+}
 
 /** Storage primitives only. Callers own eligibility/manifest/freshness/lease
  * decisions and must do all provider I/O before entering this transaction. */
@@ -86,22 +149,13 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
         async function audit(value: StoredCycle, eventKey: string, requestHash: string, kind: string, at: number,
           actor: HistoryActor, before: StoredCycle | null, revisionId: string | null = null) {
           const activeId = (await transaction.footballFixture.findUniqueOrThrow({ where: { id: fixtureId }, select: { activeCycleId: true } })).activeCycleId;
-          const beforeJson = evidenceSerialize({ cycle: before, activeCycleId: auditedActiveId, revisionId: null });
-          const afterJson = evidenceSerialize({ cycle: value, activeCycleId: activeId, revisionId });
-          await transaction.$executeRaw`INSERT INTO PredictionAudit
-            (id, fixtureId, cycleId, version, eventKey, requestHash, kind, recordedAt, actor, reason, evidenceRef, beforeJson, afterJson, integrity)
-            VALUES (${randomUUID()}, ${fixtureId}, ${value.id}, ${value.version}, ${eventKey}, ${requestHash}, ${kind}, ${new Date(at)},
-              ${actor.actor}, ${actor.reason}, ${actor.evidenceRef}, JSON_EXTRACT(${beforeJson}, '$'), JSON_EXTRACT(${afterJson}, '$'),
-              SHA2(CONCAT(${eventKey}, ':', ${requestHash}, ':', COALESCE(CAST(JSON_EXTRACT(${beforeJson}, '$') AS CHAR), 'null'), ':',
-                CAST(JSON_EXTRACT(${afterJson}, '$') AS CHAR)), 256))`;
+          await insertAudits(transaction, [auditInsert(value, eventKey, requestHash, kind, at, actor,
+            { cycle: before, activeCycleId: auditedActiveId, revisionId: null }, { cycle: value, activeCycleId: activeId, revisionId })]);
           auditedActiveId = activeId;
         }
         async function schedule(value: StoredCycle, at: number, actor: HistoryActor,
           observation: ChangeCycleInput["schedule"] = { kickoffAt: value.kickoffAt, providerObservedAt: null, actualStartedAt: null }) {
-          await transaction.predictionSchedule.create({ data: { id: randomUUID(), fixtureId, cycleId: value.id,
-            version: value.scheduleVersion, kickoffAt: new Date(value.kickoffAt), cutoffAt: new Date(value.cutoffAt),
-            observedAt: new Date(at), providerObservedAt: historyDate(observation.providerObservedAt),
-            actualStartedAt: historyDate(observation.actualStartedAt), actor: actor.actor, reason: actor.reason, evidenceRef: actor.evidenceRef } });
+          await transaction.predictionSchedule.create({ data: scheduleInsert(value, at, actor, observation) });
         }
         const primitives: PredictionHistoryWriter = Object.freeze({
           async createCycle(input) {
@@ -115,15 +169,9 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
               return cycle(previous.id);
             }
             const last = await transaction.predictionCycle.findFirst({ where: { fixtureId }, orderBy: { ordinal: "desc" } });
-            const id = randomUUID();
-            await transaction.predictionCycle.create({ data: { id, fixtureId, creationKey: request.creationKey,
-              creationHash: requestHash, ordinal: nextHistoryVersion(last?.ordinal ?? 0), scheduleVersion: 1,
-              kickoffAt: new Date(request.kickoffAt), cutoffAt: new Date(getPublicationDeadline(request.kickoffAt)), openedAt: new Date(request.openedAt) } });
+            const value = newCycle(request, nextHistoryVersion(last?.ordinal ?? 0), requestHash);
+            await transaction.predictionCycle.create({ data: cycleInsert(value) });
             // The initial schedule is inserted before the cycle is observable.
-            const value: StoredCycle = freezeEvidence({ id, fixtureId, creationKey: request.creationKey, creationHash: requestHash,
-              ordinal: nextHistoryVersion(last?.ordinal ?? 0), version: 1, scheduleVersion: 1,
-              kickoffAt: request.kickoffAt, cutoffAt: getPublicationDeadline(request.kickoffAt), openedAt: request.openedAt,
-              state: "open", currentSetId: null, lockedSetId: null, closedAt: null, lockedAt: null, voidedAt: null, voidReason: null });
             await schedule(value, request.openedAt, request);
             if (request.activate) await activate(value);
             await audit(value, request.creationKey, requestHash, "cycle-created", await now(), request, null);
@@ -238,7 +286,7 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
     return id ? storedRevision(transaction, id) : null;
   }
   return Object.freeze({
-    createRun, withFixtureTransaction,
+    createRun, withFixtureTransaction, createInitialCyclesInTransaction,
     createCycle(input: CreateCycleInput) { const request = parseCreateCycle(input); return withFixtureTransaction(request.fixtureId, (writer) => writer.createCycle(request)); },
     findCycle(id: string) { parseHistory(historyId, id); return read((transaction) => storedCycle(transaction, id)); },
     findRevision(id: string) { parseHistory(historyId, id); return read((transaction) => storedRevision(transaction, id)); },

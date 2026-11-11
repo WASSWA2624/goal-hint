@@ -237,6 +237,7 @@ model FootballFixture {
   oddsSnapshots         ProviderOddsSnapshot[]
   oddsState             FixtureOddsState?
   oddsPrices            FixtureOddsPrice[]
+  inPlayOdds            FixtureInPlayOdds?
   facts                 FixtureFacts?
 
   @@unique([provider, externalId])
@@ -1590,6 +1591,30 @@ model FixtureOddsPrice {
   @@index([snapshotId, fixtureId])
 }
 
+// Current in-play observations never replace pre-match quote state.
+model FixtureInPlayOdds {
+  fixtureId         String          @id @db.Char(36)
+  kickoffAt         DateTime        @db.DateTime(3)
+  homeTeamId        String          @db.Char(36)
+  awayTeamId        String          @db.Char(36)
+  checkedAt         DateTime        @db.DateTime(3)
+  changedAt         DateTime        @db.DateTime(3)
+  providerUpdatedAt DateTime?       @db.DateTime(3)
+  withdrawnAt      DateTime?       @db.DateTime(3)
+  semanticHash     String          @db.Char(64)
+  bodyJson         Json
+  fixture          FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([checkedAt])
+}
+
+model InPlayOddsPollState {
+  provider     String   @id @db.VarChar(32)
+  nextPollAt   DateTime @db.DateTime(3)
+  catalogDueAt DateTime @db.DateTime(3)
+  catalogJson  Json
+}
+
 // Consent-gated first-party analytics (docs/analytics.md). Visitor keys are HMACs of a random browser value;
 // no IP address, raw user agent, query string or form input is stored. Rows expire by the retention setting.
 model AnalyticsVisitor {
@@ -2412,6 +2437,9 @@ model FixtureFacts {
   statistics Json?
   statisticsHash String? @db.Char(64)
   statisticsRetrievedAt DateTime? @db.DateTime(3)
+  lineups Json?
+  playerStatistics Json?
+  detailsRetrievedAt DateTime? @db.DateTime(3)
   updatedAt DateTime @db.DateTime(3)
   fixture FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   @@index([venueExternalId])

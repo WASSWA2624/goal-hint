@@ -86,10 +86,12 @@ test('quota router opens one durable limiter per account plan and settled UTC pr
   const first = await router.refresh();
   assert.equal(first.startsAt, Date.parse('2026-10-10T00:00:00.000Z')); assert.equal(first.endsAt, first.startsAt + DAY);
   assert.equal(await router.remaining(), 90);
+  assert.deepEqual(store.periods.get(first.periodId).providerUsage, { observedAt: clock.now, limit: 100, remaining: 90 });
   assert.deepEqual(await router.limiter.complete({ periodId: 'c'.repeat(64) }, { kind: 'success' }), { status: 'denied', reason: 'dispatch-expired' });
   body = status({ requests: { current: 40, limit_day: 100 } });
   assert.equal((await router.refresh()).accountId, first.accountId);
   assert.equal(await router.remaining(), 60, 'provider usage only ever tightens the same day');
+  assert.deepEqual(store.periods.get(first.periodId).providerUsage, { observedAt: clock.now, limit: 100, remaining: 60 });
   body = status({ requests: { current: 5, limit_day: 100 } });
   await router.refresh(); assert.equal(await router.remaining(), 60, 'a higher provider count cannot restore spent capacity');
   body = status({ subscription: { plan: 'Pro', end: '2027-01-01T00:00:00+00:00', active: true }, requests: { current: 41, limit_day: 7500 } });

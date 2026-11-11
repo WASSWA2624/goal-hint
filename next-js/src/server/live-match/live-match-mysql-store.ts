@@ -22,7 +22,7 @@ const status = (value: string): SettlementStatus => z.enum(settlementStatuses).p
 const at = async (tx: Tx) => utcInstantFromEpochMilliseconds((await tx.$queryRaw<{ at: Date }[]>`SELECT UTC_TIMESTAMP(3) AS at`)[0]!.at.getTime());
 type FixtureRow = Readonly<{ fixtureId: string; externalId: bigint; cycleId: string | null; kickoffAt: Date | null;
   homeTeamId: string; awayTeamId: string; homeExternalId: bigint; awayExternalId: bigint; status: string; firstFinalAt?: Date | null }>;
-type SnapshotRow = Readonly<{ receivedAt: Date | null; bodyJson: unknown; validIntegrity: bigint | number | null; failures: number }>;
+type SnapshotRow = Readonly<{ receivedAt: Date | null; bodyJson: unknown; validIntegrity: bigint | number | null; failures: number | bigint }>;
 /** Canonical participants are included so even an identity correction without a prediction cycle starts a new occurrence. */
 function occurrence(row: FixtureRow): string {
   return evidenceFingerprint({ fixtureId: row.fixtureId, cycleId: row.cycleId, kickoffAt: stamp(row.kickoffAt),
@@ -41,6 +41,34 @@ function coverage(value: unknown, name: string): boolean | null {
   const parsed = historyJson(value);
   return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) &&
     typeof (parsed as Record<string, unknown>)[name] === "boolean" ? (parsed as Record<string, boolean>)[name]! : null;
+}
+
+async function saveFacts(tx: Tx, target: LiveMatchTarget, facts: NonNullable<Parameters<LiveMatchStore["save"]>[5]>, now: Date) {
+  const { events, statistics, lineups, players } = facts.values;
+  if (![events, statistics, lineups, players].some((rows) => rows?.length) ||
+    facts.retrievedAt > now.getTime() || Buffer.byteLength(JSON.stringify(facts.values)) > 1_000_000) return;
+  const previous = await tx.fixtureFacts.findUnique({ where: { fixtureId: target.fixtureId }, select: {
+    eventsHash: true, statisticsHash: true, lineups: true, playerStatistics: true,
+    eventsRetrievedAt: true, statisticsRetrievedAt: true, detailsRetrievedAt: true,
+  } });
+  const at = new Date(facts.retrievedAt);
+  const eventsHash = events?.length ? evidenceFingerprint(events) : null;
+  const statisticsHash = statistics?.length ? evidenceFingerprint(statistics) : null;
+  const canWrite = (old: Date | null | undefined) => old === null || old === undefined || at >= old;
+  const changes = {
+    ...(eventsHash && eventsHash !== previous?.eventsHash && canWrite(previous?.eventsRetrievedAt) ?
+      { events: events as Prisma.InputJsonArray, eventsHash, eventsRetrievedAt: at } : {}),
+    ...(statisticsHash && statisticsHash !== previous?.statisticsHash && canWrite(previous?.statisticsRetrievedAt) ?
+      { statistics: statistics as Prisma.InputJsonArray, statisticsHash, statisticsRetrievedAt: at } : {}),
+    ...(lineups?.length && canWrite(previous?.detailsRetrievedAt) && evidenceFingerprint(lineups) !== evidenceFingerprint(previous?.lineups ?? null)
+      ? { lineups: lineups as Prisma.InputJsonArray } : {}),
+    ...(players?.length && canWrite(previous?.detailsRetrievedAt) && evidenceFingerprint(players) !== evidenceFingerprint(previous?.playerStatistics ?? null)
+      ? { playerStatistics: players as Prisma.InputJsonArray } : {}),
+  };
+  if (Object.keys(changes).length === 0) return;
+  const data = { ...changes, updatedAt: now, ...("lineups" in changes || "playerStatistics" in changes ? { detailsRetrievedAt: at } : {}) };
+  await tx.fixtureFacts.upsert({ where: { fixtureId: target.fixtureId },
+    create: { fixtureId: target.fixtureId, providerFixtureId: BigInt(target.externalId), ...data }, update: data });
 }
 
 /** One stable account lease serializes the collector across restarts and provider-day changes. */
@@ -132,7 +160,10 @@ export function createMysqlLiveMatchStore(options: Readonly<{ database: Database
           LEFT JOIN FixtureResultState rs ON rs.fixtureId=f.id
           WHERE f.provider='api-football' AND (f.status='live' OR
             (f.status IN ('finished-regulation','finished-extra-time','finished-penalties','abandoned')
-              AND COALESCE(l.firstFinalAt,rs.firstFinalAt,f.retrievedAt) >= ${new Date(now - policy.finalWindowMs)}))
+              AND COALESCE(l.firstFinalAt,rs.firstFinalAt,f.retrievedAt) >= ${new Date(now - policy.finalWindowMs)}
+              AND (${policy.stopAfterFinal !== true} OR
+                (f.kickoff >= ${new Date(now - policy.finalWindowMs)} AND
+                  (l.firstFinalAt IS NOT NULL OR l.bodyJson IS NULL OR JSON_UNQUOTE(JSON_EXTRACT(l.bodyJson,'$.status')) <> f.status)))))
             AND (l.nextPollAt IS NULL OR l.nextPollAt <= ${new Date(now)})
             AND NOT EXISTS (SELECT 1 FROM FootballTeamProvider otherHome WHERE otherHome.teamId=f.homeTeamId
               AND otherHome.provider='api-football' AND otherHome.externalId<>h.externalId)
@@ -143,7 +174,7 @@ export function createMysqlLiveMatchStore(options: Readonly<{ database: Database
           const target = { occurrenceId: occurrence(row), fixtureId: uuid.parse(row.fixtureId), externalId: Number(row.externalId),
             cycleId: row.cycleId, kickoffAt: stamp(row.kickoffAt), homeExternalId: Number(row.homeExternalId), awayExternalId: Number(row.awayExternalId),
             status: status(row.status), statisticsCoverage: coverage(row.seasonCoverage, "fixtures.statistics_fixtures"),
-            eventsCoverage: coverage(row.seasonCoverage, "fixtures.events"), failures: row.failures };
+            eventsCoverage: coverage(row.seasonCoverage, "fixtures.events"), failures: Number(row.failures) };
           if (![target.externalId, target.homeExternalId, target.awayExternalId].every((v) => bounded(v, Number.MAX_SAFE_INTEGER)))
             return liveMatchFail("unavailable");
           return { ...target, previous: snapshot(row, target) };
@@ -163,7 +194,7 @@ export function createMysqlLiveMatchStore(options: Readonly<{ database: Database
           ON DUPLICATE KEY UPDATE attemptedAt=${new Date(now)},nextPollAt=${new Date(nextAt)},firstFinalAt=COALESCE(LiveMatchSnapshot.firstFinalAt,${finalAt})`;
       });
     },
-    save(lease, target, input, nextAt, failures) {
+    save(lease, target, input, nextAt, failures, facts) {
       const value = liveMatchSnapshotSchema.parse(input), body = evidenceSerialize(value);
       if (Buffer.byteLength(body) > liveMatchRules.maxSnapshotBytes || value.fixtureId !== target.fixtureId || value.cycleId !== target.cycleId ||
         value.kickoffAt !== target.kickoffAt || value.status !== target.status || !Number.isSafeInteger(failures) || failures < 0 || failures > 16)
@@ -184,6 +215,7 @@ export function createMysqlLiveMatchStore(options: Readonly<{ database: Database
         await tx.$executeRaw`UPDATE LiveMatchSnapshot SET receivedAt=${new Date(value.collectedAt)},bodyJson=JSON_EXTRACT(${body},'$'),
           integrity=SHA2(CAST(JSON_EXTRACT(${body},'$') AS CHAR),256),nextPollAt=${new Date(nextAt)},failures=${failures}
           WHERE id=${target.occurrenceId}`;
+        if (facts) await saveFacts(tx, target, facts, new Date(now));
         await locked(tx, lease);
       });
     },

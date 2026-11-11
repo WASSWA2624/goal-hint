@@ -80,7 +80,8 @@ const Action = styled.button`
   color: inherit;
   &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
   ${media.hover} { &:hover:not(:disabled):not([aria-pressed="true"]) { box-shadow: inset 0 0 0 var(--gh-stroke-thin) currentColor; } }
-  &:disabled { cursor: wait; }
+  &:disabled { cursor: default; }
+  [aria-busy="true"] &:disabled { cursor: wait; }
 `;
 
 const outcomes = [
@@ -94,20 +95,21 @@ const outcomes = [
 
 /** Shared period outcomes; null counts remain unknown and all six statuses stay visible. */
 export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title, period, actions, headingLevel = 2,
-  showCoverage = true, showAll = true, activeResult, onResult, disabled = false, resultAttributes, compactHeader = false }: {
+  showCoverage = true, showAll = true, activeResult, onResult, disabled = false, loading = false, resultAttributes, compactHeader = false }: {
   counts: PerformanceSummaryCounts | null; locale: string; kind: "matches" | "slips" | "predictions";
   title?: string | undefined; period?: string | undefined; headingLevel?: 2 | 3 | undefined;
   actions?: ReactNode;
   compactHeader?: boolean;
+  loading?: boolean;
   showCoverage?: boolean | undefined; showAll?: boolean;
   activeResult?: PredictionResult | undefined; onResult?: ((result: PredictionResult | undefined) => void) | undefined; disabled?: boolean;
   resultAttributes?: ((result: PredictionResult | undefined) => Record<`data-${string}`, string>) | undefined;
 }) {
-  const m = createMessages(locale), label = title ?? m.text("performance.summary.title"), pending = suppliedCounts === null;
+  const m = createMessages(locale), label = title ?? m.text("performance.summary.title"), unknown = suppliedCounts === null;
   const counts = suppliedCounts ?? { total: 0, won: 0, lost: 0, pending: 0 };
   const predicted = kind === "matches" ? predictedPerformanceSummary(counts) : null;
-  const number = (value: number) => pending ? "—" : m.number(value);
-  return <Panel role="group" aria-label={label} aria-busy={pending || undefined} data-performance-summary={kind}>
+  const number = (value: number) => unknown ? "—" : m.number(value);
+  return <Panel role="group" aria-label={label} aria-busy={loading || undefined} data-performance-summary={kind}>
     <Content $compactHeader={compactHeader}>
       <Header $compactHeader={compactHeader} data-performance-heading>{headingLevel === 3 ? <h3>{label}</h3> : <h2>{label}</h2>}
         {period && <p data-performance-period>{period}</p>}
@@ -119,7 +121,7 @@ export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title
           const count = key === "all" ? (showAll && predicted ? predicted.total : counts.total) : counts[key] ?? 0;
           const fraction = key === "all" ? null : predicted
             ? (predicted.total > 0 ? count / predicted.total : null) : counts.total > 0 ? count / counts.total : null;
-          const percentage = !pending && fraction !== null && fraction !== undefined
+          const percentage = !unknown && fraction !== null && fraction !== undefined
             ? m.number(fraction, { style: "percent", maximumFractionDigits: 1 }) : null;
           const Icon = "icon" in outcome ? outcome.icon : null;
           return <Count key={key} $status={key} data-summary-card={key} data-summary-outcome={"tone" in outcome ? outcome.tone : undefined}>
@@ -127,7 +129,7 @@ export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title
               {key !== "all" && <Percentage data-summary-percentage={"tone" in outcome ? outcome.tone : key}>{percentage ? `(${percentage})` : "—"}</Percentage>}
             </dd>
             {onResult && <Action type="button" aria-label={`${label}: ${number(count)}`} aria-pressed={activeResult === result}
-              disabled={disabled || pending} data-summary-result={key} {...resultAttributes?.(result)} onClick={() => onResult(result)} />}
+              disabled={disabled || unknown} data-summary-result={key} {...resultAttributes?.(result)} onClick={() => onResult(result)} />}
           </Count>;
         })}
       </Counts>{actions && <Actions data-performance-actions>{actions}</Actions>}</Figures>

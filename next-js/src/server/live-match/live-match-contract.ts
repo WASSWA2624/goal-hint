@@ -4,10 +4,11 @@ import type { UtcInstant } from "../../domain/calendar.ts";
 import type { LiveMatchSnapshot } from "../../domain/live-match.ts";
 import type { SettlementStatus } from "../../domain/market-settlement.ts";
 import type { ApiFootballBounds, ApiFootballResult } from "../football/api-football-contract.ts";
-import type { NormalizedStatistics, NormalizedEvent } from "../football/api-football-normalize.ts";
+import type { FixtureDetailFacts } from "../football/fixture-match-details.ts";
 
 export type LiveMatchPolicy = Readonly<{
   version: 1; evidenceRef: string; coverage: readonly Readonly<{ competitionId: number; season: number }>[];
+  stopAfterFinal?: true;
   intervalMs: number; finalIntervalMs: number; finalWindowMs: number; staleAfterMs: number;
   leaseMs: number; tickMs: number; maxFixturesPerTick: number; requestWindowMs: number;
   request: Omit<ApiFootballBounds, "priority" | "deadlineAt" | "cacheScope">;
@@ -27,12 +28,13 @@ export type LiveMatchStore = Readonly<{
   /** Fence and reserve the next attempt before dispatch, including on the first observation. */
   schedule(lease: LiveMatchLease, target: LiveMatchTarget, nextAt: number): Promise<void>;
   /** Reject a changed occurrence. One bounded body is replaced, never appended per poll. */
-  save(lease: LiveMatchLease, target: LiveMatchTarget, snapshot: LiveMatchSnapshot, nextAt: number, failures: number): Promise<void>;
+  save(lease: LiveMatchLease, target: LiveMatchTarget, snapshot: LiveMatchSnapshot, nextAt: number, failures: number,
+    facts?: Readonly<{ values: FixtureDetailFacts; retrievedAt: UtcInstant }>): Promise<void>;
 }>;
 export type LiveMatchAuthority = Readonly<{
   authorize(): void;
   verifyPolicy(policy: LiveMatchPolicy): boolean;
-  verifyResponse(response: ApiFootballResult<NormalizedStatistics> | ApiFootballResult<NormalizedEvent>): boolean;
+  verifyResponse(response: ApiFootballResult<unknown>): boolean;
 }>;
 export class LiveMatchError extends Error {
   readonly reason: "invalid-request" | "policy-required" | "unauthorized" | "lost-lease" | "unavailable";

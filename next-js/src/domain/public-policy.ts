@@ -1,4 +1,4 @@
-import { isDevelopmentDemo } from "./development-demo.ts";
+import { isDevelopmentDemo, isLocalFootballDevelopment } from "./development-demo.ts";
 
 /** Source-owned, nonsecret product settings. Safe for browser imports. */
 export const publicPolicy = Object.freeze({
@@ -23,9 +23,9 @@ export const publicPolicy = Object.freeze({
     additionalLocales: false,
     darkMode: false,
     exactScores: false,
-    /** Synthetic development prices enable the ordinary odds controls. Production
-     * prices remain off until the owner records odds display rights (OP-36). */
-    providerOdds: isDevelopmentDemo(),
+    /** Development prices are available in the synthetic or loopback snapshot app.
+     * Hosted odds remain subject to their display policy. */
+    providerOdds: isDevelopmentDemo() || isLocalFootballDevelopment(),
     /** Stored match statistics/events use the existing verified football public-display rights. */
     liveMatchDetails: true,
   }),

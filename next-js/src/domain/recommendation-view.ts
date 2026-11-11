@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { FixtureSnapshot } from "./fixture-snapshot.ts";
 import { isMarketSelection, marketSelections, type AcceptedMarket, type MarketFamily } from "./markets.ts";
 import { publicPolicy } from "./public-policy.ts";
 import type { RecommendationDecision } from "./recommendation.ts";
@@ -39,4 +40,10 @@ export function recommendationFamily(recommendation: PublicRecommendation | unde
   if (pick && eligible.includes(pick.family)) return pick.family;
   // An explicit family filter can still inspect probability-only family forecasts.
   return eligible.length === publicPolicy.markets.length ? null : undefined;
+}
+
+export function hasPublishedForecastWithoutPick(forecast: FixtureSnapshot["forecast"],
+  eligible: readonly MarketFamily[] = publicPolicy.markets): boolean {
+  return !!forecast && !("gated" in forecast) && forecast.recommendation?.status === "no-qualified-recommendation" &&
+    forecast.markets.some(({ market }) => eligible.includes(market.family));
 }

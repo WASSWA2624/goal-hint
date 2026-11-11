@@ -15,6 +15,7 @@ import { createMysqlQuotaStore } from "../src/server/football/quota-mysql-store.
 import { createApiFootballAdapter } from "../src/server/football/api-football-adapter.ts";
 import { createLiveQuotaAdmission } from "../src/server/live/live-detail-quota.ts";
 import { liveWorkload } from "../src/server/live/live-plan.ts";
+import { readLocalFootballUsage } from "../src/server/live/live-usage.ts";
 import { parseTrialPlan } from "../src/server/football/provider-trial-input.ts";
 import { withTrialJournal } from "../src/server/football/provider-trial-journal.ts";
 import { chargedTrialRequests, runProviderTrial } from "../src/server/football/provider-trial-runner.ts";
@@ -137,9 +138,39 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       GRANT SELECT, INSERT, UPDATE, DELETE ON goal_hint_test.ApiQuotaPeriod TO 'quota_application'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE, DELETE ON goal_hint_test.ApiQuotaAttempt TO 'quota_application'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.ApiQuotaBudget TO 'quota_application'@'127.0.0.1';
+      GRANT SELECT ON goal_hint_test.ResultSyncBatch TO 'quota_application'@'127.0.0.1';
+      GRANT SELECT ON goal_hint_test.LiveMatchSnapshot TO 'quota_application'@'127.0.0.1';
+      GRANT SELECT ON goal_hint_test.OddsImportBatch TO 'quota_application'@'127.0.0.1';
+      GRANT SELECT ON goal_hint_test.FootballFixture TO 'quota_application'@'127.0.0.1';
     `);
     const firstDatabase = replica();
     const secondDatabase = replica();
+
+    await t.test("the daily report separates account usage from local launches and attributes HTTP retries", async () => {
+      const dayLength = 86_400_000;
+      const [{ at }] = await firstDatabase.query((tx) => tx.$queryRaw`SELECT UTC_TIMESTAMP(3) AS at`);
+      const startsAt = Math.floor(at.getTime() / dayLength) * dayLength;
+      const observedAt = Math.max(startsAt + 1_000, at.getTime() - 5_000);
+      const f = fixture(firstDatabase, "daily-usage", { startsAt, endsAt: startsAt + dayLength,
+        subscriptionExpiresAt: startsAt + dayLength * 2, dailyRemaining: 149_923, observedAt });
+      f.clock.now = observedAt;
+      await f.initialize();
+      const first = await dispatch(f.limiter, f.request("enrichment", { endpoint: "/odds/live" }));
+      await f.limiter.complete(first, { kind: "rate-limited", retryAfterMs: 1 });
+      f.clock.now += 1_000;
+      const retry = await dispatch(f.limiter, f.request("enrichment", { endpoint: "/odds/live", retry: true }));
+      await f.limiter.complete(retry, { kind: "success" });
+
+      const report = await readLocalFootballUsage(secondDatabase, 2);
+      assert.deepEqual(report.days[0].provider, { observedAt: new Date(observedAt).toISOString(),
+        limit: 150_000, used: 77, remaining: 149_923 });
+      assert.equal(report.days[0].resetsAt, new Date(startsAt + dayLength).toISOString());
+      assert.deepEqual(report.days[0].local.breakdown, [{ endpoint: "/odds/live", workload: "enrichment",
+        launches: 2, retries: 1, rateLimited: 1, uncertain: 0, providerErrors: 0 }]);
+      assert.equal(report.days[0].local.remaining, 119_921);
+      assert.equal(report.freshness.latestInPlayPoll, new Date(f.clock.now).toISOString());
+      assert.equal(report.days[1].local.launches, 0);
+    });
 
     await t.test("separate application replicas serialize one account and deduplicate the same work", async () => {
       const f = fixture(firstDatabase, "concurrent");

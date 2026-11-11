@@ -9,13 +9,14 @@ import { API_FOOTBALL_ORIGIN, API_FOOTBALL_CONTRACT_VERSION, apiFootballEndpoint
   type ApiFootballBatchEvidence, type ApiFootballFallbackWorkflow } from "./api-football-contract.ts";
 import { normalizeFixture, normalizeTeam, normalizeCompetition, normalizeStatistics, normalizeEvent,
   normalizeAvailability, normalizePlayerStatistics, normalizeFallbackPrediction,
-  normalizeAccountStatus, normalizeOdds, normalizeOddsCatalogEntry,
+  normalizeAccountStatus, normalizeOdds, normalizeOddsCatalogEntry, normalizeInPlayOdds,
   type NormalizationContext, type NormalizationResult, type NormalizedFixture, type NormalizedFixtureOdds } from "./api-football-normalize.ts";
 import { createPolicyQuotaGateway, type createQuotaGateway, type GatewayQuotaLimiter } from "./quota-gateway.ts";
 import { quotaPriorities, type QuotaFeedback } from "./quota-contract.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { createDemoApiFootballFetch } from "../demo/api-football.ts";
 import { authorizeDemoFootball, createDemoFootballGateway, demoFootballAccountId } from "../demo/provider-runtime.ts";
+import { normalizeFixtureMatchDetails, type NormalizedFixtureMatchDetails } from "./fixture-match-details.ts";
 
 export type FixtureQuery = Readonly<{ date?: string; competitionId?: number; season?: number;
   teamId?: number; from?: string; to?: string; round?: string; fixtureId?: number }>;
@@ -39,6 +40,8 @@ export type ApiFootballAdapterOptions = Readonly<{
   verifyLogo?: NormalizationContext["verifyLogo"];
   verifyRegulationScore?: NormalizationContext["verifyRegulationScore"];
   verifyHalfTimeScore?: NormalizationContext["verifyHalfTimeScore"];
+  /** Private snapshot capture of a validated fixture page, including embedded match details. */
+  observeFixturePage?: (rows: readonly unknown[], provenance: ApiFootballPageProvenance) => void;
   cacheCapacity?: number;
 }>;
 type Params = Readonly<Record<string, string>>;
@@ -258,7 +261,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
       return { page: { ...cached, provenance: { ...cached.provenance, fromCache: true } } };
     }
     // Different byte/row bounds cannot safely reuse an in-flight normalization.
-    const joinKey = `${workKey}:${bounds.maxResponseBytes}:${bounds.maxRows}`;
+    const joinKey = `${workKey}:${bounds.maxResponseBytes}:${bounds.maxRows}:${normalize === normalizeFixtureMatchDetails ? "details" : "default"}`;
     const existing = inFlight.get(joinKey) as Promise<PageOutcome<T>> | undefined;
     if (existing) {
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -284,6 +287,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
     async function attempts(): Promise<PageOutcome<T>> {
       let lastError: ApiFootballFailure = failure("transport-error", true);
       let attemptId = randomBytes(32).toString("hex");
+      let retry = false;
       // A re-reserved queued attempt must repeat its original request exactly; the limiter
       // rejects a changed timeout, so it is fixed per attempt id rather than per pass.
       let attemptTimeoutMs: number | null = null;
@@ -304,10 +308,11 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
         if (!key) return { error: failure("invalid-credential") };
         let captured: ApiFootballFailure | null = null;
         let responseObservation: ApiFootballPageProvenance | null = null;
+        let fixtureRows: readonly unknown[] | null = null;
         let didDispatch = false;
         attemptTimeoutMs ??= Math.min(bounds.timeoutMs, deadlineAt - clock.now());
         const result = await options.gateway.execute({ requestId: attemptId, workKey, priority: bounds.priority,
-          deadlineAt, timeoutMs: attemptTimeoutMs }, async (signal, _permit, observe) => {
+          deadlineAt, timeoutMs: attemptTimeoutMs, endpoint: url.pathname, retry }, async (signal, _permit, observe) => {
           if (!workflowAllowed(workflow)) throw new Error("Fallback refresh is no longer authorized.");
           const dispatchCheck: unknown = workflow?.beforeDispatch?.();
           if (dispatchCheck instanceof Promise) void dispatchCheck.catch(() => undefined);
@@ -356,8 +361,8 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
             captured = failure("schema-error");
             return { value: null, feedback: { ...observation, kind: "provider-error" } };
           }
-          // Odds rows carry their own `update` time; every other endpoint lacks one.
-          const data: T[] = [], missingCoverage = new Set<string>(endpoint === "odds" ? [] : ["provider-update-time"]);
+          // Price rows carry their own `update` time; other endpoints lack one.
+          const data: T[] = [], missingCoverage = new Set<string>(endpoint === "odds" || endpoint === "inPlayOdds" ? [] : ["provider-update-time"]);
           if (rows.length === 0) missingCoverage.add(`${endpoint}-coverage-not-established`);
           if (Object.keys(params).some((key) => key !== "timezone" && (!record(body.parameters) || !Object.hasOwn(body.parameters, key)))) {
             captured = failure("coverage-error");
@@ -368,7 +373,15 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
             ...(options.verifyLogo === undefined ? {} : { verifyLogo: options.verifyLogo }),
             ...(options.verifyRegulationScore === undefined ? {} : { verifyRegulationScore: options.verifyRegulationScore }),
             ...(options.verifyHalfTimeScore === undefined ? {} : { verifyHalfTimeScore: options.verifyHalfTimeScore }) };
+          const preMatchCatalog = endpoint === "oddsBets" || endpoint === "oddsBookmakers";
+          const catalogIds = new Set<number>();
           for (const row of rows.slice(0, bounds.maxRows)) {
+            if (preMatchCatalog && record(row) && positive(row.id) && row.id <= 4_294_967_295) {
+              if (catalogIds.has(row.id)) { invalidRows++; continue; }
+              catalogIds.add(row.id);
+              // API-Football includes unnamed placeholders. They establish ID coverage only.
+              if (row.name === null) { missingCoverage.add(`odds-catalog-name:${row.id}`); continue; }
+            }
             const normalized = normalize(row, context);
             if (normalized.valid && matchesScope(endpoint, params, normalized.data)) { data.push(normalized.data); for (const missing of normalized.missingCoverage) missingCoverage.add(missing); }
             else invalidRows++;
@@ -382,11 +395,13 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
             provenance: Object.freeze({ provider: "api-football", endpoint, requestParameters: Object.freeze({ ...params }), contractVersion: API_FOOTBALL_CONTRACT_VERSION,
               retrievedAt, providerUpdatedAt: null, fromCache: false, currentPage: paging === null ? null : Number(paging.current),
               totalPages: paging === null ? null : Number(paging.total), quota: Object.freeze({ ...observation, kind: "success" }) }) });
+          if (options.observeFixturePage && endpoint === "fixtures" && pageError === null) fixtureRows = Object.freeze(rows);
           return { value: page, feedback: { ...observation, kind: "success" } };
         });
         if (result.status === "completed" && result.value) {
           if (!authorized() || !workflowAllowed(workflow)) return { error: failure("operation-not-authorized") };
           if (clock.now() >= bounds.deadlineAt) return { error: failure("deadline-exceeded") };
+          if (fixtureRows !== null) options.observeFixturePage?.(fixtureRows, result.value.provenance);
           return { page: result.value };
         }
         if (responseObservation) {
@@ -404,7 +419,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
           lastError = { ...failure("quota-denied", transient), quotaReason: result.reason,
             ...(result.retryAt === undefined ? {} : { retryAt: result.retryAt }) };
         } else lastError = captured ?? failure("transport-error", true);
-        if (didDispatch) { attemptId = randomBytes(32).toString("hex"); attemptTimeoutMs = null; }
+        if (didDispatch) { attemptId = randomBytes(32).toString("hex"); attemptTimeoutMs = null; retry = true; }
         if (!lastError.retryable || attempt + 1 >= bounds.retry.maxAttempts || budget.requests >= bounds.maxRequests) return { error: lastError };
         const jitter = Math.min(1, Math.max(0, random()));
         const backoff = Math.ceil(Math.min(bounds.retry.maxDelayMs, bounds.retry.baseDelayMs * 2 ** Math.min(attempt, 30)) * jitter);
@@ -448,7 +463,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
           const teamId = record(row) && record(row.team) && positive(row.team.id) ? row.team.id : null;
           const injuryPlayer = record(row) && record(row.reportedInjury) && positive(row.reportedInjury.playerId) ? row.reportedInjury.playerId : null;
           // Normalized odds rows have no `id`; a fixture repeated across pages is a schema error.
-          const identity = endpoint === "odds" && record(row) && positive(row.fixtureId) ? `odds:${row.fixtureId}`
+          const identity = (endpoint === "odds" || endpoint === "inPlayOdds") && record(row) && positive(row.fixtureId) ? `odds:${row.fixtureId}`
             : id !== null ? `id:${id}` : endpoint === "injuries" && teamId !== null && injuryPlayer !== null
             ? `injury:${teamId}:${injuryPlayer}:${query.fixture}` : teamId !== null && endpoint !== "injuries" ? `team:${teamId}` : endpoint === "predictions" ? `prediction:${query.fixture}` : null;
           if ((identity !== null && rowIdentities.has(identity)) || (endpoint === "fixtures" && expectedIds && (id === null || !expectedIds.includes(id)))) {
@@ -492,6 +507,22 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
     const params = queryParams(query);
     return run("fixtures", params ? [params] : null, bounds, normalizeFixture, query?.fixtureId === undefined ? undefined : [query.fixtureId], workflow);
   };
+  function fixtureIds<T>(ids: readonly number[], bounds: ApiFootballBounds, normalize: Normalize<T>, workflow?: ApiFootballFallbackWorkflow) {
+    if (!Array.isArray(ids) || ids.length === 0 || !ids.every(positive)) return run("fixtures", null, bounds, normalize);
+    const requested = [...new Set(ids)].sort((a, b) => a - b);
+    let maximum = 1;
+    const evidence = options.batchEvidence;
+    try {
+      if (evidence && positive(evidence.maximumIds) && evidence.maximumIds <= 20 && typeof evidence.evidenceRef === "string" && evidence.evidenceRef.trim()
+        && options.verifyBatchEvidence?.(evidence) === true) maximum = evidence.maximumIds;
+    } catch { /* Unverified support falls back to single-ID lookups. */ }
+    const queries: Params[] = [];
+    for (let offset = 0; offset < requested.length; offset += maximum) {
+      const chunk = requested.slice(offset, offset + maximum);
+      queries.push({ [maximum === 1 ? "id" : "ids"]: chunk.join("-"), timezone: "Africa/Kampala" });
+    }
+    return run("fixtures", queries, bounds, normalize, requested, workflow);
+  }
   return Object.freeze({
     evidence: Object.freeze({
       accountStatus: (bounds: ApiFootballBounds) => run("accountStatus", [{}], bounds, normalizeAccountStatus),
@@ -499,20 +530,11 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
       fixturesByDate: (date: string, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => fixtureQueries({ date }, bounds, workflow),
       liveFixtures: (bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => run("fixtures", [{ live: "all", timezone: "Africa/Kampala" }], bounds, normalizeFixture, undefined, workflow),
       unresolvedFixtures(ids: readonly number[], bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow): Promise<ApiFootballResult<NormalizedFixture>> {
-        if (!Array.isArray(ids) || ids.length === 0 || !ids.every(positive)) return run("fixtures", null, bounds, normalizeFixture);
-        const requested = [...new Set(ids)].sort((a, b) => a - b);
-        let maximum = 1;
-        const evidence = options.batchEvidence;
-        try {
-          if (evidence && positive(evidence.maximumIds) && evidence.maximumIds <= 20 && typeof evidence.evidenceRef === "string" && evidence.evidenceRef.trim()
-            && options.verifyBatchEvidence?.(evidence) === true) maximum = evidence.maximumIds;
-        } catch { /* Unverified support falls back to single-ID lookups. */ }
-        const queries: Params[] = [];
-        for (let offset = 0; offset < requested.length; offset += maximum) {
-          const chunk = requested.slice(offset, offset + maximum);
-          queries.push({ [maximum === 1 ? "id" : "ids"]: chunk.join("-"), timezone: "Africa/Kampala" });
-        }
-        return run("fixtures", queries, bounds, normalizeFixture, requested, workflow);
+        return fixtureIds(ids, bounds, normalizeFixture, workflow);
+      },
+      matchDetails(ids: readonly number[], bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow): Promise<ApiFootballResult<NormalizedFixtureMatchDetails>> {
+        // The fixture transport uses the same quota ledger as scores and all other football work.
+        return fixtureIds(ids, { ...bounds, cacheMaxAgeMs: 0 }, normalizeFixtureMatchDetails, workflow);
       },
       teams(query: TeamQuery, bounds: ApiFootballBounds) {
         const params = keysAllowed(query, ["teamId"]) && "teamId" in query && positive(query.teamId) ? { id: String(query.teamId) } : paired(query as PlayerStatisticsQuery);
@@ -544,6 +566,8 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
       prices: (query: OddsQuery, bounds: ApiFootballBounds) => { const params = oddsParams(query); return run("odds", params ? [params] : null, bounds, normalizeOdds); },
       bets: (bounds: ApiFootballBounds) => run("oddsBets", [{}], bounds, normalizeOddsCatalogEntry),
       bookmakers: (bounds: ApiFootballBounds) => run("oddsBookmakers", [{}], bounds, normalizeOddsCatalogEntry),
+      inPlay: (bounds: ApiFootballBounds) => run("inPlayOdds", [{}], bounds, normalizeInPlayOdds),
+      inPlayBets: (bounds: ApiFootballBounds) => run("inPlayOddsBets", [{}], bounds, normalizeOddsCatalogEntry),
     }),
   });
 }

@@ -49,9 +49,11 @@ import { fallbackRefreshPlan, LIVE_REFRESH_TYPE, liveReferences, liveWorkload,
   oddsPolicy, oddsImportBounds, oddsCatalogBounds, oddsMaxRequests, ODDS_FRESHNESS_MS, teamCodeBounds, teamCodeImportsEnabled,
   refreshEnvelopeFor } from "./live-plan.ts";
 import { oddsFail } from "../odds/odds-contract.ts";
-import { createOddsJobDefinitions, ODDS_PROVIDER_WINDOW_MS, ODDS_SWEEP_MS, type OddsQuotaUsage } from "../odds/odds-jobs.ts";
+import { createOddsJobDefinitions, oddsQuotaAllows, ODDS_PROVIDER_WINDOW_MS, ODDS_SWEEP_MS, type OddsQuotaUsage } from "../odds/odds-jobs.ts";
 import { createMysqlOddsStore } from "../odds/odds-mysql-store.ts";
+import { oddsPolicyHash } from "../odds/odds-input.ts";
 import { createOddsImportService } from "../odds/odds-service.ts";
+import { createInPlayOddsPoller } from "../odds/in-play-odds-service.ts";
 import { createTeamCodeJobDefinitions } from "../teams/team-code-jobs.ts";
 import { createMysqlTeamCodeStore } from "../teams/team-code-mysql-store.ts";
 import { createTeamCodeService } from "../teams/team-code-service.ts";
@@ -105,10 +107,19 @@ export function liveOptionalPolicy(input: RuntimePolicy, verify: EvidenceVerifie
 export type LiveRuntimeOverrides = Readonly<{
   /** Isolated tests only: a synthetic provider transport and owner register. */
   fetcher?: typeof fetch; aiFetcher?: typeof fetch; researchFetcher?: typeof fetch; approvals?: OwnerApprovals;
+  /** The development entry point verifies the owned MySQL datadir before setting this. */
+  localFootball?: boolean;
+  onPollerState?: (kind: "results" | "match-details", state: string) => void;
 }>;
 /** Composes the pinned primary and provider fallback pipeline on shared durable stores. */
 export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: LiveRuntimeOverrides = {}) {
   const verify = liveReadiness(inputPolicy, overrides.approvals), policy = liveOptionalPolicy(inputPolicy, verify), refs = liveReferences(policy);
+  const localFootball = overrides.localFootball === true;
+  if (localFootball) {
+    const url = new URL(policy.secrets.databaseUrl?.read() ?? "about:blank");
+    if (policy.mode !== "development" || url.hostname !== "127.0.0.1" || !/^\/goal_hint_football_\d{6}$/u.test(url.pathname))
+      throw new LiveConfigurationError(["Local football requires the owned loopback snapshot database."]);
+  }
   const fetcher = overrides.fetcher === undefined ? {} : { fetcher: overrides.fetcher };
   const database = createDatabase(policy, verify);
   try {
@@ -132,7 +143,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     // Freeze the reviewed source order beside the optional model for every new intent.
     const sourceOrder = aiModel === null ? null : liveSourceOrder(policy);
     let ai: LiveAiRuntime | null = null;
-    const authorities = createLiveAuthorities({ policy, verify, refs, selection, statusEvidenceRef, resultPolicy: () => results,
+    const authorities = createLiveAuthorities({ policy, verify, refs, selection, statusEvidenceRef, resultPolicy: () => results, localFootball,
       refreshPacing: workload.pacing, oddsPolicy: odds, liveMatchPolicy: () => liveDetailsPolicy,
       ...(aiModel === null || sourceOrder === null ? {} : { aiModel, sourceOrder, verifyPrimary: (...args) => ai?.verifyAi(...args) === true, verifyPrimaryCandidate: (candidate) => ai?.verifyPublishedCandidate(candidate) === true }) });
     const gateway = createPolicyQuotaGateway({ limiter: quota.limiter, policy, verifyEvidence: verify });
@@ -230,7 +241,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     // Odds (052): imported only when the owner enables them AND the verified plan leaves spare ordinary quota.
     // A separate registry runs on its own worker, so odds never occupy refresh or cutoff workers.
     const oddsEnabled = policy.choices.odds.enabled && workload.odds.eligible && odds !== null;
-    const oddsService = createOddsImportService({ adapter: adapter.odds, store: createMysqlOddsStore(database), authority: authorities.odds,
+    const oddsStore = createMysqlOddsStore(database);
+    const oddsService = createOddsImportService({ adapter: adapter.odds, store: oddsStore, authority: authorities.odds,
       accountId: () => quota.current()?.accountId ?? oddsFail("unavailable"),
       bounds: (request) => {
         const end = request.kind === "prices" ? request.slot + ODDS_SWEEP_MS : request.slot + DAY_MS;
@@ -252,6 +264,33 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       return Object.freeze({ remaining: counters.remaining, used: counters.used, oddsUsed: Number(row?.spent ?? 0) });
     }
     const enrichmentAllowance = Object.freeze({ floor: workload.odds.floor, spare: workload.odds.spare, reserve: workload.odds.reserve });
+    async function requalifyLocalOdds() {
+      if (!localFootball || !odds || !oddsEnabled) return oddsFail("unverified-policy");
+      const current = quota.current();
+      if (!current) return oddsFail("unavailable");
+      const verifyProjection = () => authorities.odds.verifyPublicDisplay() && authorities.odds.verifyPolicy(odds) &&
+        authorities.odds.verifyRetention({ evidenceRef: refs.retention, purpose: "structured-odds-history", rawPayloadsStored: false });
+      if (!verifyProjection()) return oddsFail("unverified-policy");
+      const catalogService = createOddsImportService({ adapter: adapter.odds, store: oddsStore, authority: authorities.odds,
+        accountId: () => current.accountId,
+        bounds: () => ({ ...oddsCatalogBounds(utcInstantFromEpochMilliseconds(Math.min(Date.now() + 20_000, current.endsAt))),
+          timeoutMs: 15_000, maxRequests: 1, retry: { maxAttempts: 1, baseDelayMs: 0, maxDelayMs: 0 } }),
+      });
+      let requests = 0;
+      for (const kind of ["bets", "bookmakers"] as const) {
+        if (await oddsStore.hasCompleteCatalog(kind, current.startsAt)) continue;
+        const usage = await oddsUsage();
+        if (!usage || !oddsQuotaAllows(usage, enrichmentAllowance, 1)) return oddsFail("unavailable");
+        const id = evidenceFingerprint({ kind, slot: current.startsAt, purpose: "local-odds-requalification" });
+        const summary = await catalogService.importCatalog({ id, kind, date: null, policy: odds, slot: current.startsAt });
+        requests += summary.requestsDispatched;
+        if (summary.status !== "complete") return { requests, scanned: 0, updated: 0, status: summary.status, catalog: kind };
+      }
+      const catalog = await oddsStore.latestBetCatalog();
+      if (!catalog) return oddsFail("unavailable");
+      return { requests, status: "complete", ...await oddsStore.projectRetainedPrices({ policy: odds,
+        policyHash: oddsPolicyHash(odds), catalog, limit: 500, verify: verifyProjection }) };
+    }
     const oddsDefinitions = createOddsJobDefinitions({ service: oddsService, policy: () => odds ?? oddsFail("unverified-policy"),
       enabled: () => oddsEnabled, usage: oddsUsage, allowance: enrichmentAllowance,
       maxRequests: (kind) => oddsMaxRequests(kind, workload.odds.maxPages) });
@@ -267,6 +306,10 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     const teamCodesRegistry = createJobRegistry(teamCodeDefinitions);
     // One enrichment worker runs both, so their quota gates are checked one job at a time; odds jobs claim first.
     const enrichmentRegistry = createJobRegistry([...oddsDefinitions, ...teamCodeDefinitions]);
+    const inPlayOdds = localFootball ? createInPlayOddsPoller({
+      database, adapter: adapter.odds, now: Date.now, enabled: () => oddsEnabled && quota.current() !== null,
+      displayAllowed: authorities.odds.verifyPublicDisplay,
+    }) : null;
 
     /** Follow configured stored fixtures even when a fixture received no prediction. */
     async function resultCoverage(): Promise<ResultSyncPolicy["coverage"]> {
@@ -286,12 +329,13 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       const current = quota.current(), coverage = await resultCoverage();
       if (current === null) return poller;
       if (coverage.length === 0) { results = null; poller = null; return null; }
-      const next = resultSyncPolicy(refs, workload, coverage);
+      const next = resultSyncPolicy(refs, workload, coverage, localFootball);
       if (poller && poller.accountId === current.accountId && evidenceFingerprint(poller.policy) === evidenceFingerprint(next)) return poller;
       results = next;
       // The poller lease belongs to the shared quota account row, so it follows the active provider day.
       poller = Object.freeze({ policy: next, accountId: current.accountId, service: createResultSyncService({ accountId: current.accountId,
         policy: next, authority: authorities.results, adapter: adapter.evidence,
+        ...(overrides.onPollerState ? { onState: (state) => overrides.onPollerState?.("results", state) } : {}),
         store: createMysqlResultSyncStore({ database, accountId: current.accountId, lifecycle }) }) });
       return poller;
     }
@@ -301,16 +345,18 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       if (!workload.liveDetails.eligible || quota.current() === null) return null;
       const coverage = await resultCoverage();
       if (coverage.length === 0) { liveDetailsPolicy = null; detailPoller = null; return null; }
-      const next = liveMatchPolicy(refs, workload, coverage);
+      const next = liveMatchPolicy(refs, workload, coverage, localFootball);
       if (detailPoller && evidenceFingerprint(detailPoller.policy) === evidenceFingerprint(next)) return detailPoller;
       liveDetailsPolicy = next;
       detailPoller = Object.freeze({ policy: next, service: createLiveMatchService({ accountKey: day.status.accountKey,
         policy: next, authority: authorities.liveMatch, adapter: adapter.evidence,
+        ...(localFootball ? { batchDetails: adapter.evidence.matchDetails } : {}),
+        ...(overrides.onPollerState ? { onState: (state) => overrides.onPollerState?.("match-details", state) } : {}),
         store: createMysqlLiveMatchStore({ database, accountKey: day.status.accountKey }) }) });
       return detailPoller;
     }
-    return Object.freeze({ policy, database, queue, quota, workload, registry, settlement, cache, catalog: importer, resultPoller, liveMatchPoller, day,
-      odds: Object.freeze({ enabled: oddsEnabled, registry: oddsRegistry, horizonDays: workload.odds.dates,
+    return Object.freeze({ policy, database, queue, quota, workload, registry, settlement, cache, catalog: importer, resultPoller, liveMatchPoller, inPlayOdds, day,
+      odds: Object.freeze({ enabled: oddsEnabled, registry: oddsRegistry, horizonDays: workload.odds.dates, requalifyLocal: requalifyLocalOdds,
         // Write-time staleness needs no provider call, so it runs even while imports are off.
         expire: (limit: number) => oddsService.expire(odds?.freshnessMs ?? ODDS_FRESHNESS_MS, limit) }),
       teamCodes: Object.freeze({ enabled: teamCodesEnabled, registry: teamCodesRegistry }),

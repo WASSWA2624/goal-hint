@@ -1,4 +1,4 @@
-"""Start the normal Next application with an isolated, persistent demo database."""
+"""Start the normal Next application with an isolated local database."""
 from __future__ import annotations
 
 import json
@@ -9,7 +9,7 @@ import subprocess
 import sys
 import threading
 
-from lib.development_mysql import DevelopmentMysql
+from lib.development_mysql import DevelopmentMysql, LocalFootballMysql
 from lib.development_process import process_record, process_snapshot, release_port, stop_process
 from lib.runtime import CommandError, ROOT, hidden_process, main_guard, node_binary
 from lib.app_downloads import prepare_app_downloads
@@ -62,11 +62,11 @@ def administrator_environment(source=None, directory=ROOT):
         raise CommandError("The existing administrator configuration could not be loaded; private values were withheld.") from None
 
 
-def demo_environment(url: str, source=None):
+def demo_environment(url: str, source=None, *, demo=True):
     env = dict(os.environ if source is None else source)
     administrator = administrator_environment() if source is None else {key: source[key] for key in ADMINISTRATOR_KEYS if key in source}
     # Next loads .env files automatically. Explicit empty values stop private local
-    # provider/database settings from filling missing keys in this owned demo process.
+    # provider/database settings from filling missing keys in this owned process.
     keys = set(env)
     for path in ROOT.glob(".env*"):
         if path.is_file():
@@ -75,9 +75,10 @@ def demo_environment(url: str, source=None):
     for key in keys:
         if key.startswith(("GOAL_HINT_", "NEXT_PUBLIC_")) or key in credentials:
             env[key] = ""
+    demo_value = "true" if demo else "false"
     env.update(NODE_ENV="development", DEBUG="", NODE_DEBUG="", NODE_DEBUG_NATIVE="",
-        GOAL_HINT_DEMO="true", NEXT_PUBLIC_GOAL_HINT_DEMO="true",
-        GOAL_HINT_DEMO_MEMBER=(source or os.environ).get("GOAL_HINT_DEMO_MEMBER", "true"),
+        GOAL_HINT_DEMO=demo_value, NEXT_PUBLIC_GOAL_HINT_DEMO=demo_value,
+        GOAL_HINT_DEMO_MEMBER=(source or os.environ).get("GOAL_HINT_DEMO_MEMBER", "true") if demo else "false",
         GOAL_HINT_OPERATION_SCOPE="disabled", GOAL_HINT_DEPLOYMENT_ENVIRONMENT="development",
         GOAL_HINT_DATABASE_ENABLED="true", DATABASE_URL=url, MIGRATION_DATABASE_URL=url,
         GOAL_HINT_DATABASE_CONNECTION_MODE="direct", GOAL_HINT_DATABASE_POOL_LIMIT="5",
@@ -220,6 +221,85 @@ def run_web(args, env, port, *, live=False):
     return 1
 
 
+def football_worker(directory, env):
+    worker_env = dict(os.environ, NODE_ENV="development", GOAL_HINT_DEMO="false",
+                      NEXT_PUBLIC_GOAL_HINT_DEMO="false", NEXT_PUBLIC_GOAL_HINT_LOCAL_FOOTBALL="true",
+                      DEBUG="", NODE_DEBUG="", NODE_DEBUG_NATIVE="")
+    command = [development_node_binary(), "--conditions=react-server", "--env-file-if-exists=.env.local",
+               "--env-file-if-exists=.env.operations", "scripts/local-football-live.mjs"]
+    check = subprocess.run([*command, "--check"], cwd=ROOT, env=worker_env, capture_output=True,
+                           text=True, encoding="utf-8", errors="replace", timeout=30, creationflags=hidden_process())
+    if check.returncode:
+        raise CommandError(check.stderr.strip() or "Local football configuration check failed.")
+    ready = json.loads(check.stdout)
+    ids = ready.get("competitions")
+    if not isinstance(ids, list) or not ids or any(type(value) is not int or value < 1 for value in ids):
+        raise CommandError("Local football competition scope could not be verified.")
+    env["GOAL_HINT_COMPETITION_IDS"] = ",".join(map(str, ids))
+    env["NEXT_PUBLIC_GOAL_HINT_LOCAL_FOOTBALL"] = "true"
+    log = directory / "football-live.log"
+    with log.open("ab") as output:
+        worker = subprocess.Popen(command, cwd=ROOT, env=worker_env, stdout=output, stderr=subprocess.STDOUT,
+                                  creationflags=hidden_process())
+    print(f"Started the local football worker (bookmaker {ready['bookmakerId']}). Status log: {log}", flush=True)
+    return worker
+
+
+def loopback_arguments(args):
+    for index, arg in enumerate(args):
+        if arg in ("-H", "--hostname") and (index + 1 >= len(args) or args[index + 1] != "127.0.0.1"):
+            raise CommandError("Live snapshot development uses --hostname 127.0.0.1.")
+        if arg.startswith(("--hostname=", "-H=")) and arg.split("=", 1)[1] != "127.0.0.1":
+            raise CommandError("Live snapshot development uses --hostname 127.0.0.1.")
+    return [*args, "--hostname", "127.0.0.1"]
+
+
+def run_local_football(args, *, prepare):
+    with LocalFootballMysql(replace_running=not prepare) as instance:
+        env = demo_environment(instance.url, demo=False)
+        print("Applying the application migrations to the local football snapshot…", flush=True)
+        run_checked([str(ROOT / "node_modules/prisma/build/index.js"), "migrate", "deploy"], env)
+
+        target = instance.directory / "target.env"
+        pending = instance.directory / f"target-{os.getpid()}.tmp"
+        worker = None
+        try:
+            pending.write_text(f'GOAL_HINT_LOCAL_FOOTBALL_DATABASE_URL={instance.url}\n'
+                               f'GOAL_HINT_LOCAL_FOOTBALL_DATADIR="{instance.datadir.as_posix()}"\n', encoding="utf-8")
+            pending.replace(target)
+            if prepare:
+                print(f"Local football database ready. Import configuration: {target}", flush=True)
+                instance.child.wait()
+                raise CommandError("The local football MySQL server stopped.")
+
+            ids = instance.query("""
+                SELECT DISTINCT mapping.externalId
+                FROM FootballFixture AS fixture
+                JOIN FootballSeason AS season ON season.id = fixture.seasonId
+                JOIN FootballCompetitionProvider AS mapping ON mapping.competitionId = season.competitionId
+                    AND mapping.provider = fixture.provider
+                WHERE fixture.provider = 'api-football'
+                ORDER BY mapping.externalId
+            """).splitlines()
+            if not ids or any(not re.fullmatch(r"[1-9]\d*", value) for value in ids):
+                raise CommandError("Import and verify the real football fixtures before starting the local snapshot.")
+            env["GOAL_HINT_COMPETITION_IDS"] = ",".join(ids)
+            prepare_app_downloads("development")
+            args, port = web_arguments(args)
+            if (instance.directory / "live").is_file():
+                args = loopback_arguments(args)
+                worker = football_worker(instance.directory, env)
+            release_development_web(port)
+            print(f"Serving stored API-Football fixtures from the local snapshot ({len(ids)} competitions).", flush=True)
+            return run_web(args, env, port)
+        finally:
+            if worker is not None and worker.poll() is None:
+                worker.terminate()
+                worker.wait(timeout=15)
+            pending.unlink(missing_ok=True)
+            target.unlink(missing_ok=True)
+
+
 def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -232,6 +312,13 @@ def main():
     args = [value for value in args if value != "--verify-only"]
     full = "--full" in args
     args = [value for value in args if value != "--full"]
+    prepare_football = "--prepare-local-football" in args
+    force_demo = "--demo" in args
+    args = [value for value in args if value not in ("--prepare-local-football", "--demo")]
+    if prepare_football and (live or force_demo or prepare_only or verify_only or full or args):
+        raise CommandError("Run --prepare-local-football by itself to prepare the isolated football database.")
+    if force_demo and live:
+        raise CommandError("Choose either --demo or --live.")
     if live and (prepare_only or verify_only or full):
         raise CommandError("Preparation and verification flags apply only to the development demo.")
     if prepare_only and verify_only:
@@ -239,6 +326,12 @@ def main():
     check_development_dependencies(live=live)
     if "--help" in args or "-h" in args:
         return subprocess.call([development_node_binary(), str(ROOT / "node_modules/next/dist/bin/next"), "dev", "--help"], cwd=ROOT)
+    snapshot_active = (ROOT / ".goal-hint" / LocalFootballMysql.directory_name / "active").is_file()
+    demo_retired = (ROOT / ".goal-hint" / "development-demo-retired").is_file()
+    if demo_retired and (force_demo or prepare_only or verify_only or full or not (snapshot_active or prepare_football or live)):
+        raise CommandError("The old synthetic database is retired. Start the owned local football snapshot with npm run dev.")
+    if prepare_football or (snapshot_active and not (live or force_demo or prepare_only or verify_only or full)):
+        return run_local_football(args, prepare=prepare_football)
     if not prepare_only and not verify_only:
         prepare_app_downloads("development")
         args, port = web_arguments(args)
@@ -272,6 +365,6 @@ def main():
 
 if __name__ == "__main__":
     try:
-        main_guard(main, "Development demo failed; the owned database files were preserved.")
+        main_guard(main, "Local development failed; the owned database files were preserved.")
     except KeyboardInterrupt:
         pass

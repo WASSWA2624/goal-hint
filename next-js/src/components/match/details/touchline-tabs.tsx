@@ -18,6 +18,7 @@ import { Explanation, MarketsCard } from "./markets-card";
 import { TouchlineBody, TouchlineEmpty, TouchlineSurface } from "./touchline-ui";
 import { TouchlineStandings } from "./touchline-venue";
 import { MatchTabNavigation } from "./match-tab-navigation";
+import { InPlayOddsPanel } from "./in-play-odds";
 
 const embeddedDisclosure = { open: true, byDefault: false, reveal: 0, embedded: true, toggle: () => {} };
 const untitledDisclosure = { ...embeddedDisclosure, hideHeading: true };
@@ -98,7 +99,10 @@ export function TouchlineTabs({ view }: { view: MatchView }) {
         {selected === "standings" && <TouchlineStandings view={view} />}
         {selected === "lineups" && <Section section="lineups" view={view} heading={false}><LineupsSection /></Section>}
         {selected === "players" && <Section section="players" view={view} heading={false}><PlayersSection /></Section>}
-        {selected === "markets" && <ViewProvider value={{ ...view, marketsOpen: true }}><DisclosureProvider value={embeddedDisclosure}><MarketsCard embedded /></DisclosureProvider></ViewProvider>}
+        {selected === "markets" && <>
+          <InPlayOddsPanel observation={data.inPlayOdds} messages={messages} />
+          <ViewProvider value={{ ...view, marketsOpen: true }}><DisclosureProvider value={embeddedDisclosure}><MarketsCard embedded /></DisclosureProvider></ViewProvider>
+        </>}
         {selected === "events" && <Observations kind="events" />}
         {selected === "venue" && <Section section="context" view={view} heading={false}><ContextSection /></Section>}
         {selected === "referee" && <Section section="referee" view={view} heading={false}><RefereeSection /></Section>}

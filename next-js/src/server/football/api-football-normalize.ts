@@ -3,6 +3,7 @@ import { isSafeRemoteImageUrl } from "../../domain/remote-image.ts";
 
 import { z } from "zod";
 import { parseUtcInstant, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { parseDecimalOdds } from "../../domain/odds.ts";
 import type { UtcInstant } from "../../domain/calendar.ts";
 import type { SettlementStatus } from "../../domain/market-settlement.ts";
 import { deepFreeze as freeze } from "../shared/deep-freeze.ts";
@@ -182,6 +183,15 @@ export type NormalizedFixtureOdds = Readonly<{
 }>;
 /** One /odds/bets or /odds/bookmakers catalog row. */
 export type NormalizedOddsCatalogEntry = Readonly<{ id: number; name: string; source: SourceTimestamps }>;
+export type NormalizedInPlayOddsValue = Readonly<{
+  label: string; odd: string | null; handicap: string | null; main: boolean; suspended: boolean;
+}>;
+export type NormalizedInPlayOdds = Readonly<{
+  fixtureId: number; competitionId: number; season: number; homeTeamId: number; awayTeamId: number;
+  stopped: boolean; blocked: boolean; finished: boolean;
+  bets: readonly Readonly<{ id: number; name: string | null; values: readonly NormalizedInPlayOddsValue[] }>[];
+  source: SourceTimestamps;
+}>;
 /** Internal diagnostics only; account holder names, email and credentials are discarded. */
 export type NormalizedAccountStatus = Readonly<{
   subscription: Readonly<{ plan: string | null; expiresAt: UtcInstant | null; active: boolean | null }>;
@@ -294,6 +304,17 @@ const oddsSchema = z.object({
 });
 const oddsValueSchema = z.object({ value: z.string(), odd: z.string() });
 const oddsCatalogSchema = z.object({ id: identity, name: z.string().min(1).max(256) });
+const inPlayOddsSchema = z.object({
+  fixture: z.object({ id: identity }),
+  league: z.object({ id: identity, season: seasonYear }),
+  teams: z.object({ home: z.object({ id: identity }), away: z.object({ id: identity }) }),
+  status: z.object({ stopped: z.boolean(), blocked: z.boolean(), finished: z.boolean() }),
+  update: z.string().max(128).nullable().optional(),
+  odds: z.array(oddsBetSchema).max(1_000),
+});
+const inPlayValueSchema = oddsValueSchema.extend({
+  handicap: z.string().max(24).nullable().optional(), main: optionalBoolean, suspended: z.boolean(),
+});
 /** Up to 99,999.9999 with at most four places; the domain rejects 1.00 and below. */
 const oddsDecimal = /^[1-9]\d{0,4}(?:\.\d{1,4})?$/u;
 const oddsLabel = /^[^\p{Cc}]{1,64}$/u;
@@ -320,10 +341,10 @@ const invalid = (): NormalizationResult<never> => Object.freeze({ valid: false, 
 function valid<Data>(data: Data, missing: string[]): NormalizationResult<Data> {
   return freeze({ valid: true as const, data, missingCoverage: [...new Set(missing)].sort() });
 }
-function contextValid(context: NormalizationContext): boolean {
+function contextValid(context: NormalizationContext, extraEndpoint?: "/odds/live/bets"): boolean {
   return Number.isSafeInteger(context?.retrievedAt) && context.retrievedAt >= 0 &&
     context.retrievedAt <= 253_402_300_799_999 && typeof context.endpoint === "string" &&
-    /^\/[a-z]+(?:\/[a-z]+)?$/.test(context.endpoint);
+    (/^\/[a-z]+(?:\/[a-z]+)?$/u.test(context.endpoint) || context.endpoint === extraEndpoint);
 }
 function source(context: NormalizationContext, missing: string[]): SourceTimestamps {
   // The direct v3 contracts do not identify an entity update time. Kickoff timestamps
@@ -724,9 +745,46 @@ export function normalizeOdds(raw: unknown, context: NormalizationContext): Norm
 
 /** One /odds/bets or /odds/bookmakers row; a catalog entry without a usable name is invalid. */
 export function normalizeOddsCatalogEntry(raw: unknown, context: NormalizationContext): NormalizationResult<NormalizedOddsCatalogEntry> {
-  if (!contextValid(context)) return invalid();
+  if (!contextValid(context, "/odds/live/bets")) return invalid();
   const parsed = oddsCatalogSchema.safeParse(raw);
   if (!parsed.success || parsed.data.name !== parsed.data.name.trim() || /\p{Cc}/u.test(parsed.data.name)) return invalid();
   const missing: string[] = [];
   return valid({ id: parsed.data.id, name: parsed.data.name, source: source(context, missing) }, missing);
+}
+
+/** Live odds have their own bet identities, suspension state and duplicate selection rules. */
+export function normalizeInPlayOdds(raw: unknown, context: NormalizationContext): NormalizationResult<NormalizedInPlayOdds> {
+  if (!contextValid(context) || context.endpoint !== "/odds/live") return invalid();
+  const parsed = inPlayOddsSchema.safeParse(raw);
+  if (!parsed.success) return invalid();
+  const input = parsed.data;
+  if (input.teams.home.id === input.teams.away.id) return invalid();
+  const update = input.update == null ? null : parseOffsetInstant(input.update);
+  if (update === false || update !== null && update > context.retrievedAt) return invalid();
+  const missing: string[] = [], ids = new Set<number>(), bets: NormalizedInPlayOdds["bets"][number][] = [];
+  for (const bet of input.odds) {
+    if (ids.has(bet.id)) return invalid();
+    ids.add(bet.id);
+    const values: NormalizedInPlayOddsValue[] = [];
+    for (const item of bet.values.slice(0, 1_001)) {
+      const candidate = inPlayValueSchema.safeParse(item);
+      if (!candidate.success) continue;
+      const { value: label, odd, handicap, main, suspended } = candidate.data;
+      const parsedPrice = parseDecimalOdds(odd);
+      // The live API uses zero for suspended quotes. Keep the suspension and duplicate identity, never a zero price.
+      if (parsedPrice === null && !(suspended && /^0(?:\.0+)?$/u.test(odd)) || label.trim() !== label || !oddsLabel.test(label)
+        || handicap != null && !/^[+-]?\d{1,3}(?:\.\d{1,3})?$/u.test(handicap)) continue;
+      values.push({ label, odd: parsedPrice?.text ?? null, handicap: handicap == null ? null : String(Number(handicap)),
+        main: main === true, suspended });
+    }
+    // An invalid alternative may change which duplicate is authoritative. Withhold the whole bet.
+    if (!values.length || values.length !== bet.values.length || values.length > 1_000) {
+      missing.push(`in-play-bet-rejected:${bet.id}`);
+      continue;
+    }
+    bets.push({ id: bet.id, name: oddsName(bet.name, oddsNameLimits.bet), values });
+  }
+  return valid({ fixtureId: input.fixture.id, competitionId: input.league.id, season: input.league.season,
+    homeTeamId: input.teams.home.id, awayTeamId: input.teams.away.id, ...input.status, bets,
+    source: sourceWithUpdate(context, update, missing) }, missing);
 }

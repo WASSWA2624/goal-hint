@@ -13,6 +13,7 @@ const schema = z.strictObject({ version: z.literal(1), evidenceRef: z.string().t
   coverage: z.array(z.strictObject({ competitionId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
     season: z.number().int().min(1).max(9999) })).min(1).max(maximumCompetitionScope),
   approachMs: duration, activeWindowMs: duration, unresolved: tiers, corrections: tiers,
+  skipConfirmedFinals: z.literal(true).exactOptional(),
   // Omitted keeps the spec cadence and its original policy hash; budget-limited accounts may poll more slowly.
   cadence: z.strictObject({ liveMs: duration.min(15_000).nullable(), dateMs: duration.min(60_000), activeMs: duration.min(60_000) }).exactOptional(),
   leaseMs: duration, tickMs: duration.max(10_000), maxBatchesPerTick: z.number().int().min(1).max(100),
@@ -38,6 +39,7 @@ export function finalStatus(status: string) {
 /** Horizons stop outbound work; they never remove the stored unresolved result. */
 export function pollingInterval(fixture: TrackedResultFixture, policy: ResultSyncPolicy, now: number): number | null {
   if (fixture.firstFinalAt !== null) {
+    if (policy.skipConfirmedFinals && fixture.finalConfirmed) return null;
     return policy.corrections.find((tier) => now - fixture.firstFinalAt! < tier.untilAgeMs)?.intervalMs ?? null;
   }
   const age = now - (fixture.kickoffAt ?? fixture.firstTrackedAt);

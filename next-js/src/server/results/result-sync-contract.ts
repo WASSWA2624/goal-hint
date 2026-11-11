@@ -19,6 +19,8 @@ export type ResultSyncPolicy = Readonly<{
   coverage: readonly Readonly<{ competitionId: number; season: number }>[];
   approachMs: number; activeWindowMs: number;
   unresolved: readonly PollingTier[]; corrections: readonly PollingTier[];
+  /** Skip dedicated rechecks of settled outcomes while still observing shared date sweeps. */
+  skipConfirmedFinals?: true;
   /** Omitted uses the spec cadence. Live null disables the shared live feed; date sync still observes today's statuses. */
   cadence?: Readonly<{ liveMs: number | null; dateMs: number; activeMs: number }>;
   leaseMs: number; tickMs: number; maxBatchesPerTick: number;
@@ -41,6 +43,7 @@ export type TrackedResultFixture = Readonly<{
   kickoffAt: number | null; status: string; retrievedAt: number;
   firstTrackedAt: number; firstFinalAt: number | null;
   lastSyncAt: number | null; nextCheckAt: number | null; failures: number;
+  finalConfirmed?: boolean;
 }>;
 export type ResultSyncBatch = Readonly<{
   id: string; accountId: string; policyHash: string; receivedAt: UtcInstant;

@@ -77,6 +77,7 @@
     "live": "node --conditions=react-server --env-file-if-exists=.env.local --env-file-if-exists=.env.operations src/workers/live.ts",
     "live:competitions": "python scripts/live-competitions.py",
     "live:status": "python scripts/live-status.py",
+    "live:usage": "node --conditions=react-server scripts/live-usage.mjs",
     "test:live": "node --conditions=react-server --test tests/live-binding.test.mjs",
     "test:live-details": "node --conditions=react-server --test --test-concurrency=1 tests/live-match.test.mjs tests/live-match-read.test.mjs tests/live-detail-quota.test.mjs tests/quota-priority-counts.test.mjs tests/live-match-store.integration.mjs",
     "recovery": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/recovery.ts",

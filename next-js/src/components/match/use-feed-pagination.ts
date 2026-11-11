@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { useRouter } from "next/navigation";
 import { getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import type { FeedCheckpoint } from "@/domain/feed-navigation";
-import { FeedPaginationError, initialLoadedFeed, replaceFeedPages, type LoadedFeed } from "@/domain/feed-pagination";
+import { applyServerFeedPage, FeedPaginationError, initialLoadedFeed, replaceFeedPages, type LoadedFeed } from "@/domain/feed-pagination";
 import { feedQueryHref, feedQueryKey, type FeedQuery } from "@/domain/feed-query";
 import { feedRowNumber } from "@/domain/feed-presentation";
 import type { MatchFeedResponse } from "@/domain/match-feed";
@@ -23,6 +23,12 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const [view, setView] = useState(() => initialLoadedFeed(data));
+  const [serverData, setServerData] = useState(data);
+  if (serverData !== data) {
+    setServerData(data);
+    const next = applyServerFeedPage(view, data);
+    if (next !== view) setView(next);
+  }
   const [phase, setPhase] = useState<Mode | null>(null), [error, setError] = useState<FeedPaginationError["code"] | null>(null);
   // A refreshed server query with the same canonical href must not tear down the listeners below.
   const root = useRef<HTMLDivElement>(null), viewRef = useRef(view), enabledRef = useRef(enabled), queryRef = useRef(query);
@@ -61,9 +67,11 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
       { forceRefetch: true })), controller.signal);
     try {
       const page = checkpoint?.firstPage ?? base.firstPage;
-      const next = replaceFeedPages({ ...base, firstPage: page }, [await fetchPage(page)]);
+      const observed = await fetchPage(page);
       if (controller.signal.aborted || !mounted.current || !enabledRef.current) return;
-      acceptRun(base.data.run, next.data.run, getReportingDate(utcInstantFromEpochMilliseconds(next.data.asOf)));
+      const current = viewRef.current;
+      const next = replaceFeedPages({ ...current, firstPage: page }, [observed]);
+      acceptRun(current.data.run, next.data.run, getReportingDate(utcInstantFromEpochMilliseconds(next.data.asOf)));
       restored.current = true; retryCheckpoint.current = null;
       if (mode !== "background") focusTarget.current = { fixtureId: checkpoint?.focusFixtureId ?? null,
         ...(checkpoint ? { checkpoint } : {}) };

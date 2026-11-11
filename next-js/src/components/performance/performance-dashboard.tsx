@@ -199,7 +199,7 @@ function PredictionSections({ locale, filters, report, page, loading = false }: 
   return <>
     <DesktopInset as="section" aria-labelledby="individual-performance"><Stack>
       <SectionHeading id="individual-performance">{m.text("performance.pickHeading")}</SectionHeading><MutedText>{m.text("performance.pickBasis")}</MutedText>
-      {loading ? <PerformanceSummary counts={null} locale={locale} kind="matches" period={performancePeriod(m, filters)} /> : report ? <>
+      {loading ? <PerformanceSummary counts={null} locale={locale} kind="matches" period={performancePeriod(m, filters)} loading /> : report ? <>
         <Inline><strong>{m.text("performance.fixtureCount")}: {m.number(report.cohort.fixtureCount)}</strong></Inline>
         {report.cohort.fixtureCount === 0 ? <EmptyState headingLevel={3} title={m.text("performance.noPredictions")} />
           : <MarketGrid>{cells.map((cell) => <PredictionCard key={cell.family} cell={cell} locale={locale} period={performancePeriod(m, filters)} />)}</MarketGrid>}
@@ -207,7 +207,7 @@ function PredictionSections({ locale, filters, report, page, loading = false }: 
     </Stack></DesktopInset>
     {(report || loading) && <DesktopInset as="section" aria-labelledby="league-performance"><Stack>
       <SectionHeading id="league-performance">{m.text("performance.leagueHeading")}</SectionHeading><MutedText>{m.text("performance.leagueBasis")}</MutedText>
-      {loading ? <PerformanceSummary counts={null} locale={locale} kind="matches" period={performancePeriod(m, filters)} /> : report!.leagues.records.length ? report!.leagues.records.map((league) => <LeagueCard key={league.competition.id ?? "unknown"} league={league} locale={locale} />)
+      {loading ? <PerformanceSummary counts={null} locale={locale} kind="matches" period={performancePeriod(m, filters)} loading /> : report!.leagues.records.length ? report!.leagues.records.map((league) => <LeagueCard key={league.competition.id ?? "unknown"} league={league} locale={locale} />)
         : <EmptyState headingLevel={3} title={m.text(leagueOutOfRange ? "performance.leaguePageUnavailable" : "performance.noLeagueGroups")}
           {...(leagueOutOfRange ? { action: <ButtonLink href={leagueHref(1)}>{m.text("performance.firstLeaguePage")}</ButtonLink> } : {})} />}
       {leaguePages > 1 && !leagueOutOfRange && <NumberedPagination page={report!.leagues.page} pages={leaguePages}
@@ -230,7 +230,7 @@ function HistorySection({ locale, filters, history, loading = false }: SectionPr
       <SectionHeading id="published-performance">{m.text("performance.slipHeading")}</SectionHeading><MutedText>{m.text("performance.slipBasis")}</MutedText>
       {history?.statistics ? <SlipMetrics summary={history.statistics} locale={locale} period={performancePeriod(m, filters)}
         activeResult={filters.slipStatus} onResult={selectResult} disabled={pending || loading} />
-        : loading ? <PerformanceSummary counts={null} locale={locale} kind="slips" period={performancePeriod(m, filters)} /> : <MutedText>{m.text("performance.statisticsUnavailable")}</MutedText>}
+        : loading ? <PerformanceSummary counts={null} locale={locale} kind="slips" period={performancePeriod(m, filters)} loading /> : <MutedText>{m.text("performance.statisticsUnavailable")}</MutedText>}
       {history?.records.length ? <SlipList $inset={false} data-slip-list>{history.records.map((item) => <article key={item.id} data-published-slip={item.id}>
         <SlipCard slip={item.slip} index={item.rank - 1} estimatedProbability={item.estimatedProbability} results={item.results} locale={locale}
           publishedAt={Date.parse(item.publishedAt)} outcome={item.outcome} {...(item.status ? { status: item.status } : {})} />

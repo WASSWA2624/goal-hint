@@ -18,6 +18,14 @@ export function feedPerformanceApiHref(query: FeedQuery, today: ReportingDate): 
   return feedPageApiHref(performanceFeedQuery(query), today, 1).replace("/api/matches?", "/api/matches/summary?");
 }
 
+/** A list with no available picks has no outcomes to audit. Use its own count and generation.
+ * A selected outcome narrows the list and therefore cannot establish the period total. */
+export function emptyFeedPerformanceReply(query: FeedQuery, data: MatchFeedResponse): FeedPerformanceReply | null {
+  if (query.result || data.state === "data-unavailable" || data.coverage.matchingWithMarket !== 0 || !data.performanceVersion) return null;
+  return { performance: { total: data.total, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0, unavailable: data.total },
+    paginationVersion: data.performanceVersion, asOf: data.asOf, access: data.access };
+}
+
 /** A late aggregate must still belong to the visible cohort and viewer. */
 export function checkedFeedPerformance(value: unknown, data: MatchFeedResponse): FeedPerformanceReply {
   const parsed = feedPerformanceReplySchema.safeParse(value);

@@ -41,6 +41,21 @@ class DevelopmentMysqlOwnershipTests(unittest.TestCase):
     def mysql(self, instance, pid=700, ppid=600):
         return record(pid, ppid, f'mysqld --datadir="{instance.datadir}" --port=43210', "mysqld.exe")
 
+    def test_retired_demo_cannot_recreate_its_mysql_directory(self):
+        marker = self.root / ".goal-hint/development-demo-retired"
+        marker.parent.mkdir()
+        marker.touch()
+        with patch.object(module, "ROOT", self.root), \
+                patch.object(module.DevelopmentMysql, "discover_binary", return_value=Path("mysqld")) as discover, \
+                patch.object(module.DevelopmentMysql, "start"), \
+                patch.object(module, "process_record", return_value=self.owner):
+            with self.assertRaisesRegex(CommandError, "has been retired"):
+                module.DevelopmentMysql()
+            discover.assert_not_called()
+            self.assertFalse((marker.parent / "development-demo").exists())
+            with module.LocalFootballMysql() as active:
+                self.assertEqual(active.database_name, "goal_hint_football_202611")
+
     def test_stale_lock_file_is_reused_without_growing_or_deleting_data(self):
         instance = self.make_instance()
         instance.datadir.mkdir()
