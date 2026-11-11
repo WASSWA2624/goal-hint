@@ -345,17 +345,19 @@ export function createQuotaLimiter(options: {
         if (feedback.kind !== "uncertain" && attempt.launchedAt === null) return denied("invalid-request");
         const period = await tx.period(permit.periodId);
         if (!period) throw new Error("Missing quota period.");
-        const later = (await tx.periodAttempts(period.id, attempt.sequence!)).length;
-        const unresolved = await tx.unresolvedBefore(period.id, attempt.sequence!);
         const rolling = feedback.minuteRemaining === undefined ? [] : await tx.rollingAttempts(instant(now - 60_000));
-        const crossPeriod = rolling.filter((other) => other.periodId !== period.id &&
-          (other.dispatchedAt! >= attempt.dispatchedAt! || other.state === "attempted" || other.state === "uncertain")).length;
+        // A receipt can count against the day after its dispatch has aged out of the minute window.
+        const unreflectedInMinute = rolling.filter((other) => other.id !== attempt.id &&
+          (other.state === "attempted" || other.state === "uncertain" ||
+            (other.periodId === period.id ? other.sequence! > attempt.sequence! : other.dispatchedAt! >= attempt.dispatchedAt!))).length;
         if (feedback.dailyLimit !== undefined) {
           period.providerDailyLimit = Math.min(period.providerDailyLimit, feedback.dailyLimit);
           period.dayLimit = Math.min(period.dayLimit, period.providerDailyLimit);
         }
         if (feedback.minuteLimit !== undefined) period.minuteLimit = Math.min(period.minuteLimit, feedback.minuteLimit);
         if (feedback.dailyRemaining !== undefined) {
+          const later = (await tx.periodAttempts(period.id, attempt.sequence!)).length;
+          const unresolved = await tx.unresolvedBefore(period.id, attempt.sequence!);
           const observedSpent = Math.max(0, period.providerDailyLimit - feedback.dailyRemaining) + later + unresolved;
           const extra = Math.max(0, observedSpent - period.used);
           period.used += extra;
@@ -364,7 +366,7 @@ export function createQuotaLimiter(options: {
         }
         period.dayRemaining = Math.max(0, Math.min(period.dayRemaining, period.dayLimit - period.used));
         if (feedback.minuteRemaining !== undefined) {
-          const floor = Math.max(0, Math.min(period.minuteLimit, feedback.minuteRemaining) - later - unresolved - crossPeriod);
+          const floor = Math.max(0, Math.min(period.minuteLimit, feedback.minuteRemaining) - unreflectedInMinute);
           // The observation can constrain capacity for a full trailing minute; a late
           // response extends that conservative horizon but never restores a floor.
           period.minuteRemaining = period.minuteFloorUntil !== null && now < period.minuteFloorUntil
@@ -386,7 +388,7 @@ export function createQuotaLimiter(options: {
             }
             if (feedback.minuteLimit !== undefined) target.minuteLimit = Math.min(target.minuteLimit, feedback.minuteLimit);
             if (feedback.minuteRemaining !== undefined) {
-              const floor = Math.max(0, Math.min(target.minuteLimit, feedback.minuteRemaining) - later - unresolved - crossPeriod);
+              const floor = Math.max(0, Math.min(target.minuteLimit, feedback.minuteRemaining) - unreflectedInMinute);
               target.minuteRemaining = target.minuteFloorUntil !== null && now < target.minuteFloorUntil
                 ? Math.min(target.minuteRemaining!, floor) : floor;
               target.minuteFloorUntil = instant(now + 60_000);

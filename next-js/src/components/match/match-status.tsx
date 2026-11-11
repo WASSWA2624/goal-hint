@@ -8,7 +8,7 @@ import { liveClockLabel } from "@/domain/match-clock";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import type { Messages } from "@/i18n/messages";
 import { media, type OutcomeTone } from "@/styles/theme";
-import { MatchClockText } from "./score-presentation";
+import { LiveMatchTime } from "./score-presentation";
 
 const Label = styled(StatusBadge)`
   --status-ink: ${({ theme }) => theme.color.outcome.unavailable.text};
@@ -42,14 +42,15 @@ export function MatchStatus({ status, outcome, messages, snapshot = false, offli
     : result === "correct" ? messages.text("slips.result.won") : result === "incorrect" ? messages.text("slips.result.lost")
     : result === "unavailable" ? "—" : result === "unknown" ? messages.text("slips.match.unknown")
       : messages.text(isOutcome ? `outcome.${result}` : `match.status.${result}`);
-  const clock = result === "live" && liveClock !== undefined ? liveClockLabel(liveClock, messages) : null;
+  const clock = result === "live" && liveClock && (liveClock.minute !== null || liveClock.phase !== "in-play")
+    ? liveClockLabel(liveClock, messages) : null;
   const extraTime = clock !== null && clock.minute !== null && liveClock?.phase === "extra-time";
   const finalPhase = !offline && !snapshot && (status === "finished-regulation" || status === "finished-extra-time" || status === "finished-penalties")
     ? messages.text(`match.final.${status}`) : null;
   return <Label data-match-status={result} data-match-label={!isOutcome ? "" : undefined} data-outcome-label={isOutcome ? "" : undefined}
     aria-label={clock?.spoken} title={clock?.spoken}>
     {result === "live" && <LiveDot data-match-live-dot aria-hidden="true" />}
-    <span data-pick-value="">{clock ? <><span data-mobile-only data-status-clock>{label} {extraTime && <>{messages.text("match.clock.extra-timeShort")} </>}<MatchClockText text={clock.visible} /></span><span data-desktop-only>{label}</span></> : label}</span>
+    <span data-pick-value="">{clock ? <><span data-mobile-only data-status-clock>{label} {extraTime && <>{messages.text("match.clock.extra-timeShort")} </>}<LiveMatchTime clock={liveClock} messages={messages} /></span><span data-desktop-only>{label}</span></> : label}</span>
     {liveClock !== undefined && finalPhase && <span data-mobile-only data-status-phase>{finalPhase}</span>}
   </Label>;
 }

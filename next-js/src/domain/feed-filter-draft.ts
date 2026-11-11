@@ -1,12 +1,13 @@
 import { parseReportingDate, type ReportingDate } from "./calendar.ts";
 import { dateTimeIntervalRange, localDateTimeValue, type DateTimeInterval } from "./date-time.ts";
-import { applyFeedDraft, parseProbabilityInputs } from "./feed-controls.ts";
+import { applyFeedDraft, parseProbabilityInputs, selectFeedDateScope } from "./feed-controls.ts";
 import { feedQueryRules, formatProbabilityValue, parseProbabilityValue, resolveFeedDates, type FeedQuery } from "./feed-query.ts";
 import { parseLocalDateTime } from "./date-time.ts";
 import { kickoffTimeWindows } from "./kickoff-time.ts";
 
 export type FeedFilterDraft = Readonly<{
   query: FeedQuery; dateTimes: DateTimeInterval; zone: string; probability: Readonly<{ min: string; max: string }>;
+  probabilityEdited?: boolean;
 }>;
 
 /** Cross-field issues stay separate from incomplete editor text, which belongs to the date input itself. */
@@ -35,15 +36,17 @@ export function feedFilterDraft(query: FeedQuery, today: ReportingDate, zone: st
 /** Unedited legacy links retain their scope; editing either endpoint creates one continuous interval. */
 export function compileFeedFilterDraft(draft: FeedFilterDraft, today: ReportingDate): FeedQuery | null {
   try {
-    const probability = parseProbabilityInputs(draft.probability);
-    if (!probability) return null;
-    const original = feedFilterDraft(draft.query, today, draft.zone).dateTimes;
-    if (original.from === draft.dateTimes.from && original.to === draft.dateTimes.to) {
+    const parsed = parseProbabilityInputs(draft.probability);
+    if (!parsed) return null;
+    const original = feedFilterDraft(draft.query, today, draft.zone);
+    const probability = !draft.probabilityEdited && draft.probability.min === original.probability.min &&
+      draft.probability.max === original.probability.max ? draft.query.probability : parsed;
+    if (original.dateTimes.from === draft.dateTimes.from && original.dateTimes.to === draft.dateTimes.to) {
       return applyFeedDraft({ ...draft.query, probability, page: 1 }, today);
     }
     const range = dateTimeIntervalRange(draft.dateTimes, draft.zone);
     const dates: FeedQuery["dates"] = range.startDate === range.endDate ? { kind: "date", date: parseReportingDate(range.startDate) }
       : { kind: "range", from: range.startDate, to: range.endDate };
-    return applyFeedDraft({ ...draft.query, summary: undefined, time: null, interval: draft.dateTimes, zone: draft.zone, dates, probability, page: 1 }, today);
+    return applyFeedDraft(selectFeedDateScope({ ...draft.query, summary: undefined, time: null, interval: draft.dateTimes, zone: draft.zone, dates, probability, page: 1 }, today), today);
   } catch { return null; }
 }

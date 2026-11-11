@@ -68,7 +68,7 @@ export function MarketOddsPanel({ kind, observation, messages, search = "" }: { 
   const heading = useId();
   if (!observation || observation.prices.state === "unavailable") return null;
   return <Panel as="section" aria-labelledby={heading} data-market-odds={kind}>
-    <PanelHeading id={heading}>{messages.text(kind === "in-play" ? "touchline.inPlayOdds" : "touchline.preMatchOdds")}</PanelHeading>
+    <PanelHeading id={heading}>{messages.text(kind === "in-play" ? "details.odds" : "touchline.preMatchOdds")}</PanelHeading>
     {observation.prices.state === "suspended" ? <Note role="status">{messages.text("touchline.inPlayOddsSuspended")}</Note>
       : observation.prices.providerMarkets ? <BookmakerMarketRows markets={observation.prices.providerMarkets} messages={messages} search={search} />
       : <Facts>{observation.prices.markets.map(({ family, selections }) => <Fragment key={family}>

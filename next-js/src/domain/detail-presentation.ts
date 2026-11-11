@@ -9,7 +9,7 @@ import type { TextKey } from "../i18n/messages.ts";
 export function detailRecordNotices(data: MatchDetailResponse): readonly TextKey[] {
   const fixture = data.fixture, snapshot = fullDetailSnapshot(data), notices: TextKey[] = [];
   if (snapshot) {
-    for (const source of new Set(snapshot.markets.map((item) => item.source.kind))) notices.push(`market.source.${source}`);
+    for (const source of new Set(snapshot.markets.map((item) => item.source.kind))) notices.push(`market.source.short.${source}`);
     if (snapshot.markets.some((item) => item.source.provisional)) notices.push("match.provisional");
     notices.push(`history.status.${snapshot.applicability}`);
   }

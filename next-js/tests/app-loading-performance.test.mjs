@@ -10,7 +10,8 @@ const modules = {
   '@/components/slips/slip-styles': empty(['CriteriaPanel']),
   '@/components/ui/controls': empty(['TextLink']),
   '@/components/ui/layout': empty(['Inline', 'Stack']),
-  '@/server/slips/best-slips': 'export const readBestSlips = async () => null; export const gateBestSlips = value => value;',
+  '@/server/slips/best-slips-browse': 'export const readBestSlipsBrowseSnapshot = async () => null;',
+  '@/server/slips/slip-preview': 'export const gateBestSlips = (value, viewer) => ({ ...value, entitled: viewer.tier === "full" });',
   '@/components/admin/admin-shell': empty(['AdminShell']),
   '@/components/navigation/navigation-progress': empty(['AppLoading']),
   '@/styles/provider': empty(['FallbackStyleProvider', 'ServerThemeUntilHydrated']),
@@ -35,6 +36,21 @@ test('the dedicated Best Slips route streams its valid shell before access or da
   assert.equal(boundary.type, Symbol.for('react.suspense'));
   assert.equal(boundary.props.fallback.type.name, 'BestSlipsLoading');
   assert.deepEqual(calls, [], 'The shell must not wait for viewer or slip reads.');
+});
+
+test('Best Slips reads the published cohort once and projects it after the latest access check', async () => {
+  const calls = [];
+  const route = createBestSlipsRoute({ read: async (query, locale) => {
+    calls.push(`read:${query.period}:${locale}`);
+    return { day: '2026-11-03', state: 'generated', slips: [], searchLimited: false, partialCoverage: false };
+  }, access: async () => { calls.push('access'); return { tier: 'free', signedIn: true }; } });
+  const shell = await route.Page(props());
+  const content = shell.props.children.props.children.props.children;
+  const rendered = await content.type(content.props);
+  assert.deepEqual(calls, ['read:today:en', 'access']);
+  const slips = rendered.props.children.props.children[0];
+  assert.equal(slips.props.result.entitled, false);
+  assert.equal(slips.props.signedIn, true);
 });
 
 test('performance shell returns with both reports pending and each read settles independently', async () => {

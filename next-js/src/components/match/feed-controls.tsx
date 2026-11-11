@@ -2,11 +2,11 @@
 
 import styled from "styled-components";
 import { MutedText } from "@/components/ui/layout";
-import { feedSortLabelKey, formatProbabilityValue, isAnyMarkets, panelFilterCount, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
+import { feedSortLabelKey, formatProbabilityValue, isAnyMarkets, isAnyProbability, panelFilterCount, resolveFeedDates, type FeedQuery, type ProbabilityRange } from "@/domain/feed-query";
 import type { ReportingDate } from "@/domain/calendar";
 import { formatOddsRange } from "@/domain/odds";
 import type { MatchFeedResponse } from "@/domain/match-feed";
-import { createMessages } from "@/i18n/messages";
+import { createMessages, type Messages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 
 /** Secondary feed notes: 12px on phones and tablets so they never outrank cards and controls. */
@@ -15,6 +15,11 @@ export const FeedNote = styled(MutedText)`
   line-height: var(--gh-leading-compact);
   ${media.desktop} { font-size: inherit; line-height: inherit; }
 `;
+function probabilityFilterLabel(probability: ProbabilityRange, messages: Messages) {
+  const min = formatProbabilityValue(probability.min);
+  return probability.minExclusive ? messages.text("feed.filters.abovePercent", { min })
+    : messages.text("feed.filters.percentRange", { min, max: formatProbabilityValue(probability.max) });
+}
 const PicksLabel = styled.label`
   display: flex;
   flex-wrap: wrap;
@@ -116,12 +121,7 @@ export function FeedActiveFilterSummary({ query, today, leagues }: {
   ];
   if (query.result) entries.push({ label: `${messages.text("feed.filters.result")}: ${messages.text(`performance.${query.result}`)}`, title: messages.text("feed.filters.result") });
   if (query.time) entries.push({ label: `${query.time.from}–${query.time.to}`, title: query.time.zone });
-  if (query.probability.min !== 0 || query.probability.max !== 100) {
-    const label = messages.text("feed.filters.percentRange", {
-      min: formatProbabilityValue(query.probability.min), max: formatProbabilityValue(query.probability.max),
-    });
-    entries.push({ label, title: messages.text("feed.filters.probabilityLabel") });
-  }
+  if (!isAnyProbability(query.probability)) entries.push({ label: probabilityFilterLabel(query.probability, messages), title: messages.text("feed.filters.probabilityLabel") });
   if (query.odds) entries.push({ label: `${messages.text("feed.filters.oddsLabel")}: ${formatOddsRange(query.odds)}`, title: messages.text("feed.filters.oddsLabel") });
   if (query.search) entries.push({ label: `${messages.text("feed.search.submit")}: ${query.search}`, title: query.search });
   return <AppliedSummary data-active-filter-summary data-quiet={panelFilterCount(query) === 0 && !query.search && !query.result || undefined}>
@@ -143,8 +143,7 @@ export function FeedAppliedSummary({ query, leagues }: { query: FeedQuery; leagu
     {" · "}{messages.text(feedSortLabelKey(query.sort))}
     {leagueNames.length > 0 && <> · {leagueNames.join(", ")}</>}
     {query.countries.length > 0 && <> · {query.countries.join(", ")}</>}
-    {(query.probability.min !== 0 || query.probability.max !== 100) && <> · {messages.text("feed.filters.percentRange",
-      { min: formatProbabilityValue(query.probability.min), max: formatProbabilityValue(query.probability.max) })}</>}
+    {!isAnyProbability(query.probability) && <> · {probabilityFilterLabel(query.probability, messages)}</>}
     {query.result && <> · {messages.text("feed.filters.result")}: {messages.text(`performance.${query.result}`)}</>}
     {query.search && <> · {messages.text("feed.filters.search")}: “{query.search}”</>}
   </FeedNote>;

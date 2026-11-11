@@ -61,7 +61,7 @@ export const TouchlineFeatured = memo(function TouchlineFeatured() {
       <strong>{marketName(messages, family)} · <span><PredictionOutcome messages={messages} selection={item.market.selection} /></span></strong>
       <p data-prediction-record>{[data.snapshot ? messages.text("details.publishedAt", { time: messages.reportingInstant(data.snapshot.publishedAt) }) : messages.text("touchline.featuredHint"), ...notices].join(" · ")}</p></div></Lead>
     <Numbers><div><b>{percent(messages, chance)}</b><small>{messages.text("details.estimatedProbability")}</small><i style={{ inlineSize: `${chance * 100}%` }} /></div>
-      {price !== null && <div><b>{price}</b><small>{messages.text(data.fixture.status === "live" ? "touchline.inPlayOdds" : "details.odds")}</small>
+      {price !== null && <div><b>{price}</b><small>{messages.text("details.odds")}</small>
         <ForecastValueLabel expectedReturn={detailMarketValue(data, family)} messages={messages} /></div>}</Numbers>
     <Actions>{standing ? <Standing standing={standing} /> : outcome && outcome !== "pending" ? <DetailOutcome status={outcome} /> : null}
       <TouchlineLinkButton type="button" onClick={() => update(current => openDetailTab(current, "analysis"))}>

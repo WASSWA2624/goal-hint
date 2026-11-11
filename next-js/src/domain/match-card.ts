@@ -74,7 +74,8 @@ export function selectedCardPrediction(fixture: FixtureSnapshot, family: MarketF
 
 /** Show fixture progress until completion, without changing the market's audited settlement. */
 export function cardResultStatus(status: FixtureSnapshot["status"], outcome: SettlementOutcomeStatus | "unavailable") {
-  return status === "scheduled" ? "upcoming" : isCompletedFixtureStatus(status) ? outcome : status;
+  if (status === "scheduled") return "upcoming";
+  return status !== "canceled" && isCompletedFixtureStatus(status) && outcome !== "unavailable" ? outcome : status;
 }
 
 /**
@@ -109,7 +110,7 @@ export function selectedCardPrice(fixture: FixtureSnapshot, family: MarketFamily
   return selected ? fixture.prices?.find((entry) => entry.family === family && entry.selection === selected.selection) ?? null : null;
 }
 
-export type LiveClock = { phase: (typeof liveClockPhases)[number]; minute: number | null; stoppageMinutes?: number | null };
+export type LiveClock = { phase: (typeof liveClockPhases)[number]; minute: number | null; stoppageMinutes?: number | null; observedAt?: UtcInstant };
 const providerClockPhases: Readonly<Record<string, LiveClock["phase"]>> = Object.freeze({
   "1H": "first-half", HT: "half-time", "2H": "second-half", ET: "extra-time", BT: "break",
   P: "penalties", INT: "interrupted", SUSP: "suspended", LIVE: "in-play",
@@ -117,13 +118,15 @@ const providerClockPhases: Readonly<Record<string, LiveClock["phase"]>> = Object
 const runningPhases: ReadonlySet<LiveClock["phase"]> = new Set(["first-half", "second-half", "extra-time", "in-play"]);
 
 /** Paused phases never show a stale minute; an unmapped in-play code stays generic. */
-export function liveClockFromProvider(providerStatus: string | null, elapsedMinutes: number | null, stoppageMinutes?: number | null): LiveClock {
+export function liveClockFromProvider(providerStatus: string | null, elapsedMinutes: number | null, stoppageMinutes?: number | null,
+  observedAt?: UtcInstant): LiveClock {
   const phase = providerStatus !== null && Object.hasOwn(providerClockPhases, providerStatus) ? providerClockPhases[providerStatus]! : "in-play";
   const minute = runningPhases.has(phase) && Number.isSafeInteger(elapsedMinutes) && elapsedMinutes! >= 0 && elapsedMinutes! <= 200
     ? elapsedMinutes : null;
   const stoppage = minute !== null && Number.isSafeInteger(stoppageMinutes) && stoppageMinutes! > 0 && stoppageMinutes! <= 1000
     ? stoppageMinutes! : null;
-  return { phase, minute, ...(stoppage !== null ? { stoppageMinutes: stoppage } : {}) };
+  return { phase, minute, ...(stoppage !== null ? { stoppageMinutes: stoppage } : {}),
+    ...(minute !== null && observedAt !== undefined ? { observedAt } : {}) };
 }
 
 export { isPlayedFinalStatus as hasFinalScoreStatus } from "./market-settlement.ts";

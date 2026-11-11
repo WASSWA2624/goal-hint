@@ -5,9 +5,9 @@ import { matchFeedRules } from "../domain/match-feed-rules.ts";
 import { startRequestDeadline } from "../domain/request-deadline.ts";
 
 export type RefreshError = { code: FeedPaginationError["code"] };
-export async function readJson(href: string, signal: AbortSignal, timeoutMs: number = liveRefreshRules.timeoutMs): Promise<unknown> {
+export async function readJson(href: string, signal: AbortSignal): Promise<unknown> {
   const controller = new AbortController();
-  const canceled = () => controller.abort(signal.reason), clearDeadline = startRequestDeadline(controller, timeoutMs);
+  const canceled = () => controller.abort(signal.reason), clearDeadline = startRequestDeadline(controller, liveRefreshRules.timeoutMs);
   if (signal.aborted) canceled(); else signal.addEventListener("abort", canceled, { once: true });
   try {
     const response = await fetch(href, { signal: controller.signal,

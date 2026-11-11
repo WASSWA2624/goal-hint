@@ -95,7 +95,7 @@ function PredictionRecord() {
  */
 export const Verdict = memo(function Verdict() {
   const { data, messages, update, locale } = useStableDetails();
-  const fixture = data.fixture, snapshot = data.snapshot;
+  const snapshot = data.snapshot;
   // A published forecast can require access independently of the public fixture details.
   if ("gated" in data.history && snapshot) {
     return <Box><UnlockPanel locale={locale} signedIn={data.access.signedIn} returnTo={data.route.path} /></Box>;
@@ -108,7 +108,7 @@ export const Verdict = memo(function Verdict() {
   const item = row.item, price = selectedDetailPrice(data, featured), standing = liveStanding(data, featured);
   const pick = predictionDescription(messages, item.market.selection), chance = percent(messages, item.market.selectedProbability);
   const settled = snapshot?.applicability === "historical" ? null : row.outcome?.status ?? (snapshot?.applicability === "void" ? "void" : null);
-  const oddsLabel = messages.text(fixture.status === "live" ? "touchline.inPlayOdds" : "details.odds");
+  const oddsLabel = messages.text("details.odds");
   return <Box aria-labelledby="verdict-title" data-verdict={featured} data-featured-pick={featured}>
     <Eyebrow><h2 id="verdict-title">{messages.text("details.verdict")}</h2>
       {standing ? <Standing standing={standing} /> : settled && settled !== "pending" ? <DetailOutcome status={settled} /> : null}</Eyebrow>
@@ -116,7 +116,7 @@ export const Verdict = memo(function Verdict() {
       aria-label={[messages.text("details.featuredOpen", { market: marketName(messages, featured), pick, probability: chance }),
         price ? `${oddsLabel}: ${price}` : null].filter(Boolean).join(". ")}>
       <span data-pick><strong><PredictionOutcome messages={messages} selection={item.market.selection} /></strong><small>{marketName(messages, featured)}
-        {price && fixture.status === "live" ? <> · {oddsLabel} {price}</> : <PredictionOdds odds={price} />}</small>
+        <PredictionOdds odds={price} /></small>
         <ForecastValueLabel expectedReturn={detailMarketValue(data, featured)} messages={messages} /></span>
       <span data-chance><b>{chance}</b><small>{messages.text("details.probability")}</small></span>
     </Pick>

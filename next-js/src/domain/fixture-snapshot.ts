@@ -71,6 +71,8 @@ export const liveClockSchema = z.strictObject({
   phase: z.enum(liveClockPhases), minute: z.number().int().min(0).max(200).nullable(),
   /** Additional minutes actually played, supplied separately by the provider. */
   stoppageMinutes: z.number().int().min(0).max(1000).nullable().optional(),
+  /** Time of the sealed result that supplied this minute, independent of later identical reads. */
+  observedAt: instant.optional(),
 });
 export const fixtureUpdateSchema = z.strictObject({
   prediction: z.enum(["updating", "delayed", "current", "unavailable", "outside-window", "locked"]),

@@ -56,7 +56,7 @@ test("home resolves the rolling last 30 calendar days inclusively across month, 
   assert.equal(resolveFeedDates(explicit, tomorrow).startDate, "2026-09-10");
   assert.equal(resolveFeedDates(explicit, tomorrow).endDate, today);
   assert.equal(feedQueryHref(explicit, today), "/en/predictions/2026-09-10?to=2026-10-09&picks=all");
-  assert.equal(feedQueryHref(query("when=today"), today), "/en/matches?when=today&picks=all&sort=kickoff");
+  assert.equal(feedQueryHref(query("when=today"), today), "/en/matches?when=today&picks=all&prob=0-100&sort=kickoff");
   assert.equal(resolveFeedDates(query("when=today"), today).dayCount, 1);
 });
 

@@ -15,7 +15,6 @@ import { withoutSubscriberFeedOracle } from "@/domain/paywall";
 import { emptyArchiveIsMissing } from "@/domain/feed-date-navigation";
 import { resolveViewerAccess } from "@/server/members/viewer-access";
 import { contentAccess } from "@/server/members/gated-reads";
-import { readSubscriptionOffer } from "@/server/members/public-offer";
 import { parseMatchFeedQuery } from "@/server/matches/feed-service";
 import { loadMatchFeedPage } from "@/server/matches/feed-page";
 import { readPublicMatchFeedList } from "@/server/matches/public-feed";
@@ -32,7 +31,7 @@ type Props = { params: Promise<{ locale: string; date?: string }>;
 
 /** Metadata and initial HTML share the same stored read and request-owned clock. */
 export function createFeedRoute({ dated = false, read = readPublicMatchFeedList, instant = getShellInstant, policy = getDiscoveryPolicy,
-  resolveAccess = resolveViewerAccess, readOffer = readSubscriptionOffer, readSummary = readGatedFeedSummary, document = isDocumentRequest } = {}) {
+  resolveAccess = resolveViewerAccess, readSummary = readGatedFeedSummary, document = isDocumentRequest } = {}) {
   const load = cache(async (parameters: string, locale: string, at: UtcInstant) => {
     const query = parseMatchFeedQuery(new URLSearchParams(parameters), getReportingDate(at), { locale, asOf: at,
       ...((await contentAccess(resolveAccess)).tier === "free" ? { providerOdds: true } : {}) });
@@ -57,7 +56,7 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
       query = parseMatchFeedQuery(parameters, getReportingDate(at), { locale: route.locale, asOf: at,
         ...(access.tier === "free" ? { providerOdds: true } : {}),
         ...(dated && (period === undefined || period === "custom") ? { routeDate: route.date } : {}) });
-      query = applyFeedPageDefaults(query, parameters, { dated });
+      query = applyFeedPageDefaults(query, parameters, { dated, allowProbabilityDefault: access.tier === "full" || query.status === "finished" });
       today = getFeedToday(query, at);
       if (!dated || query.status === "live" || period !== undefined) {
         const synchronized = synchronizeFeedStatusDates(query, today);
@@ -90,10 +89,7 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
       return feedMetadata(query, today, result, policy());
     },
     async Page(props: Props) {
-      // Public pricing and the fixture projection can load together after access resolves.
-      const offerPromise = contentAccess(resolveAccess).then((access) => access.tier === "free" ? readOffer() : null).catch(() => null);
       const { query, today, result, access, discovery, summary } = await resolve(props, true);
-      const offer = await offerPromise;
       const messages = createMessages(query.locale);
       const structured = !discovery.eligible ? null : breadcrumbStructuredData([{ name: publicPolicy.name, path: homeHref(query.locale) },
         { name: dated ? messages.text("metadata.breadcrumbArchive", { date: messages.reportingDate(discovery.range.startDate) }) : messages.text("navigation.matches") }]);
@@ -101,7 +97,7 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
         {!dated && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(homeStructuredData()) }} />}
         {structured && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(structured) }} />}
         <MatchFeedPage query={query} today={today} result={result} showAccount subscriberOnly={access.tier === "free"}
-          startingPriceUgx={offer?.priceUgx ?? null} {...(summary ? { summary } : {})} />
+          {...(summary ? { summary } : {})} />
       </>;
     },
   };

@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "@/components/navigation/navigation-link";
 import { TeamLogo } from "@/components/match/team-logo";
 import { MatchStatus } from "@/components/match/match-status";
-import { MatchClockText, ScoreFigures, Scoreline } from "@/components/match/score-presentation";
+import { ScoreFigures, Scoreline } from "@/components/match/score-presentation";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { compactLeagueName, compactMarketName } from "@/domain/compact-fixture-label";
@@ -100,7 +100,7 @@ export function CleanLedgerSelection({ selection, locale, result, matchStates, a
           </Scoreline>
           <VisuallyHidden>{scoreDescription}</VisuallyHidden>
         </>}
-        {clockText && <span data-score-clock><MatchClockText text={clockText} /></span>}
+        {clockText && <span data-score-clock>{clockText}</span>}
       </span>
     </h4>
     <div data-ledger-facts data-mobile-facts id={`${id}-facts`}>

@@ -200,7 +200,7 @@ test("the existing market list renders Over 1.5 with its source and positive exa
   const html = render({ details: [validated] }).details[0].markets;
   assert.match(html, /data-extended-market="goal:full-time:totals:total:1\.5:binary"/u);
   assert.match(html, /Over 1\.5/u);
-  assert.match(html, /data-forecast-source="local-engine"[^>]*>Local Engine/u);
+  assert.match(html, /data-forecast-source="local-engine"[^>]*>L</u);
   assert.equal([...html.matchAll(/data-positive-value=/gu)].length, 1);
 });
 

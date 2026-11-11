@@ -78,17 +78,18 @@ export function FeedFilters({ query, today, leagues, onApply, subscriberOnly = f
   }
   function reset() {
     const day = getDateInTimeZone(utcInstantFromEpochMilliseconds(Date.now()), deviceZone);
-    setDraft(feedFilterDraft(resetFeedFilters({ ...draft.query, zone: deviceZone }), day, deviceZone));
+    setDraft(feedFilterDraft(resetFeedFilters({ ...draft.query, zone: deviceZone }, !subscriberOnly), day, deviceZone));
     setMarketsOpen(true);
   }
   const probabilityInput = (field: "min" | "max") => <FloatingField label={messages.text(field === "min" ? "feed.filters.minProbability" : "feed.filters.maxProbability")}
     error={probabilityError(field)}><input value={draft.probability[field]} inputMode="decimal" autoComplete="off"
       onFocus={() => setProbabilityFocus(field)} onBlur={() => setProbabilityFocus(null)}
-      onChange={event => { const value = event.target.value; setLastProbability(field); setDraft(current => ({ ...current, probability: { ...current.probability, [field]: value } })); }} /></FloatingField>;
+      onChange={event => { const value = event.target.value; setLastProbability(field); setDraft(current => ({ ...current, probabilityEdited: true, probability: { ...current.probability, [field]: value } })); }} /></FloatingField>;
   const native = useMemo(() => {
     const parameters = serializeFeedQuery({ ...(complete ?? query), search: "", page: 1 }, today);
     for (const key of ["q", "date", "from", "to", "when", "start", "end", "timeFrom", "timeTo", "tz", "status", "result", "league", "country", "market"]) parameters.delete(key);
     if (draft.query.result) parameters.set("status", draft.query.status);
+    if (!parameters.has("prob")) parameters.set("prob", "0-100");
     parameters.set("picks", draft.query.picks);
     parameters.set("sort", draft.query.sort.by); parameters.set("dir", draft.query.sort.direction);
     return [...parameters];
@@ -123,10 +124,10 @@ export function FeedFilters({ query, today, leagues, onApply, subscriberOnly = f
         </div>
         <div>
           <div data-date-time-fields>
-            <DateTimeField mode="datetime" locale={query.locale} name="start" label={messages.text("feed.filters.from")} required value={draft.dateTimes.from} disabled={live}
+            <DateTimeField mode="datetime" locale={query.locale} name="start" label={messages.text("feed.filters.from")} required value={draft.dateTimes.from}
               min="1000-01-01T00:00" error={lastDate === "from" ? dateError : undefined}
               onValueChange={from => { setLastDate("from"); setDraft(current => ({ ...current, dateTimes: { ...current.dateTimes, from } })); }} />
-            <DateTimeField mode="datetime" locale={query.locale} name="end" label={messages.text("feed.filters.to")} required value={draft.dateTimes.to} disabled={live}
+            <DateTimeField mode="datetime" locale={query.locale} name="end" label={messages.text("feed.filters.to")} required value={draft.dateTimes.to}
               min="1000-01-01T00:00" error={lastDate === "to" ? dateError : undefined}
               onValueChange={to => { setLastDate("to"); setDraft(current => ({ ...current, dateTimes: { ...current.dateTimes, to } })); }} />
           </div>

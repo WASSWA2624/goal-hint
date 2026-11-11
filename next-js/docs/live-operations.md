@@ -100,6 +100,8 @@ settings cannot activate AI publication.
 
 Limits come from the provider's own `/status` (free of quota) at startup, every 10 minutes and at each
 UTC provider day. Nothing is hard-coded to a plan.
+Uncertain dispatches count toward the daily budget. Only dispatches in the preceding minute can lower a
+newly observed remaining-minute value.
 
 | Plan (daily limit) | Refreshes/day | Workers | Live feed | Date poll | Odds floor / spare per day |
 | --- | --- | --- | --- | --- | --- |

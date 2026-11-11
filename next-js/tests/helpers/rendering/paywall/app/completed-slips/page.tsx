@@ -1,9 +1,9 @@
 import { createBestSlipsRoute } from "@/app/_components/best-slips-route";
-import { readCompletedBest } from "../best";
+import { readCompletedBestSnapshot } from "../best";
 import { policy, resolveAccess } from "../stored";
 
 export const dynamic = "force-dynamic";
-const route = createBestSlipsRoute({ read: readCompletedBest, access: resolveAccess, policy });
+const route = createBestSlipsRoute({ read: readCompletedBestSnapshot, access: resolveAccess, policy });
 
 export default function Page() {
   return route.Page({ params: Promise.resolve({ locale: "en" }), searchParams: Promise.resolve({}) });

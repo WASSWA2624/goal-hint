@@ -19,7 +19,7 @@ export async function verifyAppLoading(page, origin) {
       await page.waitForFunction(mode => document.querySelector('meta[name="color-scheme"]')?.content === mode, theme);
       await page.evaluate(() => document.fonts.ready);
       assert(await summary.getAttribute('aria-busy') === 'true', `${theme}/${width}: summary must render while pending`);
-      assert(await page.getByRole('progressbar', { name: /loading/i }).count() === 1, 'Pending matches use one header progress bar');
+      assert(await page.getByRole('progressbar', { name: /loading/i }).count() === 0, 'Streaming performance must keep the header progress quiet');
       assert((await summary.textContent()).includes('Won'), 'Pending summaries retain outcome labels');
       const height = await summary.evaluate(element => element.getBoundingClientRect().height);
       const background = await summary.evaluate(element => getComputedStyle(element).backgroundColor);

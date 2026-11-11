@@ -15,7 +15,7 @@ export const refreshApi = publicRefreshApi.injectEndpoints({
       serializeQueryArgs: ({ queryArgs: { query, today } }) => feedPerformanceApiHref(query, today),
       async queryFn({ query, today }, api) {
         try {
-          const parsed = feedPerformanceReplySchema.safeParse(await readJson(feedPerformanceApiHref(query, today), api.signal, 90_000));
+          const parsed = feedPerformanceReplySchema.safeParse(await readJson(feedPerformanceApiHref(query, today), api.signal));
           if (!parsed.success) throw new FeedPaginationError("invalid-response");
           return { data: parsed.data };
         }

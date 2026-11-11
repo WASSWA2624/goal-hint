@@ -18,12 +18,12 @@ const Track = styled.div`
     block-size: 100%;
     background: ${({ theme }) => theme.header.accent};
   }
-  body:has([data-navigation-pending], [data-app-loading], main[aria-busy="true"], main [aria-busy="true"]) & {
+  body:has([data-navigation-pending], [data-app-loading], main[aria-busy="true"], main [aria-busy="true"]:not([data-navigation-passive])) & {
     opacity: 1;
     > span { display: block; animation: ${travel} var(--gh-duration-shimmer) var(--gh-easing-linear) infinite; }
   }
   @media (prefers-reduced-motion: reduce) {
-    body:has([data-navigation-pending], [data-app-loading], main[aria-busy="true"], main [aria-busy="true"]) & > span {
+    body:has([data-navigation-pending], [data-app-loading], main[aria-busy="true"], main [aria-busy="true"]:not([data-navigation-passive])) & > span {
       animation: none;
       transform: translateX(115%);
     }

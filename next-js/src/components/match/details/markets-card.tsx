@@ -200,7 +200,7 @@ function MarketPanel({ family, inline = false }: { family: MarketFamily; inline?
         <dt>{messages.text("details.prediction")}</dt><dd><strong><PredictionOutcome messages={messages} selection={item.market.selection} />
           {!live && <PredictionOdds odds={price} />}</strong>
           {!live && <ForecastValueLabel expectedReturn={detailMarketValue(data, family)} messages={messages} />}</dd>
-        {live && price && <><dt>{messages.text("touchline.inPlayOdds")}</dt><dd><b>{price}</b></dd></>}
+        {live && price && <><dt>{messages.text("details.odds")}</dt><dd><b>{price}</b></dd></>}
         <dt>{messages.text("details.estimatedProbability")}</dt><dd><b>{percent(messages, item.market.selectedProbability)}</b></dd>
       </Facts>
       <SubHeading>{messages.text("details.allOutcomes")}</SubHeading>
@@ -215,7 +215,9 @@ function MarketPanel({ family, inline = false }: { family: MarketFamily; inline?
       <Note>{messages.text(exclusiveFamily(family) ? "details.exclusiveOutcomes" : "detail.overlappingProbabilities")}</Note>
       <SubHeading>{messages.text("details.sourceAndTiming")}</SubHeading>
       <Facts>
-        <dt>{messages.text("details.source")}</dt><dd>{messages.text(`market.source.${item.source.kind}`)}{item.source.provisional && <> · {messages.text("match.provisional")}</>}</dd>
+        <dt>{messages.text("details.source")}</dt><dd><span title={messages.text(`market.source.${item.source.kind}`)}
+          aria-label={messages.text(`market.source.${item.source.kind}`)}>{messages.text(`market.source.short.${item.source.kind}`)}</span>
+          {item.source.provisional && <> · {messages.text("match.provisional")}</>}</dd>
         {item.source.fallbackReason && <><dt>{messages.text("details.fallback")}</dt><dd>{messages.text(`detail.fallback.${item.source.fallbackReason}`)}</dd></>}
         <dt>{messages.text("match.published")}</dt><dd><Time at={snapshot.publishedAt} /></dd>
         <dt>{messages.text("detail.evidenceCutoff")}</dt><dd><Time at={snapshot.evidenceCutoffAt} /></dd>
@@ -304,7 +306,7 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
               const settled = data.snapshot?.applicability !== "historical" && outcome && outcome.status !== "pending" ? outcome.status : null;
               const pick = item ? predictionDescription(messages, item.market.selection) : messages.text("details.notAvailable");
               const price = selectedDetailPrice(data, family), standing = liveStanding(data, family);
-              const oddsLabel = messages.text(data.fixture.status === "live" ? "touchline.inPlayOdds" : "details.odds");
+              const oddsLabel = messages.text("details.odds");
               return <li key={family}>
                 <MarketRow type="button" $family={family} data-detail-market={family} data-item-key={family} id={`market-row-${family}`} aria-expanded={embedded ? view.market === family : undefined}
                   aria-controls={embedded ? `market-details-${family}` : undefined}

@@ -4,6 +4,10 @@ const nextConfig: NextConfig = {
   agentRules: false,
   ...(process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_GOAL_HINT_DEMO === "true"
     ? { devIndicators: false as const } : {}),
+  // The owned Windows snapshot keeps the dev graph in memory to avoid disk
+  // compaction interrupting navigation. Production and other dev targets use their defaults.
+  ...(process.env.NODE_ENV === "development" && process.platform === "win32" && process.env.NEXT_PUBLIC_GOAL_HINT_LOCAL_FOOTBALL === "true"
+    ? { experimental: { turbopackFileSystemCacheForDev: false } } : {}),
   // No `X-Powered-By: Next.js` response header.
   poweredByHeader: false,
   // Development only: let phones and other machines on the local network open `next dev` by its LAN address

@@ -100,7 +100,7 @@ export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title
   title?: string | undefined; period?: string | undefined; headingLevel?: 2 | 3 | undefined;
   actions?: ReactNode;
   compactHeader?: boolean;
-  loading?: boolean;
+  loading?: boolean | "background";
   showCoverage?: boolean | undefined; showAll?: boolean;
   activeResult?: PredictionResult | undefined; onResult?: ((result: PredictionResult | undefined) => void) | undefined; disabled?: boolean;
   resultAttributes?: ((result: PredictionResult | undefined) => Record<`data-${string}`, string>) | undefined;
@@ -109,7 +109,8 @@ export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title
   const counts = suppliedCounts ?? { total: 0, won: 0, lost: 0, pending: 0 };
   const predicted = kind === "matches" ? predictedPerformanceSummary(counts) : null;
   const number = (value: number) => unknown ? "—" : m.number(value);
-  return <Panel role="group" aria-label={label} aria-busy={loading || undefined} data-performance-summary={kind}>
+  return <Panel role="group" aria-label={label} aria-busy={loading ? true : undefined}
+    data-navigation-passive={loading === "background" ? "" : undefined} data-performance-summary={kind}>
     <Content $compactHeader={compactHeader}>
       <Header $compactHeader={compactHeader} data-performance-heading>{headingLevel === 3 ? <h3>{label}</h3> : <h2>{label}</h2>}
         {period && <p data-performance-period>{period}</p>}

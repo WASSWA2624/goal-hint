@@ -1,8 +1,14 @@
 import "server-only";
-import type { BestSlipView, SlipPreviewView } from "../../domain/best-slips.ts";
+import type { BestSlipsResult, BestSlipView, SlipPreviewView } from "../../domain/best-slips.ts";
 import type { ContentAccess } from "../../domain/paywall.ts";
 import { slipMatchStateForSelection } from "../../domain/slip-match-state.ts";
 import { slipSelectionCard } from "../../domain/slip-card.ts";
+
+/** Project a stored slip collection only for the viewer receiving it. */
+export function gateBestSlips(result: BestSlipsResult, access: ContentAccess): BestSlipsResult {
+  return { ...result, entitled: access.tier === "full", access: { tier: access.tier, signedIn: access.signedIn },
+    slips: result.slips.map((view) => gateSlipView(view, access)) };
+}
 
 export function gateSlipView(view: BestSlipView, access: ContentAccess): BestSlipView;
 export function gateSlipView(view: SlipPreviewView, access: ContentAccess): SlipPreviewView;

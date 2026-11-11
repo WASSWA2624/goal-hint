@@ -61,9 +61,8 @@ const Results = styled(FeedStack)`
 const PreviousNote = styled(FeedNote)`${media.desktop} { color: inherit; }`;
 
 /** Memoized with stable callbacks, so header and filter state changes skip the list. */
-const FeedResults = memo(function FeedResults({ data: initial, query, today, enabled, onStatus, onApply, startingPriceUgx, summary, confirmed, onConfirmed }: {
+const FeedResults = memo(function FeedResults({ data: initial, query, today, enabled, onStatus, onApply, summary, confirmed, onConfirmed }: {
   data: MatchFeedResponse; query: FeedQuery; today: ReportingDate; enabled: boolean;
-  startingPriceUgx: number | null;
   summary?: Promise<FeedPerformanceSeed> | undefined;
   confirmed: FeedPerformanceSeed | null; onConfirmed: (seed: FeedPerformanceSeed) => void;
   onStatus: (href: string, message: string) => void; onApply: (query: FeedQuery) => void;
@@ -100,7 +99,7 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
             note={data.search?.exact === 0 ? messages.text("feed.search.noExact", { query: query.search }) : null} />}
           <li>
             <MatchCard fixture={fixture} gated={data.access.tier === "free"} signedIn={data.access.signedIn} analysisSlug={canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name)}
-              markets={query.markets} publishedMarket={query.picks !== "only"} locale={query.locale} position={first + index} startingPriceUgx={startingPriceUgx}
+              markets={query.markets} publishedMarket={query.picks !== "only"} locale={query.locale} position={first + index}
               titleNote={similarFrom !== null && first + index >= similarFrom ? messages.text("feed.search.similarItem") : undefined} />
           </li>
         </Fragment>)}
@@ -119,9 +118,8 @@ function searchAnnouncement(data: MatchFeedResponse, query: FeedQuery, count: st
 }
 
 /** Successful server projections remain visible if a later navigation fails. */
-function FeedSurfaceContent({ query, today, result, controls, pagination, showAccount = false, subscriberOnly = result.data?.access.tier === "free", startingPriceUgx = null, summary }: {
+function FeedSurfaceContent({ query, today, result, controls, pagination, showAccount = false, subscriberOnly = result.data?.access.tier === "free", summary }: {
   query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode; showAccount?: boolean; subscriberOnly?: boolean;
-  startingPriceUgx?: number | null | undefined;
   summary?: Promise<FeedPerformanceSeed>;
 }) {
   const router = useRouter(), [pending, startTransition] = useTransition();
@@ -169,7 +167,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
       </Stack>}
       {visible && <FeedResults key={feedQueryHref(visible.query, visible.today) + ":" + resolveFeedDates(visible.query, visible.today).startDate + ":" + visible.data.access.tier + ":" + visible.data.access.signedIn}
         data={visible.data} query={visible.query} today={visible.today} enabled={!pending && !result.error} onStatus={onPaginationStatus} onApply={apply}
-        startingPriceUgx={startingPriceUgx} summary={summary} confirmed={confirmed} onConfirmed={setConfirmed} />}
+        summary={summary} confirmed={confirmed} onConfirmed={setConfirmed} />}
       {!result.error && pagination}
     </Results>
   </FeedStack>;

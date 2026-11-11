@@ -8,24 +8,24 @@ import { BestSlips } from "@/components/slips/best-slips";
 import { CriteriaPanel } from "@/components/slips/slip-styles";
 import { TextLink } from "@/components/ui/controls";
 import { Inline, Stack } from "@/components/ui/layout";
+import { defaultBestSlipsQuery } from "@/domain/best-slips-query";
 import { createMessages } from "@/i18n/messages";
 import { resolveViewerAccessFresh } from "@/server/members/viewer-access";
-import { gateBestSlips, readBestSlips } from "@/server/slips/best-slips";
+import { readBestSlipsBrowseSnapshot } from "@/server/slips/best-slips-browse";
+import { gateBestSlips } from "@/server/slips/slip-preview";
 import { bestSlipsMetadata } from "@/server/seo/metadata";
 import { homeBrowseLinks } from "@/server/seo/home-query";
 import { getDiscoveryPolicy } from "@/server/seo/policy";
 import { getShellDate, PublicShell } from "./public-shell";
 
 type Props = Readonly<{ params: Promise<{ locale: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }>;
-export function createBestSlipsRoute({ read = readBestSlips, access = resolveViewerAccessFresh, policy = getDiscoveryPolicy } = {}) {
+export function createBestSlipsRoute({ read = readBestSlipsBrowseSnapshot, access = resolveViewerAccessFresh, policy = getDiscoveryPolicy } = {}) {
   async function Content({ locale }: { locale: string }) {
     const m = createMessages(locale);
-    const initialViewer = await access();
-    let published = await read(initialViewer, locale), viewer = await access();
-    if (initialViewer.tier !== viewer.tier) {
-      published = await read(viewer, locale);
-      viewer = await access();
-    }
+    const published = await read(defaultBestSlipsQuery(), locale);
+    // The stored cohort is viewer-independent. A fresh access check after the
+    // read covers an entitlement change before any selections enter the HTML.
+    const viewer = await access();
     const result = gateBestSlips(published, viewer);
     const browse = homeBrowseLinks(result, locale);
     return <>

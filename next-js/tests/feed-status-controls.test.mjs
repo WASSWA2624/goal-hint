@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseReportingDate, parseUtcInstant } from '../src/domain/calendar.ts';
 import { applyFeedDraft, resetFeedFilterSection, resetFeedFilters, selectFeedDates, selectFeedStatus, synchronizeFeedStatusDates } from '../src/domain/feed-controls.ts';
-import { feedFilterStatuses, feedQueryHref, getFeedToday, parseFeedQuery, resolveFeedDates } from '../src/domain/feed-query.ts';
+import { defaultMatchProbability, feedFilterStatuses, feedQueryHref, getFeedToday, parseFeedQuery, resolveFeedDates } from '../src/domain/feed-query.ts';
 
 const today = parseReportingDate('2026-10-09');
 const query = input => parseFeedQuery(input, { today });
 
 test('unified status choices retain stable transport codes and historical API capabilities', () => {
-  assert.deepEqual(feedFilterStatuses, ['all', 'scheduled', 'live', 'finished']);
+  assert.deepEqual(feedFilterStatuses, ['all', 'scheduled', 'live', 'finished', 'postponed', 'canceled']);
   const historical = query({ date: '2026-10-01', status: 'live' });
   assert.deepEqual(historical.dates, { kind: 'date', date: '2026-10-01' });
   assert.equal(query({ status: 'canceled' }).status, 'canceled');
@@ -28,13 +28,20 @@ test('selecting Live uses Today, clears stale kickoff times and restarts paginat
   assert.equal(feedQueryHref(selected, today), '/en/matches?when=today&tz=America%2FNew_York&q=Example&league=league-a&country=Spain&status=live&market=total-goals&prob=60-90&picks=only&sort=probability&pageSize=40');
 });
 
-test('Live remains on Today across date controls until another status is selected', () => {
+test('an explicit date outside Today clears Live so the selected period can open', () => {
   const live = selectFeedStatus(query({ when: 'last-7-days' }), 'live', today);
-  for (const dates of [{ kind: 'yesterday' }, { kind: 'tomorrow' }, { kind: 'next-30-days' },
-    { kind: 'date', date: '2026-10-01' }, { kind: 'range', from: '2026-10-01', to: '2026-10-04' }]) {
+  for (const dates of [{ kind: 'tomorrow' }, { kind: 'next-30-days' }, { kind: 'range', from: today, to: '2026-10-15' }]) {
     const selected = selectFeedDates(live, dates, today);
-    assert.deepEqual(selected.dates, { kind: 'today' }); assert.equal(selected.status, 'live');
+    assert.deepEqual(selected.dates, dates); assert.equal(selected.status, 'all');
     assert.equal(selected.page, 1);
+  }
+  assert.equal(selectFeedDates(live, { kind: 'today' }, today).status, 'live');
+  for (const dates of [{ kind: 'yesterday' }, { kind: 'date', date: '2026-10-01' }, { kind: 'range', from: '2026-10-01', to: '2026-10-04' }]) {
+    const archived = selectFeedDates({ ...live, probability: defaultMatchProbability }, dates, today);
+    assert.deepEqual(archived.dates, dates); assert.equal(archived.status, 'all'); assert.equal(archived.page, 1);
+    assert.deepEqual(archived.probability, { min: 0, max: 100 });
+    const explicit = selectFeedDates({ ...live, probability: { min: 75, max: 100 } }, dates, today);
+    assert.deepEqual(explicit.probability, { min: 75, max: 100 });
   }
   const all = selectFeedStatus(live, 'all', today), selected = selectFeedDates(all, { kind: 'next-7-days' }, today);
   assert.equal(selected.status, 'all'); assert.deepEqual(selected.dates, { kind: 'next-7-days' });

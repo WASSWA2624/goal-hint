@@ -11,7 +11,7 @@ import type { MatchFeedResponse } from "@/domain/match-feed";
 import { createMessages } from "@/i18n/messages";
 import { consumeRefresh, refreshApi } from "@/state/refresh-api";
 import { useAppDispatch } from "@/state/hooks";
-import { acceptRun } from "@/domain/live-refresh";
+import { acceptRun, feedRefreshInterval } from "@/domain/live-refresh";
 import { ensureFeedEntry, restoreFeedCheckpoint, saveFeedCheckpoint } from "./feed-restoration";
 
 type Mode = "refresh" | "restore" | "background";
@@ -54,6 +54,15 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
       scrollY: Math.max(0, Math.min(window.scrollY, 10_000_000)), focusFixtureId: article?.getAttribute("data-fixture-id") ?? null,
       paginationVersion: current.data.paginationVersion, createdAt: Date.now() });
   }, [href, queryKey]);
+  const focusAndSave = useCallback((target: FocusTarget) => {
+    const article = target.fixtureId ? root.current?.querySelector<HTMLElement>(`[data-fixture-id="${CSS.escape(target.fixtureId)}"]`) : null;
+    const focus = target.retry ? root.current?.querySelector<HTMLElement>("[data-pagination-retry]")
+      : target.checkpoint ? article?.querySelector<HTMLElement>("[data-match-analysis-link]") ?? article?.querySelector<HTMLElement>("a") ?? root.current
+      : article ?? root.current;
+    focus?.focus({ preventScroll: true });
+    if (target.checkpoint) window.scrollTo({ top: target.checkpoint.scrollY, behavior: "instant" });
+    save();
+  }, [save]);
 
   const run = useCallback(async (mode: Mode, checkpoint?: FeedCheckpoint) => {
     // The synchronous lock also handles two clicks before React paints disabled.
@@ -98,17 +107,9 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
     const target = focusTarget.current;
     if (!target) return;
     focusTarget.current = null;
-    const frame = requestAnimationFrame(() => {
-      const article = target.fixtureId ? root.current?.querySelector<HTMLElement>(`[data-fixture-id="${CSS.escape(target.fixtureId)}"]`) : null;
-      const focus = target.retry ? root.current?.querySelector<HTMLElement>("[data-pagination-retry]")
-        : target.checkpoint ? article?.querySelector<HTMLElement>("[data-match-analysis-link]") ?? article?.querySelector<HTMLElement>("a") ?? root.current
-        : article ?? root.current;
-      focus?.focus({ preventScroll: true });
-      if (target.checkpoint) window.scrollTo({ top: target.checkpoint.scrollY, behavior: "instant" });
-      save();
-    });
+    const frame = requestAnimationFrame(() => focusAndSave(target));
     return () => cancelAnimationFrame(frame);
-  }, [enabled, error, save, view]);
+  }, [enabled, error, focusAndSave, view]);
   useEffect(() => { if (!enabled) request.current?.abort(); }, [enabled]);
   useEffect(() => {
     mounted.current = true;
@@ -117,9 +118,23 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
     const checkpoint = previousCheckpoint?.firstPage === data.page && previousCheckpoint.lastPage === data.page ? previousCheckpoint : null;
     restored.current = checkpoint === null;
     let active = true;
+    let frame: number | undefined;
     const scrollRestoration = window.history.scrollRestoration;
     window.history.scrollRestoration = "manual";
-    if (checkpoint) void Promise.resolve().then(() => { if (active) return run("restore", checkpoint); });
+    if (checkpoint) {
+      const { data: current, records } = viewRef.current;
+      const now = Date.now(), age = now - current.asOf;
+      const fresh = age >= 0 && age < feedRefreshInterval(current, records, now);
+      // A recent public page may already be in the router cache. Member pages
+      // and stale observations still need a stored read on return.
+      if (!current.access.signedIn && fresh && current.paginationVersion !== null && current.paginationVersion === checkpoint.paginationVersion) {
+        frame = requestAnimationFrame(() => {
+          restored.current = true;
+          focusAndSave({ fixtureId: checkpoint.focusFixtureId, checkpoint });
+          announce("restored", viewRef.current);
+        });
+      } else void Promise.resolve().then(() => { if (active) return run("restore", checkpoint); });
+    }
     const leaving = (event: MouseEvent) => {
       const anchor = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
       if (!anchor || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey ||
@@ -133,11 +148,12 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
     window.addEventListener("popstate", save);
     return () => {
       active = false; mounted.current = false; request.current?.abort();
+      if (frame !== undefined) cancelAnimationFrame(frame);
       document.removeEventListener("click", leaving, true); document.removeEventListener("submit", save, true);
       window.removeEventListener("pagehide", save); window.removeEventListener("popstate", save);
       window.history.scrollRestoration = scrollRestoration;
     };
-  }, [data.page, href, queryKey, run, save]);
+  }, [announce, data.page, focusAndSave, href, queryKey, run, save]);
 
   return { view, phase, error, root, refresh: useCallback(() => run("background"), [run]), retry: () => {
     const checkpoint = retryCheckpoint.current;

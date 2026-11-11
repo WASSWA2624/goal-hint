@@ -40,9 +40,20 @@ export function selectFeedStatus(query: FeedQuery, status: FeedStatus, today: Re
   return synchronizeFeedStatusDates({ ...scope, ...(dates !== query.dates ? { interval: undefined } : {}), summary: undefined, status, dates, page: 1 }, today);
 }
 
-/** Live stays on Today until the visitor chooses another status. */
+/** An explicit period can leave Live, and historical dates clear today's probability default. */
+export function selectFeedDateScope(query: FeedQuery, today: ReportingDate): FeedQuery {
+  const range = resolveFeedDates(query, today);
+  const includesHistory = range.startDate < today;
+  const conflictsWithLive = query.status === "live" && (range.startDate !== today || range.endDate !== today);
+  const conflictsWithUpcoming = query.status === "scheduled" && range.endDate < today;
+  if (!includesHistory && !conflictsWithLive) return query;
+  return { ...query,
+    probability: includesHistory && query.probability.minExclusive ? anyProbability : query.probability,
+    status: conflictsWithLive || conflictsWithUpcoming ? "all" : query.status };
+}
+
 export function selectFeedDates(query: FeedQuery, dates: DateSelection, today: ReportingDate): FeedQuery {
-  return synchronizeFeedStatusDates({ ...query, summary: undefined, interval: undefined, dates, page: 1 }, today);
+  return synchronizeFeedStatusDates(selectFeedDateScope({ ...query, summary: undefined, interval: undefined, dates, page: 1 }, today), today);
 }
 
 /** Draft text stays editable; normalization happens once, at submission. */
@@ -77,10 +88,11 @@ export function resetFeedFilterSection(draft: FeedQuery, section: FeedFilterSect
 }
 
 /** Restore every page filter and fifty-item limit, retaining the browsing zone. */
-export function resetFeedFilters(query: FeedQuery): FeedQuery {
+export function resetFeedFilters(query: FeedQuery, allowProbabilityDefault = true): FeedQuery {
   const reset = { ...query };
   delete reset.time; delete reset.result; delete reset.summary;
   delete reset.interval;
-  return { ...reset, ...matchFeedPageDefaults, status: "all", search: "", leagues: [], countries: [], markets: [...defaultMarkets], probability: anyProbability, odds: null,
+  return { ...reset, ...matchFeedPageDefaults, status: "all", search: "", leagues: [], countries: [], markets: [...defaultMarkets],
+    probability: allowProbabilityDefault ? matchFeedPageDefaults.probability : anyProbability, odds: null,
     page: 1 };
 }

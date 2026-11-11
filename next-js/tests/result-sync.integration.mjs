@@ -83,20 +83,20 @@ test('shared result synchronization on isolated genuine MySQL', { timeout: 300_0
         assert.equal(await s.poller.runOnce(), true);
         assert.equal(channels(s.source, 'date').length, 1); assert.equal(channels(s.source, 'live').length, 0);
         advance(59_999); await s.poller.runOnce(); assert.equal(s.source.network.length, 1);
-        advance(1); await s.poller.runOnce(); assert.equal(channels(s.source, 'date').length, 2); assert.equal(channels(s.source, 'live').length, 1);
-        advance(14_999); await s.poller.runOnce(); assert.equal(channels(s.source, 'live').length, 1);
-        advance(1); await s.poller.runOnce(); assert.equal(channels(s.source, 'live').length, 2);
+        advance(1); await s.poller.runOnce(); assert.equal(channels(s.source, 'date').length, 2); assert.equal(channels(s.source, 'live').length, 0);
+        advance(14_999); await s.poller.runOnce(); assert.equal(channels(s.source, 'live').length, 0);
+        advance(1); await s.poller.runOnce(); assert.equal(channels(s.source, 'live').length, 1);
         await s.poller.stop(); const restarted = s.make({ store: s.makeStore(b) }); await restarted.runOnce();
-        assert.equal(channels(s.source, 'date').length, 2); assert.equal(channels(s.source, 'live').length, 2);
+        assert.equal(channels(s.source, 'date').length, 2); assert.equal(channels(s.source, 'live').length, 1);
         s.source.state.rows[0].fixture.status.short = 'FT'; s.source.state.rows[0].score.fulltime = score(1,0);
         advance(45_000); await restarted.runOnce();
-        assert.equal(channels(s.source, 'date').length, 3); assert.equal(channels(s.source, 'live').length, 2);
+        assert.equal(channels(s.source, 'date').length, 3); assert.equal(channels(s.source, 'live').length, 1);
       });
       await t.test('many concurrent ticks and a competing replica cannot multiply provider requests', async () => {
         const s = await seed([catalogFixture(10003, { kickoff: new Date(p.now() + 10_000).toISOString() })]);
         const competitor = s.make({ store: s.makeStore(b) });
         await Promise.all(Array.from({ length: 20 }, (_, i) => (i % 2 ? competitor : s.poller).runOnce()));
-        assert.equal(channels(s.source, 'date').length, 1); assert.equal(channels(s.source, 'live').length, 1);
+        assert.equal(channels(s.source, 'date').length, 1); assert.equal(channels(s.source, 'live').length, 0);
         assert.ok(s.source.network.every((request) => request.url.pathname === '/fixtures'));
       });
       await t.test('46 cross-midnight missing-live fixtures use 20/20/6 batches and retain missing records', async () => {
@@ -123,6 +123,8 @@ test('shared result synchronization on isolated genuine MySQL', { timeout: 300_0
         s.source.state.rows.push(catalogFixture(999999, { competitionId: 99999, kickoff: new Date(p.now()).toISOString(), status: '1H' }));
         assert.equal(await s.poller.runOnce(), true); assert.equal(channels(s.source, 'ids').length, 0);
         assert.equal(await catalog.fixtureByProviderId(999999), null);
+        assert.equal(channels(s.source, 'live').length, 0);
+        advance(15_000); await s.poller.runOnce();
         assert.equal(channels(s.source, 'live')[0].url.searchParams.get('live'), 'all');
       });
       await t.test('unverified extra-time/shootout totals stay separate; verified regulation and corrections append revisions', async () => {

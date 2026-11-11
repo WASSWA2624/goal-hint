@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createBestSlipsRoute } from "@/app/_components/best-slips-route";
-import { readBest } from "../../best";
+import { readBestSnapshot } from "../../best";
 import { accessFor, policy } from "../../stored";
 
 export const dynamic = "force-dynamic";
@@ -9,8 +9,11 @@ export const dynamic = "force-dynamic";
 export default async function Page({ params }: { params: Promise<{ viewer: string }> }) {
   const { viewer } = await params;
   if (!["anonymous", "expired"].includes(viewer)) notFound();
-  let checks = 0;
-  const route = createBestSlipsRoute({ read: readBest, policy,
-    access: async () => accessFor(checks++ === 0 ? "entitled" : viewer) });
+  let current = "entitled";
+  const route = createBestSlipsRoute({ policy, access: async () => accessFor(current), read: async () => {
+    const snapshot = await readBestSnapshot();
+    current = viewer;
+    return snapshot;
+  } });
   return route.Page({ params: Promise.resolve({ locale: "en" }), searchParams: Promise.resolve({}) });
 }

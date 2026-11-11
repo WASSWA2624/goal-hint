@@ -41,7 +41,6 @@ const Trigger = styled.button`
   > span { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   > svg { flex: none; font-size: var(--gh-font-emphasis); }
   > svg:last-child { font-size: var(--gh-font-secondary); color: ${({ theme }) => theme.color.mutedText}; }
-  &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
   &[aria-expanded="true"] { background: ${({ theme }) => theme.color.brandSoft}; }
   ${controlFeedback}
   ${focusRing}
@@ -133,8 +132,7 @@ export function MobileFeedDateFilter({ query, today, onApply }: {
   const range = resolveFeedDates(query, today);
   const span = range.dayCount === 1 ? messages.reportingDateShort(range.startDate) : messages.reportingDateSpan(range.startDate, range.endDate);
   const label = isFeedDatePreset(query.dates.kind) ? messages.text(`feed.date.${query.dates.kind}`) : span;
-  const title = query.status === "live" ? messages.text("feed.filters.liveToday")
-    : `${messages.text("feed.date.choose")}: ${label} (${span})`;
+  const title = `${messages.text("feed.date.choose")}: ${label} (${span})`;
   const next = useMemo(() => {
     try {
       const from = parseReportingDate(draft.from), to = parseReportingDate(draft.to);
@@ -155,7 +153,7 @@ export function MobileFeedDateFilter({ query, today, onApply }: {
     onApply(next);
   };
   return <>
-    <Trigger ref={trigger} type="button" data-mobile-date-filter disabled={query.status === "live"}
+    <Trigger ref={trigger} type="button" data-mobile-date-filter
       title={title} aria-label={title} aria-haspopup="dialog" aria-expanded={open} aria-controls={id}
       onClick={() => { setDraft(dateDraft(query, today)); setOpen(true); }}>
       <CalendarIcon /><span>{label}</span><ChevronDownIcon />

@@ -5,6 +5,7 @@ import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { OutcomeBadge } from "@/components/match/prediction-presentation";
 import { CompetitionLogo } from "@/components/match/competition-media";
+import { LiveMatchTime } from "@/components/match/score-presentation";
 import { formLetters } from "@/domain/match-details";
 import type { MarketFamily } from "@/domain/markets";
 import { toUtcIsoString } from "@/domain/calendar";
@@ -156,6 +157,7 @@ const Versus = styled.div`
     > b { min-inline-size: var(--gh-size-12); block-size: var(--gh-size-12); font-size: var(--gh-font-reading); }
     > b[data-score] { block-size: auto; font-size: var(--gh-font-hero); }
     > span { font-size: ${size("body")}; }
+    > span[data-live] { margin-block-start: var(--gh-spacing-0_5); font-size: ${size("emphasis")}; }
   }
 `;
 
@@ -171,9 +173,8 @@ export const MatchBanner = memo(function MatchBanner({ touchline = false }: { to
     const team = side === "home" ? fixture.homeTeam : fixture.awayTeam, records = preview?.sections.form[side] ?? [];
     return records.length ? <FormLetters letters={formLetters(records, team.id, 5)} label={messages.text("details.lastFive", { team: side === "home" ? home : away })} /> : null;
   };
-  const status = fixture.status === "live" && fixture.liveClock
-    ? fixture.liveClock.minute !== null ? messages.text("match.clock.minute", { minute: messages.number(fixture.liveClock.minute) }) : messages.text(`match.clock.${fixture.liveClock.phase}`)
-    : messages.text(`match.status.${fixture.status}`);
+  const status = fixture.status === "live" && fixture.liveClock && (fixture.liveClock.minute !== null || fixture.liveClock.phase !== "in-play")
+    ? <LiveMatchTime clock={fixture.liveClock} messages={messages} /> : messages.text(`match.status.${fixture.status}`);
   const competition = [fixture.competition.name || messages.text("match.competitionUnknown"), context?.competition.round].filter(Boolean).join("\u00a0· ");
   return <Box $touchline={touchline} id="current-match-summary" aria-labelledby="match-banner-title">
     <Context title={competition}>

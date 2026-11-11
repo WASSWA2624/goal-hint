@@ -6,19 +6,13 @@ import type { BestSlipsQuery } from "../../domain/best-slips-query.ts";
 import { getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "../../domain/calendar.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
-import { gateSlipView } from "./slip-preview.ts";
+import { gateBestSlips } from "./slip-preview.ts";
 import type { ViewerAccess } from "../members/viewer-access.ts";
 import { readPublicSlipBuild } from "./public-slips.ts";
 import { getDatabase } from "../database/client.ts";
 import { createPublishedSlips } from "./published-slips.ts";
 
-/** Explicit public projection; incomplete original selections never cross the response boundary. */
-export function gateBestSlips(result: BestSlipsResult, access: ViewerAccess): BestSlipsResult {
-  const entitled = access.tier === "full";
-  return { ...result, entitled, access: { tier: access.tier, signedIn: access.signedIn }, slips: result.slips.map((view) => {
-    return gateSlipView(view, access);
-  }) };
-}
+export { gateBestSlips } from "./slip-preview.ts";
 
 /** Recomputed from today's current stored cohort; no shared cache ever contains a viewer response. */
 export function createBestSlipsService({ read = readPublicSlipBuild, model = null, providerOdds = publicPolicy.features.providerOdds,

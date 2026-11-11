@@ -18,7 +18,8 @@ const Value = styled.small`
 `;
 
 export function ForecastSourceLabel({ source, messages }: { source: MarketSource; messages: Messages }) {
-  return <Source data-forecast-source={source}>{messages.text(`market.source.short.${source}`)}</Source>;
+  const name = messages.text(`market.source.${source}`);
+  return <Source data-forecast-source={source} title={name} aria-label={name}>{messages.text(`market.source.short.${source}`)}</Source>;
 }
 
 export function ForecastValueLabel({ expectedReturn, messages }: { expectedReturn: number | null; messages: Messages }) {

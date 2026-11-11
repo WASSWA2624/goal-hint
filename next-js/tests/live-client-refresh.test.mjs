@@ -75,6 +75,31 @@ test('loaded feeds rebase atomically with run/coverage updates and reject old en
   assert.equal(acceptRun(first.run, null, '2026-10-10'), null);
 });
 
+test('the feed and detail update from sealed live results without resetting the clock on identical reads', () => {
+  let feed = initialLoadedFeed(liveFeed()), detail = liveDetail();
+  for (const [record, asOf] of [
+    [liveRecord({ dataVersion: '10', status: 'live', score: { home: 0, away: 0 }, scorePeriod: 'live',
+      liveClock: { phase: 'first-half', minute: 1, observedAt: now + 1 } }), now + 1],
+    [liveRecord({ dataVersion: '11', status: 'live', score: { home: 2, away: 1 }, scorePeriod: 'live',
+      liveClock: { phase: 'second-half', minute: 84, observedAt: now + 2 } }), now + 2],
+    [liveRecord({ dataVersion: '12', status: 'finished-regulation', score: { home: 2, away: 2 }, scorePeriod: 'regulation',
+      liveClock: null }), now + 3],
+  ]) {
+    feed = replaceFeedPages(feed, [liveFeed([record], { asOf })]);
+    detail = mergeLiveDetail(detail, liveDetail(record, { asOf }));
+    const unchanged = { ...record, syncedAt: asOf + 1 };
+    feed = replaceFeedPages(feed, [liveFeed([unchanged], { asOf: asOf + 1 })]);
+    detail = mergeLiveDetail(detail, liveDetail(unchanged, { asOf: asOf + 1 }));
+    for (const projection of [feed.records[0], detail.fixture]) {
+      assert.equal(projection.status, record.status);
+      assert.deepEqual(projection.score, record.score);
+      assert.equal(projection.scorePeriod, record.scorePeriod);
+      assert.deepEqual(projection.liveClock, record.liveClock);
+      assert.equal(projection.syncedAt, asOf + 1);
+    }
+  }
+});
+
 test('unchanged forecasts retain original clocks while observation, delayed jobs and partial coverage stay fresh', () => {
   const previous = liveDetail(), next = structuredClone(previous); next.asOf++;
   next.fixture.syncedAt++; next.fixture.update.prediction = 'delayed'; next.fixture.forecast.updateDelayed = true;

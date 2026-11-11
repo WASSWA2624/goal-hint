@@ -1,4 +1,4 @@
-import { activeFeedFilterCount, defaultFeedDatePreset, defaultSortDirection, pinnedDateSelection, resolveFeedDates, feedQueryHref, feedQueryRules, type FeedQuery } from "./feed-query.ts";
+import { activeFeedFilterCount, anyProbability, defaultFeedDatePreset, defaultSortDirection, pinnedDateSelection, resolveFeedDates, feedQueryHref, feedQueryRules, type FeedQuery } from "./feed-query.ts";
 import type { ReportingDate } from "./calendar.ts";
 import { publicPolicy } from "./public-policy.ts";
 import { homeHref } from "./navigation-paths.ts";
@@ -21,14 +21,16 @@ export function feedDiscovery(query: FeedQuery, today: ReportingDate) {
   const range = resolveFeedDates(query, today);
   const defaultOrder = query.sort.direction === defaultSortDirection.kickoff
     && (query.sort.by === "kickoff" || query.dates.kind === "today" && query.sort.by === "live-first");
-  const filtered = Boolean(query.zone) || activeFeedFilterCount(query) > 0 || !defaultOrder ||
+  // The standard member view shares its public archive canonical. Explicit numeric bounds remain filters.
+  const publicScope = query.dates.kind === "today" && query.probability.minExclusive ? { ...query, probability: anyProbability } : query;
+  const filtered = Boolean(query.zone) || activeFeedFilterCount(publicScope) > 0 || !defaultOrder ||
     query.pageSize !== feedQueryRules.pageSize || range.dayCount !== 1 && query.dates.kind !== defaultFeedDatePreset;
   // The rolling default collection keeps its own pagination: pinning its 30-day
   // range would point an indexable page at a deliberately noindex multiday archive.
   // Single-day aliases still pin to a dated collection.
   const home = query.dates.kind === defaultFeedDatePreset && query.page === 1;
   const canonicalQuery: FeedQuery = filtered || query.dates.kind === defaultFeedDatePreset ? query
-    : { ...query, dates: pinnedDateSelection(range), sort: { by: "kickoff", direction: defaultSortDirection.kickoff } };
+    : { ...publicScope, dates: pinnedDateSelection(range), sort: { by: "kickoff", direction: defaultSortDirection.kickoff } };
   return { path: feedQueryHref(canonicalQuery, today), eligible: !filtered, home, range };
 }
 

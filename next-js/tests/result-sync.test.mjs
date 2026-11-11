@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { failureDelay, parseResultSyncPolicy, pollingInterval, resultCadence, shouldPollLive } from '../src/server/results/result-sync-policy.ts';
+import { failureDelay, nextLiveCheckAfterDate, parseResultSyncPolicy, pollingInterval, resultCadence, shouldPollLive } from '../src/server/results/result-sync-policy.ts';
 import { ResultSyncError } from '../src/server/results/result-sync-contract.ts';
 import { runResultSyncCommand } from '../src/server/results/result-sync-command.ts';
 import { resultPolicy } from './helpers/result-sync-fixtures.mjs';
@@ -19,6 +19,13 @@ test('live pause/approach boundary and active window use the controlled clock', 
   assert.equal(shouldPollLive([fixture], policy, 940_000), true);
   assert.equal(shouldPollLive([{ ...fixture, status: 'finished-regulation', firstFinalAt: 1_000_000 }], policy, 1_000_001), false);
   assert.equal(shouldPollLive([{ ...fixture, status: 'live' }], policy, 1_000_000 + policy.activeWindowMs), false);
+});
+test('a date sweep replaces one live slot only with complete and fresh fixture coverage', () => {
+  const now = 1_000_000, cadence = 15_000, fixtures = [fixture, { ...fixture, externalId: 2 }];
+  assert.equal(nextLiveCheckAfterDate(fixtures, new Map([[1, now - 3000], [2, now - 2000]]), cadence, now), now + 12_000);
+  assert.equal(nextLiveCheckAfterDate(fixtures, new Map([[1, now]]), cadence, now), null);
+  assert.equal(nextLiveCheckAfterDate(fixtures, new Map([[1, now], [2, now - cadence]]), cadence, now), null);
+  assert.equal(nextLiveCheckAfterDate(fixtures, null, cadence, now), null);
 });
 test('spec cadence is the default; budget cadences slow active checks and can disable the live feed', () => {
   assert.equal(policy.cadence, undefined, 'omitted cadence keeps the original policy hash');

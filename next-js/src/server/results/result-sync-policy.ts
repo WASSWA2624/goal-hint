@@ -48,11 +48,28 @@ export function pollingInterval(fixture: TrackedResultFixture, policy: ResultSyn
   return policy.unresolved.find((tier) => age - policy.activeWindowMs < tier.untilAgeMs)?.intervalMs ?? null;
 }
 export function shouldPollLive(fixtures: readonly TrackedResultFixture[], policy: ResultSyncPolicy, now: number) {
-  if (resultCadence(policy).liveMs === null) return false;
-  return fixtures.some((fixture) => fixture.firstFinalAt === null && now - (fixture.kickoffAt ?? fixture.firstTrackedAt) < policy.activeWindowMs &&
+  return sharedLiveFixtures(fixtures, policy, now).length > 0;
+}
+
+export function sharedLiveFixtures(fixtures: readonly TrackedResultFixture[], policy: ResultSyncPolicy, now: number) {
+  if (resultCadence(policy).liveMs === null) return [];
+  return fixtures.filter((fixture) => fixture.firstFinalAt === null && now - (fixture.kickoffAt ?? fixture.firstTrackedAt) < policy.activeWindowMs &&
     !(fixture.kickoffAt !== null && now - fixture.kickoffAt < -policy.approachMs) &&
     (fixture.status === "live" || fixture.status === "scheduled" && fixture.kickoffAt !== null &&
       now >= fixture.kickoffAt - policy.approachMs));
+}
+
+/** A complete date sweep can stand in for this live slot only if it just observed every expected live fixture. */
+export function nextLiveCheckAfterDate(fixtures: readonly TrackedResultFixture[], observations: ReadonlyMap<number, number> | null,
+  cadenceMs: number, now: number): number | null {
+  if (!observations || fixtures.length === 0) return null;
+  let nextAt = now + cadenceMs;
+  for (const { externalId } of fixtures) {
+    const observedAt = observations.get(externalId);
+    if (observedAt === undefined || observedAt > now || observedAt + cadenceMs <= now) return null;
+    nextAt = Math.min(nextAt, observedAt + cadenceMs);
+  }
+  return nextAt;
 }
 export function failureDelay(policy: ResultSyncPolicy, failures: number) {
   return Math.min(policy.failureMaxMs, policy.failureBaseMs * 2 ** Math.min(Math.max(0, failures - 1), 30));

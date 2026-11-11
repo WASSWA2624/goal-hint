@@ -1,6 +1,10 @@
 "use client";
 
-import styled, { keyframes } from "styled-components";
+import { useSyncExternalStore } from "react";
+import styled from "styled-components";
+import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
+import { liveClockLabel } from "@/domain/match-clock";
+import type { Messages } from "@/i18n/messages";
 
 /** Larger figures and a wider separator fit inside the existing score slot. */
 export const Scoreline = styled.span`
@@ -17,18 +21,31 @@ export function ScoreFigures({ home, away, lead = 0 }: { home: string; away: str
     <span data-score-separator>–</span><span data-score-away data-loss={lead > 0 || undefined}>{away}</span></>;
 }
 
-const minuteGlow = keyframes`
-  0%, 100% { text-shadow: 0 0 var(--gh-size-0_25) currentColor; }
-  50% { text-shadow: 0 0 var(--gh-size-1) currentColor, 0 0 var(--gh-size-1_5) currentColor; }
-`;
+const clockListeners = new Set<() => void>();
+let clockTimer: number | undefined;
+function subscribeClock(listener: () => void) {
+  clockListeners.add(listener);
+  clockTimer ??= window.setInterval(() => {
+    if (document.visibilityState === "visible") clockListeners.forEach((update) => update());
+  }, 1000);
+  return () => {
+    clockListeners.delete(listener);
+    if (clockListeners.size === 0) {
+      window.clearInterval(clockTimer);
+      clockTimer = undefined;
+    }
+  };
+}
+const subscribeIdle = () => () => {};
+const Elapsed = styled.span`font-variant-numeric: tabular-nums; white-space: nowrap;`;
 
-const MinuteMarker = styled.span`
-  animation: ${minuteGlow} var(--gh-duration-pulse) var(--gh-easing-in-out) infinite;
-  @media (prefers-reduced-motion: reduce) { animation: none; text-shadow: 0 0 var(--gh-size-0_5) currentColor; }
-`;
-
-/** Preserve the localized clock text and animate only its minute prime. */
-export function MatchClockText({ text }: { text: string }) {
-  const marker = text.indexOf("′");
-  return marker < 0 ? text : <>{text.slice(0, marker)}<MinuteMarker data-minute-marker>′</MinuteMarker>{text.slice(marker + 1)}</>;
+/** Only the small clock text subscribes to the shared browser ticker. */
+export function LiveMatchTime({ clock, messages }: { clock: FixtureSnapshot["liveClock"]; messages: Messages }) {
+  const initial = liveClockLabel(clock, messages);
+  const estimatesSeconds = initial.minute !== null && clock?.observedAt !== undefined;
+  const value = useSyncExternalStore(estimatesSeconds ? subscribeClock : subscribeIdle,
+    () => estimatesSeconds ? liveClockLabel(clock, messages, Date.now()).visible : initial.visible,
+    () => initial.visible);
+  return <Elapsed data-live-elapsed={initial.minute !== null || undefined}
+    title={estimatesSeconds ? messages.text("match.clock.estimated") : undefined}>{value}</Elapsed>;
 }

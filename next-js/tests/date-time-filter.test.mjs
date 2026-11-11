@@ -104,6 +104,16 @@ test('legacy daily-time links remain readable; editing their bounds opts into a 
   assert.equal(changed.time, undefined); assert.equal(changed.interval.to, '2026-11-06T18:00');
 });
 
+test('advanced filters keep the strict default until a probability edit or a historical period', () => {
+  const query = applyFeedPageDefaults(parse({ status: 'live' }), {});
+  const draft = feedFilterDraft(query, today, zone);
+  assert.deepEqual(compileFeedFilterDraft(draft, today).probability, { min: 75, max: 100, minExclusive: true });
+  assert.deepEqual(compileFeedFilterDraft({ ...draft, probabilityEdited: true }, today).probability, { min: 75, max: 100 });
+  const archived = compileFeedFilterDraft({ ...draft, dateTimes: { from: '2026-10-27T00:00', to: '2026-10-27T23:59' } }, today);
+  assert.equal(archived.status, 'all');
+  assert.deepEqual(archived.probability, { min: 0, max: 100 });
+});
+
 test('Live, Reset and date navigation clear interval bounds while the summary retains them', () => {
   const query = parse({ start: sample.from, end: sample.to, tz: zone });
   assert.equal(selectFeedStatus(query, 'live', today).interval, undefined);

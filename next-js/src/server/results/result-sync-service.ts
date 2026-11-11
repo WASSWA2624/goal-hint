@@ -11,7 +11,7 @@ import { parseLifecycleInput } from "../predictions/lifecycle-input.ts";
 import { historyHash } from "../predictions/history-input.ts";
 import { ResultSyncError, resultSyncFail, type PollChannel, type PollLease, type ResultSyncAuthority, type ResultSyncBatch,
   type ResultSyncStore, type TrackedResultFixture } from "./result-sync-contract.ts";
-import { failureDelay, parseResultSyncPolicy, pollingInterval, resultCadence, shouldPollLive } from "./result-sync-policy.ts";
+import { failureDelay, nextLiveCheckAfterDate, parseResultSyncPolicy, pollingInterval, resultCadence, sharedLiveFixtures } from "./result-sync-policy.ts";
 
 export function createResultSyncService(options: Readonly<{
   accountId: string; ownerId?: string; policy: unknown; authority: ResultSyncAuthority; store: ResultSyncStore;
@@ -43,7 +43,9 @@ export function createResultSyncService(options: Readonly<{
       if (batches.length === 0) return true;
       for (const batch of batches.slice(0, remaining)) {
         if (signal?.aborted) return false;
-        if (batch.policyHash !== policyHash) return resultSyncFail("policy-required");
+        // Empty failure receipts have no fixture writes to authorize. Close the
+        // sealed receipt even if coverage changed while the poll was in flight.
+        if (batch.observations.length > 0 && batch.policyHash !== policyHash) return resultSyncFail("policy-required");
         await renew(); await store.apply(lease!, batch);
         remaining--;
       }
@@ -100,11 +102,11 @@ export function createResultSyncService(options: Readonly<{
     // A verified complete poll with no in-scope effects has nothing to recover.
     // Cadence/attempt state and the counted quota dispatch still commit below.
     // Partial/error polls retain their original recovery receipt, even if empty.
-    const emptyComplete = observations.length === 0 && validPages && response.provenance.length > 0 &&
+    const complete = validPages && response.provenance.length > 0 &&
       response.status === "complete" && response.completeness.complete && response.error === null && error === null &&
       response.completeness.invalidRows === 0 && response.completeness.missingIds.length === 0 && response.completeness.reasons.length === 0;
     authorize();
-    if (!emptyComplete) {
+    if (!complete || observations.length > 0) {
       const batchValue = { accountId, policyHash, channel, date, requestedIds: ids, observations,
         receivedAt: clock.now(), error, requestsDispatched: response.requestsDispatched };
       const batch: ResultSyncBatch = { id: evidenceFingerprint(batchValue), ...batchValue };
@@ -121,6 +123,8 @@ export function createResultSyncService(options: Readonly<{
         error: refreshed.has(fixture.externalId) ? null : error ?? "missing-provider-fixture" })));
     } else await store.schedule(lease!, channel, clock.now() + delay, failures, error);
     if (error) { delayed = true; emit("delayed"); }
+    return channel === "date" && complete ? new Map(observations.map((observation) =>
+      [observation.externalFixtureId, observation.retrievedAt] as const)) : null;
   }
   async function runOnce(signal?: AbortSignal): Promise<boolean> {
     if (busy || signal?.aborted) return false;
@@ -147,12 +151,20 @@ export function createResultSyncService(options: Readonly<{
         const group = urgent.slice(offset, offset + 20); await poll("ids", group, group.map((fixture) => fixture.externalId), signal);
       }
       if (urgent.length) fixtures = await store.tracked(policy, clock.now());
+      let observedToday: ReadonlyMap<number, number> | null = null;
       if (lease!.nextDateAt <= clock.now()) {
-        await poll("date", fixtures, [], signal); fixtures = await store.tracked(policy, clock.now());
+        observedToday = await poll("date", fixtures, [], signal); fixtures = await store.tracked(policy, clock.now());
       }
-      const live = shouldPollLive(fixtures, policy, clock.now());
+      const liveFixtures = sharedLiveFixtures(fixtures, policy, clock.now()), live = liveFixtures.length > 0;
       if (live && lease!.nextLiveAt <= clock.now()) {
-        await poll("live", fixtures, [], signal); fixtures = await store.tracked(policy, clock.now());
+        const cadence = resultCadence(policy).liveMs;
+        const nextAt = cadence === null ? null : nextLiveCheckAfterDate(liveFixtures, observedToday, cadence, clock.now());
+        if (nextAt !== null) {
+          await renew();
+          await store.schedule(lease!, "live", nextAt, 0, null);
+        } else {
+          await poll("live", fixtures, [], signal); fixtures = await store.tracked(policy, clock.now());
+        }
       }
       const due = fixtures.filter((fixture) => {
         const interval = pollingInterval(fixture, policy, clock.now());

@@ -11,6 +11,9 @@ export function MetadataRecovery() {
   const previous = useRef<string | null>(null);
   const navigated = useRef(false);
   useEffect(() => {
+    // Development responses are noindex. Keep the active shell mounted while
+    // Fast Refresh and streamed route metadata update the document head.
+    if (process.env.NODE_ENV === "development") return;
     const href = pathname + (search ? `?${search}` : "");
     // This effect can first hydrate after a link has already navigated. The
     // browser's document request still identifies the original page in that case.

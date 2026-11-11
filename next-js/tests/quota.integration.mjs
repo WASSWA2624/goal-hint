@@ -407,6 +407,25 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       assert.ok((await f.state()).period.dayRemaining <= firstState.period.dayRemaining - 2);
     });
 
+    await t.test("old uncertain dispatches still count toward the day but age out of minute feedback", async () => {
+      const f = fixture(firstDatabase, "minute-feedback-window");
+      await f.initialize();
+      const old = await dispatch(f.limiter, f.request());
+      await f.limiter.complete(old, { kind: "uncertain" });
+      f.clock.now += 60_001;
+      const recent = await dispatch(f.limiter, f.request());
+      await f.limiter.complete(recent, { kind: "uncertain" });
+      f.clock.now += 1_000;
+      const current = await dispatch(f.limiter, f.request());
+      await f.limiter.complete(current, { kind: "success", dailyRemaining: f.evidence.providerDailyLimit - 3, minuteRemaining: 2 });
+      const { period } = await f.state();
+      assert.equal(period.used, 5);
+      assert.equal(period.dayRemaining, period.dayLimit - 5);
+      assert.equal(period.minuteRemaining, 1);
+      f.clock.now += 1_000;
+      await dispatch(f.limiter, f.request());
+    });
+
     await t.test("a counted reset probe cannot resume bulk traffic until exact trusted confirmation", async () => {
       const f = fixture(firstDatabase, "reset", { endsAt: initialNow + 1000, dailyRemaining: 30000 });
       await f.initialize();

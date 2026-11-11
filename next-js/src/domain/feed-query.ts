@@ -13,7 +13,7 @@ import { resolveLocale, type Locale } from "../i18n/locales.ts";
 export const feedStatuses = ["all", "scheduled", "live", "finished", "postponed", "canceled", "abandoned", "awarded", "unknown"] as const;
 export type FeedStatus = (typeof feedStatuses)[number];
 /** Shared status choices for the unified Matches interface; transport codes remain stable. */
-export const feedFilterStatuses = ["all", "scheduled", "live", "finished"] as const satisfies readonly FeedStatus[];
+export const feedFilterStatuses = ["all", "scheduled", "live", "finished", "postponed", "canceled"] as const satisfies readonly FeedStatus[];
 export type FeedFilterStatus = (typeof feedFilterStatuses)[number];
 export const feedDatePresets = ["last-30-days", "last-7-days", "last-3-days", "yesterday", "today", "tomorrow", "next-3-days", "next-7-days", "next-30-days"] as const;
 export type FeedDatePreset = (typeof feedDatePresets)[number];
@@ -35,7 +35,7 @@ export type FeedSort = Readonly<{ by: FeedSortField; direction: FeedSortDirectio
 export function feedSortLabelKey({ by, direction }: FeedSort) {
   return by === "live-first" ? "feed.sort.live-first-desc" : `feed.sort.${by}-${direction}` as const;
 }
-export type ProbabilityRange = Readonly<{ min: number; max: number }>;
+export type ProbabilityRange = Readonly<{ min: number; max: number; minExclusive?: true }>;
 /** "only" keeps fixtures whose shown pick exists; "all" includes fixtures without a prediction. */
 export type PicksFilter = "all" | "only";
 export type FeedQuery = Readonly<{
@@ -57,7 +57,7 @@ export type FeedQuery = Readonly<{
   status: FeedStatus;
   /** Selected market families in policy order. Each fixture shows its best pick among them. */
   markets: MarketFamily[];
-  /** Inclusive unrounded percentage bounds (decimals allowed) on the shown pick; 0–100 applies no filter. */
+  /** Unrounded percentage bounds on the shown pick. Custom bounds are inclusive; the page default is strict. */
   probability: ProbabilityRange;
   /** Inclusive two-place price bounds (hundredths) on the shown pick's own market price; null applies no
    * filter. Accepted only while publicPolicy.features.providerOdds is on (052). */
@@ -76,6 +76,8 @@ export const feedQueryRules = Object.freeze({ maximumDays: 366, maximumSearchLen
 /** Any market: each fixture shows its highest-probability available pick across all supported families. */
 export const defaultMarkets: readonly MarketFamily[] = publicPolicy.markets;
 export const anyProbability: ProbabilityRange = Object.freeze({ min: 0, max: 100 });
+export const defaultMatchProbability: ProbabilityRange = Object.freeze({ min: 75, max: 100, minExclusive: true });
+const defaultProbabilityParameter = "above-75";
 export const defaultSortDirection: Readonly<Record<FeedSortField, FeedSortDirection>> = Object.freeze({ "live-first": "desc", kickoff: "desc", probability: "desc" });
 const kickoffSort = Object.freeze({ by: "kickoff", direction: "desc" } as const);
 /** Matches screen and Reset defaults; the public API keeps its existing date and sort defaults. */
@@ -84,7 +86,8 @@ export const matchFeedPageDefaults = Object.freeze({
   sort: Object.freeze({ by: "live-first", direction: "desc" }),
   pageSize: feedQueryRules.pageSize,
   picks: "all",
-} as const satisfies Pick<FeedQuery, "dates" | "sort" | "pageSize" | "picks">);
+  probability: defaultMatchProbability,
+} as const satisfies Pick<FeedQuery, "dates" | "sort" | "pageSize" | "picks" | "probability">);
 export function defaultPageSort(dates: DateSelection): FeedSort {
   return dates.kind === "today" ? matchFeedPageDefaults.sort : kickoffSort;
 }
@@ -157,7 +160,8 @@ export function parseProbabilityValue(value: string): number | null {
 }
 
 export function validProbabilityRange(range: ProbabilityRange): boolean {
-  return Number.isFinite(range.min) && Number.isFinite(range.max) && range.min >= 0 && range.max <= 100 && range.min <= range.max;
+  return Number.isFinite(range.min) && Number.isFinite(range.max) && range.min >= 0 && range.max <= 100 && range.min <= range.max &&
+    (range.minExclusive === undefined || range.minExclusive === true && range.min === defaultMatchProbability.min && range.max === defaultMatchProbability.max);
 }
 
 /** Shortest round-trippable decimal, with scientific notation expanded for plain-decimal URLs. */
@@ -176,6 +180,7 @@ export function probabilityFraction(value: number): number {
 
 function probabilityRange(value: string | undefined): ProbabilityRange {
   if (value === undefined) return anyProbability;
+  if (value === defaultProbabilityParameter) return defaultMatchProbability;
   const parts = value.split("-");
   if (parts.length !== 2) fail();
   const min = parseProbabilityValue(parts[0]!), max = parseProbabilityValue(parts[1]!);
@@ -296,8 +301,9 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
 const sameList = (left: readonly string[], right: readonly string[]) =>
   left.length === right.length && left.every((item, index) => item === right[index]);
 
-/** Explicit filters and archive dates take precedence; dated archives retain their existing order. */
-export function applyFeedPageDefaults(query: FeedQuery, input: FeedParameters, { dated = false }: { dated?: boolean } = {}): FeedQuery {
+/** Explicit filters and archive dates take precedence. The probability default is only applied when authorized. */
+export function applyFeedPageDefaults(query: FeedQuery, input: FeedParameters,
+  { dated = false, allowProbabilityDefault = true }: { dated?: boolean; allowProbabilityDefault?: boolean } = {}): FeedQuery {
   const has = (key: string) => input instanceof URLSearchParams ? input.has(key) : input[key] !== undefined;
   const explicitDates = query.dates.kind === "date" || query.dates.kind === "range" || ["date", "from", "to", "when"].some(has);
   // A legacy summary-only link now sets the date for the entire view.
@@ -308,6 +314,7 @@ export function applyFeedPageDefaults(query: FeedQuery, input: FeedParameters, {
     dates,
     sort: dated || has("sort") || has("dir") ? query.sort : defaultPageSort(dates),
     picks: has("picks") ? query.picks : matchFeedPageDefaults.picks,
+    probability: !dated && dates.kind === "today" && !has("prob") && allowProbabilityDefault ? defaultMatchProbability : query.probability,
   };
 }
 
@@ -350,7 +357,9 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
   if (query.status !== feedDefaults.today.status) result.set("status", query.status);
   const markets = canonicalMarkets(query.markets);
   if (!isAnyMarkets(markets)) result.set("market", markets.join(","));
-  if (!isAnyProbability(query.probability)) result.set("prob", `${formatProbabilityValue(query.probability.min)}-${formatProbabilityValue(query.probability.max)}`);
+  if (!validProbabilityRange(query.probability)) fail();
+  if (!isAnyProbability(query.probability)) result.set("prob", query.probability.minExclusive ? defaultProbabilityParameter
+    : `${formatProbabilityValue(query.probability.min)}-${formatProbabilityValue(query.probability.max)}`);
   const requested = query.odds ?? null;
   if (requested !== null && (![requested.min, requested.max].every((value) => Number.isSafeInteger(value) &&
     value >= oddsRules.minimumHundredths && value <= oddsRules.maximumHundredths) || requested.min > requested.max)) fail();
@@ -369,6 +378,7 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
       checked.locale !== query.locale || !sameList(checked.leagues, leagues) || !sameList(checked.countries, countries) ||
       checked.status !== query.status || !sameList(checked.markets, markets) ||
       checked.probability.min !== query.probability.min || checked.probability.max !== query.probability.max ||
+      checked.probability.minExclusive !== query.probability.minExclusive ||
       checked.odds?.min !== odds?.min || checked.odds?.max !== odds?.max || checked.picks !== query.picks ||
       checked.zone !== (query.zone ?? query.time?.zone)) fail();
   return result;
@@ -387,6 +397,7 @@ export function feedQueryHref(query: FeedQuery, today: ReportingDate): string {
     path += "/matches";
     // These API defaults are explicit choices on Matches, whose entry defaults differ.
     if (dates.kind === defaultFeedDatePreset) parameters.set("when", dates.kind);
+    if (dates.kind === "today" && isAnyProbability(query.probability)) parameters.set("prob", "0-100");
     if (query.sort.by === "kickoff") parameters.set("sort", "kickoff");
   }
   const search = parameters.toString();

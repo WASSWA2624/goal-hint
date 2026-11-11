@@ -10,7 +10,9 @@ It combines a responsive website with a Flutter host for the same experience. Be
 
 ## What has been implemented
 
-Foreground navigation and app work use the shared progress bar beneath the header. The shared header and confirmed session remain in place during navigation. Background polling retains verified session, results and performance during transient failures. Matches shows only fixtures with published forecasts, at any estimated probability, and puts live fixtures first by default. Eligible viewers see the strongest forecast in the selected markets, its source, and any matching odds. The Recommended Picks Only filter retains its own qualification rules. League crests have a local fallback, and World competitions use a globe for the country icon.
+Foreground navigation and app work use the shared progress bar beneath the header. The header, confirmed session and last verified results remain visible during quiet refreshes. Today puts live fixtures first and defaults eligible forecasts to strictly above 75%. Viewers with prediction access can override the probability filter. Archived dates show stored scores and fixture statuses, with settlement outcomes for published forecasts. League crests have a local fallback, and World competitions use a globe for the country icon.
+
+Best Slips reads the published snapshot once and checks current viewer access before rendering selections. Live match views refresh scores and statuses from stored results. The browser clock estimates `MM:SS` between provider observations for up to two minutes and pauses at reported breaks. Desktop rows show it on its own line above the score with more space.
 
 The minimum decimal odds are `1.01` for current quotes and for individual and total odds bounds in Builder. Builder and its Advanced Filters preserve numeric edits, show minimum and maximum warnings while typing, and validate values on blur and submission. Saved presets load any older below-floor odds bounds at `1.01`. Published history retains the original recorded odds.
 

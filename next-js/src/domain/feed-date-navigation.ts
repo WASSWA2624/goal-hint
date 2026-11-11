@@ -1,10 +1,11 @@
 import { addReportingDays, CalendarValidationError, type ReportingDate, type ReportingDateRange } from "./calendar.ts";
 import { feedDatePresets, feedQueryHref, resolveFeedDates, type DateSelection, type FeedQuery } from "./feed-query.ts";
+import { selectFeedDates } from "./feed-controls.ts";
 
 /** Date links retain the applied query but restart its page position. Previous/next open the adjacent single day. */
 export function feedDateNavigation(query: FeedQuery, today: ReportingDate) {
   const range = resolveFeedDates(query, today);
-  const href = (dates: DateSelection) => feedQueryHref({ ...query, interval: undefined, dates, page: 1 }, today);
+  const href = (dates: DateSelection) => feedQueryHref(selectFeedDates(query, dates, today), today);
   const adjacent = (date: ReportingDate, offset: number) => {
     try {
       const target = addReportingDays(date, offset);

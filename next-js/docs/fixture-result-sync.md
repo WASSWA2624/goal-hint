@@ -88,8 +88,10 @@ Reserve the next cadence before dispatch. Save `ResultSyncBatch` before applying
 fixtures. Its sealed body retains normalized lifecycle projections, original
 retrieval/update clocks, policy hash, requested IDs/date, request count and error.
 No raw payloads or secrets are stored. Only `completedAt` is mutable. Recovery
-drains pending batches before new requests; a different policy hash holds
-recovery for reviewed configuration.
+drains pending batches before new requests. A different policy hash holds
+recovery of batches with fixture observations for reviewed configuration.
+An empty sealed receipt can be completed after a policy change because it has
+no fixture observations to apply.
 
 A trusted, complete, error-free response with no in-scope lifecycle observations
 does not create an empty `ResultSyncBatch`. There are no fixture effects to

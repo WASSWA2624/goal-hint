@@ -2,8 +2,9 @@ import "server-only";
 import { kickoffTimeWindows } from "../../domain/kickoff-time.ts";
 import { completedFixtureStatuses } from "../../domain/market-settlement.ts";
 
-import { addReportingDays, createPredictionWindow, type PredictionWindow, type ReportingDateRange, type ReportingDate } from "../../domain/calendar.ts";
-import { isAnyProbability, probabilityFraction, type FeedQuery } from "../../domain/feed-query.ts";
+import { addReportingDays, createPredictionWindow, type PredictionWindow, type ReportingDateRange, type ReportingDate, type UtcInstant } from "../../domain/calendar.ts";
+import { getDayBoundsInTimeZone } from "../../domain/device-calendar.ts";
+import { isAnyMarkets, isAnyProbability, probabilityFraction, type FeedQuery } from "../../domain/feed-query.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import type { StoredMatchFeedResponse } from "../../domain/match-feed.ts";
 import { Prisma } from "../generated/prisma/client.ts";
@@ -30,10 +31,17 @@ export const displayedSet = Prisma.sql`CASE
       WHEN c.state='void' THEN COALESCE(c.lockedSetId,c.currentSetId,
         (SELECT p.id FROM PredictionSet p WHERE p.cycleId=c.id ORDER BY p.cycleRevision DESC LIMIT 1)) END`;
 
+const archivedFixtureStatuses = [...completedFixtureStatuses, "postponed"] as const;
+export function historicalFeedCutoff(query: FeedQuery, range: ReportingDateRange, today: ReportingDate): UtcInstant | null {
+  if (range.startDate >= today || query.picks === "only" || !isAnyProbability(query.probability) || query.odds || !isAnyMarkets(query.markets)) return null;
+  return getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).startInclusive;
+}
+
 /** `providerOdds` is the caller's effective odds flag (publicPolicy.features.providerOdds unless an isolated test
  * overrides it), so the SQL join and filter always follow the same rule as the record prices. */
 export function feedSql(query: FeedQuery, range: ReportingDateRange, competitionIds: readonly number[],
-  providerOdds: boolean = publicPolicy.features.providerOdds, search: FeedSearch | null = null, completedOnly = false, publishedOnly = false) {
+  providerOdds: boolean = publicPolicy.features.providerOdds, search: FeedSearch | null = null, completedOnly = false, publishedOnly = false,
+  historyBefore: UtcInstant | null = null) {
   const markets = Prisma.join(query.markets);
   const hasDecision = Prisma.sql`rp.feedRecommendation IS NOT NULL`;
   const recommendedFamily = Prisma.sql`NULLIF(JSON_UNQUOTE(JSON_EXTRACT(rp.feedRecommendation,'$.family')),'null')`;
@@ -100,10 +108,16 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
     ${providerOdds ? Prisma.sql`LEFT JOIN FixtureOddsPrice op ON op.fixtureId=f.id AND op.marketKey=m.family
       AND op.selection=${pickSelection} AND op.stale=FALSE AND op.priceDecimal>=${minimumFixturePrice}` : Prisma.empty}`;
   };
-  if (query.picks === "only" || publishedOnly) filters.push(pickAvailable);
+  if (query.picks === "only") filters.push(pickAvailable);
+  else if (publishedOnly) {
+    // Older canonical scores and fixture statuses remain browsable even if no forecast was published.
+    filters.push(historyBefore === null ? pickAvailable : Prisma.sql`(${pickAvailable}
+      OR (f.kickoff<${new Date(historyBefore)} AND f.status IN (${Prisma.join(archivedFixtureStatuses)})))`);
+  }
   if (!isAnyProbability(query.probability)) {
-    // Inclusive unrounded bounds. Decimal-text scaling avoids introducing an arithmetic rounding error at equality.
-    filters.push(Prisma.sql`m.available=TRUE AND ${pickProbability}>=${probabilityFraction(query.probability.min)}
+    const minimum = query.probability.minExclusive ? Prisma.sql`>` : Prisma.sql`>=`;
+    // Decimal-text scaling avoids introducing an arithmetic rounding error at equality.
+    filters.push(Prisma.sql`${pickAvailable} AND ${pickProbability}${minimum}${probabilityFraction(query.probability.min)}
       AND ${pickProbability}<=${probabilityFraction(query.probability.max)}`);
   }
   // Inclusive bounds on the shown pick's own stored two-place price. A fixture without a fresh price for exactly

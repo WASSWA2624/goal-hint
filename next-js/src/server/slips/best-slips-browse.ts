@@ -7,7 +7,7 @@ import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { getDatabase } from "../database/client.ts";
 import type { ViewerAccess } from "../members/viewer-access.ts";
-import { gateBestSlips } from "./best-slips.ts";
+import { gateBestSlips } from "./slip-preview.ts";
 import { createPublishedSlips } from "./published-slips.ts";
 
 type BestSlipsBrowseReader = (query: BestSlipsQuery, today: ReportingDate, locale: string, completedOnly: boolean) => Promise<BestSlipsResult>;
@@ -25,24 +25,33 @@ const readPublishedBestSlips: BestSlipsBrowseReader = async (query, today, _loca
   return createPublishedSlips(database).browse(query, today, completedOnly);
 };
 
-export function createBestSlipsBrowseService({ read = readPublishedBestSlips, providerOdds = publicPolicy.features.providerOdds, now = Date.now }: {
+function createBestSlipsSnapshotReader({ read = readPublishedBestSlips, providerOdds = publicPolicy.features.providerOdds, now = Date.now }: {
   read?: typeof readPublishedBestSlips; providerOdds?: boolean; now?: () => number;
 } = {}) {
-  return async (access: ViewerAccess, input: BestSlipsQuery, _locale = "en"): Promise<BestSlipsResult> => {
+  return async (input: BestSlipsQuery, locale = "en"): Promise<BestSlipsResult> => {
     const asOf = now(), day = getReportingDate(utcInstantFromEpochMilliseconds(asOf));
     const query = parseBestSlipsQuery(serializeBestSlipsQuery(input), day), dates = resolveBestSlipsDates(query, day);
-    const empty = { day, entitled: access.tier === "full", slips: [], searchLimited: false, partialCoverage: false, statistics: null,
+    const empty = { day, slips: [], searchLimited: false, partialCoverage: false, statistics: null,
       browse: { query, total: query.period === "all" ? null : 0, pageSize: bestSlipsQueryRules.pageSize,
         hasMore: false, nextCursor: null, ...dates } } as const;
     if (!providerOdds) return { ...empty, state: "odds-unavailable" };
     try {
       // The browse reader aggregates the entire selected period before outcome
       // filtering and pagination. Reuse that snapshot for both list and summary.
-      const result = await read(query, day, _locale, false);
-      return gateBestSlips({ ...result, summary: { asOf, ...dates, statistics: result.statistics ?? null } }, access);
+      const result = await read(query, day, locale, false);
+      return { ...result, summary: { asOf, ...dates, statistics: result.statistics ?? null } };
     }
     catch { return { ...empty, state: "data-unavailable" }; }
   };
+}
+
+/** Server-only publication snapshot. Check access immediately before returning a viewer projection. */
+export const readBestSlipsBrowseSnapshot = createBestSlipsSnapshotReader();
+
+export function createBestSlipsBrowseService(options?: Parameters<typeof createBestSlipsSnapshotReader>[0]) {
+  const snapshot = createBestSlipsSnapshotReader(options);
+  return async (access: ViewerAccess, input: BestSlipsQuery, locale?: string): Promise<BestSlipsResult> =>
+    gateBestSlips(await snapshot(input, locale), access);
 }
 
 export const readBestSlipsBrowse = createBestSlipsBrowseService();

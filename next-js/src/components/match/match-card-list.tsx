@@ -21,6 +21,23 @@ const Board = styled.div<{ $indexLength: number }>`
   ${media.desktop} {
     ${desktopMatchBaseStyles}
     ${alignedLedgerStyles}
+    [data-centre][data-live-clock] {
+      block-size: auto;
+      grid-template-areas: "clock" "score";
+      row-gap: var(--gh-spacing-0_5);
+    }
+    [data-centre][data-live-clock] [data-score] { grid-area: score; }
+    [data-centre][data-live-clock] [data-clock] {
+      grid-area: clock;
+      position: static;
+      transform: none;
+      max-inline-size: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: var(--gh-font-secondary);
+      font-weight: ${({ theme }) => theme.typography.weight.semibold};
+      line-height: var(--gh-size-3_5);
+    }
     background: ${({ theme }) => theme.color.page};
     border: 0;
     border-radius: ${({ theme }) => theme.radius.none};

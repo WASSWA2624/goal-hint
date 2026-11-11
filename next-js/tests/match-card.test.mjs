@@ -56,7 +56,7 @@ test("cards show fixture progress until completion without altering market settl
   }
   for (const status of ["finished-regulation", "finished-extra-time", "finished-penalties", "canceled", "abandoned", "awarded"]) {
     for (const outcome of ["pending", "correct", "incorrect", "void", "unavailable"]) {
-      assert.equal(cardResultStatus(status, outcome), outcome, `${status}: ${outcome}`);
+      assert.equal(cardResultStatus(status, outcome), status === "canceled" || outcome === "unavailable" ? status : outcome, `${status}: ${outcome}`);
     }
   }
 });

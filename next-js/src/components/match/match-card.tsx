@@ -38,7 +38,7 @@ import { DesktopMatchRow } from "./desktop-match-row";
 import { MatchCardLayoutContext } from "./match-card-layout";
 import { MatchStatus } from "./match-status";
 import { MatchNumber } from "./match-number";
-import { MatchClockText, ScoreFigures, Scoreline } from "./score-presentation";
+import { LiveMatchTime, ScoreFigures, Scoreline } from "./score-presentation";
 
 export type MatchCardProps = {
   fixture: FixtureSnapshot;
@@ -52,7 +52,6 @@ export type MatchCardProps = {
   /** A published slip selection whose private fields were removed by the server. */
   lockedPrediction?: boolean;
   signedIn?: boolean;
-  startingPriceUgx?: number | null | undefined;
   analysisSlug: string;
   /** Show the most likely available pick among these eligible families. */
   markets?: readonly MarketFamily[];
@@ -447,13 +446,6 @@ const Open = styled(Link)`
 
 type LiveClock = ReturnType<typeof liveClockLabel>;
 
-const OddsGroup = styled.span`
-  display: grid; gap: var(--gh-spacing-0_25); line-height: var(--gh-leading-label);
-  font-size: var(--gh-font-caption); white-space: normal;
-  > span { display: flex; gap: var(--gh-spacing-0_75); justify-content: space-between; }
-  small:not([data-positive-value]) { color: ${({ theme }) => theme.color.mutedText}; font: inherit; font-weight: var(--gh-weight-body); }
-`;
-
 /** `lead` names the winner of a decided final score; live phase and minute stay beside the score. */
 function MatchState({ fixture, home, away, lead, clock, messages, snapshot = false }: {
   fixture: FixtureSnapshot; home: string; away: string; lead: number; clock: LiveClock | null; messages: Messages; snapshot?: boolean;
@@ -471,9 +463,11 @@ function MatchState({ fixture, home, away, lead, clock, messages, snapshot = fal
     {(status === "live" || final) && <VisuallyHidden>{messages.text(final ? "match.finalScoreUnknown" : "match.scoreUnknown")}</VisuallyHidden>}
   </>;
   if (snapshot) return <Center data-match-state="snapshot">{scoreline}</Center>;
-  if (clock) return <Center data-match-state="live">{scoreline}<StateChip data-score-clock $tone="live" aria-hidden="true">
-    <span data-mobile-only>{clock.phaseLabel}</span><span data-desktop-only><MatchClockText text={clock.visible} /></span></StateChip>
+  if (clock) return <Center data-match-state="live">{scoreline}<StateChip data-score-clock $tone="live" aria-hidden="true"
+    data-desktop-only={fixture.liveClock?.phase === "in-play" ? "" : undefined}>
+    <span data-mobile-only>{fixture.liveClock?.phase === "in-play" ? null : clock.phaseLabel}</span><span data-desktop-only><LiveMatchTime clock={fixture.liveClock} messages={messages} /></span></StateChip>
     <VisuallyHidden>{clock.spoken}</VisuallyHidden></Center>;
+  if (status === "live") return <Center data-match-state="live">{scoreline}</Center>;
   if (final && (status === "finished-regulation" || status === "finished-extra-time" || status === "finished-penalties")) {
     const regulationOnly = fixture.scorePeriod === "regulation" && status !== "finished-regulation";
     return <Center data-match-state="final">{scoreline}
@@ -572,8 +566,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const price = !selection ? null : snapshotPick ? { price: snapshotPick.odds }
     : fixture.status === "live" ? (livePrice ? { price: livePrice } : null)
       : preMatchPrice ? { price: preMatchPrice } : selectedCardPrice(fixture, shownFamily, !publishedMarket);
-  const oddsLabel = messages.text(observation?.kind === "in-play" ? "touchline.inPlayOdds" :
-    observation?.kind === "pre-match" ? "touchline.preMatchOdds" : "details.odds");
+  const oddsLabel = messages.text(observation?.kind === "pre-match" ? "touchline.preMatchOdds" : "details.odds");
   const market = prediction?.item.market;
   const expectedReturn = market?.source ? forecastExpectedReturn(market.selectedProbability, preMatchPrice) : null;
   const source = prediction?.item.market.source;
@@ -595,7 +588,8 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const lead = decided ? Math.sign(fixture.score!.home - fixture.score!.away) : 0;
   // A live score bolds the side currently ahead.
   const liveLead = showScore && fixture.status === "live" ? Math.sign(fixture.score!.home - fixture.score!.away) : 0;
-  const clock = !offline && fixture.status === "live" ? liveClockLabel(fixture.liveClock, messages) : null;
+  const clock = !offline && fixture.status === "live" && fixture.liveClock && (fixture.liveClock.minute !== null || fixture.liveClock.phase !== "in-play")
+    ? liveClockLabel(fixture.liveClock, messages) : null;
   const showProgress = !offline && (showScore || final || clock !== null || snapshotPick !== undefined && fixture.score !== null
     || fixture.status !== "scheduled" && fixture.status !== "unknown" && fixture.status !== result);
   const missing = gated || prediction ? null : noPickReason(fixture);
@@ -636,8 +630,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
         </strong>
       </>}
       odds={<span data-card-odds data-pick-price={prediction ? "" : undefined} data-odds-kind={observation?.kind}
-        title={oddsLabel}>{livePrice ? <OddsGroup><small>{oddsLabel}</small>{livePrice}</OddsGroup>
-          : <>{price?.price ?? "—"}{expectedReturn !== null && expectedReturn > 0 && <> {valueLabel}</>}</>}</span>}
+        title={oddsLabel}>{price?.price ?? "—"}{expectedReturn !== null && expectedReturn > 0 && <> {valueLabel}</>}</span>}
       probability={gated ? <span data-public-probability>{publicChanceLabel}</span> : <span data-pick-value>{prediction ? percent : "—"}</span>}
       details={offline ? <VisuallyHidden>Predictions are unavailable in the saved view.</VisuallyHidden>
         : !gated && !prediction && reason ? <span data-no-pick-reason>{reason}</span> : null}

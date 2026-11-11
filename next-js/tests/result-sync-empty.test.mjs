@@ -79,6 +79,30 @@ test("previously durable empty batches still recover before the next poll", asyn
   assert.equal(state.saved.length, 0); assert.equal(state.order[0], `apply:${batch.id}`);
 });
 
+test("an empty failure receipt can recover after coverage changes", async () => {
+  const previous = parseResultSyncPolicy(resultPolicy({ coverage: [{ competitionId: 40, season: 2026 }],
+    cadence: { liveMs: null, dateMs: 60_000, activeMs: 60_000 } }));
+  const batch = { id: resultHash("previous-coverage-failure"), accountId, policyHash: evidenceFingerprint(previous),
+    channel: "live", date: null, receivedAt: NOW - 60_000, requestedIds: [], observations: [],
+    error: "dispatch-expired", requestsDispatched: 0 };
+  const state = setup({ pending: [batch] });
+  assert.equal(await state.service.runOnce(), true);
+  assert.deepEqual(state.applied, [batch]);
+  assert.equal(state.order[0], `apply:${batch.id}`);
+  assert.equal(state.provider.network.length, 1);
+});
+
+test("a batch with fixture observations stays policy bound during recovery", async () => {
+  const batch = { id: resultHash("previous-coverage-observation"), accountId, policyHash: resultHash("previous-policy"),
+    channel: "live", date: null, receivedAt: NOW - 60_000, requestedIds: [], observations: [{ externalFixtureId: 101 }],
+    error: null, requestsDispatched: 1 };
+  const state = setup({ pending: [batch] });
+  assert.equal(await state.service.runOnce(), false);
+  assert.deepEqual(state.pending, [batch]);
+  assert.equal(state.applied.length, 0);
+  assert.equal(state.provider.network.length, 0);
+});
+
 test("an empty poll still requires response authority and the final schedule's lease fence", async () => {
   const unapproved = setup({ authority: { verifyResponse: () => false } });
   await assert.rejects(unapproved.service.runOnce(), (error) => error.reason === "unauthorized");

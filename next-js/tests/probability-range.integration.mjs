@@ -4,10 +4,10 @@ import { readFile } from "node:fs/promises";
 import mariadb from "mariadb";
 import { parseReportingDate } from "../src/domain/calendar.ts";
 import { parseFeedQuery, resolveFeedDates } from "../src/domain/feed-query.ts";
-import { feedSql } from "../src/server/matches/feed-read.ts";
+import { feedSql, historicalFeedCutoff } from "../src/server/matches/feed-read.ts";
 import { MysqlServerUnavailableError, startIsolatedMysql } from "./helpers/mysql-instance.mjs";
 
-test("inclusive decimal probability filtering uses stored DOUBLE values on genuine isolated MySQL", { timeout: 120_000 }, async (t) => {
+test("strict defaults, inclusive custom bounds and historical fixtures use the stored feed on isolated MySQL", { timeout: 120_000 }, async (t) => {
   let instance, connection;
   try {
     try { instance = await startIsolatedMysql(); }
@@ -43,9 +43,10 @@ test("inclusive decimal probability filtering uses stored DOUBLE values on genui
       await connection.query("INSERT INTO MarketPrediction VALUES (?,'match-result','home-win',TRUE,?)", [set, probability]);
     }
     const today = parseReportingDate("2026-10-12");
-    async function read(prob) {
-      const query = parseFeedQuery(new URLSearchParams({ prob }), { today });
-      const sql = feedSql(query, resolveFeedDates(query, today), [39], false);
+    async function read(prob, dates = {}, publishedOnly = false) {
+      const query = parseFeedQuery(new URLSearchParams({ prob, ...dates }), { today });
+      const range = resolveFeedDates(query, today);
+      const sql = feedSql(query, range, [39], false, null, false, publishedOnly, historicalFeedCutoff(query, range, today));
       const rows = await connection.query(`SELECT f.id ${sql.joins.sql} WHERE ${sql.where.sql} ORDER BY ${sql.order.sql}`, [...sql.joins.values, ...sql.where.values, ...sql.order.values]);
       return new Set(rows.map((row) => row.id));
     }
@@ -66,6 +67,23 @@ test("inclusive decimal probability filtering uses stored DOUBLE values on genui
     const [abstention] = await connection.query("SELECT feedRecommendation IS NOT NULL AS decision FROM PredictionSet WHERE id='set-outside'");
     assert.equal(Number(abstention.decision), 1, "an explicit abstention remains distinct from an absent decision");
     assert.deepEqual(await read("0-99.9"), new Set(["decimal", "lower", "upper"]), "all-market filtering respects the original abstention");
+
+    for (const [id, probability] of [["exactly75", 0.75], ["justAbove75", 0.75000000001]]) {
+      const cycle = `cycle-${id}`, set = `set-${id}`;
+      await connection.query("INSERT INTO FootballFixture VALUES (?,'api-football','home','away','season',?,'2026-10-12 10:00:00','scheduled')", [id, cycle]);
+      await connection.query("INSERT INTO PredictionCycle VALUES (?,?,'open',?,NULL)", [cycle, id, set]);
+      await connection.query("INSERT INTO PredictionSet(id,cycleId,cycleRevision,candidateJson) VALUES (?,?,1,JSON_OBJECT())", [set, cycle]);
+      await connection.query("INSERT INTO MarketPrediction VALUES (?,'match-result','home-win',TRUE,?)", [set, probability]);
+    }
+    assert.deepEqual(await read("above-75", { when: "today" }, true), new Set(["justAbove75"]));
+    assert.deepEqual(await read("75-100", { when: "today" }, true), new Set(["exactly75", "justAbove75"]));
+
+    for (const status of ["finished-regulation", "postponed", "canceled", "scheduled"]) {
+      await connection.query("INSERT INTO FootballFixture VALUES (?,'api-football','home','away','season',NULL,'2026-10-11 10:00:00',?)", [status, status]);
+    }
+    const yesterday = { when: "yesterday" };
+    assert.deepEqual(await read("0-100", yesterday, true), new Set(["finished-regulation", "postponed", "canceled"]));
+    assert.deepEqual(await read("1-100", yesterday, true), new Set(), "explicit probability filters still require a published forecast");
   } finally {
     if (connection) await connection.end();
     if (instance) await instance.stop();

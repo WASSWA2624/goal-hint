@@ -14,7 +14,7 @@ import { TeamLogo } from "./team-logo";
 import { CompetitionCountryFlag, CompetitionLogo } from "./competition-media";
 import { TruncatedText } from "./truncated-text";
 import { MatchStatus } from "./match-status";
-import { MatchClockText, ScoreFigures, Scoreline } from "./score-presentation";
+import { LiveMatchTime, ScoreFigures, Scoreline } from "./score-presentation";
 
 type RowTeam = Readonly<Pick<FixtureSnapshot["homeTeam"], "name" | "logoUrl">>;
 type RowCompetition = Readonly<Pick<FixtureSnapshot["competition"], "name" | "country" | "logoUrl" | "countryFlagUrl">>;
@@ -48,10 +48,8 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
   const final = isPlayedFinalStatus(status), clock = !offline && status === "live" ? liveClock : null;
   const halftime = status === "live" && clock?.phase === "half-time";
   const matchState = suppliedMatchState ?? (status === "scheduled" ? "upcoming" : halftime ? "halftime" : final ? "finished" : status);
-  const minute = clock?.minute === null || clock?.minute === undefined ? null : m.number(clock.minute);
-  const elapsed = minute === null ? null : minute + (clock?.stoppageMinutes ? `+${m.number(clock.stoppageMinutes)}` : "");
-  const clockText = offline ? "" : final ? m.text(`match.final.${status as "finished-regulation" | "finished-extra-time" | "finished-penalties"}`) + (regulationOnly ? "*" : "")
-    : status !== "live" ? "" : elapsed !== null ? m.text("match.clock.minute", { minute: elapsed }) : m.text(`match.clock.${clock?.phase ?? "in-play"}`);
+  const clockText = !offline && final ? m.text(`match.final.${status as "finished-regulation" | "finished-extra-time" | "finished-penalties"}`) + (regulationOnly ? "*" : "") : "";
+  const visibleClock = !!clock && (clock.minute !== null || clock.phase !== "in-play");
   const home = homeTeam.name?.trim() || m.text("match.homeUnknown"), away = awayTeam.name?.trim() || m.text("match.awayUnknown");
   const title = `${home} ${m.text("match.versus")} ${away}`;
   const league = competition.name?.trim() || m.text("match.competitionUnknown"), country = countryDisplayName(competition.country) || "—";
@@ -62,7 +60,7 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
     homeScore: m.number(score.home), awayScore: m.number(score.away),
   }) : status === "live" ? m.text("match.scoreUnknown") : final ? m.text("match.finalScoreUnknown") : undefined);
   const scoreTitle = score && status !== "live" ? suppliedScoreDescription ?? m.text("match.regulationScoreNote") : undefined;
-  const clockTitle = regulationOnly ? m.text("match.regulationScoreNote") : clockText && clock ? m.text(`match.clock.${clock.phase}`) : undefined;
+  const clockTitle = regulationOnly ? m.text("match.regulationScoreNote") : visibleClock ? m.text(`match.clock.${clock.phase}`) : undefined;
   const kickoffTitle = kickoffAt === null ? undefined : m.reportingInstant(kickoffAt);
   const analysisTitle = [...new Set([analysisLabel ? `${analysisLabel}: ${title}` : m.text("match.analysisLabel", { home, away }), kickoffTitle, scoreTitle, clockTitle,
     marketDescription, m.text(`match.status.${status}`)].filter(Boolean))].join(" · ");
@@ -89,10 +87,10 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
     <Heading data-row-teams id={`${id}-teams`} aria-label={titleNote ? `${title}, ${titleNote}` : title}>
       {position !== undefined && <VisuallyHidden data-row-number>{m.number(position)}. </VisuallyHidden>}
       <span data-home><TruncatedText interactive={interactive} text={home} href={detailsHref} /><TeamLogo name={home} url={offline ? undefined : homeTeam.logoUrl ?? undefined} eager={eagerLogos} size={14} /></span>
-      <span data-centre>{scoreContent}
-        <span data-clock id={`${id}-clock`} aria-hidden={!clockText || undefined}
+      <span data-centre data-live-clock={visibleClock || undefined}>{scoreContent}
+        <span data-clock id={`${id}-clock`} aria-hidden={!visibleClock && !clockText || undefined}
           title={clockTitle}>
-          <MatchClockText text={clockText} />{regulationOnly && <VisuallyHidden>. {m.text("match.regulationScoreNote")}</VisuallyHidden>}
+          {visibleClock ? <LiveMatchTime clock={clock} messages={m} /> : clockText}{regulationOnly && <VisuallyHidden>. {m.text("match.regulationScoreNote")}</VisuallyHidden>}
         </span></span>
       <span data-away><TeamLogo name={away} url={offline ? undefined : awayTeam.logoUrl ?? undefined} eager={eagerLogos} size={14} /><TruncatedText interactive={interactive} text={away} href={detailsHref} /></span>
     </Heading>

@@ -32,7 +32,7 @@ const ignoreResult = () => {};
 /** Render the actual heading and all outcome labels in the first HTML, with unknown values. */
 export function FeedPerformancePlaceholder(props: Presentation) {
   return <LoadingTheme><PerformanceSummary counts={null} locale={props.query.locale} kind="matches" {...summaryLabels(props)}
-    showCoverage={false} showAll compactHeader onResult={ignoreResult} disabled loading /></LoadingTheme>;
+    showCoverage={false} showAll compactHeader onResult={ignoreResult} disabled loading="background" /></LoadingTheme>;
 }
 
 type Reply = { key: string; scope: string; attempt: number; asOf: number; refreshAfter: number; counts: NonNullable<MatchFeedResponse["performance"]> | null; failed: boolean };
@@ -94,7 +94,7 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
   const summaryCounts = useMemo(() => counts ? { ...counts, cancelled: counts.cancelled ?? 0 } : null, [counts]);
   return <Stack $gap="sm" data-feed-performance-state={loading ? "loading" : failed ? "unavailable" : counts ? "ready" : "unknown"}>
     <PerformanceSummary counts={summaryCounts} locale={query.locale} kind="matches"
-      {...summaryLabels({ query, data })} activeResult={query.result} disabled={!enabled} loading={loading}
+      {...summaryLabels({ query, data })} activeResult={query.result} disabled={!enabled} loading={loading && (retrying || "background")}
       onResult={(result) => onApply(selectFeedSummaryResult(query, result))} showCoverage={false} showAll compactHeader />
     {(failed || retrying) && <FeedNote data-performance-unavailable>
       <span role="status">{messages.text("performance.summary.unavailable")}</span>{" "}

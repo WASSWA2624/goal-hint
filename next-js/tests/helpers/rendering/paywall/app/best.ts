@@ -7,7 +7,7 @@ import { gateBestSlips } from "@/server/slips/best-slips";
 import { at, scenarios } from "./stored";
 
 /** Synthetic transport fixture only; model generation has separate bounded-search tests. */
-async function read(access: ViewerAccess, completed: boolean, mixed = false): Promise<BestSlipsResult> {
+async function read(completed: boolean, mixed = false): Promise<BestSlipsResult> {
   const record = scenarios.scheduled!.detail.fixture;
   const second = scenarios.live!.detail.fixture;
   const slip: BestSlip = { id: `SENTINEL-PRIVATE-SLIP-${record.fixtureId}`, totalOdds: "10.98", oddsBasis: "bookmaker",
@@ -20,12 +20,14 @@ async function read(access: ViewerAccess, completed: boolean, mixed = false): Pr
     status: completed || mixed && index === 0 ? "finished-regulation" : "live", fixtureCompleted: completed || mixed && index === 0,
     regulationVerified: completed || mixed && index === 0, regulationHome: completed || mixed && index === 0 ? 1 : null, regulationAway: completed || mixed && index === 0 ? 0 : null }));
   const outcome = slipSnapshotOutcome(slip, results), status = slipSnapshotStatus(slip, results, outcome);
-  return gateBestSlips({ day: getReportingDate(at), state: "generated", entitled: true,
+  return { day: getReportingDate(at), state: "generated", entitled: true,
     slips: bestSlipViews([slip], true, slipMatchStatesFromResults(slip.selections, results)).map((view) => ({ ...view, outcome, status, completed: slipCompleted(slip, results), completedFixtureIds: completedSlipFixtureIds(slip, results) })),
     statistics: { total: 1, won: completed ? 1 : 0, lost: 0, pending: completed ? 0 : 1, void: 0 },
-    searchLimited: false, partialCoverage: false }, access);
+    searchLimited: false, partialCoverage: false };
 }
 
-export const readBest = (access: ViewerAccess) => read(access, false);
-export const readMixedBest = (access: ViewerAccess) => read(access, false, true);
-export const readCompletedBest = (access: ViewerAccess) => read(access, true);
+export const readBestSnapshot = () => read(false);
+export const readMixedBestSnapshot = () => read(false, true);
+export const readCompletedBestSnapshot = () => read(true);
+export const readBest = async (access: ViewerAccess) => gateBestSlips(await readBestSnapshot(), access);
+export const readCompletedBest = async (access: ViewerAccess) => gateBestSlips(await readCompletedBestSnapshot(), access);

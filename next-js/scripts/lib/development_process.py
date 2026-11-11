@@ -17,7 +17,7 @@ from .runtime import CommandError, hidden_process
 def _run(args, *, input=None):
     try:
         result = subprocess.run(args, input=input, capture_output=True, text=True,
-                                encoding="utf-8", errors="replace", timeout=15,
+                                encoding="utf-8", errors="replace", timeout=45,
                                 creationflags=hidden_process())
     except (OSError, subprocess.SubprocessError):
         raise CommandError("Development process inspection is unavailable on this computer.") from None
