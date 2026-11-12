@@ -8,6 +8,16 @@ import type { LifecycleInput } from "../predictions/lifecycle-contract.ts";
 import type { RefreshMember } from "./refresh-contract.ts";
 import { refreshFail } from "./refresh-contract.ts";
 
+const transientAdmission = new Set(["dispatch-expired", "minute-limit", "pacing", "priority-wait", "reset-unconfirmed",
+  "retry-delay", "second-limit", "shared-work-pending", "storage-unavailable"]);
+type UndispatchedObservation = Readonly<{ retryReason: string; requestsDispatched: 0; requestCountUnknown: false }>;
+
+export function isUndispatchedObservation(value: unknown): value is UndispatchedObservation {
+  return value !== null && typeof value === "object" && "retryReason" in value && typeof value.retryReason === "string" &&
+    transientAdmission.has(value.retryReason) && "requestsDispatched" in value && value.requestsDispatched === 0 &&
+    "requestCountUnknown" in value && value.requestCountUnknown === false;
+}
+
 export function createRefreshObservationCollector(options: Readonly<{
   adapter: Pick<ReturnType<typeof createApiFootballAdapter>["evidence"], "fixtures">;
   evidenceRef: string;
@@ -17,6 +27,14 @@ export function createRefreshObservationCollector(options: Readonly<{
     workflow.check();
     const result = await options.adapter.fixtures({ fixtureId: member.context.externalFixtureId }, bounds, workflow);
     workflow.check();
+    // A queued denial can be retried without repeating a provider dispatch. A
+    // failed/uncertain transport must keep its original attempt as the limit.
+    const error = result.error;
+    const retryReason = error?.reason === "shared-work-pending" ? error.reason : error?.reason === "quota-denied" ? error.quotaReason : undefined;
+    if (result.status === "failed" && result.requestsDispatched === 0 && result.provenance.length === 0 &&
+      retryReason !== undefined && transientAdmission.has(retryReason)) {
+      return Object.freeze({ retryReason, requestsDispatched: 0, requestCountUnknown: false } satisfies UndispatchedObservation);
+    }
     const approved: unknown = options.verifyResponse(result, member);
     if (approved instanceof Promise) { void approved.catch(() => {}); return refreshFail("unauthorized"); }
     const fixture = result.data[0], parameters = { id: String(member.context.externalFixtureId), timezone: "Africa/Kampala" };

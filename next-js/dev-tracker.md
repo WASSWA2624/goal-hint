@@ -7,7 +7,7 @@
 | ☐ Not started | No implementation yet. |
 | — Unassessed | No completion status was recorded; inspect implementation and acceptance evidence before assigning one. |
 
-**Tracked totals:** 56 completed · 10 partial · 8 not started · 1 unassessed (75 tracked plans).
+**Tracked totals:** 56 completed · 11 partial · 8 not started · 1 unassessed (76 tracked plans).
 
 | Status        | Dev file                                                                        | Pending                                                                                             |
 | ------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -90,6 +90,7 @@
 | ☑ Completed | [185-full-width-desktop-sections.md](dev-plan/185-full-width-desktop-sections.md) | Full-width desktop frames and square section edges; 48 isolated desktop cases, 64 unchanged mobile/tablet comparisons, lint, types and 141 tests passed. Live server requests timed out; see progress log. |
 | ☑ Completed | [186-aligned-desktop-content.md](dev-plan/186-aligned-desktop-content.md) | Shared 16px desktop content gutter inside full-width sections; lint, types, 151 tests, 66 desktop cases and 88 unchanged mobile/tablet comparisons passed. See progress log for live-page limits. |
 | ☑ Completed | [189-distinct-desktop-shell-backgrounds.md](dev-plan/189-distinct-desktop-shell-backgrounds.md) | Muted desktop header/footer fills in both themes; lint, types, 28 tests, six desktop checks and eight unchanged mobile/tablet comparisons passed. |
+| ◐ Partial | [309-verified-football-history.md](dev-plan/309-verified-football-history.md) | Remaining league seasons, complete dataset coverage, held-out forecast evaluation and hosted transfer. |
 
 ## Partial rows
 
@@ -104,6 +105,8 @@
 - **067 Launch readiness:** verifiers and checklist are implemented; all required local regression checks and both local production verifiers pass. Real-message, owner/host/phone and activation evidence remains pending.
 - **069 Shared offline support:** the anonymous saved view has one bounded reachability/retry coordinator, owned cancellation, public status metadata and serialized staged updates. Browser cold/privacy/recovery, measured 5/15/30/60/300-second retries, failed derived-B retention and healthy-B/full-process cold A/B passed. Windows additionally preserved its draft through actual OS visibility changes and valid B recovery, then passed separate-process cold B. See [the contract](docs/offline-startup.md) and [development progress](docs/development-progress.md#069--anonymous-offline-startup-26-october-2026). Android testing is deferred; Apple/Linux remain unqualified, keeping the overall status Partial.
 - **073 Prediction engine:** new refreshes freeze the shared evidence/0.65-probability/quote policy, select highest exact odds after qualification, prefer usable optional AI and retain the enriched baseline. Immutable recommendation/quote provenance drives existing reads without UI edits. All ten previously skipped database acceptance cases passed against fresh owned MySQL 8.4.11 instances (96 including nested cases, no failures/skips); the exhausted-budget publication regression was fixed. No paid calls, actual account coverage qualification or held-out accuracy study was performed. See [the engine runbook](docs/prediction-engine.md) and [development progress](docs/development-progress.md).
+
+- **309 Verified football history:** provider-backed results, fixture detail and reference archive trials passed on the owned database. Full coverage and hosted transfer are pending. See [development progress](docs/development-progress.md).
 
 ## Unassessed rows
 

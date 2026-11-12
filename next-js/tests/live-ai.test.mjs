@@ -13,6 +13,7 @@ import { liveReferences, liveWorkload, selectionPolicy, fallbackRefreshPlan, ref
 import { buildEvidenceSnapshot } from '../src/server/evidence/evidence-snapshot.ts';
 import { buildPredictorPrompt } from '../src/server/predictor/predictor-prompt.ts';
 import { parseRefreshPlan, refreshReference } from '../src/server/refresh/refresh-input.ts';
+import { createRefreshObservationCollector } from '../src/server/refresh/refresh-observation.ts';
 import { createPredictionRefreshService } from '../src/server/refresh/refresh-service.ts';
 import { ModelRegistryError } from '../src/server/predictor/predictor-registry.ts';
 import { createFallbackService } from '../src/server/fallback/fallback-service.ts';
@@ -237,7 +238,7 @@ function refreshHarness(options = {}) {
   const store = { async publication() { return null; }, async outcome() { return outcome; }, async loadMember() { return member(current); },
     async intent() { return intent; }, async saveIntent(_lease, saved) { intent = saved; return saved; },
     async stage(_id, name, kind) { return stages.get(`${name}:${kind}`) ?? null; },
-    async start(_lease, name) { if (stages.has(`${name}:started`)) return false; stages.set(`${name}:started`, { at: current }); return true; },
+    async start(activeLease, name) { if (stages.has(`${name}:started`)) return false; stages.set(`${name}:started`, { at: current, attemptId: activeLease.attemptId }); return true; },
     async complete(_lease, name, result) { stages.set(`${name}:completed`, { at: current, value: result }); },
     async finish(_lease, result) { outcome = result; } };
   const fallback = createFallbackService({ clock: { now: () => current }, maxInflight: 1, verifyRequest: () => true,
@@ -253,13 +254,13 @@ function refreshHarness(options = {}) {
       return { status: 'denied', reason: options.evidenceError };
       return { status: 'collected', snapshot: buildEvidenceSnapshot({ context: request.context, policy: request.policy, sources: [] }, evidenceAuthority()),
         requestsDispatched: 0, requestCountUnknown: false, usage: { football: { requests: 0, uncertain: false }, research: { requests: 0, uncertain: false } }, collectionIssues: [] }; } },
-    fallback, observation: { async collect() { return { input: {}, requestsDispatched: 1, requestCountUnknown: false }; } },
+    fallback, observation: { collect: options.observe ?? (async () => ({ input: {}, requestsDispatched: 1, requestCountUnknown: false })) },
     lifecycle: { async observe() { return { observation: { kickoffAt: value.context.kickoffAt, retrievedAt: current, providerUpdatedAt: null,
       externalFixtureId: value.context.externalFixtureId, status: 'scheduled', actualStartedAt: null, evidenceRef: 'synthetic-status' } }; }, async refreshEligibility() { return { eligible: true }; } },
     publisher: { async publish(input) { publications.push(input); if (options.publicationError) throw new Error('Synthetic interrupted publication.');
       return { refresh: { outcome: 'unavailable', reason: 'sources-unavailable', revisionId: null, id: 'synthetic-publication' } }; } },
     costs: { ai: null, research: null } });
-  return { async run() { return service.definition.handle(payload, context); }, stages, publications, evidenceRequests,
+  return { async run(attemptId = lease.attemptId) { return service.definition.handle(payload, { ...context, lease: { ...lease, attemptId } }); }, stages, publications, evidenceRequests,
     get intent() { return intent; }, counts: () => ({ prepared, modelCalls, aiCalls, fallbackCalls }), get outcome() { return outcome; } };
 }
 
@@ -271,6 +272,33 @@ test('preparation ends before immutable analysis and resumed jobs never reimport
 test('an interrupted preparation is not dispatched again', async () => {
   const h = refreshHarness(); h.stages.set('preparation:started', { at: NOW });
   await h.run(); assert.equal(h.counts().prepared, 0);
+});
+test('final status is retried on a new lease only when no provider dispatch was made', async () => {
+  const denial = { status: 'failed', data: [], provenance: [], requestsDispatched: 0,
+    error: { reason: 'quota-denied', quotaReason: 'storage-unavailable' } };
+  for (const scenario of ['queued', 'uncertain', 'twice-denied']) {
+    let calls = 0;
+    const collector = createRefreshObservationCollector({ adapter: { async fixtures() {
+      return scenario === 'uncertain' ? { ...denial, requestsDispatched: 1 } : denial;
+    } }, evidenceRef: 'synthetic-status', verifyResponse: () => false });
+    const h = refreshHarness({ observe: (...args) => {
+      calls++;
+      return scenario === 'queued' && calls === 2 ? { input: {}, requestsDispatched: 1, requestCountUnknown: false }
+        : collector.collect(...args);
+    } });
+    const first = await h.run();
+    assert.equal(h.publications.length, 0);
+    assert.equal(first.retryable, scenario !== 'uncertain');
+    const second = await h.run('c'.repeat(64));
+    assert.equal(calls, scenario === 'uncertain' ? 1 : 2);
+    assert.equal(second.status, scenario === 'queued' ? 'succeeded' : 'failed');
+    assert.equal(h.publications.length, scenario === 'queued' ? 1 : 0);
+    assert.equal(h.counts().fallbackCalls, 1);
+    if (scenario !== 'uncertain') {
+      assert.equal(h.outcome.phases.observation, 'storage-unavailable');
+      assert.notEqual(h.stages.get('observation:started').attemptId, h.stages.get('status-retry:started').attemptId);
+    }
+  }
 });
 test('safe evidence outage saves a separate empty snapshot and reaches fallback without an AI call', async () => {
   const h = refreshHarness({ ai: true, evidenceError: 'unavailable' }); await h.run();

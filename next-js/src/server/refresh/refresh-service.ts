@@ -21,7 +21,7 @@ import { PredictionRefreshError, refreshFail, type RefreshAuthority, type Refres
   type RefreshOutcome, type RefreshPhase, type RefreshPlan } from "./refresh-contract.ts";
 import { parseRefreshPlan, refreshPayload, refreshPin, refreshReference } from "./refresh-input.ts";
 import type { RefreshStore } from "./refresh-mysql-store.ts";
-import type { createRefreshObservationCollector } from "./refresh-observation.ts";
+import { isUndispatchedObservation, type createRefreshObservationCollector } from "./refresh-observation.ts";
 import type { EvidenceContext } from "../evidence/evidence-contract.ts";
 import { assessBaselineEvidence } from "../evidence/baseline-evidence.ts";
 import type { RecommendationQuote } from "../../domain/recommendation.ts";
@@ -273,9 +273,20 @@ export function createPredictionRefreshService(options: Readonly<{
           goalExtension = parseGoalMarketExtensionInput({ scoreDistribution: ai.output.scoreDistribution, definitions: plan.goalDefinitions });
       }
       const generationCompletedAt = utcInstantFromEpochMilliseconds((await options.store.stage(lease.jobId, "fallback", "completed"))!.at);
-      const observation = await phase<Observation | null>("observation", plan.observation.bounds.timeoutMs * plan.observation.bounds.maxRequests,
-        plan.publicationReserveMs, (workflow) => options.observation.collect(saved.member, plan.observation.bounds, workflow), () => null);
-      if (!observation) return finish("failed", "observation-unavailable");
+      const observe = (name: "observation" | "status-retry") => phase<Observation | null>(name,
+        plan.observation.bounds.timeoutMs * plan.observation.bounds.maxRequests, plan.publicationReserveMs,
+        (workflow) => options.observation.collect(saved.member, plan.observation.bounds, workflow), () => null);
+      let observation = await observe("observation");
+      if (isUndispatchedObservation(observation)) {
+        const replay = phases.observation === "reused";
+        phases.observation = observation.retryReason;
+        // Retry in a new lease only when the first attempt proved no request
+        // left the worker. The separate sealed stage bounds it to one retry.
+        if (!replay) return { status: "failed", reason: observation.retryReason === "storage-unavailable" ? "handler-failed" : "rate-limited", retryable: true };
+        observation = await observe("status-retry");
+      }
+      if (isUndispatchedObservation(observation)) phases["status-retry"] = observation.retryReason;
+      if (!observation || isUndispatchedObservation(observation)) return finish("failed", "observation-unavailable");
       // Always let lifecycle process verified early play/corrections, including stale
       // safety evidence, before freshness decides whether publication is possible.
       const observed = await options.lifecycle.observe(observation.input);

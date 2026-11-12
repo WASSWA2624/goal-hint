@@ -4,7 +4,9 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma, FootballFixture, FootballImport, FootballTeam, FootballCompetition } from "../generated/prisma/client.ts";
 import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type Clock, type UtcInstant } from "../../domain/calendar.ts";
-import type { SettlementStatus } from "../../domain/market-settlement.ts";
+import { isPlayedFinalStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
+import { evidenceFingerprint } from "../evidence/evidence-input.ts";
+import { fixtureResultValue, insertFixtureResult } from "../results/result-write.ts";
 import type { NormalizedFixture, NormalizedTeam, NormalizedCompetition, SourceTimestamps } from "./api-football-normalize.ts";
 import type { CatalogAuthority, CatalogPreparedBatch, CatalogSelection, CatalogTeamMapping } from "./catalog-contract.ts";
 import { normalizeCatalogSearch, isSafeCatalogLogo, parseCatalogTeamMapping, catalogScopeKey, assertCatalogPreparedBatch, parseCatalogEvidenceRef } from "./catalog-input.ts";
@@ -108,6 +110,31 @@ function fields(row: FootballFixture): FixtureFields {
     elapsedMinutes: row.elapsedMinutes, regulationHome: row.regulationHome, regulationAway: row.regulationAway,
     regulationEvidenceRef: row.regulationEvidenceRef, regulationVerifiedAt: row.regulationVerifiedAt };
 }
+
+async function recordHistoricalResult(tx: Prisma.TransactionClient, fixture: StoredFixture,
+  observation: NormalizedFixture, importId: string, existing: boolean) {
+  if (existing && fixture.activeCycleId !== null) return;
+  const observedAt = new Date(observation.source.retrievedAt);
+  const value = fixtureResultValue(fixture, { ...observation, externalFixtureId: observation.id });
+  if (!value.regulation.verified) return fail("invalid-state");
+  const state = existing ? await tx.fixtureResultState.findUnique({ where: { fixtureId: fixture.id } }) : null;
+  if (existing) {
+    if (state?.resultId != null || state && [state.firstTrackedAt, state.firstFinalAt, state.lastSyncAt]
+      .some((at) => at !== null && at > observedAt)) return;
+    const lifecycle = await tx.fixtureLifecycleState.findUnique({ where: { fixtureId: fixture.id },
+      select: { issue: true, retrievedAt: true } });
+    if (lifecycle && (lifecycle.issue !== null || lifecycle.retrievedAt > observedAt)) return;
+    if (await tx.predictionCycle.findFirst({ where: { fixtureId: fixture.id }, select: { id: true } }) ||
+      await tx.fixtureResult.findFirst({ where: { fixtureId: fixture.id }, select: { id: true } })) return;
+  }
+  const resultId = await insertFixtureResult(tx, { fixtureId: fixture.id, fixtureVersion: fixture.dataVersion, previousId: null,
+    observationId: evidenceFingerprint({ importId, fixtureId: fixture.id, observedAt: observation.source.retrievedAt }),
+    observedAt: observation.source.retrievedAt, providerUpdatedAt: observation.source.providerUpdatedAt,
+    regulationVerifiedAt: fixture.regulationVerifiedAt, value, contentHash: evidenceFingerprint(value) });
+  const data = { resultId, firstFinalAt: state?.firstFinalAt ?? observedAt, lastSyncAt: observedAt };
+  if (state) await tx.fixtureResultState.update({ where: { fixtureId: fixture.id }, data });
+  else await tx.fixtureResultState.create({ data: { fixtureId: fixture.id, firstTrackedAt: observedAt, ...data } });
+}
 const visibleKeys = ["homeTeamId", "awayTeamId", "seasonId", "round", "kickoff", "eatDate", "status", "providerStatus",
   "elapsedMinutes", "regulationHome", "regulationAway"] as const;
 function materialChanges(before: FixtureFields | null, after: FixtureFields): Record<string, unknown> {
@@ -133,9 +160,11 @@ function sharedChanges<Entity extends FootballTeam | FootballCompetition>(histor
 /** All provider I/O happens before this bounded transaction, which serializes catalog identity writes. */
 export function createFootballCatalogStore(database: DatabaseRuntime, options: Readonly<{
   clock?: Clock; coordinateFixtureMutation?: CatalogMutationCoordinator; transactionTimeoutMs?: number;
+  historicalResults?: true;
 }> = {}) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const transactionTimeout = options.transactionTimeoutMs ?? 30_000;
+  const historical = options.historicalResults === true;
   if (!Number.isSafeInteger(transactionTimeout) || transactionTimeout < 1 || transactionTimeout > 120_000) fail("invalid-state");
   async function write<Result>(operation: (transaction: Prisma.TransactionClient) => Promise<Result>, retryConflicts = options.coordinateFixtureMutation === undefined): Promise<Result> {
     try {
@@ -191,6 +220,7 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
   }
   async function team(transaction: Prisma.TransactionClient, input: NormalizedTeam, authority: CatalogAuthority, changed: Set<string>, history: SharedHistory<FootballTeam>) {
     const mapping = await transaction.footballTeamProvider.findUnique({ where: { provider_externalId: { provider: PROVIDER, externalId: BigInt(input.id) } }, include: { team: true } });
+    if (historical && mapping) return mapping.teamId;
     let current: FootballTeam;
     if (!mapping) {
       current = await transaction.footballTeam.create({ data: { id: randomUUID(), name: input.name,
@@ -228,6 +258,7 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
   }
   async function competition(transaction: Prisma.TransactionClient, input: NormalizedCompetition, authority: CatalogAuthority, changed: Set<string>, history: SharedHistory<FootballCompetition>) {
     const mapping = await transaction.footballCompetitionProvider.findUnique({ where: { provider_externalId: { provider: PROVIDER, externalId: BigInt(input.id) } }, include: { competition: true } });
+    if (historical && mapping) return mapping.competitionId;
     let current: FootballCompetition;
     if (!mapping) {
       current = await transaction.footballCompetition.create({ data: { id: randomUUID(), name: input.name,
@@ -277,7 +308,7 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
     if (!current) return transaction.footballSeason.create({ data: { id: randomUUID(), competitionId, year,
       current: metadata?.current ?? null, ...(metadata ? { coverage: json(metadata.coverage) } : {}),
       retrievedAt: new Date(source.retrievedAt), providerUpdatedAt: timestamp(source.providerUpdatedAt) } });
-    if (!fresh(source, current)) return current;
+    if (historical || !fresh(source, current)) return current;
     const previousCoverage = current.coverage !== null && typeof current.coverage === "object" && !Array.isArray(current.coverage) ? current.coverage : {};
     const coverage = metadata ? { ...previousCoverage, ...Object.fromEntries(Object.entries(metadata.coverage).filter(([, value]) => value !== null)) } : previousCoverage;
     return transaction.footballSeason.update({ where: { id: current.id }, data: { current: metadata?.current ?? current.current,
@@ -286,6 +317,8 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
   async function importBatch(batch: CatalogPreparedBatch, authority: CatalogAuthority): Promise<CatalogImportSummary> {
     assertCatalogPreparedBatch(batch, authority);
     authorize(batch, authority);
+    if (historical && (batch.selection.kind !== "fixtures" || batch.selection.query.competitionId === undefined ||
+      batch.selection.query.season === undefined)) fail("invalid-state");
     return write(async (transaction) => {
       authorize(batch, authority);
       const existing = await transaction.footballImport.findUnique({ where: { id: batch.request.id } });
@@ -308,22 +341,47 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
         season: { ...row.season, competition: competitionHistory.get(row.season.competitionId)?.before ?? row.season.competition } });
       for (const input of batch.rows.teams) await team(transaction, input, authority, changedTeams, teamHistory);
       for (const input of batch.rows.competitions) await competition(transaction, input, authority, changedCompetitions, competitionHistory);
-      for (const input of batch.rows.fixtures) {
+      const fixtures = historical && batch.status !== "complete" ? [] : batch.rows.fixtures;
+      for (const input of fixtures) {
+        const score = input.regulationScore;
+        const scoreEvidence = batch.scoreEvidenceRefs?.[String(input.id)];
+        const proof = score === null ? null : { fixtureId: score.fixtureId, providerStatus: score.providerStatus,
+          sourceField: score.sourceField, period: score.period, home: score.home, away: score.away };
+        const verified = score?.verified === true && scoreEvidence && proof !== null && trusted(authority.verifyRegulationScore, proof);
+        if (historical && (!verified || !isPlayedFinalStatus(input.status) || input.kickoff === null ||
+          input.kickoff >= input.source.retrievedAt || input.source.retrievedAt > recordedAt.getTime())) continue;
+        const findExisting = () => transaction.footballFixture.findUnique({ where: { provider_externalId: {
+          provider: PROVIDER, externalId: BigInt(input.id),
+        } }, include: fixtureRelations });
+        const archivedFixture = historical ? await findExisting() : null;
+        if (archivedFixture) {
+          // Preserve current identities, scores and prediction history. An exact match may seed its first result record.
+          const mapping = await transaction.footballCompetitionProvider.findUnique({ where: {
+            provider_externalId: { provider: PROVIDER, externalId: BigInt(input.competition.id) },
+          } });
+          if (archivedFixture.season.competitionId !== mapping?.competitionId || archivedFixture.season.year !== input.competition.season ||
+            !archivedFixture.homeTeam.providers.some((row) => row.provider === PROVIDER && row.externalId === BigInt(input.homeTeam.id)) ||
+            !archivedFixture.awayTeam.providers.some((row) => row.provider === PROVIDER && row.externalId === BigInt(input.awayTeam.id)) ||
+            archivedFixture.kickoff?.getTime() !== input.kickoff || archivedFixture.status !== input.status || archivedFixture.providerStatus !== input.providerStatus ||
+            archivedFixture.regulationHome !== score!.home || archivedFixture.regulationAway !== score!.away || archivedFixture.regulationEvidenceRef !== scoreEvidence ||
+            archivedFixture.regulationVerifiedAt === null || archivedFixture.regulationVerifiedAt.getTime() > input.source.retrievedAt) continue;
+          fixtureIds.push(archivedFixture.id);
+          if (fresh(input.source, archivedFixture)) {
+            await lockFixture(transaction, archivedFixture.id);
+            await recordHistoricalResult(transaction, archivedFixture, input, batch.request.id, true);
+          }
+          continue;
+        }
         const homeTeamId = await team(transaction, input.homeTeam, authority, changedTeams, teamHistory), awayTeamId = await team(transaction, input.awayTeam, authority, changedTeams, teamHistory);
         const competitionId = await competition(transaction, input.competition, authority, changedCompetitions, competitionHistory);
         const season = await upsertSeason(transaction, competitionId, input.competition.season!, input.competition.source);
-        const previous = await transaction.footballFixture.findUnique({ where: { provider_externalId: { provider: PROVIDER, externalId: BigInt(input.id) } }, include: fixtureRelations });
+        const previous = historical ? null : await findExisting();
         if (homeTeamId === awayTeamId) fail("invalid-state");
         if (previous) { fixtureIds.push(previous.id); await lockFixture(transaction, previous.id); }
         if (previous && !fresh(input.source, previous) && !options.coordinateFixtureMutation) continue;
         const status = input.status === "unknown" && previous ? previous.status : input.status;
         const kickoff = input.kickoff === null ? previous?.kickoff ?? null : new Date(input.kickoff);
         const providerStatus = input.status === "unknown" && previous ? previous.providerStatus : input.providerStatus ?? previous?.providerStatus ?? null;
-        const score = input.regulationScore;
-        const scoreEvidence = batch.scoreEvidenceRefs?.[String(input.id)];
-        const proof = score === null ? null : { fixtureId: score.fixtureId, providerStatus: score.providerStatus,
-          sourceField: score.sourceField, period: score.period, home: score.home, away: score.away };
-        const verified = score?.verified === true && scoreEvidence && proof !== null && trusted(authority.verifyRegulationScore, proof);
         const keepScore = previous && previous.status === status && previous.providerStatus === providerStatus;
         const proposed: FixtureFields = { homeTeamId, awayTeamId, seasonId: season.id, round: input.competition.round ?? previous?.round ?? null, kickoff,
           eatDate: kickoff === null ? null : new Date(`${getReportingDate(instant(kickoff))}T00:00:00.000Z`), status,
@@ -341,7 +399,10 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
               ...(material ? { dataVersion: { increment: 1n } } : {}) }, include: fixtureRelations })
             : transaction.footballFixture.create({ data: { id: randomUUID(), provider: PROVIDER, externalId: BigInt(input.id), ...proposed, ...metadata }, include: fixtureRelations }),
             input, `catalog-import:${batch.request.id}`);
-          if (!previous) { fixtureIds.push(row.id); insertedFixtures.add(row.id); }
+          if (!previous) {
+            fixtureIds.push(row.id); insertedFixtures.add(row.id);
+            if (historical) await recordHistoricalResult(transaction, row, input, batch.request.id, false);
+          }
           if (applied && material) { changedFixtures.add(row.id); audit(row, input.source.retrievedAt, changes); }
         } else await transaction.footballFixture.update({ where: { id: previous.id }, data: { ...metadata,
           regulationEvidenceRef: proposed.regulationEvidenceRef, regulationVerifiedAt: proposed.regulationVerifiedAt } });
@@ -375,7 +436,8 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
       const receipt = await transaction.footballImport.create({ data: { id: batch.request.id, fingerprint: batch.fingerprint,
         requestFingerprint: batch.requestFingerprint, selection: json(batch.selection), scopeKey: batch.scopeKey, provider: PROVIDER,
         kind: batch.selection.kind, status: batch.status, observedAt: new Date(batch.observedAt), recordedAt, receivedCount,
-        importedCount: receivedCount - batch.invalidRows, rejectedCount: batch.invalidRows, requestsDispatched: batch.requestsDispatched,
+        importedCount: historical ? fixtureIds.length : receivedCount - batch.invalidRows, rejectedCount: batch.invalidRows,
+        requestsDispatched: batch.requestsDispatched,
         reasons: json(batch.reasons), missingIds: json(batch.missingIds), missingCoverage: json(batch.missingCoverage),
         provenance: json(batch.provenance), retentionEvidenceRef: batch.request.retentionEvidenceRef,
         subsetEvidenceRef: batch.request.knownSubset?.evidenceRef ?? null, fixtureIds: json(fixtureIds), changedFixtureIds: json([...changedFixtures]) } });

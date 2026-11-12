@@ -4,11 +4,19 @@ import { normalizeAvailability, normalizeEvent, normalizeFixture, normalizeStati
   type NormalizationContext, type NormalizationResult, type NormalizedEvent, type NormalizedFixture,
   type NormalizedStatistics } from "./api-football-normalize.ts";
 
+export type FixtureDetailInfo = Readonly<{
+  venueId: number | null;
+  venueName: string | null;
+  venueCity: string | null;
+  referee: string | null;
+}>;
+
 export type FixtureDetailFacts = Readonly<{
   events: readonly unknown[] | null;
   statistics: readonly unknown[] | null;
   lineups: readonly unknown[] | null;
   players: readonly unknown[] | null;
+  info?: FixtureDetailInfo;
 }>;
 export type NormalizedFixtureMatchDetails = NormalizedFixture & Readonly<{
   matchEvents: readonly NormalizedEvent[] | null;
@@ -35,11 +43,25 @@ function section(value: unknown, maximum: number): readonly unknown[] | null {
   return Array.isArray(value) && value.length <= maximum ? Object.freeze(value) : null;
 }
 
+function text(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const clean = value.normalize("NFC").replace(/\p{Cc}/gu, " ").trim();
+  return clean.length > 0 && clean.length <= 256 ? clean : null;
+}
+
+function fixtureInfo(value: unknown): FixtureDetailInfo | null {
+  const fixture = object(value), venue = object(fixture?.venue), id = venue?.id;
+  const info = { venueId: typeof id === "number" && Number.isSafeInteger(id) && id > 0 ? id : null,
+    venueName: text(venue?.name), venueCity: text(venue?.city), referee: text(fixture?.referee) };
+  return Object.values(info).some((field) => field !== null) ? Object.freeze(info) : null;
+}
+
 /** Retain only correlated sections. An invalid detail block does not discard the fixture or other blocks. */
 export function normalizeFixtureMatchDetails(raw: unknown, context: NormalizationContext): NormalizationResult<NormalizedFixtureMatchDetails> {
   const fixture = normalizeFixture(raw, context);
   if (!fixture.valid) return fixture;
   const data = fixture.data, row = object(raw)!;
+  const info = fixtureInfo(row.fixture);
   const teams = new Set([data.homeTeam.id, data.awayTeam.id]);
   const events = section(row.events, 500), statistics = section(row.statistics, 2);
   const normalizedEvents = normalized(events, (value) => normalizeEvent(value, context));
@@ -63,5 +85,5 @@ export function normalizeFixtureMatchDetails(raw: unknown, context: Normalizatio
   }) ? players : null;
   return { ...fixture, data: Object.freeze({ ...data, matchEvents, matchStatistics,
     facts: Object.freeze({ events: matchEvents === null ? null : events, statistics: matchStatistics === null ? null : statistics,
-      lineups: matchLineups, players: matchPlayers }) }) };
+      lineups: matchLineups, players: matchPlayers, ...(info === null ? {} : { info }) }) }) };
 }

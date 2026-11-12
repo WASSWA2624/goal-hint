@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateMarketSnapshot } from '../src/domain/markets.ts';
 import { publicPolicy } from '../src/domain/public-policy.ts';
+import { recommendationPolicy, recommendationPolicyForVersion } from '../src/domain/recommendation.ts';
 import { selectRecommendation } from '../src/server/refresh/recommendation-selection.ts';
 import { parseRecommendationDecision } from '../src/server/predictions/recommendation-input.ts';
 import { evidenceContext, evidenceHash } from './helpers/evidence-fixtures.mjs';
@@ -24,33 +25,53 @@ function quote(family, selection, decimal, overrides = {}) {
 const select = (value, quotes, assess = assessor, extra = {}) => selectRecommendation({ candidate: value, quotes, snapshot,
   decisionAt: context.analysisAt + 1000, ...extra }, assess);
 
-test('probability qualification precedes exact highest-odds ranking across every selection', () => {
+test('the highest qualified probability wins across every priced selection', () => {
   const forecast = candidate();
   const result = select(forecast, [quote('match-result', 'home-win', '1.9001'), quote('double-chance', 'home-or-draw', '1.40'),
     quote('double-chance', 'home-or-away', '1.9002'), quote('match-result', 'away-win', '99.99')]);
-  assert.equal(result.decision.selected.selection, 'home-or-away', 'eligible non-argmax selection can win');
-  assert.equal(result.decision.selected.probability, .8);
+  assert.equal(result.decision.policyVersion, recommendationPolicy.version);
+  assert.equal(result.decision.selected.selection, 'home-or-draw');
+  assert.equal(result.decision.selected.probability, .9);
   assert.equal(result.candidate.markets['double-chance'].market.selection, 'home-or-draw', 'family argmax remains intact');
   assert.equal(result.decision.decisions.find(x => x.selection === 'away-win').eligible, false);
   assert.ok(result.decision.decisions.find(x => x.selection === 'away-win').reasons.includes('below-minimum-probability'));
   assert.equal(result.candidate.audit.recommendation, result.decision);
   assert.doesNotThrow(() => parseRecommendationDecision(result.decision, forecast.context, forecast.markets));
+  const withoutArgmaxQuote = select(forecast, [quote('match-result', 'home-win', '2.90'), quote('double-chance', 'home-or-away', '1.40')]);
+  assert.equal(withoutArgmaxQuote.decision.selected.selection, 'home-or-away');
+  assert.equal(withoutArgmaxQuote.candidate.markets['double-chance'].market.selection, 'home-or-draw');
 });
 
-test('a lower probability wins with higher odds; threshold equality is inclusive', () => {
+test('the frozen odds-first policy retains its original decisions and archived compatibility', () => {
   const forecast = candidate('api-football', { 'home-win': .65, draw: .25, 'away-win': .10 });
-  assert.equal(select(forecast, [quote('match-result', 'home-win', '1.90'), quote('double-chance', 'home-or-draw', '1.40')])
-    .decision.selected.selection, 'home-win');
-});
-
-test('equal exact prices use unrounded probability then stable family and selection order', () => {
-  const forecast = candidate('api-football', { 'home-win': .65, draw: .25, 'away-win': .10 });
-  const quotes = [quote('match-result', 'home-win', '1.9000'), quote('double-chance', 'home-or-draw', '1.9')];
+  const quotes = [quote('match-result', 'home-win', '1.90'), quote('double-chance', 'home-or-draw', '1.40')];
+  const policy = recommendationPolicyForVersion('probability-qualified-odds-v1');
+  assert.ok(policy);
+  const previous = select(forecast, quotes, assessor, { policy }).decision;
+  assert.equal(previous.policyVersion, policy.version);
+  assert.equal(previous.selected.selection, 'home-win', 'the probability threshold includes equality');
+  assert.match(previous.explanation, /highest eligible decimal odds 1\.90/u);
+  assert.deepEqual(parseRecommendationDecision(previous, forecast.context, forecast.markets), previous);
   assert.equal(select(forecast, quotes).decision.selected.selection, 'home-or-draw');
+});
+
+test('close probabilities that display identically are not ties', () => {
+  const forecast = candidate('ai', { 'home-win': .650001, draw: .20, 'away-win': .149999 }, {
+    'total-goals': { source: 'ai', period: publicPolicy.matchPeriod, line: 2.5, probabilities: { 'over-2.5': .650002, 'under-2.5': .349998 } },
+  });
+  const result = select(forecast, [quote('match-result', 'home-win', '2.50'), quote('total-goals', 'over-2.5', '1.40')]);
+  assert.equal(result.decision.selected.selection, 'over-2.5');
+  assert.equal(result.decision.selected.probability, .650002);
+});
+
+test('exact probability ties use full decimal odds and then stable family order', () => {
   const tied = candidate('api-football', { 'home-win': .65, draw: .20, 'away-win': .15 }, {
     'total-goals': { source: 'api-football', period: publicPolicy.matchPeriod, line: 2.5, probabilities: { 'over-2.5': .65, 'under-2.5': .35 } },
   });
-  assert.equal(select(tied, [quote('total-goals', 'over-2.5', '1.9'), quotes[0]]).decision.selected.family, 'match-result');
+  assert.equal(select(tied, [quote('total-goals', 'over-2.5', '1.9002'), quote('match-result', 'home-win', '1.9001')])
+    .decision.selected.family, 'total-goals');
+  assert.equal(select(tied, [quote('total-goals', 'over-2.5', '1.9'), quote('match-result', 'home-win', '1.9000')])
+    .decision.selected.family, 'match-result');
 });
 
 test('missing, stale, suspended, future, wrong-selection, line and identity quotes abstain', () => {

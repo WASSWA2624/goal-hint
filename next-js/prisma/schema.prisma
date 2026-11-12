@@ -196,6 +196,7 @@ model FootballSeason {
 model FootballFixture {
   intelligenceShadow    IntelligenceShadowState?
   liveMatchSnapshots    LiveMatchSnapshot[]
+  historyDetailState    FootballHistoryDetailState?
   publishedSlipLegs     PublishedSlipLeg[]
   id                    String                        @id @default(uuid()) @db.Char(36)
   resultState           FixtureResultState?
@@ -2443,6 +2444,31 @@ model FixtureFacts {
   updatedAt DateTime @db.DateTime(3)
   fixture FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   @@index([venueExternalId])
+}
+
+model FootballHistoryDetailState {
+  fixtureId   String          @id @db.Char(36)
+  state       Json
+  nextCheckAt DateTime?       @db.DateTime(3)
+  checkedAt   DateTime        @db.DateTime(3)
+  fixture     FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([nextCheckAt])
+}
+
+// Private provider pages for replay and future normalization against the saved source.
+model FootballHistorySourcePage {
+  id             String   @id @db.Char(64)
+  endpoint       String   @db.VarChar(40)
+  selectorHash   String   @db.Char(64)
+  parameters     Json
+  contract       String   @db.VarChar(96)
+  retrievedAt    DateTime @db.DateTime(3)
+  rowCount       Int      @db.UnsignedInt
+  contentHash    String   @db.Char(64)
+  compressedRows Bytes    @db.LongBlob
+
+  @@index([endpoint, selectorHash, retrievedAt])
 }
 
 model FootballVenue {

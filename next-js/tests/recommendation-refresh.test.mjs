@@ -154,8 +154,9 @@ test('AI disabled and no key still publishes an enriched priced baseline through
   assert.equal(h.outcome.outcome, 'published'); assert.equal(h.calls.ai, 0); assert.equal(h.calls.fallback, 1);
   const input = h.published[0], decision = input.candidate.audit.recommendation;
   assert.ok(decision.selected, JSON.stringify(decision.decisions));
-  assert.equal(decision.selected.source, 'api-football'); assert.equal(decision.selected.selection, 'home-or-away');
-  assert.equal(decision.selected.quote.decimal, '1.9'); assert.equal(decision.evidenceSnapshotId, input.evidenceSnapshotId);
+  assert.equal(decision.selected.source, 'api-football'); assert.equal(decision.selected.selection, 'home-or-draw');
+  assert.equal(decision.selected.probability, .8); assert.equal(decision.selected.quote.decimal, '1.2');
+  assert.equal(decision.evidenceSnapshotId, input.evidenceSnapshotId);
   assert.ok(decision.decisions.some((entry) => entry.eligible && entry.evidence.cohorts?.every((cohort) => cohort.sampleSize === 3)));
 });
 
@@ -164,7 +165,8 @@ test('unpriced AI falls back and usable AI wins through production resolution an
   assert.equal(fallback.published[0].candidate.audit.recommendation.selected.source, 'api-football');
   const primary = harness({ ai: 'usable' }); await primary.run();
   const decision = primary.published[0].candidate.audit.recommendation;
-  assert.equal(decision.selected.source, 'ai'); assert.equal(decision.selected.selection, 'home-win');
+  assert.equal(decision.selected.source, 'ai'); assert.equal(decision.selected.selection, 'home-or-draw');
+  assert.equal(decision.selected.probability, .9);
   assert.equal(primary.calls.fallback, 1, 'the independently retained baseline was computed');
   assert.equal(primary.calls.ai, 1);
 });

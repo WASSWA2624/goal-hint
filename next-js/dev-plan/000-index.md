@@ -14,6 +14,8 @@ The desktop filter follow-up is tracked in
 [183 — Sticky desktop filter sections](183-sticky-desktop-filter-sections.md).
 The matching section-spacing follow-up is
 [184 — Joined desktop sections](184-joined-desktop-sections.md).
+The provider archive and forecast evaluation follow-up is
+[309 — Verified football history](309-verified-football-history.md).
 
 ## How to run a prompt
 

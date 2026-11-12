@@ -15,6 +15,11 @@ import { createFallbackService } from "../fallback/fallback-service.ts";
 import { createApiFootballAdapter } from "../football/api-football-adapter.ts";
 import { createFootballCatalogStore } from "../football/catalog-mysql-store.ts";
 import { createFootballCatalogImporter } from "../football/catalog-service.ts";
+import { createFootballHistoryBackfill, normalizeHistoryCompetition } from "../football/history-backfill.ts";
+import { createFootballHistoryDetails } from "../football/history-details.ts";
+import { createFootballHistoryReference } from "../football/history-reference.ts";
+import { readHistoryReferenceTargets, type HistoryReferenceDataset } from "../football/history-reference-targets.ts";
+import { createFootballHistorySource } from "../football/history-source.ts";
 import { quotaPriorities } from "../football/quota-contract.ts";
 import { createPolicyQuotaGateway } from "../football/quota-gateway.ts";
 import { createMysqlQuotaStore } from "../football/quota-mysql-store.ts";
@@ -110,6 +115,8 @@ export type LiveRuntimeOverrides = Readonly<{
   fetcher?: typeof fetch; aiFetcher?: typeof fetch; researchFetcher?: typeof fetch; approvals?: OwnerApprovals;
   /** The development entry point verifies the owned MySQL datadir before setting this. */
   localFootball?: boolean;
+  /** The historical archive command has already verified the owned target. */
+  historyBackfill?: boolean;
   onPollerState?: (kind: "results" | "match-details", state: string) => void;
 }>;
 /** Composes the prediction cascade on shared durable stores. */
@@ -150,9 +157,20 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         verifyPrimaryCandidate: (candidate) => ai?.verifyPublishedCandidate(candidate) === true,
         verifyPrimaryGoals: (candidate, distribution) => ai?.verifyPublishedGoalDistribution(candidate, distribution) === true }) });
     const gateway = createPolicyQuotaGateway({ limiter: quota.limiter, policy, verifyEvidence: verify });
+    const historySource = localFootball && overrides.historyBackfill && verify(refs.retention, "football-private-use")
+      ? createFootballHistorySource(database) : null;
     // The adapter identity is the stable provider account; daily limiter accounts sit behind the router.
     const adapter = createApiFootballAdapter({ accountId: day.status.accountKey, credential: { read: () => policy.secrets.footballKey?.read() ?? "" },
       gateway, authorize: () => assertOperationAllowed(policy, "football", verify), ...fetcher,
+      ...(historySource ? {
+        retainPartiallyNormalizedFixturePages: true as const,
+        observeFixturePage: async (rows, source) => {
+          await historySource.savePage({ endpoint: "fixtures", rows, parameters: source.requestParameters, retrievedAt: source.retrievedAt });
+        },
+        observeCompetitionPage: async (rows, source) => {
+          await historySource.savePage({ endpoint: "competitions", rows, parameters: source.requestParameters, retrievedAt: source.retrievedAt });
+        },
+      } : {}),
       verifyLogo: authorities.catalog.verifyLogo, verifyRegulationScore: authorities.catalog.verifyRegulationScore,
       // API-Football documents up to 20 IDs per /fixtures?ids request.
       batchEvidence: { maximumIds: 20, evidenceRef: "api-football-documentation-v3:fixtures-ids-maximum-20" },
@@ -161,6 +179,65 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     const lifecycle = createScheduleLifecycleService({ database, cutoff, policy: lifecyclePolicy(refs), authority: authorities.lifecycle });
     const catalog = createFootballCatalogStore(database, { coordinateFixtureMutation: lifecycle.coordinateFixtureMutation, transactionTimeoutMs: 120_000 });
     const importer = createFootballCatalogImporter({ adapter, store: catalog, authority: authorities.catalog });
+    const historyBackfill = historySource ? (() => {
+      const store = createFootballCatalogStore(database, { historicalResults: true, transactionTimeoutMs: 120_000 });
+      return createFootballHistoryBackfill({ competitions: async (query, bounds) => {
+        const parameters = query.competitionId === undefined ? {} : { id: String(query.competitionId) };
+        const selector = { endpoint: "competitions", parameters } as const;
+        const read = async (selection: typeof selector, after: number) => {
+          const page = await historySource.latestPage(selection);
+          if (!page || page.retrievedAt.getTime() < after) return null;
+          const context = { endpoint: "/leagues", retrievedAt: utcInstantFromEpochMilliseconds(page.retrievedAt.getTime()) };
+          return page.rows.flatMap((row) => {
+            const normalized = normalizeHistoryCompetition(row, context);
+            return normalized && (query.competitionId === undefined || normalized.id === query.competitionId) ? [normalized] : [];
+          });
+        };
+        const expires = Date.now() - 24 * 60 * 60_000;
+        const saved = await read(selector, expires);
+        const cached = saved ?? (query.competitionId === undefined ? null : await read({ ...selector, parameters: {} }, expires));
+        if (cached?.length) return { status: "partial", data: cached, error: null, requestsDispatched: 0 };
+        const started = Date.now();
+        const response = await adapter.evidence.competitions(query, bounds);
+        if (response.status !== "failed") {
+          const fresh = await read(selector, started);
+          if (fresh?.length) return { status: "partial", data: fresh, error: null, requestsDispatched: response.requestsDispatched };
+        }
+        return response;
+      }, store,
+        importer: createFootballCatalogImporter({ adapter, store, authority: authorities.catalog }),
+        competitionIds: policy.choices.competitionIds ?? [], retentionEvidenceRef: refs.retention,
+        upcomingSeasons: async () => {
+          const rows = await database.query((client) => client.$queryRaw<{ id: bigint; year: number; upcoming: bigint }[]>`
+            SELECT mapping.externalId AS id, season.year, COUNT(*) AS upcoming
+            FROM FootballFixture AS fixture
+            JOIN FootballSeason AS season ON season.id=fixture.seasonId
+            JOIN FootballCompetitionProvider AS mapping ON mapping.competitionId=season.competitionId AND mapping.provider=fixture.provider
+            WHERE fixture.provider='api-football' AND fixture.status='scheduled'
+              AND fixture.kickoff>UTC_TIMESTAMP(3) AND fixture.kickoff<DATE_ADD(UTC_TIMESTAMP(3), INTERVAL 7 DAY)
+            GROUP BY mapping.externalId, season.year`);
+          return rows.map(({ id, year, upcoming }) => ({ competitionId: Number(id), season: year, fixtures: Number(upcoming) }));
+        },
+        hasFixtureSource: (parameters) => historySource.hasPage({ endpoint: "fixtures", parameters }),
+        recordCoverage: async ({ competitionId, season }, coverage) => {
+          await database.query((client) => client.footballSeason.updateMany({ where: { year: season, coverage: { equals: Prisma.DbNull },
+            competition: { providers: { some: { provider: "api-football", externalId: BigInt(competitionId) } } } }, data: { coverage } }));
+        },
+        now: () => utcInstantFromEpochMilliseconds(Date.now()), providerDayEndsAt: () => quota.current()?.endsAt ?? null });
+    })() : null;
+    const historyDetails = historySource ? createFootballHistoryDetails({ database, adapter: adapter.evidence,
+      competitionIds: policy.choices.competitionIds ?? [], batchSize: 20,
+      now: () => utcInstantFromEpochMilliseconds(Date.now()), providerDayEndsAt: () => quota.current()?.endsAt ?? null }) : null;
+    const historyReference = historySource ? (() => {
+      const reference = createFootballHistoryReference({ reference: adapter.reference, hasPage: historySource.hasPage,
+        savePage: historySource.savePage, now: () => utcInstantFromEpochMilliseconds(Date.now()), providerDayEndsAt: () => quota.current()?.endsAt ?? null });
+      const approved = policy.choices.competitionIds ?? [];
+      return async (input: Readonly<{ maxRequests: number; competitionId?: number; dataset?: HistoryReferenceDataset }>, signal?: AbortSignal) => {
+        if (input.competitionId !== undefined && !approved.includes(input.competitionId)) throw new RangeError("Choose an approved competition.");
+        const targets = await readHistoryReferenceTargets(database, input.competitionId === undefined ? approved : [input.competitionId], input.dataset);
+        return reference.run({ targets, maxRequests: input.maxRequests, ...(signal && { signal }) });
+      };
+    })() : null;
     const selectionStore = createMysqlDailySelectionStore(database, queue);
     const dailySelection = createDailySelectionService({ policy: selection, authority: authorities.selection, store: selectionStore, importer, cutoff });
     // Original public quotes follow the published-slip precedent: the code flag and owner-recorded odds display rights.
@@ -360,7 +437,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         store: createMysqlLiveMatchStore({ database, accountKey: day.status.accountKey }) }) });
       return detailPoller;
     }
-    return Object.freeze({ policy, database, queue, quota, workload, registry, settlement, cache, catalog: importer, resultPoller, liveMatchPoller, inPlayOdds, day,
+    return Object.freeze({ policy, database, queue, quota, workload, registry, settlement, cache, catalog: importer, historyBackfill, historyDetails, historyReference, resultPoller, liveMatchPoller, inPlayOdds, day,
       odds: Object.freeze({ enabled: oddsEnabled, registry: oddsRegistry, horizonDays: workload.odds.dates, bookmakerScope: odds?.bookmakerScope,
         requalifyLocal: requalifyLocalOdds,
         // Write-time staleness needs no provider call, so it runs even while imports are off.

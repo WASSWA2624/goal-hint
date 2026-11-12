@@ -8,6 +8,9 @@ export const API_FOOTBALL_CONTRACT_VERSION = "direct-v3-official-examples-2026-1
 export const apiFootballEndpoints = Object.freeze({
   fixtures: Object.freeze({ path: "/fixtures", paginated: false }),
   teams: Object.freeze({ path: "/teams", paginated: false }),
+  venues: Object.freeze({ path: "/venues", paginated: false }),
+  standings: Object.freeze({ path: "/standings", paginated: false }),
+  transfers: Object.freeze({ path: "/transfers", paginated: false }),
   competitions: Object.freeze({ path: "/leagues", paginated: false }),
   statistics: Object.freeze({ path: "/fixtures/statistics", paginated: false }),
   events: Object.freeze({ path: "/fixtures/events", paginated: false }),
@@ -24,6 +27,28 @@ export const apiFootballEndpoints = Object.freeze({
   inPlayOddsBets: Object.freeze({ path: "/odds/live/bets", paginated: false }),
 } as const);
 export type ApiFootballEndpoint = keyof typeof apiFootballEndpoints;
+
+export type FootballHistoryReferenceTarget = Readonly<
+  { endpoint: "teams" | "standings" | "injuries"; competitionId: number; season: number }
+  | { endpoint: "venues"; venueId: number }
+  | { endpoint: "transfers"; teamId: number }
+>;
+
+export function apiFootballReferenceParameters(target: FootballHistoryReferenceTarget): Readonly<Record<string, string>> | null {
+  const providerId = (value: number) => Number.isSafeInteger(value) && value > 0 && value <= 4_294_967_295;
+  if (!target || typeof target !== "object") return null;
+  switch (target.endpoint) {
+    case "venues": return providerId(target.venueId) ? { id: String(target.venueId) } : null;
+    case "transfers": return providerId(target.teamId) ? { team: String(target.teamId) } : null;
+    case "teams":
+    case "standings":
+    case "injuries":
+      return providerId(target.competitionId) && Number.isInteger(target.season) && target.season >= 1000 && target.season <= 9999
+        ? { league: String(target.competitionId), season: String(target.season) } : null;
+    default: return null;
+  }
+}
+
 /** Fixed rows per non-final page for paginated endpoints; null when no size is documented. */
 export function pageSizeOf(endpoint: ApiFootballEndpoint): number | null {
   const entry = apiFootballEndpoints[endpoint];

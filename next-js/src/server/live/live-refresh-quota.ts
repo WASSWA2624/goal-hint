@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { RefreshStore } from "../refresh/refresh-mysql-store.ts";
+import { isUndispatchedObservation } from "../refresh/refresh-observation.ts";
 import { FOOTBALL_PREPARATION_REQUESTS } from "./live-plan.ts";
 
 type RecoveryStore = Pick<RefreshStore, "publication" | "outcome" | "intent" | "stage">;
@@ -16,7 +17,9 @@ export async function remainingLiveRefreshRequests(store: RecoveryStore, jobId: 
   const preparation = preparationEnabled && intent === null ? await store.stage(jobId, "preparation", "started") : null;
   const historyRequests = preparationEnabled && intent === null && preparation === null ? FOOTBALL_PREPARATION_REQUESTS : 0;
   const fallbackRequests = fallback === null ? intent?.plan.fallback.bounds?.maxRequests ?? (intent === null ? 1 : 0) : 0;
-  const observationRequests = observation === null ? intent?.plan.observation.bounds.maxRequests ?? 1 : 0;
+  const retry = observation !== null && isUndispatchedObservation((await store.stage(jobId, "observation", "completed"))?.value) &&
+    await store.stage(jobId, "status-retry", "started") === null;
+  const observationRequests = observation === null || retry ? intent?.plan.observation.bounds.maxRequests ?? 1 : 0;
   return historyRequests + fallbackRequests + observationRequests;
 }
 

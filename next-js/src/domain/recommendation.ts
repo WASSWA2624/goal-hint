@@ -1,8 +1,8 @@
 import type { MarketFamily, MarketSelection, MarketSource } from "./markets.ts";
 import { publicPolicy } from "./public-policy.ts";
 
-/** Provisional engineering policy, not a calibrated accuracy or profitability claim. */
-export const recommendationPolicy = Object.freeze({
+/** Frozen policy for decisions and refresh intents created before probability-first ranking. */
+const oddsFirstRecommendationPolicy = Object.freeze({
   version: "probability-qualified-odds-v1",
   minimumProbability: 0.65,
   forecastMaxAgeMs: 86_400_000,
@@ -13,7 +13,19 @@ export const recommendationPolicy = Object.freeze({
   evidenceVersion: "baseline-evidence-v1",
   tieBreak: "decimal-odds-probability-policy-order" as const,
 });
-export type RecommendationPolicy = typeof recommendationPolicy;
+
+/** Provisional engineering policy, not a calibrated accuracy or profitability claim. */
+export const recommendationPolicy = Object.freeze({
+  ...oddsFirstRecommendationPolicy,
+  version: "probability-then-odds-v2",
+  tieBreak: "probability-decimal-odds-policy-order" as const,
+});
+const supportedRecommendationPolicies = [oddsFirstRecommendationPolicy, recommendationPolicy] as const;
+export type RecommendationPolicy = typeof supportedRecommendationPolicies[number];
+
+export function recommendationPolicyForVersion(version: unknown): RecommendationPolicy | undefined {
+  return supportedRecommendationPolicies.find((policy) => policy.version === version);
+}
 export type RecommendationQuote = Readonly<{
   fixtureId: string; fixtureVersion: string; homeTeamId: string; awayTeamId: string;
   family: MarketFamily; selection: MarketSelection; period: typeof publicPolicy.matchPeriod; line: number | null;

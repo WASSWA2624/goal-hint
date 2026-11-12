@@ -15,6 +15,7 @@ import { lifecycleContentHash } from "../predictions/lifecycle-policy.ts";
 import { finalStatus } from "./result-sync-policy.ts";
 import { ResultSyncError, resultSyncFail, type PollLease, type ResultSyncStore } from "./result-sync-contract.ts";
 import { storedFixtureResult } from "./result-read.ts";
+import { fixtureResultValue, insertFixtureResult } from "./result-write.ts";
 
 type Tx = Prisma.TransactionClient;
 type TrackedFixtureRow = Readonly<{
@@ -94,6 +95,8 @@ export function createMysqlResultSyncStore(options: Readonly<{
       return database.query(async (tx) => {
         const day = getReportingDayBounds(getReportingDate(at));
         const lower = new Date(at - policy.activeWindowMs - (policy.unresolved.at(-1)?.untilAgeMs ?? 0));
+        // A result observed at the end of its unresolved window can still need corrections.
+        const correctionLower = new Date(lower.getTime() - (policy.corrections.at(-1)?.untilAgeMs ?? 0));
         const upper = new Date(at + policy.approachMs);
         const scope = JSON.stringify(policy.coverage);
         // A single relation join per table supports large competition lists.
@@ -111,14 +114,14 @@ export function createMysqlResultSyncStore(options: Readonly<{
           FROM FootballFixture f JOIN coveredSeasons s ON s.id = f.seasonId
           LEFT JOIN FixtureResultState r ON r.fixtureId = f.id
           WHERE f.provider = 'api-football' AND (
-            ${policy.skipConfirmedFinals !== true}
-            OR (f.kickoff >= ${new Date(day.startInclusive)} AND f.kickoff < ${new Date(day.endExclusive)})
-            OR (f.kickoff BETWEEN ${lower} AND ${upper}
-              AND f.status NOT IN ('finished-regulation', 'finished-extra-time', 'finished-penalties', 'canceled', 'abandoned', 'awarded'))
-            OR (f.kickoff BETWEEN ${lower} AND ${upper} AND f.regulationVerifiedAt IS NULL
-              AND f.status IN ('finished-regulation', 'finished-extra-time', 'finished-penalties'))
-            OR (f.kickoff IS NULL AND f.createdAt >= ${lower}
-              AND f.status NOT IN ('finished-regulation', 'finished-extra-time', 'finished-penalties', 'canceled', 'abandoned', 'awarded'))
+            (f.kickoff >= ${new Date(day.startInclusive)} AND f.kickoff < ${new Date(day.endExclusive)})
+            OR (${policy.skipConfirmedFinals !== true} AND f.kickoff BETWEEN ${correctionLower} AND ${upper})
+            OR (f.kickoff BETWEEN ${lower} AND ${upper} AND (
+              f.status NOT IN ('finished-regulation', 'finished-extra-time', 'finished-penalties', 'canceled', 'abandoned', 'awarded')
+              OR (f.regulationVerifiedAt IS NULL AND f.status IN ('finished-regulation', 'finished-extra-time', 'finished-penalties'))))
+            OR (f.kickoff IS NULL AND f.createdAt >= ${lower} AND (
+              ${policy.skipConfirmedFinals !== true}
+              OR f.status NOT IN ('finished-regulation', 'finished-extra-time', 'finished-penalties', 'canceled', 'abandoned', 'awarded')))
           )`;
         return freezeEvidence(fixtures.map((fixture) => ({ fixtureId: fixture.fixtureId, externalId: Number(fixture.externalId),
           competitionId: Number(fixture.competitionId), season: fixture.season, kickoffAt: fixture.kickoff?.getTime() ?? null,
@@ -173,29 +176,14 @@ export function createMysqlResultSyncStore(options: Readonly<{
               cursor.contentHash === lifecycleContentHash(observation) && fixture.retrievedAt.getTime() === observation.retrievedAt &&
               fixture.status === observation.status && fixture.providerStatus === observation.providerStatus;
             const outcome = originallyAccepted && !accepted ? "stale" : receipt.outcome;
-            const verified = fixture.regulationHome !== null && fixture.regulationAway !== null && fixture.regulationVerifiedAt !== null;
-            const value = { status: fixture.status, providerStatus: fixture.providerStatus, elapsedMinutes: fixture.elapsedMinutes,
-              ...(observation.stoppageMinutes !== undefined ? { stoppageMinutes: observation.stoppageMinutes } : {}),
-              reportedGoals: observation.reportedGoals, extraTimeScore: observation.extraTimeScore, penaltyScore: observation.penaltyScore,
-              regulation: { verified, home: verified ? fixture.regulationHome : null, away: verified ? fixture.regulationAway : null,
-                evidenceRef: verified ? fixture.regulationEvidenceRef : null },
-              ...(verified && finalStatus(fixture.status) && observation.halfTimeScore?.verified &&
-                observation.halfTimeScore.home <= fixture.regulationHome! && observation.halfTimeScore.away <= fixture.regulationAway!
-                ? { halfTime: { verified: true as const, period: observation.halfTimeScore.period,
-                  home: observation.halfTimeScore.home, away: observation.halfTimeScore.away,
-                  evidenceRef: `api-football:fixture:${observation.externalFixtureId}:${observation.halfTimeScore.providerStatus}:score.halftime` } } : {}) };
+            const value = fixtureResultValue(fixture, observation);
             const contentHash = evidenceFingerprint(value);
             let resultId = previous?.id ?? null;
             if (accepted && previous?.contentHash !== contentHash) {
               const version = (await tx.footballFixture.update({ where: { id: fixture.id }, data: { dataVersion: { increment: 1 } }, select: { dataVersion: true } })).dataVersion;
-              resultId = evidenceFingerprint({ observationId: id, kind: "fixture-result" });
-              const body = evidenceSerialize({ id: resultId, fixtureId: fixture.id, fixtureVersion: version, previousId: previous?.id ?? null,
+              resultId = await insertFixtureResult(tx, { fixtureId: fixture.id, fixtureVersion: version, previousId: previous?.id ?? null,
                 observationId: id, observedAt: observation.retrievedAt, providerUpdatedAt: observation.providerUpdatedAt,
-                regulationVerifiedAt: verified ? fixture.regulationVerifiedAt!.getTime() : null, ...value });
-              await tx.$executeRaw`INSERT INTO FixtureResult (id, fixtureId, fixtureVersion, observedAt, status,
-                regulationVerified, regulationHome, regulationAway, contentHash, integrity, body)
-                VALUES (${resultId}, ${fixture.id}, ${version}, ${new Date(observation.retrievedAt)}, ${fixture.status},
-                  ${verified}, ${value.regulation.home}, ${value.regulation.away}, ${contentHash}, SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`;
+                regulationVerifiedAt: fixture.regulationVerifiedAt, value, contentHash });
               await tx.predictionChangeEvent.create({ data: { fixtureId: fixture.id, version, fixtureResultId: resultId, kind: "fixture-result", at: new Date(at) } });
             }
             const lastSyncAt = new Date(Math.max(state?.lastSyncAt?.getTime() ?? 0, observation.retrievedAt));

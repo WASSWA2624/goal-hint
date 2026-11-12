@@ -8,12 +8,13 @@ import { createJobRegistry } from '../src/server/jobs/job-registry.ts';
 import { evidenceHash } from './helpers/evidence-fixtures.mjs';
 
 // Every phase the refresh service writes must pass the deployed stage check.
-test('preparation and empty-evidence stages persist through the deployed stage check', { timeout: 300000 }, async (t) => {
+test('refresh stages persist through the deployed stage check', { timeout: 300000 }, async (t) => {
   await withPredictionPipeline(t, async (db) => {
     const scenarios = [{}, {}], h = await refreshHarness(db, scenarios);
-    await t.test('preparation and evidence-empty start and complete as sealed stages', async () => {
+    await t.test('preparation, empty evidence and a final status retry start and complete as sealed stages', async () => {
       const lease = await db.queue.claim(evidenceHash('stage-phase-worker'), h.jobs.types);
-      for (const [phase, value] of [['preparation', { status: 'prepared' }], ['evidence-empty', { status: 'denied', reason: 'unavailable' }]]) {
+      for (const [phase, value] of [['preparation', { status: 'prepared' }], ['evidence-empty', { status: 'denied', reason: 'unavailable' }],
+        ['status-retry', { retryReason: 'pacing', requestsDispatched: 0, requestCountUnknown: false }]]) {
         assert.equal(await h.store.start(lease, phase), true, `${phase} started`);
         await h.store.complete(lease, phase, value);
         const stored = await h.store.stage(lease.jobId, phase, 'completed');

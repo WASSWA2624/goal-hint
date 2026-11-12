@@ -3,10 +3,10 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type Clock, type UtcInstant } from "../../domain/calendar.ts";
 import { assertOperationAllowed, type EvidenceVerifier, type RuntimePolicy } from "../config/runtime-policy.ts";
-import { API_FOOTBALL_ORIGIN, API_FOOTBALL_CONTRACT_VERSION, apiFootballEndpoints, pageSizeOf,
+import { API_FOOTBALL_ORIGIN, API_FOOTBALL_CONTRACT_VERSION, apiFootballEndpoints, apiFootballReferenceParameters, pageSizeOf,
   type ApiFootballBounds, type ApiFootballEndpoint, type ApiFootballFailure,
   type ApiFootballPageProvenance, type ApiFootballResult, type ApiFootballCachePermission,
-  type ApiFootballBatchEvidence, type ApiFootballFallbackWorkflow } from "./api-football-contract.ts";
+  type ApiFootballBatchEvidence, type ApiFootballFallbackWorkflow, type FootballHistoryReferenceTarget } from "./api-football-contract.ts";
 import { normalizeFixture, normalizeTeam, normalizeCompetition, normalizeStatistics, normalizeEvent,
   normalizeAvailability, normalizePlayerStatistics, normalizeFallbackPrediction,
   normalizeAccountStatus, normalizeOdds, normalizeOddsCatalogEntry, normalizeInPlayOdds,
@@ -42,7 +42,11 @@ export type ApiFootballAdapterOptions = Readonly<{
   verifyRegulationScore?: NormalizationContext["verifyRegulationScore"];
   verifyHalfTimeScore?: NormalizationContext["verifyHalfTimeScore"];
   /** Private snapshot capture of a validated fixture page, including embedded match details. */
-  observeFixturePage?: (rows: readonly unknown[], provenance: ApiFootballPageProvenance) => void;
+  observeFixturePage?: (rows: readonly unknown[], provenance: ApiFootballPageProvenance) => void | Promise<void>;
+  /** Preserve rows from a valid envelope even when a canonical projection rejects some fields. */
+  retainPartiallyNormalizedFixturePages?: true;
+  /** Private archive capture of a competition catalog envelope, including coverage fields. */
+  observeCompetitionPage?: (rows: readonly unknown[], provenance: ApiFootballPageProvenance) => Promise<void>;
   cacheCapacity?: number;
 }>;
 type Params = Readonly<Record<string, string>>;
@@ -56,6 +60,49 @@ const record = (value: unknown): value is Record<string, unknown> => value !== n
 const positive = (value: unknown): value is number => Number.isSafeInteger(value) && Number(value) > 0;
 const nonnegative = (value: unknown): value is number => Number.isSafeInteger(value) && Number(value) >= 0;
 const keysAllowed = (value: unknown, keys: readonly string[]): value is Record<string, unknown> => record(value) && Object.keys(value).every((key) => keys.includes(key));
+
+type ReferenceRow = Readonly<{ raw: Readonly<Record<string, unknown>>; id?: number }>;
+
+function normalizeReferenceRow(raw: unknown, target: FootballHistoryReferenceTarget): NormalizationResult<ReferenceRow> {
+  const invalid = { valid: false, reason: "schema-error" } as const;
+  const identified = (value: unknown): value is Record<string, unknown> & { id: number } =>
+    record(value) && positive(value.id) && value.id <= 4_294_967_295;
+  if (!record(raw)) return invalid;
+  const valid = (id?: number): NormalizationResult<ReferenceRow> => ({ valid: true,
+    data: Object.freeze({ raw, ...(id === undefined ? {} : { id }) }), missingCoverage: [] });
+
+  switch (target.endpoint) {
+    case "teams":
+      if (!identified(raw.team) || (raw.venue != null && (!record(raw.venue) || raw.venue.id != null && !identified(raw.venue)))) return invalid;
+      return valid(raw.team.id);
+    case "venues":
+      return raw.id === target.venueId ? valid(target.venueId) : invalid;
+    case "standings":
+      if (!record(raw.league) || raw.league.id !== target.competitionId || raw.league.season !== target.season ||
+        !Array.isArray(raw.league.standings) || !raw.league.standings.every((group) => Array.isArray(group) &&
+          group.every((entry) => record(entry) && positive(entry.rank) && identified(entry.team)))) return invalid;
+      return valid(target.competitionId);
+    case "injuries":
+      // A player can appear in multiple fixtures, so the player id is not a row identity.
+      return record(raw.league) && raw.league.id === target.competitionId && raw.league.season === target.season &&
+        identified(raw.fixture) && identified(raw.player) && identified(raw.team) ? valid() : invalid;
+    case "transfers": {
+      if (!identified(raw.player) || !Array.isArray(raw.transfers)) return invalid;
+      let matches = false;
+      for (const transfer of raw.transfers) {
+        if (!record(transfer) || !record(transfer.teams) || typeof transfer.date !== "string") return invalid;
+        try { parseReportingDate(transfer.date); } catch { return invalid; }
+        for (const club of [transfer.teams.in, transfer.teams.out]) {
+          if (club === null || record(club) && club.id === null) continue;
+          if (!identified(club)) return invalid;
+          if (club.id === target.teamId) matches = true;
+        }
+      }
+      // A team lookup can return the player's complete transfer history.
+      return matches ? valid(raw.player.id) : invalid;
+    }
+  }
+}
 
 function validBounds(bounds: ApiFootballBounds, now: UtcInstant, fallback: boolean): boolean {
   if (!record(bounds) || !record(bounds.retry)) return false;
@@ -135,7 +182,7 @@ function matchesScope(endpoint: ApiFootballEndpoint, params: Params, row: unknow
     && !row.statistics.some((statistic) => record(statistic) && record(statistic.competition)
       && statistic.competition.id === Number(params.league) && statistic.competition.season === Number(params.season)
       && (params.team === undefined || record(statistic.team) && statistic.team.id === Number(params.team)))) return false;
-  if (endpoint === "injuries" && row.fixtureId !== null && row.fixtureId !== Number(params.fixture)) return false;
+  if (endpoint === "injuries" && params.fixture && row.fixtureId !== null && row.fixtureId !== Number(params.fixture)) return false;
   if (endpoint === "odds") {
     const odds = row as unknown as NormalizedFixtureOdds;
     if (params.fixture && odds.fixtureId !== Number(params.fixture)) return false;
@@ -253,7 +300,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
     } catch { return false; }
   }
   async function request<T>(endpoint: ApiFootballEndpoint, params: Params, bounds: ApiFootballBounds,
-    budget: Budget, normalize: Normalize<T>, workflow?: ApiFootballFallbackWorkflow): Promise<PageOutcome<T>> {
+    budget: Budget, normalize: Normalize<T>, workflow?: ApiFootballFallbackWorkflow, view?: "reference"): Promise<PageOutcome<T>> {
     const url = new URL(apiFootballEndpoints[endpoint].path, API_FOOTBALL_ORIGIN);
     for (const key of Object.keys(params).sort()) url.searchParams.set(key, params[key]!);
     const workKey = createHash("sha256").update(JSON.stringify([options.accountId, url.href, endpoint === "predictions" ? bounds.cacheScope : null])).digest("hex");
@@ -267,7 +314,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
       return { page: { ...cached, provenance: { ...cached.provenance, fromCache: true } } };
     }
     // Different byte/row bounds cannot safely reuse an in-flight normalization.
-    const joinKey = `${workKey}:${bounds.maxResponseBytes}:${bounds.maxRows}:${normalize === normalizeFixtureMatchDetails ? "details" : "default"}`;
+    const joinKey = `${workKey}:${bounds.maxResponseBytes}:${bounds.maxRows}:${view ?? (normalize === normalizeFixtureMatchDetails ? "details" : "default")}`;
     const existing = inFlight.get(joinKey) as Promise<PageOutcome<T>> | undefined;
     if (existing) {
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -314,7 +361,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
         if (!key) return { error: failure("invalid-credential") };
         let captured: ApiFootballFailure | null = null;
         let responseObservation: ApiFootballPageProvenance | null = null;
-        let fixtureRows: readonly unknown[] | null = null;
+        let fixtureRows: readonly unknown[] | null = null, competitionRows: readonly unknown[] | null = null;
         let didDispatch = false;
         attemptTimeoutMs ??= Math.min(bounds.timeoutMs, deadlineAt - clock.now());
         const result = await options.gateway.execute({ requestId: attemptId, workKey, priority: bounds.priority,
@@ -401,13 +448,18 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
             provenance: Object.freeze({ provider: "api-football", endpoint, requestParameters: Object.freeze({ ...params }), contractVersion: API_FOOTBALL_CONTRACT_VERSION,
               retrievedAt, providerUpdatedAt: null, fromCache: false, currentPage: paging === null ? null : Number(paging.current),
               totalPages: paging === null ? null : Number(paging.total), quota: Object.freeze({ ...observation, kind: "success" }) }) });
-          if (options.observeFixturePage && endpoint === "fixtures" && pageError === null) fixtureRows = Object.freeze(rows);
+          if (options.observeFixturePage && endpoint === "fixtures" && (pageError === null ||
+              options.retainPartiallyNormalizedFixturePages && pageError.reason === "schema-error")) fixtureRows = Object.freeze(rows);
+          if (options.observeCompetitionPage && endpoint === "competitions" && (pageError === null || pageError.reason === "schema-error")) {
+            competitionRows = Object.freeze(rows);
+          }
           return { value: page, feedback: { ...observation, kind: "success" } };
         });
         if (result.status === "completed" && result.value) {
           if (!authorized() || !workflowAllowed(workflow)) return { error: failure("operation-not-authorized") };
           if (clock.now() >= bounds.deadlineAt) return { error: failure("deadline-exceeded") };
-          if (fixtureRows !== null) options.observeFixturePage?.(fixtureRows, result.value.provenance);
+          if (fixtureRows !== null) await options.observeFixturePage?.(fixtureRows, result.value.provenance);
+          if (competitionRows !== null) await options.observeCompetitionPage?.(competitionRows, result.value.provenance);
           return { page: result.value };
         }
         if (responseObservation) {
@@ -445,7 +497,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
       requestsDispatched: budget.requests, error: error ? Object.freeze(error) : null });
   }
   async function run<T>(endpoint: ApiFootballEndpoint, queries: readonly Params[] | null, bounds: ApiFootballBounds,
-    normalize: Normalize<T>, expectedIds?: readonly number[], workflow?: ApiFootballFallbackWorkflow): Promise<ApiFootballResult<T>> {
+    normalize: Normalize<T>, expectedIds?: readonly number[], workflow?: ApiFootballFallbackWorkflow, view?: "reference"): Promise<ApiFootballResult<T>> {
     const budget: Budget = { requests: 0 }, data: T[] = [], pages: ApiFootballPageProvenance[] = [], missingCoverage: string[] = [];
     if (!queries || !validBounds(bounds, clock.now(), endpoint === "predictions")) return finished(data, pages, [], 0, budget, failure("invalid-request"));
     let error: ApiFootballFailure | null = null, invalidRows = 0;
@@ -456,7 +508,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
       let pageNumber = 1, totalPages: number | null = null;
       do {
         if (retrievedPages.length >= bounds.maxPages || data.length >= bounds.maxRows) { error = failure("pagination-incomplete"); break; }
-        const outcome = await request(endpoint, apiFootballEndpoints[endpoint].paginated ? { ...query, page: String(pageNumber) } : query, bounds, budget, normalize, workflow);
+        const outcome = await request(endpoint, apiFootballEndpoints[endpoint].paginated ? { ...query, page: String(pageNumber) } : query, bounds, budget, normalize, workflow, view);
         if (outcome.provenance) pages.push(...outcome.provenance);
         if (!outcome.page) { error = outcome.error ?? failure("transport-error"); break; }
         const page = outcome.page;
@@ -563,6 +615,13 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
         const params = pairedParams && (team === undefined || positive(team))
           ? { ...pairedParams, ...(team === undefined ? {} : { team: String(team) }) } : null;
         return run("playerStatistics", params ? [params] : null, bounds, normalizePlayerStatistics);
+      },
+    }),
+    reference: Object.freeze({
+      page(target: FootballHistoryReferenceTarget, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) {
+        const params = apiFootballReferenceParameters(target);
+        return run(target?.endpoint, params ? [params] : null, { ...bounds, cacheMaxAgeMs: 0 },
+          (raw) => normalizeReferenceRow(raw, target), undefined, workflow, "reference");
       },
     }),
     fallback: Object.freeze({ predictions: (fixtureId: number, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => run("predictions",

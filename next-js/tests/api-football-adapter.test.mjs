@@ -226,6 +226,22 @@ test("failed durable completion withholds the fetched value and prevents it from
   assert.equal(state.completions.length, 2);
 });
 
+test("the private history capture retains provider rows rejected by the canonical fixture projection", async () => {
+  const rows = [fixture(1), fixture(0)];
+  for (const retainPartiallyNormalizedFixturePages of [undefined, true]) {
+    const observed = [];
+    const state = setup({ respond: (url) => jsonResponse(url, rows), options: {
+      retainPartiallyNormalizedFixturePages,
+      async observeFixturePage(page) { observed.push(...page); },
+    } });
+    const result = await state.adapter.evidence.fixtures({ competitionId: 39, season: 2026 }, bounds());
+    assert.equal(result.status, "partial");
+    assert.equal(result.error.reason, "schema-error");
+    assert.deepEqual(result.data.map(({ id }) => id), [1]);
+    assert.deepEqual(observed, retainPartiallyNormalizedFixturePages ? rows : []);
+  }
+});
+
 test("daily/minute headers and Retry-After seconds are observed on counted rate-limit failures", async () => {
   const state = setup({ respond: (url) => jsonResponse(url, [], {
     status: 429, headers: {

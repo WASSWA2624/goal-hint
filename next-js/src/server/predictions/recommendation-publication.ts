@@ -1,6 +1,5 @@
 import "server-only";
 
-import { recommendationPolicy } from "../../domain/recommendation.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { recommendationQuotesFromSnapshots } from "../odds/recommendation-quotes.ts";
@@ -9,6 +8,7 @@ import type { OddsBatchBody } from "../odds/odds-contract.ts";
 import { assertHistorySeal, historyJson } from "./history-read.ts";
 import { refreshArchiveJson } from "../refresh/refresh-archive.ts";
 import { publicationFail, type PublishRevisionInput } from "./publication-contract.ts";
+import { matchFrozenRecommendationPolicy } from "./recommendation-input.ts";
 
 type Tx = Prisma.TransactionClient;
 type Sealed = { body: unknown; validIntegrity: unknown };
@@ -32,13 +32,13 @@ export async function validatePublishedRecommendation(tx: Tx, input: PublishRevi
   const intent = body((await tx.$queryRaw<Sealed[]>`SELECT body,integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity
     FROM PredictionRefreshIntent WHERE jobId=${jobId}`)[0], refreshArchiveJson);
   const frozen = intent.plan as { recommendationPolicy?: unknown } | undefined;
+  const policy = matchFrozenRecommendationPolicy(frozen?.recommendationPolicy);
   const owner = intent.member as { jobId?: string; context?: unknown } | undefined;
   if (stage.jobId !== jobId || stage.phase !== "fallback" || stage.kind !== "completed" ||
-    typeof stage.at !== "number" || stage.at > now || owner?.jobId !== jobId || !owner.context || !resolved?.candidate || !frozen?.recommendationPolicy ||
+    typeof stage.at !== "number" || stage.at > now || owner?.jobId !== jobId || !owner.context || !resolved?.candidate || !policy ||
     evidenceFingerprint(owner.context) !== evidenceFingerprint(context.context) ||
     evidenceFingerprint(resolved?.candidate) !== evidenceFingerprint(input.candidate) ||
-    evidenceFingerprint(frozen?.recommendationPolicy) !== evidenceFingerprint(recommendationPolicy) ||
-    recommendation.policyVersion !== recommendationPolicy.version) return publicationFail("unauthorized");
+    recommendation.policyVersion !== policy.version) return publicationFail("unauthorized");
   const selected = recommendation.selected;
   if (!selected) return true;
   const quote = selected.quote;
@@ -55,7 +55,7 @@ export async function validatePublishedRecommendation(tx: Tx, input: PublishRevi
     integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity FROM OddsImportBatch WHERE scopeKey='bets' AND kind='bets'
     AND status='complete' AND receivedAt<=${new Date(context.context.cutoffAt)} ORDER BY receivedAt DESC,id DESC LIMIT 1`)[0]));
   const quotes = recommendationQuotesFromSnapshots({ context: context.context, bookmakerId: quote.bookmakerId,
-    freshnessMs: recommendationPolicy.quoteMaxAgeMs, batch, snapshots: [snapshot],
+    freshnessMs: policy.quoteMaxAgeMs, batch, snapshots: [snapshot],
     catalog: new Map(catalog.catalog.map((entry) => [entry.id, entry.name])), permitted: true });
   const comparison = (item: typeof quote) => {
     const { observationReceiptId: _receipt, ...content } = item; void _receipt;
@@ -65,6 +65,6 @@ export async function validatePublishedRecommendation(tx: Tx, input: PublishRevi
     !sourceBatch.pages.some((page) => page.endpoint === "odds" && page.retrievedAt === snapshot.retrievedAt) ||
     !sourceBatch.fixtures.some((fixture) => fixture.externalId === context.context.externalFixtureId && fixture.outcome === "apply") ||
     !quotes.some((item) => comparison(item) === comparison(quote))) return publicationFail("unauthorized");
-  return quote.observedAt <= now && now - quote.observedAt <= recommendationPolicy.quoteMaxAgeMs &&
-    (quote.providerUpdatedAt === null || quote.providerUpdatedAt <= now && now - quote.providerUpdatedAt <= recommendationPolicy.quoteMaxAgeMs);
+  return quote.observedAt <= now && now - quote.observedAt <= policy.quoteMaxAgeMs &&
+    (quote.providerUpdatedAt === null || quote.providerUpdatedAt <= now && now - quote.providerUpdatedAt <= policy.quoteMaxAgeMs);
 }

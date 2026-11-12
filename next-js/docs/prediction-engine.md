@@ -1,6 +1,6 @@
 # Probability-qualified prediction engine
 
-New live refresh intents freeze `probability-qualified-odds-v1` from
+New live refresh intents freeze `probability-then-odds-v2` from
 `src/domain/recommendation.ts`. The inclusive minimum winning probability is
 **0.65**, a provisional engineering default, not a calibrated success rate.
 Forecasts remain separate from bookmaker-implied probabilities.
@@ -14,10 +14,12 @@ Unsupported families remain unavailable; no new statistical goal model is claime
 
 An eligible candidate must pass identity, regulation-period/exact-line, source
 freshness, football evidence and the probability threshold, and have a fresh
-permitted quote for exactly that event. Rank eligible candidates by full stored
-decimal odds, then higher unrounded probability, then configured family/selection
-order. There is no extra edge or expected-value ranking. Odds never enter the AI
-probability prompt or alter a provider probability.
+permitted quote for exactly that event. Within each source, rank eligible
+candidates by unrounded probability. Break exact probability ties by higher
+stored decimal odds and then by configured family and selection order. Odds never
+enter the AI probability prompt or alter a provider probability. Existing
+`probability-qualified-odds-v1` intents retain their odds-first ranking, and
+previously published recommendations retain their original decisions.
 
 Forecast retrieval age is bounded by 24 hours and quote age by three hours,
 also subject to stricter source policies. Quotes observed after the analysis

@@ -19,7 +19,7 @@ import { historyCandidate, revisionInput } from './helpers/prediction-history-fi
 import { candidateRecommendation } from './helpers/recommendation-fixtures.mjs';
 import { evidenceFingerprint, evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
 import { validatePublishedRecommendation } from '../src/server/predictions/recommendation-publication.ts';
-import { recommendationPolicy } from '../src/domain/recommendation.ts';
+import { recommendationPolicy, recommendationPolicyForVersion } from '../src/domain/recommendation.ts';
 
 function card() {
   const fixture = cardFixture({ status: 'scheduled', score: null }, 'ai', null);
@@ -144,13 +144,14 @@ test('publication rechecks the sealed owning decision, original quote provenance
     fixtures: [{ externalId: context.externalFixtureId, outcome: 'apply', observationHash: evidenceHash('observed-row'),
       quoteManifest: { bookmakerId: 8, kickoffAt: context.kickoffAt, bets: [{ betId: 12, betName: 'Double Chance', valuesHash: snapshot.valuesHash }] } }], catalog: [] };
   const state = { stage: { jobId: candidate.context.jobId, phase: 'fallback', kind: 'completed', at: context.analysisAt + 2500,
-    value: { status: 'candidate', candidate } }, snapshot, sourceBatch: base, observedBatch: null, costCapUsdPicos: 0n };
+    value: { status: 'candidate', candidate } }, snapshot, sourceBatch: base, observedBatch: null, costCapUsdPicos: 0n,
+    policy: recommendationPolicy };
   const sealed = (body, extra = {}) => [{ body: evidenceSerialize(body), validIntegrity: true, ...extra }];
   const tx = { async $queryRaw(strings, ...parameters) {
     const sql = strings.join('');
     if (sql.includes('PredictionRefreshStage')) return sealed(state.stage);
     if (sql.includes('PredictionRefreshIntent')) return sealed({ member: { jobId: candidate.context.jobId, context },
-      plan: { recommendationPolicy, ai: { job: { costCapUsdPicos: state.costCapUsdPicos } } } });
+      plan: { recommendationPolicy: state.policy, ai: { job: { costCapUsdPicos: state.costCapUsdPicos } } } });
     if (sql.includes('ProviderOddsSnapshot')) return sealed(state.snapshot, { batchId: base.id });
     if (sql.includes("scopeKey='bets'")) return sealed({ ...base, kind: 'bets', scopeKey: 'bets', fixtures: [], catalog: [{ id: 12, name: 'Double Chance' }] });
     if (sql.includes('OddsImportBatch')) return sealed(parameters[0] === state.observedBatch?.id ? state.observedBatch : state.sourceBatch);
@@ -162,6 +163,15 @@ test('publication rechecks the sealed owning decision, original quote provenance
     assert.equal(await validatePublishedRecommendation(tx, input, context.analysisAt + 3000), true,
       'the sealed refresh intent retains the full nonnegative DECIMAL(38,0) cost range');
   }
+  const legacyPolicy = recommendationPolicyForVersion('probability-qualified-odds-v1');
+  assert.ok(legacyPolicy);
+  const legacy = { ...candidate, audit: { ...candidate.audit, recommendation: { ...decision, policyVersion: legacyPolicy.version } } };
+  state.stage = { ...state.stage, value: { status: 'candidate', candidate: legacy } };
+  state.policy = legacyPolicy;
+  assert.equal(await validatePublishedRecommendation(tx, { ...input, candidate: legacy }, context.analysisAt + 3000), true);
+  state.policy = recommendationPolicy;
+  await assert.rejects(validatePublishedRecommendation(tx, { ...input, candidate: legacy }, context.analysisAt + 3000), /publication refused|unavailable/iu);
+  state.stage = { ...state.stage, value: { status: 'candidate', candidate } };
   assert.equal(await validatePublishedRecommendation(tx, input, context.analysisAt + recommendationPolicy.quoteMaxAgeMs), false);
   state.stage = { ...state.stage, value: { ...state.stage.value, candidate: forecast } };
   await assert.rejects(validatePublishedRecommendation(tx, input, context.analysisAt + 3000), /publication refused|unavailable/iu);

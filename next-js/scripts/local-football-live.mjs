@@ -1,41 +1,12 @@
-import { isLocalFootballDevelopment } from "../src/domain/development-demo.ts";
-import { parseRuntimePolicy } from "../src/server/config/runtime-policy.ts";
 import { runLive } from "../src/server/live/live-runner.ts";
-import { createLiveRuntime, LiveConfigurationError, liveReadiness } from "../src/server/live/live-runtime.ts";
-import { openLocalFootballTarget } from "./lib/local-football-target.mjs";
-
-async function localPolicy() {
-  if (!isLocalFootballDevelopment()) throw new Error("Start live football through the loopback development launcher.");
-  const { database, url } = await openLocalFootballTarget();
-  let stored;
-  try {
-    stored = await database.query((client) => client.footballCompetitionProvider.findMany({
-      where: { provider: "api-football" }, select: { externalId: true },
-    }));
-  } finally {
-    await database.disconnect();
-  }
-  const configured = (process.env.GOAL_HINT_COMPETITION_IDS ?? "").split(",").filter(Boolean);
-  const competitionIds = [...new Set([...configured, ...stored.map((row) => String(row.externalId))])];
-  const policy = parseRuntimePolicy({
-    ...process.env,
-    DATABASE_URL: url, MIGRATION_DATABASE_URL: url, GOAL_HINT_DATABASE_ENABLED: "true",
-    GOAL_HINT_DATABASE_CONNECTION_MODE: "direct", GOAL_HINT_DATABASE_TLS_MODE: "disabled",
-    GOAL_HINT_DATABASE_POOL_LIMIT: "8", GOAL_HINT_DEPLOYMENT_ENVIRONMENT: "development",
-    GOAL_HINT_AI_ENABLED: process.env.GOAL_HINT_AI_ENABLED ?? "false", GOAL_HINT_RESEARCH_ENABLED: "false",
-    GOAL_HINT_LIVE_DETAILS_ENABLED: "true", GOAL_HINT_ODDS_IMPORT_ENABLED: "true",
-    GOAL_HINT_ODDS_BOOKMAKER_ID: process.env.GOAL_HINT_ODDS_BOOKMAKER_ID || "8",
-    GOAL_HINT_COMPETITION_IDS: competitionIds.join(","),
-  });
-  liveReadiness(policy);
-  return policy;
-}
+import { createLiveRuntime, LiveConfigurationError } from "../src/server/live/live-runtime.ts";
+import { loadLocalFootballPolicy } from "./lib/local-football-policy.mjs";
 
 const controller = new AbortController(), stop = () => controller.abort();
 process.once("SIGINT", stop);
 process.once("SIGTERM", stop);
 try {
-  const policy = await localPolicy();
+  const policy = await loadLocalFootballPolicy();
   if (process.argv.includes("--check")) {
     console.log(JSON.stringify({ competitions: policy.choices.competitionIds, bookmakerId: policy.choices.odds.bookmakerId }));
   } else if (process.argv.includes("--qualify-odds")) {

@@ -3,14 +3,19 @@ import test from 'node:test';
 import { canRunLiveRefresh, remainingLiveRefreshRequests } from '../src/server/live/live-refresh-quota.ts';
 
 const jobId = 'a'.repeat(64);
-function fixture({ publication = null, outcome = null, intent = null, started = [] } = {}) {
+function fixture({ publication = null, outcome = null, intent = null, started = [], observation = null } = {}) {
   const calls = [], phases = new Set(started);
   return { calls, store: {
     async publication(id) { assert.equal(id, jobId); calls.push('publication'); return publication; },
     async outcome(id) { assert.equal(id, jobId); calls.push('outcome'); return outcome; },
     async intent(id) { assert.equal(id, jobId); calls.push('intent'); return intent; },
     async stage(id, phase, kind) {
-      assert.equal(id, jobId); assert.equal(kind, 'started'); calls.push(phase);
+      assert.equal(id, jobId); calls.push(phase);
+      if (kind === 'completed') {
+        assert.equal(phase, 'observation');
+        return observation === null ? null : { jobId, phase, kind, value: observation };
+      }
+      assert.equal(kind, 'started');
       return phases.has(phase) ? { jobId, phase, kind, value: null } : null;
     },
   } };
@@ -60,4 +65,12 @@ test('started fallback and observation phases cannot reserve or dispatch a secon
 test('a frozen fallback-disabled plan reserves only the remaining observation request', async () => {
   const h = fixture({ intent: { plan: { ...saved.plan, fallback: { bounds: null } } } });
   assert.equal(await remainingLiveRefreshRequests(h.store, jobId, true), 1);
+});
+
+test('a proven undispatched status failure reserves one request until the retry starts', async () => {
+  const observation = { retryReason: 'priority-wait', requestsDispatched: 0, requestCountUnknown: false };
+  for (const retryStarted of [false, true]) {
+    const h = fixture({ intent: saved, observation, started: ['fallback', 'observation', ...(retryStarted ? ['status-retry'] : [])] });
+    assert.equal(await remainingLiveRefreshRequests(h.store, jobId), retryStarted ? 0 : 1);
+  }
 });

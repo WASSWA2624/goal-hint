@@ -7,6 +7,7 @@ import { liveMatchRules, liveMatchSnapshotSchema, type LiveMatchSnapshot } from 
 import { settlementStatuses, type SettlementStatus } from "../../domain/market-settlement.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
+import { saveFixtureFacts } from "../football/fixture-facts-store.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { historyJson } from "../predictions/history-read.ts";
 import { fourDigitYearInstant } from "../shared/utc-instant.ts";
@@ -41,34 +42,6 @@ function coverage(value: unknown, name: string): boolean | null {
   const parsed = historyJson(value);
   return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) &&
     typeof (parsed as Record<string, unknown>)[name] === "boolean" ? (parsed as Record<string, boolean>)[name]! : null;
-}
-
-async function saveFacts(tx: Tx, target: LiveMatchTarget, facts: NonNullable<Parameters<LiveMatchStore["save"]>[5]>, now: Date) {
-  const { events, statistics, lineups, players } = facts.values;
-  if (![events, statistics, lineups, players].some((rows) => rows?.length) ||
-    facts.retrievedAt > now.getTime() || Buffer.byteLength(JSON.stringify(facts.values)) > 1_000_000) return;
-  const previous = await tx.fixtureFacts.findUnique({ where: { fixtureId: target.fixtureId }, select: {
-    eventsHash: true, statisticsHash: true, lineups: true, playerStatistics: true,
-    eventsRetrievedAt: true, statisticsRetrievedAt: true, detailsRetrievedAt: true,
-  } });
-  const at = new Date(facts.retrievedAt);
-  const eventsHash = events?.length ? evidenceFingerprint(events) : null;
-  const statisticsHash = statistics?.length ? evidenceFingerprint(statistics) : null;
-  const canWrite = (old: Date | null | undefined) => old === null || old === undefined || at >= old;
-  const changes = {
-    ...(eventsHash && eventsHash !== previous?.eventsHash && canWrite(previous?.eventsRetrievedAt) ?
-      { events: events as Prisma.InputJsonArray, eventsHash, eventsRetrievedAt: at } : {}),
-    ...(statisticsHash && statisticsHash !== previous?.statisticsHash && canWrite(previous?.statisticsRetrievedAt) ?
-      { statistics: statistics as Prisma.InputJsonArray, statisticsHash, statisticsRetrievedAt: at } : {}),
-    ...(lineups?.length && canWrite(previous?.detailsRetrievedAt) && evidenceFingerprint(lineups) !== evidenceFingerprint(previous?.lineups ?? null)
-      ? { lineups: lineups as Prisma.InputJsonArray } : {}),
-    ...(players?.length && canWrite(previous?.detailsRetrievedAt) && evidenceFingerprint(players) !== evidenceFingerprint(previous?.playerStatistics ?? null)
-      ? { playerStatistics: players as Prisma.InputJsonArray } : {}),
-  };
-  if (Object.keys(changes).length === 0) return;
-  const data = { ...changes, updatedAt: now, ...("lineups" in changes || "playerStatistics" in changes ? { detailsRetrievedAt: at } : {}) };
-  await tx.fixtureFacts.upsert({ where: { fixtureId: target.fixtureId },
-    create: { fixtureId: target.fixtureId, providerFixtureId: BigInt(target.externalId), ...data }, update: data });
 }
 
 /** One stable account lease serializes the collector across restarts and provider-day changes. */
@@ -215,7 +188,7 @@ export function createMysqlLiveMatchStore(options: Readonly<{ database: Database
         await tx.$executeRaw`UPDATE LiveMatchSnapshot SET receivedAt=${new Date(value.collectedAt)},bodyJson=JSON_EXTRACT(${body},'$'),
           integrity=SHA2(CAST(JSON_EXTRACT(${body},'$') AS CHAR),256),nextPollAt=${new Date(nextAt)},failures=${failures}
           WHERE id=${target.occurrenceId}`;
-        if (facts) await saveFacts(tx, target, facts, new Date(now));
+        if (facts) await saveFixtureFacts(tx, target, facts, new Date(now));
         await locked(tx, lease);
       });
     },

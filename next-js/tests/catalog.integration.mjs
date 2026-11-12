@@ -10,8 +10,10 @@ import { createDatabase } from "../src/server/database/client.ts";
 import { createFootballCatalogStore } from "../src/server/football/catalog-mysql-store.ts";
 import { createFootballCatalogImporter } from "../src/server/football/catalog-service.ts";
 import { validateCatalogBatch } from "../src/server/football/catalog-input.ts";
+import { storedFixtureResult } from "../src/server/results/result-read.ts";
+import { createMysqlResultSyncStore } from "../src/server/results/result-sync-mysql-store.ts";
 import { MysqlServerUnavailableError, startIsolatedMysql } from "./helpers/mysql-instance.mjs";
-import { CATALOG_NOW, catalogFixture, catalogTeam, catalogCompetition, catalogRequest,
+import { CATALOG_NOW, catalogFixture, catalogTeam, catalogCompetition, catalogRequest, catalogHash,
   catalogResponse, createSyntheticCatalogAdapter } from "./helpers/catalog-fixtures.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -76,6 +78,12 @@ test("canonical football catalog invariants on isolated genuine MySQL", { timeou
       { cwd: workspace, env, windowsHide: true, timeout: 60000, maxBuffer: 1024 * 1024 });
     await instance.executeAdmin(catalogTables.map((table) =>
       `GRANT ${catalogAppendOnly.includes(table) ? 'SELECT, INSERT' : 'SELECT, INSERT, UPDATE, DELETE'} ON goal_hint_test.${table} TO 'catalog_application'@'127.0.0.1';`).join("\n"));
+    await instance.executeAdmin(`
+      GRANT SELECT, INSERT ON goal_hint_test.FixtureResult TO 'catalog_application'@'127.0.0.1';
+      GRANT SELECT, INSERT, UPDATE ON goal_hint_test.FixtureResultState TO 'catalog_application'@'127.0.0.1';
+      GRANT SELECT ON goal_hint_test.FixtureLifecycleState TO 'catalog_application'@'127.0.0.1';
+      GRANT SELECT ON goal_hint_test.PredictionCycle TO 'catalog_application'@'127.0.0.1';
+    `);
     const firstDatabase = replica(), secondDatabase = replica();
     const clock = { now: () => CATALOG_NOW + 60_000 };
     const firstStore = createFootballCatalogStore(firstDatabase, { clock });
@@ -108,7 +116,9 @@ test("canonical football catalog invariants on isolated genuine MySQL", { timeou
         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE ${"Football%"}
       `);
       assert.ok(columns.some((column) => column.COLUMN_NAME === "logoUrl" && column.DATA_TYPE === "varchar"));
-      assert.ok(columns.every((column) => !/blob|binary/iu.test(column.DATA_TYPE)));
+      const binaryColumns = columns.filter((column) => /blob|binary/iu.test(column.DATA_TYPE));
+      assert.deepEqual(binaryColumns.map(({ TABLE_NAME, COLUMN_NAME, DATA_TYPE }) =>
+        [TABLE_NAME.toLowerCase(), COLUMN_NAME, DATA_TYPE]), [["footballhistorysourcepage", "compressedRows", "longblob"]]);
     });
 
     await t.test("concurrent repeated identities across competitions and seasons reuse canonical teams", async () => {
@@ -131,6 +141,52 @@ test("canonical football catalog invariants on isolated genuine MySQL", { timeou
       assert.equal((await fixture(2000)).dataVersion, rows[0].dataVersion);
       const aliases = await firstDatabase.query((client) => client.footballTeamAlias.count({ where: { teamId: rows[0].homeTeamId } }));
       assert.equal(aliases, 1);
+    });
+
+    await t.test("historical imports seal verified results without changing canonical history or polling old finals", async () => {
+      const store = createFootballCatalogStore(firstDatabase, { clock, historicalResults: true });
+      const scope = { kind: "fixtures", query: { competitionId: 810, season: 2025 } };
+      const final = (id, home = 2, overrides = {}) => catalogFixture(id, { competitionId: 810, season: 2025,
+        kickoff: "2025-10-09T06:00:00.000Z", status: "FT", homeId: 8110, awayId: 8111,
+        goals: { home, away: 1 }, score: { fulltime: { home, away: 1 }, extratime: null, penalty: null }, ...overrides });
+      const recent = final(8102, 2, { kickoff: "2026-10-09T06:00:00.000Z" });
+      const existing = final(8103);
+      await operation([existing]).run(fixtureSelection(8103));
+      const first = operation([final(8101), recent, existing,
+        catalogFixture(8104, { competitionId: 810, season: 2025, status: "NS" })], { store, now: CATALOG_NOW + 1000 });
+      const request = catalogRequest(scope, CATALOG_NOW + 1000);
+      const receipt = await first.importer.import(request);
+      assert.equal(receipt.status, "complete");
+      assert.equal(receipt.receivedCount, 4);
+      assert.equal(receipt.importedCount, 3);
+      assert.equal(receipt.changedFixtureIds.length, 2);
+      assert.equal(await fixture(8104), null);
+      assert.equal((await first.importer.import(request)).id, receipt.id);
+      assert.equal(first.network.length, 1);
+
+      const archived = await fixture(8101);
+      const matched = await fixture(8103);
+      for (const row of [archived, matched]) {
+        const sealed = await firstDatabase.transaction(async (tx) => {
+          const state = await tx.fixtureResultState.findUniqueOrThrow({ where: { fixtureId: row.id } });
+          return storedFixtureResult(tx, row.id, state.resultId);
+        });
+        assert.equal(sealed.observedAt, CATALOG_NOW + 1000);
+        assert.equal(sealed.regulation.verified, true);
+        assert.equal(sealed.regulation.home, 2);
+        assert.equal(sealed.fixtureVersion, row.dataVersion);
+      }
+      assert.equal(matched.retrievedAt.getTime(), CATALOG_NOW, "seeding a missing result does not rewrite the canonical fixture");
+      await operation([final(8101, 5, { teams: { home: catalogTeam(8110, { name: "Historical alias" }), away: catalogTeam(8111) } })],
+        { store, now: CATALOG_NOW + 2000 }).run(scope);
+      assert.equal((await fixture(8101)).regulationHome, 2);
+      assert.equal((await fixture(8101)).homeTeam.name, archived.homeTeam.name);
+      assert.equal(await firstDatabase.query((client) => client.fixtureResult.count({ where: { fixtureId: archived.id } })), 1);
+
+      const resultStore = createMysqlResultSyncStore({ database: firstDatabase, accountId: catalogHash("historical-polling"), lifecycle: {} });
+      const tracked = await resultStore.tracked({ coverage: [{ competitionId: 810, season: 2025 }], approachMs: 900_000,
+        activeWindowMs: 10_800_000, unresolved: [{ untilAgeMs: 7 * 86_400_000 }], corrections: [{ untilAgeMs: 3 * 86_400_000 }] }, CATALOG_NOW + 2000);
+      assert.deepEqual(tracked.map((row) => row.externalId), [8102], "an old final with a fresh capture stays out of hosted polling");
     });
 
     await t.test("concurrent repeated fixture imports keep one identity and one version per material change", async () => {

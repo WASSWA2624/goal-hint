@@ -21,6 +21,7 @@ import { parsePublicationPolicy } from '../src/server/predictions/publication-in
 import { parseProviderFallbackPolicy } from '../src/server/fallback/fallback-adapter.ts';
 import { parseCutoffPolicy } from '../src/server/predictions/cutoff-input.ts';
 import { parseLifecyclePolicy } from '../src/server/predictions/lifecycle-input.ts';
+import { recommendationPolicyForVersion } from '../src/domain/recommendation.ts';
 
 // Synthetic accounts, approvals and responses only; no provider or database is contacted.
 const DAY = 86_400_000, NOW = Date.parse('2026-10-10T12:00:00.000Z');
@@ -306,6 +307,13 @@ test('slow per-minute plans wait out the rolling minute and skip cutoffs the que
     const authorities = createLiveAuthorities({ policy, verify: () => true, refs, selection,
       statusEvidenceRef: `${refs.freshness}#status`, resultPolicy: () => null, refreshPacing: pacing });
     assert.equal(authorities.refresh.verifyPlan(parsed, candidate), true, `${pacing} refresh plans retain their approved pacing`);
+    const previousPolicy = recommendationPolicyForVersion('probability-qualified-odds-v1');
+    assert.ok(previousPolicy);
+    const previousPlan = { ...parsed, recommendationPolicy: previousPolicy };
+    assert.equal(authorities.refresh.verifyPlan(parseRefreshPlan(previousPlan, candidate), candidate), true,
+      'a recovered odds-first intent retains its original policy');
+    assert.equal(authorities.refresh.verifyPlan({ ...previousPlan, recommendationPolicy: { ...previousPolicy, minimumProbability: .5 } }, candidate), false,
+      'replay still requires the exact frozen policy');
     assert.equal(authorities.refresh.verifyPlan({ ...parsed, fallback: { ...parsed.fallback,
       bounds: { ...parsed.fallback.bounds, timeoutMs: parsed.fallback.bounds.timeoutMs + 1 } } }, candidate), false,
     `${pacing} authority rejects timing changes outside its approved plan`);

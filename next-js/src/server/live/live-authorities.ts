@@ -198,12 +198,14 @@ export function createLiveAuthorities(options: Readonly<{
     authorize() { publish(); },
     verifyPlan: (plan, member: RefreshMember) => {
       try {
-        const baseline = fallbackRefreshPlan(member, refs, options.refreshPacing);
+        // Reconstruct recovered intents with their original, reviewed policy. The parser rejects altered versions.
+        const frozenPolicy = plan.recommendationPolicy === undefined ? {} : { recommendationPolicy: plan.recommendationPolicy };
+        const baseline = { ...fallbackRefreshPlan(member, refs, options.refreshPacing), ...frozenPolicy };
         const reviewed = plan.modelVersionId === null ? { ...baseline, evidence: { ...baseline.evidence,
           policy: liveAiEvidencePolicy(refs), cachedSources: plan.evidence.cachedSources } } :
-          options.aiModel === undefined ? null : liveAiRefreshPlan(member, refs, policy, options.aiModel,
+          options.aiModel === undefined ? null : { ...liveAiRefreshPlan(member, refs, policy, options.aiModel,
             plan.evidence.cachedSources as import("../evidence/evidence-contract.ts").EvidenceSource[], options.refreshPacing,
-            (plan.recommendationPolicy === undefined ? plan.sourceOrder : options.sourceOrder) ?? "ai-first");
+            (plan.recommendationPolicy === undefined ? plan.sourceOrder : options.sourceOrder) ?? "ai-first"), ...frozenPolicy };
         if (reviewed === null) return false;
         if (plan.sourceCascade !== undefined) return cascadeEnabled &&
           same(plan, parseRefreshPlan(liveCascadePlan(reviewed, options.localFootball === true), member));

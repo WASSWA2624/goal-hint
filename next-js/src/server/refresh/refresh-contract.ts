@@ -49,7 +49,7 @@ export type RefreshPlan = Readonly<{
 }>;
 export type { ForecastSourceOrder };
 export type RefreshIntent = Readonly<{ member: RefreshMember; plan: RefreshPlan; pin: ModelPin | null }>;
-export type RefreshPhase = "preparation" | "evidence" | "evidence-empty" | "ai" | "fallback" | "observation";
+export type RefreshPhase = "preparation" | "evidence" | "evidence-empty" | "ai" | "fallback" | "observation" | "status-retry";
 export type RefreshOutcome = Readonly<{
   jobId: string; runId: string; fixtureId: string; cycleId: string; at: number;
   outcome: "published" | "retained-previous" | "unavailable" | "skipped" | "failed";

@@ -3,10 +3,17 @@ import "server-only";
 import { z } from "zod";
 import { marketSelections, marketSources, type MarketFamily } from "../../domain/markets.ts";
 import { parseRecordedDecimalOdds } from "../../domain/odds.ts";
-import { recommendationPolicy, type RecommendationDecision } from "../../domain/recommendation.ts";
+import { recommendationPolicyForVersion, type RecommendationDecision } from "../../domain/recommendation.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import type { FallbackContext, ResolvedForecastMarket } from "../fallback/fallback-contract.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
+
+/** A stored plan must match every field of its reviewed policy version. */
+export function matchFrozenRecommendationPolicy(value: unknown) {
+  if (!value || typeof value !== "object" || !("version" in value)) return undefined;
+  const policy = recommendationPolicyForVersion(value.version);
+  return policy && evidenceFingerprint(value) === evidenceFingerprint(policy) ? policy : undefined;
+}
 
 const id = z.string().min(1).max(128), hash = z.string().regex(/^[a-f0-9]{64}$/u);
 const instant = z.number().int().min(0).max(253_402_300_799_999), version = z.string().regex(/^[1-9]\d{0,19}$/u);
@@ -27,13 +34,18 @@ export const recommendationDecisionSchema = z.strictObject({ version: z.literal(
     eligible: z.boolean(), reasons: z.array(z.string().min(1).max(128)).max(32), evidence: z.record(z.string(), z.unknown()) })).max(64),
   fallbackReason: z.string().max(512).nullable(), explanation: z.string().min(1).max(4096),
 }).superRefine((value, ctx) => {
+  const policy = recommendationPolicyForVersion(value.policyVersion);
+  if (!policy) {
+    ctx.addIssue({ code: "custom", message: "Unsupported recommendation policy." });
+    return;
+  }
   const selected = value.selected;
   if ((value.status === "selected") !== (selected !== null)) ctx.addIssue({ code: "custom", message: "Incoherent recommendation availability." });
   if (!selected) return;
   const price = selected.quote;
   if (!(marketSelections[selected.family] as readonly string[]).includes(selected.selection) ||
     selected.line !== (selected.family === "total-goals" ? publicPolicy.totalGoalsLine : null) ||
-    selected.probability < recommendationPolicy.minimumProbability || !price.permitted || price.suspended ||
+    selected.probability < policy.minimumProbability || !price.permitted || price.suspended ||
     price.fixtureId !== value.fixtureId || price.fixtureVersion !== value.fixtureVersion ||
     price.homeTeamId !== value.homeTeamId || price.awayTeamId !== value.awayTeamId ||
     price.family !== selected.family || price.selection !== selected.selection || price.period !== selected.period || price.line !== selected.line ||
@@ -46,11 +58,12 @@ export const recommendationDecisionSchema = z.strictObject({ version: z.literal(
 export function parseRecommendationDecision(value: unknown, context: FallbackContext,
   markets: Readonly<Record<MarketFamily, ResolvedForecastMarket>>): RecommendationDecision {
   const parsed = recommendationDecisionSchema.parse(value), expected = context.context, selected = parsed.selected;
-  if (parsed.fixtureId !== expected.fixtureId || parsed.fixtureVersion !== String(expected.fixtureVersion) ||
+  const policy = recommendationPolicyForVersion(parsed.policyVersion);
+  if (!policy || parsed.fixtureId !== expected.fixtureId || parsed.fixtureVersion !== String(expected.fixtureVersion) ||
     parsed.homeTeamId !== expected.home.teamId || parsed.awayTeamId !== expected.away.teamId ||
     parsed.analysisAt !== expected.analysisAt || parsed.evidenceHash !== context.evidenceHash ||
     selected && (selected.quote.observedAt > expected.cutoffAt ||
-      expected.cutoffAt - selected.quote.observedAt > recommendationPolicy.quoteMaxAgeMs ||
+      expected.cutoffAt - selected.quote.observedAt > policy.quoteMaxAgeMs ||
       selected.forecastTimestamps.retrievedAt > expected.kickoffAt)) throw new RangeError("Invalid recommendation context.");
   if (selected) {
     const item = markets[selected.family];

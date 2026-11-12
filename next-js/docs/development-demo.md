@@ -113,6 +113,33 @@ local pre-match default when `GOAL_HINT_ODDS_BOOKMAKER_ID` is unset. Use
 day. Remove the `live` marker and restart development to browse the saved
 snapshot offline.
 
+With the owned snapshot running, `npm run history:backfill -- --requests 100`
+loads finished results in season order, newest first. The importer reuses its
+saved competition catalog and includes verified league identities discovered
+there. Within each season, leagues with more upcoming fixtures run first. The
+optional `--competition <id>` limits a batch to one known league
+and `--oldest-season <year>` stops it at a specific season. A regular
+run uses at most six requests by default, including season discovery. Run the
+same command again to resume. Completed receipts and original fixture rows
+travel with the database, including verified empty seasons. Incomplete responses
+and absent catalog entries are reported separately. The shared quota gives live
+work priority.
+
+Use `npm run history:backfill -- --reuse-pages` to move existing owned snapshot
+pages into the archive without calling API-Football. Use
+`npm run history:backfill -- --details --requests 20` to retrieve missing match
+details for verified finals in batches of up to 20 fixtures per request. The
+archive records available, missing, partial, and unsupported sections and keeps
+the original observation times. The local archive can be exported later after
+checking the hosted schema and permitted scope.
+
+`npm run history:backfill -- --reference --requests 20` archives team, venue,
+standings, injury, and transfer pages for identities already in the database.
+Use `--dataset teams`, `venues`, `standings`, `injuries`, or `transfers` to limit
+the run. Historical pages retain their retrieval dates and can be read locally
+by selector. A complete empty response records what the provider returned at
+that time. Active-season changes require later observations.
+
 The live snapshot's web server defaults to `127.0.0.1`. To browse from another
 device on the same network, start it with `npm run dev -- --hostname 0.0.0.0 --port 3000`
 and open the host computer's LAN IP on port 3000. To keep LAN access enabled on

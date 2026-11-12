@@ -1,5 +1,26 @@
 # Development progress
 
+## 309 — Verified football history (12 November 2026)
+
+Implemented the first archive layers in the owned football database. The import
+reuses original fixture pages, resumes verified league-season results, tracks
+match detail availability by section, and archives team, venue, standings,
+injury, and transfer responses. Batches share the live worker's provider
+quota and use its enrichment priority. The original November snapshot seeded
+295 pages with zero provider calls. The archive checkpoint contains 56,581
+unique fixture IDs and 28,352 verified results. A scoped Premier League backfill
+reached September 2020 for the replay comparison. The local engine produced
+candidates for 28 of 97 upcoming fixtures after targeted history imports, up
+from zero before those imports.
+
+The local schema is current and its drift check passed. Focused unit checks
+and disposable MySQL write checks passed. The older full-schema integration
+wrapper failed its schema-verification subtest. The retrospective Premier
+League replay found small probability-score gains for five years of history.
+Calibration results varied by market. The engine retains its two-year window
+pending cross-league evaluation. Full provider coverage and hosted transfer
+remain open. See [plan 309](../dev-plan/309-verified-football-history.md).
+
 ## 076 — Compact mobile subscription status (27 October 2026)
 
 Implemented [plan 076](../dev-plan/076-compact-mobile-subscription.md). Active
