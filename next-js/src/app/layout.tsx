@@ -8,6 +8,7 @@ import { createMessages } from "@/i18n/messages";
 import { canonicalUrl } from "@/domain/discovery";
 import { TruncationTooltips } from "@/components/ui/truncation-tooltips";
 import { OfflineBootstrap } from "@/components/offline/offline-bootstrap";
+import { isLocalFootballDevelopment } from "@/domain/development-demo";
 import { consentBootstrapScript, consentInitialStyle } from "@/server/analytics/consent-bootstrap";
 import { socialLocale } from "@/server/seo/metadata";
 
@@ -43,6 +44,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang={publicPolicy.defaultLocale} className={manrope.variable}>
       <head>
+        {/* Use production's CSSOM rule insertion on the owned development snapshot. */}
+        {isLocalFootballDevelopment() && <ConsentBootstrapScript id="goal-hint-development-styles" code="globalThis.SC_DISABLE_SPEEDY = false;" />}
         <style id="analytics-consent-initial">{consentInitialStyle}</style>
         <ConsentBootstrapScript id="analytics-consent-bootstrap" code={consentBootstrapScript()} />
       </head>
