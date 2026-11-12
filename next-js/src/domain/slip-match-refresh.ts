@@ -2,7 +2,7 @@ import { z } from "zod";
 import { utcInstantFromEpochMilliseconds } from "./calendar.ts";
 import { liveClockSchema, marketFamilySchema } from "./fixture-snapshot.ts";
 import { isPlayedFinalStatus, settlementStatuses } from "./market-settlement.ts";
-import { isMarketSelection } from "./markets.ts";
+import { isSlipMarketSelection, isTotal15SlipSelection } from "./slip-markets.ts";
 import { slipBuilderRules, type SlipSelection } from "./slip-builder.ts";
 import { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
 import type { SlipMatchState } from "./slip-match-state.ts";
@@ -25,7 +25,8 @@ export const slipMatchWatchSchema = z.strictObject({
   fixtureId: z.uuid(), kickoffAt: instant, homeTeam: z.strictObject({ id: identity }), awayTeam: z.strictObject({ id: identity }),
   family: marketFamilySchema, selection: z.string().min(1).max(64), probability: z.number().min(0).max(1),
   forecast: slipForecastReferenceSchema.optional(),
-}).refine((value) => isMarketSelection(value.family, value.selection), "Invalid original selection.")
+}).refine((value) => isSlipMarketSelection(value.family, value.selection)
+  && (!isTotal15SlipSelection(value.selection) || !!value.forecast), "Invalid original selection.")
   .transform((value) => value as SlipMatchWatch);
 
 export function slipMatchSelectionKey(selection: Pick<SlipMatchWatch, "fixtureId" | "family" | "selection" | "forecast">): string {
@@ -66,7 +67,8 @@ export const slipMatchStateSchema = z.strictObject({
   outcome: z.enum(["correct", "incorrect", "pending", "void"]),
 }).superRefine((value, context) => {
   const final = isPlayedFinalStatus(value.status);
-  if (!isMarketSelection(value.family, value.selection) || value.status !== "live" && value.liveClock !== null
+  if (!isSlipMarketSelection(value.family, value.selection) || isTotal15SlipSelection(value.selection) && !value.forecast
+    || value.status !== "live" && value.liveClock !== null
     || value.status !== "live" && !final && value.score !== null
     || (value.outcome === "correct" || value.outcome === "incorrect") && (!final || value.score === null)
     || (value.status === "scheduled" || value.status === "live") && value.outcome !== "pending") {

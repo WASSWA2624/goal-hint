@@ -1,51 +1,41 @@
 # Custom Filters
 
 Every signed-in account can keep up to ten named filter configurations, including
-while access is expired or subscription sales are closed. **Custom Filters** in
-the builder's Actions opens the shared criteria dialog, using the existing
-filter toolbar styling. The body contains the chooser and optional default.
-The footer contains **Create**, **Rename**, **Update**, **Delete** and
-**Use Selected Filter**, with the last action at the far right. Choosing an
-option selects the saved record to manage; it does not change the main draft,
-applied configuration ID, URL or generated results. **Use Selected Filter**
-applies the selected values and returns to the builder. The top-right X closes
-the parent. On desktop, the four management actions open a
-smaller native child dialog above the visible, inactive parent. The child names
-the affected filter and offers its specific action and Cancel. Its errors stay
-inside the child. Cancel, Escape and successful writes return to the parent and
-restore focus; background controls remain inert until the child closes. The two
-dialogs share the existing criteria-dialog styling and are centered in the
-viewport. The wider desktop parent fits its five actions on one row. Clicking
-outside either dialog does nothing; Escape, explicit close/cancel controls and
-completed actions handle dismissal. Child action labels are Create, Rename,
-Update and Delete.
-Phones and tablets keep inline editors. Resizing preserves the pending form.
-Persistent explanatory text is omitted. This is the only management interface on desktop and
-phone; the account page has no saved-filter panel. Deleting a configuration does
-not change an open builder draft. The main builder is the single place to view
-and edit filter values; **Update** replaces the selected record's saved values
-with that current draft without applying the record. Creation, renaming and
-default changes likewise leave the draft and its applied ID alone. Deleting a
-record only clears the applied ID if that record was the one applied.
-All desktop filter and action buttons share one row, including at 1024px.
+while access is expired or subscription sales are closed. **Custom filters** in
+Builder opens the shared criteria dialog. The saved count and limit appear above
+**Choose a filter**. The chooser starts on the default when one exists, then
+falls back to the applied filter if there is one. Long names wrap inside the
+scrollable chooser. Selecting a record prefills the dialog's copy of the Builder
+controls. **Markets** opens a nested dialog with all supported markets and their
+outcomes on desktop and mobile.
+
+The footer holds **Create**, **Rename**, **Update**, **Delete** and **Apply**.
+Create and Rename open a child dialog for the name. Update confirms replacement
+with the form values, and Delete confirms removal. The child dialogs use the
+same layout on desktop and mobile. Cancelling or pressing Escape dismisses the
+active child and restores focus to the parent.
+
+**Apply** loads the selected filter's saved values into Builder and closes the
+dialog. The form flags unsaved edits so members can update the filter before
+applying it. The top-right X and Escape close the parent while keeping the
+Builder settings. Create, Rename, Update and default changes leave the Builder
+draft as it was. Deleting the applied record clears its ID while preserving
+the Builder values. Custom Filters are managed from Builder.
 
 Names are trimmed, Unicode-normalized and unique per account without case
-distinctions. A configuration includes time bounds, market selections/outcomes,
-reuse and unrestricted ranges. Dates are excluded: loading uses today's date
-in the reporting timezone, Africa/Kampala, for both date bounds. The saved time
-range is preserved; blank times default to the entire day, 00:00–23:59.
-Older dated configurations are normalized on read and load for today as well;
-the next filter update writes the date-free format. No additional migration is
-needed.
+distinctions. The **Date and time** fields display **From** and **To** in the
+device's active time zone. Creating or updating a filter saves the continuous
+range with its time zone, alongside the markets, outcomes, reuse and limits.
+Applying a dated preset uses that saved interval. Older time-only presets use
+today's date in the device's time zone with their saved times. The range fits
+in the existing saved-configuration parameters.
 
 An optional default fills a fresh builder visit with no query. Explicit query
-filters and Reset take precedence. A slow default read does not overwrite filters
-the member has started editing. Loading updates the builder draft and canonical
-URL with the configuration ID **without `build=1`**, clears previous results,
-and closes the dialog after Use Selected Filter. It requires no server
-navigation or generation. Generation still requires the explicit Build slips
-action and entitlement. Configuration controls sit outside the generation form;
-a hidden configuration ID preserves the selection through generation.
+filters, Reset and the member's edits take precedence over a late default read.
+Applying updates the Builder draft and canonical URL with the configuration ID
+and clears previous results. Generation requires the explicit **Build slips**
+action and entitlement. A hidden configuration ID preserves the selection
+through generation.
 
 `GET /api/account/slip-configurations` returns the private account collection.
 `POST` accepts strict `create`, `rename`, `update`, `default` and `delete` actions.

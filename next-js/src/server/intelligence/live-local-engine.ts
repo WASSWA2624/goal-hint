@@ -3,7 +3,7 @@ import "server-only";
 import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
 import { marketRules, validateMarketSnapshot } from "../../domain/markets.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
-import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
+import { freezeEvidence } from "../evidence/evidence-input.ts";
 import { LIVE_FORECAST_CASCADE, type FallbackContext, type ResolvedForecastCandidate } from "../fallback/fallback-contract.ts";
 import { fixtureResultFromRow } from "../results/result-read.ts";
 import type { HistoryRow } from "../predictions/history-read.ts";

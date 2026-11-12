@@ -5,11 +5,21 @@ import { telegramShareUrl, whatsAppShareUrl } from "./share-links.ts";
 
 export type ReferralInvitation = Readonly<{ title: string; text: string; url: string }>;
 
-export function referralInvitation(code: string, locale: string) {
-  if (!validReferralCode(code)) throw new RangeError("An invitation requires a valid referral code.");
+function invitationLinks(url: string, locale: string) {
   const invitation: ReferralInvitation = { title: publicPolicy.name,
     text: createMessages(locale).text("referrals.invitation", { name: publicPolicy.name }),
-    url: new URL(referralPath(code), publicPolicy.origin).toString() };
+    url };
   return { invitation, whatsApp: whatsAppShareUrl(`${invitation.text}\n${invitation.url}`),
     telegram: telegramShareUrl(invitation.url, invitation.text) };
+}
+
+export type InvitationLinks = ReturnType<typeof invitationLinks>;
+
+export function publicInvitation(locale: string): InvitationLinks {
+  return invitationLinks(publicPolicy.origin, locale);
+}
+
+export function referralInvitation(code: string, locale: string): InvitationLinks {
+  if (!validReferralCode(code)) throw new RangeError("An invitation requires a valid referral code.");
+  return invitationLinks(new URL(referralPath(code), publicPolicy.origin).toString(), locale);
 }

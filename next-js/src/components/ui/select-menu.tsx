@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useLayoutEffect, useRef, useState, type ComponentPropsWithoutRef, type KeyboardEvent } from "react";
+import { useCallback, useId, useImperativeHandle, useLayoutEffect, useRef, useState, type ComponentPropsWithRef, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import styled, { css } from "styled-components";
 import { CheckIcon, ChevronDownIcon } from "./icons";
 import { controlBodyHeight } from "./control-layout";
@@ -13,13 +13,19 @@ import { anchoredPanel, useAnchoredPanel } from "./anchored-panel";
 
 export type SelectMenuOption = Readonly<{ value: string; label: string; disabled?: boolean }>;
 export type SelectMenuProps = Readonly<{
-  value: string; options: readonly SelectMenuOption[]; label: string; onValueChange: (value: string) => void;
+  value: string; options: readonly SelectMenuOption[]; label: ReactNode; onValueChange: (value: string) => void;
   onOptionSelect?: (value: string, trigger: HTMLButtonElement) => void;
-}> & Omit<ComponentPropsWithoutRef<"button">, "children" | "value" | "onChange" | "onClick" | "onKeyDown" | "onSelect" | "role">;
+  matchTriggerWidth?: boolean;
+}> & Omit<ComponentPropsWithRef<"button">, "children" | "value" | "onChange" | "onClick" | "onKeyDown" | "onSelect" | "role">;
 const Root = styled.div.attrs<{ "data-control-field"?: string }>({ "data-control-field": "" })`
   position: relative; min-inline-size: 0; max-inline-size: 100%; margin-block-start: var(--floating-label-space);
-  > [data-floating-outline] { ${floatingOutline} > legend { max-inline-size: 100%; } }
+  > [data-floating-outline] { ${floatingOutline} }
+  &:is(:focus-within, :has(> [data-select-trigger]:not([data-select-empty])), :has(> [data-select-trigger][aria-expanded="true"]))
+    > [data-floating-outline] > legend:not([data-empty="true"]) { max-inline-size: 100%; }
   &:focus-within > [data-floating-outline] { ${floatingOutlineFocus} }
+  &:has(> [aria-invalid="true"]) > [data-floating-outline] {
+    border-color: color-mix(in srgb, ${({ theme }) => theme.color.outcome.incorrect.text} 45%, ${({ theme }) => theme.textField.background});
+  }
 `;
 const Trigger = styled.button`
   display: inline-flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-3);
@@ -35,13 +41,18 @@ const Trigger = styled.button`
   border: var(--gh-stroke-thin) solid transparent;
   &:focus-visible { outline: none; }
   position: relative; ${controlBodyHeight} padding-block: var(--gh-spacing-2);
-  > [data-select-label] { ${floatingLabel} ${raisedFloatingLabel} max-inline-size: calc(100% - var(--gh-size-10)); }
+  > [data-select-label] { ${floatingLabel} max-inline-size: calc(100% - var(--gh-size-10)); cursor: inherit; }
+  &:is(:not([data-select-empty]), :focus-within, [aria-expanded="true"]) > [data-select-label] { ${raisedFloatingLabel} }
+  &[data-select-empty]:not(:focus-within):not([aria-expanded="true"]) > [data-select-value] { visibility: hidden; }
   &:focus-within > [data-select-label] { color: ${({ theme }) => theme.color.link}; }
+  &[aria-invalid="true"] > [data-select-label] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
+  &:disabled > [data-select-label] { color: ${({ theme }) => theme.color.disabledText}; }
 `;
-const Options = styled.ul<{ $inline?: boolean }>`
+const Options = styled.ul<{ $inline?: boolean; $matchTriggerWidth?: boolean }>`
   ${anchoredPanel}
   z-index: var(--gh-layer-tooltip);
-  display: grid; gap: var(--gh-spacing-0_5); inline-size: max(100%, var(--gh-size-44));
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gh-spacing-0_5);
+  inline-size: ${({ $matchTriggerWidth }) => $matchTriggerWidth ? "100%" : "max(100%, var(--gh-size-44))"};
   max-block-size: min(var(--gh-size-80), 50dvh, var(--anchored-panel-space, 100dvh)); overflow-y: auto; overscroll-behavior: contain;
   margin: 0; padding: var(--gh-spacing-1); list-style: none; box-sizing: border-box;
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
@@ -51,6 +62,7 @@ const Options = styled.ul<{ $inline?: boolean }>`
     display: flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-3);
     min-block-size: var(--form-control-height); padding: var(--gh-spacing-1_75) var(--gh-spacing-2_5); border: 0; border-radius: ${({ theme }) => theme.radius.small};
     font-size: var(--gh-font-secondary); line-height: var(--gh-leading-caption); cursor: pointer;
+    > span { min-inline-size: 0; overflow-wrap: anywhere; }
     > svg { flex: none; inline-size: var(--gh-size-3_5); block-size: var(--gh-size-3_5); visibility: hidden; }
     &[aria-selected="true"] {
       color: ${({ theme }) => theme.color.brand}; background: ${({ theme }) => theme.color.brandSoft};
@@ -67,30 +79,53 @@ const Options = styled.ul<{ $inline?: boolean }>`
   `}
 `;
 
-export { Root as SelectMenuRoot, Trigger as SelectMenuTrigger, Options as SelectMenuOptions };
+export { Trigger as SelectMenuTrigger, Options as SelectMenuOptions };
+
+export function SelectMenuRoot({ onFocusLeave, ...props }: Omit<ComponentPropsWithRef<"div">, "onBlur"> & { onFocusLeave: () => void }) {
+  return <Root {...props} onBlur={event => {
+    // A click can clear focus before its option activates. Outside clicks have their own dismissal handler.
+    if (event.relatedTarget instanceof Node && !event.currentTarget.contains(event.relatedTarget)) onFocusLeave();
+  }} />;
+}
+
+/** Reveal options for keyboard navigation without scrolling a hovered row out from under the pointer. */
+export function useSelectOptionReveal(listRef: RefObject<HTMLUListElement | null>, open: boolean, activeValue: string | undefined,
+  setActive: (value: string | null) => void) {
+  const fromPointerRef = useRef(false);
+  useLayoutEffect(() => {
+    const panel = listRef.current;
+    if (!open || fromPointerRef.current || !panel) return;
+    const item = panel.querySelector<HTMLElement>(':scope > [data-active="true"]');
+    if (!item) return;
+    const bounds = item.getBoundingClientRect(), viewport = panel.getBoundingClientRect();
+    if (bounds.bottom > viewport.bottom) panel.scrollBy({ top: bounds.bottom - viewport.bottom, behavior: "instant" });
+    else if (bounds.top < viewport.top) panel.scrollBy({ top: bounds.top - viewport.top, behavior: "instant" });
+  }, [activeValue, listRef, open]);
+  return useCallback((value: string | null, fromPointer = false) => {
+    fromPointerRef.current = fromPointer;
+    setActive(value);
+  }, [setActive]);
+}
 
 /** Single-choice menu with themed options, keyboard navigation and selection committed only on activation. */
-export function SelectMenu({ value, options, label, onValueChange, onOptionSelect, className, disabled = false, ...attributes }: SelectMenuProps) {
+export function SelectMenu({ value, options, label, onValueChange, onOptionSelect, className, disabled = false, matchTriggerWidth = false, ref, ...attributes }: SelectMenuProps) {
   const [open, setOpen] = useState(false), [activeValue, setActiveValue] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null), panel = useRef<HTMLUListElement>(null);
+  useImperativeHandle(ref, () => trigger.current!, []);
   const search = useRef({ text: "", at: 0 }), id = useId();
   const enabled = options.filter((option) => !option.disabled), current = options.find((option) => option.value === value);
+  const labelText = attributes["aria-label"] ?? (typeof label === "string" ? label : undefined);
+  const labelledBy = attributes["aria-labelledby"];
+  const labelId = `${id}-label`, valueId = `${id}-value`;
   const active = enabled.find((option) => option.value === activeValue) ?? enabled.find((option) => option.value === value) ?? enabled[0];
   const activeIndex = options.findIndex((option) => option.value === active?.value);
   const close = useCallback(() => { setOpen(false); search.current = { text: "", at: 0 }; }, []);
   useOutsideDismiss({ enabled: open, root, onDismiss: close });
   useAnchoredPanel({ open, anchor: trigger, panel });
-  useLayoutEffect(() => {
-    if (!open) return;
-    const list = panel.current, item = list?.children[activeIndex] as HTMLElement | undefined;
-    if (!list || !item) return;
-    const bounds = item.getBoundingClientRect(), viewport = list.getBoundingClientRect();
-    if (bounds.bottom > viewport.bottom - 4) list.scrollTop += bounds.bottom - viewport.bottom + 4;
-    else if (bounds.top < viewport.top + 4) list.scrollTop -= viewport.top + 4 - bounds.top;
-  }, [open, activeIndex]);
+  const activate = useSelectOptionReveal(panel, open, active?.value, setActiveValue);
 
   function show(first = false) {
-    setActiveValue((first ? enabled[0] : enabled.find((option) => option.value === value) ?? enabled[0])?.value ?? null);
+    activate((first ? enabled[0] : enabled.find((option) => option.value === value) ?? enabled[0])?.value ?? null);
     search.current = { text: "", at: 0 }; setOpen(true);
   }
   function choose(option = active) {
@@ -119,7 +154,7 @@ export function SelectMenu({ value, options, label, onValueChange, onOptionSelec
       const index = enabled.findIndex((option) => option.value === active?.value);
       const next = key === "Home" ? 0 : key === "End" ? enabled.length - 1
         : Math.max(0, Math.min(enabled.length - 1, index + (key === "ArrowDown" ? 1 : -1)));
-      setActiveValue(enabled[next]!.value); setOpen(true); return;
+      activate(enabled[next]!.value); setOpen(true); return;
     }
     if (key.length !== 1 || event.altKey || event.ctrlKey || event.metaKey) return;
     event.preventDefault();
@@ -129,28 +164,29 @@ export function SelectMenu({ value, options, label, onValueChange, onOptionSelec
     const start = Math.max(0, enabled.findIndex((option) => option.value === active?.value)) + (needle.length === 1 ? 1 : 0);
     const match = Array.from({ length: enabled.length }, (_, offset) => enabled[(start + offset) % enabled.length]!)
       .find((option) => option.label.toLocaleLowerCase().startsWith(needle));
-    if (match) { setActiveValue(match.value); setOpen(true); }
+    if (match) { activate(match.value); setOpen(true); }
   }
-  return <Root className={className} ref={root} onBlur={(event) => {
-    if (!event.currentTarget.contains(event.relatedTarget)) close();
-  }}>
+  return <SelectMenuRoot className={className} ref={root} onFocusLeave={close}>
     <Trigger {...attributes} ref={trigger} type="button" role="combobox" data-select-trigger data-floating-control disabled={disabled || !enabled.length}
-      aria-label={`${label}: ${current?.label ?? value}`} aria-haspopup="listbox" aria-expanded={open}
+      aria-label={labelText ? `${labelText}: ${current?.label ?? value}` : undefined}
+      aria-labelledby={labelledBy ? `${labelledBy} ${valueId}` : labelText ? undefined : `${labelId} ${valueId}`} aria-haspopup="listbox" aria-expanded={open}
       aria-controls={open ? id : undefined} aria-activedescendant={open && activeIndex >= 0 ? `${id}-${activeIndex}` : undefined}
       onKeyDown={keyboard} onClick={() => { if (open) close(); else show(); }}>
-      <span data-select-label aria-hidden="true">{label}</span>
-      <span aria-hidden="true">{options.map((option) => <span key={option.value} data-current={option.value === value || undefined}>{option.label}</span>)}</span>
+      <span id={labelId} data-select-label aria-hidden="true">{label}</span>
+      <span data-select-value aria-hidden="true">{options.map((option) => <span key={option.value} id={option.value === value ? valueId : undefined}
+        data-current={option.value === value || undefined}>{option.label}</span>)}</span>
       <ChevronDownIcon />
     </Trigger>
     <FloatingOutline label={label} />
-    {open && <Options ref={panel} id={id} role="listbox" aria-label={label} data-select-options>
+    {open && <Options ref={panel} id={id} role="listbox" aria-label={labelText} aria-labelledby={labelledBy ?? (labelText ? undefined : labelId)}
+      data-select-options $matchTriggerWidth={matchTriggerWidth}>
       {options.map((option, index) => <li key={option.value} id={`${id}-${index}`} role="option" aria-selected={option.value === value}
         aria-disabled={option.disabled || undefined} data-active={!option.disabled && active?.value === option.value || undefined}
         onPointerDown={(event) => event.preventDefault()}
-        onPointerMove={(event) => { if (event.pointerType === "mouse" && !option.disabled) setActiveValue(option.value); }}
+        onPointerMove={(event) => { if (event.pointerType === "mouse" && !option.disabled) activate(option.value, true); }}
         onClick={() => { if (!option.disabled) { choose(option); trigger.current?.focus({ preventScroll: true }); } }}>
         <span>{option.label}</span><CheckIcon />
       </li>)}
     </Options>}
-  </Root>;
+  </SelectMenuRoot>;
 }

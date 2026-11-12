@@ -1,41 +1,41 @@
 "use client";
 
-import { DateTimeField } from "@/components/ui/date-time-field";
-
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { trackEvent } from "@/components/analytics/tracker";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
-import type { TextInputProps } from "@/components/ui/controls";
-import { ChoicePicker } from "@/components/ui/choice-picker";
-import { CriteriaAccordion } from "@/components/ui/criteria-accordion";
-import { ChevronRightIcon, ResetIcon } from "@/components/ui/icons";
+import { ChartIcon, ChevronRightIcon, LockIcon, ResetIcon, SlipIcon, SlidersIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/ui/feedback";
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
 import { PagePaginationSection } from "@/components/ui/pagination-styles";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
-import { marketSelections, type MarketFamily, type MarketSelection } from "@/domain/markets";
+import { parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
+import { getDateInTimeZone } from "@/domain/device-calendar";
+import type { MarketFamily } from "@/domain/markets";
 import { slipsHref } from "@/domain/navigation";
 import { subscriberHref } from "@/domain/subscriber-navigation";
-import { predictionLabel } from "@/domain/prediction-label";
 import { publicPolicy } from "@/domain/public-policy";
 import { fullDayKickoffTime } from "@/domain/kickoff-time";
-import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipBuilderRules, slipInputFields,
-  type SlipCriteria, type SlipCriteriaErrorCode, type SlipInputs } from "@/domain/slip-builder";
-import { commitSlipNumber, slipDateBounds, slipNumberRangeIssue, type SlipDateTimeField, type SlipNumericField } from "@/domain/slip-input-guards";
+import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipInputFields,
+  type SlipCriteria, type SlipInputs } from "@/domain/slip-builder";
 import { createMessages } from "@/i18n/messages";
+import { useDeviceTimeZone } from "@/i18n/use-messages";
 import type { SlipBuildPageResult } from "@/domain/slip-page";
 import { compareSlipDisplayProbability, slipPageSize } from "@/domain/slip-pagination";
 import { SlipCard } from "./slip-card";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
-import { SlipNumericInput, slipNumberErrorMessage } from "./slip-numeric-input";
+import { allSlipMarketsAutomatic, commitNumericParameters, criteriaDraft, isDateTimeField, isNumericRange, renderSlipCriteriaFields,
+  type BuilderIssue, type NumericRangeField, type SlipCriteriaIssue } from "./slip-criteria-fields";
+import { slipNumberErrorMessage } from "./slip-numeric-input";
 import { SavedSlipConfigurations } from "./saved-slip-configurations";
-import { canonicalSlipConfigurationParameters, slipConfigurationCriteria, slipConfigurationHref, slipConfigurationIdSchema, type SlipConfiguration } from "@/domain/slip-configurations";
+import { canonicalSlipConfigurationParameters, datedSlipConfiguration, slipConfigurationCriteria, slipConfigurationHref, slipConfigurationIdSchema, type SlipConfiguration } from "@/domain/slip-configurations";
 import { UnlockPanel } from "@/components/members/prediction-unlock";
-import { ActionControls, Actions, AdvancedCriteria, BuildActionLabel, BuildButton, BuildLink, BuilderEssentials, BuilderHeader, BuilderOptions, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOption, CriteriaOptions, CriteriaSummary, CriteriaTitle, CriteriaTrigger, FieldGroup,
-  Fields, InlineCriteria, LimitGroups, MarketChoice, MarketChoices, MarketField, BuilderCriteriaDialog, Note, Results, BuilderFeedback, ReuseRow, SavedFiltersButton, SlipHeading, SlipList, SlipStack, TargetGroups } from "./slip-styles";
+import { ActionControls, Actions, AdvancedCriteria, BuildActionLabel, BuildButton, BuildLink, BuilderCriteriaDialog,
+  BuilderFeedback, BuilderHeader, BuilderOptions, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOption, CriteriaOptions,
+  CriteriaSummary, CriteriaTitle, CriteriaTrigger, FieldGroup, InlineCriteria, Note, Results, SlipHeading, SlipList, SlipStack } from "./slip-styles";
+
+export type { SlipCriteriaIssue } from "./slip-criteria-fields";
 
 export function SlipAccessRequired({ locale, showAccount = false, signedIn = false }: { locale: string; showAccount?: boolean; signedIn?: boolean }) {
   return <SlipStack><AppBrandBar locale={locale} showAccount={showAccount} />
@@ -43,9 +43,8 @@ export function SlipAccessRequired({ locale, showAccount = false, signedIn = fal
   </SlipStack>;
 }
 
-export type SlipCriteriaIssue = Readonly<{ code: SlipCriteriaErrorCode; field: keyof SlipCriteria | "query" }>;
-type BuilderIssue = SlipCriteriaIssue | Readonly<{ field: SlipNumericField; message: string }>;
 type CriteriaGroup = "limits" | "kickoff" | "markets";
+type BuilderDialog = "advanced" | "markets";
 /** Responsive copies keep the action's existing desktop structure and stable dimensions. */
 function SlipBuildActionLabel({ locale, restricted }: {
   locale: string; restricted: boolean;
@@ -57,10 +56,6 @@ function SlipBuildActionLabel({ locale, restricted }: {
     <span data-action-label="desktop">{restricted ? messages.text("paywall.unlock") : build}</span>
   </BuildActionLabel>;
 }
-function isDateTimeField(name: typeof slipInputFields[number]): name is SlipDateTimeField {
-  return name === "dateFrom" || name === "dateTo" || name === "timeFrom" || name === "timeTo";
-}
-type NumericRangeField = `${"total" | "teams" | "odds" | "prob" | "totalProb"}${"Min" | "Max"}`;
 const groupFields = {
   limits: ["oddsMin", "oddsMax", "probMin", "probMax", "totalProbMin", "totalProbMax"],
   kickoff: ["dateFrom", "dateTo", "timeFrom", "timeTo"],
@@ -70,28 +65,22 @@ const subscribeNever = () => () => {};
 const clientReady = () => true;
 const serverReady = () => false;
 
+function currentDateInZone(zone: string) {
+  return getDateInTimeZone(utcInstantFromEpochMilliseconds(Date.now()), zone);
+}
+
+function setExactKickoff(parameters: URLSearchParams, draft: SlipInputs, zone: string) {
+  for (const field of groupFields.kickoff) parameters.delete(field);
+  parameters.set("start", `${draft.dateFrom}T${draft.timeFrom}`);
+  parameters.set("end", `${draft.dateTo}T${draft.timeTo}`);
+  parameters.set("tz", zone);
+}
+
 function issueGroup(issue: BuilderIssue | null): CriteriaGroup | null {
   if (!issue) return null;
   if (groupFields.limits.some((field) => field === issue.field)) return "limits";
   if (groupFields.kickoff.some((field) => field === issue.field)) return "kickoff";
   return issue.field === "markets" || issue.field === "outcomes" ? "markets" : null;
-}
-
-function isNumericRange(name: string): name is NumericRangeField {
-  return name.endsWith("Min") || name.endsWith("Max");
-}
-
-/** Submit canonical values without changing the text in the controls. */
-function commitNumericParameters(parameters: URLSearchParams) {
-  for (const field of slipInputFields) {
-    if (isDateTimeField(field)) continue;
-    const raw = parameters.get(field);
-    if (raw === null) continue;
-    const result = commitSlipNumber(field, raw);
-    if (!result.accepted) return { field, result };
-    parameters.set(field, result.value);
-  }
-  return null;
 }
 
 function rangeValue(name: NumericRangeField, value: string | undefined, defaults: SlipCriteria) {
@@ -101,28 +90,9 @@ function rangeValue(name: NumericRangeField, value: string | undefined, defaults
   return value === undefined || value === "" ? bound : Number(value);
 }
 
-/** Keep configured defaults explicit, unrestricted ceilings blank, and invalid submitted drafts editable. */
-function criteriaDraft(criteria: SlipCriteria, inputs: SlipInputs = {}): SlipInputs {
-  const values = serializeSlipCriteria(criteria);
-  return Object.fromEntries(slipInputFields.map((name) => {
-    let value = inputs[name] ?? values.get(name) ?? "";
-    if (!value && name !== "slips" && !isNumericRange(name)) value = values.get(name) || (name === "timeFrom" ? fullDayKickoffTime.from : name === "timeTo" ? fullDayKickoffTime.to : "");
-    // Keep total odds at two decimal places; other ranges retain compact numeric formatting.
-    const numericFormat = name.startsWith("prob") || name.startsWith("totalProb") ? /^(0|[1-9]\d*)(?:\.\d{1,3})?$/
-      : name.startsWith("odds") || name.startsWith("total") ? /^(0|[1-9]\d*)(?:\.\d{1,2})?$/ : /^[1-9]\d*$/;
-    if (name !== "dateFrom" && name !== "dateTo" && name !== "timeFrom" && name !== "timeTo" && numericFormat.test(value)) {
-      if (name === "totalMin" || name === "totalMax") {
-        const checked = commitSlipNumber(name, value);
-        if (checked.accepted) value = checked.value;
-      } else value = name === "totalProbMin" && Number(value) === 0 ? ""
-        : value.includes(".") ? value.replace(/0+$/u, "").replace(/\.$/u, "") : value;
-    }
-    return [name, value];
-  }));
-}
 type Props = Readonly<{
   locale: string; today: ReportingDate; criteria: SlipCriteria; result: SlipBuildPageResult | null;
-  error?: SlipCriteriaIssue | null; initialInputs?: SlipInputs; initialMarkets?: readonly MarketFamily[];
+  error?: SlipCriteriaIssue | null; initialInputs?: SlipInputs; initialTimeZone?: string; initialMarkets?: readonly MarketFamily[];
   initialOutcomes?: SlipCriteria["outcomes"];
   initialReuse?: boolean; showAccount?: boolean; subscriberOnly?: boolean; signedIn?: boolean;
   jointEstimates?: boolean;
@@ -130,7 +100,7 @@ type Props = Readonly<{
 }>;
 
 /** The native GET form and enhanced navigation use the same strict criteria parser. */
-export function SlipBuilder({ locale, today, criteria, result: receivedResult, error: initialError = null, initialInputs = {}, initialMarkets, initialOutcomes, initialReuse, showAccount = false, subscriberOnly = false, signedIn = false, jointEstimates = false, configurationId = null, applyDefault = false }: Props) {
+export function SlipBuilder({ locale, today, criteria, result: receivedResult, error: initialError = null, initialInputs = {}, initialTimeZone, initialMarkets, initialOutcomes, initialReuse, showAccount = false, subscriberOnly = false, signedIn = false, jointEstimates = false, configurationId = null, applyDefault = false }: Props) {
   const messages = createMessages(locale), router = useRouter(), prefix = useId();
   const [clearedResult, setClearedResult] = useState<SlipBuildPageResult | null>(null);
   const result = clearedResult === receivedResult ? null : receivedResult;
@@ -138,11 +108,15 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   const [pagination, setPagination] = useState({ result, page: 1 });
   if (pagination.result !== result) setPagination({ result, page: 1 });
   const desktop = useDesktopLayout();
+  const deviceZone = useDeviceTimeZone();
   const recheckAccess = useCallback(() => { startTransition(() => router.refresh()); }, [router]);
   const enhanced = useSyncExternalStore(subscribeNever, clientReady, serverReady);
   const formRef = useRef<HTMLFormElement>(null), errorRef = useRef<HTMLParagraphElement>(null), resultsRef = useRef<HTMLElement>(null);
   const savedFiltersTrigger = useRef<HTMLButtonElement>(null);
-  const [savedFiltersOpen, setSavedFiltersOpen] = useState(false);
+  const [savedFiltersOpenedAt, setSavedFiltersOpenedAt] = useState<number | null>(null);
+  const savedFiltersOpen = savedFiltersOpenedAt !== null;
+  const savedFiltersDay = savedFiltersOpenedAt === null ? today
+    : getDateInTimeZone(utcInstantFromEpochMilliseconds(savedFiltersOpenedAt), deviceZone);
   const [selectedConfiguration, setSelectedConfiguration] = useState(configurationId);
   const savedFiltersId = `${prefix}-saved-filters`;
   const defaultAllowed = useRef(true);
@@ -152,29 +126,31 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   const resetCriteria = { ...defaultSlipCriteria(today), timeFrom: fullDayKickoffTime.from, timeTo: fullDayKickoffTime.to };
   const resetDraft = criteriaDraft(resetCriteria);
   const [draft, setDraft] = useState(() => criteriaDraft(criteria, initialInputs));
+  const [kickoffZone, setKickoffZone] = useState(criteria.interval?.zone ?? initialTimeZone);
   const [feedbackKey, setFeedbackKey] = useState(0);
   const [selectedMarkets, setSelectedMarkets] = useState(initialMarkets ?? criteria.markets);
   const [outcomes, setOutcomes] = useState(initialOutcomes ?? criteria.outcomes ?? {});
   const [reuse, setReuse] = useState(initialReuse ?? criteria.reuse);
   const missingKickoff = groupFields.kickoff.find((name) => !draft[name]?.trim());
-  const dialogGroup = desktop ? "markets" : "advanced";
-  const dialogId = `${prefix}-${dialogGroup}`;
+  const marketsId = `${prefix}-markets`, advancedId = `${prefix}-advanced`;
   const currentParameters = useMemo(() => {
     if (!signedIn || missingKickoff) return null;
     try {
       const parameters = new URLSearchParams();
       for (const field of slipInputFields) parameters.set(field, draft[field] ?? "");
       if (commitNumericParameters(parameters)) return null;
+      if (kickoffZone || draft.dateFrom !== today || draft.dateTo !== today) setExactKickoff(parameters, draft, kickoffZone ?? publicPolicy.reportingTimeZone);
       parameters.set("markets", selectedMarkets.join(",")); parameters.set("reuse", reuse ? "1" : "0");
       for (const market of selectedMarkets) if (outcomes[market]?.length) parameters.set(`picks.${market}`, outcomes[market]!.join(","));
       return canonicalSlipConfigurationParameters(parameters.toString(), today);
     } catch { return null; }
-  }, [signedIn, missingKickoff, draft, selectedMarkets, outcomes, reuse, today]);
-  const [dialogState, setDialogState] = useState<"open" | "mobile-error" | null>(() => {
+  }, [signedIn, missingKickoff, draft, selectedMarkets, outcomes, reuse, today, kickoffZone]);
+  const [dialogState, setDialogState] = useState<BuilderDialog | "mobile-error" | null>(() => {
     const group = issueGroup(initialError);
-    return group === "markets" ? "open" : group ? "mobile-error" : null;
+    return group === "markets" ? "markets" : group ? "mobile-error" : null;
   });
-  const dialogOpen = dialogState === "open" || !desktop && dialogState === "mobile-error";
+  const activeDialog = dialogState === "mobile-error" ? (desktop ? null : "advanced") : dialogState;
+  const advancedInline = desktop && activeDialog !== "advanced";
   const snapshot = useRef<{ draft: SlipInputs; markets: typeof selectedMarkets; outcomes: typeof outcomes; reuse: boolean } | null>(
     dialogState ? { draft, markets: selectedMarkets, outcomes, reuse } : null);
   const clearAppliedConfiguration = useCallback(() => {
@@ -184,16 +160,24 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
   }, []);
   const loadConfiguration = useCallback((configuration: SlipConfiguration) => {
-    const day = getReportingDate(utcInstantFromEpochMilliseconds(Date.now()));
-    const next = slipConfigurationCriteria(configuration.parameters, day);
+    const day = currentDateInZone(deviceZone);
+    let applied: SlipConfiguration, next: SlipCriteria;
+    try {
+      applied = datedSlipConfiguration(configuration, day, deviceZone);
+      next = slipConfigurationCriteria(applied.parameters, day);
+    } catch (error) {
+      if (error instanceof SlipCriteriaError) return;
+      throw error;
+    }
+    setKickoffZone(next.interval?.zone);
     setDraft(criteriaDraft(next)); setSelectedMarkets(next.markets); setOutcomes(next.outcomes ?? {}); setReuse(next.reuse);
     setError(null); setFeedbackKey(value => value + 1);
     snapshot.current = null; setDialogState(null); setSelectedConfiguration(configuration.id); setClearedResult(receivedResult);
     // Keep the management dialog open and replace the generation URL without a server build/read.
-    window.history.replaceState(null, "", slipConfigurationHref(configuration, locale, day));
-  }, [locale, receivedResult]);
+    window.history.replaceState(null, "", slipConfigurationHref(applied, locale, day));
+  }, [deviceZone, locale, receivedResult]);
   const closeSavedFilters = useCallback(() => {
-    setSavedFiltersOpen(false);
+    setSavedFiltersOpenedAt(null);
     requestAnimationFrame(() => savedFiltersTrigger.current?.focus());
   }, []);
   useEffect(() => {
@@ -203,7 +187,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       else errorRef.current?.focus();
     });
     return () => cancelAnimationFrame(frame);
-  }, [error, dialogOpen]);
+  }, [error, activeDialog]);
   function range(from: typeof slipInputFields[number], to: typeof slipInputFields[number], unit = "") {
     const lower = draft[from]?.trim(), upper = draft[to]?.trim(), any = messages.text("slips.any");
     if (!lower && !upper) return any;
@@ -213,16 +197,15 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   function dateSummary() {
     try {
       const from = parseReportingDate(draft.dateFrom || today), to = parseReportingDate(draft.dateTo || from);
-      if (from === today && to === today) return messages.text("slips.today");
+      if (!kickoffZone && from === today && to === today) return messages.text("slips.today");
       return from === to ? messages.reportingDateShort(from) : `${messages.reportingDateShort(from)}–${messages.reportingDateShort(to)}`;
     } catch { return messages.text("slips.summary.checkDates"); }
   }
-  const invalidField = error?.field;
   const showJoint = jointEstimates || criteria.totalProbMin !== undefined || criteria.totalProbMax !== undefined
     || initialInputs.totalProbMin !== undefined || initialInputs.totalProbMax !== undefined || Boolean(draft.totalProbMin || draft.totalProbMax);
-  const invalidMarkets = invalidField === "markets" || invalidField === "outcomes";
+  const invalidMarkets = error?.field === "markets" || error?.field === "outcomes";
   const manualMarkets = selectedMarkets.filter((family) => outcomes[family]?.length).length;
-  const allAutomatic = publicPolicy.markets.every((family) => selectedMarkets.includes(family) && !outcomes[family]?.length);
+  const allAutomatic = allSlipMarketsAutomatic(selectedMarkets, outcomes);
   const marketCountSummary = selectedMarkets.length === publicPolicy.markets.length
     ? messages.text("slips.summary.allMarkets", { count: messages.number(selectedMarkets.length) })
     : messages.plural("slips.marketCount", selectedMarkets.length);
@@ -232,33 +215,32 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       : messages.text("slips.summary.automaticResults"),
   });
   const errorGroup = issueGroup(error);
-  const dialogTitle = messages.text(desktop ? "slips.accordion.markets" : "feed.filters.dialogTitle");
-  const dialogLabel = messages.text(desktop ? manualMarkets ? "slips.toolbar.manual" : "slips.automatic" : "feed.filters.dialogTitle");
-  const dialogIssue = (group: CriteriaGroup | null) => group !== null && (!desktop || group === "markets");
+  const marketsTitle = messages.text("slips.dialog.markets"), advancedTitle = messages.text("feed.filters.dialogTitle");
+  const issueDialog = (group: CriteriaGroup | null) => group === "markets" ? "markets" : group && !advancedInline ? "advanced" : null;
   function changed(fields: readonly typeof slipInputFields[number][]) {
     return fields.some((name) => isNumericRange(name)
       ? rangeValue(name, draft[name], resetCriteria) !== rangeValue(name, undefined, resetCriteria) : draft[name] !== resetDraft[name]);
   }
-  const marketsEdited = !allAutomatic || reuse;
-  const criteriaCount = desktop ? selectedMarkets.length
-    : Number(changed(["oddsMin", "oddsMax"])) + Number(changed(["probMin", "probMax"]))
-      + Number(changed(["totalProbMin", "totalProbMax"])) + Number(changed(groupFields.kickoff)) + Number(marketsEdited);
-  function openDialog() {
-    setFeedbackKey((current) => current + 1);
+  const marketsEdited = !allAutomatic || advancedInline && reuse;
+  const advancedCount = Number(changed(["oddsMin", "oddsMax"])) + Number(changed(["probMin", "probMax"]))
+    + Number(changed(["totalProbMin", "totalProbMax"])) + Number(changed(groupFields.kickoff)) + Number(reuse);
+  function openDialog(group: BuilderDialog) {
+    if (group === "advanced") setFeedbackKey((current) => current + 1);
     snapshot.current = { draft, markets: selectedMarkets, outcomes, reuse };
-    setDialogState("open");
+    setDialogState(group);
   }
   function restoreAdvanced(values: SlipInputs) {
     setDraft((current) => ({ ...current, ...Object.fromEntries(advancedFields.map((name) => [name, values[name]])) }));
   }
-  function cancelDialog() {
-    setFeedbackKey((current) => current + 1);
+  function cancelDialog(group: BuilderDialog) {
     const previous = snapshot.current;
+    if (group === "advanced") setFeedbackKey((current) => current + 1);
     if (previous) {
-      restoreAdvanced(previous.draft);
-      setSelectedMarkets(previous.markets); setOutcomes(previous.outcomes); setReuse(previous.reuse);
+      if (group === "advanced") restoreAdvanced(previous.draft);
+      else { setSelectedMarkets(previous.markets); setOutcomes(previous.outcomes); }
+      setReuse(previous.reuse);
     }
-    setError((current) => dialogIssue(issueGroup(current)) ? null : current);
+    setError((current) => issueDialog(issueGroup(current)) === group ? null : current);
     snapshot.current = null; setDialogState(null);
   }
   function validateCriteria(parameters: URLSearchParams, requireKickoff: boolean): { criteria: SlipCriteria } | { issue: BuilderIssue } {
@@ -275,32 +257,40 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
         : { field: issue.field, code: issue.code } };
     }
   }
-  function applyDialog() {
+  function applyDialog(group: BuilderDialog) {
     const parameters = serializeSlipCriteria(resetCriteria);
-    if (!desktop) for (const name of advancedFields) parameters.set(name, draft[name] ?? "");
-    parameters.delete("markets");
-    selectedMarkets.forEach((market) => parameters.append("markets", market));
-    for (const market of selectedMarkets) outcomes[market]?.forEach((value) => parameters.append(`picks.${market}`, value));
+    if (group === "advanced") {
+      for (const name of advancedFields) parameters.set(name, draft[name] ?? "");
+      if (kickoffZone) setExactKickoff(parameters, draft, kickoffZone);
+    } else {
+      parameters.delete("markets");
+      selectedMarkets.forEach((market) => parameters.append("markets", market));
+      for (const market of selectedMarkets) outcomes[market]?.forEach((value) => parameters.append(`picks.${market}`, value));
+    }
     parameters.set("reuse", reuse ? "1" : "0"); parameters.set("build", "1");
-    const validation = validateCriteria(parameters, !desktop);
+    const validation = validateCriteria(parameters, group === "advanced");
     if ("issue" in validation) { setError(validation.issue); return; }
-    setError((current) => dialogIssue(issueGroup(current)) ? null : current);
-    setFeedbackKey((current) => current + 1);
+    setError((current) => issueDialog(issueGroup(current)) === group ? null : current);
+    if (group === "advanced") setFeedbackKey((current) => current + 1);
     snapshot.current = null; setDialogState(null);
   }
   function reset() {
     setFeedbackKey((current) => current + 1);
+    setKickoffZone(undefined);
     setDraft(resetDraft); setSelectedMarkets(resetCriteria.markets); setOutcomes(resetCriteria.outcomes ?? {}); setReuse(resetCriteria.reuse);
     setError(null); snapshot.current = null; setDialogState(null);
     setSelectedConfiguration(null);
     setClearedResult(receivedResult);
     if (window.location.search) startTransition(() => router.push(`${action}?${serializeSlipCriteria(resetCriteria)}`, { scroll: false }));
   }
-  function resetDialog() {
-    setFeedbackKey((current) => current + 1);
-    if (!desktop) restoreAdvanced(resetDraft);
-    setSelectedMarkets(resetCriteria.markets); setOutcomes(resetCriteria.outcomes ?? {}); setReuse(resetCriteria.reuse);
-    setError((current) => dialogIssue(issueGroup(current)) ? null : current);
+  function resetDialog(group: BuilderDialog) {
+    if (group === "advanced") {
+      setFeedbackKey((current) => current + 1);
+      const day = kickoffZone ? currentDateInZone(kickoffZone) : today;
+      restoreAdvanced({ ...resetDraft, dateFrom: day, dateTo: day });
+    } else { setSelectedMarkets(resetCriteria.markets); setOutcomes(resetCriteria.outcomes ?? {}); }
+    if (group === "advanced" || advancedInline) setReuse(resetCriteria.reuse);
+    setError((current) => issueDialog(issueGroup(current)) === group ? null : current);
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -312,7 +302,8 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
     const validation = validateCriteria(parameters, true);
     if ("issue" in validation) {
       setError(validation.issue);
-      if (dialogIssue(issueGroup(validation.issue))) openDialog();
+      const group = issueDialog(issueGroup(validation.issue));
+      if (group) openDialog(group);
       else { snapshot.current = null; setDialogState(null); }
       return;
     }
@@ -333,49 +324,9 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       || isDateTimeField(name) && current.field.toString().startsWith(name.startsWith("date") ? "date" : "time")
       || isNumericRange(name) && current.field.toString().replace(/(?:Min|Max)$/u, "") === name.replace(/(?:Min|Max)$/u, "")) ? null : current);
   }
-  function field(name: typeof slipInputFields[number], label: TextInputProps["label"], options: Omit<TextInputProps, "label" | "name"> = {}) {
-    const numericMessage = error && "message" in error && error.field === name ? error.message : undefined;
-    const criteriaError = error && "code" in error ? error : null;
-    const invalid = Boolean(numericMessage) || criteriaError?.field === name || (error?.field === "dateFrom" && name === "dateTo")
-      || (error?.field === "timeFrom" && name === "timeTo")
-      || (criteriaError?.field === "totalMin" && name === "totalMax") || (criteriaError?.field === "oddsMin" && name === "oddsMax")
-      || (criteriaError?.field === "probMin" && name === "probMax") || (criteriaError?.field === "totalProbMin" && name === "totalProbMax") || (criteriaError?.field === "teamsMin" && name === "teamsMax");
-    const shared = { name, id: `${prefix}-${name}`, label,
-      placeholder: isNumericRange(name) ? messages.text("slips.any") : undefined,
-      "aria-invalid": invalid || undefined, "aria-describedby": invalid && criteriaError && !isDateTimeField(name) ? errorId : undefined, ...options };
-    if (!isDateTimeField(name)) return <SlipNumericInput {...shared} field={name as SlipNumericField} locale={locale}
-      feedbackKey={feedbackKey} validationMessage={numericMessage}
-      value={draft[name] ?? ""} onValueChange={(value) => updateField(name, value)}
-      rangeError={(value) => slipNumberRangeIssue(name, { ...draft, [name]: value }, resetDraft) ? messages.text("slips.guard.range") : undefined} />;
-    const date = name.startsWith("date");
-    const bounds = date ? name === "dateFrom" ? { min: "0001-01-01", max: "9999-12-31" } : slipDateBounds("dateTo", draft)
-      : { min: name === "timeTo" ? draft.timeFrom || fullDayKickoffTime.from : fullDayKickoffTime.from, max: fullDayKickoffTime.to };
-    return <DateTimeField {...shared} locale={locale} mode={date ? "date" : "time"} {...bounds} required value={draft[name] ?? ""}
-      error={invalid && criteriaError ? messages.text(`slips.error.${criteriaError.code}`) : undefined}
-      onValueChange={value => updateField(name, value)} />;
-  }
-  function kickoffField(endpoint: "From" | "To") {
-    const date = `date${endpoint}` as const, time = `time${endpoint}` as const;
-    const value = draft[date] && draft[time] ? `${draft[date]}T${draft[time]}` : "";
-    const invalid = invalidField === date || invalidField === time
-      || endpoint === "To" && (invalidField === "dateFrom" || invalidField === "timeFrom");
-    return <>
-      <input type="hidden" name={date} value={draft[date] ?? ""} />
-      <input type="hidden" name={time} value={draft[time] ?? ""} />
-      <DateTimeField key={desktop ? undefined : feedbackKey} id={`${prefix}-date-time-${endpoint}`} locale={locale} mode="datetime" timeZone={publicPolicy.reportingTimeZone}
-        label={messages.text(`slips.dateTime${endpoint}`)} value={value} required
-        aria-invalid={invalid || undefined} aria-describedby={invalid ? errorId : undefined}
-        onValueChange={(value) => {
-          const [day = "", minute = ""] = value.split("T");
-          setDraft((current) => ({ ...current, [date]: day, [time]: minute }));
-          setError((current) => issueGroup(current) === "kickoff" ? null : current);
-        }} />
-    </>;
-  }
   function errorMessage(group: CriteriaGroup | null) {
     return error && "code" in error && errorGroup === group ? <CriteriaError id={errorId} ref={errorRef} tabIndex={-1} role="alert">{messages.text(`slips.error.${error.code}`)}</CriteriaError> : null;
   }
-  const oddsOptions = { min: slipBuilderRules.minimumOddsHundredths / 100, step: "0.01" };
   const data = result?.data, generated = result?.state === "generated" && data !== null && data !== undefined;
   const slips = data?.slips;
   const pageCount = Math.ceil((slips?.length ?? 0) / slipPageSize);
@@ -383,152 +334,105 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   const orderedSlips = useMemo(() => slips ? [...slips].sort(compareSlipDisplayProbability) : [], [slips]);
   const shownSlips = useMemo(() => orderedSlips.slice(offset, offset + slipPageSize), [orderedSlips, offset]);
   const emptyState = result?.state === "generated" ? "data-unavailable" : result?.state;
-  const timeSummary = draft.timeFrom === fullDayKickoffTime.from && draft.timeTo === fullDayKickoffTime.to
+  const timeSummary = kickoffZone ? `${range("timeFrom", "timeTo")} ${kickoffZone.replaceAll("_", " ")}`
+    : draft.timeFrom === fullDayKickoffTime.from && draft.timeTo === fullDayKickoffTime.to
     ? messages.text("slips.summary.allDay") : `${range("timeFrom", "timeTo")} EAT`;
   const accessRequired = <UnlockPanel locale={locale} signedIn={signedIn} returnTo={action} guestView="login" />;
-  const limitsFields = <LimitGroups>
-    <fieldset><legend>{messages.text("slips.individualOdds")}</legend><Fields>
-      {field("oddsMin", messages.text("slips.minimum"), { ...oddsOptions, "aria-label": messages.text("slips.oddsMin") })}
-      {field("oddsMax", messages.text("slips.maximum"), { ...oddsOptions, "aria-label": messages.text("slips.oddsMax") })}
-    </Fields></fieldset>
-    <fieldset><legend>{messages.text("slips.probabilityPercent", { minimum: messages.number(slipBuilderRules.minimumPickPercent) })}</legend><Fields>
-      {field("probMin", messages.text("slips.minimum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.probMin") })}
-      {field("probMax", messages.text("slips.maximum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.probMax") })}
-    </Fields></fieldset>
-    {showJoint && <fieldset data-joint-limit><legend>{messages.text("slips.combinedProbabilityPercent")}</legend><Fields>
-      {field("totalProbMin", messages.text("slips.minimum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.totalProbMin") })}
-      {field("totalProbMax", messages.text("slips.maximum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.totalProbMax") })}
-    </Fields><Note>{messages.text("slips.combinedProbabilityHint")}</Note></fieldset>}
-  </LimitGroups>;
-  const kickoffFields = desktop || enhanced ? <Fields data-combined-kickoff-fields>
-    {kickoffField("From")}{kickoffField("To")}
-  </Fields> : <Fields data-kickoff-fields>
-    {field("dateFrom", messages.text("slips.dateFrom"))}
-    {field("dateTo", messages.text("slips.dateTo"))}
-    {field("timeFrom", messages.text("slips.timeFrom"))}
-    {field("timeTo", messages.text("slips.timeTo"))}
-  </Fields>;
-  const reuseField = <ReuseRow>
-    <input type="hidden" name="reuse" value="0" />
-    <label><input type="checkbox" name="reuse" value="1" checked={reuse}
-      aria-describedby={desktop ? `${prefix}-reuse-hint` : undefined} onChange={(event) => setReuse(event.target.checked)} />{messages.text("slips.reuse")}</label>
-    {desktop && <Note id={`${prefix}-reuse-hint`}>{messages.text("slips.reuseHint")}</Note>}
-  </ReuseRow>;
-  const marketFields = <FieldGroup data-criteria-field="markets" aria-describedby={invalidMarkets ? errorId : undefined}>
-    <VisuallyHidden as="legend">{messages.text("slips.accordion.markets")}</VisuallyHidden>
-    {desktop && <Note>{messages.text("slips.marketsHint")}</Note>}
-    {!desktop && enhanced && <>
-      <MarketChoice>
-        <input type="checkbox" checked={allAutomatic} aria-describedby={`${prefix}-all-automatic-hint`}
-          onChange={() => { setSelectedMarkets(resetCriteria.markets); setOutcomes({}); }} />
-        {messages.text("slips.automatic")}
-      </MarketChoice>
-      <Note id={`${prefix}-all-automatic-hint`}>{messages.text("slips.automaticAllHint")}</Note>
-    </>}
-    <MarketChoices>
-      {publicPolicy.markets.map((family) => {
-        const enabled = selectedMarkets.includes(family), market = messages.text(`market.family.${family}`);
-        return <MarketField key={family}>
-          <MarketChoice>
-            <input type="checkbox" name="markets" value={family} checked={enabled}
-              onChange={() => {
-                setSelectedMarkets((current) => enabled ? current.filter((value) => value !== family) : [...current, family]);
-                setOutcomes((current) => { const next = { ...current }; delete next[family]; return next; });
-              }} aria-invalid={error?.field === "markets" || undefined} />{market}
-          </MarketChoice>
-          <ChoicePicker inline name={`picks.${family}`} label={messages.text("slips.outcomeLabel", { market })}
-            automaticLabel={messages.text("slips.automatic")} automaticHint={messages.text("slips.automaticHint")}
-            options={marketSelections[family].map((value) => ({ value, label: predictionLabel(messages, value) }))}
-            selected={outcomes[family] ?? []}
-            onChange={(values) => setOutcomes((current) => ({ ...current, [family]: values as readonly MarketSelection[] }))}
-            disabled={!enabled} invalid={error?.field === "outcomes"} {...(error?.field === "outcomes" ? { describedBy: errorId } : {})} />
-        </MarketField>;
-      })}
-    </MarketChoices>
-    {desktop && reuseField}
-  </FieldGroup>;
-  const savedFiltersButton = signedIn && <SavedFiltersButton ref={savedFiltersTrigger} type="button" variant="secondary" data-saved-filters-trigger
+  const { targets, limits: limitsFields, kickoff: kickoffFields, markets: marketFields, reuse: reuseField } = renderSlipCriteriaFields({
+    locale, prefix, draft, resetDraft, error, errorId, feedbackKey, desktop, enhanced, showJoint, selectedMarkets, outcomes, reuse,
+    ...(kickoffZone ? { timeZone: kickoffZone, interval: true } : {}),
+    onFieldChange: updateField,
+    onKickoffChange: (endpoint, day, minute) => {
+      setDraft(current => ({ ...current, [`date${endpoint}`]: day, [`time${endpoint}`]: minute }));
+      setError(current => issueGroup(current) === "kickoff" ? null : current);
+    },
+    onMarketToggle: family => {
+      setSelectedMarkets(current => current.includes(family) ? current.filter(value => value !== family) : [...current, family]);
+      setOutcomes(current => { const next = { ...current }; delete next[family]; return next; });
+    },
+    onOutcomesChange: (family, values) => setOutcomes(current => ({ ...current, [family]: values })),
+    onAutomaticMarkets: () => { setSelectedMarkets(resetCriteria.markets); setOutcomes({}); },
+    onReuseChange: setReuse,
+    reuseInMarkets: advancedInline,
+    resetKickoffOnFeedback: !advancedInline,
+  });
+  const kickoffContents = <>{kickoffFields}{errorMessage("kickoff")}</>;
+  const savedFiltersButton = signedIn && <CriteriaTrigger ref={savedFiltersTrigger} type="button" variant="secondary" data-saved-filters-trigger
     aria-haspopup="dialog" aria-expanded={savedFiltersOpen} aria-controls={savedFiltersId} disabled={pending || !enhanced}
-    onClick={() => setSavedFiltersOpen(true)}>{messages.text("slipConfigs.title")}</SavedFiltersButton>;
+    onClick={() => setSavedFiltersOpenedAt(Date.now())}><SlidersIcon />{messages.text("slips.customFilters")}</CriteriaTrigger>;
+  const dialogLabels = { resetLabel: messages.text("slips.reset"), applyLabel: messages.text("slips.dialog.apply"), cancelLabel: messages.text("slips.dialog.cancel") };
 
   return <SlipStack data-slip-builder-page aria-busy={pending} onInputCapture={markInteracted} onClickCapture={markInteracted} onKeyDownCapture={markInteracted}>
     <AppBrandBar locale={locale} showAccount={showAccount} />
     <BuilderHeader>
       <SlipHeading>{messages.text("slips.title")}</SlipHeading>
     </BuilderHeader>
-    {signedIn && <SavedSlipConfigurations id={savedFiltersId} locale={locale} currentParameters={currentParameters} appliedId={selectedConfiguration}
+    {signedIn && <SavedSlipConfigurations id={savedFiltersId} locale={locale} today={savedFiltersDay} timeZone={deviceZone} currentParameters={currentParameters} appliedId={selectedConfiguration}
       open={savedFiltersOpen} onClose={closeSavedFilters} onAppliedConfigurationRemoved={clearAppliedConfiguration}
-      applyDefault={applyDefault} onLoad={loadConfiguration} pending={pending} canApplyDefault={canApplyDefault} />}
+      applyDefault={applyDefault} onLoad={loadConfiguration} pending={pending} canApplyDefault={canApplyDefault} jointEstimates={jointEstimates} />}
     <BuilderPanel data-slip-builder-toolbar aria-labelledby={`${prefix}-criteria`}>
       <VisuallyHidden as="h2" id={`${prefix}-criteria`}>{messages.text("slips.criteria")}</VisuallyHidden>
       <CriteriaForm id={formId} data-enhanced={enhanced} action={action} method="get" ref={formRef} onSubmit={submit} noValidate>
         <input type="hidden" name="build" value="1" />
         {selectedConfiguration && <input type="hidden" name="configuration" value={selectedConfiguration} />}
-        <BuilderEssentials data-slip-builder-essentials>
-        <fieldset data-slip-count data-toolbar-group="slips"><legend>{messages.text("slips.totalSlips")}</legend>{field("slips", null, { min: 1, max: slipBuilderRules.maximumSlips, step: 1, inputMode: "numeric", required: true, "aria-label": messages.text("slips.count") })}</fieldset>
-        <FieldGroup data-criteria-field="targets"><VisuallyHidden as="legend">{messages.text("slips.yourSlips")}</VisuallyHidden><TargetGroups data-slip-target-groups>
-          <fieldset data-toolbar-group="total"><legend><span data-slip-label="mobile">{messages.text("slips.mobile.totalOdds")}</span><span data-slip-label="desktop">{messages.text("slips.totalOddsRange")}</span></legend><Fields>
-            {field("totalMin", messages.text("slips.minimum"), { ...oddsOptions, "aria-label": messages.text("slips.totalMin") })}
-            {field("totalMax", messages.text("slips.maximum"), { ...oddsOptions, "aria-label": messages.text("slips.totalMax") })}
-          </Fields></fieldset>
-          <fieldset data-toolbar-group="matches"><legend><span data-slip-label="mobile">{messages.text("slips.mobile.matches")}</span><span data-slip-label="desktop">{messages.text("slips.selectionsRange")}</span></legend><Fields>
-            {field("teamsMin", messages.text("slips.minimum"), { min: 1, step: 1, inputMode: "numeric", "aria-label": messages.text("slips.teamsMin") })}
-            {field("teamsMax", messages.text("slips.maximum"), { min: 1, step: 1, inputMode: "numeric", "aria-label": messages.text("slips.teamsMax") })}
-          </Fields></fieldset>
-        </TargetGroups></FieldGroup>
-        </BuilderEssentials>
-        {desktop && <>
-          <VisuallyHidden id={`${dialogId}-summary`}>{marketsSummary}</VisuallyHidden>
+        {targets}
+        {advancedInline && <>
           <InlineCriteria data-criteria-field="limits">
             <VisuallyHidden as="legend">{messages.text("slips.dialog.limits")}</VisuallyHidden>
             {limitsFields}
             {errorMessage("limits")}
           </InlineCriteria>
           <InlineCriteria data-criteria-field="kickoff">
-            <VisuallyHidden as="legend">{messages.text("slips.dialog.kickoffTitle")}</VisuallyHidden>
-            {kickoffFields}
-            {errorMessage("kickoff")}
+            {kickoffContents}
           </InlineCriteria>
         </>}
-        <BuilderCriteriaDialog id={dialogId} group={dialogGroup} title={dialogTitle} open={dialogOpen}
-          onReset={resetDialog} resetLabel={messages.text("slips.reset")}
-          onCancel={cancelDialog} onApply={applyDialog} applyLabel={messages.text("slips.dialog.apply")}
-          cancelLabel={messages.text("slips.dialog.cancel")} closeLabel={messages.text("slips.dialog.close", { section: dialogTitle })}>
-          {dialogIssue(errorGroup) && errorMessage(errorGroup)}
-          {desktop ? marketFields : <AdvancedCriteria>
+        {!advancedInline && <BuilderCriteriaDialog id={advancedId} group="advanced" title={advancedTitle} open={activeDialog === "advanced"}
+          {...dialogLabels} closeLabel={messages.text("slips.dialog.close", { section: advancedTitle })}
+          onReset={() => resetDialog("advanced")} onCancel={() => cancelDialog("advanced")} onApply={() => applyDialog("advanced")}>
+          <AdvancedCriteria>
             <FieldGroup data-criteria-field="limits">
               <VisuallyHidden as="legend">{messages.text("slips.dialog.limits")}</VisuallyHidden>
               {limitsFields}
+              {errorMessage("limits")}
             </FieldGroup>
             <FieldGroup data-criteria-field="kickoff">
-              <VisuallyHidden as="legend">{messages.text("slips.dialog.kickoffTitle")}</VisuallyHidden>
-              {kickoffFields}
+              {kickoffContents}
             </FieldGroup>
             {reuseField}
-            <CriteriaAccordion group="markets" title={messages.text("slips.dialog.markets")} summary={marketsSummary}
-              defaultOpen invalid={invalidMarkets} resetVersion={feedbackKey}>
-              {marketFields}
-            </CriteriaAccordion>
-          </AdvancedCriteria>}
+          </AdvancedCriteria>
+        </BuilderCriteriaDialog>}
+        <BuilderCriteriaDialog id={marketsId} group="markets" title={marketsTitle} open={activeDialog === "markets"}
+          {...dialogLabels} closeLabel={messages.text("slips.dialog.close", { section: marketsTitle })}
+          onReset={() => resetDialog("markets")} onCancel={() => cancelDialog("markets")} onApply={() => applyDialog("markets")}>
+          {errorMessage("markets")}
+          {marketFields}
         </BuilderCriteriaDialog>
         {errorMessage(null)}
         <BuilderOptions data-slip-builder-options>
         <CriteriaOptions data-slip-criteria-options hidden={!enhanced}>
-          <CriteriaOption data-criteria-option={dialogGroup} data-toolbar-group={dialogGroup}>
-            <CriteriaTitle data-criteria-title>{desktop ? messages.text("slips.dialog.markets") : dialogTitle}</CriteriaTitle>
-            <CriteriaTrigger type="button" variant="secondary" data-criteria-trigger={dialogGroup}
-              aria-label={desktop ? `${messages.text("slips.dialog.markets")}: ${dialogLabel}` : undefined}
-              data-edited={desktop ? marketsEdited : criteriaCount > 0} aria-haspopup="dialog" aria-controls={dialogId} aria-expanded={dialogOpen}
-              aria-describedby={desktop ? `${dialogId}-summary` : undefined} aria-invalid={dialogIssue(errorGroup) || undefined}
-              disabled={pending} onClick={openDialog}>
-              <span data-criteria-label>{dialogLabel}</span>
-              {criteriaCount > 0 && (!desktop || marketsEdited) && <>
-                <small data-criteria-count aria-hidden="true">{messages.number(criteriaCount)}</small>
-                {!desktop && <VisuallyHidden> {messages.plural("slips.activeFilterCount", criteriaCount)}</VisuallyHidden>}
+          <CriteriaOption data-criteria-option="markets" data-toolbar-group="markets">
+            <VisuallyHidden id={`${marketsId}-summary`}>{marketsSummary}</VisuallyHidden>
+            <CriteriaTrigger type="button" variant="secondary" data-criteria-trigger="markets" data-edited={marketsEdited}
+              aria-haspopup="dialog" aria-controls={marketsId} aria-expanded={activeDialog === "markets"}
+              aria-describedby={`${marketsId}-summary`} aria-invalid={invalidMarkets || undefined}
+              disabled={pending} onClick={() => openDialog("markets")}>
+              <ChartIcon />{marketsTitle}
+              {marketsEdited && selectedMarkets.length > 0 && <small data-criteria-count aria-hidden="true">{messages.number(selectedMarkets.length)}</small>}
+            </CriteriaTrigger>
+          </CriteriaOption>
+          {!desktop && <CriteriaOption data-criteria-option="advanced" data-toolbar-group="advanced">
+            <CriteriaTrigger type="button" variant="secondary" data-criteria-trigger="advanced" data-edited={advancedCount > 0}
+              aria-haspopup="dialog" aria-controls={advancedId} aria-expanded={activeDialog === "advanced"}
+              aria-invalid={issueDialog(errorGroup) === "advanced" || undefined}
+              disabled={pending} onClick={() => openDialog("advanced")}>
+              {advancedTitle}
+              {advancedCount > 0 && <>
+                <small data-criteria-count aria-hidden="true">{messages.number(advancedCount)}</small>
+                <VisuallyHidden> {messages.plural("slips.activeFilterCount", advancedCount)}</VisuallyHidden>
               </>}
               <ChevronRightIcon data-dialog-arrow />
             </CriteriaTrigger>
-          </CriteriaOption>
+          </CriteriaOption>}
           {!desktop && savedFiltersButton}
         </CriteriaOptions>
         <Actions data-criteria-actions data-toolbar-group="actions">
@@ -537,9 +441,9 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
           {desktop && savedFiltersButton}
           <ClearLink href={action} variant="quiet" prefetch={false} onClick={(event) => { event.preventDefault(); reset(); }}><ResetIcon />{messages.text("slips.reset")}</ClearLink>
           {subscriberOnly ? <BuildLink data-slip-access-action href={subscriberHref(signedIn, action, "login")} prefetch={false}>
-            <SlipBuildActionLabel locale={locale} restricted />
+            <LockIcon /><SlipBuildActionLabel locale={locale} restricted />
           </BuildLink> : <BuildButton data-slip-access-action type="submit" disabled={pending}>
-            <SlipBuildActionLabel locale={locale} restricted={false} />
+            <SlipIcon /><SlipBuildActionLabel locale={locale} restricted={false} />
           </BuildButton>}
           </ActionControls>
         </Actions>

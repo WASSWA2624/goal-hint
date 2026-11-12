@@ -6,7 +6,7 @@ import { AccountLinks } from "@/components/members/account-link";
 import { MemberNavigationRecovery } from "@/components/members/member-controls";
 import { NavigationProgress } from "@/components/navigation/navigation-progress";
 import { DesktopNav, Header, HeaderActions, HomeLink, SkipLink, TabBar } from "@/components/navigation/shell-styles";
-import { ResponsiveNavigation } from "@/components/navigation/responsive-navigation";
+import { SessionNavigation } from "@/components/navigation/session-navigation";
 import { dashboardDestination, navigationDestinations } from "@/components/navigation/navigation-destinations";
 import { getShellDate } from "@/app/_components/shell-time";
 import { homeHref } from "@/domain/navigation";
@@ -19,7 +19,8 @@ import { AdminHeaderContent, AdminMark, AdminSectionMenu, AdminShellFrame, Admin
  */
 export async function AdminShell({ username, ...props }: ComponentProps<typeof AdminWorkspace> & { username: string }) {
   const messages = createMessages("en");
-  const destinations = [...navigationDestinations(await getShellDate(), "en"), dashboardDestination(messages.text("navigation.dashboard"))];
+  const dashboardLabel = messages.text("navigation.dashboard");
+  const destinations = [...navigationDestinations(await getShellDate(), "en"), dashboardDestination(dashboardLabel)];
   return (
     <AdminShellFrame data-admin-shell>
       <MemberNavigationRecovery expectedAdministrator />
@@ -31,7 +32,7 @@ export async function AdminShell({ username, ...props }: ComponentProps<typeof A
           </HomeLink>
           <AdminMark>Admin</AdminMark>
           <DesktopNav aria-label={messages.text("navigation.primary")}>
-            <ResponsiveNavigation destinations={destinations} current="dashboard" moreLabel={messages.text("navigation.more")} />
+            <SessionNavigation locale="en" destinations={destinations} current="dashboard" dashboardLabel={dashboardLabel} moreLabel={messages.text("navigation.more")} />
           </DesktopNav>
           <HeaderActions><AccountLinks locale="en" administratorName={username} /></HeaderActions>
         </AdminHeaderContent>
@@ -40,7 +41,7 @@ export async function AdminShell({ username, ...props }: ComponentProps<typeof A
       </Header>
       <AdminWorkspace {...props} />
       <TabBar aria-label={messages.text("navigation.tabs")}>
-        <ResponsiveNavigation mobile destinations={destinations} current="dashboard" moreLabel={messages.text("navigation.more")} />
+        <SessionNavigation mobile locale="en" destinations={destinations} current="dashboard" dashboardLabel={dashboardLabel} moreLabel={messages.text("navigation.more")} />
       </TabBar>
     </AdminShellFrame>
   );

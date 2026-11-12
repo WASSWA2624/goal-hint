@@ -250,16 +250,34 @@ def football_worker(directory, env):
     return worker
 
 
-def loopback_arguments(args):
-    for index, arg in enumerate(args):
-        if arg in ("-H", "--hostname") and (index + 1 >= len(args) or args[index + 1] != "127.0.0.1"):
-            raise CommandError("Live snapshot development uses --hostname 127.0.0.1.")
-        if arg.startswith(("--hostname=", "-H=")) and arg.split("=", 1)[1] != "127.0.0.1":
-            raise CommandError("Live snapshot development uses --hostname 127.0.0.1.")
-    return [*args, "--hostname", "127.0.0.1"]
+def snapshot_web_arguments(args, *, lan=False):
+    """Keep live snapshots on loopback unless LAN access is requested explicitly."""
+    hostname = "0.0.0.0" if lan else "127.0.0.1"
+    forwarded = []
+    values = iter(args)
+    for value in values:
+        if value in ("--hostname", "-H"):
+            hostname = next(values, None)
+        elif value.startswith(("--hostname=", "-H=")):
+            hostname = value.split("=", 1)[1]
+        elif value.startswith("-H"):
+            hostname = value[2:]
+        else:
+            forwarded.append(value)
+            continue
+        # Both bindings keep the existing loopback warm-up available.
+        if hostname not in ("127.0.0.1", "0.0.0.0"):
+            raise CommandError("Use --hostname 127.0.0.1 for local access or --hostname 0.0.0.0 for LAN access.")
+    return [*forwarded, "--hostname", hostname]
 
 
 def run_local_football(args, *, prepare):
+    snapshot_dir = ROOT / ".goal-hint" / LocalFootballMysql.directory_name
+    live_snapshot = (snapshot_dir / "live").is_file()
+    if not prepare:
+        if live_snapshot:
+            args = snapshot_web_arguments(args, lan=(snapshot_dir / "lan").is_file())
+        args, port = web_arguments(args)
     with LocalFootballMysql(replace_running=not prepare) as instance:
         env = demo_environment(instance.url, demo=False)
         print("Applying the application migrations to the local football snapshot…", flush=True)
@@ -290,9 +308,7 @@ def run_local_football(args, *, prepare):
                 raise CommandError("Import and verify the real football fixtures before starting the local snapshot.")
             env["GOAL_HINT_COMPETITION_IDS"] = ",".join(ids)
             prepare_app_downloads("development")
-            args, port = web_arguments(args)
-            if (instance.directory / "live").is_file():
-                args = loopback_arguments(args)
+            if live_snapshot:
                 worker = football_worker(instance.directory, env)
             release_development_web(port)
             print(f"Serving stored API-Football fixtures from the local snapshot ({len(ids)} competitions).", flush=True)

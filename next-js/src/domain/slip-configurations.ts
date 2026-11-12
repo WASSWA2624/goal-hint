@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getReportingDate, utcInstantFromEpochMilliseconds } from "./calendar.ts";
+import { getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "./calendar.ts";
 import { parseSlipCriteria, serializeSlipCriteria, type SlipCriteria } from "./slip-builder.ts";
 import { fullDayKickoffTime } from "./kickoff-time.ts";
 import { formatOddsHundredths, oddsRules } from "./odds.ts";
@@ -16,7 +16,10 @@ function normalizeSlipConfigurationParameters(value: string, today: string, stor
   if (value.length > slipConfigurationRules.parameterBytes) throw new RangeError("Configuration is too large.");
   const query = new URLSearchParams(value);
   if (query.has("build") || query.has("configuration")) throw new RangeError("Save filters without generation flags.");
-  query.delete("dateFrom"); query.delete("dateTo");
+  // Older rows omit dates. A continuous interval explicitly supplies both endpoints and a zone.
+  if (!["start", "end", "tz"].some(key => query.has(key))) {
+    query.delete("dateFrom"); query.delete("dateTo");
+  }
   if (stored) {
     for (const field of ["totalMin", "totalMax", "oddsMin", "oddsMax"]) {
       const [bound, duplicate] = query.getAll(field);
@@ -30,13 +33,14 @@ function normalizeSlipConfigurationParameters(value: string, today: string, stor
     }
   }
   const criteria = parseSlipCriteria(query, today);
+  if (criteria.interval) return serializeSlipCriteria(criteria).toString();
   const saved = serializeSlipCriteria({ ...criteria, timeFrom: criteria.timeFrom || fullDayKickoffTime.from,
     timeTo: criteria.timeTo || fullDayKickoffTime.to });
   saved.delete("dateFrom"); saved.delete("dateTo");
   return saved.toString();
 }
 
-/** Reusable filters retain time ranges and validate the current bounds before saving. */
+/** Exact date-time filters retain both endpoints. Legacy parameters retain their reusable clock times. */
 export function canonicalSlipConfigurationParameters(value: string, today = getReportingDate(utcInstantFromEpochMilliseconds(Date.now()))): string {
   return normalizeSlipConfigurationParameters(value, today, false);
 }
@@ -61,17 +65,30 @@ export const slipConfigurationsSchema = z.strictObject({ configurations: z.array
 export type SlipConfigurations = z.infer<typeof slipConfigurationsSchema>;
 export type SlipConfigurationFailure = "forbidden" | "limit" | "name-taken" | "not-found" | "conflict" | "invalid";
 
-/** A fresh draft, independent of the generation result or the dates in an older save. */
+/** Decode saved filters, giving time-only presets the supplied current date. */
 export function slipConfigurationCriteria(parameters: string,
   today = getReportingDate(utcInstantFromEpochMilliseconds(Date.now()))): SlipCriteria {
   return parseSlipCriteria(new URLSearchParams(storedSlipConfigurationParameters(parameters, today)), today);
 }
 
-/** Loading fills today's filters without generation, even for legacy saves or an already-open builder from yesterday. */
+/** Give a legacy preset today's continuous range for this application without changing its stored values. */
+export function datedSlipConfiguration(configuration: SlipConfiguration, today: ReportingDate, zone: string): SlipConfiguration {
+  const query = new URLSearchParams(storedSlipConfigurationParameters(configuration.parameters, today));
+  if (query.has("start")) return configuration;
+  query.set("start", `${today}T${query.get("timeFrom") ?? fullDayKickoffTime.from}`);
+  query.set("end", `${today}T${query.get("timeTo") ?? fullDayKickoffTime.to}`);
+  query.set("tz", zone);
+  query.delete("timeFrom"); query.delete("timeTo");
+  return { ...configuration, parameters: canonicalSlipConfigurationParameters(query.toString(), today) };
+}
+
+/** Loading fills the Builder without generation. Date-free presets use today's date. */
 export function slipConfigurationHref(configuration: Pick<SlipConfiguration, "id" | "parameters">, locale: string,
   today = getReportingDate(utcInstantFromEpochMilliseconds(Date.now()))): string {
   const query = new URLSearchParams(storedSlipConfigurationParameters(configuration.parameters, today));
-  query.set("dateFrom", today); query.set("dateTo", today);
+  if (!query.has("start")) {
+    query.set("dateFrom", today); query.set("dateTo", today);
+  }
   query.set("configuration", id.parse(configuration.id));
   return `/${locale}/slips?${query}`;
 }

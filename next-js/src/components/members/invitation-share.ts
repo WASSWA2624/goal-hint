@@ -1,4 +1,5 @@
 import type { ReferralInvitation } from "../../domain/referral-invitation.ts";
+import { publicPolicy } from "../../domain/public-policy.ts";
 
 export type NativeShareImage = Readonly<{ name: string; data: string }>;
 
@@ -6,6 +7,7 @@ declare global {
   interface Window {
     goalHintNativeShare?: Readonly<{ version: 1;
       readableReferences?: boolean;
+      publicInvitations?: boolean;
       downloadFiles?: (data: ReferralInvitation & { files: readonly NativeShareImage[] }) => Promise<"handed-off" | "cancelled">;
       shareFiles?: (data: ReferralInvitation & { files: readonly NativeShareImage[] }) => Promise<"handed-off" | "cancelled">;
       share: (data: ReferralInvitation) => Promise<"handed-off" | "cancelled"> }>;
@@ -30,12 +32,14 @@ export function invitationShareAvailable(): boolean {
 /** Called directly by a click; no network or clipboard work consumes its activation. */
 export async function shareInvitation(data: ReferralInvitation): Promise<"handed-off" | "cancelled" | "failed"> {
   try {
-    if (window.goalHintNativeShare?.version === 1) {
-      if (/\/r\/[0-9]{8}$/u.test(data.url) && !window.goalHintNativeShare.readableReferences) return "failed";
-      if (data.text.length > (data.url.includes("/r/") ? 512 : 4096)) return "failed";
-      return await window.goalHintNativeShare.share(data);
+    const bridge = window.goalHintNativeShare, guest = data.url === publicPolicy.origin;
+    if (bridge?.version === 1 && (!guest || bridge.publicInvitations)) {
+      if (/\/r\/[0-9]{8}$/u.test(data.url) && !bridge.readableReferences) return "failed";
+      if (data.text.length > (guest || data.url.includes("/r/") ? 512 : 4096)) return "failed";
+      return await bridge.share(data);
     }
-    if (!invitationShareAvailable() || typeof navigator.canShare === "function" && !navigator.canShare(data)) return "failed";
+    if (!window.isSecureContext || typeof navigator.share !== "function"
+      || typeof navigator.canShare === "function" && !navigator.canShare(data)) return "failed";
     await navigator.share(data);
     return "handed-off";
   } catch (error) {

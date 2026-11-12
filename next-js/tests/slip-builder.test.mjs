@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { matchFeedRecordSchema } from '../src/domain/match-feed.ts';
 import { marketRules, marketSelections, validateMarketSnapshot } from '../src/domain/markets.ts';
-import { buildSlips, defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipBuilderRules } from '../src/domain/slip-builder.ts';
+import { buildSlips, defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipBuilderRules, slipCriteriaRange } from '../src/domain/slip-builder.ts';
 import { jointSlipBuilder } from '../src/domain/joint-slip-model.ts';
 
 const today = '2026-10-13', asOf = Date.parse('2026-10-13T07:00:00Z');
@@ -519,6 +519,34 @@ test('kickoff dates are inclusive EAT days and the time range includes the final
     record('next-eat-day', '2.00', 0.8, { kickoffAt: Date.parse('2026-10-13T21:00:00Z') }),
   ], asOf);
   assert.deepEqual(midnight.slips.map(fixtureIds), [['last-minute']]);
+});
+
+test('a zoned Builder interval includes intervening hours and the complete final minute', () => {
+  const exact = parseSlipCriteria({ start: '2026-10-13T23:00', end: '2026-10-14T02:30', tz: 'America/New_York',
+    markets: 'match-result', totalMin: '1.01', totalMax: '', teamsMax: '1', slips: '10' }, today);
+  const saved = serializeSlipCriteria(exact);
+  assert.deepEqual(parseSlipCriteria(saved, '2026-10-18'), exact);
+  assert.equal(saved.has('dateFrom'), false);
+  assert.equal(saved.has('timeFrom'), false);
+  assert.deepEqual(slipCriteriaRange(exact).window, { startInclusive: Date.parse('2026-10-14T03:00:00Z'),
+    endExclusive: Date.parse('2026-10-14T06:31:00Z') });
+  const records = [
+    ['before', '2026-10-14T02:59:59.999Z'], ['start', '2026-10-14T03:00:00Z'], ['midnight', '2026-10-14T04:00:00Z'],
+    ['end', '2026-10-14T06:30:59.999Z'], ['after', '2026-10-14T06:31:00Z'],
+  ].map(([id, at]) => record(id, '2.00', 0.8, { kickoffAt: Date.parse(at) }));
+  const result = buildSlips(exact, records, asOf);
+  assert.deepEqual(result.slips.flatMap(fixtureIds).sort(), ['end', 'midnight', 'start']);
+});
+
+test('continuous Builder intervals reject incomplete, mixed, reversed, excessive and nonexistent local ranges', () => {
+  const interval = { start: '2026-03-08T01:45', end: '2026-03-08T03:30', tz: 'America/New_York' };
+  for (const invalid of [{ start: undefined }, { start: '2026-03-08T02:30' }, { end: '2026-03-08T01:44' },
+    { tz: 'Invalid/Zone' }, { end: '2026-04-08T03:30' }, { timeFrom: '01:45' }]) {
+    assert.throws(() => parseSlipCriteria({ ...interval, ...invalid }, today), SlipCriteriaError);
+  }
+  const repeated = parseSlipCriteria({ start: '2026-11-01T01:30', end: '2026-11-01T01:30', tz: interval.tz }, today);
+  assert.deepEqual(slipCriteriaRange(repeated).window, { startInclusive: Date.parse('2026-11-01T05:30:00Z'),
+    endExclusive: Date.parse('2026-11-01T06:31:00Z') });
 });
 
 test('small exhaustive oracle agrees with ranked exact two-pick combinations', () => {

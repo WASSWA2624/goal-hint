@@ -60,6 +60,26 @@ retry `npm run dev`. The launcher checks its dependencies before starting MySQL
 or replacing an existing development server. Do not add Prisma's transitive
 dependencies to this application's `package.json` to repair a partial install.
 
+To open the app from another device on the same network, start it from `next-js/`
+with an explicit network binding.
+
+```sh
+npm run dev -- --hostname 0.0.0.0 --port 3000
+```
+
+On the other device, open `http://<host-ip>:3000`, using the IPv4 address of the
+computer running Next.js. On Windows, run `ipconfig` and look under the active
+Wi-Fi or Ethernet adapter. If the connection times out, check for guest Wi-Fi
+isolation and Windows Firewall. On a trusted network with the Windows Private
+profile, allow inbound TCP 3000 from the local subnet.
+
+To keep LAN access enabled when restarting the live snapshot with `npm run dev`,
+see the [local snapshot setup](docs/development-demo.md).
+
+LAN HTTP supports online browsing. Service workers, Web Push, and some clipboard
+and sharing features require a secure browser context. See [development URLs](../flutter/docs/development-urls.md)
+for native app setup and Next.js development asset origins.
+
 To run the production build locally with the configured MySQL database, stop the
 development server, then run:
 

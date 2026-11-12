@@ -346,7 +346,7 @@ export function SelectInput({ label, hint, error, children, ...props }: SelectIn
 
   return (
     <Field>
-      <FloatingField label={label}><SelectControl
+      <FloatingField label={label} enhanceSelect><SelectControl
         {...props}
         id={field.id}
         aria-describedby={field.describedBy}

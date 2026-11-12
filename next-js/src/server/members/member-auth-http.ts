@@ -102,6 +102,7 @@ export function createMemberSessionHandler(source: MemberServicesSource = getMem
       const member = await services.sessions.verify(readCookie(request, memberCookieName(services.config.production)));
       const administrator = !!member && !member.blocked && member.administrator === true && isMemberAdminPhone(member.phone);
       const identity = { phone: member?.phone ?? null, administrator,
+        ...(!member?.blocked && member?.referralCode ? { referralCode: member.referralCode } : {}),
         freeContentAccess: allowsContentWithoutSubscription(services.settings, !!member && !member.blocked) };
       const salesOpen = subscriptionCheckoutPublished(services.settings?.settings, services.config.production);
       const subscription: SubscriptionSummary = { activeUntil: null, paymentPending: false,

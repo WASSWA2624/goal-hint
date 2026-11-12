@@ -99,31 +99,26 @@ class NativeInvitationRequest {
           ).hasMatch(data['url'])) {
         return null;
       }
-      final slip = !(data['url'] as String).contains('/r/');
-      if (data['url'] == 'https://goalhint.com' && !data.containsKey('files')) {
-        return null;
-      }
-      if (!slip &&
-          ((data['text'] as String).length > 512 ||
-              data.containsKey('files'))) {
+      final url = data['url'] as String, text = data['text'] as String;
+      final hasFiles = data.containsKey('files');
+      final referral = url.contains('/r/');
+      final publicInvitation = url == 'https://goalhint.com' && !hasFiles;
+      if ((referral || publicInvitation) && text.length > 512) {
         return null;
       }
       final images = <NativeSlipImage>[];
       if (data.containsKey('action') &&
-          (data['action'] != 'download' || !data.containsKey('files'))) {
+          (data['action'] != 'download' || !hasFiles)) {
         return null;
       }
-      if (data.containsKey('files')) {
+      if (hasFiles) {
         final files = data['files'];
-        if (!slip || files is! List || files.isEmpty || files.length > 32) {
+        if (referral || files is! List || files.isEmpty || files.length > 32) {
           return null;
         }
         var bytes = 0;
         for (final file in files) {
-          final image = NativeSlipImage.parse(
-            file,
-            (data['url'] as String).split('/').last,
-          );
+          final image = NativeSlipImage.parse(file, url.split('/').last);
           if (image == null ||
               images.any((existing) => existing.name == image.name)) {
             return null;
@@ -136,8 +131,8 @@ class NativeInvitationRequest {
       return NativeInvitationRequest(
         data['id'],
         data['title'],
-        data['text'],
-        data['url'],
+        text,
+        url,
         images,
         data['action'] == 'download',
       );
@@ -175,7 +170,7 @@ class NativeInvitationShare {
       GoalHintInvitationShare.postMessage(JSON.stringify({id, nonce, title: data.title, text: data.text, url: data.url, ...(files ? {files} : {}), ...(action ? {action} : {})}));
     });
   }
-  const bridge = Object.freeze({version: 1, readableReferences: true, share(data) { return send(data); }, shareFiles(data) { return send(data, data.files); }, downloadFiles(data) { return send(data, data.files, 'download'); }});
+  const bridge = Object.freeze({version: 1, readableReferences: true, publicInvitations: true, share(data) { return send(data); }, shareFiles(data) { return send(data, data.files); }, downloadFiles(data) { return send(data, data.files, 'download'); }});
   window.addEventListener('goalhint:native-share-result', event => {
     if (event.detail?.nonce !== nonce) return;
     const request = pending.get(event.detail.id);

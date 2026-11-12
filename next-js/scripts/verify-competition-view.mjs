@@ -8,7 +8,15 @@ export async function verifyCompetitionView(page, { origin = "http://127.0.0.1:3
   await page.addInitScript(() => { Date.now = () => Date.parse("2026-10-09T09:00:00Z"); delete Navigator.prototype.serviceWorker; });
   await page.route("**/api/account/session", route => route.fulfill({ json: { phone:null, administrator:false, subscription:null } }));
   const panel = page.locator("#match-information-panel"), table = panel.locator("[data-competition-table]");
-  const canvas = panel.locator("[data-knockout-canvas]"), round = panel.getByRole("combobox", { name:"Round", exact:true });
+  const canvas = panel.locator("[data-knockout-canvas]");
+  const dropdown = name => panel.getByRole("combobox", { name: new RegExp(`^${name}(?::|$)`, "u") });
+  const nativeSelect = name => panel.locator(`select[aria-label="${name}"]`);
+  const round = nativeSelect("Round");
+  async function selectChoice(name, value) {
+    const label = await nativeSelect(name).locator(`option[value="${value}"]`).textContent();
+    await dropdown(name).click();
+    await panel.getByRole("listbox", { name, exact: true }).getByRole("option", { name: label, exact: true }).click();
+  }
   const path = (id, slug) => `${origin}/en/matches/10000000-0000-4000-8000-${String(id).padStart(12,"0")}/${slug}?panel=standings&section=context`;
   async function choose(name) {
     const radio = panel.getByRole("radio", {name,exact:true});
@@ -28,7 +36,7 @@ export async function verifyCompetitionView(page, { origin = "http://127.0.0.1:3
     check((await table.locator("thead th").allTextContents()).join(",") === "#,Team,P,GD,PT,Form", "compact table uses abbreviated columns and no Group column");
     check(await table.locator('tr[data-side="home"] [data-points]').innerText() === "23"
       && await table.locator('tr[data-side="away"] [data-points]').innerText() === "21", "source points and both fixture club highlights");
-    check(await panel.locator("h2").count() === 0 && !await panel.getByRole("combobox",{name:"Group",exact:true}).count(), "single league repeats neither title nor group control");
+    check(await panel.locator("h2").count() === 0 && !await dropdown("Group").count(), "single league repeats neither title nor group control");
     await choose("Detailed");
     check((await table.locator("thead th").allTextContents()).join(",") === "#,Team,P,W,D,L,GF,GA,GD,PT,Form", "detailed view shows every supplied statistic in one row");
     check(new URL(page.url()).searchParams.get("tab") === "table-detail", "column preference is stored in the URL");
@@ -73,7 +81,7 @@ export async function verifyCompetitionView(page, { origin = "http://127.0.0.1:3
     check(await round.inputValue() === "semi-finals", "next round navigation");
     await panel.getByRole("button",{name:"Previous round",exact:true}).click();
     check(await round.inputValue() === "quarter-finals", "previous round navigation");
-    await round.selectOption("final"); await settle();
+    await selectChoice("Round", "final"); await settle();
     check(await round.inputValue() === "final" && await panel.getByRole("button",{name:"Next round",exact:true}).isDisabled(), "round selector and last-round boundary");
     await canvas.evaluate(element=>element.focus({preventScroll:true})); await canvas.press("Home");
     check(await round.inputValue() === "round-of-16", "keyboard Home reaches opening round");
@@ -85,7 +93,7 @@ export async function verifyCompetitionView(page, { origin = "http://127.0.0.1:3
     await current.click(); await dialog.waitFor();
     check(/Penalties: 5–4/u.test(await dialog.innerText()), "shootout remains distinct from the two-all match score");
     await dialog.getByRole("button",{name:"Close",exact:true}).last().click();
-    await round.selectOption("quarter-finals");
+    await selectChoice("Round", "quarter-finals");
     const aggregate = panel.locator('[data-knockout-tie="qf-3"]');
     await aggregate.click(); await dialog.waitFor();
     check(/Aggregate: 3–2/u.test(await dialog.innerText()) && await dialog.locator("section").count() === 2, "two-leg tie details show aggregate and each fixture in actual home-away order");
@@ -93,26 +101,26 @@ export async function verifyCompetitionView(page, { origin = "http://127.0.0.1:3
     await capture("knockout-desktop");
     for (const width of [320,390,768,1024,1440]) {
       await page.setViewportSize({width,height:844}); await canvas.waitFor();
-      await round.selectOption("final"); await settle();
+      await selectChoice("Round", "final"); await settle();
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}: bracket stays inside the page`);
       check(await panel.locator('[data-knockout-tie="final"]').innerText().then(text=>text.includes("To be decided")), `${width}: unknown finalists remain TBD`);
       await panel.getByRole("button",{name:"Current match",exact:true}).click(); await settle();
       check(await current.evaluate(element=>Math.round(element.getBoundingClientRect().width)===224), `${width}: bracket cards retain readable proportions`);
       if(width===390) await capture("knockout-mobile");
     }
-    await page.setViewportSize({width:390,height:844}); await round.selectOption("round-of-16"); await settle();
+    await page.setViewportSize({width:390,height:844}); await selectChoice("Round", "round-of-16"); await settle();
     await canvas.evaluate(element => { element.dispatchEvent(new WheelEvent("wheel",{bubbles:true})); element.scrollLeft=520; }); await settle();
     check(await round.inputValue() !== "round-of-16", "native horizontal scrolling updates the visible round control");
-    await page.setViewportSize({width:1024,height:844}); await round.selectOption("final"); await settle();
+    await page.setViewportSize({width:1024,height:844}); await selectChoice("Round", "final"); await settle();
     const box=await canvas.boundingBox(), left=await canvas.evaluate(element=>element.scrollLeft);
     await page.mouse.move(box.x+20,box.y+18); await page.mouse.down(); await page.mouse.move(box.x+140,box.y+18,{steps:5}); await page.mouse.up(); await settle();
     check(await canvas.evaluate(element=>element.scrollLeft) < left, "desktop dragging pans the draw");
     await page.goto(path(8,"group-stage"),{waitUntil:"networkidle"}); await table.waitFor();
     check(await panel.getByRole("radio",{name:"Table",exact:true}).isChecked() && await panel.getByRole("radio",{name:"Bracket",exact:true}).count() === 1, "mixed competition exposes table and knockout modes");
-    const group=panel.getByRole("combobox",{name:"Group",exact:true});
+    const group = nativeSelect("Group");
     check(await group.locator("option").count() === 4 && await table.locator("tbody tr").count() === 4, "grouped competition shows the entire selected group");
     const other=(await group.locator("option").all()).at(-1), groupId=await other.getAttribute("value");
-    await group.selectOption(groupId);
+    await selectChoice("Group", groupId);
     check(new URL(page.url()).searchParams.get("item") === groupId, "group choice is stored in URL");
     await page.reload({waitUntil:"networkidle"}); await table.waitFor();
     check(await group.inputValue() === groupId, "selected group survives reload");

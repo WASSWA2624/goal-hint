@@ -1,12 +1,13 @@
 import "server-only";
 
-import { getPublicationDeadline, getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock } from "../../domain/calendar.ts";
-import { feedQueryRules, type FeedParameters } from "../../domain/feed-query.ts";
+import { getPublicationDeadline, getReportingDate, utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
+import { feedQueryRules, getFeedToday, type FeedParameters } from "../../domain/feed-query.ts";
 import { storedMatchFeedResponseSchema, type StoredMatchFeedResponse } from "../../domain/match-feed.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { scheduledSlipMatchStates } from "../../domain/slip-match-state.ts";
-import { buildSlips, hasJointProbabilityBounds, slipBuilderRules, type SlipCriteria, type SlipMatchRecord } from "../../domain/slip-builder.ts";
+import { buildSlips, hasJointProbabilityBounds, slipBuilderRules, slipCriteriaRange, type SlipCriteria, type SlipMatchRecord } from "../../domain/slip-builder.ts";
+import { isTotal15SlipSelection } from "../../domain/slip-markets.ts";
 import { jointSlipBuilder } from "../../domain/joint-slip-model.ts";
 import { slipPricePageSchema, type SlipPricePage } from "../../domain/slip-price-page.ts";
 import { slipCohortRules, slipCohortSchema } from "../../domain/slip-cohort.ts";
@@ -45,18 +46,25 @@ export function createSlipBuildService(options: Readonly<SlipReadSource & {
     let readStage = "rate-limit";
     try {
       await options.consume();
-      const today = getReportingDate(asOf), range = validateReportingDateRange(criteria.dateFrom, criteria.dateTo, slipBuilderRules.maximumDays);
-      const parameters = new URLSearchParams({ from: criteria.dateFrom, to: criteria.dateTo,
+      const reportingToday = getReportingDate(asOf), range = slipCriteriaRange(criteria);
+      const interval = criteria.interval;
+      const today = interval ? getFeedToday({ zone: interval.zone }, asOf) : reportingToday;
+      const dates: Record<string, string> = interval ? { start: interval.from, end: interval.to, tz: interval.zone }
+        : { from: criteria.dateFrom, to: criteria.dateTo };
+      const parameters = new URLSearchParams({ ...dates,
         status: "scheduled", market: criteria.markets.join(","), sort: "probability", dir: "desc", pageSize: String(slipReadRules.pageSize) });
-      if (criteria.timeFrom !== "" || criteria.timeTo !== "") {
+      if (!interval && (criteria.timeFrom !== "" || criteria.timeTo !== "")) {
         parameters.set("timeFrom", criteria.timeFrom); parameters.set("timeTo", criteria.timeTo); parameters.set("tz", publicPolicy.reportingTimeZone);
       }
       const records: SlipMatchRecord[] = [], pages: SlipPricePage[] = [], seen = new Set<string>();
       let first: StoredMatchFeedResponse | null = null, partialCoverage = false, searchLimited = false;
       if (options.readCohort) {
         readStage = "read-cohort";
+        const goals = criteria.outcomes?.["total-goals"], primaryBookmakerOnly = !!(joint || options.build);
+        const total15 = !primaryBookmakerOnly && criteria.markets.includes("total-goals") && (!goals || goals.some(isTotal15SlipSelection))
+          ? criteria.markets.length === 1 && goals?.every(isTotal15SlipSelection) ? "only" : "include" : undefined;
         const cohort = slipCohortSchema.parse(await options.readCohort(parameters, {
-          locale, ...(joint || options.build ? { primaryBookmakerOnly: true } : {}),
+          locale, ...(primaryBookmakerOnly ? { primaryBookmakerOnly: true } : {}), ...(total15 ? { total15 } : {}),
         }, pinnedClock));
         readStage = "validate-cohort";
         if (cohort.asOf !== asOf || cohort.today !== today || cohort.range.from !== range.startDate || cohort.range.to !== range.endDate
@@ -64,7 +72,10 @@ export function createSlipBuildService(options: Readonly<SlipReadSource & {
           throw new MatchFeedError("unavailable");
         }
         partialCoverage = cohort.partialCoverage; searchLimited = cohort.searchLimited;
-        records.push(...cohort.records.map((record) => ({ ...record, selectionPrices: cohort.selectionPrices[record.fixtureId]! })));
+        records.push(...cohort.records.map((record) => {
+          const total15Forecast = cohort.total15Forecasts?.[record.fixtureId];
+          return { ...record, selectionPrices: cohort.selectionPrices[record.fixtureId]!, ...(total15Forecast ? { total15Forecast } : {}) };
+        }));
       } else {
         const read = options.read;
         if (!read) throw new MatchFeedError("unavailable");
@@ -120,7 +131,7 @@ export function createSlipBuildService(options: Readonly<SlipReadSource & {
       }
       readStage = "completion-clock";
       const completedAt = clock.now();
-      if (completedAt < asOf || getReportingDate(completedAt) !== today) throw new MatchFeedError("unavailable");
+      if (completedAt < asOf || getReportingDate(completedAt) !== reportingToday) throw new MatchFeedError("unavailable");
       // The scan can take time. Retain the original observation cutoff, but exclude matches that
       // have entered the publication/kickoff cutoff by completion, even if their first page was valid.
       const current = records.filter((record) => record.kickoffAt === null || completedAt < getPublicationDeadline(record.kickoffAt));
@@ -136,7 +147,7 @@ export function createSlipBuildService(options: Readonly<SlipReadSource & {
       // Estimator callbacks cannot retain approval or validity revoked during generation.
       const returnedAt = joint ? clock.now() : completedAt;
       if (joint && !approvedSlipJointModel(joint, returnedAt)) return { ...base, state: "model-unavailable" };
-      if (returnedAt < completedAt || getReportingDate(returnedAt) !== today
+      if (returnedAt < completedAt || getReportingDate(returnedAt) !== reportingToday
         || data.slips.some((slip) => slip.selections.some((selection) => returnedAt >= getPublicationDeadline(utcInstantFromEpochMilliseconds(selection.kickoffAt))))) {
         throw new MatchFeedError("unavailable");
       }

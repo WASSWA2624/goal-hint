@@ -15,6 +15,7 @@ import { summarizeSlipPerformance } from "../../domain/slip-performance.ts";
 import { slipMatchStatesFromResults } from "../../domain/slip-match-state.ts";
 import { compareSlipDisplayProbability } from "../../domain/slip-pagination.ts";
 import { parseSlipCriteria, serializeSlipCriteria, slipBuilderRules, type BuiltSlip, type SlipCriteria } from "../../domain/slip-builder.ts";
+import { isMarketSelection } from "../../domain/markets.ts";
 import { getDatabase, type DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
@@ -38,7 +39,8 @@ const publicationSchema = z.strictObject({ version: z.union([z.literal(1), z.lit
   && getReportingDate(utcInstantFromEpochMilliseconds(value.publishedAt)) === value.day
   && (value.version === 1 ? value.oddsBand === undefined && value.count <= 100 : value.oddsBand !== undefined && value.count <= bestSlipBandLimit));
 const snapshotSchema = z.strictObject({ slip: slipSnapshotSchema, estimatedProbability: z.number().min(0).max(1) })
-  .refine((value) => value.slip.selections.every((selection) => selection.forecast !== undefined), "Original forecasts are required.")
+  .refine((value) => value.slip.selections.every((selection) =>
+    selection.forecast !== undefined && isMarketSelection(selection.family, selection.selection)), "Reviewed original forecasts are required.")
   .transform((value) => ({ ...value, slip: value.slip as BuiltSlip }));
 type Publication = z.infer<typeof publicationSchema> & Readonly<{ bounds: SlipCriteria | null }>;
 type PublicationRow = { id: string; eatDate: Date; oddsBand?: string; publishedAt: Date; modelId: string; bodyJson: unknown; validIntegrity: unknown };

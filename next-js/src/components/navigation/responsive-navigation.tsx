@@ -39,8 +39,9 @@ function restoreTarget(container: HTMLElement, target: FocusTarget) {
 }
 
 /** The server leaves phone room for More; hydration fills the measured space. */
-export function ResponsiveNavigation({ destinations, current: selected, moreLabel, mobile = false }: {
+export function ResponsiveNavigation({ destinations, current: selected, moreLabel, mobile = false, onInviteFriends }: {
   destinations: readonly NavigationDestination[]; current?: NavigationLocation; moreLabel: string; mobile?: boolean;
+  onInviteFriends?: (() => void) | undefined;
 }) {
   const current = normalizeNavigationLocation(selected);
   const community = useCommunitySettings(), [communityOpen, setCommunityOpen] = useState(false);
@@ -120,11 +121,13 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
   }, [items, current, mobile]);
 
   const List = mobile ? TabList : TopNavList, Primary = mobile ? TabLink : TopNavLink, Action = mobile ? TabButton : TopNavButton, Measure = mobile ? TabMeasure : TopNavMeasure;
-  const openCommunity = (event: MouseEvent<HTMLButtonElement>) => {
+  const openAction = (event: MouseEvent<HTMLButtonElement>, open: () => void) => {
     const menu = event.currentTarget.closest("details");
     if (menu) { menu.open = false; menu.querySelector("summary")?.focus({ preventScroll: true }); }
-    setCommunityOpen(true);
+    open();
   };
+  const actions = { community: () => setCommunityOpen(true), "invite-friends": onInviteFriends };
+  const actionFor = (key: NavigationDestination["key"]) => key === "community" || key === "invite-friends" ? actions[key] : undefined;
   return <Layout ref={root} data-responsive-navigation={mobile ? "mobile" : "desktop"}
     onFocusCapture={(event) => {
       const target = focusTarget(event.target);
@@ -135,20 +138,21 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
     }}>
     <List ref={list}>
       {visible.map(({ key, href, label, tab, icon, tone }) => {
-        const Icon = icons[icon];
-        if (key === "community") return <li key={key}><Action type="button" $tone={tone} data-nav-key={key}
-          data-community-entry aria-haspopup="dialog" onClick={openCommunity}><Icon /><span>{mobile ? tab : label}</span></Action></li>;
-        return <li key={key}><Primary href={href} prefetch={false} $tone={tone} data-nav-key={key}
+        const Icon = icons[icon], action = actionFor(key);
+        if (action) return <li key={key}><Action type="button" $tone={tone} data-nav-key={key}
+          data-community-entry={key === "community" ? "" : undefined} aria-haspopup="dialog"
+          onClick={event => openAction(event, action)}><Icon /><span>{mobile ? tab : label}</span></Action></li>;
+        return href && <li key={key}><Primary href={href} prefetch={false} $tone={tone} data-nav-key={key}
           aria-current={current === key ? "page" : undefined}><Icon /><span>{mobile ? tab : label}</span></Primary></li>;
       })}
       {overflow.length > 0 && <li data-nav-more>
         <MoreMenu $mobile={mobile} current={overflowCurrent} label={<><MoreIcon /><span>{moreLabel}</span></>}>
           <MoreList $mobile={mobile}>
             {overflow.map(({ key, href, label, icon }) => {
-            const Icon = icons[icon];
-            if (key === "community") return <li key={key}><button type="button" data-nav-key={key} data-community-entry
-              aria-haspopup="dialog" onClick={openCommunity}><Icon /><span>{label}</span></button></li>;
-            return <li key={key}><TextLink href={href} prefetch={false} data-nav-key={key}
+            const Icon = icons[icon], action = actionFor(key);
+            if (action) return <li key={key}><button type="button" data-nav-key={key} data-community-entry={key === "community" ? "" : undefined}
+              aria-haspopup="dialog" onClick={event => openAction(event, action)}><Icon /><span>{label}</span></button></li>;
+            return href && <li key={key}><TextLink href={href} prefetch={false} data-nav-key={key}
               aria-current={current === key ? "page" : undefined}><Icon /><span>{label}</span></TextLink></li>;
           })}</MoreList>
         </MoreMenu>

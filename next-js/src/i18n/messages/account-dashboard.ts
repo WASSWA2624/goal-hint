@@ -15,6 +15,7 @@ export const accountDashboardMessages = {
   "referrals.remaining": "Reward time",
   "referrals.view": "View referrals",
   "referrals.invite": "Invite friends",
+  "referrals.close": "Close Invite friends",
   "referrals.invitation": "Join me on {name} for football predictions and slip building.",
   "referrals.share": "Share",
   "referrals.shareInvitation": "Share invitation",

@@ -1,7 +1,9 @@
 import "server-only";
 
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
-import { isMarketFamily, isMarketSelection, type MarketFamily, type MarketSelection } from "@/domain/markets";
+import { validTimeZone } from "@/domain/device-calendar";
+import { isMarketFamily, type MarketFamily } from "@/domain/markets";
+import { isSlipMarketSelection, slipMarketSelections, type SlipMarketSelection } from "@/domain/slip-markets";
 import { publicPolicy } from "@/domain/public-policy";
 import { slipsHref } from "@/domain/navigation";
 import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipInputFields, type SlipInputs } from "@/domain/slip-builder";
@@ -38,6 +40,7 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
         if (typeof value === "string" && value.length <= 256) initialInputs[field] = value;
       }
       let criteria = defaultSlipCriteria(today), error: SlipCriteriaIssue | null = null;
+      let initialTimeZone: string | undefined;
       try {
         if (configuration !== undefined && configuration !== "" && !configurationId) throw new SlipCriteriaError("query", "invalid-query");
         criteria = parseSlipCriteria(query, today);
@@ -45,17 +48,29 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
       catch (issue) {
         if (!(issue instanceof SlipCriteriaError)) throw issue;
         error = { code: issue.code, field: issue.field };
+        const { start, end, tz } = query;
+        if (start !== undefined || end !== undefined || tz !== undefined) {
+          if (validTimeZone(tz)) initialTimeZone = tz;
+          for (const [endpoint, value] of [["From", start], ["To", end]] as const) {
+            delete initialInputs[`date${endpoint}`]; delete initialInputs[`time${endpoint}`];
+            if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/u.test(value)) {
+              initialInputs[`date${endpoint}`] = value.slice(0, 10); initialInputs[`time${endpoint}`] = value.slice(11);
+            }
+          }
+          try { criteria = parseSlipCriteria({ start, end, tz }, today); }
+          catch (calendarIssue) { if (!(calendarIssue instanceof SlipCriteriaError)) throw calendarIssue; }
+        }
       }
       const rawMarkets = query.markets;
       const marketValues = Array.isArray(rawMarkets) ? rawMarkets : [rawMarkets ?? ""];
       const initialMarkets = rawMarkets === undefined && query.build !== "1" ? undefined
         : marketValues.length <= 4 && marketValues.every((value) => value.length <= 256)
           ? marketValues.flatMap((value) => value.split(",")).filter(isMarketFamily) : [];
-      const initialOutcomes: Partial<Record<MarketFamily, readonly MarketSelection[]>> = {};
+      const initialOutcomes: Partial<Record<MarketFamily, readonly SlipMarketSelection[]>> = {};
       for (const family of publicPolicy.markets) {
         const raw = query[`picks.${family}`], values = Array.isArray(raw) ? raw : [raw ?? "auto"];
-        if (values.length > 3 || values.some((value) => value.length > 256)) continue;
-        const choices = values.flatMap((value) => value.split(",")).filter((value): value is MarketSelection => isMarketSelection(family, value));
+        if (values.length > slipMarketSelections[family].length || values.some((value) => value.length > 256)) continue;
+        const choices = values.flatMap((value) => value.split(",")).filter((value): value is SlipMarketSelection => isSlipMarketSelection(family, value));
         if (choices.length) initialOutcomes[family] = choices;
       }
       let captured = false;
@@ -67,10 +82,11 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
       try { const binding = jointModel(); jointEstimates = !!binding && approvedSlipJointModel(binding, at); }
       catch { /* An unavailable estimator offers no whole-slip limits. */ }
       // A criteria change or browser history navigation resets uncontrolled inputs to this server-owned draft.
-      const key = `${Object.keys(query).length ? "draft" : "defaults"}|${serializeSlipCriteria(criteria)}|${JSON.stringify(initialInputs)}|${initialMarkets?.join(",") ?? ""}|${JSON.stringify(initialOutcomes)}|${initialReuse}|${error?.code ?? ""}|${jointEstimates}|${configurationId ?? ""}`;
+      const key = `${Object.keys(query).length ? "draft" : "defaults"}|${serializeSlipCriteria(criteria)}|${JSON.stringify(initialInputs)}|${initialTimeZone ?? ""}|${initialMarkets?.join(",") ?? ""}|${JSON.stringify(initialOutcomes)}|${initialReuse}|${error?.code ?? ""}|${jointEstimates}|${configurationId ?? ""}`;
       return <PublicShell showAccount={showAccount} locale={locale} today={today} current="slips" app compact>
         <SlipBuilder subscriberOnly={access.tier === "free"} signedIn={access.signedIn} showAccount={showAccount} key={key} locale={locale} today={today} criteria={criteria} result={result}
-          error={error} initialInputs={initialInputs} initialOutcomes={initialOutcomes} initialReuse={initialReuse} jointEstimates={jointEstimates}
+          error={error} initialInputs={initialInputs} {...(initialTimeZone ? { initialTimeZone } : {})}
+          initialOutcomes={initialOutcomes} initialReuse={initialReuse} jointEstimates={jointEstimates}
           configurationId={configurationId} applyDefault={Object.keys(rawQuery).length === 0} {...(initialMarkets ? { initialMarkets } : {})} />
       </PublicShell>;
     },

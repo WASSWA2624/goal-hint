@@ -4,15 +4,8 @@ import type { ReactNode } from "react";
 import styled from "styled-components";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
-import { SlidersIcon } from "./icons";
-import { CriteriaDialog, CriteriaDialogButton } from "./criteria-dialog";
-
-const Title = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: var(--gh-spacing-2);
-  > svg { flex: none; inline-size: var(--gh-size-5); block-size: var(--gh-size-5); color: ${({ theme }) => theme.color.link}; }
-`;
+import { ResetIcon, SlidersIcon } from "./icons";
+import { CriteriaDialog, CriteriaDialogButton, CriteriaDialogTitle } from "./criteria-dialog";
 
 const ResetButton = styled(CriteriaDialogButton)`
   &&:not(:disabled) {
@@ -29,10 +22,10 @@ export function AdvancedFilterDialog({ locale, onReset, onApply, applyDisabled =
 }) {
   const messages = createMessages(locale);
   return <CriteriaDialog {...props} onApply={onApply}
-    title={<Title><SlidersIcon />{messages.text("feed.filters.dialogTitle")}</Title>}
+    title={<CriteriaDialogTitle><SlidersIcon />{messages.text("feed.filters.dialogTitle")}</CriteriaDialogTitle>}
     footer={<>
       <ResetButton type="button" variant="secondary" data-dialog-reset onClick={onReset}>
-        {messages.text("feed.filters.resetFilters")}
+        <ResetIcon />{messages.text("feed.filters.resetFilters")}
       </ResetButton>
       <CriteriaDialogButton type="button" disabled={applyDisabled} onClick={onApply}>
         {messages.text("feed.filters.applyFilters")}

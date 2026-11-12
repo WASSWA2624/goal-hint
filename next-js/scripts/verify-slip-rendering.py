@@ -153,27 +153,53 @@ NUMERIC_RANGE_DEFAULTS = {
     "oddsMin": "1.01", "oddsMax": "", "probMin": "75", "probMax": "100",
 }
 
+BUILDER_ICONS = {
+    "markets": "M4 20V4M4 20h16M9 16v-5M14 16V8M19 16v-3",
+    "custom-filters": "M4 7h4M12 7h8M4 17h8M16 17h4M8 4v6M16 14v6",
+    "reset": "M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5",
+    "build": "M5 3h14v18H5zM8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5",
+    "locked": "M8 11V7a4 4 0 0 1 8 0v4",
+}
+
+
+def has_builder_icon(control, name):
+    return any(svg.attrs.get("aria-hidden") == "true"
+               and any(path.attrs.get("d") == BUILDER_ICONS[name] for path in svg.nodes("path"))
+               for svg in control.nodes("svg"))
+
 
 def criteria_groups(document, path, error_group=None):
-    groups = document.nodes("dialog", "data-slip-criteria-group")
-    assert len(groups) == 1 and groups[0].attrs["data-slip-criteria-group"] == "advanced", f"{path}: one native Advanced Filters dialog"
-    dialog = groups[0]
-    assert "open" in dialog.attrs and dialog.attrs.get("data-enhanced") == "false", f"{path}: advanced fields stay available inline before hydration"
-    labelled_by = dialog.attrs.get("aria-labelledby")
-    assert labelled_by and any(node.attrs.get("id") == labelled_by and node.text.strip() == "Advanced Filters" for node in dialog.nodes()), f"{path}: accessible Advanced Filters title"
-    for action in ("Cancel", "Apply"):
-        assert any(button.text.strip() == action and button.attrs.get("type") == "button" for button in dialog.nodes("button")), f"{path}: {action} does not submit a build"
-    by_name = {group.attrs["data-criteria-field"]: group for group in dialog.nodes(attr="data-criteria-field")}
+    dialogs = document.nodes("dialog", "data-slip-criteria-group")
+    assert [dialog.attrs["data-slip-criteria-group"] for dialog in dialogs] == ["advanced", "markets"], f"{path}: two native dialogs for Advanced Filters and Markets"
+    advanced, markets = dialogs
+    for dialog, title in [(advanced, "Advanced filters"), (markets, "Markets")]:
+        assert "open" in dialog.attrs and dialog.attrs.get("data-enhanced") == "false", f"{path}: {title} fields stay available inline before hydration"
+        labelled_by = dialog.attrs.get("aria-labelledby")
+        assert labelled_by and any(node.attrs.get("id") == labelled_by and node.text.strip().casefold() == title.casefold() for node in dialog.nodes()), f"{path}: accessible {title} title"
+        actions = {button.text.strip(): button for button in dialog.nodes("button") if button.attrs.get("type") == "button"}
+        assert {"Reset", "Cancel", "Apply"} <= actions.keys(), f"{path}: {title} actions do not submit a build"
+        assert has_builder_icon(actions["Reset"], "reset"), f"{path}: {title} uses the shared reset icon"
+    by_name = {group.attrs["data-criteria-field"]: group for dialog in dialogs for group in dialog.nodes(attr="data-criteria-field")}
     assert list(by_name) == list(CRITERIA_GROUP_FIELDS), f"{path}: limits, kickoff and markets appear in order"
-    disclosure = dialog.nodes("details", "data-slip-criteria-group")
-    assert len(disclosure) == 1 and "open" in disclosure[0].attrs and by_name["markets"] in disclosure[0].nodes(), f"{path}: Markets is collapsible and expanded by default"
+    assert by_name["markets"] in markets.nodes() and by_name["markets"] not in advanced.nodes(), f"{path}: market choices have their own dialog"
+    date_headings = [child for child in by_name["kickoff"].children if isinstance(child, Element) and child.tag == "legend"]
+    assert len(date_headings) == 1 and date_headings[0].text.strip() == "Date and time", f"{path}: Date and time groups both endpoints"
     option_rows = document.nodes(attr="data-slip-criteria-options")
     assert len(option_rows) == 1, f"{path}: one compact row of optional criteria"
     triggers = option_rows[0].nodes("button", "data-criteria-trigger")
-    assert len(triggers) == 1 and triggers[0].attrs.get("aria-controls") == dialog.attrs.get("id"), f"{path}: one trigger opens Advanced Filters"
-    assert triggers[0].attrs.get("type") == "button" and triggers[0].attrs.get("aria-haspopup") == "dialog", f"{path}: Advanced Filters opens without submitting"
-    assert any(node.attrs.get("d") == "m9 6 6 6-6 6" for node in triggers[0].nodes("path")), f"{path}: the trigger uses a right-pointing arrow"
-    assert option_rows[0].nodes("button", "data-saved-filters-trigger") == document.nodes("button", "data-saved-filters-trigger"), f"{path}: Custom Filters shares the Advanced Filters row"
+    assert [trigger.attrs["data-criteria-trigger"] for trigger in triggers] == ["markets", "advanced"], f"{path}: Markets precedes Advanced Filters in the option row"
+    for trigger, dialog in zip(triggers, [markets, advanced]):
+        assert trigger.attrs.get("aria-controls") == dialog.attrs.get("id"), f"{path}: {trigger.text.strip()} opens its own dialog"
+        assert trigger.attrs.get("type") == "button" and trigger.attrs.get("aria-haspopup") == "dialog", f"{path}: optional criteria open without submitting"
+    market_trigger = triggers[0]
+    market_label = "".join(child.text if isinstance(child, Element) else child
+                           for child in market_trigger.children
+                           if not isinstance(child, Element) or child.attrs.get("aria-hidden") != "true")
+    assert market_label.strip() == "Markets" and has_builder_icon(market_trigger, "markets"), f"{path}: Markets has its label and shared chart icon"
+    assert not market_trigger.nodes(attr="data-dialog-arrow"), f"{path}: Markets has no disclosure arrow"
+    custom_filters = document.nodes("button", "data-saved-filters-trigger")
+    assert option_rows[0].nodes("button", "data-saved-filters-trigger") == custom_filters, f"{path}: Custom Filters shares the mobile option row"
+    assert all(has_builder_icon(button, "custom-filters") for button in custom_filters), f"{path}: Custom Filters uses the shared sliders icon"
     values = {}
     for name, group in by_name.items():
         inputs = group.nodes("input")
@@ -186,9 +212,10 @@ def criteria_groups(document, path, error_group=None):
         assert all("disabled" not in fieldset.attrs for fieldset in group.nodes("fieldset")), f"{path}: dialog presentation does not disable native submission"
         if name == error_group:
             assert any(node.attrs.get("aria-invalid") == "true" for node in group.nodes()), f"{path}: {name} exposes the invalid controls"
-            assert any(node.attrs.get("role") == "alert" for node in dialog.nodes(attr="role")), f"{path}: Advanced Filters contains the validation message"
+            dialog = markets if name == "markets" else advanced
+            assert any(node.attrs.get("role") == "alert" for node in dialog.nodes(attr="role")), f"{path}: {name} dialog contains the validation message"
     targets = [node for node in document.nodes(attr="data-criteria-field") if node.attrs["data-criteria-field"] == "targets"]
-    assert len(targets) == 1 and all(targets[0] not in group.nodes() for group in groups), f"{path}: essential slip targets always stay visible"
+    assert len(targets) == 1 and all(targets[0] not in dialog.nodes() for dialog in dialogs), f"{path}: essential slip targets always stay visible"
     toolbars = document.nodes(attr="data-slip-builder-toolbar")
     assert len(toolbars) == 1, f"{path}: one shared compact settings toolbar"
     toolbar = toolbars[0]
@@ -204,21 +231,23 @@ def criteria_groups(document, path, error_group=None):
         assert len(labels) == 1 and labels[0].attrs.get("for") == control.attrs.get("id"), f"{path}: {name} retains its associated accessible floating label"
         assert labels[0].text.strip() == ("Min" if name.endswith("Min") else "Max"), f"{path}: {name} keeps a visible range-bound label"
     toolbar_groups = toolbar.nodes(attr="data-toolbar-group")
-    assert [node.attrs["data-toolbar-group"] for node in toolbar_groups] == ["slips", "total", "matches", "advanced", "actions"], f"{path}: controls retain their titled category order"
+    assert [node.attrs["data-toolbar-group"] for node in toolbar_groups] == ["slips", "total", "matches", "markets", "advanced", "actions"], f"{path}: controls retain their category order"
     for group in toolbar_groups:
         name = group.attrs["data-toolbar-group"]
+        if name in {"markets", "advanced"}:
+            continue
         titles = [child for child in group.children if isinstance(child, Element) and child.tag == "legend"] if name in {"slips", "total", "matches"} else group.nodes(attr="data-criteria-title")
         assert len(titles) == 1 and titles[0].text.strip(), f"{path}: {name} has a category title"
     for name in ["slips", "totalMin", "totalMax", "teamsMin", "teamsMax"]:
         controls = [node for node in document.nodes("input") if node.attrs.get("name") == name]
         assert len(controls) == 1 and "disabled" not in controls[0].attrs, f"{path}: one enabled essential target {name}"
-        assert all(controls[0] not in group.nodes() for group in groups), f"{path}: essential {name} remains outside dialogs"
+        assert all(controls[0] not in dialog.nodes() for dialog in dialogs), f"{path}: essential {name} remains outside dialogs"
         assert controls[0] in toolbar.nodes("input"), f"{path}: essential {name} belongs to the settings toolbar"
     inputs = document.nodes("input")
     reuse = [node for node in inputs if node.attrs.get("name") == "reuse"]
     choices = [node for node in by_name["markets"].nodes("input")
                if node.attrs.get("name") == "markets" or (node.attrs.get("name") or "").startswith("picks.")]
-    assert len(reuse) == 2 and all(node in dialog.nodes() for node in reuse), f"{path}: hidden reuse value and checkbox belong to Advanced Filters"
+    assert len(reuse) == 2 and all(node in advanced.nodes() for node in reuse), f"{path}: hidden reuse value and checkbox belong to Advanced Filters"
     assert choices and max(inputs.index(node) for node in reuse) < min(inputs.index(node) for node in choices), f"{path}: match reuse precedes Markets in native keyboard order"
     return values
 
@@ -358,8 +387,8 @@ def verify_custom_numeric_bounds(document, expected):
 
 def verify_builder_access(origin, directory):
     for viewer, label, destination in [
-        ("guest", "Login", "/en/account"),
-        ("member", "Subscribe", "/en/subscribe"),
+        ("guest", "Unlock", "/en/account"),
+        ("member", "Unlock", "/en/subscribe"),
         ("subscriber", "Build slips", None),
     ]:
         path = f"/access/{viewer}"
@@ -371,38 +400,29 @@ def verify_builder_access(origin, directory):
         verify_defaults(document)
         actions = document.nodes(attr="data-criteria-actions")
         assert len(actions) == 1, f"{path}: one toolbar action group"
+        reset = [node for node in actions[0].nodes("a") if node.text.strip() == "Reset"]
+        assert len(reset) == 1 and has_builder_icon(reset[0], "reset"), f"{path}: toolbar Reset uses the shared icon"
         summary = document.nodes(attr="data-slip-summary-layout")
         assert {node.attrs["data-slip-summary-layout"] for node in summary} == {"mobile", "desktop"}, f"{path}: responsive summaries"
         desktop_summary = next(node for node in summary if node.attrs["data-slip-summary-layout"] == "desktop")
         assert all(caption in desktop_summary.text for caption in ["Markets", "Selection", "Match reuse off"]), f"{path}: desktop summary identifies market choices and default reuse"
-        desktop_label = {"guest": "Login to build slips", "member": "Subscribe to build slips", "subscriber": label}[viewer]
         account_actions = document.nodes(attr="data-slip-access-action")
         assert len(account_actions) == 1, f"{path}: one account-aware toolbar action without a duplicate below"
-        for account_action in account_actions:
-            labels = {node.attrs["data-action-label"]: node.text.strip() for node in account_action.nodes(attr="data-action-label")}
-            assert labels == {"mobile": desktop_label, "desktop": desktop_label}, f"{path}: clear account-aware action on both screen sizes"
-        status = {node.attrs["data-slip-access-message"]: node.text.strip() for node in document.nodes(attr="data-slip-access-message")}
-        assert set(status) == {"mobile", "desktop"}, f"{path}: responsive account status guidance"
+        account_action = account_actions[0]
+        labels = {node.attrs["data-action-label"]: node.text.strip() for node in account_action.nodes(attr="data-action-label")}
+        assert labels == {"mobile": label, "desktop": label}, f"{path}: clear account-aware action on both screen sizes"
+        assert has_builder_icon(account_action, "locked" if destination else "build"), f"{path}: matches the access state icon"
         if destination:
-            assert ("Login above" if viewer == "guest" else "Subscribe above") in status["mobile"], f"{path}: mobile guidance matches the account action"
-            assert "subscription" in status["mobile"].lower() if viewer == "guest" else "predictions and odds" in status["mobile"], f"{path}: mobile guidance explains access"
-            assert "active subscription" in status["desktop"].lower(), f"{path}: desktop explains the subscription requirement"
-            assert ("log in" if viewer == "guest" else "Subscribe to build slips above") in status["desktop"], f"{path}: desktop guidance matches the account action"
-        else:
-            assert "tap Build slips" in status["mobile"], f"{path}: mobile ready guidance points to the primary action"
-            assert "select Build slips" in status["desktop"], f"{path}: eligible members receive generation guidance"
-        if destination:
-            for account_action in account_actions:
-                assert account_action.tag == "a", f"{path}: access action is a native link"
-                target = urlsplit(account_action.attrs["href"])
-                assert target.path == destination and parse_qs(target.query).get("return") == ["/en/slips"], f"{path}: retains Slip Builder return destination"
-                if viewer == "guest":
-                    assert parse_qs(target.query).get("view") == ["login"], f"{path}: guests open Login rather than registration"
+            assert account_action.tag == "a", f"{path}: access action is a native link"
+            target = urlsplit(account_action.attrs["href"])
+            assert target.path == destination and parse_qs(target.query).get("return") == ["/en/slips"], f"{path}: retains Slip Builder return destination"
+            if viewer == "guest":
+                assert parse_qs(target.query).get("view") == ["login"], f"{path}: guests open Login rather than registration"
             assert not any(node.attrs.get("type") == "submit" for node in actions[0].nodes("button")), f"{path}: access-restricted toolbar cannot submit a build"
         else:
             submit = [node for node in actions[0].nodes("button") if node.attrs.get("type") == "submit"]
             assert len(submit) == 1 and submit[0] in account_actions, f"{path}: eligible members build slips"
-    print("PASS Slip Builder access actions: desktop/mobile labels and status guidance, titled categories, one toolbar action, Login/login, Subscribe and Build slips.", flush=True)
+    print("PASS Slip Builder access actions: responsive labels, lock and slip icons, and Login, Subscribe and Build slips destinations.", flush=True)
 
 
 def verify_generated_limits(document, *, total_min, total_max, odds_min, odds_max, prob_min, prob_max, selections, reuse):
@@ -500,8 +520,8 @@ def verify(origin, directory):
     assert re.search(r"Score after 90 minutes: .+ 2, .+ 1", compact_row.nodes(attr="data-stack-progress")[0].text), "Compact saved regulation scores keep their full accessible meaning"
     print("PASS compact saved slip: original alternative, price/probability and supplied regulation score/outcome.", flush=True)
     live = Document(snapshots.text).root.nodes(attr="data-live-snapshot")[0].nodes("a", "data-fixture-id")
-    clocks = [("2nd half", "67′"), ("HT", "HT"), ("1st half", "45+2′"), ("2nd half", "90+4′"),
-        ("Extra time", "ET 104′"), ("Extra time", "ET 120+1′"), ("Penalties", "Penalties")]
+    clocks = [("2nd half", "67:00"), ("HT", "HT"), ("1st half", "47:00"), ("2nd half", "94:00"),
+        ("Extra time", "ET 104:00"), ("Extra time", "ET 121:00"), ("Penalties", "Penalties")]
     assert len(live) == len(clocks), "Every supplied live observation is rendered"
     for row, (phase, badge) in zip(live, clocks):
         assert row.nodes(attr="data-score-home")[0].text == "1" and row.nodes(attr="data-score-away")[0].text == "0", "Live score uses the supplied progress"
@@ -589,7 +609,7 @@ def verify(origin, directory):
     member_overrides = {"slips": "2", "teamsMin": "2", "teamsMax": "2"}
     member_query = [(name, member_overrides.get(name, value)) for name, value in query if name != "reuse"] + [("reuse", "0")]
     member = inspect(origin, "/member?" + urlencode(member_query), directory, "route-member-build", "generated", 2)
-    assert "Probability (75% minimum)" in member.text, "The existing probability controls explain the slip floor"
+    assert "Probability (%)" in member.text and "75% minimum" not in member.text, "The probability controls show their units without labeling the default as a floor"
     verify_generated_limits(member, total_min="3", total_max="6", odds_min="1.25", odds_max="2.60",
         prob_min="75", prob_max="100", selections=2, reuse=False)
     below_floor = [(name, "74.999" if name == "probMax" else value) for name, value in member_query]

@@ -1,11 +1,13 @@
 import type { SubscriptionOffer } from "@/domain/subscription-offer";
 import type { SubscriptionSummary } from "@/domain/subscription-summary";
+import { validReferralCode } from "../../domain/referrals.ts";
 import { startRequestDeadline } from "../../domain/request-deadline.ts";
 import { clearProtectedDrafts, purgeLegacyDrafts } from "./draft-storage.ts";
 
 /** Client-only account state. Public page HTML and browser storage never contain it. */
 let phone: string | null = null;
 let administrator = false;
+let invitationSession: string | null | undefined;
 let freeContentAccess = false;
 let subscription: SubscriptionSummary | null = null;
 let pending: Promise<void> | null = null;
@@ -19,6 +21,8 @@ export const getServerMemberSessionSnapshot = (): null => null;
 export const hasConfirmedMemberSession = (): boolean => confirmedAt !== null;
 export const getAdminSessionSnapshot = (): boolean => administrator;
 export const getServerAdminSessionSnapshot = (): false => false;
+export const getInvitationSessionSnapshot = (): string | null | undefined => invitationSession;
+export const getServerInvitationSessionSnapshot = (): undefined => undefined;
 export const getSubscriptionSnapshot = (): SubscriptionSummary | null => subscription;
 export const getServerSubscriptionSnapshot = (): null => null;
 export const getSlipSharingSnapshot = (): boolean => freeContentAccess || phone !== null
@@ -82,6 +86,8 @@ export function refreshMemberSession(): Promise<void> {
         session.phone !== null && typeof session.phone !== "string") return;
       if (session.phone === null || phone !== null && phone !== session.phone) clearProtectedDrafts();
       const nextAdministrator = "administrator" in session && session.administrator === true;
+      const nextInvitationSession = session.phone === null && !nextAdministrator ? null
+        : "referralCode" in session && validReferralCode(session.referralCode) ? session.referralCode : undefined;
       const nextFreeContentAccess = "freeContentAccess" in session && session.freeContentAccess === true;
       const rawSubscription = "subscription" in session ? session.subscription : undefined;
       // Null is a storage failure for an otherwise verified account. Expiry still runs from the known deadline.
@@ -89,6 +95,7 @@ export function refreshMemberSession(): Promise<void> {
         && administrator === nextAdministrator ? subscription : readSubscription(rawSubscription);
       confirmedAt = Date.now();
       if (phone === session.phone && administrator === nextAdministrator && freeContentAccess === nextFreeContentAccess
+        && invitationSession === nextInvitationSession
         && subscription?.activeUntil === nextSubscription?.activeUntil
         && subscription?.paymentPending === nextSubscription?.paymentPending
         && subscription?.expired === nextSubscription?.expired
@@ -99,6 +106,7 @@ export function refreshMemberSession(): Promise<void> {
         && subscription?.offer?.durationDays === nextSubscription?.offer?.durationDays) return;
       phone = session.phone;
       administrator = nextAdministrator;
+      invitationSession = nextInvitationSession;
       freeContentAccess = nextFreeContentAccess;
       subscription = nextSubscription;
       publish();

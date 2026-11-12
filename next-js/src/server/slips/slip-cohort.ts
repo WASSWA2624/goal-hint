@@ -17,9 +17,10 @@ import { storedFeedSearch } from "../matches/feed-search.ts";
 import { parseMatchFeedQuery } from "../matches/feed-service.ts";
 import { storedFeedFixtures } from "../matches/fixture-read.ts";
 import { storedSlipPricePools } from "./price-read.ts";
+import { storedSlipTotal15Forecasts } from "./slip-goal-forecast.ts";
 
 export type SlipCohortReader = (parameters: FeedParameters,
-  context: Readonly<{ locale?: string; primaryBookmakerOnly?: boolean }>, clock: Clock) => Promise<SlipCohort>;
+  context: Readonly<{ locale?: string; primaryBookmakerOnly?: boolean; total15?: "include" | "only" }>, clock: Clock) => Promise<SlipCohort>;
 
 /** Reuses the production feed's exact filtering, order, record projection and approved price rules.
  * One repeatable-read snapshot covers ordered IDs, forecasts and all prices. No page re-probes or
@@ -43,7 +44,11 @@ export function createStoredSlipCohort(options: Readonly<{
       const search = await storedFeedSearch(tx, query.search, range, configured, query.locale);
       const primaryOnly = context.primaryBookmakerOnly === true;
       const sql = feedSql(query, range, configured, primaryOnly && enabled, search, false, !primaryOnly);
-      const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT f.id ${sql.joins} ${sql.searchJoin} WHERE ${sql.where}
+      const total15 = primaryOnly ? undefined : context.total15;
+      const goals = total15 ? Prisma.sql`LEFT JOIN GoalMarketExtension goal ON goal.revisionId=rp.id` : Prisma.empty;
+      const extended = Prisma.sql`goal.revisionId IS NOT NULL AND ${sql.cohortWhere}`;
+      const where = total15 === "only" ? extended : total15 ? Prisma.sql`((${sql.where}) OR (${extended}))` : sql.where;
+      const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT f.id ${sql.joins} ${goals} ${sql.searchJoin} WHERE ${where}
         ORDER BY ${sql.order} LIMIT ${slipCohortRules.maximumRecords + 1}`);
       if (rows.length > slipCohortRules.maximumRecords + 1 || new Set(rows.map((row) => row.id)).size !== rows.length) {
         throw new MatchFeedError("unavailable");
@@ -72,8 +77,10 @@ export function createStoredSlipCohort(options: Readonly<{
         records.push(...batch);
         if (primaryOnly) Object.assign(selectionPrices, await storedSlipPricePools(tx, batch, asOf, { enabled, primaryBookmakerOnly: true }));
       }
-      if (!primaryOnly) Object.assign(selectionPrices, await storedSlipPricePools(tx, records, asOf, { enabled, families: query.markets }));
-      return freezeEvidence(slipCohortSchema.parse({ records, selectionPrices, asOf, today,
+      const total15Forecasts = total15 ? await storedSlipTotal15Forecasts(tx, records, asOf) : undefined;
+      if (!primaryOnly) Object.assign(selectionPrices, await storedSlipPricePools(tx, records, asOf, { enabled, families: query.markets,
+        ...(total15Forecasts ? { total15Forecasts } : {}) }));
+      return freezeEvidence(slipCohortSchema.parse({ records, selectionPrices, asOf, today, ...(total15Forecasts ? { total15Forecasts } : {}),
         range: { from: range.startDate, to: range.endDate, ...range.window }, searchLimited: rows.length > selected.length, partialCoverage }));
     }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 60_000 });
   };

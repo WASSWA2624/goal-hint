@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
-import { canonicalSlipConfigurationParameters, slipConfigurationCriteria, slipConfigurationHref, slipConfigurationMutationSchema } from "../src/domain/slip-configurations.ts";
+import { canonicalSlipConfigurationParameters, datedSlipConfiguration, slipConfigurationCriteria, slipConfigurationHref, slipConfigurationMutationSchema } from "../src/domain/slip-configurations.ts";
 import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria } from "../src/domain/slip-builder.ts";
 import { createSlipConfigurationsHandler } from "../src/server/slips/slip-configurations-http.ts";
 import { memberTokenHash } from "../src/server/members/member-sessions.ts";
@@ -52,6 +52,40 @@ test("legacy dated configurations load for each current reporting day while reta
     assert.equal(loaded.get("timeFrom"), "09:30"); assert.equal(loaded.get("timeTo"), "18:45");
     assert.equal(loaded.has("build"), false);
   }
+});
+
+test("saved date-time endpoints persist across days, service restarts and Builder URLs", async () => {
+  const f = fixture(), member = f.first.member;
+  const interval = { from: "2026-10-31T22:45", to: "2026-11-01T09:15", zone: "Asia/Tokyo" };
+  const exact = new URLSearchParams(parameters);
+  for (const key of ["dateFrom", "dateTo", "timeFrom", "timeTo"]) exact.delete(key);
+  exact.set("start", interval.from); exact.set("end", interval.to); exact.set("tz", interval.zone);
+  const result = await f.service.mutate(member, { ...create("Dated filter"), parameters: exact.toString() });
+  assert.equal(result.status, "saved");
+  const persisted = (await f.restart().read(member)).configurations[0];
+  const canonical = canonicalSlipConfigurationParameters(exact.toString(), "2026-11-20");
+  assert.equal(persisted.parameters, canonical);
+  assert.deepEqual(slipConfigurationCriteria(canonical, "2026-11-20").interval, interval);
+  assert.equal(datedSlipConfiguration(persisted, "2026-11-20", "America/New_York"), persisted);
+  const applied = new URL(slipConfigurationHref(persisted, "en", "2026-11-20"), "https://example.test").searchParams;
+  assert.equal(applied.get("start"), interval.from); assert.equal(applied.get("end"), interval.to); assert.equal(applied.get("tz"), interval.zone);
+  assert.equal(applied.has("dateFrom"), false); assert.equal(applied.has("build"), false);
+});
+
+test("applying a time-only preset can add today's device-zone bounds without rewriting the record", async () => {
+  const f = fixture(), member = f.first.member;
+  const legacy = new URLSearchParams(parameters);
+  legacy.set("timeFrom", "02:15"); legacy.set("timeTo", "05:45");
+  const result = await f.service.mutate(member, { ...create("Legacy filter"), parameters: legacy.toString() });
+  assert.equal(result.status, "saved");
+  const preset = result.configurations[0];
+  const applied = datedSlipConfiguration(preset, "2026-03-09", "America/New_York");
+  assert.deepEqual(slipConfigurationCriteria(applied.parameters).interval, {
+    from: "2026-03-09T02:15", to: "2026-03-09T05:45", zone: "America/New_York",
+  });
+  assert.equal((await f.restart().read(member)).configurations[0].parameters, preset.parameters);
+  assert.equal(new URLSearchParams(preset.parameters).has("start"), false);
+  assert.throws(() => datedSlipConfiguration(preset, "2026-03-08", "America/New_York"));
 });
 
 test("save, restart/read, rename and replace filters persist independently of subscriptions and sessions", async () => {

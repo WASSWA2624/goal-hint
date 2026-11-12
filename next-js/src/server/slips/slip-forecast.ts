@@ -3,16 +3,21 @@ import "server-only";
 import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { isCompletedFixtureStatus, isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { liveClockFromProvider } from "../../domain/match-card.ts";
+import { total15MarketKey } from "../../domain/extended-markets.ts";
+import type { MarketFamily } from "../../domain/markets.ts";
 import type { SlipMatchWatch } from "../../domain/slip-match-refresh.ts";
 import { slipCompletedStatuses, type SlipResult } from "../../domain/slip-snapshot.ts";
 import { slipBuilderRules, type BuiltSlip, type SlipSelection } from "../../domain/slip-builder.ts";
+import { isTotal15SlipSelection } from "../../domain/slip-markets.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { reconstructCutoff, revisionEligibleForLock } from "../predictions/cutoff-eligibility.ts";
 import type { CutoffSchedule } from "../predictions/cutoff-contract.ts";
 import { historyFail, type StoredCycle, type StoredRevision } from "../predictions/history-contract.ts";
 import { cycleFromRows, historyTime, revisionFromRows, storedCycle, storedRevision, type HistoryRow } from "../predictions/history-read.ts";
+import { readGoalMarketSettlement, type StoredGoalMarketExtension } from "../predictions/goal-market-store.ts";
 import { fixtureResultFromRow, fixtureResultMatchesCanonical, resultStatus, storedFixtureResult, type StoredFixtureResult } from "../results/result-read.ts";
 import { cycleEligibilityFor, storedSettlementRevision } from "../settlement/settlement-read.ts";
+import { projectSlipTotal15Forecast, readSlipGoalExtensions } from "./slip-goal-forecast.ts";
 
 type Tx = Prisma.TransactionClient;
 export const slipForecastReadRules = Object.freeze({
@@ -25,11 +30,19 @@ const fixtureSelect = { id: true, status: true, activeCycleId: true, kickoff: tr
   lifecycleState: { select: { issue: true } }, resultState: { select: { resultId: true } } } as const;
 type Fixture = Prisma.FootballFixtureGetPayload<{ select: typeof fixtureSelect }>;
 
-export function slipRevisionMatches(selection: SlipMatchWatch, revision: StoredRevision | null): revision is StoredRevision {
-  const reference = selection.forecast, market = revision?.candidate.markets[selection.family];
-  return revision !== null && revision.fixtureId === selection.fixtureId && market?.available === true &&
-    (market.market.probabilities as Readonly<Record<string, number>>)[selection.selection] === selection.probability &&
-    (!reference || reference.cycleId === revision.cycleId && reference.revisionId === revision.id && reference.publishedAt === revision.publishedAt);
+export function slipRevisionMatches(selection: SlipMatchWatch, revision: StoredRevision | null,
+  extension: StoredGoalMarketExtension | null = null, asOf = revision?.publishedAt ?? 0): revision is StoredRevision {
+  const reference = selection.forecast;
+  if (!revision || revision.fixtureId !== selection.fixtureId || reference &&
+    (reference.cycleId !== revision.cycleId || reference.revisionId !== revision.id || reference.publishedAt !== revision.publishedAt)) return false;
+  if (isTotal15SlipSelection(selection.selection)) {
+    return selection.family === "total-goals" && !!reference &&
+      projectSlipTotal15Forecast(extension, selection.fixtureId, selection.kickoffAt, reference, asOf)
+        ?.probabilities[selection.selection] === selection.probability;
+  }
+  const market = revision.candidate.markets[selection.family];
+  return market?.available === true &&
+    (market.market.probabilities as Readonly<Record<string, number>>)[selection.selection] === selection.probability;
 }
 
 /** Shared fixture locks block source mutation until commit without requiring canonical UPDATE grants. */
@@ -40,6 +53,7 @@ export async function bindSlipForecasts(tx: Tx, slip: BuiltSlip, at: number): Pr
     WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR SHARE`);
   if (locked.length !== ids.length) return null;
   const fixtures = new Map((await tx.footballFixture.findMany({ where: { id: { in: ids } }, select: fixtureSelect })).map((row) => [row.id, row]));
+  const goalExtensions = await readSlipGoalExtensions(tx, slipGoalRevisionIds(slip.selections));
   const selections: SlipSelection[] = [];
   for (const selection of slip.selections) {
     const fixture = fixtures.get(selection.fixtureId);
@@ -49,7 +63,8 @@ export async function bindSlipForecasts(tx: Tx, slip: BuiltSlip, at: number): Pr
     if (!cycle || cycle.fixtureId !== fixture.id || cycle.state !== "open" || cycle.kickoffAt !== selection.kickoffAt ||
       cycle.openedAt > instant || cycle.cutoffAt <= instant || !cycle.currentSetId) return null;
     const revision = await storedRevision(tx, cycle.currentSetId);
-    if (!slipRevisionMatches(selection, revision) || revision.cycleId !== cycle.id || revision.publishedAt > instant) return null;
+    if (!slipRevisionMatches(selection, revision, goalExtensions.get(cycle.currentSetId) ?? null, instant)
+      || revision.cycleId !== cycle.id || revision.publishedAt > instant) return null;
     selections.push({ ...selection, forecast: { cycleId: cycle.id, revisionId: revision.id, publishedAt: revision.publishedAt } });
   }
   return { ...slip, selections };
@@ -64,12 +79,13 @@ type HistoricalResult = Readonly<{ result: StoredFixtureResult | null; terminalV
 /** Pure projection of already validated, sealed records. The saved choice never changes to the cutoff's later choice. */
 export function projectSlipForecastResult(selection: SlipMatchWatch, input: Readonly<{
   fixture: Fixture; cycle: StoredCycle | null; revision: StoredRevision | null; schedules: readonly CutoffSchedule[];
+  goalExtension?: StoredGoalMarketExtension | null;
   result: StoredFixtureResult | null; historical: HistoricalResult | null; asOf: number;
 }>): SlipResult {
   const { fixture, cycle, revision, asOf } = input;
   const base = { ...emptyResult(selection), fixtureCompleted: isCompletedFixtureStatus(resultStatus.parse(fixture.status)) };
   if (!selection.forecast || !cycle || cycle.id !== selection.forecast.cycleId || cycle.fixtureId !== selection.fixtureId ||
-    cycle.openedAt > asOf || !slipRevisionMatches(selection, revision) || revision.publishedAt > asOf) return base;
+    cycle.openedAt > asOf || !slipRevisionMatches(selection, revision, input.goalExtension, asOf) || revision.publishedAt > asOf) return base;
   if (cycle.state === "void" && cycle.voidedAt !== null && cycle.voidedAt <= asOf) {
     return { ...base, completed: true, cycleEligibility: cycleEligibilityFor(cycle) };
   }
@@ -96,6 +112,37 @@ export function projectSlipForecastResult(selection: SlipMatchWatch, input: Read
   return resultProjection(base, status, coherent ? result : null, slipCompletedStatuses.includes(status));
 }
 
+/** A saved 1.5 choice follows its original cycle even if the current fixture was rescheduled. */
+async function historicalTotal15Result(tx: Tx, selection: SlipMatchWatch, cycle: StoredCycle, asOf: number): Promise<HistoricalResult | null> {
+  if (!cycle.lockedSetId) return null;
+  const row = await tx.extendedMarketSettlementRevision.findFirst({ where: { fixtureId: cycle.fixtureId, cycleId: cycle.id,
+    predictionRevisionId: cycle.lockedSetId, marketKey: total15MarketKey, at: { lte: new Date(asOf) } },
+    orderBy: [{ at: "desc" }, { id: "desc" }], select: { id: true } });
+  // The original revision can supply 1.5 even when a later locked revision supplies only core markets.
+  // An independently verified regulation score from that cycle still settles this original event.
+  if (!row) return historicalResult(tx, selection, asOf, "match-result");
+  const settlement = await readGoalMarketSettlement(tx, row.id);
+  if (settlement.fixtureId !== cycle.fixtureId || settlement.cycleId !== cycle.id || settlement.predictionRevisionId !== cycle.lockedSetId
+    || settlement.marketKey !== total15MarketKey || settlement.at > asOf) return null;
+  if (settlement.status === "void") return { result: null, terminalVoid: true, completed: true };
+  if ((settlement.status === "correct" || settlement.status === "incorrect") && settlement.resultUsable && settlement.resultId) {
+    const result = await storedFixtureResult(tx, cycle.fixtureId, settlement.resultId);
+    return result.observedAt <= settlement.at ? { result, terminalVoid: false, completed: true } : null;
+  }
+  // A corrected settlement may withhold an older score, while retaining terminal visibility.
+  const [anchor] = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM ExtendedMarketSettlementRevision
+    WHERE fixtureId=${cycle.fixtureId} AND cycleId=${cycle.id} AND predictionRevisionId=${cycle.lockedSetId}
+      AND marketKey=${total15MarketKey} AND at<=${new Date(settlement.at)}
+      AND JSON_UNQUOTE(JSON_EXTRACT(body,'$.status')) IN ('correct','incorrect','void')
+    ORDER BY at DESC, id DESC LIMIT 1`;
+  if (!anchor) return null;
+  const previous = await readGoalMarketSettlement(tx, anchor.id);
+  return { result: null, terminalVoid: false, completed: previous.fixtureId === cycle.fixtureId &&
+    previous.cycleId === cycle.id && previous.predictionRevisionId === cycle.lockedSetId &&
+    previous.marketKey === total15MarketKey && previous.at <= settlement.at &&
+    ["correct", "incorrect", "void"].includes(previous.status) };
+}
+
 function resultProjection(base: SlipResult, status: SlipResult["status"], result: StoredFixtureResult | null,
   completed: boolean): SlipResult {
   const verified = isPlayedFinalStatus(status) && result?.regulation.verified === true;
@@ -105,20 +152,20 @@ function resultProjection(base: SlipResult, status: SlipResult["status"], result
     regulationHome: verified ? result!.regulation.home : null, regulationAway: verified ? result!.regulation.away : null,
     progress: { score: verified ? { home: result!.regulation.home!, away: result!.regulation.away! }
       : liveScore ? { home: result!.reportedGoals.home!, away: result!.reportedGoals.away! } : null,
-    liveClock: live ? liveClockFromProvider(result!.providerStatus, result!.elapsedMinutes, result!.stoppageMinutes) : null } };
+    liveClock: live ? liveClockFromProvider(result!.providerStatus, result!.elapsedMinutes, result!.stoppageMinutes, result!.observedAt) : null } };
 }
 
 /** Resolve only the original cycle's final evidence when a later cycle has become active. */
-async function historicalResult(tx: Tx, selection: SlipMatchWatch, asOf: number): Promise<HistoricalResult | null> {
+async function historicalResult(tx: Tx, selection: SlipMatchWatch, asOf: number, family: MarketFamily = selection.family): Promise<HistoricalResult | null> {
   const reference = selection.forecast;
   if (!reference) return null;
   const row = await tx.marketSettlementRevision.findFirst({ where: { fixtureId: selection.fixtureId, cycleId: reference.cycleId,
-    family: selection.family, at: { lte: new Date(asOf) } },
+    family, at: { lte: new Date(asOf) } },
     orderBy: [{ at: "desc" }, { id: "desc" }], select: { id: true } });
   if (!row) return null;
   const settlement = await storedSettlementRevision(tx, row.id);
   if (settlement.fixtureId !== selection.fixtureId || settlement.cycleId !== reference.cycleId ||
-    settlement.family !== selection.family || settlement.at > asOf || settlement.cycleState === "open") return null;
+    settlement.family !== family || settlement.at > asOf || settlement.cycleState === "open") return null;
   if (settlement.status === "void") return { result: null, terminalVoid: true, completed: true };
   if ((settlement.status === "correct" || settlement.status === "incorrect") && settlement.resultUsable && settlement.resultId) {
     const result = await storedFixtureResult(tx, selection.fixtureId, settlement.resultId);
@@ -127,13 +174,13 @@ async function historicalResult(tx: Tx, selection: SlipMatchWatch, asOf: number)
   // A correction can invalidate a prior result. Keep its public history visible as pending,
   // but never move backwards to the prior winning/losing score for adjudication.
   const [anchor] = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT id FROM MarketSettlementRevision
-    WHERE fixtureId=${selection.fixtureId} AND cycleId=${reference.cycleId} AND family=${selection.family}
+    WHERE fixtureId=${selection.fixtureId} AND cycleId=${reference.cycleId} AND family=${family}
       AND at<=${new Date(settlement.at)} AND JSON_UNQUOTE(JSON_EXTRACT(body,'$.status')) IN ('correct','incorrect','void')
     ORDER BY at DESC, id DESC LIMIT 1`);
   if (!anchor) return null;
   const previous = await storedSettlementRevision(tx, anchor.id);
   const completed = previous.fixtureId === selection.fixtureId && previous.cycleId === reference.cycleId &&
-    previous.family === selection.family && previous.at <= settlement.at && previous.cycleState !== "open" &&
+    previous.family === family && previous.at <= settlement.at && previous.cycleState !== "open" &&
     ["correct", "incorrect", "void"].includes(previous.status);
   return { result: null, terminalVoid: false, completed };
 }
@@ -143,6 +190,10 @@ type ForecastCache = Readonly<{
 }>;
 function* batches(values: readonly string[]) {
   for (let offset = 0; offset < values.length; offset += slipForecastReadRules.batchSize) yield values.slice(offset, offset + slipForecastReadRules.batchSize);
+}
+function slipGoalRevisionIds(selections: readonly SlipMatchWatch[]) {
+  return [...new Set(selections.flatMap((selection) => isTotal15SlipSelection(selection.selection) && selection.forecast
+    ? [selection.forecast.revisionId] : []))];
 }
 function scheduleProjection(row: HistoryRow): CutoffSchedule {
   if (typeof row.version !== "number") return historyFail("invalid-state");
@@ -209,6 +260,10 @@ export async function readSlipForecastResults(tx: Tx, selections: readonly SlipM
   if (Math.max(cycleIds.length, revisionIds.length) > slipForecastReadRules.prefetchThreshold) {
     await prefetchForecasts(tx, cycleIds, revisionIds, { cycles, revisions, schedules });
   }
+  const goalExtensions = new Map<string, StoredGoalMarketExtension>();
+  for (const ids of batches(slipGoalRevisionIds(selections))) {
+    for (const [id, extension] of await readSlipGoalExtensions(tx, ids)) goalExtensions.set(id, extension);
+  }
   const history = new Map<string, HistoricalResult | null>(), projected: SlipResult[] = [];
   for (const selection of selections) {
     const fixture = fixtures.get(selection.fixtureId), reference = selection.forecast;
@@ -227,11 +282,12 @@ export async function readSlipForecastResults(tx: Tx, selections: readonly SlipM
     if (cycle?.state === "closed" && !schedules.has(cycle.id)) {
       schedules.set(cycle.id, (await tx.predictionSchedule.findMany({ where: { cycleId: cycle.id }, orderBy: { version: "asc" } })).map(scheduleProjection));
     }
-    const key = `${reference.cycleId}:${selection.family}`;
+    const total15 = isTotal15SlipSelection(selection.selection), key = `${reference.cycleId}:${total15 ? total15MarketKey : selection.family}`;
     if (cycle?.state === "closed" && fixture.activeCycleId !== null && fixture.activeCycleId !== cycle.id && !history.has(key)) {
-      history.set(key, await historicalResult(tx, selection, asOf));
+      history.set(key, total15 ? await historicalTotal15Result(tx, selection, cycle, asOf) : await historicalResult(tx, selection, asOf));
     }
     projected.push(projectSlipForecastResult(selection, { fixture, cycle, revision: revisions.get(reference.revisionId) ?? null,
+      goalExtension: goalExtensions.get(reference.revisionId) ?? null,
       schedules: schedules.get(reference.cycleId) ?? [], result, historical: history.get(key) ?? null, asOf }));
   }
   return projected;

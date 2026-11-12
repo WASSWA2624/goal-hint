@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { createMemberSessionHandler } from "../src/server/members/member-auth-http.ts";
+import { createMemberSessions } from "../src/server/members/member-sessions.ts";
 import { createAccessCodes } from "../src/server/members/access-codes.ts";
 import { silentPaymentNotifications } from "./helpers/payment-notification-fixtures.mjs";
 import { fixtureAdminPhone, installAdminFixtureEnvironment } from "./helpers/admin-fixtures.mjs";
@@ -24,6 +25,30 @@ test("navigation role and phone come from the same verified member, ignoring leg
 
 const instant = Date.parse("2026-10-24T10:00:00Z"), hour = 3_600_000;
 const period = (from, to, revoked = false) => ({ startsAt: new Date(instant + from * hour), endsAt: new Date(instant + to * hour), revokedAt: revoked ? new Date(instant) : null });
+
+test("private invitations read an existing referral code only from an unblocked phone-verified account", async () => {
+  const phoneVerifiedAt = new Date(instant - hour), referralCode = "01234567", legacyCode = "a".repeat(32);
+  for (const [accountChange, expected] of [
+    [{}, referralCode], [{ referralCode: legacyCode }, legacyCode], [{ blockedAt: phoneVerifiedAt }, undefined],
+    [{ referralCode: "malformed" }, undefined], [{ referralCode: null }, undefined], [{ phoneVerifiedAt: null }, undefined],
+    [{ phone: fixtureAdminPhone }, referralCode], [{ phone: fixtureAdminPhone, phoneVerifiedAt: null }, undefined],
+  ]) {
+    const account = { phone: "256700000101", phoneVerifiedAt, referralCode, blockedAt: null, erasedAt: null, passwordHash: "password", ...accountChange };
+    const row = { accountId: "account", account, authenticatedAt: phoneVerifiedAt, lastSeenAt: phoneVerifiedAt,
+      expiresAt: new Date(instant + hour), passwordResetAt: null, adminPasswordVersion: "admin-version" };
+    let reads = 0;
+    const database = { query: run => run({ memberSession: { async findUnique() { reads++; return row; } } }) };
+    const config = { production: false, key: () => "admin-version" };
+    const sessions = createMemberSessions({ database, config, now: () => instant, adminPasswordHash: () => "admin-password" });
+    const handler = createMemberSessionHandler(async () => ({ config, sessions }));
+    const response = await handler(new Request("http://localhost/api/account/session", { headers: { Cookie: `goal-hint-member=${token}` } }));
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("cache-control"), /no-store/u);
+    assert.equal((await response.json()).referralCode, expected);
+    assert.equal(reads, 1, "the existing session query supplies the referral code");
+  }
+});
+
 function subscriptionFixture({ periods = [], status = null, mode = "on", blocked = false, sessionChange = {}, accountChange = {} } = {}) {
   const member = { phone: "256700000101", accountId: "account", tokenHash: "session", blocked, codeEnteredAt: null };
   const account = { blockedAt: null, erasedAt: null, creditUgx: 0, autoRenew: false, autoRenewPlan: null, codes: periods,

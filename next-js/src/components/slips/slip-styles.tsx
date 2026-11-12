@@ -105,11 +105,8 @@ export const BuilderPanel = styled(CriteriaPanel)`
   [data-criteria-dialog] { ${filterDialogSurface} }
   ${pageFilterPanel}
   && { ${desktopSectionFrame} ${desktopContentPadding(true)} }
-  [data-slip-label="mobile"] { display: none; }
   ${media.belowDesktop} {
     && { padding-block: ${({ theme }) => theme.layout.sectionPadding}; }
-    [data-slip-label="desktop"] { display: none; }
-    [data-slip-label="mobile"] { display: inline; }
     && [data-slip-builder-essentials] { grid-template-columns: var(--gh-size-20) minmax(0, 1fr); gap: var(--gh-spacing-1_5); }
     && [data-slip-count] { align-self: end; }
     && [data-slip-count] > legend, && [data-criteria-field="targets"] [data-slip-floating-field] > label,
@@ -186,6 +183,11 @@ export const CriteriaForm = styled.form`
 export const BuilderEssentials = styled.div`
   display: grid; grid-template-columns: var(--gh-size-20) minmax(0, 1fr); gap: var(--gh-spacing-2);
   align-items: end; min-inline-size: 0;
+  [data-slip-label="mobile"] { display: none; }
+  ${media.belowDesktop} {
+    [data-slip-label="desktop"] { display: none; }
+    [data-slip-label="mobile"] { display: inline; }
+  }
   > [data-slip-count] { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
   > [data-slip-count] > legend { ${desktopGroupTitle} margin-block-end: var(--gh-spacing-2); padding: 0; white-space: nowrap; }
   > [data-slip-count] input { font-variant-numeric: tabular-nums; }
@@ -198,18 +200,16 @@ export const BuilderOptions = styled.div`
   ${media.desktop} { display: contents; }
 `;
 export const CriteriaOptions = styled.div`
-  display: grid; grid-template-columns: minmax(0, 1fr); flex: 1 0 100%;
+  display: flex; flex: 1 0 100%; flex-wrap: wrap; align-items: center;
   gap: var(--gh-spacing-1); min-inline-size: 0;
-  &:has(> [data-saved-filters-trigger]) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   &[hidden] { display: none; }
-  ${media.desktop} { display: flex; flex: 0 1 auto; flex-wrap: wrap; gap: var(--gh-spacing-1_5); align-items: end; }
+  ${media.desktop} { flex: 0 1 auto; gap: var(--gh-spacing-1_5); align-items: end; }
 `;
 export const CriteriaOption = styled.div`
   display: contents;
   ${media.desktop} {
-    display: flex; flex: none; flex-direction: column; justify-content: space-between; gap: var(--gh-spacing-2);
+    display: flex; flex: none;
     ${desktopGroupDivider}
-    > [data-criteria-title] { white-space: nowrap; }
   }
 `;
 export const CriteriaTitle = styled.span`
@@ -219,11 +219,9 @@ export const CriteriaTitle = styled.span`
 export const CriteriaTrigger = styled(Button)`
   && {
     ${slipToolbarControl}
-    inline-size: 100%; min-block-size: var(--form-control-height); padding-inline: var(--gh-spacing-1_5);
+    flex: none; padding-inline: var(--gh-spacing-1_5); white-space: nowrap;
     flex-direction: row; gap: var(--gh-spacing-1); font-weight: ${({ theme }) => theme.typography.weight.medium};
     ${filterButtonColors}
-    > [data-criteria-label] { min-inline-size: 0; white-space: normal; }
-    > svg { font-size: var(--gh-font-secondary); }
     > [data-criteria-count] {
       flex: none; display: inline-flex; align-items: center; justify-content: center;
       min-inline-size: var(--gh-size-4); block-size: var(--gh-size-4); padding-inline: var(--gh-spacing-0_75); border-radius: ${({ theme }) => theme.radius.small};
@@ -233,8 +231,7 @@ export const CriteriaTrigger = styled(Button)`
     &[data-edited="true"], &[aria-expanded="true"] { color: ${({ theme }) => theme.color.link};  background: ${({ theme }) => theme.color.brandSoft}; }
     ${controlFeedback}
   }
-  ${media.desktop} { && { inline-size: 100%; min-block-size: ${compactControlHeight}; padding-inline: var(--gh-spacing-2); } }
-  @media (pointer: coarse) { && { min-block-size: var(--form-control-height); } }
+  ${media.desktop} { && { padding-inline: var(--gh-spacing-2); } }
 `;
 export const CriteriaSummary = styled.p`
   margin: 0; min-inline-size: 0; color: ${({ theme }) => theme.color.mutedText};
@@ -262,6 +259,10 @@ export const Fields = styled.div`
   @media (max-width: ${({ theme }) => theme.viewport[22.5]}) { &[data-kickoff-fields] { grid-template-columns: minmax(0, 1fr); } }
   @media (pointer: coarse) { > div > input { min-block-size: var(--gh-size-11); } }
 `;
+export const KickoffFields = styled.div`
+  display: flex; flex-wrap: wrap; align-items: start; gap: var(--gh-spacing-2);
+  > [data-date-time-field] { inline-size: max-content; }
+`;
 export const LimitGroups = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-2);
   @media (max-width: ${({ theme }) => theme.viewport[22.5]}) { grid-template-columns: minmax(0, 1fr); }
@@ -277,8 +278,6 @@ export const InlineCriteria = styled(FieldGroup)`
 `;
 export const AdvancedCriteria = styled.div`
   display: grid; gap: var(--gh-spacing-2_5); min-inline-size: 0;
-  [data-combined-kickoff-fields] { grid-template-columns: minmax(0, 1fr); gap: var(--gh-spacing-2); }
-  [data-criteria-field="markets"] > ${Note} { margin: 0 0 var(--gh-spacing-2); }
 `;
 export const TargetGroups = styled(LimitGroups)`
   grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: var(--gh-spacing-2);
@@ -306,11 +305,16 @@ export const MarketChoice = styled.label`
   display: flex; align-items: center; gap: var(--gh-spacing-1_5); min-inline-size: 0; min-block-size: var(--form-control-height);
   padding: var(--gh-spacing-1) 0; color: ${({ theme }) => theme.color.text};
   font-size: var(--gh-font-secondary); font-weight: ${({ theme }) => theme.typography.weight.bold}; cursor: pointer;
-  > input { flex: none; inline-size: var(--gh-size-4); block-size: var(--gh-size-4); accent-color: ${({ theme }) => theme.color.brand}; }
+  > input { flex: none; inline-size: var(--gh-size-4); block-size: var(--gh-size-4); margin: 0; accent-color: ${({ theme }) => theme.color.brand}; }
 `;
 export const MarketField = styled.div`
   display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gh-spacing-1); align-items: start; min-inline-size: 0; padding-block: var(--gh-spacing-2_25);
   border-block-end: 0;
+  > [data-choice-inline] {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--gh-size-20)), 1fr));
+    gap: var(--gh-spacing-1) var(--gh-spacing-2);
+    > label { min-inline-size: 0; overflow-wrap: anywhere; }
+  }
   &:first-child { padding-block-start: 0; }
   &:last-child { padding-block-end: 0; border-block-end: 0; }
   ${media.desktop} {
@@ -318,8 +322,7 @@ export const MarketField = styled.div`
     gap: var(--gh-spacing-2);
     border-block-end: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
     &:first-child { padding-block-start: var(--gh-spacing-2_25); }
-    > fieldset {
-      gap: var(--gh-spacing-1) var(--gh-spacing-2);
+    > [data-choice-inline] {
       > label { padding-inline: var(--gh-spacing-1_5); border-radius: ${({ theme }) => theme.radius.control}; }
       > label:has(input:checked) {
         color: ${({ theme }) => theme.color.link};
@@ -358,9 +361,6 @@ export const Actions = styled.div`
 export const ActionControls = styled.div`
   display: contents;
   ${media.desktop} { display: flex; align-items: center; gap: var(--gh-spacing-1); }
-`;
-export const SavedFiltersButton = styled(Button)`
-  && { ${slipToolbarControl} ${filterButtonColors} flex: none; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
 `;
 export const BuildButton = styled(Button)`
   && { ${slipToolbarControl} }

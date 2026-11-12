@@ -3,7 +3,8 @@ export async function verifyFloatingLabels(page, origin, widths = [320, 390, 768
   const checks = [];
   const assert = (value, message) => { if (!value) throw new Error(message); checks.push(message); };
   const geometry = control => control.evaluate(element => {
-    const frame = element.closest("[data-floating-control]"), label = frame.querySelector("label");
+    const frame = element.matches("[data-select-trigger]") ? element.parentElement : element.closest("[data-floating-control]");
+    const label = frame.querySelector("label, [data-select-label]");
     const input = element.getBoundingClientRect(), bounds = label.getBoundingClientRect();
     return { raised: Math.abs(bounds.top + bounds.height / 2 - input.top) < 2,
       background: getComputedStyle(label).backgroundColor,
@@ -12,7 +13,8 @@ export async function verifyFloatingLabels(page, origin, widths = [320, 390, 768
   });
   const state = async (control, raised, name) => {
     await page.waitForFunction(({ element, raised }) => {
-      const frame = element.closest("[data-floating-control]"), label = frame.querySelector("label");
+      const frame = element.matches("[data-select-trigger]") ? element.parentElement : element.closest("[data-floating-control]");
+      const label = frame.querySelector("label, [data-select-label]");
       const input = element.getBoundingClientRect(), bounds = label.getBoundingClientRect();
       const active = Math.abs(bounds.top + bounds.height / 2 - input.top) < 2;
       const notch = frame.querySelector("legend").getBoundingClientRect().width;
@@ -71,9 +73,13 @@ export async function verifyFloatingLabels(page, origin, widths = [320, 390, 768
         await stepper.getByRole("button").last().click();
         assert(await number.inputValue() === "2", `${prefix}/down arrow decrements`);
       }
-      const select = page.getByLabel("Native choice", { exact: true });
+      const select = page.getByRole("combobox", { name: /^Native choice(?::|$)/u });
+      const nativeSelect = page.locator("select#select");
       await state(select, false, `${prefix}/select/empty`);
-      await select.selectOption("one"); await select.blur(); await state(select, true, `${prefix}/select/selected`);
+      await select.click();
+      await page.getByRole("listbox", { name: "Native choice", exact: true }).getByRole("option", { name: "One", exact: true }).click();
+      assert(await nativeSelect.inputValue() === "one", `${prefix}/select/first click updates the native value`);
+      await select.blur(); await state(select, true, `${prefix}/select/selected`);
       const notes = page.getByLabel("Notes", { exact: true });
       await state(notes, false, `${prefix}/textarea/empty`);
       await notes.focus(); await state(notes, true, `${prefix}/textarea/focused`);
@@ -87,9 +93,10 @@ export async function verifyFloatingLabels(page, origin, widths = [320, 390, 768
       await state(text, false, `${prefix}/reset/text`);
       await state(page.getByLabel("Date", { exact: true }), false, `${prefix}/reset/date`);
       await state(select, false, `${prefix}/reset/select`);
+      assert(await nativeSelect.inputValue() === "", `${prefix}/reset/select restores the native default`);
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${prefix}/no horizontal overflow`);
       const row = await page.locator("[data-alignment-row]").evaluate(element => {
-        return [...element.querySelectorAll("input, select, button")].map(control => control.getBoundingClientRect().toJSON());
+        return [...element.querySelectorAll('input, select:not([aria-hidden="true"]), button')].map(control => control.getBoundingClientRect().toJSON());
       });
       assert(row.every(bounds => Math.abs(bounds.height - row[0].height) < 1), `${prefix}/row controls share one height`);
       for (const bounds of row) {

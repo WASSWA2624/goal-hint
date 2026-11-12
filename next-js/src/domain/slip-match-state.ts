@@ -1,13 +1,15 @@
 import type { LiveClock } from "./match-card.ts";
 import type { StoredMatchFeedRecord } from "./match-feed.ts";
-import { isPlayedFinalStatus, settleMarketSelection, type SettlementStatus } from "./market-settlement.ts";
-import type { MarketFamily, MarketSelection } from "./markets.ts";
+import { isPlayedFinalStatus, type SettlementStatus } from "./market-settlement.ts";
+import type { MarketFamily } from "./markets.ts";
+import type { SlipMarketSelection } from "./slip-markets.ts";
+import { settleSlipSelection } from "./slip-settlement.ts";
 import type { SlipResult } from "./slip-snapshot.ts";
 import type { BuiltSlip, SlipForecastReference, SlipSelection } from "./slip-builder.ts";
 
 /** Current presentation facts stay outside the immutable saved/publication snapshot. */
 export type SlipMatchState = Readonly<{
-  fixtureId: string; family: MarketFamily; selection: MarketSelection; forecast?: SlipForecastReference;
+  fixtureId: string; family: MarketFamily; selection: SlipMarketSelection; forecast?: SlipForecastReference;
   status: SettlementStatus; score: Readonly<{ home: number; away: number }> | null; liveClock: LiveClock | null;
   outcome: "correct" | "incorrect" | "pending" | "void";
 }>;
@@ -62,7 +64,7 @@ export function slipMatchStatesFromResults(selections: readonly SelectionIdentit
     const regulation = verified ? { home: result.regulationHome!, away: result.regulationAway! } : null;
     const live = result.status === "live" && validScore(result.progress?.score?.home, result.progress?.score?.away)
       ? result.progress!.score : null;
-    const settled = result.completed === true ? settleMarketSelection(selection.family, selection.selection, {
+    const settled = result.completed === true ? settleSlipSelection(selection.family, selection.selection, {
       status: result.status, cycleEligibility: result.cycleEligibility ?? { eligible: true },
       regulationScore: regulation ? { ...regulation, verified: true, period: "regulation-including-stoppage-time" } : null,
     }).status : "pending";

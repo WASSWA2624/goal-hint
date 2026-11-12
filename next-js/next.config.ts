@@ -1,3 +1,4 @@
+import { networkInterfaces } from "node:os";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -10,10 +11,14 @@ const nextConfig: NextConfig = {
     ? { experimental: { turbopackFileSystemCacheForDev: false } } : {}),
   // No `X-Powered-By: Next.js` response header.
   poweredByHeader: false,
-  // Development only: let phones and other machines on the local network open `next dev` by its LAN address
-  // (e.g. http://192.168.1.148:3000). Without this, Next blocks the dev scripts and HMR socket from that origin, so
-  // pages never hydrate: lazy team crests stay as initials and client controls stay in their pending state.
-  allowedDevOrigins: ["127.0.0.1", "[::1]", "10.0.2.2", "192.168.*.*"],
+  // Allow dev assets and hot reload from this machine's actual IPv4 addresses,
+  // along with loopback and the Android emulator's host alias.
+  ...(process.env.NODE_ENV === "development" ? {
+    allowedDevOrigins: ["127.0.0.1", "[::1]", "10.0.2.2", ...Object.values(networkInterfaces()).flatMap(
+      (addresses) => (addresses ?? []).filter(({ family, internal }) => family === "IPv4" && !internal)
+        .map(({ address }) => address),
+    )],
+  } : {}),
   // Self-contained server bundle for cPanel/Passenger, enabled only by scripts/package-cpanel.py.
   ...(process.env.BUILD_OUTPUT === "standalone" ? { output: "standalone" as const } : {}),
   // Readable `file__Component` class names only in development; production emits bare `sc-` ids.

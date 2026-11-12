@@ -89,6 +89,49 @@ void main() {
   );
 
   test(
+    'a text-only public invitation accepts only the canonical home link',
+    () async {
+      const home = 'https://goalhint.com';
+      final bridge = NativeInvitationShare(), scripts = <String>[];
+      final installed = bridge.installScript(origin);
+      expect(installed, contains('publicInvitations: true'));
+      final token = nonce(installed);
+      final valid = {...request(token), 'url': home};
+      expect(
+        NativeInvitationRequest.parse(jsonEncode(valid), token)?.url,
+        home,
+      );
+      for (final data in [
+        {...valid, 'url': '$home/'},
+        {...valid, 'url': '$home?ref=private'},
+        {...valid, 'url': '$home#account'},
+        {...valid, 'url': 'https://goalhint.com.example.test'},
+        {...valid, 'text': 'x' * 513},
+        {...valid, 'action': 'download'},
+        {...valid, 'files': []},
+        {...valid, 'nonce': 'old-document'},
+      ]) {
+        expect(NativeInvitationRequest.parse(jsonEncode(data), token), isNull);
+      }
+      await bridge.handle(
+        jsonEncode(valid),
+        ownsDocument: () async => true,
+        evaluate: (script) async {
+          scripts.add(script);
+        },
+        anchor: anchor,
+        share: (params) async {
+          expect(params.text, 'Join me on Goal Hint.\n$home');
+          expect(params.files, isNull);
+          expect(params.sharePositionOrigin, anchor);
+          return const ShareResult('', ShareResultStatus.success);
+        },
+      );
+      expect(scripts.single, contains('handed-off'));
+    },
+  );
+
+  test(
     'concurrent requests open one sheet and navigation prevents stale responses',
     () async {
       final bridge = NativeInvitationShare(), scripts = <String>[];
@@ -260,13 +303,6 @@ void main() {
           token,
         )?.url,
         'https://goalhint.com/r/00000042',
-      );
-      expect(
-        NativeInvitationRequest.parse(
-          jsonEncode({...request(token), 'url': 'https://goalhint.com'}),
-          token,
-        ),
-        isNull,
       );
       final ownedToken = nonce(bridge.installScript(origin));
       var saves = 0;

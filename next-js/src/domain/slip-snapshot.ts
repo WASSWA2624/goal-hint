@@ -1,14 +1,16 @@
 import { z } from "zod";
 import { storedMatchFeedRecordSchema } from "./match-feed.ts";
-import { isMarketSelection, type MarketFamily, type MarketSelection } from "./markets.ts";
+import type { MarketFamily } from "./markets.ts";
 import { marketFamilySchema } from "./fixture-snapshot.ts";
-import { completedFixtureStatuses, isCompletedFixtureStatus, isPlayedFinalStatus, settleMarketSelection, type CycleEligibility, type SettlementStatus } from "./market-settlement.ts";
+import { completedFixtureStatuses, isCompletedFixtureStatus, isPlayedFinalStatus, type CycleEligibility, type SettlementStatus } from "./market-settlement.ts";
 import { slipBuilderRules, type BuiltSlip, type SlipForecastReference } from "./slip-builder.ts";
 import { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
 import { slipBookmakerSchema, slipQuoteOddsSchema } from "./slip-quote.ts";
 import type { SlipMatchProgress } from "./slip-match-state.ts";
 import { slipOutcome } from "./slip-outcome.ts";
 import { slipStatus, type SlipStatus } from "./slip-status.ts";
+import { isSlipMarketSelection, isTotal15SlipSelection, type SlipMarketSelection } from "./slip-markets.ts";
+import { settleSlipSelection } from "./slip-settlement.ts";
 export { slipOutcome } from "./slip-outcome.ts";
 export { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
 
@@ -26,7 +28,8 @@ const selection = z.strictObject({
   oddsBasis: z.enum(["bookmaker", "median"]),
   bookmaker: slipBookmakerSchema.optional(),
   forecast: slipForecastReferenceSchema.optional(),
-}).refine((value) => isMarketSelection(value.family, value.selection) && (!value.bookmaker || value.oddsBasis === "bookmaker"), "Invalid slip selection.");
+}).refine((value) => isSlipMarketSelection(value.family, value.selection) && (!value.bookmaker || value.oddsBasis === "bookmaker")
+  && (!isTotal15SlipSelection(value.selection) || !!value.forecast && !!value.bookmaker), "Invalid slip selection.");
 
 /** Neutral slip data shared by transient builders, image exports and editorial publications. */
 export const slipSnapshotSchema = z.strictObject({
@@ -40,7 +43,7 @@ export type SlipResult = Readonly<{
   fixtureId: string; status: SettlementStatus; regulationVerified: boolean; regulationHome: number | null; regulationAway: number | null;
   forecast?: SlipForecastReference;
   family?: MarketFamily;
-  selection?: MarketSelection;
+  selection?: SlipMarketSelection;
   /** A terminal original cycle stays complete even when a replacement fixture is active. */
   completed?: boolean;
   /** Current canonical fixture completion, independent of adjudication of an older prediction cycle. */
@@ -122,7 +125,7 @@ function slipLegResults(slip: BuiltSlip, results: readonly SlipResult[]) {
     if (!result || (item.forecast ? result.completed !== true : !slipCompletedStatuses.includes(result.status))) return null;
     const score = isPlayedFinalStatus(result.status) && result.regulationVerified && result.regulationHome !== null && result.regulationAway !== null
       ? { verified: true as const, period: "regulation-including-stoppage-time" as const, home: result.regulationHome, away: result.regulationAway } : null;
-    const settled = settleMarketSelection(item.family, item.selection, { status: result.status,
+    const settled = settleSlipSelection(item.family, item.selection, { status: result.status,
       cycleEligibility: result.cycleEligibility ?? { eligible: true }, regulationScore: score });
     return { fixtureId: item.fixtureId, home: score?.home ?? null, away: score?.away ?? null,
       outcome: settled.status === "correct" || settled.status === "incorrect" || settled.status === "void" ? settled.status : "pending" as const };

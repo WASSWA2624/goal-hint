@@ -11,6 +11,20 @@ async function verifyUnifiedMatchFilters(page) {
     clipboardData.setData('text/plain', text);
     node.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));
   }, value);
+  const sortBy = dialog => dialog.getByRole('combobox', { name: /^Sort by:/u });
+  const latestApplied = url => url.searchParams.get('sort') === 'kickoff'
+    && (url.searchParams.get('dir') ?? 'desc') === 'desc';
+  async function chooseLatestSort(target, dialog, activate = control => control.click()) {
+    const before = target.url(), sort = sortBy(dialog);
+    const originalSort = await sort.getAttribute('aria-label');
+    await activate(sort);
+    const options = dialog.getByRole('listbox', { name: 'Sort by', exact: true });
+    await activate(options.getByRole('option', { name: 'Latest first', exact: true }));
+    assert(originalSort !== 'Sort by: Latest first' && await dialog.isVisible() && await sort.getAttribute('aria-label') === 'Sort by: Latest first'
+      && (await sort.innerText()).includes('Latest first') && await sort.getAttribute('aria-expanded') === 'false',
+      'One activation closes the Sort by menu and visibly updates the filter draft');
+    assert(target.url() === before, 'Changing the Sort by draft leaves the route unchanged before Apply');
+  }
   const results = [], errors = [];
   page.on("pageerror", error => errors.push(error.message));
   async function ready() {
@@ -160,21 +174,39 @@ async function verifyUnifiedMatchFilters(page) {
     await anyMarket.check();
     assert(await markets.getByRole('checkbox', { checked: true }).count() === 5, 'Any selects all four individual markets');
     await pasteDate(from, '04-JAN-2026 09:00'); await pasteDate(to, '06-JAN-2026 17:00');
+    await chooseLatestSort(page, dialog);
     const geometry = await dialog.evaluate(node => ({ overflow: node.scrollWidth > node.clientWidth + 1,
       background: getComputedStyle(node).backgroundColor, height: node.getBoundingClientRect().height }));
     assert(!geometry.overflow, 'Dialog fits the viewport');
     await page.screenshot({ path: `output/playwright/match-filters-${mode}-${width}.png` });
     await apply.click();
-    await page.waitForURL(url => url.searchParams.get('start') === '2026-01-04T09:00' && url.searchParams.get('end') === '2026-01-06T17:00' && url.searchParams.get('country') === 'Egypt');
+    await page.waitForURL(url => url.searchParams.get('start') === '2026-01-04T09:00' && url.searchParams.get('end') === '2026-01-06T17:00'
+      && url.searchParams.get('country') === 'Egypt' && latestApplied(url));
     await ready(); await opener.click();
     assert(await dateText(from) === '04-JAN-2026 09:00' && await dateText(to) === '06-JAN-2026 17:00', 'Reopening prefills applied dates');
     assert((await countries.locator('[data-select-trigger]').innerText()).includes('Egypt'), 'Reopening prefills applied country');
+    assert((await sortBy(dialog).innerText()).includes('Latest first'), 'Reopening prefills the applied sort');
     await page.keyboard.press('Escape');
     await page.goto(`${origin}/en/matches?when=today&picks=all&page=2`); await ready();
     assert(await page.locator('[data-fixture-id]').count() === 5 && /51–55 of 55/u.test(await page.locator('[data-match-count]').innerText()), 'Second page shows the remaining five');
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Page has no horizontal overflow');
     results.push({ mode, width, ...geometry });
   }
+  const touch = await page.context().browser().newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  try {
+    const phone = await touch.newPage();
+    await phone.goto(`${origin}/en/matches?when=today&picks=all`);
+    await phone.locator('[data-feed-filters] [data-criteria-dialog][data-enhanced="true"]').waitFor({ state: 'attached' });
+    const opener = phone.locator('[data-feed-filters] [data-search-filters]');
+    const dialog = phone.getByRole('dialog', { name: 'Advanced Filters', exact: true });
+    await opener.tap();
+    await chooseLatestSort(phone, dialog, control => control.tap());
+    await dialog.getByRole('button', { name: 'Apply Filters', exact: true }).tap();
+    await phone.waitForURL(latestApplied);
+    await phone.locator('[data-feed-filters][aria-busy="false"]').waitFor();
+    await opener.tap();
+    assert((await sortBy(dialog).innerText()).includes('Latest first'), 'Touch reopens with the applied sort');
+  } finally { await touch.close(); }
   // Date-only and standalone-time reuse, including successful form values and real leap-day clamping.
   await page.goto(origin); await page.locator('[data-date-gallery] [data-date-time-input]').first().waitFor();
   const gallery = page.locator('[data-date-gallery]');

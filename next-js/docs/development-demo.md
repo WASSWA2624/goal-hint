@@ -105,13 +105,22 @@ fixtures and uses the usual private administrator configuration.
 
 The local `.goal-hint/local-football-2026-11/live` marker starts the football
 worker with the web app. The worker verifies the owned MySQL listener, uses
-the configured API-Football account, and keeps the web app on `127.0.0.1`.
+the configured API-Football account, and stops with the launcher.
 It refreshes the schedule and results, collects match details in fixture
 batches, and keeps pre-match and in-play prices separate. Bookmaker 8 is the
 local pre-match default when `GOAL_HINT_ODDS_BOOKMAKER_ID` is unset. Use
 `npm run live:usage -- --watch` in another terminal to monitor the provider
 day. Remove the `live` marker and restart development to browse the saved
-snapshot offline. The worker stops with the launcher.
+snapshot offline.
+
+The live snapshot's web server defaults to `127.0.0.1`. To browse from another
+device on the same network, start it with `npm run dev -- --hostname 0.0.0.0 --port 3000`
+and open the host computer's LAN IP on port 3000. To keep LAN access enabled on
+ordinary restarts, create an empty `.goal-hint/local-football-2026-11/lan` file.
+Remove that file to restore the loopback default, or pass `--hostname 127.0.0.1`
+for a single start. MySQL listens on loopback and the usual authentication
+applies. See [LAN setup](../README.md#local-development) for address lookup and
+firewall troubleshooting.
 
 The local `.goal-hint/development-demo-retired` marker retires the old synthetic
 database and blocks development commands that would recreate it. Preserved

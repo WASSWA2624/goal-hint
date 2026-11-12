@@ -22,6 +22,7 @@ export const DialogContent = styled.div`
   && [data-status-sort-fields] [data-floating-control] > select {
     font-size: var(--gh-font-body); padding-inline-end: var(--gh-spacing-4); text-overflow: ellipsis;
   }
+  && [data-status-sort-fields] [data-select-trigger] { font-size: var(--gh-font-body); }
   [data-full] { grid-column: 1 / -1; }
   [data-date-time-fields] { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--gh-size-48)), 1fr)); gap: var(--gh-spacing-2_5); }
   [data-probability-fields] label, [data-odds-fields] label { font-size: var(--gh-font-secondary); }

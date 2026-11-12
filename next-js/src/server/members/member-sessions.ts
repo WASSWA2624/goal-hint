@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { isCanonicalPhone } from "../../domain/phone.ts";
+import { validReferralCode } from "../../domain/referrals.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
@@ -18,7 +19,7 @@ export const validMemberToken = (token: unknown): token is string => typeof toke
 export const memberCookieName = (production: boolean) => `${production ? "__Host-" : ""}goal-hint-member`;
 
 export type MemberIdentity = Readonly<{ tokenHash: string; accountId: string; phone: string; blocked: boolean;
-  expiresAt: Date; administrator?: boolean; whatsappNotificationsAt?: Date | null }>;
+  expiresAt: Date; administrator?: boolean; whatsappNotificationsAt?: Date | null; referralCode?: string }>;
 export type MemberSignIn = Readonly<{ status: "signed-in"; token: string }> | Readonly<{ status: "busy" }>;
 
 export const activeMemberSessionsWhere = (accountId: string, at: Date) => ({
@@ -97,9 +98,12 @@ export function createMemberSessions({ database, config, now = Date.now, adminPh
           lastSeenAt: { lte: new Date(at.getTime() - memberSessionRules.touchAfterMs) } },
         data: { lastSeenAt: at, expiresAt: new Date(at.getTime() + memberSessionRules.expiryMs) } }));
       }
-      return { tokenHash: hash, accountId: row.accountId, phone: row.account.phone, blocked: row.account.blockedAt !== null,
+      const { blockedAt, phoneVerifiedAt, referralCode } = row.account;
+      const blocked = blockedAt !== null;
+      return { tokenHash: hash, accountId: row.accountId, phone: row.account.phone, blocked,
         expiresAt: row.expiresAt,
-        whatsappNotificationsAt: row.account.whatsappNotificationsAt ?? null, ...(administrator ? { administrator: true } : {}) };
+        whatsappNotificationsAt: row.account.whatsappNotificationsAt ?? null, ...(administrator ? { administrator: true } : {}),
+        ...(!blocked && phoneVerifiedAt && validReferralCode(referralCode) ? { referralCode } : {}) };
     },
 
     async signOut(token?: string): Promise<void> {

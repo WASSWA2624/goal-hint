@@ -1,10 +1,8 @@
 "use client";
 
 import { filledTableRows } from "@/components/ui/filled-surfaces";
-import { useRef, useState, useSyncExternalStore } from "react";
-import { inlineControlRow } from "@/components/ui/control-layout";
 import styled from "styled-components";
-import { Button, ButtonLink, TextInput } from "@/components/ui/controls";
+import { ButtonLink } from "@/components/ui/controls";
 import { accountSectionHref } from "@/domain/account-navigation";
 import type { ReferralSummary } from "@/domain/referrals";
 import { referralInvitation } from "@/domain/referral-invitation";
@@ -12,27 +10,8 @@ import { formatShortDay, formatSubscriptionExpiry } from "@/domain/subscription-
 import { createMessages } from "@/i18n/messages";
 import { AccountActionLink, AccountFine } from "./account-overview";
 import { AccountFacts, AccountPanel } from "./account-workspace";
-import { ChevronLeftIcon, CopyIcon, GiftIcon, ShareIcon } from "@/components/ui/icons";
-import { media } from "@/styles/theme";
-import { invitationShareAvailable, serverInvitationShareAvailable, shareInvitation, subscribeInvitationShare } from "./invitation-share";
-
-const LinkRow = styled.div`
-  display: flex; align-items: end; gap: var(--gh-spacing-2); max-inline-size: var(--gh-size-192);
-  > :first-child { flex: 1; min-inline-size: 0; }
-  input { min-inline-size: 0; }
-  > button { flex: none; inline-size: auto; }
-  ${inlineControlRow}
-`;
-const ShareActions = styled.div`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-2); max-inline-size: var(--gh-size-192);
-  > button { grid-column: 1 / -1; }
-  > a, > button { min-block-size: var(--form-control-height); }
-  ${media.tablet} { display: flex; flex-wrap: wrap; > a, > button { inline-size: auto; } }
-`;
-const InviteContent = styled.div`
-  display: grid; gap: var(--gh-spacing-4);
-  > p { color: ${({ theme }) => theme.color.text}; }
-`;
+import { ChevronLeftIcon, GiftIcon } from "@/components/ui/icons";
+import { InvitationActions } from "./invitation-actions";
 const InviteTitle = styled.span`
   display: inline-flex; align-items: center; gap: var(--gh-spacing-2);
   > svg { color: ${({ theme }) => theme.color.brand}; font-size: var(--gh-font-heading); }
@@ -66,39 +45,15 @@ export function AccountReferralSummary({ locale, summary, returnTo }: { locale: 
 }
 
 export function AccountReferrals({ locale, summary }: { locale: string; summary: ReferralSummary | null }) {
-  const m = createMessages(locale), field = useRef<HTMLInputElement>(null), sharing = useRef(false);
-  const [notice, setNotice] = useState(""), [busy, setBusy] = useState(false);
-  const nativeShare = useSyncExternalStore(subscribeInvitationShare, invitationShareAvailable, serverInvitationShareAvailable);
+  const m = createMessages(locale);
   const back = <ButtonLink href={accountSectionHref(locale)} variant="quiet" contextBack prefetch={false} data-context-back>
     <ChevronLeftIcon />{m.text("navigation.back")}</ButtonLink>;
   if (!summary) return <AccountPanel title={m.text("account.section.referrals")} actions={back}><AccountFine role="status">{m.text("referrals.unavailable")}</AccountFine></AccountPanel>;
-  const { invitation, whatsApp, telegram } = referralInvitation(summary.code, locale), { url } = invitation;
-  async function copy() {
-    try { await navigator.clipboard.writeText(url); setNotice(m.text("referrals.copied")); }
-    catch { field.current?.focus(); field.current?.select(); setNotice(m.text("referrals.copyFallback")); }
-  }
-  async function share() {
-    if (sharing.current) return;
-    sharing.current = true; setBusy(true); setNotice("");
-    try {
-      const result = await shareInvitation(invitation);
-      if (result === "failed") setNotice(m.text("referrals.shareFailed"));
-    } finally { sharing.current = false; setBusy(false); }
-  }
   return <>
-    <AccountPanel title={<InviteTitle><GiftIcon />{m.text("referrals.invite")}</InviteTitle>} actions={back} data-account-referrals aria-busy={busy}>
-      <InviteContent>
+    <AccountPanel title={<InviteTitle><GiftIcon />{m.text("referrals.invite")}</InviteTitle>} actions={back} data-account-referrals>
+      <InvitationActions locale={locale} links={referralInvitation(summary.code, locale)}>
         <p>{m.text("referrals.hint")}</p>
-        <ShareActions aria-label={m.text("referrals.invite")} role="group" data-invitation-actions>
-          {nativeShare && <Button type="button" disabled={busy} onClick={share}><ShareIcon />{m.text("referrals.shareInvitation")}</Button>}
-          <ButtonLink href={whatsApp} target="_blank" rel="noopener noreferrer" prefetch={false} variant="secondary">WhatsApp</ButtonLink>
-          <ButtonLink href={telegram} target="_blank" rel="noopener noreferrer" prefetch={false} variant="secondary">Telegram</ButtonLink>
-        </ShareActions>
-        <LinkRow data-invite-friends><TextInput ref={field} label={m.text("referrals.link")} value={url} readOnly name="referralLink" spellCheck={false} />
-          <Button type="button" variant="secondary" onClick={copy}><CopyIcon />{m.text("referrals.copy")}</Button>
-        </LinkRow>
-        {notice && <AccountFine role="status">{notice}</AccountFine>}
-      </InviteContent>
+      </InvitationActions>
     </AccountPanel>
     <AccountPanel title={m.text("referrals.rewards")} data-referral-rewards>
       <AccountFacts $columns={3}>

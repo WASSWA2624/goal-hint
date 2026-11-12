@@ -120,8 +120,7 @@ def verify(origin, directory):
     no_match(r"Final score:|Live score:|data-live-minute=", by_id["card-delayed"])
     no_match(r">0</span><span>–</span><span>0<", by_id["card-delayed"])
     # Mobile live badges show the observed clock, with the phase beside the scores.
-    match(r'data-result-badge="live"[^>]*data-live-minute="67"[^>]*>[\s\S]*?data-match-live-dot[\s\S]*?data-status-clock[^>]*>Live(?:\s|<!-- -->)*67<span[^>]*data-minute-marker[^>]*>′</span>', by_id["card-pending"])
-    match(r'>67<span[^>]*data-minute-marker[^>]*>′</span>', by_id["card-pending"])
+    match(r'data-match-status="live"[^>]*>[\s\S]*?data-match-live-dot[\s\S]*?data-status-clock[^>]*>Live(?:\s|<!-- -->)*<span[^>]*data-live-elapsed[^>]*>67:00</span>', by_id["card-pending"])
     no_match(r'data-result-badge="pending"', by_id["card-pending"])
     no_match(r">(?:vs|VS)<", by_id["card-pending"])
     checks = {

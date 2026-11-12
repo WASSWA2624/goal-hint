@@ -1,20 +1,21 @@
-import { isMarketSelection, presentMarketProbabilities, type AcceptedMarket, type MarketFamily, type MarketSelection, type ProbabilityLabelKey } from "./markets.ts";
+import { presentMarketProbabilities, type AcceptedMarket, type MarketFamily, type MarketSelection, type ProbabilityLabelKey } from "./markets.ts";
 import type { FixtureSnapshot, liveClockPhases } from "./fixture-snapshot.ts";
 import { isCompletedFixtureStatus, isPlayedFinalStatus, selectionOccurred, type SettlementOutcomeStatus } from "./market-settlement.ts";
 import { recommendationMarket, type DisplayedMarketPick } from "./recommendation-view.ts";
 import { sameMarketOdds } from "./in-play-odds.ts";
 import type { UtcInstant } from "./calendar.ts";
+import { isSlipMarketSelection, type SlipMarketSelection } from "./slip-markets.ts";
 
 /** An original saved selection has one probability, not a complete current forecast distribution. */
 export type CardSnapshotPick = Readonly<{
-  family: MarketFamily; selection: MarketSelection; probability: number; odds: string;
+  family: MarketFamily; selection: SlipMarketSelection; probability: number; odds: string;
   outcome: "correct" | "incorrect" | "pending" | "void";
   publishedAt?: UtcInstant;
 }>;
 
 /** Reuse the ordinary card presentation without manufacturing a source, publication or other outcomes. */
 export function snapshotCardPrediction(pick: CardSnapshotPick) {
-  if (!isMarketSelection(pick.family, pick.selection) || !Number.isFinite(pick.probability) || pick.probability < 0 || pick.probability > 1)
+  if (!isSlipMarketSelection(pick.family, pick.selection) || !Number.isFinite(pick.probability) || pick.probability < 0 || pick.probability > 1)
     throw new RangeError("Invalid saved card selection.");
   const roundedPercent = Math.round(pick.probability * 1000) / 10;
   const labelKey: ProbabilityLabelKey = roundedPercent === 0 && pick.probability > 0 ? "probability.less-than-one"

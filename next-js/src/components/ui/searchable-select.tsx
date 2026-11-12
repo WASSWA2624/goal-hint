@@ -8,7 +8,7 @@ import { CheckIcon, ChevronDownIcon } from "./icons";
 import { FloatingOutline } from "./floating-outline";
 import { FloatingField } from "./floating-field";
 import { SearchBar } from "./search-bar";
-import { SelectMenuRoot, SelectMenuTrigger, SelectMenuOptions } from "./select-menu";
+import { SelectMenuRoot, SelectMenuTrigger, SelectMenuOptions, useSelectOptionReveal } from "./select-menu";
 import { useAnchoredPanel } from "./anchored-panel";
 import { useOutsideDismiss } from "./use-outside-dismiss";
 
@@ -42,7 +42,7 @@ const SearchableOption = memo(function SearchableOption({ option, id, selected, 
 }) {
   return <li id={id} role="option" aria-selected={selected} aria-disabled={blocked || undefined}
     data-active={active || undefined} data-select-option={option.value}
-    onPointerDown={event => event.preventDefault()} onPointerMove={event => { if (event.pointerType === "mouse") onActive(option.value); }}
+    onPointerDown={event => event.preventDefault()} onPointerMove={event => { if (event.pointerType === "mouse" && !blocked) onActive(option.value); }}
     onClick={() => onChoose(option.value)}><Detail>{option.icon}<span>{option.label}{option.detail && <small>{option.detail}</small>}</span></Detail><CheckIcon /></li>;
 });
 
@@ -83,13 +83,8 @@ export function SearchableSelect({ label, values, options, onValuesChange, allLa
   const optionId = (value: string) => `${id}-option-${value === "" ? 0 : (availableByValue.get(value)?.index ?? -1) + 1}`;
   const allOption = useMemo<SearchableSelectOption>(() => ({ value: "", label: allLabel }), [allLabel]);
   useLayoutEffect(() => { if (open && searchable) popup.current?.querySelector("input")?.focus({ preventScroll: true }); }, [open, searchable]);
-  useLayoutEffect(() => {
-    const item = list.current?.querySelector<HTMLElement>('[data-active="true"]'), panel = list.current;
-    if (!open || !item || !panel) return;
-    const bounds = item.getBoundingClientRect(), viewport = panel.getBoundingClientRect();
-    if (bounds.bottom > viewport.bottom) panel.scrollTop += bounds.bottom - viewport.bottom;
-    else if (bounds.top < viewport.top) panel.scrollTop -= viewport.top - bounds.top;
-  }, [open, activeValue]);
+  const activate = useSelectOptionReveal(list, open, activeValue, setActive);
+  const hoverOption = useCallback((value: string) => activate(value, true), [activate]);
   const choose = useCallback((value: string) => {
     if (disabled || blocked(value)) return;
     onValuesChange(value === "" ? [...allValues] : selectedValues.has(value) ? values.filter(item => item !== value) : [...values, value].sort());
@@ -97,14 +92,14 @@ export function SearchableSelect({ label, values, options, onValuesChange, allLa
   function keyboard(event: KeyboardEvent) {
     if (event.key === "Escape" && open) { event.preventDefault(); event.stopPropagation(); close(); trigger.current?.focus(); return; }
     if (!open) {
-      if (["ArrowDown", "ArrowUp"].includes(event.key)) { event.preventDefault(); setSearch(""); setActive(null); setOpen(true); }
+      if (["ArrowDown", "ArrowUp"].includes(event.key)) { event.preventDefault(); setSearch(""); activate(null); setOpen(true); }
       return;
     }
     if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
       if (searchable && (event.key === "Home" || event.key === "End")) return;
       event.preventDefault();
       const index = enabled.indexOf(activeValue);
-      setActive(enabled[event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1
+      activate(enabled[event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1
         : Math.max(0, Math.min(enabled.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)))]!);
     } else if (event.key === "Enter" || !searchable && event.key === " ") { event.preventDefault(); choose(activeValue); }
   }
@@ -112,24 +107,22 @@ export function SearchableSelect({ label, values, options, onValuesChange, allLa
     value={[...values]} onChange={event => onValuesChange(Array.from(event.target.selectedOptions, option => option.value))}>
     {available.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
   </select></FloatingField>;
-  return <SelectMenuRoot ref={root} data-searchable-select onKeyDown={keyboard} onBlur={event => {
-    if (!event.currentTarget.contains(event.relatedTarget)) close();
-  }}>
+  return <SelectMenuRoot ref={root} data-searchable-select onKeyDown={keyboard} onFocusLeave={close}>
     {name && values.map(value => <input key={value} type="hidden" name={name} value={value} />)}
     <SelectMenuTrigger ref={trigger} type="button" data-select-trigger disabled={disabled}
       aria-label={`${label}: ${display}`} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined}
-      onClick={() => { setSearch(""); setActive(null); setOpen(value => !value); }}>
+      onClick={() => { setSearch(""); activate(null); setOpen(value => !value); }}>
       <span data-select-label aria-hidden="true">{label}</span><span aria-hidden="true"><span data-current>{display}</span></span><ChevronDownIcon />
     </SelectMenuTrigger>
     <FloatingOutline label={label} />
     {open && <Popup as="div" $searchable={searchable} ref={element => { popup.current = element; }} id={id} role="dialog" aria-label={label} data-select-popup>
       {searchable && <Search data-select-search><SearchBar label={searchLabel} value={search} role="combobox" aria-expanded="true"
         aria-autocomplete="list" aria-controls={`${id}-list`} aria-activedescendant={optionId(activeValue)}
-        onChange={event => { setSearch(event.target.value); setActive(null); }} /></Search>}
+        onChange={event => { setSearch(event.target.value); activate(null); }} /></Search>}
       <List $inline ref={list} id={`${id}-list`} role="listbox" aria-label={label} aria-multiselectable="true">
         {[allOption, ...shown].map(option => <SearchableOption key={option.value} option={option} id={optionId(option.value)}
           selected={option.value === "" ? allSelected : selectedValues.has(option.value)} blocked={blocked(option.value)}
-          active={activeValue === option.value} onChoose={choose} onActive={setActive} />)}
+          active={activeValue === option.value} onChoose={choose} onActive={hoverOption} />)}
         {shown.length === 0 && <li role="presentation"><Empty>{emptyLabel}</Empty></li>}
       </List>
     </Popup>}

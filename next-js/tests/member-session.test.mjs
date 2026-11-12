@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   getAdminSessionSnapshot, getServerAdminSessionSnapshot,
+  getInvitationSessionSnapshot, getServerInvitationSessionSnapshot,
   ensureMemberSession, getMemberSessionSnapshot, getServerMemberSessionSnapshot, refreshMemberSession, subscribeMemberSession,
   getSubscriptionSnapshot, getServerSubscriptionSnapshot,
   getSlipSharingSnapshot,
@@ -28,6 +29,8 @@ test("header identity requests are private, deduplicated and refreshed after ano
   assert.equal(getSlipSharingSnapshot(), false);
   assert.equal(getAdminSessionSnapshot(), false);
   assert.equal(getServerAdminSessionSnapshot(), false);
+  assert.equal(getInvitationSessionSnapshot(), undefined);
+  assert.equal(getServerInvitationSessionSnapshot(), undefined);
   let updates = 0;
   const desktop = subscribeMemberSession(() => { updates += 1; });
   const mobile = subscribeMemberSession(() => { updates += 1; });
@@ -40,20 +43,40 @@ test("header identity requests are private, deduplicated and refreshed after ano
   assert.equal(requests[0].url, "/api/account/session");
   assert.equal(requests[0].options.cache, "no-store");
   assert.equal(requests[0].options.credentials, "same-origin");
-  responses.shift()(Response.json({ phone: "+256700000001" }));
+  responses.shift()(Response.json({ phone: null }));
   await first;
+  assert.equal(getInvitationSessionSnapshot(), null);
+  assert.equal(updates, 2, "the first confirmed guest session notifies both headers");
+
+  const signedIn = refreshMemberSession();
+  await Promise.resolve();
+  responses.shift()(Response.json({ phone: "+256700000001", referralCode: "01234567" }));
+  await signedIn;
   assert.equal(getMemberSessionSnapshot(), "+256700000001");
   assert.equal(getServerMemberSessionSnapshot(), null, "public server rendering never receives the client phone");
-  assert.equal(updates, 2, "both header instances receive the identity update");
+  assert.equal(getInvitationSessionSnapshot(), "01234567");
+  assert.equal(getServerInvitationSessionSnapshot(), undefined, "public server rendering never receives the client referral code");
+  assert.equal(updates, 4, "both header instances receive the identity update");
+
+  for (const [referralCode, expected] of [["76543210", "76543210"], ["malformed", undefined]]) {
+    const before = updates;
+    const changed = refreshMemberSession();
+    await Promise.resolve();
+    responses.shift()(Response.json({ phone: "+256700000001", referralCode }));
+    await changed;
+    assert.equal(getInvitationSessionSnapshot(), expected);
+    assert.equal(updates, before + 2, "a referral code change notifies both headers even when the phone stays the same");
+  }
 
   browser.dispatchEvent(new Event("focus"));
   const focused = refreshMemberSession();
   await Promise.resolve();
   responses.shift()(Response.json({ phone: null }));
   await focused;
-  assert.equal(requests.length, 2);
+  assert.equal(requests.length, 5);
   assert.equal(getMemberSessionSnapshot(), null);
-  assert.equal(updates, 4);
+  assert.equal(getInvitationSessionSnapshot(), null);
+  assert.equal(updates, 10);
 
   const restored = new Event("pageshow");
   Object.defineProperty(restored, "persisted", { value: true });

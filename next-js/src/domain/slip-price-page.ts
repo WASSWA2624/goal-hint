@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { fixturePriceSchema } from "./fixture-snapshot.ts";
 import { storedMatchFeedResponseSchema, type StoredMatchFeedRecord, type StoredMatchFeedResponse } from "./match-feed.ts";
-import { isMarketSelection, marketSelections } from "./markets.ts";
 import type { SlipSelectionPrice } from "./slip-builder.ts";
 import { slipBookmakerSchema, slipQuoteOddsSchema } from "./slip-quote.ts";
+import { isSlipMarketSelection, isTotal15SlipSelection, slipMarketSelections, type SlipTotal15Forecast } from "./slip-markets.ts";
 
 export const slipPricePageRules = Object.freeze({
-  maximumPricesPerFixture: Object.values(marketSelections).reduce((total, selections) => total + selections.length, 0),
+  maximumPricesPerFixture: Object.values(slipMarketSelections).reduce((total, selections) => total + selections.length, 0),
   maximumBookmakersPerFixture: 200,
 });
 
@@ -19,7 +19,7 @@ export const slipSelectionPricesSchema = z.record(z.string(), z.array(slipSelect
 
 /** Identical outcome ownership, uniqueness and observation-cutoff checks for pages and atomic cohorts. */
 export function refineSlipPricePools(records: readonly StoredMatchFeedRecord[], selectionPrices: Readonly<Record<string, readonly SlipSelectionPrice[]>>,
-  asOf: number, context: z.RefinementCtx) {
+  asOf: number, context: z.RefinementCtx, total15Forecasts?: Readonly<Record<string, SlipTotal15Forecast>>) {
   const fixtures = new Map(records.map((record) => [record.fixtureId, record]));
   for (const record of records) {
     if (!Object.hasOwn(selectionPrices, record.fixtureId)) {
@@ -41,7 +41,10 @@ export function refineSlipPricePools(records: readonly StoredMatchFeedRecord[], 
         context.addIssue({ code: "custom", path, message: "Each bookmaker may offer one price for a family and selection." });
       }
       seen.add(key);
-      if (!market || !isMarketSelection(price.family, price.selection) || !Object.hasOwn(market.probabilities, price.selection)) {
+      const hasForecast = isTotal15SlipSelection(price.selection)
+        ? !!total15Forecasts?.[fixtureId] && !!price.bookmaker
+        : !!market && Object.hasOwn(market.probabilities, price.selection);
+      if (!isSlipMarketSelection(price.family, price.selection) || !hasForecast) {
         context.addIssue({ code: "custom", path, message: "A price must belong to a published market outcome." });
       }
       if (price.retrievedAt > asOf || price.providerUpdatedAt !== null && price.providerUpdatedAt > asOf) {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { referralInvitation } from "../src/domain/referral-invitation.ts";
+import { publicInvitation, referralInvitation } from "../src/domain/referral-invitation.ts";
 import { telegramShareUrl, whatsAppShareUrl } from "../src/domain/share-links.ts";
 import { invitationShareAvailable, shareInvitation } from "../src/components/members/invitation-share.ts";
 
@@ -13,6 +13,14 @@ test("all invitation destinations preserve the existing canonical link without r
   assert.equal(new URL(telegram).searchParams.get("text"), invitation.text);
   assert.deepEqual(referralInvitation("a".repeat(32), "unsupported"), referralInvitation("a".repeat(32), "en"));
   for (const code of [null, "", "../account", "a".repeat(31), "A".repeat(32)]) assert.throws(() => referralInvitation(code, "en"));
+});
+
+test("guest invitations share the public site with the same promotional text", () => {
+  const { invitation, whatsApp, telegram } = publicInvitation("en");
+  assert.equal(invitation.url, "https://goalhint.com");
+  assert.equal(invitation.text, referralInvitation("12345678", "en").invitation.text);
+  assert.equal(new URL(whatsApp).searchParams.get("text"), `${invitation.text}\n${invitation.url}`);
+  assert.equal(new URL(telegram).searchParams.get("url"), invitation.url);
 });
 
 test("social handoffs encode punctuation, non-ASCII text, newlines and URL query fragments exactly once", () => {
@@ -49,4 +57,12 @@ test("native sharing retains user activation, treats cancellation quietly and re
   assert.equal(invitationShareAvailable(), true);
   assert.equal(await shareInvitation(invitation), "cancelled");
   assert.deepEqual(received, invitation);
+  const guest = publicInvitation("en").invitation;
+  assert.equal(await shareInvitation(guest), "failed", "An older bridge never receives a guest invitation.");
+  navigator.share = async data => { received = data; };
+  delete navigator.canShare;
+  assert.equal(await shareInvitation(guest), "handed-off");
+  assert.deepEqual(received, guest);
+  window.goalHintNativeShare.publicInvitations = true;
+  assert.equal(await shareInvitation(guest), "cancelled", "A capable bridge takes priority over Web Share.");
 });

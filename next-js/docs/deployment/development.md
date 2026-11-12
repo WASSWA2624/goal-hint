@@ -10,10 +10,11 @@ npm run dev -- --hostname 0.0.0.0 --port 3000
 ```
 
 Open `http://localhost:3000` on this computer. For a phone on the same LAN, use
-the computer's reachable IP, for example `http://192.168.1.148:3000`. Allow the
-development server through the local firewall if needed. The Android development
-shell uses `APP_ENV=development` and that address as `DEV_APP_ORIGIN`; use the
-actual current address of the development computer.
+the computer's current IPv4 address, for example `http://192.168.1.148:3000`.
+See [local development](../../README.md#local-development) for finding that
+address, Windows Firewall troubleshooting, and browser limitations over HTTP.
+The Android development shell uses `APP_ENV=development` and that LAN URL as
+`DEV_APP_ORIGIN`.
 
 The source export includes the lockfile and `.env.example`. Dependencies, build
 caches and private settings are excluded. Development starts with the

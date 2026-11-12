@@ -3,7 +3,7 @@
 import { useEffect, useRef, useSyncExternalStore, type ReactNode, type Ref } from "react";
 import styled from "styled-components";
 import { Button } from "./controls";
-import { CloseIcon } from "./icons";
+import { CloseIcon, ResetIcon } from "./icons";
 import { dialogChromePadding, dialogFooterSurface, dialogHeaderSurface, dialogSurface } from "./dialog-surfaces";
 import { controlRow } from "./control-layout";
 
@@ -59,6 +59,11 @@ const Header = styled.header`
 
   > h2 { margin: 0; font-size: var(--gh-font-section); line-height: var(--gh-leading-label); font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   [data-enhanced="false"] > & { padding: var(--gh-spacing-2_25) var(--gh-spacing-3); border: 0; }
+`;
+
+export const CriteriaDialogTitle = styled.span`
+  display: inline-flex; align-items: center; gap: var(--gh-spacing-2);
+  > svg { flex: none; inline-size: var(--gh-size-5); block-size: var(--gh-size-5); color: ${({ theme }) => theme.color.link}; }
 `;
 
 const CloseButton = styled(Button)`
@@ -146,7 +151,7 @@ export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onRe
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     if (open && !element.open) {
       element.showModal();
-      element.querySelector<HTMLElement>('input:not([type="hidden"]):not(:disabled), select:not(:disabled), textarea:not(:disabled)')?.focus();
+      element.querySelector<HTMLElement>('input:not([type="hidden"]):not(:disabled), select:not(:disabled):not([aria-hidden="true"]), textarea:not(:disabled), button[data-select-trigger]:not(:disabled)')?.focus();
     } else if (!open && element.open) element.close();
     return () => {
       if (element.open) element.close();
@@ -173,7 +178,7 @@ export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onRe
     <Body>{children}</Body>
     {!hideFooter && <Actions>
       {footer ?? <>
-        {onReset && <CriteriaDialogButton type="button" variant="secondary" data-dialog-reset disabled={busy} onClick={onReset}>{resetLabel}</CriteriaDialogButton>}
+        {onReset && <CriteriaDialogButton type="button" variant="secondary" data-dialog-reset disabled={busy} onClick={onReset}><ResetIcon />{resetLabel}</CriteriaDialogButton>}
         <CriteriaDialogButton type="button" variant="secondary" disabled={busy} onClick={onCancel}>{cancelLabel}</CriteriaDialogButton>
         <CriteriaDialogButton type="button" disabled={busy || applyDisabled} onClick={onApply}>{applyLabel}</CriteriaDialogButton>
       </>}

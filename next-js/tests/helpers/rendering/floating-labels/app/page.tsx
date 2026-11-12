@@ -6,7 +6,6 @@ import { ActionButton as OwnerAction, FieldBlock, FieldRow } from "@/components/
 import { SearchBar } from "@/components/ui/search-bar";
 import { CompactSelect } from "@/components/match/filter-parts";
 import { SlipNumericInput } from "@/components/slips/slip-numeric-input";
-import { CustomRangeButton, DateControls, DateSelect } from "@/components/slips/best-slips-filter-styles";
 import { AmountInput } from "@/components/ui/amount-input";
 import { Button, ButtonLink, FileInput, SelectInput, TextInput } from "@/components/ui/controls";
 import { inlineControlRow } from "@/components/ui/control-layout";
@@ -47,7 +46,7 @@ export default function Page() {
   const [rowError, setRowError] = useState(false);
   const [phone, setPhone] = useState("256"), [count, setCount] = useState("2"), [menu, setMenu] = useState("all");
   return <ThemeProvider theme={dark ? darkTheme : lightTheme}>
-    <GlobalStyle />
+    <GlobalStyle $windowsHost={false} />
     <Canvas data-floating-fixture data-mode={dark ? "dark" : "light"}>
       <header><h1>Floating fields</h1><Button onClick={() => setDark(value => !value)}>Toggle theme</Button></header>
       <form onSubmit={event => event.preventDefault()}>
@@ -58,10 +57,10 @@ export default function Page() {
         </FieldRow>
         <MixedControls data-mixed-controls data-uniform-row="mixed nested controls">
           <div data-control-field><TextInput id="mixed-input" label="Mixed row field" defaultValue="Value" /></div>
-          <DateControls data-mixed-dates>
-            <DateSelect label="Mixed date picker" value={menu} options={[{ value: "all", label: "All dates" }, { value: "one", label: "Today" }]} onValueChange={setMenu} />
-            <CustomRangeButton type="button" data-mixed-range>Custom dates</CustomRangeButton>
-          </DateControls>
+          <Inline data-mixed-dates>
+            <SelectMenu label="Mixed date picker" value={menu} options={[{ value: "all", label: "All dates" }, { value: "one", label: "Today" }]} onValueChange={setMenu} />
+            <Button type="button" data-mixed-range>Custom dates</Button>
+          </Inline>
           <CompactSelect data-mixed-compact aria-label="Mixed compact select" value={menu}
             options={[{ value: "all", label: "All" }, { value: "one", label: "One" }]} onChange={event => setMenu(event.target.value)} />
           <Button data-mixed-action>Apply filters</Button>

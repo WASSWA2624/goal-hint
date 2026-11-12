@@ -88,7 +88,8 @@ async function contained(locator, label, viewport = false) {
 }
 
 async function uniform(locator, label) {
-  const result = await locator.evaluateAll(elements => elements.filter(element => element.checkVisibility({ visibilityProperty: true, opacityProperty: true }))
+  const result = await locator.evaluateAll(elements => elements.filter(element => !element.matches('select[aria-hidden="true"]')
+    && element.checkVisibility({ visibilityProperty: true, opacityProperty: true }))
     .map(element => ({ name: element.getAttribute("aria-label") || element.textContent?.trim(), rect: element.getBoundingClientRect().toJSON(),
       expected: Number.parseFloat(getComputedStyle(element).getPropertyValue("--form-control-height")),
       clipped: element.tagName !== "INPUT" && element.tagName !== "SELECT"
@@ -105,6 +106,48 @@ async function uniform(locator, label) {
     }
   }
   return result.length;
+}
+
+async function verifyFirstSelection(page, origin, mode) {
+  const touch = await page.evaluate(() => matchMedia("(pointer: coarse)").matches);
+  const width = touch ? 320 : 1024;
+  await page.setViewportSize({ width, height: 640 });
+  await page.goto(origin, { waitUntil: "domcontentloaded", timeout: 90000 });
+  await page.locator('[data-layout-bounds-fixture][data-ready="true"]').waitFor();
+  await page.evaluate(() => document.fonts.ready);
+  if (mode === "dark") await page.getByRole("button", { name: "Toggle theme", exact: true }).click();
+  const trigger = page.locator('[data-layout-select="bottom"]');
+  const panel = page.getByRole("listbox", { name: "Bottom choice" });
+  await trigger.click();
+  await settled(page);
+  const point = await panel.getByRole("option", { name: "Option 11", exact: true }).evaluate(option => {
+    const element = option.closest('[role="listbox"]');
+    const { left, width, bottom } = element.getBoundingClientRect();
+    element.scrollTop += option.getBoundingClientRect().bottom - bottom - 10;
+    const x = left + width / 2, y = bottom - 2;
+    if (document.elementFromPoint(x, y)?.closest('[role="option"]') !== option) {
+      throw new Error("Expected a clipped option at the picker edge");
+    }
+    return { x, y, label: option.textContent.trim() };
+  });
+  if (touch) await page.touchscreen.tap(point.x, point.y);
+  else {
+    await page.mouse.move(point.x, point.y);
+    await settled(page);
+    await page.mouse.down();
+    await page.mouse.up();
+  }
+  if (await trigger.getAttribute("aria-label") !== `Bottom choice: ${point.label}`
+    || await trigger.getAttribute("aria-expanded") !== "false") {
+    throw new Error(`${mode}: first pointer activation did not select the clipped option`);
+  }
+  await trigger.click();
+  await trigger.evaluate(button => button.blur());
+  await panel.getByRole("option", { name: "One", exact: true }).click();
+  if (await trigger.getAttribute("aria-label") !== "Bottom choice: One") {
+    throw new Error(`${mode}: a transient focus loss prevented selection`);
+  }
+  return width;
 }
 
 /** Run once in each fine/coarse pointer context; every frame is measured after layout settles. */
@@ -163,6 +206,10 @@ export async function verifyLayoutBounds(page, origin, widths = [320, 390, 768, 
         throw new Error(`${mode}/${width}/${height}: page overflows horizontally`);
       }
     }
+  }
+  for (const mode of ["light", "dark"]) {
+    const width = await verifyFirstSelection(page, origin, mode);
+    checks.push({ mode, width, height: 640, name: "first picker selection" });
   }
   return { passed: true, checks };
 }

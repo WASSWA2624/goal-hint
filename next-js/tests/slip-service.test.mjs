@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { resolveFeedDates, parseFeedQuery } from '../src/domain/feed-query.ts';
+import { getFeedToday, resolveFeedDates, parseFeedQuery } from '../src/domain/feed-query.ts';
 import { storedMatchFeedResponseSchema } from '../src/domain/match-feed.ts';
 import { marketRules, validateMarketSnapshot } from '../src/domain/markets.ts';
-import { buildSlips, defaultSlipCriteria } from '../src/domain/slip-builder.ts';
+import { buildSlips, defaultSlipCriteria, parseSlipCriteria } from '../src/domain/slip-builder.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 import { readPublicSlipBuild } from '../src/server/slips/public-slips.ts';
 import { createSlipBuildService, slipReadRules } from '../src/server/slips/slip-service.ts';
@@ -169,6 +169,34 @@ test('build uses one EAT stored cohort, all requested families, one budget charg
   assert.equal(result.data.slips[0].totalOdds, '4.00'); assert.equal(result.data.slips[0].averageProbability, 0.75);
   assert.deepEqual(result.data.slips[0].selections[0].forecast, { cycleId: records[0].cycleId,
     revisionId: records[0].forecast.revisionId, publishedAt: records[0].forecast.publishedAt });
+});
+
+test('a continuous Build reads the exact zoned cohort when its browsing day differs from EAT', async () => {
+  const asOf = Date.parse('2026-11-10T22:30:00Z'), reportingDay = '2026-11-11';
+  const input = parseSlipCriteria({ start: '2026-11-10T20:00', end: '2026-11-11T00:30', tz: 'America/New_York',
+    markets: 'match-result', totalMin: '1.01', totalMax: '', teamsMax: '1' }, reportingDay);
+  const fixture = record('zoned-match', { kickoffAt: Date.parse('2026-11-11T04:00:00Z') });
+  const candidate = { ...fixture, forecast: { ...fixture.forecast, publishedAt: asOf - 60_000 },
+    prices: fixture.prices.map(price => ({ ...price, retrievedAt: asOf - 1000 })) };
+  let reads = 0;
+  const result = await createSlipBuildService({ providerOdds: true, consume: async () => {}, clock: { now: () => asOf },
+    readCohort: async (parameters, context, pinnedClock) => {
+      reads++;
+      assert.equal(pinnedClock.now(), asOf);
+      assert.equal(parameters.has('from'), false); assert.equal(parameters.has('timeFrom'), false);
+      const query = parseFeedQuery(parameters, { today: reportingDay, ...context });
+      assert.deepEqual(query.interval, { from: input.interval.from, to: input.interval.to });
+      assert.equal(query.zone, input.interval.zone);
+      const browsingDay = getFeedToday(query, asOf), range = resolveFeedDates(query, browsingDay);
+      assert.equal(browsingDay, '2026-11-10');
+      assert.deepEqual(range.window, { startInclusive: Date.parse('2026-11-11T01:00:00Z'), endExclusive: Date.parse('2026-11-11T05:31:00Z') });
+      return { records: [candidate], selectionPrices: { [candidate.fixtureId]: candidate.prices }, asOf, today: browsingDay,
+        range: { from: range.startDate, to: range.endDate, ...range.window }, searchLimited: false, partialCoverage: false };
+    },
+  }).query(input);
+  assert.equal(reads, 1);
+  assert.equal(result.state, 'generated');
+  assert.equal(result.data.slips[0].selections[0].fixtureId, candidate.fixtureId);
 });
 
 test('an unchanged quote cannot conceal a source revision changing during the final cohort probe', async () => {

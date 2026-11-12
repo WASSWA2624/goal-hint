@@ -139,7 +139,7 @@ the shell's Release configuration.
 
 `next-js/next.config.ts` owns the web server's `allowedDevOrigins`. It is a development-asset/HMR protection, separate from interface binding and application authentication. Its entries contain **hostnames only**, without `http://`, a port or a path. Next.js checks the Origin hostname, or the Referer hostname for relevant requests without an Origin. A `*` matches a hostname label, not an arbitrary substring. [Next.js allowedDevOrigins](https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins).
 
-The configured entries cover `127.0.0.1`, `[::1]`, `10.0.2.2`, and `192.168.*.*`; localhost is already allowed by Next.js. Add a specific host or appropriate private-network pattern when using a LAN outside that range. Keep entries restricted to intended development hosts; do not turn the list into unrestricted `*` access. After changing this configuration, restart the development server and check both page loading and dev assets/HMR. A page returning HTML while hydration assets are blocked is not a successful device-access check.
+The configured entries cover `127.0.0.1`, `[::1]`, `10.0.2.2`, and the server computer's IPv4 interface addresses at startup. Next.js already allows localhost. Restart the development server after changing networks or IP addresses. Verify that the page and its development assets load and that hot reload connects.
 
 ## Native transport and privacy policy
 

@@ -115,7 +115,7 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
         }
         const bordered = [...canvas.querySelectorAll("*")].filter(element => {
           const bounds = element.getBoundingClientRect();
-          if (!bounds.width || !bounds.height) return false;
+          if (!bounds.width || !bounds.height || element.matches('select[aria-hidden="true"]')) return false;
           const style = getComputedStyle(element);
           if (element.matches("[data-floating-outline]")) return ["Top", "Right", "Bottom", "Left"].some(edge => Number.parseFloat(style[`border${edge}Width`]) > 2);
           const edges = ["Top", "Right", "Bottom", "Left"];
@@ -149,14 +149,18 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
         const footer = canvas.querySelector("[data-app-footer]");
         const statusSelect = [...canvas.querySelectorAll("[data-feed-status]")].find(element => element.getBoundingClientRect().width > 0);
         const statusStyle = statusSelect && getComputedStyle(statusSelect);
+        const statusOutline = statusSelect?.parentElement.querySelector("[data-floating-outline]");
+        const statusOutlineStyle = statusOutline && getComputedStyle(statusOutline);
         const statusCorners = !statusStyle || ["borderTopLeftRadius", "borderTopRightRadius", "borderBottomLeftRadius", "borderBottomRightRadius"]
-          .every(corner => Number.parseFloat(statusStyle[corner]) > 0) && statusStyle.borderTopWidth === "0px";
+          .every(corner => Number.parseFloat(statusStyle[corner]) > 0) && (statusSelect.matches("select")
+            ? statusStyle.borderTopWidth === "0px"
+            : statusStyle.borderTopColor === "rgba(0, 0, 0, 0)" && statusOutlineStyle?.borderTopWidth === ruleWidth);
         const distributionBars = canvas.querySelectorAll("[data-performance-summary] > [aria-hidden=true]").length;
         const subscriptionBanners = canvas.querySelectorAll("[data-subscription-status-bar], [data-desktop-subscription-status], [data-mobile-subscription-status]").length;
         const textFieldErrors = [], selectErrors = [];
         if (document.querySelector('[data-preview-theme="porcelain-blue"], [data-preview-theme="cobalt-night"]')) {
           const contentSurface = roleColor("content");
-          for (const select of canvas.querySelectorAll("select, [data-select-trigger]")) {
+          for (const select of canvas.querySelectorAll('select:not([aria-hidden="true"]), [data-select-trigger]')) {
             const bounds = select.getBoundingClientRect();
             if (!bounds.width || !bounds.height || select.matches(":disabled")) continue;
             const face = getComputedStyle(select).opacity === "0" ? select.closest("[data-floating-control]") : select;
@@ -380,7 +384,7 @@ export async function verifyAppearanceParity(page, { origin = "http://127.0.0.1:
       });
       appearances.push(await page.locator("[data-preview-canvas]").evaluate(canvas => {
         const origin = canvas.getBoundingClientRect();
-        const selector = '[data-app-header], [data-mobile-app-header], [data-app-footer], main, [data-best-slips-filters], [data-slip-builder-toolbar], [data-slip-id], [data-slip-summary], [data-fixture-id], [data-performance-summary], button, a, input, select, textarea, summary, [data-floating-control]';
+        const selector = '[data-app-header], [data-mobile-app-header], [data-app-footer], main, [data-best-slips-filters], [data-slip-builder-toolbar], [data-slip-id], [data-slip-summary], [data-fixture-id], [data-performance-summary], button, a, input, select:not([aria-hidden="true"]), textarea, summary, [data-floating-control]';
         return [...canvas.querySelectorAll(selector)].filter(element => element.checkVisibility({ visibilityProperty: true })
           && element.getBoundingClientRect().width && element.getBoundingClientRect().height).map(element => {
           const box = element.getBoundingClientRect(), style = getComputedStyle(element);

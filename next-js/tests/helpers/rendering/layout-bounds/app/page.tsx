@@ -12,10 +12,14 @@ import { GlobalStyle } from "@/styles/global-style";
 import { darkTheme, lightTheme } from "@/styles/theme";
 
 const options = [{ value: "one", label: "One" }, { value: "two", label: "Both teams score and total goals" }];
+const bottomOptions = [...options, ...Array.from({ length: 19 }, (_, index) => ({
+  value: `extra-${index}`, label: `Option ${index + 1}`,
+}))];
 
 export default function Page() {
   const ready = useClientReady();
   const [dark, setDark] = useState(false), [choice, setChoice] = useState("one");
+  const [bottomChoice, setBottomChoice] = useState("one");
   const [selected, setSelected] = useState<readonly string[]>(["one", "two"]), [validation, setValidation] = useState(false);
   const [dialog, setDialog] = useState("");
   const close = () => setDialog("");
@@ -41,7 +45,7 @@ export default function Page() {
           options={options} selected={selected} onChange={setSelected} />
       </div>
       <div style={{ position: "fixed", bottom: 8, left: 16, width: 80 }}>
-        <SelectMenu data-layout-select="bottom" label="Bottom choice" value={choice} options={options} onValueChange={setChoice} />
+        <SelectMenu data-layout-select="bottom" label="Bottom choice" value={bottomChoice} options={bottomOptions} onValueChange={setBottomChoice} />
       </div>
       <CriteriaDialog id="layout-payment" title="Payment screenshot" open={dialog === "payment"} onCancel={close} closeLabel="Close payment dialog"
         footer={<><CriteriaDialogButton variant="secondary" onClick={close}>Try another screenshot</CriteriaDialogButton>

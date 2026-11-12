@@ -39,7 +39,7 @@ export function PublicHeader({ locale, current, destinations, app, wide, workspa
         <HeaderBrand alt="" />
       </HomeLink>
       <DesktopNav aria-label={messages.text("navigation.primary")}>
-        <SessionNavigation destinations={destinations} dashboardLabel={messages.text("navigation.dashboard")}
+        <SessionNavigation locale={locale} destinations={destinations} dashboardLabel={messages.text("navigation.dashboard")}
           moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />
       </DesktopNav>
       <HeaderActions><AccountLinks locale={locale} showAccount={showAccount} {...(administratorName ? { administratorName } : {})} /></HeaderActions>
@@ -51,7 +51,7 @@ export function PublicHeader({ locale, current, destinations, app, wide, workspa
 export function PublicTabs({ locale, current, destinations }: NavigationProps) {
   const messages = createMessages(locale);
   return <TabBar aria-label={messages.text("navigation.tabs")}>
-    <SessionNavigation mobile destinations={destinations} dashboardLabel={messages.text("navigation.dashboard")}
+    <SessionNavigation mobile locale={locale} destinations={destinations} dashboardLabel={messages.text("navigation.dashboard")}
       moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />
   </TabBar>;
 }

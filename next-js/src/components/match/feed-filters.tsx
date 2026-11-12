@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { AdvancedFilterDialog } from "@/components/ui/advanced-filter-dialog";
+import { SelectInput } from "@/components/ui/controls";
 import { DateTimeField } from "@/components/ui/date-time-field";
 import { FloatingField } from "@/components/ui/floating-field";
 import { SearchBar } from "@/components/ui/search-bar";
@@ -115,12 +116,12 @@ export function FeedFilters({ query, today, leagues, onApply, subscriberOnly = f
               const day = getDateInTimeZone(utcInstantFromEpochMilliseconds(Date.now()), base.zone ?? deviceZone);
               return feedFilterDraft(selectFeedStatus(base, status, day), day, deviceZone);
             }); }} />
-          <FloatingField label={messages.text("feed.sort.label")}><select value={`${draft.query.sort.by}-${draft.query.sort.direction}`} onChange={event => {
-            const sort = feedSortOptions.find(value => `${value.by}-${value.direction}` === event.target.value);
+          <SelectInput label={messages.text("feed.sort.label")} value={`${draft.query.sort.by}-${draft.query.sort.direction}`} onChange={event => {
+            const sort = feedSortOptions.find(value => `${value.by}-${value.direction}` === event.currentTarget.value);
             if (sort) setDraft(current => ({ ...current, query: { ...current.query, sort } }));
           }}>{feedSortOptions.map(sort => <option key={`${sort.by}-${sort.direction}`} value={`${sort.by}-${sort.direction}`}>
             {messages.text(feedSortLabelKey(sort))}
-          </option>)}</select></FloatingField>
+          </option>)}</SelectInput>
         </div>
         <div>
           <div data-date-time-fields>
