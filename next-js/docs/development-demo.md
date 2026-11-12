@@ -145,9 +145,9 @@ provider returned at that time. Active-season changes require later observations
 Use `npm run history:backfill -- --continuous` to run the supported fixture,
 match-detail, and reference imports under one owned database lock. The runner
 checks each phase in bounded batches and waits when the shared provider quota
-gives live work priority or repeated transport failures interrupt retrieval. A drained pass
-waits for retryable or newly discovered coverage. The saved source pages and
-import receipts persist across restarts.
+gives live work priority or repeated transport failures interrupt retrieval.
+A drained pass waits for retryable or newly discovered coverage. The saved
+source pages and import receipts persist across restarts.
 
 The live snapshot's web server defaults to `127.0.0.1`. To browse from another
 device on the same network, start it with `npm run dev -- --hostname 0.0.0.0 --port 3000`

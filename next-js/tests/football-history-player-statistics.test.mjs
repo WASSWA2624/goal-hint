@@ -274,3 +274,24 @@ test("the global profile adapter rejects an unexpected player selector or an inv
   assert.notEqual(bad.status, "complete");
   assert.equal(bad.completeness.invalidRows, 1);
 });
+
+test("default reference ordering gives the least recently archived group the next single-call window", async () => {
+  const observed = new Map([["fixtures", NOW + 99], ["teams", NOW], ["injuries", NOW - 10]]);
+  const database = { async query(operation) { return operation({ footballHistorySourcePage: { async groupBy(query) {
+    assert.deepEqual(query.by, ["endpoint"]);
+    assert.deepEqual(query._max, { retrievedAt: true });
+    assert.equal(query.where.endpoint.in.includes("fixtures"), false);
+    assert.equal(query.where.endpoint.in.includes("competitions"), false);
+    return [...observed].filter(([endpoint]) => query.where.endpoint.in.includes(endpoint))
+      .map(([endpoint, time]) => ({ endpoint, _max: { retrievedAt: new Date(time) } }));
+  } } }); } };
+  const source = createFootballHistorySource(database);
+  assert.deepEqual(await source.referencePhaseOrder(true), ["playerStatistics", "playerProfiles", "reference"]);
+  observed.set("playerStatistics", NOW + 1);
+  assert.deepEqual(await source.referencePhaseOrder(true), ["playerProfiles", "reference", "playerStatistics"]);
+  observed.set("playerProfiles", NOW + 2);
+  assert.deepEqual(await source.referencePhaseOrder(true), ["reference", "playerStatistics", "playerProfiles"]);
+  observed.set("standings", NOW + 3);
+  assert.deepEqual(await source.referencePhaseOrder(true), ["playerStatistics", "playerProfiles", "reference"]);
+  assert.deepEqual(await source.referencePhaseOrder(false), ["playerStatistics", "reference"]);
+});

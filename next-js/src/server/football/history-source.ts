@@ -43,6 +43,8 @@ const selectors = {
 } as const;
 type Endpoint = keyof typeof selectors;
 type Selection = Readonly<{ endpoint: Endpoint; parameters: unknown }>;
+const referencePhases = ["playerStatistics", "playerProfiles", "reference"] as const;
+export type FootballHistoryReferencePhase = typeof referencePhases[number];
 
 function archiveSelector({ endpoint, parameters: input }: Selection) {
   if (!Object.hasOwn(selectors, endpoint) || !input || typeof input !== "object" || Array.isArray(input)) throw new Error("Invalid historical archive selector.");
@@ -155,6 +157,19 @@ export function createFootballHistorySource(database: DatabaseRuntime) {
   }
 
   return {
+    async referencePhaseOrder(globalScope: boolean): Promise<FootballHistoryReferencePhase[]> {
+      const endpoints = Object.keys(selectors).filter((endpoint) => endpoint !== "fixtures" && endpoint !== "competitions" &&
+        (globalScope || endpoint !== "playerProfiles"));
+      // The endpoint/selector/time index covers this query without opening any compressed pages.
+      const latest = await database.query((client) => client.footballHistorySourcePage.groupBy({ by: ["endpoint"],
+        where: { endpoint: { in: endpoints } }, _max: { retrievedAt: true } }));
+      const observations = { playerStatistics: 0, playerProfiles: 0, reference: 0 };
+      for (const { endpoint, _max } of latest) {
+        const phase = endpoint === "playerStatistics" || endpoint === "playerProfiles" ? endpoint : "reference";
+        observations[phase] = Math.max(observations[phase], _max.retrievedAt?.getTime() ?? 0);
+      }
+      return referencePhases.filter((phase) => globalScope || phase !== "playerProfiles").sort((left, right) => observations[left] - observations[right]);
+    },
     async hasPage(input: Selection, observedSince?: number) {
       const selectorHash = hash(JSON.stringify(archiveSelector(input)));
       const retrievedAt = observedSince === undefined ? undefined : { gte: new Date(observedSince) };
