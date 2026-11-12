@@ -2,9 +2,10 @@ import "server-only";
 
 import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
 import type { createApiFootballAdapter } from "./api-football-adapter.ts";
-import { API_FOOTBALL_CONTRACT_VERSION, apiFootballReferenceParameters, isApiFootballLeaderboard,
+import { API_FOOTBALL_CONTRACT_VERSION, apiFootballReferenceParameters, isApiFootballLeaderboard, isFootballHistoryReferenceDictionary,
   type ApiFootballErrorReason, type FootballHistoryReferenceTarget } from "./api-football-contract.ts";
 import { historyBackfillLimits } from "./history-backfill.ts";
+import { isFootballHistoryPersonRecordEndpoint } from "./history-person-records.ts";
 
 export type { FootballHistoryReferenceTarget } from "./api-football-contract.ts";
 
@@ -21,9 +22,10 @@ const stopReasons = new Set<ApiFootballErrorReason>(["quota-denied", "rate-limit
   "authentication-error", "invalid-credential", "subscription-expired", "shared-work-pending"]);
 
 function priority({ endpoint }: FootballHistoryReferenceTarget) {
-  if (endpoint === "countries" || endpoint === "timezones" || endpoint === "leagueSeasons") return 2;
+  if (isFootballHistoryReferenceDictionary(endpoint)) return 2;
   return endpoint === "teamStatistics" || endpoint === "coaches" || endpoint === "squads" || endpoint === "teamSeasons" ||
-    endpoint === "fixtureRounds" || endpoint === "fixtureHalfStatistics" || isApiFootballLeaderboard(endpoint) ? 0 : 1;
+    endpoint === "fixtureRounds" || endpoint === "fixtureHalfStatistics" || isApiFootballLeaderboard(endpoint) ||
+    isFootballHistoryPersonRecordEndpoint(endpoint) ? 0 : 1;
 }
 
 function acceptedPage(response: ReferenceResponse, selector: FootballHistoryReferenceSelector,
@@ -102,6 +104,7 @@ export function createFootballHistoryReference(options: Readonly<{
         if (page) {
           await savePage(page);
           totals.archived++;
+          if ("subjectIds" in target && target.subjectIds.length > 1 && page.rows.length < target.subjectIds.length) totals.deferred++;
         } else totals.deferred++;
 
         const reason = response.error?.reason;

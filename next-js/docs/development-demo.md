@@ -135,7 +135,8 @@ checking the hosted schema and permitted scope.
 
 `npm run history:backfill -- --reference --requests 20` archives provider
 dictionaries, team and venue records, standings, injuries, transfers, season
-statistics, leaderboards, player profiles, coaches, and current squads. It
+statistics, leaderboards, player profiles and career teams, coaches, current
+squads, trophies, and sidelined records. It
 discovers scoped targets from saved fixtures. Use `--help` for dataset selectors
 or resume player pages separately with `--dataset player-statistics` or
 `--dataset player-profiles`. Archived pages retain their retrieval dates and
@@ -143,11 +144,19 @@ can be read locally by selector. A complete empty response records what the
 provider returned at that time. Active-season changes require later observations.
 
 Use `npm run history:backfill -- --continuous` to run the supported fixture,
-match-detail, and reference imports under one owned database lock. The runner
+match-detail, and reference imports and process deferred fixture pages under
+one owned database lock. The runner
 checks each phase in bounded batches and waits when the shared provider quota
 gives live work priority or repeated transport failures interrupt retrieval.
 A drained pass waits for retryable or newly discovered coverage. The saved
 source pages and import receipts persist across restarts.
+
+To resume in the background after Windows sign-in, run the same continuous
+command with `--prepare-database --log-to-disk` through Task Scheduler. The
+runner starts the existing private loopback snapshot if necessary, and writes
+an importer log under `.goal-hint/`. It can use the database already started
+by the development app. Use `npm run history:backfill -- --replay` to process
+a bounded batch of saved fixture pages without making API requests.
 
 The live snapshot's web server defaults to `127.0.0.1`. To browse from another
 device on the same network, start it with `npm run dev -- --hostname 0.0.0.0 --port 3000`

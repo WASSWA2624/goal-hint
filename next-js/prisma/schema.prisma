@@ -2458,17 +2458,26 @@ model FootballHistoryDetailState {
 
 // Private provider pages for replay and future normalization against the saved source.
 model FootballHistorySourcePage {
-  id             String   @id @db.Char(64)
-  endpoint       String   @db.VarChar(40)
-  selectorHash   String   @db.Char(64)
-  parameters     Json
-  contract       String   @db.VarChar(96)
-  retrievedAt    DateTime @db.DateTime(3)
-  rowCount       Int      @db.UnsignedInt
-  contentHash    String   @db.Char(64)
-  compressedRows Bytes    @db.LongBlob
+  id                 String   @id @db.Char(64)
+  endpoint           String   @db.VarChar(40)
+  selectorHash       String   @db.Char(64)
+  parameters         Json
+  contract           String   @db.VarChar(96)
+  retrievedAt        DateTime @db.DateTime(3)
+  rowCount           Int      @db.UnsignedInt
+  contentHash        String   @db.Char(64)
+  compressedRows     Bytes    @db.LongBlob
+  subjectIndexStatus String?  @db.VarChar(8)
 
   @@index([endpoint, selectorHash, retrievedAt])
+  @@index([endpoint, subjectIndexStatus, id], map: "football_history_source_subject_idx")
+}
+
+model FootballHistorySubject {
+  kind       String @db.VarChar(8)
+  externalId Int    @db.UnsignedInt
+
+  @@id([kind, externalId])
 }
 
 model FootballVenue {

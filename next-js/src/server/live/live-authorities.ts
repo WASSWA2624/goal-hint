@@ -1,6 +1,6 @@
 import "server-only";
 
-import { utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
+import { utcInstantFromEpochMilliseconds, type Clock, type UtcInstant } from "../../domain/calendar.ts";
 import { liveGoalMarketDefinitions } from "../../domain/goal-market-definitions.ts";
 import { assertOperationAllowed, type EvidenceVerifier, type RuntimePolicy } from "../config/runtime-policy.ts";
 import type { EvidenceAuthority } from "../evidence/evidence-contract.ts";
@@ -46,6 +46,30 @@ function pages(result: Pick<ApiFootballResult<unknown>, "provenance">, endpoint:
     page.endpoint === endpoint && page.contractVersion === API_FOOTBALL_CONTRACT_VERSION && page.retrievedAt <= now + SKEW_MS);
 }
 
+/** Shared catalog authority for the live adapter and verified local archive replay. */
+export function createLiveCatalogAuthority(policy: RuntimePolicy, verify: EvidenceVerifier, refs: LiveReferences,
+  now: () => UtcInstant = () => utcInstantFromEpochMilliseconds(Date.now())): CatalogAuthority {
+  const verifyScore = (candidate: RegulationScoreCandidate) => candidate.sourceField === "score.fulltime" &&
+    candidate.period === "regulation-including-stoppage-time" && ["FT", "AET", "PEN"].includes(candidate.providerStatus) &&
+    [candidate.home, candidate.away].every((goals) => Number.isSafeInteger(goals) && goals >= 0 && goals <= 99);
+  return Object.freeze({
+    authorize(request) {
+      assertOperationAllowed(policy, "football", verify);
+      if (request.retentionEvidenceRef !== refs.retention) throw new Error("Unapproved retention.");
+    },
+    verifyRetention: (permission) => permission.evidenceRef === refs.retention && permission.rawPayloadsStored === false &&
+      permission.purpose === "structured-catalog-and-audit-history",
+    verifyObservation: (_request, result) => pages(result, "fixtures", now()) || pages(result, "teams", now()) || pages(result, "competitions", now()),
+    verifyLogo: (url) => verify(refs.publicRights, "football-public-rights") && isApiFootballMediaUrl(url),
+    verifyRegulationScore: verifyScore,
+    regulationEvidenceRef: (candidate) => verifyScore(candidate)
+      ? `api-football:fixture:${candidate.fixtureId}:${candidate.providerStatus}:score.fulltime` : null,
+    authorizeMapping() { throw new Error("Alternate identity mapping needs manual review."); },
+    verifyMapping: () => false,
+    verifyKnownSubset: () => false,
+  } satisfies CatalogAuthority);
+}
+
 /** Trusted operator binding for the primary and fallback live pipeline. Every approval
  * re-runs the runtime gates against the owner register, binds exact policies, and
  * refuses manual-operator paths (voids, recovery, identity remapping) this runner never uses. */
@@ -75,27 +99,10 @@ export function createLiveAuthorities(options: Readonly<{
     publication: publicationPolicy(refs) as PublicationPolicy, evidence: evidencePolicy(refs), fallback: providerFallbackPolicy(refs) as ProviderFallbackPolicy,
   });
   const statuses = new Map(providerStatusMappings.map((entry) => [entry.providerStatus, entry.status]));
-  const verifyScore = (candidate: RegulationScoreCandidate) => candidate.sourceField === "score.fulltime" &&
-    candidate.period === "regulation-including-stoppage-time" && ["FT", "AET", "PEN"].includes(candidate.providerStatus) &&
-    [candidate.home, candidate.away].every((goals) => Number.isSafeInteger(goals) && goals >= 0 && goals <= 99);
   const cascadeEnabled = options.sourceOrder !== "provider-first";
   const localModelVersion = localGoalModelVersion();
 
-  const catalog: CatalogAuthority = Object.freeze({
-    authorize(request) { football(); if (request.retentionEvidenceRef !== refs.retention) throw new Error("Unapproved retention."); },
-    verifyRetention: (permission) => permission.evidenceRef === refs.retention && permission.rawPayloadsStored === false &&
-      permission.purpose === "structured-catalog-and-audit-history",
-    verifyObservation: (_request, result) => pages(result, "fixtures", now()) || pages(result, "teams", now()) || pages(result, "competitions", now()),
-    // Remote provider logos and country flags display under the owner-recorded public rights decision.
-    verifyLogo: (url) => verify(refs.publicRights, "football-public-rights") && isApiFootballMediaUrl(url),
-    // API-Football score.fulltime is the regulation score, including after extra time or penalties.
-    verifyRegulationScore: verifyScore,
-    regulationEvidenceRef: (candidate) => verifyScore(candidate)
-      ? `api-football:fixture:${candidate.fixtureId}:${candidate.providerStatus}:score.fulltime` : null,
-    authorizeMapping() { throw new Error("Alternate identity mapping needs manual review."); },
-    verifyMapping: () => false,
-    verifyKnownSubset: () => false,
-  });
+  const catalog = createLiveCatalogAuthority(policy, verify, refs, now);
   const selection: SelectionAuthority = Object.freeze({
     authorize() { football(); },
     verifyPolicy: (value) => same(value, expected.selection),

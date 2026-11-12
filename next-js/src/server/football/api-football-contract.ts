@@ -1,6 +1,8 @@
 import "server-only";
 
 import { parseReportingDate, type ReportingDate, type UtcInstant } from "../../domain/calendar.ts";
+import { footballHistoryPersonRecordSelector, type FootballHistoryPersonRecordEndpoint,
+  type FootballHistorySubjectKind } from "./history-person-records.ts";
 import type { QuotaFeedback, QuotaPriority, QuotaDenialReason } from "./quota-contract.ts";
 
 export const API_FOOTBALL_ORIGIN = "https://v3.football.api-sports.io";
@@ -13,6 +15,10 @@ export const apiFootballLeaderboards = Object.freeze({
 } as const);
 export type ApiFootballLeaderboard = keyof typeof apiFootballLeaderboards;
 export const isApiFootballLeaderboard = (endpoint: string): endpoint is ApiFootballLeaderboard => Object.hasOwn(apiFootballLeaderboards, endpoint);
+const historyReferenceDictionaries = ["countries", "timezones", "leagueSeasons", "teamCountries", "playerSeasons"] as const;
+type HistoryReferenceDictionary = typeof historyReferenceDictionaries[number];
+export const isFootballHistoryReferenceDictionary = (endpoint: string): endpoint is HistoryReferenceDictionary =>
+  historyReferenceDictionaries.some((dictionary) => dictionary === endpoint);
 
 export const apiFootballEndpoints = Object.freeze({
   fixtures: Object.freeze({ path: "/fixtures", paginated: false }),
@@ -21,11 +27,14 @@ export const apiFootballEndpoints = Object.freeze({
   timezones: Object.freeze({ path: "/timezone", paginated: false }),
   leagueSeasons: Object.freeze({ path: "/leagues/seasons", paginated: false }),
   teams: Object.freeze({ path: "/teams", paginated: false }),
+  teamCountries: Object.freeze({ path: "/teams/countries", paginated: false }),
   teamSeasons: Object.freeze({ path: "/teams/seasons", paginated: false }),
   teamStatistics: Object.freeze({ path: "/teams/statistics", paginated: false }),
   venues: Object.freeze({ path: "/venues", paginated: false }),
   standings: Object.freeze({ path: "/standings", paginated: false }),
   transfers: Object.freeze({ path: "/transfers", paginated: false }),
+  trophies: Object.freeze({ path: "/trophies", paginated: false }),
+  sidelined: Object.freeze({ path: "/sidelined", paginated: false }),
   coaches: Object.freeze({ path: "/coachs", paginated: false }),
   squads: Object.freeze({ path: "/players/squads", paginated: false }),
   competitions: Object.freeze({ path: "/leagues", paginated: false }),
@@ -37,6 +46,8 @@ export const apiFootballEndpoints = Object.freeze({
   ...apiFootballLeaderboards,
   playerStatistics: Object.freeze({ path: "/players", paginated: true, pageSize: 20 }),
   playerProfiles: Object.freeze({ path: "/players/profiles", paginated: true, pageSize: 250 }),
+  playerSeasons: Object.freeze({ path: "/players/seasons", paginated: false }),
+  playerTeams: Object.freeze({ path: "/players/teams", paginated: false }),
   predictions: Object.freeze({ path: "/predictions", paginated: false }),
   accountStatus: Object.freeze({ path: "/status", paginated: false }),
   // Pre-match odds (prompt 052). The page size follows the official v3 documentation; the counted trial must confirm it.
@@ -64,11 +75,13 @@ export function parseApiFootballFixtureRound(raw: unknown): ApiFootballFixtureRo
 }
 
 export type FootballHistoryReferenceTarget = Readonly<
-  { endpoint: "countries" | "timezones" | "leagueSeasons" }
+  { endpoint: HistoryReferenceDictionary }
   | { endpoint: "teams" | "standings" | "injuries" | "fixtureRounds" | ApiFootballLeaderboard; competitionId: number; season: number }
   | { endpoint: "teamStatistics"; competitionId: number; season: number; teamId: number }
   | { endpoint: "fixtureHalfStatistics"; fixtureId: number; homeTeamId: number; awayTeamId: number }
   | { endpoint: "venues"; venueId: number }
+  | { endpoint: FootballHistoryPersonRecordEndpoint; kind: FootballHistorySubjectKind; subjectIds: readonly number[] }
+  | { endpoint: "playerTeams"; playerId: number }
   | { endpoint: "transfers" | "coaches" | "squads" | "teamSeasons"; teamId: number }
 >;
 
@@ -76,11 +89,12 @@ export function apiFootballReferenceParameters(target: FootballHistoryReferenceT
   const providerId = (value: number) => Number.isSafeInteger(value) && value > 0 && value <= 4_294_967_295;
   const validSeason = (value: number) => Number.isInteger(value) && value >= 1000 && value <= 9999;
   if (!target || typeof target !== "object") return null;
+  if (isFootballHistoryReferenceDictionary(target.endpoint)) return Object.keys(target).length === 1 ? {} : null;
   switch (target.endpoint) {
-    case "countries":
-    case "timezones":
-    case "leagueSeasons": return Object.keys(target).length === 1 ? {} : null;
     case "venues": return providerId(target.venueId) ? { id: String(target.venueId) } : null;
+    case "trophies":
+    case "sidelined": return footballHistoryPersonRecordSelector(target.kind, target.subjectIds);
+    case "playerTeams": return providerId(target.playerId) ? { player: String(target.playerId) } : null;
     case "transfers":
     case "coaches":
     case "teamSeasons":

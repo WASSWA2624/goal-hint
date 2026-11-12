@@ -161,40 +161,44 @@ test("does not dispatch after a provider day rollover while checking stored cove
   assert.deepEqual(transport, []);
 });
 
-test("archives the three documented global dictionaries and the team-statistics object within the shared request budget", async () => {
+test("archives the documented global dictionaries and the team-statistics object within the shared request budget", async () => {
   const rows = new Map([["/countries", countryRows], ["/timezone", ["Africa/Kampala", "America/Argentina/Buenos_Aires", "UTC"]],
-    ["/leagues/seasons", [2008, 2025]], ["/teams", scenarios[0][2]]]);
+    ["/leagues/seasons", [2008, 2025]], ["/teams/countries", countryRows], ["/players/seasons", [1966, 1982, 2025]],
+    ["/teams", scenarios[0][2]]]);
   const { importer, transport, pages, reservations } = setup((url) => url.pathname === "/teams/statistics"
     ? teamStatisticsResponse(url) : catalogResponse(url, rows.get(url.pathname)));
   const targets = [teamStatisticsTarget, { endpoint: "countries" }, { endpoint: "timezones" },
-    { endpoint: "leagueSeasons" }, scenarios[0][0]];
-  const first = await importer.run({ targets, maxRequests: 4 });
+    { endpoint: "leagueSeasons" }, { endpoint: "teamCountries" }, { endpoint: "playerSeasons" }, scenarios[0][0]];
+  const first = await importer.run({ targets, maxRequests: 6 });
   assert.equal(first.stopped, "request-budget");
-  assert.deepEqual(transport.map(({ pathname }) => pathname), ["/countries", "/timezone", "/leagues/seasons", "/teams"]);
-  assert.ok(transport.slice(0, 3).every(({ search }) => search === ""));
-  assert.deepEqual(pages.slice(0, 3).map(({ rows: archivedRows }) => archivedRows), [...rows.values()].slice(0, 3));
+  assert.deepEqual(transport.map(({ pathname }) => pathname), ["/countries", "/timezone", "/leagues/seasons", "/teams/countries",
+    "/players/seasons", "/teams"]);
+  assert.ok(transport.slice(0, 5).every(({ search }) => search === ""));
+  assert.deepEqual(pages.slice(0, 5).map(({ rows: archivedRows }) => archivedRows), [...rows.values()].slice(0, 5));
   const second = await importer.run({ targets, maxRequests: 1, hasMoreTargets: true });
   assert.equal(second.stopped, "request-budget");
-  assert.equal(second.skipped, 4);
+  assert.equal(second.skipped, 6);
   assert.equal(second.archived, 1);
-  assert.equal(reservations.length, 5);
-  assert.deepEqual(Object.fromEntries(transport[4].searchParams), teamStatisticsParameters);
-  assert.deepEqual(pages[4], { endpoint: "teamStatistics", parameters: teamStatisticsParameters,
-    rows: [teamStatistics], retrievedAt: CATALOG_NOW + 500 });
+  assert.equal(reservations.length, 7);
+  assert.deepEqual(Object.fromEntries(transport[6].searchParams), teamStatisticsParameters);
+  assert.deepEqual(pages[6], { endpoint: "teamStatistics", parameters: teamStatisticsParameters,
+    rows: [teamStatistics], retrievedAt: CATALOG_NOW + 700 });
 });
 
 test("new reference endpoints withhold unexpected selectors, invalid rows, and inconsistent object counts", async () => {
   const { importer, adapter, pages } = setup((url) => {
     if (url.pathname === "/teams/statistics") return teamStatisticsResponse(url, { ...teamStatistics, team: { id: 11 } });
-    if (url.pathname === "/countries") return new Response(JSON.stringify({ get: "countries", parameters: { name: "england" },
+    if (url.pathname === "/countries" || url.pathname === "/teams/countries") return new Response(JSON.stringify({
+      get: url.pathname.slice(1), parameters: { name: "england" },
       errors: [], results: countryRows.length, paging: { current: 1, total: 1 }, response: countryRows }),
     { headers: { "content-type": "application/json" } });
     return catalogResponse(url, url.pathname === "/timezone" ? ["Africa/Kampala\n"] : ["2025"]);
   });
-  const targets = [{ endpoint: "countries" }, { endpoint: "timezones" }, { endpoint: "leagueSeasons" }, teamStatisticsTarget];
-  const report = await importer.run({ targets, maxRequests: 4 });
-  assert.equal(report.deferred, 4);
-  assert.equal(report.requests, 4);
+  const targets = [{ endpoint: "countries" }, { endpoint: "timezones" }, { endpoint: "leagueSeasons" }, { endpoint: "teamCountries" },
+    { endpoint: "playerSeasons" }, teamStatisticsTarget];
+  const report = await importer.run({ targets, maxRequests: 6 });
+  assert.equal(report.deferred, 6);
+  assert.equal(report.requests, 6);
   assert.deepEqual(pages, []);
   assert.equal((await adapter.reference.page({ ...teamStatisticsTarget, teamId: 0 }, catalogBounds())).error.reason, "invalid-request");
 
@@ -217,6 +221,12 @@ test("team-statistics planning reads bounded unarchived home and away team-seaso
     },
   }) };
   assert.deepEqual(await readHistoryReferenceTargets(database, [39], "countries", 1), { targets: [{ endpoint: "countries" }], hasMoreTargets: false });
+  assert.deepEqual(await readHistoryReferenceTargets(database, [39], "team-countries", 1), {
+    targets: [{ endpoint: "teamCountries" }], hasMoreTargets: false,
+  });
+  assert.deepEqual(await readHistoryReferenceTargets(database, [39], "player-seasons", 1), {
+    targets: [{ endpoint: "playerSeasons" }], hasMoreTargets: false,
+  });
   const plan = await readHistoryReferenceTargets(database, [39], "team-statistics", 1);
   assert.deepEqual(plan, { targets: [{ ...teamStatisticsTarget, season: 2026 }], hasMoreTargets: true });
   assert.equal(queries.length, 1);
@@ -225,7 +235,8 @@ test("team-statistics planning reads bounded unarchived home and away team-seaso
   assert.ok(queries[0].sql.includes(`SHA2(CONCAT('{"league":"', league.externalId, '","season":"', season.year, '","team":"', team.externalId, '"}'), 256)`));
   assert.deepEqual(queries[0].values.slice(-2), [39n, 2]);
   const defaultPlan = await readHistoryReferenceTargets(database, [39], undefined, 1);
-  assert.deepEqual(defaultPlan, { targets: [{ endpoint: "countries" }, { endpoint: "timezones" }, { endpoint: "leagueSeasons" }, ...plan.targets],
+  assert.deepEqual(defaultPlan, { targets: [{ endpoint: "countries" }, { endpoint: "timezones" }, { endpoint: "leagueSeasons" },
+    { endpoint: "teamCountries" }, { endpoint: "playerSeasons" }, ...plan.targets],
     hasMoreTargets: true });
 });
 
@@ -306,8 +317,9 @@ test("canonical observed teams feed the explicit coach and squad selectors and t
   assert.deepEqual(home.homeFixtures.some.season.competition.providers.some.externalId.in, [39n]);
 
   const { importer, transport } = setup((url) => catalogResponse(url, []));
-  await importer.run({ targets, maxRequests: 8 });
-  assert.deepEqual(transport.map(({ pathname }) => pathname), ["/countries", "/timezone", "/leagues/seasons", "/transfers",
+  await importer.run({ targets, maxRequests: 10 });
+  assert.deepEqual(transport.map(({ pathname }) => pathname), ["/countries", "/timezone", "/leagues/seasons", "/teams/countries",
+    "/players/seasons", "/transfers",
     "/transfers", "/coachs", "/teams/statistics", "/players/squads"]);
 });
 
@@ -471,6 +483,7 @@ test("half-statistics planning checks played fixtures, applicable coverage and a
   assert.deepEqual(await readHistoryReferenceTargets(database, [39], "half-statistics", 1), { targets: [halfTarget], hasMoreTargets: true });
   assert.match(queries[0].sql, /season\.year >= 2024[\s\S]+fixture\.status IN \('finished-regulation', 'finished-extra-time', 'finished-penalties'\)/u);
   assert.match(queries[0].sql, /fixture\.regulationVerifiedAt <= UTC_TIMESTAMP\(3\)/u);
+  assert.match(queries[0].sql, /FORCE INDEX \(FootballFixture_kickoff_idx\)[\s\S]+ORDER BY fixture\.kickoff DESC, fixture\.id DESC/u);
   assert.match(queries[0].sql, /fixtures\.statistics_fixtures[\s\S]+\$\[0\]\.statistics[\s\S]+\$\[1\]\.statistics/u);
   assert.match(queries[0].sql, /archived\.endpoint = 'fixtureHalfStatistics'[\s\S]+"half":"true"/u);
   assert.deepEqual(queries[0].values, ["api-football", 39n, 2]);
@@ -497,4 +510,86 @@ test("pre-dispatch deadline responses count toward the bounded provider transpor
   const targets = Array.from({ length: 4 }, (_, index) => ({ endpoint: "venues", venueId: index + 1 }));
   assert.deepEqual(await importer.run({ targets, maxRequests: 1 }),
     { status: "partial", requested: 3, archived: 0, skipped: 0, deferred: 3, requests: 0, stopped: "provider-transport-unavailable" });
+});
+
+test("trophy and sidelined archives verify exact person selectors and leave omitted groups pending", async () => {
+  const record = { league: "Synthetic Cup", country: "World", season: "2025", place: "Winner" };
+  const unavailable = { type: "Suspended", start: "2025-11-01", end: "Unknown" };
+  const targets = [{ endpoint: "trophies", kind: "player", subjectIds: [3, 1, 2] },
+    { endpoint: "sidelined", kind: "coach", subjectIds: [8, 7] },
+    { endpoint: "sidelined", kind: "player", subjectIds: [11] }];
+  const { importer, transport, pages } = setup((url) => {
+    if (url.pathname === "/trophies") return catalogResponse(url, [{ id: 1, trophies: [record] }, { id: 2, trophies: [] }]);
+    if (url.searchParams.has("coachs")) return catalogResponse(url, [{ id: 8, sidelined: [unavailable] }, { id: 7, sidelined: [] }]);
+    return catalogResponse(url, []);
+  });
+  assert.deepEqual(await importer.run({ targets, maxRequests: 3 }), {
+    status: "partial", requested: 3, archived: 3, skipped: 0, deferred: 1, requests: 3, stopped: null,
+  });
+  assert.deepEqual(transport.map((url) => Object.fromEntries(url.searchParams)), [
+    { players: "1-2-3" }, { coachs: "7-8" }, { player: "11" },
+  ]);
+  assert.deepEqual(pages[0].rows, [{ id: 1, trophies: [record] }, { id: 2, trophies: [] }]);
+  assert.deepEqual(pages[1].rows, [{ id: 8, sidelined: [unavailable] }, { id: 7, sidelined: [] }]);
+  assert.deepEqual(pages[2].rows, []);
+});
+
+test("invalid or ambiguous person batches cannot become complete archive pages", async () => {
+  const target = { endpoint: "trophies", kind: "player", subjectIds: [1, 2] };
+  for (const rows of [[{ id: 3, trophies: [] }], [{ id: 1, trophies: [] }, { id: 1, trophies: [] }],
+    [{ id: 1, trophies: [{ arbitrary: "unexpected" }] }]]) {
+    const { importer, pages } = setup((url) => catalogResponse(url, rows));
+    assert.equal((await importer.run({ targets: [target], maxRequests: 1 })).deferred, 1);
+    assert.deepEqual(pages, []);
+  }
+  const { adapter, transport } = setup((url) => {
+    const echo = new URL(url);
+    echo.searchParams.set("coach", "1");
+    return catalogResponse(echo, []);
+  });
+  assert.equal((await adapter.reference.page(target, catalogBounds())).error.reason, "schema-error");
+  assert.equal((await adapter.reference.page({ ...target, subjectIds: Array.from({ length: 21 }, (_, index) => index + 1) },
+    catalogBounds())).error.reason, "invalid-request");
+  assert.equal(transport.length, 1);
+});
+
+test("subject receipts distinguish verified empty records from omitted subjects and resume omitted IDs alone", async () => {
+  const stored = [], insertSizes = [], lookups = [];
+  const database = { query: (callback) => callback({ footballHistorySourcePage: {
+    async createMany({ data }) {
+      const rows = Array.isArray(data) ? data : [data];
+      insertSizes.push(rows.length);
+      stored.push(...rows);
+      return { count: rows.length };
+    },
+    async findFirst({ where }) { return stored.find((row) => row.endpoint === where.endpoint && row.selectorHash === where.selectorHash) ?? null; },
+    async findMany({ where }) { return stored.filter((row) => where.OR.some(({ endpoint, selectorHash }) =>
+      row.endpoint === endpoint && selectorHash.in.includes(row.selectorHash))); },
+  }, async $queryRaw(query, kind, endpoint, prefix, limit) {
+    assert.match(query.join("?"), /NOT EXISTS[\s\S]+archived\.selectorHash = SHA2/u);
+    lookups.push({ kind, endpoint, prefix, limit });
+    return kind === "coach" ? [] : Array.from({ length: 22 }, (_, index) => ({ externalId: 3 + index }));
+  } }) };
+  const archive = createFootballHistorySource(database);
+  const record = { league: "Synthetic Cup", place: "Winner" };
+  const parameters = { players: "1-2-3" };
+  const rows = [{ id: 1, trophies: [record] }, { id: 2, trophies: [] }];
+  const page = { endpoint: "trophies", parameters, rows, retrievedAt: CATALOG_NOW };
+  await archive.savePage(page);
+  assert.deepEqual(insertSizes, [4]);
+  assert.deepEqual((await archive.latestPage(page)).rows, rows);
+  assert.deepEqual((await archive.latestPage({ endpoint: "trophies", parameters: { player: "1" } })).rows, [record]);
+  assert.deepEqual((await archive.latestPage({ endpoint: "trophies", parameters: { player: "2" } })).rows, []);
+  assert.equal(await archive.latestPage({ endpoint: "trophies", parameters: { player: "3" } }), null);
+  assert.ok(stored.some((row) => row.endpoint === "trophiesOmitted" && row.selectorHash === catalogHash('{"player":"3"}')));
+  const plan = await readHistoryReferenceTargets(database, [], "trophies", 2, true);
+  assert.deepEqual(plan, { targets: [
+    { endpoint: "trophies", kind: "player", subjectIds: [3] },
+    { endpoint: "trophies", kind: "player", subjectIds: Array.from({ length: 20 }, (_, index) => index + 4) },
+  ], hasMoreTargets: true });
+  assert.deepEqual(lookups.map(({ kind, limit }) => [kind, limit]), [["player", 41], ["coach", 41]]);
+  await archive.savePage({ endpoint: "sidelined", parameters: { coachs: "7-8" }, rows: [], retrievedAt: CATALOG_NOW });
+  assert.deepEqual(insertSizes, [4, 3]);
+  assert.equal(await archive.latestPage({ endpoint: "sidelined", parameters: { coach: "7" } }), null);
+  assert.equal(stored.filter(({ endpoint }) => endpoint === "sidelinedOmitted").length, 2);
 });

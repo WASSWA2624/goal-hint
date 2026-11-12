@@ -7,10 +7,13 @@ import { z } from "zod";
 import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { API_FOOTBALL_CONTRACT_VERSION } from "./api-football-contract.ts";
-import { archivedPlayerProfileRowId, archivedPlayerStatisticsRowId, playerProfilePageSize, playerStatisticsPageSize, playerStatisticsProviderId,
+import { footballHistoryPersonOmissionEndpoint, isFootballHistoryPersonRecord, isFootballHistoryPersonRecordEndpoint,
+  readFootballHistoryPersonGroup, readFootballHistoryPersonSelector, type FootballHistoryPersonRecordEndpoint } from "./history-person-records.ts";
+import { archivedCoachRowId, archivedPlayerProfileRowId, archivedPlayerStatisticsRowId, playerProfilePageSize, playerStatisticsPageSize, playerStatisticsProviderId,
   validPlayerArchivePageSize } from "./history-player-statistics-input.ts";
 import type { FootballHistoryPlayerProfilePage, FootballHistoryPlayerStatisticsPage, FootballHistoryPlayerStatisticsReceipt,
   FootballHistoryPlayerStatisticsTarget } from "./history-player-statistics.ts";
+import { indexHistorySubjects, type FootballHistorySubjectPage } from "./history-subjects.ts";
 
 const compress = promisify(gzip);
 const decompress = promisify(gunzip);
@@ -24,12 +27,15 @@ const selectors = {
   countries: new Set<string>(),
   timezones: new Set<string>(),
   leagueSeasons: new Set<string>(),
+  teamCountries: new Set<string>(),
+  playerSeasons: new Set<string>(),
   competitions: new Set(["id", "season"]),
   teams: new Set(["league", "season"]),
   teamSeasons: new Set(["team"]),
   teamStatistics: new Set(["league", "season", "team"]),
   playerStatistics: new Set(["league", "season"]),
   playerProfiles: new Set<string>(),
+  playerTeams: new Set(["player"]),
   venues: new Set(["id"]),
   standings: new Set(["league", "season"]),
   topScorers: new Set(["league", "season"]),
@@ -38,13 +44,18 @@ const selectors = {
   topRedCards: new Set(["league", "season"]),
   injuries: new Set(["league", "season"]),
   transfers: new Set(["team"]),
+  trophies: new Set(["player", "players", "coach", "coachs"]),
+  sidelined: new Set(["player", "players", "coach", "coachs"]),
+  trophiesOmitted: new Set(["player", "coach"]),
+  sidelinedOmitted: new Set(["player", "coach"]),
   coaches: new Set(["team"]),
   squads: new Set(["team"]),
 } as const;
 type Endpoint = keyof typeof selectors;
 type Selection = Readonly<{ endpoint: Endpoint; parameters: unknown }>;
-const referencePhases = ["playerStatistics", "playerProfiles", "reference"] as const;
+const referencePhases = ["playerStatistics", "playerProfiles", "playerTeams", "reference"] as const;
 export type FootballHistoryReferencePhase = typeof referencePhases[number];
+const globalPersonSources = new Set(["playerProfiles", "playerTeams", "trophies", "sidelined", "trophiesOmitted", "sidelinedOmitted"]);
 
 function archiveSelector({ endpoint, parameters: input }: Selection) {
   if (!Object.hasOwn(selectors, endpoint) || !input || typeof input !== "object" || Array.isArray(input)) throw new Error("Invalid historical archive selector.");
@@ -55,7 +66,11 @@ function archiveSelector({ endpoint, parameters: input }: Selection) {
     entries.some(([key, value]) => !allowedParameters.has(key) || typeof value !== "string" || !value || value.length > 512)) {
     throw new Error("Invalid historical archive selector.");
   }
-  return Object.fromEntries(entries) as Record<string, string>;
+  const parameters = Object.fromEntries(entries) as Record<string, string>;
+  if (isFootballHistoryPersonRecordEndpoint(endpoint) && !readFootballHistoryPersonSelector(parameters)) {
+    throw new Error("Invalid historical person-record selector.");
+  }
+  return parameters;
 }
 
 async function verifiedBody(page: { compressedRows: Uint8Array; contentHash: string }): Promise<unknown> {
@@ -64,8 +79,12 @@ async function verifiedBody(page: { compressedRows: Uint8Array; contentHash: str
   return JSON.parse(body.toString("utf8"));
 }
 
-async function verifiedRows(page: { compressedRows: Uint8Array; rowCount: number; contentHash: string }) {
-  const rows = await verifiedBody(page);
+const personProjection = z.strictObject({ batchPageId: z.string().regex(/^[a-f0-9]{64}$/u),
+  batchParameters: z.record(z.string(), z.string()), rows: z.array(z.unknown()).max(footballHistorySourceMaxRows) });
+
+async function verifiedRows(page: { compressedRows: Uint8Array; rowCount: number; contentHash: string }, fromPersonBatch = false) {
+  const body = await verifiedBody(page);
+  const rows = fromPersonBatch && !Array.isArray(body) ? personProjection.parse(body).rows : body;
   if (!Array.isArray(rows) || rows.length !== page.rowCount) throw new Error("Historical archive page failed verification.");
   return rows as readonly unknown[];
 }
@@ -99,6 +118,51 @@ function playerIdsForPage(rows: readonly unknown[], rowId: PlayerPageSource["row
   return [...ids];
 }
 
+type StoredPage = Pick<FootballHistorySubjectPage, "parameters" | "contract" | "retrievedAt" | "contentHash" | "compressedRows"> &
+  Readonly<{ rowCount: number }>;
+
+async function verifiedPlayerPage(page: StoredPage, source: PlayerPageSource): Promise<FootballHistoryPlayerStatisticsReceipt | null> {
+  const parameters = archiveSelector({ endpoint: source.endpoint, parameters: page.parameters });
+  if (page.contract !== API_FOOTBALL_CONTRACT_VERSION || JSON.stringify(parameters) !== JSON.stringify(source.parameters)) return null;
+  const { page: current, totalPages, retrievedAt, rows } = playerPageEnvelope.parse(await verifiedBody(page));
+  const playerIds = playerIdsForPage(rows, source.rowId);
+  if (retrievedAt !== page.retrievedAt.getTime() || rows.length !== page.rowCount ||
+    !validPlayerArchivePageSize(current, totalPages, page.rowCount, source.pageSize) || !playerIds) return null;
+  return { page: current, totalPages, retrievedAt: utcInstantFromEpochMilliseconds(retrievedAt), rowCount: page.rowCount, playerIds };
+}
+
+function archivedSubjectId(value: unknown) {
+  return value && typeof value === "object" && "id" in value && playerStatisticsProviderId(value.id) ? value.id : null;
+}
+
+async function archivedSubjectIds(page: FootballHistorySubjectPage): Promise<readonly number[] | null> {
+  // Prisma's MySQL raw path can return an unsigned INT as bigint, unlike model reads.
+  if (typeof page.rowCount !== "number" && typeof page.rowCount !== "bigint" ||
+    !(page.retrievedAt instanceof Date) || !Number.isFinite(page.retrievedAt.getTime()) || !(page.compressedRows instanceof Uint8Array)) {
+    throw new Error("The historical subject source has an unsupported database shape.");
+  }
+  const rowCount = Number(page.rowCount);
+  if (!Number.isSafeInteger(rowCount) || rowCount < 0 || rowCount > footballHistorySourceMaxRows) return null;
+  try {
+    const { endpoint } = page;
+    const parameters = archiveSelector({ endpoint, parameters: typeof page.parameters === "string" ? JSON.parse(page.parameters) : page.parameters });
+    if (page.contract !== API_FOOTBALL_CONTRACT_VERSION || hash(JSON.stringify(parameters)) !== page.selectorHash) return null;
+    if (endpoint === "playerProfiles" || endpoint === "playerStatistics") {
+      const source = endpoint === "playerProfiles" ? profilePages : playerStatisticsPages({
+        competitionId: Number(parameters.league), season: Number(parameters.season),
+      });
+      return (await verifiedPlayerPage({ ...page, parameters, rowCount }, source))?.playerIds ?? null;
+    }
+    const rows = await verifiedRows({ ...page, rowCount });
+    if (endpoint === "coaches") return playerIdsForPage(rows, (row) => archivedCoachRowId(row, Number(parameters.team)));
+    if (!rows.length) return [];
+    const [squad] = rows;
+    if (rows.length !== 1 || !squad || typeof squad !== "object" || !("team" in squad) ||
+      archivedSubjectId(squad.team) !== Number(parameters.team) || !("players" in squad) || !Array.isArray(squad.players)) return null;
+    return playerIdsForPage(squad.players, archivedSubjectId);
+  } catch { return null; }
+}
+
 function sameFixtureScope(rows: readonly unknown[], parameters: Readonly<Record<string, string>>): boolean {
   const fixtures = new Set<number>();
   for (const value of rows) {
@@ -116,7 +180,7 @@ function sameFixtureScope(rows: readonly unknown[], parameters: Readonly<Record<
 
 /** Private replay storage. Only validated response rows and their request identity are retained. */
 export function createFootballHistorySource(database: DatabaseRuntime) {
-  async function writePage(endpoint: Endpoint, parameters: Record<string, string>, value: unknown, observedAt: number, rowCount: number) {
+  async function preparePage(endpoint: Endpoint, parameters: Record<string, string>, value: unknown, observedAt: number, rowCount: number) {
     const retrievedAt = new Date(observedAt);
     if (!Number.isFinite(retrievedAt.getTime()) || observedAt > Date.now()) throw new Error("Invalid historical archive page.");
     const body = Buffer.from(JSON.stringify(value));
@@ -124,9 +188,41 @@ export function createFootballHistorySource(database: DatabaseRuntime) {
     const selectorHash = hash(JSON.stringify(parameters)), contentHash = hash(body);
     const id = hash(JSON.stringify([endpoint, selectorHash, observedAt, contentHash]));
     const compressedRows = new Uint8Array(await compress(body));
-    return database.query((client) => client.footballHistorySourcePage.createMany({ skipDuplicates: true, data: {
-      id, endpoint, selectorHash, parameters, contract: API_FOOTBALL_CONTRACT_VERSION, retrievedAt, rowCount, contentHash, compressedRows,
-    } }));
+    return { id, endpoint, selectorHash, parameters, contract: API_FOOTBALL_CONTRACT_VERSION, retrievedAt, rowCount, contentHash, compressedRows };
+  }
+
+  async function writePage(endpoint: Endpoint, parameters: Record<string, string>, value: unknown, observedAt: number, rowCount: number) {
+    const data = await preparePage(endpoint, parameters, value, observedAt, rowCount);
+    return database.query((client) => client.footballHistorySourcePage.createMany({ skipDuplicates: true, data }));
+  }
+
+  async function savePersonRecordPage(endpoint: FootballHistoryPersonRecordEndpoint, parameters: Record<string, string>,
+    rows: readonly unknown[], retrievedAt: number) {
+    const selector = readFootballHistoryPersonSelector(parameters);
+    if (!selector) throw new Error("Invalid historical person-record selector.");
+    const { kind, subjectIds } = selector;
+    if (subjectIds.length === 1) {
+      if (!rows.every((row) => isFootballHistoryPersonRecord(endpoint, row))) throw new Error("Invalid historical person records.");
+      return writePage(endpoint, parameters, rows, retrievedAt, rows.length);
+    }
+
+    const groups = new Map<number, readonly unknown[]>();
+    for (const row of rows) {
+      const group = readFootballHistoryPersonGroup(endpoint, row, subjectIds);
+      if (!group || group.rows.length > footballHistorySourceMaxRows || groups.has(group.subjectId)) {
+        throw new Error("Invalid historical person-record batch.");
+      }
+      groups.set(group.subjectId, group.rows);
+    }
+    const batch = await preparePage(endpoint, parameters, rows, retrievedAt, rows.length);
+    const subjects = await Promise.all(subjectIds.map((id) => {
+      const records = groups.get(id);
+      const subjectEndpoint = records ? endpoint : footballHistoryPersonOmissionEndpoint(endpoint);
+      return preparePage(subjectEndpoint, { [kind]: String(id) },
+        { batchPageId: batch.id, batchParameters: parameters, rows: records ?? [] }, retrievedAt, records?.length ?? 0);
+    }));
+    // Store the original response and its subject receipts in the same insert.
+    return database.query((client) => client.footballHistorySourcePage.createMany({ skipDuplicates: true, data: [batch, ...subjects] }));
   }
 
   async function savePlayerPage(input: FootballHistoryPlayerProfilePage, source: PlayerPageSource) {
@@ -145,30 +241,28 @@ export function createFootballHistorySource(database: DatabaseRuntime) {
     const receipts: FootballHistoryPlayerStatisticsReceipt[] = [];
     try {
       for (const page of pages) {
-        if (page.contract !== API_FOOTBALL_CONTRACT_VERSION || JSON.stringify(archiveSelector({ endpoint, parameters: page.parameters })) !== selector) return null;
-        const { page: current, totalPages, retrievedAt, rows } = playerPageEnvelope.parse(await verifiedBody(page));
-        const playerIds = playerIdsForPage(rows, rowId);
-        if (retrievedAt !== page.retrievedAt.getTime() || rows.length !== page.rowCount ||
-          !validPlayerArchivePageSize(current, totalPages, page.rowCount, pageSize) || !playerIds) return null;
-        receipts.push({ page: current, totalPages, retrievedAt: utcInstantFromEpochMilliseconds(retrievedAt), rowCount: page.rowCount, playerIds });
+        const receipt = await verifiedPlayerPage(page, { endpoint, parameters, pageSize, rowId });
+        if (!receipt) return null;
+        receipts.push(receipt);
       }
     } catch { return null; }
     return receipts;
   }
 
   return {
+    indexSubjects: () => indexHistorySubjects(database, archivedSubjectIds),
     async referencePhaseOrder(globalScope: boolean): Promise<FootballHistoryReferencePhase[]> {
-      const endpoints = Object.keys(selectors).filter((endpoint) => endpoint !== "fixtures" && endpoint !== "competitions" &&
-        (globalScope || endpoint !== "playerProfiles"));
+      const inScope = (endpoint: string) => globalScope || !globalPersonSources.has(endpoint);
+      const endpoints = Object.keys(selectors).filter((endpoint) => endpoint !== "fixtures" && endpoint !== "competitions" && inScope(endpoint));
       // The endpoint/selector/time index covers this query without opening any compressed pages.
       const latest = await database.query((client) => client.footballHistorySourcePage.groupBy({ by: ["endpoint"],
         where: { endpoint: { in: endpoints } }, _max: { retrievedAt: true } }));
-      const observations = { playerStatistics: 0, playerProfiles: 0, reference: 0 };
+      const observations = { playerStatistics: 0, playerProfiles: 0, playerTeams: 0, reference: 0 };
       for (const { endpoint, _max } of latest) {
-        const phase = endpoint === "playerStatistics" || endpoint === "playerProfiles" ? endpoint : "reference";
+        const phase = endpoint === "playerStatistics" || endpoint === "playerProfiles" || endpoint === "playerTeams" ? endpoint : "reference";
         observations[phase] = Math.max(observations[phase], _max.retrievedAt?.getTime() ?? 0);
       }
-      return referencePhases.filter((phase) => globalScope || phase !== "playerProfiles").sort((left, right) => observations[left] - observations[right]);
+      return referencePhases.filter(inScope).sort((left, right) => observations[left] - observations[right]);
     },
     async hasPage(input: Selection, observedSince?: number) {
       const selectorHash = hash(JSON.stringify(archiveSelector(input)));
@@ -189,11 +283,28 @@ export function createFootballHistorySource(database: DatabaseRuntime) {
         orderBy: { id: "desc" } }));
       return page !== null && sameFixtureScope(await verifiedRows(page), selector);
     },
+    async readExactFixtureScope(parameters: unknown, observed: Readonly<{ retrievedAt: number; rowCount: number }>) {
+      const endpoint = "fixtures";
+      const selector = archiveSelector({ endpoint, parameters });
+      const serialized = JSON.stringify(selector), selectorHash = hash(serialized);
+      const pages = await database.query((client) => client.footballHistorySourcePage.findMany({ where: { endpoint, selectorHash,
+        retrievedAt: new Date(observed.retrievedAt), rowCount: observed.rowCount, contract: API_FOOTBALL_CONTRACT_VERSION },
+        take: 2 }));
+      const [page] = pages;
+      try {
+        if (pages.length !== 1 || !page || JSON.stringify(archiveSelector({ endpoint, parameters: page.parameters })) !== serialized ||
+          page.id !== hash(JSON.stringify([endpoint, selectorHash, observed.retrievedAt, page.contentHash]))) return null;
+        const rows = await verifiedRows(page);
+        return sameFixtureScope(rows, selector) ? { id: page.id, rows } : null;
+      } catch { return null; }
+    },
     async savePage(input: Selection & Readonly<{ rows: readonly unknown[]; retrievedAt: number }>) {
       const { endpoint } = input, parameters = archiveSelector(input);
-      if (endpoint === "playerStatistics" || endpoint === "playerProfiles" || !Array.isArray(input.rows) || input.rows.length > footballHistorySourceMaxRows) {
+      if (endpoint === "playerStatistics" || endpoint === "playerProfiles" || endpoint === "trophiesOmitted" || endpoint === "sidelinedOmitted" ||
+          !Array.isArray(input.rows) || input.rows.length > footballHistorySourceMaxRows) {
         throw new Error("Invalid historical archive page.");
       }
+      if (isFootballHistoryPersonRecordEndpoint(endpoint)) return savePersonRecordPage(endpoint, parameters, input.rows, input.retrievedAt);
       return writePage(endpoint, parameters, input.rows, input.retrievedAt, input.rows.length);
     },
     async savePlayerStatisticsPage(input: FootballHistoryPlayerStatisticsPage) {
@@ -213,7 +324,8 @@ export function createFootballHistorySource(database: DatabaseRuntime) {
       const page = await database.query((client) => client.footballHistorySourcePage.findFirst({ where: { endpoint: input.endpoint, selectorHash },
         orderBy: [{ retrievedAt: "desc" }, { id: "desc" }] }));
       if (!page) return null;
-      return { rows: await verifiedRows(page), retrievedAt: page.retrievedAt, parameters: page.parameters, contract: page.contract };
+      return { rows: await verifiedRows(page, isFootballHistoryPersonRecordEndpoint(input.endpoint)),
+        retrievedAt: page.retrievedAt, parameters: page.parameters, contract: page.contract };
     },
   };
 }

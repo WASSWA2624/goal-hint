@@ -1,6 +1,6 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma, FootballFixture, FootballImport, FootballTeam, FootballCompetition } from "../generated/prisma/client.ts";
@@ -15,12 +15,29 @@ import { normalizeCatalogSearch, isSafeCatalogLogo, parseCatalogTeamMapping, cat
 const PROVIDER = "api-football";
 const MAX_VERSION = 18_446_744_073_709_551_615n;
 export const catalogPersistenceUnavailable = "catalog-persistence-unavailable";
+export const historyReplayKind = "history-fixture-replay";
+export const historyReplayScopePrefix = "goal-hint:history-fixture-replay:v1:";
+const historyReplayChunkSize = 40;
+const replayed = "archive-replay-complete", replaySegment = "archive-replay-segment";
 const fixtureRelations = { homeTeam: { include: { providers: true } }, awayTeam: { include: { providers: true } },
   season: { include: { competition: true } } } as const;
 type StoredFixture = Prisma.FootballFixtureGetPayload<{ include: typeof fixtureRelations }>;
 type SharedHistory<Entity> = Map<string, { before: Entity; aliasesAdded: { name: string; normalizedSearch: string; observedAt: UtcInstant }[] }>;
 type FixtureFields = Pick<FootballFixture, "homeTeamId" | "awayTeamId" | "seasonId" | "round" | "kickoff" | "eatDate" | "status" |
   "providerStatus" | "elapsedMinutes" | "regulationHome" | "regulationAway" | "regulationEvidenceRef" | "regulationVerifiedAt">;
+type ReplaySegment = Readonly<{ id: string; scopeKey: string; reference: string; fingerprint: string; start: number; end: number }>;
+
+function replayScopeKey(parentId: string): string {
+  return createHash("sha256").update(historyReplayScopePrefix + parentId).digest("hex");
+}
+
+function replayImportId(scope: string, segment: number | "complete"): string {
+  const bytes = createHash("sha256").update(`${scope}:${segment}`).digest().subarray(0, 16);
+  bytes[6] = (bytes[6]! & 15) | 128;
+  bytes[8] = (bytes[8]! & 63) | 128;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 export class CatalogStoreError extends Error {
   readonly reason: "not-authorized" | "conflicting-import" | "invalid-state" | "coordination-failed" | "unavailable";
@@ -327,34 +344,37 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
     return transaction.footballSeason.update({ where: { id: current.id }, data: { current: metadata?.current ?? current.current,
       ...(metadata ? { coverage: json(coverage) } : {}), retrievedAt: new Date(source.retrievedAt), providerUpdatedAt: timestamp(source.providerUpdatedAt) ?? current.providerUpdatedAt } });
   }
-  async function writeImport(batch: CatalogPreparedBatch, authority: CatalogAuthority, persistenceDeferred = false): Promise<CatalogImportSummary> {
+  async function writeImport(batch: CatalogPreparedBatch, authority: CatalogAuthority, persistenceDeferred = false,
+    replay?: ReplaySegment): Promise<CatalogImportSummary> {
     assertCatalogPreparedBatch(batch, authority);
     authorize(batch, authority);
     if (persistenceDeferred && !historical) fail("invalid-state");
     if (historical && (batch.selection.kind !== "fixtures" || batch.selection.query.competitionId === undefined ||
       batch.selection.query.season === undefined)) fail("invalid-state");
     const receiptOnly = historical && (persistenceDeferred || batch.status !== "complete" || batch.rows.fixtures.length === 0);
+    const importId = replay?.id ?? batch.request.id, fingerprint = replay?.fingerprint ?? batch.fingerprint;
+    const fixtures = replay ? batch.rows.fixtures.slice(replay.start, replay.end) : batch.rows.fixtures;
     return write(async (transaction) => {
       authorize(batch, authority);
-      const existing = await transaction.footballImport.findUnique({ where: { id: batch.request.id } });
+      const existing = await transaction.footballImport.findUnique({ where: { id: importId } });
       if (existing) {
-        if (existing.fingerprint !== batch.fingerprint || existing.requestFingerprint !== batch.requestFingerprint) fail("conflicting-import");
+        if (existing.fingerprint !== fingerprint || existing.requestFingerprint !== batch.requestFingerprint) fail("conflicting-import");
         return catalogImportSummary(existing);
       }
-      const receivedCount = batch.rows.fixtures.length + batch.rows.teams.length + batch.rows.competitions.length + batch.invalidRows;
+      const receivedCount = fixtures.length + batch.rows.teams.length + batch.rows.competitions.length + batch.invalidRows;
       const recordedAt = new Date(clock.now());
       async function appendReceipt(fixtureIds: readonly string[], changedFixtureIds: readonly string[]) {
         authorize(batch, authority);
-        return transaction.footballImport.create({ data: { id: batch.request.id, fingerprint: batch.fingerprint,
-          requestFingerprint: batch.requestFingerprint, selection: json(batch.selection), scopeKey: batch.scopeKey, provider: PROVIDER,
-          kind: batch.selection.kind, status: persistenceDeferred ? "partial" : batch.status,
+        return transaction.footballImport.create({ data: { id: importId, fingerprint,
+          requestFingerprint: batch.requestFingerprint, selection: json(batch.selection), scopeKey: replay?.scopeKey ?? batch.scopeKey, provider: PROVIDER,
+          kind: replay ? historyReplayKind : batch.selection.kind, status: persistenceDeferred || replay ? "partial" : batch.status,
           observedAt: new Date(batch.observedAt), recordedAt, receivedCount,
           importedCount: historical ? fixtureIds.length : receivedCount - batch.invalidRows, rejectedCount: batch.invalidRows,
           requestsDispatched: batch.requestsDispatched,
-          reasons: json(persistenceDeferred ? [...batch.reasons, catalogPersistenceUnavailable].sort() : batch.reasons),
+          reasons: json(replay ? [replaySegment] : persistenceDeferred ? [...batch.reasons, catalogPersistenceUnavailable].sort() : batch.reasons),
           missingIds: json(batch.missingIds), missingCoverage: json(batch.missingCoverage),
           provenance: json(batch.provenance), retentionEvidenceRef: batch.request.retentionEvidenceRef,
-          subsetEvidenceRef: batch.request.knownSubset?.evidenceRef ?? null, fixtureIds: json(fixtureIds), changedFixtureIds: json(changedFixtureIds) } });
+          subsetEvidenceRef: replay?.reference ?? batch.request.knownSubset?.evidenceRef ?? null, fixtureIds: json(fixtureIds), changedFixtureIds: json(changedFixtureIds) } });
       }
       // Historical observations can record coverage without touching identities or results.
       if (receiptOnly) return catalogImportSummary(await appendReceipt([], []));
@@ -371,7 +391,7 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
         season: { ...row.season, competition: competitionHistory.get(row.season.competitionId)?.before ?? row.season.competition } });
       for (const input of batch.rows.teams) await team(transaction, input, authority, changedTeams, teamHistory);
       for (const input of batch.rows.competitions) await competition(transaction, input, authority, changedCompetitions, competitionHistory);
-      for (const input of batch.rows.fixtures) {
+      for (const input of fixtures) {
         const score = input.regulationScore;
         const scoreEvidence = batch.scoreEvidenceRefs?.[String(input.id)];
         const proof = score === null ? null : { fixtureId: score.fixtureId, providerStatus: score.providerStatus,
@@ -397,7 +417,7 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
           fixtureIds.push(archivedFixture.id);
           if (fresh(input.source, archivedFixture)) {
             await lockFixture(transaction, archivedFixture.id);
-            await recordHistoricalResult(transaction, archivedFixture, input, batch.request.id, true);
+            await recordHistoricalResult(transaction, archivedFixture, input, importId, true);
           }
           continue;
         }
@@ -427,10 +447,10 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
             ? transaction.footballFixture.update({ where: { id: previous.id }, data: { ...proposed, ...metadata,
               ...(material ? { dataVersion: { increment: 1n } } : {}) }, include: fixtureRelations })
             : transaction.footballFixture.create({ data: { id: randomUUID(), provider: PROVIDER, externalId: BigInt(input.id), ...proposed, ...metadata }, include: fixtureRelations }),
-            input, `catalog-import:${batch.request.id}`);
+            input, `catalog-import:${importId}`);
           if (!previous) {
             fixtureIds.push(row.id); insertedFixtures.add(row.id);
-            if (historical) await recordHistoricalResult(transaction, row, input, batch.request.id, false);
+            if (historical) await recordHistoricalResult(transaction, row, input, importId, false);
           }
           if (applied && material) { changedFixtures.add(row.id); audit(row, input.source.retrievedAt, changes); }
         } else await transaction.footballFixture.update({ where: { id: previous.id }, data: { ...metadata,
@@ -463,9 +483,76 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
       }
       const receipt = await appendReceipt(fixtureIds, [...changedFixtures]);
       for (const entry of audits) await transaction.footballFixtureAudit.create({ data: { id: entry.id, fixtureId: entry.fixtureId,
-        importId: batch.request.id, dataVersion: entry.dataVersion, observedAt: new Date(entry.observedAt), changes: json(entry.changes) } });
+        importId, dataVersion: entry.dataVersion, observedAt: new Date(entry.observedAt), changes: json(entry.changes) } });
       return catalogImportSummary(receipt);
     }, receiptOnly ? "receipt-only" : historical ? "historical" : "catalog");
+  }
+  /** Apply one checksummed observation without monopolizing the live catalog lock. */
+  async function replayHistory(batch: CatalogPreparedBatch, authority: CatalogAuthority, pageId: string, maxChunks: number, signal?: AbortSignal) {
+    assertCatalogPreparedBatch(batch, authority);
+    authorize(batch, authority);
+    if (!historical || !/^[a-f0-9]{64}$/u.test(pageId) || !Number.isSafeInteger(maxChunks) || maxChunks < 1 || maxChunks > 10 ||
+      batch.status !== "complete" || batch.selection.kind !== "fixtures" || batch.selection.query.competitionId === undefined ||
+      batch.selection.query.season === undefined || !batch.rows.fixtures.length || batch.requestsDispatched !== 0 ||
+      batch.provenance.length !== 1 || batch.provenance[0]?.fromCache !== true) fail("invalid-state");
+
+    const parentId = batch.request.id, scopeKey = replayScopeKey(parentId), completionId = replayImportId(scopeKey, "complete");
+    const originalProvenance = batch.provenance.map((page) => ({ ...page, fromCache: false }));
+    const parent = await database.query((client) => client.footballImport.findUnique({ where: { id: parentId } }));
+    if (!parent || parent.scopeKey !== batch.scopeKey || parent.provider !== PROVIDER || parent.kind !== "fixtures" ||
+      parent.status !== "partial" || parent.requestsDispatched !== 1 || parent.importedCount !== 0 || parent.rejectedCount !== 0 ||
+      parent.observedAt.getTime() !== batch.observedAt || parent.receivedCount !== batch.rows.fixtures.length ||
+      parent.retentionEvidenceRef !== batch.request.retentionEvidenceRef ||
+      evidenceFingerprint(parent.reasons) !== evidenceFingerprint([catalogPersistenceUnavailable]) ||
+      evidenceFingerprint(parent.provenance) !== evidenceFingerprint(originalProvenance)) fail("invalid-state");
+    const reference = `history-source:${pageId}:import:${parentId}`;
+    const chunkCount = Math.ceil(batch.rows.fixtures.length / historyReplayChunkSize);
+    const plan = Array.from({ length: chunkCount }, (_, index): ReplaySegment => {
+      const start = index * historyReplayChunkSize, end = Math.min(start + historyReplayChunkSize, batch.rows.fixtures.length);
+      return { id: replayImportId(scopeKey, index), scopeKey, reference: `${reference}:${start}-${end}`, start, end,
+        fingerprint: evidenceFingerprint([batch.fingerprint, reference, start, end]) };
+    });
+    const findChunks = (client: Prisma.TransactionClient) => client.footballImport.findMany({ where: { id: { in: plan.map(({ id }) => id) } } });
+    function verifiedChunks(rows: readonly FootballImport[]) {
+      const saved = new Map(rows.map((row) => [row.id, row]));
+      for (const segment of plan) {
+        const row = saved.get(segment.id);
+        if (row && (row.fingerprint !== segment.fingerprint || row.requestFingerprint !== batch.requestFingerprint ||
+          row.scopeKey !== scopeKey || row.kind !== historyReplayKind || row.status !== "partial" ||
+          row.subsetEvidenceRef !== segment.reference || row.requestsDispatched !== 0 || row.receivedCount !== segment.end - segment.start ||
+          row.importedCount < 0 || row.importedCount > row.receivedCount)) fail("conflicting-import");
+      }
+      return saved;
+    }
+    const saved = verifiedChunks(await database.query(findChunks));
+    let written = 0, imported = 0;
+    for (const segment of plan) {
+      if (saved.has(segment.id)) continue;
+      if (signal?.aborted || written >= maxChunks) return { written, imported, complete: false };
+      const receipt = await writeImport(batch, authority, false, segment);
+      written++;
+      imported += receipt.importedCount;
+    }
+    if (signal?.aborted) return { written, imported, complete: false };
+    const completionFingerprint = evidenceFingerprint([batch.fingerprint, reference, plan.map(({ fingerprint }) => fingerprint)]);
+    await write(async (client) => {
+      authorize(batch, authority);
+      const complete = await client.footballImport.findUnique({ where: { id: completionId } });
+      if (complete) {
+        if (complete.fingerprint !== completionFingerprint || complete.requestFingerprint !== batch.requestFingerprint) fail("conflicting-import");
+        return;
+      }
+      const chunks = verifiedChunks(await findChunks(client));
+      if (chunks.size !== plan.length) fail("invalid-state");
+      await client.footballImport.create({ data: { id: completionId, fingerprint: completionFingerprint,
+        requestFingerprint: batch.requestFingerprint, selection: json(batch.selection), scopeKey, provider: PROVIDER,
+        kind: historyReplayKind, status: "complete", observedAt: new Date(batch.observedAt), recordedAt: new Date(clock.now()),
+        receivedCount: batch.rows.fixtures.length, importedCount: [...chunks.values()].reduce((sum, row) => sum + row.importedCount, 0),
+        rejectedCount: 0, requestsDispatched: 0, reasons: json([replayed]), missingIds: json([]), missingCoverage: json(batch.missingCoverage),
+        provenance: json(batch.provenance), retentionEvidenceRef: batch.request.retentionEvidenceRef, subsetEvidenceRef: reference,
+        fixtureIds: json([]), changedFixtureIds: json([]) } });
+    }, "receipt-only");
+    return { written, imported, complete: true };
   }
   async function registerTeamMapping(input: CatalogTeamMapping, authority: CatalogAuthority, retentionEvidenceRef: string) {
     const mapping = parseCatalogTeamMapping(input);
@@ -533,6 +620,12 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
   return Object.freeze({
     importBatch: (batch: CatalogPreparedBatch, authority: CatalogAuthority) => writeImport(batch, authority),
     deferImport: (batch: CatalogPreparedBatch, authority: CatalogAuthority) => writeImport(batch, authority, true),
+    replayHistory,
+    async hasReplayedImport(parentId: string) {
+      const scopeKey = replayScopeKey(parentId), id = replayImportId(scopeKey, "complete");
+      const row = await database.query((client) => client.footballImport.findUnique({ where: { id } }));
+      return row?.scopeKey === scopeKey && row.kind === historyReplayKind && row.status === "complete" && row.requestsDispatched === 0;
+    },
     registerTeamMapping, dateCoverage,
     findImport: async (id: string) => database.query(async (client) => {
       const row = await client.footballImport.findUnique({ where: { id } }); return row ? catalogImportSummary(row) : null;

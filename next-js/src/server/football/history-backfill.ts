@@ -96,7 +96,7 @@ function bounds(now: UtcInstant, providerDayEndsAt: number): ApiFootballBounds {
 /** Whole seasons are preferred. Oversized scopes resume from their independently verified round receipts. */
 export function createFootballHistoryBackfill(options: Readonly<{
   competitions(query: Parameters<CompetitionsReader>[0], requestBounds: ApiFootballBounds): Promise<CompetitionCatalog>;
-  store: Pick<FootballCatalogStore, "findImport">;
+  store: Pick<FootballCatalogStore, "findImport"> & Partial<Pick<FootballCatalogStore, "hasReplayedImport">>;
   importer: Pick<ReturnType<typeof createFootballCatalogImporter>, "import">;
   competitionIds: readonly number[];
   upcomingSeasons?(): Promise<readonly (LeagueSeason & Readonly<{ fixtures: number }>)[]>;
@@ -142,6 +142,9 @@ export function createFootballHistoryBackfill(options: Readonly<{
       const id = historicalImportId(scope, attempt), receipt = await options.store.findImport(id);
       if (!receipt) return { id, complete: false, archivedOnly: null, oversized, coolingDown: false };
       if (receipt.status === "complete" && await hasSource(scope, receipt)) return { id, complete: true, archivedOnly: null, oversized, coolingDown: false };
+      if (receipt.reasons.includes(catalogPersistenceUnavailable) && await options.store.hasReplayedImport?.(id) && await hasSource(scope, receipt)) {
+        return { id, complete: true, archivedOnly: null, oversized, coolingDown: false };
+      }
       const archivedOnly = await archivedWithoutCanonicalResults(scope, receipt);
       if (archivedOnly) return { id, complete: false, archivedOnly, oversized, coolingDown: false };
       oversized ||= requiresPartition(receipt.reasons);

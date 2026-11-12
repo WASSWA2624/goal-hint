@@ -22,6 +22,7 @@ import { createFootballHistoryPlayerProfiles, createFootballHistoryPlayerStatist
 import { createFootballHistoryReference } from "../football/history-reference.ts";
 import { readHistoryPlayerStatisticsTargets, readHistoryReferenceTargets, type HistoryReferenceDataset } from "../football/history-reference-targets.ts";
 import { createFootballHistorySource, type FootballHistoryReferencePhase } from "../football/history-source.ts";
+import { readPendingHistorySubjectIds } from "../football/history-subjects.ts";
 import { quotaPriorities } from "../football/quota-contract.ts";
 import { createPolicyQuotaGateway } from "../football/quota-gateway.ts";
 import { createMysqlQuotaStore } from "../football/quota-mysql-store.ts";
@@ -259,34 +260,49 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         if (!Number.isSafeInteger(input.maxRequests) || input.maxRequests < 1 || input.maxRequests > historyBackfillLimits.maximumRequests) {
           throw new RangeError("Choose a historical reference request limit between 1 and 100.");
         }
+        const globalScope = input.competitionId === undefined;
         const scope = input.competitionId === undefined ? approved : [input.competitionId], workflow = signal ? { signal } : {};
         const runPlayers = async (maxRequests: number) => playerStatistics.run({
           targets: await readHistoryPlayerStatisticsTargets(database, scope), maxRequests, ...workflow,
         });
         const runProfiles = (maxRequests: number) => playerProfiles.run({ maxRequests, ...workflow });
-        const runReference = async (maxRequests: number) => {
-          const plan = await readHistoryReferenceTargets(database, scope, input.dataset, maxRequests);
-          return reference.run({ ...plan, maxRequests, ...workflow });
-        };
         if (input.dataset === "player-statistics") return runPlayers(input.maxRequests);
-        const globalScope = input.competitionId === undefined;
         if (input.dataset === "player-profiles") {
           if (!globalScope) throw new RangeError("The player profile catalog uses global scope.");
           return runProfiles(input.maxRequests);
         }
-        if (input.dataset !== undefined) return runReference(input.maxRequests);
+        const personDataset = input.dataset === "player-teams" || input.dataset === "trophies" || input.dataset === "sidelined";
+        if (personDataset && !globalScope) throw new RangeError("Person archive datasets use global scope.");
+        const subjectDiscovery = globalScope && (input.dataset === undefined || personDataset) ? await historySource.indexSubjects() : null;
+        const pendingDiscovery = Boolean(subjectDiscovery?.hasMore || subjectDiscovery?.hasInvalid);
+        const runPlayerTeams = async (maxRequests: number) => {
+          const playerIds = await readPendingHistorySubjectIds(database, "playerTeams", "player", maxRequests + 1);
+          const targets = playerIds.slice(0, maxRequests).map((playerId) => ({ endpoint: "playerTeams" as const, playerId }));
+          return reference.run({ targets, hasMoreTargets: pendingDiscovery || playerIds.length > maxRequests, maxRequests, ...workflow });
+        };
+        const runReference = async (maxRequests: number) => {
+          const plan = await readHistoryReferenceTargets(database, scope, input.dataset, maxRequests, globalScope);
+          return reference.run({ ...plan, hasMoreTargets: plan.hasMoreTargets || pendingDiscovery, maxRequests, ...workflow });
+        };
+        if (input.dataset === "player-teams") return { ...await runPlayerTeams(input.maxRequests), subjectDiscovery };
+        if (input.dataset !== undefined) return { ...await runReference(input.maxRequests), ...(subjectDiscovery ? { subjectDiscovery } : {}) };
 
         // Rotate by durable progress, including when live work leaves room for just one request.
         const order = await historySource.referencePhaseOrder(globalScope);
-        const runners = { playerStatistics: runPlayers, playerProfiles: runProfiles, reference: runReference };
+        const runners = { playerStatistics: runPlayers, playerProfiles: runProfiles, playerTeams: runPlayerTeams, reference: runReference };
         type ReferenceReport = Awaited<ReturnType<typeof runPlayers>> | Awaited<ReturnType<typeof runReference>>;
-        const phases: Record<FootballHistoryReferencePhase, ReferenceReport | null> = { playerStatistics: null, playerProfiles: null, reference: null };
-        const blocked = (result: Readonly<{ stopped: string | null }> | null) => Boolean(result?.stopped && result.stopped !== "request-budget");
+        const phases: Record<FootballHistoryReferencePhase, ReferenceReport | null> = {
+          playerStatistics: null, playerProfiles: null, playerTeams: null, reference: null,
+        };
+        const blocked = (result: Readonly<{ stopped: string | null }> | null) =>
+          Boolean(result?.stopped && result.stopped !== "request-budget" && result.stopped !== "target-limit");
         const totals = { requested: 0, archived: 0, skipped: 0, deferred: 0, requests: 0 };
+        const bulkPhase = (phase: FootballHistoryReferencePhase) => phase === "reference" || phase === "playerTeams";
         for (const [index, phase] of order.entries()) {
           const remaining = input.maxRequests - totals.requests;
           if (remaining < 1) break;
-          const allowance = phase === "reference" ? Math.max(1, remaining - (order.length - index - 1)) : 1;
+          const allowance = bulkPhase(phase) ? Math.max(1, Math.floor(
+            (remaining - (order.length - index - 1)) / order.slice(index).filter(bulkPhase).length)) : 1;
           const report = phases[phase] = await runners[phase](allowance);
           for (const key of Object.keys(totals) as (keyof typeof totals)[]) totals[key] += report[key];
           if (blocked(report)) break;
@@ -294,8 +310,9 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         const reports = Object.values(phases).filter((report) => report !== null);
         const complete = reports.length === order.length && reports.every(({ status }) => status === "complete");
         const stopped = reports.find(blocked)?.stopped ??
-          (reports.length < order.length || reports.some(({ stopped }) => stopped === "request-budget") ? "request-budget" : null);
-        return { status: complete ? "complete" as const : "partial" as const, ...totals, stopped, ...phases };
+          (reports.length < order.length || reports.some(({ stopped }) => stopped === "request-budget") ? "request-budget" :
+            reports.some(({ stopped }) => stopped === "target-limit") ? "target-limit" : null);
+        return { status: complete ? "complete" as const : "partial" as const, ...totals, stopped, subjectDiscovery, ...phases };
       };
     })() : null;
     const selectionStore = createMysqlDailySelectionStore(database, queue);

@@ -7,6 +7,8 @@ import { createDatabase } from "../../src/server/database/client.ts";
 const schema = "goal_hint_football_202611";
 const normalizePath = process.platform === "win32" ? (value) => value.toLowerCase() : (value) => value;
 
+export class LocalFootballTargetUnavailableError extends Error {}
+
 /** Opens only the owned development snapshot. Private credentials stay in this process. */
 export async function openLocalFootballTarget({ root = process.cwd(), poolLimit = 2 } = {}) {
   const directory = join(root, ".goal-hint", "local-football-2026-11");
@@ -19,7 +21,7 @@ export async function openLocalFootballTarget({ root = process.cwd(), poolLimit 
     expected = normalizePath(await realpath(join(directory, "mysql")));
     if (normalizePath(await realpath(config.GOAL_HINT_LOCAL_FOOTBALL_DATADIR)) !== expected) throw new Error();
   } catch {
-    throw new Error("Start the owned local football database before using its worker or usage monitor.");
+    throw new LocalFootballTargetUnavailableError("Start the owned local football database before using its worker or usage monitor.");
   }
   const database = createDatabase(parseRuntimePolicy({ NODE_ENV: "development", GOAL_HINT_DATABASE_ENABLED: "true",
     DATABASE_URL: target.href, GOAL_HINT_DATABASE_POOL_LIMIT: String(poolLimit), GOAL_HINT_DATABASE_TLS_MODE: "disabled" }));
@@ -29,6 +31,6 @@ export async function openLocalFootballTarget({ root = process.cwd(), poolLimit 
     return { database, url: target.href, directory };
   } catch {
     await database.disconnect().catch(() => {});
-    throw new Error("Could not verify the owned local football database.");
+    throw new LocalFootballTargetUnavailableError("Could not verify the owned local football database.");
   }
 }

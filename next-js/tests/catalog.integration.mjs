@@ -11,6 +11,8 @@ import { createDatabase } from "../src/server/database/client.ts";
 import { createFootballCatalogStore, lockCatalog } from "../src/server/football/catalog-mysql-store.ts";
 import { createFootballCatalogImporter } from "../src/server/football/catalog-service.ts";
 import { validateCatalogBatch } from "../src/server/football/catalog-input.ts";
+import { createFootballHistoryFixtureReplay } from "../src/server/football/history-fixture-replay.ts";
+import { createFootballHistorySource } from "../src/server/football/history-source.ts";
 import { storedFixtureResult } from "../src/server/results/result-read.ts";
 import { createMysqlResultSyncStore } from "../src/server/results/result-sync-mysql-store.ts";
 import { MysqlServerUnavailableError, startIsolatedMysql } from "./helpers/mysql-instance.mjs";
@@ -84,6 +86,7 @@ test("canonical football catalog invariants on isolated genuine MySQL", { timeou
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.FixtureResultState TO 'catalog_application'@'127.0.0.1';
       GRANT SELECT ON goal_hint_test.FixtureLifecycleState TO 'catalog_application'@'127.0.0.1';
       GRANT SELECT ON goal_hint_test.PredictionCycle TO 'catalog_application'@'127.0.0.1';
+      GRANT SELECT, INSERT ON goal_hint_test.FootballHistorySourcePage TO 'catalog_application'@'127.0.0.1';
     `);
     const firstDatabase = replica(), secondDatabase = replica();
     const clock = { now: () => CATALOG_NOW + 60_000 };
@@ -257,6 +260,98 @@ test("canonical football catalog invariants on isolated genuine MySQL", { timeou
         where: { fixtureId: row.id }, orderBy: { dataVersion: "asc" } }));
       assert.equal(new Set(audits.map((audit) => audit.dataVersion)).size, audits.length);
       assert.equal(audits.at(-1).dataVersion, latest.dataVersion);
+    });
+
+    await t.test("checksummed historical replay resumes by chunk without provider calls", async () => {
+      const authority = syntheticAuthority(), source = createFootballHistorySource(firstDatabase);
+      const store = createFootballCatalogStore(firstDatabase, { clock, historicalResults: true });
+      const scores = { home: 1, away: 0 };
+      const rows = Array.from({ length: 41 }, (_, index) => catalogFixture(12_000 + index, {
+        competitionId: 1200, season: 2025, homeId: 1201, awayId: 1202,
+        status: "FT", kickoff: "2025-10-01T21:30:00.000Z", goals: scores, score: { fulltime: scores, extratime: null, penalty: null },
+      }));
+      const state = createSyntheticCatalogAdapter({ rows });
+      const selection = { kind: "fixtures", query: { competitionId: 1200, season: 2025, round: "Synthetic round 1" } };
+      const request = catalogRequest(selection);
+      const observation = await state.adapter.evidence.fixtures(selection.query, request.bounds);
+      const [page] = observation.provenance;
+      assert.equal(observation.status, "complete");
+      await source.savePage({ endpoint: "fixtures", parameters: page.requestParameters, rows, retrievedAt: page.retrievedAt });
+      const deferred = await store.deferImport(validateCatalogBatch(request, observation, authority, clock), authority);
+      assert.equal(deferred.status, "partial");
+      assert.equal(deferred.requestsDispatched, 1);
+      const run = createFootballHistoryFixtureReplay(firstDatabase, authority, request.retentionEvidenceRef, clock);
+      assert.deepEqual(await run(undefined, 1), { status: "partial", requests: 0, written: 1, imported: 40,
+        completed: 0, pending: 1, unverified: 0, stopped: "chunk-budget" });
+      assert.equal(await store.hasReplayedImport(request.id), false);
+      assert.equal(await fixture(12_040), null);
+      const committed = await fixture(12_000);
+      assert.equal(committed.regulationHome, 1);
+      assert.equal(committed.regulationVerifiedAt.getTime(), page.retrievedAt);
+
+      const restarted = createFootballHistoryFixtureReplay(secondDatabase, authority, request.retentionEvidenceRef, clock);
+      assert.deepEqual(await restarted(undefined, 1), { status: "complete", requests: 0, written: 1, imported: 1,
+        completed: 1, pending: 0, unverified: 0, stopped: null });
+      assert.equal(await store.hasReplayedImport(request.id), true);
+      assert.deepEqual(await run(), { status: "complete", requests: 0, written: 0, imported: 0,
+        completed: 0, pending: 0, unverified: 0, stopped: null });
+      assert.equal(state.network.length, 1);
+      assert.equal((await fixture(12_000)).dataVersion, committed.dataVersion);
+      assert.equal((await store.findImport(request.id)).status, "partial");
+      const receipts = await firstDatabase.query((client) => client.footballImport.findMany({
+        where: { kind: "history-fixture-replay" }, orderBy: { sequence: "asc" },
+      }));
+      assert.deepEqual(receipts.map((row) => [row.status, row.receivedCount, row.importedCount, row.requestsDispatched]),
+        [["partial", 40, 40, 0], ["partial", 1, 1, 0], ["complete", 41, 41, 0]]);
+      assert.ok(receipts.every((row) => row.observedAt.getTime() === page.retrievedAt && row.provenance[0].fromCache));
+    });
+
+    await t.test("historical replay seeds the latest deferred score before earlier observations", async () => {
+      const authority = syntheticAuthority(), source = createFootballHistorySource(firstDatabase);
+      const store = createFootballCatalogStore(firstDatabase, { clock, historicalResults: true });
+      const selection = { kind: "fixtures", query: { competitionId: 1220, season: 2025 } };
+      for (const [observedAt, home] of [[CATALOG_NOW, 1], [CATALOG_NOW + 1000, 2]]) {
+        const scores = { home, away: 0 };
+        const row = catalogFixture(12_200, { competitionId: 1220, season: 2025, homeId: 1221, awayId: 1222,
+          status: "FT", kickoff: "2025-10-01T21:30:00.000Z", goals: scores,
+          score: { fulltime: scores, extratime: null, penalty: null } });
+        const state = createSyntheticCatalogAdapter({ rows: [row] });
+        state.clock.value = observedAt;
+        const request = catalogRequest(selection, observedAt);
+        const observation = await state.adapter.evidence.fixtures(selection.query, request.bounds);
+        const [page] = observation.provenance;
+        assert.equal(observation.status, "complete");
+        await source.savePage({ endpoint: "fixtures", parameters: page.requestParameters, rows: [row], retrievedAt: page.retrievedAt });
+        await store.deferImport(validateCatalogBatch(request, observation, authority, clock), authority);
+      }
+      const run = createFootballHistoryFixtureReplay(firstDatabase, authority, "synthetic-catalog-retention", clock);
+      assert.equal((await run(undefined, 1)).pending, 1);
+      assert.equal((await fixture(12_200)).regulationHome, 2);
+      assert.equal((await fixture(12_200)).regulationVerifiedAt.getTime(), CATALOG_NOW + 1000);
+      assert.equal((await run()).status, "complete");
+      assert.equal((await fixture(12_200)).regulationHome, 2);
+    });
+
+    await t.test("historical replay withholds a deferred scope when its archived observation is ambiguous", async () => {
+      const authority = syntheticAuthority(), source = createFootballHistorySource(firstDatabase);
+      const store = createFootballCatalogStore(firstDatabase, { clock, historicalResults: true });
+      const scores = { home: 1, away: 0 };
+      const row = catalogFixture(12_100, { competitionId: 1210, season: 2025, homeId: 1211, awayId: 1212,
+        status: "FT", kickoff: "2025-10-01T21:30:00.000Z", goals: scores, score: { fulltime: scores, extratime: null, penalty: null } });
+      const state = createSyntheticCatalogAdapter({ rows: [row] });
+      const selection = { kind: "fixtures", query: { competitionId: 1210, season: 2025 } };
+      const request = catalogRequest(selection);
+      const observation = await state.adapter.evidence.fixtures(selection.query, request.bounds);
+      const [page] = observation.provenance;
+      await store.deferImport(validateCatalogBatch(request, observation, authority, clock), authority);
+      for (const archivedRow of [row, { ...row, league: { ...row.league, name: "Different synthetic name" } }]) {
+        await source.savePage({ endpoint: "fixtures", parameters: page.requestParameters, rows: [archivedRow], retrievedAt: page.retrievedAt });
+      }
+      const run = createFootballHistoryFixtureReplay(firstDatabase, authority, request.retentionEvidenceRef, clock);
+      assert.deepEqual(await run(), { status: "partial", requests: 0, written: 0, imported: 0,
+        completed: 0, pending: 1, unverified: 1, stopped: null });
+      assert.equal(await fixture(12_100), null);
+      assert.equal(await store.hasReplayedImport(request.id), false);
     });
 
     await t.test("same names remain separate identities and historical aliases support case-insensitive search", async () => {

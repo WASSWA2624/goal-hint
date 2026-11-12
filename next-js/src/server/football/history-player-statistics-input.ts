@@ -18,6 +18,12 @@ export function archivedPlayerProfileRowId(row: unknown): number | null {
   return record(row) && record(row.player) && playerStatisticsProviderId(row.player.id) ? row.player.id : null;
 }
 
+export function archivedCoachRowId(row: unknown, teamId: number): number | null {
+  if (!record(row) || !playerStatisticsProviderId(row.id) || !Array.isArray(row.career) || !row.career.every(record)) return null;
+  const associated = (team: unknown) => record(team) && team.id === teamId;
+  return associated(row.team) || row.career.some(({ team }) => associated(team)) ? row.id : null;
+}
+
 export function archivedPlayerStatisticsRowId(row: unknown, selector: FootballHistoryPlayerStatisticsTarget): number | null {
   const id = archivedPlayerProfileRowId(row);
   if (id === null || !record(row) || !Array.isArray(row.statistics)) return null;

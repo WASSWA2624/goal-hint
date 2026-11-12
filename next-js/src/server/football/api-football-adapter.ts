@@ -4,7 +4,8 @@ import { createHash, randomBytes } from "node:crypto";
 import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type Clock, type UtcInstant } from "../../domain/calendar.ts";
 import { assertOperationAllowed, type EvidenceVerifier, type RuntimePolicy } from "../config/runtime-policy.ts";
 import { API_FOOTBALL_ORIGIN, API_FOOTBALL_CONTRACT_VERSION, apiFootballEndpoints, apiFootballFixtureRoundParameters,
-  apiFootballLeaderboards, apiFootballReferenceParameters, isApiFootballLeaderboard, pageSizeOf, parseApiFootballFixtureRound,
+  apiFootballLeaderboards, apiFootballReferenceParameters, isApiFootballLeaderboard, isFootballHistoryReferenceDictionary,
+  pageSizeOf, parseApiFootballFixtureRound,
   type ApiFootballBounds, type ApiFootballEndpoint, type ApiFootballFailure,
   type ApiFootballPageProvenance, type ApiFootballResult, type ApiFootballCachePermission,
   type ApiFootballBatchEvidence, type ApiFootballFallbackWorkflow, type FixtureRoundQuery, type FootballHistoryReferenceTarget } from "./api-football-contract.ts";
@@ -18,7 +19,8 @@ import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { createDemoApiFootballFetch } from "../demo/api-football.ts";
 import { authorizeDemoFootball, createDemoFootballGateway, demoFootballAccountId } from "../demo/provider-runtime.ts";
 import { normalizeFixtureMatchDetails, type NormalizedFixtureMatchDetails } from "./fixture-match-details.ts";
-import { archivedPlayerProfileRowId, archivedPlayerStatisticsRowId, playerStatisticsProviderId } from "./history-player-statistics-input.ts";
+import { isFootballHistoryPersonRecord, isFootballHistoryPersonRecordEndpoint, readFootballHistoryPersonGroup } from "./history-person-records.ts";
+import { archivedCoachRowId, archivedPlayerProfileRowId, archivedPlayerStatisticsRowId, playerStatisticsProviderId } from "./history-player-statistics-input.ts";
 import type { FootballHistoryPlayerProfileSelector, FootballHistoryPlayerStatisticsSelector } from "./history-player-statistics.ts";
 
 export type FixtureQuery = Readonly<{ date?: string; competitionId?: number; season?: number;
@@ -85,13 +87,14 @@ function normalizeReferenceRow(raw: unknown, target: FootballHistoryReferenceTar
     data: Object.freeze({ raw, ...(id === undefined ? {} : { id }) }), missingCoverage: [] });
   if (target.endpoint === "timezones") return typeof raw === "string" && raw.length <= 128 &&
     /^[A-Za-z0-9_+-]+(?:\/[A-Za-z0-9_+-]+)*$/u.test(raw) ? valid(raw) : invalid;
-  if (target.endpoint === "leagueSeasons" || target.endpoint === "teamSeasons") {
+  if (target.endpoint === "leagueSeasons" || target.endpoint === "playerSeasons" || target.endpoint === "teamSeasons") {
     return positive(raw) && raw >= 1000 && raw <= 9999 ? valid(raw, raw) : invalid;
   }
   if (!record(raw)) return invalid;
 
   switch (target.endpoint) {
     case "countries":
+    case "teamCountries":
       return typeof raw.name === "string" && raw.name.trim().length > 0 && raw.name.length <= 256 && !raw.name.includes("\0") &&
         (raw.code === null || typeof raw.code === "string" && /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/u.test(raw.code) && raw.code.length <= 32) &&
         (raw.flag === null || typeof raw.flag === "string" && raw.flag.length <= 2048) ? valid(raw) : invalid;
@@ -125,6 +128,12 @@ function normalizeReferenceRow(raw: unknown, target: FootballHistoryReferenceTar
     }
     case "venues":
       return raw.id === target.venueId ? valid(raw, target.venueId) : invalid;
+    case "trophies":
+    case "sidelined": {
+      if (target.subjectIds.length === 1) return isFootballHistoryPersonRecord(target.endpoint, raw) ? valid(raw) : invalid;
+      const group = readFootballHistoryPersonGroup(target.endpoint, raw, target.subjectIds);
+      return group ? valid(raw, group.subjectId) : invalid;
+    }
     case "standings":
       if (!record(raw.league) || raw.league.id !== target.competitionId || raw.league.season !== target.season ||
         !Array.isArray(raw.league.standings) || !raw.league.standings.every((group) => Array.isArray(group) &&
@@ -135,13 +144,16 @@ function normalizeReferenceRow(raw: unknown, target: FootballHistoryReferenceTar
       return record(raw.league) && raw.league.id === target.competitionId && raw.league.season === target.season &&
         identified(raw.fixture) && identified(raw.player) && identified(raw.team) ? valid(raw) : invalid;
     case "coaches": {
-      if (!identified(raw) || !Array.isArray(raw.career) || !raw.career.every(record)) return invalid;
-      const associated = (team: unknown) => identified(team) && team.id === target.teamId;
-      return associated(raw.team) || raw.career.some(({ team }) => associated(team)) ? valid(raw, raw.id) : invalid;
+      const id = archivedCoachRowId(raw, target.teamId);
+      return id === null ? invalid : valid(raw, id);
     }
     case "squads":
       return record(raw.team) && raw.team.id === target.teamId && Array.isArray(raw.players) && raw.players.every(identified) &&
         new Set(raw.players.map(({ id }) => id)).size === raw.players.length ? valid(raw, target.teamId) : invalid;
+    case "playerTeams":
+      return identified(raw.team) && Array.isArray(raw.seasons) && raw.seasons.length > 0 &&
+        raw.seasons.every((season) => positive(season) && season >= 1000 && season <= 9999) &&
+        new Set(raw.seasons).size === raw.seasons.length ? valid(raw, raw.team.id) : invalid;
     case "transfers": {
       if (!identified(raw.player) || !Array.isArray(raw.transfers)) return invalid;
       let matches = false;
@@ -465,9 +477,9 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
           const resultCount = teamStatistics && objectResponse ? Object.keys(payload).length : rows?.length;
           // The documented team seasons example counts one team even with several years in response.
           const oneTeamWithSeasons = endpoint === "teamSeasons" && rows !== null && rows.length > 0;
-          const exactReferenceEcho = teamStatistics || endpoint === "countries" || endpoint === "timezones" || endpoint === "leagueSeasons" ||
+          const exactReferenceEcho = teamStatistics || isFootballHistoryReferenceDictionary(endpoint) ||
             endpoint === "coaches" || endpoint === "squads" || endpoint === "teamSeasons" || isApiFootballLeaderboard(endpoint) ||
-            endpoint === "fixtureHalfStatistics" || view === "reference" &&
+            endpoint === "fixtureHalfStatistics" || endpoint === "playerTeams" || isFootballHistoryPersonRecordEndpoint(endpoint) || view === "reference" &&
               (endpoint === "fixtureRounds" || endpoint === "playerStatistics" || endpoint === "playerProfiles");
           const paging = record(body) && record(body.paging) ? body.paging : null;
           const validPaging = accountStatus && record(body) && body.paging === undefined
