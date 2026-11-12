@@ -11,6 +11,7 @@ import { TextInput } from "@/components/ui/controls";
 import { refreshCommunitySettings } from "@/components/navigation/community";
 import { refreshContactPageSettings } from "@/components/members/contact-page";
 import { PhoneInput } from "@/components/ui/phone-input";
+import { authCopy } from "@/i18n/messages/auth";
 import { CardIcon, ChatIcon, CheckIcon, ChevronDownIcon, DocumentIcon, Icon, LockIcon, ShieldIcon, type IconProps } from "@/components/ui/icons";
 import { formatPhone, normalizePhone } from "@/domain/phone";
 import { publicPolicy } from "@/domain/public-policy";
@@ -60,8 +61,8 @@ const shortcutFields = new Set<EditableSettingField>(["mtnMenuShortcut", "airtel
 const numberFields = new Set<EditableSettingField>(["trialDays", "screenshotRetentionDays", "paymentAlertRepeats"]);
 const modeLabels: Record<PaywallMode, string> = { off: "Off", on: "On" };
 const modeExplanations: Record<PaywallMode, string> = {
-  off: "Everyone can view subscriber content, including visitors who are signed out.",
-  on: "Visitors see the free view. Signed-in members need current access unless free member access is enabled.",
+  off: authCopy.paidAccessOffHelp,
+  on: authCopy.paidAccessOnHelp,
 };
 /** Short names for the password reason line under the field. */
 const protectedNames: Record<ProtectedSettingField, string> = {
@@ -327,7 +328,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
             </div></ConfirmBox>}
             <TwoUp>
               <FieldBlock label="Verified members without a subscription" description={<>{error("allowUnsubscribedMembers")}
-                <Hint id="setting-allowUnsubscribedMembers-hint">Free access continues while the setting is enabled and the member is signed in.</Hint></>}>
+                <Hint id="setting-allowUnsubscribedMembers-hint">{authCopy.freeMemberAccessHelp}</Hint></>}>
                 <select {...field("allowUnsubscribedMembers", true)}>
                   <option value="false">Require an active access period</option><option value="true">Allow free access</option>
                 </select>

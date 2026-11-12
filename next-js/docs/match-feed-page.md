@@ -49,8 +49,8 @@ An idle retry of a failed read at the same URL uses `router.refresh()`.
 
 `/en/matches` and `/en/predictions/YYYY-MM-DD` share the same feed service and
 `MatchFeedPage`; dated URLs preserve historical links without separate Live or
-Results navigation destinations. The Matches page defaults to kickoff
-descending; dated archive routes retain their named dates and kickoff/fixture-ID
+Results navigation destinations. The default Today view puts live fixtures
+first. Dated archive routes retain their named dates and kickoff/fixture-ID
 order. Stored API defaults remain Last 30 days and kickoff descending. The first
 page shows up to fifty matches. Validated URL variants retain the
 existing selected market, filters, sorting and bounded page-size contract.

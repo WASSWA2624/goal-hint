@@ -1,3 +1,5 @@
+import { authCopy } from "./auth.ts";
+
 export const accountDashboardMessages = {
   "account.sections": "Account sections",
   "account.section.overview": "Overview",
@@ -80,10 +82,10 @@ export const accountDashboardMessages = {
   "account.signInDetails": "Login details",
   "account.phoneLabel": "Phone",
   "account.editPhone": "Edit phone",
-  "account.signedInDevices": "Signed-in devices",
+  "account.signedInDevices": authCopy.signedInDevices,
   "account.deviceCount": { one: "{count} device", other: "{count} devices" },
   "account.devicesUnavailable": "Device details are temporarily unavailable.",
-  "account.noSignedInDevices": "No signed-in devices.",
+  "account.noSignedInDevices": authCopy.noSignedInDevices,
   "account.currentDevice": "This device",
   "account.deviceLabel": "Device {number}",
   "account.deviceColumn": "Device",

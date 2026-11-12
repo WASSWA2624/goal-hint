@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { getEventListeners } from "node:events";
+import { liveRefreshRules } from "../src/domain/live-refresh.ts";
 import { startRequestDeadline } from "../src/domain/request-deadline.ts";
 import { slipMatchStateForSelection, slipMatchStatesFromResults } from "../src/domain/slip-match-state.ts";
 import { readJson } from "../src/state/refresh-base.ts";
@@ -66,27 +67,31 @@ test("completed feed/detail reads release abort relays and timers, while cancell
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const caller = new AbortController(), signals = [];
   t.mock.method(globalThis, "fetch", async (_url, options) => { signals.push(options.signal); return Response.json({ accepted: true }); });
-  for (let index = 0; index < 30; index++) assert.deepEqual(await readJson("/api/matches", caller.signal, 100), { accepted: true });
+  for (let index = 0; index < 30; index++) assert.deepEqual(await readJson("/api/matches", caller.signal), { accepted: true });
   assert.equal(getEventListeners(caller.signal, "abort").length, 0, "polling cannot accumulate abort listeners on older browsers");
-  t.mock.timers.tick(100);
+  t.mock.timers.tick(liveRefreshRules.timeoutMs);
   assert.ok(signals.every(signal => !signal.aborted), "completed reads leave no active deadline");
   t.mock.method(globalThis, "fetch", (_url, options) => new Promise((_resolve, reject) => {
     options.signal.addEventListener("abort", () => reject(options.signal.reason), { once: true });
   }));
-  const canceled = readJson("/api/matches", caller.signal, 100);
+  const canceled = readJson("/api/matches", caller.signal);
   caller.abort(new DOMException("Canceled", "AbortError"));
   await assert.rejects(canceled, { name: "AbortError" });
   assert.equal(getEventListeners(caller.signal, "abort").length, 0);
-  const slow = readJson("/api/matches", new AbortController().signal, 100);
-  t.mock.timers.tick(100);
+  const slow = readJson("/api/matches", new AbortController().signal);
+  t.mock.timers.tick(liveRefreshRules.timeoutMs);
   await assert.rejects(slow, { name: "TimeoutError" });
+  const { promise: bodyStarted, resolve: markBodyStarted } = Promise.withResolvers();
   t.mock.method(globalThis, "fetch", async (_url, options) => ({
     ok: true,
-    text: () => new Promise((_resolve, reject) => options.signal.addEventListener("abort", () => reject(options.signal.reason), { once: true })),
+    text: () => new Promise((_resolve, reject) => {
+      options.signal.addEventListener("abort", () => reject(options.signal.reason), { once: true });
+      markBodyStarted();
+    }),
   }));
-  const slowBody = readJson("/api/matches", new AbortController().signal, 100);
-  await Promise.resolve();
-  t.mock.timers.tick(100);
+  const slowBody = readJson("/api/matches", new AbortController().signal);
+  await bodyStarted;
+  t.mock.timers.tick(liveRefreshRules.timeoutMs);
   await assert.rejects(slowBody, { name: "TimeoutError" }, "the deadline also covers a body stalled after response headers");
 });
 

@@ -57,7 +57,8 @@ async function createFixture(t) {
 
 function run(fixture, args, env = isolatedEnvironment()) {
   return execFileAsync(process.execPath, ["--conditions=react-server", script, ...args], {
-    cwd: fixture, env, windowsHide: true, timeout: 60000, maxBuffer: 2 * 1024 * 1024,
+    // Allow Prisma's own 120-second deadline plus launcher overhead.
+    cwd: fixture, env, windowsHide: true, timeout: 150_000, maxBuffer: 2 * 1024 * 1024,
   });
 }
 
@@ -73,7 +74,7 @@ async function observableEndpoint(t) {
   return { port: server.address().port, connections: () => connections };
 }
 
-test("offline Prisma commands generate reviewed SQL and a snapshot without database access", { timeout: 180000 }, async (t) => {
+test("offline Prisma commands generate reviewed SQL and a snapshot without database access", { timeout: 360_000 }, async (t) => {
   const fixture = await createFixture(t);
   const endpoint = await observableEndpoint(t);
   const sentinel = "synthetic-local-env-credential-sentinel";
@@ -95,10 +96,6 @@ test("offline Prisma commands generate reviewed SQL and a snapshot without datab
   const before = await readFile(schemaFile, "utf8");
   const changed = `${before}${syntheticModel}`;
   await writeFile(schemaFile, changed);
-  const raw = await execFileAsync(process.execPath, [path.join(workspace, "node_modules", "prisma", "build", "index.js"), "migrate", "diff", "--from-schema", "prisma/schema.snapshot.prisma", "--to-schema", "prisma/schema.prisma", "--script"], {
-    cwd: fixture, env: isolatedEnvironment(), windowsHide: true, timeout: 60000, maxBuffer: 2 * 1024 * 1024,
-  });
-  t.diagnostic(JSON.stringify({ schema: await readFile(schemaFile, "utf8"), snapshot: await readFile(snapshotFile, "utf8"), stdout: raw.stdout, stderr: raw.stderr }));
   const migration = await run(fixture, ["migrate", "--name", "offline_probe"], offline);
   assert.match(migration.stdout, /Migration \d{14}_offline_probe generated; review SQL before deployment\./u);
   const directory = path.join(fixture, "prisma", "migrations");

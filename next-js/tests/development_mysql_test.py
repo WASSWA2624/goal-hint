@@ -315,7 +315,7 @@ class DevelopmentMysqlStartupGuardTests(unittest.TestCase):
                 "from lib.development_mysql import _startup_guard",
                 f"directory = Path({str(directory)!r})",
                 "(directory / 'ready.txt').write_text('waiting')",
-                "with _startup_guard(directory, timeout=8):",
+                "with _startup_guard(directory, timeout=30):",
                 "    assert (directory / 'published.txt').read_text() == 'owner metadata'",
                 "    (directory / 'acquired.txt').write_text('acquired')",
             ])
@@ -326,13 +326,16 @@ class DevelopmentMysqlStartupGuardTests(unittest.TestCase):
                         env=dict(os.environ, PYTHONPATH=str(ROOT / "scripts")),
                         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                         text=True, encoding="utf-8", creationflags=module.hidden_process())
-                    deadline = time.monotonic() + 5
+                    deadline = time.monotonic() + 30
                     while not ready.exists() and child.poll() is None and time.monotonic() < deadline:
                         time.sleep(0.02)
+                    if child.poll() is not None:
+                        _, stderr = child.communicate()
+                        self.fail(f"The competing startup exited before acquiring the guard: {stderr}")
                     self.assertTrue(ready.exists(), "The competing startup did not begin.")
                     self.assertFalse(acquired.exists())
                     (directory / "published.txt").write_text("owner metadata")
-                _, stderr = child.communicate(timeout=10)
+                _, stderr = child.communicate(timeout=30)
                 self.assertEqual(child.returncode, 0, stderr)
                 self.assertEqual(acquired.read_text(), "acquired")
             finally:

@@ -7,7 +7,7 @@ import { matchDetailResponseSchema, storedMatchDetailResponseSchema } from '../s
 import { storedMatchFeedResponseSchema } from '../src/domain/match-feed.ts';
 import { feedSql } from '../src/server/matches/feed-read.ts';
 import { storedFeedSearch } from '../src/server/matches/feed-search.ts';
-import { createMatchFeedService, storedFeedPaginationVersion } from '../src/server/matches/feed-service.ts';
+import { createMatchFeedService, storedFeedVersions } from '../src/server/matches/feed-service.ts';
 import { createMatchFeedSummaryService } from '../src/server/matches/feed-summary-service.ts';
 import { createMatchFeedSummaryHandler } from '../src/server/matches/feed-summary-http.ts';
 import { createMatchInsightsHandler } from '../src/server/matches/insights-service.ts';
@@ -42,9 +42,10 @@ test('public SQL restricts the full cohort, counts, ranked picks and search befo
 test('raw caches and pagination versions distinguish completed public cohorts from subscriber cohorts', async () => {
   const query = parseFeedQuery({ date: today }, { today }), range = resolveFeedDates(query, today);
   const tx = { publicCacheTag: { findMany: async () => [] } };
-  const member = await storedFeedPaginationVersion(tx, query, today, range, [39], false);
-  const guest = await storedFeedPaginationVersion(tx, query, today, range, [39], true);
-  assert.notEqual(member, guest);
+  const member = await storedFeedVersions(tx, query, today, range, [39], false);
+  const guest = await storedFeedVersions(tx, query, today, range, [39], true);
+  assert.notEqual(member.paginationVersion, guest.paginationVersion);
+  assert.notEqual(member.performanceVersion, guest.performanceVersion);
   for (const create of [createMatchFeedService, createMatchFeedSummaryService]) {
     const keys = [], service = create({ database: {}, competitionIds: [39], clock,
       cache: { read: async (descriptor) => { keys.push(descriptor.key); return {}; } } });

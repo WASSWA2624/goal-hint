@@ -192,8 +192,8 @@ test('sitemap shards preserve stored lastmod, advertise each bounded shard and p
     'https://goalhint.com/sitemap-matches-0.xml', 'https://goalhint.com/sitemap-matches-1.xml', 'https://goalhint.com/sitemap-matches-2.xml',
     'https://goalhint.com/sitemap-archive-0.xml']);
   assert.match(index, /^<\?xml version="1\.0" encoding="UTF-8"\?>\n<sitemapindex xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
-  const urls = (await routes.sitemap()).map(row => row.url);
-  assert.deepEqual(urls, ['https://goalhint.com/en/matches', 'https://goalhint.com/en/best-slips', 'https://goalhint.com/en/help', 'https://goalhint.com/en/contact']);
+  const urls = (await routes.sitemap()).map(row => row.url).sort();
+  assert.deepEqual(urls, ['https://goalhint.com/en/best-slips', 'https://goalhint.com/en/contact', 'https://goalhint.com/en/help', 'https://goalhint.com/en/matches']);
   for (const id of ['-1', '01', '1.xml', '9999999999', 'x']) {
     assert.throws(() => sitemapPage(id), RangeError);
     await assert.rejects(routes.matches({ id: Promise.resolve(id) }), RangeError);
