@@ -2,11 +2,16 @@ import "server-only";
 
 import type { DatabaseRuntime } from "../database/client.ts";
 import { Prisma } from "../generated/prisma/client.ts";
+import { API_FOOTBALL_CONTRACT_VERSION } from "./api-football-contract.ts";
+import type { FootballHistorySubjectKind } from "./history-person-records.ts";
 
-const subjectSources = { playerProfiles: "player", playerStatistics: "player", squads: "player", coaches: "coach" } as const;
+const subjectSources = { playerProfiles: "player", playerStatistics: "player", squads: "player",
+  coaches: "coach", coachProfiles: "coach", fixtures: "coachRef", teamsByCountry: "team" } as const;
 type SubjectSource = keyof typeof subjectSources;
-type SubjectKind = typeof subjectSources[SubjectSource];
-type SubjectDataset = "playerTeams" | "trophies" | "sidelined";
+export const footballHistoryPlayerSubjectDatasets = ["playerTeams", "playerSeasonHistory", "playerTransfers"] as const;
+export type FootballHistoryPlayerSubjectDataset = typeof footballHistoryPlayerSubjectDatasets[number];
+export type FootballHistoryTeamSubjectDataset = "transfers" | "coaches" | "squads" | "teamSeasons";
+type SubjectDataset = FootballHistoryPlayerSubjectDataset | FootballHistoryTeamSubjectDataset | "trophies" | "sidelined";
 const pagesPerSource = 8;
 const identitiesPerInsert = 2_000;
 
@@ -32,6 +37,7 @@ export async function indexHistorySubjects(database: DatabaseRuntime,
       SELECT id, endpoint, selectorHash, parameters, contract, retrievedAt, rowCount, contentHash, compressedRows
       FROM FootballHistorySourcePage
       WHERE endpoint = ${endpoint} AND subjectIndexStatus IS NULL
+        AND (endpoint <> 'fixtures' OR JSON_CONTAINS_PATH(parameters, 'one', '$.id', '$.ids'))
       ORDER BY id LIMIT ${pagesPerSource + 1}`);
     progress.hasMore ||= pages.length > pagesPerSource;
     const indexed: string[] = [], invalid: string[] = [], ids = new Set<number>();
@@ -65,16 +71,32 @@ export async function indexHistorySubjects(database: DatabaseRuntime,
 }
 
 /** Exact per-subject archive selectors are the durable receipts, including verified empty pages. */
-export async function readPendingHistorySubjectIds(database: DatabaseRuntime, endpoint: SubjectDataset, kind: SubjectKind, limit: number) {
+export async function readPendingHistorySubjectIds(database: DatabaseRuntime, endpoint: SubjectDataset,
+  kind: FootballHistorySubjectKind | "team", limit: number) {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 2_001) throw new RangeError("Invalid historical subject batch limit.");
-  const prefix = kind === "player" ? '{"player":"' : '{"coach":"';
+  const prefix = `{"${kind}":"`;
   const rows = await database.query((client) => client.$queryRaw<{ externalId: number }[]>`
-    SELECT subject.externalId FROM FootballHistorySubject AS subject
-    WHERE subject.kind = ${kind} AND NOT EXISTS (
+    SELECT DISTINCT subject.externalId FROM FootballHistorySubject AS subject
+    WHERE subject.kind IN (${kind}, ${kind === "coach" ? "coachRef" : kind}) AND NOT EXISTS (
       SELECT 1 FROM FootballHistorySourcePage AS archived
       WHERE archived.endpoint = ${endpoint}
+        AND archived.contract = ${API_FOOTBALL_CONTRACT_VERSION}
         AND archived.selectorHash = SHA2(CONCAT(${prefix}, subject.externalId, '"}'), 256)
     )
     ORDER BY subject.externalId LIMIT ${limit}`);
+  return rows.map(({ externalId }) => Number(externalId));
+}
+
+/** Full career data already present in a team coach page satisfies a known coach identity. */
+export async function readPendingHistoryCoachProfiles(database: DatabaseRuntime, limit: number) {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 101) throw new RangeError("Invalid historical coach batch limit.");
+  const rows = await database.query((client) => client.$queryRaw<{ externalId: number }[]>`
+    SELECT reference.externalId FROM FootballHistorySubject AS reference
+    WHERE reference.kind = 'coachRef'
+      AND NOT EXISTS (SELECT 1 FROM FootballHistorySubject AS observed WHERE observed.kind = 'coach' AND observed.externalId = reference.externalId)
+      AND NOT EXISTS (SELECT 1 FROM FootballHistorySourcePage AS archived WHERE archived.endpoint = 'coachProfiles'
+        AND archived.contract = ${API_FOOTBALL_CONTRACT_VERSION}
+        AND archived.selectorHash = SHA2(CONCAT('{"id":"', reference.externalId, '"}'), 256))
+    ORDER BY reference.externalId LIMIT ${limit}`);
   return rows.map(({ externalId }) => Number(externalId));
 }

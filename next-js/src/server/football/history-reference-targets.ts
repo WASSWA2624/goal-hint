@@ -2,17 +2,21 @@ import "server-only";
 
 import type { DatabaseRuntime } from "../database/client.ts";
 import { Prisma } from "../generated/prisma/client.ts";
-import { apiFootballLeaderboards, type ApiFootballLeaderboard } from "./api-football-contract.ts";
+import { API_FOOTBALL_CONTRACT_VERSION, apiFootballLeaderboards, type ApiFootballLeaderboard } from "./api-football-contract.ts";
+import { readHistoryCountryTargets } from "./history-country-targets.ts";
 import { readHistoryPersonRecordTargets } from "./history-person-record-targets.ts";
 import type { FootballHistoryReferenceTarget } from "./history-reference.ts";
+import { readPendingHistoryCoachProfiles, readPendingHistorySubjectIds } from "./history-subjects.ts";
 
 const provider = "api-football";
 const leaderboardDatasets = [["top-scorers", "topScorers"], ["top-assists", "topAssists"],
   ["top-yellow-cards", "topYellowCards"], ["top-red-cards", "topRedCards"]] as const;
+const countryTeamDatasets = [["transfers", "transfers"], ["coaches", "coaches"], ["squads", "squads"], ["team-seasons", "teamSeasons"]] as const;
 export const historyReferenceDatasets = ["teams", "venues", "standings", "injuries", "transfers",
   "countries", "timezones", "league-seasons", "team-countries", "player-seasons", "team-statistics", "player-statistics", "player-profiles", "player-teams",
-  "coaches", "squads", "rounds", "team-seasons",
-  "half-statistics", "trophies", "sidelined",
+  "player-season-history", "player-transfers",
+  "coaches", "coach-profiles", "teams-by-country", "venues-by-country", "squads", "rounds", "team-seasons",
+  "half-statistics", "trophies", "sidelined", "odds-mapping",
   ...leaderboardDatasets.map(([dataset]) => dataset)] as const;
 export type HistoryReferenceDataset = typeof historyReferenceDatasets[number];
 
@@ -32,6 +36,7 @@ function pendingRounds(database: DatabaseRuntime, competitionIds: readonly numbe
       AND NOT EXISTS (SELECT 1 FROM FootballCompetitionProvider AS alternate WHERE alternate.competitionId = league.competitionId
         AND alternate.provider = league.provider AND alternate.externalId <> league.externalId)
       AND NOT EXISTS (SELECT 1 FROM FootballHistorySourcePage AS archived WHERE archived.endpoint = 'fixtureRounds'
+        AND archived.contract = ${API_FOOTBALL_CONTRACT_VERSION}
         AND archived.selectorHash = SHA2(CONCAT('{"dates":"true","league":"', league.externalId,
           '","season":"', season.year, '","timezone":"Africa/Kampala"}'), 256))
     ORDER BY season.year DESC, league.externalId
@@ -52,6 +57,7 @@ function pendingLeaderboards(database: DatabaseRuntime, competitionIds: readonly
         AND alternate.provider = league.provider AND alternate.externalId <> league.externalId)
       AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(season.coverage, requested.coveragePath)), 'null') <> 'false'
       AND NOT EXISTS (SELECT 1 FROM FootballHistorySourcePage AS archived WHERE archived.endpoint = requested.endpoint
+        AND archived.contract = ${API_FOOTBALL_CONTRACT_VERSION}
         AND archived.selectorHash = SHA2(CONCAT('{"league":"', league.externalId, '","season":"', season.year, '"}'), 256))
     ORDER BY season.year DESC, league.externalId, requested.sortOrder
     LIMIT ${limit}`));
@@ -82,6 +88,7 @@ function pendingHalfStatistics(database: DatabaseRuntime, competitionIds: readon
       AND NOT EXISTS (SELECT 1 FROM FootballTeamProvider AS alternate WHERE alternate.teamId = away.teamId
         AND alternate.provider = fixture.provider AND alternate.externalId <> away.externalId)
       AND NOT EXISTS (SELECT 1 FROM FootballHistorySourcePage AS archived WHERE archived.endpoint = 'fixtureHalfStatistics'
+        AND archived.contract = ${API_FOOTBALL_CONTRACT_VERSION}
         AND archived.selectorHash = SHA2(CONCAT('{"fixture":"', fixture.externalId, '","half":"true"}'), 256))
     ORDER BY fixture.kickoff DESC, fixture.id DESC
     LIMIT ${limit}`));
@@ -106,6 +113,7 @@ function pendingTeamStatistics(database: DatabaseRuntime, competitionIds: readon
       AND NOT EXISTS (SELECT 1 FROM FootballTeamProvider AS alternate WHERE alternate.teamId = team.teamId
         AND alternate.provider = team.provider AND alternate.externalId <> team.externalId)
       AND NOT EXISTS (SELECT 1 FROM FootballHistorySourcePage AS archived WHERE archived.endpoint = 'teamStatistics'
+        AND archived.contract = ${API_FOOTBALL_CONTRACT_VERSION}
         AND archived.selectorHash = SHA2(CONCAT('{"league":"', league.externalId, '","season":"', season.year, '","team":"', team.externalId, '"}'), 256))
     ORDER BY season.year DESC, league.externalId, team.externalId
     LIMIT ${limit}`));
@@ -128,7 +136,8 @@ export async function readHistoryReferenceTargets(database: DatabaseRuntime, com
   if (include("league-seasons")) targets.push({ endpoint: "leagueSeasons" });
   if (include("team-countries")) targets.push({ endpoint: "teamCountries" });
   if (include("player-seasons")) targets.push({ endpoint: "playerSeasons" });
-  const [seasons, venues, teams, teamStatistics, rounds, leaderboards, halfStatistics, personRecords] = await Promise.all([
+  const [seasons, venues, teams, teamStatistics, rounds, leaderboards, halfStatistics, personRecords, coachProfiles, countryTargets,
+    discoveredTeams] = await Promise.all([
     include("teams") || include("standings") || include("injuries") ? database.query((client) => client.footballSeason.findMany({
       where: { competition, fixtures: { some: { provider } } }, select: { year: true, coverage: true,
         competition: { select: { providers: { where: competitionMapping, select: { externalId: true } } } } },
@@ -146,7 +155,15 @@ export async function readHistoryReferenceTargets(database: DatabaseRuntime, com
     include("half-statistics") && competitionIds.length ? pendingHalfStatistics(database, competitionIds, maxDatasetTargets + 1) : [],
     globalScope && (dataset === undefined || dataset === "trophies" || dataset === "sidelined")
       ? readHistoryPersonRecordTargets(database, dataset, maxDatasetTargets) : { targets: [], hasMoreTargets: false },
+    globalScope && include("coach-profiles") ? readPendingHistoryCoachProfiles(database, maxDatasetTargets + 1) : [],
+    globalScope && (include("teams-by-country") || include("venues-by-country"))
+      ? readHistoryCountryTargets(database, include("teams-by-country"), include("venues-by-country"), maxDatasetTargets)
+      : { targets: [], hasMoreTargets: false },
+    globalScope ? Promise.all(countryTeamDatasets.filter(([dataset]) => include(dataset)).map(async ([, endpoint]) => ({
+      endpoint, ids: await readPendingHistorySubjectIds(database, endpoint, "team", maxDatasetTargets + 1),
+    }))) : [],
   ]);
+  targets.push(...countryTargets.targets);
   for (const row of seasons) {
     if (row.competition.providers.length !== 1) continue;
     const competitionId = Number(row.competition.providers[0]!.externalId), season = row.year;
@@ -168,8 +185,9 @@ export async function readHistoryReferenceTargets(database: DatabaseRuntime, com
   }
   const statistics = teamStatistics.slice(0, maxDatasetTargets), roundScopes = rounds.slice(0, maxDatasetTargets);
   const leaderboardScopes = leaderboards.slice(0, maxDatasetTargets), halfFixtures = halfStatistics.slice(0, maxDatasetTargets);
+  const coaches = coachProfiles.slice(0, maxDatasetTargets);
   const queueLength = Math.max(teamSnapshots.length, statistics.length, roundScopes.length, leaderboardScopes.length, halfFixtures.length,
-    personRecords.targets.length);
+    personRecords.targets.length, coaches.length, ...discoveredTeams.map(({ ids }) => Math.min(ids.length, maxDatasetTargets)));
   for (let index = 0; index < queueLength; index++) {
     const snapshot = teamSnapshots[index], round = roundScopes[index], row = statistics[index], leaderboard = leaderboardScopes[index];
     if (snapshot) targets.push(snapshot);
@@ -181,9 +199,16 @@ export async function readHistoryReferenceTargets(database: DatabaseRuntime, com
       homeTeamId: Number(half.homeTeamId), awayTeamId: Number(half.awayTeamId) });
     const person = personRecords.targets[index];
     if (person) targets.push(person);
+    const coachId = coaches[index];
+    if (coachId !== undefined) targets.push({ endpoint: "coachProfiles", coachId });
+    if (index < maxDatasetTargets) for (const { endpoint, ids } of discoveredTeams) {
+      const teamId = ids[index];
+      if (teamId !== undefined) targets.push({ endpoint, teamId });
+    }
   }
-  return { targets, hasMoreTargets: personRecords.hasMoreTargets ||
-    [teamStatistics, rounds, leaderboards, halfStatistics].some((rows) => rows.length > maxDatasetTargets) };
+  return { targets, hasMoreTargets: personRecords.hasMoreTargets || countryTargets.hasMoreTargets ||
+    discoveredTeams.some(({ ids }) => ids.length > maxDatasetTargets) ||
+    [teamStatistics, rounds, leaderboards, halfStatistics, coachProfiles].some((rows) => rows.length > maxDatasetTargets) };
 }
 
 /** Use observed competition seasons and skip explicit provider noncoverage. */

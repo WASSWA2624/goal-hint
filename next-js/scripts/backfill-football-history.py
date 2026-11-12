@@ -17,16 +17,24 @@ ACCESS_BLOCKERS = {"authentication-error", "invalid-credential", "subscription-e
 SHARED_QUOTA_PAUSES = {"quota-denied", "rate-limited", "provider-day-ended"}
 PROVIDER_TRANSPORT_PAUSE = "provider-transport-unavailable"
 TRANSIENT_PAUSES = {"operation-not-authorized", "shared-work-pending", "detail-work-busy", "reference-unavailable", "deadline-exceeded"}
+COMPLETION_NOTIFICATION_KEY = "api-football-archive-completion-v1"
 
 
 def report_state(status, **details):
     print(json.dumps({"event": "history-background", "status": status, **details}), flush=True)
 
 
-def run_batch(command, env):
+def run_batch(command, env, *, input_record=None):
     summary = failure = None
-    with subprocess.Popen(command, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    stdin = subprocess.PIPE if input_record is not None else None
+    with subprocess.Popen(command, cwd=ROOT, env=env, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                           text=True, encoding="utf-8", errors="replace", creationflags=hidden_process()) as process:
+        if process.stdin is not None:
+            try:
+                with process.stdin:
+                    json.dump(input_record, process.stdin, separators=(",", ":"))
+            except BrokenPipeError:
+                pass
         for line in process.stdout:
             print(line, end="", flush=True)
             if not line.startswith('{"event":"history-'):
@@ -35,19 +43,44 @@ def run_batch(command, env):
                 record = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if record["event"] == "history-batch":
+            if record["event"] in ("history-batch", "history-completion"):
                 summary = record
             elif record["event"] == "history-error":
                 failure = record
         return process.wait(), summary, failure
 
 
-def run_continuous(command, args, env, *, prepare_database=None):
+def verify_and_notify(command, env, reports, directory):
+    from lib.football_history_notification import notify_archive_complete
+
+    code, proof, _failure = run_batch([*command, "--verify-completion"], env, input_record=reports)
+    if code or not proof:
+        report_state("completion-check-unavailable")
+        return "retryable"
+    if (proof.get("event") != "history-completion" or proof.get("status") != "complete"
+            or proof.get("scope") != "historical-archive" or not proof.get("snapshotId")):
+        return "pending"
+    message = "Goal Hint verified its API-Football historical archive against the saved provider catalog and discovered datasets."
+    return notify_archive_complete(directory, COMPLETION_NOTIFICATION_KEY, message)
+
+
+def run_continuous(command, args, env, *, prepare_database=None, notification_directory=None):
     phases = deque(ARCHIVE_PHASES)
     pause = 30
+    if notification_directory is not None:
+        from lib.football_history_notification import retry_archive_notification
+
+        report_state("completion-notification-enabled")
     while True:
+        notification = "inactive"
+        if notification_directory is not None:
+            notification = retry_archive_notification(notification_directory, COMPLETION_NOTIFICATION_KEY)
+            if notification in ("delivered", "already-delivered"):
+                report_state("completion-notification", delivery=notification)
+                notification_directory = None
         progress = False
         retry = None
+        reports = {}
         for _ in range(len(phases)):
             phase, options = phases[0]
             report_state("running", phase=phase)
@@ -65,6 +98,8 @@ def run_continuous(command, args, env, *, prepare_database=None):
                 report_state("blocked", phase=phase, reason=stop or failure["reason"])
                 return 1
             if not exit_code and summary is not None:
+                if notification == "pending":
+                    reports[phase] = summary
                 indexed = (summary.get("subjectDiscovery") or {}).get("indexed", 0)
                 progress |= indexed > 0 or (stop == "request-budget" and summary.get("requests", 0) > 0) or any(
                     summary.get(field, 0) > 0 for field in ("imported", "received", "written", "archived"))
@@ -75,6 +110,16 @@ def run_continuous(command, args, env, *, prepare_database=None):
             phases.rotate(-1)
             if exit_code or summary is None or stop in TRANSIENT_PAUSES:
                 retry = "waiting-to-resume"
+        if (notification_directory is not None and not retry and len(reports) == len(phases)
+                and reports["fixtures"].get("status") == "complete"
+                and reports["details"].get("passComplete") is True
+                and (reports["reference"].get("verification") or {}).get("complete") is True
+                and reports["replay"].get("status") == "complete"):
+            delivery = verify_and_notify(command, env, reports, notification_directory)
+            if delivery != "pending":
+                report_state("completion-notification", delivery=delivery)
+            if delivery in ("delivered", "already-delivered"):
+                notification_directory = None
         if retry:
             pause = 30 if progress else pause
             report_state(retry, retrySeconds=pause)
@@ -93,10 +138,13 @@ def main():
     args = sys.argv[1:]
     continuous = "--continuous" in args
     prepare = "--prepare-database" in args
+    notify = "--notify-on-completion" in args
     if prepare and (not continuous or args.count("--prepare-database") != 1):
         raise CommandError("Use --prepare-database once with --continuous.")
+    if notify and (not continuous or args.count("--notify-on-completion") != 1):
+        raise CommandError("Use --notify-on-completion once with --continuous.")
     if continuous:
-        args = [argument for argument in args if argument not in ("--continuous", "--prepare-database")]
+        args = [argument for argument in args if argument not in ("--continuous", "--prepare-database", "--notify-on-completion")]
         if args and (len(args) != 2 or args[0] != "--requests" or not args[1].isascii() or not args[1].isdigit()
                      or len(args[1]) > 3 or not 2 <= int(args[1]) <= 100):
             raise CommandError("Use --continuous with an optional --requests value from 2 to 100.")
@@ -107,7 +155,7 @@ def main():
     env = dict(os.environ, NODE_ENV="development", GOAL_HINT_DEMO="false",
                NEXT_PUBLIC_GOAL_HINT_DEMO="false", NEXT_PUBLIC_GOAL_HINT_LOCAL_FOOTBALL="true",
                NODE_DEBUG="", NODE_DEBUG_NATIVE="")
-    if args == ["--help"]:
+    if args in (["--help"], ["--coverage"]):
         return subprocess.call([*command, *args], cwd=ROOT, env=env)
     directory = ROOT / ".goal-hint" / LocalFootballMysql.directory_name
     if prepare:
@@ -141,7 +189,8 @@ def main():
             report_state("waiting-for-current-batch", retrySeconds=5)
             time.sleep(5)
         if continuous:
-            return run_continuous(command, args, env, prepare_database=prepare_database if prepare else None)
+            return run_continuous(command, args, env, prepare_database=prepare_database if prepare else None,
+                                  notification_directory=directory if notify else None)
         return subprocess.call([*command, *args], cwd=ROOT, env=env)
 
 

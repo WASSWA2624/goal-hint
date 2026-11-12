@@ -72,6 +72,38 @@ class FootballHistoryRunnerTests(unittest.TestCase):
         self.assertEqual([call.args[0] for call in sleep.call_args_list], [30, 60])
         report.assert_any_call("waiting-for-provider", retrySeconds=60)
 
+    def test_notification_requires_all_four_settled_phases_and_keeps_importing(self):
+        fixtures = {"status": "complete"}
+        details = {"status": "partial", "passComplete": True}
+        reference = {"status": "complete", "verification": {"complete": True}}
+        replay = {"status": "complete"}
+        proof = {"event": "history-completion", "status": "complete", "scope": "historical-archive", "snapshotId": "verified"}
+        phases = [(0, fixtures, None), (0, details, None), (0, reference, None), (0, replay, None)]
+        directory = Path("owned-archive")
+        with patch.object(runner, "run_batch", side_effect=[*phases, (0, proof, None), (130, None, None)]) as run, \
+             patch("lib.football_history_notification.retry_archive_notification", return_value="pending"), \
+             patch("lib.football_history_notification.notify_archive_complete", return_value="delivered") as notify, \
+             patch.object(runner, "report_state"), patch.object(runner.time, "sleep"):
+            self.assertEqual(runner.run_continuous(["node"], [], {}, notification_directory=directory), 130)
+        self.assertEqual(run.call_args_list[4].args[0], ["node", "--verify-completion"])
+        self.assertEqual(run.call_args_list[4].kwargs["input_record"], {
+            "fixtures": fixtures, "details": details, "reference": reference, "replay": replay,
+        })
+        self.assertEqual(run.call_args_list[5].args[0], ["node"])
+        notify.assert_called_once()
+        self.assertEqual(notify.call_args.args[:2], (directory, runner.COMPLETION_NOTIFICATION_KEY))
+
+    def test_drained_but_unverified_reference_pass_cannot_trigger_a_notification(self):
+        complete = {"status": "complete"}
+        details = {"passComplete": True}
+        reference = {"status": "complete", "verification": {"complete": False}}
+        phases = [(0, complete, None), (0, details, None), (0, reference, None), (0, complete, None)]
+        with patch.object(runner, "run_batch", side_effect=[*phases, (130, None, None)]) as run, \
+             patch("lib.football_history_notification.retry_archive_notification", return_value="pending"), \
+             patch.object(runner, "report_state"), patch.object(runner.time, "sleep"):
+            self.assertEqual(runner.run_continuous(["node"], [], {}, notification_directory=Path("owned-archive")), 130)
+        self.assertEqual(run.call_args_list[4].args[0], ["node"])
+
     def test_unavailable_owned_database_prepares_once_per_retry_without_advancing_the_phase(self):
         unavailable = {"reason": "local-target-unavailable", "retryable": True}
         prepare = Mock()
@@ -84,7 +116,8 @@ class FootballHistoryRunnerTests(unittest.TestCase):
         report.assert_any_call("waiting-for-local-database", retrySeconds=30)
 
     def test_prepare_uses_the_owned_snapshot_launcher_without_inheriting_live_mode(self):
-        def prepare_once(*_args, prepare_database):
+        def prepare_once(*_args, prepare_database, notification_directory):
+            self.assertIsNone(notification_directory)
             prepare_database()
             return 0
 

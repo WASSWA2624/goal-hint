@@ -18,11 +18,13 @@ import { createFootballCatalogStore } from "../football/catalog-mysql-store.ts";
 import { createFootballCatalogImporter } from "../football/catalog-service.ts";
 import { createFootballHistoryBackfill, historyBackfillLimits, normalizeHistoryCompetition } from "../football/history-backfill.ts";
 import { createFootballHistoryDetails } from "../football/history-details.ts";
+import { footballHistoryCatalogMaxAgeMs, readUpcomingFootballHistorySeasons } from "../football/history-fixture-scope.ts";
+import { createFootballHistoryOddsMapping } from "../football/history-odds-mapping.ts";
 import { createFootballHistoryPlayerProfiles, createFootballHistoryPlayerStatistics } from "../football/history-player-statistics.ts";
-import { createFootballHistoryReference } from "../football/history-reference.ts";
+import { createFootballHistoryReference, verifyFootballHistoryReferencePass } from "../football/history-reference.ts";
 import { readHistoryPlayerStatisticsTargets, readHistoryReferenceTargets, type HistoryReferenceDataset } from "../football/history-reference-targets.ts";
 import { createFootballHistorySource, type FootballHistoryReferencePhase } from "../football/history-source.ts";
-import { readPendingHistorySubjectIds } from "../football/history-subjects.ts";
+import { readPendingHistorySubjectIds, type FootballHistoryPlayerSubjectDataset } from "../football/history-subjects.ts";
 import { quotaPriorities } from "../football/quota-contract.ts";
 import { createPolicyQuotaGateway } from "../football/quota-gateway.ts";
 import { createMysqlQuotaStore } from "../football/quota-mysql-store.ts";
@@ -197,7 +199,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
             return normalized && (query.competitionId === undefined || normalized.id === query.competitionId) ? [normalized] : [];
           });
         };
-        const expires = Date.now() - 24 * 60 * 60_000;
+        const expires = Date.now() - footballHistoryCatalogMaxAgeMs;
         const saved = await read(selector, expires);
         const cached = saved ?? (query.competitionId === undefined ? null : await read({ ...selector, parameters: {} }, expires));
         if (cached?.length) return { status: "partial", data: cached, error: null, requestsDispatched: 0 };
@@ -209,24 +211,16 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         }
         return response;
       }, store,
-        importer: createFootballCatalogImporter({ adapter, store, authority: authorities.catalog }),
+        importer: createFootballCatalogImporter({ adapter, store, authority: authorities.catalog, deferFixtureWritesAbove: 1_000 }),
         competitionIds: policy.choices.competitionIds ?? [], retentionEvidenceRef: refs.retention,
-        upcomingSeasons: async () => {
-          const rows = await database.query((client) => client.$queryRaw<{ id: bigint; year: number; upcoming: bigint }[]>`
-            SELECT mapping.externalId AS id, season.year, COUNT(*) AS upcoming
-            FROM FootballFixture AS fixture
-            JOIN FootballSeason AS season ON season.id=fixture.seasonId
-            JOIN FootballCompetitionProvider AS mapping ON mapping.competitionId=season.competitionId AND mapping.provider=fixture.provider
-            WHERE fixture.provider='api-football' AND fixture.status='scheduled'
-              AND fixture.kickoff>UTC_TIMESTAMP(3) AND fixture.kickoff<DATE_ADD(UTC_TIMESTAMP(3), INTERVAL 7 DAY)
-            GROUP BY mapping.externalId, season.year`);
-          return rows.map(({ id, year, upcoming }) => ({ competitionId: Number(id), season: year, fixtures: Number(upcoming) }));
-        },
+        upcomingSeasons: () => readUpcomingFootballHistorySeasons(database, utcInstantFromEpochMilliseconds(Date.now())),
         hasFixtureSource: (parameters, observation) => {
           const selection = { endpoint: "fixtures", parameters } as const;
           return observation ? historySource.hasExactPage(selection, observation) : historySource.hasPage(selection);
         },
-        hasExactFixtureScope: historySource.hasExactFixtureScope,
+        hasExactFixtureScope: async (parameters, observation) => observation.pageId === undefined
+          ? historySource.hasExactFixtureScope(parameters, observation)
+          : (await historySource.readExactFixtureScope(parameters, observation))?.id === observation.pageId,
         rounds: {
           async read(scope) {
             const page = await historySource.latestPage(roundSelection(scope));
@@ -250,10 +244,22 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       const reference = createFootballHistoryReference({ reference: adapter.reference, hasPage: historySource.hasPage,
         savePage: historySource.savePage, now, providerDayEndsAt });
       const playerStatistics = createFootballHistoryPlayerStatistics({ playerStatisticsPage: adapter.reference.playerStatisticsPage,
-        readPages: historySource.readPlayerStatisticsPages, savePage: historySource.savePlayerStatisticsPage, now, providerDayEndsAt,
+        readPages: historySource.readPlayerStatisticsPages, savePage: historySource.savePlayerStatisticsPage,
+        recordConflict: historySource.recordPlayerStatisticsConflict, now, providerDayEndsAt,
         ...(day.status.plan.trim().toLowerCase() === "free" ? { maximumPage: 3 } : {}) });
       const playerProfiles = createFootballHistoryPlayerProfiles({ playerProfilePage: adapter.reference.playerProfilePage,
-        readPages: historySource.readPlayerProfilePages, savePage: historySource.savePlayerProfilePage, now, providerDayEndsAt });
+        readPages: historySource.readPlayerProfilePages, savePage: historySource.savePlayerProfilePage,
+        recordConflict: historySource.recordPlayerProfileConflict, now, providerDayEndsAt });
+      const mappingAuthorized = () => oddsEnabled && odds !== null && authorities.odds.verifyPolicy(odds) &&
+        verify(refs.retention, "football-private-use") && authorities.odds.verifyRetention({
+          evidenceRef: refs.retention, purpose: "structured-odds-history", rawPayloadsStored: false,
+        });
+      const oddsMapping = createFootballHistoryOddsMapping({ mappingPage: adapter.odds.mappingPage,
+        readPages: historySource.readOddsMappingPages, savePage: historySource.saveOddsMappingPage, now, providerDayEndsAt,
+        authorized: mappingAuthorized, async canDispatch() {
+          const usage = await oddsUsage();
+          return usage !== null && oddsQuotaAllows(usage, enrichmentAllowance, 1);
+        } });
       const approved = policy.choices.competitionIds ?? [];
       return async (input: Readonly<{ maxRequests: number; competitionId?: number; dataset?: HistoryReferenceDataset }>, signal?: AbortSignal) => {
         if (input.competitionId !== undefined && !approved.includes(input.competitionId)) throw new RangeError("Choose an approved competition.");
@@ -261,6 +267,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
           throw new RangeError("Choose a historical reference request limit between 1 and 100.");
         }
         const globalScope = input.competitionId === undefined;
+        const startedAt = now(), initialProviderDayEndsAt = providerDayEndsAt();
         const scope = input.competitionId === undefined ? approved : [input.competitionId], workflow = signal ? { signal } : {};
         const runPlayers = async (maxRequests: number) => playerStatistics.run({
           targets: await readHistoryPlayerStatisticsTargets(database, scope), maxRequests, ...workflow,
@@ -271,33 +278,53 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
           if (!globalScope) throw new RangeError("The player profile catalog uses global scope.");
           return runProfiles(input.maxRequests);
         }
-        const personDataset = input.dataset === "player-teams" || input.dataset === "trophies" || input.dataset === "sidelined";
+        const runOddsMapping = (maxRequests: number) => oddsMapping.run(maxRequests, signal);
+        if (input.dataset === "odds-mapping") {
+          if (!globalScope) throw new RangeError("Odds mapping uses global scope.");
+          return runOddsMapping(input.maxRequests);
+        }
+        const playerEndpoint = ([
+          ["player-teams", "playerTeams"], ["player-season-history", "playerSeasonHistory"], ["player-transfers", "playerTransfers"],
+        ] as const).find(([dataset]) => dataset === input.dataset)?.[1];
+        const personDataset = playerEndpoint !== undefined || input.dataset === "trophies" || input.dataset === "sidelined" ||
+          input.dataset === "coach-profiles";
         if (personDataset && !globalScope) throw new RangeError("Person archive datasets use global scope.");
-        const subjectDiscovery = globalScope && (input.dataset === undefined || personDataset) ? await historySource.indexSubjects() : null;
+        if (!globalScope && (input.dataset === "teams-by-country" || input.dataset === "venues-by-country")) {
+          throw new RangeError("Country archive datasets use global scope.");
+        }
+        const countryTeamDataset = input.dataset === "transfers" || input.dataset === "coaches" || input.dataset === "squads" ||
+          input.dataset === "team-seasons";
+        const subjectDiscovery = globalScope && (input.dataset === undefined || personDataset || countryTeamDataset)
+          ? await historySource.indexSubjects() : null;
         const pendingDiscovery = Boolean(subjectDiscovery?.hasMore || subjectDiscovery?.hasInvalid);
-        const runPlayerTeams = async (maxRequests: number) => {
-          const playerIds = await readPendingHistorySubjectIds(database, "playerTeams", "player", maxRequests + 1);
-          const targets = playerIds.slice(0, maxRequests).map((playerId) => ({ endpoint: "playerTeams" as const, playerId }));
+        const runPlayerHistory = async (endpoint: FootballHistoryPlayerSubjectDataset, maxRequests: number) => {
+          const playerIds = await readPendingHistorySubjectIds(database, endpoint, "player", maxRequests + 1);
+          const targets = playerIds.slice(0, maxRequests).map((playerId) => ({ endpoint, playerId }));
           return reference.run({ targets, hasMoreTargets: pendingDiscovery || playerIds.length > maxRequests, maxRequests, ...workflow });
         };
         const runReference = async (maxRequests: number) => {
           const plan = await readHistoryReferenceTargets(database, scope, input.dataset, maxRequests, globalScope);
           return reference.run({ ...plan, hasMoreTargets: plan.hasMoreTargets || pendingDiscovery, maxRequests, ...workflow });
         };
-        if (input.dataset === "player-teams") return { ...await runPlayerTeams(input.maxRequests), subjectDiscovery };
+        if (playerEndpoint !== undefined) return { ...await runPlayerHistory(playerEndpoint, input.maxRequests), subjectDiscovery };
         if (input.dataset !== undefined) return { ...await runReference(input.maxRequests), ...(subjectDiscovery ? { subjectDiscovery } : {}) };
 
         // Rotate by durable progress, including when live work leaves room for just one request.
-        const order = await historySource.referencePhaseOrder(globalScope);
-        const runners = { playerStatistics: runPlayers, playerProfiles: runProfiles, playerTeams: runPlayerTeams, reference: runReference };
-        type ReferenceReport = Awaited<ReturnType<typeof runPlayers>> | Awaited<ReturnType<typeof runReference>>;
+        const mappingAllowed = mappingAuthorized();
+        const order = (await historySource.referencePhaseOrder(globalScope)).filter((phase) => phase !== "oddsMapping" || mappingAllowed);
+        const runners = { playerStatistics: runPlayers, playerProfiles: runProfiles, oddsMapping: runOddsMapping, reference: runReference,
+          playerTeams: (limit: number) => runPlayerHistory("playerTeams", limit),
+          playerSeasonHistory: (limit: number) => runPlayerHistory("playerSeasonHistory", limit),
+          playerTransfers: (limit: number) => runPlayerHistory("playerTransfers", limit),
+        };
+        type ReferenceReport = Awaited<ReturnType<typeof runPlayers>> | Awaited<ReturnType<typeof runReference>> | Awaited<ReturnType<typeof runOddsMapping>>;
         const phases: Record<FootballHistoryReferencePhase, ReferenceReport | null> = {
-          playerStatistics: null, playerProfiles: null, playerTeams: null, reference: null,
+          playerStatistics: null, playerProfiles: null, playerTeams: null, playerSeasonHistory: null, playerTransfers: null, oddsMapping: null, reference: null,
         };
         const blocked = (result: Readonly<{ stopped: string | null }> | null) =>
           Boolean(result?.stopped && result.stopped !== "request-budget" && result.stopped !== "target-limit");
         const totals = { requested: 0, archived: 0, skipped: 0, deferred: 0, requests: 0 };
-        const bulkPhase = (phase: FootballHistoryReferencePhase) => phase === "reference" || phase === "playerTeams";
+        const bulkPhase = (phase: FootballHistoryReferencePhase) => phase !== "playerStatistics" && phase !== "playerProfiles";
         for (const [index, phase] of order.entries()) {
           const remaining = input.maxRequests - totals.requests;
           if (remaining < 1) break;
@@ -305,14 +332,18 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
             (remaining - (order.length - index - 1)) / order.slice(index).filter(bulkPhase).length)) : 1;
           const report = phases[phase] = await runners[phase](allowance);
           for (const key of Object.keys(totals) as (keyof typeof totals)[]) totals[key] += report[key];
-          if (blocked(report)) break;
+          if (blocked(report) && (phase !== "oddsMapping" ||
+              !["odds-mapping-quota-unavailable", "odds-mapping-archive-invalid", "pagination-incomplete", "schema-error", "coverage-error"].includes(report.stopped ?? ""))) break;
         }
         const reports = Object.values(phases).filter((report) => report !== null);
         const complete = reports.length === order.length && reports.every(({ status }) => status === "complete");
         const stopped = reports.find(blocked)?.stopped ??
           (reports.length < order.length || reports.some(({ stopped }) => stopped === "request-budget") ? "request-budget" :
             reports.some(({ stopped }) => stopped === "target-limit") ? "target-limit" : null);
-        return { status: complete ? "complete" as const : "partial" as const, ...totals, stopped, subjectDiscovery, ...phases };
+        const verification = verifyFootballHistoryReferencePass({ globalScope, interrupted: signal?.aborted ?? false, startedAt,
+          checkedAt: now(), providerDayEndsAt: initialProviderDayEndsAt, currentProviderDayEndsAt: providerDayEndsAt(),
+          mappingAuthorized: mappingAllowed && mappingAuthorized(), subjectDiscovery, phases });
+        return { status: complete ? "complete" as const : "partial" as const, ...totals, stopped, subjectDiscovery, ...phases, verification };
       };
     })() : null;
     const selectionStore = createMysqlDailySelectionStore(database, queue);

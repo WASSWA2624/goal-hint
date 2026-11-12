@@ -17,6 +17,8 @@ function archiveMemory() {
   const database = { async query(operation) { return operation({ footballHistorySourcePage: {
     async createMany({ data }) { saved.push(data); return { count: 1 }; },
     async findMany({ where }) { return saved.filter((page) => page.endpoint === where.endpoint && page.selectorHash === where.selectorHash); },
+    async findFirst({ where }) { return saved.filter((page) => page.endpoint === where.endpoint && page.selectorHash === where.selectorHash)
+      .sort((left, right) => right.retrievedAt - left.retrievedAt)[0] ?? null; },
   } }); } };
   return { saved, source: createFootballHistorySource(database) };
 }
@@ -46,9 +48,10 @@ function harness({ respond = response, maximumPage, afterRead } = {}) {
   const options = { maximumPage, now: () => now, providerDayEndsAt: () => dayEnd,
     async readPages(selector) {
       afterRead?.(() => { dayEnd += 24 * 3_600_000; });
-      return [...(saved.get(scope(selector))?.values() ?? [])];
+      return { generation: null, receipts: [...(saved.get(scope(selector))?.values() ?? [])] };
     },
     async savePage(page) { persist(page); },
+    async recordConflict() {},
     async playerStatisticsPage(selector, bounds, workflow) {
       assert.equal(bounds.maxRequests, 1);
       assert.equal(bounds.maxPages, 1);
@@ -146,6 +149,40 @@ test("pagination drift and duplicate identities never replace saved pages or cla
   assert.equal(storedConflict.requests.length, 0);
 });
 
+test("repeated verified drift starts a new generation without borrowing pages from the original scan", async () => {
+  let now = Date.now() - 10_000, dayEnd = now + 60_000, announcedTotal = 2;
+  const { saved, source } = archiveMemory();
+  const requests = [];
+  const run = () => createFootballHistoryPlayerStatistics({
+    async playerStatisticsPage(selector) { requests.push(selector.page); return response(selector, ++now, announcedTotal); },
+    readPages: source.readPlayerStatisticsPages, savePage: source.savePlayerStatisticsPage,
+    recordConflict: source.recordPlayerStatisticsConflict, now: () => now, providerDayEndsAt: () => dayEnd,
+  }).run({ targets: [target], maxRequests: 1 });
+  await run();
+  const [originalPage] = saved;
+  announcedTotal = 3;
+  assert.equal((await run()).conflicts, 1);
+  assert.deepEqual(saved.map(({ endpoint }) => endpoint), ["playerStatistics", "playerArchiveConflict"]);
+  assert.equal((await source.readPlayerStatisticsPages(target)).generation, null);
+  assert.equal((await run()).conflicts, 1);
+  const [,, restart] = saved;
+  assert.equal(restart.endpoint, "playerArchiveGeneration");
+  assert.deepEqual(await source.readPlayerStatisticsPages(target), { generation: restart.id, receipts: [] });
+
+  assert.equal((await run()).status, "partial");
+  dayEnd += 24 * 3_600_000;
+  assert.equal((await run()).status, "partial");
+  assert.equal((await run()).status, "complete");
+  assert.equal((await run()).requests, 0);
+  assert.deepEqual(requests, [1, 2, 2, 1, 2, 3]);
+  assert.equal(saved[0], originalPage);
+  assert.deepEqual(saved[0].parameters, { league: "39", season: "2025" });
+  const archive = await source.readPlayerStatisticsPages(target);
+  assert.equal(archive.generation, restart.id);
+  assert.deepEqual(archive.receipts.map(({ page, totalPages }) => [page, totalPages]), [[1, 3], [2, 3], [3, 3]]);
+  assert.ok(saved.slice(3).every(({ parameters }) => parameters.generation === restart.id));
+});
+
 test("plan limits and a provider day rollover leave the season incomplete without excess dispatch", async () => {
   const limited = harness({ maximumPage: 3, respond: (selector, at) => response(selector, at, 4) });
   const first = await limited.run({ maxRequests: 10 });
@@ -210,11 +247,11 @@ test("raw page envelopes share a source selector and restore their verified play
   assert.notEqual(saved[0].id, saved[1].id);
   assert.deepEqual(JSON.parse(gunzipSync(saved[1].compressedRows).toString()), { provider: "api-football", contract: API_FOOTBALL_CONTRACT_VERSION,
     page: 2, totalPages: 2, retrievedAt: retrievedAt + 2, rows: players({ ...target, page: 2 }, 3) });
-  const pages = await source.readPlayerStatisticsPages(target);
+  const { receipts: pages } = await source.readPlayerStatisticsPages(target);
   assert.deepEqual(pages.map(({ page, totalPages, rowCount }) => ({ page, totalPages, rowCount })),
     [{ page: 1, totalPages: 2, rowCount: 20 }, { page: 2, totalPages: 2, rowCount: 3 }]);
   assert.deepEqual(pages[1].playerIds, [21, 22, 23]);
-  assert.deepEqual(await source.readPlayerStatisticsPages({ ...target, season: 2024 }), []);
+  assert.deepEqual(await source.readPlayerStatisticsPages({ ...target, season: 2024 }), { generation: null, receipts: [] });
   saved[0].contentHash = "bad";
   assert.equal(await source.readPlayerStatisticsPages(target), null);
 });
@@ -246,7 +283,8 @@ test("the global player profile catalog resumes from 250-row pages and restores 
     return catalogResponse(url, rows, { paging: { current: page, total: 2 } });
   } });
   const run = () => createFootballHistoryPlayerProfiles({ playerProfilePage: provider.adapter.reference.playerProfilePage,
-    readPages: source.readPlayerProfilePages, savePage: source.savePlayerProfilePage, now: () => now,
+    readPages: source.readPlayerProfilePages, savePage: source.savePlayerProfilePage,
+    recordConflict: source.recordPlayerProfileConflict, now: () => now,
     providerDayEndsAt: () => started + 60_000 }).run({ maxRequests: 1 });
   const first = await run();
   assert.equal(first.status, "partial");
@@ -258,7 +296,7 @@ test("the global player profile catalog resumes from 250-row pages and restores 
   assert.deepEqual(saved.map(({ parameters, endpoint }) => ({ parameters, endpoint })), [
     { parameters: {}, endpoint: "playerProfiles" }, { parameters: {}, endpoint: "playerProfiles" },
   ]);
-  assert.deepEqual((await source.readPlayerProfilePages())[1].playerIds, [251, 252]);
+  assert.deepEqual((await source.readPlayerProfilePages()).receipts[1].playerIds, [251, 252]);
 });
 
 test("the global profile adapter rejects an unexpected player selector or an invalid profile identity", async () => {
@@ -286,17 +324,25 @@ test("default reference ordering gives the least recently archived group the nex
       .map(([endpoint, time]) => ({ endpoint, _max: { retrievedAt: new Date(time) } }));
   } } }); } };
   const source = createFootballHistorySource(database);
-  assert.deepEqual(await source.referencePhaseOrder(true), ["playerStatistics", "playerProfiles", "playerTeams", "reference"]);
+  const players = ["playerStatistics", "playerProfiles", "playerTeams", "playerSeasonHistory", "playerTransfers", "oddsMapping"];
+  assert.deepEqual(await source.referencePhaseOrder(true), [...players, "reference"]);
   observed.set("playerStatistics", NOW + 1);
-  assert.deepEqual(await source.referencePhaseOrder(true), ["playerProfiles", "playerTeams", "reference", "playerStatistics"]);
+  assert.deepEqual(await source.referencePhaseOrder(true), [...players.slice(1), "reference", "playerStatistics"]);
   observed.set("playerProfiles", NOW + 2);
-  assert.deepEqual(await source.referencePhaseOrder(true), ["playerTeams", "reference", "playerStatistics", "playerProfiles"]);
+  assert.deepEqual(await source.referencePhaseOrder(true), [...players.slice(2), "reference", ...players.slice(0, 2)]);
   observed.set("playerTeams", NOW + 3);
-  assert.deepEqual(await source.referencePhaseOrder(true), ["reference", "playerStatistics", "playerProfiles", "playerTeams"]);
-  observed.set("standings", NOW + 4);
-  assert.deepEqual(await source.referencePhaseOrder(true), ["playerStatistics", "playerProfiles", "playerTeams", "reference"]);
+  assert.deepEqual(await source.referencePhaseOrder(true), [...players.slice(3), "reference", ...players.slice(0, 3)]);
+  observed.set("playerSeasonHistory", NOW + 4);
+  assert.deepEqual(await source.referencePhaseOrder(true), ["playerTransfers", "oddsMapping", "reference", ...players.slice(0, 4)]);
+  observed.set("playerTransfers", NOW + 5);
+  assert.deepEqual(await source.referencePhaseOrder(true), ["oddsMapping", "reference", ...players.slice(0, 5)]);
+  observed.set("oddsMapping", NOW + 6);
+  assert.deepEqual(await source.referencePhaseOrder(true), ["reference", ...players]);
+  observed.set("standings", NOW + 7);
+  assert.deepEqual(await source.referencePhaseOrder(true), [...players, "reference"]);
   assert.deepEqual(await source.referencePhaseOrder(false), ["playerStatistics", "reference"]);
-  observed.set("playerStatistics", NOW + 5);
-  observed.set("trophies", NOW + 6);
+  observed.set("playerStatistics", NOW + 8);
+  observed.set("playerTransfers", NOW + 9);
+  observed.set("trophies", NOW + 10);
   assert.deepEqual(await source.referencePhaseOrder(false), ["reference", "playerStatistics"]);
 });

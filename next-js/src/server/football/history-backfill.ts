@@ -8,11 +8,14 @@ import { API_FOOTBALL_CONTRACT_VERSION, apiFootballFixtureRoundParameters, type 
 import { normalizeCompetition, type NormalizationContext, type NormalizedCompetition } from "./api-football-normalize.ts";
 import { catalogPersistenceUnavailable, type FootballCatalogStore } from "./catalog-mysql-store.ts";
 import { CatalogPersistenceDeferredError, type createFootballCatalogImporter } from "./catalog-service.ts";
+import { reviewedHistoryFixtureRepair } from "./history-fixture-correction.ts";
+import { footballHistoryFixtureScopeFingerprint } from "./history-fixture-scope.ts";
 import { footballHistorySourceMaxRows } from "./history-source.ts";
 
 export const historyBackfillLimits = Object.freeze({ defaultRequests: 6, maximumRequests: 100 });
 const retryDelayMs = 15 * 60_000;
 const consecutiveTransportLimit = 3;
+const previousWholeSeasonRowLimit = 5_000;
 const transportFailures = new Set(["transport-error", "deadline-exceeded"]);
 const stopReasons = new Set(["quota-denied", "rate-limited", "operation-not-authorized", "authentication-error",
   "invalid-credential", "subscription-expired"]);
@@ -20,7 +23,7 @@ const stopReasons = new Set(["quota-denied", "rate-limited", "operation-not-auth
 type LeagueSeason = FixtureRoundQuery;
 type FixtureScope = LeagueSeason & Readonly<{ round?: string }>;
 type FixtureSelector = Readonly<{ league: string; season: string; timezone: string; round?: string }>;
-type FixtureSourceObservation = Readonly<{ retrievedAt: number; rowCount: number }>;
+type FixtureSourceObservation = Readonly<{ retrievedAt: number; rowCount: number; pageId?: string }>;
 type SeasonCoverage = Readonly<Record<string, boolean | null>>;
 type HistoricalImport = FixtureScope & Readonly<{ status: string; received: number; imported: number; requests: number; reasons: readonly string[] }>;
 type CompetitionsReader = ReturnType<typeof createApiFootballAdapter>["evidence"]["competitions"];
@@ -50,10 +53,10 @@ export function normalizeHistoryCompetition(row: unknown, context: Normalization
   return id === null ? null : { id, seasons: [...seasons].map(([year, coverage]) => ({ year, coverage })) };
 }
 
-function historicalImportId({ competitionId, season, round }: FixtureScope, attempt: number): string {
+function historicalImportId({ competitionId, season, round }: FixtureScope, attempt: number, expandedLimit?: number): string {
   const key = round === undefined ? `goal-hint:historical-results:v1:${competitionId}:${season}:${attempt}`
     : `goal-hint:historical-results:round:v1:${JSON.stringify([competitionId, season, round, attempt])}`;
-  const bytes = createHash("sha256").update(key).digest().subarray(0, 16);
+  const bytes = createHash("sha256").update(expandedLimit === undefined ? key : `${key}:row-limit:${expandedLimit}`).digest().subarray(0, 16);
   bytes[6] = (bytes[6]! & 0x0f) | 0x80;
   bytes[8] = (bytes[8]! & 0x3f) | 0x80;
   const hex = bytes.toString("hex");
@@ -116,8 +119,7 @@ export function createFootballHistoryBackfill(options: Readonly<{
 
   async function hasSource(scope: FixtureScope, receipt: Readonly<{ observedAt: number; receivedCount: number }>) {
     if (!options.hasFixtureSource) return scope.round === undefined;
-    const exact = scope.round === undefined ? undefined : { retrievedAt: receipt.observedAt, rowCount: receipt.receivedCount };
-    return options.hasFixtureSource(fixtureSelector(scope), exact);
+    return options.hasFixtureSource(fixtureSelector(scope), { retrievedAt: receipt.observedAt, rowCount: receipt.receivedCount });
   }
 
   async function verifiedArchive(scope: FixtureScope, observation: FixtureSourceObservation) {
@@ -137,18 +139,35 @@ export function createFootballHistoryBackfill(options: Readonly<{
   }
 
   async function progress(scope: FixtureScope) {
-    let oversized = false;
+    let oversized = false, reachedPreviousLimit = false, expanded = false;
     for (let attempt = 1; ; attempt++) {
-      const id = historicalImportId(scope, attempt), receipt = await options.store.findImport(id);
-      if (!receipt) return { id, complete: false, archivedOnly: null, oversized, coolingDown: false };
+      const id = historicalImportId(scope, attempt, expanded ? footballHistorySourceMaxRows : undefined);
+      const receipt = await options.store.findImport(id);
+      if (!receipt) {
+        if (!expanded && reachedPreviousLimit && !oversized) {
+          // The old local limit did not prove the provider could not return the whole season.
+          expanded = true;
+          reachedPreviousLimit = false;
+          attempt = 0;
+          continue;
+        }
+        return { id, complete: false, archivedOnly: null, oversized, coolingDown: false };
+      }
       if (receipt.status === "complete" && await hasSource(scope, receipt)) return { id, complete: true, archivedOnly: null, oversized, coolingDown: false };
-      if (receipt.reasons.includes(catalogPersistenceUnavailable) && await options.store.hasReplayedImport?.(id) && await hasSource(scope, receipt)) {
-        return { id, complete: true, archivedOnly: null, oversized, coolingDown: false };
+      const reviewed = reviewedHistoryFixtureRepair(id);
+      if ((reviewed || receipt.reasons.includes(catalogPersistenceUnavailable)) && await options.store.hasReplayedImport?.(id)) {
+        const archived = reviewed
+          ? await verifiedArchive(scope, { retrievedAt: receipt.observedAt, rowCount: receipt.receivedCount, pageId: reviewed.pageId })
+          : await hasSource(scope, receipt);
+        if (archived) return { id, complete: true, archivedOnly: null, oversized, coolingDown: false };
       }
       const archivedOnly = await archivedWithoutCanonicalResults(scope, receipt);
       if (archivedOnly) return { id, complete: false, archivedOnly, oversized, coolingDown: false };
-      oversized ||= requiresPartition(receipt.reasons);
-      if (!oversized && receipt.status !== "complete" && options.now() - receipt.recordedAt < retryDelayMs) {
+      if (!expanded && scope.round === undefined && receipt.requestsDispatched === 1 && receipt.receivedCount === previousWholeSeasonRowLimit &&
+        receipt.reasons.includes("pagination-incomplete") && !receipt.reasons.includes("response-too-large")) {
+        reachedPreviousLimit = true;
+      } else oversized ||= requiresPartition(receipt.reasons);
+      if (!oversized && !reachedPreviousLimit && receipt.status !== "complete" && options.now() - receipt.recordedAt < retryDelayMs) {
         return { id, complete: false, archivedOnly: null, oversized, coolingDown: true };
       }
     }
@@ -308,8 +327,11 @@ export function createFootballHistoryBackfill(options: Readonly<{
     }
 
     const unlistedCompetitions = [...scoped].filter((competitionId) => !known.has(competitionId)).sort((left, right) => left - right);
-    return { status: stopped || deferred || unlistedCompetitions.length ? "partial" as const : "complete" as const,
+    const complete = !stopped && deferred === 0 && unlistedCompetitions.length === 0;
+    return { status: complete ? "complete" as const : "partial" as const,
       requests, planned: plan.length, completed, archivedOnly, deferred, processed, imported, partitioned, roundsPlanned, roundsCompleted,
+      ...(complete && { fixtureScopeFingerprint: footballHistoryFixtureScopeFingerprint(plan.map(({ scope }) => scope)) }),
+      providerDayEndsAt: verifiedDayEnd,
       roundsArchivedOnly, persistenceDeferred, roundsPersistenceDeferred, consecutiveTransportErrors, unlistedCompetitions, stopped };
   };
 }

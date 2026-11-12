@@ -14,7 +14,7 @@ export type FootballHistoryPlayerStatisticsSelector = PlayerPageSelector<Footbal
 export type FootballHistoryPlayerProfileSelector = PlayerPageSelector<ProfileTarget>;
 export type FootballHistoryPlayerStatisticsReceipt = Readonly<{ page: number; totalPages: number; retrievedAt: UtcInstant;
   rowCount: number; playerIds: readonly number[] }>;
-type PlayerPage<Target> = Target & FootballHistoryPlayerStatisticsReceipt & Readonly<{ rows: readonly unknown[] }>;
+type PlayerPage<Target> = Target & FootballHistoryPlayerStatisticsReceipt & Readonly<{ rows: readonly unknown[]; generation?: string }>;
 export type FootballHistoryPlayerStatisticsPage = PlayerPage<FootballHistoryPlayerStatisticsTarget>;
 export type FootballHistoryPlayerProfilePage = PlayerPage<ProfileTarget>;
 type PlayerPageTransport<Target> = (selector: PlayerPageSelector<Target>,
@@ -22,16 +22,19 @@ type PlayerPageTransport<Target> = (selector: PlayerPageSelector<Target>,
 export type FootballHistoryPlayerStatisticsTransport = PlayerPageTransport<FootballHistoryPlayerStatisticsTarget>;
 export type FootballHistoryPlayerProfileTransport = PlayerPageTransport<ProfileTarget>;
 
-type PageDeferral = ApiFootballErrorReason | "unverified-page" | "page-count-changed" | "duplicate-player";
+type PaginationConflictReason = "page-count-changed" | "duplicate-player";
+export type FootballHistoryPlayerPaginationConflict = Readonly<{ page: number; retrievedAt: UtcInstant; reason: PaginationConflictReason }>;
+type PageDeferral = ApiFootballErrorReason | "unverified-page" | PaginationConflictReason;
 type PageReport<Target> = PlayerPageSelector<Target> & Readonly<{ status: "archived" | "deferred";
   totalPages: number | null; rowCount: number; requests: number; reason: PageDeferral | null }>;
 type PageRules<Target> = Readonly<{ endpoint: "playerStatistics" | "playerProfiles"; pageSize: number;
   parameters(selector: PlayerPageSelector<Target>): Readonly<Record<string, string>>;
   rowId(row: unknown, target: Target): number | null }>;
 type ArchiveOptions<Target> = Readonly<{
-  // Receipts must refer to durable raw pages. A null result denotes corrupted stored evidence.
-  readPages(target: Target): Promise<readonly FootballHistoryPlayerStatisticsReceipt[] | null>;
+  // Receipts must all refer to the same durable generation. A null result denotes corrupt evidence.
+  readPages(target: Target): Promise<Readonly<{ generation: string | null; receipts: readonly FootballHistoryPlayerStatisticsReceipt[] }> | null>;
   savePage(page: PlayerPage<Target>): Promise<unknown>;
+  recordConflict(target: Target, generation: string | null, conflict: FootballHistoryPlayerPaginationConflict): Promise<void>;
   now(): UtcInstant;
   providerDayEndsAt(): number | null;
   maximumPage?: number;
@@ -83,7 +86,7 @@ function acceptedPage<Target>(response: ApiFootballResult<Readonly<{ raw: unknow
 
 /** Each target requires a consistent receipt for every page reported by the provider. */
 function playerArchive<Target>(options: ArchiveOptions<Target>, transport: PlayerPageTransport<Target>, rules: PageRules<Target>) {
-  const { readPages, savePage, now, providerDayEndsAt, maximumPage } = options, { pageSize } = rules;
+  const { readPages, savePage, recordConflict, now, providerDayEndsAt, maximumPage } = options, { pageSize } = rules;
   if (maximumPage !== undefined && !positive(maximumPage)) throw new RangeError("Invalid player-statistics page limit.");
 
   return {
@@ -102,11 +105,11 @@ function playerArchive<Target>(options: ArchiveOptions<Target>, transport: Playe
       targetLoop: for (const target of planned) {
         stopped = dayStop();
         if (stopped) break;
-        const receipts = await readPages(target);
+        const archive = await readPages(target);
         stopped = dayStop();
         if (stopped) break;
-        const state = receiptState(receipts, now(), pageSize);
-        if (!state) { totals.conflicts++; continue; }
+        const state = archive && receiptState(archive.receipts, now(), pageSize);
+        if (!archive || !state) { totals.conflicts++; continue; }
         totals.skipped += state.pages.size;
         let { totalPages, empty } = state;
         let page = 1;
@@ -138,7 +141,10 @@ function playerArchive<Target>(options: ArchiveOptions<Target>, transport: Playe
 
           if (reason) {
             totals.deferred++;
-            if (reason === "page-count-changed" || reason === "duplicate-player") totals.conflicts++;
+            if (observed && (reason === "page-count-changed" || reason === "duplicate-player")) {
+              totals.conflicts++;
+              await recordConflict(target, archive.generation, { page, retrievedAt: observed.retrievedAt, reason });
+            }
             onPage?.({ ...selector, status: "deferred", totalPages: observed?.totalPages ?? totalPages,
               rowCount: 0, requests, reason });
             stopped = dayStop() ?? (response.error && stopReasons.has(response.error.reason) ? response.error.reason : null);
@@ -146,7 +152,7 @@ function playerArchive<Target>(options: ArchiveOptions<Target>, transport: Playe
             continue targetLoop;
           }
           if (!observed) throw new Error("Missing validated player archive page.");
-          await savePage(observed);
+          await savePage(archive.generation ? { ...observed, generation: archive.generation } : observed);
           totals.archived++;
           totalPages = observed.totalPages;
           empty = observed.rowCount === 0;

@@ -44,9 +44,10 @@ function harness(failures = [], upcomingSeasons) {
       assert.match(request.id, /^[\da-f]{8}-[\da-f]{4}-8[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/u);
       imported.push(request);
       const failure = failures.shift();
-      const dispatched = !failure || ["transport-error", "deadline-exceeded"].includes(failure);
+      const dispatched = !failure || ["transport-error", "deadline-exceeded", "pagination-incomplete"].includes(failure);
       const receipt = { id: request.id, status: failure ? "failed" : "complete", reasons: failure ? [failure] : [],
-        recordedAt: now, requestsDispatched: dispatched ? 1 : 0, importedCount: failure ? 0 : 12, receivedCount: failure ? 0 : 16 };
+        recordedAt: now, requestsDispatched: dispatched ? 1 : 0, importedCount: failure ? 0 : 12,
+        receivedCount: failure === "pagination-incomplete" ? 5_000 : failure ? 0 : 16 };
       receipts.set(request.id, receipt);
       return receipt;
     } },
@@ -85,6 +86,17 @@ test("upcoming fixtures prioritize their league and include active seasons label
     { competitionId: 11, season: 2026 }, { competitionId: 7, season: 2026 },
     { competitionId: 11, season: 2025 }, { competitionId: 7, season: 2024 },
   ]);
+});
+
+test("a whole season stopped at the old row cap gets a durable retry with the current limit", async () => {
+  const h = harness(["pagination-incomplete"]);
+  const options = { maxRequests: 2, competitionId: 7, oldestSeason: 2026 };
+  assert.equal((await h.run(options)).completed, 0);
+  assert.equal((await h.run(options)).completed, 1);
+  assert.notEqual(h.imported[0].id, h.imported[1].id);
+  assert.equal(h.imported[1].bounds.maxRows, 10_000);
+  assert.equal((await h.run(options)).processed, 0);
+  assert.equal(h.imported.length, 2);
 });
 
 test("quota refusal pauses the batch, and an incomplete receipt can be retried without rewriting it", async () => {
@@ -150,7 +162,7 @@ function roundHarness({ reason = "response-too-large", responseParameters, exact
       const failure = oversized ? reason : roundFailures.shift();
       const receipt = { status: oversized ? "partial" : failure ? "failed" : "complete", reasons: failure ? [failure] : [],
         recordedAt: now, observedAt: now - 100, requestsDispatched: 1,
-        importedCount: failure ? 0 : 2, receivedCount: oversized ? 5_000 : failure ? 0 : 3 };
+        importedCount: failure ? 0 : 2, receivedCount: failure ? 0 : 3 };
       receipts.set(request.id, receipt);
       return receipt;
     } },
@@ -300,8 +312,8 @@ test("a complete raw season with conflicting rows is retained without repeated p
   assert.equal(fetched, 1);
 });
 
-function persistenceHarness({ archiveProof = true, durableDeferral = true, loseCommitResponse = false } = {}) {
-  const receipts = new Map(), proofCalls = [], deferredWrites = [], network = [];
+function persistenceHarness({ archiveProof = true, durableDeferral = true, loseCommitResponse = false, deferFixtureWritesAbove } = {}) {
+  const receipts = new Map(), proofCalls = [], deferredWrites = [], normalWrites = [], network = [];
   const round = "Club Friendlies 3";
   const authority = { authorize() {}, verifyRetention: () => true, verifyObservation: () => true,
     verifyLogo: () => true, verifyRegulationScore: () => true };
@@ -333,6 +345,7 @@ function persistenceHarness({ archiveProof = true, durableDeferral = true, loseC
   const store = {
     async findImport(id) { return receipts.get(id) ?? null; },
     async importBatch(batch) {
+      normalWrites.push(batch);
       if (batch.selection.query.round !== round) return save(batch);
       assert.equal(batch.status, "complete");
       if (loseCommitResponse) save(batch);
@@ -345,7 +358,7 @@ function persistenceHarness({ archiveProof = true, durableDeferral = true, loseC
     },
   };
   const now = () => CATALOG_NOW;
-  const importer = createFootballCatalogImporter({ adapter, store, authority, clock: { now } });
+  const importer = createFootballCatalogImporter({ adapter, store, authority, clock: { now }, deferFixtureWritesAbove });
   const run = createFootballHistoryBackfill({
     competitionIds: [667, 999], retentionEvidenceRef: "verified-history-retention", now,
     providerDayEndsAt: () => CATALOG_NOW + 24 * 3_600_000,
@@ -360,7 +373,7 @@ function persistenceHarness({ archiveProof = true, durableDeferral = true, loseC
       async fetch() { throw new Error("The round catalog is already archived."); },
       async save() { throw new Error("The round catalog is already archived."); } },
   });
-  return { run, importer, network, deferredWrites, proofCalls, receipts, round };
+  return { run, importer, network, deferredWrites, normalWrites, proofCalls, receipts, round };
 }
 
 test("a saved oversized round with unavailable canonical storage is deferred and later seasons continue", async () => {
@@ -399,6 +412,16 @@ test("an ambiguous canonical commit is recovered without a deferred receipt or s
   assert.equal(receipt.requestsDispatched, 1);
   assert.equal(receipt.importedCount, 1);
   assert.equal(h.deferredWrites.length, 0);
+  assert.equal(h.network.length, 1);
+});
+
+test("a large complete fixture page with exact saved evidence goes straight to bounded replay", async () => {
+  const h = persistenceHarness({ deferFixtureWritesAbove: 0 });
+  const request = catalogRequest({ kind: "fixtures", query: { competitionId: 999, season: 2025 } });
+  const receipt = await h.importer.import(request, async (observation) => observation.rowCount === 1);
+  assert.deepEqual(receipt.reasons, [catalogPersistenceUnavailable]);
+  assert.equal(h.normalWrites.length, 0);
+  assert.equal(h.deferredWrites.length, 1);
   assert.equal(h.network.length, 1);
 });
 

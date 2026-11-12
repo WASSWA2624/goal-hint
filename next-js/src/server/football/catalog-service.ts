@@ -34,6 +34,7 @@ export function createFootballCatalogImporter(options: Readonly<{
   adapter: ReturnType<typeof createApiFootballAdapter>;
   store: Pick<FootballCatalogStore, "findImport" | "importBatch" | "deferImport">;
   authority: CatalogAuthority;
+  deferFixtureWritesAbove?: number;
   clock?: Clock;
 }>) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
@@ -72,17 +73,18 @@ export function createFootballCatalogImporter(options: Readonly<{
     }
     authorize(request);
     const batch = validateCatalogBatch(request, result, options.authority, clock);
-    try { return await options.store.importBatch(batch, options.authority); }
-    catch (error) {
-      if (!verifySavedFixtureScope || selection.kind !== "fixtures" || !unavailable(error)) throw error;
+    const [page] = batch.provenance;
+    async function hasSavedFixtures() {
+      return verifySavedFixtureScope !== undefined && batch.requestsDispatched === 1 && result.provenance.length === 1 &&
+        result.provenance[0]?.quota?.kind === "success" && batch.provenance.length === 1 && page !== undefined &&
+        !page.fromCache && page.currentPage === 1 && page.totalPages === 1 &&
+        await verifySavedFixtureScope({ retrievedAt: page.retrievedAt, rowCount: batch.rows.fixtures.length + batch.invalidRows }).catch(() => false);
+    }
+    async function defer(alreadyVerified?: boolean) {
       authorize(request);
       const recovered = await reconcile(batch);
       if (recovered) return recovered;
-      const [page] = batch.provenance;
-      const rawArchived = batch.requestsDispatched === 1 && result.provenance.length === 1 && result.provenance[0]?.quota?.kind === "success" &&
-        batch.provenance.length === 1 && page !== undefined &&
-        !page.fromCache && page.currentPage === 1 && page.totalPages === 1 &&
-        await verifySavedFixtureScope({ retrievedAt: page.retrievedAt, rowCount: batch.rows.fixtures.length + batch.invalidRows }).catch(() => false);
+      const rawArchived = alreadyVerified ?? await hasSavedFixtures();
       if (rawArchived) {
         try { return await options.store.deferImport(batch, options.authority); }
         catch (error) { if (!unavailable(error)) throw error; }
@@ -90,6 +92,13 @@ export function createFootballCatalogImporter(options: Readonly<{
         if (recoveredDeferral) return recoveredDeferral;
       }
       throw new CatalogPersistenceDeferredError(batch, rawArchived);
+    }
+    if (selection.kind === "fixtures" && batch.status === "complete" && options.deferFixtureWritesAbove !== undefined &&
+      batch.rows.fixtures.length > options.deferFixtureWritesAbove && await hasSavedFixtures()) return defer(true);
+    try { return await options.store.importBatch(batch, options.authority); }
+    catch (error) {
+      if (!verifySavedFixtureScope || selection.kind !== "fixtures" || !unavailable(error)) throw error;
+      return defer();
     }
   }
   return Object.freeze({

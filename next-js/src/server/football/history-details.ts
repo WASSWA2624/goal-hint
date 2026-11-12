@@ -73,7 +73,7 @@ const storedComplete = Prisma.join(sectionNames.map((name) => completeFacts[name
 const resolved = Prisma.join(sectionNames.map((name) => name === "info" ? completeFacts.info :
   Prisma.sql`(${completeFacts[name]} OR ${hasSectionState(name, "unsupported")})`), " AND ");
 
-async function readCoverage(database: DatabaseRuntime, ids: readonly number[], at: number) {
+export async function readFootballHistoryDetailCoverage(database: DatabaseRuntime, ids: readonly number[], at: number) {
   const [row] = await database.query((tx) => tx.$queryRaw<CoverageRow[]>(Prisma.sql`
     SELECT COUNT(*) AS eligible,
       COUNT(CASE WHEN detailCoverage='stored-complete' THEN 1 END) AS storedComplete,
@@ -304,7 +304,7 @@ export function createFootballHistoryDetails(options: Readonly<{
       transportFailures = failedTransport ? transportFailures + 1 : 0;
       if (transportFailures >= 3) { stopped = "provider-transport-unavailable"; break; }
     }
-    const coverage = await readCoverage(database, scope, now());
+    const coverage = await readFootballHistoryDetailCoverage(database, scope, now());
     if (stopped === null && requestSignal.aborted) stopped = "interrupted";
     if (stopped === null && coverage.due > 0 && totals.requests >= maxRequests) stopped = "request-budget";
     const passComplete = stopped === null && coverage.due === 0;

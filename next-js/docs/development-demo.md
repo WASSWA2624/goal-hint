@@ -158,6 +158,19 @@ an importer log under `.goal-hint/`. It can use the database already started
 by the development app. Use `npm run history:backfill -- --replay` to process
 a bounded batch of saved fixture pages without making API requests.
 
+Run `npm run history:backfill -- --coverage` alongside the importer to audit
+the saved archive without spending quota. It matches whole-season receipts
+to checksummed provider pages, reports verified empty seasons and unresolved
+scopes, and lists match-detail coverage and saved endpoint observations.
+
+Add `--notify-on-completion` to the continuous Windows task to get one
+desktop message after a settled pass verifies the historical archive.
+The check requires current catalog evidence, resolved fixture and detail
+coverage, settled reference discovery, the current odds mapping, and no
+pending fixture replay. The runner saves the verified message and retries
+delivery when the signed-in desktop is available. Imports continue after
+the message. Live price and forecast collection have their own windows.
+
 The live snapshot's web server defaults to `127.0.0.1`. To browse from another
 device on the same network, start it with `npm run dev -- --hostname 0.0.0.0 --port 3000`
 and open the host computer's LAN IP on port 3000. To keep LAN access enabled on

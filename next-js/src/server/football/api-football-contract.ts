@@ -27,15 +27,18 @@ export const apiFootballEndpoints = Object.freeze({
   timezones: Object.freeze({ path: "/timezone", paginated: false }),
   leagueSeasons: Object.freeze({ path: "/leagues/seasons", paginated: false }),
   teams: Object.freeze({ path: "/teams", paginated: false }),
+  teamsByCountry: Object.freeze({ path: "/teams", paginated: false }),
   teamCountries: Object.freeze({ path: "/teams/countries", paginated: false }),
   teamSeasons: Object.freeze({ path: "/teams/seasons", paginated: false }),
   teamStatistics: Object.freeze({ path: "/teams/statistics", paginated: false }),
   venues: Object.freeze({ path: "/venues", paginated: false }),
+  venuesByCountry: Object.freeze({ path: "/venues", paginated: false }),
   standings: Object.freeze({ path: "/standings", paginated: false }),
   transfers: Object.freeze({ path: "/transfers", paginated: false }),
   trophies: Object.freeze({ path: "/trophies", paginated: false }),
   sidelined: Object.freeze({ path: "/sidelined", paginated: false }),
   coaches: Object.freeze({ path: "/coachs", paginated: false }),
+  coachProfiles: Object.freeze({ path: "/coachs", paginated: false }),
   squads: Object.freeze({ path: "/players/squads", paginated: false }),
   competitions: Object.freeze({ path: "/leagues", paginated: false }),
   statistics: Object.freeze({ path: "/fixtures/statistics", paginated: false }),
@@ -47,11 +50,14 @@ export const apiFootballEndpoints = Object.freeze({
   playerStatistics: Object.freeze({ path: "/players", paginated: true, pageSize: 20 }),
   playerProfiles: Object.freeze({ path: "/players/profiles", paginated: true, pageSize: 250 }),
   playerSeasons: Object.freeze({ path: "/players/seasons", paginated: false }),
+  playerSeasonHistory: Object.freeze({ path: "/players/seasons", paginated: false }),
+  playerTransfers: Object.freeze({ path: "/transfers", paginated: false }),
   playerTeams: Object.freeze({ path: "/players/teams", paginated: false }),
   predictions: Object.freeze({ path: "/predictions", paginated: false }),
   accountStatus: Object.freeze({ path: "/status", paginated: false }),
   // Pre-match odds (prompt 052). The page size follows the official v3 documentation; the counted trial must confirm it.
   odds: Object.freeze({ path: "/odds", paginated: true, pageSize: 10 }),
+  oddsMapping: Object.freeze({ path: "/odds/mapping", paginated: true, pageSize: 100 }),
   oddsBets: Object.freeze({ path: "/odds/bets", paginated: false }),
   oddsBookmakers: Object.freeze({ path: "/odds/bookmakers", paginated: false }),
   inPlayOdds: Object.freeze({ path: "/odds/live", paginated: false }),
@@ -80,8 +86,10 @@ export type FootballHistoryReferenceTarget = Readonly<
   | { endpoint: "teamStatistics"; competitionId: number; season: number; teamId: number }
   | { endpoint: "fixtureHalfStatistics"; fixtureId: number; homeTeamId: number; awayTeamId: number }
   | { endpoint: "venues"; venueId: number }
+  | { endpoint: "teamsByCountry" | "venuesByCountry"; country: string }
+  | { endpoint: "coachProfiles"; coachId: number }
   | { endpoint: FootballHistoryPersonRecordEndpoint; kind: FootballHistorySubjectKind; subjectIds: readonly number[] }
-  | { endpoint: "playerTeams"; playerId: number }
+  | { endpoint: "playerTeams" | "playerSeasonHistory" | "playerTransfers"; playerId: number }
   | { endpoint: "transfers" | "coaches" | "squads" | "teamSeasons"; teamId: number }
 >;
 
@@ -92,9 +100,16 @@ export function apiFootballReferenceParameters(target: FootballHistoryReferenceT
   if (isFootballHistoryReferenceDictionary(target.endpoint)) return Object.keys(target).length === 1 ? {} : null;
   switch (target.endpoint) {
     case "venues": return providerId(target.venueId) ? { id: String(target.venueId) } : null;
+    case "teamsByCountry":
+    case "venuesByCountry":
+      return typeof target.country === "string" && target.country.length > 0 && target.country.length <= 256 &&
+        target.country.trim() === target.country && !/[\p{Cc}]/u.test(target.country) ? { country: target.country } : null;
+    case "coachProfiles": return providerId(target.coachId) ? { id: String(target.coachId) } : null;
     case "trophies":
     case "sidelined": return footballHistoryPersonRecordSelector(target.kind, target.subjectIds);
-    case "playerTeams": return providerId(target.playerId) ? { player: String(target.playerId) } : null;
+    case "playerTeams":
+    case "playerSeasonHistory":
+    case "playerTransfers": return providerId(target.playerId) ? { player: String(target.playerId) } : null;
     case "transfers":
     case "coaches":
     case "teamSeasons":

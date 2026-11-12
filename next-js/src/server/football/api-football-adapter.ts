@@ -19,6 +19,7 @@ import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { createDemoApiFootballFetch } from "../demo/api-football.ts";
 import { authorizeDemoFootball, createDemoFootballGateway, demoFootballAccountId } from "../demo/provider-runtime.ts";
 import { normalizeFixtureMatchDetails, type NormalizedFixtureMatchDetails } from "./fixture-match-details.ts";
+import { normalizeFootballHistoryOddsMapping } from "./history-odds-mapping.ts";
 import { isFootballHistoryPersonRecord, isFootballHistoryPersonRecordEndpoint, readFootballHistoryPersonGroup } from "./history-person-records.ts";
 import { archivedCoachRowId, archivedPlayerProfileRowId, archivedPlayerStatisticsRowId, playerStatisticsProviderId } from "./history-player-statistics-input.ts";
 import type { FootballHistoryPlayerProfileSelector, FootballHistoryPlayerStatisticsSelector } from "./history-player-statistics.ts";
@@ -87,7 +88,8 @@ function normalizeReferenceRow(raw: unknown, target: FootballHistoryReferenceTar
     data: Object.freeze({ raw, ...(id === undefined ? {} : { id }) }), missingCoverage: [] });
   if (target.endpoint === "timezones") return typeof raw === "string" && raw.length <= 128 &&
     /^[A-Za-z0-9_+-]+(?:\/[A-Za-z0-9_+-]+)*$/u.test(raw) ? valid(raw) : invalid;
-  if (target.endpoint === "leagueSeasons" || target.endpoint === "playerSeasons" || target.endpoint === "teamSeasons") {
+  if (target.endpoint === "leagueSeasons" || target.endpoint === "playerSeasons" || target.endpoint === "playerSeasonHistory" ||
+      target.endpoint === "teamSeasons") {
     return positive(raw) && raw >= 1000 && raw <= 9999 ? valid(raw, raw) : invalid;
   }
   if (!record(raw)) return invalid;
@@ -99,7 +101,9 @@ function normalizeReferenceRow(raw: unknown, target: FootballHistoryReferenceTar
         (raw.code === null || typeof raw.code === "string" && /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/u.test(raw.code) && raw.code.length <= 32) &&
         (raw.flag === null || typeof raw.flag === "string" && raw.flag.length <= 2048) ? valid(raw) : invalid;
     case "teams":
-      if (!identified(raw.team) || (raw.venue != null && (!record(raw.venue) || raw.venue.id != null && !identified(raw.venue)))) return invalid;
+    case "teamsByCountry":
+      if (!identified(raw.team) || (target.endpoint === "teamsByCountry" && raw.team.country !== target.country) ||
+        (raw.venue != null && (!record(raw.venue) || raw.venue.id != null && !identified(raw.venue)))) return invalid;
       return valid(raw, raw.team.id);
     case "teamStatistics":
       return record(raw.league) && raw.league.id === target.competitionId && raw.league.season === target.season &&
@@ -128,6 +132,8 @@ function normalizeReferenceRow(raw: unknown, target: FootballHistoryReferenceTar
     }
     case "venues":
       return raw.id === target.venueId ? valid(raw, target.venueId) : invalid;
+    case "venuesByCountry":
+      return identified(raw) && raw.country === target.country ? valid(raw, raw.id) : invalid;
     case "trophies":
     case "sidelined": {
       if (target.subjectIds.length === 1) return isFootballHistoryPersonRecord(target.endpoint, raw) ? valid(raw) : invalid;
@@ -147,6 +153,8 @@ function normalizeReferenceRow(raw: unknown, target: FootballHistoryReferenceTar
       const id = archivedCoachRowId(raw, target.teamId);
       return id === null ? invalid : valid(raw, id);
     }
+    case "coachProfiles":
+      return archivedCoachRowId(raw) === target.coachId ? valid(raw, target.coachId) : invalid;
     case "squads":
       return record(raw.team) && raw.team.id === target.teamId && Array.isArray(raw.players) && raw.players.every(identified) &&
         new Set(raw.players.map(({ id }) => id)).size === raw.players.length ? valid(raw, target.teamId) : invalid;
@@ -154,19 +162,21 @@ function normalizeReferenceRow(raw: unknown, target: FootballHistoryReferenceTar
       return identified(raw.team) && Array.isArray(raw.seasons) && raw.seasons.length > 0 &&
         raw.seasons.every((season) => positive(season) && season >= 1000 && season <= 9999) &&
         new Set(raw.seasons).size === raw.seasons.length ? valid(raw, raw.team.id) : invalid;
-    case "transfers": {
+    case "transfers":
+    case "playerTransfers": {
       if (!identified(raw.player) || !Array.isArray(raw.transfers)) return invalid;
-      let matches = false;
+      if (target.endpoint === "playerTransfers" && raw.player.id !== target.playerId) return invalid;
+      let matches = target.endpoint === "playerTransfers";
       for (const transfer of raw.transfers) {
         if (!record(transfer) || !record(transfer.teams) || typeof transfer.date !== "string") return invalid;
         try { parseReportingDate(transfer.date); } catch { return invalid; }
         for (const club of [transfer.teams.in, transfer.teams.out]) {
           if (club === null || record(club) && club.id === null) continue;
           if (!identified(club)) return invalid;
-          if (club.id === target.teamId) matches = true;
+          if (target.endpoint === "transfers" && club.id === target.teamId) matches = true;
         }
       }
-      // A team lookup can return the player's complete transfer history.
+      // A team lookup can include off-team rows. It only proves the team's request scope.
       return matches ? valid(raw, raw.player.id) : invalid;
     }
   }
@@ -477,7 +487,9 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
           const resultCount = teamStatistics && objectResponse ? Object.keys(payload).length : rows?.length;
           // The documented team seasons example counts one team even with several years in response.
           const oneTeamWithSeasons = endpoint === "teamSeasons" && rows !== null && rows.length > 0;
-          const exactReferenceEcho = teamStatistics || isFootballHistoryReferenceDictionary(endpoint) ||
+          const exactReferenceEcho = teamStatistics || endpoint === "oddsMapping" || isFootballHistoryReferenceDictionary(endpoint) ||
+            endpoint === "coachProfiles" || endpoint === "teamsByCountry" || endpoint === "venuesByCountry" ||
+            endpoint === "playerSeasonHistory" || endpoint === "playerTransfers" ||
             endpoint === "coaches" || endpoint === "squads" || endpoint === "teamSeasons" || isApiFootballLeaderboard(endpoint) ||
             endpoint === "fixtureHalfStatistics" || endpoint === "playerTeams" || isFootballHistoryPersonRecordEndpoint(endpoint) || view === "reference" &&
               (endpoint === "fixtureRounds" || endpoint === "playerStatistics" || endpoint === "playerProfiles");
@@ -494,8 +506,9 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
             captured = failure("schema-error");
             return { value: null, feedback: { ...observation, kind: "provider-error" } };
           }
-          // Price rows carry their own `update` time; other endpoints lack one.
-          const data: T[] = [], missingCoverage = new Set<string>(endpoint === "odds" || endpoint === "inPlayOdds" ? [] : ["provider-update-time"]);
+          // Price and mapping rows carry their own `update` time.
+          const carriesUpdate = endpoint === "odds" || endpoint === "inPlayOdds" || endpoint === "oddsMapping";
+          const data: T[] = [], missingCoverage = new Set<string>(carriesUpdate ? [] : ["provider-update-time"]);
           if (rows.length === 0) missingCoverage.add(`${endpoint}-coverage-not-established`);
           if (Object.keys(params).some((key) => key !== "timezone" && (!record(body.parameters) || !Object.hasOwn(body.parameters, key)))) {
             captured = failure("coverage-error");
@@ -719,7 +732,8 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
       },
       page(target: FootballHistoryReferenceTarget, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) {
         const params = apiFootballReferenceParameters(target);
-        const rowLimit = target?.endpoint === "fixtureHalfStatistics" ? 2 : isApiFootballLeaderboard(target?.endpoint) ? 20 : null;
+        const rowLimit = target?.endpoint === "playerTransfers" ? 1 :
+          target?.endpoint === "fixtureHalfStatistics" ? 2 : isApiFootballLeaderboard(target?.endpoint) ? 20 : null;
         const maxRows = rowLimit !== null && positive(bounds?.maxRows) ? Math.min(bounds.maxRows, rowLimit) : bounds?.maxRows;
         return run(target?.endpoint, params ? [params] : null, { ...bounds, maxRows, cacheMaxAgeMs: 0 },
           (raw) => normalizeReferenceRow(raw, target), undefined, workflow, "reference");
@@ -730,6 +744,11 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
     // Kept outside evidence and fallback so bookmaker prices never reach AI or fallback forecasts.
     odds: Object.freeze({
       prices: (query: OddsSweepQuery, bounds: ApiFootballBounds) => { const params = oddsParams(query); return run("odds", params ? [params] : null, bounds, normalizeOdds); },
+      mappingPage: (page: number, bounds: ApiFootballBounds, workflow: ApiFootballFallbackWorkflow) =>
+        run("oddsMapping", positive(page) ? [{}] : null, { ...bounds, cacheMaxAgeMs: 0 }, (raw, context) => {
+          const data = normalizeFootballHistoryOddsMapping(raw, context.retrievedAt);
+          return data ? { valid: true, data, missingCoverage: [] } : { valid: false, reason: "schema-error" };
+        }, undefined, workflow, "reference", page),
       bets: (bounds: ApiFootballBounds) => run("oddsBets", [{}], bounds, normalizeOddsCatalogEntry),
       bookmakers: (bounds: ApiFootballBounds) => run("oddsBookmakers", [{}], bounds, normalizeOddsCatalogEntry),
       inPlay: (bounds: ApiFootballBounds) => run("inPlayOdds", [{}], bounds, normalizeInPlayOdds),

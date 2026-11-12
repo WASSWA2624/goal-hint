@@ -18,8 +18,9 @@ export function archivedPlayerProfileRowId(row: unknown): number | null {
   return record(row) && record(row.player) && playerStatisticsProviderId(row.player.id) ? row.player.id : null;
 }
 
-export function archivedCoachRowId(row: unknown, teamId: number): number | null {
+export function archivedCoachRowId(row: unknown, teamId?: number): number | null {
   if (!record(row) || !playerStatisticsProviderId(row.id) || !Array.isArray(row.career) || !row.career.every(record)) return null;
+  if (teamId === undefined) return row.id;
   const associated = (team: unknown) => record(team) && team.id === teamId;
   return associated(row.team) || row.career.some(({ team }) => associated(team)) ? row.id : null;
 }

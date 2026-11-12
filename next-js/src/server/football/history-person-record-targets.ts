@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import type { DatabaseRuntime } from "../database/client.ts";
-import type { FootballHistoryReferenceTarget } from "./api-football-contract.ts";
+import { API_FOOTBALL_CONTRACT_VERSION, type FootballHistoryReferenceTarget } from "./api-football-contract.ts";
 import { footballHistoryPersonOmissionEndpoint, historyPersonRecordBatchSize, type FootballHistoryPersonRecordEndpoint,
   type FootballHistorySubjectKind } from "./history-person-records.ts";
 import { readPendingHistorySubjectIds } from "./history-subjects.ts";
@@ -24,7 +24,7 @@ export async function readHistoryPersonRecordTargets(database: DatabaseRuntime,
     endpoint: footballHistoryPersonOmissionEndpoint(endpoint), selectorHash: { in: ids.map((id) => subjectHash(kind, id)) },
   }));
   const omitted = omissionLookups.length ? await database.query((client) => client.footballHistorySourcePage.findMany({
-    where: { OR: omissionLookups }, select: { endpoint: true, selectorHash: true },
+    where: { contract: API_FOOTBALL_CONTRACT_VERSION, OR: omissionLookups }, select: { endpoint: true, selectorHash: true },
   })) : [];
   const omissions = new Set(omitted.map(({ endpoint, selectorHash }) => `${endpoint}:${selectorHash}`));
   let hasMoreTargets = false;

@@ -174,6 +174,33 @@ rollback; do not reset job, forecast or quota data.
 | Release is broken | Run `--rollback` |
 
 
+## VPS staging and release promotion
+
+`https://test.goalhint.com` runs under the `ghstage` cPanel account on the
+Ubuntu VPS. Apache serves the Next.js bundle through Passenger using the
+repository's pinned Node.js. The VPS keeps MariaDB on loopback. The staging
+database uses separate application and migration accounts with verified TLS.
+Staging starts with an empty app database and disabled provider jobs.
+
+1. Build the release with `npm run package:cpanel` from a clean checkout of the
+   intended commit. Keep the ZIP and its SHA-256 together.
+2. Verify the ZIP after upload. Unpack it into
+   `~/goal-hint-releases/<commit>` under the staging account. Copy the staging
+   environment file and approval register from `~/goal-hint-private/` into
+   the release's `standalone/` directory with account-only permissions.
+3. Qualify pending migrations on MariaDB with the migration account. Verify
+   the schema and original Prisma migration checksums before switching
+   `~/goal-hint` to the new release and restarting the Passenger app.
+4. Check the public HTTPS Matches page and `/api/matches`, and verify the
+   staging page returns a `noindex` directive. Review the release online before
+   promoting the same ZIP to production with production's own configuration
+   and database. Verify the previous production database backup and restore
+   before moving the main domain.
+
+Keep the prior app release available for rollback. Switching releases does
+not roll back the database. The shared-host deployment commands above target
+the previous production host.
+
 ## Paid access (066)
 
 No deployment or activation is authorized by prompts 057–067. Overlay inventory includes `prisma/mariadb/20261019142209_subscriptions.sql` alongside analytics and existing goal-market/manifest overlays. Stop app and worker writes for verified DDL; check all nine InnoDB tables, checks/FKs and narrow grants before restarting. Preserve paid mode off and complete host checks plus OP-40 approval. See [subscriber operations](../subscriptions.md).

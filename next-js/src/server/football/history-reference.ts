@@ -6,6 +6,7 @@ import { API_FOOTBALL_CONTRACT_VERSION, apiFootballReferenceParameters, isApiFoo
   type ApiFootballErrorReason, type FootballHistoryReferenceTarget } from "./api-football-contract.ts";
 import { historyBackfillLimits } from "./history-backfill.ts";
 import { isFootballHistoryPersonRecordEndpoint } from "./history-person-records.ts";
+import { footballHistoryReferencePhases, type FootballHistoryReferencePhase } from "./history-source.ts";
 
 export type { FootballHistoryReferenceTarget } from "./api-football-contract.ts";
 
@@ -17,14 +18,50 @@ export type FootballHistoryReferenceSelector = Readonly<{
 type ReferenceAdapter = ReturnType<typeof createApiFootballAdapter>["reference"];
 type ReferenceResponse = Awaited<ReturnType<ReferenceAdapter["page"]>>;
 type ReferencePage = FootballHistoryReferenceSelector & Readonly<{ rows: readonly unknown[]; retrievedAt: UtcInstant }>;
+type PhaseReport = Readonly<{ status: "complete" | "partial"; stopped: string | null; archived: number; deferred: number; day?: string }>;
+
+/** Confirm that a full pass observed no unfinished work in the discovered scope. */
+export function verifyFootballHistoryReferencePass(input: Readonly<{
+  globalScope: boolean;
+  interrupted: boolean;
+  startedAt: UtcInstant;
+  checkedAt: UtcInstant;
+  providerDayEndsAt: number | null;
+  currentProviderDayEndsAt: number | null;
+  mappingAuthorized: boolean;
+  subjectDiscovery: Readonly<{ indexed: number; hasMore: boolean; hasInvalid: boolean }> | null;
+  phases: Readonly<Record<FootballHistoryReferencePhase, PhaseReport | null>>;
+}>) {
+  const { globalScope, interrupted, startedAt, checkedAt, providerDayEndsAt, currentProviderDayEndsAt,
+    mappingAuthorized, subjectDiscovery, phases } = input;
+  const observationDay = new Date(startedAt).toISOString().slice(0, 10);
+  let reason: string | null = null;
+  if (!globalScope) reason = "limited-competition-scope";
+  else if (interrupted) reason = "interrupted";
+  else if (providerDayEndsAt === null || !Number.isSafeInteger(providerDayEndsAt) || providerDayEndsAt !== currentProviderDayEndsAt ||
+    checkedAt < startedAt || checkedAt >= providerDayEndsAt ||
+    new Date(checkedAt).toISOString().slice(0, 10) !== observationDay) reason = "provider-day-ended";
+  else if (!mappingAuthorized) reason = "odds-mapping-not-authorized";
+  else if (!subjectDiscovery || subjectDiscovery.hasMore || subjectDiscovery.hasInvalid) reason = "pending-subject-discovery";
+  else if (footballHistoryReferencePhases.some((phase) => {
+    const report = phases[phase];
+    return !report || report.status !== "complete" || report.stopped !== null || report.deferred !== 0;
+  }) || phases.oddsMapping?.day !== observationDay) reason = "pending-reference-phases";
+  // Fresh pages and subjects can open new selectors that this pass did not visit.
+  else if (subjectDiscovery.indexed > 0 || footballHistoryReferencePhases.some((phase) => (phases[phase]?.archived ?? 0) > 0)) {
+    reason = "reference-scope-changed";
+  }
+  return { scope: "discovered" as const, complete: reason === null, providerDayEndsAt, reason };
+}
 
 const stopReasons = new Set<ApiFootballErrorReason>(["quota-denied", "rate-limited", "operation-not-authorized",
   "authentication-error", "invalid-credential", "subscription-expired", "shared-work-pending"]);
 
 function priority({ endpoint }: FootballHistoryReferenceTarget) {
-  if (isFootballHistoryReferenceDictionary(endpoint)) return 2;
+  if (isFootballHistoryReferenceDictionary(endpoint)) return 3;
+  if (endpoint === "teamsByCountry" || endpoint === "venuesByCountry") return 2;
   return endpoint === "teamStatistics" || endpoint === "coaches" || endpoint === "squads" || endpoint === "teamSeasons" ||
-    endpoint === "fixtureRounds" || endpoint === "fixtureHalfStatistics" || isApiFootballLeaderboard(endpoint) ||
+    endpoint === "coachProfiles" || endpoint === "fixtureRounds" || endpoint === "fixtureHalfStatistics" || isApiFootballLeaderboard(endpoint) ||
     isFootballHistoryPersonRecordEndpoint(endpoint) ? 0 : 1;
 }
 
@@ -115,6 +152,7 @@ export function createFootballHistoryReference(options: Readonly<{
         if (consecutiveTransportFailures >= 3) { stopped = "provider-transport-unavailable"; break; }
         if (response.requestsDispatched !== 1 && !transportFailure) { stopped = reason ?? "reference-unavailable"; break; }
       }
+      stopped ??= dayStop();
       if (!stopped && input.hasMoreTargets) stopped = totals.requests >= maxRequests ? "request-budget" : "target-limit";
       return { status: stopped || totals.deferred ? "partial" as const : "complete" as const, ...totals, stopped };
     },

@@ -7,10 +7,13 @@ import type { Prisma, FootballFixture, FootballImport, FootballTeam, FootballCom
 import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type Clock, type UtcInstant } from "../../domain/calendar.ts";
 import { isPlayedFinalStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
+import { fixtureResultMatchesCanonical, storedFixtureResult } from "../results/result-read.ts";
 import { fixtureResultValue, insertFixtureResult } from "../results/result-write.ts";
 import type { NormalizedFixture, NormalizedTeam, NormalizedCompetition, SourceTimestamps } from "./api-football-normalize.ts";
 import type { CatalogAuthority, CatalogPreparedBatch, CatalogSelection, CatalogTeamMapping } from "./catalog-contract.ts";
 import { normalizeCatalogSearch, isSafeCatalogLogo, parseCatalogTeamMapping, catalogScopeKey, assertCatalogPreparedBatch, parseCatalogEvidenceRef } from "./catalog-input.ts";
+import { reviewedDuplicateReplacement, reviewedFixtureMatches, reviewedFixtureRejectionCount, reviewedFixtureReplayMarkerMatches,
+  reviewedHistoryFixtureRepair } from "./history-fixture-correction.ts";
 
 const PROVIDER = "api-football";
 const MAX_VERSION = 18_446_744_073_709_551_615n;
@@ -25,7 +28,8 @@ type StoredFixture = Prisma.FootballFixtureGetPayload<{ include: typeof fixtureR
 type SharedHistory<Entity> = Map<string, { before: Entity; aliasesAdded: { name: string; normalizedSearch: string; observedAt: UtcInstant }[] }>;
 type FixtureFields = Pick<FootballFixture, "homeTeamId" | "awayTeamId" | "seasonId" | "round" | "kickoff" | "eatDate" | "status" |
   "providerStatus" | "elapsedMinutes" | "regulationHome" | "regulationAway" | "regulationEvidenceRef" | "regulationVerifiedAt">;
-type ReplaySegment = Readonly<{ id: string; scopeKey: string; reference: string; fingerprint: string; start: number; end: number }>;
+type ReplaySegment = Readonly<{ id: string; scopeKey: string; reference: string; fingerprint: string; start: number; end: number;
+  existingReviewedEvidence: ReadonlyMap<number, string> }>;
 
 function replayScopeKey(parentId: string): string {
   return createHash("sha256").update(historyReplayScopePrefix + parentId).digest("hex");
@@ -239,8 +243,9 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
           fail("coordination-failed");
         await apply();
       }
-    } catch {
+    } catch (error) {
       await pending?.catch(() => {});
+      if (historical && !options.coordinateFixtureMutation) throw error;
       fail("coordination-failed");
     }
     if (calls !== 1 || pending === undefined) fail("coordination-failed");
@@ -408,12 +413,23 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
           const mapping = await transaction.footballCompetitionProvider.findUnique({ where: {
             provider_externalId: { provider: PROVIDER, externalId: BigInt(input.competition.id) },
           } });
+          const existingEvidence = replay?.existingReviewedEvidence.get(input.id);
+          const reuseSealedEvidence = existingEvidence !== undefined && archivedFixture.regulationEvidenceRef === existingEvidence;
           if (archivedFixture.season.competitionId !== mapping?.competitionId || archivedFixture.season.year !== input.competition.season ||
             !archivedFixture.homeTeam.providers.some((row) => row.provider === PROVIDER && row.externalId === BigInt(input.homeTeam.id)) ||
             !archivedFixture.awayTeam.providers.some((row) => row.provider === PROVIDER && row.externalId === BigInt(input.awayTeam.id)) ||
             archivedFixture.kickoff?.getTime() !== input.kickoff || archivedFixture.status !== input.status || archivedFixture.providerStatus !== input.providerStatus ||
-            archivedFixture.regulationHome !== score!.home || archivedFixture.regulationAway !== score!.away || archivedFixture.regulationEvidenceRef !== scoreEvidence ||
+            archivedFixture.regulationHome !== score!.home || archivedFixture.regulationAway !== score!.away ||
+            (archivedFixture.regulationEvidenceRef !== scoreEvidence && !reuseSealedEvidence) ||
             archivedFixture.regulationVerifiedAt === null || archivedFixture.regulationVerifiedAt.getTime() > input.source.retrievedAt) continue;
+          if (reuseSealedEvidence) {
+            const state = await transaction.fixtureResultState.findUnique({ where: { fixtureId: archivedFixture.id }, select: { resultId: true } });
+            if (!state?.resultId) continue;
+            const result = await storedFixtureResult(transaction, archivedFixture.id, state.resultId);
+            if (!fixtureResultMatchesCanonical(archivedFixture, result) || result.providerStatus !== input.providerStatus) continue;
+            fixtureIds.push(archivedFixture.id);
+            continue;
+          }
           fixtureIds.push(archivedFixture.id);
           if (fresh(input.source, archivedFixture)) {
             await lockFixture(transaction, archivedFixture.id);
@@ -497,19 +513,35 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
       batch.provenance.length !== 1 || batch.provenance[0]?.fromCache !== true) fail("invalid-state");
 
     const parentId = batch.request.id, scopeKey = replayScopeKey(parentId), completionId = replayImportId(scopeKey, "complete");
+    const reviewed = reviewedHistoryFixtureRepair(parentId);
+    const reviewedEntries = reviewed ? [...reviewed.corrections, ...reviewed.duplicates.map(reviewedDuplicateReplacement)] : [];
+    if (reviewed) {
+      if (pageId !== reviewed.pageId || batch.selection.query.competitionId !== reviewed.competitionId ||
+        batch.selection.query.season !== reviewed.season || batch.selection.query.round !== reviewed.round ||
+        batch.rows.fixtures.length !== reviewed.expectedRows - reviewed.duplicates.length ||
+        reviewed.duplicates.some(({ fixtureId }) => batch.rows.fixtures.some(({ id }) => id === fixtureId))) fail("invalid-state");
+      for (const entry of reviewedEntries) {
+        const row = batch.rows.fixtures.find(({ id }) => id === entry.fixtureId);
+        if (!row || !reviewedFixtureMatches(reviewed, entry, row) || reviewed.corrections.includes(entry) && entry.expected.score !== null &&
+          batch.scoreEvidenceRefs[String(entry.fixtureId)] !== entry.evidenceRef) fail("invalid-state");
+      }
+    }
     const originalProvenance = batch.provenance.map((page) => ({ ...page, fromCache: false }));
     const parent = await database.query((client) => client.footballImport.findUnique({ where: { id: parentId } }));
     if (!parent || parent.scopeKey !== batch.scopeKey || parent.provider !== PROVIDER || parent.kind !== "fixtures" ||
-      parent.status !== "partial" || parent.requestsDispatched !== 1 || parent.importedCount !== 0 || parent.rejectedCount !== 0 ||
-      parent.observedAt.getTime() !== batch.observedAt || parent.receivedCount !== batch.rows.fixtures.length ||
+      parent.status !== "partial" || parent.requestsDispatched !== 1 || parent.importedCount !== 0 ||
+      parent.rejectedCount !== (reviewed ? reviewedFixtureRejectionCount(reviewed) : 0) ||
+      parent.observedAt.getTime() !== batch.observedAt || parent.receivedCount !== (reviewed?.expectedRows ?? batch.rows.fixtures.length) ||
       parent.retentionEvidenceRef !== batch.request.retentionEvidenceRef ||
-      evidenceFingerprint(parent.reasons) !== evidenceFingerprint([catalogPersistenceUnavailable]) ||
+      evidenceFingerprint(parent.reasons) !== evidenceFingerprint(reviewed?.reasons ?? [catalogPersistenceUnavailable]) ||
       evidenceFingerprint(parent.provenance) !== evidenceFingerprint(originalProvenance)) fail("invalid-state");
-    const reference = `history-source:${pageId}:import:${parentId}`;
+    const reference = reviewed?.reference ?? `history-source:${pageId}:import:${parentId}`;
+    const existingReviewedEvidence = new Map(reviewedEntries.flatMap(({ fixtureId, existingEvidenceRef }) =>
+      existingEvidenceRef === undefined ? [] : [[fixtureId, existingEvidenceRef] as const]));
     const chunkCount = Math.ceil(batch.rows.fixtures.length / historyReplayChunkSize);
     const plan = Array.from({ length: chunkCount }, (_, index): ReplaySegment => {
       const start = index * historyReplayChunkSize, end = Math.min(start + historyReplayChunkSize, batch.rows.fixtures.length);
-      return { id: replayImportId(scopeKey, index), scopeKey, reference: `${reference}:${start}-${end}`, start, end,
+      return { id: replayImportId(scopeKey, index), scopeKey, reference: `${reference}:${start}-${end}`, start, end, existingReviewedEvidence,
         fingerprint: evidenceFingerprint([batch.fingerprint, reference, start, end]) };
     });
     const findChunks = (client: Prisma.TransactionClient) => client.footballImport.findMany({ where: { id: { in: plan.map(({ id }) => id) } } });
@@ -539,15 +571,34 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
       authorize(batch, authority);
       const complete = await client.footballImport.findUnique({ where: { id: completionId } });
       if (complete) {
-        if (complete.fingerprint !== completionFingerprint || complete.requestFingerprint !== batch.requestFingerprint) fail("conflicting-import");
+        if (complete.fingerprint !== completionFingerprint || complete.requestFingerprint !== batch.requestFingerprint ||
+          reviewed && !reviewedFixtureReplayMarkerMatches(reviewed, complete)) fail("conflicting-import");
         return;
       }
       const chunks = verifiedChunks(await findChunks(client));
       if (chunks.size !== plan.length) fail("invalid-state");
+      const importedCount = [...chunks.values()].reduce((sum, row) => sum + row.importedCount, 0);
+      if (reviewed) {
+        if (importedCount !== reviewed.expectedVerifiedResults) fail("invalid-state");
+        for (const entry of reviewedEntries) {
+          const { score, kickoff, providerStatus } = entry.expected;
+          if (score === null) continue;
+          const fixture = await client.footballFixture.findUnique({ where: { provider_externalId: {
+            provider: PROVIDER, externalId: BigInt(entry.fixtureId),
+          } }, select: { id: true, kickoff: true, status: true, providerStatus: true, regulationEvidenceRef: true,
+            regulationHome: true, regulationAway: true, regulationVerifiedAt: true, resultState: { select: { resultId: true } } } });
+          if (!fixture?.resultState?.resultId || (fixture.kickoff?.getTime() ?? null) !== kickoff || fixture.providerStatus !== providerStatus ||
+            (fixture.regulationEvidenceRef !== batch.scoreEvidenceRefs[String(entry.fixtureId)] &&
+              fixture.regulationEvidenceRef !== entry.existingEvidenceRef)) fail("invalid-state");
+          const result = await storedFixtureResult(client, fixture.id, fixture.resultState.resultId);
+          if (!fixtureResultMatchesCanonical(fixture, result) || result.providerStatus !== providerStatus ||
+            !result.regulation.verified || result.regulation.home !== score.home || result.regulation.away !== score.away) fail("invalid-state");
+        }
+      }
       await client.footballImport.create({ data: { id: completionId, fingerprint: completionFingerprint,
         requestFingerprint: batch.requestFingerprint, selection: json(batch.selection), scopeKey, provider: PROVIDER,
         kind: historyReplayKind, status: "complete", observedAt: new Date(batch.observedAt), recordedAt: new Date(clock.now()),
-        receivedCount: batch.rows.fixtures.length, importedCount: [...chunks.values()].reduce((sum, row) => sum + row.importedCount, 0),
+        receivedCount: parent.receivedCount, importedCount,
         rejectedCount: 0, requestsDispatched: 0, reasons: json([replayed]), missingIds: json([]), missingCoverage: json(batch.missingCoverage),
         provenance: json(batch.provenance), retentionEvidenceRef: batch.request.retentionEvidenceRef, subsetEvidenceRef: reference,
         fixtureIds: json([]), changedFixtureIds: json([]) } });
@@ -624,7 +675,9 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
     async hasReplayedImport(parentId: string) {
       const scopeKey = replayScopeKey(parentId), id = replayImportId(scopeKey, "complete");
       const row = await database.query((client) => client.footballImport.findUnique({ where: { id } }));
-      return row?.scopeKey === scopeKey && row.kind === historyReplayKind && row.status === "complete" && row.requestsDispatched === 0;
+      const reviewed = reviewedHistoryFixtureRepair(parentId);
+      return row?.scopeKey === scopeKey && row.kind === historyReplayKind && row.status === "complete" && row.requestsDispatched === 0 &&
+        (!reviewed || reviewedFixtureReplayMarkerMatches(reviewed, row));
     },
     registerTeamMapping, dateCoverage,
     findImport: async (id: string) => database.query(async (client) => {
