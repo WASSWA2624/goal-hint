@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
+import { restoredLiveFeedSearch } from "@/domain/feed-live-search";
 import type { FeedCheckpoint } from "@/domain/feed-navigation";
 import { applyServerFeedPage, FeedPaginationError, initialLoadedFeed, replaceFeedPages, type LoadedFeed } from "@/domain/feed-pagination";
 import { feedQueryHref, feedQueryKey, type FeedQuery } from "@/domain/feed-query";
@@ -22,20 +23,22 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
 }) {
   const dispatch = useAppDispatch();
   const router = useRouter();
+  const href = feedQueryHref(query, today), queryKey = feedQueryKey(query, today);
   const [view, setView] = useState(() => initialLoadedFeed(data));
-  const [serverData, setServerData] = useState(data);
-  if (serverData !== data) {
-    setServerData(data);
+  const [source, setSource] = useState({ href, data });
+  const [phase, setPhase] = useState<Mode | null>(null), [error, setError] = useState<FeedPaginationError["code"] | null>(null);
+  if (source.href !== href) {
+    setSource({ href, data }); setView(initialLoadedFeed(data)); setPhase(null); setError(null);
+  } else if (source.data !== data) {
+    setSource({ href, data });
     const next = applyServerFeedPage(view, data);
     if (next !== view) setView(next);
   }
-  const [phase, setPhase] = useState<Mode | null>(null), [error, setError] = useState<FeedPaginationError["code"] | null>(null);
   // A refreshed server query with the same canonical href must not tear down the listeners below.
   const root = useRef<HTMLDivElement>(null), viewRef = useRef(view), enabledRef = useRef(enabled), queryRef = useRef(query);
   const mounted = useRef(false), request = useRef<AbortController | null>(null), entryId = useRef<string | null>(null);
   const restored = useRef(true), retryCheckpoint = useRef<FeedCheckpoint | null>(null), failedMode = useRef<Mode>("refresh");
   const focusTarget = useRef<FocusTarget | null>(null);
-  const href = feedQueryHref(query, today), queryKey = feedQueryKey(query, today);
   const announce = useCallback((key: "loading" | "restoring" | "loaded" | "restored" | "refreshed" | "changed" | "failed" | "busy", loaded?: LoadedFeed, added = 0) => {
     const messages = createMessages(query.locale);
     const status = messages.text(`feed.pagination.${key}`, { shown: messages.number(loaded?.records.length ?? 0),
@@ -103,6 +106,9 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
 
   useLayoutEffect(() => { queryRef.current = query; }, [query]);
   useLayoutEffect(() => {
+    request.current?.abort(); request.current = null; retryCheckpoint.current = null; focusTarget.current = null;
+  }, [href]);
+  useLayoutEffect(() => {
     viewRef.current = view; enabledRef.current = enabled;
     const target = focusTarget.current;
     if (!target) return;
@@ -112,6 +118,8 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
   }, [enabled, error, focusAndSave, view]);
   useEffect(() => { if (!enabled) request.current?.abort(); }, [enabled]);
   useEffect(() => {
+    // A shallow-search return can briefly have the old server seed. Keep the real entry's checkpoint until the search is restored.
+    if (restoredLiveFeedSearch(window.location.pathname + window.location.search, queryRef.current, today) !== null) return;
     mounted.current = true;
     entryId.current = ensureFeedEntry(href);
     const previousCheckpoint = restoreFeedCheckpoint(entryId.current, queryKey, href, data.page);
@@ -153,7 +161,7 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
       window.removeEventListener("pagehide", save); window.removeEventListener("popstate", save);
       window.history.scrollRestoration = scrollRestoration;
     };
-  }, [announce, data.page, focusAndSave, href, queryKey, run, save]);
+  }, [announce, data.page, focusAndSave, href, queryKey, run, save, today]);
 
   return { view, phase, error, root, refresh: useCallback(() => run("background"), [run]), retry: () => {
     const checkpoint = retryCheckpoint.current;

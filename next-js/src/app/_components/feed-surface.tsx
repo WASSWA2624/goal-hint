@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, memo, Suspense, useCallback, useEffect, useState, useTransition, type ReactNode } from "react";
+import { Fragment, memo, Suspense, useCallback, useLayoutEffect, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
 import { FeedAppliedSummary, FeedNote } from "@/components/match/feed-controls";
@@ -11,9 +11,10 @@ import { useLiveRefresh } from "@/components/match/use-live-refresh";
 import { feedRefreshInterval } from "@/domain/live-refresh";
 import { FeedPagination } from "@/components/match/feed-pagination";
 import { useFeedPagination } from "@/components/match/use-feed-pagination";
+import { useLiveFeedSearch } from "@/components/match/use-live-feed-search";
 import { MatchCard } from "@/components/match/match-card";
 import { MatchCardList, MatchListDivider } from "@/components/match/match-card-list";
-import { ButtonLink } from "@/components/ui/controls";
+import { ButtonLink, TextButton } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
 import { joinedDesktopSections, Stack } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
@@ -59,21 +60,28 @@ const Results = styled(FeedStack)`
 `;
 /** The retained-result label keeps body colour on desktop. */
 const PreviousNote = styled(FeedNote)`${media.desktop} { color: inherit; }`;
+const StableFeedHeader = memo(FeedHeader);
 
 /** Memoized with stable callbacks, so header and filter state changes skip the list. */
-const FeedResults = memo(function FeedResults({ data: initial, query, today, enabled, onStatus, onApply, summary, confirmed, onConfirmed }: {
+const FeedResults = memo(function FeedResults({ data: initial, query, today, enabled, searchPending, performanceQuery, performanceData,
+  onStatus, onApply, onRollover, summary, confirmed, onConfirmed }: {
   data: MatchFeedResponse; query: FeedQuery; today: ReportingDate; enabled: boolean;
+  searchPending: boolean; performanceQuery: FeedQuery; performanceData: MatchFeedResponse; onRollover: () => void;
   summary?: Promise<FeedPerformanceSeed> | undefined;
   confirmed: FeedPerformanceSeed | null; onConfirmed: (seed: FeedPerformanceSeed) => void;
   onStatus: (href: string, message: string) => void; onApply: (query: FeedQuery) => void;
 }) {
   const messages = createMessages(query.locale, undefined, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone);
   const router = useRouter();
-  const { view, phase, error, root, retry, refresh } = useFeedPagination({ data: initial, query, today, enabled, onStatus });
+  const { view, phase, error, root, retry, refresh } = useFeedPagination({ data: initial, query, today, enabled: enabled && !searchPending, onStatus });
   const { data, records } = view;
+  const [performance, setPerformance] = useState({ seed: performanceData, data: performanceData });
+  const summaryData = query.search === performanceQuery.search ? data : performanceData === performance.seed ? performance.data : performanceData;
+  if (summaryData !== performance.data || performanceData !== performance.seed) setPerformance({ seed: performanceData, data: summaryData });
   // Read when each wait is armed, so the kickoff window always uses the current clock.
   useLiveRefresh({ today, zone: query.zone ?? query.time?.zone ?? null, enabled, interval: () => feedRefreshInterval(data, records, Date.now()), refresh,
     rollover: (day) => {
+      onRollover();
       if (isFeedDatePreset(query.dates.kind) && query.page !== 1) {
         router.replace(feedQueryHref({ ...query, page: 1 }, day), { scroll: false });
       } else router.refresh();
@@ -83,11 +91,11 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
   const similarFrom = data.search && data.search.similar > 0 ? data.search.exact + 1 : null;
   return <FeedStack $gap="sm" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
     aria-busy={phase !== null} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
-    <PerformanceSection data-feed-performance-section><Suspense fallback={<FeedPerformancePlaceholder query={query} data={data} />}>
-      <ServerThemeUntilHydrated><FeedPerformanceSummary query={query} today={today} data={data} enabled={enabled} onApply={onApply}
+    <PerformanceSection data-feed-performance-section><Suspense fallback={<FeedPerformancePlaceholder query={performanceQuery} data={summaryData} />}>
+      <ServerThemeUntilHydrated><FeedPerformanceSummary query={performanceQuery} today={today} data={summaryData} enabled={enabled} onApply={onApply}
         initial={summary} confirmed={confirmed} onConfirmed={onConfirmed} /></ServerThemeUntilHydrated>
     </Suspense></PerformanceSection>
-    <MatchResults data-feed-match-results>
+    <MatchResults data-feed-match-results aria-busy={searchPending || phase !== null}>
       <ResultsToolbar query={query} today={today} total={data.total} first={first}
         last={first + records.length - 1} publishedAt={latestPredictionPublication(records)} />
       {data.state !== "ready" && data.state !== "insufficient-data" && <EmptyState title={messages.text(`feed.state.${data.state}`)} description={data.message} />}
@@ -105,13 +113,15 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
         </Fragment>)}
       </MatchCardList>}
     </MatchResults>
-    {enabled && <FeedPagination firstPage={view.firstPage} shown={records.length} query={query} today={today} data={data} busy={phase !== null} error={error} onRetry={retry} />}
+    {enabled && <FeedPagination firstPage={view.firstPage} shown={records.length} query={query} today={today} data={data} busy={searchPending || phase !== null} error={error} onRetry={retry} />}
   </FeedStack>;
 });
 
 /** The count, plus whether a search found only similar results or where they begin. */
-function searchAnnouncement(data: MatchFeedResponse, query: FeedQuery, count: string): string {
+function searchAnnouncement(data: MatchFeedResponse, query: FeedQuery): string {
   const messages = createMessages(query.locale), search = data.search;
+  if (data.state !== "ready" && data.state !== "insufficient-data") return messages.text(`feed.state.${data.state}`);
+  const count = messages.plural("feed.matchCount", data.total);
   if (!search || search.similar === 0) return count;
   return search.exact === 0 ? `${messages.text("feed.search.noExact", { query: query.search })} ${count}`
     : `${count}. ${messages.text("feed.search.similarFrom", { position: messages.number(search.exact + 1) })}`;
@@ -131,28 +141,45 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
   const visible = result.data ? { query, today, data: result.data } : previous;
   const messages = createMessages(query.locale);
   const href = feedQueryHref(query, today), leagues = result.data?.leagues ?? previous?.data.leagues ?? noLeagues;
-  useEffect(() => {
-    // Match pages link back to this exact list, filters included.
-    try { window.sessionStorage.setItem(feedReturnStorageKey, href); } catch { /* Storage can be blocked. */ }
-  }, [href]);
   const failed = result.error !== null;
-  const apply = useCallback((next: FeedQuery) => {
+  const navigate = useCallback((next: FeedQuery) => {
     const nextHref = feedQueryHref(synchronizeFeedStatusDates(next, today), today);
-    // App Router discards superseded navigations. No per-keystroke requests.
     startTransition(() => {
       // Explicit Clear must supersede Apply even before React exposes pending=true.
       if (nextHref === href && failed && !pending) router.refresh();
       else router.push(nextHref, { scroll: false });
     });
   }, [failed, href, pending, router, today]);
-  const announcement = pending ? messages.text("feed.filters.loading") : result.error
+  const refresh = useCallback(() => { router.refresh(); }, [router]);
+  const { accepted, cancel, edit, error: searchError, pending: searchPending, search, text, reset } = useLiveFeedSearch({
+    query, today, data: result.data, suspended: pending, navigate, refresh,
+  });
+  const displayed = accepted ? { ...accepted, today } : visible;
+  const displayedHref = displayed ? feedQueryHref(displayed.query, displayed.today) : href;
+  useLayoutEffect(() => {
+    // Match pages link back to this exact accepted list, filters included.
+    try { window.sessionStorage.setItem(feedReturnStorageKey, displayedHref); } catch { /* Storage can be blocked. */ }
+  }, [displayedHref]);
+  const apply = useCallback((next: FeedQuery) => {
+    if (feedQueryHref(synchronizeFeedStatusDates(next, today), today) === href) reset();
+    else cancel();
+    navigate(next);
+  }, [cancel, href, navigate, reset, today]);
+  const applyPerformance = useCallback((next: FeedQuery) => apply({ ...next, search: accepted?.query.search ?? next.search }), [accepted, apply]);
+  const onSearchChange = useCallback((value: string, composing: boolean) => {
+    setPaginationStatus(null);
+    if (composing) edit(value); else search(value);
+  }, [edit, search]);
+  const onSearchSubmit = useCallback((value: string) => { setPaginationStatus(null); search(value, true); }, [search]);
+  const searchFailure = searchError ? messages.text(searchError === "rate-limited" ? "feed.rateLimited" : "feed.unavailable") : null;
+  const announcement = pending || searchPending ? messages.text("feed.filters.loading") : searchFailure ?? (result.error
     ? messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")
-    : paginationStatus?.href === href ? paginationStatus.message
-    : result.data.state === "ready" || result.data.state === "insufficient-data" ? searchAnnouncement(result.data, query, messages.plural("feed.matchCount", result.data.total))
-    : messages.text(`feed.state.${result.data.state}`);
+    : paginationStatus?.href === displayedHref ? paginationStatus.message
+    : displayed ? searchAnnouncement(displayed.data, displayed.query) : messages.text("feed.state.data-unavailable"));
   return <FeedStack $gap="sm">
-    <FeedHeader query={query} today={today} showAccount={showAccount} />
-    <FeedFilters key={`${href}:${today}`} subscriberOnly={subscriberOnly} query={query} today={today} leagues={leagues} onApply={apply} pending={pending} />
+    <StableFeedHeader query={query} today={today} showAccount={showAccount} />
+    <FeedFilters key={`${href}:${today}`} subscriberOnly={subscriberOnly} query={query} today={today} leagues={leagues} onApply={apply} pending={pending}
+      searchText={text} onSearchChange={onSearchChange} onSearchSubmit={onSearchSubmit} />
     {controls}
     <VisuallyHidden role="status" aria-live="polite" aria-atomic="true">{announcement}</VisuallyHidden>
     <Results $gap="md" aria-busy={pending} data-feed-results>
@@ -165,8 +192,10 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
         <PreviousNote>{messages.text("feed.filters.previous")}</PreviousNote>
         <FeedAppliedSummary query={visible.query} leagues={visible.data.leagues} />
       </Stack>}
-      {visible && <FeedResults key={feedQueryHref(visible.query, visible.today) + ":" + resolveFeedDates(visible.query, visible.today).startDate + ":" + visible.data.access.tier + ":" + visible.data.access.signedIn}
-        data={visible.data} query={visible.query} today={visible.today} enabled={!pending && !result.error} onStatus={onPaginationStatus} onApply={apply}
+      {searchFailure && <FeedNote>{searchFailure}{" "}<TextButton onClick={() => onSearchSubmit(text)}>{messages.text("feed.retry")}</TextButton></FeedNote>}
+      {displayed && visible && <FeedResults key={feedQueryHref(visible.query, visible.today) + ":" + resolveFeedDates(visible.query, visible.today).startDate + ":" + visible.data.access.tier + ":" + visible.data.access.signedIn}
+        data={displayed.data} query={displayed.query} today={displayed.today} enabled={!pending && !result.error} onStatus={onPaginationStatus} onApply={applyPerformance}
+        searchPending={searchPending} performanceQuery={visible.query} performanceData={visible.data} onRollover={cancel}
         summary={summary} confirmed={confirmed} onConfirmed={setConfirmed} />}
       {!result.error && pagination}
     </Results>

@@ -3,6 +3,7 @@
 import styled, { css } from "styled-components";
 import { controlBodyHeight } from "@/components/ui/control-layout";
 import { controlFeedback, filterButtonColors, filterPanelColors, focusRing, pageFilterPanel } from "@/components/ui/filter-chrome";
+import { FilterDialogTrigger } from "@/components/ui/filter-dialog-trigger";
 import { desktopContentPadding } from "@/components/ui/layout";
 import { media } from "@/styles/theme";
 
@@ -46,16 +47,9 @@ export const FilterButton = styled.button`
 `;
 
 /** An embedded summary action stretches to the card row; its minimum uses shared control metrics. */
-export const AdvancedFiltersButton = styled(FilterButton)`
-  display: inline-flex; align-items: center; justify-content: center; gap: var(--gh-spacing-1_5);
+export const BestSlipsFilterTrigger = styled(FilterDialogTrigger)`
   /* Keep row sizing above the shared button rule, including after style reinsertion. */
   && { block-size: auto; align-self: stretch; }
-  white-space: nowrap;
-  > svg { flex: none; font-size: var(--gh-font-emphasis); }
-`;
-
-export const FilterOptions = styled.div`
-  display: grid; gap: var(--gh-spacing-3); min-inline-size: 0;
 `;
 
 /** Desktop browsing details and the mobile today summary share the same outer card rails. */

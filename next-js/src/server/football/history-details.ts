@@ -26,9 +26,11 @@ type DetailState = z.infer<typeof stateSchema>;
 type StoredFlags = Readonly<{ hasInfo: number; hasEvents: number; hasStatistics: number; hasLineups: number; hasPlayers: number }>;
 type Target = Readonly<{ fixtureId: string; externalId: number; competitionId: number; season: number; kickoffAt: Date;
   homeExternalId: number; awayExternalId: number; homeGoals: number; awayGoals: number; coverage: unknown;
-  archiveState: unknown; nextCheckAt: Date | null }> & StoredFlags;
+  archiveState: unknown }> & StoredFlags;
 type ClaimedTarget = Readonly<{ target: Target; previous: DetailState; reservation: string }>;
 type BatchReport = Readonly<{ requested: number; received: number; written: number; completed: number; deferred: number; requests: number }>;
+type CoverageRow = Readonly<{ eligible: bigint; storedComplete: bigint; unsupported: bigint; exhausted: bigint; delayedCount: bigint;
+  due: bigint; nextCheckAt: Date | null }>;
 
 const eligibleFixture = Prisma.sql`f.provider='api-football' AND f.kickoff<=UTC_TIMESTAMP(3)
   AND f.status IN ('finished-regulation','finished-extra-time','finished-penalties')
@@ -44,16 +46,16 @@ const storedFacts = {
 };
 const factFlags = Prisma.sql`${storedFacts.info} AS hasInfo, ${storedFacts.events} AS hasEvents, ${storedFacts.statistics} AS hasStatistics,
   ${storedFacts.lineups} AS hasLineups, ${storedFacts.players} AS hasPlayers`;
-const candidateQuery = Prisma.sql`SELECT f.id AS fixtureId, f.externalId, cp.externalId AS competitionId, s.year AS season,
-  f.kickoff AS kickoffAt, h.externalId AS homeExternalId, a.externalId AS awayExternalId,
-  f.regulationHome AS homeGoals, f.regulationAway AS awayGoals, s.coverage, ${factFlags},
-  detail.state AS archiveState, detail.nextCheckAt
-  FROM FootballFixture f JOIN FootballSeason s ON s.id=f.seasonId
+const archiveFixtures = Prisma.sql`FROM FootballFixture f JOIN FootballSeason s ON s.id=f.seasonId
   JOIN FootballCompetitionProvider cp ON cp.competitionId=s.competitionId AND cp.provider='api-football'
   JOIN FootballTeamProvider h ON h.teamId=f.homeTeamId AND h.provider='api-football'
   JOIN FootballTeamProvider a ON a.teamId=f.awayTeamId AND a.provider='api-football'
   LEFT JOIN FixtureFacts facts ON facts.fixtureId=f.id
   LEFT JOIN FootballHistoryDetailState detail ON detail.fixtureId=f.id`;
+const candidateQuery = Prisma.sql`SELECT f.id AS fixtureId, f.externalId, cp.externalId AS competitionId, s.year AS season,
+  f.kickoff AS kickoffAt, h.externalId AS homeExternalId, a.externalId AS awayExternalId,
+  f.regulationHome AS homeGoals, f.regulationAway AS awayGoals, s.coverage, ${factFlags},
+  detail.state AS archiveState ${archiveFixtures}`;
 
 const unambiguous = Prisma.sql`NOT EXISTS (SELECT 1 FROM FootballTeamProvider m WHERE m.teamId=f.homeTeamId
   AND m.provider='api-football' AND m.externalId<>h.externalId)
@@ -61,6 +63,36 @@ const unambiguous = Prisma.sql`NOT EXISTS (SELECT 1 FROM FootballTeamProvider m 
   AND m.provider='api-football' AND m.externalId<>a.externalId)
   AND NOT EXISTS (SELECT 1 FROM FootballCompetitionProvider m WHERE m.competitionId=s.competitionId
   AND m.provider='api-football' AND m.externalId<>cp.externalId)`;
+
+const withinScope = (ids: readonly number[]) => Prisma.sql`cp.externalId IN (${Prisma.join(ids)}) AND ${eligibleFixture} AND ${unambiguous}`;
+const retryDue = (at: number) => Prisma.sql`(detail.fixtureId IS NULL OR detail.nextCheckAt<=${new Date(at)})`;
+const hasSectionState = (name: Section, state: "known-empty" | "unsupported") => Prisma.sql`COALESCE(
+  JSON_EXTRACT(detail.state,'$.version')=1 AND JSON_UNQUOTE(JSON_EXTRACT(detail.state,${`$.sections.${name}`}))=${state}, FALSE)`;
+const completeFacts = { ...storedFacts, events: Prisma.sql`(${storedFacts.events} OR ${hasSectionState("events", "known-empty")})` };
+const storedComplete = Prisma.join(sectionNames.map((name) => completeFacts[name]), " AND ");
+const resolved = Prisma.join(sectionNames.map((name) => name === "info" ? completeFacts.info :
+  Prisma.sql`(${completeFacts[name]} OR ${hasSectionState(name, "unsupported")})`), " AND ");
+
+async function readCoverage(database: DatabaseRuntime, ids: readonly number[], at: number) {
+  const [row] = await database.query((tx) => tx.$queryRaw<CoverageRow[]>(Prisma.sql`
+    SELECT COUNT(*) AS eligible,
+      COUNT(CASE WHEN detailCoverage='stored-complete' THEN 1 END) AS storedComplete,
+      COUNT(CASE WHEN detailCoverage='unsupported' THEN 1 END) AS unsupported,
+      COUNT(CASE WHEN detailCoverage='exhausted' THEN 1 END) AS exhausted,
+      COUNT(CASE WHEN detailCoverage='delayed' THEN 1 END) AS delayedCount,
+      COUNT(CASE WHEN detailCoverage='due' THEN 1 END) AS due,
+      MIN(CASE WHEN detailCoverage='delayed' THEN nextCheckAt END) AS nextCheckAt
+    FROM (SELECT CASE
+      WHEN ${storedComplete} THEN 'stored-complete'
+      WHEN ${resolved} THEN 'unsupported'
+      WHEN ${retryDue(at)} THEN 'due'
+      WHEN detail.nextCheckAt IS NOT NULL THEN 'delayed'
+      ELSE 'exhausted' END AS detailCoverage, detail.nextCheckAt
+      ${archiveFixtures} WHERE ${withinScope(ids)}) AS fixtureCoverage`));
+  if (!row) throw new Error("Historical detail coverage is unavailable.");
+  return { eligible: Number(row.eligible), storedComplete: Number(row.storedComplete), unsupported: Number(row.unsupported),
+    exhausted: Number(row.exhausted), delayed: Number(row.delayedCount), due: Number(row.due), nextCheckAt: row.nextCheckAt?.toISOString() ?? null };
+}
 
 function target(row: Target): Target {
   const normalized = { ...row, externalId: Number(row.externalId), competitionId: Number(row.competitionId),
@@ -89,7 +121,7 @@ function coverage(row: Target, name: string): boolean | null {
   return typeof flag === "boolean" ? flag : null;
 }
 
-const completeSection = (state: SectionState) => state === "available" || state === "known-empty" || state === "unsupported";
+const resolvedSection = (state: SectionState) => state === "available" || state === "known-empty" || state === "unsupported";
 const sectionCoverage = { events: "fixtures.events", statistics: "fixtures.statistics_fixtures",
   lineups: "fixtures.lineups", players: "fixtures.statistics_players" } as const;
 
@@ -177,13 +209,12 @@ export function createFootballHistoryDetails(options: Readonly<{
   if (!Number.isSafeInteger(batchSize) || batchSize < 1 || batchSize > 20 || !approved.size ||
     [...approved].some((value) => !Number.isSafeInteger(value) || value < 1)) throw new RangeError("Invalid archive detail scope.");
 
-  const due = (at: number) => Prisma.sql`(detail.nextCheckAt<=${new Date(at)} OR detail.fixtureId IS NULL AND
-    NOT (${Prisma.join(Object.values(storedFacts), " AND ")}))`;
+  const due = (at: number) => Prisma.sql`${retryDue(at)} AND NOT (${resolved})`;
 
   async function claim(ids: readonly number[], at: number) {
     // Do not lock the candidate scan or its league, season and team joins.
     const rows = await database.query((tx) => tx.$queryRaw<Target[]>(Prisma.sql`${candidateQuery}
-      WHERE cp.externalId IN (${Prisma.join(ids)}) AND ${eligibleFixture} AND ${unambiguous} AND ${due(at)}
+      WHERE ${withinScope(ids)} AND ${due(at)}
       ORDER BY f.kickoff DESC,f.id LIMIT ${batchSize}`));
     const claimed = await database.transaction(async (tx) => {
       const claimed: ClaimedTarget[] = [];
@@ -191,7 +222,7 @@ export function createFootballHistoryDetails(options: Readonly<{
         const [locked] = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM FootballFixture WHERE id=${fixtureId} FOR UPDATE SKIP LOCKED`;
         if (!locked) continue;
         const [raw] = await tx.$queryRaw<Target[]>(Prisma.sql`${candidateQuery} WHERE f.id=${fixtureId}
-          AND cp.externalId IN (${Prisma.join(ids)}) AND ${eligibleFixture} AND ${unambiguous} AND ${due(at)}`);
+          AND ${withinScope(ids)} AND ${due(at)}`);
         if (!raw) continue;
         const row = target(raw), previous = initialState(row), reservation = randomUUID();
         const state = { ...previous, reservation }, checkedAt = new Date(at), nextCheckAt = new Date(at + 5 * MINUTE);
@@ -223,7 +254,7 @@ export function createFootballHistoryDetails(options: Readonly<{
           WHERE facts.fixtureId=${row.fixtureId}`) : [row];
         const sections = archiveSections(row, stored ?? row, item.previous, values);
         const observations = item.previous.observations + Number(accepted !== null);
-        const done = Object.values(sections).every(completeSection);
+        const done = Object.values(sections).every(resolvedSection);
         const nextCheckAt = done || observations >= 3 ? null : new Date(checkedAt + (accepted === null ? 15 * MINUTE : observations * DAY));
         await tx.footballHistoryDetailState.update({ where: { fixtureId: row.fixtureId }, data: { checkedAt: new Date(checkedAt), nextCheckAt,
           state: { version: 1, attempts: item.previous.attempts + requests, observations, reservation: null, sections } } });
@@ -269,7 +300,12 @@ export function createFootballHistoryDetails(options: Readonly<{
       if (reason && stopReasons.has(reason)) { stopped = reason; break; }
       if (!requests) { stopped = requestSignal.aborted ? "interrupted" : reason ?? "detail-unavailable"; break; }
     }
-    if (stopped === null && totals.requests >= maxRequests) stopped = "request-budget";
-    return { status: stopped || totals.deferred ? "partial" as const : "complete" as const, ...totals, stopped };
+    const coverage = await readCoverage(database, scope, now());
+    if (stopped === null && requestSignal.aborted) stopped = "interrupted";
+    if (stopped === null && coverage.due > 0 && totals.requests >= maxRequests) stopped = "request-budget";
+    const passComplete = stopped === null && coverage.due === 0;
+    const fullyCovered = coverage.eligible > 0 && coverage.storedComplete === coverage.eligible;
+    return { status: passComplete && fullyCovered ? "complete" as const : "partial" as const, ...totals, stopped,
+      passComplete, fullyCovered, coverage };
   };
 }

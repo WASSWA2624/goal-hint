@@ -31,7 +31,7 @@ const Explanation = styled.span`
 `;
 
 /** A disabled input stays out of the form while its explanation remains reachable. */
-export function UnavailableField({ label, reason }: { label: string; reason: string }) {
+export function UnavailableField({ label, accessibleLabel = label, reason }: { label: string; accessibleLabel?: string; reason: string }) {
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -43,7 +43,7 @@ export function UnavailableField({ label, reason }: { label: string; reason: str
 
   return <Root ref={root}>
     <FloatingField label={label}><input disabled aria-hidden="true" /></FloatingField>
-    <Trigger ref={trigger} type="button" aria-label={label} aria-describedby={id}
+    <Trigger ref={trigger} type="button" aria-label={accessibleLabel} aria-describedby={id}
       onFocus={() => setOpen(true)} onBlur={close}
       onClick={event => { event.currentTarget.focus({ preventScroll: true }); setOpen(true); }}
       onKeyDown={event => {

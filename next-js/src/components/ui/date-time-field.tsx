@@ -90,7 +90,7 @@ export function DateTimeField({ mode = "date", locale, timeZone, label, title, v
   return <Field className={className} data-date-time-field={mode}>
     {name && <input type="hidden" name={name} value={canonical} disabled={disabled} />}
     <FloatingField label={label} hint={hint} error={show ? <span role="alert">{error || message}</span> : undefined}
-      trailing={<PickerButton type="button" aria-label={m.text(pickerTitleKey[mode])}
+      trailing={<PickerButton type="button" data-date-time-picker-trigger aria-label={m.text(pickerTitleKey[mode])}
         aria-haspopup="dialog" aria-expanded={pickerOpen} disabled={disabled || readOnly} onClick={() => setPickerOpen(true)}>
         {mode === "time" ? <ClockIcon /> : <CalendarIcon />}</PickerButton>}>
       <DateEntryControl {...props} ref={element => { input.current = element; assignRef(ref, element); }} id={id} mode={mode} locale={locale}

@@ -106,6 +106,26 @@ test("fixture transport requires a counted launch, keeps credentials private and
   assert.equal(JSON.stringify(result).includes(KEY), false);
 });
 
+test("a counted historical round list requires the league, season and date selectors", async () => {
+  const scope = { competitionId: 39, season: 2025 };
+  const row = { round: "Play-offs - 1", dates: ["2026-02-06", "2026-02-08"] };
+  const state = setup({ respond: (url) => jsonResponse(url, [row]) });
+  const result = await state.adapter.evidence.fixtureRounds(scope, bounds({ maxRequests: 1, maxPages: 1 }));
+  assert.equal(result.status, "complete");
+  assert.deepEqual(result.data, [row]);
+  assert.equal(result.requestsDispatched, 1);
+  assert.equal(state.network[0].url.pathname, "/fixtures/rounds");
+  assert.deepEqual(Object.fromEntries(state.network[0].url.searchParams), { league: "39", season: "2025", dates: "true", timezone: "Africa/Kampala" });
+  const invalid = await state.adapter.evidence.fixtureRounds({ ...scope, season: 0 }, bounds());
+  assert.equal(invalid.error.reason, "invalid-request");
+  assert.equal(state.network.length, 1);
+
+  const badRows = setup({ respond: (url) => jsonResponse(url, [{ ...row, dates: ["2026-02-30"] }]) });
+  const rejected = await badRows.adapter.evidence.fixtureRounds(scope, bounds());
+  assert.equal(rejected.error.reason, "schema-error");
+  assert.deepEqual(rejected.data, []);
+});
+
 test("all evidence and fallback outbound operations use the same protected origin and gateway", async () => {
   const state = setup({ respond: (url) => jsonResponse(url,
     url.pathname === "/fixtures" && url.searchParams.has("id") ? [fixture(1)] : []) });

@@ -4,6 +4,7 @@ import {
 } from "./calendar.ts";
 import { getDateInTimeZone, getDayBoundsInTimeZone, validTimeZone } from "./device-calendar.ts";
 import { dateTimeIntervalRange, parseLocalDateTime, type DateTimeInterval } from "./date-time.ts";
+import { canonicalFeedMarketPicks, type FeedMarketPick } from "./feed-market-picks.ts";
 import { isMarketFamily, type MarketFamily } from "./markets.ts";
 import { formatOddsRange, oddsRules, parseOddsRange, type OddsRange } from "./odds.ts";
 import { publicPolicy } from "./public-policy.ts";
@@ -57,6 +58,8 @@ export type FeedQuery = Readonly<{
   status: FeedStatus;
   /** Selected market families in policy order. Each fixture shows its best pick among them. */
   markets: MarketFamily[];
+  /** Optional cohort constraint on at least one engine-published outcome on the visible revision. */
+  marketPicks?: FeedMarketPick[] | undefined;
   /** Unrounded percentage bounds on the shown pick. Custom bounds are inclusive; the page default is strict. */
   probability: ProbabilityRange;
   /** Inclusive two-place price bounds (hundredths) on the shown pick's own market price; null applies no
@@ -100,7 +103,11 @@ export class FeedQueryError extends RangeError {
   constructor() { super("Invalid or incompatible feed parameters."); this.name = "FeedQueryError"; }
 }
 function fail(): never { throw new FeedQueryError(); }
-const keys = new Set(["result", "summary", "date", "from", "to", "when", "start", "end", "timeFrom", "timeTo", "tz", "q", "league", "country", "status", "market", "prob", "odds", "picks", "sort", "dir", "page", "pageSize"]);
+export function normalizeFeedSearch(value: string): string {
+  if (value.length > feedQueryRules.maximumSearchLength || /[\u0000-\u001f\u007f]/u.test(value)) fail();
+  return value.normalize("NFC").trim().replace(/\s+/gu, " ");
+}
+const keys = new Set(["result", "summary", "date", "from", "to", "when", "start", "end", "timeFrom", "timeTo", "tz", "q", "league", "country", "status", "market", "marketPick", "prob", "odds", "picks", "sort", "dir", "page", "pageSize"]);
 export const feedQueryKeys: ReadonlySet<string> = keys;
 const leaguePattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u;
 const countryPattern = /^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} .'()&-]{0,127}$/u;
@@ -114,7 +121,7 @@ export function isFeedDatePreset(value: unknown): value is FeedDatePreset {
 }
 
 /** Plain checkbox forms repeat list keys; they join exactly like comma lists. Other keys stay unique. */
-const listKeys = new Set(["league", "country", "market"]);
+const listKeys = new Set(["league", "country", "market", "marketPick"]);
 function parameters(input: FeedParameters): Map<string, string> {
   const result = new Map<string, string>();
   const entries: [string, unknown][] = input instanceof URLSearchParams ? [...input.entries()]
@@ -275,14 +282,13 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
     : { ...bounds, zone: zone ?? "" };
   if (time && !validKickoffTime(time)) fail();
   resolveFeedDates({ dates, ...(zone === undefined ? {} : { zone }), ...(time ? { time } : {}), ...(interval ? { interval } : {}) }, context.today, context.asOf);
-  const rawSearch = get("q") ?? "";
-  if (rawSearch.length > feedQueryRules.maximumSearchLength || /[\u0000-\u001f\u007f]/u.test(rawSearch)) fail();
-  const search = rawSearch.normalize("NFC").trim().replace(/\s+/gu, " ");
+  const search = normalizeFeedSearch(get("q") ?? "");
   const leagues = list(get("league"), leaguePattern, feedQueryRules.maximumLeagues);
   const countries = list(get("country"), countryPattern, feedQueryRules.maximumCountries);
   const marketValue = get("market");
   const markets = marketValue === undefined ? [...defaultMarkets] : canonicalMarkets(marketValue.split(","));
   if (marketValue !== undefined && marketValue.split(",").length !== markets.length) fail();
+  const marketPicks = canonicalFeedMarketPicks(get("marketPick")?.split(",") ?? []) ?? fail();
   const picks = get("picks") ?? "all";
   if (picks !== "all" && picks !== "only") fail();
   const by = get("sort") ?? "kickoff", direction = get("dir");
@@ -290,7 +296,7 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
       direction !== undefined && direction !== "desc" && (direction !== "asc" || by === "live-first")) fail();
   return {
     locale: resolveLocale(context.locale), ...(summary ? { summary } : {}), ...(result && result !== "all" ? { result: result as PredictionResult } : {}), dates, search, ...(zone === undefined ? {} : { zone }), ...(time ? { time } : {}), ...(interval ? { interval } : {}),
-    leagues, countries, status: parseFeedStatus(get("status")), markets,
+    leagues, countries, status: parseFeedStatus(get("status")), markets, ...(marketPicks.length ? { marketPicks } : {}),
     probability: probabilityRange(get("prob")), odds: oddsRange(get("odds"), context.providerOdds ?? publicPolicy.features.providerOdds), picks,
     sort: { by, direction: direction ?? defaultSortDirection[by] },
     page: integer(get("page"), 1, feedQueryRules.maximumPage),
@@ -357,6 +363,8 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
   if (query.status !== feedDefaults.today.status) result.set("status", query.status);
   const markets = canonicalMarkets(query.markets);
   if (!isAnyMarkets(markets)) result.set("market", markets.join(","));
+  const marketPicks = canonicalFeedMarketPicks(query.marketPicks ?? []) ?? fail();
+  if (marketPicks.length) result.set("marketPick", marketPicks.join(","));
   if (!validProbabilityRange(query.probability)) fail();
   if (!isAnyProbability(query.probability)) result.set("prob", query.probability.minExclusive ? defaultProbabilityParameter
     : `${formatProbabilityValue(query.probability.min)}-${formatProbabilityValue(query.probability.max)}`);
@@ -376,7 +384,7 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
   const checked = parseFeedQuery(result, { today, locale: query.locale, ...(odds === null ? {} : { providerOdds: true }) });
   if (checked.result !== query.result || checked.summary !== query.summary || checked.search !== query.search || checked.page !== query.page || checked.pageSize !== query.pageSize ||
       checked.locale !== query.locale || !sameList(checked.leagues, leagues) || !sameList(checked.countries, countries) ||
-      checked.status !== query.status || !sameList(checked.markets, markets) ||
+      checked.status !== query.status || !sameList(checked.markets, markets) || !sameList(checked.marketPicks ?? [], marketPicks) ||
       checked.probability.min !== query.probability.min || checked.probability.max !== query.probability.max ||
       checked.probability.minExclusive !== query.probability.minExclusive ||
       checked.odds?.min !== odds?.min || checked.odds?.max !== odds?.max || checked.picks !== query.picks ||
@@ -418,9 +426,9 @@ export function pinnedDateSelection(range: ReportingDateRange): DateSelection {
 
 /** Filters that narrow the cohort (dates and order excluded). */
 /** Choices made inside the filter panel itself: leagues, countries, markets, probability and odds. */
-export function panelFilterCount(query: Pick<FeedQuery, "leagues" | "countries" | "markets" | "probability"> & Partial<Pick<FeedQuery, "odds" | "time" | "interval">>): number {
+export function panelFilterCount(query: Pick<FeedQuery, "leagues" | "countries" | "markets" | "probability" | "marketPicks"> & Partial<Pick<FeedQuery, "odds" | "time" | "interval">>): number {
   return query.leagues.length + query.countries.length +
-    Number(!isAnyMarkets(query.markets)) + Number(!isAnyProbability(query.probability)) +
+    Number(!isAnyMarkets(query.markets) || !!query.marketPicks?.length) + Number(!isAnyProbability(query.probability)) +
     Number(!isAnyOdds(query.odds ?? null)) + Number(!!query.interval || !isAnyKickoffTime(query.time));
 }
 

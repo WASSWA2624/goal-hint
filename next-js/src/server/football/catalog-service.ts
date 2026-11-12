@@ -1,16 +1,38 @@
 import "server-only";
 
 import { utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
+import { DatabaseOperationError } from "../database/client.ts";
 import type { createApiFootballAdapter } from "./api-football-adapter.ts";
-import type { CatalogAuthority, CatalogImportRequest, CatalogProviderRow } from "./catalog-contract.ts";
+import type { CatalogAuthority, CatalogImportRequest, CatalogPreparedBatch, CatalogProviderRow } from "./catalog-contract.ts";
 import type { ApiFootballResult } from "./api-football-contract.ts";
 import { CatalogInputError, catalogRequestFingerprint, parseCatalogImportRequest, validateCatalogBatch } from "./catalog-input.ts";
-import { CatalogStoreError, type FootballCatalogStore, type CatalogImportSummary } from "./catalog-mysql-store.ts";
+import { catalogPersistenceUnavailable, CatalogStoreError, type FootballCatalogStore, type CatalogImportSummary } from "./catalog-mysql-store.ts";
+
+type VerifySavedFixtureScope = (observation: Readonly<{ retrievedAt: number; rowCount: number }>) => Promise<boolean>;
+
+export class CatalogPersistenceDeferredError extends CatalogStoreError {
+  readonly requestsDispatched: number;
+  readonly receivedCount: number;
+  readonly observedAt: number;
+  readonly reasons: readonly string[];
+  readonly rawArchived: boolean;
+  constructor(batch: CatalogPreparedBatch, rawArchived: boolean) {
+    super("unavailable");
+    this.name = "CatalogPersistenceDeferredError";
+    this.rawArchived = rawArchived;
+    this.requestsDispatched = batch.requestsDispatched;
+    this.receivedCount = batch.rows.fixtures.length + batch.invalidRows;
+    this.observedAt = batch.observedAt;
+    this.reasons = Object.freeze([...batch.reasons, catalogPersistenceUnavailable].sort());
+  }
+}
+
+const unavailable = (error: unknown) => error instanceof CatalogStoreError && error.reason === "unavailable";
 
 /** Private worker entry point. The existing adapter owns every provider request and quota reservation. */
 export function createFootballCatalogImporter(options: Readonly<{
   adapter: ReturnType<typeof createApiFootballAdapter>;
-  store: FootballCatalogStore;
+  store: Pick<FootballCatalogStore, "findImport" | "importBatch" | "deferImport">;
   authority: CatalogAuthority;
   clock?: Clock;
 }>) {
@@ -23,7 +45,18 @@ export function createFootballCatalogImporter(options: Readonly<{
       evidenceRef: request.retentionEvidenceRef, purpose: "structured-catalog-and-audit-history", rawPayloadsStored: false }) === true; } catch { /* Fail closed. */ }
     if (!permitted) throw new CatalogInputError("retention-not-authorized");
   }
-  async function execute(request: CatalogImportRequest, fingerprint: string) {
+  async function reconcile(batch: CatalogPreparedBatch) {
+    const previous = await options.store.findImport(batch.request.id).catch((error: unknown) => {
+      if (error instanceof DatabaseOperationError || unavailable(error)) return null;
+      throw error;
+    });
+    authorize(batch.request);
+    if (previous && (previous.fingerprint !== batch.fingerprint || previous.requestFingerprint !== batch.requestFingerprint)) {
+      throw new CatalogStoreError("conflicting-import");
+    }
+    return previous;
+  }
+  async function execute(request: CatalogImportRequest, fingerprint: string, verifySavedFixtureScope?: VerifySavedFixtureScope) {
     const previous = await options.store.findImport(request.id);
     authorize(request);
     if (previous) {
@@ -38,10 +71,29 @@ export function createFootballCatalogImporter(options: Readonly<{
       case "competitions": result = await options.adapter.evidence.competitions(selection.query, request.bounds); break;
     }
     authorize(request);
-    return options.store.importBatch(validateCatalogBatch(request, result, options.authority, clock), options.authority);
+    const batch = validateCatalogBatch(request, result, options.authority, clock);
+    try { return await options.store.importBatch(batch, options.authority); }
+    catch (error) {
+      if (!verifySavedFixtureScope || selection.kind !== "fixtures" || !unavailable(error)) throw error;
+      authorize(request);
+      const recovered = await reconcile(batch);
+      if (recovered) return recovered;
+      const [page] = batch.provenance;
+      const rawArchived = batch.requestsDispatched === 1 && result.provenance.length === 1 && result.provenance[0]?.quota?.kind === "success" &&
+        batch.provenance.length === 1 && page !== undefined &&
+        !page.fromCache && page.currentPage === 1 && page.totalPages === 1 &&
+        await verifySavedFixtureScope({ retrievedAt: page.retrievedAt, rowCount: batch.rows.fixtures.length + batch.invalidRows }).catch(() => false);
+      if (rawArchived) {
+        try { return await options.store.deferImport(batch, options.authority); }
+        catch (error) { if (!unavailable(error)) throw error; }
+        const recoveredDeferral = await reconcile(batch);
+        if (recoveredDeferral) return recoveredDeferral;
+      }
+      throw new CatalogPersistenceDeferredError(batch, rawArchived);
+    }
   }
   return Object.freeze({
-    async import(input: unknown): Promise<CatalogImportSummary> {
+    async import(input: unknown, verifySavedFixtureScope?: VerifySavedFixtureScope): Promise<CatalogImportSummary> {
       const request = parseCatalogImportRequest(input);
       authorize(request);
       const fingerprint = catalogRequestFingerprint(request), current = running.get(request.id);
@@ -49,7 +101,7 @@ export function createFootballCatalogImporter(options: Readonly<{
         if (current.fingerprint !== fingerprint) throw new CatalogStoreError("conflicting-import");
         return current.result;
       }
-      const result = execute(request, fingerprint).finally(() => running.delete(request.id));
+      const result = execute(request, fingerprint, verifySavedFixtureScope).finally(() => running.delete(request.id));
       running.set(request.id, { fingerprint, result });
       return result;
     },

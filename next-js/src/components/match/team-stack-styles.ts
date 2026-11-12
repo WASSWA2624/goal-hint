@@ -124,6 +124,7 @@ export const teamStackStyles = css`
     display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
     color: ${({ theme }) => theme.color.link}; font-size: var(--gh-font-secondary); font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: var(--gh-leading-label);
   }
+  [data-ledger-field="prediction"] [data-pick-line] { display: inline-flex; }
   [data-ledger-field="market"] [data-field-label], [data-ledger-field="prediction"] [data-field-label] { display: none; }
   [data-ledger-field="odds"], [data-ledger-field="probability"] {
     display: inline-flex; flex-direction: row; align-items: baseline; gap: var(--gh-spacing-0_75); padding: 0;
@@ -132,6 +133,7 @@ export const teamStackStyles = css`
   }
   [data-ledger-field="odds"] { grid-column: 1; }
   [data-ledger-field="probability"] { grid-column: 2; justify-content: space-between; }
+  [data-ledger-field="probability"][data-stack-label] { justify-content: flex-end; }
   [data-ledger-field="odds"][data-stack-label]::before, [data-ledger-field="probability"][data-stack-label]::before {
     content: attr(data-stack-label); color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-micro); font-weight: var(--gh-weight-body);
   }
@@ -159,8 +161,6 @@ export const teamStackStyles = css`
     [data-ledger-facts] [data-match-metrics] { display: flex; flex-direction: column; }
     [data-match-metrics] [data-ledger-field] { inline-size: 100%; max-inline-size: 100%; flex-wrap: wrap; }
     [data-match-metrics] [data-ledger-field="probability"] { flex: none; }
-    [data-ledger-field="probability"] > [data-pick-value],
-    [data-ledger-field="probability"] > [data-field-value],
-    [data-ledger-field="probability"] > [data-public-probability] { margin-inline-start: auto; }
+    [data-ledger-field="probability"]:not([data-stack-label]) > :is([data-pick-value], [data-field-value], [data-public-probability]) { margin-inline-start: auto; }
   }
 `;

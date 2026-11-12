@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { execFile } from "./helpers/command-runtime.mjs";
 import { randomBytes, randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { getReportingDate } from "../src/domain/calendar.ts";
 import { parseRuntimePolicy } from "../src/server/config/runtime-policy.ts";
 import { createDatabase } from "../src/server/database/client.ts";
-import { createFootballCatalogStore } from "../src/server/football/catalog-mysql-store.ts";
+import { createFootballCatalogStore, lockCatalog } from "../src/server/football/catalog-mysql-store.ts";
 import { createFootballCatalogImporter } from "../src/server/football/catalog-service.ts";
 import { validateCatalogBatch } from "../src/server/football/catalog-input.ts";
 import { storedFixtureResult } from "../src/server/results/result-read.ts";
@@ -187,6 +188,50 @@ test("canonical football catalog invariants on isolated genuine MySQL", { timeou
       const tracked = await resultStore.tracked({ coverage: [{ competitionId: 810, season: 2025 }], approachMs: 900_000,
         activeWindowMs: 10_800_000, unresolved: [{ untilAgeMs: 7 * 86_400_000 }], corrections: [{ untilAgeMs: 3 * 86_400_000 }] }, CATALOG_NOW + 2000);
       assert.deepEqual(tracked.map((row) => row.externalId), [8102], "an old final with a fresh capture stays out of hosted polling");
+    });
+
+    await t.test("historical partial receipts bypass the catalog lock and preserve duplicate and conflicting IDs", async () => {
+      const scope = { kind: "fixtures", query: { competitionId: 812, season: 2025 } };
+      const request = catalogRequest(scope), authority = syntheticAuthority();
+      const final = (id, displayedHome = 2) => catalogFixture(id, { competitionId: 812, season: 2025,
+        kickoff: "2025-10-09T06:00:00.000Z", status: "FT", goals: { home: displayedHome, away: 1 },
+        score: { fulltime: { home: 2, away: 1 } } });
+      const prepare = async (rows) => {
+        const { adapter } = createSyntheticCatalogAdapter({ rows });
+        return validateCatalogBatch(request, await adapter.evidence.fixtures(scope.query, request.bounds), authority, clock);
+      };
+      const batch = await prepare([final(8120), final(8121, 3)]);
+      const conflicting = await prepare([final(8122), final(8123, 3)]);
+      assert.equal(batch.status, "partial");
+      const stores = [firstDatabase, secondDatabase].map((database) => createFootballCatalogStore(database, { clock, historicalResults: true }));
+      const held = Promise.withResolvers(), release = Promise.withResolvers();
+      const holder = firstDatabase.transaction(async (transaction) => {
+        await lockCatalog(transaction);
+        held.resolve();
+        await release.promise;
+      }, { timeout: 15_000 });
+      try {
+        await Promise.race([held.promise, holder]);
+        const duplicateWrites = Promise.all(stores.map((store) => store.importBatch(batch, authority)));
+        const receipts = await Promise.race([duplicateWrites, delay(4000, null, { ref: false })]);
+        assert.ok(receipts, "receipt-only writes complete while the live catalog lock is held");
+        assert.deepEqual(receipts[0], receipts[1]);
+        assert.equal(receipts[0].fingerprint, batch.fingerprint);
+        assert.equal(receipts[0].status, "partial");
+        assert.equal(receipts[0].receivedCount, 2);
+        assert.equal(receipts[0].importedCount, 0);
+        assert.equal(receipts[0].rejectedCount, 1);
+        assert.deepEqual(receipts[0].fixtureIds, []);
+        assert.deepEqual(receipts[0].changedFixtureIds, []);
+        assert.ok(receipts[0].reasons.includes("schema-error"));
+        assert.equal(await fixture(8120), null);
+        assert.equal(await fixture(8121), null);
+        await assert.rejects(stores[0].importBatch(conflicting, authority), (error) => error.reason === "conflicting-import");
+        assert.equal(await firstDatabase.query((client) => client.footballImport.count({ where: { id: request.id } })), 1);
+      } finally {
+        release.resolve();
+        await holder;
+      }
     });
 
     await t.test("concurrent repeated fixture imports keep one identity and one version per material change", async () => {

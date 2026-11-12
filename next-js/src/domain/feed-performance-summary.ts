@@ -19,7 +19,7 @@ export function feedPerformanceApiHref(query: FeedQuery, today: ReportingDate): 
 }
 
 /** A list with no available picks has no outcomes to audit. Use its own count and generation.
- * A selected outcome narrows the list and therefore cannot establish the period total. */
+ * A settled-result drilldown narrows the list and therefore cannot establish the period total. */
 export function emptyFeedPerformanceReply(query: FeedQuery, data: MatchFeedResponse): FeedPerformanceReply | null {
   const picks = data.coverage.matchingWithPerformancePick ?? data.coverage.matchingWithMarket;
   if (query.result || data.state === "data-unavailable" || picks !== 0 || !data.performanceVersion) return null;
@@ -45,7 +45,7 @@ export function retainedFeedPerformance(seed: FeedPerformanceSeed | null | undef
   try { checkedFeedPerformance(seed.reply, data); return seed; } catch { return null; }
 }
 
-/** Outcome selection and list ordering never narrow the period metrics. */
+/** Settled-result drilldowns and list ordering never narrow the period metrics. */
 export function performanceFeedQuery(query: FeedQuery): FeedQuery {
   const scope = { ...query };
   delete scope.result;

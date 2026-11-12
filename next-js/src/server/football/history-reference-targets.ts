@@ -1,21 +1,98 @@
 import "server-only";
 
 import type { DatabaseRuntime } from "../database/client.ts";
+import { Prisma } from "../generated/prisma/client.ts";
+import { apiFootballLeaderboards, type ApiFootballLeaderboard } from "./api-football-contract.ts";
 import type { FootballHistoryReferenceTarget } from "./history-reference.ts";
 
 const provider = "api-football";
-export const historyReferenceDatasets = ["teams", "venues", "standings", "injuries", "transfers"] as const;
+const leaderboardDatasets = [["top-scorers", "topScorers"], ["top-assists", "topAssists"],
+  ["top-yellow-cards", "topYellowCards"], ["top-red-cards", "topRedCards"]] as const;
+export const historyReferenceDatasets = ["teams", "venues", "standings", "injuries", "transfers",
+  "countries", "timezones", "league-seasons", "team-statistics", "player-statistics", "coaches", "squads", "rounds", "team-seasons",
+  ...leaderboardDatasets.map(([dataset]) => dataset)] as const;
 export type HistoryReferenceDataset = typeof historyReferenceDatasets[number];
+
+type LeagueSeason = Readonly<{ competitionId: bigint; season: number }>;
+type TeamSeason = LeagueSeason & Readonly<{ teamId: bigint }>;
+type LeaderboardSeason = LeagueSeason & Readonly<{ endpoint: ApiFootballLeaderboard }>;
+
+function pendingRounds(database: DatabaseRuntime, competitionIds: readonly number[], limit: number) {
+  // Match the same sorted selector used by the oversized fixture fallback.
+  return database.query((client) => client.$queryRaw<LeagueSeason[]>(Prisma.sql`
+    SELECT league.externalId AS competitionId, season.year AS season
+    FROM FootballSeason AS season
+    JOIN FootballCompetitionProvider AS league ON league.competitionId = season.competitionId AND league.provider = ${provider}
+    WHERE league.externalId IN (${Prisma.join(competitionIds.map(BigInt))})
+      AND EXISTS (SELECT 1 FROM FootballFixture AS fixture WHERE fixture.seasonId = season.id AND fixture.provider = ${provider})
+      AND NOT EXISTS (SELECT 1 FROM FootballCompetitionProvider AS alternate WHERE alternate.competitionId = league.competitionId
+        AND alternate.provider = league.provider AND alternate.externalId <> league.externalId)
+      AND NOT EXISTS (SELECT 1 FROM FootballHistorySourcePage AS archived WHERE archived.endpoint = 'fixtureRounds'
+        AND archived.selectorHash = SHA2(CONCAT('{"dates":"true","league":"', league.externalId,
+          '","season":"', season.year, '","timezone":"Africa/Kampala"}'), 256))
+    ORDER BY season.year DESC, league.externalId
+    LIMIT ${limit}`));
+}
+
+function pendingLeaderboards(database: DatabaseRuntime, competitionIds: readonly number[], endpoints: readonly ApiFootballLeaderboard[], limit: number) {
+  const requested = endpoints.map((endpoint, order) => Prisma.sql`SELECT CONVERT(${endpoint} USING utf8mb4) COLLATE utf8mb4_unicode_ci AS endpoint,
+    ${`$.${apiFootballLeaderboards[endpoint].coverage}`} AS coveragePath, ${order} AS sortOrder`);
+  return database.query((client) => client.$queryRaw<LeaderboardSeason[]>(Prisma.sql`
+    SELECT league.externalId AS competitionId, season.year AS season, requested.endpoint
+    FROM FootballSeason AS season
+    JOIN FootballCompetitionProvider AS league ON league.competitionId = season.competitionId AND league.provider = ${provider}
+    CROSS JOIN (${Prisma.join(requested, " UNION ALL ")}) AS requested
+    WHERE league.externalId IN (${Prisma.join(competitionIds.map(BigInt))})
+      AND EXISTS (SELECT 1 FROM FootballFixture AS fixture WHERE fixture.seasonId = season.id AND fixture.provider = ${provider})
+      AND NOT EXISTS (SELECT 1 FROM FootballCompetitionProvider AS alternate WHERE alternate.competitionId = league.competitionId
+        AND alternate.provider = league.provider AND alternate.externalId <> league.externalId)
+      AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(season.coverage, requested.coveragePath)), 'null') <> 'false'
+      AND NOT EXISTS (SELECT 1 FROM FootballHistorySourcePage AS archived WHERE archived.endpoint = requested.endpoint
+        AND archived.selectorHash = SHA2(CONCAT('{"league":"', league.externalId, '","season":"', season.year, '"}'), 256))
+    ORDER BY season.year DESC, league.externalId, requested.sortOrder
+    LIMIT ${limit}`));
+}
+
+function pendingTeamStatistics(database: DatabaseRuntime, competitionIds: readonly number[], limit: number) {
+  // The archive hashes JSON with selector keys sorted as league, season, team.
+  return database.query((client) => client.$queryRaw<TeamSeason[]>(Prisma.sql`
+    WITH observed_teams AS (
+      SELECT seasonId, homeTeamId AS teamId FROM FootballFixture WHERE provider = ${provider}
+      UNION
+      SELECT seasonId, awayTeamId AS teamId FROM FootballFixture WHERE provider = ${provider}
+    )
+    SELECT league.externalId AS competitionId, season.year AS season, team.externalId AS teamId
+    FROM observed_teams AS observed
+    JOIN FootballSeason AS season ON season.id = observed.seasonId
+    JOIN FootballCompetitionProvider AS league ON league.competitionId = season.competitionId AND league.provider = ${provider}
+    JOIN FootballTeamProvider AS team ON team.teamId = observed.teamId AND team.provider = ${provider}
+    WHERE league.externalId IN (${Prisma.join(competitionIds.map(BigInt))})
+      AND NOT EXISTS (SELECT 1 FROM FootballCompetitionProvider AS alternate WHERE alternate.competitionId = league.competitionId
+        AND alternate.provider = league.provider AND alternate.externalId <> league.externalId)
+      AND NOT EXISTS (SELECT 1 FROM FootballTeamProvider AS alternate WHERE alternate.teamId = team.teamId
+        AND alternate.provider = team.provider AND alternate.externalId <> team.externalId)
+      AND NOT EXISTS (SELECT 1 FROM FootballHistorySourcePage AS archived WHERE archived.endpoint = 'teamStatistics'
+        AND archived.selectorHash = SHA2(CONCAT('{"league":"', league.externalId, '","season":"', season.year, '","team":"', team.externalId, '"}'), 256))
+    ORDER BY season.year DESC, league.externalId, team.externalId
+    LIMIT ${limit}`));
+}
 
 /** Reuse canonical season, team and venue identities already discovered by the archive. */
 export async function readHistoryReferenceTargets(database: DatabaseRuntime, competitionIds: readonly number[],
-  dataset?: HistoryReferenceDataset): Promise<FootballHistoryReferenceTarget[]> {
+  dataset: HistoryReferenceDataset | undefined, maxDatasetTargets: number) {
+  if (!Number.isSafeInteger(maxDatasetTargets) || maxDatasetTargets < 1 || maxDatasetTargets > 100) {
+    throw new RangeError("Choose a historical reference request limit between 1 and 100.");
+  }
   const competitionMapping = { provider, externalId: { in: competitionIds.map(BigInt) } };
   const competition = { providers: { some: competitionMapping } };
   const fixture = { provider, season: { competition } };
   const include = (value: HistoryReferenceDataset) => dataset === undefined || dataset === value;
+  const leaderboardEndpoints = leaderboardDatasets.filter(([name]) => include(name)).map(([, endpoint]) => endpoint);
   const targets: FootballHistoryReferenceTarget[] = [];
-  const [seasons, venues, teams] = await Promise.all([
+  if (include("countries")) targets.push({ endpoint: "countries" });
+  if (include("timezones")) targets.push({ endpoint: "timezones" });
+  if (include("league-seasons")) targets.push({ endpoint: "leagueSeasons" });
+  const [seasons, venues, teams, teamStatistics, rounds, leaderboards] = await Promise.all([
     include("teams") || include("standings") || include("injuries") ? database.query((client) => client.footballSeason.findMany({
       where: { competition, fixtures: { some: { provider } } }, select: { year: true, coverage: true,
         competition: { select: { providers: { where: competitionMapping, select: { externalId: true } } } } },
@@ -23,9 +100,13 @@ export async function readHistoryReferenceTargets(database: DatabaseRuntime, com
     })) : [],
     include("venues") ? database.query((client) => client.fixtureFacts.findMany({ where: { fixture, venueExternalId: { not: null } },
       distinct: ["venueExternalId"], select: { venueExternalId: true }, orderBy: { venueExternalId: "asc" } })) : [],
-    include("transfers") ? database.query((client) => client.footballTeamProvider.findMany({ where: { provider, team: { OR: [
+    include("transfers") || include("coaches") || include("squads") || include("team-seasons") ? database.query((client) => client.footballTeamProvider.findMany({ where: { provider, team: { OR: [
       { homeFixtures: { some: fixture } }, { awayFixtures: { some: fixture } },
-    ] } }, select: { externalId: true }, orderBy: { externalId: "asc" } })) : [],
+    ] } }, select: { externalId: true, team: { select: { providers: { where: { provider }, select: { externalId: true }, take: 2 } } } },
+    orderBy: { externalId: "asc" } })) : [],
+    include("team-statistics") && competitionIds.length ? pendingTeamStatistics(database, competitionIds, maxDatasetTargets + 1) : [],
+    include("rounds") && competitionIds.length ? pendingRounds(database, competitionIds, maxDatasetTargets + 1) : [],
+    leaderboardEndpoints.length && competitionIds.length ? pendingLeaderboards(database, competitionIds, leaderboardEndpoints, maxDatasetTargets + 1) : [],
   ]);
   for (const row of seasons) {
     if (row.competition.providers.length !== 1) continue;
@@ -37,6 +118,38 @@ export async function readHistoryReferenceTargets(database: DatabaseRuntime, com
     if (include("injuries") && season >= 2020 && coverage.injuries !== false) targets.push({ endpoint: "injuries", competitionId, season });
   }
   for (const { venueExternalId } of venues) if (venueExternalId !== null) targets.push({ endpoint: "venues", venueId: Number(venueExternalId) });
-  for (const { externalId } of teams) targets.push({ endpoint: "transfers", teamId: Number(externalId) });
-  return targets;
+  const teamSnapshots: FootballHistoryReferenceTarget[] = [];
+  for (const { externalId, team } of teams) {
+    const teamId = Number(externalId);
+    if (include("transfers")) targets.push({ endpoint: "transfers", teamId });
+    if (team.providers.length !== 1) continue;
+    if (include("coaches")) teamSnapshots.push({ endpoint: "coaches", teamId });
+    if (include("squads")) teamSnapshots.push({ endpoint: "squads", teamId });
+    if (include("team-seasons")) teamSnapshots.push({ endpoint: "teamSeasons", teamId });
+  }
+  const statistics = teamStatistics.slice(0, maxDatasetTargets), roundScopes = rounds.slice(0, maxDatasetTargets);
+  const leaderboardScopes = leaderboards.slice(0, maxDatasetTargets);
+  for (let index = 0; index < Math.max(teamSnapshots.length, statistics.length, roundScopes.length, leaderboardScopes.length); index++) {
+    const snapshot = teamSnapshots[index], round = roundScopes[index], row = statistics[index], leaderboard = leaderboardScopes[index];
+    if (snapshot) targets.push(snapshot);
+    if (round) targets.push({ endpoint: "fixtureRounds", competitionId: Number(round.competitionId), season: round.season });
+    if (row) targets.push({ endpoint: "teamStatistics", competitionId: Number(row.competitionId), season: row.season, teamId: Number(row.teamId) });
+    if (leaderboard) targets.push({ endpoint: leaderboard.endpoint, competitionId: Number(leaderboard.competitionId), season: leaderboard.season });
+  }
+  return { targets, hasMoreTargets: [teamStatistics, rounds, leaderboards].some((rows) => rows.length > maxDatasetTargets) };
+}
+
+/** Use observed competition seasons and skip explicit provider noncoverage. */
+export async function readHistoryPlayerStatisticsTargets(database: DatabaseRuntime, competitionIds: readonly number[]) {
+  const scope = new Set(competitionIds);
+  if (!scope.size) return [];
+  const rows = await database.query((client) => client.footballSeason.findMany({ where: {
+    fixtures: { some: { provider } }, competition: { providers: { some: { provider, externalId: { in: [...scope].map(BigInt) } } } },
+  }, select: { year: true, coverage: true,
+    competition: { select: { providers: { where: { provider }, select: { externalId: true } } } } }, orderBy: { year: "desc" } }));
+  return rows.flatMap(({ year, coverage, competition }) => {
+    if (competition.providers.length !== 1 || coverage && typeof coverage === "object" && !Array.isArray(coverage) && coverage.players === false) return [];
+    const competitionId = Number(competition.providers[0]!.externalId);
+    return scope.has(competitionId) ? [{ competitionId, season: year }] : [];
+  });
 }

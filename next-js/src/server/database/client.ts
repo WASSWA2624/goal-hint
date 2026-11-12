@@ -8,7 +8,7 @@ import { assertOperationAllowed, getRuntimePolicy, type EvidenceVerifier, type R
 import { assertSafeDatabaseDiagnostics, databasePoolOptions } from "./connection.ts";
 import { createDatabaseEvidenceVerifier } from "./operator-evidence.ts";
 
-type ErrorCode = "conflict" | "constraint" | "unavailable" | "failed" | "closed";
+type ErrorCode = "conflict" | "lock-timeout" | "constraint" | "unavailable" | "failed" | "closed";
 
 export class DatabaseOperationError extends Error {
   readonly code: ErrorCode;
@@ -22,8 +22,13 @@ export class DatabaseOperationError extends Error {
 
 function sanitized(error: unknown): DatabaseOperationError {
   let code: unknown;
-  try { code = error !== null && typeof error === "object" && "code" in error ? error.code : null; }
-  catch { return new DatabaseOperationError("failed"); }
+  try {
+    code = error !== null && typeof error === "object" && "code" in error ? error.code : null;
+    if (code === "P2010" || code === "P2039") {
+      const cause = (error as { meta?: { driverAdapterError?: { cause?: { kind?: unknown; code?: unknown } } } }).meta?.driverAdapterError?.cause;
+      if (cause?.kind === "mysql" && cause.code === 1205) return new DatabaseOperationError("lock-timeout");
+    }
+  } catch { return new DatabaseOperationError("failed"); }
   if (typeof code !== "string") return new DatabaseOperationError("failed");
   if (code === "P2034") return new DatabaseOperationError("conflict");
   if (["P2002", "P2003", "P2011", "P2014"].includes(code)) return new DatabaseOperationError("constraint");

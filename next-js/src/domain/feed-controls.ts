@@ -82,7 +82,11 @@ export function resetFeedFilterSection(draft: FeedQuery, section: FeedFilterSect
     }
     case "leagues": return { ...draft, leagues: [], page: 1 };
     case "countries": return { ...draft, countries: [], page: 1 };
-    case "markets": return { ...draft, markets: [...defaultMarkets], page: 1 };
+    case "markets": {
+      const reset = { ...draft, markets: [...defaultMarkets], page: 1 };
+      delete reset.marketPicks;
+      return reset;
+    }
     case "limits": return { ...draft, probability: anyProbability, odds: null, page: 1 };
   }
 }
@@ -90,7 +94,7 @@ export function resetFeedFilterSection(draft: FeedQuery, section: FeedFilterSect
 /** Restore every page filter and fifty-item limit, retaining the browsing zone. */
 export function resetFeedFilters(query: FeedQuery, allowProbabilityDefault = true): FeedQuery {
   const reset = { ...query };
-  delete reset.time; delete reset.result; delete reset.summary;
+  delete reset.time; delete reset.result; delete reset.summary; delete reset.marketPicks;
   delete reset.interval;
   return { ...reset, ...matchFeedPageDefaults, status: "all", search: "", leagues: [], countries: [], markets: [...defaultMarkets],
     probability: allowProbabilityDefault ? matchFeedPageDefaults.probability : anyProbability, odds: null,

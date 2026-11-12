@@ -203,6 +203,22 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       await publish(3006, 0.45, 0.65);
       await publish(3007, 0.43, 0.65); await publish(3008, 0.5, 0.6, false, 'api-football');
     });
+    await t.test('published engine outcomes filter before pagination and exclude provider fallback picks', async () => {
+      const marketPick = 'match-result:home-win';
+      const matching = await query({ marketPick, pageSize: '100' });
+      assert.ok(matching.total > 1);
+      assert.equal(matching.total, matching.records.length);
+      assert.ok(matching.records.every(record => record.fixtureId !== published.get(3008).fixture.id &&
+        record.forecast.markets.some(({ market }) => market.family === 'match-result' && market.selection === 'home-win')));
+      const first = await query({ marketPick, pageSize: '1' });
+      assert.equal(first.total, matching.total);
+      const next = new URL(first.links.next, 'http://localhost');
+      assert.equal(next.searchParams.get('marketPick'), marketPick);
+      assert.equal((await service.query(next.searchParams)).records[0].fixtureId, matching.records[1].fixtureId);
+      const empty = await query({ marketPick: 'match-result:draw' });
+      assert.equal(empty.state, 'no-filter-matches'); assert.equal(empty.total, 0);
+      assert.equal(empty.coverage.knownFixtures, matching.coverage.knownFixtures);
+    });
     await t.test('published-only pages count and rank stored forecasts without a minimum probability', async () => {
       const context = { publishedOnly: true };
       const result = await service.query({ date: '2026-10-09', picks: 'all', sort: 'live-first', pageSize: '2' }, context);

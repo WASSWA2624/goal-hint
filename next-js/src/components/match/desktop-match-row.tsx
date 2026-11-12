@@ -96,8 +96,8 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
     </Heading>
     {predictionAction ? <div data-row-unlock id={`${id}-access`}>{predictionAction}</div> : <>
     <span data-row-market id={`${id}-market`} title={marketDescription}>{market}</span>
-    <span data-row-odds id={`${id}-odds`}><span data-number-label data-row-number-label>{m.text("slips.odds")}</span><strong>{odds}</strong></span>
-    <span data-row-probability id={`${id}-probability`}><span data-number-label data-row-number-label aria-hidden="true">Prob.</span><VisuallyHidden>{m.text("slips.probability")}: </VisuallyHidden><strong>{probability}</strong></span>
+    <span data-row-odds id={`${id}-odds`}><span data-number-label data-row-number-label>{m.text("details.odds")}:</span><strong>{odds}</strong></span>
+    <span data-row-probability id={`${id}-probability`}><span data-number-label data-row-number-label aria-hidden="true">{m.text("match.columns.probabilityCompact")}:</span><VisuallyHidden>{m.text("slips.probability")}: </VisuallyHidden><strong>{probability}</strong></span>
     </>}
     <span data-row-status id={`${id}-status`}><MatchStatus status={status} outcome={outcome} messages={m}
       snapshot={matchState === "snapshot"} offline={offline} /></span>

@@ -13,12 +13,14 @@ import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { createProviderFallbackAdapter } from "../fallback/fallback-adapter.ts";
 import { createFallbackService } from "../fallback/fallback-service.ts";
 import { createApiFootballAdapter } from "../football/api-football-adapter.ts";
+import { apiFootballFixtureRoundParameters, parseApiFootballFixtureRound, type FixtureRoundQuery } from "../football/api-football-contract.ts";
 import { createFootballCatalogStore } from "../football/catalog-mysql-store.ts";
 import { createFootballCatalogImporter } from "../football/catalog-service.ts";
-import { createFootballHistoryBackfill, normalizeHistoryCompetition } from "../football/history-backfill.ts";
+import { createFootballHistoryBackfill, historyBackfillLimits, normalizeHistoryCompetition } from "../football/history-backfill.ts";
 import { createFootballHistoryDetails } from "../football/history-details.ts";
+import { createFootballHistoryPlayerStatistics } from "../football/history-player-statistics.ts";
 import { createFootballHistoryReference } from "../football/history-reference.ts";
-import { readHistoryReferenceTargets, type HistoryReferenceDataset } from "../football/history-reference-targets.ts";
+import { readHistoryPlayerStatisticsTargets, readHistoryReferenceTargets, type HistoryReferenceDataset } from "../football/history-reference-targets.ts";
 import { createFootballHistorySource } from "../football/history-source.ts";
 import { quotaPriorities } from "../football/quota-contract.ts";
 import { createPolicyQuotaGateway } from "../football/quota-gateway.ts";
@@ -181,6 +183,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     const importer = createFootballCatalogImporter({ adapter, store: catalog, authority: authorities.catalog });
     const historyBackfill = historySource ? (() => {
       const store = createFootballCatalogStore(database, { historicalResults: true, transactionTimeoutMs: 120_000 });
+      const roundSelection = (scope: FixtureRoundQuery) => ({ endpoint: "fixtureRounds", parameters: apiFootballFixtureRoundParameters(scope) } as const);
       return createFootballHistoryBackfill({ competitions: async (query, bounds) => {
         const parameters = query.competitionId === undefined ? {} : { id: String(query.competitionId) };
         const selector = { endpoint: "competitions", parameters } as const;
@@ -218,7 +221,20 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
             GROUP BY mapping.externalId, season.year`);
           return rows.map(({ id, year, upcoming }) => ({ competitionId: Number(id), season: year, fixtures: Number(upcoming) }));
         },
-        hasFixtureSource: (parameters) => historySource.hasPage({ endpoint: "fixtures", parameters }),
+        hasFixtureSource: (parameters, observation) => {
+          const selection = { endpoint: "fixtures", parameters } as const;
+          return observation ? historySource.hasExactPage(selection, observation) : historySource.hasPage(selection);
+        },
+        hasExactFixtureScope: historySource.hasExactFixtureScope,
+        rounds: {
+          async read(scope) {
+            const page = await historySource.latestPage(roundSelection(scope));
+            const rows = page?.rows.map(parseApiFootballFixtureRound);
+            return rows?.every((row) => row !== null) ? rows : null;
+          },
+          fetch: adapter.evidence.fixtureRounds,
+          save: (scope, rows, retrievedAt) => historySource.savePage({ ...roundSelection(scope), rows, retrievedAt }),
+        },
         recordCoverage: async ({ competitionId, season }, coverage) => {
           await database.query((client) => client.footballSeason.updateMany({ where: { year: season, coverage: { equals: Prisma.DbNull },
             competition: { providers: { some: { provider: "api-football", externalId: BigInt(competitionId) } } } }, data: { coverage } }));
@@ -229,13 +245,34 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       competitionIds: policy.choices.competitionIds ?? [], batchSize: 20,
       now: () => utcInstantFromEpochMilliseconds(Date.now()), providerDayEndsAt: () => quota.current()?.endsAt ?? null }) : null;
     const historyReference = historySource ? (() => {
+      const now = () => utcInstantFromEpochMilliseconds(Date.now()), providerDayEndsAt = () => quota.current()?.endsAt ?? null;
       const reference = createFootballHistoryReference({ reference: adapter.reference, hasPage: historySource.hasPage,
-        savePage: historySource.savePage, now: () => utcInstantFromEpochMilliseconds(Date.now()), providerDayEndsAt: () => quota.current()?.endsAt ?? null });
+        savePage: historySource.savePage, now, providerDayEndsAt });
+      const playerStatistics = createFootballHistoryPlayerStatistics({ playerStatisticsPage: adapter.reference.playerStatisticsPage,
+        readPages: historySource.readPlayerStatisticsPages, savePage: historySource.savePlayerStatisticsPage, now, providerDayEndsAt,
+        ...(day.status.plan.trim().toLowerCase() === "free" ? { maximumPage: 3 } : {}) });
       const approved = policy.choices.competitionIds ?? [];
       return async (input: Readonly<{ maxRequests: number; competitionId?: number; dataset?: HistoryReferenceDataset }>, signal?: AbortSignal) => {
         if (input.competitionId !== undefined && !approved.includes(input.competitionId)) throw new RangeError("Choose an approved competition.");
-        const targets = await readHistoryReferenceTargets(database, input.competitionId === undefined ? approved : [input.competitionId], input.dataset);
-        return reference.run({ targets, maxRequests: input.maxRequests, ...(signal && { signal }) });
+        if (!Number.isSafeInteger(input.maxRequests) || input.maxRequests < 1 || input.maxRequests > historyBackfillLimits.maximumRequests) {
+          throw new RangeError("Choose a historical reference request limit between 1 and 100.");
+        }
+        const scope = input.competitionId === undefined ? approved : [input.competitionId], workflow = signal ? { signal } : {};
+        const runPlayers = async (maxRequests: number) => playerStatistics.run({
+          targets: await readHistoryPlayerStatisticsTargets(database, scope), maxRequests, ...workflow,
+        });
+        if (input.dataset === "player-statistics") return runPlayers(input.maxRequests);
+        const playerReserve = input.dataset === undefined && input.maxRequests > 1 ? Math.max(1, Math.floor(input.maxRequests / 4)) : 0;
+        const referenceBudget = input.maxRequests - playerReserve;
+        const plan = await readHistoryReferenceTargets(database, scope, input.dataset, referenceBudget);
+        const result = await reference.run({ ...plan, maxRequests: referenceBudget, ...workflow });
+        const remaining = input.maxRequests - result.requests;
+        if (input.dataset !== undefined || remaining < 1 || result.stopped && result.stopped !== "request-budget") return result;
+        const players = await runPlayers(remaining);
+        return { status: result.status === "complete" && players.status === "complete" ? "complete" as const : "partial" as const,
+          requested: result.requested + players.requested, archived: result.archived + players.archived,
+          skipped: result.skipped + players.skipped, deferred: result.deferred + players.deferred, requests: result.requests + players.requests,
+          stopped: players.stopped ?? result.stopped, reference: result, playerStatistics: players };
       };
     })() : null;
     const selectionStore = createMysqlDailySelectionStore(database, queue);

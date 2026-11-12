@@ -121,22 +121,40 @@ export async function verifySlipBuilderFields(page, origin) {
       await page.setViewportSize({ width, height: 1000 });
       await page.goto(`${origin}/themes/${theme}/slip-builder`, { waitUntil: "domcontentloaded", timeout: 90000 });
       await page.locator('[data-preview-ready="true"]').waitFor();
-      const geometry = await page.locator("[data-slip-builder-essentials]").evaluate(element => {
+      await page.locator('dialog[data-slip-criteria-group="advanced"][data-enhanced="true"]').waitFor({ state: "attached" });
+      const targets = page.locator("[data-slip-builder-essentials]");
+      if (await targets.isVisible()) throw new Error(`${theme}/${width}: Builder fields must start inside the closed Filters dialog`);
+      await page.locator('[data-criteria-trigger="advanced"]').click();
+      const dialog = page.getByRole("dialog", { name: "Filters", exact: true });
+      await dialog.waitFor();
+      const dividers = await dialog.locator("[data-filter-section]:visible").evaluateAll(sections =>
+        sections.map(section => ({ width: parseFloat(getComputedStyle(section).borderBlockStartWidth),
+          followsSection: section.previousElementSibling?.matches("[data-filter-section]:not([hidden])") === true })));
+      if (dividers.length < 5 || !dividers.every(({ width, followsSection }) => (width > 0) === followsSection)) {
+        throw new Error(`${theme}/${width}: Builder filter groups must be separated by dividers`);
+      }
+      const geometry = await dialog.locator("[data-slip-builder-essentials]").evaluate(element => {
         const group = element.querySelector("[data-slip-count]"), legend = group.querySelector(":scope > legend");
         const inputs = [...element.querySelectorAll("input[data-slip-numeric-field]")];
+        const controlHeight = parseFloat(getComputedStyle(element).getPropertyValue("--form-control-height"));
         return { title: legend.textContent, floatingLabel: !!group.querySelector("label"),
-          titleFits: legend.scrollWidth <= legend.clientWidth + 1,
+          titleFits: legend.scrollWidth <= legend.clientWidth + 1, controlHeight,
           fields: inputs.map(input => ({ field: input.dataset.slipNumericField, ...input.getBoundingClientRect().toJSON() })) };
       });
       if (geometry.title !== "Total slips" || geometry.floatingLabel || !geometry.titleFits) {
         throw new Error(`${theme}/${width}: Total slips must remain a fully visible section legend`);
       }
-      const first = geometry.fields[0];
-      if (!geometry.fields.every(field => Math.abs(field.height - first.height) < 1 && Math.abs(field.bottom - first.bottom) < 1)) {
-        throw new Error(`${theme}/${width}: numeric heights/bottoms differ: ${JSON.stringify(geometry.fields)}`);
+      const fields = Object.fromEntries(geometry.fields.map(field => [field.field, field]));
+      if (geometry.fields.length !== 5 || !geometry.fields.every(field => Math.abs(field.height - geometry.controlHeight) < 1)) {
+        throw new Error(`${theme}/${width}: Builder fields must use the shared height: ${JSON.stringify(geometry.fields)}`);
+      }
+      for (const range of ["total", "teams"]) {
+        if (Math.abs(fields[`${range}Min`].bottom - fields[`${range}Max`].bottom) >= 1) {
+          throw new Error(`${theme}/${width}: ${range} range fields must share a row`);
+        }
       }
       if (width >= 1024) {
-        const count = page.locator('[data-slip-numeric-field="slips"]');
+        const count = dialog.locator('[data-slip-numeric-field="slips"]');
         const initial = Number(await count.inputValue());
         await count.focus();
         const stepper = count.locator("..").locator("[data-slip-number-stepper]");

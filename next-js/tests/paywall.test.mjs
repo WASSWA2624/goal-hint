@@ -74,13 +74,13 @@ test('all played final statuses expose the original result and revision to guest
   }
 });
 test('finished filters are public; active probability, selection and price oracles stay locked', () => {
-  for (const query of ['', 'prob=0-100', 'status=finished', 'market=total-goals', 'sort=kickoff&dir=asc', 'sort=probability', 'status=finished&picks=only', 'status=finished&odds=1.50-3.00']) assert.equal(usesSubscriberFeedOracle(parseFeedQuery(new URLSearchParams(query), { today, providerOdds: true })), false);
-  for (const query of ['picks=only', 'odds=1.50-3.00', 'prob=1-100', 'prob=0-99']) {
+  for (const query of ['', 'prob=0-100', 'status=finished', 'market=total-goals', 'sort=kickoff&dir=asc', 'sort=probability', 'status=finished&picks=only', 'status=finished&odds=1.50-3.00', 'status=finished&marketPick=total-goals:over-1.5']) assert.equal(usesSubscriberFeedOracle(parseFeedQuery(new URLSearchParams(query), { today, providerOdds: true })), false);
+  for (const query of ['picks=only', 'odds=1.50-3.00', 'prob=1-100', 'prob=0-99', 'marketPick=match-result:home-win', 'status=scheduled&marketPick=total-goals:over-1.5']) {
     assert.equal(usesSubscriberFeedOracle(parseFeedQuery(new URLSearchParams(query), { today, providerOdds: true })), true);
   }
 });
 test('oracle requests return nonrecoverable private 403 before any raw read', async () => {
-  for (const query of ['picks=only', 'odds=1.50-3.00', 'prob=1-100', 'prob=0-99']) {
+  for (const query of ['picks=only', 'odds=1.50-3.00', 'prob=1-100', 'prob=0-99', 'marketPick=match-result:home-win', 'status=scheduled&marketPick=total-goals:over-1.5']) {
     const response = await createMatchFeedHandler(async () => { assert.fail('oracle read'); }, { now: () => now }, async () => free)(new Request(`https://example.test/api/matches?${query}`));
     assert.equal(response.status, 403); assert.equal(response.headers.get('cache-control'), 'private, no-store'); assert.equal(response.headers.get('vary'), 'Cookie');
     assert.equal(response.headers.get('set-cookie'), null);

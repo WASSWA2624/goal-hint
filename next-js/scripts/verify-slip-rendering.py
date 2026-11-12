@@ -153,9 +153,12 @@ NUMERIC_RANGE_DEFAULTS = {
     "oddsMin": "1.01", "oddsMax": "", "probMin": "75", "probMax": "100",
 }
 
+APPLIED_CRITERIA_LABELS = ["Total slips", "Total odds", "Matches per slip", "Individual odds", "Probability (%)", "Match reuse", "Date and time window", "Markets"]
+
 BUILDER_ICONS = {
     "markets": "M4 20V4M4 20h16M9 16v-5M14 16V8M19 16v-3",
-    "custom-filters": "M4 7h4M12 7h8M4 17h8M16 17h4M8 4v6M16 14v6",
+    "filters": "M4 7h4M12 7h8M4 17h8M16 17h4M8 4v6M16 14v6",
+    "manage-filters": "M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-8 8l-7 7a2.1 2.1 0 0 1-3-3l7-7a6 6 0 0 1 8-8l-3.8 3.8Z",
     "reset": "M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5",
     "build": "M5 3h14v18H5zM8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5",
     "locked": "M8 11V7a4 4 0 0 1 8 0v4",
@@ -168,38 +171,87 @@ def has_builder_icon(control, name):
                for svg in control.nodes("svg"))
 
 
+def applied_criteria(toolbar, path):
+    summary, = toolbar.nodes("dl", "data-slip-criteria-summary")
+    groups = [child for child in summary.children if isinstance(child, Element)]
+    values = {}
+    for group in groups:
+        label, = group.nodes("dt")
+        value, = group.nodes("dd")
+        assert label.text.strip() not in values and value.text.strip(), f"{path}: every applied setting has one visible label and value"
+        values[label.text.strip()] = value.text.strip()
+    assert [label for label in values if label != "Combined probability %"] == APPLIED_CRITERIA_LABELS, f"{path}: summary shows the applied criteria"
+    assert not any(summary.nodes(tag) for tag in ("input", "select", "textarea", "button", "a")), f"{path}: applied criteria summary is read-only"
+    actions, = toolbar.nodes(attr="data-slip-builder-options")
+    nodes = toolbar.nodes()
+    assert nodes.index(summary) < nodes.index(actions), f"{path}: applied criteria appear above Filters and Build or Unlock"
+    return values
+
+
 def criteria_groups(document, path, error_group=None):
     dialogs = document.nodes("dialog", "data-slip-criteria-group")
-    assert [dialog.attrs["data-slip-criteria-group"] for dialog in dialogs] == ["advanced", "markets"], f"{path}: two native dialogs for Advanced Filters and Markets"
+    assert [dialog.attrs["data-slip-criteria-group"] for dialog in dialogs] == ["advanced", "markets"], f"{path}: two native dialogs for Filters and Markets"
     advanced, markets = dialogs
-    for dialog, title in [(advanced, "Advanced filters"), (markets, "Markets")]:
+    for dialog, title, apply_label in [(advanced, "Filters", "Apply Filters"), (markets, "Markets", "Apply")]:
         assert "open" in dialog.attrs and dialog.attrs.get("data-enhanced") == "false", f"{path}: {title} fields stay available inline before hydration"
-        labelled_by = dialog.attrs.get("aria-labelledby")
-        assert labelled_by and any(node.attrs.get("id") == labelled_by and node.text.strip().casefold() == title.casefold() for node in dialog.nodes()), f"{path}: accessible {title} title"
-        actions = {button.text.strip(): button for button in dialog.nodes("button") if button.attrs.get("type") == "button"}
-        assert {"Reset", "Cancel", "Apply"} <= actions.keys(), f"{path}: {title} actions do not submit a build"
-        assert has_builder_icon(actions["Reset"], "reset"), f"{path}: {title} uses the shared reset icon"
-    by_name = {group.attrs["data-criteria-field"]: group for dialog in dialogs for group in dialog.nodes(attr="data-criteria-field")}
+        header, = [child for child in dialog.children if isinstance(child, Element) and child.tag == "header"]
+        heading, = header.nodes("h2")
+        assert heading.attrs.get("id") == dialog.attrs.get("aria-labelledby") and heading.text.strip() == title, f"{path}: accessible {title} title"
+        assert has_builder_icon(heading, title.lower()), f"{path}: {title} title has its shared icon"
+        assert any(button.attrs.get("aria-label", "").startswith("Close") for button in header.nodes("button")), f"{path}: {title} has a named close action"
+        footer, = [child for child in dialog.children if isinstance(child, Element) and child.tag == "footer"]
+        actions = {button.text.strip(): button for button in footer.nodes("button") if button.attrs.get("type") == "button"}
+        assert apply_label in actions, f"{path}: {title} applies without submitting a build"
+        if dialog is advanced:
+            assert "Reset Filters" in actions and has_builder_icon(actions["Reset Filters"], "reset"), f"{path}: Filters uses the shared reset action"
+        else:
+            assert "Cancel" in actions, f"{path}: Markets has a draft cancel action"
+    by_name = {group.attrs["data-criteria-field"]: group for group in document.nodes(attr="data-criteria-field") if group.attrs["data-criteria-field"] in CRITERIA_GROUP_FIELDS}
     assert list(by_name) == list(CRITERIA_GROUP_FIELDS), f"{path}: limits, kickoff and markets appear in order"
-    assert by_name["markets"] in markets.nodes() and by_name["markets"] not in advanced.nodes(), f"{path}: market choices have their own dialog"
+    assert by_name["markets"] in markets.nodes(), f"{path}: market choices have their own dialog"
+    assert all(by_name[name] in advanced.nodes() and by_name[name] not in markets.nodes() for name in ("limits", "kickoff")), f"{path}: ranges belong to Filters"
     date_headings = [child for child in by_name["kickoff"].children if isinstance(child, Element) and child.tag == "legend"]
-    assert len(date_headings) == 1 and date_headings[0].text.strip() == "Date and time", f"{path}: Date and time groups both endpoints"
-    option_rows = document.nodes(attr="data-slip-criteria-options")
-    assert len(option_rows) == 1, f"{path}: one compact row of optional criteria"
-    triggers = option_rows[0].nodes("button", "data-criteria-trigger")
-    assert [trigger.attrs["data-criteria-trigger"] for trigger in triggers] == ["markets", "advanced"], f"{path}: Markets precedes Advanced Filters in the option row"
-    for trigger, dialog in zip(triggers, [markets, advanced]):
+    assert len(date_headings) == 1 and date_headings[0].text.strip() == "Date and time window", f"{path}: Date and time window groups both endpoints"
+    expected_families = {"match-result": "Match result", "double-chance": "Double chance", "total-goals": "Total goals (Over/Under)", "both-teams-to-score": "Both teams to score"}
+    families = by_name["markets"].nodes("fieldset", "data-market-family")
+    assert [group.attrs["data-market-family"] for group in families] == list(expected_families), f"{path}: separate groups cover every supported market family"
+    for group in families:
+        family = group.attrs["data-market-family"]
+        legend, = [child for child in group.children if isinstance(child, Element) and child.tag == "legend"]
+        assert legend.text.strip() == expected_families[family], f"{path}: {family} has a distinct group heading"
+        toggle, = legend.nodes("input")
+        assert toggle.attrs.get("name") == "markets" and toggle.attrs.get("value") == family, f"{path}: the heading controls its market family"
+        choices = [node.attrs.get("name") for node in group.nodes("input") if (node.attrs.get("name") or "").startswith("picks.")]
+        assert choices and set(choices) == {f"picks.{family}"}, f"{path}: {family} offers its own outcomes"
+    toolbars = document.nodes(attr="data-slip-builder-toolbar")
+    assert len(toolbars) == 1, f"{path}: one shared compact settings toolbar"
+    toolbar = toolbars[0]
+    applied_criteria(toolbar, path)
+    filter_trigger, = [node for node in toolbar.nodes("button", "data-criteria-trigger") if node.attrs["data-criteria-trigger"] == "advanced"]
+    market_trigger, = [node for node in advanced.nodes("button", "data-criteria-trigger") if node.attrs["data-criteria-trigger"] == "markets"]
+    build_action, = toolbar.nodes(attr="data-slip-access-action")
+    dialog_contents = set(advanced.nodes()) | set(markets.nodes())
+    assert [node for node in toolbar.nodes() if node.tag in {"button", "a"} and node not in dialog_contents] == [filter_trigger, build_action], f"{path}: the toolbar offers Filters and Build or Unlock"
+    for trigger, dialog, label in [(filter_trigger, advanced, "Filters"), (market_trigger, markets, "Markets")]:
         assert trigger.attrs.get("aria-controls") == dialog.attrs.get("id"), f"{path}: {trigger.text.strip()} opens its own dialog"
         assert trigger.attrs.get("type") == "button" and trigger.attrs.get("aria-haspopup") == "dialog", f"{path}: optional criteria open without submitting"
-    market_trigger = triggers[0]
-    market_label = "".join(child.text if isinstance(child, Element) else child
-                           for child in market_trigger.children
-                           if not isinstance(child, Element) or child.attrs.get("aria-hidden") != "true")
-    assert market_label.strip() == "Markets" and has_builder_icon(market_trigger, "markets"), f"{path}: Markets has its label and shared chart icon"
-    assert not market_trigger.nodes(attr="data-dialog-arrow"), f"{path}: Markets has no disclosure arrow"
-    custom_filters = document.nodes("button", "data-saved-filters-trigger")
-    assert option_rows[0].nodes("button", "data-saved-filters-trigger") == custom_filters, f"{path}: Custom Filters shares the mobile option row"
-    assert all(has_builder_icon(button, "custom-filters") for button in custom_filters), f"{path}: Custom Filters uses the shared sliders icon"
+        assert trigger.text.strip().startswith(label) and has_builder_icon(trigger, label.lower()), f"{path}: {label} retains its label and icon"
+        assert not trigger.nodes(attr="data-dialog-arrow"), f"{path}: {label} opens a dialog directly"
+    summary_id = market_trigger.attrs.get("aria-describedby")
+    assert summary_id and any(node.attrs.get("id") == summary_id and node.text.strip() for node in advanced.nodes()), f"{path}: Markets has a visible selection summary after hydration"
+    manage_filters = document.nodes("button", "data-saved-filters-trigger")
+    saved_filter_selects = document.nodes("button", "data-saved-filter-select")
+    assert len(manage_filters) == len(saved_filter_selects) <= 1, f"{path}: a single dropdown and Manage action"
+    body, = [child for child in advanced.children if isinstance(child, Element) and child.tag == "div"]
+    content, = [child for child in body.children if isinstance(child, Element) and child.tag == "div"]
+    sections = [section for section in content.children if isinstance(section, Element) and "data-filter-section" in section.attrs]
+    assert len(sections) == 5 + bool(manage_filters), f"{path}: Filters separates targets, limits, dates, reuse and Markets"
+    assert sections[0].nodes("button", "data-saved-filters-trigger") == manage_filters and sections[0].nodes("button", "data-saved-filter-select") == saved_filter_selects, f"{path}: Saved filters leads the Filters sections when available"
+    if manage_filters:
+        row, = sections[0].nodes(attr="data-saved-filters-row")
+        assert "data-analytics-ignore" in row.attrs, f"{path}: private preset names stay out of click analytics"
+        assert row.nodes("button") == saved_filter_selects + manage_filters, f"{path}: Manage immediately follows the Saved filters dropdown"
+        assert manage_filters[0].text.strip() == "Manage" and has_builder_icon(manage_filters[0], "manage-filters"), f"{path}: Manage has its label and icon"
     values = {}
     for name, group in by_name.items():
         inputs = group.nodes("input")
@@ -215,12 +267,12 @@ def criteria_groups(document, path, error_group=None):
             dialog = markets if name == "markets" else advanced
             assert any(node.attrs.get("role") == "alert" for node in dialog.nodes(attr="role")), f"{path}: {name} dialog contains the validation message"
     targets = [node for node in document.nodes(attr="data-criteria-field") if node.attrs["data-criteria-field"] == "targets"]
-    assert len(targets) == 1 and all(targets[0] not in dialog.nodes() for dialog in dialogs), f"{path}: essential slip targets always stay visible"
-    toolbars = document.nodes(attr="data-slip-builder-toolbar")
-    assert len(toolbars) == 1, f"{path}: one shared compact settings toolbar"
-    toolbar = toolbars[0]
-    floating_fields = [node for node in toolbar.nodes(attr="data-slip-floating-field") if node.attrs["data-slip-floating-field"] == "true"]
-    numeric_inputs = toolbar.nodes("input", "data-slip-numeric-field")
+    assert len(targets) == 1 and targets[0] in advanced.nodes(), f"{path}: slip targets belong inside Filters"
+    for title in ["Total slips", "Total odds", "Matches per slip"]:
+        assert any(title in heading.text for heading in advanced.nodes("legend")), f"{path}: {title} keeps its section heading"
+    floating_fields = [node for node in advanced.nodes(attr="data-slip-floating-field") if node.attrs["data-slip-floating-field"] == "true"]
+    numeric_inputs = advanced.nodes("input", "data-slip-numeric-field")
+    limit_labels = {"oddsMin": "Minimum", "oddsMax": "Maximum", "probMin": "Minimum", "probMax": "Maximum", "totalProbMin": "Minimum", "totalProbMax": "Maximum"}
     for control in numeric_inputs:
         name = control.attrs["data-slip-numeric-field"]
         if name == "slips":
@@ -229,25 +281,25 @@ def criteria_groups(document, path, error_group=None):
         assert len(containers) == 1, f"{path}: {name} uses one reusable floating-label field"
         labels = containers[0].nodes("label")
         assert len(labels) == 1 and labels[0].attrs.get("for") == control.attrs.get("id"), f"{path}: {name} retains its associated accessible floating label"
-        assert labels[0].text.strip() == ("Min" if name.endswith("Min") else "Max"), f"{path}: {name} keeps a visible range-bound label"
-    toolbar_groups = toolbar.nodes(attr="data-toolbar-group")
-    assert [node.attrs["data-toolbar-group"] for node in toolbar_groups] == ["slips", "total", "matches", "markets", "advanced", "actions"], f"{path}: controls retain their category order"
-    for group in toolbar_groups:
-        name = group.attrs["data-toolbar-group"]
-        if name in {"markets", "advanced"}:
-            continue
-        titles = [child for child in group.children if isinstance(child, Element) and child.tag == "legend"] if name in {"slips", "total", "matches"} else group.nodes(attr="data-criteria-title")
-        assert len(titles) == 1 and titles[0].text.strip(), f"{path}: {name} has a category title"
+        assert labels[0].text.strip() == limit_labels.get(name, "Min" if name.endswith("Min") else "Max"), f"{path}: {name} keeps a visible range-bound label"
+    builder_form, = [form for form in toolbar.nodes("form") if advanced in form.nodes("dialog")]
+    reset_links = [node for node in advanced.nodes("a") if node.text.strip() == "Reset Filters"]
+    assert len(reset_links) == 1 and reset_links[0].attrs.get("href") == builder_form.attrs.get("action"), f"{path}: native Reset stays inside Filters"
+    target_controls = []
     for name in ["slips", "totalMin", "totalMax", "teamsMin", "teamsMax"]:
         controls = [node for node in document.nodes("input") if node.attrs.get("name") == name]
         assert len(controls) == 1 and "disabled" not in controls[0].attrs, f"{path}: one enabled essential target {name}"
-        assert all(controls[0] not in dialog.nodes() for dialog in dialogs), f"{path}: essential {name} remains outside dialogs"
-        assert controls[0] in toolbar.nodes("input"), f"{path}: essential {name} belongs to the settings toolbar"
+        assert controls[0] in advanced.nodes("input") and controls[0] in builder_form.nodes("input"), f"{path}: {name} is editable inside Filters and belongs to the native form"
+        target_controls.append(controls[0])
+    if error_group == "targets":
+        assert any(node.attrs.get("aria-invalid") == "true" for node in target_controls), f"{path}: invalid targets retain native validation state"
+        target_section, = [section for section in sections if targets[0] in section.nodes()]
+        assert any(node.attrs.get("role") == "alert" for node in target_section.nodes(attr="role")), f"{path}: target errors appear within their Filters section"
     inputs = document.nodes("input")
     reuse = [node for node in inputs if node.attrs.get("name") == "reuse"]
     choices = [node for node in by_name["markets"].nodes("input")
                if node.attrs.get("name") == "markets" or (node.attrs.get("name") or "").startswith("picks.")]
-    assert len(reuse) == 2 and all(node in advanced.nodes() for node in reuse), f"{path}: hidden reuse value and checkbox belong to Advanced Filters"
+    assert len(reuse) == 2 and all(node in advanced.nodes() for node in reuse), f"{path}: hidden reuse value and checkbox belong to Filters"
     assert choices and max(inputs.index(node) for node in reuse) < min(inputs.index(node) for node in choices), f"{path}: match reuse precedes Markets in native keyboard order"
     return values
 
@@ -400,12 +452,10 @@ def verify_builder_access(origin, directory):
         verify_defaults(document)
         actions = document.nodes(attr="data-criteria-actions")
         assert len(actions) == 1, f"{path}: one toolbar action group"
-        reset = [node for node in actions[0].nodes("a") if node.text.strip() == "Reset"]
-        assert len(reset) == 1 and has_builder_icon(reset[0], "reset"), f"{path}: toolbar Reset uses the shared icon"
-        summary = document.nodes(attr="data-slip-summary-layout")
-        assert {node.attrs["data-slip-summary-layout"] for node in summary} == {"mobile", "desktop"}, f"{path}: responsive summaries"
-        desktop_summary = next(node for node in summary if node.attrs["data-slip-summary-layout"] == "desktop")
-        assert all(caption in desktop_summary.text for caption in ["Markets", "Selection", "Match reuse off"]), f"{path}: desktop summary identifies market choices and default reuse"
+        toolbar, = document.nodes(attr="data-slip-builder-toolbar")
+        summary = applied_criteria(toolbar, path)
+        assert summary["Total odds"] == "5.00–10.00" and summary["Match reuse"] == "Off", f"{path}: summary shows the default odds range and match reuse"
+        assert summary["Markets"] == "All 4 markets · Automatic results", f"{path}: summary shows the default market selections"
         account_actions = document.nodes(attr="data-slip-access-action")
         assert len(account_actions) == 1, f"{path}: one account-aware toolbar action without a duplicate below"
         account_action = account_actions[0]

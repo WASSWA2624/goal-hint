@@ -1,5 +1,7 @@
 import "server-only";
 import { kickoffTimeWindows } from "../../domain/kickoff-time.ts";
+import { total15MarketKey } from "../../domain/extended-markets.ts";
+import { feedMarketPickOptions, type FeedMarketPick } from "../../domain/feed-market-picks.ts";
 import { completedFixtureStatuses } from "../../domain/market-settlement.ts";
 
 import { addReportingDays, createPredictionWindow, type PredictionWindow, type ReportingDateRange, type ReportingDate, type UtcInstant } from "../../domain/calendar.ts";
@@ -33,8 +35,24 @@ export const displayedSet = Prisma.sql`CASE
 
 const archivedFixtureStatuses = [...completedFixtureStatuses, "postponed"] as const;
 export function historicalFeedCutoff(query: FeedQuery, range: ReportingDateRange, today: ReportingDate): UtcInstant | null {
-  if (range.startDate >= today || query.picks === "only" || !isAnyProbability(query.probability) || query.odds || !isAnyMarkets(query.markets)) return null;
+  if (range.startDate >= today || query.picks === "only" || !isAnyProbability(query.probability) || query.odds ||
+      query.marketPicks?.length || !isAnyMarkets(query.markets)) return null;
   return getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).startInclusive;
+}
+
+/** The scope uses the same visible revision as the card and requires an actual model-published pick. */
+function publishedOutcomeFilter(picks: readonly FeedMarketPick[]): Prisma.Sql {
+  const options = feedMarketPickOptions.filter(({ id }) => picks.includes(id));
+  const legacy = options.filter(option => option.kind === "legacy");
+  const extended = options.filter(option => option.kind === "extended");
+  const clauses: Prisma.Sql[] = [];
+  if (legacy.length) clauses.push(Prisma.sql`EXISTS (SELECT 1 FROM MarketPrediction mp
+    WHERE mp.setId=${displayedSet} AND mp.available=TRUE AND mp.source IN ('ai','local-engine')
+      AND (mp.family, mp.selection) IN (${Prisma.join(legacy.map(({ family, selection }) => Prisma.sql`(${family}, ${selection})`))}))`);
+  if (extended.length) clauses.push(Prisma.sql`EXISTS (SELECT 1 FROM ExtendedMarketPublishedPick ep
+    WHERE ep.revisionId=${displayedSet} AND ep.marketKey=${total15MarketKey} AND ep.source IN ('ai-score-distribution','local-poisson')
+      AND ep.selection IN (${Prisma.join(extended.map(({ selection }) => selection))}))`);
+  return clauses.length ? Prisma.sql`(${Prisma.join(clauses, " OR ")})` : Prisma.sql`FALSE`;
 }
 
 /** `providerOdds` is the caller's effective odds flag (publicPolicy.features.providerOdds unless an isolated test
@@ -89,6 +107,7 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
   if (query.countries.length > 0) filters.push(Prisma.sql`l.country IN (${Prisma.join(query.countries)})`);
   if (query.status !== "all") filters.push(query.status === "finished"
     ? Prisma.sql`f.status IN ('finished-regulation','finished-extra-time','finished-penalties')` : Prisma.sql`f.status=${query.status}`);
+  if (query.marketPicks?.length) filters.push(publishedOutcomeFilter(query.marketPicks));
   const cohortFilters = [...filters];
   // Rank a date-bounded set in one pass instead of running a sorting subquery
   // for every fixture in a large historical range. LIMIT/page never enters it.

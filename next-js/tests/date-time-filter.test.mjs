@@ -8,6 +8,7 @@ import { resetFeedFilters, selectFeedStatus } from '../src/domain/feed-controls.
 import { performanceFeedQuery } from '../src/domain/feed-performance-summary.ts';
 import { feedDateNavigation } from '../src/domain/feed-date-navigation.ts';
 import { feedDiscovery } from '../src/domain/discovery.ts';
+import { publicPolicy } from '../src/domain/public-policy.ts';
 import { feedSql } from '../src/server/matches/feed-read.ts';
 
 const today = parseReportingDate('2026-11-04'), zone = 'Africa/Kampala';
@@ -24,6 +25,23 @@ test('draft validation separates incomplete dates, range limits and individual p
   assert.equal(feedFilterDraftIssues({ ...draft, probability: { min: '101', max: '' } }).minInvalid, true);
   assert.equal(feedFilterDraftIssues({ ...draft, probability: { min: '', max: 'no' } }).maxInvalid, true);
   assert.equal(feedFilterDraftIssues({ ...draft, probability: { min: '80', max: '20' } }).probabilityOrder, true);
+});
+
+test('odds drafts prefill shared links, validate decimal bounds and omit unavailable criteria', () => {
+  const query = parseFeedQuery(new URLSearchParams({ odds: '1.01-2.25' }), { today, providerOdds: true });
+  const draft = feedFilterDraft(query, today, zone);
+  assert.deepEqual(draft.odds, { min: '', max: '2.25' });
+  assert.equal(feedFilterDraftIssues({ ...draft, odds: { min: '1.001', max: '' } }).oddsMinInvalid, true);
+  assert.equal(feedFilterDraftIssues({ ...draft, odds: { min: '', max: '1000.01' } }).oddsMaxInvalid, true);
+  const reversed = { ...draft, odds: { min: '3', max: '2' } };
+  assert.equal(feedFilterDraftIssues(reversed).oddsOrder, true);
+  assert.equal(compileFeedFilterDraft(reversed, today, false).odds, null);
+
+  const edited = { ...draft, dateTimes: sample, odds: { min: '1.5', max: '' } };
+  const applied = compileFeedFilterDraft(edited, today);
+  assert.deepEqual(applied.interval, sample);
+  assert.equal(serializeFeedQuery(applied, today).get('odds'), publicPolicy.features.providerOdds ? '1.50-1000.00' : null);
+  assert.equal(compileFeedFilterDraft({ ...draft, odds: { min: '', max: '' } }, today).odds, null);
 });
 
 test('continuous intervals include intervening nights and the complete final minute', () => {

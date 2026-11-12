@@ -21,6 +21,12 @@ const Board = styled.div<{ $indexLength: number }>`
   ${media.desktop} {
     ${desktopMatchBaseStyles}
     ${alignedLedgerStyles}
+    [data-row-market] > [data-market-label] { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
+    [data-row-market] > [data-pick-line] { flex: none; }
+    [data-row-odds] { justify-content: flex-start; }
+    [data-row-market], [data-row-odds], [data-row-probability] { gap: var(--gh-spacing-0_75); }
+    [data-row-odds] > [data-number-label] { flex: none; }
+    [data-row-odds] > strong { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; text-align: end; }
     [data-centre][data-live-clock] {
       block-size: auto;
       grid-template-areas: "clock" "score";

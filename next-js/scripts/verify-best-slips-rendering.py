@@ -1,6 +1,6 @@
 """Verify the Best Slips filter/results shell with isolated, multi-day stored fixtures."""
 from pathlib import Path
-from lib.rendering import Server, build_fixture, create_fixture, environment, parse_args, request, visible_html
+from lib.rendering import Server, build_fixture, create_fixture, environment, match, parse_args, request, visible_html
 from lib.runtime import ROOT, main_guard
 
 
@@ -14,7 +14,9 @@ def verify(origin):
         assert "data-best-slips-publication" not in html
         assert html.count("data-best-slips-summary") == 1
         assert "data-list-divider" not in html
-        assert "data-performance-heading" in html and "Advanced filters" in html
+        assert "data-performance-heading" in html
+        trigger = match(r'<button\b[^>]*data-best-slips-filter-trigger="[^"]*"[^>]*>[\s\S]*?</button>', html).group()
+        assert ">Filters</span>" in trigger
     print("Best Slips SSR passed: one filter action and results bar across multi-day, single-day and bounded All dates views.", flush=True)
 
 

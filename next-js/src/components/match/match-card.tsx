@@ -386,6 +386,14 @@ const PickShort = styled(PickCell)<{ $family: MarketFamily; $available: boolean 
     }
   }
 `;
+const PickLine = styled.span`
+  display: inline-flex; align-items: baseline; gap: var(--gh-spacing-0_75);
+  min-inline-size: 0; max-inline-size: 100%; white-space: nowrap;
+  > [data-pick-selection] { ${ellipsis} }
+  > [data-forecast-source] {
+    flex: none; font-size: calc(var(--gh-font-micro) - var(--gh-stroke-thin)); line-height: var(--gh-leading-solid);
+  }
+`;
 /** One price cell serves both the desktop track and the mobile facts row. */
 const Odds = styled(PickCell)`
   grid-column: 3;
@@ -566,11 +574,16 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const price = !selection ? null : snapshotPick ? { price: snapshotPick.odds }
     : fixture.status === "live" ? (livePrice ? { price: livePrice } : null)
       : preMatchPrice ? { price: preMatchPrice } : selectedCardPrice(fixture, shownFamily, !publishedMarket);
-  const oddsLabel = messages.text(observation?.kind === "pre-match" ? "touchline.preMatchOdds" : "details.odds");
+  const oddsCaption = messages.text("details.odds");
+  const stackOddsCaption = `${oddsCaption}:`;
+  const stackProbabilityCaption = `${messages.text("match.columns.probabilityCompact")}:`;
+  const oddsLabel = observation?.kind === "pre-match" ? messages.text("touchline.preMatchOdds") : oddsCaption;
+  const oddsDescription = `${oddsLabel}: ${price?.price ?? messages.text("outcome.unavailable")}`;
   const market = prediction?.item.market;
   const expectedReturn = market?.source ? forecastExpectedReturn(market.selectedProbability, preMatchPrice) : null;
   const source = prediction?.item.market.source;
-  const sourceLabel = source ? <ForecastSourceLabel source={source} messages={messages} /> : null;
+  const sourceLabel = source ? <ForecastSourceLabel source={source} messages={messages}
+    compactLabel={source === "local-engine" ? messages.text("match.source.localShort") : undefined} /> : null;
   const valueLabel = <ForecastValueLabel expectedReturn={expectedReturn} messages={messages} />;
   const family = messages.text(`market.family.${shownFamily}`);
   const locked = fixture.cycle?.state === "closed";
@@ -623,14 +636,13 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       offline={offline} interactive={interactive} eagerLogos={eagerLogos} {...(!gated && !offline ? { marketFamily: shownFamily } : {})}
       {...(marketDescription ? { marketDescription } : {})}
       market={offline ? <span>Unavailable offline</span> : gated ? <><SubscriberIcon /><span data-subscriber-notice>{messages.text("paywall.unlock")}</span></> : <>
-        {prediction && <span data-market-label aria-hidden="true">{compactMarketName(shownFamily)}</span>}
-        <strong data-pick-label data-no-pick={missing ?? undefined} title={publication || undefined}>
-          {selection ? <span data-pick-selection>{predictionLabel(messages, selection)}</span> : noPickLabel}
-          {sourceLabel}
-        </strong>
+        {prediction && <span data-market-label aria-hidden="true">{compactMarketName(shownFamily)}:</span>}
+        {selection ? <PickLine as="strong" data-pick-line="" data-pick-label title={publication || undefined}>
+          <span data-pick-selection>{predictionLabel(messages, selection)}</span>{sourceLabel}
+        </PickLine> : <strong data-pick-label data-no-pick={missing ?? undefined}>{noPickLabel}</strong>}
       </>}
       odds={<span data-card-odds data-pick-price={prediction ? "" : undefined} data-odds-kind={observation?.kind}
-        title={oddsLabel}>{price?.price ?? "—"}{expectedReturn !== null && expectedReturn > 0 && <> {valueLabel}</>}</span>}
+        title={oddsDescription}>{price?.price ?? "—"}{expectedReturn !== null && expectedReturn > 0 && <> {valueLabel}</>}</span>}
       probability={gated ? <span data-public-probability>{publicChanceLabel}</span> : <span data-pick-value>{prediction ? percent : "—"}</span>}
       details={offline ? <VisuallyHidden>Predictions are unavailable in the saved view.</VisuallyHidden>
         : !gated && !prediction && reason ? <span data-no-pick-reason>{reason}</span> : null}
@@ -664,24 +676,24 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       </MarketName>
       {offline ? <PredictionCell prediction={null} price={null} reason="Predictions are unavailable in the saved view." locale={locale}>
         <PickShort $family={shownFamily} $available={false} data-ledger-field="prediction"><span data-pick-value="">Unavailable offline</span></PickShort>
-        <span data-match-metrics><Odds data-ledger-field="odds" data-stack-label={messages.text("details.odds")} aria-hidden="true">—</Odds><Probability data-ledger-field="probability" data-stack-label={messages.text("match.columns.probabilityShort")} aria-hidden="true"><Percent>—</Percent></Probability></span>
+        <span data-match-metrics><Odds data-ledger-field="odds" data-stack-label={stackOddsCaption} aria-hidden="true">—</Odds><Probability data-ledger-field="probability" data-stack-label={stackProbabilityCaption} aria-hidden="true"><Percent>—</Percent></Probability></span>
       </PredictionCell> : gated ? <><GatedPick data-ledger-field="prediction"><SubscriberIcon />
         <span data-subscriber-notice>{messages.text("paywall.unlock")}</span>
       </GatedPick>
         <span data-match-metrics><Odds data-ledger-field="odds" aria-hidden="true">—</Odds>
-        <Probability data-ledger-field="probability" data-stack-label={messages.text("match.columns.probabilityShort")} aria-label={messages.text("details.probability")}><Percent data-public-probability>{publicChanceLabel}</Percent></Probability></span>
+        <Probability data-ledger-field="probability" data-stack-label={stackProbabilityCaption} aria-label={messages.text("details.probability")}><Percent data-public-probability>{publicChanceLabel}</Percent></Probability></span>
       </> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale}>
         <PickShort $family={shownFamily} $available={prediction !== null} data-ledger-field="prediction" aria-hidden="true"
           data-no-pick={missing ?? undefined}>
-          {selection ? <span data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection)}>{predictionLabel(messages, selection)}</span>{sourceLabel}</span> : <>
+          {selection ? <PickLine data-pick-line="" data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection)}>{predictionLabel(messages, selection)}</span>{sourceLabel}</PickLine> : <>
             <b data-mobile-only="">{noPickLabel}</b>
             <span data-pick-value="" data-mobile-only="">{messages.text(`match.noPickReason.short.${missing!}`)}</span>
             <span data-pick-value="" data-desktop-only="">{noPickLabel}</span>
           </>}
         </PickShort>
-        <span data-match-metrics><Odds data-ledger-field="odds" data-stack-label={oddsLabel} aria-hidden={expectedReturn === null || expectedReturn <= 0}
-          data-card-odds data-odds-kind={observation?.kind} data-pick-price={prediction ? "" : undefined}>{price?.price ?? "—"}{expectedReturn !== null && expectedReturn > 0 && <> {valueLabel}</>}</Odds>
-        <Probability data-ledger-field="probability" data-stack-label={messages.text("match.columns.probabilityShort")} aria-hidden="true">
+        <span data-match-metrics><Odds data-ledger-field="odds" data-stack-label={stackOddsCaption} aria-hidden={expectedReturn === null || expectedReturn <= 0}
+          data-card-odds data-odds-kind={observation?.kind} data-pick-price={prediction ? "" : undefined} title={oddsDescription}>{price?.price ?? "—"}{expectedReturn !== null && expectedReturn > 0 && <> {valueLabel}</>}</Odds>
+        <Probability data-ledger-field="probability" data-stack-label={stackProbabilityCaption} aria-hidden="true">
           {prediction && <ProbabilityBar $family={shownFamily} data-probability-meter=""><span style={{ inlineSize: `${Math.max(2, prediction.probability.roundedPercent)}%` }} /></ProbabilityBar>}
           <Percent data-pick-value="">{prediction ? percent : "—"}</Percent>
         </Probability></span>
@@ -691,7 +703,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
           {locked && `. ${messages.text("match.lockedPrediction")}`}
         </VisuallyHidden> : <VisuallyHidden>{messages.text("match.noPickLabel", { market: family })}: {reason}</VisuallyHidden>}
       </PredictionCell>}
-      {prediction && <VisuallyHidden>{oddsLabel}: {price?.price ?? messages.text("outcome.unavailable")}</VisuallyHidden>}
+      {prediction && <VisuallyHidden>{oddsDescription}</VisuallyHidden>}
     </Pick>
     {gated && !offline && <MobileUnlockArea data-mobile-unlock-area>
       <UnlockButton locale={locale} signedIn={signedIn} returnTo={detailHref} />

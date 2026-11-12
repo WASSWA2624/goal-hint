@@ -1,30 +1,23 @@
-# Custom Filters
+# Saved filters
 
-Every signed-in account can keep up to ten named filter configurations, including
-while access is expired or subscription sales are closed. **Custom filters** in
-Builder opens the shared criteria dialog. The saved count and limit appear above
-**Choose a filter**. The chooser starts on the default when one exists, then
-falls back to the applied filter if there is one. Long names wrap inside the
-scrollable chooser. Selecting a record prefills the dialog's copy of the Builder
-controls. **Markets** opens a nested dialog with all supported markets and their
-outcomes on desktop and mobile.
+Every signed-in account can keep up to ten named presets, including while access
+is expired or subscription sales are closed. The **Saved filters** chooser and
+**Manage** button sit at the top of Builder **Filters**. Long names wrap in the
+scrollable chooser. Choosing a preset fills the criteria form as a draft.
+**Apply Filters** commits the visible values to the next build and updates its
+summary. Closing Filters discards the draft. **Reset Filters** restores defaults
+in the form and keeps the saved presets available.
 
-The footer holds **Create**, **Rename**, **Update**, **Delete** and **Apply**.
-Create and Rename open a child dialog for the name. Update confirms replacement
-with the form values, and Delete confirms removal. The child dialogs use the
-same layout on desktop and mobile. Cancelling or pressing Escape dismisses the
-active child and restores focus to the parent.
-
-**Apply** loads the selected filter's saved values into Builder and closes the
-dialog. The form flags unsaved edits so members can update the filter before
-applying it. The top-right X and Escape close the parent while keeping the
-Builder settings. Create, Rename, Update and default changes leave the Builder
-draft as it was. Deleting the applied record clears its ID while preserving
-the Builder values. Custom Filters are managed from Builder.
+**Manage** opens a child dialog with the saved count, preset selection, default
+control and **Create**, **Rename**, **Update**, and **Delete** actions. Create and
+Update save the values currently entered in the main Filters form. Create and
+Rename ask for a name. Update and Delete ask for confirmation. Escape closes
+the active dialog and returns focus to its opener. Deleting the applied record
+clears its ID and preserves the Builder values.
 
 Names are trimmed, Unicode-normalized and unique per account without case
-distinctions. The **Date and time** fields display **From** and **To** in the
-device's active time zone. Creating or updating a filter saves the continuous
+distinctions. The **Date and time window** displays **From** and **To** in the
+form's time zone. Creating or updating a filter saves the continuous
 range with its time zone, alongside the markets, outcomes, reuse and limits.
 Applying a dated preset uses that saved interval. Older time-only presets use
 today's date in the device's time zone with their saved times. The range fits

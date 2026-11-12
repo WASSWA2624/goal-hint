@@ -1,22 +1,41 @@
 import "server-only";
 
-import type { UtcInstant } from "../../domain/calendar.ts";
+import { parseReportingDate, type ReportingDate, type UtcInstant } from "../../domain/calendar.ts";
 import type { QuotaFeedback, QuotaPriority, QuotaDenialReason } from "./quota-contract.ts";
 
 export const API_FOOTBALL_ORIGIN = "https://v3.football.api-sports.io";
 export const API_FOOTBALL_CONTRACT_VERSION = "direct-v3-official-examples-2026-10-08";
+export const apiFootballLeaderboards = Object.freeze({
+  topScorers: Object.freeze({ path: "/players/topscorers", paginated: false, coverage: "top_scorers", group: "goals", metric: "total" }),
+  topAssists: Object.freeze({ path: "/players/topassists", paginated: false, coverage: "top_assists", group: "goals", metric: "assists" }),
+  topYellowCards: Object.freeze({ path: "/players/topyellowcards", paginated: false, coverage: "top_cards", group: "cards", metric: "yellow" }),
+  topRedCards: Object.freeze({ path: "/players/topredcards", paginated: false, coverage: "top_cards", group: "cards", metric: "red" }),
+} as const);
+export type ApiFootballLeaderboard = keyof typeof apiFootballLeaderboards;
+export const isApiFootballLeaderboard = (endpoint: string): endpoint is ApiFootballLeaderboard => Object.hasOwn(apiFootballLeaderboards, endpoint);
+
 export const apiFootballEndpoints = Object.freeze({
   fixtures: Object.freeze({ path: "/fixtures", paginated: false }),
+  fixtureRounds: Object.freeze({ path: "/fixtures/rounds", paginated: false }),
+  countries: Object.freeze({ path: "/countries", paginated: false }),
+  timezones: Object.freeze({ path: "/timezone", paginated: false }),
+  leagueSeasons: Object.freeze({ path: "/leagues/seasons", paginated: false }),
   teams: Object.freeze({ path: "/teams", paginated: false }),
+  teamSeasons: Object.freeze({ path: "/teams/seasons", paginated: false }),
+  teamStatistics: Object.freeze({ path: "/teams/statistics", paginated: false }),
   venues: Object.freeze({ path: "/venues", paginated: false }),
   standings: Object.freeze({ path: "/standings", paginated: false }),
   transfers: Object.freeze({ path: "/transfers", paginated: false }),
+  coaches: Object.freeze({ path: "/coachs", paginated: false }),
+  squads: Object.freeze({ path: "/players/squads", paginated: false }),
   competitions: Object.freeze({ path: "/leagues", paginated: false }),
   statistics: Object.freeze({ path: "/fixtures/statistics", paginated: false }),
   events: Object.freeze({ path: "/fixtures/events", paginated: false }),
   lineups: Object.freeze({ path: "/fixtures/lineups", paginated: false }),
   injuries: Object.freeze({ path: "/injuries", paginated: false }),
+  ...apiFootballLeaderboards,
   playerStatistics: Object.freeze({ path: "/players", paginated: true, pageSize: 20 }),
+  playerProfiles: Object.freeze({ path: "/players/profiles", paginated: true, pageSize: 250 }),
   predictions: Object.freeze({ path: "/predictions", paginated: false }),
   accountStatus: Object.freeze({ path: "/status", paginated: false }),
   // Pre-match odds (prompt 052). The page size follows the official v3 documentation; the counted trial must confirm it.
@@ -28,22 +47,55 @@ export const apiFootballEndpoints = Object.freeze({
 } as const);
 export type ApiFootballEndpoint = keyof typeof apiFootballEndpoints;
 
+export type FixtureRoundQuery = Readonly<{ competitionId: number; season: number }>;
+export type ApiFootballFixtureRound = Readonly<Record<string, unknown> & { round: string; dates: readonly ReportingDate[] }>;
+
+export function apiFootballFixtureRoundParameters({ competitionId, season }: FixtureRoundQuery): Readonly<Record<string, string>> {
+  return { league: String(competitionId), season: String(season), dates: "true", timezone: "Africa/Kampala" };
+}
+
+export function parseApiFootballFixtureRound(raw: unknown): ApiFootballFixtureRound | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw) || !("round" in raw) || typeof raw.round !== "string" ||
+    !raw.round.trim() || raw.round.length > 200 || raw.round.includes("\0") || !("dates" in raw) || !Array.isArray(raw.dates)) return null;
+  try {
+    return Object.freeze({ ...raw, round: raw.round, dates: Object.freeze(raw.dates.map(parseReportingDate)) });
+  } catch { return null; }
+}
+
 export type FootballHistoryReferenceTarget = Readonly<
-  { endpoint: "teams" | "standings" | "injuries"; competitionId: number; season: number }
+  { endpoint: "countries" | "timezones" | "leagueSeasons" }
+  | { endpoint: "teams" | "standings" | "injuries" | "fixtureRounds" | ApiFootballLeaderboard; competitionId: number; season: number }
+  | { endpoint: "teamStatistics"; competitionId: number; season: number; teamId: number }
   | { endpoint: "venues"; venueId: number }
-  | { endpoint: "transfers"; teamId: number }
+  | { endpoint: "transfers" | "coaches" | "squads" | "teamSeasons"; teamId: number }
 >;
 
 export function apiFootballReferenceParameters(target: FootballHistoryReferenceTarget): Readonly<Record<string, string>> | null {
   const providerId = (value: number) => Number.isSafeInteger(value) && value > 0 && value <= 4_294_967_295;
+  const validSeason = (value: number) => Number.isInteger(value) && value >= 1000 && value <= 9999;
   if (!target || typeof target !== "object") return null;
   switch (target.endpoint) {
+    case "countries":
+    case "timezones":
+    case "leagueSeasons": return Object.keys(target).length === 1 ? {} : null;
     case "venues": return providerId(target.venueId) ? { id: String(target.venueId) } : null;
-    case "transfers": return providerId(target.teamId) ? { team: String(target.teamId) } : null;
+    case "transfers":
+    case "coaches":
+    case "teamSeasons":
+    case "squads": return providerId(target.teamId) ? { team: String(target.teamId) } : null;
+    case "fixtureRounds":
+      return providerId(target.competitionId) && validSeason(target.season) ? apiFootballFixtureRoundParameters(target) : null;
+    case "teamStatistics":
+      return providerId(target.competitionId) && validSeason(target.season) && providerId(target.teamId)
+        ? { league: String(target.competitionId), season: String(target.season), team: String(target.teamId) } : null;
     case "teams":
     case "standings":
     case "injuries":
-      return providerId(target.competitionId) && Number.isInteger(target.season) && target.season >= 1000 && target.season <= 9999
+    case "topScorers":
+    case "topAssists":
+    case "topYellowCards":
+    case "topRedCards":
+      return providerId(target.competitionId) && validSeason(target.season)
         ? { league: String(target.competitionId), season: String(target.season) } : null;
     default: return null;
   }

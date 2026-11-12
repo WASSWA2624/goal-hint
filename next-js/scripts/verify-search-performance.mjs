@@ -103,13 +103,15 @@ export async function verifyFeedSearchFilters(page, origin, pathname = '/en/matc
     const panel = page.locator('[data-feed-filters]');
     await panel.waitFor({ state: 'visible' });
     const field = panel.getByRole('searchbox'), filter = panel.locator('[data-search-filters]');
-    const before = page.url();
+    const historyLength = await page.evaluate(() => history.length);
+    await field.evaluate(element => { element.dataset.searchIdentity = 'retained'; });
     await field.fill('Arsenal');
-    assert(page.url() === before, 'Feed typing remains a draft');
-    await panel.locator('[data-feed-search-submit]').click();
     await page.waitForURL(url => url.searchParams.get('q') === 'Arsenal');
+    await page.waitForFunction(() => document.querySelector('[data-feed-match-results]')?.getAttribute('aria-busy') === 'false');
+    assert(await field.evaluate(element => element.dataset.searchIdentity === 'retained' && document.activeElement === element), 'Live search preserves the input and focus');
+    assert(await page.evaluate(() => history.length) === historyLength, 'Live search replaces the current history entry');
     await filter.click();
-    const dialog = page.getByRole('dialog', { name: 'Advanced Filters', exact: true });
+    const dialog = page.getByRole('dialog', { name: 'Filters', exact: true });
     await dialog.waitFor({ state: 'visible' });
     assert(await filter.getAttribute('aria-controls') === await dialog.getAttribute('id'), 'The feed opener targets its own dialog');
     const dates = dialog.locator('[data-date-time-field="datetime"]');
@@ -118,7 +120,7 @@ export async function verifyFeedSearchFilters(page, origin, pathname = '/en/matc
     const probability = dialog.locator('input[inputmode="decimal"]').first(), original = await probability.inputValue();
     const applied = page.url();
     await probability.fill('101');
-    assert(page.url() === applied, 'Advanced-filter edits do not execute a search');
+    assert(page.url() === applied, 'Filter edits do not execute a search');
     await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'hidden' });
     assert(await filter.evaluate(element => document.activeElement === element), 'Feed dialog dismissal restores opener focus');
     await filter.click(); await dialog.waitFor({ state: 'visible' });
@@ -129,7 +131,7 @@ export async function verifyFeedSearchFilters(page, origin, pathname = '/en/matc
     assert(await summary.locator('[data-summary-card]').count() === 6, 'The feed uses all six shared cards');
     if (!desktop) assert(await summary.locator('svg').evaluateAll(icons => icons.every(icon => getComputedStyle(icon).display === 'none')), 'Feed mobile cards hide icons');
     await summary.locator('[data-summary-result="won"]').click();
-    await page.waitForURL(url => url.searchParams.get('result') === 'won');
+    await page.waitForURL(url => url.searchParams.get('result') === 'won' && url.searchParams.get('q') === 'Arsenal');
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'The integrated feed fits the viewport');
     results.push({ mode, width, search: true, advancedFilters: true, resultDrilldown: true });
   }

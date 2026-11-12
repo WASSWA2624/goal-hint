@@ -133,12 +133,21 @@ archive records available, missing, partial, and unsupported sections and keeps
 the original observation times. The local archive can be exported later after
 checking the hosted schema and permitted scope.
 
-`npm run history:backfill -- --reference --requests 20` archives team, venue,
-standings, injury, and transfer pages for identities already in the database.
-Use `--dataset teams`, `venues`, `standings`, `injuries`, or `transfers` to limit
-the run. Historical pages retain their retrieval dates and can be read locally
-by selector. A complete empty response records what the provider returned at
-that time. Active-season changes require later observations.
+`npm run history:backfill -- --reference --requests 20` archives provider
+dictionaries, team and venue records, standings, injuries, transfers, season
+statistics, coaches, and current squads. It discovers target identities from
+saved fixtures. Use `--help` for dataset selectors and `--dataset player-statistics`
+to resume paginated league-season player statistics on their own. Archived
+pages retain their retrieval dates and can be read locally by selector. A
+complete empty response records what the provider returned at that time.
+Active-season changes require later observations.
+
+Use `npm run history:backfill -- --continuous` to run the supported fixture,
+match-detail, and reference imports under one owned database lock. The runner
+checks each phase in bounded batches, waits when the shared provider quota
+gives live work priority, and resumes after transient failures. A drained pass
+waits for retryable or newly discovered coverage. The saved source pages and
+import receipts persist across restarts.
 
 The live snapshot's web server defaults to `127.0.0.1`. To browse from another
 device on the same network, start it with `npm run dev -- --hostname 0.0.0.0 --port 3000`

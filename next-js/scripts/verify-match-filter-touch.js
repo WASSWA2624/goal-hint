@@ -22,33 +22,45 @@ async function verifyMatchFilterTouch(page) {
     const month = picker.getByRole('listbox', { name: 'Month', exact: true });
     assert(await month.getByRole('option', { selected: true }).innerText() === 'DEC', 'Touch arrow wraps January to December');
     const cdp = await context.newCDPSession(phone);
-    async function swipeForward(wheel) {
+    async function swipe(wheel, direction = 1) {
       const bounds = await wheel.boundingBox();
-      const x = bounds.x + bounds.width / 2, y = bounds.y + bounds.height * 0.75;
+      const x = bounds.x + bounds.width / 2, y = bounds.y + bounds.height * (direction === 1 ? 0.75 : 0.25);
       const travel = bounds.height / 3 + 8;
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
       for (let step = 1; step <= 6; step++) {
-        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - step * travel / 6 }] });
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - direction * step * travel / 6 }] });
         await new Promise(resolve => setTimeout(resolve, 40));
       }
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     }
-    await swipeForward(month);
+    await swipe(month);
     await phone.waitForFunction(() => document.querySelector('[data-scroll-picker-column="Month"] [aria-selected="true"]')?.textContent === 'JAN');
-    await swipeForward(picker.getByRole('listbox', { name: 'Day', exact: true }));
+    await swipe(picker.getByRole('listbox', { name: 'Day', exact: true }));
     await phone.waitForFunction(() => document.querySelector('[data-scroll-picker-column="Day"] [aria-selected="true"]')?.textContent === '01');
     const hourStep = picker.getByRole('button', { name: 'Next Hour', exact: true });
     const arrow = await hourStep.boundingBox();
     assert(arrow.width === 44 && arrow.height === 44, 'Picker arrows use shared 44px touch targets');
+    const hour = picker.getByRole('listbox', { name: 'Hour', exact: true });
+    await hour.press('Home');
+    await picker.getByRole('button', { name: 'Previous Hour', exact: true }).tap();
+    assert(await hour.getByRole('option', { selected: true }).innerText() === '23', 'Touch arrow wraps hour from 00 to 23');
     await hourStep.tap();
+    assert(await hour.getByRole('option', { selected: true }).innerText() === '00', 'Touch arrow wraps hour from 23 to 00');
+    await hourStep.tap();
+    const minute = picker.getByRole('listbox', { name: 'Minute', exact: true });
+    await minute.press('End');
+    await swipe(minute);
+    await phone.waitForFunction(() => document.querySelector('[data-scroll-picker-column="Minute"] [aria-selected="true"]')?.textContent === '00');
+    await swipe(minute, -1);
+    await phone.waitForFunction(() => document.querySelector('[data-scroll-picker-column="Minute"] [aria-selected="true"]')?.textContent === '59');
     await phone.screenshot({ path: 'output/playwright/date-time-picker-touch-dark-390.png' });
-    await picker.getByRole('button', { name: 'Use selection', exact: true }).tap();
-    assert(await gallery.locator('input[name="receivedAt"]').inputValue() === '2026-01-01T15:05', 'Wrapped date and stepped hour commit together');
+    await picker.getByRole('button', { name: 'Apply', exact: true }).tap();
+    assert(await gallery.locator('input[name="receivedAt"]').inputValue() === '2026-01-01T01:59', 'Wrapped date and time commit together');
     await phone.goto(`${origin}/en/matches?start=2026-11-04T09%3A00&end=2026-11-06T17%3A00&tz=Africa%2FKampala&picks=all`);
-    await phone.locator('[data-criteria-dialog][data-enhanced="true"]').waitFor({ state: 'attached' });
+    await phone.locator('[data-feed-filters] [data-criteria-dialog][data-enhanced="true"]').first().waitFor({ state: 'attached' });
     await phone.locator('[data-search-filters]').tap();
-    const dialog = phone.getByRole('dialog', { name: 'Advanced Filters', exact: true });
-    assert(await dialog.getByRole('group', { name: 'From Date and Time', exact: true }).evaluate(node =>
+    const dialog = phone.getByRole('dialog', { name: 'Filters', exact: true });
+    assert(await dialog.getByRole('group', { name: 'From', exact: true }).evaluate(node =>
       [...node.children].map(child => child.value ?? child.textContent).join('')) === '04-NOV-2026 01:00', 'Applied interval prefills in detected New York device zone');
     const countries = dialog.locator('[data-searchable-select]').filter({ has: phone.getByRole('button', { name: /^Countries:/ }) });
     await countries.locator('[data-select-trigger]').tap(); await countries.getByRole('combobox').fill('E');
@@ -56,6 +68,6 @@ async function verifyMatchFilterTouch(page) {
     assert(await countries.getByRole('option', { name: 'Egypt', exact: true }).getAttribute('aria-selected') === 'true', 'One tap selects Egypt');
     await phone.screenshot({ path: 'output/playwright/match-filters-touch-dark-390.png' });
     assert(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Touch layout fits viewport');
-    return { touch: 'passed', monthWrap: 'DEC to JAN', dayWrap: '31 to 01', controlHeight: arrow.height };
+    return { touch: 'passed', monthWrap: 'DEC to JAN', dayWrap: '31 to 01', hourWrap: '00 and 23', minuteWrap: '00 and 59', controlHeight: arrow.height };
   } finally { await context.close(); }
 }

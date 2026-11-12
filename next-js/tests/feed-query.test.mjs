@@ -5,6 +5,7 @@ import { activeFeedFilterCount, defaultMarkets, feedQueryHref, feedQueryKey, Fee
 import { publicPolicy } from "../src/domain/public-policy.ts";
 import { parseReportingDate } from "../src/domain/calendar.ts";
 import { fullDayKickoffTime } from "../src/domain/kickoff-time.ts";
+import { resetFeedFilters, resetFeedFilterSection } from "../src/domain/feed-controls.ts";
 import { query, today } from "./helpers/client-state-fixtures.mjs";
 
 test("URL queries round trip with one canonical order and explicit EAT context", () => {
@@ -38,6 +39,23 @@ test("default markets are Any; page links retain an explicit all-fixture choice"
   assert.equal(feedQueryHref(query("market=match-result"), today), "/en/matches?market=match-result&picks=all&when=last-30-days&sort=kickoff");
   assert.equal(panelFilterCount(defaults), 0); assert.equal(panelFilterCount(query("market=match-result")), 1);
   assert.notEqual(feedQueryKey(defaults, today), feedQueryKey(query("market=match-result"), today));
+});
+
+test("published outcome choices round trip separately from market families and reset with Markets", () => {
+  const input = "market=double-chance&marketPick=total-goals%3Aover-1.5&marketPick=match-result%3Ahome-win";
+  const selected = query(input);
+  assert.deepEqual(selected.markets, ["double-chance"]);
+  assert.deepEqual(selected.marketPicks, ["match-result:home-win", "total-goals:over-1.5"]);
+  assert.deepEqual(query(serializeFeedQuery(selected, today).toString()), selected);
+  assert.deepEqual(query(new URL(feedQueryHref(selected, today), "https://example.test").searchParams.toString()), selected);
+  assert.equal(feedQueryKey(selected, today), feedQueryKey(query(`${input}&page=2`), today));
+  assert.notEqual(feedQueryKey(selected, today), feedQueryKey(query("market=double-chance"), today));
+  assert.equal(panelFilterCount(selected), 1);
+  assert.equal(resetFeedFilterSection(selected, "markets").marketPicks, undefined);
+  assert.equal(resetFeedFilters(selected).marketPicks, undefined);
+  for (const value of ["", "corners:over-1.5", "double-chance:home-win", "total-goals:over-3.5", "total-goals:over-1.5,total-goals:over-1.5"]) {
+    assert.throws(() => query(`marketPick=${encodeURIComponent(value)}`), FeedQueryError);
+  }
 });
 
 test("home resolves the rolling last 30 calendar days inclusively across month, leap-day and year boundaries", () => {

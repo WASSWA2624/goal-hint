@@ -6,8 +6,7 @@ submission. Omit `submitLabel` for immediate in-list/option filtering. Submitted
 searches use the inset action; `onSearch` handles local searches inside another
 form without submitting that parent, including Enter with IME composition
 protection. `filters` supplies the dialog ID, open state, opener and optional
-applied count. `trailingAction` places the optional primary button after the filter; `filterButtonRef` supports focus restoration. Mobile shows only
-the filter icon; desktop shows its icon and label. All controls use the shared control
+applied count. `trailingAction` places the optional primary button after the filter, and `filterButtonRef` supports focus restoration. Matches shows the filter icon and label at every width. All controls use the shared control
 metrics, floating-label primitives, focus styles and theme tokens. The search
 action and input use the field’s inner grid track, overriding the standalone
 control minimum so their bounds stay inside the field on every screen size.
@@ -55,11 +54,11 @@ muted inset rule while keyboard focus keeps its stronger outline.
 ## Match search and filters
 
 `FeedFilters` owns one validated draft shared by mobile and desktop. Status or
-result, From/To date-times, sorting, Predictions only, league/country searchable
-multi-selects and probability live in its Advanced Filters dialog. Match status
-and Sort by share a row, as do Leagues and Countries. Markets opens expanded
-with four choices in two columns and an Any checkbox that selects all four.
-Predictions only sits directly above Markets.
+result, From/To date-times, sorting, Predictions only, league and country,
+probability and eligible odds live in Filters. Match status and Sort by share a
+row. Leagues and Countries each have a full row. Markets opens a child dialog
+with families, published outcomes, and a shared search. Filtering the choices
+keeps checked values in the draft.
 Period and editable time-zone controls are removed. From/To use the detected
 device zone and define one continuous interval, including the final minute.
 Min/Max probability and odds fields have their own labels. Inactive odds
@@ -69,9 +68,14 @@ direct partial matches precede football aliases and spelling suggestions.
 Selection takes one activation and persists when searching. Missing applied
 choices remain selectable, and countries use bundled flags.
 
-Only search and its adjacent filter button remain outside. Search submits on
-Enter or the inset action; typing and dialog edits make no match requests.
-Apply Filters commits the complete draft and closes the dialog. Reset Filters
+Search and its adjacent Filters button sit above the results. Typing schedules a
+short-debounced request through the same feed endpoint as pagination. Enter and
+the inset Search button run the current text immediately. The current list stays
+visible during the request. The latest response updates the list, count and
+pagination. Clearing the search restores results for the applied filters. The
+field and performance cards stay in place while searching.
+
+Apply Filters commits the dialog draft and closes the dialog. Reset Filters
 restores the configured defaults in the draft, including fifty matches per page.
 Closing discards changes and restores focus to the opener. Invalid ranges and
 probabilities disable Apply; validation appears beneath the affected input.

@@ -83,6 +83,31 @@ def get(origin, path):
     return response.text, visible_html(response.text)
 
 
+def verify_filter_form(visible, name):
+    filter_form = match(r'<form\b[^>]*aria-label="Search and filter matches"[\s\S]*?</form>', visible).group()
+    # The pair remains editable and submittable as civil datetimes before hydration.
+    date_inputs = re.findall(r'<input\b[^>]*type="datetime-local"[^>]*>', filter_form)
+    assert len(date_inputs) == 2
+    for field, name_attr in zip(date_inputs, ("start", "end"), strict=True):
+        match(r'\bname="' + name_attr + r'"', field)
+        match(r'\bvalue="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}"', field)
+    match(r'<legend\b[^>]*>Date and time window</legend>', filter_form)
+    for label in ["From", "To"]:
+        match(r'<label\b[^>]*>' + label + r'</label>', filter_form)
+    match(r'<legend\b[^>]*>Probability \(%\)</legend>', filter_form)
+    filter_button = match(r'<button\b[^>]*data-search-filters="[^"]*"[^>]*>[\s\S]*?</button>', filter_form).group()
+    match(r'\baria-label="Filters(?:, [^"]+ active)?"', filter_button)
+    match(r'<span>Filters</span>', filter_button)
+    match(r'<button\b[^>]*data-market-trigger="[^"]*"[^>]*>[\s\S]*?<span>Markets</span></button>', filter_form)
+    match(r'<div\b[^>]*data-market-choices="[^"]*"', filter_form)
+    market_inputs = re.findall(r'<input\b[^>]*type="checkbox"[^>]*\bname="market"[^>]*>', filter_form)
+    assert len(market_inputs) == 4, name + ": nested Markets retains native inputs for all four families"
+    assert len(re.findall(r'\bdata-feed-dialog=', filter_form)) == 1
+    assert len(re.findall(r'>Reset Filters</button>', filter_form)) == 1
+    assert len(re.findall(r'>Apply Filters</button>', filter_form)) == 1
+    assert len(re.findall(r'Recommended picks only</label>', filter_form)) == 1
+
+
 def verify_feed(origin, directory, scenarios):
     verify_status_routes(origin)
     empty_titles = {
@@ -96,24 +121,8 @@ def verify_feed(origin, directory, scenarios):
         (directory / f"{name}.html").write_text(html, encoding="utf-8")
         assert 0 <= html.find("data-styled=") < html.find("<main"), name + ": CSS before content"
         assert len(re.findall(r"<h1[\s>]", visible)) == 1
-        # Expanding filters needs no extra fetch: range fields render once in the initial document.
-        assert len(re.findall(r'<input\b[^>]*type="date"', visible)) == 2
-        time_inputs = re.findall(r'<input\b[^>]*type="time"[^>]*>', visible)
-        assert len(time_inputs) == 2
-        time_range = scenario["query"].get("time") or {"from": "00:00", "to": "23:59"}
-        for field, bound in zip(time_inputs, ("from", "to")):
-            match(r'\bvalue="' + re.escape(time_range[bound]) + r'"', field)
-        for label in ["From date", "To date", "From time", "To time"]:
-            match(label, visible)
-        match(r'>Reset Filters</button>', visible)
-        match(r'>Apply Filters</button>', visible)
-        match(r'aria-label="Advanced filters(?:, [^"]+ active)?"', visible)
         no_match("Clear filters", visible)
-        filter_form = match(r'<form\b[^>]*aria-label="Search and filter matches"[\s\S]*?</form>', visible).group()
-        assert len(re.findall(r'\bdata-feed-dialog=', filter_form)) == 1
-        assert len(re.findall(r'>Reset Filters</button>', filter_form)) == 1
-        assert len(re.findall(r'>Apply Filters</button>', filter_form)) == 1
-        assert len(re.findall(r'Recommended picks only</label>', filter_form)) == 1
+        verify_filter_form(visible, name)
         no_match('role="slider"|With predictions|Any time|Specific time', visible)
         articles = re.findall(r'(<article\b[^>]*data-fixture-id="([^"]+)"[^>]*>)([\s\S]*?)</article>', visible)
         no_match("data-match-table-header", visible, name + ": shared match presentation replaces the former column header")

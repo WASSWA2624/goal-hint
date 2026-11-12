@@ -109,7 +109,7 @@ export async function benchmarkUI(page, origin, outputDirectory,
       const dialogs = [];
       for (let sample = 0; sample < 5; sample++) {
         dialogs.push(await timed(page, 'click', () => filters.click()));
-        await page.getByRole('dialog', { name: 'Advanced Filters', exact: true }).waitFor();
+        await page.getByRole('dialog', { name: 'Filters', exact: true }).waitFor();
         await page.keyboard.press('Escape');
       }
       if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error(`${theme}/${width}: viewport overflow`);

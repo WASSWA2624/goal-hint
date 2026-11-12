@@ -1,11 +1,14 @@
 import { parseArgs } from "node:util";
+import { DatabaseOperationError } from "../src/server/database/client.ts";
+import { CatalogStoreError } from "../src/server/football/catalog-mysql-store.ts";
 import { historyBackfillLimits } from "../src/server/football/history-backfill.ts";
 import { historyReferenceDatasets } from "../src/server/football/history-reference-targets.ts";
 import { createLiveRuntime, LiveConfigurationError } from "../src/server/live/live-runtime.ts";
 import { loadLocalFootballPolicy } from "./lib/local-football-policy.mjs";
 import { seedFootballHistory } from "./lib/seed-football-history.mjs";
 
-const usage = `Usage: npm run history:backfill -- [--reuse-pages | --details | --reference] [--requests 1–${historyBackfillLimits.maximumRequests}] [--competition <id>] [--oldest-season <year>] [--dataset ${historyReferenceDatasets.join("|")}]`;
+const usage = `Usage: npm run history:backfill -- [--reuse-pages | --details | --reference] [--requests 1–${historyBackfillLimits.maximumRequests}] [--competition <id>] [--oldest-season <year>] [--dataset ${historyReferenceDatasets.join("|")}]
+       npm run history:backfill -- --continuous [--requests 2–${historyBackfillLimits.maximumRequests}]`;
 function argumentsForRun() {
   const { values } = parseArgs({ options: { requests: { type: "string" }, competition: { type: "string" },
     "oldest-season": { type: "string" }, "reuse-pages": { type: "boolean" }, details: { type: "boolean" },
@@ -23,6 +26,16 @@ function argumentsForRun() {
       (values.dataset !== undefined && (!values.reference || !historyReferenceDatasets.includes(values.dataset)))) throw new RangeError(usage);
   return { help: values.help, reusePages: values["reuse-pages"], details: values.details, reference: values.reference, dataset: values.dataset, maxRequests,
     competitionId: integer(values.competition), oldestSeason: integer(values["oldest-season"]) };
+}
+
+function reportFailure(error) {
+  const configuration = error instanceof LiveConfigurationError, invalid = error instanceof RangeError;
+  const reason = error instanceof DatabaseOperationError ? `database-${error.code}` :
+    error instanceof CatalogStoreError ? `catalog-${error.reason}` : configuration ? "configuration" : invalid ? "invalid-input" : "unexpected";
+  const retryable = configuration ? error.issues.includes("The application database is unavailable.") :
+    !invalid && reason !== "catalog-not-authorized";
+  console.error(configuration || invalid ? error.message : "History import paused. Completed batches remain saved. Private diagnostics are withheld.");
+  console.error(JSON.stringify({ event: "history-error", reason, retryable }));
 }
 
 let args;
@@ -57,11 +70,11 @@ else if (args) {
     }
     if (stop.signal.aborted) process.exitCode = 130;
   } catch (error) {
-    const safe = error instanceof LiveConfigurationError || error instanceof RangeError;
-    console.error(safe ? error.message : "History import stopped. Completed batches remain saved. Private diagnostics are withheld.");
+    reportFailure(error);
     process.exitCode = 1;
   } finally {
-    await runtime?.close();
+    try { await runtime?.close(); }
+    catch (error) { reportFailure(error); process.exitCode ||= 1; }
     process.off("SIGINT", abort);
     process.off("SIGTERM", abort);
   }

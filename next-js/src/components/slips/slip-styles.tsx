@@ -3,10 +3,10 @@
 import { controlBodyHeight } from "@/components/ui/control-layout";
 import styled, { css } from "styled-components";
 import { Button, ButtonLink } from "@/components/ui/controls";
-import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { EmptyState } from "@/components/ui/feedback";
-import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors, pageFilterPanel } from "@/components/ui/filter-chrome";
+import { controlFeedback, filterControlColors, filterPanelColors, pageFilterPanel } from "@/components/ui/filter-chrome";
 import { desktopContentPadding, desktopSectionFrame, joinedDesktopSections, PageHeading, Stack, Surface } from "@/components/ui/layout";
+import { MarketFilterChoice } from "@/components/ui/market-filter-dialog";
 import { media } from "@/styles/theme";
 import { filterDialogSurface } from "@/components/ui/dialog-surfaces";
 
@@ -19,29 +19,6 @@ export const slipToolbarControl = css`
   border-radius: ${({ theme }) => theme.radius.control}; gap: var(--gh-spacing-1_25); font-size: var(--gh-font-secondary); line-height: var(--gh-leading-label);
   > svg { flex: none; font-size: var(--gh-font-emphasis); }
   @media (pointer: coarse) { min-block-size: var(--gh-size-11); }
-`;
-const desktopBuildAction = css`
-  ${media.desktop} {
-    && {
-      flex: 1 1 var(--gh-size-22); inline-size: auto; min-inline-size: max-content; max-inline-size: var(--gh-size-52);
-      block-size: ${compactControlHeight}; min-block-size: ${compactControlHeight};
-      padding: var(--gh-spacing-1) var(--gh-spacing-2); border-radius: ${({ theme }) => theme.radius.control}; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-label); white-space: nowrap;
-    }
-    @media (pointer: coarse) { && { block-size: var(--gh-size-11); min-block-size: var(--gh-size-11); } }
-  }
-`;
-const mobileBuildAction = css`
-  ${media.belowDesktop} {
-    && {
-      flex: none; inline-size: var(--gh-size-52); min-inline-size: var(--gh-size-52);
-      block-size: var(--form-control-height); min-block-size: var(--form-control-height); padding: var(--gh-spacing-1) var(--gh-spacing-2);
-      font-size: ${mobileToolbarFontSize}; line-height: var(--gh-leading-label); white-space: nowrap;
-    }
-  }
-`;
-const desktopGroupDivider = css`
-  padding-inline-start: var(--gh-spacing-2_5);
-  border-inline-start: 0;
 `;
 const desktopGroupTitle = css`
   color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption);
@@ -164,87 +141,55 @@ export const CriteriaForm = styled.form`
   display: flex; flex-direction: column; gap: var(--gh-spacing-1_5);
   min-inline-size: 0;
   > [role="alert"] { margin: 0; }
-  ${media.desktop} {
-    &[data-enhanced="true"] {
-      display: grid; align-items: end; gap: var(--gh-spacing-2) clamp(var(--gh-spacing-1_5), .7vw, var(--gh-spacing-2_5));
-      grid-template-columns: var(--gh-size-22) repeat(2, minmax(var(--gh-size-28), 1fr)) minmax(var(--gh-size-28), 1.5fr) repeat(2, max-content);
-      > [data-slip-builder-essentials] { display: contents; }
-      [data-criteria-field="targets"], [data-slip-target-groups] { display: contents; }
-      [data-slip-criteria-options]:not([hidden]) { display: contents; }
-      > [data-criteria-field="limits"] { grid-column: 4 / -1; }
-      > [data-criteria-field="kickoff"] { grid-area: 2 / 1 / 3 / 5; }
-      [data-toolbar-group="markets"] { grid-area: 2 / 5; }
-      [data-toolbar-group="actions"] { grid-area: 2 / 6; }
-      > [role="alert"], > [data-slip-criteria-summary] { grid-column: 1 / -1; }
-      [data-toolbar-group]:not([data-toolbar-group="slips"]) { padding-inline-start: var(--gh-spacing-1_5); }
-    }
-  }
 `;
 export const BuilderEssentials = styled.div`
-  display: grid; grid-template-columns: var(--gh-size-20) minmax(0, 1fr); gap: var(--gh-spacing-2);
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gh-spacing-2);
   align-items: end; min-inline-size: 0;
   [data-slip-label="mobile"] { display: none; }
   ${media.belowDesktop} {
     [data-slip-label="desktop"] { display: none; }
     [data-slip-label="mobile"] { display: inline; }
   }
-  > [data-slip-count] { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
+  > [data-slip-count] { min-inline-size: 0; max-inline-size: var(--gh-size-36); margin: 0; padding: 0; border: 0; }
   > [data-slip-count] > legend { ${desktopGroupTitle} margin-block-end: var(--gh-spacing-2); padding: 0; white-space: nowrap; }
   > [data-slip-count] input { font-variant-numeric: tabular-nums; }
-  ${media.desktop} { grid-template-columns: var(--gh-size-22) max-content; gap: var(--gh-spacing-3); }
 `;
 export const BuilderOptions = styled.div`
-  display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-1_5);
-  min-inline-size: 0; padding-block-start: var(--gh-spacing-1_5);
-  border-block-start: 0;
-  ${media.desktop} { display: contents; }
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center;
+  gap: var(--gh-spacing-1_5); min-inline-size: 0;
+  &:has(> [hidden]) { grid-template-columns: minmax(0, 1fr); }
+  > div > :is(button, a) { inline-size: 100%; }
+  ${media.desktop} {
+    display: flex; flex-wrap: wrap;
+    > div > :is(button, a) { inline-size: auto; }
+  }
 `;
 export const CriteriaOptions = styled.div`
-  display: flex; flex: 1 0 100%; flex-wrap: wrap; align-items: center;
-  gap: var(--gh-spacing-1); min-inline-size: 0;
+  display: flex; flex: none;
   &[hidden] { display: none; }
-  ${media.desktop} { flex: 0 1 auto; gap: var(--gh-spacing-1_5); align-items: end; }
 `;
-export const CriteriaOption = styled.div`
-  display: contents;
-  ${media.desktop} {
-    display: flex; flex: none;
-    ${desktopGroupDivider}
+export const CriteriaSummaryPanel = styled.section`
+  display: grid; gap: var(--gh-spacing-1_5); min-inline-size: 0;
+  margin-block-end: var(--gh-spacing-1);
+  > h2 {
+    margin: 0; color: ${({ theme }) => theme.color.text};
+    font-size: var(--gh-font-body); font-weight: var(--gh-weight-bold); line-height: var(--gh-leading-label);
   }
 `;
-export const CriteriaTitle = styled.span`
-  display: none;
-  ${media.desktop} { display: block; ${desktopGroupTitle} }
-`;
-export const CriteriaTrigger = styled(Button)`
-  && {
-    ${slipToolbarControl}
-    flex: none; padding-inline: var(--gh-spacing-1_5); white-space: nowrap;
-    flex-direction: row; gap: var(--gh-spacing-1); font-weight: ${({ theme }) => theme.typography.weight.medium};
-    ${filterButtonColors}
-    > [data-criteria-count] {
-      flex: none; display: inline-flex; align-items: center; justify-content: center;
-      min-inline-size: var(--gh-size-4); block-size: var(--gh-size-4); padding-inline: var(--gh-spacing-0_75); border-radius: ${({ theme }) => theme.radius.small};
-      color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft};
-      font-size: var(--gh-font-caption); font-weight: ${({ theme }) => theme.typography.weight.medium}; font-variant-numeric: tabular-nums; line-height: var(--gh-leading-solid);
-    }
-    &[data-edited="true"], &[aria-expanded="true"] { color: ${({ theme }) => theme.color.link};  background: ${({ theme }) => theme.color.brandSoft}; }
-    ${controlFeedback}
+export const CriteriaSummary = styled.dl`
+  display: flex; flex-wrap: wrap; gap: var(--gh-spacing-1_5);
+  margin: 0; min-inline-size: 0;
+  font-size: var(--gh-font-secondary); line-height: var(--gh-leading-compact); overflow-wrap: anywhere;
+  > div {
+    display: flex; align-items: baseline; justify-content: space-between; gap: var(--gh-spacing-2);
+    flex: 1 1 auto; min-inline-size: 0; max-inline-size: 100%;
+    padding: var(--gh-spacing-1_25) var(--gh-spacing-2);
+    background: color-mix(in srgb, ${({ theme }) => theme.color.field} calc(var(--gh-opacity-60) * 100%), transparent);
   }
-  ${media.desktop} { && { padding-inline: var(--gh-spacing-2); } }
-`;
-export const CriteriaSummary = styled.p`
-  margin: 0; min-inline-size: 0; color: ${({ theme }) => theme.color.mutedText};
-  font-size: var(--gh-font-caption); line-height: var(--gh-leading-compact); overflow-wrap: anywhere;
-  > [data-slip-summary-layout="desktop"] { display: none; }
-  ${media.desktop} {
-    > [data-slip-summary-layout="mobile"] { display: none; }
-    > [data-slip-summary-layout="desktop"] {
-      display: flex; flex-wrap: wrap; gap: var(--gh-spacing-1) var(--gh-spacing-3);
-      > span { display: inline-flex; flex-wrap: wrap; gap: var(--gh-spacing-1); }
-      strong { font-weight: ${({ theme }) => theme.typography.weight.medium}; color: ${({ theme }) => theme.color.text}; }
-    }
-  }
+  > [data-summary-wide] { justify-content: flex-start; }
+  ${media.belowDesktop} { > [data-summary-wide] { flex-basis: 100%; } }
+  dt { flex: none; color: ${({ theme }) => theme.color.mutedText}; }
+  dd { min-inline-size: 0; margin: 0; color: ${({ theme }) => theme.color.text}; font-weight: var(--gh-weight-medium); font-variant-numeric: tabular-nums; }
 `;
 export const FieldGroup = styled.fieldset`
   border: 0; padding: 0; margin: 0; min-inline-size: 0;
@@ -259,25 +204,11 @@ export const Fields = styled.div`
   @media (max-width: ${({ theme }) => theme.viewport[22.5]}) { &[data-kickoff-fields] { grid-template-columns: minmax(0, 1fr); } }
   @media (pointer: coarse) { > div > input { min-block-size: var(--gh-size-11); } }
 `;
-export const KickoffFields = styled.div`
-  display: flex; flex-wrap: wrap; align-items: start; gap: var(--gh-spacing-2);
-  > [data-date-time-field] { inline-size: max-content; }
-`;
-export const LimitGroups = styled.div`
+const LimitGroups = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-2);
   @media (max-width: ${({ theme }) => theme.viewport[22.5]}) { grid-template-columns: minmax(0, 1fr); }
   > fieldset { padding: 0; margin: 0; border: 0; min-inline-size: 0; }
   > fieldset > legend { padding: 0; margin-block-end: var(--gh-spacing-2); font-size: var(--gh-font-secondary); font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  > fieldset[data-joint-limit] { grid-column: 1 / -1; }
-  > fieldset[data-joint-limit] > ${Note} { margin-block-start: var(--gh-spacing-1); }
-`;
-export const InlineCriteria = styled(FieldGroup)`
-  > [role="alert"] { margin: var(--gh-spacing-1) 0 0; }
-  > ${Fields}, > ${LimitGroups} { gap: var(--gh-spacing-2); }
-  ${LimitGroups} > fieldset > legend { ${desktopGroupTitle} }
-`;
-export const AdvancedCriteria = styled.div`
-  display: grid; gap: var(--gh-spacing-2_5); min-inline-size: 0;
 `;
 export const TargetGroups = styled(LimitGroups)`
   grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: var(--gh-spacing-2);
@@ -291,8 +222,7 @@ export const TargetGroups = styled(LimitGroups)`
   }
   @media (max-width: ${({ theme }) => theme.viewport[22.5]}) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-1_5); }
   ${media.desktop} {
-    grid-template-columns: repeat(2, max-content); gap: var(--gh-spacing-3);
-    > fieldset { flex: none; ${desktopGroupDivider} }
+    gap: var(--gh-spacing-3);
     > fieldset > legend { ${desktopGroupTitle} }
     ${Fields} { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     ${Fields} > div > input { font-size: var(--gh-font-secondary); padding-inline: var(--gh-spacing-1_5); font-variant-numeric: tabular-nums; }
@@ -301,39 +231,17 @@ export const TargetGroups = styled(LimitGroups)`
 export const MarketChoices = styled.div`
   display: grid; grid-template-columns: minmax(0, 1fr);
 `;
-export const MarketChoice = styled.label`
-  display: flex; align-items: center; gap: var(--gh-spacing-1_5); min-inline-size: 0; min-block-size: var(--form-control-height);
-  padding: var(--gh-spacing-1) 0; color: ${({ theme }) => theme.color.text};
-  font-size: var(--gh-font-secondary); font-weight: ${({ theme }) => theme.typography.weight.bold}; cursor: pointer;
-  > input { flex: none; inline-size: var(--gh-size-4); block-size: var(--gh-size-4); margin: 0; accent-color: ${({ theme }) => theme.color.brand}; }
+export const MarketChoice = styled(MarketFilterChoice)`
+  font-weight: ${({ theme }) => theme.typography.weight.bold};
 `;
-export const MarketField = styled.div`
-  display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gh-spacing-1); align-items: start; min-inline-size: 0; padding-block: var(--gh-spacing-2_25);
-  border-block-end: 0;
+export const MarketField = styled(FieldGroup)`
+  padding-block-end: var(--gh-spacing-1_5);
+  &:not(:last-child) { border-block-end: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border}; }
+  > legend { margin-block-end: 0; }
   > [data-choice-inline] {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--gh-size-20)), 1fr));
-    gap: var(--gh-spacing-1) var(--gh-spacing-2);
+    gap: var(--gh-spacing-0_5) var(--gh-spacing-2);
     > label { min-inline-size: 0; overflow-wrap: anywhere; }
-  }
-  &:first-child { padding-block-start: 0; }
-  &:last-child { padding-block-end: 0; border-block-end: 0; }
-  ${media.desktop} {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 2.5fr);
-    gap: var(--gh-spacing-2);
-    border-block-end: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
-    &:first-child { padding-block-start: var(--gh-spacing-2_25); }
-    > [data-choice-inline] {
-      > label { padding-inline: var(--gh-spacing-1_5); border-radius: ${({ theme }) => theme.radius.control}; }
-      > label:has(input:checked) {
-        color: ${({ theme }) => theme.color.link};
-        background: ${({ theme }) => theme.color.brandSoft};
-      }
-    }
-  }
-`;
-export const BuilderCriteriaDialog = styled(CriteriaDialog)`
-  ${media.desktop} {
-    &&[data-enhanced="true"][data-slip-criteria-group="markets"] { inline-size: min(var(--gh-size-160), calc(100vw - var(--gh-size-6))); }
   }
 `;
 export const ReuseRow = styled.div`
@@ -344,40 +252,18 @@ export const ReuseRow = styled.div`
   }
   input[type="checkbox"] { inline-size: var(--gh-size-4); block-size: var(--gh-size-4); accent-color: ${({ theme }) => theme.color.brand}; }
   ${media.desktop} {
-    margin-block-start: var(--gh-spacing-2_5);
-    border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
     > label { font-weight: ${({ theme }) => theme.typography.weight.bold}; }
     > ${Note} { margin: 0; }
   }
 `;
 export const Actions = styled.div`
-  display: flex; flex: 1 0 auto; flex-wrap: wrap; align-items: center;
-  justify-content: flex-end; gap: var(--gh-spacing-1); margin-inline-start: auto;
-  ${media.desktop} {
-    flex: 1 0 auto; flex-direction: column; align-items: stretch; justify-content: space-between; gap: var(--gh-spacing-2);
-    ${desktopGroupDivider}
-  }
-`;
-export const ActionControls = styled.div`
-  display: contents;
-  ${media.desktop} { display: flex; align-items: center; gap: var(--gh-spacing-1); }
+  display: flex; min-inline-size: 0;
 `;
 export const BuildButton = styled(Button)`
   && { ${slipToolbarControl} }
-  ${desktopBuildAction}
-  ${mobileBuildAction}
 `;
 export const BuildLink = styled(ButtonLink)`
   && { ${slipToolbarControl} }
-  ${desktopBuildAction}
-  ${mobileBuildAction}
-`;
-export const ClearLink = styled(ButtonLink)`
-  && { ${slipToolbarControl} flex: 1 1 auto; }
-  ${media.desktop} { && { ${filterButtonColors} flex: none; } }
-  ${media.belowDesktop} {
-    && { flex: 1 1 0; inline-size: auto; min-inline-size: var(--gh-size-16); block-size: var(--form-control-height); min-block-size: var(--form-control-height); padding: var(--gh-spacing-1); font-size: ${mobileToolbarFontSize}; white-space: nowrap; ${filterButtonColors} }
-  }
 `;
 export const CriteriaError = styled.p`color: ${({ theme }) => theme.color.outcome.incorrect.text}; font-size: var(--gh-font-body);`;
 export const Results = styled.section`

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma, FootballFixture, FootballImport, FootballTeam, FootballCompetition } from "../generated/prisma/client.ts";
 import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type Clock, type UtcInstant } from "../../domain/calendar.ts";
@@ -13,6 +14,7 @@ import { normalizeCatalogSearch, isSafeCatalogLogo, parseCatalogTeamMapping, cat
 
 const PROVIDER = "api-football";
 const MAX_VERSION = 18_446_744_073_709_551_615n;
+export const catalogPersistenceUnavailable = "catalog-persistence-unavailable";
 const fixtureRelations = { homeTeam: { include: { providers: true } }, awayTeam: { include: { providers: true } },
   season: { include: { competition: true } } } as const;
 type StoredFixture = Prisma.FootballFixtureGetPayload<{ include: typeof fixtureRelations }>;
@@ -166,18 +168,29 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
   const transactionTimeout = options.transactionTimeoutMs ?? 30_000;
   const historical = options.historicalResults === true;
   if (!Number.isSafeInteger(transactionTimeout) || transactionTimeout < 1 || transactionTimeout > 120_000) fail("invalid-state");
-  async function write<Result>(operation: (transaction: Prisma.TransactionClient) => Promise<Result>, retryConflicts = options.coordinateFixtureMutation === undefined): Promise<Result> {
+  async function write<Result>(operation: (transaction: Prisma.TransactionClient) => Promise<Result>,
+    mode: "catalog" | "fixture-transaction" | "historical" | "receipt-only" = "catalog"): Promise<Result> {
+    const receiptOnly = mode === "receipt-only";
+    const historicalWrite = mode === "historical" || receiptOnly;
+    const retryConflicts = mode !== "fixture-transaction" && options.coordinateFixtureMutation === undefined;
     try {
-      // The callback contains only transactional writes; retry a genuine deadlock, never external I/O.
+      // Reuse the prepared batch on a retry. Provider I/O has already finished.
       for (let attempt = 0; ; attempt++) {
         let domainError: CatalogStoreError | undefined;
         try { return await database.transaction(async (transaction) => {
-          try { await lockCatalog(transaction); return await operation(transaction); }
+          try {
+            if (!receiptOnly) await lockCatalog(transaction);
+            return await operation(transaction);
+          }
           catch (error) { if (error instanceof CatalogStoreError) domainError = error; throw error; }
         }, { maxWait: 10_000, timeout: transactionTimeout, isolationLevel: "ReadCommitted" }); }
         catch (error) {
           if (domainError) throw domainError;
-          if (!retryConflicts || !(error !== null && typeof error === "object" && "code" in error && error.code === "conflict") || attempt >= 2) throw error;
+          const code = error !== null && typeof error === "object" && "code" in error ? error.code : null;
+          const transient = retryConflicts && (code === "conflict" || historicalWrite && code === "lock-timeout");
+          // The primary key arbitrates receipt-only races; the next read checks both fingerprints.
+          if (attempt >= 2 || !(transient || receiptOnly && code === "constraint")) throw error;
+          if (historicalWrite && transient) await delay(100 * (attempt + 1));
         }
       }
     } catch (error) { if (error instanceof CatalogStoreError) throw error; return fail("unavailable"); }
@@ -314,11 +327,13 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
     return transaction.footballSeason.update({ where: { id: current.id }, data: { current: metadata?.current ?? current.current,
       ...(metadata ? { coverage: json(coverage) } : {}), retrievedAt: new Date(source.retrievedAt), providerUpdatedAt: timestamp(source.providerUpdatedAt) ?? current.providerUpdatedAt } });
   }
-  async function importBatch(batch: CatalogPreparedBatch, authority: CatalogAuthority): Promise<CatalogImportSummary> {
+  async function writeImport(batch: CatalogPreparedBatch, authority: CatalogAuthority, persistenceDeferred = false): Promise<CatalogImportSummary> {
     assertCatalogPreparedBatch(batch, authority);
     authorize(batch, authority);
+    if (persistenceDeferred && !historical) fail("invalid-state");
     if (historical && (batch.selection.kind !== "fixtures" || batch.selection.query.competitionId === undefined ||
       batch.selection.query.season === undefined)) fail("invalid-state");
+    const receiptOnly = historical && (persistenceDeferred || batch.status !== "complete" || batch.rows.fixtures.length === 0);
     return write(async (transaction) => {
       authorize(batch, authority);
       const existing = await transaction.footballImport.findUnique({ where: { id: batch.request.id } });
@@ -328,6 +343,21 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
       }
       const receivedCount = batch.rows.fixtures.length + batch.rows.teams.length + batch.rows.competitions.length + batch.invalidRows;
       const recordedAt = new Date(clock.now());
+      async function appendReceipt(fixtureIds: readonly string[], changedFixtureIds: readonly string[]) {
+        authorize(batch, authority);
+        return transaction.footballImport.create({ data: { id: batch.request.id, fingerprint: batch.fingerprint,
+          requestFingerprint: batch.requestFingerprint, selection: json(batch.selection), scopeKey: batch.scopeKey, provider: PROVIDER,
+          kind: batch.selection.kind, status: persistenceDeferred ? "partial" : batch.status,
+          observedAt: new Date(batch.observedAt), recordedAt, receivedCount,
+          importedCount: historical ? fixtureIds.length : receivedCount - batch.invalidRows, rejectedCount: batch.invalidRows,
+          requestsDispatched: batch.requestsDispatched,
+          reasons: json(persistenceDeferred ? [...batch.reasons, catalogPersistenceUnavailable].sort() : batch.reasons),
+          missingIds: json(batch.missingIds), missingCoverage: json(batch.missingCoverage),
+          provenance: json(batch.provenance), retentionEvidenceRef: batch.request.retentionEvidenceRef,
+          subsetEvidenceRef: batch.request.knownSubset?.evidenceRef ?? null, fixtureIds: json(fixtureIds), changedFixtureIds: json(changedFixtureIds) } });
+      }
+      // Historical observations can record coverage without touching identities or results.
+      if (receiptOnly) return catalogImportSummary(await appendReceipt([], []));
       // Import receipts and audits are append-only: both are inserted once, with final values, at the end.
       const audits: { id: string; fixtureId: string; dataVersion: bigint; observedAt: UtcInstant; changes: Record<string, unknown> }[] = [];
       const audit = (row: StoredFixture, observedAt: UtcInstant, changes: Record<string, unknown>) => {
@@ -341,8 +371,7 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
         season: { ...row.season, competition: competitionHistory.get(row.season.competitionId)?.before ?? row.season.competition } });
       for (const input of batch.rows.teams) await team(transaction, input, authority, changedTeams, teamHistory);
       for (const input of batch.rows.competitions) await competition(transaction, input, authority, changedCompetitions, competitionHistory);
-      const fixtures = historical && batch.status !== "complete" ? [] : batch.rows.fixtures;
-      for (const input of fixtures) {
+      for (const input of batch.rows.fixtures) {
         const score = input.regulationScore;
         const scoreEvidence = batch.scoreEvidenceRefs?.[String(input.id)];
         const proof = score === null ? null : { fixtureId: score.fixtureId, providerStatus: score.providerStatus,
@@ -432,19 +461,11 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
           if (sharedIdentity.teams.length || sharedIdentity.competitions.length) entry.changes = { ...entry.changes, sharedIdentity };
         }
       }
-      authorize(batch, authority);
-      const receipt = await transaction.footballImport.create({ data: { id: batch.request.id, fingerprint: batch.fingerprint,
-        requestFingerprint: batch.requestFingerprint, selection: json(batch.selection), scopeKey: batch.scopeKey, provider: PROVIDER,
-        kind: batch.selection.kind, status: batch.status, observedAt: new Date(batch.observedAt), recordedAt, receivedCount,
-        importedCount: historical ? fixtureIds.length : receivedCount - batch.invalidRows, rejectedCount: batch.invalidRows,
-        requestsDispatched: batch.requestsDispatched,
-        reasons: json(batch.reasons), missingIds: json(batch.missingIds), missingCoverage: json(batch.missingCoverage),
-        provenance: json(batch.provenance), retentionEvidenceRef: batch.request.retentionEvidenceRef,
-        subsetEvidenceRef: batch.request.knownSubset?.evidenceRef ?? null, fixtureIds: json(fixtureIds), changedFixtureIds: json([...changedFixtures]) } });
+      const receipt = await appendReceipt(fixtureIds, [...changedFixtures]);
       for (const entry of audits) await transaction.footballFixtureAudit.create({ data: { id: entry.id, fixtureId: entry.fixtureId,
         importId: batch.request.id, dataVersion: entry.dataVersion, observedAt: new Date(entry.observedAt), changes: json(entry.changes) } });
       return catalogImportSummary(receipt);
-    });
+    }, receiptOnly ? "receipt-only" : historical ? "historical" : "catalog");
   }
   async function registerTeamMapping(input: CatalogTeamMapping, authority: CatalogAuthority, retentionEvidenceRef: string) {
     const mapping = parseCatalogTeamMapping(input);
@@ -509,7 +530,10 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
         providerReturnedEmpty, knownFixtureIds: Object.freeze(matches.map((row) => row.id)), lastCompleteImportId: lastComplete?.id ?? null });
     }, { isolationLevel: "RepeatableRead", timeout: transactionTimeout });
   }
-  return Object.freeze({ importBatch, registerTeamMapping, dateCoverage,
+  return Object.freeze({
+    importBatch: (batch: CatalogPreparedBatch, authority: CatalogAuthority) => writeImport(batch, authority),
+    deferImport: (batch: CatalogPreparedBatch, authority: CatalogAuthority) => writeImport(batch, authority, true),
+    registerTeamMapping, dateCoverage,
     findImport: async (id: string) => database.query(async (client) => {
       const row = await client.footballImport.findUnique({ where: { id } }); return row ? catalogImportSummary(row) : null;
     }),
@@ -535,7 +559,7 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
         if (!row) return fail("invalid-state");
         return operation(transaction, catalogFixtureSnapshot(row));
       };
-      return existingTransaction ? execute(existingTransaction) : write(execute, false);
+      return existingTransaction ? execute(existingTransaction) : write(execute, "fixture-transaction");
     },
   });
 }

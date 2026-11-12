@@ -2,7 +2,7 @@ import "server-only";
 
 import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
 import type { createApiFootballAdapter } from "./api-football-adapter.ts";
-import { API_FOOTBALL_CONTRACT_VERSION, apiFootballReferenceParameters,
+import { API_FOOTBALL_CONTRACT_VERSION, apiFootballReferenceParameters, isApiFootballLeaderboard,
   type ApiFootballErrorReason, type FootballHistoryReferenceTarget } from "./api-football-contract.ts";
 import { historyBackfillLimits } from "./history-backfill.ts";
 
@@ -19,6 +19,12 @@ type ReferencePage = FootballHistoryReferenceSelector & Readonly<{ rows: readonl
 
 const stopReasons = new Set<ApiFootballErrorReason>(["quota-denied", "rate-limited", "operation-not-authorized",
   "authentication-error", "invalid-credential", "subscription-expired", "shared-work-pending"]);
+
+function priority({ endpoint }: FootballHistoryReferenceTarget) {
+  if (endpoint === "countries" || endpoint === "timezones" || endpoint === "leagueSeasons") return 2;
+  return endpoint === "teamStatistics" || endpoint === "coaches" || endpoint === "squads" || endpoint === "teamSeasons" ||
+    endpoint === "fixtureRounds" || isApiFootballLeaderboard(endpoint) ? 0 : 1;
+}
 
 function acceptedPage(response: ReferenceResponse, selector: FootballHistoryReferenceSelector,
   started: UtcInstant, finished: UtcInstant, deadlineAt: UtcInstant) {
@@ -46,7 +52,7 @@ export function createFootballHistoryReference(options: Readonly<{
   const { reference, hasPage, savePage, now, providerDayEndsAt } = options;
 
   return {
-    async run(input: Readonly<{ targets: readonly FootballHistoryReferenceTarget[]; maxRequests: number; signal?: AbortSignal }>) {
+    async run(input: Readonly<{ targets: readonly FootballHistoryReferenceTarget[]; maxRequests: number; hasMoreTargets?: boolean; signal?: AbortSignal }>) {
       const { maxRequests, targets } = input;
       if (!Number.isSafeInteger(maxRequests) || maxRequests < 1 || maxRequests > historyBackfillLimits.maximumRequests || !Array.isArray(targets)) {
         throw new RangeError("Choose historical reference targets and a request limit between 1 and 100.");
@@ -58,8 +64,12 @@ export function createFootballHistoryReference(options: Readonly<{
         const selector = { endpoint: target.endpoint, parameters };
         plan.set(JSON.stringify(selector), { target, selector });
       }
-      const planned = [...plan.values()].sort(({ target: left }, { target: right }) =>
-        ("season" in right ? right.season : 0) - ("season" in left ? left.season : 0));
+      const planned = [...plan.values()].sort(({ target: left }, { target: right }) => {
+        const leftPriority = priority(left), rightPriority = priority(right);
+        if (leftPriority !== rightPriority) return rightPriority - leftPriority;
+        if (leftPriority === 0) return 0;
+        return ("season" in right ? right.season : 0) - ("season" in left ? left.season : 0);
+      });
       const dayEnd = providerDayEndsAt();
       if (dayEnd === null || !Number.isSafeInteger(dayEnd) || now() >= dayEnd) throw new Error("The historical reference import needs a verified provider day.");
 
@@ -97,6 +107,7 @@ export function createFootballHistoryReference(options: Readonly<{
         if (stopped) break;
         if (response.requestsDispatched !== 1) { stopped = reason ?? "reference-unavailable"; break; }
       }
+      if (!stopped && input.hasMoreTargets) stopped = totals.requests >= maxRequests ? "request-budget" : "target-limit";
       return { status: stopped || totals.deferred ? "partial" as const : "complete" as const, ...totals, stopped };
     },
   };

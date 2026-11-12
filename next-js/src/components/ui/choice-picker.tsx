@@ -33,6 +33,7 @@ const Root = styled.details`
     border-radius: ${({ theme }) => theme.radius.overlay};
     background: ${({ theme }) => theme.color.surface}; box-shadow: ${({ theme }) => theme.shadow.popover};
     > label, > button { display: flex; align-items: center; gap: var(--gh-spacing-1_5); min-block-size: var(--form-control-height); padding: var(--gh-spacing-1); border-radius: ${({ theme }) => theme.radius.small}; font-size: var(--gh-font-secondary); cursor: pointer; }
+    > label[hidden] { display: none; }
     > button { inline-size: 100%; border: 0; background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.text}; }
     > button[aria-pressed="true"] { background: ${({ theme }) => theme.color.brandSoft}; }
     > p { font-size: var(--gh-font-caption); color: ${({ theme }) => theme.color.mutedText}; padding: var(--gh-spacing-1); }
@@ -47,6 +48,7 @@ const InlineChoices = styled.fieldset`
     display: inline-flex; align-items: center; gap: var(--gh-spacing-1_5); min-block-size: var(--form-control-height);
     color: ${({ theme }) => theme.color.text}; font-size: var(--gh-font-secondary); cursor: pointer;
   }
+  > label[hidden] { display: none; }
   input {
     flex: none; inline-size: var(--gh-size-4); block-size: var(--gh-size-4); margin: 0;
     accent-color: ${({ theme }) => theme.color.brand};
@@ -60,8 +62,9 @@ const clientReady = () => true;
 const serverReady = () => false;
 
 /** Native disclosure keeps named inputs available to GET forms, including without JavaScript. */
-export function ChoicePicker({ name, label, automaticLabel, automaticHint, options, selected, onChange, disabled = false, invalid = false, describedBy, inline = false }: {
+export function ChoicePicker({ name, label, automaticLabel, automaticHint, options, selected, visibleValues, onChange, disabled = false, invalid = false, describedBy, inline = false }: {
   name: string; label: string; automaticLabel: string; automaticHint: string; options: readonly Option[]; selected: readonly string[];
+  visibleValues?: ReadonlySet<string> | undefined;
   onChange: (values: readonly string[]) => void; disabled?: boolean; invalid?: boolean; describedBy?: string; inline?: boolean;
 }) {
   const root = useRef<HTMLDetailsElement>(null), panelId = useId(), [open, setOpen] = useState(false);
@@ -73,12 +76,14 @@ export function ChoicePicker({ name, label, automaticLabel, automaticHint, optio
   useOutsideDismiss({ enabled: open && !inline, root, onDismiss: close });
   useAnchoredPanel({ open: open && !inline, anchor: trigger, panel });
   const summary = selected.length ? options.filter((option) => selected.includes(option.value)).map((option) => option.label).join(", ") : automaticLabel;
-  const choices = options.map((option) => <label key={option.value}><input type="checkbox" name={name} value={option.value} checked={!clearSelection && selected.includes(option.value)}
+  const choices = options.map((option) => <label key={option.value} hidden={visibleValues !== undefined && !visibleValues.has(option.value)}><input type="checkbox" name={name} value={option.value} checked={!clearSelection && selected.includes(option.value)}
     onChange={() => onChange(selected.includes(option.value) ? selected.filter((value) => value !== option.value) : [...selected, option.value])} />{option.label}</label>);
   if (inline) return <InlineChoices data-choice-inline disabled={inactive} aria-invalid={invalid || undefined}
     {...(describedBy ? { "aria-describedby": describedBy } : {})}>
     <legend><VisuallyHidden>{label}</VisuallyHidden></legend>
-    <label><input type="checkbox" checked={!clearSelection && selected.length === 0} onChange={() => onChange([])} />{automaticLabel}</label>
+    <label hidden={visibleValues !== undefined && visibleValues.size < options.length}>
+      <input type="checkbox" checked={!clearSelection && selected.length === 0} onChange={() => onChange([])} />{automaticLabel}
+    </label>
     {choices}
   </InlineChoices>;
   return <Root ref={root} data-disabled={inactive} onToggle={(event) => setOpen(event.currentTarget.open)} onKeyDown={(event) => {

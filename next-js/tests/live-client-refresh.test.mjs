@@ -124,9 +124,11 @@ test('RTK Query deduplicates consumers, cancels an obsolete consumer, and only m
   const store = makeStore({ today, query: query(), data: null });
   t.after(() => { globalThis.fetch = original; store.dispatch(refreshApi.util.resetApiState()); });
   const args = { query: query(), today, page: 1 }, first = store.dispatch(refreshApi.endpoints.feed.initiate(args));
-  const second = store.dispatch(refreshApi.endpoints.feed.initiate(args, { forceRefetch: true }));
   const controller = new AbortController(), canceled = consumeRefresh(first, controller.signal);
-  controller.abort(); await assert.rejects(canceled, e => e.name === 'AbortError');
+  controller.abort();
+  // A replacement consumer can attach during the canceled consumer's cleanup.
+  const second = store.dispatch(refreshApi.endpoints.feed.initiate(args, { forceRefetch: true }));
+  await assert.rejects(canceled, e => e.name === 'AbortError');
   assert.equal(calls.length, 1); assert.equal(calls[0].options.signal.aborted, false);
   const response = liveFeed(); pending.shift()(Response.json(response));
   assert.deepEqual(await second.unwrap(), response); second.unsubscribe();

@@ -76,6 +76,10 @@ test("callback failures retain only stable classifications and never retry or ex
   const sentinel = "synthetic-driver-password-and-statement-sentinel";
   const cases = [
     ...["P2034"].map((code) => [{ code, message: sentinel }, "conflict"]),
+    ...["P2010", "P2039"].map((code) => [
+      { code, meta: { driverAdapterError: { cause: { kind: "mysql", code: 1205, message: sentinel } } } }, "lock-timeout",
+    ]),
+    [{ code: "P2039", meta: { driverAdapterError: { cause: { kind: "mysql", code: 3819, message: sentinel } } } }, "failed"],
     ...["P2002", "P2003", "P2011", "P2014"].map((code) => [{ code, message: sentinel }, "constraint"]),
     ...["P1000", "P1001", "P1002", "P1017", "P2024"].map((code) => [{ code, message: sentinel }, "unavailable"]),
     [new Error(sentinel), "failed"], [null, "failed"], [sentinel, "failed"],

@@ -7,8 +7,13 @@ import { publicPolicy } from "./public-policy.ts";
 import { isCompletedFixtureStatus } from "./market-settlement.ts";
 
 export type ContentAccess = Readonly<{ tier: "full" | "free"; signedIn: boolean }>;
-export const usesSubscriberFeedOracle = (query: FeedQuery) => query.status !== "finished" && (query.picks === "only" || query.odds !== null || query.probability.min > 0 || query.probability.max < 100);
-export const withoutSubscriberFeedOracle = (query: FeedQuery): FeedQuery => ({ ...query, odds: null, picks: "all", probability: { min: 0, max: 100 }, page: 1 });
+export const usesSubscriberFeedOracle = (query: FeedQuery) => query.status !== "finished" &&
+  (query.picks === "only" || query.odds !== null || !!query.marketPicks?.length || query.probability.min > 0 || query.probability.max < 100);
+export function withoutSubscriberFeedOracle(query: FeedQuery): FeedQuery {
+  const safe = { ...query };
+  delete safe.marketPicks;
+  return { ...safe, odds: null, picks: "all", probability: { min: 0, max: 100 }, page: 1 };
+}
 const wireAccess = ({ tier, signedIn }: ContentAccess): ContentAccess => ({ tier, signedIn });
 const families = (items: readonly { market: { family: (typeof publicPolicy.markets)[number] } }[]) =>
   publicPolicy.markets.filter((family) => items.some((item) => item.market.family === family));

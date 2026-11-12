@@ -17,9 +17,9 @@ const Value = styled.small`
   font-weight: ${({ theme }) => theme.typography.weight.body};
 `;
 
-export function ForecastSourceLabel({ source, messages }: { source: MarketSource; messages: Messages }) {
+export function ForecastSourceLabel({ source, messages, compactLabel }: { source: MarketSource; messages: Messages; compactLabel?: string | undefined }) {
   const name = messages.text(`market.source.${source}`);
-  return <Source data-forecast-source={source} title={name} aria-label={name}>{messages.text(`market.source.short.${source}`)}</Source>;
+  return <Source data-forecast-source={source} title={name} aria-label={name}>{compactLabel ?? messages.text(`market.source.short.${source}`)}</Source>;
 }
 
 export function ForecastValueLabel({ expectedReturn, messages }: { expectedReturn: number | null; messages: Messages }) {

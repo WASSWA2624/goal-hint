@@ -14,6 +14,7 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 1
       await page.evaluate(() => document.fonts.ready);
       if (width >= 1024) await page.waitForFunction(() => document.querySelector("[data-performance-period]")?.textContent.includes("11:00 EAT"), null, { timeout: 15_000 });
       const trigger = page.locator("[data-best-slips-filter-trigger]"), bar = page.locator("[data-best-slips-applied]");
+      assert((await trigger.innerText()).trim() === "Filters" && await trigger.locator("svg").count() === 1, "The Filters action uses the shared label and icon");
       const geometry = await trigger.evaluate(button => {
         const summary = button.closest("[data-performance-summary]"), cards = summary.querySelector("[data-performance-figures]").getBoundingClientRect();
         const action = button.getBoundingClientRect(), bar = document.querySelector("[data-best-slips-applied]"), bounds = bar.getBoundingClientRect();
@@ -59,14 +60,14 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 1
       const record = request => { if (request.url().includes("/api/best-slips?")) requests.push(new URL(request.url())); };
       page.on("request", record);
       try {
-        const dialog = page.locator("dialog[open]");
+        const dialog = page.getByRole("dialog", { name: "Filters", exact: true });
         const open = async () => { await trigger.click(); await dialog.waitFor(); };
         const apply = () => dialog.getByRole("button", { name: "Apply Filters", exact: true }).click();
         const settled = () => page.waitForFunction(() => document.querySelector("[data-best-slips-filters]")?.getAttribute("aria-busy") === "false", null, { timeout: 15_000 });
         const chooseOdds = label => dialog.getByText(label, { exact: true }).click();
         const selected = label => dialog.getByRole("radio", { name: label, exact: true }).isChecked();
         await open();
-        assert(await dialog.locator('input[type="date"], [data-slip-period-select]').count() === 0, "Advanced Filters contains no date controls");
+        assert(await dialog.locator('input[type="date"], [data-slip-period-select]').count() === 0, "Best Slips Filters contains no date controls");
         {
           const group = dialog.getByRole("group", { name: "Total odds", exact: true });
           assert(await group.getByRole("radio").count() === 6, "Every odds band is listed");

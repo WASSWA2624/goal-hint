@@ -2,12 +2,13 @@
 
 import styled from "styled-components";
 import { MutedText } from "@/components/ui/layout";
-import { feedSortLabelKey, formatProbabilityValue, isAnyMarkets, isAnyProbability, panelFilterCount, resolveFeedDates, type FeedQuery, type ProbabilityRange } from "@/domain/feed-query";
+import { feedSortLabelKey, formatProbabilityValue, isAnyProbability, panelFilterCount, resolveFeedDates, type FeedQuery, type ProbabilityRange } from "@/domain/feed-query";
 import type { ReportingDate } from "@/domain/calendar";
 import { formatOddsRange } from "@/domain/odds";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { createMessages, type Messages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
+import { feedMarketLabels } from "./feed-market-filters";
 
 /** Secondary feed notes: 12px on phones and tablets so they never outrank cards and controls. */
 export const FeedNote = styled(MutedText)`
@@ -103,7 +104,7 @@ export function FeedActiveFilterSummary({ query, today, leagues }: {
   query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"];
 }) {
   const messages = createMessages(query.locale), range = resolveFeedDates(query, today);
-  const marketNames = query.markets.map((family) => messages.text(`market.family.${family}`));
+  const marketNames = feedMarketLabels(messages, query);
   const leagueNames = query.leagues.map((id) => leagues.find((league) => league.id === id)?.name ?? id);
   const selection = (label: string, values: readonly string[], fallback: string) => ({
     label: values.length > 1 ? `${label}: ${messages.text("feed.filters.selectedCount", { count: messages.number(values.length) })}`
@@ -115,7 +116,7 @@ export function FeedActiveFilterSummary({ query, today, leagues }: {
       : `${messages.reportingDateShort(range.startDate)} – ${messages.reportingDateShort(range.endDate)}`,
       title: range.dayCount === 1 ? messages.reportingDate(range.startDate)
         : `${messages.reportingDate(range.startDate)} – ${messages.reportingDate(range.endDate)}` },
-    selection(messages.text("feed.filters.markets"), isAnyMarkets(query.markets) ? [] : marketNames, messages.text("feed.filters.any")),
+    selection(messages.text("feed.filters.markets"), marketNames, messages.text("feed.filters.any")),
     selection(messages.text("feed.filters.leagues"), leagueNames, messages.text("feed.filters.allLeagues")),
     selection(messages.text("feed.filters.countries"), query.countries, messages.text("feed.filters.anyCountry")),
   ];
@@ -137,8 +138,7 @@ export function FeedAppliedSummary({ query, leagues }: { query: FeedQuery; leagu
   const messages = createMessages(query.locale);
   const leagueNames = query.leagues.map((id) => leagues.find((item) => item.id === id)?.name ?? id);
   return <FeedNote data-applied-filters>
-    {messages.text("feed.filters.applied")}: {isAnyMarkets(query.markets) ? messages.text("feed.filters.any")
-      : query.markets.map((family) => messages.text(`market.family.${family}`)).join(", ")}
+    {messages.text("feed.filters.applied")}: {feedMarketLabels(messages, query).join(", ") || messages.text("feed.filters.any")}
     {" · "}{messages.text(`feed.status.${query.status}`)}
     {" · "}{messages.text(feedSortLabelKey(query.sort))}
     {leagueNames.length > 0 && <> · {leagueNames.join(", ")}</>}

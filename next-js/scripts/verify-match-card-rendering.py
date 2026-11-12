@@ -70,7 +70,11 @@ def verify(origin, directory):
             picks = re.findall(r'data-pick-selection=""[^>]*>([^<]+)</span>', article)
             assert len(picks) == 1 and re.fullmatch(r"1|X|2|1X|X2|12|[OU] \d+(?:\.\d+)?|Yes|No", picks[0]), "One recognized betting code per card, with the full meaning retained"
             match(r'data-pick-selection=""[^>]*title="[^\"]+"', article)
+            match(r'<span\b[^>]*data-pick-line=""[^>]*><span\b[^>]*data-pick-selection=""[^>]*>[^<]+</span>'
+                  r'<small\b[^>]*data-forecast-source="[^"]+"[^>]*title="[^"]+"[^>]*>(?:AI|API|Local)</small></span>', article)
         assert len(re.findall(r'\bdata-card-odds=', article)) == 1, "One price cell serves both phone and desktop layouts"
+        match(r'data-ledger-field="odds"[^>]*data-stack-label="Odds:"', article)
+        match(r'data-ledger-field="probability"[^>]*data-stack-label="Prob:"', article)
         no_match(r'data-pick-price=""[^>]*>@', article)
         no_match(r"\(—\)", article)
     for card, status in [("card-correct", "correct"), ("card-incorrect", "incorrect"), ("card-pending", "pending"),
@@ -102,8 +106,6 @@ def verify(origin, directory):
     match(r'data-card-odds[^>]*>—</span>', by_id["card-incorrect"])
     match(r'data-pick-price=""[^>]*>—</span>', by_id["card-incorrect"])
     no_match(r'data-caption=|>likely</span>', visible)
-    for caption in ["Odds", "Prob."]:
-        match(rf'data-stack-label="{re.escape(caption)}"', visible)
     match("Odds: 1.85", by_id["card-correct"])
     no_match(r"Odds 2\.10", by_id["card-correct"])
     no_match(r"Odds 2\.10|Odds 2\.25|data-selected-odds=", by_id["card-incorrect"])

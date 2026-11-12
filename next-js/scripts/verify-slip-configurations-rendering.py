@@ -1,15 +1,19 @@
 """Serve real builder/account/configuration services with isolated synthetic account storage."""
 import json
-from lib.rendering import Server, build_fixture, create_fixture, local_origin, parse_args, request
+from lib.rendering import Server, build_fixture, create_fixture, local_origin, match, parse_args, request, visible_html
 from lib.runtime import main_guard
 
 
 def verify(origin):
     headers = {"Cookie": "goal-hint-member=" + "a" * 43, "Sec-Fetch-Site": "same-origin"}
     builder = request(origin, "/en/slips", headers=headers)
-    assert builder.status == 200 and "data-saved-filters-trigger" in builder.text
-    assert ">Custom filters</button>" in builder.text, "The builder action must use the current feature name."
-    assert "data-saved-slip-configurations" not in builder.text, "Custom Filters belong in their closed dialog."
+    assert builder.status == 200
+    html = visible_html(builder.text)
+    filters = match(r'<dialog\b[^>]*data-slip-criteria-group="advanced"[^>]*>[\s\S]*?</dialog>', html).group()
+    row = match(r'<div\b[^>]*data-saved-filters-row="[^"]*"[^>]*>[\s\S]*?<button\b[^>]*data-saved-filters-trigger="[^"]*"[^>]*>[\s\S]*?</button>', filters).group()
+    match(r'<button\b[^>]*data-saved-filter-select="[^"]*"[^>]*role="combobox"[^>]*>[\s\S]*?Saved filters', row)
+    assert html.count("data-saved-filters-trigger") == 1 and ">Manage</button>" in row, "The sole Manage action is beside the Saved filters dropdown."
+    assert "data-saved-slip-configurations" not in builder.text, "Preset management stays in its closed dialog."
     assert 'data-slip-state="idle"' in builder.text, "A fresh builder must not generate slips."
     account = request(origin, "/en/account", headers=headers)
     assert account.status == 200 and "data-saved-slip-configurations" not in account.text
