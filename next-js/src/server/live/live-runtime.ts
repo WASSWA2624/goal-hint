@@ -18,7 +18,7 @@ import { createFootballCatalogStore } from "../football/catalog-mysql-store.ts";
 import { createFootballCatalogImporter } from "../football/catalog-service.ts";
 import { createFootballHistoryBackfill, historyBackfillLimits, normalizeHistoryCompetition } from "../football/history-backfill.ts";
 import { createFootballHistoryDetails } from "../football/history-details.ts";
-import { createFootballHistoryPlayerStatistics } from "../football/history-player-statistics.ts";
+import { createFootballHistoryPlayerProfiles, createFootballHistoryPlayerStatistics } from "../football/history-player-statistics.ts";
 import { createFootballHistoryReference } from "../football/history-reference.ts";
 import { readHistoryPlayerStatisticsTargets, readHistoryReferenceTargets, type HistoryReferenceDataset } from "../football/history-reference-targets.ts";
 import { createFootballHistorySource } from "../football/history-source.ts";
@@ -251,6 +251,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       const playerStatistics = createFootballHistoryPlayerStatistics({ playerStatisticsPage: adapter.reference.playerStatisticsPage,
         readPages: historySource.readPlayerStatisticsPages, savePage: historySource.savePlayerStatisticsPage, now, providerDayEndsAt,
         ...(day.status.plan.trim().toLowerCase() === "free" ? { maximumPage: 3 } : {}) });
+      const playerProfiles = createFootballHistoryPlayerProfiles({ playerProfilePage: adapter.reference.playerProfilePage,
+        readPages: historySource.readPlayerProfilePages, savePage: historySource.savePlayerProfilePage, now, providerDayEndsAt });
       const approved = policy.choices.competitionIds ?? [];
       return async (input: Readonly<{ maxRequests: number; competitionId?: number; dataset?: HistoryReferenceDataset }>, signal?: AbortSignal) => {
         if (input.competitionId !== undefined && !approved.includes(input.competitionId)) throw new RangeError("Choose an approved competition.");
@@ -261,18 +263,35 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         const runPlayers = async (maxRequests: number) => playerStatistics.run({
           targets: await readHistoryPlayerStatisticsTargets(database, scope), maxRequests, ...workflow,
         });
+        const runProfiles = (maxRequests: number) => playerProfiles.run({ maxRequests, ...workflow });
+        const runReference = async (maxRequests: number) => {
+          const plan = await readHistoryReferenceTargets(database, scope, input.dataset, maxRequests);
+          return reference.run({ ...plan, maxRequests, ...workflow });
+        };
         if (input.dataset === "player-statistics") return runPlayers(input.maxRequests);
-        const playerReserve = input.dataset === undefined && input.maxRequests > 1 ? Math.max(1, Math.floor(input.maxRequests / 4)) : 0;
-        const referenceBudget = input.maxRequests - playerReserve;
-        const plan = await readHistoryReferenceTargets(database, scope, input.dataset, referenceBudget);
-        const result = await reference.run({ ...plan, maxRequests: referenceBudget, ...workflow });
-        const remaining = input.maxRequests - result.requests;
-        if (input.dataset !== undefined || remaining < 1 || result.stopped && result.stopped !== "request-budget") return result;
-        const players = await runPlayers(remaining);
-        return { status: result.status === "complete" && players.status === "complete" ? "complete" as const : "partial" as const,
-          requested: result.requested + players.requested, archived: result.archived + players.archived,
-          skipped: result.skipped + players.skipped, deferred: result.deferred + players.deferred, requests: result.requests + players.requests,
-          stopped: players.stopped ?? result.stopped, reference: result, playerStatistics: players };
+        const globalScope = input.competitionId === undefined;
+        if (input.dataset === "player-profiles") {
+          if (!globalScope) throw new RangeError("The player profile catalog uses global scope.");
+          return runProfiles(input.maxRequests);
+        }
+        if (input.dataset !== undefined) return runReference(input.maxRequests);
+
+        // Give each paginated archive a turn before larger reference sweeps reach a live-quota gate.
+        const blocked = (result: Readonly<{ stopped: string | null }> | null) => Boolean(result?.stopped && result.stopped !== "request-budget");
+        const statistics = input.maxRequests > 1 ? await runPlayers(1) : null;
+        let remaining = input.maxRequests - (statistics?.requests ?? 0);
+        const profiles = globalScope && remaining > 1 && !blocked(statistics) ? await runProfiles(1) : null;
+        remaining -= profiles?.requests ?? 0;
+        const other = remaining > 0 && !blocked(statistics) && !blocked(profiles) ? await runReference(remaining) : null;
+        const reports = [statistics, profiles, other].filter((report) => report !== null);
+        const totals = { requested: 0, archived: 0, skipped: 0, deferred: 0, requests: 0 };
+        for (const report of reports) for (const key of Object.keys(totals) as (keyof typeof totals)[]) totals[key] += report[key];
+        const expectedReports = globalScope ? 3 : 2;
+        const complete = reports.length === expectedReports && reports.every(({ status }) => status === "complete");
+        const stopped = reports.find(blocked)?.stopped ??
+          (reports.length < expectedReports || reports.some(({ stopped }) => stopped === "request-budget") ? "request-budget" : null);
+        return { status: complete ? "complete" as const : "partial" as const, ...totals, stopped,
+          reference: other, playerStatistics: statistics, playerProfiles: profiles };
       };
     })() : null;
     const selectionStore = createMysqlDailySelectionStore(database, queue);

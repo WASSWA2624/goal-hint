@@ -57,3 +57,14 @@ class FootballHistoryRunnerTests(unittest.TestCase):
             self.assertEqual(runner.run_continuous(["node"], [], {}), 130)
         self.assertEqual(run.call_args_list[1].args[0], ["node", "--details"])
         sleep.assert_called_once_with(30)
+
+    def test_provider_transport_pause_backs_off_across_phases(self):
+        unavailable = {"status": "partial", "stopped": "provider-transport-unavailable", "requests": 3}
+        with patch.object(runner, "run_batch", side_effect=[(0, unavailable, None), (0, unavailable, None),
+                                                          (130, None, None)]) as run, \
+             patch.object(runner, "report_state") as report, patch.object(runner.time, "sleep") as sleep:
+            self.assertEqual(runner.run_continuous(["node"], [], {}), 130)
+        self.assertEqual([call.args[0] for call in run.call_args_list], [["node"], ["node", "--details"],
+                                                                     ["node", "--reference"]])
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [30, 60])
+        report.assert_any_call("waiting-for-provider", retrySeconds=60)

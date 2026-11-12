@@ -18,8 +18,8 @@ import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { createDemoApiFootballFetch } from "../demo/api-football.ts";
 import { authorizeDemoFootball, createDemoFootballGateway, demoFootballAccountId } from "../demo/provider-runtime.ts";
 import { normalizeFixtureMatchDetails, type NormalizedFixtureMatchDetails } from "./fixture-match-details.ts";
-import { archivedPlayerStatisticsRowId, playerStatisticsProviderId } from "./history-player-statistics-input.ts";
-import type { FootballHistoryPlayerStatisticsSelector } from "./history-player-statistics.ts";
+import { archivedPlayerProfileRowId, archivedPlayerStatisticsRowId, playerStatisticsProviderId } from "./history-player-statistics-input.ts";
+import type { FootballHistoryPlayerProfileSelector, FootballHistoryPlayerStatisticsSelector } from "./history-player-statistics.ts";
 
 export type FixtureQuery = Readonly<{ date?: string; competitionId?: number; season?: number;
   teamId?: number; from?: string; to?: string; round?: string; fixtureId?: number }>;
@@ -66,6 +66,17 @@ const keysAllowed = (value: unknown, keys: readonly string[]): value is Record<s
 
 type ReferenceRow = Readonly<{ raw: Readonly<Record<string, unknown>> | string | number; id?: number }>;
 
+function archivePlayerRow(raw: unknown, id: number | null): NormalizationResult<ReferenceRow> {
+  return id === null || !record(raw) ? { valid: false, reason: "schema-error" } :
+    { valid: true, data: { raw, id }, missingCoverage: [] };
+}
+
+function statisticsSeries(series: unknown): boolean {
+  return Array.isArray(series) && series.every((entry) => record(entry) && typeof entry.type === "string" &&
+    entry.type.trim().length > 0 && entry.type.length <= 128 && (entry.value === null ||
+      typeof entry.value === "number" && Number.isFinite(entry.value) || typeof entry.value === "string" && entry.value.length <= 128));
+}
+
 function normalizeReferenceRow(raw: unknown, target: FootballHistoryReferenceTarget): NormalizationResult<ReferenceRow> {
   const invalid = { valid: false, reason: "schema-error" } as const;
   const identified = (value: unknown): value is Record<string, unknown> & { id: number } =>
@@ -94,6 +105,10 @@ function normalizeReferenceRow(raw: unknown, target: FootballHistoryReferenceTar
       const round = parseApiFootballFixtureRound(raw);
       return round ? valid(round) : invalid;
     }
+    case "fixtureHalfStatistics":
+      return identified(raw.team) && [target.homeTeamId, target.awayTeamId].includes(raw.team.id) &&
+        statisticsSeries(raw.statistics) && [raw.statistics_1h, raw.statistics_2h].every((series) => series == null || statisticsSeries(series))
+        ? valid(raw, raw.team.id) : invalid;
     case "topScorers":
     case "topAssists":
     case "topYellowCards":
@@ -452,7 +467,8 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
           const oneTeamWithSeasons = endpoint === "teamSeasons" && rows !== null && rows.length > 0;
           const exactReferenceEcho = teamStatistics || endpoint === "countries" || endpoint === "timezones" || endpoint === "leagueSeasons" ||
             endpoint === "coaches" || endpoint === "squads" || endpoint === "teamSeasons" || isApiFootballLeaderboard(endpoint) ||
-            endpoint === "fixtureRounds" && view === "reference";
+            endpoint === "fixtureHalfStatistics" || view === "reference" &&
+              (endpoint === "fixtureRounds" || endpoint === "playerStatistics" || endpoint === "playerProfiles");
           const paging = record(body) && record(body.paging) ? body.paging : null;
           const validPaging = accountStatus && record(body) && body.paging === undefined
             || paging !== null && positive(paging.current) && positive(paging.total) && paging.current <= paging.total;
@@ -681,15 +697,18 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
       playerStatisticsPage(selector: FootballHistoryPlayerStatisticsSelector, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) {
         const params = paired(selector, ["page"]);
         const valid = params !== null && playerStatisticsProviderId(selector.competitionId) && selector.season >= 1000 && positive(selector.page);
-        return run<ReferenceRow>("playerStatistics", valid ? [params] : null, { ...bounds, cacheMaxAgeMs: 0 }, (raw) => {
-          const id = archivedPlayerStatisticsRowId(raw, selector);
-          return id === null || !record(raw) ? { valid: false, reason: "schema-error" } :
-            { valid: true, data: { raw, id }, missingCoverage: [] };
-        }, undefined, workflow, "reference", valid ? selector.page : undefined);
+        return run("playerStatistics", valid ? [params] : null, { ...bounds, cacheMaxAgeMs: 0 },
+          (raw) => archivePlayerRow(raw, archivedPlayerStatisticsRowId(raw, selector)), undefined, workflow, "reference", valid ? selector.page : undefined);
+      },
+      playerProfilePage(selector: FootballHistoryPlayerProfileSelector, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) {
+        const valid = keysAllowed(selector, ["page"]) && positive(selector.page);
+        return run("playerProfiles", valid ? [{}] : null, { ...bounds, cacheMaxAgeMs: 0 },
+          (raw) => archivePlayerRow(raw, archivedPlayerProfileRowId(raw)), undefined, workflow, "reference", valid ? selector.page : undefined);
       },
       page(target: FootballHistoryReferenceTarget, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) {
         const params = apiFootballReferenceParameters(target);
-        const maxRows = params && isApiFootballLeaderboard(target.endpoint) && positive(bounds?.maxRows) ? Math.min(bounds.maxRows, 20) : bounds?.maxRows;
+        const rowLimit = target?.endpoint === "fixtureHalfStatistics" ? 2 : isApiFootballLeaderboard(target?.endpoint) ? 20 : null;
+        const maxRows = rowLimit !== null && positive(bounds?.maxRows) ? Math.min(bounds.maxRows, rowLimit) : bounds?.maxRows;
         return run(target?.endpoint, params ? [params] : null, { ...bounds, maxRows, cacheMaxAgeMs: 0 },
           (raw) => normalizeReferenceRow(raw, target), undefined, workflow, "reference");
       },

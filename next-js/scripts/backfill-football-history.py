@@ -13,6 +13,7 @@ from lib.runtime import CommandError, ROOT, main_guard, node_binary
 ARCHIVE_PHASES = (("fixtures", ()), ("details", ("--details",)), ("reference", ("--reference",)))
 ACCESS_BLOCKERS = {"authentication-error", "invalid-credential", "subscription-expired"}
 SHARED_QUOTA_PAUSES = {"quota-denied", "rate-limited", "provider-day-ended"}
+PROVIDER_TRANSPORT_PAUSE = "provider-transport-unavailable"
 TRANSIENT_PAUSES = {"operation-not-authorized", "shared-work-pending", "detail-work-busy", "reference-unavailable", "deadline-exceeded"}
 
 
@@ -58,10 +59,10 @@ def run_continuous(command, args, env):
             if not exit_code and summary is not None:
                 progress |= (stop == "request-budget" and summary.get("requests", 0) > 0) or any(
                     summary.get(field, 0) > 0 for field in ("imported", "received", "written", "archived"))
-            if stop in SHARED_QUOTA_PAUSES:
+            if stop in SHARED_QUOTA_PAUSES or stop == PROVIDER_TRANSPORT_PAUSE:
                 if summary.get("requests", 0) > 0:
                     phases.rotate(-1)
-                retry = "waiting-for-shared-quota"
+                retry = "waiting-for-provider" if stop == PROVIDER_TRANSPORT_PAUSE else "waiting-for-shared-quota"
                 break
             phases.rotate(-1)
             if exit_code or summary is None or stop in TRANSIENT_PAUSES:

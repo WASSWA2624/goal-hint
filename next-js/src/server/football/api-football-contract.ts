@@ -30,6 +30,7 @@ export const apiFootballEndpoints = Object.freeze({
   squads: Object.freeze({ path: "/players/squads", paginated: false }),
   competitions: Object.freeze({ path: "/leagues", paginated: false }),
   statistics: Object.freeze({ path: "/fixtures/statistics", paginated: false }),
+  fixtureHalfStatistics: Object.freeze({ path: "/fixtures/statistics", paginated: false }),
   events: Object.freeze({ path: "/fixtures/events", paginated: false }),
   lineups: Object.freeze({ path: "/fixtures/lineups", paginated: false }),
   injuries: Object.freeze({ path: "/injuries", paginated: false }),
@@ -66,6 +67,7 @@ export type FootballHistoryReferenceTarget = Readonly<
   { endpoint: "countries" | "timezones" | "leagueSeasons" }
   | { endpoint: "teams" | "standings" | "injuries" | "fixtureRounds" | ApiFootballLeaderboard; competitionId: number; season: number }
   | { endpoint: "teamStatistics"; competitionId: number; season: number; teamId: number }
+  | { endpoint: "fixtureHalfStatistics"; fixtureId: number; homeTeamId: number; awayTeamId: number }
   | { endpoint: "venues"; venueId: number }
   | { endpoint: "transfers" | "coaches" | "squads" | "teamSeasons"; teamId: number }
 >;
@@ -85,6 +87,9 @@ export function apiFootballReferenceParameters(target: FootballHistoryReferenceT
     case "squads": return providerId(target.teamId) ? { team: String(target.teamId) } : null;
     case "fixtureRounds":
       return providerId(target.competitionId) && validSeason(target.season) ? apiFootballFixtureRoundParameters(target) : null;
+    case "fixtureHalfStatistics":
+      return providerId(target.fixtureId) && providerId(target.homeTeamId) && providerId(target.awayTeamId) && target.homeTeamId !== target.awayTeamId
+        ? { fixture: String(target.fixtureId), half: "true" } : null;
     case "teamStatistics":
       return providerId(target.competitionId) && validSeason(target.season) && providerId(target.teamId)
         ? { league: String(target.competitionId), season: String(target.season), team: String(target.teamId) } : null;

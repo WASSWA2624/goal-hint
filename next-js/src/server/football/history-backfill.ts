@@ -12,6 +12,8 @@ import { footballHistorySourceMaxRows } from "./history-source.ts";
 
 export const historyBackfillLimits = Object.freeze({ defaultRequests: 6, maximumRequests: 100 });
 const retryDelayMs = 15 * 60_000;
+const consecutiveTransportLimit = 3;
+const transportFailures = new Set(["transport-error", "deadline-exceeded"]);
 const stopReasons = new Set(["quota-denied", "rate-limited", "operation-not-authorized", "authentication-error",
   "invalid-credential", "subscription-expired"]);
 
@@ -188,6 +190,7 @@ export function createFootballHistoryBackfill(options: Readonly<{
     let completed = 0, imported = 0, deferred = 0, processed = 0, partitioned = 0, roundsPlanned = 0, roundsCompleted = 0;
     let archivedOnly = 0, roundsArchivedOnly = 0;
     let persistenceDeferred = 0, roundsPersistenceDeferred = 0;
+    let consecutiveTransportErrors = 0;
     let stopped: string | null = null;
     function canContinue() {
       if (signal?.aborted) stopped = "interrupted";
@@ -198,6 +201,13 @@ export function createFootballHistoryBackfill(options: Readonly<{
       if (!canContinue()) return false;
       if (requests >= input.maxRequests) { stopped = "request-budget"; return false; }
       return true;
+    }
+    function recordTransport(dispatched: number, failed: boolean, retrieved: boolean) {
+      if (dispatched === 0) return;
+      if (failed) {
+        consecutiveTransportErrors++;
+        if (consecutiveTransportErrors >= consecutiveTransportLimit) stopped ??= "provider-transport-unavailable";
+      } else if (retrieved) consecutiveTransportErrors = 0;
     }
     async function importScope(scope: FixtureScope, id: string) {
       const result = await options.importer.import({ id, selection: { kind: "fixtures", query: scope },
@@ -218,6 +228,8 @@ export function createFootballHistoryBackfill(options: Readonly<{
       onImport?.({ ...scope, status: pendingPersistence ? "deferred" : result.status, received: result.receivedCount, imported: result.importedCount,
         requests: result.requestsDispatched, reasons: result.reasons });
       stopped = result.reasons.find((reason) => stopReasons.has(reason)) ?? null;
+      recordTransport(result.requestsDispatched, result.reasons.some((reason) => transportFailures.has(reason)),
+        result.status === "complete" || result.status === "partial" || result.status === "degraded" || "rawArchived" in result && result.rawArchived);
       return result;
     }
 
@@ -260,6 +272,8 @@ export function createFootballHistoryBackfill(options: Readonly<{
         if (!canContinue()) break;
         if (response.error && stopReasons.has(response.error.reason)) { stopped = response.error.reason; break; }
         const observation = verifiedRoundObservation(response, item, started, options.now());
+        recordTransport(response.requestsDispatched, response.error !== null && transportFailures.has(response.error.reason), observation !== null);
+        if (stopped) break;
         if (!observation) continue;
         roundRows = response.data;
         await options.rounds.save(item, roundRows, observation.retrievedAt);
@@ -293,6 +307,6 @@ export function createFootballHistoryBackfill(options: Readonly<{
     const unlistedCompetitions = [...scoped].filter((competitionId) => !known.has(competitionId)).sort((left, right) => left - right);
     return { status: stopped || deferred || unlistedCompetitions.length ? "partial" as const : "complete" as const,
       requests, planned: plan.length, completed, archivedOnly, deferred, processed, imported, partitioned, roundsPlanned, roundsCompleted,
-      roundsArchivedOnly, persistenceDeferred, roundsPersistenceDeferred, unlistedCompetitions, stopped };
+      roundsArchivedOnly, persistenceDeferred, roundsPersistenceDeferred, consecutiveTransportErrors, unlistedCompetitions, stopped };
   };
 }

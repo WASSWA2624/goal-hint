@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { gunzipSync } from "node:zlib";
 import { API_FOOTBALL_CONTRACT_VERSION } from "../src/server/football/api-football-contract.ts";
-import { createFootballHistoryPlayerStatistics } from "../src/server/football/history-player-statistics.ts";
+import { createFootballHistoryPlayerProfiles, createFootballHistoryPlayerStatistics } from "../src/server/football/history-player-statistics.ts";
 import { readHistoryPlayerStatisticsTargets } from "../src/server/football/history-reference-targets.ts";
 import { createFootballHistorySource } from "../src/server/football/history-source.ts";
 import { catalogBounds, catalogResponse } from "./helpers/catalog-fixtures.mjs";
@@ -11,6 +11,15 @@ import { resultProvider } from "./helpers/result-sync-fixtures.mjs";
 const NOW = Date.parse("2026-11-12T02:00:00Z");
 const target = { competitionId: 39, season: 2025 };
 const scope = ({ competitionId, season }) => `${competitionId}:${season}`;
+
+function archiveMemory() {
+  const saved = [];
+  const database = { async query(operation) { return operation({ footballHistorySourcePage: {
+    async createMany({ data }) { saved.push(data); return { count: 1 }; },
+    async findMany({ where }) { return saved.filter((page) => page.endpoint === where.endpoint && page.selectorHash === where.selectorHash); },
+  } }); } };
+  return { saved, source: createFootballHistorySource(database) };
+}
 
 function players(selector, count = 20) {
   return Array.from({ length: count }, (_, index) => ({ player: { id: (selector.page - 1) * 20 + index + 1, nationality: "Synthetic" },
@@ -188,12 +197,7 @@ test("the counted adapter fetches exactly the requested raw page and rejects unr
 });
 
 test("raw page envelopes share a source selector and restore their verified player identities", async () => {
-  const saved = [];
-  const database = { async query(operation) { return operation({ footballHistorySourcePage: {
-    async createMany({ data }) { saved.push(data); return { count: 1 }; },
-    async findMany({ where }) { return saved.filter((page) => page.endpoint === where.endpoint && page.selectorHash === where.selectorHash); },
-  } }); } };
-  const source = createFootballHistorySource(database);
+  const { saved, source } = archiveMemory();
   const retrievedAt = Date.now() - 1000;
   for (const page of [1, 2]) {
     const selector = { ...target, page };
@@ -226,4 +230,47 @@ test("player-statistics planning uses observed approved seasons and skips explic
   assert.deepEqual(await readHistoryPlayerStatisticsTargets(database, [39, 40]), [
     { competitionId: 39, season: 2026 }, { competitionId: 40, season: 2024 },
   ]);
+});
+
+test("the global player profile catalog resumes from 250-row pages and restores known player IDs", async () => {
+  const started = Date.now() - 10_000;
+  let now = started;
+  const { saved, source } = archiveMemory();
+  const provider = resultProvider({ now: () => now }, { respond: (url) => {
+    assert.equal(url.pathname, "/players/profiles");
+    const page = Number(url.searchParams.get("page"));
+    assert.deepEqual(Object.fromEntries(url.searchParams), { page: String(page) });
+    const rows = Array.from({ length: page === 1 ? 250 : 2 }, (_, index) => ({ player: { id: (page - 1) * 250 + index + 1,
+      name: "Synthetic player", birth: { date: "2000-01-01" } } }));
+    now++;
+    return catalogResponse(url, rows, { paging: { current: page, total: 2 } });
+  } });
+  const run = () => createFootballHistoryPlayerProfiles({ playerProfilePage: provider.adapter.reference.playerProfilePage,
+    readPages: source.readPlayerProfilePages, savePage: source.savePlayerProfilePage, now: () => now,
+    providerDayEndsAt: () => started + 60_000 }).run({ maxRequests: 1 });
+  const first = await run();
+  assert.equal(first.status, "partial");
+  assert.equal(first.archived, 1);
+  assert.equal(saved[0].rowCount, 250);
+  assert.equal((await run()).status, "complete");
+  assert.equal((await run()).requests, 0);
+  assert.equal(provider.reservations.length, 2);
+  assert.deepEqual(saved.map(({ parameters, endpoint }) => ({ parameters, endpoint })), [
+    { parameters: {}, endpoint: "playerProfiles" }, { parameters: {}, endpoint: "playerProfiles" },
+  ]);
+  assert.deepEqual((await source.readPlayerProfilePages())[1].playerIds, [251, 252]);
+});
+
+test("the global profile adapter rejects an unexpected player selector or an invalid profile identity", async () => {
+  let unexpectedSelector = true;
+  const provider = resultProvider({ now: () => NOW }, { respond: (url) => new Response(JSON.stringify({ get: "players/profiles",
+    parameters: unexpectedSelector ? { page: "1", player: "999" } : Object.fromEntries(url.searchParams), errors: [], results: 1,
+    paging: { current: 1, total: 1 }, response: [{ player: { id: unexpectedSelector ? 999 : 0 } }],
+  }), { headers: { "content-type": "application/json" } }) });
+  const bounds = catalogBounds(NOW, { priority: "enrichment", maxRows: 250, timeoutMs: 10_000 });
+  assert.notEqual((await provider.adapter.reference.playerProfilePage({ page: 1 }, bounds)).status, "complete");
+  unexpectedSelector = false;
+  const bad = await provider.adapter.reference.playerProfilePage({ page: 1 }, bounds);
+  assert.notEqual(bad.status, "complete");
+  assert.equal(bad.completeness.invalidRows, 1);
 });

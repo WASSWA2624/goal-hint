@@ -23,7 +23,7 @@ Use the [provider's endpoint documentation](https://www.api-football.com/documen
 
 ## Local verification
 
-The owned snapshot saved 295 previously downloaded fixture pages without provider requests. Counted trials saved the Premier League seasons starting in 2020 through 2025, wrote new details for 63 fixtures from four batched requests, and archived team, venue, standings, injury, and transfer pages. A November 12 checkpoint counted 169,017 canonical API-Football fixtures, including 160,829 verified results. The source archive also retains fixture pages awaiting canonical import.
+The owned snapshot saved 295 previously downloaded fixture pages without provider requests. Counted trials saved the Premier League seasons starting in 2020 through 2025, wrote new details for 63 fixtures from four batched requests, and archived team, venue, standings, injury, and transfer pages. November 12 checkpoints verified 220,551 distinct fixture IDs in the saved provider pages, 169,017 canonical API-Football fixtures, and 160,829 verified results. Fixture receipts marked 1,219 of 8,784 whole league-season selectors complete. Two oversized Club Friendlies rounds are saved as provider pages and await canonical processing.
 
 A counted seven-day fixture-range request across leagues returned no usable body. The league-season requests returned verifiable fixtures and are the current archive partition.
 

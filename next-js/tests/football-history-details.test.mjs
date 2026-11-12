@@ -128,6 +128,17 @@ test("an uncorrelated fixture and a failed dispatch preserve facts and retry wit
   assert.equal(state.archive.nextCheckAt, null);
 });
 
+test("historical detail pauses after repeated provider transport failures", async () => {
+  const state = harness();
+  state.provider.state.status = 503;
+  const result = await state.run({ maxRequests: 10 }, () => state.advance(60 * 60_000));
+  assert.equal(result.stopped, "provider-transport-unavailable");
+  assert.equal(result.requests, 3);
+  assert.equal(result.received, 0);
+  assert.equal(result.fullyCovered, false);
+  assert.equal(state.provider.network.length, 3);
+});
+
 test("exhausted fixture details remain visible after a completed pass and do not dispatch again", async () => {
   const state = harness();
   state.provider.state.rows = [fixture({ awayId: 99 })];

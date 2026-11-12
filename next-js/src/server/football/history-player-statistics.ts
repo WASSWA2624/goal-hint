@@ -171,7 +171,7 @@ export function createFootballHistoryPlayerStatistics(options: ArchiveOptions<Fo
     parameters: ({ competitionId, season, page }) => ({ league: String(competitionId), season: String(season), page: String(page) }),
     rowId: archivedPlayerStatisticsRowId });
   return {
-    run(input: BatchInput & Readonly<{ targets: readonly FootballHistoryPlayerStatisticsTarget[] }>, onPage?: (report: PageReport<FootballHistoryPlayerStatisticsTarget>) => void) {
+    async run(input: BatchInput & Readonly<{ targets: readonly FootballHistoryPlayerStatisticsTarget[] }>, onPage?: (report: PageReport<FootballHistoryPlayerStatisticsTarget>) => void) {
       if (!Array.isArray(input.targets)) throw new RangeError("Choose player-statistics targets.");
       const unique = new Map<string, FootballHistoryPlayerStatisticsTarget>();
       for (const target of input.targets) {

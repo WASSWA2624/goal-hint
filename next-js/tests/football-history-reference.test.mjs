@@ -432,3 +432,69 @@ test("leaderboard targets use observed seasons, advertised coverage and bounded 
   assert.match(queries[0].sql, /archived\.endpoint = requested\.endpoint[\s\S]+SHA2\(CONCAT\('\{"league":"', league\.externalId/u);
   assert.deepEqual(queries[0].values, ["api-football", "topRedCards", "$.top_cards", 0, 39n, "api-football", 2]);
 });
+
+const halfTarget = { endpoint: "fixtureHalfStatistics", fixtureId: 1234, homeTeamId: 10, awayTeamId: 20 };
+const firstHalf = [{ type: "Ball Possession", value: "52%" }];
+const halfRows = [{ team: { id: 10 }, statistics: [{ type: "Total Shots", value: 10 }], statistics_1h: firstHalf,
+  statistics_2h: [{ type: "Red Cards", value: null }] }, { team: { id: 20 }, statistics: [{ type: "Total Shots", value: 5 }] }];
+
+test("archives raw half statistics and preserves unavailable half fields without refetching", async () => {
+  const { importer, transport, pages } = setup((url) => catalogResponse(url, halfRows));
+  assert.equal((await importer.run({ targets: [halfTarget], maxRequests: 1 })).archived, 1);
+  assert.equal(transport[0].pathname, "/fixtures/statistics");
+  assert.equal(transport[0].search, "?fixture=1234&half=true");
+  assert.deepEqual(pages[0], { endpoint: "fixtureHalfStatistics", parameters: { fixture: "1234", half: "true" },
+    rows: halfRows, retrievedAt: CATALOG_NOW + 100 });
+  assert.equal((await importer.run({ targets: [halfTarget], maxRequests: 1 })).skipped, 1);
+  assert.equal(transport.length, 1);
+});
+
+test("half statistics require both expected teams when nonempty and valid half series when present", async () => {
+  const cases = [[halfRows[0]], [halfRows[0], { ...halfRows[1], team: { id: 30 } }], [halfRows[0], halfRows[0]],
+    [halfRows[0], { ...halfRows[1], statistics_1h: [{ type: "Total Shots", value: {} }] }]];
+  for (const rows of cases) {
+    const { importer, pages } = setup((url) => catalogResponse(url, rows));
+    assert.equal((await importer.run({ targets: [halfTarget], maxRequests: 1 })).deferred, 1);
+    assert.deepEqual(pages, []);
+  }
+  const empty = setup((url) => catalogResponse(url, []));
+  assert.equal((await empty.importer.run({ targets: [halfTarget], maxRequests: 1 })).archived, 1);
+  assert.deepEqual(empty.pages[0].rows, []);
+});
+
+test("half-statistics planning checks played fixtures, applicable coverage and already archived selectors", async () => {
+  const queries = [];
+  const database = { query: (callback) => callback({ async $queryRaw(query) {
+    queries.push(query);
+    return [{ fixtureId: 1234n, homeTeamId: 10n, awayTeamId: 20n }, { fixtureId: 1235n, homeTeamId: 11n, awayTeamId: 21n }];
+  } }) };
+  assert.deepEqual(await readHistoryReferenceTargets(database, [39], "half-statistics", 1), { targets: [halfTarget], hasMoreTargets: true });
+  assert.match(queries[0].sql, /season\.year >= 2024[\s\S]+fixture\.status IN \('finished-regulation', 'finished-extra-time', 'finished-penalties'\)/u);
+  assert.match(queries[0].sql, /fixture\.regulationVerifiedAt <= UTC_TIMESTAMP\(3\)/u);
+  assert.match(queries[0].sql, /fixtures\.statistics_fixtures[\s\S]+\$\[0\]\.statistics[\s\S]+\$\[1\]\.statistics/u);
+  assert.match(queries[0].sql, /archived\.endpoint = 'fixtureHalfStatistics'[\s\S]+"half":"true"/u);
+  assert.deepEqual(queries[0].values, ["api-football", 39n, 2]);
+});
+
+test("reference transport stops after three consecutive errors and a valid scoped response resets the count", async () => {
+  const statuses = [500, 500, 200, 500, 500, 500, 200];
+  const { importer, transport } = setup((url) => catalogResponse(url, [], { status: statuses.shift() }));
+  const targets = Array.from({ length: 7 }, (_, index) => ({ endpoint: "transfers", teamId: index + 1 }));
+  const report = await importer.run({ targets, maxRequests: 7 });
+  assert.equal(report.stopped, "provider-transport-unavailable");
+  assert.equal(report.requests, 6);
+  assert.equal(report.archived, 1);
+  assert.equal(report.deferred, 5);
+  assert.equal(transport.length, 6);
+});
+
+test("pre-dispatch deadline responses count toward the bounded provider transport stop", async () => {
+  const importer = createFootballHistoryReference({
+    reference: { async page() { return { status: "failed", error: { reason: "deadline-exceeded" }, provenance: [], requestsDispatched: 0 }; } },
+    now: () => CATALOG_NOW, providerDayEndsAt: () => CATALOG_NOW + 60_000,
+    async hasPage() { return false; }, async savePage() { assert.fail("unexpected archive write"); },
+  });
+  const targets = Array.from({ length: 4 }, (_, index) => ({ endpoint: "venues", venueId: index + 1 }));
+  assert.deepEqual(await importer.run({ targets, maxRequests: 1 }),
+    { status: "partial", requested: 3, archived: 0, skipped: 0, deferred: 3, requests: 0, stopped: "provider-transport-unavailable" });
+});

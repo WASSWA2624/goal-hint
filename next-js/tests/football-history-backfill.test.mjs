@@ -43,8 +43,9 @@ function harness(failures = [], upcomingSeasons) {
       assert.match(request.id, /^[\da-f]{8}-[\da-f]{4}-8[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/u);
       imported.push(request);
       const failure = failures.shift();
+      const dispatched = !failure || ["transport-error", "deadline-exceeded"].includes(failure);
       const receipt = { id: request.id, status: failure ? "failed" : "complete", reasons: failure ? [failure] : [],
-        recordedAt: now, requestsDispatched: failure ? 0 : 1, importedCount: failure ? 0 : 12, receivedCount: failure ? 0 : 16 };
+        recordedAt: now, requestsDispatched: dispatched ? 1 : 0, importedCount: failure ? 0 : 12, receivedCount: failure ? 0 : 16 };
       receipts.set(request.id, receipt);
       return receipt;
     } },
@@ -101,10 +102,37 @@ test("quota refusal pauses the batch, and an incomplete receipt can be retried w
   await assert.rejects(h.run({ maxRequests: 3, competitionId: 21 }), /approved competition/);
 });
 
-function roundHarness({ reason = "response-too-large", responseParameters, exactProof = () => true } = {}) {
+test("three dispatched transport failures stop a fixture batch and leave durable cooldown receipts", async () => {
+  const h = harness(["transport-error", "deadline-exceeded", "transport-error"]);
+  const batch = await h.run({ maxRequests: 6 });
+  assert.equal(batch.stopped, "provider-transport-unavailable");
+  assert.equal(batch.consecutiveTransportErrors, 3);
+  assert.equal(batch.requests, 4);
+  assert.equal(batch.processed, 3);
+  assert.equal(batch.deferred, 3);
+  assert.equal(h.imported.length, 3);
+  const resumed = await h.run({ maxRequests: 6 });
+  assert.equal(resumed.requests, 2);
+  assert.equal(resumed.completed, 1);
+  assert.equal(resumed.deferred, 3);
+  assert.equal(resumed.consecutiveTransportErrors, 0);
+  assert.equal(h.imported.length, 4);
+});
+
+test("a retrieved fixture scope resets the consecutive transport count", async () => {
+  const h = harness(["transport-error", "deadline-exceeded", null, "transport-error"]);
+  const batch = await h.run({ maxRequests: 6 });
+  assert.equal(batch.stopped, null);
+  assert.equal(batch.requests, 5);
+  assert.equal(batch.processed, 4);
+  assert.equal(batch.completed, 1);
+  assert.equal(batch.consecutiveTransportErrors, 1);
+});
+
+function roundHarness({ reason = "response-too-large", responseParameters, exactProof = () => true, plannedRounds, roundFailures = [] } = {}) {
   const scope = { competitionId: 39, season: 2025 };
   const now = Date.parse("2026-11-12T02:00:00Z"), receipts = new Map(), imports = [], observations = [];
-  const roundRows = [{ round: "Opening Round", dates: ["2025-08-16"] }, { round: "Play-off", dates: ["2026-05-01"] },
+  const roundRows = plannedRounds ?? [{ round: "Opening Round", dates: ["2025-08-16"] }, { round: "Play-off", dates: ["2026-05-01"] },
     { round: "Opening Round", dates: ["2025-08-17"] }];
   let archivedRounds = null, roundReads = 0;
   const run = createFootballHistoryBackfill({
@@ -118,8 +146,10 @@ function roundHarness({ reason = "response-too-large", responseParameters, exact
       assert.equal(request.bounds.maxRows, 10_000);
       assert.equal(request.bounds.maxRequests, 1);
       const oversized = query.round === undefined;
-      const receipt = { status: oversized ? "partial" : "complete", reasons: oversized ? [reason] : [],
-        recordedAt: now, observedAt: now - 100, requestsDispatched: 1, importedCount: oversized ? 0 : 2, receivedCount: oversized ? 5_000 : 3 };
+      const failure = oversized ? reason : roundFailures.shift();
+      const receipt = { status: oversized ? "partial" : failure ? "failed" : "complete", reasons: failure ? [failure] : [],
+        recordedAt: now, observedAt: now - 100, requestsDispatched: 1,
+        importedCount: failure ? 0 : 2, receivedCount: oversized ? 5_000 : failure ? 0 : 3 };
       receipts.set(request.id, receipt);
       return receipt;
     } },
@@ -197,6 +227,44 @@ test("incorrect round-plan selector provenance never archives or drives fixture 
   assert.equal(result.deferred, 1);
   assert.equal(h.archived(), null);
   assert.equal(h.imports.length, 1);
+});
+
+test("the transport stop bounds fixture requests within an oversized season's round plan", async () => {
+  const h = roundHarness({ roundFailures: ["deadline-exceeded", "transport-error", "transport-error"],
+    plannedRounds: Array.from({ length: 4 }, (_, index) => ({ round: `Round ${index + 1}`, dates: [] })) });
+  const batch = await h.run({ maxRequests: 10 });
+  assert.equal(batch.stopped, "provider-transport-unavailable");
+  assert.equal(batch.consecutiveTransportErrors, 3);
+  assert.equal(batch.requests, 6);
+  assert.equal(batch.roundsPlanned, 4);
+  assert.equal(batch.roundsCompleted, 0);
+  assert.deepEqual(h.imports.map(({ query }) => query.round), [undefined, "Round 1", "Round 2", "Round 3"]);
+});
+
+test("counted round-catalog transport failures participate in the fixture outage limit", async () => {
+  const now = Date.parse("2026-11-12T02:00:00Z"), imports = [], roundRequests = [];
+  const run = createFootballHistoryBackfill({ competitionIds: [1, 2, 3, 4], retentionEvidenceRef: "verified-history-retention",
+    now: () => now, providerDayEndsAt: () => now + 3_600_000,
+    async competitions() { return { status: "complete", requestsDispatched: 1,
+      data: [1, 2, 3, 4].map(id => ({ id, seasons: [{ year: 2025 }] })) }; },
+    store: { findImport: async () => null }, hasFixtureSource: async () => false,
+    importer: { async import(request) {
+      imports.push(request.selection.query.competitionId);
+      return { status: "failed", reasons: ["response-too-large"], recordedAt: now,
+        observedAt: now, requestsDispatched: 1, importedCount: 0, receivedCount: 0 };
+    } },
+    rounds: { async read() { return null; }, async fetch(scope) {
+      roundRequests.push(scope.competitionId);
+      return { status: "failed", requestsDispatched: 1, error: { reason: "transport-error", retryable: true },
+        data: [], completeness: { complete: false, invalidRows: 0 }, provenance: [] };
+    }, async save() { throw new Error("No round page was retrieved."); } },
+  });
+  const batch = await run({ maxRequests: 10 });
+  assert.equal(batch.stopped, "provider-transport-unavailable");
+  assert.equal(batch.requests, 7);
+  assert.equal(batch.consecutiveTransportErrors, 3);
+  assert.deepEqual(imports, [1, 2, 3]);
+  assert.deepEqual(roundRequests, [1, 2, 3]);
 });
 
 test("a complete raw season with conflicting rows is retained without repeated provider calls", async () => {
@@ -289,7 +357,7 @@ function persistenceHarness({ archiveProof = true, durableDeferral = true, loseC
 test("a saved oversized round with unavailable canonical storage is deferred and later seasons continue", async () => {
   const h = persistenceHarness(), events = [];
   const first = await h.run({ maxRequests: 4 }, event => events.push(event));
-  assert.equal(first.requests, 4);
+  assert.equal(first.requests, 4, JSON.stringify({ batch: first, events }));
   assert.equal(first.processed, 3);
   assert.equal(first.completed, 1);
   assert.equal(first.roundsCompleted, 0);

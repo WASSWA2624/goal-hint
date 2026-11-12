@@ -274,6 +274,7 @@ export function createFootballHistoryDetails(options: Readonly<{
     const requestSignal = signal ?? new AbortController().signal;
     const totals = { requested: 0, received: 0, written: 0, completed: 0, deferred: 0, requests: 0 };
     let stopped: string | null = null;
+    let transportFailures = 0;
     while (totals.requests < maxRequests) {
       if (requestSignal.aborted) { stopped = "interrupted"; break; }
       if (providerDayEndsAt() !== dayEnd || now() >= dayEnd) { stopped = "provider-day-ended"; break; }
@@ -299,6 +300,9 @@ export function createFootballHistoryDetails(options: Readonly<{
       const reason = response?.error?.reason;
       if (reason && stopReasons.has(reason)) { stopped = reason; break; }
       if (!requests) { stopped = requestSignal.aborted ? "interrupted" : reason ?? "detail-unavailable"; break; }
+      const failedTransport = batch.received === 0 && (reason === "transport-error" || reason === "deadline-exceeded");
+      transportFailures = failedTransport ? transportFailures + 1 : 0;
+      if (transportFailures >= 3) { stopped = "provider-transport-unavailable"; break; }
     }
     const coverage = await readCoverage(database, scope, now());
     if (stopped === null && requestSignal.aborted) stopped = "interrupted";

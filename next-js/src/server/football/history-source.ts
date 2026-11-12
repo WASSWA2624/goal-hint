@@ -7,9 +7,9 @@ import { z } from "zod";
 import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { API_FOOTBALL_CONTRACT_VERSION } from "./api-football-contract.ts";
-import { archivedPlayerStatisticsRowId, playerStatisticsPageSize, playerStatisticsProviderId,
-  validPlayerStatisticsPageSize } from "./history-player-statistics-input.ts";
-import type { FootballHistoryPlayerStatisticsPage, FootballHistoryPlayerStatisticsReceipt,
+import { archivedPlayerProfileRowId, archivedPlayerStatisticsRowId, playerProfilePageSize, playerStatisticsPageSize, playerStatisticsProviderId,
+  validPlayerArchivePageSize } from "./history-player-statistics-input.ts";
+import type { FootballHistoryPlayerProfilePage, FootballHistoryPlayerStatisticsPage, FootballHistoryPlayerStatisticsReceipt,
   FootballHistoryPlayerStatisticsTarget } from "./history-player-statistics.ts";
 
 const compress = promisify(gzip);
@@ -20,6 +20,7 @@ const hash = (data: string | Uint8Array) => createHash("sha256").update(data).di
 const selectors = {
   fixtures: new Set(["id", "ids", "date", "league", "season", "team", "from", "to", "round", "timezone"]),
   fixtureRounds: new Set(["league", "season", "dates", "timezone"]),
+  fixtureHalfStatistics: new Set(["fixture", "half"]),
   countries: new Set<string>(),
   timezones: new Set<string>(),
   leagueSeasons: new Set<string>(),
@@ -28,6 +29,7 @@ const selectors = {
   teamSeasons: new Set(["team"]),
   teamStatistics: new Set(["league", "season", "team"]),
   playerStatistics: new Set(["league", "season"]),
+  playerProfiles: new Set<string>(),
   venues: new Set(["id"]),
   standings: new Set(["league", "season"]),
   topScorers: new Set(["league", "season"]),
@@ -68,7 +70,10 @@ async function verifiedRows(page: { compressedRows: Uint8Array; rowCount: number
 
 const playerPageEnvelope = z.strictObject({ provider: z.literal("api-football"), contract: z.literal(API_FOOTBALL_CONTRACT_VERSION),
   page: z.number().int().positive(), totalPages: z.number().int().positive(), retrievedAt: z.number().int().nonnegative(),
-  rows: z.array(z.unknown()).max(playerStatisticsPageSize) });
+  rows: z.array(z.unknown()).max(playerProfilePageSize) });
+type PlayerPageSource = Readonly<{ endpoint: "playerStatistics" | "playerProfiles"; parameters: Record<string, string>;
+  pageSize: number; rowId(row: unknown): number | null }>;
+const profilePages = { endpoint: "playerProfiles", parameters: {}, pageSize: playerProfilePageSize, rowId: archivedPlayerProfileRowId } satisfies PlayerPageSource;
 
 function playerStatisticsParameters({ competitionId, season }: FootballHistoryPlayerStatisticsTarget) {
   if (!playerStatisticsProviderId(competitionId) || !Number.isInteger(season) || season < 1000 || season > 9999) {
@@ -77,10 +82,15 @@ function playerStatisticsParameters({ competitionId, season }: FootballHistoryPl
   return { league: String(competitionId), season: String(season) };
 }
 
-function playerIdsForPage(rows: readonly unknown[], target: FootballHistoryPlayerStatisticsTarget) {
+function playerStatisticsPages(target: FootballHistoryPlayerStatisticsTarget): PlayerPageSource {
+  return { endpoint: "playerStatistics", parameters: playerStatisticsParameters(target), pageSize: playerStatisticsPageSize,
+    rowId: (row) => archivedPlayerStatisticsRowId(row, target) };
+}
+
+function playerIdsForPage(rows: readonly unknown[], rowId: PlayerPageSource["rowId"]) {
   const ids = new Set<number>();
   for (const row of rows) {
-    const id = archivedPlayerStatisticsRowId(row, target);
+    const id = rowId(row);
     if (id === null || ids.has(id)) return null;
     ids.add(id);
   }
@@ -117,6 +127,33 @@ export function createFootballHistorySource(database: DatabaseRuntime) {
     } }));
   }
 
+  async function savePlayerPage(input: FootballHistoryPlayerProfilePage, source: PlayerPageSource) {
+    const { page, totalPages, retrievedAt, rows, rowCount } = input;
+    if (!Array.isArray(rows) || rowCount !== rows.length || !validPlayerArchivePageSize(page, totalPages, rowCount, source.pageSize) ||
+      !playerIdsForPage(rows, source.rowId)) throw new Error("Invalid historical player archive page.");
+    const body = { provider: "api-football", contract: API_FOOTBALL_CONTRACT_VERSION, page, totalPages, retrievedAt, rows };
+    return writePage(source.endpoint, source.parameters, body, retrievedAt, rowCount);
+  }
+
+  async function readPlayerPages({ endpoint, parameters, pageSize, rowId }: PlayerPageSource): Promise<FootballHistoryPlayerStatisticsReceipt[] | null> {
+    const selector = JSON.stringify(parameters);
+    const pages = await database.query((client) => client.footballHistorySourcePage.findMany({ where: { endpoint, selectorHash: hash(selector) },
+      select: { parameters: true, contract: true, retrievedAt: true, rowCount: true, contentHash: true, compressedRows: true },
+      orderBy: [{ retrievedAt: "asc" }, { id: "asc" }] }));
+    const receipts: FootballHistoryPlayerStatisticsReceipt[] = [];
+    try {
+      for (const page of pages) {
+        if (page.contract !== API_FOOTBALL_CONTRACT_VERSION || JSON.stringify(archiveSelector({ endpoint, parameters: page.parameters })) !== selector) return null;
+        const { page: current, totalPages, retrievedAt, rows } = playerPageEnvelope.parse(await verifiedBody(page));
+        const playerIds = playerIdsForPage(rows, rowId);
+        if (retrievedAt !== page.retrievedAt.getTime() || rows.length !== page.rowCount ||
+          !validPlayerArchivePageSize(current, totalPages, page.rowCount, pageSize) || !playerIds) return null;
+        receipts.push({ page: current, totalPages, retrievedAt: utcInstantFromEpochMilliseconds(retrievedAt), rowCount: page.rowCount, playerIds });
+      }
+    } catch { return null; }
+    return receipts;
+  }
+
   return {
     async hasPage(input: Selection, observedSince?: number) {
       const selectorHash = hash(JSON.stringify(archiveSelector(input)));
@@ -139,37 +176,22 @@ export function createFootballHistorySource(database: DatabaseRuntime) {
     },
     async savePage(input: Selection & Readonly<{ rows: readonly unknown[]; retrievedAt: number }>) {
       const { endpoint } = input, parameters = archiveSelector(input);
-      if (endpoint === "playerStatistics" || !Array.isArray(input.rows) || input.rows.length > footballHistorySourceMaxRows) {
+      if (endpoint === "playerStatistics" || endpoint === "playerProfiles" || !Array.isArray(input.rows) || input.rows.length > footballHistorySourceMaxRows) {
         throw new Error("Invalid historical archive page.");
       }
       return writePage(endpoint, parameters, input.rows, input.retrievedAt, input.rows.length);
     },
     async savePlayerStatisticsPage(input: FootballHistoryPlayerStatisticsPage) {
-      const parameters = playerStatisticsParameters(input);
-      const { page, totalPages, retrievedAt, rows, rowCount } = input;
-      if (!Array.isArray(rows) || rowCount !== rows.length || !validPlayerStatisticsPageSize(page, totalPages, rowCount) || !playerIdsForPage(rows, input)) {
-        throw new Error("Invalid historical player-statistics page.");
-      }
-      const body = { provider: "api-football", contract: API_FOOTBALL_CONTRACT_VERSION, page, totalPages, retrievedAt, rows };
-      return writePage("playerStatistics", parameters, body, retrievedAt, rowCount);
+      return savePlayerPage(input, playerStatisticsPages(input));
     },
-    async readPlayerStatisticsPages(target: FootballHistoryPlayerStatisticsTarget): Promise<FootballHistoryPlayerStatisticsReceipt[] | null> {
-      const endpoint = "playerStatistics", parameters = playerStatisticsParameters(target), selector = JSON.stringify(parameters);
-      const pages = await database.query((client) => client.footballHistorySourcePage.findMany({ where: { endpoint, selectorHash: hash(selector) },
-        select: { parameters: true, contract: true, retrievedAt: true, rowCount: true, contentHash: true, compressedRows: true },
-        orderBy: [{ retrievedAt: "asc" }, { id: "asc" }] }));
-      const receipts: FootballHistoryPlayerStatisticsReceipt[] = [];
-      try {
-        for (const page of pages) {
-          if (page.contract !== API_FOOTBALL_CONTRACT_VERSION || JSON.stringify(archiveSelector({ endpoint, parameters: page.parameters })) !== selector) return null;
-          const { page: current, totalPages, retrievedAt, rows } = playerPageEnvelope.parse(await verifiedBody(page));
-          const playerIds = playerIdsForPage(rows, target);
-          if (retrievedAt !== page.retrievedAt.getTime() || rows.length !== page.rowCount ||
-            !validPlayerStatisticsPageSize(current, totalPages, page.rowCount) || !playerIds) return null;
-          receipts.push({ page: current, totalPages, retrievedAt: utcInstantFromEpochMilliseconds(retrievedAt), rowCount: page.rowCount, playerIds });
-        }
-      } catch { return null; }
-      return receipts;
+    async readPlayerStatisticsPages(target: FootballHistoryPlayerStatisticsTarget) {
+      return readPlayerPages(playerStatisticsPages(target));
+    },
+    async savePlayerProfilePage(input: FootballHistoryPlayerProfilePage) {
+      return savePlayerPage(input, profilePages);
+    },
+    async readPlayerProfilePages() {
+      return readPlayerPages(profilePages);
     },
     async latestPage(input: Selection) {
       const selectorHash = hash(JSON.stringify(archiveSelector(input)));

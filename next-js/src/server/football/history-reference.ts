@@ -23,7 +23,7 @@ const stopReasons = new Set<ApiFootballErrorReason>(["quota-denied", "rate-limit
 function priority({ endpoint }: FootballHistoryReferenceTarget) {
   if (endpoint === "countries" || endpoint === "timezones" || endpoint === "leagueSeasons") return 2;
   return endpoint === "teamStatistics" || endpoint === "coaches" || endpoint === "squads" || endpoint === "teamSeasons" ||
-    endpoint === "fixtureRounds" || isApiFootballLeaderboard(endpoint) ? 0 : 1;
+    endpoint === "fixtureRounds" || endpoint === "fixtureHalfStatistics" || isApiFootballLeaderboard(endpoint) ? 0 : 1;
 }
 
 function acceptedPage(response: ReferenceResponse, selector: FootballHistoryReferenceSelector,
@@ -38,6 +38,7 @@ function acceptedPage(response: ReferenceResponse, selector: FootballHistoryRefe
   const parameters = Object.entries(selector.parameters);
   if (Object.keys(page.requestParameters).length !== parameters.length ||
     parameters.some(([key, value]) => page.requestParameters[key] !== value)) return null;
+  if (selector.endpoint === "fixtureHalfStatistics" && response.data.length !== 0 && response.data.length !== 2) return null;
   return { ...selector, rows: response.data.map(({ raw }) => raw), retrievedAt: page.retrievedAt };
 }
 
@@ -77,6 +78,7 @@ export function createFootballHistoryReference(options: Readonly<{
       const totals = { requested: 0, archived: 0, skipped: 0, deferred: 0, requests: 0 };
       const dayStop = () => signal.aborted ? "interrupted" : providerDayEndsAt() !== dayEnd || now() >= dayEnd ? "provider-day-ended" : null;
       let stopped: string | null = null;
+      let consecutiveTransportFailures = 0;
       for (const { target, selector } of planned) {
         stopped = dayStop();
         if (stopped) break;
@@ -105,7 +107,10 @@ export function createFootballHistoryReference(options: Readonly<{
         const reason = response.error?.reason;
         stopped = dayStop() ?? (reason && stopReasons.has(reason) ? reason : null);
         if (stopped) break;
-        if (response.requestsDispatched !== 1) { stopped = reason ?? "reference-unavailable"; break; }
+        const transportFailure = reason === "transport-error" || reason === "deadline-exceeded";
+        consecutiveTransportFailures = transportFailure ? consecutiveTransportFailures + 1 : 0;
+        if (consecutiveTransportFailures >= 3) { stopped = "provider-transport-unavailable"; break; }
+        if (response.requestsDispatched !== 1 && !transportFailure) { stopped = reason ?? "reference-unavailable"; break; }
       }
       if (!stopped && input.hasMoreTargets) stopped = totals.requests >= maxRequests ? "request-budget" : "target-limit";
       return { status: stopped || totals.deferred ? "partial" as const : "complete" as const, ...totals, stopped };

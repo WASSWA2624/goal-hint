@@ -14,9 +14,6 @@ export function validPlayerArchivePageSize(page: number, totalPages: number, row
     rowCount <= pageSize && (page < totalPages ? rowCount === pageSize : rowCount > 0 || page === 1);
 }
 
-export const validPlayerStatisticsPageSize = (page: number, totalPages: number, rowCount: number) =>
-  validPlayerArchivePageSize(page, totalPages, rowCount, playerStatisticsPageSize);
-
 export function archivedPlayerProfileRowId(row: unknown): number | null {
   return record(row) && record(row.player) && playerStatisticsProviderId(row.player.id) ? row.player.id : null;
 }
