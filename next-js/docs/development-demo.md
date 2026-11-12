@@ -135,17 +135,17 @@ checking the hosted schema and permitted scope.
 
 `npm run history:backfill -- --reference --requests 20` archives provider
 dictionaries, team and venue records, standings, injuries, transfers, season
-statistics, coaches, and current squads. It discovers target identities from
-saved fixtures. Use `--help` for dataset selectors and `--dataset player-statistics`
-to resume paginated league-season player statistics on their own. Archived
-pages retain their retrieval dates and can be read locally by selector. A
-complete empty response records what the provider returned at that time.
-Active-season changes require later observations.
+statistics, leaderboards, player profiles, coaches, and current squads. It
+discovers scoped targets from saved fixtures. Use `--help` for dataset selectors
+or resume player pages separately with `--dataset player-statistics` or
+`--dataset player-profiles`. Archived pages retain their retrieval dates and
+can be read locally by selector. A complete empty response records what the
+provider returned at that time. Active-season changes require later observations.
 
 Use `npm run history:backfill -- --continuous` to run the supported fixture,
 match-detail, and reference imports under one owned database lock. The runner
-checks each phase in bounded batches, waits when the shared provider quota
-gives live work priority, and resumes after transient failures. A drained pass
+checks each phase in bounded batches and waits when the shared provider quota
+gives live work priority or repeated transport failures interrupt retrieval. A drained pass
 waits for retryable or newly discovered coverage. The saved source pages and
 import receipts persist across restarts.
 

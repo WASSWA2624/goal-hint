@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { API_FOOTBALL_CONTRACT_VERSION, apiFootballFixtureRoundParameters } from "../src/server/football/api-football-contract.ts";
+import { normalizeFixture } from "../src/server/football/api-football-normalize.ts";
 import { catalogPersistenceUnavailable, CatalogStoreError } from "../src/server/football/catalog-mysql-store.ts";
 import { createFootballCatalogImporter } from "../src/server/football/catalog-service.ts";
 import { createFootballHistoryBackfill, normalizeHistoryCompetition } from "../src/server/football/history-backfill.ts";
-import { CATALOG_NOW, catalogFixture, catalogRequest, catalogResponse, createSyntheticCatalogAdapter } from "./helpers/catalog-fixtures.mjs";
+import { CATALOG_NOW, catalogFixture, catalogRequest } from "./helpers/catalog-fixtures.mjs";
 
 test("duplicate league season records share one fixture selector and retain reported coverage", () => {
   const context = { endpoint: "/leagues", retrievedAt: Date.parse("2026-11-12T02:00:00Z") };
@@ -300,19 +301,27 @@ test("a complete raw season with conflicting rows is retained without repeated p
 });
 
 function persistenceHarness({ archiveProof = true, durableDeferral = true, loseCommitResponse = false } = {}) {
-  const receipts = new Map(), proofCalls = [], deferredWrites = [];
+  const receipts = new Map(), proofCalls = [], deferredWrites = [], network = [];
   const round = "Club Friendlies 3";
   const authority = { authorize() {}, verifyRetention: () => true, verifyObservation: () => true,
     verifyLogo: () => true, verifyRegulationScore: () => true };
-  const { adapter, network } = createSyntheticCatalogAdapter({ respond(url) {
-    const competitionId = Number(url.searchParams.get("league")), season = Number(url.searchParams.get("season"));
-    if (competitionId === 667 && !url.searchParams.has("round")) {
-      return catalogResponse(url, [], { paging: { current: 1, total: 2 } });
-    }
-    const fixture = catalogFixture(competitionId, { competitionId, season });
-    if (competitionId === 667) fixture.league.round = round;
-    return catalogResponse(url, [fixture]);
-  } });
+  const adapter = { evidence: { async fixtures(query) {
+    const { competitionId, season } = query;
+    network.push(query);
+    const oversized = competitionId === 667 && query.round === undefined;
+    const raw = catalogFixture(competitionId, { competitionId, season });
+    if (query.round !== undefined) raw.league.round = query.round;
+    const row = normalizeFixture(raw, { endpoint: "/fixtures", retrievedAt: CATALOG_NOW });
+    assert.equal(row.valid, true);
+    const reasons = oversized ? ["pagination-incomplete"] : [];
+    return { status: oversized ? "failed" : "complete", data: oversized ? [] : [row.data], requestsDispatched: 1,
+      completeness: { complete: !oversized, reasons, missingIds: [], missingCoverage: [], invalidRows: 0 },
+      error: oversized ? { reason: "pagination-incomplete", retryable: false } : null,
+      provenance: [{ provider: "api-football", endpoint: "fixtures", contractVersion: API_FOOTBALL_CONTRACT_VERSION,
+        requestParameters: { league: String(competitionId), season: String(season), timezone: "Africa/Kampala",
+          ...(query.round === undefined ? {} : { round: query.round }) }, retrievedAt: CATALOG_NOW, providerUpdatedAt: null,
+        fromCache: false, currentPage: 1, totalPages: oversized ? 2 : 1, quota: { kind: "success" } }] };
+  } } };
   function save(batch, deferred = false) {
     const receipt = { id: batch.request.id, fingerprint: batch.fingerprint, requestFingerprint: batch.requestFingerprint,
       status: deferred ? "partial" : batch.status, observedAt: batch.observedAt, recordedAt: CATALOG_NOW,
