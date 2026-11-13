@@ -21,7 +21,7 @@ import { resultHash, resultAuthority, resultPolicy, resultProvider } from './hel
 import { withPredictionPipeline } from './prediction-pipeline.mjs';
 
 const execute = promisify(execFile);
-test('shared result synchronization on isolated genuine MySQL', { timeout: 300_000 }, async (t) => {
+test('shared result synchronization on isolated genuine MySQL', { timeout: 420_000 }, async (t) => {
   await withPredictionPipeline(t, async (p) => {
     const { a, b, first, second, catalog, history, queue } = p;
     const clock = { now: () => p.now() }, pollers = [];
@@ -179,6 +179,37 @@ test('shared result synchronization on isolated genuine MySQL', { timeout: 300_0
         assert.deepEqual(await counts((await s.fixture(1)).id), { results: 1, observations: 1, events: 1 });
         assert.equal(s.source.network.length, 1);
       });
+      await t.test('a participant identity conflict retains sealed evidence and does not stall the batch', async () => {
+        const s = await seed([10021,10022].map((id) => catalogFixture(id, { kickoff: new Date(p.now()-300_000).toISOString(), status: 'FT' })));
+        const fixtures = await Promise.all([s.fixture(), s.fixture(1)]);
+        const observations = s.rows.map((row, index) => {
+          const raw = structuredClone(row);
+          if (index === 0) raw.teams.away.id += 10_000;
+          const normalized = normalizeFixture(raw, { retrievedAt: p.now(), endpoint: '/fixtures', verifyRegulationScore: () => true });
+          assert.equal(normalized.valid, true);
+          return parseLifecycleInput({ fixtureId: fixtures[index].id, fixture: normalized.data, actualStartedAt: null,
+            actor: 'fixture-result-sync', evidenceRef: s.policy.evidenceRef });
+        });
+        const value = { accountId: s.accountId, policyHash: evidenceFingerprint(s.policy), receivedAt: p.now(), channel: 'ids', date: null,
+          requestedIds: fixtures.map((fixture) => fixture.externalId), observations, error: null, requestsDispatched: 0 };
+        const batch = { id: evidenceFingerprint(value), ...value };
+        const lease = await s.store.acquire(resultHash('identity-conflict-result-owner'), 30_000);
+        await s.store.save(lease, batch);
+        await s.store.apply(lease, batch);
+        await s.store.apply(lease, batch);
+        assert.deepEqual(await s.store.pending(lease), []);
+        const rejected = await a.query((tx) => tx.resultProviderObservation.findFirstOrThrow({ where: { batchId: batch.id, fixtureId: fixtures[0].id } }));
+        const receipt = await lifecycle().receipt(rejected.lifecycleId);
+        assert.equal(receipt.outcome, 'conflict');
+        assert.equal(receipt.reason, 'identity-unresolved');
+        assert.deepEqual(receipt.observation, observations[0]);
+        assert.equal(historyJson(rejected.body).reason, 'identity-unresolved');
+        assert.equal(historyJson(rejected.body).resultId, null);
+        assert.deepEqual(await counts(fixtures[0].id), { results: 0, observations: 1, events: 0 });
+        assert.deepEqual(await counts(fixtures[1].id), { results: 1, observations: 1, events: 1 });
+        assert.equal((await s.fixture()).retrievedAt, fixtures[0].retrievedAt);
+        await s.store.release(lease);
+      });
       await t.test('stale and equal-time conflicting evidence cannot roll back results or fake a newer last sync', async () => {
         const s = await seed([catalogFixture(10014, { kickoff: new Date(p.now()-300_000).toISOString(), status: 'FT', score: { fulltime: score(2,1) } })]);
         await s.poller.runOnce(); const fixture = await s.fixture(), original = await s.store.result(fixture.id), at = p.now();
@@ -298,5 +329,5 @@ test('shared result synchronization on isolated genuine MySQL', { timeout: 300_0
         assert.equal(await a.query((tx) => tx.resultSyncBatch.count({ where: { accountId: s.accountId } })), 0);
       });
     } finally { await Promise.all(pollers.map((poller) => poller.stop().catch(() => {}))); }
-  });
+  }, { migrationTimeoutMs: 240_000 });
 });

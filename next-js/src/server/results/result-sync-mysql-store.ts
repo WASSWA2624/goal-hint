@@ -165,6 +165,17 @@ export function createMysqlResultSyncStore(options: Readonly<{
             if (await tx.resultProviderObservation.findUnique({ where: { id } })) return;
             const before = await tx.footballFixture.findUniqueOrThrow({ where: { id: observation.fixtureId }, select: { status: true, retrievedAt: true } });
             const receipt = await lifecycle.observeProjection(observation, tx);
+            async function record(outcome: string, resultId: string | null, reason?: string) {
+              const body = evidenceSerialize({ observation, lifecycleId: receipt.id, outcome, lifecycleOutcome: receipt.outcome,
+                resultId, appliedAt: at, ...(reason ? { reason } : {}) });
+              await tx.$executeRaw`INSERT INTO ResultProviderObservation (id, batchId, fixtureId, lifecycleId, retrievedAt, integrity, body)
+                VALUES (${id}, ${batch.id}, ${observation.fixtureId}, ${receipt.id}, ${new Date(observation.retrievedAt)},
+                  SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`;
+            }
+            if (receipt.outcome === "conflict" && receipt.reason === "identity-unresolved") {
+              await record("conflict", null, receipt.reason);
+              return;
+            }
             const fixture = await tx.footballFixture.findUniqueOrThrow({ where: { id: observation.fixtureId } });
             const state = await tx.fixtureResultState.findUnique({ where: { fixtureId: fixture.id } });
             const previous = state?.resultId ? await tx.fixtureResult.findUniqueOrThrow({ where: { id: state.resultId } }) : null;
@@ -193,10 +204,7 @@ export function createMysqlResultSyncStore(options: Readonly<{
               ...(accepted ? { failures: 0, delayReason: null } : { delayReason: outcome === "stale" ? "older-observation" : receipt.reason }) };
             await tx.fixtureResultState.upsert({ where: { fixtureId: fixture.id },
               create: { fixtureId: fixture.id, firstTrackedAt: new Date(at), nextCheckAt: epoch, ...data }, update: data });
-            const body = evidenceSerialize({ observation, lifecycleId: receipt.id, outcome, lifecycleOutcome: receipt.outcome, resultId, appliedAt: at });
-            await tx.$executeRaw`INSERT INTO ResultProviderObservation (id, batchId, fixtureId, lifecycleId, retrievedAt, integrity, body)
-              VALUES (${id}, ${batch.id}, ${fixture.id}, ${receipt.id}, ${new Date(observation.retrievedAt)},
-                SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`;
+            await record(outcome, resultId);
           }, tx);
           await locked(tx, lease);
         });

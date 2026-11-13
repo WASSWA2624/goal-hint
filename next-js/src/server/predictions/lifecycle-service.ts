@@ -43,7 +43,8 @@ export function createScheduleLifecycleService(options: Readonly<{
     } catch { return lifecycleFail("unauthorized"); }
   }
   async function ingest(input: LifecycleObservation, existingTransaction?: Transaction,
-    canonical?: Readonly<{ apply(): Promise<unknown>; retain(): Promise<unknown> }>): Promise<LifecycleReceipt> {
+    canonical?: Readonly<{ apply(): Promise<unknown>; retain(): Promise<unknown> }>,
+    retainIdentityConflict = false): Promise<LifecycleReceipt> {
     const observation = parseLifecycle(lifecycleObservationSchema, input), id = evidenceFingerprint(observation);
     let failure: unknown;
     try { return await history.withFixtureTransaction(observation.fixtureId, async (writer, tx) => {
@@ -56,13 +57,25 @@ export function createScheduleLifecycleService(options: Readonly<{
         const fixture = await tx.footballFixture.findUniqueOrThrow({ where: { id: observation.fixtureId }, include: {
           homeTeam: { include: { providers: true } }, awayTeam: { include: { providers: true } },
           season: { include: { competition: { include: { providers: true } } } } } });
+        const target = fixture.activeCycleId === null ? null : { fixtureId: fixture.id, cycleId: fixture.activeCycleId };
+        async function record(fixtureVersion: bigint, outcome: LifecycleReceipt["outcome"], reason: string) {
+          const payload = evidenceSerialize({ id, fixtureId: fixture.id, cycleId: target?.cycleId ?? null,
+            fixtureVersion, at: now, outcome, reason, policyHash: evidenceFingerprint(policy), observation });
+          await tx.$executeRaw`INSERT INTO FixtureLifecycleObservation
+            (id, fixtureId, cycleId, fixtureVersion, at, retrievedAt, outcome, reason, integrity, receiptJson)
+            VALUES (${id}, ${fixture.id}, ${target?.cycleId ?? null}, ${fixtureVersion}, ${new Date(now)}, ${new Date(observation.retrievedAt)},
+              ${outcome}, ${reason}, SHA2(CAST(JSON_EXTRACT(${payload}, '$') AS CHAR), 256), JSON_EXTRACT(${payload}, '$'))`;
+        }
         const mapped = (rows: readonly { provider: string; externalId: bigint }[], externalId: number) =>
           rows.some((entry) => entry.provider === "api-football" && entry.externalId === BigInt(externalId));
         if (fixture.provider !== "api-football" || fixture.externalId !== BigInt(observation.externalFixtureId) ||
           !mapped(fixture.homeTeam.providers, observation.homeExternalId) || !mapped(fixture.awayTeam.providers, observation.awayExternalId) ||
-          !mapped(fixture.season.competition.providers, observation.competitionExternalId) || fixture.season.year !== observation.season)
-          return lifecycleFail("identity-unresolved");
-        const target = fixture.activeCycleId === null ? null : { fixtureId: fixture.id, cycleId: fixture.activeCycleId };
+          !mapped(fixture.season.competition.providers, observation.competitionExternalId) || fixture.season.year !== observation.season) {
+          if (!retainIdentityConflict) return lifecycleFail("identity-unresolved");
+          await record(fixture.dataVersion, "conflict", "identity-unresolved");
+          authorize(observation);
+          return (await storedLifecycleReceipt(tx, id))!;
+        }
         let cycle = target === null ? null : await storedCycle(tx, target.cycleId);
         const state = await tx.fixtureLifecycleState.findUnique({ where: { fixtureId: fixture.id } });
         const barrier = target ? await storedPublicationBarrier(tx, target.cycleId) : null;
@@ -166,13 +179,7 @@ export function createScheduleLifecycleService(options: Readonly<{
         }
         if (material && await tx.predictionChangeEvent.findUnique({ where: { fixtureId_version: { fixtureId: fixture.id, version } } }))
           version = (await tx.footballFixture.update({ where: { id: fixture.id }, data: { dataVersion: { increment: 1 } }, select: { dataVersion: true } })).dataVersion;
-        const receipt: LifecycleReceipt = freezeEvidence({ id, fixtureId: fixture.id, cycleId: target?.cycleId ?? null,
-          fixtureVersion: version, at: now, outcome: decision.outcome, reason: decision.reason, policyHash: evidenceFingerprint(policy), observation });
-        const payload = evidenceSerialize(receipt);
-        await tx.$executeRaw`INSERT INTO FixtureLifecycleObservation
-          (id, fixtureId, cycleId, fixtureVersion, at, retrievedAt, outcome, reason, integrity, receiptJson)
-          VALUES (${id}, ${fixture.id}, ${target?.cycleId ?? null}, ${version}, ${new Date(now)}, ${new Date(observation.retrievedAt)},
-            ${receipt.outcome}, ${receipt.reason}, SHA2(CAST(JSON_EXTRACT(${payload}, '$') AS CHAR), 256), JSON_EXTRACT(${payload}, '$'))`;
+        await record(version, decision.outcome, decision.reason);
         if (material) await tx.predictionChangeEvent.create({ data: { fixtureId: fixture.id, version, lifecycleId: id,
           kind: issue ? "lifecycle-conflict" : "schedule-lifecycle", at: new Date(now) } });
         authorize(observation);
@@ -189,8 +196,8 @@ export function createScheduleLifecycleService(options: Readonly<{
       actor: "catalog-schedule-lifecycle", evidenceRef: mutation.evidenceRef! }), mutation.transaction, mutation);
   };
   return Object.freeze({ observe: (input: LifecycleInput) => ingest(parseLifecycleInput(input)), coordinateFixtureMutation,
-    /** Private durable-ingestion boundary; the enclosing caller owns rollback. */
-    observeProjection: (input: LifecycleObservation, transaction: Transaction) => ingest(input, transaction),
+    /** The result batch retains identity conflicts without applying them to the fixture. */
+    observeProjection: (input: LifecycleObservation, transaction: Transaction) => ingest(input, transaction, undefined, true),
     receipt(id: string) { parseLifecycle(historyHash, id); return database.transaction((tx) => storedLifecycleReceipt(tx, id)); },
     history(fixtureId: string, limit = 100) {
       parseLifecycle(historyId, fixtureId); parseLifecycle(historyVersion.max(100), limit);
