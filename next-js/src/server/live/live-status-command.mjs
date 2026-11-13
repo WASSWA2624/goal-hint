@@ -39,6 +39,7 @@ try {
         maxFixturesPerTick: workload.liveDetails.maxFixturesPerTick },
       // Odds (052) run only when enabled, eligible on this plan and given a documented bookmaker.
       odds: { enabled: policy.choices.odds.enabled, eligible: workload.odds.eligible, bookmakerConfigured: policy.choices.odds.bookmakerId !== null,
+        bookmakerScope: policy.choices.odds.bookmakerScope,
         imports: policy.choices.odds.enabled && workload.odds.eligible && policy.choices.odds.bookmakerId !== null,
         // Without recorded display rights (OP-36), imported odds stay private.
         displayRightsRecorded: policy.choices.odds.rightsRef !== null && verify(policy.choices.odds.rightsRef, 'football-odds-rights'),

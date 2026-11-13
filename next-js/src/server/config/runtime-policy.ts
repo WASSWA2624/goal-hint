@@ -179,7 +179,9 @@ const environmentSchema = z.object({
   GOAL_HINT_FOOTBALL_TRIAL_REQUEST_LIMIT: count.describe("Use a positive counted trial request allowance within the shared ceiling (008)."),
   GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF: text.describe("Record verified rights to display bookmaker odds publicly; without it odds stay private (052)."),
   GOAL_HINT_ODDS_IMPORT_ENABLED: enabled.describe("Use true or false; the live runner imports odds only when its plan has spare quota (052)."),
-  GOAL_HINT_ODDS_BOOKMAKER_ID: count.describe("Use the positive API-Football id of the one documented odds bookmaker; required when odds imports are enabled (052)."),
+  GOAL_HINT_ODDS_BOOKMAKER_ID: count.describe("Use the positive API-Football id of the verified primary bookmaker; required when odds imports are enabled (052)."),
+  GOAL_HINT_ODDS_BOOKMAKER_SCOPE: z.enum(["primary", "all"]).default("primary")
+    .describe("Use primary (default) or all for pre-match odds imports. The primary bookmaker still supplies the reviewed projection."),
   GOAL_HINT_TEAM_CODES_IMPORT_ENABLED: enabledByDefault.describe("Use true or false (default true); the live runner imports team codes only from spare quota, so they stay off on Free and slow plans."),
   GOAL_HINT_LIVE_DETAILS_ENABLED: enabled.describe("Use true or false (default false); centrally collect fixture statistics/events within the verified plan's bounded live-detail allowance."),
   GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS: money.describe("Use an explicitly approved separate AI cap in integer US cents (010)."),
@@ -296,6 +298,7 @@ function assemble(settings: z.output<typeof environmentSchema>) {
       odds: {
         enabled: settings.GOAL_HINT_ODDS_IMPORT_ENABLED,
         bookmakerId: settings.GOAL_HINT_ODDS_BOOKMAKER_ID,
+        bookmakerScope: settings.GOAL_HINT_ODDS_BOOKMAKER_SCOPE,
         rightsRef: settings.GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF,
       },
       teamCodes: { enabled: settings.GOAL_HINT_TEAM_CODES_IMPORT_ENABLED },
@@ -496,7 +499,7 @@ function consistencyIssues(policy: RuntimePolicy): PolicyIssue[] {
     issues.push({ field: "TEST_DATABASE_URL", reason: "The isolated test target must differ from DATABASE_URL; prompt 003 must also verify actual database isolation." });
   }
   if (policy.choices.odds.enabled && policy.choices.odds.bookmakerId === null) {
-    issues.push({ field: "GOAL_HINT_ODDS_BOOKMAKER_ID", reason: "Odds imports need one documented bookmaker id; no bookmaker is assumed." });
+    issues.push({ field: "GOAL_HINT_ODDS_BOOKMAKER_ID", reason: "Odds imports need a documented primary bookmaker id." });
   }
   if (policy.choices.football.trialRequestLimit !== null
     && policy.choices.football.trialRequestLimit > operatingRules.football.requestsPerProviderDay - operatingRules.football.essentialReserveRequests) {

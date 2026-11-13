@@ -2,9 +2,8 @@
 
 The pre-match importer retains every verified bet and price in its
 API-Football date sweep. Owned local development requests all bookmakers in
-the same bounded date batches. The configured primary bookmaker supplies the
-reviewed four-family projection. Hosted imports continue to use that bookmaker
-under the hosted odds policy.
+the same bounded date batches. Hosted workers can opt into the same scope.
+The configured primary bookmaker supplies the reviewed four-family projection.
 
 This runbook covers storage, import semantics and grants. The adapter contract
 is in [api-football-adapter.md](api-football-adapter.md), the counted odds trial
@@ -40,7 +39,7 @@ including markets that have only a price. It labels pre-match, closing and
 in-play offers separately. Custom Builder selects exact current quotes across
 verified bookmakers for supported published outcomes at 75% or higher.
 
-Each local date sweep records the bookmaker scope in its job and stores
+Each date sweep records the bookmaker scope in its job and stores
 the observed books and bet hashes in the sealed fixture receipt. The existing
 quota gate and page ceiling apply to that sweep. Current reads accept only
 offers reconfirmed by the latest receipt. A complete sweep can withdraw absent
@@ -58,6 +57,12 @@ snapshots without repeating a fixture sweep.
   it to `true` with the verified `GOAL_HINT_ODDS_BOOKMAKER_ID` on the worker
   after confirming the provider plan and ordinary-quota spare. The Free plan
   remains ineligible.
+- `GOAL_HINT_ODDS_BOOKMAKER_SCOPE=all` requests every available bookmaker in the
+  same date sweep. The default is `primary`. Both scopes require the verified
+  primary ID for Matches and Best Slips. With approved display rights, Match
+  Details lists the stored verified offers and Custom Builder can compare their
+  exact prices. All-bookmaker sweeps use the same dispatch, page, response-size
+  and deadline limits as primary sweeps. Partial sweeps preserve unseen fixtures.
 - For approved hosted display, set `GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF` on the
   web and worker runtimes and record the exact `football-odds-rights` approval
   in each runtime's private `.goal-hint/owner-approvals.json`. The web checks

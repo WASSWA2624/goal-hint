@@ -217,6 +217,10 @@ test('odds spend only quota above every ordinary need of the day and stay off on
   const free = parseOddsPolicy(oddsPolicy(policy, refs, liveWorkload(100, 1, 'Free', 10)));
   assert.equal(free.horizonDays, 2); assert.equal(free.bookmakerId, 8);
   const pro = parseOddsPolicy(oddsPolicy(policy, refs, liveWorkload(7500, 5, 'Pro', 300)));
+  assert.equal(pro.bookmakerScope, undefined, 'hosted odds default to the primary bookmaker');
+  const allBooks = parseRuntimePolicy({ ...refsEnv, GOAL_HINT_ODDS_IMPORT_ENABLED: 'true', GOAL_HINT_ODDS_BOOKMAKER_ID: '8', GOAL_HINT_ODDS_BOOKMAKER_SCOPE: 'all' });
+  assert.equal(parseOddsPolicy(oddsPolicy(allBooks, liveReferences(allBooks), mega)).bookmakerScope, 'all');
+  assert.equal(parseOddsPolicy(oddsPolicy(policy, refs, mega, true)).bookmakerScope, 'all', 'the owned local sweeps keep their all-bookmaker scope');
   assert.deepEqual([pro.horizonDays, pro.sweepMs, pro.freshnessMs, pro.retainAfterKickoffMs], [7, ODDS_SWEEP_MS, 12 * 3_600_000, 30 * DAY]);
   assert.equal(pro.retentionEvidenceRef, refs.retention); assert.equal(pro.evidenceRef, refs.odds);
   assert.equal(refs.oddsRights, null, 'without a rights reference odds stay private');

@@ -371,7 +371,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       database, evidenceAuthority: authorities.evidence, fallbackReserveMs: refreshEnvelopeFor(workload.pacing, true).fallbackReserveMs,
       ...(overrides.researchFetcher ? { fetcher: overrides.researchFetcher } : {}) }); } catch { /* Optional research startup failure preserves the baseline and AI structured evidence. */ }
     const footballPreparation = ai !== null || sourceOrder === "ai-first"
-      ? createLiveFootballPreparation({ importer, refs, pacing: workload.pacing, adapter: adapter.evidence, database }) : null;
+      ? createLiveFootballPreparation({ importer, refs, pacing: workload.pacing,
+        ...(ai !== null || localFootball ? { adapter: adapter.evidence, database } : {}) }) : null;
     const refresh = createPredictionRefreshService({ type: LIVE_REFRESH_TYPE, handlerVersion: 1, store: refreshStore,
       selection: selectionStore, authority: authorities.refresh,
       prepare: async (member, context) => {

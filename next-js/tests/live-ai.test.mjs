@@ -207,13 +207,14 @@ test('unavailable history gives insufficient evidence, never assumed perfect fit
   assert.ok(snapshot.missingness.some(item => item.kind === 'history'));
 });
 
-test('bounded preparation accounts both history calls and does not consume fallback time', async () => {
+test('history-only preparation accounts both team calls and does not consume fallback time', async () => {
   const value = member(), calls = [], usages = [], context = { deadlineAt: NOW + 120000, remainingMs: () => 120000,
     async checkpoint() {}, async recordUsage(usage) { usages.push(usage); } };
   const prepare = createLiveFootballPreparation({ refs, pacing: 'standard', importer: { async import(request) {
     calls.push(request); if (calls.length === 2) throw new Error('synthetic outage'); return { requestsDispatched: 1 }; } } });
-  await prepare(value, context);
+  assert.deepEqual(await prepare(value, context), { sources: [] });
   assert.equal(calls.length, 2); assert.ok(calls.every(call => call.bounds.maxRequests === 1 && call.bounds.deadlineAt === NOW + 60000));
+  assert.deepEqual(calls.map(call => call.selection.query.teamId), [value.context.home.externalId, value.context.away.externalId]);
   assert.deepEqual(usages.map(usage => [usage.phase, usage.requests]), [['completed', 1], ['uncertain', 1]]);
   await prepare(value, { ...context, remainingMs: () => 60000 }); assert.equal(calls.length, 2);
 });

@@ -146,7 +146,8 @@ Odds imports are built but **off**. The storage, mapping and rights rules are in
 | Key | Default | Effect |
 | --- | --- | --- |
 | `GOAL_HINT_ODDS_IMPORT_ENABLED` | `false` | The owner switch. Even when `true`, the runner imports odds only on an eligible plan. |
-| `GOAL_HINT_ODDS_BOOKMAKER_ID` | empty | The one documented bookmaker. Required when imports are enabled; no bookmaker is ever assumed. |
+| `GOAL_HINT_ODDS_BOOKMAKER_ID` | empty | The verified primary bookmaker. Required whenever imports are enabled. |
+| `GOAL_HINT_ODDS_BOOKMAKER_SCOPE` | `primary` | Use `all` to acquire all bookmakers in the same bounded date sweep. The primary bookmaker still supplies Matches and Best Slips. |
 | `GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF` | empty | The odds display-rights reference (OP-36). It never blocks the runner. Without an owner-recorded `football-odds-rights` approval for this exact reference, every price stays private. |
 
 **Eligibility.** Odds run only when all three hold: the switch is `true`, a bookmaker is configured, and the
@@ -160,8 +161,10 @@ rebuilds its workload and picks up eligibility without a code change.
 **Schedule.** At each 3-hour UTC slot (00:00, 03:00 … 21:00) the runner enqueues the UTC day's `odds.catalog`
 (`/odds/bets` and `/odds/bookmakers`, one durable row per day), then one `odds.import` per EAT date in the
 window: today first, up to `min(7, importDays)` dates. The catalog has the highest priority, so it is stored
-before that day's sweeps. Each sweep is one `/odds?date=…&bookmaker=…` walk of up to 150 pages at the
-`enrichment` quota priority, uncached. A job expires when its slot ends, and the next slot sweeps again.
+before that day's sweeps. Each sweep walks up to 150 pages from `/odds` at the
+`enrichment` quota priority without using cached responses. The primary scope adds `bookmaker=…`
+to the date query. The all-bookmaker scope sends only the date and reporting timezone.
+A job expires when its slot ends, and the next slot sweeps again.
 Enqueueing is idempotent, so restarts and plan rebuilds re-enqueue the same rows.
 
 **Quota gate.** Odds have their own budget: the spare. Before any provider call the job reads the open

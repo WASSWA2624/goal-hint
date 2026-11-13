@@ -133,7 +133,7 @@ export function oddsPolicy(policy: RuntimePolicy, refs: LiveReferences, workload
   const bookmakerId = policy.choices.odds.bookmakerId;
   if (bookmakerId === null) return null;
   return Object.freeze({ version: 1, evidenceRef: refs.odds, retentionEvidenceRef: refs.retention, basis: "bookmaker", bookmakerId,
-    ...(localFootball ? { bookmakerScope: "all" as const } : {}),
+    ...(localFootball || policy.choices.odds.bookmakerScope === "all" ? { bookmakerScope: "all" as const } : {}),
     method: DE_MARGIN_METHOD, mappingVersion: ODDS_MAPPING_VERSION, contractVersion: ODDS_CONTRACT_VERSION, freshnessMs: ODDS_FRESHNESS_MS,
     retainAfterKickoffMs: ODDS_RETAIN_AFTER_KICKOFF_MS, horizonDays: workload.odds.dates, sweepMs: workload.odds.sweepMs });
 }
