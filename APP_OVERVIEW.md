@@ -98,3 +98,5 @@ A typical journey is **browse → inspect a match → register and verify → ob
 - **Scope limits:** additional languages, advertising, exact-score public forecasts, and match/result alerts are not delivered. Predictions are estimates, never guarantees.
 
 For setup and implementation evidence, see the [web guide](next-js/README.md), [slip lifecycle and odds bands](next-js/docs/best-slip-odds-bands.md), [slip sharing](next-js/docs/slip-sharing.md), [web tracker](next-js/dev-tracker.md), and [Flutter tracker](flutter/dev-tracker.md). Older specifications may describe superseded behavior.
+
+Production and staging administrator access uses the private phone allowlist and shared password. Older shared password hash entries no longer authorize sign-in.
