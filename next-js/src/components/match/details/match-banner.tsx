@@ -5,7 +5,7 @@ import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { OutcomeBadge } from "@/components/match/prediction-presentation";
 import { CompetitionLogo } from "@/components/match/competition-media";
-import { LiveMatchTime, useStartUnconfirmed } from "@/components/match/score-presentation";
+import { LiveMatchTime, MatchFreshnessIcon, useStartUnconfirmed } from "@/components/match/score-presentation";
 import { formLetters } from "@/domain/match-details";
 import type { MarketFamily } from "@/domain/markets";
 import { toUtcIsoString } from "@/domain/calendar";
@@ -131,7 +131,7 @@ const TeamText = styled.div<{ $side: "home" | "away"; $touchline: boolean }>`
 `;
 const Versus = styled.div`
   grid-area: vs;
-  display: grid;
+  position: relative; display: grid;
   justify-items: center;
   gap: var(--gh-spacing-0_5);
   padding-block-start: var(--gh-spacing-0_5);
@@ -148,7 +148,7 @@ const Versus = styled.div`
     font-variant-numeric: tabular-nums;
   }
   > b[data-score] { block-size: auto; color: ${({ theme }) => theme.color.text}; background: none; font-size: var(--gh-font-displayLarge); font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: var(--gh-leading-dense); white-space: nowrap; }
-  > span { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("secondary")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; text-align: center; }
+  > span:where(:not([data-match-freshness])) { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("secondary")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; text-align: center; }
   > span[data-live] { display: inline-flex; align-items: center; gap: var(--gh-spacing-1_25); color: ${({ theme }) => theme.color.live.text}; }
   > span[data-live]::before { content: ""; inline-size: var(--gh-size-1_75); block-size: var(--gh-size-1_75); background: ${({ theme }) => theme.color.live.solid}; border-radius: ${({ theme }) => theme.radius.circle}; }
   ${desktop} {
@@ -175,9 +175,10 @@ export const MatchBanner = memo(function MatchBanner({ touchline = false }: { to
   };
   const startUnconfirmed = useStartUnconfirmed(fixture.status, fixture.kickoffAt);
   const liveClock = fixture.liveClock ?? null;
-  const showClock = fixture.status === "live" && (fixture.resultVerifiedAt != null || liveClock && (liveClock.minute !== null || liveClock.phase !== "in-play"));
-  const status = showClock ? <LiveMatchTime clock={liveClock} messages={messages} resultVerifiedAt={fixture.resultVerifiedAt} />
-    : messages.text(startUnconfirmed ? "match.status.startUnconfirmed" : `match.status.${fixture.status}`);
+  const clockHasProgress = liveClock !== null && (liveClock.minute !== null || liveClock.phase !== "in-play");
+  const showClock = fixture.status === "live" && (fixture.resultVerifiedAt != null || clockHasProgress);
+  const status = showClock ? <LiveMatchTime clock={liveClock} messages={messages} resultVerifiedAt={fixture.resultVerifiedAt} badge={!clockHasProgress} />
+    : messages.text(`match.status.${fixture.status}`);
   const competition = [fixture.competition.name || messages.text("match.competitionUnknown"), context?.competition.round].filter(Boolean).join("\u00a0· ");
   return <Box $touchline={touchline} id="current-match-summary" aria-labelledby="match-banner-title">
     <Context title={competition}>
@@ -194,7 +195,8 @@ export const MatchBanner = memo(function MatchBanner({ touchline = false }: { to
       <TeamText $side="home" $touchline={touchline}>{touchline && <small>{messages.text("touchline.home")}</small>}<strong title={home}>{home}</strong>{!touchline && form("home")}</TeamText></Team>
     <Versus>
       {played ? <b data-score>{messages.number(fixture.score!.home)} – {messages.number(fixture.score!.away)}</b> : <b>{fixture.status.startsWith("finished") || fixture.status === "awarded" ? "–" : messages.text("details.versus")}</b>}
-      {(played || fixture.status !== "scheduled" || startUnconfirmed) && <span data-live={fixture.status === "live" || undefined}>{status}</span>}
+      {(played || fixture.status !== "scheduled") && <span data-live={fixture.status === "live" || undefined}>{status}</span>}
+      {startUnconfirmed && <MatchFreshnessIcon reason="start-unconfirmed" label={messages.text("match.status.startUnconfirmed")} />}
     </Versus>
     <Team $side="away"><Crest name={fixture.awayTeam.name} url={fixture.awayTeam.logoUrl} size={48} eager />
       <TeamText $side="away" $touchline={touchline}>{touchline && <small>{messages.text("touchline.away")}</small>}<strong title={away}>{away}</strong>{!touchline && form("away")}</TeamText></Team>

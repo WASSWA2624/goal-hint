@@ -8,7 +8,7 @@ import { liveClockLabel } from "@/domain/match-clock";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import type { Messages } from "@/i18n/messages";
 import { media, type OutcomeTone } from "@/styles/theme";
-import { LiveMatchTime, useStartUnconfirmed } from "./score-presentation";
+import { LiveMatchTime, MatchFreshnessIcon, useStartUnconfirmed } from "./score-presentation";
 
 const Label = styled(StatusBadge)`
   --status-ink: ${({ theme }) => theme.color.outcome.unavailable.text};
@@ -18,11 +18,9 @@ const Label = styled(StatusBadge)`
     background-color: color-mix(in srgb, var(--status-fill) calc(var(--gh-opacity-55) * 100%), transparent);
     box-shadow: inset 0 0 0 var(--gh-stroke-thin) color-mix(in srgb, var(--status-ink) calc(var(--gh-opacity-25) * 100%), transparent);
   }
-  gap: var(--gh-spacing-1_5); font-size: var(--gh-font-body);
+  position: relative; gap: var(--gh-spacing-1_5); font-size: var(--gh-font-body);
   &[data-match-status="upcoming"] { --status-ink: ${({ theme }) => theme.color.accent.blue.text}; --status-fill: ${({ theme }) => theme.color.accent.blue.soft}; }
-  &[data-match-status="start-unconfirmed"] { --status-ink: ${({ theme }) => theme.color.accent.orange.text}; --status-fill: ${({ theme }) => theme.color.accent.orange.soft}; white-space: normal; }
-  &:has([data-clock-freshness]) { --status-ink: ${({ theme }) => theme.color.accent.orange.text}; --status-fill: ${({ theme }) => theme.color.accent.orange.soft}; }
-  &:has([data-clock-freshness]) [data-match-live-dot] { visibility: hidden; }
+  &:has([data-match-freshness]) [data-match-live-dot]::before { animation: none; opacity: 0; }
   &[data-match-status="live"] { --status-ink: ${({ theme }) => theme.color.live.text}; --status-fill: ${({ theme }) => theme.color.live.soft}; }
   &[data-live-badge-clock] {
     display: inline-grid; grid-template-columns: minmax(var(--gh-size-1_25), 1fr) minmax(0, max-content) minmax(var(--gh-size-1_25), 1fr);
@@ -46,15 +44,15 @@ export function MatchStatus({ status, outcome, messages, snapshot = false, offli
   desktopClock?: boolean;
 }) {
   const startUnconfirmed = useStartUnconfirmed(status, offline || snapshot ? undefined : kickoffAt);
-  const result = offline ? "saved" : snapshot ? outcome : startUnconfirmed ? "start-unconfirmed" : cardResultStatus(status, outcome);
+  const result = offline ? "saved" : snapshot ? outcome : cardResultStatus(status, outcome);
   const isOutcome = result === "correct" || result === "incorrect" || result === "pending" || result === "void" || result === "unavailable";
   const label = result === "saved" ? "Saved" : result === "upcoming" ? messages.text("match.result.upcoming")
-    : result === "start-unconfirmed" ? messages.text("match.status.startUnconfirmed")
     : result === "correct" ? messages.text("slips.result.won") : result === "incorrect" ? messages.text("slips.result.lost")
     : result === "unavailable" ? "—" : result === "unknown" ? messages.text("slips.match.unknown")
       : messages.text(isOutcome ? `outcome.${result}` : `match.status.${result}`);
-  const clock = result === "live" && (resultVerifiedAt != null || liveClock && (liveClock.minute !== null || liveClock.phase !== "in-play"))
+  const clock = result === "live" && liveClock && (liveClock.minute !== null || liveClock.phase !== "in-play")
     ? liveClockLabel(liveClock, messages) : null;
+  const showClock = result === "live" && (clock !== null || resultVerifiedAt != null);
   const extraTime = clock !== null && clock.minute !== null && liveClock?.phase === "extra-time";
   const finalPhase = !offline && !snapshot && (status === "finished-regulation" || status === "finished-extra-time" || status === "finished-penalties")
     ? messages.text(`match.final.${status}`) : null;
@@ -62,8 +60,10 @@ export function MatchStatus({ status, outcome, messages, snapshot = false, offli
     data-live-badge-clock={desktopClock && result === "live" ? "" : undefined}
     title={clock?.spoken}>
     {result === "live" && <LiveDot data-match-live-dot aria-hidden="true" />}
-    <span data-pick-value="">{clock ? desktopClock ? <LiveMatchTime clock={liveClock ?? null} messages={messages} resultVerifiedAt={resultVerifiedAt} badge />
+    <span data-pick-value="">{showClock ? desktopClock || clock === null
+      ? <LiveMatchTime clock={liveClock ?? null} messages={messages} resultVerifiedAt={resultVerifiedAt} badge />
       : <><span data-mobile-only data-status-clock>{label} {extraTime && <>{messages.text("match.clock.extra-timeShort")} </>}<LiveMatchTime clock={liveClock ?? null} messages={messages} resultVerifiedAt={resultVerifiedAt} /></span><span data-desktop-only>{label}</span></> : label}</span>
+    {startUnconfirmed && <MatchFreshnessIcon reason="start-unconfirmed" label={messages.text("match.status.startUnconfirmed")} />}
     {!desktopClock && liveClock !== undefined && finalPhase && <span data-mobile-only data-status-phase>{finalPhase}</span>}
   </Label>;
 }

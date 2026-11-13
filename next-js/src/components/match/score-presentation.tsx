@@ -2,6 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 import styled from "styled-components";
+import { ClockIcon } from "@/components/ui/icons";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import { liveClockFreshness, liveClockFreshnessMs, liveClockLabel, startConfirmationDeadline } from "@/domain/match-clock";
 import type { Messages } from "@/i18n/messages";
@@ -57,11 +58,21 @@ export function useStartUnconfirmed(status: FixtureSnapshot["status"], kickoffAt
   return useReachedTime(status === "scheduled" ? startConfirmationDeadline(kickoffAt) : null);
 }
 
-const Elapsed = styled.span`
-  font-variant-numeric: tabular-nums; white-space: nowrap;
-  &[data-clock-freshness] { display: inline-flex; flex-direction: column; align-items: center; line-height: var(--gh-leading-control); }
-  > small { font-size: var(--gh-font-caption); font-weight: ${({ theme }) => theme.typography.weight.medium}; white-space: normal; }
+const Elapsed = styled.span`font-variant-numeric: tabular-nums; white-space: nowrap;`;
+
+const FreshnessMarker = styled.span`
+  position: absolute; inset-block-start: 0; inset-inline-end: 0;
+  display: grid; place-items: center; padding: 0;
+  inline-size: var(--gh-size-2_5); block-size: var(--gh-size-2_5);
+  color: ${({ theme }) => theme.color.accent.orange.text};
+  > svg { inline-size: 100%; block-size: 100%; }
 `;
+
+export function MatchFreshnessIcon({ reason, label }: {
+  reason: "start-unconfirmed" | NonNullable<ReturnType<typeof liveClockFreshness>>; label: string;
+}) {
+  return <FreshnessMarker data-match-freshness={reason} role="img" aria-label={label} title={label}><ClockIcon /></FreshnessMarker>;
+}
 
 /** Only the small clock text subscribes to the shared browser ticker. */
 export function LiveMatchTime({ clock, messages, badge = false, resultVerifiedAt }: {
@@ -81,17 +92,11 @@ export function LiveMatchTime({ clock, messages, badge = false, resultVerifiedAt
   const value = useSyncExternalStore(estimatesSeconds ? subscribeClock : subscribeIdle,
     () => estimatesSeconds ? liveClockLabel(clock, messages, Date.now())[field] : initial[field],
     () => initial[field]);
-  const time = freshness !== null && verifiedAt !== null ? messages.reportingTime(verifiedAt) : null;
-  const verification = time === null ? null : messages.text("match.clock.verifiedTime", { time });
-  const verificationLabel = time === null ? null : messages.text("match.clock.verifiedAt", { time });
-  const note = freshness === "status-stale" ? messages.text("match.clock.statusStale")
-    : freshness === "last-verified" ? verification ?? messages.text("match.clock.lastVerified") : null;
-  const detail = verificationLabel ?? (estimatesSeconds ? messages.text("match.clock.estimated") : null);
-  return <Elapsed data-live-elapsed={initial.minute !== null || undefined}
-    data-clock-freshness={freshness ?? undefined}
-    aria-label={note ? undefined : initial.spoken} title={detail || undefined}>
-    {note ? <><span aria-label={initial.spoken}>{value}</span>
-      <small aria-label={freshness === "last-verified" ? verificationLabel ?? undefined : undefined}>{note}</small>
-      {freshness === "status-stale" && verification && <small aria-label={verificationLabel ?? undefined}>{verification}</small>}</> : value}
-  </Elapsed>;
+  const note = freshness === null ? null : messages.text(freshness === "status-stale" ? "match.clock.statusStale" : "match.clock.lastVerified");
+  const verification = note !== null && verifiedAt !== null
+    ? messages.text("match.clock.verifiedAt", { time: messages.reportingTime(verifiedAt) }) : null;
+  return <><Elapsed data-live-elapsed={hasMinute || undefined} aria-label={initial.spoken}
+    title={estimatesSeconds ? messages.text("match.clock.estimated") : undefined}>{value}</Elapsed>
+    {freshness && note && <MatchFreshnessIcon reason={freshness} label={[note, verification].filter(Boolean).join(" · ")} />}
+  </>;
 }
