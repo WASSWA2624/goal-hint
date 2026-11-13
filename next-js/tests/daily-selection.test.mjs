@@ -5,9 +5,12 @@ import { DailySelectionError } from '../src/server/selection/selection-contract.
 import { parseSelectionPolicy, selectionWindow } from '../src/server/selection/selection-input.ts';
 import { selectionDateState } from '../src/server/selection/selection-read.ts';
 import { createDailySelectionService } from '../src/server/selection/selection-service.ts';
+import { createHourlyFixtureReconciler } from '../src/server/selection/selection-fixture-reconciliation.ts';
 import { createDailySelectionTrigger, dailySelectionSchedule } from '../src/server/selection/selection-trigger.ts';
 import { createBearerJobIdentity } from '../src/server/jobs/job-trigger.ts';
-import { selectionPolicy, selectionAuthority, SELECTION_FOR } from './helpers/selection-fixtures.mjs';
+import { API_FOOTBALL_CONTRACT_VERSION } from '../src/server/football/api-football-contract.ts';
+import { CatalogStoreError } from '../src/server/football/catalog-mysql-store.ts';
+import { degradedAction, selectionPolicy, selectionAuthority, SELECTION_FOR } from './helpers/selection-fixtures.mjs';
 
 const denied = (reason) => (error) => error instanceof DailySelectionError && error.reason === reason;
 test('7 October run uses Kampala midnight and exactly 7–13 October with an exclusive next boundary', () => {
@@ -65,4 +68,40 @@ test('lost renewal ownership prevents manifest commit and dispatch after a provi
     commit: async () => { committed++; }, reconcile: async () => { dispatched++; } };
   const service = createDailySelectionService({ cutoff: { scheduleRun: async () => {} }, policy: selectionPolicy(), authority: selectionAuthority(), store, importer: { import: async () => {} } });
   await assert.rejects(service.run(SELECTION_FOR)); assert.equal(committed, 0); assert.equal(dispatched, 0);
+});
+
+test('failed optional fixture lookup leaves the date coverage retry and degraded commit intact', async () => {
+  const scheduledFor = SELECTION_FOR + 3_600_000, observedAt = scheduledFor + 60_000;
+  const date = getReportingDate(scheduledFor), receiptId = 'complete-date-receipt';
+  const policy = selectionPolicy({ importDays: 1 });
+  const lease = { runId: '00000000-0000-4000-8000-000000000001', ownerId: 'synthetic-owner', fence: 1 };
+  const confirmed = '00000000-0000-4000-8000-000000000002', omitted = '00000000-0000-4000-8000-000000000003';
+  const failures = [], calls = [], commits = [];
+  const query = async (operation) => operation({
+    dailyRun: { findFirst: async () => ({ leaseExpiresAt: new Date(observedAt + 600_000) }) },
+    dailyRunImport: { findMany: async () => [{ id: receiptId, eatDate: new Date(date) }] },
+    footballImport: { findMany: async () => [{ id: receiptId, status: 'complete', observedAt: new Date(observedAt),
+      requestsDispatched: 1, rejectedCount: 0, fixtureIds: [confirmed], provenance: [{ provider: 'api-football', endpoint: 'fixtures',
+        contractVersion: API_FOOTBALL_CONTRACT_VERSION, retrievedAt: observedAt, fromCache: false, currentPage: 1, totalPages: 1,
+        requestParameters: { date, timezone: 'Africa/Kampala' } }] }] },
+    footballFixture: { findMany: async () => [{ id: confirmed, externalId: 10n }, { id: omitted, externalId: 20n }] },
+  });
+  const reconciler = createHourlyFixtureReconciler({ database: { query }, policy: parseSelectionPolicy(policy),
+    clock: { now: () => observedAt }, onLookupFailure: (...failure) => failures.push(failure),
+    importer: { async import(request) {
+      calls.push(request.selection.query.fixtureIds);
+      throw new CatalogStoreError('coordination-failed');
+    } } });
+  const store = { acquire: async () => lease, inspect: async () => null, renew: async () => {}, release: async () => {},
+    beginImport: async () => null, async commit(_lease, _policy, action, identities) {
+      if (action === null) throw new DailySelectionError('incomplete-import');
+      commits.push({ action, identities });
+    }, reconcile: async () => ({ total: 0 }) };
+  const service = createDailySelectionService({ cutoff: { scheduleRun: async () => {} }, policy, authority: selectionAuthority(), store,
+    importer: { import() { assert.fail('existing date receipts should be reused'); } }, reconcileHourly: reconciler.reconcile });
+  await assert.rejects(service.runHourly(scheduledFor), denied('incomplete-import'));
+  assert.equal((await service.runHourly(scheduledFor, undefined, degradedAction)).status, 'committed');
+  assert.deepEqual(calls, [[20], [20]]);
+  assert.deepEqual(failures, [['coordination-failed', 1], ['coordination-failed', 1]]);
+  assert.deepEqual(commits, [{ action: degradedAction, identities: [] }]);
 });
