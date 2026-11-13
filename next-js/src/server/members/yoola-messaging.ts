@@ -11,6 +11,8 @@ export type SmsMessage = Readonly<{ phone: string; message: string }>;
 export type WhatsAppMessage = Readonly<{ phone: string; templateName: string; parameters: readonly string[]; consent: true }>;
 export type SmsMessaging = Readonly<{ sendSms(message: SmsMessage): Promise<void>; sendWhatsApp?(message: WhatsAppMessage): Promise<void>; configured?(): boolean }>;
 type MessagingErrorCode = "invalid-message" | "unsupported-country" | "configuration" | "delivery";
+type MessagingFailure = MessagingErrorCode | "credentials" | "settings-unavailable" | "channel-disabled" |
+  "transport" | "http" | "invalid-response" | "recipient-rejected";
 /**
  * `not-sent` failed local validation before dispatch. Provider/transport failures are `uncertain`: the gateway's HTTP or
  * response status does not establish a verified idempotency, billing or non-delivery contract.
@@ -28,11 +30,13 @@ const errorMessages: Readonly<Record<MessagingErrorCode, string>> = Object.freez
 export class YoolaMessagingError extends Error {
   readonly code: MessagingErrorCode;
   readonly dispatch: MessagingDispatch;
-  constructor(code: MessagingErrorCode, dispatch: MessagingDispatch = code === "delivery" ? "uncertain" : "not-sent") {
+  readonly failure: MessagingFailure;
+  constructor(code: MessagingErrorCode, failure: MessagingFailure = code) {
     super(errorMessages[code]);
     this.name = "YoolaMessagingError";
     this.code = code;
-    this.dispatch = dispatch;
+    this.dispatch = code === "delivery" ? "uncertain" : "not-sent";
+    this.failure = failure;
   }
 }
 
@@ -52,7 +56,7 @@ export function createYoolaMessaging({ env = process.env, fetch: request = globa
   async function deliver(phone: string, channel: MessageChannel, payload: Readonly<Record<string, unknown>>): Promise<void> {
     if (!supportedMessageChannels(phone).includes(channel)) throw new YoolaMessagingError("unsupported-country");
     const configured = credentials();
-    if (!configured) throw new YoolaMessagingError("configuration");
+    if (!configured) throw new YoolaMessagingError("configuration", "credentials");
     const { apiKey, sender } = configured, endpoint = channel === "sms" ? "send" : "send-whatsapp";
     // No automatic retries here: an uncertain result could already have delivered and charged for this message. Each failure
     // is classified once without provider text. No response failure authorizes an automatic resend.
@@ -63,15 +67,18 @@ export function createYoolaMessaging({ env = process.env, fetch: request = globa
         body: JSON.stringify({ api_key: apiKey, phone, ...payload, ...(channel === "sms" && sender ? { sender } : {}) }),
         signal: AbortSignal.timeout(10_000), redirect: "error", cache: "no-store",
       });
-    } catch { throw new YoolaMessagingError("delivery", "uncertain"); }
-    if (!response.ok) throw new YoolaMessagingError("delivery", "uncertain");
-    let status: string | null;
-    try {
-      const result: unknown = await response.json();
-      status = result && typeof result === "object" && "status" in result ? String(result.status) : null;
-    } catch { throw new YoolaMessagingError("delivery", "uncertain"); }
-    if (status === "success" || status === "queued") return;
-    throw new YoolaMessagingError("delivery", "uncertain");
+    } catch { throw new YoolaMessagingError("delivery", "transport"); }
+    if (!response.ok) throw new YoolaMessagingError("delivery", "http");
+    let result: unknown;
+    try { result = await response.json(); }
+    catch { throw new YoolaMessagingError("delivery", "invalid-response"); }
+    if (result && typeof result === "object" && "status" in result) {
+      // Yoola's send receipt can report a failed recipient in an HTTP-success response.
+      const acceptedRecipient = (!("failed" in result) || result.failed === 0)
+        && (!("successful" in result) || result.successful === 1);
+      if (acceptedRecipient && (result.status === "success" || result.status === "queued")) return;
+    }
+    throw new YoolaMessagingError("delivery", "recipient-rejected");
   }
 
   async function sendSms({ phone, message }: SmsMessage): Promise<void> {
@@ -95,10 +102,10 @@ export function createYoolaMessaging({ env = process.env, fetch: request = globa
         throw new YoolaMessagingError("invalid-message");
       }
       const settings = readSettings ? await readSettings() : null;
-      if (readSettings && !settings) throw new YoolaMessagingError("configuration");
+      if (readSettings && !settings) throw new YoolaMessagingError("configuration", "settings-unavailable");
       const event = purpose === "account" ? "account-verification" : "password-reset";
       const template = (settings?.messageTemplates ?? defaultMessageTemplates).events[event];
-      if (!template.enabled || !template.channels.includes(channel)) throw new YoolaMessagingError("configuration");
+      if (!template.enabled || !template.channels.includes(channel)) throw new YoolaMessagingError("configuration", "channel-disabled");
       const values = { ...sharedMessageValues(settings, phone), verification_code: code, expiry_hours: String(verificationCodeLifetimeMs / 3_600_000) };
       if (channel === "sms") {
         await sendSms({ phone, message: renderMessageTemplate(event, template.sms, values) });

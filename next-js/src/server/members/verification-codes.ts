@@ -5,7 +5,7 @@ import { verificationCodeLifetimeMs, verificationRequestLimit, verificationReque
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { MemberAccount, Prisma } from "../generated/prisma/client.ts";
-import type { MemberMessaging, VerificationMessage } from "./yoola-messaging.ts";
+import { YoolaMessagingError, type MemberMessaging, type VerificationMessage } from "./yoola-messaging.ts";
 import { takeMemberLimit } from "./rate-limit.ts";
 
 type Purpose = "account" | "reset";
@@ -37,7 +37,11 @@ export function createVerificationCodes({ database, config, delivery, now }: {
 
     async deliver(reservation: Reservation): Promise<boolean> {
       try { await delivery.send(reservation.message); }
-      catch {
+      catch (error) {
+        if (error instanceof YoolaMessagingError) {
+          console.warn(JSON.stringify({ event: "member-verification-delivery-failed",
+            purpose: reservation.message.purpose, channel: reservation.message.channel, reason: error.failure }));
+        }
         await database.query(tx => tx.memberVerification.updateMany({ where: { id: reservation.id, consumedAt: null }, data: { consumedAt: new Date(now()) } }));
         return false;
       }

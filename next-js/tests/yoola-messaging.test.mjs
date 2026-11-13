@@ -113,6 +113,18 @@ test("delivery rejects HTTP errors, malformed and error responses without leakin
   }
 });
 
+test("an HTTP-success receipt with a failed recipient cannot confirm OTP delivery", async () => {
+  for (const receipt of [
+    { status: "success", successful: 0, failed: 1 }, { status: "success", failed: 1 }, { status: "success", successful: 0 },
+    { status: "queued", failed: 1 }, { status: "queued", successful: 0 }, { status: "success", successful: "1", failed: "0" },
+  ]) {
+    const { messaging } = fixture({ fetch: async () => Response.json(receipt) });
+    await assert.rejects(() => messaging.send(message), { code: "delivery", dispatch: "uncertain" });
+  }
+  const { messaging } = fixture({ fetch: async () => Response.json({ status: "success", successful: 1, failed: 0 }) });
+  await messaging.send(message);
+});
+
 test("a queued provider acceptance succeeds without a second send", async () => {
   let calls = 0;
   const { messaging } = fixture({ fetch: async () => { calls++; return Response.json({ status: "queued" }, { status: 202 }); } });
