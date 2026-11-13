@@ -1,10 +1,11 @@
 import "server-only";
 
 import { utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
-import type { DatabaseRuntime } from "../database/client.ts";
+import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { API_FOOTBALL_CONTRACT_VERSION } from "../football/api-football-contract.ts";
-import { parseCatalogImportRequest } from "../football/catalog-input.ts";
+import { CatalogInputError, parseCatalogImportRequest } from "../football/catalog-input.ts";
+import { CatalogStoreError } from "../football/catalog-mysql-store.ts";
 import type { createFootballCatalogImporter } from "../football/catalog-service.ts";
 import type { SelectionLease, SelectionPolicy } from "./selection-contract.ts";
 
@@ -42,6 +43,7 @@ export function createHourlyFixtureReconciler(options: Readonly<{
   importer: Pick<ReturnType<typeof createFootballCatalogImporter>, "import">;
   policy: SelectionPolicy;
   clock?: Clock;
+  onLookupFailure?(reason: string, fixtureCount: number): void;
 }>) {
   const { database, importer, policy } = options;
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
@@ -126,14 +128,23 @@ export function createHourlyFixtureReconciler(options: Readonly<{
         const check = () => {
           if (signal.aborted || clock.now() >= deadlineAt) throw new Error("Hourly fixture reconciliation expired.");
         };
-        const receipt = await importer.import({ id, selection: { kind: "fixtures", query: { fixtureIds: ids } },
+        const request = { id, selection: { kind: "fixtures", query: { fixtureIds: ids } },
           retentionEvidenceRef: policy.retentionEvidenceRef,
           bounds: { ...bounds, deadlineAt: nextSlot, maxRequests: 1, maxPages: 1, maxRows: ids.length, cacheMaxAgeMs: 0 },
-        }, undefined, { signal, deadlineAt, check }).catch((error: unknown) => {
-          if (error instanceof HourlyScheduleQuotaUnavailable) return null;
-          throw error;
-        });
-        if (!receipt) break;
+        } as const;
+        let receipt: Awaited<ReturnType<typeof importer.import>>;
+        try {
+          receipt = await importer.import(request, undefined, { signal, deadlineAt, check });
+        } catch (error) {
+          if (signal.aborted || clock.now() >= deadlineAt || error instanceof HourlyScheduleQuotaUnavailable) break;
+          // These IDs supplement the sealed date receipts. A failed lookup proves no fixture identity.
+          const reason = error instanceof DatabaseOperationError ? error.code :
+            error instanceof CatalogStoreError && ["unavailable", "coordination-failed", "invalid-state"].includes(error.reason) ? error.reason :
+            error instanceof CatalogInputError && ["invalid-result", "unverified-observation"].includes(error.reason) ? error.reason : null;
+          if (reason === null) throw error;
+          options.onLookupFailure?.(reason, ids.length);
+          break;
+        }
         if (receipt.rejectedCount === 0 && receipt.requestsDispatched === 1 &&
           receipt.observedAt >= scheduledFor && receipt.observedAt < nextSlot) {
           for (const fixtureId of receipt.fixtureIds) confirmed.add(fixtureId);

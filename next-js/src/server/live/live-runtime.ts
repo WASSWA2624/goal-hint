@@ -130,6 +130,7 @@ export type LiveRuntimeOverrides = Readonly<{
   /** The historical archive command has already verified the owned target. */
   historyBackfill?: boolean;
   onPollerState?: (kind: "results" | "match-details", state: string) => void;
+  onHourlyLookupFailure?: (reason: string, fixtureCount: number) => void;
 }>;
 /** Composes the prediction cascade on shared durable stores. */
 export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: LiveRuntimeOverrides = {}) {
@@ -376,7 +377,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         scheduleCutoff: ({ fixtureId, cycleId }, tx) => cutoff.scheduleCycle({ fixtureId, cycleId }, undefined, tx) } } : {});
     const dailySelection = createDailySelectionService({ policy: selection, authority: authorities.selection, store: selectionStore, importer, cutoff,
       ...(hourlySelectionEnabled ? { hourlyImporter,
-        reconcileHourly: createHourlyFixtureReconciler({ database, importer: hourlyImporter, policy: selection }).reconcile } : {}) });
+        reconcileHourly: createHourlyFixtureReconciler({ database, importer: hourlyImporter, policy: selection,
+          ...(overrides.onHourlyLookupFailure ? { onLookupFailure: overrides.onHourlyLookupFailure } : {}) }).reconcile } : {}) });
     // Long-lived performance quotes also require the development-only capture policy.
     const publisher = createRevisionPublicationService({ database, queue, policy: publicationPolicy(refs), authority: authorities.publication,
       quotes: { verify: () => publicPolicy.features.providerOdds && authorities.odds.verifyPublicDisplay() === true,

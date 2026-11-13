@@ -173,7 +173,9 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
   while (!signal.aborted) {
     let runtime: LiveRuntime;
     const pollerStates = new Map<string, string>();
-    try { runtime = await createLiveRuntime(policy, { localFootball, ...(localFootball ? { onPollerState: (kind, state) => {
+    try { runtime = await createLiveRuntime(policy, { localFootball,
+      onHourlyLookupFailure: (reason, fixtureCount) => log({ event: "hourly-fixture-reconcile-failed", reason, fixtureCount }),
+      ...(localFootball ? { onPollerState: (kind, state) => {
       if (pollerStates.get(kind) === state) return;
       pollerStates.set(kind, state);
       log({ event: "poller-state", kind, state });
