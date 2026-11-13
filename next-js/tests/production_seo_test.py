@@ -92,6 +92,19 @@ class ProductionSeoTests(unittest.TestCase):
         self.assertEqual(result['fixtures'], 1)
         self.assertIn('/en/matches', self.seen)
 
+    def test_signed_out_redirect_keeps_private_routes_uncacheable_and_unindexed(self):
+        for path in ('/admin', '/en/subscribe'):
+            self.overrides[path] = response('', 307, Location='/en/account?view=login',
+                Cache_Control='no-store', X_Robots_Tag='noindex, nofollow')
+        self.assertGreater(self.verify()['passed'], 0)
+        for headers in ({'Location': 'https://other.example/en/account?view=login'},
+                {'Cache_Control': 'public'}, {'X_Robots_Tag': 'index, follow'}):
+            with self.subTest(headers=headers):
+                values = {'Location': '/en/account?view=login', 'Cache_Control': 'no-store', 'X_Robots_Tag': 'noindex, nofollow'}
+                self.overrides['/admin'] = response('', 307, **(values | headers))
+                with self.assertRaises(AssertionError):
+                    self.verify()
+
     def test_suspension_has_safe_actionable_diagnostic_and_stops(self):
         self.overrides['/en/best-slips'] = response('Private response body', 302,
             Location='/cgi-sys/suspendedpage.cgi?private=value')

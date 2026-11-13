@@ -56,13 +56,15 @@ class PageMarkup(HTMLParser):
 def verify(origin, *, today=None):
     checks = 0
 
-    def read(path, status=200):
+    def read(path, *statuses):
+        statuses = statuses or (200,)
         response = get(origin, path)
-        if response.status != status:
+        if response.status not in statuses:
             # Public status only: never print response bodies, query strings or arbitrary redirects.
             if urlsplit(response.headers.get('Location', '')).path == '/cgi-sys/suspendedpage.cgi':
                 raise CommandError('Hosting suspension intercepts the public site. Restore hosting before SEO verification.')
-            raise CommandError(f'Public SEO check expected HTTP {status}, received HTTP {response.status}.')
+            expected = ' or '.join(map(str, statuses))
+            raise CommandError(f'Public SEO check expected HTTP {expected}, received HTTP {response.status}.')
         return response
 
     def page(path, canonical, index, *, filters=None):
@@ -100,10 +102,13 @@ def verify(origin, *, today=None):
     page('/en/privacy', '/en/privacy', publication['privacyNotice']['releaseReady'])
     page('/en/terms', '/en/terms', publication['termsNotice']['releaseReady'])
     for path in ('/admin', '/en/account', '/en/subscribe'):
-        response = read(path)
+        response = read(path, 200, 307) if path != '/en/account' else read(path)
         private_response(response, path, require_private=False)
-        assert any('noindex' in value.lower() for value in PageMarkup(response.text).meta.get('robots', []) if value), path
         assert 'noindex' in response.headers.get('X-Robots-Tag', ''), path
+        if response.status == 307:
+            assert response.headers.get('Location') == '/en/account?view=login', path
+        else:
+            assert any('noindex' in value.lower() for value in PageMarkup(response.text).meta.get('robots', []) if value), path
         checks += 1
     robots = read('/robots.txt').text
     assert 'Sitemap: ' + ORIGIN + '/sitemap-index.xml' in robots
