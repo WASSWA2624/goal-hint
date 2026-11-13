@@ -107,11 +107,14 @@ class WindowsWebViewAdapter extends WebViewAdapter {
         return;
       }
       _environment = environment;
-      final userAgent = await installedAppUserAgent(
-        await WindowsInAppWebViewController.static().getDefaultUserAgent(),
-        'windows',
-        configuration.environment,
-      );
+      final browserAgent = await environment.getUserAgent();
+      final userAgent = browserAgent == null || browserAgent.isEmpty
+          ? null
+          : await installedAppUserAgent(
+              browserAgent,
+              'windows',
+              configuration.environment,
+            );
       if (_disposed) return;
       _view = WindowsInAppWebViewWidget(
         WindowsInAppWebViewWidgetCreationParams(
@@ -463,7 +466,7 @@ class WindowsWebViewAdapter extends WebViewAdapter {
 
 /// Extra keys are handled by the pinned Windows native integration.
 class _ShellWebViewSettings extends InAppWebViewSettings {
-  _ShellWebViewSettings(this.origin, String browserAgent)
+  _ShellWebViewSettings(this.origin, String? browserAgent)
     : super(
         userAgent: browserAgent,
         javaScriptEnabled: true,

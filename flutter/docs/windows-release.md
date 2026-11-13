@@ -61,7 +61,7 @@ file's length/SHA256. It contains no signing credentials or private build paths.
 PDB/debug/test/private files are rejected or excluded. Existing candidate output
 is preserved unless `-Force` explicitly replaces an unpublished package of the
 same public version. Keep all output ignored. The public archive version remains
-`1.0.0` until the first production release; Flutter's internal version is `1.0.0+7`.
+`1.0.0` until the first production release. Flutter's internal version is `1.0.0+8`.
 
 The ZIP checksum detects corruption when obtained from a trusted separate
 channel. The embedded manifest checks extracted file consistency; neither is

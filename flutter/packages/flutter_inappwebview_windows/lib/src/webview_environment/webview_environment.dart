@@ -106,6 +106,15 @@ class WindowsWebViewEnvironment extends PlatformWebViewEnvironment
         'compareBrowserVersions', args);
   }
 
+  /// Reads the native agent from this environment's initialized WebView2.
+  Future<String?> getUserAgent() async {
+    try {
+      return await channel?.invokeMethod<String>('getUserAgent');
+    } on Exception {
+      return null;
+    }
+  }
+
   @override
   Future<void> dispose() async {
     Map<String, dynamic> args = <String, dynamic>{};

@@ -58,6 +58,10 @@ editing a developer's Pub cache or generated build output.
   environment channel to the newly created environment's ID. Upstream used the
   static factory object's ID, causing `dispose` to reach a nonexistent channel
   and fail after the native test/app had otherwise finished successfully.
+- The environment channel reads the default user agent from its existing
+  WebView2 controller. The Windows plugin does not implement the Dart
+  controller's static user-agent method. The shell adds its installed-package
+  marker to the native user agent before the first navigation.
 - The same native file omits the plugin script and WebMessage listener and
   disables WebView2 WebMessage APIs when the JavaScript bridge is disabled. The
   shell also disables host objects. The normal website's JavaScript remains

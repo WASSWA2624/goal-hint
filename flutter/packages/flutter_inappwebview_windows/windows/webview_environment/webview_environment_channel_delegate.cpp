@@ -34,6 +34,20 @@ namespace flutter_inappwebview_plugin
       }
       result->Success();
     }
+    else if (string_equals(methodName, "getUserAgent")) {
+      auto webView = webViewEnvironment->getWebView();
+      wil::com_ptr<ICoreWebView2Settings> settings;
+      wil::com_ptr<ICoreWebView2Settings2> settings2;
+      wil::unique_cotaskmem_string userAgent;
+      if (webView && SUCCEEDED(webView->get_Settings(&settings)) && settings &&
+        SUCCEEDED(settings->QueryInterface(IID_PPV_ARGS(&settings2))) &&
+        SUCCEEDED(settings2->get_UserAgent(&userAgent)) && userAgent.get()) {
+        result->Success(flutter::EncodableValue(wide_to_utf8(userAgent.get())));
+      }
+      else {
+        result->Success();
+      }
+    }
     else {
       result->NotImplemented();
     }
