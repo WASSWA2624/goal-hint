@@ -235,7 +235,7 @@ export async function storedFeedCoverage(tx: Tx, range: ReportingDateRange): Pro
   const receipts = new Map<string, (typeof receiptRows)[number]>();
   for (const row of receiptRows) if (!receipts.has(row.scopeKey)) receipts.set(row.scopeKey, row);
   const attemptRows = await tx.dailyRunImport.findMany({ where: { eatDate: { in: days.map((date) => new Date(`${date}T00:00:00Z`)) } },
-    orderBy: [{ run: { sequence: "desc" } }, { attempt: "desc" }] });
+    orderBy: [{ run: { eatDate: "desc" } }, { run: { slotHour: "desc" } }, { attempt: "desc" }] });
   const attempts = new Map<string, (typeof attemptRows)[number]>();
   for (const row of attemptRows) {
     const date = row.eatDate.toISOString().slice(0, 10);
@@ -268,7 +268,7 @@ export async function storedFeedCoverage(tx: Tx, range: ReportingDateRange): Pro
 export async function storedFeedRunContext(tx: Tx, today: ReportingDate, range: ReportingDateRange): Promise<Readonly<{
   window: PredictionWindow; run: StoredMatchFeedResponse["run"];
 }>> {
-  const row = await tx.dailyRun.findUnique({ where: { eatDate: new Date(`${today}T00:00:00Z`) } });
+  const row = await tx.dailyRun.findUnique({ where: { eatDate_slotHour: { eatDate: new Date(`${today}T00:00:00Z`), slotHour: 0 } } });
   const window = row ? selectionRunWindow(row) : createPredictionWindow(today);
   const result = (run: StoredMatchFeedResponse["run"]) => ({ window, run });
   if (range.window.endExclusive <= window.startInclusive || range.window.startInclusive >= window.endExclusive) return result(null);

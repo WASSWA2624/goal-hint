@@ -39,7 +39,10 @@ const unsignedVersion = (value: unknown) => parseHistory(historyVersion, typeof 
 export function runFromRow(row: HistoryRow): StoredRun {
   const date = historyTime(row.eatDate);
   const eatDate = new Date(date).toISOString().slice(0, 10), sequence = historyInteger(row.sequence);
-  if (sequence !== BigInt(eatDate.replaceAll("-", ""))) return historyFail("invalid-state");
+  const slotHour = row.slotHour === undefined ? 0 : Number(row.slotHour);
+  const daily = BigInt(eatDate.replaceAll("-", ""));
+  if (!Number.isInteger(slotHour) || slotHour < 0 || slotHour > 23 ||
+      sequence !== (slotHour === 0 ? daily : daily * 100n + BigInt(slotHour))) return historyFail("invalid-state");
   return freezeEvidence({ id: parseHistory(historyId, row.id), sequence, eatDate,
     createdAt: historyTime(row.createdAt) });
 }

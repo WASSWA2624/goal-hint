@@ -662,6 +662,7 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
       const query = selection.query;
       const where: Prisma.FootballFixtureWhereInput = { provider: PROVIDER,
         ...(query.fixtureId === undefined ? {} : { externalId: BigInt(query.fixtureId) }),
+        ...(query.fixtureIds === undefined ? {} : { externalId: { in: query.fixtureIds.map(BigInt) } }),
         ...(query.round === undefined ? {} : { round: query.round }),
         ...(query.date === undefined ? {} : { eatDate: new Date(`${parseReportingDate(query.date)}T00:00:00.000Z`) }),
         ...(query.from === undefined ? {} : { eatDate: { gte: new Date(`${parseReportingDate(query.from)}T00:00:00.000Z`), lte: new Date(`${parseReportingDate(query.to)}T00:00:00.000Z`) } }),

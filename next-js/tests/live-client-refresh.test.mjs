@@ -44,6 +44,10 @@ test('cycle ordinal, run order and immutable lock references fence even higher-v
   assert.equal(fixtureAdvance(locked, { ...locked, dataVersion: '11', forecast: { ...locked.forecast, revisionId: randomUUID() } }), -1);
   const sequenced = { ...before, forecast: { ...before.forecast, runSequence: '20261010' } };
   assert.equal(fixtureAdvance(sequenced, { ...sequenced, dataVersion: '11', forecast: { ...sequenced.forecast, runSequence: '20261009' } }), -1);
+  const hourly = { ...sequenced, forecast: { ...sequenced.forecast, runSequence: '2026101013' } };
+  const followingDay = { ...hourly, dataVersion: '11', forecast: { ...hourly.forecast, runSequence: '20261011' } };
+  assert.equal(fixtureAdvance(hourly, followingDay), 1);
+  assert.equal(fixtureAdvance(followingDay, { ...hourly, dataVersion: '12' }), -1);
   const newRun = liveDetail(); newRun.snapshot.runSequence = '20261010';
   const oldRun = structuredClone(newRun); oldRun.fixture.dataVersion = '10'; oldRun.snapshot.runSequence = '20261009';
   assert.throws(() => mergeLiveDetail(newRun, oldRun), e => e.code === 'stale-data');

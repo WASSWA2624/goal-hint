@@ -32,13 +32,16 @@ const country = searchableText(256);
 const fixtureQuery = z.object({
   date: date.optional(), competitionId: identity.optional(), season: season.optional(), teamId: identity.optional(),
   from: date.optional(), to: date.optional(), round: z.string().min(1).max(200).optional(), fixtureId: identity.optional(),
+  fixtureIds: z.array(identity).min(1).max(20).refine((ids) => new Set(ids).size === ids.length)
+    .transform((ids) => ids.sort((left, right) => left - right)).optional(),
 }).strict().refine((query) => {
   if (!Object.values(query).some((value) => value !== undefined) || query.competitionId !== undefined && query.season === undefined) return false;
   if (query.season !== undefined && query.competitionId === undefined && query.teamId === undefined) return false;
   if ((query.from === undefined) !== (query.to === undefined) || query.date !== undefined && query.from !== undefined) return false;
   if (query.from !== undefined && query.to !== undefined && query.from > query.to) return false;
   if (query.round !== undefined && query.competitionId === undefined) return false;
-  return query.fixtureId === undefined || Object.values(query).filter((value) => value !== undefined).length === 1;
+  return query.fixtureId === undefined && query.fixtureIds === undefined ||
+    Object.values(query).filter((value) => value !== undefined).length === 1;
 });
 const selectionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("fixtures"), query: fixtureQuery }).strict(),
@@ -172,6 +175,8 @@ function parameters(selection: CatalogSelection): Record<string, string> {
       const value = selection.query[field];
       if (value !== undefined) params[name] = String(value);
     }
+    const ids = selection.query.fixtureIds;
+    if (ids !== undefined) params[ids.length === 1 ? "id" : "ids"] = ids.join("-");
   } else if (selection.kind === "teams") {
     if ("teamId" in selection.query) params.id = String(selection.query.teamId);
     else { params.league = String(selection.query.competitionId); params.season = String(selection.query.season); }
@@ -188,7 +193,8 @@ function inScope(row: CatalogProviderRow, selection: CatalogSelection): boolean 
   if (selection.kind === "fixtures") {
     if (!("homeTeam" in row)) return false;
     const query = selection.query;
-    if (query.fixtureId !== undefined && row.id !== query.fixtureId || query.competitionId !== undefined && row.competition.id !== query.competitionId ||
+    if (query.fixtureId !== undefined && row.id !== query.fixtureId || query.fixtureIds !== undefined && !query.fixtureIds.includes(row.id) ||
+      query.competitionId !== undefined && row.competition.id !== query.competitionId ||
       query.season !== undefined && row.competition.season !== query.season || query.teamId !== undefined && ![row.homeTeam.id, row.awayTeam.id].includes(query.teamId) ||
       query.round !== undefined && row.competition.round !== query.round) return false;
     if (row.kickoff !== null) {
@@ -263,6 +269,7 @@ export function validateCatalogBatch(input: CatalogImportRequest, result: ApiFoo
     parsed.data.provenance.length > request.bounds.maxRequests + request.bounds.maxPages) throw new CatalogInputError("invalid-result");
   if (!verified(() => authority.verifyObservation(request, result))) throw new CatalogInputError("unverified-observation");
   const observation = parsed.data, expected = parameters(request.selection), reasons = new Set<string>(observation.completeness.reasons);
+  const targeted = request.selection.kind === "fixtures" && request.selection.query.fixtureIds !== undefined;
   const missing = new Set(observation.completeness.missingCoverage), validPages: z.infer<typeof provenanceSchema>[] = [];
   for (const page of observation.provenance) {
     const value = provenanceSchema.safeParse(page);
@@ -289,12 +296,24 @@ export function validateCatalogBatch(input: CatalogImportRequest, result: ApiFoo
     accepted.push(approvedRow(value.data, authority, missing, scoreEvidenceRefs));
   }
   const missingIds = [...new Set(observation.completeness.missingIds)].sort((left, right) => left - right);
-  if (request.selection.kind === "fixtures" && request.selection.query.fixtureId !== undefined && !ids.has(request.selection.query.fixtureId)) {
-    missingIds.push(request.selection.query.fixtureId);
+  if (request.selection.kind === "fixtures") {
+    const { fixtureId, fixtureIds } = request.selection.query;
+    const expectedIds = fixtureId === undefined ? fixtureIds ?? [] : [fixtureId];
+    missingIds.push(...expectedIds.filter((id) => !ids.has(id)));
   }
   if (missingIds.length > 0) reasons.add("missing-identities");
   if (observation.completeness.invalidRows > 0 || rejected > 0) reasons.add("invalid-rows");
   if (!observation.completeness.complete || observation.status !== "complete" || observation.error !== null) reasons.add("retrieval-incomplete");
+  // An exact ID response can omit an identity while confirming the other rows.
+  // A malformed or unverified page cannot confirm schedule changes.
+  if (targeted &&
+    (observation.completeness.invalidRows > 0 || rejected > 0 || observation.requestsDispatched !== 1 ||
+      observation.provenance.length !== 1 || validPages.length !== 1 ||
+      validPages.some((page) => page.fromCache || page.currentPage !== 1 || page.totalPages !== 1 || page.quota.kind !== "success") ||
+      observation.error !== null && (observation.error.reason !== "coverage-error" || missingIds.length === 0))) {
+    accepted.length = 0;
+    reasons.add("unverified-id-coverage");
+  }
   let status: CatalogPreparedBatch["status"] = reasons.size === 0 ? "complete" : accepted.length === 0 ? "failed" : "partial";
   if (request.knownSubset !== undefined) {
     const subset = request.knownSubset;
@@ -311,7 +330,8 @@ export function validateCatalogBatch(input: CatalogImportRequest, result: ApiFoo
   const rows = { fixtures: request.selection.kind === "fixtures" ? accepted as NormalizedFixture[] : [],
     teams: request.selection.kind === "teams" ? accepted as NormalizedTeam[] : [],
     competitions: request.selection.kind === "competitions" ? accepted as NormalizedCompetition[] : [] };
-  const content = { request, selection: request.selection, rows, scoreEvidenceRefs, latestRetrievedAt, scopeKey: catalogScopeKey(request.selection),
+  const content = { request, selection: request.selection, rows, scoreEvidenceRefs: rows.fixtures.length ? scoreEvidenceRefs : {},
+    latestRetrievedAt, scopeKey: catalogScopeKey(request.selection),
     requestFingerprint: catalogRequestFingerprint(request), status, reasons: [...reasons].sort(), missingIds: [...new Set(missingIds)].sort((a, b) => a - b),
     missingCoverage: [...missing].sort(), invalidRows: observation.completeness.invalidRows + rejected, requestsDispatched: observation.requestsDispatched,
     provenance, error: canonical(observation.error) as ApiFootballFailure | null,

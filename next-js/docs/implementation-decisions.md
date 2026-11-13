@@ -4312,3 +4312,7 @@ Tasks **10/11** remain open for provider accuracy/freshness, player coverage/dis
 rights and approved performance evaluation/cohorts/reporting windows. Keep withheld
 metrics unpublished until the existing evaluation and publication gates are met.
 This decision update changes documentation only; application behavior is unchanged.
+
+## Hourly fixture recheck (13 November 2026)
+
+The proposed worker adds one durable fixture recheck per eligible hour. The EAT midnight selection covers that hour. The job reuses canonical date imports, exact provider-ID checks for omitted known fixtures, the shared quota gateway, the existing prediction pipeline and cutoff scheduling. Hourly work is limited to new fixtures, material schedule or qualified Local Engine evidence changes, and transitions to sufficient evidence. See the [selection runbook](daily-selection.md#hourly-fixture-recheck) for the migration, bounds and rollout status.

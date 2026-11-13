@@ -1,4 +1,5 @@
 import "server-only";
+import { predictionRunOrder } from "../../domain/prediction-run-order.ts";
 
 import { createPredictionWindow, getReportingDate, isInWindow, predictionWindowDays, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
@@ -71,14 +72,15 @@ export function createMysqlRefreshStore(database: DatabaseRuntime, queue: JobQue
     if (!cycle || fixture.activeCycleId !== cycle.id) return refreshFail("ineligible", "wrong-cycle");
     if (cycle.state !== "open") return refreshFail("ineligible", "closed-cycle");
     if (fixture.status !== "scheduled") return refreshFail("ineligible", "status-ineligible");
-    if (fixture.kickoff?.getTime() !== cycle.kickoffAt) return refreshFail("ineligible", "schedule-changed");
+    if (fixture.kickoff?.getTime() !== cycle.kickoffAt || entry.kickoffAt !== cycle.kickoffAt)
+      return refreshFail("ineligible", "schedule-changed");
     if ((await tx.fixtureLifecycleState.findUnique({ where: { fixtureId: fixture.id } }))?.issue) return refreshFail("ineligible", "lifecycle-conflict");
     const now = utcInstantFromEpochMilliseconds((await tx.$queryRaw<{ at: Date }[]>`SELECT UTC_TIMESTAMP(3) AS at`)[0]!.at.getTime());
     if (now >= cycle.cutoffAt) return refreshFail("ineligible", "cutoff-passed");
     if (!isInWindow(cycle.kickoffAt, window) ||
       !isInWindow(cycle.kickoffAt, createPredictionWindow(getReportingDate(now), predictionWindowDays(window)))) return refreshFail("ineligible", "outside-window");
-    const latest = await tx.predictionSet.findFirst({ where: { fixtureId: fixture.id }, orderBy: { runSequence: "desc" }, select: { runSequence: true } });
-    if (latest && latest.runSequence >= row.run.sequence) return refreshFail("ineligible", "older-run");
+    const latest = await tx.predictionSet.findFirst({ where: { fixtureId: fixture.id }, orderBy: { fixtureRevision: "desc" }, select: { runSequence: true } });
+    if (latest && predictionRunOrder(latest.runSequence) >= predictionRunOrder(row.run.sequence)) return refreshFail("ineligible", "older-run");
     const external = (team: typeof fixture.homeTeam) => Number(team.providers.find((item) => item.provider === "api-football")?.externalId);
     const context = parseEvidenceContext({ ...identity, fixtureVersion: fixture.dataVersion, provider: "api-football", externalFixtureId: Number(fixture.externalId),
       home: { teamId: fixture.homeTeamId, externalId: external(fixture.homeTeam) }, away: { teamId: fixture.awayTeamId, externalId: external(fixture.awayTeam) },

@@ -173,3 +173,11 @@ network requests. They do not qualify live coverage, rights or budgets.
 Rollback disables the binding/worker while preserving additive schema and all
 manifests, imports, cycles and jobs. Inspect actual schema/migration state before
 any forward repair; never regenerate an already committed cohort.
+
+## Hourly fixture recheck
+
+The worker keeps the midnight EAT selection and adds one expiring durable job for each other hour on a verified provider plan of at least 7,500 requests per day. Each job uses the active selection scope and date horizon. Completed date receipts are reused across retries. An omission from a complete date sweep can trigger a quota-bounded lookup by provider ID, grouped in batches of up to 20. Only confirmed provider rows can change the schedule through the lifecycle coordinator. A fixture can move outside the forecast horizon while staying in the catalog.
+
+Hourly cohorts dispatch work for new fixtures, material schedule changes and newly sufficient or changed qualified Local Engine evidence. The evidence check uses stored verified regulation results, plus verified first-half data used by the model. It shares one read per league and ignores retrieval-clock churn. AI and research still run only under existing authorization during a selected refresh. Their evidence does not independently trigger hourly work. Same-cycle requests with unchanged inputs or a matching pending job are deduplicated. Refresh and cutoff jobs are attached in the same transaction that seals an hourly cohort. Existing valid forecasts remain available while the regular cutoff and publication rules are applied.
+
+The live score, result and match-detail pollers retain their existing schedules. When preparing an approved deployment, apply the hourly migration on a verified database copy first. The worker needs SELECT and INSERT on SelectionFixtureInput and UPDATE on its cycleId, scheduleHash, evidenceHash, evidenceReady and runId columns. The immutable midnight sequence and existing prediction references survive migration. Coordinate the web and worker versions before enabling hourly writes so every reader uses the date and slot key. The production hourly rollout is pending approval.

@@ -214,7 +214,7 @@ export function createScheduleLifecycleService(options: Readonly<{
         let window = createPredictionWindow(getReportingDate(now)), outsideOriginal = false;
         if (fixture.activeCycle?.state === "open" && kickoff !== undefined) {
           const member = await tx.runFixture.findFirst({ where: { fixtureId, cycleId: fixture.activeCycle.id },
-            orderBy: { run: { sequence: "desc" } }, include: { run: true } });
+            orderBy: [{ run: { eatDate: "desc" } }, { run: { slotHour: "desc" } }], include: { run: true } });
           if (member) {
             const manifest = await storedSelectionManifest(tx, member.run), original = selectionRunWindow(member.run);
             if (!manifest?.entries.some((entry) => entry.fixtureId === fixtureId && entry.cycleId === fixture.activeCycle!.id))

@@ -57,10 +57,10 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
     ? await (options.readSettlement ?? ((fixtureId, cycleId) => storedSettlementProjection(tx, fixtureId, cycleId)))(id, cycle.id) : null;
   const result = options.source ? options.source.result
     : settlement?.result ?? (fixture.resultState?.resultId ? await storedFixtureResult(tx, id, fixture.resultState.resultId) : null);
-  const latest = !options.source && cycle ? await tx.predictionRefreshResult.findFirst({ where: { fixtureId: id, cycleId: cycle.id }, orderBy: [{ runSequence: "desc" }, { fixtureVersion: "desc" }], select: { id: true } }) : null;
+  const latest = !options.source && cycle ? await tx.predictionRefreshResult.findFirst({ where: { fixtureId: id, cycleId: cycle.id }, orderBy: [{ selection: { run: { eatDate: "desc" } } }, { selection: { run: { slotHour: "desc" } } }, { fixtureVersion: "desc" }], select: { id: true } }) : null;
   const refresh = options.source ? options.source.refresh : latest ? await storedRefreshResult(tx, latest.id) : null;
   const work = options.source ? { job: options.source.jobState ? { state: options.source.jobState } : null }
-    : cycle ? await tx.runFixture.findFirst({ where: { fixtureId: id, cycleId: cycle.id }, orderBy: { run: { sequence: "desc" } }, select: { job: { select: { state: true } } } }) : null;
+    : cycle ? await tx.runFixture.findFirst({ where: { fixtureId: id, cycleId: cycle.id }, orderBy: [{ run: { eatDate: "desc" } }, { run: { slotHour: "desc" } }], select: { job: { select: { state: true } } } }) : null;
   const outside = fixture.kickoff !== null && fixture.kickoff.getTime() >= window.endExclusive;
   const updating = cycle?.state === "open" && work?.job && ["pending", "running"].includes(work.job.state);
   const delayed = refresh?.outcome === "retained-previous" || work?.job && ["failed", "expired"].includes(work.job.state);
@@ -190,8 +190,8 @@ export async function storedFeedFixtures(tx: Prisma.TransactionClient, ids: read
   }
   const refreshRows = cycleIds.length ? await tx.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT r.*,
     r.integrity=SHA2(CAST(r.resultJson AS CHAR),256) AS validIntegrity FROM PredictionCycle c
-    JOIN PredictionRefreshResult r ON r.id=(SELECT p.id FROM PredictionRefreshResult p
-      WHERE p.fixtureId=c.fixtureId AND p.cycleId=c.id ORDER BY p.runSequence DESC,p.fixtureVersion DESC LIMIT 1)
+    JOIN PredictionRefreshResult r ON r.id=(SELECT p.id FROM PredictionRefreshResult p JOIN DailyRun d ON d.id=p.runId
+      WHERE p.fixtureId=c.fixtureId AND p.cycleId=c.id ORDER BY d.eatDate DESC,d.slotHour DESC,p.fixtureVersion DESC LIMIT 1)
     WHERE c.id IN (${Prisma.join(cycleIds)})`) : [];
   const refreshes = new Map(refreshRows.map((row) => {
     const refresh = refreshResultFromRow(row);
@@ -201,7 +201,7 @@ export async function storedFeedFixtures(tx: Prisma.TransactionClient, ids: read
   const workRows = cycleIds.length ? await tx.$queryRaw<{ cycleId: string; jobState: string | null }[]>(Prisma.sql`
     SELECT c.id AS cycleId,j.state AS jobState FROM PredictionCycle c
     LEFT JOIN RunFixture rf ON rf.fixtureId=c.fixtureId AND rf.cycleId=c.id AND rf.runId=(SELECT r.runId
-      FROM RunFixture r JOIN DailyRun d ON d.id=r.runId WHERE r.fixtureId=c.fixtureId AND r.cycleId=c.id ORDER BY d.sequence DESC LIMIT 1)
+      FROM RunFixture r JOIN DailyRun d ON d.id=r.runId WHERE r.fixtureId=c.fixtureId AND r.cycleId=c.id ORDER BY d.eatDate DESC,d.slotHour DESC LIMIT 1)
     LEFT JOIN DurableJob j ON j.id=rf.jobId WHERE c.id IN (${Prisma.join(cycleIds)})`) : [];
   const work = new Map(workRows.map((row) => [row.cycleId, row.jobState]));
   const priceRows = (options.prices ?? publicPolicy.features.providerOdds) ? await tx.$queryRaw<(FixturePriceRow & { fixtureId: string })[]>(Prisma.sql`

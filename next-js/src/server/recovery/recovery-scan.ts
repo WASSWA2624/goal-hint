@@ -23,7 +23,7 @@ export async function scanRecovery(database: DatabaseRuntime, policy: RecoveryPo
         const date = addReportingDays(today, -age); if (date <= after) continue;
         const scheduledFor = createPredictionWindow(date).startInclusive;
         if (now < scheduledFor + policy.runGraceMs) continue;
-        const run = await tx.dailyRun.findUnique({ where: { eatDate: new Date(`${date}T00:00:00Z`) } });
+        const run = await tx.dailyRun.findUnique({ where: { eatDate_slotHour: { eatDate: new Date(`${date}T00:00:00Z`), slotHour: 0 } } });
         const undispatched = run ? await tx.runFixture.count({ where: { runId: run.id, jobId: null } }) : 0;
         const stale = run?.leaseExpiresAt != null && run.leaseExpiresAt.getTime() <= now;
         const terminal = run ? await tx.runFixture.count({ where: { runId: run.id, job: { state: { in: ["succeeded", "failed", "expired"] } } } }) : 0;

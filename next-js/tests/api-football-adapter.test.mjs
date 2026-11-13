@@ -106,6 +106,21 @@ test("fixture transport requires a counted launch, keeps credentials private and
   assert.equal(JSON.stringify(result).includes(KEY), false);
 });
 
+test("one schedule catalog ID batch uses the approved, canonical fixtures selector", async () => {
+  const options = { batchEvidence: { maximumIds: 20, evidenceRef: "synthetic-provider-documentation" },
+    verifyBatchEvidence: () => true };
+  const state = setup({ options, respond: (url) => jsonResponse(url, [fixture(2, "PST")]) });
+  const response = await state.adapter.evidence.fixtures({ fixtureIds: [4, 2] }, bounds({ maxRequests: 1 }));
+  assert.equal(state.network.length, 1);
+  assert.deepEqual(Object.fromEntries(state.network[0].url.searchParams), { ids: "2-4", timezone: "Africa/Kampala" });
+  assert.deepEqual(response.data.map(({ id }) => id), [2]);
+  assert.deepEqual(response.completeness.missingIds, [4]);
+
+  const unverified = setup();
+  await unverified.adapter.evidence.fixtures({ fixtureIds: [4, 2] }, bounds());
+  assert.equal(unverified.network.length, 0);
+});
+
 test("a counted historical round list requires the league, season and date selectors", async () => {
   const scope = { competitionId: 39, season: 2025 };
   const row = { round: "Play-offs - 1", dates: ["2026-02-06", "2026-02-08"] };

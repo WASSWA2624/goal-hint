@@ -15,7 +15,7 @@ import { createLiveRuntime } from '../src/server/live/live-runtime.ts';
 import { createMatchFeedService } from '../src/server/matches/feed-service.ts';
 import { latestOddsSlot, ODDS_CATALOG_TYPE, ODDS_IMPORT_TYPE, ODDS_SWEEP_MS, oddsImportEnvelope, oddsScheduleEnvelopes,
   oddsSlotDates } from '../src/server/odds/odds-jobs.ts';
-import { dailySelectionEnvelope } from '../src/server/selection/selection-trigger.ts';
+import { dailySelectionEnvelope, hourlySelectionEnvelope, latestHourlySelectionOccurrence } from '../src/server/selection/selection-trigger.ts';
 import { latestTeamCodesSlot, TEAM_CODES_HANDLER_VERSION, TEAM_CODES_SLOT_MS, TEAM_CODES_TYPE, teamCodesEnvelope } from '../src/server/teams/team-code-jobs.ts';
 import { catalogCompetition, catalogFixture, catalogResponse, catalogTeam } from './helpers/catalog-fixtures.mjs';
 import { fallbackRawPrediction, fallbackResponse } from './helpers/fallback-adapter-fixtures.mjs';
@@ -37,6 +37,7 @@ const mutable = ['ApiQuotaAccount','ApiQuotaAttempt','ApiQuotaPeriod','CostBudge
   'FixtureLifecycleState','FixtureResultState','FootballCatalogLock','FootballCompetition','FootballCompetitionAlias','FootballCompetitionProvider',
   'FootballFixture','FootballIdentityReview','FootballSeason','FootballTeam','FootballTeamAlias','FootballTeamProvider','ResultPollerLease'];
 const columns = {
+  SelectionFixtureInput: 'cycleId, scheduleHash, evidenceHash, evidenceReady, runId',
   FootballHistoryImportStatus: 'status, coverage, updatedAt',
   PublicCacheInvalidation: 'acknowledgedAt', SelectionCycleEligibility: 'actor, consumedRunId, eligibleAfter, evidenceRef, kickoffAt, previousVersion, recordedAt, state',
   DurableJob: 'attemptCount, attemptDeadlineAt, availableAt, fence, finishedAt, leaseExpiresAt, ownerId, state, terminalReason, updatedAt, version',
@@ -58,7 +59,7 @@ const requirementFor = { GOAL_HINT_BUDGET_APPROVAL_REF: 'budget-approval', GOAL_
   GOAL_HINT_FOOTBALL_PUBLIC_RIGHTS_REF: 'football-public-rights', GOAL_HINT_QUALITY_QUALIFICATION_REF: 'quality-qualification',
   GOAL_HINT_RELEASE_APPROVAL_REF: 'release-approval' };
 
-test('the live runtime imports, publishes fallback forecasts and serves them through the public feed', { timeout: 300_000 }, async (t) => {
+test('the live runtime imports, publishes fallback forecasts and serves them through the public feed', { timeout: 420_000 }, async (t) => {
   let instance;
   try { instance = await startIsolatedMysql(); }
   catch (error) { if (!(error instanceof MysqlServerUnavailableError)) throw error; t.skip(`${error.message} Live runtime acceptance remains pending.`); return; }
@@ -72,8 +73,8 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
       GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, TRIGGER ON goal_hint_test.* TO 'live_migration'@'127.0.0.1';`);
     const base = { ...process.env };
     for (const key of Object.keys(base)) if (key.startsWith('GOAL_HINT_') || key.endsWith('DATABASE_URL') || key.endsWith('_API_KEY')) delete base[key];
-    await execute(process.execPath, ['--conditions=react-server', script, 'deploy'], { cwd: workspace, windowsHide: true, timeout: 120_000,
-      env: { ...base, NODE_ENV: 'development', GOAL_HINT_DATABASE_ENABLED: 'true', MIGRATION_DATABASE_URL: migrationUrl,
+    await execute(process.execPath, ['--conditions=react-server', script, 'deploy'], { cwd: workspace, windowsHide: true, timeout: 240_000,
+      env: { ...base, NODE_ENV: 'development', GOAL_HINT_DATABASE_ENABLED: 'true', DATABASE_URL: appUrl, MIGRATION_DATABASE_URL: migrationUrl,
         GOAL_HINT_DATABASE_TLS_MODE: 'disabled', DEBUG: '' } });
     // Mirror the local application role: database-wide reads, append-only history and column-scoped updates.
     await instance.executeAdmin([`GRANT SELECT ON goal_hint_test.* TO 'live_app'@'127.0.0.1';`,
@@ -183,6 +184,42 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
       assert.equal(network.length, before);
     });
 
+    const hourlySlot = latestHourlySelectionOccurrence(Date.now());
+    await t.test('a durable hourly recheck publishes a new fixture and retains unchanged forecasts', {
+      skip: hourlySlot === null || hourlySlot + 3_600_000 - Date.now() < 60_000,
+    }, async () => {
+      const old = await runtime.database.query((tx) => tx.predictionSet.findMany({ select: { id: true }, orderBy: { id: 'asc' } }));
+      const networkStart = network.length;
+      const added = catalogFixture(9005, { kickoff: iso(now + 2 * DAY), homeId: 501, awayId: 502 });
+      rows.push(added);
+      try {
+        const envelope = hourlySelectionEnvelope(hourlySlot, selectionTriggerBounds);
+        const scheduled = await runtime.queue.enqueue(envelope);
+        for (let index = 0; index < 12 && await worker.runOnce(); index++);
+        const completed = await runtime.database.query((tx) => tx.durableJob.findUniqueOrThrow({ where: { id: scheduled.id } }));
+        assert.equal(completed.state, 'succeeded');
+        const lookup = await runtime.database.query(async (tx) => {
+          const cohort = await tx.dailyRun.findFirstOrThrow({ where: { slotHour: { gt: 0 } }, include: { fixtures: true } });
+          const revisions = await tx.predictionSet.findMany({ select: { id: true, runId: true, fixture: { select: { externalId: true } } } });
+          return { cohort, revisions };
+        });
+        assert.equal(lookup.cohort.fixtures.length, 1);
+        assert.ok(old.every(({ id }) => lookup.revisions.some((entry) => entry.id === id)));
+        assert.equal(lookup.revisions.find((entry) => entry.runId === lookup.cohort.id)?.fixture.externalId, 9005n);
+        assert.equal(network.slice(networkStart).filter((call) => call === '/fixtures?date').length, 8);
+        assert.equal(network.slice(networkStart).filter((call) => call === '/predictions?fixture').length, 1);
+        const feed = createMatchFeedService({ database: runtime.database, competitionIds: [39] });
+        const response = await feed.query({ date: getReportingDate(Date.parse(added.fixture.date)) });
+        assert.ok(response.records.some((entry) => entry.forecast?.runId === lookup.cohort.id));
+        const repeatFrom = network.length;
+        assert.equal((await runtime.queue.enqueue(envelope)).id, scheduled.id);
+        assert.equal(await worker.runOnce(), false);
+        assert.equal(network.length, repeatFrom);
+      } finally {
+        rows.pop();
+      }
+    });
+
     // Odds (052): synthetic bookmaker 8 prices for two imported fixtures and one fixture the catalog never imported.
     const oddsTypes = [ODDS_IMPORT_TYPE, ODDS_CATALOG_TYPE], slot = latestOddsSlot(Date.now()), today = getReportingDate(slot);
     const slotDates = oddsSlotDates(slot, 7), oddsCalls = () => network.filter((entry) => entry.startsWith('/odds')).length;
@@ -245,7 +282,7 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
       oddsRuntime = await createLiveRuntime(parseRuntimePolicy({ ...policyEnv, GOAL_HINT_ODDS_IMPORT_ENABLED: 'true', GOAL_HINT_ODDS_BOOKMAKER_ID: '8' }),
         { fetcher, approvals });
       assert.equal(oddsRuntime.odds.enabled, true); assert.equal(oddsRuntime.odds.horizonDays, 7);
-      assert.equal(oddsRuntime.workload.odds.floor, 6641);
+      assert.equal(oddsRuntime.workload.odds.floor, 6745);
       const before = { fixtures: await runtime.database.query((tx) => tx.footballFixture.count()), enrichment: await enrichmentDispatched() };
       assert.equal(before.enrichment, await teamsReceipts(), 'only the team-code sweep has used enrichment priority so far');
       const calls = oddsCalls();
@@ -279,10 +316,12 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
     });
     await t.test('partly spent ordinary quota leaves the odds spare: the gate counts ordinary use once', { skip: oddsSkip }, async () => {
       assert.ok(oddsRuntime, 'the enabled runtime exists');
-      // The provider reports 800 used (a morning of one-minute date polls): remaining 6,700 is below floor 6,639 + one
-      // sweep ceiling of 154, which the previous gate refused. Odds have spent only their own few requests.
-      statusUsed = 800; await oddsRuntime.quota.refresh();
-      assert.ok(await oddsRuntime.quota.remaining() < 6639 + 154);
+      // Report provider use that still leaves the protected workload and the subsequent archive smoke budget.
+      // The older admission check would also demand room for the full odds sweep on top of the floor.
+      const { floor } = oddsRuntime.workload.odds;
+      statusUsed = oddsRuntime.workload.dailyLimit - floor - 20;
+      await oddsRuntime.quota.refresh();
+      assert.ok(await oddsRuntime.quota.remaining() < floor + 154);
       const before = network.length, envelope = oddsImportEnvelope(slot, addReportingDays(today, 7), 6);
       await oddsRuntime.queue.enqueue(envelope);
       await drain(oddsRuntime.odds.registry, 'odds-worker-mid-day');

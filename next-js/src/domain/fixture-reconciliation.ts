@@ -1,5 +1,6 @@
 import type { FixtureSnapshot } from "./fixture-snapshot.ts";
 import { compareFixtureVersions } from "./fixture-version.ts";
+import { predictionRunOrder } from "./prediction-run-order.ts";
 
 /** Versions order whole snapshots; cycle/reference checks also reject malformed regressions. */
 export function fixtureAdvance(previous: FixtureSnapshot, next: FixtureSnapshot): -1 | 0 | 1 {
@@ -13,7 +14,7 @@ export function fixtureAdvance(previous: FixtureSnapshot, next: FixtureSnapshot)
     if (oldCycle.state === "closed" && previous.forecast?.revisionId !== next.forecast?.revisionId) return -1;
     if (previous.forecast && (!next.forecast || next.forecast.publishedAt < previous.forecast.publishedAt)) return -1;
     const sequence = previous.forecast?.runSequence, incoming = next.forecast?.runSequence;
-    if (sequence && (!incoming || BigInt(incoming) < BigInt(sequence) || incoming === sequence &&
+    if (sequence && (!incoming || predictionRunOrder(BigInt(incoming)) < predictionRunOrder(BigInt(sequence)) || incoming === sequence &&
         next.forecast?.revisionId !== previous.forecast?.revisionId)) return -1;
   }
   return order;

@@ -57,7 +57,7 @@ export function catalogResponse(url, rows, options = {}) {
 }
 
 export function createSyntheticCatalogAdapter({ rows = [], authorize = () => {},
-  respond, verifyLogo = () => true, verifyRegulationScore = () => true } = {}) {
+  respond, verifyLogo = () => true, verifyRegulationScore = () => true, batchEvidence } = {}) {
   const clock = { value: CATALOG_NOW, now() { return this.value; } };
   const requests = [], completions = [], network = [];
   const limiter = {
@@ -73,7 +73,7 @@ export function createSyntheticCatalogAdapter({ rows = [], authorize = () => {},
   const adapter = createApiFootballAdapter({ accountId: catalogHash("synthetic-catalog-account"),
     credential: { read: () => "synthetic-catalog-private-key" },
     gateway: createQuotaGateway({ limiter, authorize }), authorize, clock,
-    verifyLogo, verifyRegulationScore, sleep: async (ms) => { clock.value += ms; }, random: () => 0.5,
+    verifyLogo, verifyRegulationScore, batchEvidence, verifyBatchEvidence: (evidence) => evidence === batchEvidence, sleep: async (ms) => { clock.value += ms; }, random: () => 0.5,
     fetcher: async (input, init) => {
       const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
       assert.equal(url.origin, "https://v3.football.api-sports.io");

@@ -1,3 +1,4 @@
+import { predictionRunOrder } from "./prediction-run-order.ts";
 import { getReportingDate, getReportingDayBounds, utcInstantFromEpochMilliseconds, type ReportingDate } from "./calendar.ts";
 import { getDateInTimeZone, getDayBoundsInTimeZone } from "./device-calendar.ts";
 import { FeedPaginationError } from "./feed-pagination-error.ts";
@@ -40,7 +41,7 @@ export function mergeLiveDetail(previous: MatchDetailResponse, next: MatchDetail
   const oldSnapshot = fullDetailSnapshot(previous), newSnapshot = fullDetailSnapshot(next);
   if (!!oldSnapshot !== !!newSnapshot) return liveMatch === next.liveMatch ? next : { ...next, liveMatch };
   if (oldSnapshot && newSnapshot && newSnapshot.cycleId === oldSnapshot.cycleId &&
-      (BigInt(newSnapshot.runSequence) < BigInt(oldSnapshot.runSequence) || newSnapshot.fixtureRevision < oldSnapshot.fixtureRevision)) {
+      (predictionRunOrder(BigInt(newSnapshot.runSequence)) < predictionRunOrder(BigInt(oldSnapshot.runSequence)) || newSnapshot.fixtureRevision < oldSnapshot.fixtureRevision)) {
     throw new FeedPaginationError("stale-data");
   }
   if (next.fixture.dataVersion === previous.fixture.dataVersion) {

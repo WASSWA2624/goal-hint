@@ -616,7 +616,8 @@ model ModelVersion {
 model DailyRun {
   id             String                      @id @default(uuid()) @db.Char(36)
   sequence       BigInt                      @unique @db.UnsignedBigInt
-  eatDate        DateTime                    @unique @db.Date
+  eatDate        DateTime                    @db.Date
+  slotHour       Int                         @default(0) @db.UnsignedTinyInt
   createdAt      DateTime                    @db.DateTime(3)
   sets           PredictionSet[]
   jobs           DurableJob[]
@@ -638,6 +639,17 @@ model DailyRun {
   manifest       DailyRunManifest?
 
   @@unique([id, sequence])
+  @@unique([eatDate, slotHour])
+}
+
+// The last material inputs assigned to a fixture cycle, independent of import receipt timestamps.
+model SelectionFixtureInput {
+  fixtureId     String @id @db.Char(36)
+  cycleId       String @db.Char(36)
+  scheduleHash  String @db.Char(64)
+  evidenceHash  String @db.Char(64)
+  evidenceReady Boolean
+  runId         String @db.Char(36)
 }
 
 // INSERT/SELECT only for the application role. Never update a committed cohort.

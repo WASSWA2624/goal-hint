@@ -15,6 +15,7 @@ import { createFallbackService } from "../fallback/fallback-service.ts";
 import { createApiFootballAdapter, type ApiFootballAdapterOptions } from "../football/api-football-adapter.ts";
 import { apiFootballFixtureRoundParameters, parseApiFootballFixtureRound, type FixtureRoundQuery } from "../football/api-football-contract.ts";
 import { createFootballCatalogStore, historyReplayKind } from "../football/catalog-mysql-store.ts";
+import { parseCatalogImportRequest } from "../football/catalog-input.ts";
 import { createFootballCatalogImporter } from "../football/catalog-service.ts";
 import { createFootballHistoryBackfill, historyBackfillLimits, normalizeHistoryCompetition } from "../football/history-backfill.ts";
 import { createFootballHistoryDetails } from "../football/history-details.ts";
@@ -45,9 +46,11 @@ import { createMysqlResultSyncStore } from "../results/result-sync-mysql-store.t
 import { createResultSyncService } from "../results/result-sync-service.ts";
 import { createMarketSettlementService } from "../settlement/settlement-service.ts";
 import { DailySelectionError } from "../selection/selection-contract.ts";
-import { scheduledSelection, selectionWindow } from "../selection/selection-input.ts";
+import { hourlySelectionWindow, scheduledHourlySelection, scheduledSelection, selectionWindow } from "../selection/selection-input.ts";
 import { createMysqlDailySelectionStore } from "../selection/selection-mysql-store.ts";
 import { createDailySelectionService } from "../selection/selection-service.ts";
+import { createHourlyFixtureReconciler, HourlyScheduleQuotaUnavailable } from "../selection/selection-fixture-reconciliation.ts";
+import { HOURLY_SELECTION_TYPE } from "../selection/selection-trigger.ts";
 import { loadOwnerApprovals, missingOwnerApprovals, ownerEvidenceVerifier, type OwnerApprovals } from "./live-approvals.ts";
 import { createAccountStatusReader, createQuotaRouter, type QuotaDay } from "./live-account.ts";
 import { createLiveAuthorities, LIVE_ACTOR } from "./live-authorities.ts";
@@ -358,8 +361,22 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         return { status: complete ? "complete" as const : "partial" as const, ...totals, stopped, subjectDiscovery, ...phases, verification };
       };
     })() : null;
-    const selectionStore = createMysqlDailySelectionStore(database, queue);
-    const dailySelection = createDailySelectionService({ policy: selection, authority: authorities.selection, store: selectionStore, importer, cutoff });
+    // Hourly calls use the shared quota limiter and preserve the ordinary reserve on paid plans.
+    const hourlySelectionEnabled = workload.dailyLimit >= 7_500 && workload.refreshCapacity > 0;
+    const hourlyImporter = {
+      async import(...[input, verifyScope, workflow]: Parameters<typeof importer.import>) {
+        const request = parseCatalogImportRequest(input);
+        if (await quota.remaining() < workload.refreshFloor + request.bounds.maxRequests)
+          throw new HourlyScheduleQuotaUnavailable();
+        return importer.import(request, verifyScope, workflow);
+      },
+    };
+    const selectionStore = createMysqlDailySelectionStore(database, queue, hourlySelectionEnabled
+      ? { hourly: { localEvidence: sourceOrder === "ai-first",
+        scheduleCutoff: ({ fixtureId, cycleId }, tx) => cutoff.scheduleCycle({ fixtureId, cycleId }, undefined, tx) } } : {});
+    const dailySelection = createDailySelectionService({ policy: selection, authority: authorities.selection, store: selectionStore, importer, cutoff,
+      ...(hourlySelectionEnabled ? { hourlyImporter,
+        reconcileHourly: createHourlyFixtureReconciler({ database, importer: hourlyImporter, policy: selection }).reconcile } : {}) });
     // Long-lived performance quotes also require the development-only capture policy.
     const publisher = createRevisionPublicationService({ database, queue, policy: publicationPolicy(refs), authority: authorities.publication,
       quotes: { verify: () => publicPolicy.features.providerOdds && authorities.odds.verifyPublicDisplay() === true,
@@ -440,7 +457,26 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
             ["incomplete-import", "lost-lease", "unavailable"].includes(error.reason) };
         }
       } });
-    const registry = createJobRegistry([selectionDefinition, refreshDefinition, createCutoffJob(cutoff)]);
+    const hourlySelectionDefinition = defineJob({ type: HOURLY_SELECTION_TYPE, handlerVersion: 1, payload: scheduledHourlySelection,
+      async handle(payload, context) {
+        if (!hourlySelectionEnabled) return { status: "succeeded" };
+        await context.checkpoint();
+        const { window } = hourlySelectionWindow(payload.scheduledFor, selection.windowDays);
+        // Commit verified slices when a provider retry has left some dates unavailable.
+        const degrade = workload.importDays < (selection.windowDays ?? 7) || context.lease.job.attemptCount >= 2;
+        try {
+          const result = await dailySelection.runHourly(payload.scheduledFor, context.signal, degrade ? {
+            actor: LIVE_ACTOR, policyRef: selection.degradationPolicyRef!,
+            evidenceRef: `${selection.degradationPolicyRef}:${window.runDate}`,
+          } : undefined);
+          await context.checkpoint();
+          return result.status === "busy" ? { status: "failed", reason: "handler-failed", retryable: true } : { status: "succeeded" };
+        } catch (error) {
+          return { status: "failed", reason: "handler-failed", retryable: error instanceof DailySelectionError &&
+            ["incomplete-import", "lost-lease", "unavailable"].includes(error.reason) };
+        }
+      } });
+    const registry = createJobRegistry([selectionDefinition, hourlySelectionDefinition, refreshDefinition, createCutoffJob(cutoff)]);
 
     // Odds (052): imported only when the owner enables them AND the verified plan leaves spare ordinary quota.
     // A separate registry runs on its own worker, so odds never occupy refresh or cutoff workers.
@@ -603,7 +639,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         store: createMysqlLiveMatchStore({ database, accountKey: day.status.accountKey }) }) });
       return detailPoller;
     }
-    return Object.freeze({ policy, database, queue, quota, workload, registry, settlement, cache, catalog: importer, historyBackfill, historyDetails, historyReference, resultPoller, liveMatchPoller, inPlayOdds, day,
+    return Object.freeze({ policy, database, queue, quota, workload, registry, hourlySelectionEnabled, settlement, cache, catalog: importer, historyBackfill, historyDetails, historyReference, resultPoller, liveMatchPoller, inPlayOdds, day,
       odds: Object.freeze({ enabled: oddsEnabled, registry: oddsRegistry, horizonDays: workload.odds.dates, bookmakerScope: odds?.bookmakerScope,
         requalifyLocal: requalifyLocalOdds,
         // Write-time staleness needs no provider call, so it runs even while imports are off.

@@ -33,7 +33,7 @@ export function createMonitoringInspector(options: Readonly<{ database: Database
         metrics.available = 1;
         Object.assign(metrics, assessBackupHealth(backupEvidence, at, policy.evidenceMaxAgeMs,
           options.backup ? (evidence) => options.backup!.verify(evidence) : undefined));
-        const runs = await tx.dailyRun.findMany({ where: { eatDate: { gte: new Date(`${firstDate}T00:00:00Z`), lte: new Date(`${today}T00:00:00Z`) } },
+        const runs = await tx.dailyRun.findMany({ where: { slotHour: 0, eatDate: { gte: new Date(`${firstDate}T00:00:00Z`), lte: new Date(`${today}T00:00:00Z`) } },
           select: { id: true, eatDate: true, createdAt: true, committedAt: true, partial: true, totalJobs: true, terminalJobs: true,
             jobs: { orderBy: { updatedAt: "desc" }, take: 1, select: { updatedAt: true } } }, take: 7 });
         for (let age = 0; age < policy.lookbackDays; age++) {

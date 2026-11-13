@@ -25,7 +25,7 @@ import { archivedCoachRowId, archivedPlayerProfileRowId, archivedPlayerStatistic
 import type { FootballHistoryPlayerProfileSelector, FootballHistoryPlayerStatisticsSelector } from "./history-player-statistics.ts";
 
 export type FixtureQuery = Readonly<{ date?: string; competitionId?: number; season?: number;
-  teamId?: number; from?: string; to?: string; round?: string; fixtureId?: number }>;
+  teamId?: number; from?: string; to?: string; round?: string; fixtureId?: number; fixtureIds?: readonly number[] }>;
 export type TeamQuery = Readonly<{ teamId: number }> | Readonly<{ competitionId: number; season: number }>;
 export type CompetitionQuery = Readonly<{ competitionId?: number; season?: number }>;
 export type PlayerStatisticsQuery = Readonly<{ competitionId: number; season: number; teamId?: number }>;
@@ -656,18 +656,29 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
       ? { league: String(query.competitionId), season: String(query.season) } : null;
   }
   const fixtureQueries = (query: FixtureQuery, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => {
+    if (query?.fixtureIds !== undefined) {
+      const ids = query.fixtureIds;
+      const valid = keysAllowed(query, ["fixtureIds"]) && Array.isArray(ids) && ids.length > 0 &&
+        ids.length <= fixtureBatchMaximum() && ids.every(positive) && new Set(ids).size === ids.length;
+      return run("fixtures", valid ? [{ [ids.length === 1 ? "id" : "ids"]: [...ids].sort((a, b) => a - b).join("-"),
+        timezone: "Africa/Kampala" }] : null,
+        bounds, normalizeFixture, valid ? ids : undefined, workflow);
+    }
     const params = queryParams(query);
     return run("fixtures", params ? [params] : null, bounds, normalizeFixture, query?.fixtureId === undefined ? undefined : [query.fixtureId], workflow);
   };
-  function fixtureIds<T>(ids: readonly number[], bounds: ApiFootballBounds, normalize: Normalize<T>, workflow?: ApiFootballFallbackWorkflow) {
-    if (!Array.isArray(ids) || ids.length === 0 || !ids.every(positive)) return run("fixtures", null, bounds, normalize);
-    const requested = [...new Set(ids)].sort((a, b) => a - b);
-    let maximum = 1;
+  function fixtureBatchMaximum() {
     const evidence = options.batchEvidence;
     try {
       if (evidence && positive(evidence.maximumIds) && evidence.maximumIds <= 20 && typeof evidence.evidenceRef === "string" && evidence.evidenceRef.trim()
-        && options.verifyBatchEvidence?.(evidence) === true) maximum = evidence.maximumIds;
+        && options.verifyBatchEvidence?.(evidence) === true) return evidence.maximumIds;
     } catch { /* Unverified support falls back to single-ID lookups. */ }
+    return 1;
+  }
+  function fixtureIds<T>(ids: readonly number[], bounds: ApiFootballBounds, normalize: Normalize<T>, workflow?: ApiFootballFallbackWorkflow) {
+    if (!Array.isArray(ids) || ids.length === 0 || !ids.every(positive)) return run("fixtures", null, bounds, normalize);
+    const requested = [...new Set(ids)].sort((a, b) => a - b);
+    const maximum = fixtureBatchMaximum();
     const queries: Params[] = [];
     for (let offset = 0; offset < requested.length; offset += maximum) {
       const chunk = requested.slice(offset, offset + maximum);

@@ -16,6 +16,7 @@ import { DailySelectionError } from '../src/server/selection/selection-contract.
 import { parseSelectionPolicy, selectionWindow } from '../src/server/selection/selection-input.ts';
 import { createMysqlDailySelectionStore } from '../src/server/selection/selection-mysql-store.ts';
 import { selectionDateState } from '../src/server/selection/selection-read.ts';
+import { createHourlyFixtureReconciler } from '../src/server/selection/selection-fixture-reconciliation.ts';
 import { createDailySelectionService } from '../src/server/selection/selection-service.ts';
 import { catalogFixture as rawCatalogFixture, catalogRequest, catalogResponse, createSyntheticCatalogAdapter } from './helpers/catalog-fixtures.mjs';
 import { jobTestEnvironment } from './helpers/job-fixtures.mjs';
@@ -40,7 +41,7 @@ const actor = { actor: 'synthetic-lifecycle', reason: 'Synthetic formal lifecycl
 const catalogFixture = (id, options = {}) => rawCatalogFixture(id, { competitionId: id < 1100 ? 39 : Math.floor(id / 100) + 30, ...options });
 const policyFor = (rows) => selectionPolicy({ competitionIds: [rows[0]?.league.id ?? 39] });
 
-test('daily selection manifests and recovery on isolated genuine MySQL', { timeout: 420_000 }, async (t) => {
+test('daily and hourly selection manifests and recovery on isolated genuine MySQL', { timeout: 420_000 }, async (t) => {
   let instance;
   try { instance = await startIsolatedMysql(); }
   catch (error) { if (!(error instanceof MysqlServerUnavailableError)) throw error; t.skip(`${error.message} Selection acceptance remains pending.`); return; }
@@ -72,6 +73,7 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
       GRANT SELECT, INSERT, UPDATE (finishedAt, failure) ON goal_hint_test.DailyRunImport TO 'selection_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE (jobId, jobState, terminalReason) ON goal_hint_test.RunFixture TO 'selection_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE (consumedRunId) ON goal_hint_test.SelectionCycleEligibility TO 'selection_app'@'127.0.0.1';
+      GRANT SELECT, INSERT, UPDATE ON goal_hint_test.SelectionFixtureInput TO 'selection_app'@'127.0.0.1';
       GRANT SELECT, INSERT ON goal_hint_test.DurableJob TO 'selection_app'@'127.0.0.1';
       GRANT SELECT, UPDATE ON goal_hint_test.DurableJobEnqueueLock TO 'selection_app'@'127.0.0.1';
       GRANT UPDATE (state, version, availableAt, updatedAt, attemptCount, fence, ownerId, leaseExpiresAt, attemptDeadlineAt, finishedAt, terminalReason)
@@ -90,7 +92,7 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
     }
     async function runId(scheduledFor) {
       const date = new Date(`${selectionWindow(scheduledFor).runDate}T00:00:00Z`);
-      return (await database.query((tx) => tx.dailyRun.findUniqueOrThrow({ where: { eatDate: date } }))).id;
+      return (await database.query((tx) => tx.dailyRun.findUniqueOrThrow({ where: { eatDate_slotHour: { eatDate: date, slotHour: 0 } } }))).id;
     }
     async function stage(offset, rows, policy = policyFor(rows)) {
       const state = setup({ rows, policy }), parsed = parseSelectionPolicy(policy);
@@ -322,6 +324,98 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
       assert.deepEqual(manifest.coverage.map((entry) => entry.status), ['complete', 'complete', 'failed', 'failed', 'failed', 'failed', 'failed']);
       assert.ok(manifest.coverage.slice(2).every((entry) => entry.missingCoverage.includes('date-not-retrieved')));
       assert.throws(() => parseSelectionPolicy({ ...policy, importDays: 8 }));
+    });
+    await t.test('hourly cohorts queue new and changed fixtures, preserve the daily manifest, and skip unchanged inputs', async () => {
+      const hour = 3_600_000, scheduledFor = occurrence(29) + hour;
+      const known = catalogFixture(3101, { kickoff: kickoff(30) });
+      const discovered = catalogFixture(3102, { kickoff: kickoff(30, 13) });
+      const policy = policyFor([known]); policy.refresh.type = 'test.selection-hourly';
+      const hourlyStore = createMysqlDailySelectionStore(database, queue, { hourly: { localEvidence: false } });
+      const daily = await setup({ rows: [known], policy, selectionStore: hourlyStore }).service.run(occurrence(29));
+      const dailyManifest = (await hourlyStore.inspect(daily.runId)).manifest;
+      assert.equal(daily.total, 1);
+
+      const state = setup({ rows: [known, discovered], policy, selectionStore: hourlyStore });
+      const first = await state.service.runHourly(scheduledFor);
+      assert.equal(first.total, 1);
+      assert.notEqual(first.runId, daily.runId);
+      const fixture = await catalog.fixtureByProviderId(3102);
+      const original = (await hourlyStore.inspect(first.runId)).manifest.entries[0];
+      assert.equal(original.fixtureId, fixture.id);
+      const type = [{ type: policy.refresh.type, handlerVersion: 1 }];
+      const job = await queue.claim(selectionHash('hourly-worker'), type);
+      assert.equal(job?.job.envelope.refresh.runId, first.runId);
+      await queue.acknowledge(job);
+
+      const restartedDb = replica(), restartedQueue = createMysqlJobQueue(restartedDb);
+      const restartedStore = createMysqlDailySelectionStore(restartedDb, restartedQueue, { hourly: { localEvidence: false } });
+      const restarted = setup({ rows: [known, discovered], policy, selectionStore: restartedStore, db: restartedDb });
+      assert.equal((await restarted.service.runHourly(scheduledFor)).runId, first.runId);
+      assert.equal(restarted.provider.network.length, 0);
+      assert.equal(await database.query((tx) => tx.durableJob.count({ where: { refreshRunId: first.runId } })), 1);
+      const unchanged = await restarted.service.runHourly(scheduledFor + hour);
+      assert.equal(unchanged.total, 0);
+      assert.deepEqual((await restartedStore.inspect(unchanged.runId)).manifest.exclusions.find((entry) => entry.fixtureId === fixture.id),
+        { fixtureId: fixture.id, reason: 'inputs-unchanged' });
+
+      const adjusted = catalogFixture(3102, { kickoff: kickoff(30, 15) });
+      // Apply the already coordinated lifecycle state before the next catalog observation.
+      const cycle = await history.findCycle(original.cycleId);
+      const [{ at }] = await database.query((tx) => tx.$queryRaw`SELECT UTC_TIMESTAMP(3) AS at`);
+      const revisedKickoff = new Date(adjusted.fixture.date);
+      await history.withFixtureTransaction(fixture.id, (writer, tx) => writer.changeCycle({
+        ...actor, cycleId: cycle.id, expectedVersion: cycle.version, eventKey: selectionHash('hourly-kickoff-change'), at: at.getTime(),
+        next: { state: 'open', currentSetId: null, lockedSetId: null, closedAt: null, lockedAt: null, voidedAt: null, voidReason: null },
+        schedule: { kickoffAt: revisedKickoff.getTime(), providerObservedAt: null, actualStartedAt: null },
+      }).then(() => tx.footballFixture.update({ where: { id: fixture.id }, data: { kickoff: revisedKickoff } })));
+      const moved = await setup({ rows: [known, adjusted], policy, selectionStore: restartedStore, db: restartedDb })
+        .service.runHourly(scheduledFor + 2 * hour);
+      assert.equal(moved.total, 1);
+      const revised = (await restartedStore.inspect(moved.runId)).manifest.entries[0];
+      assert.equal(revised.cycleId, original.cycleId);
+      assert.equal(revised.kickoffAt, Date.parse(adjusted.fixture.date));
+      assert.deepEqual((await restartedStore.inspect(daily.runId)).manifest, dailyManifest);
+    });
+    await t.test('hourly date omissions require identity confirmation and fixtures inside the lock window stay excluded', async () => {
+      const hour = 3_600_000, now = Date.now(), today = getReportingDayBounds(getReportingDate(now));
+      const scheduledFor = Math.max(Math.floor(now / hour) * hour, today.startInclusive + hour);
+      const nextDay = getReportingDate(today.startInclusive + day);
+      const targetTime = today.startInclusive + day + 12 * hour;
+      const rows = [catalogFixture(3301, { kickoff: new Date(targetTime).toISOString() }),
+        catalogFixture(3302, { kickoff: new Date(targetTime + hour).toISOString() })];
+      const nearCutoff = catalogFixture(3303, { kickoff: new Date(Math.floor(now / 1000) * 1000 + 120_000).toISOString() });
+      const policy = policyFor(rows); policy.refresh.type = 'test.selection-omission'; policy.importBounds.deadlineMs = hour;
+      const seed = createSyntheticCatalogAdapter({ rows });
+      seed.clock.value = scheduledFor - hour;
+      const seedImporter = createFootballCatalogImporter({ adapter: seed.adapter, store: catalog, authority: catalogSelectionAuthority, clock: seed.clock });
+      await seedImporter.import(catalogRequest({ kind: 'fixtures', query: { date: nextDay } }, seed.clock.value));
+
+      const lookedUp = [];
+      const provider = createSyntheticCatalogAdapter({ batchEvidence: { maximumIds: 20, evidenceRef: "synthetic-batch-proof" }, respond(url) {
+        const query = url.searchParams.get('ids') ?? url.searchParams.get('id');
+        if (query === null) return catalogResponse(url, url.searchParams.get('date') === getReportingDate(Date.parse(nearCutoff.fixture.date)) ? [nearCutoff] : []);
+        lookedUp.push(...query.split('-'));
+        return catalogResponse(url, [rows[0]]);
+      } });
+      provider.clock.value = Math.max(scheduledFor, now);
+      const importer = createFootballCatalogImporter({ adapter: provider.adapter, store: catalog, authority: catalogSelectionAuthority, clock: provider.clock });
+      const hourlyStore = createMysqlDailySelectionStore(database, queue, { hourly: { localEvidence: false } });
+      const reconciler = createHourlyFixtureReconciler({ database, importer, policy: parseSelectionPolicy(policy) });
+      const service = createDailySelectionService({ cutoff: { scheduleRun: async () => {} }, policy,
+        authority: selectionAuthority(), store: hourlyStore, importer, reconcileHourly: reconciler.reconcile });
+      const result = await service.runHourly(scheduledFor);
+      const confirmed = await catalog.fixtureByProviderId(3301), unconfirmed = await catalog.fixtureByProviderId(3302);
+      const locked = await catalog.fixtureByProviderId(3303);
+      const manifest = (await hourlyStore.inspect(result.runId)).manifest;
+      const importedDate = manifest.coverage.find((date) => date.date === nextDay);
+      assert.equal(importedDate?.status, 'complete');
+      assert.equal(importedDate.provenance[0]?.retrievedAt, provider.clock.value);
+      assert.deepEqual(lookedUp.sort(), ['3301', '3302']);
+      assert.equal(result.total, 1);
+      assert.equal(manifest.entries[0].fixtureId, confirmed.id);
+      assert.deepEqual(manifest.exclusions.find((entry) => entry.fixtureId === locked.id), { fixtureId: locked.id, reason: 'cutoff-passed' });
+      assert.ok(!manifest.coverage.some((date) => date.fixtureIds.includes(confirmed.id)), 'identity confirmation stays separate from date coverage');
+      assert.equal(await database.query((tx) => tx.predictionCycle.count({ where: { fixtureId: unconfirmed.id } })), 0);
     });
     await t.test('a large stored cohort commits one sealed selection without reimporting its fixtures', async (t) => {
       const fixture = catalogFixture(2501, { kickoff: kickoff(27) });

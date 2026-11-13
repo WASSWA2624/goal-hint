@@ -11,7 +11,7 @@ import { historyImportEnvelopes, latestHistoryImportSlot } from "../football/his
 import { createJobRegistry } from "../jobs/job-registry.ts";
 import { createJobWorker } from "../jobs/job-worker.ts";
 import { resultCadence } from "../results/result-sync-policy.ts";
-import { dailySelectionEnvelope } from "../selection/selection-trigger.ts";
+import { DAILY_SELECTION_TYPE, dailySelectionEnvelope, HOURLY_SELECTION_TYPE, hourlySelectionEnvelope, latestHourlySelectionOccurrence } from "../selection/selection-trigger.ts";
 import { latestOddsSlot, oddsScheduleEnvelopes } from "../odds/odds-jobs.ts";
 import { latestTeamCodesSlot, teamCodesEnvelope } from "../teams/team-code-jobs.ts";
 import { LiveAccountError } from "./live-account.ts";
@@ -30,12 +30,12 @@ const reason = (error: unknown) => error instanceof LiveAccountError ? error.rea
   : error instanceof Error && "reason" in error && typeof error.reason === "string" ? error.reason : "unavailable";
 async function pause(ms: number, signal: AbortSignal) { await sleep(ms, undefined, { signal }).catch(() => {}); }
 
-/** Maintenance cadence: provider-day rollover, the daily selection schedule, result
+/** Maintenance cadence: provider-day rollover, fixture selection schedules, result
  * polling ownership, settlement and cache recovery. Visitor requests trigger none of it. */
 async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () => void, log: (event: LiveEvent) => void,
   localFootball: boolean) {
   let accountCheckedAt = Date.now(), scheduled = 0, pollerCheckedAt = 0, oddsScheduled = 0, teamCodesScheduled = 0;
-  let historyScheduled = 0;
+  let hourlyScheduled: number | null = null, historyScheduled = 0;
   type Poller = Readonly<{ controller: AbortController; done: Promise<void>; policy: unknown }>;
   const owned: { poller: Poller | null; details: Poller | null } = { poller: null, details: null };
   const plan = runtime.day.status.plan, dailyLimit = runtime.day.status.dailyLimit;
@@ -64,6 +64,16 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
           const job = await runtime.queue.enqueue(dailySelectionEnvelope(occurrence, selectionTriggerBounds));
           scheduled = occurrence; log({ event: "selection-scheduled", scheduledFor: new Date(occurrence).toISOString(), state: job.state });
         } catch (error) { log({ event: "selection-schedule-failed", reason: reason(error) }); }
+      }
+      if (runtime.hourlySelectionEnabled) {
+        const slot = latestHourlySelectionOccurrence(now);
+        if (slot !== null && slot !== hourlyScheduled) {
+          try {
+            const job = await runtime.queue.enqueue(hourlySelectionEnvelope(slot, selectionTriggerBounds));
+            hourlyScheduled = slot;
+            log({ event: "hourly-selection-scheduled", scheduledFor: new Date(slot).toISOString(), state: job.state });
+          } catch (error) { log({ event: "hourly-selection-schedule-failed", reason: reason(error) }); }
+        }
       }
       // Odds: the UTC day's catalog, then one import per EAT date for each 3-hour slot (nearest date first).
       // Durable idempotency keys make restarts, plan rebuilds and a retried tick re-enqueue the same rows.
@@ -188,11 +198,11 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
       liveDetailsRequests: workload.liveDetails.requests, historyImport: runtime.enrichment.historyEnabled });
     let selectionRegistry = runtime.registry, refreshAndCutoffRegistry = runtime.registry;
     if (!localFootball && workersPerRun > 1) {
-      // Reserve a slot so an older refresh backlog cannot delay the next daily import.
-      const selection = runtime.registry.find("daily.selection", 1)!;
+      // Reserve a worker so an older refresh backlog cannot delay fixture imports.
       const definitions = runtime.registry.types.map(({ type, handlerVersion }) => runtime.registry.find(type, handlerVersion)!);
-      selectionRegistry = createJobRegistry([selection]);
-      refreshAndCutoffRegistry = createJobRegistry(definitions.filter((definition) => definition !== selection));
+      const selectionTypes = new Set<string>([DAILY_SELECTION_TYPE, HOURLY_SELECTION_TYPE]);
+      selectionRegistry = createJobRegistry(definitions.filter((definition) => selectionTypes.has(definition.type)));
+      refreshAndCutoffRegistry = createJobRegistry(definitions.filter((definition) => !selectionTypes.has(definition.type)));
     }
     const workers = Array.from({ length: workersPerRun }, (_, index) => createJobWorker({
       queue: runtime.queue, registry: index === 0 ? selectionRegistry : refreshAndCutoffRegistry,

@@ -52,6 +52,26 @@ export function goalProbabilities(home: number, away: number): IntelligenceProba
     "total-goals": { "over-2.5": 1 - under, "under-2.5": under }, "both-teams-to-score": { yes, no: 1 - yes } });
 }
 
+/** The model and the hourly evidence check use the same ordered, recency-weighted sample. */
+export function weightLocalGoalHistory<Row extends Pick<LocalGoalInput["history"][number], "fixtureId" | "kickoffAt" | "homeTeamId" | "awayTeamId">>(
+  rows: readonly Row[], cutoffAt: number, configuration = localGoalDefaults,
+) {
+  const ordered = [...rows].sort((a, b) => a.kickoffAt - b.kickoffAt || (a.fixtureId < b.fixtureId ? -1 : a.fixtureId > b.fixtureId ? 1 : 0));
+  const weighted = ordered.map((row) => ({ row, weight: Math.exp(-Math.LN2 * (cutoffAt - row.kickoffAt) / configuration.halfLifeMs) }));
+  const teamEffectiveMatches = new Map<string, number>();
+  let effectiveMatches = 0;
+  for (const { row, weight } of weighted) {
+    effectiveMatches += weight;
+    for (const team of [row.homeTeamId, row.awayTeamId])
+      teamEffectiveMatches.set(team, (teamEffectiveMatches.get(team) ?? 0) + weight);
+  }
+  return { ordered, weighted, effectiveMatches, teamEffectiveMatches };
+}
+
+export function hasLocalGoalSamples(effectiveMatches: number, homeMatches: number, awayMatches: number, configuration = localGoalDefaults): boolean {
+  return effectiveMatches >= configuration.minimumMatches && Math.min(homeMatches, awayMatches) >= configuration.minimumTeamMatches;
+}
+
 /** Fits regularized, recency-weighted Poisson log rates using only independently
  * observed regulation results. No provider forecast or AI number enters fitting.
  * Configuration is methodological, not empirically qualified. */
@@ -69,14 +89,11 @@ export function estimateLocalGoals(input: LocalGoalInput): LocalGoalForecast {
       row.period !== marketRules.period || !/^[a-f0-9]{64}$/u.test(row.observationHash) || seen.has(row.fixtureId)) throw new Error("Invalid or duplicate result evidence.");
     seen.add(row.fixtureId);
   }
-  const rows = input.history.filter((row) => row.competitionId === fixture.competitionId && row.fixtureId !== fixture.fixtureId &&
-    row.kickoffAt < cutoffAt && row.kickoffAt >= cutoffAt - configuration.lookbackMs && row.availableAt <= cutoffAt)
-    .sort((a, b) => a.kickoffAt - b.kickoffAt || (a.fixtureId < b.fixtureId ? -1 : a.fixtureId > b.fixtureId ? 1 : 0));
-  const weighted = rows.map((row) => ({ row, weight: Math.exp(-Math.LN2 * (cutoffAt - row.kickoffAt) / configuration.halfLifeMs) }));
-  const effectiveMatches = weighted.reduce((sum, entry) => sum + entry.weight, 0);
-  const teamMatches = (team: string) => weighted.reduce((sum, { row, weight }) => sum + (row.homeTeamId === team || row.awayTeamId === team ? weight : 0), 0);
-  const diagnostics = { matches: rows.length, effectiveMatches, homeEffectiveMatches: teamMatches(fixture.homeTeamId),
-    awayEffectiveMatches: teamMatches(fixture.awayTeamId), iterations: 0, converged: false,
+  const eligible = input.history.filter((row) => row.competitionId === fixture.competitionId && row.fixtureId !== fixture.fixtureId &&
+    row.kickoffAt < cutoffAt && row.kickoffAt >= cutoffAt - configuration.lookbackMs && row.availableAt <= cutoffAt);
+  const { ordered: rows, weighted, effectiveMatches, teamEffectiveMatches } = weightLocalGoalHistory(eligible, cutoffAt, configuration);
+  const diagnostics = { matches: rows.length, effectiveMatches, homeEffectiveMatches: teamEffectiveMatches.get(fixture.homeTeamId) ?? 0,
+    awayEffectiveMatches: teamEffectiveMatches.get(fixture.awayTeamId) ?? 0, iterations: 0, converged: false,
     uncertainty: "high" as "high" | "moderate", tailProbability: 0 };
   const finish = (reasons: string[], expectedGoals: LocalGoalForecast["expectedGoals"] = null): LocalGoalForecast => {
     let scoreDistribution: LocalGoalForecast["scoreDistribution"] = null;
@@ -95,7 +112,7 @@ export function estimateLocalGoals(input: LocalGoalInput): LocalGoalForecast {
     issuedForecasts.add(forecast); return forecast;
   };
   if (fixture.forecastAt >= fixture.kickoffAt - lockMs) return finish(["forecast-locked"]);
-  if (effectiveMatches < configuration.minimumMatches || Math.min(diagnostics.homeEffectiveMatches, diagnostics.awayEffectiveMatches) < configuration.minimumTeamMatches)
+  if (!hasLocalGoalSamples(effectiveMatches, diagnostics.homeEffectiveMatches, diagnostics.awayEffectiveMatches, configuration))
     return finish(["insufficient-point-in-time-history"]);
   const teamIds = [...new Set(rows.flatMap((row) => [row.homeTeamId, row.awayTeamId]))].sort();
   const index = new Map(teamIds.map((team, i) => [team, i]));

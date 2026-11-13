@@ -138,7 +138,7 @@ export function createCutoffLockingService(options: Readonly<{
       if (!eligibility.due) return cutoffFail("not-due");
       // Traverse accepted runs in their stored order. Neither the current pointer
       // nor scores, outcome labels, source confidence or completion order choose a pick.
-      const accepted = await tx.predictionRefreshResult.findMany({ where: { ...target, outcome: "published" }, orderBy: { runSequence: "desc" }, select: { id: true } });
+      const accepted = await tx.predictionRefreshResult.findMany({ where: { ...target, outcome: "published" }, orderBy: [{ selection: { run: { eatDate: "desc" } } }, { selection: { run: { slotHour: "desc" } } }], select: { id: true } });
       let revision = null;
       for (const row of accepted) {
         const receipt = await storedRefreshResult(tx, row.id);

@@ -1,4 +1,5 @@
 import "server-only";
+import { predictionRunOrder } from "../../domain/prediction-run-order.ts";
 
 import { randomUUID } from "node:crypto";
 import { getPublicationDeadline, parseReportingDate, type Clock } from "../../domain/calendar.ts";
@@ -98,19 +99,23 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
       }, { isolationLevel: "RepeatableRead", timeout: 30_000 });
     } catch { if (domainError) throw domainError; return historyFail("unavailable"); }
   }
-  async function createRun(date: string, createdAt: number): Promise<StoredRun> {
+  async function createRun(date: string, createdAt: number, slotHour = 0): Promise<StoredRun> {
     try { parseReportingDate(date); } catch { return historyFail("invalid-request"); }
+    if (!Number.isInteger(slotHour) || slotHour < 0 || slotHour > 23) return historyFail("invalid-request");
     const at = parseHistory(historyInstant, createdAt), eatDate = new Date(`${date}T00:00:00.000Z`);
     parseHistory(historyInstant, eatDate.getTime());
+    const dateSequence = BigInt(date.replaceAll("-", ""));
+    const sequence = slotHour === 0 ? dateSequence : dateSequence * 100n + BigInt(slotHour);
+    const where = { eatDate_slotHour: { eatDate, slotHour } };
     try {
       return await database.transaction(async (transaction) => {
-        const previous = await transaction.dailyRun.findUnique({ where: { eatDate } });
-        return runFromRow(previous ?? await transaction.dailyRun.create({ data: { id: randomUUID(), sequence: BigInt(date.replaceAll("-", "")), eatDate, createdAt: new Date(at) } }));
+        const previous = await transaction.dailyRun.findUnique({ where });
+        return runFromRow(previous ?? await transaction.dailyRun.create({ data: { id: randomUUID(), sequence, eatDate, slotHour, createdAt: new Date(at) } }));
       }, { isolationLevel: "ReadCommitted", timeout: 30_000 });
     } catch {
       // A competing identical date may have won. Do not retry arbitrary effects.
       return read(async (transaction) => {
-        const previous = await transaction.dailyRun.findUnique({ where: { eatDate } });
+        const previous = await transaction.dailyRun.findUnique({ where });
         return previous ? runFromRow(previous) : historyFail("unavailable");
       });
     }
@@ -198,7 +203,7 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
               evidence.kickoffAt.getTime() !== context.kickoffAt || evidence.homeTeamId !== context.home.teamId ||
               evidence.awayTeamId !== context.away.teamId) return historyFail("invalid-request");
             const predecessor = await transaction.predictionSet.findFirst({ where: { cycleId }, orderBy: { cycleRevision: "desc" } });
-            if (predecessor && predecessor.runSequence >= run.sequence) return historyFail("out-of-order");
+            if (predecessor && predictionRunOrder(predecessor.runSequence) >= predictionRunOrder(run.sequence)) return historyFail("out-of-order");
             const latestFixture = await transaction.predictionSet.findFirst({ where: { fixtureId }, orderBy: { fixtureRevision: "desc" } });
             const at = await now(); if (at < request.publishedAt || at < previousCycle.openedAt) return historyFail("invalid-request");
             const id = randomUUID(), candidateJson = evidenceSerialize(request.candidate);

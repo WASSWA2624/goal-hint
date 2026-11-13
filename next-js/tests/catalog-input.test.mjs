@@ -114,6 +114,29 @@ test("provider identities above 32 bits retain the full 007 safe integer contrac
     evidenceRef: null, sourceRef: "synthetic-private-review", observedAt: NOW }).candidateExternalId, Number.MAX_SAFE_INTEGER);
 });
 
+test("targeted schedule imports confirm exactly the verified IDs returned", () => {
+  const input = request({ kind: "fixtures", query: { fixtureIds: [4, 2, 5, 3] } });
+  const parameters = { ids: "2-3-4-5", timezone: "Africa/Kampala" };
+  assert.deepEqual(parseCatalogImportRequest(input).selection.query.fixtureIds, [2, 3, 4, 5]);
+  const moved = fixture(5, "NS", "2026-10-25T15:00:00+03:00");
+  const known = result([fixture(2, "PST"), fixture(4, "CANC"), moved], "fixtures", parameters);
+  known.status = "partial";
+  known.completeness = { ...known.completeness, complete: false, reasons: ["coverage-error"], missingIds: [3] };
+  known.error = { reason: "coverage-error", retryable: false };
+  const accepted = prepare(input, known);
+  assert.equal(accepted.status, "partial");
+  assert.deepEqual(accepted.rows.fixtures.map(({ id, status }) => [id, status]), [[2, "postponed"], [4, "canceled"], [5, "scheduled"]]);
+  assert.equal(accepted.rows.fixtures[2].kickoff, Date.parse("2026-10-25T12:00:00Z"));
+  assert.deepEqual(accepted.missingIds, [3]);
+  const foreign = { ...known, data: [...known.data, fixture(9)] };
+  const cached = { ...known, provenance: [{ ...known.provenance[0], fromCache: true }] };
+  for (const unsafe of [foreign, cached]) {
+    const rejected = prepare(input, unsafe);
+    assert.equal(rejected.status, "failed");
+    assert.deepEqual(rejected.rows.fixtures, []);
+  }
+});
+
 test("only original deeply frozen validator results may enter catalog persistence", () => {
   const permissions = authority(), batch = prepare(request(), result([fixture()]), permissions);
   assert.doesNotThrow(() => assertCatalogPreparedBatch(batch));

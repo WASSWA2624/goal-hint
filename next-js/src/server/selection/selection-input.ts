@@ -10,6 +10,17 @@ import { selectionFail, type CycleSelectionEligibility, type DegradedSelectionAc
 
 const ref = z.string().min(1).max(512).regex(/^[^\p{Cc}]+$/u);
 const actor = z.string().min(1).max(128).regex(/^[^\p{Cc}]+$/u);
+export const SELECTION_HOUR_MS = 3_600_000;
+export function hourlySelectionWindow(scheduledFor: number, days: PredictionWindowDays = 7) {
+  const at = utcInstantFromEpochMilliseconds(scheduledFor), window = createPredictionWindow(getReportingDate(at), days);
+  const slotHour = (at - window.startInclusive) / SELECTION_HOUR_MS;
+  if (!Number.isInteger(slotHour) || slotHour < 1 || slotHour > 23) return selectionFail("invalid-request");
+  return { window, slotHour };
+}
+export const scheduledHourlySelection = z.strictObject({ scheduledFor: jobInstant }).refine(({ scheduledFor }) => {
+  try { return hourlySelectionWindow(scheduledFor).slotHour > 0; } catch { return false; }
+});
+
 export const scheduledSelection = z.strictObject({ scheduledFor: jobInstant }).refine(({ scheduledFor }) => {
   try { return selectionWindow(scheduledFor).startInclusive === scheduledFor; } catch { return false; }
 });

@@ -1,21 +1,24 @@
 import "server-only";
 
-import { calendarRules } from "../../domain/calendar.ts";
+import { calendarRules, getReportingDate, getReportingDayBounds, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import type { JobEnvelope, JobQueue } from "../jobs/job-contract.ts";
 import { parseJobEnvelope } from "../jobs/job-input.ts";
 import { defineJob } from "../jobs/job-registry.ts";
 import { readPrivateJobBody, type JobTriggerIdentity } from "../jobs/job-trigger.ts";
 import { DailySelectionError } from "./selection-contract.ts";
-import { parseSelection, scheduledSelection, selectionWindow } from "./selection-input.ts";
+import { parseSelection, scheduledHourlySelection, scheduledSelection, SELECTION_HOUR_MS, selectionWindow } from "./selection-input.ts";
 import type { createDailySelectionService } from "./selection-service.ts";
+
+export const DAILY_SELECTION_TYPE = "daily.selection";
+export const HOURLY_SELECTION_TYPE = "hourly.selection";
 
 export const dailySelectionSchedule = Object.freeze({ timeZone: "UTC", cron: calendarRules.dailyRunUtcCron,
   reportingTimeZone: "Africa/Kampala", reportingTime: calendarRules.dailyRunTime });
 
 /** Register only after the host has approved workload identity, policy and bounds. */
 export function defineDailySelectionJob(service: ReturnType<typeof createDailySelectionService>) {
-  return defineJob({ type: "daily.selection", handlerVersion: 1, payload: scheduledSelection,
+  return defineJob({ type: DAILY_SELECTION_TYPE, handlerVersion: 1, payload: scheduledSelection,
     async handle(payload, context) {
       await context.checkpoint();
       try {
@@ -36,10 +39,26 @@ export function dailySelectionEnvelope(scheduledFor: unknown, input: DailySelect
   const payload = parseSelection(scheduledSelection, { scheduledFor }), window = selectionWindow(payload.scheduledFor);
   const { expiresAfterMs, ...bounds } = input;
   if (!Number.isSafeInteger(expiresAfterMs) || expiresAfterMs <= 0 || payload.scheduledFor + expiresAfterMs > window.endExclusive) throw new Error();
-  return parseJobEnvelope({ ...bounds, version: 1, type: "daily.selection", handlerVersion: 1,
-    idempotencyKey: evidenceFingerprint({ type: "daily.selection", runDate: window.runDate }), payload, refresh: null,
+  return parseJobEnvelope({ ...bounds, version: 1, type: DAILY_SELECTION_TYPE, handlerVersion: 1,
+    idempotencyKey: evidenceFingerprint({ type: DAILY_SELECTION_TYPE, runDate: window.runDate }), payload, refresh: null,
     notBefore: window.startInclusive, expiresAt: window.startInclusive + expiresAfterMs, priority: 0 });
 }
+/** The current UTC-aligned hour, except when the EAT daily selection owns the slot. */
+export function latestHourlySelectionOccurrence(now: number): number | null {
+  const slot = utcInstantFromEpochMilliseconds(Math.floor(now / SELECTION_HOUR_MS) * SELECTION_HOUR_MS);
+  return getReportingDayBounds(getReportingDate(slot)).startInclusive === slot ? null : slot;
+}
+
+/** One durable recheck per hour. The next occurrence supersedes an expired slot. */
+export function hourlySelectionEnvelope(scheduledFor: number, input: DailySelectionBounds): JobEnvelope {
+  const payload = parseSelection(scheduledHourlySelection, { scheduledFor });
+  const { leaseMs, fallbackReserveMs, backoff } = input;
+  return parseJobEnvelope({ leaseMs, fallbackReserveMs, backoff, version: 1, type: HOURLY_SELECTION_TYPE, handlerVersion: 1,
+    idempotencyKey: evidenceFingerprint({ type: HOURLY_SELECTION_TYPE, scheduledFor }), payload, refresh: null,
+    notBefore: scheduledFor, expiresAt: scheduledFor + SELECTION_HOUR_MS, priority: 0,
+    maxAttempts: Math.min(input.maxAttempts, 3), timeoutMs: Math.min(input.timeoutMs, SELECTION_HOUR_MS) });
+}
+
 /** The scheduler supplies its original occurrence, retained through every retry.
  * This protected adapter enqueues bounded durable work and does no provider I/O. */
 export function createDailySelectionTrigger(input: Readonly<{

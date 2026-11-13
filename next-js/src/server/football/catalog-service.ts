@@ -4,7 +4,7 @@ import { utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calend
 import { DatabaseOperationError } from "../database/client.ts";
 import type { createApiFootballAdapter } from "./api-football-adapter.ts";
 import type { CatalogAuthority, CatalogImportRequest, CatalogPreparedBatch, CatalogProviderRow } from "./catalog-contract.ts";
-import type { ApiFootballResult } from "./api-football-contract.ts";
+import type { ApiFootballFallbackWorkflow, ApiFootballResult } from "./api-football-contract.ts";
 import { CatalogInputError, catalogRequestFingerprint, parseCatalogImportRequest, validateCatalogBatch } from "./catalog-input.ts";
 import { catalogPersistenceUnavailable, CatalogStoreError, type FootballCatalogStore, type CatalogImportSummary } from "./catalog-mysql-store.ts";
 
@@ -57,7 +57,8 @@ export function createFootballCatalogImporter(options: Readonly<{
     }
     return previous;
   }
-  async function execute(request: CatalogImportRequest, fingerprint: string, verifySavedFixtureScope?: VerifySavedFixtureScope) {
+  async function execute(request: CatalogImportRequest, fingerprint: string, verifySavedFixtureScope?: VerifySavedFixtureScope,
+    workflow?: ApiFootballFallbackWorkflow) {
     const previous = await options.store.findImport(request.id);
     authorize(request);
     if (previous) {
@@ -67,7 +68,7 @@ export function createFootballCatalogImporter(options: Readonly<{
     const selection = request.selection;
     let result: ApiFootballResult<CatalogProviderRow>;
     switch (selection.kind) {
-      case "fixtures": result = await options.adapter.evidence.fixtures(selection.query, request.bounds); break;
+      case "fixtures": result = await options.adapter.evidence.fixtures(selection.query, request.bounds, workflow); break;
       case "teams": result = await options.adapter.evidence.teams(selection.query, request.bounds); break;
       case "competitions": result = await options.adapter.evidence.competitions(selection.query, request.bounds); break;
     }
@@ -102,7 +103,7 @@ export function createFootballCatalogImporter(options: Readonly<{
     }
   }
   return Object.freeze({
-    async import(input: unknown, verifySavedFixtureScope?: VerifySavedFixtureScope): Promise<CatalogImportSummary> {
+    async import(input: unknown, verifySavedFixtureScope?: VerifySavedFixtureScope, workflow?: ApiFootballFallbackWorkflow): Promise<CatalogImportSummary> {
       const request = parseCatalogImportRequest(input);
       authorize(request);
       const fingerprint = catalogRequestFingerprint(request), current = running.get(request.id);
@@ -110,7 +111,7 @@ export function createFootballCatalogImporter(options: Readonly<{
         if (current.fingerprint !== fingerprint) throw new CatalogStoreError("conflicting-import");
         return current.result;
       }
-      const result = execute(request, fingerprint, verifySavedFixtureScope).finally(() => running.delete(request.id));
+      const result = execute(request, fingerprint, verifySavedFixtureScope, workflow).finally(() => running.delete(request.id));
       running.set(request.id, { fingerprint, result });
       return result;
     },

@@ -1,4 +1,5 @@
 import "server-only";
+import { predictionRunOrder } from "../../domain/prediction-run-order.ts";
 
 import { isInWindow, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { SettlementStatus } from "../../domain/market-settlement.ts";
@@ -123,7 +124,7 @@ export function createRevisionPublicationService(options: Readonly<{
           if (reason === null && (await tx.fixtureLifecycleState.findUnique({ where: { fixtureId: fixture.id } }))?.issue)
             reason = "status-ineligible";
           const latest = await tx.predictionSet.findFirst({ where: { fixtureId: fixture.id }, orderBy: { fixtureRevision: "desc" } });
-          if (reason === null && latest && latest.runSequence >= run.sequence) reason = "older-run";
+          if (reason === null && latest && predictionRunOrder(latest.runSequence) >= predictionRunOrder(run.sequence)) reason = "older-run";
           let quoteCapture = false;
           let revision = null, impliedSnapshot: StoredImpliedMarketExtension | null = null,
             outcome: RefreshPublicationResult["outcome"] = "skipped";
@@ -268,7 +269,7 @@ export function createRevisionPublicationService(options: Readonly<{
         if (!display) return publicationFail("unavailable");
         const { cycle, revision } = display;
         const latest = await tx.predictionRefreshResult.findFirst({ where: { fixtureId, cycleId: cycle.id },
-          orderBy: [{ runSequence: "desc" }, { fixtureVersion: "desc" }], select: { id: true } });
+          orderBy: [{ selection: { run: { eatDate: "desc" } } }, { selection: { run: { slotHour: "desc" } } }, { fixtureVersion: "desc" }], select: { id: true } });
         const refresh = latest === null ? null : await storedRefreshResult(tx, latest.id);
         return freezeEvidence({ fixtureVersion: fixture.dataVersion, ...display, refresh,
           updateDelayed: cycle.state === "open" && refresh?.outcome === "retained-previous" && refresh.revisionId === revision?.id });

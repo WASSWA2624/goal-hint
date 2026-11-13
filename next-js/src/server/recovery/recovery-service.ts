@@ -50,7 +50,7 @@ async function snapshot(tx: JobTransaction, action: RecoveryAction) {
     }
     case "selection": {
       const date = selectionWindow(action.scheduledFor).runDate;
-      const run = await tx.dailyRun.findUnique({ where: { eatDate: new Date(`${date}T00:00:00Z`) }, select: {
+      const run = await tx.dailyRun.findUnique({ where: { eatDate_slotHour: { eatDate: new Date(`${date}T00:00:00Z`), slotHour: 0 } }, select: {
         id: true, selectionHash: true, committedAt: true, partial: true, totalJobs: true, terminalJobs: true } });
       return { run: run ? { ...run, committedAt: run.committedAt?.getTime() ?? null } : null };
     }
@@ -123,7 +123,7 @@ export function createRecoveryWatchdog(options: Readonly<{ database: DatabaseRun
           const at = await now(tx), window = selectionWindow(action.scheduledFor), today = getReportingDate(utcInstantFromEpochMilliseconds(at));
           if (window.runDate < addReportingDays(today, 1 - policy.lookbackDays) || window.startInclusive + policy.runGraceMs > at)
             return recoveryFail("invalid-request");
-          const row = await tx.dailyRun.findUnique({ where: { eatDate: new Date(`${window.runDate}T00:00:00Z`) } });
+          const row = await tx.dailyRun.findUnique({ where: { eatDate_slotHour: { eatDate: new Date(`${window.runDate}T00:00:00Z`), slotHour: 0 } } });
           if (action.selectionHash !== null && row?.selectionHash !== action.selectionHash) return recoveryFail("invalid-request");
           if (row?.selectionHash && evidenceFingerprint(row.selectionJson) !== row.selectionHash) return recoveryFail("unavailable");
           return row?.selectionHash ? parseSelectionPolicy(row.selectionJson) : parseSelectionPolicy(services.selectionPolicy);
