@@ -58,6 +58,12 @@ KEEP_RELEASES = 3
 # Database settings belong in ~/goal-hint-private/.env.production.local: cPanel writes
 # these into the domain's .htaccess, and they would override the private file.
 INITIAL_ENV = {"GOAL_HINT_DEPLOYMENT_ENVIRONMENT": "production"}
+# Existing shared-host files can still contain settings that new profiles omit.
+LEGACY_CONFIG_KEYS = {
+    "GOAL_HINT_ADS_ENABLED", "GOAL_HINT_DARK_MODE_ENABLED", "GOAL_HINT_EXACT_SCORES_ENABLED", "GOAL_HINT_LOCALES",
+    "GOAL_HINT_PROBABILITY_SUM_TOLERANCE", "GOAL_HINT_CONSISTENCY_TOLERANCE", "GOAL_HINT_AI_PROMOTION_REF",
+    "GOAL_HINT_ANALYTICS_ADMIN_USERNAME", "GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH",
+}
 
 SSH_OPTIONS = ["-i", str(KEY), "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "PasswordAuthentication=no",
                "-o", "KbdInteractiveAuthentication=no", "-o", "ConnectTimeout=20", "-o", "StrictHostKeyChecking=accept-new",
@@ -304,7 +310,7 @@ def config_pull() -> None:
 def check_config(env_text: str | None, approvals_text: str | None, *, require_production_database: bool = False) -> list[str]:
     """Catch the mistakes that otherwise surface only as an unlogged 503 or a 500. Names only, never values."""
     problems, env = [], {}
-    known = set(re.findall(r"^[A-Z][A-Z0-9_]*(?==)", (ROOT / ".env.example").read_text(encoding="utf-8"), re.M))
+    known = LEGACY_CONFIG_KEYS | set(re.findall(r"^[A-Z][A-Z0-9_]*(?==)", (ROOT / ".env.example").read_text(encoding="utf-8"), re.M))
     for number, line in enumerate((env_text or "").splitlines(), 1):
         line = line.strip()
         if not line or line.startswith("#"):

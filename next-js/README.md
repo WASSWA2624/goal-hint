@@ -88,12 +88,13 @@ npm run build
 npm run start
 ```
 
-The ignored `.env.production.local` supplies the local TLS and database approval
-settings. See [local production startup](docs/local-production.md) for the profile,
-certificate renewal and port conflicts. To keep another server on port 3000,
-use `npm start -- --port 3001`.
+Local builds use `.env.development` with the ignored
+`.goal-hint/local-environment/production-build.env` overlay for local TLS and
+database approval settings. The hosted `.env.production` profile is reserved for
+the VPS. To keep another server on port 3000, use `npm start -- --port 3001`.
+See [local production startup](docs/local-production.md).
 
-All developer and operator entry points in `scripts/` use Python. They share
+Python developer and operator tools in `scripts/` share
 native filesystem, process, HTTP, rendering and backup helpers in `scripts/lib/`.
 A private pipe adapter reuses the existing TypeScript application services and
 policy checks; Node.js remains required. Install Python dependencies with
@@ -117,7 +118,9 @@ debounces saves; generated output and dependency directories are excluded.
 | `npm run lint` | Run Next.js/TypeScript lint and module-boundary rules. |
 | `npm run typecheck` | Generate route types, then check strict TypeScript. |
 | `npm test` | Check module boundaries, runtime validation and operation gates. |
-| `npm run policy:check` | Validate server configuration from the process and optional `.env.local`. |
+| `npm run policy:check` | Validate server configuration from the process and `.env.development`. |
+| `npm run env:check` | Verify that the three private profiles match the template and declare the expected environment. |
+| `npm run env:sync -- --help` | Show the options for updating selected web settings on the VPS. |
 | `npm run build` | Compile/prerender production and generate the pinned anonymous offline bundle manifest. |
 | `npm start` | Serve the completed production build. |
 | `npm run check` | Generate and validate Prisma, then run lint, type-check, Node/Python tests and production build. |

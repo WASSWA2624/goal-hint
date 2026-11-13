@@ -242,6 +242,48 @@ Keep the prior app release available for rollback. Switching releases does
 not roll back the database. The shared-host deployment commands above target
 the previous production host.
 
+### Update hosted web settings
+
+In the normal checkout, keep the three ignored files in `next-js/` aligned
+with `.env.example`. Edit `.env.development` for local development,
+`.env.test` for `test.goalhint.com`, or `.env.production` for
+`goalhint.com`. Keep local worker overrides in the separate `.env.operations`
+file. Each hosted account keeps its own private web file and approval register.
+Leave server-held database URLs blank. The shared API-Football key is recorded
+in the private profiles for the authorized operator. The hosted web sync keeps
+football settings out of the hosted web files, and staging provider jobs remain
+disabled.
+Use `npm run env:check` to verify the local layouts and target labels without
+displaying any values.
+
+From `next-js/`, use the authorized VPS operator SSH key and review a dry run
+before applying. Supply `--key` once per setting you want to update.
+
+```sh
+npm run env:sync -- --target staging --key YOOLA_SMS_SENDER
+npm run env:sync -- --target staging --key YOOLA_SMS_SENDER --apply
+```
+
+Use `--target production` to select `.env.production` and the production
+account. The dry run reports changes by key name and checks the active release,
+environment and database. An `add` means the key has no explicit entry in the
+hosted file. If the active release already uses the intended default, leave
+the default in effect. A blank selected value preserves the server's setting.
+To remove an optional override, preview and then apply
+`--clear KEY`. Run `npm run env:sync -- --help` for the eligible web settings.
+Flutterwave sandbox settings are available only for staging. Hosted database
+credentials, permissions, approval files and football worker settings remain
+managed through their respective deployment procedures.
+
+An apply backs up the hosted settings privately, updates the canonical file
+and its active copy under the release lock, and reloads Passenger. It checks
+the public Matches page, Matches API and Account session endpoint and restores
+the original files if the smoke check fails. If a process interruption leaves
+the copies out of sync, recover both from the same private backup under the
+release lock before retrying.
+The shared-host `--config-push` and `--config-pull` commands still refer to
+the legacy host.
+
 To refresh staging data, take a consistent data-only MySQL export into a new
 cPanel database with the verified MariaDB table definitions. Load the data
 before restoring the staging triggers, and preserve the target's Prisma history.

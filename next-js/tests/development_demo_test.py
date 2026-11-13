@@ -101,7 +101,7 @@ class DemoEnvironmentTests(unittest.TestCase):
         self.assertEqual(env["GOAL_HINT_AI_ENABLED"], "false")
         self.assertEqual(env["GOAL_HINT_ADMIN_PASSWORD"], "private-admin-password")
         self.assertEqual(env["GOAL_HINT_ADMIN_PHONES"], '["256700009991"]')
-        self.assertEqual(env["GOAL_HINT_ADMIN_PASSWORD_HASH"], "configured-hash")
+        self.assertEqual(env["GOAL_HINT_ADMIN_PASSWORD_HASH"], "")
         self.assertEqual(env["API_FOOTBALL_KEY"], "")
         self.assertEqual(env["AI_API_KEY"], "")
         self.assertEqual(env["NEXT_PUBLIC_OTHER_FLAG"], "")
@@ -113,25 +113,36 @@ class DemoEnvironmentTests(unittest.TestCase):
         for key in MODULE.ADMINISTRATOR_KEYS:
             self.assertEqual(env[key], "")
 
-    def test_next_development_env_precedence_and_process_overrides_are_retained(self):
+    def test_only_development_file_and_process_overrides_supply_local_web_credentials(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / ".env").write_text('GOAL_HINT_ADMIN_PASSWORD=base-sentinel-password\nGOAL_HINT_ADMIN_PHONES=["256700009991"]\nAPI_FOOTBALL_KEY=never-return-this\n', encoding="utf-8")
-            (root / ".env.local").write_text('GOAL_HINT_ADMIN_PASSWORD=local-sentinel-password\nGOAL_HINT_ADMIN_PASSWORD_HASH=local-hash-sentinel\n', encoding="utf-8")
-            (root / ".env.development.local").write_text('GOAL_HINT_ADMIN_PASSWORD="development-sentinel-password"\n', encoding="utf-8")
-            source = {key: value for key, value in MODULE.os.environ.items() if key not in MODULE.ADMINISTRATOR_KEYS}
-            resolved = MODULE.administrator_environment(source, root)
+            (root / ".env").write_text('GOAL_HINT_ADMIN_PASSWORD=base-sentinel-password\n', encoding="utf-8")
+            (root / ".env.local").write_text('GOAL_HINT_ADMIN_PASSWORD_HASH=local-hash-sentinel\n', encoding="utf-8")
+            (root / ".env.development.local").write_text('GOAL_HINT_ADMIN_PASSWORD=legacy-development-sentinel\n', encoding="utf-8")
+            (root / ".env.production").write_text('GOAL_HINT_ADMIN_PASSWORD=production-sentinel\nYOOLA_SMS_API_KEY=production-key\n', encoding="utf-8")
+            (root / ".env.operations").write_text('GOAL_HINT_ADMIN_PASSWORD=worker-sentinel\nYOOLA_SMS_API_KEY=worker-key\n', encoding="utf-8")
+            (root / ".env.development").write_text('GOAL_HINT_ADMIN_PASSWORD="development-sentinel-password"\n'
+                'GOAL_HINT_ADMIN_PHONES=["256700009991"]\nYOOLA_SMS_API_KEY=development-key\nAPI_FOOTBALL_KEY=never-return-this\n', encoding="utf-8")
+            source = {key: value for key, value in MODULE.os.environ.items() if key not in (*MODULE.ADMINISTRATOR_KEYS, *MODULE.MESSAGING_KEYS)}
+            resolved = MODULE.development_web_credentials(source, root)
             self.assertEqual(resolved, {"GOAL_HINT_ADMIN_PHONES": '["256700009991"]',
-                "GOAL_HINT_ADMIN_PASSWORD": "development-sentinel-password", "GOAL_HINT_ADMIN_PASSWORD_HASH": "local-hash-sentinel"})
-            overridden = MODULE.administrator_environment(dict(source, GOAL_HINT_ADMIN_PASSWORD="process-sentinel-password", GOAL_HINT_ADMIN_PASSWORD_HASH=""), root)
+                "GOAL_HINT_ADMIN_PASSWORD": "development-sentinel-password"})
+            overridden = MODULE.development_web_credentials(dict(source, GOAL_HINT_ADMIN_PASSWORD="process-sentinel-password", GOAL_HINT_ADMIN_PASSWORD_HASH=""), root, messaging=True)
             self.assertEqual(overridden["GOAL_HINT_ADMIN_PASSWORD"], "process-sentinel-password")
-            self.assertEqual(overridden["GOAL_HINT_ADMIN_PASSWORD_HASH"], "")
+            self.assertNotIn("GOAL_HINT_ADMIN_PASSWORD_HASH", overridden)
+            self.assertEqual(overridden["YOOLA_SMS_API_KEY"], "development-key")
+
+    def test_yoola_settings_stay_available_for_the_owned_real_snapshot_only(self):
+        for demo, expected in [(True, ""), (False, "development-key")]:
+            with self.subTest(demo=demo):
+                env = MODULE.demo_environment("mysql://root@127.0.0.1:43210/goal_hint_demo", {"YOOLA_SMS_API_KEY": "development-key"}, demo=demo)
+                self.assertEqual(env["YOOLA_SMS_API_KEY"], expected)
 
     def test_configuration_loader_failure_does_not_print_private_child_diagnostics(self):
         with patch.object(MODULE.subprocess, "run", return_value=subprocess.CompletedProcess([], 1,
                 stdout="private-sentinel-password", stderr="private-sentinel-password")):
             with self.assertRaises(MODULE.CommandError) as failure:
-                MODULE.administrator_environment({})
+                MODULE.development_web_credentials({})
         self.assertNotIn("private-sentinel-password", str(failure.exception))
 
     def test_demo_members_can_be_explicitly_disabled(self):

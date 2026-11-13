@@ -239,11 +239,9 @@ original slips with their current pending, won or lost results. Custom builds
 continue to use the normal current eligibility and kickoff checks.
 
 The protected owner workspace uses the regular account login with your existing
-administrator phone and password. The launcher reads `GOAL_HINT_ADMIN_PHONES`,
-`GOAL_HINT_ADMIN_PASSWORD_HASH` and `GOAL_HINT_ADMIN_PASSWORD` with Next's normal
-development environment-file precedence and process overrides. A configured hash
-keeps precedence over a plain password. No public demo administrator credential
-is installed. A valid configured administrator is provisioned in the isolated
+administrator phone and password. The launcher reads `GOAL_HINT_ADMIN_PHONES` and
+`GOAL_HINT_ADMIN_PASSWORD` from `.env.development` and accepts process overrides.
+A valid configured administrator is provisioned in the isolated
 demo database through normal login; the original database is not connected.
 Startup does not create synthetic subscriber or financial examples. Analytics includes 61
 days of diverse synthetic visits, devices, locations, sources and conversions.

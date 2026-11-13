@@ -16,9 +16,10 @@ Open [localhost:3000/en](http://localhost:3000/en). Append `--port 3001` to the
 
 The ignored local preview settings live in `.goal-hint/local-environment/production-build.env`.
 This profile inherits the existing private application connection from
-`.env.development`. The preview uses the production Next.js build with the
-development deployment classification and applies pending MySQL migrations before
-startup. Hosted `.env.production` belongs to the live release.
+`.env.development`. Both `npm run build` and `npm start` use the local files.
+The guarded preview commands above use the production Next.js build with the
+development deployment classification and apply pending MySQL migrations before
+startup. The VPS sync workflow uses `.env.production` for hosted production.
 
 - Deployment classification remains `development`; operation scope is `disabled`.
 - Database access remains enabled, using direct TCP and an explicit pool limit.

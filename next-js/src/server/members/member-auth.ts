@@ -109,7 +109,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
       const account = await database.query((tx) => tx.memberAccount.findUnique({ where: { phone } }));
       const stored = administrator ? credential : account?.passwordHash;
       // Retired credentials and missing accounts still perform the normal password work.
-      const matches = administrator && stored ? await verifyMemberAdminCredential(password, stored)
+      const matches = administrator && stored ? verifyMemberAdminCredential(password, stored)
         : await verifyPassword(password, stored && isPasswordHash(stored) ? stored : await dummyHash());
       if (!matches || !stored || !administrator && !isPasswordHash(stored) || account?.erasedAt || account?.blockedAt) return refused();
       if (!administrator && !account) return refused();

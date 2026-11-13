@@ -15,7 +15,7 @@ const reviewNotices = page => page.items.filter(item => item.kind === "referral-
 const reviewRows = f => [...f.notifications.values()].filter(item => item.eventKey.startsWith("referral-review:"));
 
 async function fixture() {
-  const f = createMemberAuthFixture({ admins: [adminPhone], adminHash: `plain:${password}`, trialDays: 0 });
+  const f = createMemberAuthFixture({ admins: [adminPhone], adminPassword: password, trialDays: 0 });
   const signed = await f.authenticate();
   const administrator = await f.service.login(adminPhone, password, "198.51.100.2");
   const admin = await f.sessionService.verify(administrator.token);

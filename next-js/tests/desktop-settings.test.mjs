@@ -37,6 +37,20 @@ test("configured support is a fallback until an explicit directory projects its 
   assert.equal(configuredSubscriptionSettings({ ...settings, supportContacts: [] }, identity).contactPhone, null);
 });
 
+test("blank environment values leave stored support fields and the Admin directory editable", async () => {
+  const legacy = { contactPhone: "256700000906", whatsappPhone: "256700000907" };
+  const { state, service } = harness(legacy, { contactPhone: null, whatsappPhone: null });
+  assert.deepEqual((await service.overview()).environmentFields, []);
+  assert.equal((await service.current()).settings.contactPhone, legacy.contactPhone);
+  const saved = await service.save("owner", { contactPhone: "256700000908" }, authorized);
+  assert.equal(saved.status, "saved");
+  assert.equal(state.row.whatsappPhone, legacy.whatsappPhone);
+  const contacts = [contact("mtn", "256700000905", { whatsapp: true })];
+  assert.equal((await service.save("owner", { supportContacts: contacts }, authorized)).status, "saved");
+  assert.deepEqual((await service.currentFresh()).settings.supportContacts, contacts);
+  assert.equal((await service.current()).settings.whatsappPhone, contacts[0].phone);
+});
+
 test("structured settings reject malformed contacts and unavailable event variables before writing", async () => {
   const { state, service } = harness();
   assert.equal(parseSettingsChanges({ supportContacts: [contact("mtn", "invalid")] }).ok, false);

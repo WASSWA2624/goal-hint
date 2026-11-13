@@ -3,7 +3,7 @@ import test from "node:test";
 import { execFileSync } from "node:child_process";
 import { defaultSubscriptionSettings } from "../src/domain/subscription-settings.ts";
 
-test("demo receiving details use the isolated row and managed support cannot override wallets", async (t) => {
+test("demo receiving details use the isolated row and missing support environment values preserve the stored contacts and wallets", async (t) => {
   const previous = { NODE_ENV: process.env.NODE_ENV, NEXT_PUBLIC_GOAL_HINT_DEMO: process.env.NEXT_PUBLIC_GOAL_HINT_DEMO };
   Object.assign(process.env, { NODE_ENV: "development", NEXT_PUBLIC_GOAL_HINT_DEMO: "true" });
   const { createSettingsService } = await import("../src/server/members/settings.ts");
@@ -21,16 +21,19 @@ test("demo receiving details use the isolated row and managed support cannot ove
   assert.equal(state.settings.airtelNumber, row.airtelNumber); assert.equal(state.settings.contactPhone, row.contactPhone);
   const identity = { mtnNumber: "256700000090", mtnName: "Configured wallet", mtnMenuShortcut: null,
     airtelNumber: null, airtelName: null, airtelMenuShortcut: null, contactPhone: null, whatsappPhone: null };
-  const managed = createSettingsService(database, { environment: identity });
-  assert.deepEqual(managed.environmentFields, ["contactPhone", "whatsappPhone"]);
-  assert.equal((await managed.current()).settings.mtnNumber, row.mtnNumber);
-  assert.equal((await managed.save("owner", { contactPhone: row.contactPhone }, { password: null, confirm: async () => assert.fail() })).status, "invalid");
+  const unmanaged = createSettingsService(database, { environment: identity });
+  assert.deepEqual(unmanaged.environmentFields, []);
+  const effective = (await unmanaged.current()).settings;
+  assert.equal(effective.mtnNumber, row.mtnNumber);
+  assert.equal(effective.contactPhone, row.contactPhone);
+  assert.equal(effective.whatsappPhone, row.whatsappPhone);
 });
 
 test("a public demo flag cannot unlock production-managed support settings", () => {
   const source = "import {createSettingsService} from './src/server/members/settings.ts'; "
-    + "if(createSettingsService({}).environmentFields.length!==2)process.exit(1)";
+    + "if(createSettingsService({}).environmentFields.join()!=='contactPhone')process.exit(1)";
   execFileSync(process.execPath, ["--conditions=react-server", "--input-type=module", "-e", source], {
-    cwd: new URL("..", import.meta.url), env: { NODE_ENV: "production", NEXT_PUBLIC_GOAL_HINT_DEMO: "true" }, stdio: "pipe",
+    cwd: new URL("..", import.meta.url), env: { NODE_ENV: "production", NEXT_PUBLIC_GOAL_HINT_DEMO: "true",
+      GOAL_HINT_CUSTOMER_SUPPORT_NUMBER: "256700000090", GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER: "" }, stdio: "pipe",
   });
 });

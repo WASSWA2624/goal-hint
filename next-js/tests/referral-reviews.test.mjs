@@ -8,7 +8,7 @@ import { createMemberAuthFixture } from "./helpers/member-auth-fixture.mjs";
 
 const DAY = 86_400_000, HOUR = 3_600_000, adminPhone = "256700009990", password = "correct horse 47";
 async function fixture() {
-  const f = createMemberAuthFixture({ admins: [adminPhone], adminHash: `plain:${password}`, trialDays: 0 });
+  const f = createMemberAuthFixture({ admins: [adminPhone], adminPassword: password, trialDays: 0 });
   const signed = await f.authenticate();
   const administrator = await f.service.login(adminPhone, password, "198.51.100.2");
   const admin = await f.sessionService.verify(administrator.token);

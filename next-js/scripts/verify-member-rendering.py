@@ -389,7 +389,7 @@ def authentication_routes(origin):
 def main():
     options = parse_args("member account", extra=("--fixture",))
     env = environment(GOAL_HINT_DATABASE_ENABLED="false", GOAL_HINT_ADMIN_PHONES='["256700000991"]',
-        GOAL_HINT_ADMIN_PASSWORD="Synthetic admin password", GOAL_HINT_ADMIN_PASSWORD_HASH="")
+        GOAL_HINT_ADMIN_PASSWORD="Synthetic admin password")
     if options.fixture:
         directory = Path(options.fixture).resolve()
         assert directory.is_relative_to(ROOT / ".tmp") and (directory / ".next/BUILD_ID").is_file(), "Reuse a built acceptance fixture inside .tmp."

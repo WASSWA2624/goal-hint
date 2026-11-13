@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHmac, randomUUID } from "node:crypto";
 import { defaultSubscriptionSettings } from "../../src/domain/subscription-settings.ts";
 import { hashPassword } from "../../src/server/analytics/analytics-password.ts";
+import { memberAdminCredential } from "../../src/server/members/member-admin.ts";
 import { createMemberAuth } from "../../src/server/members/member-auth.ts";
 import { createMemberSessions } from "../../src/server/members/member-sessions.ts";
 
@@ -9,7 +10,7 @@ const phone = "256700000001", password = "correct horse 47";
 const key = (purpose, value) => createHmac("sha256", "synthetic-test-secret").update(`${purpose}\0${value}`).digest("hex");
 
 /** Small transactional store: assertions exercise the production auth service, not a second implementation of it. */
-export function createMemberAuthFixture({ admins = [], adminHash = null, send, trialDays = 2 } = {}) {
+export function createMemberAuthFixture({ admins = [], adminPassword, send, trialDays = 2 } = {}) {
   let time = Date.parse("2026-10-20T18:00:00Z"), queue = Promise.resolve();
   const accounts = new Map(), sessions = new Map(), challenges = new Map(), buckets = new Map(), accessCodes = new Map(), referrals = new Map(), notifications = new Map(), payments = new Map(), sent = [], messages = [];
   const reviewCases = new Map(), reviewEvidence = new Map(), reviewEvents = new Map(), reversals = new Map();
@@ -92,9 +93,10 @@ export function createMemberAuthFixture({ admins = [], adminHash = null, send, t
   } };
   const adminPhones = new Set(admins), adminPhone = (phone) => adminPhones.has(phone);
   const delivery = { async send(message) { messages.push(message); await send?.(message); } };
-  const restart = () => createMemberAuth({ database, config: { key }, now: () => time, adminPhone, adminPasswordHash: () => adminHash, delivery });
+  const adminPasswordHash = () => memberAdminCredential({ GOAL_HINT_ADMIN_PASSWORD: adminPassword });
+  const restart = () => createMemberAuth({ database, config: { key }, now: () => time, adminPhone, adminPasswordHash, delivery });
   const service = restart();
-  const sessionService = createMemberSessions({ database, config: { key }, now: () => time, adminPhone, adminPasswordHash: () => adminHash });
+  const sessionService = createMemberSessions({ database, config: { key }, now: () => time, adminPhone, adminPasswordHash });
   async function account(fields = {}) {
     return tx.memberAccount.create({ data: { id: randomUUID(), phone, passwordHash: await hashPassword(password), phoneVerifiedAt: new Date(time), createdAt: new Date(time), lastSignInAt: new Date(time), ...fields } });
   }

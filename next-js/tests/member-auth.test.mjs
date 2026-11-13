@@ -100,13 +100,13 @@ test("registration creates a restricted verification session and never claims an
 });
 
 test("configured admin numbers require the environment password and land on the dashboard", async () => {
-  const hash = await hashPassword("configured admin password"), f = fixture({ admins: [phone], adminHash: hash });
+  const adminPassword = "configured admin password", f = fixture({ admins: [phone], adminPassword });
   assert.equal((await f.service.register(phone, password, browser(), "198.51.100.1")).status, "unauthorized");
   const account = await f.account();
   assert.equal((await f.service.login(phone, password, "198.51.100.1")).status, "unauthorized");
   const logged = await f.service.login(phone, "configured admin password", "198.51.100.1");
   assert.equal(logged.administrator, true); assert.equal((await f.sessionService.verify(logged.token)).accountId, account.id);
-  const noAccount = fixture({ admins: [replacement], adminHash: hash });
+  const noAccount = fixture({ admins: [replacement], adminPassword });
   assert.equal((await noAccount.service.login(replacement, "configured admin password", "198.51.100.1")).administrator, true);
   assert.equal(noAccount.accounts.size, 1);
   const request = new Request("https://goal.test/api/account/login", { method: "POST", headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json" },
@@ -115,28 +115,28 @@ test("configured admin numbers require the environment password and land on the 
   assert.equal(response.status, 200); assert.equal((await response.json()).next, "/admin");
 });
 
-test("private administrator password fallback works without hashing on each read and yields only opaque session metadata", async () => {
-  const configured = "private admin fallback", environment = { GOAL_HINT_ADMIN_PASSWORD: configured };
+test("shared administrator password ignores retired hashes and yields only opaque session metadata", async () => {
+  const configured = "private admin password", environment = { GOAL_HINT_ADMIN_PASSWORD: configured };
   const credential = memberAdminCredential(environment);
-  assert.equal(memberAdminCredential(environment), credential, "The credential identity is stable across processes");
-  assert.equal(await verifyMemberAdminCredential("wrong password", credential), false);
-  const f = fixture({ admins: [phone], adminHash: credential });
+  assert.equal(credential, `plain:${configured}`, "Existing password-bound session identity is stable");
+  assert.equal(verifyMemberAdminCredential("wrong password", credential), false);
+  const f = fixture({ admins: [phone], adminPassword: configured });
   const logged = await f.service.login(phone, configured, "198.51.100.1");
   assert.equal(logged.administrator, true); assert.equal((await f.sessionService.verify(logged.token)).administrator, true);
   assert.ok(!JSON.stringify([...f.accounts.values(), ...f.sessions.values(), logged]).includes(configured));
   assert.match([...f.sessions.values()][0].adminPasswordVersion, /^[a-f0-9]{64}$/u);
-  const preferred = await hashPassword("preferred hashed credential");
-  assert.equal(memberAdminCredential({ ...environment, GOAL_HINT_ADMIN_PASSWORD_HASH: preferred }), preferred);
-  assert.equal(await verifyMemberAdminCredential(configured, preferred), false);
-  assert.equal(memberAdminCredential({ ...environment, GOAL_HINT_ADMIN_PASSWORD_HASH: "malformed hash" }), null);
-  assert.equal(memberAdminCredential({ ...environment, GOAL_HINT_ADMIN_PASSWORD_HASH: "   " }), credential);
+  const retired = await hashPassword("retired hashed credential");
+  assert.equal(memberAdminCredential({ ...environment, GOAL_HINT_ADMIN_PASSWORD_HASH: retired }), credential);
+  assert.equal(memberAdminCredential({ ...environment, GOAL_HINT_ADMIN_PASSWORD_HASH: "malformed hash" }), credential);
+  assert.equal(memberAdminCredential({ GOAL_HINT_ADMIN_PASSWORD_HASH: retired }), null);
+  assert.equal(verifyMemberAdminCredential("retired hashed credential", retired), false);
   assert.equal(memberAdminCredential({ GOAL_HINT_ADMIN_PASSWORD: "        " }), null);
 });
 
 test("shared sign-in cannot provision missing ordinary accounts or authenticate blocked, erased or unconfigured administrator accounts", async () => {
-  const configured = "configured administrator password", hash = await hashPassword(configured);
+  const configured = "configured administrator password";
   for (const fields of [{ blockedAt: new Date() }, { erasedAt: new Date() }]) {
-    const f = fixture({ admins: [phone], adminHash: hash }); await f.account(fields);
+    const f = fixture({ admins: [phone], adminPassword: configured }); await f.account(fields);
     assert.equal((await f.service.login(phone, configured, address)).status, "unauthorized");
     assert.equal(f.sessions.size, 0);
   }
@@ -149,7 +149,7 @@ test("shared sign-in cannot provision missing ordinary accounts or authenticate 
 });
 
 test("administrator password logins allow two sessions and evict the oldest on the third", async () => {
-  const configured = "configured administrator password", f = fixture({ admins: [phone], adminHash: await hashPassword(configured) });
+  const configured = "configured administrator password", f = fixture({ admins: [phone], adminPassword: configured });
   const first = await f.service.login(phone, configured, address);
   assert.equal((await f.service.login(phone, "wrong administrator password", "198.51.100.2")).status, "unauthorized");
   assert.equal((await f.sessionService.verify(first.token)).administrator, true);

@@ -63,7 +63,7 @@ Set the enabled status, receiving number, registered name and optional tested di
 
 Older installations that kept receiving details in environment variables must verify and enter those values privately in Admin Settings before accepting transfers with this version. The retired variables are ignored at runtime. Keep real receiving numbers and credentials out of seed data and version control.
 
-The optional `GOAL_HINT_CUSTOMER_SUPPORT_NUMBER` and `GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER` values remain separate legacy support fallbacks. Use country-code numbers and restart after changing them. Payment decision SMS uses the server-side `YOOLA_SMS_API_KEY` and optional `YOOLA_SMS_SENDER`. [Messaging runbook](yoola-messaging.md)
+Manage support contacts in Admin Settings. One contact can handle both calls and WhatsApp. The optional `GOAL_HINT_CUSTOMER_SUPPORT_NUMBER` and `GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER` settings serve older installations without a stored contact directory. Leave them blank when using the dashboard. Payment decision SMS uses the server-side `YOOLA_SMS_API_KEY` and optional `YOOLA_SMS_SENDER`. [Messaging runbook](yoola-messaging.md)
 
 ## Saved slip history
 

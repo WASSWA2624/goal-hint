@@ -40,44 +40,41 @@ def check_development_dependencies(*, live=False):
                        "then retry the development command.")
 
 
-ADMINISTRATOR_KEYS = ("GOAL_HINT_ADMIN_PHONES", "GOAL_HINT_ADMIN_PASSWORD_HASH", "GOAL_HINT_ADMIN_PASSWORD")
+ADMINISTRATOR_KEYS = ("GOAL_HINT_ADMIN_PHONES", "GOAL_HINT_ADMIN_PASSWORD")
+MESSAGING_KEYS = ("YOOLA_SMS_API_KEY", "YOOLA_SMS_SENDER")
 
 
-def administrator_environment(source=None, directory=ROOT):
-    """Resolve only administrator settings with Next's normal development precedence."""
+def development_web_credentials(source=None, directory=ROOT, *, messaging=False):
+    """Resolve only the private settings retained by the isolated development web app."""
     source = dict(os.environ if source is None else source)
-    script = ("import nextEnv from '@next/env'; "
-              "nextEnv.loadEnvConfig(process.argv[1], true, {info(){}, error(){}}, true); "
-              "const keys=['GOAL_HINT_ADMIN_PHONES','GOAL_HINT_ADMIN_PASSWORD_HASH','GOAL_HINT_ADMIN_PASSWORD']; "
-              "process.stdout.write(JSON.stringify(Object.fromEntries(keys.filter(key=>process.env[key]!==undefined)"
-              ".map(key=>[key,process.env[key]]))));")
+    keys = (*ADMINISTRATOR_KEYS, *MESSAGING_KEYS) if messaging else ADMINISTRATOR_KEYS
+    script = ("import { readLocalEnvFile } from './scripts/lib/local-web-environment.mjs'; "
+              "const settings={...readLocalEnvFile(process.argv[1],'.env.development'),...process.env}; "
+              "const keys=process.argv.slice(2); "
+              "process.stdout.write(JSON.stringify(Object.fromEntries(keys.filter(key=>settings[key]!==undefined)"
+              ".map(key=>[key,settings[key]]))));")
     try:
-        resolved = subprocess.run([development_node_binary(), "--input-type=module", "-e", script, str(directory)],
-            cwd=ROOT, env=dict(source, NODE_ENV="development"), capture_output=True, text=True,
+        resolved = subprocess.run([development_node_binary(), "--input-type=module", "-e", script, str(directory), *keys],
+            cwd=ROOT, env=source, capture_output=True, text=True,
             encoding="utf-8", errors="replace", timeout=30, creationflags=hidden_process())
         values = json.loads(resolved.stdout) if resolved.returncode == 0 else None
-        if not isinstance(values, dict) or any(key not in ADMINISTRATOR_KEYS or not isinstance(value, str) for key, value in values.items()):
+        if not isinstance(values, dict) or any(key not in keys or not isinstance(value, str) for key, value in values.items()):
             raise ValueError
         return values
     except (OSError, subprocess.SubprocessError, ValueError):
-        raise CommandError("The existing administrator configuration could not be loaded; private values were withheld.") from None
+        raise CommandError("The local web credentials could not be loaded; private values were withheld.") from None
 
 
 def demo_environment(url: str, source=None, *, demo=True):
     env = dict(os.environ if source is None else source)
-    administrator = administrator_environment() if source is None else {key: source[key] for key in ADMINISTRATOR_KEYS if key in source}
-    # Next loads .env files automatically. Explicit empty values stop private local
-    # provider/database settings from filling missing keys in this owned process.
-    keys = set(env)
-    for path in ROOT.glob(".env*"):
-        if path.is_file():
-            keys.update(re.findall(r"^(?:export\s+)?([A-Z][A-Z0-9_]*)\s*=", path.read_text(encoding="utf-8-sig"), re.M))
-    credentials = {"DATABASE_URL", "TEST_DATABASE_URL", "MIGRATION_DATABASE_URL", "API_FOOTBALL_KEY", "AI_API_KEY", "RESEARCH_API_KEY"}
-    for key in keys:
+    retained = (*ADMINISTRATOR_KEYS, *MESSAGING_KEYS) if not demo else ADMINISTRATOR_KEYS
+    configured = development_web_credentials(messaging=not demo) if source is None else {key: source[key] for key in retained if key in source}
+    credentials = {"DATABASE_URL", "TEST_DATABASE_URL", "MIGRATION_DATABASE_URL", "API_FOOTBALL_KEY", "AI_API_KEY", "RESEARCH_API_KEY", *MESSAGING_KEYS}
+    for key in env.keys() | credentials:
         if key.startswith(("GOAL_HINT_", "NEXT_PUBLIC_")) or key in credentials:
             env[key] = ""
     demo_value = "true" if demo else "false"
-    env.update(NODE_ENV="development", DEBUG="", NODE_DEBUG="", NODE_DEBUG_NATIVE="",
+    env.update(NODE_ENV="development", DEBUG="", NODE_DEBUG="", NODE_DEBUG_NATIVE="", __GOAL_HINT_OWNED_LOCAL_WEB="1",
         GOAL_HINT_DEMO=demo_value, NEXT_PUBLIC_GOAL_HINT_DEMO=demo_value,
         GOAL_HINT_DEMO_MEMBER=(source or os.environ).get("GOAL_HINT_DEMO_MEMBER", "true") if demo else "false",
         GOAL_HINT_OPERATION_SCOPE="disabled", GOAL_HINT_DEPLOYMENT_ENVIRONMENT="development",
@@ -90,9 +87,7 @@ def demo_environment(url: str, source=None, *, demo=True):
         GOAL_HINT_TEAM_CODES_IMPORT_ENABLED="false", GOAL_HINT_ANALYTICS_ENABLED="true",
         GOAL_HINT_ADS_ENABLED="false", GOAL_HINT_DARK_MODE_ENABLED="false",
         GOAL_HINT_EXACT_SCORES_ENABLED="false", GOAL_HINT_LOCALES="en")
-    # Keep the same private administrator authentication as the normal app. The
-    # production allowlist, hash precedence and session checks remain in force.
-    env.update({key: administrator.get(key, "") for key in ADMINISTRATOR_KEYS})
+    env.update({key: configured.get(key, "") for key in retained})
     return env
 
 
@@ -199,7 +194,8 @@ def run_web(args, env, port, *, live=False, warm_matches=False):
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     command = [development_node_binary(), str(ROOT / "node_modules/nodemon/bin/nodemon.js"), *args] if live else [
-        development_node_binary(), str(ROOT / "node_modules/next/dist/bin/next"), "dev", *args]
+        development_node_binary(), "--import", "./scripts/local-next-environment.mjs",
+        str(ROOT / "node_modules/next/dist/bin/next"), "dev", *args]
     for attempt in range(3):
         release_port(port)
         child = subprocess.Popen(command, cwd=ROOT, env=env, creationflags=hidden_process(), stdout=subprocess.PIPE,

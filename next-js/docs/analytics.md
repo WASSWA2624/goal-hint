@@ -137,16 +137,15 @@ neutralised; percentages as 0–100, durations in seconds).
    | `GOAL_HINT_ANALYTICS_ENABLED` | `true` (default) | `true` |
    | `GOAL_HINT_ANALYTICS_SECRET` | fixed development value | **required**, 32+ random characters |
    | `GOAL_HINT_ADMIN_PHONES` | configured canonical phone array | **required for dashboard access** |
-   | `GOAL_HINT_ADMIN_PASSWORD_HASH` | configured scrypt hash | **required**, or private `GOAL_HINT_ADMIN_PASSWORD` fallback |
+   | `GOAL_HINT_ADMIN_PASSWORD` | private shared administrator password | **required for dashboard access** |
    | `GOAL_HINT_ANALYTICS_RETENTION_DAYS` | 395 | optional; the dashboard can override |
    | `GOAL_HINT_ANALYTICS_GEO_SOURCE` | `timezone` | `timezone`, `cloudflare` or `vercel` |
 
    Administrator numbers use the same login as ordinary accounts. Legacy username
    credentials, including `admin` / `admin`, cannot sign in. Production collects
-   nothing without the secret. Create the administrator hash with
-   `npm run analytics:hash-password` (input
-   is hidden; at least 12 characters) and paste the printed line into
-   `../deploy/.private/nextjs/.env.production.local`, then `python scripts/deploy-cpanel.py --config-push`.
+   nothing without the secret. Set `GOAL_HINT_ADMIN_PASSWORD` in the intended
+   environment's private profile. Apply hosted changes
+   through the [VPS web settings workflow](deployment/how-to-deploy.md#update-hosted-web-settings).
    Generate the secret with e.g. `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
    Changing the secret starts new visitor keys (existing visitors count as new).
 3. **Retention.** Raw rows older than the retention period (default 395 days, choices

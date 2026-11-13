@@ -1,7 +1,6 @@
 {
   "watch": [
-    ".env{,.*}",
-    ".env.example",
+    ".env.development",
     "nodemon.json"
   ],
   "ext": "*",
@@ -13,5 +12,5 @@
     "src/server/generated/**"
   ],
   "delay": 300,
-  "exec": "next dev"
+  "exec": "node --import ./scripts/local-next-environment.mjs ./node_modules/next/dist/bin/next dev"
 }

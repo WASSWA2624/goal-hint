@@ -4,6 +4,16 @@ import path from "node:path";
 import test, { after } from "node:test";
 import { fixtureAdminSessions, installAdminFixtureEnvironment } from "./helpers/admin-fixtures.mjs";
 after(installAdminFixtureEnvironment());
+const previousSupport = process.env.GOAL_HINT_CUSTOMER_SUPPORT_NUMBER;
+const previousWhatsApp = process.env.GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER;
+process.env.GOAL_HINT_CUSTOMER_SUPPORT_NUMBER = "256700000902";
+process.env.GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER = "";
+after(() => {
+  if (previousSupport === undefined) delete process.env.GOAL_HINT_CUSTOMER_SUPPORT_NUMBER;
+  else process.env.GOAL_HINT_CUSTOMER_SUPPORT_NUMBER = previousSupport;
+  if (previousWhatsApp === undefined) delete process.env.GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER;
+  else process.env.GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER = previousWhatsApp;
+});
 import { createMemberSignInHandler, createMemberDevicesHandler } from "../src/server/members/member-http.ts";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -235,8 +245,8 @@ test("Plans and Settings: reads expose managed support settings, writes are JSON
   assert.equal(shown.settings.paywallMode, "off", "A missing row reads off.");
   assert.equal(shown.settings.trialDays, 2, "A missing row configures a 2-day trial for paid access.");
   assert.equal(shown.settings.allowUnsubscribedMembers, false);
-  assert.deepEqual(shown.environmentFields, ["contactPhone", "whatsappPhone"]);
-  assert.deepEqual(shown.checkoutReadiness.map(({ key }) => key), ["plan", "payment-number", "contact", "privacy", "terms"]);
+  assert.deepEqual(shown.environmentFields, ["contactPhone"]);
+  assert.deepEqual(shown.checkoutReadiness.map(({ key }) => key), ["plan", "payment-number", "privacy", "terms"]);
   assert.equal(shown.diagnostics.address, "unknown", "Raw forwarded headers cannot establish a trusted transport address.");
   assert.deepEqual(shown.diagnostics.headers.filter(({ value }) => value !== null), [{ name: "x-forwarded-for", value: "198.51.100.4, 203.0.113.8" },
     { name: "x-real-ip", value: "203.0.113.8" }]);

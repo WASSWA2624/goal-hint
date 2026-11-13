@@ -153,6 +153,15 @@ await sealBackup(input.node,backupText('Synthetic Node backup.'),{...options,met
             self.assertEqual(path, ROOT.parent / "deploy/.private/nextjs" / name)
         self.assertEqual(deployment.web_archive(development=True), ROOT.parent / "deploy/goal-hint-nextjs-1.0.0-dev.zip")
 
+    def test_legacy_deployment_accepts_existing_settings_omitted_from_new_profiles(self):
+        deployer = load_script("deploy-cpanel")
+        settings = "\n".join(f"{key}=" for key in sorted(deployer.LEGACY_CONFIG_KEYS))
+        self.assertEqual(deployer.check_config(settings, None), [])
+        self.assertEqual(
+            deployer.check_config(settings + "\nGOAL_HINT_UNKNOWN=", None),
+            ["GOAL_HINT_UNKNOWN is not a known setting (see .env.example)"],
+        )
+
     def test_source_export_excludes_generated_private_and_missing_files(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

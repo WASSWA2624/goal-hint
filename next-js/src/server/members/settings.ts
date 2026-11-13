@@ -130,10 +130,12 @@ type SupportIdentity = Pick<SubscriptionSettings, (typeof environmentSupportFiel
 
 /** Retain the configured legacy support fallback. Payment destinations come from the stored settings. */
 export function configuredSubscriptionSettings(settings: SubscriptionSettings, environment: SupportIdentity | null): SubscriptionSettings {
-  const configured = environment ? { ...settings, contactPhone: environment.contactPhone, whatsappPhone: environment.whatsappPhone } : settings;
-  if (configured.supportContacts == null) return configured;
-  const contacts = supportContactsOf(configured);
-  return Object.freeze({ ...configured, contactPhone: contacts.find(contact => contact.calls)?.phone ?? null,
+  if (settings.supportContacts == null) return environment ? {
+    ...settings, contactPhone: environment.contactPhone ?? settings.contactPhone,
+    whatsappPhone: environment.whatsappPhone ?? settings.whatsappPhone,
+  } : settings;
+  const contacts = supportContactsOf(settings);
+  return Object.freeze({ ...settings, contactPhone: contacts.find(contact => contact.calls)?.phone ?? null,
     whatsappPhone: contacts.find(contact => contact.whatsapp)?.phone ?? null });
 }
 
@@ -144,7 +146,7 @@ export function createSettingsService(database: DatabaseRuntime,
     now?: () => number; readiness?: ReleaseReadiness;
     environment?: SupportIdentity | null;
   } = {}) {
-  const environmentFields = environment ? environmentSupportFields : [];
+  const environmentFields = environmentSupportFields.filter(field => environment?.[field] != null);
   const effective = (settings: SubscriptionSettings) => configuredSubscriptionSettings(settings, environment);
   let cached: Readonly<{ state: SettingsState; until: number }> | null = null;
   let lastGood: SubscriptionSettings | null = null;

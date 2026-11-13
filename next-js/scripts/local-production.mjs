@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { localProductionOverlays, localWebEnvironment } from "./lib/local-web-environment.mjs";
 
 const [action, ...args] = process.argv.slice(2);
 if (action !== "build" && action !== "start") {
@@ -7,15 +8,17 @@ if (action !== "build" && action !== "start") {
   process.exit(1);
 }
 
+const environment = localWebEnvironment("production", { overlays: localProductionOverlays });
+
 function run(path, ...parameters) {
-  const result = spawnSync(process.execPath, [fileURLToPath(new URL(path, import.meta.url)), ...parameters], { stdio: "inherit" });
+  const result = spawnSync(process.execPath, [fileURLToPath(new URL(path, import.meta.url)), ...parameters], { env: environment, stdio: "inherit" });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
 if (action === "start") {
-  const app = new URL(process.env.DATABASE_URL);
-  const migration = new URL(process.env.MIGRATION_DATABASE_URL);
-  if (process.env.GOAL_HINT_DEPLOYMENT_ENVIRONMENT !== "development" ||
+  const app = new URL(environment.DATABASE_URL);
+  const migration = new URL(environment.MIGRATION_DATABASE_URL);
+  if (environment.GOAL_HINT_DEPLOYMENT_ENVIRONMENT !== "development" ||
       app.protocol !== "mysql:" || !["127.0.0.1", "localhost", "[::1]"].includes(app.hostname) ||
       app.host !== migration.host || app.pathname !== migration.pathname) {
     throw new Error("Use matching private loopback database settings for the local preview.");
