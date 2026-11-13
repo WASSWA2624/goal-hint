@@ -54,7 +54,7 @@ export async function verifyCheckoutPay(page, { origin, outputDirectory } = {}) 
   async function open(values = {}) {
     scenario = { wallet: 0, earnedDays: 0, mode: "light", width: 390, ...values };
     const parameters = new URLSearchParams({ packages: "standard", wallet: String(scenario.wallet), earnedDays: String(scenario.earnedDays),
-      scenario: `pay-${Date.now()}-${++sequence}` });
+      ...(scenario.stableDraft ? {} : { scenario: `pay-${Date.now()}-${++sequence}` }) });
     if (scenario.lastProvider) parameters.set("lastProvider", scenario.lastProvider);
     if (scenario.disabledProvider) parameters.set("disabledProvider", scenario.disabledProvider);
     await page.setViewportSize({ width: scenario.width, height: 1100 });
@@ -82,7 +82,7 @@ export async function verifyCheckoutPay(page, { origin, outputDirectory } = {}) 
     await settled(page);
     const layout = await inspectAppLayout(page, "[data-checkout-pay]");
     assert(layout.failures.length === 0, `${label}: ${JSON.stringify(layout.failures)}`);
-    const controls = await pay().locator("button").evaluateAll(elements => elements.filter(element => element.checkVisibility())
+    const controls = await pay().locator("button, [data-pay-wallet-top-up]").evaluateAll(elements => elements.filter(element => element.checkVisibility())
       .map(element => ({ name: element.textContent.trim(), height: element.getBoundingClientRect().height,
         expected: Number.parseFloat(getComputedStyle(element).getPropertyValue("--form-control-height")) })));
     const standard = await page.evaluate(() => matchMedia("(pointer: coarse)").matches ? 44 : 40);
@@ -189,6 +189,7 @@ export async function verifyCheckoutPay(page, { origin, outputDirectory } = {}) 
     await recipient("902");
     await open({ disabledProvider: "both" });
     assert(await pay().locator("[data-pay-continue]").isDisabled(), "No providers must disable payment continuation.");
+    assert(!await pay().locator("[data-pay-wallet-top-up]").count(), "Top-up requires an available provider.");
     const unavailableRecipient = await pay().locator("[data-pay-recipient]").allTextContents();
     assert(unavailableRecipient.every(value => !/\d/u.test(value)), "No usable provider must never expose a receiving number.");
     checks.push({ check: "unavailable provider fallback and empty methods" });
@@ -199,6 +200,9 @@ export async function verifyCheckoutPay(page, { origin, outputDirectory } = {}) 
       await wallet().check();
       await quoted();
       assert((await pay().locator("[data-pay-amount]").textContent()).includes("2,000"), "Partial wallet must leave UGX 2,000.");
+      const topUp = pay().getByRole("link", { name: "Top up", exact: true });
+      assert(await topUp.getAttribute("href") === "/en/subscribe?add=credit&resume=plan#plans", "Shortfalls must open the top-up flow with a return to the plan.");
+
       assert(await pay().locator("[data-pay-earned-days]").isVisible(), "Available earned days need a redemption entry.");
       await pay().getByRole("radio", { name: "Airtel Money", exact: true }).check();
       await recipient("902");
@@ -211,10 +215,22 @@ export async function verifyCheckoutPay(page, { origin, outputDirectory } = {}) 
       checks.push({ check: "explicit partial wallet and provider switching", mode });
     }
 
+    await open({ wallet: 3000, stableDraft: true });
+    await wallet().check();
+    await pay().getByRole("link", { name: "Top up", exact: true }).click();
+    await page.waitForURL(url => url.searchParams.get("add") === "credit");
+    await page.getByRole("textbox", { name: "Amount to add (UGX)", exact: true }).waitFor();
+    await page.goBack({ waitUntil: "domcontentloaded" });
+    await pay().waitFor();
+    assert((await pay().locator('[data-pay-package-part="name"]').textContent()).trim() === "Weekly"
+      && await wallet().isChecked(), "Returning from top-up must restore the chosen plan and wallet contribution.");
+    checks.push({ check: "shortfall top-up and return preserves the plan" });
+
     await open({ wallet: 10000, lastProvider: "airtel" });
     await wallet().check();
     await quoted();
     assert(!await pay().locator("[data-pay-recipient]").count(), "Wallet-only payment must not request a transfer.");
+    assert(!await pay().locator("[data-pay-wallet-top-up]").count(), "Sufficient credit must not prompt for a top-up.");
     assert(await pay().getByRole("button", { name: "Review payment", exact: true }).isVisible(), "Full wallet must proceed to review.");
     assert(await pay().getByRole("radio", { name: "MTN MoMo", exact: true }).isVisible(), "Mobile Money must remain discoverable.");
     await pay().getByRole("radio", { name: "MTN MoMo", exact: true }).check();

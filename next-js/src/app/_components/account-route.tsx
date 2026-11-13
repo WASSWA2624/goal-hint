@@ -22,7 +22,7 @@ import { SignOutIcon } from "@/components/ui/icons";
 import { memberLandingPath, memberNextPath, memberReturnPath } from "@/domain/member-navigation";
 import { publicSupportContactSettings } from "@/domain/public-subscription-settings";
 import { manualPaymentProvider } from "@/domain/subscription-settings";
-import { checkoutOpenStatuses } from "@/domain/checkout";
+import { automaticCheckoutPending, checkoutOpenStatuses } from "@/domain/checkout";
 import { formatSubscriptionExpiry } from "@/domain/subscription-expiry";
 import { accountSection, accountSectionHref } from "@/domain/account-navigation";
 import { notificationCursor } from "@/domain/account-notifications";
@@ -61,6 +61,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const returnTo = memberReturnPath(parameters.return);
     const section = accountSection(parameters.section), summarySection = section === "overview" || section === "subscription";
     const walletSection = section === "wallet";
+    const authReturnTo = section === "subscription" ? accountSectionHref(locale, "subscription", returnTo) : returnTo;
     const contact = { ...publicSupportContactSettings(settings), reviewTime: settings?.reviewTime ?? null };
     // Old reset links enter the same code-based recovery flow.
     const authView: AccountAuthView = parameters.view === "register" ? "register" : parameters.view === "forgot" || parameters.view === "reset" ? "forgot" : "login";
@@ -73,10 +74,10 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const unavailable = mode === undefined;
     // Administrator sign-in is independent of subscription settings and every account subview.
     if (member && !member.blocked && member.administrator) redirect(memberLandingPath(true, returnTo));
-    if (session.kind === "reset") return <PublicShell locale={locale} showAccount><MemberNavigationRecovery expectedPhone={null} /><ResetPasswordForm locale={locale} phone={session.phone} returnTo={returnTo} contact={contact} /></PublicShell>;
-    if (session.kind === "verification") return <PublicShell locale={locale} showAccount><MemberNavigationRecovery expectedPhone={null} /><AccountVerificationForm locale={locale} phone={session.phone} returnTo={returnTo} contact={contact} /></PublicShell>;
+    if (session.kind === "reset") return <PublicShell locale={locale} showAccount><MemberNavigationRecovery expectedPhone={null} /><ResetPasswordForm locale={locale} phone={session.phone} returnTo={authReturnTo} contact={contact} /></PublicShell>;
+    if (session.kind === "verification") return <PublicShell locale={locale} showAccount><MemberNavigationRecovery expectedPhone={null} /><AccountVerificationForm locale={locale} phone={session.phone} returnTo={authReturnTo} contact={contact} /></PublicShell>;
     if (authView === "forgot" && member && !member.blocked) redirect(accountSectionHref(locale, "password", returnTo));
-    if (authView === "forgot" && !member) return <PublicShell locale={locale} showAccount><MemberNavigationRecovery expectedPhone={null} /><AccountAuthForm locale={locale} view="forgot" returnTo={returnTo} contact={contact} /></PublicShell>;
+    if (authView === "forgot" && !member) return <PublicShell locale={locale} showAccount><MemberNavigationRecovery expectedPhone={null} /><AccountAuthForm locale={locale} view="forgot" returnTo={authReturnTo} contact={contact} /></PublicShell>;
     if (member && !member.blocked && typeof parameters.view === "string" && ["login", "register", "verify", "new-password"].includes(parameters.view))
       redirect(memberLandingPath(false, returnTo));
     const now = new Date();
@@ -95,28 +96,34 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const topUpStatus = paymentView?.topUpStatus ?? [status, paymentView?.otherStatus].find((report) => report?.purpose === "topup") ?? null;
     const activeUntil = subscription?.activeUntil ?? null;
     const refreshAt = subscription?.trial?.state === "active" ? subscription.trial.endsAt : activeUntil;
-    const waiting = (subscription?.paymentPending ?? (!!status && ["pending", "superseded"].includes(status.status)))
-      || ["pending", "superseded"].includes(paymentView?.otherStatus?.status ?? "")
-      || (walletSection && [...checkoutOpenStatuses, "superseded"].some(state => state === topUpStatus?.status));
-    const salesOpen = mode === "on";
-    const checkoutPublished = subscriptionCheckoutPublished(settings, resolved.config.production);
+    const waitingStatuses = ["pending", "superseded", automaticCheckoutPending];
+    const waiting = subscription?.paymentPending || waitingStatuses.includes(status?.status ?? "")
+      || waitingStatuses.includes(paymentView?.otherStatus?.status ?? "")
+      || (walletSection && [...checkoutOpenStatuses, "superseded", automaticCheckoutPending].some(state => state === topUpStatus?.status));
+    const checkoutPublished = subscriptionCheckoutPublished(settings, resolved.config);
     const topUpOpen = checkoutPublished && settings !== null &&
-      (manualPaymentProvider(settings, "mtn").reason === null || manualPaymentProvider(settings, "airtel").reason === null);
+      (!!resolved.flutterwave || manualPaymentProvider(settings, "mtn").reason === null || manualPaymentProvider(settings, "airtel").reason === null);
     // Plans are read only for an account with credit or auto-renewal to manage.
     const credit = paymentView?.credit ?? null;
-    const offers = walletSection && salesOpen && credit && (credit.availableBalanceUgx > 0 || credit.autoRenew)
+    const offers = walletSection && checkoutPublished && credit && (credit.availableBalanceUgx > 0 || credit.autoRenew)
       ? await plans().catch(() => []) : [];
     // A waiting, refused or reversed plan report sends the member back to it instead of to a second payment; a top-up has
     // its own notice and leaves Renew in place.
     const reports = paymentView ? [status, paymentView.otherStatus ?? null].filter((report) => report && report.purpose !== "topup") : null;
-    const viewPayment = reports ? reports.some((report) => ["pending", "superseded", "rejected", "reversed"].includes(report!.status)) : !!subscription?.paymentPending;
+    const viewPayment = reports ? reports.some((report) => [...waitingStatuses, "rejected", "reversed"].includes(report!.status)) : !!subscription?.paymentPending;
+    const purchaseAction = viewPayment ? "account.viewPayment"
+      : activeUntil || subscription?.expired || last ? "account.renewLabel" : "account.subscribe";
+    const purchaseHref = `${memberNextPath("subscribe", returnTo)}#${viewPayment ? "report" : "plans"}`;
+    const subscriptionAction = (checkoutPublished && !!subscription) || viewPayment ? {
+      href: purchaseHref, label: messages.text(purchaseAction),
+    } : null;
     if (member && !member.blocked) return <PublicShell locale={locale} showAccount workspace>
       <MemberNavigationRecovery expectedPhone={member.phone} expectedAdministrator={false} />
       <ApprovalRefresh waiting={waiting || !!dashboard?.activity.some(entry => entry.kind === "payment" && entry.status === "pending")} refreshAt={refreshAt} />
       <AccountWorkspace locale={locale} current={section} phone={member.phone} returnTo={returnTo}>
         <AccountPageHead><h1>{messages.text(section === "overview" ? "account.title" : `account.section.${section}`)}</h1>
-          {summarySection && subscription && (checkoutPublished || viewPayment) && <ButtonLink href={`${memberNextPath("subscribe", returnTo)}#${viewPayment ? "report" : "plans"}`} prefetch={false}>
-            {messages.text(viewPayment ? "account.viewPayment" : activeUntil ? "account.renewLabel" : "account.subscribe")}
+          {summarySection && subscriptionAction && <ButtonLink href={subscriptionAction.href} prefetch={false} data-account-subscription-action>
+            {subscriptionAction.label}
           </ButtonLink>}
         </AccountPageHead>
         {unavailable && <AccountFine role="status">{messages.text("account.unavailable")}</AccountFine>}
@@ -146,7 +153,8 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
           </AccountFacts>)}
         </AccountPanel>}
         {walletSection && <AccountWallet locale={locale} credit={credit} topUpStatus={topUpStatus} contact={contact}
-          phone={member.phone} returnTo={returnTo} topUpOpen={topUpOpen} salesOpen={salesOpen} plans={offers}
+          phone={member.phone} returnTo={returnTo} topUpOpen={topUpOpen} salesOpen={checkoutPublished} plans={offers}
+          subscriptionAction={subscriptionAction}
           acceptedTerms={paymentView?.acceptedTerms === true} active={!!activeUntil} />}
         {section === "payments" && <>
           <PaymentNotice locale={locale} status={status} settings={contact} phone={member.phone} />
@@ -169,7 +177,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
       <MemberNavigationRecovery expectedPhone={null} />
       {!member ? <>
         {parameters.status === "signed-out" && <p role="status">{messages.text("account.signedOut")}</p>}
-        <AccountAuthForm key={authView} locale={locale} view={authView} returnTo={returnTo} contact={contact} />
+        <AccountAuthForm key={authView} locale={locale} view={authView} returnTo={authReturnTo} contact={contact} />
       </> : <MemberPanel><p role="status">{messages.text("account.refused")}</p><MemberSignOut><SignOutIcon />{messages.text("auth.signOut")}</MemberSignOut></MemberPanel>}
     </Stack></PublicShell>;
   };

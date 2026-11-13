@@ -24,7 +24,7 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     airtelEnabled: true, airtelNumber: "256700000902", airtelName: "TEST AIRTEL", updatedAt: at, updatedBy: "test" } }));
   await database.query(tx => tx.subscriptionPlan.create({ data: { id: planId, name: "Weekly", durationDays: 7, priceUgx: 5000, active: true, sortOrder: 1, createdAt: at, updatedAt: at } }));
   const sessions = createAuthenticatedTestSessions({ database, config, now });
-  const checkout = createCheckout({ database, config, now }), review = createCheckoutReview(database, now);
+  const checkout = createCheckout({ database, config, now, flutterwaveAvailable: true }), review = createCheckoutReview(database, now);
   async function member() { const signed = await sessions.signIn(`25670000${String(++phone).padStart(4, "0")}`, "unknown"); return sessions.verify(signed.token); }
   async function fund(who, credit = 0, days = 0) {
     if (credit) { const codes = createAccessCodes({ database, now, notifications: silentPaymentNotifications });
@@ -150,6 +150,105 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     assert.equal(redeemed.status, "approved"); assert.equal(redeemed.priceUgx, 0);
     assert.equal(Date.parse(redeemed.endsAt) - now(), 10 * 86_400_000);
     assert.equal((await checkout.read(who)).availableReferralDays, 0);
+  });
+  await t.test("an expired member renews once with the exact wallet balance and no manual provider", async () => {
+    const who = await member();
+    await fund(who, 5000);
+    const expired = await database.transaction(async tx => createAccessPeriod(tx, await lockMemberAccount(tx, who.accountId), {
+      source: "manual", planName: "Previous access", durationDays: 1, priceUgx: 0, amountReceivedUgx: 0,
+    }, "historical-fixture", new Date(now() - 2 * 86_400_000)));
+    assert.ok(+expired.endsAt < now());
+
+    await database.query(tx => tx.subscriptionSettings.update({
+      where: { id: 1 }, data: { mtnEnabled: false, airtelEnabled: false },
+    }));
+    try {
+      const selection = select({ method: "wallet", walletUgx: 5000 });
+      const publicCheckout = createCheckout({ database, config: { ...config, production: true }, now });
+      assert.equal((await publicCheckout.quote(who, selection)).ok, false);
+      const stagingCheckout = createCheckout({ database, config: { ...config, production: true, staging: true }, now });
+      const quote = await stagingCheckout.quote(who, selection);
+      assert.equal(quote.ok, true, quote.message);
+      assert.equal(quote.value.amountToSend, 0);
+      assert.equal(quote.value.recipient, null);
+      const requestKey = randomUUID();
+      const first = await stagingCheckout.confirm(who, selection, requestKey, quote.value.quoteKey, true);
+      assert.equal(first.ok, true, first.message);
+      const replay = await stagingCheckout.confirm(who, selection, requestKey, quote.value.quoteKey, true);
+      assert.deepEqual(replay, first);
+      assert.equal(first.value.status, "approved");
+      assert.deepEqual(first.value.receipts, []);
+      assert.equal((await checkout.read(who)).availableWalletUgx, 0);
+
+      const grant = await database.query(tx => tx.accessCode.findUniqueOrThrow({ where: { paymentSubmissionId: first.value.id } }));
+      assert.equal(+grant.startsAt, now());
+      assert.equal(+grant.endsAt, now() + 7 * 86_400_000);
+      const entries = await database.query(tx => tx.walletEntry.findMany({ where: { accountId: who.accountId, kind: "purchase" } }));
+      assert.deepEqual(entries.map(entry => [entry.amountUgx, entry.accessCodeId]), [[-5000, grant.id]]);
+    } finally {
+      await database.query(tx => tx.subscriptionSettings.update({
+        where: { id: 1 }, data: { mtnEnabled: true, airtelEnabled: true },
+      }));
+    }
+  });
+  await t.test("hosted payments reconcile a verified plan and top-up exactly once", async () => {
+    const who = await member(), another = await member();
+    const selection = select({ method: "flw" }), requestKey = randomUUID();
+    const quote = await checkout.quote(who, selection);
+    assert.equal(quote.ok, true, quote.message);
+    assert.equal((await checkout.confirm(who, selection, requestKey, quote.value.quoteKey, true, proof())).ok, false);
+    assert.equal((await checkout.quote(who, { ...selection, referralDays: 1 })).ok, false);
+    const starts = await Promise.all([1, 2].map(() => checkout.startFlutterwave(who, selection, requestKey, quote.value.quoteKey, true)));
+    const started = starts.find(result => result.ok).value;
+    assert.equal(starts.filter(result => result.ok).length, 1);
+    assert.equal(starts.find(result => !result.ok).code, "flutterwave-pending");
+    assert.equal(started.checkoutUrl, null);
+    const url = "https://checkout.flutterwave.com/v3/hosted/pay/synthetic-link";
+    assert.equal((await checkout.saveFlutterwaveUrl(started.id, randomUUID(), url)).ok, false);
+    assert.equal((await checkout.saveFlutterwaveUrl(started.id, started.lease, "https://example.test/checkout")).ok, false);
+    assert.deepEqual(await checkout.saveFlutterwaveUrl(started.id, started.lease, url), { ok: true, value: url });
+    const resumed = await checkout.startFlutterwave(who, selection, requestKey, quote.value.quoteKey, true);
+    assert.equal(resumed.value.checkoutUrl, url);
+    assert.equal(resumed.value.lease, null);
+    assert.equal((await checkout.startFlutterwave(another, selection, requestKey, quote.value.quoteKey, true)).ok, false);
+    assert.equal((await checkout.read(another)).requests.some(row => row.id === started.id), false);
+    assert.equal((await checkout.cancel(who, started.id)).ok, false);
+    assert.equal((await checkout.attach(who, started.id, proof())).ok, false);
+    assert.equal((await checkout.reconfirm(who, started.id, 0, 0, 5000, true)).ok, false);
+
+    const verified = { id: "987654321", txRef: started.id, amountUgx: 5000, currency: "UGX", status: "successful", paidAt: new Date(now()) };
+    for (const patch of [{ status: "pending" }, { status: "failed" }, { currency: "USD" }, { amountUgx: 4999 }, { txRef: randomUUID() }])
+      assert.equal((await checkout.settleFlutterwave({ ...verified, ...patch })).ok, false);
+    assert.equal((await checkout.lookupFlutterwave(started.id)).status, "provider-pending");
+    assert.equal(await database.query(tx => tx.accessCode.count({ where: { accountId: who.accountId } })), 0);
+
+    const originalClock = instant;
+    instant += 31 * 60_000;
+    try {
+      assert.equal((await checkout.read(who)).requests.find(row => row.id === started.id).checkoutUrl, null);
+      assert.equal((await checkout.startFlutterwave(who, selection, requestKey, quote.value.quoteKey, true)).code, "flutterwave-expired");
+      const approvals = await Promise.all([checkout.settleFlutterwave(verified), checkout.settleFlutterwave(verified)]);
+      assert.ok(approvals.every(result => result.ok && result.value.purpose === "plan"));
+      assert.deepEqual(approvals[0], approvals[1]);
+      assert.equal(await database.query(tx => tx.accessCode.count({ where: { accountId: who.accountId } })), 1);
+      assert.equal(await database.query(tx => tx.paymentReceipt.count({ where: { allocatedSubmissionId: started.id, provider: "flw" } })), 1);
+      assert.equal((await checkout.settleFlutterwave({ ...verified, id: "987654322" })).code, "flutterwave-conflict");
+
+      const topUp = select({ method: "flw", purpose: "topup", planId: null, topUpUgx: 5000 });
+      const topUpQuote = await checkout.quote(who, topUp);
+      assert.equal(topUpQuote.ok, true, topUpQuote.message);
+      const credit = await checkout.startFlutterwave(who, topUp, randomUUID(), topUpQuote.value.quoteKey, true);
+      assert.equal(credit.ok, true, credit.message);
+      assert.equal((await checkout.settleFlutterwave({ ...verified, txRef: credit.value.id })).code, "flutterwave-conflict");
+      const topUpPayment = { ...verified, id: "987654323", txRef: credit.value.id, paidAt: new Date(now()) };
+      const outcomes = await Promise.all([checkout.settleFlutterwave(topUpPayment), checkout.settleFlutterwave(topUpPayment)]);
+      assert.ok(outcomes.every(result => result.ok && result.value.purpose === "topup"));
+      assert.equal((await checkout.read(who)).availableWalletUgx, 5000);
+      assert.equal(await database.query(tx => tx.walletEntry.count({ where: { paymentSubmissionId: credit.value.id, kind: "topup" } })), 1);
+      assert.equal(await database.query(tx => tx.accessCode.count({ where: { accountId: who.accountId } })), 1);
+    } finally {
+      instant = originalClock;
+    }
   });
   await t.test("a weekly purchase plus seven referral days grants fourteen days without reducing its cash price", async () => {
     const who = await member(); await fund(who, 0, 7);

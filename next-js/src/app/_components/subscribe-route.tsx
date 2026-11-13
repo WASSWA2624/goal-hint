@@ -9,8 +9,8 @@ import { SubscriptionSummaryCard } from "@/components/members/subscription-summa
 import { FreeTrialControl } from "@/components/members/free-trial-control";
 import { ButtonLink } from "@/components/ui/controls";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { accountSectionHref } from "@/domain/account-navigation";
-import { memberAuthPath, memberReturnPath, sharedSlipReturnPath } from "@/domain/member-navigation";
+import { accountSectionHref, walletTopUpHref } from "@/domain/account-navigation";
+import { memberAuthPath, memberNextPath, memberReturnPath, sharedSlipReturnPath } from "@/domain/member-navigation";
 import { adminLandingPath } from "@/domain/admin-navigation";
 import { checkoutOpenStatuses } from "@/domain/checkout";
 import type { PaymentView } from "@/domain/payment";
@@ -41,14 +41,17 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
       <SubscribeIntro locale={locale} /><MemberNavigationRecovery /><p role="status">{m.text("account.unavailable")}</p>
     </SubscribeLayout></PublicShell>;
     const settings = resolved.settings.settings;
-    const salesOpen = subscriptionCheckoutPublished(settings, resolved.config.production);
+    const salesOpen = subscriptionCheckoutPublished(settings, resolved.config);
     const parameters = await searchParams, returnTo = memberReturnPath(parameters.return), topUp = parameters.add === "credit";
+    const resumePlan = topUp && parameters.resume === "plan";
+    const continuation = topUp ? walletTopUpHref(locale, returnTo, resumePlan).split("#")[0]
+      : accountSectionHref(locale, "subscription", returnTo);
     const userAgent = (await headers()).get("user-agent") ?? "";
     const session = await readMemberPageSession(resolved, (await cookies()).get(memberCookieName(resolved.config.production))?.value);
     // Authentication always has its own URL, before pricing or checkout reads can fail.
-    if (session.kind === "guest") redirect(memberAuthPath("login", returnTo));
-    if (session.kind === "verification") redirect(memberAuthPath("verify", returnTo));
-    if (session.kind === "reset") redirect(memberAuthPath("new-password", returnTo));
+    if (session.kind === "guest") redirect(memberAuthPath("login", continuation));
+    if (session.kind === "verification") redirect(memberAuthPath("verify", continuation));
+    if (session.kind === "reset") redirect(memberAuthPath("new-password", continuation));
     const member = session.kind === "member" ? session.member : null;
     const eligible = member && !member.blocked && !member.administrator ? member : null;
     // Payment history and the current access period remain available when new sales are paused.
@@ -78,15 +81,19 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
     const reports = [paymentView?.status, paymentView?.otherStatus].filter(report => report != null);
     const waiting = !showFlow && (subscription?.paymentPending || reports.some(report => [...checkoutOpenStatuses, "superseded"].some(state => state === report.status)));
     const contact = { ...publicSupportContactSettings(settings), reviewTime: settings?.reviewTime ?? null };
+    const flutterwaveNotice = parameters.flutterwave === "failed" ? "Flutterwave did not complete the payment. You can return to checkout to try again."
+      : parameters.flutterwave === "pending" ? "Payment confirmation is pending. Check the payment status below." : null;
     const trialNotice = trial && !topUp
       ? <FreeTrialControl key={member?.accountId} locale={locale} trial={trial} days={offeredTrialDays(settings)} /> : null;
     return <PublicShell locale={locale} showAccount><SubscribeLayout>
       {topUp ? <VisuallyHidden as="h1">{m.text("account.section.wallet")}</VisuallyHidden> : <SubscribeIntro locale={locale} />}
       <MemberNavigationRecovery {...(member ? { expectedPhone: member.blocked ? null : member.phone, expectedAdministrator: !!administrator } : {})} />
       {topUp && member && !member.blocked && !administrator
-        ? <div><ButtonLink href={accountSectionHref(locale, "wallet", returnTo)} variant="quiet" prefetch={false}>{m.text("wallet.back")}</ButtonLink></div>
+        ? <div><ButtonLink href={resumePlan ? `${memberNextPath("subscribe", returnTo)}#plans` : accountSectionHref(locale, "wallet", returnTo)}
+            variant="quiet" prefetch={false}>{m.text(resumePlan ? "wallet.backToPlan" : "wallet.back")}</ButtonLink></div>
         : sharedSlipReturnPath(returnTo) && <div><ButtonLink href={returnTo!} prefetch={false}>{m.text("slipShare.return")}</ButtonLink></div>}
       <ApprovalRefresh waiting={waiting} refreshAt={trial?.state === "active" ? trial.endsAt : activeUntil} />
+      {eligible && flutterwaveNotice && <p role="status">{flutterwaveNotice}</p>}
       {!checkoutAvailable && trialNotice}
       {eligible && !showFlow && reports.length > 0 && <div id="report">
         {reports.map(report => <PaymentStatusCard key={report.reference} locale={locale} status={report} settings={contact} phone={eligible.phone} />)}
@@ -100,7 +107,8 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
               : resolved.checkout && !newCheckoutAvailable && <p role="status">{m.text("subscribe.noPlans")}</p>}
       {showFlow && settings && eligible && <SubscribeFlow key={`${draftScope}:${topUp ? "credit" : "plans"}`} locale={locale} settings={publicSubscriptionSettings(settings)} plans={offers}
         account={{ id: eligible.accountId, phone: eligible.phone, draftScope }} view={view} returnTo={returnTo} userAgent={userAgent}
-        startWithTopUp={topUp} salesOpen={newCheckoutAvailable} referralsOpen={referralsOpen} noticeBeforeCheckout={trialNotice} />}
+        startWithTopUp={topUp} salesOpen={newCheckoutAvailable} referralsOpen={referralsOpen} noticeBeforeCheckout={trialNotice}
+        flutterwaveAvailable={!!resolved.flutterwave && newCheckoutAvailable} resumePlanAfterTopUp={resumePlan} />}
     </SubscribeLayout></PublicShell>;
   };
 }

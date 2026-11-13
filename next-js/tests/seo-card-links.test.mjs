@@ -56,17 +56,17 @@ const program = String.raw`
     },
   });
   const source = (path) => import(new URL(path, root).href);
-  const [{ createElement: h }, { renderToStaticMarkup }, { ThemeProvider }, { lightTheme }, { MatchCard }, { Verdict }, { MarketsCard }, { AnalysisDrawer },
+  const [{ createElement: h }, { renderToStaticMarkup }, { ThemeProvider }, { lightTheme, darkTheme }, { MatchCard }, { Verdict }, { MarketsCard }, { AnalysisDrawer },
     { DetailsProvider }, { createMessages }] = await Promise.all([import("react"), import("react-dom/server"), import("styled-components"),
     source("src/styles/theme.ts"), source("src/components/match/match-card.tsx"), source("src/components/match/details/verdict.tsx"),
     source("src/components/match/details/markets-card.tsx"), source("src/components/match/details/analysis-drawer.tsx"),
     source("src/components/match/details/details-ui.tsx"), source("src/i18n/messages.ts")]);
   const { cards, details } = JSON.parse(readFileSync(0, "utf8")), messages = createMessages("en");
-  const html = (element) => renderToStaticMarkup(h(ThemeProvider, { theme: lightTheme }, element));
+  const html = (element, mode) => renderToStaticMarkup(h(ThemeProvider, { theme: mode === "dark" ? darkTheme : lightTheme }, element));
   const context = (data) => ({ data, preview: null, locale: "en", messages, go() {}, update() {}, home: "Synthetic A", away: "Synthetic B",
     fixtureId: data.fixture.fixtureId, history: null, offer: null });
   process.stdout.write(JSON.stringify({
-    cards: cards.map((props) => html(h(MatchCard, { locale: "en", ...props }))),
+    cards: cards.map(({ mode, ...props }) => html(h(MatchCard, { locale: "en", ...props }), mode)),
     details: details.map((data) => Object.fromEntries([["verdict", Verdict], ["markets", MarketsCard], ["analysis", AnalysisDrawer]]
       .map(([name, Section]) => [name, html(h(DetailsProvider, { value: context(data) }, h(Section)))]))),
   }));
@@ -82,26 +82,32 @@ const pickState = (html) => html.match(/data-pick-state="([a-z]+)"/u)?.[1];
 test("locked cards retain the canonical match as their return destination for guest and member access links", () => {
   const locked = gateFixture(upcoming("card-gated"), anonymous);
   assert.equal(locked.forecast.gated, true);
-  const { cards: [guest, signedIn, subscriber] } = render({ cards: [
-    { fixture: locked, gated: true, analysisSlug: slug }, { fixture: gateFixture(upcoming("card-gated"), member), gated: true, signedIn: true, analysisSlug: slug },
-    { fixture: upcoming("card-gated"), analysisSlug: slug }] });
+  const cardProps = [
+    { fixture: locked, gated: true, analysisSlug: slug },
+    { fixture: gateFixture(upcoming("card-gated"), member), gated: true, signedIn: true, analysisSlug: slug },
+    { fixture: upcoming("card-gated"), analysisSlug: slug },
+  ];
+  const { cards } = render({ cards: ["light", "dark"].flatMap(mode => cardProps.map(props => ({ ...props, mode }))) });
   const path = `/en/matches/card-gated/${slug}`, returnTo = encodeURIComponent(path);
-  const guestHref = `/en/account?view=register&return=${returnTo}`, memberHref = `/en/subscribe?return=${returnTo}`;
-  assert.deepEqual(anchors(guest), [guestHref, guestHref]);
-  assert.deepEqual(anchors(signedIn), [memberHref, memberHref]);
-  assert.deepEqual(anchors(subscriber), [path]);
-  // Locked cards keep the public chance placeholder without private selections, prices or meters.
-  for (const html of [guest, signedIn]) {
-    assert.equal(pickState(html), "subscriber");
-    assert.doesNotMatch(html, prediction);
-    assert.deepEqual(cardPick(html), []);
-    assert.match(html, /data-subscriber-notice="true"[^>]*>Unlock</u);
-    assert.match(html, /data-unlock-button="true"/u);
-    assert.match(html, /data-public-probability/u);
+  const memberHref = `/en/account?section=subscription&return=${returnTo}`;
+  const guestHref = `/en/account?view=register&return=${encodeURIComponent(memberHref)}`;
+  for (const [guest, signedIn, subscriber] of [cards.slice(0, 3), cards.slice(3)]) {
+    assert.deepEqual(anchors(guest), [guestHref, guestHref]);
+    assert.deepEqual(anchors(signedIn), [memberHref, memberHref]);
+    assert.deepEqual(anchors(subscriber), [path]);
+    // Locked cards keep the public chance placeholder without private selections, prices or meters.
+    for (const html of [guest, signedIn]) {
+      assert.equal(pickState(html), "subscriber");
+      assert.doesNotMatch(html, prediction);
+      assert.deepEqual(cardPick(html), []);
+      assert.match(html, /data-subscriber-notice="true"[^>]*>Unlock</u);
+      assert.match(html, /data-unlock-button="true"/u);
+      assert.match(html, /data-public-probability/u);
+    }
+    assert.match(guest, /Register \/ log in to unlock/u);
+    assert.match(signedIn, /Subscribe to unlock/u);
+    assert.match(subscriber, /data-pick-selection=/u);
   }
-  assert.match(guest, /Register \/ log in to unlock/u);
-  assert.match(signedIn, /Subscribe to unlock/u);
-  assert.match(subscriber, /data-pick-selection=/u);
 });
 
 test("an unfinished card without a published forecast shows why, not a lock", () => {
@@ -216,7 +222,8 @@ test("the match page locks the verdict, markets and analysis only over a publish
   for (const html of Object.values(locked)) {
     assert.match(html, /data-unlock-link="true"/u);
     assert.match(html, />Unlock</u);
-    assert.deepEqual(anchors(html), [`/en/account?view=register&return=${encodeURIComponent(published.route.path)}`]);
+    const subscriptions = `/en/account?section=subscription&return=${encodeURIComponent(published.route.path)}`;
+    assert.deepEqual(anchors(html), [`/en/account?view=register&return=${encodeURIComponent(subscriptions)}`]);
     assert.doesNotMatch(html, /SENTINEL-|61\.7|62%|data-public-probability/u);
   }
   assert.match(guest.verdict, /data-featured-pick="none"/u);

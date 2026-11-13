@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
 import { formatPaymentReference, parseTransactionId, paymentRules, transactionKey, type PaymentFields, type PaymentStatus, type PaymentView } from "../../domain/payment.ts";
+import { automaticCheckoutPending } from "../../domain/checkout.ts";
 import { validMobilePhone } from "../../domain/phone-mobile.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
 import { manualPaymentProvider } from "../../domain/subscription-settings.ts";
@@ -16,7 +17,7 @@ import { acceptedTerms } from "./member-terms.ts";
 import { reservedWalletCredit, walletHistory } from "./wallet.ts";
 import { validTopUp } from "../../domain/wallet.ts";
 import { memberRateRules, takeMemberLimit } from "./rate-limit.ts";
-import { subscriptionCheckoutPublished } from "./sales-readiness.ts";
+import { subscriptionCheckoutPublished, type CheckoutRuntime } from "./sales-readiness.ts";
 import { decide, lockSettings } from "./settings.ts";
 import { enqueueMemberMessage } from "./payment-notification-outbox.ts";
 
@@ -26,7 +27,7 @@ const unavailableView: PaymentView = Object.freeze({ acceptedTerms: false, statu
 export const duplicatePaymentMessage = "This transaction ID was already used. If you made this payment, call admin with the ID.";
 
 export function createPayments({ database, config, now = Date.now }: {
-  database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key"> & Partial<Pick<AnalyticsConfig, "production">>; now?: () => number;
+  database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key"> & CheckoutRuntime; now?: () => number;
 }) {
   async function bucket(tx: Prisma.TransactionClient, purpose: string, value: string, at: Date): Promise<Bucket> {
     const key = config.key(`member-${purpose}`, value), start = new Date(Math.floor(+at / memberRateRules.dayMs) * memberRateRules.dayMs);
@@ -81,7 +82,7 @@ export function createPayments({ database, config, now = Date.now }: {
           if (!current) return rollback({ status: "refused" });
           // Shares confirmation's global lock, so a simultaneous owner approval cannot slip past this lookup.
           const settings = await lockSettings(tx, "system", at);
-          if (!subscriptionCheckoutPublished(settings, config.production === true)) return rollback({ status: "refused" });
+          if (!subscriptionCheckoutPublished(settings, config)) return rollback({ status: "refused" });
           const plan = topUp === null && fields.planId ? await tx.subscriptionPlan.findUnique({ where: { id: fields.planId } }) : null;
           if (topUp === null && !plan?.active || manualPaymentProvider(settings, fields.network).reason !== null
             || !fields.accepted && !await acceptedTerms(tx, member, at)) return rollback({ status: "invalid" });
@@ -127,7 +128,9 @@ export function createPayments({ database, config, now = Date.now }: {
           sessions: { some: { tokenHash: member.tokenHash, authenticatedAt: { not: null }, passwordResetAt: null, expiresAt: { gt: at } } } },
           select: { creditUgx: true, autoRenew: true, autoRenewPlanId: true } });
         if (!account) return unavailableView;
-        const reportOf = { accountId: member.accountId };
+        const reportOf = { accountId: member.accountId, OR: [
+          { status: { not: automaticCheckoutPending } }, { checkoutUrlExpiresAt: { gt: at } }, { transactionRef: { not: null } },
+        ] } as const satisfies Prisma.PaymentSubmissionWhereInput;
         const shown = { reference: true, status: true, rejectText: true, rejectReason: true, planName: true, priceUgx: true, submittedAt: true, purpose: true,
           decidedAt: true, reversedAt: true, code: { select: { endsAt: true } } } as const;
         const [terms, status, history, reserved] = await Promise.all([
@@ -144,7 +147,7 @@ export function createPayments({ database, config, now = Date.now }: {
           endsAt: row.code?.endsAt.toISOString() ?? null, purpose: row.purpose === "topup" ? "topup" : "plan" });
         // A newer report of one purpose hides the other's; the hidden one still shows while it waits or once it is decided against later.
         const decidedLater = (row: Shown) => +(row.reversedAt ?? row.decidedAt ?? 0) > +(status?.submittedAt ?? 0);
-        const otherStatus = hidden && status && hidden.reference !== status.reference && (["pending", "superseded"].includes(hidden.status)
+        const otherStatus = hidden && status && hidden.reference !== status.reference && (["pending", "superseded", automaticCheckoutPending].includes(hidden.status)
           || ["rejected", "reversed"].includes(hidden.status) && decidedLater(hidden)) ? view(hidden) : null;
         const topUp = status?.purpose === "topup" ? status : hidden?.purpose === "topup" ? hidden : null;
         const credit = { balanceUgx: account.creditUgx, availableBalanceUgx: Math.max(0, account.creditUgx - reserved),

@@ -177,14 +177,21 @@ test('completed analysis is public only with verified canonical terminal status'
     readStatus: async () => { throw Error('unavailable'); } }).insights(fixture.detail.fixture.fixtureId), (error) => error.code === 'subscription-required');
 });
 
-test('locked destinations preserve safe return paths and distinguish guests from members', () => {
-  assert.equal(subscriberHref(false, '/en/best-slips/2026-10-09/1'), '/en/account?view=register&return=%2Fen%2Fbest-slips%2F2026-10-09%2F1');
-  assert.equal(subscriberHref(false, '/en/matches'), '/en/account?view=register&return=%2Fen%2Fmatches');
-  assert.equal(subscriberHref(true, '/en/slips'), '/en/subscribe?return=%2Fen%2Fslips');
-  assert.equal(subscriberHref(false, 'https://outside.test'), '/en/account?view=register');
-  assert.equal(subscriberHref(false, '/en', 'login'), '/en/account?view=login&return=%2Fen');
-  assert.equal(subscriberHref(true, '/en', 'login'), '/en/subscribe?return=%2Fen');
-  assert.equal(subscriberHref(false, 'https://outside.test', 'login'), '/en/account?view=login');
+test('locked features lead to Subscriptions, preserving safe feature returns and the guest authentication form', () => {
+  const section = '/en/account?section=subscription';
+  const bestSlip = '/en/best-slips/2026-10-09/1';
+  const matches = '/en/matches';
+  const shared = `/s/${'a'.repeat(32)}`;
+  const destination = path => path ? `${section}&return=${encodeURIComponent(path)}` : section;
+  const authenticate = (view, path) => `/en/account?view=${view}&return=${encodeURIComponent(destination(path))}`;
+
+  assert.equal(subscriberHref(false, bestSlip), authenticate('register', bestSlip));
+  assert.equal(subscriberHref(false, matches), authenticate('register', matches));
+  assert.equal(subscriberHref(true, '/en/slips'), destination('/en/slips'));
+  assert.equal(subscriberHref(false, 'https://outside.test'), authenticate('register'));
+  assert.equal(subscriberHref(false, '/en', 'login'), authenticate('login', '/en'));
+  assert.equal(subscriberHref(true, shared, 'login'), destination(shared));
+  assert.equal(subscriberHref(false, 'https://outside.test', 'login'), authenticate('login'));
 });
 
 test('the final access check redacts unfinished feed rows after expiry without hiding matches', async () => {

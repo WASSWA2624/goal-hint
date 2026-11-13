@@ -72,7 +72,7 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
         : action === "reset" ? await services.auth.resetPassword(body.password, currentToken, address)
         : await services.auth.changePassword(body.password, binding);
       if (result.status !== "authenticated") return failure(result);
-      // Shared-slip journeys return to their canonical token; ordinary sign-ins still finish at home.
+      // Subscription, shared-slip and owner-review journeys keep their validated continuation.
       const returnTo = ["register", "login", "verify", "reset"].includes(action) ? memberLandingPath(false, body.return) : memberReturnPath(body.return);
       const next = result.requiresPasswordChange ? memberAuthPath("new-password", returnTo)
         : result.requiresVerification ? memberAuthPath("verify", returnTo)
@@ -104,7 +104,7 @@ export function createMemberSessionHandler(source: MemberServicesSource = getMem
       const identity = { phone: member?.phone ?? null, administrator,
         ...(!member?.blocked && member?.referralCode ? { referralCode: member.referralCode } : {}),
         freeContentAccess: allowsContentWithoutSubscription(services.settings, !!member && !member.blocked) };
-      const salesOpen = subscriptionCheckoutPublished(services.settings?.settings, services.config.production);
+      const salesOpen = subscriptionCheckoutPublished(services.settings?.settings, services.config);
       const subscription: SubscriptionSummary = { activeUntil: null, paymentPending: false,
         canSubscribe: salesOpen && !member?.blocked && !administrator, ...noCredit };
       // Only a visitor or member without access who can subscribe reads the cheapest plan, for the access bar's offer.

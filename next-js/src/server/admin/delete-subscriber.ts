@@ -129,6 +129,9 @@ export async function deleteSubscriber(database: DatabaseRuntime, id: string, co
         for (const phone of scope.exclusivePhones) await rememberRegistrationPhone(tx, config, phone, new Date());
         if (await tx.paymentReceiptClaim.count({ where: { submissionId: { in: scope.paymentIds } } }))
           return rollback({ status: "refused", message: "This account has payment receipt accounting. Erase its personal data instead of deleting its records." });
+        if (await tx.paymentSubmission.count({ where: { id: { in: scope.paymentIds }, method: "flw", OR: [
+          { checkoutUrlExpiresAt: { not: null } }, { checkoutLease: { not: null } },
+        ] } })) return rollback({ status: "refused", message: "This account has a hosted payment request that may need reconciliation. Erase its personal data instead of deleting its records." });
         await tx.memberReferral.updateMany({ where: { accountId: id, status: "pending" }, data: { status: "ineligible" } });
         await tx.memberSession.deleteMany({ where: { accountId: id } });
         await tx.memberVerification.deleteMany({ where: { OR: [

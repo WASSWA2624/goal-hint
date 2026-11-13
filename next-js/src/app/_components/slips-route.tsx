@@ -11,8 +11,9 @@ import { SlipBuilder, type SlipCriteriaIssue } from "@/components/slips/slip-bui
 import { createMessages } from "@/i18n/messages";
 import { approvedSlipJointModel, boundJointSlipModel } from "@/server/slips/joint-model";
 import { readPublicSlipBuild } from "@/server/slips/public-slips";
-import { createGatedReads, contentAccess } from "@/server/members/gated-reads";
-import { resolveViewerAccess } from "@/server/members/viewer-access";
+import { contentAccess } from "@/server/members/gated-reads";
+import { resolveViewerAccessFresh } from "@/server/members/viewer-access";
+import { readWithSlipAccess } from "@/server/slips/slip-access";
 import { publicOddsEnabled } from "@/server/odds/public-odds-policy";
 import { pageMetadata } from "@/server/seo/metadata";
 import { getShellInstant, PublicShell } from "./public-shell";
@@ -23,7 +24,7 @@ type Props = Readonly<{ params: Promise<{ locale: string }>; searchParams: Promi
 /** Anonymous, read-only GET builds. Invalid drafts remain editable without reading the stored feed.
  * `jointModel` only decides whether whole-slip limits are offered; the reader applies its own bound model. */
 export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShellInstant,
-  completionInstant = () => utcInstantFromEpochMilliseconds(Date.now()), resolveAccess = resolveViewerAccess,
+  completionInstant = () => utcInstantFromEpochMilliseconds(Date.now()), resolveAccess = resolveViewerAccessFresh,
   jointModel = boundJointSlipModel } = {}) {
   return {
     async generateMetadata({ params }: Props) {
@@ -34,7 +35,7 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
       const { locale } = await params, rawQuery = await searchParams, at = await instant(), today = getReportingDate(at);
       const { configuration, ...query } = rawQuery;
       const configurationId = slipConfigurationIdSchema.safeParse(configuration).success ? configuration as string : null;
-      const access = await contentAccess(resolveAccess), showAccount = true;
+      const checkAccess = () => contentAccess(resolveAccess), showAccount = true;
       const initialInputs: SlipInputs = {};
       for (const field of slipInputFields) {
         const value = query[field];
@@ -76,7 +77,11 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
       }
       let captured = false;
       const clock = { now: () => { if (!captured) { captured = true; return at; } return completionInstant(); } };
-      const result = access.tier === "full" && !error && query.build === "1" ? await createGatedReads({ readSlips: read, resolveAccess }).slips(criteria, clock, locale) : null;
+      const { access, result } = !error && query.build === "1"
+        ? await readWithSlipAccess(async access => ({
+          access, result: access.tier === "full" ? await read(criteria, clock, locale) : null,
+        }), checkAccess)
+        : { access: await checkAccess(), result: null };
       const initialReuse = query.reuse === "0" ? false : query.reuse === "1"
         || Array.isArray(query.reuse) && query.reuse.length === 2 && query.reuse[0] === "0" && query.reuse[1] === "1" ? true : criteria.reuse;
       let jointEstimates = false;

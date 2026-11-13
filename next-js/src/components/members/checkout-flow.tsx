@@ -4,7 +4,7 @@ import { AppLoading } from "@/components/navigation/navigation-progress";
 import { backToWorkflowStep, workflowPage, workflowStep, writeWorkflowStep } from "@/components/navigation/workflow-history";
 import { useCallback, useEffect, useEffectEvent, useId, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import { useRouter } from "next/navigation";
-import { Button, InputControl } from "@/components/ui/controls";
+import { Button, ButtonLink, InputControl, TextInput } from "@/components/ui/controls";
 import { FloatingField } from "@/components/ui/floating-field";
 import { AmountInput } from "@/components/ui/amount-input";
 import { CriteriaDialogButton } from "@/components/ui/criteria-dialog";
@@ -12,7 +12,8 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { randomId } from "@/components/ui/random-id";
 import { CheckIcon, ClipboardIcon, CloseIcon, CopyIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { checkoutLabels, checkoutMethodAvailable, checkoutOpenStatuses, duplicateReceiptMessage, fundingAmounts, type CheckoutEvidenceCheck, type CheckoutQuote, type CheckoutRequest, type CheckoutSelection, type CheckoutView } from "@/domain/checkout";
+import { walletTopUpHref } from "@/domain/account-navigation";
+import { automaticCheckoutPending, checkoutEmail, checkoutLabels, checkoutMethodAvailable, checkoutOpenStatuses, duplicateReceiptMessage, fundingAmounts, type CheckoutEvidenceCheck, type CheckoutQuote, type CheckoutRequest, type CheckoutSelection, type CheckoutView } from "@/domain/checkout";
 import { parseScreenshotOcr, screenshotOcrNeedsReview, screenshotOcrUncertainFields, type ScreenshotMetadata } from "@/domain/payment-screenshot";
 import { formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { PublicSubscriptionSettings } from "@/domain/public-subscription-settings";
@@ -46,18 +47,22 @@ import { capCheckoutFunding, chooseCheckoutMethod, chooseCheckoutPackage, loadCh
 import { clearProtectedDrafts } from "./draft-storage";
 
 const emptyView: CheckoutView = { availableWalletUgx: 0, availableReferralDays: 0, lastMethod: null, requests: [] };
-const methodNames = { mtn: "MTN Mobile Money", airtel: "Airtel Money", wallet: "Wallet balance", referral: "Earned days" };
+const methodNames = { mtn: "MTN Mobile Money", airtel: "Airtel Money", wallet: "Wallet balance", referral: "Earned days", flw: "Flutterwave" };
 type DisplayedQuote = { selectionKey: string; quote: CheckoutQuote };
+const providerCheckoutExpired = (request: CheckoutRequest | undefined, now: number) =>
+  !!request?.checkoutExpiresAt && Date.parse(request.checkoutExpiresAt) <= now;
 const localDate = (date = new Date()) => new Date(+date - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 function formatReviewPhone(value: string) {
   const parts = splitPhoneValue(value);
   return `+${parts.callingCode} ${formatNationalPhone(parts)}`.trim();
 }
 
-export function CheckoutFlow({ locale, settings, plans, account, initialView, topUp = false, salesOpen = true, referralsOpen = true, noticeBeforeCheckout }: {
+export function CheckoutFlow({ locale, settings, plans, account, initialView, topUp = false, salesOpen = true, referralsOpen = true, returnTo,
+  flutterwaveAvailable = false, resumePlanAfterTopUp = false, noticeBeforeCheckout }: {
   locale: string; settings: PublicSubscriptionSettings; plans: readonly SubscriptionPlanView[];
   account: { id: string; phone: string; draftScope?: string }; initialView: CheckoutView; topUp?: boolean;
-  salesOpen?: boolean; referralsOpen?: boolean; noticeBeforeCheckout?: ReactNode;
+  salesOpen?: boolean; referralsOpen?: boolean; returnTo?: string | null; noticeBeforeCheckout?: ReactNode;
+  flutterwaveAvailable?: boolean; resumePlanAfterTopUp?: boolean;
 }) {
   const router = useRouter(), m = createMessages(locale), [view, setView] = useState(initialView ?? emptyView);
   // A pending request in one journey must not hide the other journey's form.
@@ -69,6 +74,8 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     paidAt: localDate(), text: "", extracted: {}, originalText: "", editedEvidence: [], accepted: false, attachingId: null });
   const [draft, setDraft] = useState(initial), [image, setImage] = useState<Blob | null>(null), [loaded, setLoaded] = useState(false);
   const canStartDraft = salesOpen || canRedeem && draft.purpose === "referral";
+  const [email, setEmail] = useState("");
+  const [checkoutTime, setCheckoutTime] = useState<number | null>(null);
   const [quote, setQuote] = useState<CheckoutQuote | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [finishedQuote, setFinishedQuote] = useState<string>();
   const [reading, setReading] = useState("");
@@ -91,14 +98,16 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   const scope = account.draftScope ?? account.id, kind = topUp ? "topup" : "plan";
   const page = useRef("");
   const selectedPlanPrice = plans.find(plan => plan.id === draft.planId)?.priceUgx ?? 0;
-  const networkAvailable = (method: string) => checkoutMethodAvailable(method, view, settings);
+  const networkAvailable = (method: string) => checkoutMethodAvailable(method, view, settings, flutterwaveAvailable);
+  const canTopUp = salesOpen && !topUp && selectedPlanPrice > view.availableWalletUgx &&
+    (flutterwaveAvailable || networkAvailable("mtn") || networkAvailable("airtel"));
   const normalizeDraft = useCallback((value: CheckoutDraft, balances = view) => {
     // Package and earned-day redemption are separate choices before evidence entry.
     const purchase = value.step === 0 && !topUp && !value.attachingId ? chooseCheckoutPackage(value, true, balances, plans) : value;
     const separated = purchase.step <= 1 && purchase.purpose === "plan" && (purchase.useReferral || Number(purchase.referralDays) > 0)
       ? { ...purchase, useReferral: false, referralDays: "0", accepted: false } : purchase;
-    return shareUnchanged(value, withCheckoutProvider(capCheckoutFunding(separated, balances, plans), settings, balances.lastMethod));
-  }, [plans, settings, topUp, view]);
+    return shareUnchanged(value, withCheckoutProvider(capCheckoutFunding(separated, balances, plans), settings, balances.lastMethod, flutterwaveAvailable));
+  }, [plans, settings, topUp, view, flutterwaveAvailable]);
   function validStep(target: CheckoutDraft["step"], value: CheckoutDraft, screenshot: Blob | null) {
     const attaching = !!value.attachingId && journeyRequests.some(r => r.id === value.attachingId &&
       (checkoutOpenStatuses as readonly string[]).includes(r.status));
@@ -114,7 +123,10 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   const restore = useEffectEvent(() => {
     page.current = workflowPage(window.location.href);
     const start = { ...initial(), requestKey: randomId() };
-    const stored = loadCheckoutDraft(scope, kind, start);
+    const saved = loadCheckoutDraft(scope, kind, start);
+    const previousRequest = saved && journeyRequests.find(request => request.requestKey === saved.draft.requestKey);
+    const stored = previousRequest?.method === "flw" && (previousRequest.status !== automaticCheckoutPending ||
+      providerCheckoutExpired(previousRequest, Date.now())) ? null : saved;
     let restored = start;
     if (stored) {
       const previous = capCheckoutFunding({ ...stored.draft, accepted: false }, view, plans);
@@ -129,6 +141,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     }
     writeWorkflowStep(restored.requestKey, restored.step, "replace");
     setDraft(normalizeDraft(restored));
+    setCheckoutTime(Date.now());
     setLoaded(true);
   });
   useEffect(() => {
@@ -194,7 +207,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   function resetCheckout() {
     const start = normalizeDraft({ ...initial(), requestKey: randomId() });
     if (page.current === workflowPage(window.location.href)) writeWorkflowStep(start.requestKey, 0, "replace");
-    setDraft(start); setImage(null); setQuote(null);
+    setDraft(start); setImage(null); setQuote(null); setEmail("");
   }
   function chooseRedemption() {
     const redemption = { purpose: "referral", usePackage: false, method: "referral", useWallet: false, walletUgx: "0",
@@ -257,12 +270,13 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
           : "Review the confirmed transfer details before continuing.");
         return;
       }
-      lastQuoteKey.current = value.quoteKey; setQuote(value); goTo(value.amountToSend > 0 ? 2 : 3);
+      lastQuoteKey.current = value.quoteKey; setQuote(value); goTo(value.amountToSend > 0 && value.method !== "flw" ? 2 : 3);
     }
     catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   }
   const attaching = journeyRequests.find(r => r.id === draft.attachingId);
+  const automatic = draft.method === "flw";
   const external = !!attaching || ["mtn", "airtel"].includes(draft.method);
   const receiptProvider = (attaching?.method ?? draft.method) === "airtel" ? "airtel" : "mtn";
   const screenshotReady = !!image && draft.screenshot?.version === 1;
@@ -318,6 +332,10 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     event?.preventDefault(); if (submitting.current || readingActive) return;
     if (draft.step !== 3) return;
     if (!draft.accepted) { setError("Check the details and confirm the purchase terms."); return; }
+    const paymentEmail = automatic ? checkoutEmail.safeParse(email) : null;
+    if (paymentEmail?.success === false) { setError(m.text("checkout.flutterwaveEmailInvalid")); return; }
+    const automaticSelection = automatic ? topUp ? `topup:${Number(draft.topUpUgx)}` : `plan:${draft.planId}` : undefined;
+    const attempted = draft.flutterwaveAttempt;
     const issue = detailsIssue();
     if (issue) { goTo(2, "replace"); setError(issue); return; }
     if (acknowledgeWarnings(() => { void submit(undefined, adjustmentAccepted, reuseAccepted, warningKey); }, acceptedWarningKey)) return;
@@ -349,8 +367,27 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
           extracted: { ...draft.extracted, paymentDateSource: evidenceDate ? "evidence" : "submission" } } } : undefined;
       const q = attaching ? null : await send<CheckoutQuote>({ action: "quote", selection: selection() });
       if (q && (!quote || q.quoteKey !== quote.quoteKey)) { setQuote(q); update({ accepted: false }); throw new Error("Funding changed. Check the updated summary and confirm again."); }
+      const expiredRequest = automatic && providerCheckoutExpired(journeyRequests.find(request => request.requestKey === draft.requestKey), Date.now());
+      const requestKey = expiredRequest || attempted && attempted !== automaticSelection ? randomId() : draft.requestKey;
+      if (requestKey !== draft.requestKey) writeWorkflowStep(requestKey, 3, "replace");
+      if (requestKey !== draft.requestKey || automaticSelection !== attempted) {
+        const nextDraft = { ...draft, requestKey, flutterwaveAttempt: automaticSelection };
+        saveCheckoutDraft(scope, kind, { draft: nextDraft, image });
+        setDraft(nextDraft);
+      }
+      if (paymentEmail?.success) {
+        const saved = await send<Pick<CheckoutRequest, "id" | "status" | "checkoutUrl">>({
+          action: "confirm", selection: selection(), requestKey, quoteKey: q!.quoteKey, confirmed: true,
+          email: paymentEmail.data, ...(topUp && resumePlanAfterTopUp ? { resumePlan: true } : {}),
+        });
+        if (saved.checkoutUrl) { window.location.assign(saved.checkoutUrl); return; }
+        await refresh();
+        if (saved.status !== automaticCheckoutPending) { setShowNew(false); resetCheckout(); }
+        else setError(m.text("checkout.flutterwaveUnavailable"));
+        return;
+      }
       const saved = await send<CheckoutRequest>(attaching ? { action: "attach", id: attaching.id, proof }
-        : { action: "confirm", selection: selection(), requestKey: draft.requestKey, quoteKey: q!.quoteKey, confirmed: true, ...(proof ? { proof } : {}) }, external ? image : null);
+        : { action: "confirm", selection: selection(), requestKey, quoteKey: q!.quoteKey, confirmed: true, ...(proof ? { proof } : {}) }, external ? image : null);
       setView(current => ({ ...current, requests: [saved, ...current.requests.filter(request => request.id !== saved.id)] }));
       setShowNew(false); resetCheckout();
       await refresh();
@@ -415,14 +452,26 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     update({ text: "", originalText: "", extracted: { ...draft.extracted, messageSource: "message" } }); setReading("");
     requestAnimationFrame(() => messageInput.current?.focus());
   }
-  const active = journeyRequests.some(r => (checkoutOpenStatuses as readonly string[]).includes(r.status));
+  const hasProviderLink = (request: CheckoutRequest) => !!request.checkoutUrl && !providerCheckoutExpired(request, checkoutTime ?? 0);
+  const active = journeyRequests.some(r => (checkoutOpenStatuses as readonly string[]).includes(r.status)
+    || r.status === automaticCheckoutPending && hasProviderLink(r));
+  const checkoutExpiry = journeyRequests.reduce<number | null>((earliest, request) => {
+    const expires = request.checkoutExpiresAt ? Date.parse(request.checkoutExpiresAt) : null;
+    if (request.status !== automaticCheckoutPending || expires === null || expires <= (checkoutTime ?? 0)) return earliest;
+    return earliest === null ? expires : Math.min(earliest, expires);
+  }, null);
+  useEffect(() => {
+    if (checkoutExpiry === null) return;
+    const timer = window.setTimeout(() => setCheckoutTime(Date.now()), Math.max(0, checkoutExpiry - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [checkoutExpiry]);
   const visibleRequests = journeyRequests.slice(0, 5);
   const showForm = loaded && (!!attaching || canStartDraft && (showNew || !active));
   const packageStep = !topUp && draft.step === 0;
   const payStep = !topUp && draft.step === 1;
   const wizardTitle = topUp && draft.step < 2 ? m.text("credit.topUp")
     : ["Choose your package", draft.purpose === "referral" ? "Redeem earned days" : "Pay for your package", "Payment Details", "Review payment"][draft.step]!;
-  const summary = effectiveQuote && <FundingBreakdown quote={effectiveQuote} {...(external && draft.amountUgx !== "" ? { reportedUgx: Number(draft.amountUgx) + (attaching?.verifiedUgx ?? 0) } : {})} />;
+  const summary = effectiveQuote && <FundingBreakdown quote={effectiveQuote} automatic={automatic} {...(external && draft.amountUgx !== "" ? { reportedUgx: Number(draft.amountUgx) + (attaching?.verifiedUgx ?? 0) } : {})} />;
   function startReceipt(request: CheckoutRequest) {
     setQuote(null); setShowNew(true); setImage(null);
     const requestKey = randomId();
@@ -436,7 +485,18 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     {warningDialog && <PaymentEvidenceWarning warnings={warningDialog.warnings} onCancel={() => setWarningDialog(null)}
       {...(!attaching ? { onChangeMethod: () => { setWarningDialog(null); goBack(1); } } : {})}
       onContinue={() => { const action = warningDialog.continue; setWarningsAccepted(warningDialog.key); setWarningDialog(null); action?.(); }} />}
-     {visibleRequests.map((request, index) => <CheckoutPanel key={request.id} id={index === 0 ? "report" : undefined} data-checkout-status={request.status}>
+     {visibleRequests.map((request, index) => request.method === "flw" ? <CheckoutPanel key={request.id}
+       id={index === 0 ? "report" : undefined} data-checkout-status={request.status}>
+       <header role="status"><h2>{checkoutLabels[request.status] ?? request.status}</h2><p>Request ID: <strong>{request.reference}</strong></p></header>
+       {request.status === "approved"
+         ? <p>{request.purpose === "topup" ? "Wallet credited." : `Access until ${request.endsAt ? formatPeriodEnd(new Date(request.endsAt)) : "—"} (EAT).`}</p>
+         : <><p>{request.planName} · {formatUgx(request.priceUgx)}</p>
+           {request.status === automaticCheckoutPending && <p>{m.text(providerCheckoutExpired(request, checkoutTime ?? 0)
+             ? "checkout.flutterwaveExpired" : "checkout.flutterwavePendingDetails")}</p>}
+           {request.checkoutUrl && hasProviderLink(request) && <CheckoutActions><ButtonLink href={request.checkoutUrl} prefetch={false}>{m.text("checkout.flutterwaveContinue")}</ButtonLink></CheckoutActions>}
+         </>}
+       <CheckoutSupport settings={settings} reference={request.reference} />
+     </CheckoutPanel> : <CheckoutPanel key={request.id} id={index === 0 ? "report" : undefined} data-checkout-status={request.status}>
       <header role="status"><h2>{checkoutLabels[request.status] ?? request.status}</h2><p>Request ID: <strong>{request.reference}</strong></p></header>
       {request.status === "approved" ? <p>{request.purpose === "topup" ? "Wallet credited." : `Access until ${request.endsAt ? formatPeriodEnd(new Date(request.endsAt)) : "—"} (EAT).`}</p>
         : <><p>{request.planName} · {formatUgx(request.priceUgx)}</p>
@@ -494,9 +554,12 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
         <CheckoutChoices><VisuallyHidden as="legend">Payment method</VisuallyHidden>{(["mtn", "airtel"] as const).map(method =>
           <label key={method}><input type="radio" name="checkout-method" checked={draft.method === method} disabled={busy || !networkAvailable(method)}
             onChange={() => chooseMethod(method, true)} /><CheckoutProviderMark><MobileMoneyLogo network={method} /></CheckoutProviderMark>
-            <span data-method-text>{methodNames[method]}{manualPaymentProvider(settings, method).reason && <small>{manualPaymentProvider(settings, method).reason}</small>}</span></label>)}</CheckoutChoices>
+            <span data-method-text>{methodNames[method]}{manualPaymentProvider(settings, method).reason && <small>{manualPaymentProvider(settings, method).reason}</small>}</span></label>)}
+          {flutterwaveAvailable && <label><input type="radio" name="checkout-method" checked={automatic} disabled={busy} onChange={() => chooseMethod("flw", true)} />
+            {m.text("checkout.flutterwavePay")}</label>}
+        </CheckoutChoices>
         <PaymentDestination selection={selection()} settings={settings} plans={plans} quoteEpoch={quoteEpoch} displayed={payQuote} onError={setError} />
-        <WizardActions><Button variant="secondary" onClick={() => goBack(0)}>Back</Button><Button disabled={busy} onClick={next}>Next</Button></WizardActions>
+        <WizardActions><Button variant="secondary" onClick={() => goBack(0)}>Back</Button><Button disabled={busy} onClick={next}>{automatic ? m.text("checkout.flutterwaveReview") : "Next"}</Button></WizardActions>
       </> : draft.purpose === "referral" ? <EarnedDaysRedemption data-earned-days-redemption>
         <p>{view.availableReferralDays} earned days available. Redeem them for access without a Mobile Money payment.</p>
         <CheckoutFundingInput label="Earned days to redeem" maxLabel="Use max earned days" disabled={busy || view.availableReferralDays === 0}
@@ -509,8 +572,9 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
           <Button disabled={busy || Number(draft.referralDays) < 1} onClick={next}>Review redemption</Button></WizardActions>
       </EarnedDaysRedemption> : <CheckoutPay plan={plans.find(plan => plan.id === draft.planId)} settings={settings} method={draft.method} useWallet={draft.useWallet}
         walletUgx={Number(draft.walletUgx)} availableWalletUgx={view.availableWalletUgx} availableEarnedDays={view.availableReferralDays}
-        lastProvider={view.lastMethod} disabled={busy} onMethodChange={chooseMethod} onChangePackage={() => goBack(0)} onContinue={() => void next()}
-         onRedeem={chooseRedemption}>
+        lastProvider={view.lastMethod} disabled={busy} flutterwaveAvailable={flutterwaveAvailable} onMethodChange={chooseMethod} onChangePackage={() => goBack(0)} onContinue={() => void next()}
+        onRedeem={chooseRedemption} topUp={canTopUp ? { href: walletTopUpHref(locale, returnTo, true), label: m.text("wallet.topUp"),
+          shortfall: m.text("wallet.shortfall", { amount: formatUgx(selectedPlanPrice - view.availableWalletUgx) }) } : null}>
         <PaymentDestination redesigned availableWalletUgx={view.availableWalletUgx} selection={selection()} settings={settings} plans={plans} quoteEpoch={quoteEpoch} displayed={payQuote} onError={setError} />
       </CheckoutPay>)}
       {draft.step === 2 && <form onSubmit={review} noValidate style={{ display: "grid", gap: "var(--gh-spacing-3)" }}>
@@ -551,6 +615,9 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       </form>}
       {draft.step === 3 && <form onSubmit={submit} noValidate style={{ display: "grid", gap: "var(--gh-spacing-3)" }}>
         {summary}
+        {automatic && <TextInput type="email" autoComplete="email" required maxLength={254} disabled={busy}
+          label={m.text("checkout.flutterwaveEmail")} hint={m.text("checkout.flutterwaveEmailHint")} value={email}
+          onChange={event => setEmail(event.currentTarget.value)} />}
         {external && <div data-payment-review>
           <WizardReview><div><dt>Payment method</dt><dd>{methodNames[receiptProvider]}</dd></div><div><dt>Transaction ID</dt><dd>{draft.transactionId}</dd></div>
             <div><dt>Number used to pay</dt><dd>{formatReviewPhone(draft.payerPhone)}</dd></div>
@@ -560,9 +627,10 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
         </div>}
         <label><input type="checkbox" disabled={busy} checked={draft.accepted} onChange={e => update({ accepted: e.target.checked })} /> I checked these details and confirm this {draft.purpose === "referral" ? "redemption" : "purchase"}. I accept the <a href="/en/terms" target="_blank" rel="noopener">terms</a>.</label>
         <WizardActions><Button type="button" variant="secondary" disabled={busy || readingActive} onClick={() => goBack(external ? 2 : 1)}>Back</Button>
-          <Button type="submit" disabled={busy || readingActive || !draft.accepted || !attaching && !quote || external && (!!image && !screenshotReady || !image && !draft.text.trim())}>Submit</Button></WizardActions>
+          <Button type="submit" disabled={busy || readingActive || !draft.accepted || !attaching && !quote || automatic && !email.trim() ||
+            external && (!!image && !screenshotReady || !image && !draft.text.trim())}>{automatic ? m.text("checkout.flutterwaveContinue") : "Submit"}</Button></WizardActions>
         {external ? <Button variant="quiet" disabled={busy || readingActive} onClick={() => setNotice({ title: "Payment verification", message: "Reported details and extraction do not verify payment. The admin checks the incoming transfer." })}>About payment verification</Button>
-          : <WizardNotice>Your available balance is debited only when you confirm.</WizardNotice>}
+          : automatic ? null : <WizardNotice>Your available balance is debited only when you confirm.</WizardNotice>}
       </form>}
     </PaymentWizard>}
   </>;

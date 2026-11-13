@@ -16,7 +16,7 @@ import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
 import type { AccessCode, MemberAccount, Prisma } from "../generated/prisma/client.ts";
 import { activeMemberSessionsWhere, type MemberIdentity } from "./member-sessions.ts";
-import { subscriptionCheckoutPublished } from "./sales-readiness.ts";
+import { subscriptionCheckoutPublished, type CheckoutRuntime } from "./sales-readiness.ts";
 import { decide, lockSettings } from "./settings.ts";
 import type { PaymentNotifications } from "./payment-notifications.ts";
 import { createQueuedPaymentNotifications } from "./payment-notification-outbox.ts";
@@ -24,7 +24,7 @@ import { acceptedTerms } from "./member-terms.ts";
 import { appendWalletEntry, creditPath, InsufficientCredit, lastEntryNumber, lockedCredit, reservedWalletCredit, spendableCredit } from "./wallet.ts";
 import { rechainRewardPeriods } from "./referral-periods.ts";
 import { transferReferralReviewClaims } from "./referral-review-transfer.ts";
-import { checkoutOpenStatuses } from "../../domain/checkout.ts";
+import { automaticCheckoutPending, checkoutOpenStatuses } from "../../domain/checkout.ts";
 
 export const generateCode = () => Array.from({ length: 12 }, () => accessCodeAlphabet[randomInt(32)]).join("");
 export const newSalt = () => randomBytes(16);
@@ -145,7 +145,7 @@ export async function createAccessPeriod(tx: Prisma.TransactionClient, account: 
 /** Access periods without codes to send (068): every new period unlocks the account's signed-in devices directly. */
 export function createAccessCodes({ database, now = Date.now, config, notifications = createQueuedPaymentNotifications(database) }: {
   database: DatabaseRuntime; now?: () => number; notifications?: PaymentNotifications;
-  config?: Partial<Pick<AnalyticsConfig, "key" | "production">>;
+  config?: Partial<Pick<AnalyticsConfig, "key">> & CheckoutRuntime;
 }) {
   const create = createAccessPeriod;
 
@@ -378,7 +378,9 @@ export function createAccessCodes({ database, now = Date.now, config, notificati
         destination = await tx.memberAccount.findUniqueOrThrow({ where: { id: destination.id } });
         if (!old || old.blockedAt || old.erasedAt || destination.blockedAt || destination.erasedAt) return rollback(refused());
         if (await tx.paymentSubmission.count({ where: { accountId: { in: [accountId, destination.id] }, workflowVersion: 2, OR: [
-          { status: { in: [...checkoutOpenStatuses] } }, { receiptClaims: { some: { receipt: { verifiedAt: { not: null }, allocatedSubmissionId: null } } } },
+          { status: { in: [...checkoutOpenStatuses] } },
+          { status: automaticCheckoutPending, OR: [{ checkoutUrlExpiresAt: { gt: at } }, { checkoutLeaseUntil: { gt: at } }] },
+          { receiptClaims: { some: { receipt: { verifiedAt: { not: null }, allocatedSubmissionId: null } } } },
         ] } })) return rollback(invalid("Resolve open payment requests and unapplied receipts before changing the account number."));
         const codes = await tx.accessCode.findMany({ where: { accountId, revokedAt: null, endsAt: { gt: at } } });
         const rewards = codes.filter(code => code.source === "referral");
@@ -505,7 +507,7 @@ export function createAccessCodes({ database, now = Date.now, config, notificati
           return rollback(invalid(`Your earlier purchase of ${replay.accessCode.planName} from credit went through. Refresh to see it.`));
         }
         if (replay?.accessCode) return { status: "created", grant: { ...grantOf(replay.accessCode), credit: { addedUgx: replay.amountUgx, balanceUgx: replay.balanceAfter } } };
-        if (!subscriptionCheckoutPublished(await lockSettings(tx, "member", at), config?.production === true)) return rollback(refused());
+        if (!subscriptionCheckoutPublished(await lockSettings(tx, "member", at), config)) return rollback(refused());
         const plan = await tx.subscriptionPlan.findUnique({ where: { id: input.planId } });
         if (!plan?.active) return rollback(invalid("Choose a plan."));
         if (!input.accepted && !await acceptedTerms(tx, member, at)) return rollback(invalid("Accept the terms to continue."));
@@ -537,20 +539,22 @@ export function createAccessCodes({ database, now = Date.now, config, notificati
           && !await tx.walletEntry.findUnique({ where: { requestKey: `renewal:${accountId}:${+end.endsAt}` }, select: { id: true } });
       });
       if (!due) return "skipped";
-      const outcome = await codeTransaction<"renewed" | "skipped">(database, async (tx) => {
+      const outcome = await codeTransaction<"renewed" | "skipped">(database, async (tx, rollback) => {
         renewed = null;
         const account = await lockMemberAccount(tx, accountId);
         if (!account || account.blockedAt || account.erasedAt || !account.phone || !account.autoRenew || !account.autoRenewPlanId) return "skipped";
         const at = new Date(now());
         const latest = await tx.accessCode.findFirst({ where: { accountId, revokedAt: null }, orderBy: { endsAt: "desc" }, select: { endsAt: true, source: true } });
         if (!latest || latest.source === "trial" || latest.source === "referral" && latest.endsAt > at
-          || !renewalDue(latest.endsAt, at, walletRules.renewLeadMs, maxLapseMs) || !await salesOpen(tx)) return "skipped";
+          || !renewalDue(latest.endsAt, at, walletRules.renewLeadMs, maxLapseMs)) return "skipped";
         const plan = await tx.subscriptionPlan.findUnique({ where: { id: account.autoRenewPlanId } });
         const balance = await spendableCredit(tx, accountId);
         if (!plan?.active || balance === null || balance < plan.priceUgx) return "skipped";
         // One renewal per period end. If the owner revoked it, the same end is not bought again; the member buys by hand.
         const requestKey = `renewal:${accountId}:${+latest.endsAt}`;
         if (await tx.walletEntry.findUnique({ where: { requestKey }, select: { id: true } })) return "skipped";
+        // Serialize the debit with the owner's paid-access toggle, as for a wallet purchase.
+        if ((await lockSettings(tx, "system:auto-renew", at)).paywallMode !== "on") return rollback("skipped");
         const grant = await create(tx, account, { source: "renewal", planId: plan.id, planName: plan.name, durationDays: plan.durationDays, priceUgx: plan.priceUgx,
           termsVersion: account.autoRenewTermsVersion }, "system:auto-renew", at);
         const entry = await appendWalletEntry(tx, accountId, { kind: "renewal", amountUgx: -plan.priceUgx, actor: "system", at, accessCodeId: grant.id, requestKey });
@@ -580,7 +584,7 @@ export function createAccessCodes({ database, now = Date.now, config, notificati
         if (input.on) {
           const settings = await lockSettings(tx, "member", at);
           const plan = await tx.subscriptionPlan.findUnique({ where: { id: input.planId! } });
-          if (!plan?.active || !subscriptionCheckoutPublished(settings, config?.production === true)) return rollback(invalid("Choose a plan to renew."));
+          if (!plan?.active || !subscriptionCheckoutPublished(settings, config)) return rollback(invalid("Choose a plan to renew."));
           if (!account.autoRenew && (await spendableCredit(tx, account.id) ?? 0) <= 0) {
             return rollback(insufficient("Add wallet credit to turn on auto-renewal."));
           }
@@ -641,7 +645,9 @@ export function createAccessCodes({ database, now = Date.now, config, notificati
           && await salesOpen(tx) && creditUgx - await reservedWalletCredit(tx, session.accountId) >= autoRenewPlan.priceUgx;
         // The newest report decides, unless an older report of the other purpose still waits (a plan and a top-up may both).
         const paymentPending = ["pending", "superseded"].includes(session.account.submissions[0]?.status ?? "")
-          || !!session.account.submissions[0] && await tx.paymentSubmission.count({ where: { accountId: session.accountId, status: "pending" } }) > 0;
+          || !!session.account.submissions[0] && await tx.paymentSubmission.count({ where: { accountId: session.accountId, OR: [
+            { status: "pending" }, { status: automaticCheckoutPending, OR: [{ checkoutUrlExpiresAt: { gt: at } }, { transactionRef: { not: null } }] },
+          ] } }) > 0;
         const activeUntil = activeSubscriptionUntil(live, at), trial = trialStatus(session.account, codes.find(code => code.source === "trial"), at);
         return { activeUntil, paymentPending, creditUgx, autoRenew, renewsFromCredit,
           ...(trial ? { trial } : {}),

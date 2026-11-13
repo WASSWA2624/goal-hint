@@ -51,6 +51,21 @@ test("full wallet, changed balances and switching providers preserve the member'
   assert.equal(switched.walletUgx, "0");
 });
 
+test("Flutterwave is optional and choosing it charges the full amount outside the wallet", () => {
+  const balances = { availableWalletUgx: 5000, availableReferralDays: 3 };
+  const none = { ...settings, mtnEnabled: false, airtelEnabled: false };
+  assert.equal(withCheckoutProvider(draft, none, null, true).method, "flw");
+  assert.equal(withCheckoutProvider(draft, settings, null, true).method, "mtn");
+  const mixed = { ...draft, method: "mtn", useWallet: true, walletUgx: "2500", useReferral: true, referralDays: "1" };
+  const hosted = chooseCheckoutMethod(mixed, "flw", true, balances, plans);
+  assert.equal(withCheckoutProvider(hosted, settings, "airtel", true).method, "flw");
+  assert.deepEqual([hosted.useWallet, hosted.walletUgx, hosted.useReferral, hosted.referralDays], [false, "0", false, "0"]);
+  assert.equal(withCheckoutProvider(hosted, settings, "airtel", false).method, "airtel");
+  const deposit = chooseCheckoutMethod({ ...draft, purpose: "topup", topUpUgx: "5000" }, "flw", true, balances, plans);
+  assert.equal(deposit.purpose, "topup");
+  assert.equal(deposit.topUpUgx, "5000");
+});
+
 test("defaults never change a redemption, receipt attachment, or payment awaiting review", () => {
   const redemption = withCheckoutProvider({ ...draft, purpose: "referral", method: "referral", usePackage: false }, settings, "airtel");
   assert.equal(redemption.method, "referral");

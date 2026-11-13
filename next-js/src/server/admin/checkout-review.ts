@@ -102,7 +102,7 @@ export function createCheckoutReview(database: DatabaseRuntime, now = Date.now) 
       const action = parsed.data;
       return accessCodeTransaction(database, async tx => {
         const at = new Date(now()), initial = await tx.paymentSubmission.findUnique({ where: { id } });
-        if (!initial || initial.workflowVersion !== 2) return { ok: false, message: "Payment unavailable." };
+        if (!initial || initial.workflowVersion !== 2 || initial.method === "flw") return { ok: false, message: "Payment unavailable for manual review." };
         await lockMemberAccount(tx, initial.accountId); await lockSettings(tx, actor, at);
         const row = await tx.paymentSubmission.findUniqueOrThrow({ where: { id } });
         if (row.status === "approved" && action.action === "approve-checkout") return { ok: true };

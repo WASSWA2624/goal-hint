@@ -3,7 +3,7 @@ import "server-only";
 import { reconcileReviewEvent } from "./payment-review-events.ts";
 
 import { createHash, randomUUID } from "node:crypto";
-import { checkoutEvidenceSchema, checkoutOpenStatuses, checkoutRules, checkoutSelectionSchema, duplicateReceiptMessage, fundingAmounts, receiptInputSchema,
+import { automaticCheckoutPending, checkoutEvidenceSchema, checkoutOpenStatuses, checkoutRules, checkoutSelectionSchema, duplicateReceiptMessage, fundingAmounts, receiptInputSchema,
   type CheckoutQuote, type CheckoutRequest, type CheckoutSelection, type CheckoutView, type ReceiptInput } from "../../domain/checkout.ts";
 import { formatPaymentReference, parseTransactionId, transactionKey } from "../../domain/payment.ts";
 import { validMobilePhone } from "../../domain/phone-mobile.ts";
@@ -16,16 +16,23 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import type { PaymentSubmission, Prisma } from "../generated/prisma/client.ts";
 import { accessCodeTransaction, createAccessPeriod, lockMemberAccount, newReference } from "./access-codes.ts";
 import type { MemberIdentity } from "./member-sessions.ts";
-import { subscriptionCheckoutPublished } from "./sales-readiness.ts";
+import { subscriptionCheckoutPublished, type CheckoutRuntime } from "./sales-readiness.ts";
 import { lockSettings } from "./settings.ts";
 import { appendWalletEntry, lockedCredit } from "./wallet.ts";
 import { takeMemberLimit, memberRateRules } from "./rate-limit.ts";
+import { flutterwaveCheckoutUrl, flutterwaveCurrency, flutterwaveReference, flutterwaveSessionMinutes, flutterwaveTransactionId, type VerifiedFlutterwavePayment } from "./flutterwave.ts";
 
 type Tx = Prisma.TransactionClient;
 type Result<T> = { ok: true; value: T } | { ok: false; message: string; code?: string };
 const fail = (message: string, code?: string): Result<never> => ({ ok: false, message, ...(code ? { code } : {}) });
 const open = (status: string) => (checkoutOpenStatuses as readonly string[]).includes(status);
 const claimsSelect = { id: true, amountUgx: true, paidAt: true, receipt: true, withdrawn: true } as const;
+const checkoutLeaseMs = 60_000;
+type FlutterwaveStart = {
+  id: string; amountUgx: number; currency: typeof flutterwaveCurrency; payerPhone: string;
+  status: string; checkoutUrl: string | null; lease: string | null;
+};
+type FlutterwaveSettlement = { status: "approved"; purpose: "plan" | "topup"; reference: string };
 
 export async function paymentEvent(tx: Tx, submissionId: string, action: string, actor: string, at: Date,
   reason?: string, receiptId?: string, details?: Prisma.InputJsonObject) {
@@ -56,7 +63,7 @@ export async function checkoutBalances(tx: Tx, accountId: string) {
     availableReferralDays: Math.max(0, (days._sum.days ?? 0) - (reserved._sum.referralDays ?? 0)) };
 }
 
-async function requestView(tx: Tx, row: PaymentSubmission): Promise<CheckoutRequest> {
+async function requestView(tx: Tx, row: PaymentSubmission, at = new Date()): Promise<CheckoutRequest> {
   const claims = await tx.paymentReceiptClaim.findMany({ where: { submissionId: row.id }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: claimsSelect });
   const verifiedUgx = claims.reduce((sum, c) => sum + (!c.withdrawn && c.receipt.verifiedAt && !c.receipt.disputed
     && c.receipt.intendedSubmissionId === row.id ? c.receipt.amountUgx ?? 0 : 0), 0);
@@ -66,6 +73,9 @@ async function requestView(tx: Tx, row: PaymentSubmission): Promise<CheckoutRequ
     reportedUgx: claims.reduce((sum, c) => sum + (c.withdrawn ? 0 : c.amountUgx), 0), verifiedUgx,
     ...fundingAmounts(row.priceUgx, row.walletUgx, verifiedUgx), endsAt: latest?.endsAt.toISOString() ?? null,
     reservationUntil: row.reservationActive ? row.reservationUntil?.toISOString() ?? null : null,
+    ...(row.method === "flw" ? { ...(row.requestKey ? { requestKey: row.requestKey } : {}),
+      checkoutUrl: row.status === automaticCheckoutPending && row.checkoutUrlExpiresAt && row.checkoutUrlExpiresAt > at
+        ? row.checkoutUrl : null, checkoutExpiresAt: row.checkoutUrlExpiresAt?.toISOString() ?? null } : {}),
     reason: row.rejectText, revision: row.revision, receipts: claims.map(c => ({ id: c.id, transactionId: c.receipt.transactionId,
       amountUgx: c.amountUgx, paidAt: c.paidAt.toISOString(), verified: !!c.receipt.verifiedAt,
       disputed: c.receipt.disputed || !!c.receipt.intendedSubmissionId && c.receipt.intendedSubmissionId !== row.id, withdrawn: c.withdrawn })) };
@@ -78,13 +88,14 @@ async function currentMember(tx: Tx, member: MemberIdentity, at: Date) {
     && session.authenticatedAt && !session.passwordResetAt && session.expiresAt > at && !member.administrator ? account : null;
 }
 
-export function createCheckout({ database, config, now = Date.now }: {
-  database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key"> & Partial<Pick<AnalyticsConfig, "production">>; now?: () => number;
+export function createCheckout({ database, config, now = Date.now, flutterwaveAvailable = false }: {
+  database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key"> & CheckoutRuntime; now?: () => number; flutterwaveAvailable?: boolean;
 }) {
   const run = <T>(fn: (tx: Tx, at: Date) => Promise<T>) => accessCodeTransaction(database, tx => fn(tx, new Date(now())));
   const newCheckoutOpen = (settings: Awaited<ReturnType<typeof lockSettings>>, purpose: string) => purpose === "referral"
-    ? settings.paywallMode === "on" : subscriptionCheckoutPublished(settings, config.production === true);
+    ? settings.paywallMode === "on" : subscriptionCheckoutPublished(settings, config);
   async function quote(tx: Tx, selection: CheckoutSelection, at: Date, accountId: string): Promise<Result<CheckoutQuote>> {
+    if (selection.method === "flw" && !flutterwaveAvailable) return fail("Flutterwave checkout is temporarily unavailable.", "provider-unavailable");
     const settings = await lockSettings(tx, "checkout", at);
     if (!newCheckoutOpen(settings, selection.purpose)) return fail("Subscriptions are not open yet.");
     const balances = await checkoutBalances(tx, accountId);
@@ -99,6 +110,7 @@ export function createCheckout({ database, config, now = Date.now }: {
     const { amountToSend } = fundingAmounts(priceUgx, selection.walletUgx);
     if (selection.method === "wallet" && (selection.purpose !== "plan" || amountToSend !== 0)
       || selection.method === "referral" && selection.purpose !== "referral"
+      || selection.method === "flw" && (!amountToSend || selection.walletUgx > 0 || selection.referralDays > 0)
       || ["mtn", "airtel"].includes(selection.method) && amountToSend === 0) return fail("Choose a usable payment method.");
     const provider = selection.method === "mtn" || selection.method === "airtel" ? manualPaymentProvider(settings, selection.method) : null;
     if (provider?.reason) return fail(provider.reason, "provider-unavailable");
@@ -236,7 +248,7 @@ export function createCheckout({ database, config, now = Date.now }: {
             OR: [{ method: { in: ["mtn", "airtel"] } }, { method: null, network: { in: ["mtn", "airtel"] } }] },
           orderBy: [{ decidedAt: "desc" }, { submittedAt: "desc" }, { id: "desc" }], select: { method: true, network: true },
         });
-        return { ...await checkoutBalances(tx, member.accountId), lastMethod: last?.method ?? last?.network ?? null, requests: await Promise.all(rows.map(r => requestView(tx, r))) };
+        return { ...await checkoutBalances(tx, member.accountId), lastMethod: last?.method ?? last?.network ?? null, requests: await Promise.all(rows.map(r => requestView(tx, r, at))) };
       });
     },
     async quote(member: MemberIdentity, input: unknown): Promise<Result<CheckoutQuote>> {
@@ -249,12 +261,12 @@ export function createCheckout({ database, config, now = Date.now }: {
     },
     async confirm(member: MemberIdentity, input: unknown, requestKey: string, quoteKey: string, confirmed: boolean, proof?: unknown, image: Buffer | null = null): Promise<Result<CheckoutRequest>> {
       const parsed = checkoutSelectionSchema.safeParse(input), receipt = proof === undefined ? null : receiptInputSchema.safeParse(proof);
-      if (!parsed.success || !confirmed || !/^[a-f0-9-]{36}$/iu.test(requestKey) || receipt && !receipt.success) return fail("Confirm the payment details and terms.");
+      if (!parsed.success || parsed.data.method === "flw" || !confirmed || !/^[a-f0-9-]{36}$/iu.test(requestKey) || receipt && !receipt.success) return fail("Confirm the payment details and terms.");
       return accessCodeTransaction(database, async (tx, rollback) => {
         const at = new Date(now()), account = await currentMember(tx, member, at);
         if (!account) return rollback(fail(authCopy.loginAgain));
         const previous = await tx.paymentSubmission.findUnique({ where: { requestKey } });
-        if (previous) return previous.accountId === account.id ? { ok: true, value: await requestView(tx, previous) } : fail("Request unavailable.");
+        if (previous) return previous.accountId === account.id && previous.method !== "flw" ? { ok: true, value: await requestView(tx, previous) } : fail("Request unavailable.");
         await expire(tx, account.id, at);
         const quoted = await quote(tx, parsed.data, at, account.id);
         if (!quoted.ok) return quoted;
@@ -288,6 +300,106 @@ export function createCheckout({ database, config, now = Date.now }: {
         return { ok: true, value: await requestView(tx, await tx.paymentSubmission.findUniqueOrThrow({ where: { id: row.id } })) };
       });
     },
+    async startFlutterwave(member: MemberIdentity, input: unknown, requestKey: string, quoteKey: string, confirmed: boolean): Promise<Result<FlutterwaveStart>> {
+      if (!flutterwaveAvailable) return fail("Flutterwave checkout is temporarily unavailable.", "provider-unavailable");
+      const parsed = checkoutSelectionSchema.safeParse(input);
+      if (!parsed.success || parsed.data.method !== "flw" || parsed.data.walletUgx || parsed.data.referralDays
+        || !flutterwaveReference.safeParse(requestKey).success || !confirmed)
+        return fail("Confirm the payment details and terms.");
+      const selection = parsed.data;
+      return run(async (tx, at) => {
+        const account = await currentMember(tx, member, at);
+        if (!account?.phone) return fail(authCopy.loginAgain);
+        const previous = await tx.paymentSubmission.findUnique({ where: { requestKey } });
+        if (previous && (previous.accountId !== account.id || previous.method !== "flw" || previous.planId !== selection.planId
+          || previous.purpose !== selection.purpose || selection.purpose === "topup" && previous.priceUgx !== selection.topUpUgx))
+          return fail("Request unavailable.");
+        const intent = (row: PaymentSubmission): Result<FlutterwaveStart> => ({ ok: true, value: { id: row.id, amountUgx: row.priceUgx,
+          currency: flutterwaveCurrency, payerPhone: account.phone!, status: row.status, checkoutUrl: row.checkoutUrl, lease: row.checkoutLease } });
+        if (previous?.status === "approved") return intent(previous);
+        const lease = { checkoutLease: randomUUID(), checkoutLeaseUntil: new Date(+at + checkoutLeaseMs) };
+        if (previous) {
+          if (!newCheckoutOpen(await lockSettings(tx, "checkout", at), selection.purpose)) return fail("Subscriptions are not open yet.");
+          if (previous.status !== automaticCheckoutPending) return fail("Request unavailable.");
+          if (previous.transactionRef) return fail("Flutterwave verified your payment. It is awaiting reconciliation.", "flutterwave-pending");
+          if (previous.checkoutUrlExpiresAt && previous.checkoutUrlExpiresAt <= at)
+            return fail("This checkout link has expired. Start a new payment.", "flutterwave-expired");
+          if (previous.checkoutUrl) return intent(previous);
+          if (previous.checkoutLeaseUntil && previous.checkoutLeaseUntil > at)
+            return fail("Your checkout link is being prepared. Try again shortly.", "flutterwave-pending");
+          return intent(await tx.paymentSubmission.update({ where: { id: previous.id }, data: lease }));
+        }
+        await expire(tx, account.id, at);
+        const quoted = await quote(tx, selection, at, account.id);
+        if (!quoted.ok) return quoted;
+        const q = quoted.value;
+        if (q.quoteKey !== quoteKey) return fail("The payable amount or balances changed. Review the updated breakdown and confirm again.", "quote-changed");
+        const row = await tx.paymentSubmission.create({ data: { ...lease, id: randomUUID(), requestKey, reference: newReference().slice(2),
+          source: "checkout", workflowVersion: 2, accountId: account.id, purpose: q.purpose, planId: q.planId, planName: q.planName,
+          priceUgx: q.priceUgx, durationDays: q.purpose === "plan" ? q.durationDays : null, method: "flw", claimedNetwork: "flw",
+          claimedAmountUgx: q.priceUgx, status: automaticCheckoutPending, submittedAt: at, submittedSessionHash: member.tokenHash,
+          termsVersion: termsNotice.reviewedOn, acceptedAt: at } });
+        return intent(row);
+      });
+    },
+    async saveFlutterwaveUrl(id: string, lease: string, url: string): Promise<Result<string>> {
+      const checkoutUrl = flutterwaveCheckoutUrl(url);
+      if (!checkoutUrl) return fail("Flutterwave checkout is temporarily unavailable.");
+      const at = new Date(now());
+      const updated = await database.query(tx => tx.paymentSubmission.updateMany({
+        where: { id, method: "flw", status: automaticCheckoutPending, checkoutLease: lease, checkoutLeaseUntil: { gt: at } },
+        data: { checkoutUrl, checkoutUrlExpiresAt: new Date(+at + flutterwaveSessionMinutes * 60_000), checkoutLease: null, checkoutLeaseUntil: null },
+      }));
+      return updated.count ? { ok: true, value: checkoutUrl } : fail("Your checkout link changed. Reload and try again.", "flutterwave-pending");
+    },
+    async releaseFlutterwaveLink(id: string, lease: string): Promise<void> {
+      await database.query(tx => tx.paymentSubmission.updateMany({
+        where: { id, method: "flw", status: automaticCheckoutPending, checkoutLease: lease },
+        data: { checkoutLease: null, checkoutLeaseUntil: null },
+      }));
+    },
+    async lookupFlutterwave(id: string) {
+      if (!flutterwaveReference.safeParse(id).success) return null;
+      const row = await database.query(tx => tx.paymentSubmission.findFirst({
+        where: { id, method: "flw" },
+        select: { id: true, accountId: true, priceUgx: true, purpose: true, status: true, transactionRef: true },
+      }));
+      return row ? { id: row.id, accountId: row.accountId, amountUgx: row.priceUgx, purpose: row.purpose,
+        status: row.status, transactionId: row.transactionRef } : null;
+    },
+    async settleFlutterwave(payment: VerifiedFlutterwavePayment): Promise<Result<FlutterwaveSettlement>> {
+      if (!flutterwaveReference.safeParse(payment.txRef).success || !flutterwaveTransactionId.safeParse(payment.id).success || payment.currency !== flutterwaveCurrency
+        || payment.status !== "successful" || !Number.isSafeInteger(payment.amountUgx) || payment.amountUgx <= 0 || !Number.isFinite(+payment.paidAt))
+        return fail("Flutterwave payment has not been verified.", "flutterwave-unverified");
+      return run(async (tx, at) => {
+        const initial = await tx.paymentSubmission.findFirst({ where: { id: payment.txRef, method: "flw" }, select: { accountId: true } });
+        if (!initial) return fail("Payment request unavailable.");
+        await lockMemberAccount(tx, initial.accountId);
+        await lockSettings(tx, "system:flutterwave", at);
+        const row = await tx.paymentSubmission.findUniqueOrThrow({ where: { id: payment.txRef } });
+        if (row.priceUgx !== payment.amountUgx || row.purpose !== "plan" && row.purpose !== "topup")
+          return fail("Flutterwave payment does not match the checkout.", "flutterwave-mismatch");
+        const outcome = { ok: true, value: { status: "approved", purpose: row.purpose, reference: formatPaymentReference(row.reference) } } as const;
+        if (row.transactionRef && row.transactionRef !== payment.id)
+          return fail("This checkout already has a different verified payment.", "flutterwave-conflict");
+        if (row.status === "approved") return outcome;
+        if (row.status !== automaticCheckoutPending) return fail("Payment request unavailable.");
+        const receipt = await tx.paymentReceipt.findUnique({ where: { provider_transactionKey: { provider: "flw", transactionKey: payment.id } } });
+        if (receipt && receipt.intendedSubmissionId !== row.id)
+          return fail("This Flutterwave payment already belongs to another checkout.", "flutterwave-conflict");
+        if (!receipt) {
+          const saved = await tx.paymentReceipt.create({ data: { id: randomUUID(), provider: "flw", transactionKey: payment.id, transactionId: payment.id,
+            verifiedAt: at, verifiedBy: "system:flutterwave", amountUgx: payment.amountUgx, receivedAt: payment.paidAt, intendedSubmissionId: row.id } });
+          await tx.paymentReceiptClaim.create({ data: { id: randomUUID(), submissionId: row.id, receiptId: saved.id,
+            amountUgx: payment.amountUgx, paidAt: payment.paidAt, createdAt: at } });
+          await tx.paymentSubmission.update({ where: { id: row.id }, data: { transactionRef: payment.id, network: "flw",
+            checkoutUrl: null, checkoutUrlExpiresAt: null, checkoutLease: null, checkoutLeaseUntil: null } });
+          await paymentEvent(tx, row.id, "receipt_verified", "system:flutterwave", at, undefined, saved.id, { amountUgx: payment.amountUgx });
+        }
+        const result = await allocateCheckout(tx, row, at, "system:flutterwave");
+        return result.ok ? outcome : result;
+      });
+    },
     async attach(member: MemberIdentity, id: string, proof: unknown, image: Buffer | null = null): Promise<Result<CheckoutRequest>> {
       const parsed = receiptInputSchema.safeParse(proof); if (!parsed.success) return fail("Check the transaction details.");
       return run(async (tx, at) => {
@@ -295,7 +407,7 @@ export function createCheckout({ database, config, now = Date.now }: {
         await lockSettings(tx, "checkout", at);
         await expire(tx, member.accountId, at);
         const row = await tx.paymentSubmission.findUnique({ where: { id } });
-        if (!row || row.accountId !== member.accountId || row.workflowVersion !== 2 || !open(row.status)) return fail("This request is closed.");
+        if (!row || row.accountId !== member.accountId || row.workflowVersion !== 2 || row.method === "flw" || !open(row.status)) return fail("This request is closed.");
         if (!row.reservationActive) return fail("Review your funding and confirm again before attaching payment.", "reconfirm");
         const result = await attach(tx, row, parsed.data, image, at);
         if (!result.ok) return result;
@@ -309,7 +421,8 @@ export function createCheckout({ database, config, now = Date.now }: {
         const settings = await lockSettings(tx, "checkout", at);
         await expire(tx, member.accountId, at);
         const row = await tx.paymentSubmission.findUnique({ where: { id } });
-        if (!row || row.workflowVersion !== 2 || row.accountId !== member.accountId || ![...checkoutOpenStatuses, "rejected", "cancelled", "superseded"].includes(row.status) || row.reservationActive) return fail("This request cannot be reconfirmed.");
+        if (!row || row.workflowVersion !== 2 || row.method === "flw" || row.accountId !== member.accountId
+          || ![...checkoutOpenStatuses, "rejected", "cancelled", "superseded"].includes(row.status) || row.reservationActive) return fail("This request cannot be reconfirmed.");
         if (!open(row.status) && !newCheckoutOpen(settings, row.purpose) && !await tx.paymentReceiptClaim.findFirst({
           where: { submissionId: row.id, withdrawn: false, receipt: { verifiedAt: { not: null }, disputed: false,
             intendedSubmissionId: row.id, allocatedSubmissionId: null } },
@@ -330,7 +443,7 @@ export function createCheckout({ database, config, now = Date.now }: {
         if (!await currentMember(tx, member, at)) return fail(authCopy.loginAgain);
         await lockSettings(tx, "checkout", at);
         const row = await tx.paymentSubmission.findUnique({ where: { id } });
-        if (!row || row.accountId !== member.accountId || row.workflowVersion !== 2) return fail("Request unavailable.");
+        if (!row || row.accountId !== member.accountId || row.workflowVersion !== 2 || row.method === "flw") return fail("Request unavailable.");
         if (row.status === "cancelled") return { ok: true, value: await requestView(tx, row) };
         if (!open(row.status)) return fail("This request is closed.");
         const updated = await tx.paymentSubmission.update({ where: { id }, data: { status: "cancelled", reservationActive: false, decidedAt: at, decidedBy: "member", revision: { increment: 1 } } });
@@ -358,16 +471,21 @@ export function createCheckout({ database, config, now = Date.now }: {
 /** The account and settings locks cover every receipt verification/allocation path. */
 export async function allocateCheckout(tx: Tx, row: PaymentSubmission, at: Date, actor: string): Promise<Result<{ endsAt: string | null }>> {
   if (row.status === "approved") return { ok: true, value: { endsAt: (await requestView(tx, row)).endsAt } };
-  if (!open(row.status) || row.status === "disputed") return fail("Resolve ownership before approval.");
-  if (!row.reservationActive || !row.reservationUntil || row.reservationUntil <= at) return fail("The customer must reconfirm expired funding choices.", "reconfirm");
+  const hosted = row.method === "flw";
+  if (hosted ? row.status !== automaticCheckoutPending || actor !== "system:flutterwave" : !open(row.status) || row.status === "disputed")
+    return fail("Resolve ownership before approval.");
+  if (!hosted && (!row.reservationActive || !row.reservationUntil || row.reservationUntil <= at))
+    return fail("The customer must reconfirm expired funding choices.", "reconfirm");
   const account = await tx.memberAccount.findUniqueOrThrow({ where: { id: row.accountId } });
   if (!account.phone || account.blockedAt || account.erasedAt) return fail("This account cannot receive access.");
-  const reserved = await tx.paymentSubmission.aggregate({ where: { accountId: row.accountId, reservationActive: true }, _sum: { walletUgx: true, referralDays: true } });
-  const days = await tx.referralCredit.aggregate({ where: { accountId: row.accountId }, _sum: { days: true } });
-  if (account.creditUgx < (reserved._sum.walletUgx ?? 0) || (days._sum.days ?? 0) < (reserved._sum.referralDays ?? 0)) {
-    await tx.paymentSubmission.update({ where: { id: row.id }, data: { reservationActive: false, status: "reconfirm", revision: { increment: 1 } } });
-    await paymentEvent(tx, row.id, "funding_changed", actor, at);
-    return fail("Available funding changed. The customer must check and confirm the new payable amount.", "reconfirm");
+  if (!hosted) {
+    const reserved = await tx.paymentSubmission.aggregate({ where: { accountId: row.accountId, reservationActive: true }, _sum: { walletUgx: true, referralDays: true } });
+    const days = await tx.referralCredit.aggregate({ where: { accountId: row.accountId }, _sum: { days: true } });
+    if (account.creditUgx < (reserved._sum.walletUgx ?? 0) || (days._sum.days ?? 0) < (reserved._sum.referralDays ?? 0)) {
+      await tx.paymentSubmission.update({ where: { id: row.id }, data: { reservationActive: false, status: "reconfirm", revision: { increment: 1 } } });
+      await paymentEvent(tx, row.id, "funding_changed", actor, at);
+      return fail("Available funding changed. The customer must check and confirm the new payable amount.", "reconfirm");
+    }
   }
   const claims = await tx.paymentReceiptClaim.findMany({ where: { submissionId: row.id, withdrawn: false }, select: { receipt: true, original: true, corrections: true } });
   if (claims.some(claim => !receiptEvidenceValidation(claim.original, claim.corrections).reviewed))
@@ -377,6 +495,8 @@ export async function allocateCheckout(tx: Tx, row: PaymentSubmission, at: Date,
   if (claims.some(c => !c.receipt.verifiedAt)) return fail("Verify each attached receipt or request correction of unverified evidence before approval.");
   if (receipts.some(r => r.allocatedSubmissionId && r.allocatedSubmissionId !== row.id)) return fail("A receipt is already allocated. Mark the ownership dispute.");
   const received = receipts.reduce((sum, r) => sum + (r.amountUgx ?? 0), 0);
+  if (hosted && (receipts.length !== 1 || receipts[0]?.provider !== "flw" || received !== row.priceUgx))
+    return fail("Flutterwave payment does not match the checkout.", "flutterwave-mismatch");
   const amounts = fundingAmounts(row.priceUgx, row.walletUgx, received);
   const added = row.purpose === "topup" ? received : amounts.excessUgx;
   if (added > checkoutRules.maximumUgx || account.creditUgx - row.walletUgx + added > checkoutRules.maximumUgx)

@@ -15,7 +15,7 @@ import { AccountBlock, AccountBlockActions, AccountBlockText, AccountContactLink
 import { richText } from "./rich-text";
 import { refreshMemberSession } from "./member-session";
 import { Action, Disclosure, Note, PaymentReviewBox, StatusFacts, StatusTitle } from "./subscribe-styles";
-import { checkoutLabels } from "@/domain/checkout";
+import { automaticCheckoutPending, checkoutLabels } from "@/domain/checkout";
 
 export type StatusSettings = SupportContactSettings & Pick<SubscriptionSettings, "reviewTime">;
 const rejectReasons = ["unreadable", "amount-mismatch", "not-received", "duplicate", "wrong-number", "other"] as const;
@@ -85,6 +85,11 @@ export function PaymentStatusCard({ locale, status, settings, phone, heading = "
 }) {
   const m = createMessages(locale);
   if (!status) return null;
+  if (status.status === automaticCheckoutPending) return <PaymentReviewBox data-payment-status={status.status}>
+    <StatusTitle as={heading}>{checkoutLabels[status.status]}</StatusTitle>
+    <p>{m.text("checkout.flutterwavePendingDetails")}</p>
+    <PaymentDetails locale={locale} status={status} pending reviewTime={null} />
+  </PaymentReviewBox>;
   if (["remaining", "disputed", "correction", "reconfirm", "cancelled"].includes(status.status)) return <PaymentReviewBox data-payment-status={status.status}>
     <StatusTitle as={heading}>{checkoutLabels[status.status]}</StatusTitle><p>Request {status.reference}{status.rejectText ? ` · ${status.rejectText}` : ""}</p>
     <a href={status.purpose === "topup" ? walletTopUpHref(locale) : `/${locale}/subscribe`}>View payment status and corrections</a>
@@ -124,6 +129,10 @@ export function PaymentStatusCard({ locale, status, settings, phone, heading = "
 export function PaymentNotice({ locale, status, settings, phone }: { locale: string; status: PaymentStatus | null; settings: StatusSettings; phone: string }) {
   const m = createMessages(locale);
   if (!status) return null;
+  if (status.status === automaticCheckoutPending) return <AccountBlock $attention role="status" data-payment-status={status.status}>
+    <AccountBlockText><p>{checkoutLabels[status.status]} · {status.reference}</p></AccountBlockText>
+    <a href={status.purpose === "topup" ? walletTopUpHref(locale) : `/${locale}/subscribe#report`}>{m.text("account.viewPayment")}</a>
+  </AccountBlock>;
   if (["remaining", "disputed", "correction", "reconfirm", "cancelled"].includes(status.status)) return <AccountBlock $attention role="status" data-payment-status={status.status}>
     <AccountBlockText><p>{checkoutLabels[status.status]} · {status.reference}</p></AccountBlockText>
     <a href={status.purpose === "topup" ? walletTopUpHref(locale) : `/${locale}/subscribe`}>View request</a>

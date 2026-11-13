@@ -440,7 +440,7 @@ def verify_custom_numeric_bounds(document, expected):
 def verify_builder_access(origin, directory):
     for viewer, label, destination in [
         ("guest", "Unlock", "/en/account"),
-        ("member", "Unlock", "/en/subscribe"),
+        ("member", "Unlock", "/en/account"),
         ("subscriber", "Build slips", None),
     ]:
         path = f"/access/{viewer}"
@@ -465,14 +465,19 @@ def verify_builder_access(origin, directory):
         if destination:
             assert account_action.tag == "a", f"{path}: access action is a native link"
             target = urlsplit(account_action.attrs["href"])
-            assert target.path == destination and parse_qs(target.query).get("return") == ["/en/slips"], f"{path}: retains Slip Builder return destination"
+            assert target.path == destination, f"{path}: account destination"
+            query = parse_qs(target.query)
             if viewer == "guest":
-                assert parse_qs(target.query).get("view") == ["login"], f"{path}: guests open Login rather than registration"
+                assert query.get("view") == ["login"], f"{path}: guests open Login"
+                target = urlsplit(query["return"][0])
+                assert target.path == "/en/account", f"{path}: authentication continues to Subscriptions"
+                query = parse_qs(target.query)
+            assert query.get("section") == ["subscription"] and query.get("return") == ["/en/slips"], f"{path}: Subscriptions retains Slip Builder return destination"
             assert not any(node.attrs.get("type") == "submit" for node in actions[0].nodes("button")), f"{path}: access-restricted toolbar cannot submit a build"
         else:
             submit = [node for node in actions[0].nodes("button") if node.attrs.get("type") == "submit"]
             assert len(submit) == 1 and submit[0] in account_actions, f"{path}: eligible members build slips"
-    print("PASS Slip Builder access actions: responsive labels, lock and slip icons, and Login, Subscribe and Build slips destinations.", flush=True)
+    print("PASS Slip Builder access actions: responsive labels, lock and slip icons, and Login, Subscriptions and Build slips destinations.", flush=True)
 
 
 def verify_generated_limits(document, *, total_min, total_max, odds_min, odds_max, prob_min, prob_max, selections, reuse):
