@@ -88,7 +88,7 @@ export function FeedFilters({ query, today, leagues, onApply, searchText, onSear
   function reset() {
     const day = getDateInTimeZone(utcInstantFromEpochMilliseconds(Date.now()), deviceZone);
     setMarketDraft(null);
-    setDraft(feedFilterDraft(resetFeedFilters({ ...draft.query, zone: deviceZone }, !subscriberOnly), day, deviceZone));
+    setDraft(feedFilterDraft(resetFeedFilters({ ...draft.query, zone: deviceZone }), day, deviceZone));
   }
   const probabilityInput = (field: "min" | "max") => <FloatingField label={messages.text(field === "min" ? "filters.minimum" : "filters.maximum")}
     error={probabilityError(field)}><input value={draft.probability[field]} inputMode="decimal" autoComplete="off"

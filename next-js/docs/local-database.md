@@ -11,7 +11,7 @@ loopback-only TCP, a 128 MiB InnoDB buffer pool and 40 maximum connections.
 MySQL X Protocol is disabled. TLS-disabled access is restricted to local
 development; this configuration does not qualify a hosted or production target.
 
-The ignored `.env.local` enables the database boundary and selects this target.
+The ignored `.env.development` enables the database boundary and selects this target.
 The app uses `goal_hint_app` with the owner-supplied application password.
 `goal_hint_migration` uses a separate generated secret and database-scoped DDL
 privileges. Root administration uses a generated secret in the private
@@ -221,7 +221,7 @@ npm run dev
 Migrations deploy through the migration account. `db:verify` checks applied
 migration state and schema drift. Test commands continue to use their own
 throwaway MySQL instances; no `TEST_DATABASE_URL` points to this application
-database. The existing development watcher reloads `.env.local` changes.
+database. The existing development watcher reloads `.env.development` changes.
 
 Keep the data directory across code updates. Do not use a migration reset or
 delete the installation to resolve a connection failure. Inspect the private

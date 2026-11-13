@@ -13,12 +13,14 @@ import { synchronous } from "../shared/authority-proof.ts";
 import { fallbackRequestedGroups, resolveFallbackCandidate } from "./fallback-resolution.ts";
 import { forecastSourceReceipts, type ForecastSourceReceipts } from "./source-receipts.ts";
 import type { createLiveLocalEngine } from "../intelligence/live-local-engine.ts";
+import { sourceGroups } from "../../domain/markets.ts";
 
 export type FallbackRefreshRequest = Readonly<{
   requestId: string; expected: FallbackContext; ai: PredictorResult; bounds: ApiFootballBounds | null; maxElapsedMs: number;
-  /** Legacy ordered requests collect both source receipts. The cascade collects the first usable source. */
+  /** Legacy ordered requests collect both source receipts. The cascade fills missing groups in priority order. */
   order?: ForecastSourceOrder;
   sourceCascade?: typeof LIVE_FORECAST_CASCADE;
+  includeGoalMarkets?: true;
 }>;
 export type FallbackRefreshReason = "invalid-request" | "not-authorized" | "ineligible-refresh" | "timeout" |
   "clock-regression" | "unavailable" | "invalid-timing" | "conflicting-request" | "capacity-exhausted";
@@ -36,18 +38,20 @@ class RefreshFailure extends Error {
 export function parseFallbackRefreshRequest(input: unknown): FallbackRefreshRequest {
   try {
     if (input === null || typeof input !== "object" || Object.keys(input).some((key) =>
-      !["requestId", "expected", "ai", "bounds", "maxElapsedMs", "order", "sourceCascade"].includes(key))) throw new Error();
+      !["requestId", "expected", "ai", "bounds", "maxElapsedMs", "order", "sourceCascade", "includeGoalMarkets"].includes(key))) throw new Error();
     const value = input as FallbackRefreshRequest, expected = parseFallbackContext(value.expected), ai = parseFallbackAiResult(value.ai);
     if (typeof value.requestId !== "string" || !/^[a-f0-9]{64}$/u.test(value.requestId) ||
       !Number.isSafeInteger(value.maxElapsedMs) || value.maxElapsedMs < 1 || value.maxElapsedMs > 2_147_483_647 ||
       value.order !== undefined && value.order !== "provider-first" && value.order !== "ai-first" ||
-      value.sourceCascade !== undefined && (value.sourceCascade !== LIVE_FORECAST_CASCADE || value.order === "provider-first")) throw new Error();
+      value.sourceCascade !== undefined && (value.sourceCascade !== LIVE_FORECAST_CASCADE || value.order === "provider-first") ||
+      value.includeGoalMarkets !== undefined && (value.includeGoalMarkets !== true || value.sourceCascade !== LIVE_FORECAST_CASCADE)) throw new Error();
     const bounds = value.bounds === null ? null : parseProviderFallbackRequest({ context: expected.context,
       jobId: expected.jobId, requestedGroups: ["match-result", "total-goals", "both-teams-to-score"], bounds: value.bounds }).bounds;
     // Preserve the original AI object for trusted invocation/output ownership proof.
     return Object.freeze({ requestId: value.requestId, expected, ai, bounds, maxElapsedMs: value.maxElapsedMs,
       ...(value.order === undefined ? {} : { order: value.order }),
-      ...(value.sourceCascade === undefined ? {} : { sourceCascade: value.sourceCascade }) });
+      ...(value.sourceCascade === undefined ? {} : { sourceCascade: value.sourceCascade }),
+      ...(value.includeGoalMarkets ? { includeGoalMarkets: true } : {}) });
   } catch { throw new RefreshFailure("invalid-request"); }
 }
 
@@ -71,10 +75,11 @@ export function createFallbackService(options: Readonly<{
   const denied = (reason: FallbackRefreshReason, requestsDispatched = 0, requestCountUnknown = false): FallbackRefreshResult =>
     Object.freeze({ status: "denied", reason, requestsDispatched, requestCountUnknown });
   function withCascade(result: FallbackResolutionResult, request: FallbackRefreshRequest,
-    localStatus: NonNullable<ResolvedForecastCandidate["audit"]["localStatus"]>): FallbackResolutionResult {
+    localStatus: NonNullable<ResolvedForecastCandidate["audit"]["localStatus"]>, localGoalRates?: ResolvedForecastCandidate["audit"]["localGoalRates"]): FallbackResolutionResult {
     if (result.status === "denied" || request.sourceCascade === undefined) return result;
     return { ...result, candidate: parseResolvedForecastCandidate({ ...result.candidate, audit: {
       ...result.candidate.audit, sourceCascade: request.sourceCascade, localStatus,
+      ...(localGoalRates === undefined ? {} : { localGoalRates }),
       ...(request.order === undefined ? {} : { sourceOrder: request.order }),
     } }) };
   }
@@ -131,18 +136,21 @@ export function createFallbackService(options: Readonly<{
         status: "candidate", candidate, requestsDispatched: 0, requestCountUnknown: false,
         ...(request.order === undefined ? {} : { sources: forecastSourceReceipts({ ai: request.ai, provider: null, audit: candidate.audit, order: request.order }) }),
       });
+      let local: ResolvedForecastCandidate | null = null;
+      let localGoalRates: ResolvedForecastCandidate["audit"]["localGoalRates"];
+      let missingGroups: readonly typeof sourceGroups[number][] = sourceGroups;
       if (cascade) {
         const aiOnly = withCascade(resolveFallbackCandidate({ expected: request.expected, ai: request.ai, provider: null, now: now(), ...order },
           authority, "legacy-ai-primary"), request, "not-requested");
         if (aiOnly.status === "denied") return denied(aiOnly.reason);
         check();
-        if (aiOnly.status === "candidate" && request.ai.status === "candidate" &&
-          isPredictorForecastCurrent(request.ai.output, now())) return finishEarly(aiOnly.candidate);
+        if (aiOnly.status === "candidate" && sourceGroups.every((group) => aiOnly.candidate.markets[group].available) &&
+          !request.includeGoalMarkets)
+          return finishEarly(aiOnly.candidate);
         const engine = options.localEngine;
         if (engine) {
           let localTimer: ReturnType<typeof setTimeout> | undefined;
           const localLimit = Math.min(3000, allowanceMs - (performance.now() - startedAt) - (request.bounds?.timeoutMs ?? 0));
-          let local: ResolvedForecastCandidate | null = null;
           if (localLimit > 0) {
             try {
               const output = await Promise.race([
@@ -162,11 +170,17 @@ export function createFallbackService(options: Readonly<{
             } finally { clearTimeout(localTimer); }
           }
           check();
-          if (local) return finishEarly(local);
         }
+        const localMatch = local?.markets["match-result"];
+        if (localMatch?.available && localMatch.provenance.kind === "local-engine") localGoalRates = localMatch.provenance.rates;
+        const combined = withCascade(resolveFallbackCandidate({ expected: request.expected, ai: request.ai, provider: null, now: now(), ...order,
+          ...(local ? { local } : {}) }, authority), request, localGoalRates ? "candidate" : "unavailable", localGoalRates);
+        if (combined.status === "denied") return denied(combined.reason);
+        missingGroups = sourceGroups.filter((group) => !combined.candidate.markets[group].available);
+        if (combined.status === "candidate" && missingGroups.length === 0) return finishEarly(combined.candidate);
       }
-      // Legacy frozen orders capture the provider beside AI. Cascades only reach this stage when neither earlier source was usable.
-      const groups = request.order === undefined && selectionPolicy !== "optional-ai-primary" ? fallbackRequestedGroups(request.ai, now(), selectionPolicy)
+      // Legacy frozen orders capture the provider beside AI. Cascades request only groups the earlier sources could not supply.
+      const groups = cascade ? missingGroups : request.order === undefined && selectionPolicy !== "optional-ai-primary" ? fallbackRequestedGroups(request.ai, now(), selectionPolicy)
         : ["match-result", "total-goals", "both-teams-to-score"] as const;
       let provider: ProviderFallbackResult | null = null;
       if (groups.length > 0) {
@@ -196,8 +210,8 @@ export function createFallbackService(options: Readonly<{
       }
       check();
       const resolve = (at: ReturnType<typeof now>) => withCascade(resolveFallbackCandidate({
-        expected: request.expected, ai: request.ai, provider, now: at, ...(cascade ? {} : order),
-      }, authority, cascade ? "cascade-provider" : selectionPolicy), request, "unavailable");
+        expected: request.expected, ai: request.ai, provider, now: at, ...order, ...(local ? { local } : {}),
+      }, authority, cascade ? "legacy-ai-primary" : selectionPolicy), request, localGoalRates ? "candidate" : "unavailable", localGoalRates);
       let result = resolve(now());
       check();
       if (result.status === "denied") return denied(result.reason, requestsDispatched, requestCountUnknown);

@@ -22,12 +22,16 @@ async function priorityUse(tx: QuotaTransaction, period: QuotaPeriodState) {
 
 /** Both detail and optional enrichment admission are atomic with the account's
  * dispatch counter, including across processes and uncertain provider responses. */
-export function createLiveQuotaAdmission(workload: () => LiveWorkload | null, accountKey?: () => string | null): QuotaAdmission {
+export function createLiveQuotaAdmission(workload: () => LiveWorkload | null, accountKey?: () => string | null,
+  archiveEnabled = false): QuotaAdmission {
   return async (tx, period, attempt) => {
     if (attempt.priority !== "live-details" && attempt.priority !== "enrichment") return true;
     const plan = workload();
     if (!plan) return false;
-    if (!plan.liveDetails.eligible) return attempt.priority !== "live-details";
+    if (!plan.liveDetails.eligible) {
+      if (attempt.priority === "live-details") return false;
+      if (!archiveEnabled) return true;
+    }
     const used = await priorityUse(tx, period);
     // Provider-reported or prior-plan use is not proof that this runtime's
     // selection/result/refresh obligations have been completed.

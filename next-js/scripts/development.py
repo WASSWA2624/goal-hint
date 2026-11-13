@@ -84,8 +84,9 @@ def demo_environment(url: str, source=None, *, demo=True):
         GOAL_HINT_DATABASE_ENABLED="true", DATABASE_URL=url, MIGRATION_DATABASE_URL=url,
         GOAL_HINT_DATABASE_CONNECTION_MODE="direct", GOAL_HINT_DATABASE_POOL_LIMIT="5",
         GOAL_HINT_DATABASE_TLS_MODE="disabled", GOAL_HINT_FOOTBALL_ENABLED="false",
+        GOAL_HINT_FOOTBALL_EXISTING_PREPAID="false", GOAL_HINT_ODDS_BOOKMAKER_SCOPE="primary",
         GOAL_HINT_AI_ENABLED="false", GOAL_HINT_RESEARCH_ENABLED="false",
-        GOAL_HINT_ODDS_IMPORT_ENABLED="false", GOAL_HINT_LIVE_DETAILS_ENABLED="false",
+        GOAL_HINT_ODDS_IMPORT_ENABLED="false", GOAL_HINT_LIVE_DETAILS_ENABLED="false", GOAL_HINT_HISTORY_IMPORT_ENABLED="false",
         GOAL_HINT_TEAM_CODES_IMPORT_ENABLED="false", GOAL_HINT_ANALYTICS_ENABLED="true",
         GOAL_HINT_ADS_ENABLED="false", GOAL_HINT_DARK_MODE_ENABLED="false",
         GOAL_HINT_EXACT_SCORES_ENABLED="false", GOAL_HINT_LOCALES="en")
@@ -145,6 +146,12 @@ def run_checked(args, env, timeout=300, *, status=None, summarize=None):
             child.terminate()
             child.wait(timeout=15)
         child.stdout.close()
+
+
+def migrate_development_database(env):
+    prisma = str(ROOT / "node_modules/prisma/build/index.js")
+    run_checked([prisma, "migrate", "deploy"], env)
+    run_checked([prisma, "migrate", "status"], env)
 
 
 def web_arguments(args, source=None):
@@ -230,7 +237,7 @@ def football_worker(directory, env):
     worker_env = dict(os.environ, NODE_ENV="development", GOAL_HINT_DEMO="false",
                       NEXT_PUBLIC_GOAL_HINT_DEMO="false", NEXT_PUBLIC_GOAL_HINT_LOCAL_FOOTBALL="true",
                       DEBUG="", NODE_DEBUG="", NODE_DEBUG_NATIVE="")
-    command = [development_node_binary(), "--conditions=react-server", "--env-file-if-exists=.env.local",
+    command = [development_node_binary(), "--conditions=react-server", "--env-file-if-exists=.env.development",
                "--env-file-if-exists=.env.operations", "scripts/local-football-live.mjs"]
     check = subprocess.run([*command, "--check"], cwd=ROOT, env=worker_env, capture_output=True,
                            text=True, encoding="utf-8", errors="replace", timeout=30, creationflags=hidden_process())
@@ -281,7 +288,7 @@ def run_local_football(args, *, prepare):
     with LocalFootballMysql(replace_running=not prepare) as instance:
         env = demo_environment(instance.url, demo=False)
         print("Applying the application migrations to the local football snapshot…", flush=True)
-        run_checked([str(ROOT / "node_modules/prisma/build/index.js"), "migrate", "deploy"], env)
+        migrate_development_database(env)
 
         target = instance.directory / "target.env"
         pending = instance.directory / f"target-{os.getpid()}.tmp"
@@ -360,6 +367,9 @@ def main():
     if live:
         env = dict(os.environ, GOAL_HINT_DEMO="false", NEXT_PUBLIC_GOAL_HINT_DEMO="false")
         env["PATH"] = os.pathsep.join([str(ROOT / "node_modules/.bin"), str(Path(development_node_binary()).parent), env.get("PATH", "")])
+        for action in ("deploy", "status"):
+            if subprocess.call([sys.executable, str(ROOT / "scripts/database.py"), action], cwd=ROOT, env=env):
+                raise CommandError("The configured development database must be up to date before the web app starts.")
         return run_web(args, env, port, live=True)
     with DevelopmentMysql(replace_running=not (prepare_only or verify_only)) as instance:
         env = demo_environment(instance.url)
@@ -370,7 +380,7 @@ def main():
             raise CommandError("The synthetic football catalog could not be loaded.")
         env["GOAL_HINT_COMPETITION_IDS"] = catalog.stdout.strip()
         print("Applying the normal application migrations to the owned demo database…", flush=True)
-        run_checked([str(ROOT / "node_modules/prisma/build/index.js"), "migrate", "deploy"], env)
+        migrate_development_database(env)
         run_checked(["--conditions=react-server", "src/server/demo/seed-command.ts", "full" if full else "bootstrap"], env,
                     timeout=21600 if full else 7200, status="Preparing demo match details, slips and reports…",
                     summarize=demo_preparation_summary)

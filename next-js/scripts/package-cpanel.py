@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 import json
 import os
+from hashlib import sha256
 from pathlib import Path
 import re
 import shutil
@@ -15,6 +16,64 @@ from lib.deployment import git, publish_zip, stage_source, web_archive, write_zi
 
 def write_json(file: Path, value: dict) -> None:
     file.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+
+def prepare_hosted_activation(source: Path, bundle: Path) -> str:
+    """Install the immutable migration inventory and Passenger startup check."""
+    migrations = source / "prisma"
+    shutil.copytree(migrations / "migrations", bundle / "prisma/migrations")
+    shutil.copytree(migrations / "mariadb", bundle / "prisma/mariadb")
+    shutil.copy2(migrations / "adopted-migrations.json", bundle / "prisma/adopted-migrations.json")
+    (bundle / "scripts").mkdir()
+    for script in ("activate-hosted.sh", "deploy-mariadb.py"):
+        shutil.copy2(ROOT / "scripts" / script, bundle / "scripts" / script)
+    ledger = sha256()
+    for migration in sorted((migrations / "migrations").glob("*/migration.sql")):
+        ledger.update(migration.parent.name.encode("ascii") + b"\0" + migration.read_bytes())
+    (bundle / "app.js").write_text('''// Passenger startup file: app.js. Next.js and its dependencies live in ./standalone.
+"use strict";
+const path = require("node:path");
+const fs = require("node:fs");
+const { pathToFileURL } = require("node:url");
+const standalone = path.join(__dirname, "standalone");
+
+async function start() {
+  const files = [[".env.test", "staging"], [".env.production", "production"]]
+    .filter(([name]) => fs.existsSync(path.join(standalone, name)));
+  if (files.length > 1) throw new Error("Install exactly one hosted environment file.");
+  if (files.length === 1) {
+    const [name, deployment] = files[0];
+    process.loadEnvFile(path.join(standalone, name));
+    if (process.env.GOAL_HINT_DEPLOYMENT_ENVIRONMENT !== deployment) {
+      throw new Error("Hosted environment does not match its environment file.");
+    }
+    const database = new URL(process.env.DATABASE_URL);
+    const marker = JSON.parse(fs.readFileSync(path.join(__dirname, ".goal-hint-migrations.json"), "utf8"));
+    const build = require("./BUILD_INFO.json");
+    if (database.protocol !== "mysql:" || database.hostname !== "127.0.0.1" || (database.port && database.port !== "3306") ||
+        marker.environment !== deployment || marker.database !== decodeURIComponent(database.pathname.slice(1)) ||
+        marker.migrations !== build.migrations) {
+      throw new Error("Verify the hosted database migrations before starting this release.");
+    }
+  }
+  await import(pathToFileURL(path.join(standalone, "server.js")).href);
+}
+
+start().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+''', encoding="utf-8", newline="\n")
+    return ledger.hexdigest()
+
+
+def verify_traced_database_runtime(standalone: Path) -> None:
+    next_root = standalone / ".next"
+    pattern = re.compile(rb"@prisma/client-[0-9a-f]{16}(?=/runtime/client)")
+    aliases = {alias.decode("ascii") for chunk in (next_root / "server/chunks").rglob("*.js")
+               for alias in pattern.findall(chunk.read_bytes())}
+    if any(not (next_root / "node_modules" / alias / "runtime/client.js").is_file() for alias in aliases):
+        raise CommandError("The standalone build is missing a traced Prisma runtime dependency. Rebuild from a clean tree.")
 
 
 def main():
@@ -52,6 +111,7 @@ def main():
         shutil.copytree(built, standalone, symlinks=False)
         shutil.copytree(source / ".next/static", standalone / ".next/static", dirs_exist_ok=True)
         shutil.copytree(source / "public", standalone / "public", dirs_exist_ok=True)
+        verify_traced_database_runtime(standalone)
         if not any("/usr/bin/convert" in content and "/usr/bin/gm" in content
                    for chunk in (standalone / ".next/server/chunks").glob("*.js")
                    for content in [chunk.read_text(encoding="utf-8")]):
@@ -66,21 +126,13 @@ def main():
                 shutil.rmtree(target)
                 print(f"Pruned standalone/{prune}")
         commit, dirty = git("rev-parse", "HEAD").strip(), bool(git("status", "--porcelain").strip())
-        (bundle / "app.js").write_text('''// Passenger startup file: app.js. Next.js and its dependencies live in ./standalone.
-"use strict";
-const path = require("node:path");
-const { pathToFileURL } = require("node:url");
-import(pathToFileURL(path.join(__dirname, "standalone", "server.js")).href).catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
-''', encoding="utf-8", newline="\n")
+        migration_fingerprint = prepare_hosted_activation(source, bundle)
         write_json(bundle / "package.json", {"name": package["name"] + "-cpanel", "version": package["version"], "private": True,
                    "type": "commonjs", "main": "app.js", "scripts": {"start": "node app.js"}, "engines": {"node": version.split(".")[0] + ".x"}})
         next_version = json.loads((source / "node_modules/next/package.json").read_text(encoding="utf-8"))["version"]
         write_json(bundle / "BUILD_INFO.json", {"name": package["name"], "version": package["version"], "commit": commit,
                    "uncommittedChanges": dirty, "builtAt": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
-                   "node": version, "next": next_version, "badgeCodec": "system-webp"})
+                   "node": version, "next": next_version, "badgeCodec": "system-webp", "migrations": migration_fingerprint})
         shutil.copy2(ROOT / "docs/deployment/README.md", bundle / "DEPLOY.md")
         shutil.copy2(ROOT / ".env.example", bundle / ".env.example")
         archive = web_archive()

@@ -76,7 +76,7 @@ export function createMysqlLiveMatchStore(options: Readonly<{ database: Database
         AND NOT EXISTS (SELECT 1 FROM FootballTeamProvider otherHome WHERE otherHome.teamId=f.homeTeamId
           AND otherHome.provider='api-football' AND otherHome.externalId<>h.externalId)
         AND NOT EXISTS (SELECT 1 FROM FootballTeamProvider otherAway WHERE otherAway.teamId=f.awayTeamId
-          AND otherAway.provider='api-football' AND otherAway.externalId<>a.externalId) FOR SHARE`)[0];
+          AND otherAway.provider='api-football' AND otherAway.externalId<>a.externalId) LOCK IN SHARE MODE`)[0];
     if (!row || occurrence(row) !== target.occurrenceId || row.cycleId !== target.cycleId || stamp(row.kickoffAt) !== target.kickoffAt ||
       Number(row.externalId) !== target.externalId || Number(row.homeExternalId) !== target.homeExternalId ||
       Number(row.awayExternalId) !== target.awayExternalId || row.status !== target.status) return liveMatchFail("invalid-request");

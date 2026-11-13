@@ -4,7 +4,7 @@ import type { MatchDetailResponse } from "./match-detail.ts";
 import { fullDetailSnapshot } from "./detail-snapshot.ts";
 import { marketSelections, type MarketFamily, type MarketSelection } from "./markets.ts";
 import { publicPolicy } from "./public-policy.ts";
-import { bestPublishedFamily } from "./market-ranking.ts";
+import { bestPublishedFamily, rankFixtureOutcomes } from "./market-ranking.ts";
 import { selectedCardPrice } from "./match-card.ts";
 import { selectionOccurred } from "./market-settlement.ts";
 import { displayMarketOddsPrice, marketOddsPrice } from "./in-play-odds.ts";
@@ -79,6 +79,13 @@ export function featuredFamily(data: MatchDetailResponse): MarketFamily | null {
     family: group.family, selection: price.selection, price: price.price,
   })))];
   return bestPublishedFamily(snapshot.markets, prices);
+}
+
+export function currentFeaturedOutcome(data: MatchDetailResponse) {
+  const snapshot = fullDetailSnapshot(data);
+  if (snapshot?.applicability !== "current" || data.fixture.status !== "scheduled") return null;
+  return rankFixtureOutcomes(snapshot.markets, data.extendedMarkets?.markets ?? [],
+    data.bookmakerOdds?.kind === "pre-match" ? data.bookmakerOdds : null, data.fixture.marketOdds);
 }
 
 export type LiveStanding = "on-track" | "off-track";

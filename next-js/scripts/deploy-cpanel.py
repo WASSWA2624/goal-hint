@@ -122,22 +122,32 @@ activate() {  # $1 = release stamp. Touching the release keeps `ls -t` in activa
 case "$command" in
   downloads-install)
     python3 - "$HOME/$3" "$HOME/$app_root-downloads" <<'PY'
-import hashlib, json, os, pathlib, re, shutil, sys, zipfile
+import hashlib, json, os, pathlib, re, shutil, sys, tempfile, zipfile
 archive, root = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 root.mkdir(parents=True, exist_ok=True)
+extensions = {'android': '.apk', 'windows': '.exe', 'macos': '.dmg', 'linux': '.deb'}
+existing = root / 'catalog.json'
+active = {}
+if existing.is_file():
+    previous = json.loads(existing.read_text(encoding='utf-8'))
+    assert previous['schema'] == 1 and previous['channel'] == 'production'
+    active = {release['platform']: release for release in previous['releases']}
 with zipfile.ZipFile(archive) as bundle:
     catalog = json.loads(bundle.read('catalog.json'))
     assert catalog['schema'] == 1 and catalog['channel'] == 'production'
-    assert len(catalog['releases']) == 1
+    assert 1 <= len(catalog['releases']) <= len(extensions)
+    assert len({release['platform'] for release in catalog['releases']}) == len(catalog['releases'])
     for release in catalog['releases']:
-        assert release['platform'] == 'windows'
+        platform = release['platform']
+        assert platform in extensions
         assert re.fullmatch(r'\d+\.\d+\.\d+', release['version'])
         assert isinstance(release['build'], int) and release['build'] > 0
-        assert re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]+\.exe', release['fileName'])
-        relative = pathlib.Path('files/windows') / (release['version'] + '-' + str(release['build'])) / release['fileName']
+        assert re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]+' + re.escape(extensions[platform]), release['fileName'])
+        relative = pathlib.Path('files', platform, release['version'] + '-' + str(release['build']), release['fileName'])
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        pending = target.with_suffix('.pending')
+        with tempfile.NamedTemporaryFile(dir=target.parent, suffix='.pending', delete=False) as temporary:
+            pending = pathlib.Path(temporary.name)
         try:
             with bundle.open(relative.as_posix()) as source, pending.open('wb') as destination:
                 shutil.copyfileobj(source, destination)
@@ -153,11 +163,13 @@ with zipfile.ZipFile(archive) as bundle:
             os.replace(pending, target)
         finally:
             pending.unlink(missing_ok=True)
+        active[platform] = release
+    catalog['releases'] = list(active.values())
     pending_catalog = root / 'catalog.json.pending'
     pending_catalog.write_text(json.dumps(catalog) + '\n', encoding='utf-8')
     os.replace(pending_catalog, root / 'catalog.json')
 archive.unlink()
-print('Verified Windows installer and activated download catalog.')
+print('Verified native installers and activated download catalog.')
 PY
     ;;
   deploy)
@@ -436,13 +448,13 @@ def deploy(archive: Path) -> None:
 
 
 def publish_app_downloads() -> None:
-    """Publish available production Windows packages independently of web rollback."""
+    """Publish available production native packages independently of web rollback."""
     with tempfile.TemporaryDirectory(prefix="goal-hint-downloads-") as temporary:
         directory = Path(temporary)
         root = prepare_app_downloads("production", directory / "downloads")
         catalog = json.loads((root / "catalog.json").read_text(encoding="utf-8"))
         if not catalog["releases"]:
-            print("No Windows production installer packaged; preserving hosted downloads.")
+            print("No production native installers packaged; preserving hosted downloads.")
             return
         archive = directory / "downloads.zip"
         with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:

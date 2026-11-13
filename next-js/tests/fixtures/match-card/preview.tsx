@@ -18,11 +18,11 @@ export function CardPreview({ examples, boundary, equal }: {
   const [recovered, setRecovered] = useState(false);
   const [finish, setFinish] = useState<"finished-extra-time" | "finished-penalties" | null>(null);
   const [livePhase, setLivePhase] = useState(0);
-  const liveClocks: NonNullable<FixtureSnapshot["liveClock"]>[] = [
+  const liveClocks: FixtureSnapshot["liveClock"][] = [
     { phase: "second-half", minute: 67 }, { phase: "first-half", minute: 45, stoppageMinutes: 2 },
     { phase: "half-time", minute: 45 }, { phase: "second-half", minute: 90, stoppageMinutes: 4 },
     { phase: "extra-time", minute: 104 }, { phase: "extra-time", minute: 120, stoppageMinutes: 1 },
-    { phase: "penalties", minute: 120 },
+    { phase: "break", minute: null }, { phase: "penalties", minute: 120 }, null,
   ];
   return <Stack $gap="lg">
     <Inline>

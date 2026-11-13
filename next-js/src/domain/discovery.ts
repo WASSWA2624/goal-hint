@@ -1,4 +1,4 @@
-import { activeFeedFilterCount, anyProbability, defaultFeedDatePreset, defaultPageSort, resolveFeedDates, feedQueryHref, feedQueryRules, type FeedQuery } from "./feed-query.ts";
+import { activeFeedFilterCount, defaultFeedDatePreset, defaultPageSort, resolveFeedDates, feedQueryHref, feedQueryRules, type FeedQuery } from "./feed-query.ts";
 import type { ReportingDate } from "./calendar.ts";
 import { publicPolicy } from "./public-policy.ts";
 import { homeHref, localePath } from "./navigation-paths.ts";
@@ -17,15 +17,12 @@ export function canonicalUrl(path: string): string {
   return url.href;
 }
 
-export function feedDiscovery(query: FeedQuery, today: ReportingDate, allowProbabilityDefault = false) {
+export function feedDiscovery(query: FeedQuery, today: ReportingDate) {
   const range = resolveFeedDates(query, today);
   const order = defaultPageSort(query.dates);
   const defaultOrder = query.sort.direction === order.direction && query.sort.by === order.by;
   const matchesToday = query.dates.kind === "today";
-  const usesTodayDefault = Boolean(query.probability.minExclusive) === allowProbabilityDefault;
-  // The stable Matches URL applies its own live sort and the viewer's default probability on each request.
-  const scope = matchesToday && usesTodayDefault && query.probability.minExclusive ? { ...query, probability: anyProbability } : query;
-  const filtered = Boolean(query.zone) || activeFeedFilterCount(scope) > 0 || !defaultOrder || (matchesToday && !usesTodayDefault) ||
+  const filtered = Boolean(query.zone) || activeFeedFilterCount(query) > 0 || !defaultOrder ||
     query.pageSize !== feedQueryRules.pageSize || range.dayCount !== 1 && query.dates.kind !== defaultFeedDatePreset;
   const page = query.page === 1 ? "" : `?page=${query.page}`;
   const path = filtered || query.dates.kind === defaultFeedDatePreset ? feedQueryHref(query, today)

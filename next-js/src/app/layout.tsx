@@ -11,6 +11,7 @@ import { OfflineBootstrap } from "@/components/offline/offline-bootstrap";
 import { isLocalFootballDevelopment } from "@/domain/development-demo";
 import { consentBootstrapScript, consentInitialStyle } from "@/server/analytics/consent-bootstrap";
 import { socialLocale } from "@/server/seo/metadata";
+import { themePreferenceBootstrap } from "@/styles/theme-preference";
 
 // Latin WOFF2 subset of the variable source TTF (see docs/brand-styling.md); other scripts use the fallback.
 const manrope = localFont({
@@ -42,8 +43,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang={publicPolicy.defaultLocale} className={manrope.variable}>
+    <html lang={publicPolicy.defaultLocale} className={manrope.variable} suppressHydrationWarning>
       <head>
+        <ConsentBootstrapScript id="goal-hint-theme-preference" code={themePreferenceBootstrap} />
         {/* Use production's CSSOM rule insertion on the owned development snapshot. */}
         {isLocalFootballDevelopment() && <ConsentBootstrapScript id="goal-hint-development-styles" code="globalThis.SC_DISABLE_SPEEDY = false;" />}
         <style id="analytics-consent-initial">{consentInitialStyle}</style>

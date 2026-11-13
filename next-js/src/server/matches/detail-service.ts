@@ -37,7 +37,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
   const providerOdds = options.providerOdds ?? publicPolicy.features.providerOdds;
   const allowLiveMatch = options.allowLiveMatch ?? publicPolicy.features.liveMatchDetails;
   const allowInPlayOdds = providerOdds && (options.allowInPlayOdds ?? isLocalFootballDevelopment());
-  const extendedMarketsEnabled = options.extendedMarketsEnabled ?? isLocalFootballDevelopment();
+  const extendedMarketsEnabled = options.extendedMarketsEnabled ?? true;
   const evidenceStore = createMysqlEvidenceStore(options.database);
   return Object.freeze({ async query(id: string, parameters = new URLSearchParams()): Promise<StoredMatchDetailResponse> {
     const query = parseMatchDetailQuery(id, parameters), asOf = clock.now(), today = getReportingDate(asOf);

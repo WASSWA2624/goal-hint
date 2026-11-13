@@ -5,20 +5,20 @@ application against the existing MySQL database with verified TLS. From the
 Next.js application root (`next-js/`), stop the development server and run:
 
 ```sh
-npm run build
-npm run start
+node --env-file=.env.development --env-file=.goal-hint/local-environment/production-build.env scripts/local-production.mjs build
+node --env-file=.env.development --env-file=.goal-hint/local-environment/production-build.env scripts/local-production.mjs start
 ```
 
-Open [localhost:3000/en](http://localhost:3000/en). Both development and production
-default to port 3000. If another server should keep that port, run
-`npm start -- --port 3001` and open [localhost:3001/en](http://localhost:3001/en).
+Open [localhost:3000/en](http://localhost:3000/en). Append `--port 3001` to the
+`start` command to keep another local server on port 3000.
 
 ## Private local configuration
 
-Next.js loads the ignored application-root `.env.production.local` before `.env.local` during
-production builds and startup. Exported process variables take precedence over
-both files. The profile inherits the existing private application connection URL
-from `.env.local` and supplies these local choices:
+The ignored local preview settings live in `.goal-hint/local-environment/production-build.env`.
+This profile inherits the existing private application connection from
+`.env.development`. The preview uses the production Next.js build with the
+development deployment classification and applies pending MySQL migrations before
+startup. Hosted `.env.production` belongs to the live release.
 
 - Deployment classification remains `development`; operation scope is `disabled`.
 - Database access remains enabled, using direct TCP and an explicit pool limit.

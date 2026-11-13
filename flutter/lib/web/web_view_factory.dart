@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../config/app_config.dart';
+import 'linux_web_view.dart';
 import 'navigation_policy.dart';
 import 'system_web_view.dart';
 import 'unsupported_web_view.dart';
@@ -22,6 +23,11 @@ WebViewAdapter createWebViewAdapter({
       openExternal: openExternal,
     ),
     TargetPlatform.windows => WindowsWebViewAdapter(
+      configuration: configuration,
+      navigationPolicy: navigationPolicy,
+      openExternal: openExternal,
+    ),
+    TargetPlatform.linux => LinuxWebViewAdapter(
       configuration: configuration,
       navigationPolicy: navigationPolicy,
       openExternal: openExternal,

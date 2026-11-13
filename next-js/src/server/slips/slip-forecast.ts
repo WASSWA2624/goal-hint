@@ -50,7 +50,7 @@ export async function bindSlipForecasts(tx: Tx, slip: BuiltSlip, at: number): Pr
   const instant = utcInstantFromEpochMilliseconds(at), ids = [...new Set(slip.selections.map((selection) => selection.fixtureId))].sort();
   if (!ids.length || ids.length !== slip.selections.length) return null;
   const locked = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT id FROM FootballFixture
-    WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR SHARE`);
+    WHERE id IN (${Prisma.join(ids)}) ORDER BY id LOCK IN SHARE MODE`);
   if (locked.length !== ids.length) return null;
   const fixtures = new Map((await tx.footballFixture.findMany({ where: { id: { in: ids } }, select: fixtureSelect })).map((row) => [row.id, row]));
   const goalExtensions = await readSlipGoalExtensions(tx, slipGoalRevisionIds(slip.selections));

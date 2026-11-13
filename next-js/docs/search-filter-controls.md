@@ -45,8 +45,8 @@ Container queries retain three columns inside narrow report panels; large
 counts wrap within their cards. Outcome definitions are shared once at module
 level and streamed match counts are normalized only when those counts change.
 Mobile cards have no icons. Result actions retain each screen's date/filter navigation;
-unknown counts show dashes and cannot be selected. Desktop percentages and
-optional prediction-coverage details remain available. Reporting dates come
+unknown counts show dashes and cannot be selected. Outcome percentages appear
+on mobile and in wide desktop summaries. Reporting dates come
 from the actual cohort; unbounded collections use their
 “All dates” label. Desktop icons sit beside labels, and selection uses a thin,
 muted inset rule while keyboard focus keeps its stronger outline.

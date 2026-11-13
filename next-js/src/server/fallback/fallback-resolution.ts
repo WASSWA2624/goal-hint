@@ -77,6 +77,10 @@ function explanations(markets: ResolvedForecastCandidate["markets"], ai: Predict
     for (const item of ai.output.reasons) reasons.push(explanation(item.text, ai.output.sources.flatMap((source) =>
       source.sourceUrl === null || !item.references.some((reference) => reference.sourceId === source.sourceId) ? [] : [source.sourceUrl])));
   }
+  if (available.some((value) => value.market.source === "local-engine")) {
+    const basis = explanation("The Local Engine estimates uncovered goal markets from verified historical results.");
+    if (reasons.length === 4) reasons[3] = basis; else reasons.push(basis);
+  }
   if (providerUsed) {
     const baseline = available.some((value) => value.fallback?.reason === "provider-baseline");
     const basis = explanation(baseline ? "API-Football supplies the independently retained baseline forecast; recommendation eligibility is evaluated separately."
@@ -107,17 +111,19 @@ export function resolveFallbackCandidate(value: Readonly<{
   expected: FallbackContext; ai: PredictorResult; provider: ProviderFallbackResult | null; now: UtcInstant;
   /** Absent keeps the original AI-first resolution and an audit without a source order. */
   order?: ForecastSourceOrder;
-}>, authority: FallbackResolutionAuthority, policy: ForecastSelectionPolicy | "cascade-provider" = "legacy-ai-primary"): FallbackResolutionResult {
+  local?: ResolvedForecastCandidate;
+}>, authority: FallbackResolutionAuthority, policy: ForecastSelectionPolicy = "legacy-ai-primary"): FallbackResolutionResult {
   const denied = (reason: "invalid-request" | "not-authorized" | "ineligible-refresh"): FallbackResolutionResult => Object.freeze({ status: "denied", reason });
-  const providerOnly = policy === "provider-baseline" || policy === "cascade-provider";
+  const providerOnly = policy === "provider-baseline";
   if (!providerOnly && policy !== "legacy-ai-primary" && policy !== "optional-ai-primary" ||
     providerOnly && value?.order === "ai-first") return denied("invalid-request");
   let expected: FallbackContext, ai: PredictorResult, provider: ProviderFallbackResult | null, now: UtcInstant;
   const order = value?.order;
   try {
-    if (value === null || typeof value !== "object" || Object.keys(value).some((key) => !["expected", "ai", "provider", "now", "order"].includes(key)) ||
+    if (value === null || typeof value !== "object" || Object.keys(value).some((key) => !["expected", "ai", "provider", "now", "order", "local"].includes(key)) ||
       order !== undefined && order !== "provider-first" && order !== "ai-first") throw new Error();
     expected = parseFallbackContext(value.expected); ai = parseFallbackAiResult(value.ai);
+    if (value.local && (providerOnly || order === "provider-first" || evidenceFingerprint(value.local.context) !== evidenceFingerprint(expected))) throw new Error();
     provider = value.provider === null ? null : parseProviderFallbackResult(value.provider); now = utcInstantFromEpochMilliseconds(value.now);
     if (ai.status === "candidate" && (expected.pin === null || ai.pin.id !== expected.pin.id || ai.pin.jobId !== expected.jobId ||
       ai.output.modelVersionId !== expected.pin.modelVersionId || ai.output.evidenceHash !== expected.evidenceHash ||
@@ -150,6 +156,7 @@ export function resolveFallbackCandidate(value: Readonly<{
       if (providerOnly) { if (providerMarket?.available) chosen[family] = providerMarket; }
       else if (providerFirst && providerMarket?.available) chosen[family] = providerMarket;
       else if (aiMarket.available) chosen[family] = aiMarket;
+      else if (value.local?.markets[family].available) chosen[family] = value.local.markets[family];
       else if (providerMarket?.available) chosen[family] = providerMarket;
     }
     const constraints = providerFirst ? providerFirstConflict(chosen) : [];
@@ -180,6 +187,8 @@ export function resolveFallbackCandidate(value: Readonly<{
         markets[family] = freezeEvidence({ available: true, market, fallback: null, timestamps: {
           generatedAt: ai.output.timestamps.generatedAt, retrievedAt: ai.output.timestamps.retrievedAt, providerUpdatedAt: ai.output.timestamps.providerUpdatedAt },
         provenance: primaryProvenance, flags: ai.output.flags });
+      } else if (market.source === "local-engine" && value.local?.markets[family].available) {
+        markets[family] = value.local.markets[family];
       } else if (market.source === "api-football" && supplied !== null && fallbackProvenance !== null) {
         markets[family] = freezeEvidence({ available: true, market, fallback: policy === "provider-baseline"
           ? { reason: "provider-baseline", detail: "independent-provider-baseline" }

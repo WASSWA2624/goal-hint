@@ -7,6 +7,7 @@ import { randomBytes } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { calendarRules } from "../../domain/calendar.ts";
 import type { RuntimePolicy } from "../config/runtime-policy.ts";
+import { historyImportEnvelopes, latestHistoryImportSlot } from "../football/history-import-jobs.ts";
 import { createJobRegistry } from "../jobs/job-registry.ts";
 import { createJobWorker } from "../jobs/job-worker.ts";
 import { resultCadence } from "../results/result-sync-policy.ts";
@@ -34,6 +35,7 @@ async function pause(ms: number, signal: AbortSignal) { await sleep(ms, undefine
 async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () => void, log: (event: LiveEvent) => void,
   localFootball: boolean) {
   let accountCheckedAt = Date.now(), scheduled = 0, pollerCheckedAt = 0, oddsScheduled = 0, teamCodesScheduled = 0;
+  let historyScheduled = 0;
   type Poller = Readonly<{ controller: AbortController; done: Promise<void>; policy: unknown }>;
   const owned: { poller: Poller | null; details: Poller | null } = { poller: null, details: null };
   const plan = runtime.day.status.plan, dailyLimit = runtime.day.status.dailyLimit;
@@ -84,6 +86,15 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
             const job = await runtime.queue.enqueue(teamCodesEnvelope(slot));
             teamCodesScheduled = slot; log({ event: "team-codes-scheduled", slot: new Date(slot).toISOString(), state: job.state });
           } catch (error) { log({ event: "team-codes-schedule-failed", reason: reason(error) }); }
+        }
+      }
+      if (runtime.enrichment.historyEnabled) {
+        const slot = latestHistoryImportSlot(now);
+        if (slot !== historyScheduled) {
+          try {
+            for (const envelope of historyImportEnvelopes(slot)) await runtime.queue.enqueue(envelope);
+            historyScheduled = slot;
+          } catch (error) { log({ event: "football-history-schedule-failed", reason: reason(error) }); }
         }
       }
       // Write-time staleness (and, without verified display rights, hiding every fresh price) makes no provider
@@ -174,7 +185,7 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
       odds: runtime.odds.enabled, oddsSwitch: policy.choices.odds.enabled, oddsSpare: workload.odds.spare,
       teamCodes: runtime.teamCodes.enabled, teamCodesSwitch: policy.choices.teamCodes.enabled,
       liveDetails: workload.liveDetails.eligible, liveDetailsSwitch: policy.choices.liveDetails.enabled,
-      liveDetailsRequests: workload.liveDetails.requests });
+      liveDetailsRequests: workload.liveDetails.requests, historyImport: runtime.enrichment.historyEnabled });
     let selectionRegistry = runtime.registry, refreshAndCutoffRegistry = runtime.registry;
     if (!localFootball && workersPerRun > 1) {
       // Reserve a slot so an older refresh backlog cannot delay the next daily import.
@@ -188,7 +199,7 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
       ownerId: randomBytes(32).toString("hex"), onEvent: (event) => {
         if (event.kind !== "claimed") log({ event: `job-${event.kind}`, jobId: event.jobId?.slice(0, 12) ?? null, reason: event.reason });
       } }).run(stop));
-    // One dedicated enrichment worker for odds and team codes. It runs even while imports are off so queued jobs drain
+    // One dedicated enrichment worker for odds, team codes and history. It runs even while imports are off so queued jobs drain
     // or expire, one at a time, so the shared spare-quota gate is never checked by two jobs at once. Sweeps are hourly
     // at most, so it polls every 10 seconds when idle instead of every second.
     const enrichmentWorker = createJobWorker({ queue: runtime.queue, registry: runtime.enrichment.registry, ownerId: randomBytes(32).toString("hex"),

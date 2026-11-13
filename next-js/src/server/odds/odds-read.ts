@@ -116,7 +116,7 @@ export type QuoteSourceRow = Readonly<{ marketKey: string; selection: string; ba
   line: string | null; method: string; mappingVersion: string; snapshotId: string | null; retrievedAt: Date; providerUpdatedAt: Date | null }>;
 export type StoredQuoteSource = Readonly<{ state: Readonly<{ lastRetrievedAt: Date; withdrawnAt: Date | null }> | null; rows: readonly QuoteSourceRow[] }>;
 /** The fixture's odds state and fresh public prices for a publication-time quote, in ONE non-locking statement so the
- * publication transaction (READ COMMITTED) sees a single consistent commit. No FOR SHARE (no new lock order against
+ * publication transaction (READ COMMITTED) sees a single consistent commit. No LOCK IN SHARE MODE (no new lock order against
  * odds apply) and no private snapshot read: FixtureOddsPrice is the authoritative public projection. */
 export async function storedQuoteSource(tx: Tx, fixtureId: string): Promise<StoredQuoteSource> {
   const rows = await tx.$queryRaw<(Omit<QuoteSourceRow, "marketKey"> & { marketKey: string | null; lastRetrievedAt: Date; withdrawnAt: Date | null })[]>`

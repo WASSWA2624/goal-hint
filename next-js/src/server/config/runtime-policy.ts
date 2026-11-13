@@ -139,9 +139,12 @@ const environmentSchema = z.object({
   GOAL_HINT_IOS_APP_LINK_TEAM_ID: optional(z.string().trim().regex(/^[A-Z0-9]{10}$/))
     .describe("Public ten-character Apple team ID for the signed iOS app; blank leaves universal links unconfigured."),
   GOAL_HINT_APP_DOWNLOADS_ROOT: text.describe("Optional persistent installer root; blank uses .app-downloads beside the web runtime."),
-  GOAL_HINT_ANDROID_PLAY_STORE_URL: text.describe("Published production Google Play listing; blank keeps Android production downloads unavailable."),
+  GOAL_HINT_ANDROID_PLAY_STORE_URL: text.describe("Optional production Google Play listing when a hosted APK is unavailable."),
   GOAL_HINT_ANDROID_PLAY_STORE_VERSION: text.describe("Actual Google Play native version for update checks; never the website version."),
   GOAL_HINT_ANDROID_PLAY_STORE_BUILD: text.describe("Actual Google Play native build number for update checks."),
+  GOAL_HINT_IOS_DISTRIBUTION_URL: text.describe("Published production App Store listing or public TestFlight invitation URL."),
+  GOAL_HINT_IOS_DISTRIBUTION_VERSION: text.describe("Actual published iOS native version for update checks."),
+  GOAL_HINT_IOS_DISTRIBUTION_BUILD: text.describe("Actual published iOS native build number for update checks."),
   GOAL_HINT_DATABASE_ENABLED: enabled.describe("Use true or false; database integration belongs to prompt 003."),
   GOAL_HINT_TRUSTED_PROXY_CIDRS: text.describe("Comma-separated exact proxy IPs/CIDRs, verified from the actual socket chain. Blank trusts no forwarded address."),
   GOAL_HINT_CUSTOMER_SUPPORT_NUMBER: subscriptionPhone.describe("Supply the customer support call/SMS number separately from receiving wallets."),
@@ -184,6 +187,7 @@ const environmentSchema = z.object({
     .describe("Use primary (default) or all for pre-match odds imports. The primary bookmaker still supplies the reviewed projection."),
   GOAL_HINT_TEAM_CODES_IMPORT_ENABLED: enabledByDefault.describe("Use true or false (default true); the live runner imports team codes only from spare quota, so they stay off on Free and slow plans."),
   GOAL_HINT_LIVE_DETAILS_ENABLED: enabled.describe("Use true or false (default false); centrally collect fixture statistics/events within the verified plan's bounded live-detail allowance."),
+  GOAL_HINT_HISTORY_IMPORT_ENABLED: enabled.describe("Use true on the production football worker to resume historical imports under its verified spare quota."),
   GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS: money.describe("Use an explicitly approved separate AI cap in integer US cents (010)."),
   GOAL_HINT_AI_BILLING_MODE: optional(z.enum(["capped", "usage-based"])).transform((value) => value ?? "capped")
     .describe("Capped requires the monthly AI allowance; explicitly approved usage-based billing has no monthly spending ceiling."),
@@ -303,6 +307,7 @@ function assemble(settings: z.output<typeof environmentSchema>) {
       },
       teamCodes: { enabled: settings.GOAL_HINT_TEAM_CODES_IMPORT_ENABLED },
       liveDetails: { enabled: settings.GOAL_HINT_LIVE_DETAILS_ENABLED },
+      historyImport: { enabled: settings.GOAL_HINT_HISTORY_IMPORT_ENABLED },
       budgets: {
         aiBillingMode: settings.GOAL_HINT_AI_BILLING_MODE,
         aiMonthlyUsdCents: settings.GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS,

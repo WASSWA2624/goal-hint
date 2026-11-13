@@ -1,7 +1,7 @@
 import "server-only";
 import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import { appReleaseCatalogSchema, appVersionSchema, checkedPlayStoreUrl, type AppChannel, type AppDownload, type AppDownloads, type AppFileRelease } from "../../domain/app-downloads.ts";
+import { appReleaseCatalogSchema, appVersionSchema, checkedIosDistribution, checkedPlayStoreUrl, type AppChannel, type AppDownload, type AppDownloads, type AppFileRelease } from "../../domain/app-downloads.ts";
 
 export function appDownloadsChannel(): AppChannel {
   const environment = process.env.GOAL_HINT_DEPLOYMENT_ENVIRONMENT;
@@ -26,9 +26,7 @@ export async function readAppFileReleases(): Promise<readonly AppFileRelease[]> 
   try {
     const catalog = appReleaseCatalogSchema.parse(JSON.parse(await readFile(path.join(appDownloadsRoot(), "catalog.json"), "utf8")));
     if (catalog.channel !== appDownloadsChannel()) return [];
-    const candidates = catalog.releases.filter(release => (release.platform === "android" ? release.fileName.endsWith(".apk") : release.fileName.endsWith(".exe"))
-      && (catalog.channel !== "production" || release.platform === "windows"));
-    const verified = await Promise.all(candidates.map(async release => await appReleaseFile(release).catch(() => null) ? release : null));
+    const verified = await Promise.all(catalog.releases.map(async release => await appReleaseFile(release).catch(() => null) ? release : null));
     return verified.filter(release => release !== null);
   } catch { return []; }
 }
@@ -40,11 +38,19 @@ export async function getAppDownloads(): Promise<AppDownloads> {
     href: `/api/downloads/${release.platform}?version=${release.version}&build=${release.build}`,
   }));
   const store = checkedPlayStoreUrl(process.env.GOAL_HINT_ANDROID_PLAY_STORE_URL);
-  if (channel === "production" && store) {
+  if (channel === "production" && store && !releases.some(release => release.platform === "android")) {
     const version = appVersionSchema.safeParse(process.env.GOAL_HINT_ANDROID_PLAY_STORE_VERSION);
     const build = Number(process.env.GOAL_HINT_ANDROID_PLAY_STORE_BUILD);
     const knownVersion = version.success && Number.isSafeInteger(build) && build > 0;
     releases.push({ platform: "android", kind: "store", href: store, version: knownVersion ? version.data : null,
+      build: knownVersion ? build : null, size: null, sha256: null });
+  }
+  const ios = checkedIosDistribution(process.env.GOAL_HINT_IOS_DISTRIBUTION_URL);
+  if (channel === "production" && ios) {
+    const version = appVersionSchema.safeParse(process.env.GOAL_HINT_IOS_DISTRIBUTION_VERSION);
+    const build = Number(process.env.GOAL_HINT_IOS_DISTRIBUTION_BUILD);
+    const knownVersion = version.success && Number.isSafeInteger(build) && build > 0;
+    releases.push({ platform: "ios", ...ios, version: knownVersion ? version.data : null,
       build: knownVersion ? build : null, size: null, sha256: null });
   }
   return { channel, releases };

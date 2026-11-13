@@ -62,7 +62,7 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
   const markets = Prisma.join(query.markets);
   const hasDecision = Prisma.sql`rp.feedRecommendation IS NOT NULL`;
   const recommendedFamily = Prisma.sql`NULLIF(JSON_UNQUOTE(JSON_EXTRACT(rp.feedRecommendation,'$.family')),'null')`;
-  const preferRecommendation = !publishedOnly || query.picks === "only";
+  const preferRecommendation = !publishedOnly;
   const useRecommendation = Prisma.sql`${recommendedFamily} IN (${markets})`;
   const chosen = Prisma.sql`(${hasDecision} AND m.family=${recommendedFamily})`;
   const forecastAvailable = Prisma.sql`m.available=TRUE`;
@@ -78,11 +78,12 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
   const rankedCandidateMarket = preferRecommendation
     ? Prisma.sql`CASE WHEN ${useRecommendation} THEN b.family=${recommendedFamily} ELSE ${candidateMarket} END`
     : candidateMarket;
-  // One shown pick per fixture: highest unrounded probability, then the exact fresh public price,
-  // then policy order. Candidate odds remain unread while their public feature is disabled.
+  // One shown pick per fixture: prioritize exact fresh quotes, then rank by unrounded probability,
+  // quote and policy order. Candidate odds remain unread while their public feature is disabled.
   const candidatePriceJoin = providerOdds ? Prisma.sql`LEFT JOIN FixtureOddsPrice bp ON bp.fixtureId=f.id
       AND bp.marketKey=b.family AND bp.selection=b.selection AND bp.stale=FALSE AND bp.priceDecimal>=${minimumFixturePrice}` : Prisma.empty;
   const candidatePriceOrder = providerOdds ? Prisma.sql`bp.displayHundredths DESC,` : Prisma.empty;
+  const pricedFirst = providerOdds ? Prisma.sql`(bp.displayHundredths IS NOT NULL) DESC,` : Prisma.empty;
   // The cohort joins alone serve the known count and league options: each shown-pick join below matches a full primary
   // key, (setId, family) and (fixtureId, marketKey, selection), so it never adds or removes a cohort row.
   // The provider equality is low-selectivity across a season archive. Keep this
@@ -110,7 +111,7 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
     const fixtures = ids ? Prisma.sql`AND f.id IN (${Prisma.join(ids)})` : Prisma.empty;
     const source = ids ? Prisma.sql`FROM FootballFixture f FORCE INDEX (PRIMARY) ${fixtureRelations}` : cohortJoins;
     const ranked = Prisma.sql`SELECT STRAIGHT_JOIN f.id AS fixtureId,b.setId,b.family,
-    ROW_NUMBER() OVER (PARTITION BY f.id ORDER BY b.selectedProbability DESC,
+    ROW_NUMBER() OVER (PARTITION BY f.id ORDER BY ${pricedFirst} b.selectedProbability DESC,
       ${candidatePriceOrder} FIELD(b.family,${Prisma.join(publicPolicy.markets)}) ASC) AS pickRank
     ${source} LEFT JOIN PredictionSet rp ON rp.id=${displayedSet}
     JOIN MarketPrediction b FORCE INDEX (MarketPrediction_feed_choice_idx) ON b.setId=rp.id AND ${rankedCandidateMarket}
@@ -159,7 +160,9 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
   const liveFirst = query.sort.by === "live-first" && query.status === "all";
   const order = query.sort.by === "probability"
     ? Prisma.sql`${pickProbability} IS NULL ASC, ${pickProbability} ${descending ? Prisma.sql`DESC` : Prisma.sql`ASC`}, f.kickoff ASC, f.id ASC`
-    : liveFirst ? Prisma.sql`(f.status='live') DESC, ${kickoffOrder}` : kickoffOrder;
+    : liveFirst ? Prisma.sql`CASE f.status WHEN 'live' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END,
+      CASE WHEN f.status='scheduled' THEN f.kickoff END ASC, ${kickoffOrder}`
+    : query.sort.by === "live-first" && query.status === "scheduled" ? Prisma.sql`f.kickoff ASC, f.id ASC` : kickoffOrder;
   // `searchJoin` belongs to the filtered reads only: known counts and league options keep the whole date cohort.
   // Availability counts and kickoff/live-first pagination need only the existence of an
   // eligible pick. They do not need probability/price ranking across the cohort.

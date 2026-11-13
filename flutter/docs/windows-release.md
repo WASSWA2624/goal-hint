@@ -63,12 +63,11 @@ is preserved unless `-Force` explicitly replaces an unpublished package of the
 same public version. Keep all output ignored. The public archive version remains
 `1.0.0` until the first production release. Flutter's internal version is `1.0.0+8`.
 
-The ZIP checksum detects corruption when obtained from a trusted separate
-channel. The embedded manifest checks extracted file consistency; neither is
-a digital signature or publisher authentication. This workflow creates an
-unsigned candidate. A public signed installer or MSIX/store release needs the
-appropriate publisher identity, signing credentials and its own acceptance.
-No certificate is created, imported or trusted by these scripts.
+The ZIP checksum and embedded manifest verify integrity. For a hosted release,
+pass `-SigningThumbprint` for the existing Windows code signing certificate and
+`-TimestampUrl` for its RFC 3161 timestamp service. The packager verifies the
+signatures on the staged runner and setup. Use `-SignTool` when the Windows SDK
+tool is outside PATH. A build without these signing settings is a local candidate.
 
 ## Install, run and remove
 

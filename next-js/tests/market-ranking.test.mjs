@@ -4,7 +4,7 @@ import { parseReportingDate, validateReportingDateRange } from "../src/domain/ca
 import { bestCardFamily } from "../src/domain/feed-presentation.ts";
 import { parseFeedQuery } from "../src/domain/feed-query.ts";
 import { featuredFamily } from "../src/domain/match-details.ts";
-import { bestPublishedFamily } from "../src/domain/market-ranking.ts";
+import { bestPublishedFamily, rankFixtureOutcomes } from "../src/domain/market-ranking.ts";
 import { feedSql } from "../src/server/matches/feed-read.ts";
 
 const families = ["match-result", "total-goals"];
@@ -13,10 +13,26 @@ const price = (family, selection, value) => ({ family, selection, price: value }
 const tied = [pick("match-result", "home-win", 0.7), pick("total-goals", "over-2.5", 0.7)];
 const prices = [price("match-result", "home-win", "1.90"), price("total-goals", "over-2.5", "2.10")];
 
-test("legacy revisions retain their probability ranking when displayed percentages tie", () => {
+test("upcoming featured selection considers alternatives and matches the exact goal period and line", () => {
+  const launch = [{ market: { family: "match-result", source: "ai", probabilities: { "home-win": 0.65, draw: 0.2, "away-win": 0.15 } } }];
+  const goal = (period, probability) => ({ key: `goal:${period}:totals:total:4.5:binary`, label: "Goals 4.5", code: "O/U 4.5",
+    source: "local-poisson", selections: [{ key: "over", label: "Over 4.5", probability }, { key: "under", label: "Under 4.5", probability: 1 - probability }] });
+  const goals = [goal("full-time", 0.15), goal("half-time", 0.01)];
+  const offers = { books: [{ markets: [{ betId: 1, name: "Match Winner", selections: [{ label: "Draw", line: null, price: "4" }] },
+    { betId: 5, name: "Goals Over/Under", selections: [{ label: "Under 4.5", line: null, price: "1.2" }] }] }] };
+  const priced = rankFixtureOutcomes(launch, goals, offers);
+  assert.deepEqual([priced.key, priced.odds], [goals[0].key, "1.2"]);
+  assert.equal(rankFixtureOutcomes(launch, [], offers).selection, "draw");
+  const unpriced = rankFixtureOutcomes(launch, goals, null);
+  assert.equal(unpriced.key, goals[1].key);
+  assert.equal(unpriced.odds, null);
+});
+
+test("prefer a fresh exact quote, then retain unrounded probability ranking", () => {
   const items = [pick("match-result", "home-win", 0.7000001), tied[1]];
   assert.equal(bestPublishedFamily(items, [price("match-result", "home-win", "1.20"), price("total-goals", "over-2.5", "9.99")], families), "match-result");
-  assert.equal(bestPublishedFamily(items, [price("total-goals", "over-2.5", "9.99")], families), "match-result", "a missing price never discards a more probable forecast");
+  assert.equal(bestPublishedFamily(items, [price("total-goals", "over-2.5", "9.99")], families), "total-goals");
+  assert.equal(bestPublishedFamily(items, [], families), "match-result");
 });
 
 test("the Any default selects the highest-probability available family and keeps its own price", () => {
@@ -26,9 +42,9 @@ test("the Any default selects the highest-probability available family and keeps
   const family = bestCardFamily({ forecast: { markets: items }, prices }, query.markets);
   assert.equal(family, "double-chance");
   assert.equal(prices.find((entry) => entry.family === family)?.price, "1.30");
-  assert.equal(bestCardFamily({ forecast: { markets: items.filter((entry) => entry.market.family !== family) }, prices }, query.markets), "both-teams-to-score");
+  assert.equal(bestCardFamily({ forecast: { markets: items.filter((entry) => entry.market.family !== family) }, prices }, query.markets), "match-result");
   const sql = feedSql(query, validateReportingDateRange("2026-10-14", "2026-10-14", 31), [39], true);
-  assert.match(sql.joins.sql, /ORDER BY b.selectedProbability DESC,\s+bp.displayHundredths DESC/u);
+  assert.match(sql.joins.sql, /ORDER BY \(bp.displayHundredths IS NOT NULL\) DESC, b.selectedProbability DESC,\s+bp.displayHundredths DESC/u);
   assert.match(sql.pickAvailable.sql, /rp\.feedRecommendation IS NOT NULL[\s\S]*\$\.family/u,
     "published fallback markets stay separate from full-market recommendation coverage");
   assert.match(sql.joins.sql, /op.marketKey=m.family\s+AND op.selection=CASE WHEN/u);
@@ -53,12 +69,12 @@ test("public forecast rows require a published market without applying the recom
   assert.match(published.where.sql, /AND m\.available=TRUE$/u);
   assert.equal(published.pickAvailable.sql, "m.available=TRUE");
   assert.doesNotMatch(published.joins.sql, /feedRecommendation/u);
-  assert.match(published.order.sql, /^\(f.status='live'\) DESC/u);
+  assert.match(published.order.sql, /^CASE f.status WHEN 'live' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END/u);
   assert.equal(published.pageJoins, published.countJoins);
 
-  const recommended = feedSql({ ...query, picks: "only" }, range, [39], true, null, false, true);
-  assert.match(recommended.where.sql, /m\.available=TRUE[\s\S]+feedRecommendation/u);
-  assert.match(recommended.joins.sql, /feedRecommendation/u);
+  const picksOnly = feedSql({ ...query, picks: "only" }, range, [39], true, null, false, true);
+  assert.match(picksOnly.where.sql, /m\.available=TRUE/u);
+  assert.doesNotMatch(picksOnly.joins.sql, /feedRecommendation/u);
 });
 
 test("missing or equal prices retain deterministic policy order and selected-family eligibility", () => {
@@ -85,7 +101,7 @@ test("feed SQL ranks the candidate's exact fresh price only when provider odds a
   const query = parseFeedQuery(new URLSearchParams("market=match-result,total-goals&prob=60-100&odds=1.50-3.00&sort=probability"), { today, providerOdds: true });
   const enabled = feedSql(query, range, [39], true);
   assert.match(enabled.joins.sql, /LEFT JOIN FixtureOddsPrice bp ON bp.fixtureId=f.id\s+AND bp.marketKey=b.family AND bp.selection=b.selection AND bp.stale=FALSE/u);
-  assert.match(enabled.joins.sql, /ROW_NUMBER\(\) OVER \(PARTITION BY f.id ORDER BY b.selectedProbability DESC,\s+bp.displayHundredths DESC, FIELD\(b.family,/u);
+  assert.match(enabled.joins.sql, /ROW_NUMBER\(\) OVER \(PARTITION BY f.id ORDER BY \(bp.displayHundredths IS NOT NULL\) DESC, b.selectedProbability DESC,\s+bp.displayHundredths DESC, FIELD\(b.family,/u);
   assert.match(enabled.joins.sql, /op.marketKey=m.family\s+AND op.selection=CASE WHEN/u);
   assert.match(enabled.where.sql, /ELSE m.selectedProbability END>=\?/u);
   assert.match(enabled.where.sql, /ELSE m.selectedProbability END<=\?/u);
@@ -99,7 +115,7 @@ test("feed SQL ranks the candidate's exact fresh price only when provider odds a
   const disabled = feedSql(query, range, [39], false);
   assert.doesNotMatch(disabled.joins.sql, /FixtureOdds|\bbp\.|\bop\./u);
   assert.doesNotMatch(disabled.where.sql, /\bop\./u);
-  assert.match(disabled.joins.sql, /ORDER BY b.selectedProbability DESC,\s+FIELD\(b.family,/u);
+  assert.match(disabled.joins.sql, /ORDER BY\s+b.selectedProbability DESC,\s+FIELD\(b.family,/u);
   const equalDecimal = feedSql({ ...query, probability: { min: 58.2, max: 58.2 } }, range, [39], true);
   assert.equal(equalDecimal.where.values.filter((value) => value === 0.582).length, 2, "equal decimal bounds compare against the same exact fraction");
 });

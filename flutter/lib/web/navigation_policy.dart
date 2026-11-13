@@ -38,8 +38,12 @@ class NavigationPolicy {
         return NavigationAction.block;
       }
       if (uri.origin == _origin &&
-          (uri.path == '/api/downloads/android' ||
-              uri.path == '/api/downloads/windows')) {
+          const {
+            '/api/downloads/android',
+            '/api/downloads/windows',
+            '/api/downloads/macos',
+            '/api/downloads/linux',
+          }.contains(uri.path)) {
         return NavigationAction.external;
       }
       return uri.origin == _origin

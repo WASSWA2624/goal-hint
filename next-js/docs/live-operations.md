@@ -21,7 +21,7 @@ Confirm API-Sports terms for public display/redistribution before any public dep
 
 ## Setup
 
-1. Put the API-Football key (from dashboard.api-football.com) in `API_FOOTBALL_KEY` in `.env.local`.
+1. Put the API-Football key (from dashboard.api-football.com) in `API_FOOTBALL_KEY` in `.env.development`.
 2. `npm run db:deploy` applies the migrations, including `20261010170000_fallback_only_refresh_intent`.
 3. `npm run live:status` checks configuration, owner approvals and the account without spending quota.
 4. `npm run live:competitions -- --write` records the competition list (one provider request).
@@ -141,7 +141,7 @@ partial coverage, never as "no fixtures".
 Odds imports are built but **off**. The storage, mapping and rights rules are in
 [provider-odds.md](provider-odds.md).
 
-**Switches.** These are runner-only settings, so put them in the ignored `.env.operations`, not `.env.local`:
+**Switches.** These are runner-only settings, so put them in the ignored `.env.operations`, not `.env.development`:
 
 | Key | Default | Effect |
 | --- | --- | --- |
@@ -283,7 +283,7 @@ for migrations, grants, limits, coverage and final retention.
 | Command | Purpose |
 | --- | --- |
 | `npm run live:status` | Readiness and account/plan check (no quota). |
-| `npm run live:competitions` | Dry run of competition discovery; add `-- --write` to update `.env.local`. |
+| `npm run live:competitions` | Dry run of competition discovery; add `-- --write` to update `.env.development`. |
 | `npm run live` | Long-running live runner (JSON log lines). |
 | `npm run test:live` | Unit checks for account parsing, workload sizing (including the odds floor and spare), policies and approvals. |
 | `npm run test:live-details` | Collector, source/coverage, stored-reader, quota-budget and owned MySQL snapshot checks. |

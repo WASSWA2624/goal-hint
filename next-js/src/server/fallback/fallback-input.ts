@@ -1,4 +1,6 @@
 import "server-only";
+
+import { localPoissonRatesSchema } from "../../domain/score-distribution-markets.ts";
 import { parseRecommendationDecision } from "../predictions/recommendation-input.ts";
 
 import { z } from "zod";
@@ -156,7 +158,7 @@ const resolvedProvenance = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("api-football"), source: providerCandidate.shape.provenance,
     policyVersion: text, policyEvidenceRef: text }).strict(),
   z.strictObject({ kind: z.literal("local-engine"), modelVersion: text, historyHash: identity, evidenceHash: identity,
-    rates: z.strictObject({ home: z.number().min(0.05).max(6), away: z.number().min(0.05).max(6) }),
+    rates: localPoissonRatesSchema,
     sample: z.strictObject({ matches: z.number().int().positive().max(1500),
       homeEffectiveMatches: z.number().positive().max(1500), awayEffectiveMatches: z.number().positive().max(1500) })
       .refine(({ matches, homeEffectiveMatches, awayEffectiveMatches }) => homeEffectiveMatches <= matches && awayEffectiveMatches <= matches) }),
@@ -176,6 +178,7 @@ const resolvedCandidate = z.object({ context: z.unknown(), markets: z.object({
     providerStatus: z.enum(["candidate", "denied", "not-requested"]), providerReason: z.enum(fallbackProviderReasons).nullable(),
     sourceOrder: z.enum(forecastSourceOrders).optional(), sourceCascade: z.literal(LIVE_FORECAST_CASCADE).optional(),
     localStatus: z.enum(["candidate", "unavailable", "not-requested"]).optional(),
+    localGoalRates: localPoissonRatesSchema.optional(),
     recommendation: z.unknown().optional() }).strict(),
 }).strict();
 
@@ -207,7 +210,6 @@ export function parseResolvedForecastCandidate(value: unknown): ResolvedForecast
           provenance.provisional !== (provenance.evaluation.status !== "evaluated")) throw new Error();
       } else if (provenance.kind === "local-engine") {
         if (parsed.audit.sourceCascade !== LIVE_FORECAST_CASCADE || parsed.audit.localStatus !== "candidate" ||
-          parsed.audit.providerStatus !== "not-requested" ||
           provenance.evidenceHash !== context.evidenceHash || item.fallback !== null || item.timestamps.generatedAt !== item.timestamps.retrievedAt ||
           item.timestamps.providerUpdatedAt !== null) throw new Error();
       } else {
@@ -220,14 +222,14 @@ export function parseResolvedForecastCandidate(value: unknown): ResolvedForecast
     }
     const result = parsed.markets["match-result"], chance = parsed.markets["double-chance"];
     const available = Object.values(parsed.markets).filter((item) => item.available);
-    if (parsed.audit.sourceCascade === LIVE_FORECAST_CASCADE &&
-      (parsed.audit.sourceOrder === "provider-first" || new Set(available.map((item) => item.provenance.kind)).size > 1)) throw new Error();
-    const local = available.find((item) => item.provenance.kind === "local-engine");
+    if (parsed.audit.sourceCascade === LIVE_FORECAST_CASCADE && parsed.audit.sourceOrder === "provider-first") throw new Error();
+    const local = available.filter((item) => item.provenance.kind === "local-engine");
     if ((parsed.audit.sourceCascade !== undefined) !== (parsed.audit.localStatus !== undefined) ||
-      (parsed.audit.localStatus === "candidate") !== !!local) throw new Error();
-    if (local && (available.length !== Object.keys(parsed.markets).length || available.some((item) =>
-      evidenceFingerprint(item.provenance) !== evidenceFingerprint(local.provenance) ||
-      evidenceFingerprint(item.timestamps) !== evidenceFingerprint(local.timestamps)))) throw new Error();
+      (parsed.audit.localStatus === "candidate") !== (local.length > 0 || parsed.audit.localGoalRates !== undefined)) throw new Error();
+    if (local.some((item) => evidenceFingerprint(item.provenance) !== evidenceFingerprint(local[0]!.provenance) ||
+      evidenceFingerprint(item.timestamps) !== evidenceFingerprint(local[0]!.timestamps) ||
+      parsed.audit.localGoalRates !== undefined && item.provenance.kind === "local-engine" &&
+      evidenceFingerprint(item.provenance.rates) !== evidenceFingerprint(parsed.audit.localGoalRates))) throw new Error();
     if (result.available && chance.available) {
       for (const key of ["provenance", "timestamps", "flags", "fallback"] as const)
         if (evidenceFingerprint(result[key]) !== evidenceFingerprint(chance[key])) throw new Error();

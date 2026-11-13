@@ -122,8 +122,8 @@ test('legacy daily-time links remain readable; editing their bounds opts into a 
   assert.equal(changed.time, undefined); assert.equal(changed.interval.to, '2026-11-06T18:00');
 });
 
-test('advanced filters keep the strict default until a probability edit or a historical period', () => {
-  const query = applyFeedPageDefaults(parse({ status: 'live' }), {});
+test('advanced filters keep the legacy strict filter until a probability edit or a historical period', () => {
+  const query = applyFeedPageDefaults(parse({ status: 'live', prob: 'above-75' }), { prob: 'above-75' });
   const draft = feedFilterDraft(query, today, zone);
   assert.deepEqual(compileFeedFilterDraft(draft, today).probability, { min: 75, max: 100, minExclusive: true });
   assert.deepEqual(compileFeedFilterDraft({ ...draft, probabilityEdited: true }, today).probability, { min: 75, max: 100 });

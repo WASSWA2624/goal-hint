@@ -32,7 +32,7 @@ def service(action: str, payload: dict | None = None, *, operations: bool = Fals
     env = dict(os.environ if environment is None else environment)
     args = [node_binary(), "--conditions=react-server"]
     if env.get("NODE_ENV") != "test":
-        args.append("--env-file-if-exists=.env.local")
+        args.append("--env-file-if-exists=.env.development")
     if operations:
         args.append("--env-file-if-exists=.env.operations")
     args.append(str(ROOT / "src/server/operations/cli-bridge.mjs"))

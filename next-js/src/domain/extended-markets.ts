@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { parseDecimalOdds } from "./odds.ts";
+import { marketSources } from "./markets.ts";
+import { publicPolicy } from "./public-policy.ts";
 
 export const total15MarketKey = "goal:full-time:totals:total:1.5:binary" as const;
 export const total15Selections = ["over", "under"] as const;
@@ -16,6 +18,11 @@ const text = z.string().min(1).refine((value) => value === value.trim() && !/[\p
 const label = text.max(128), selectionLabel = text.max(512);
 const probability = z.number().finite().min(0).max(1);
 const outcomes = z.strictObject({ win: probability, "half-win": probability, push: probability, "half-loss": probability, loss: probability });
+export const featuredPredictionSchema = z.strictObject({ key: label, family: z.enum(publicPolicy.markets),
+  label, code: label.max(16).nullable(), selection: label.max(64), selectionLabel, probability,
+  odds: z.string().refine((price) => parseDecimalOdds(price) !== null).nullable(), source: z.enum(marketSources) });
+export type FeaturedPrediction = Readonly<z.infer<typeof featuredPredictionSchema>>;
+export type FeaturedGoalMarket = Pick<PublicExtendedMarket, "key" | "label" | "code" | "source" | "selections">;
 
 /** Additive public contract. Model events and normalized bookmaker prices retain distinct meanings. */
 const publicFields = {
@@ -29,8 +36,7 @@ const publicFields = {
 };
 function sourceCoherent(market: z.infer<z.ZodObject<typeof publicFields>>): boolean {
   const model = market.source !== "market-implied";
-  if (market.source === "local-poisson" && (market.key !== total15MarketKey || market.probabilityBasis !== "model-event" ||
-      !total15Selections.some((selection) => selection === market.selection))) return false;
+  if (market.source === "local-poisson" && !/^goal:[^:]+:(?:totals|exact-count|count-range|odd-even):/u.test(market.key)) return false;
   return market.key.split(":")[1] === market.period && model === market.key.startsWith("goal:") &&
     market.sourceLabel === extendedMarketSourceLabels[market.source] && model === market.probabilityBasis.startsWith("model-");
 }

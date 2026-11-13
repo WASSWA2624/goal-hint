@@ -16,7 +16,7 @@ remote images, publish forecasts or qualify AI quality.
 ## Commands and private files
 
 Use the pinned Node.js 24.18.1 and npm 11.16.0 runtime. Commands load optional
-`.env.local`; `init` and `report` do not construct live services or validate live
+`.env.development`; `init` and `report` do not construct live services or validate live
 environment policy.
 
 ```sh
@@ -171,7 +171,7 @@ private-use evidence, approved payable total, selected competition IDs and
 `quotaEvidence.accountId` must match the plan. Read [.env.example](../.env.example),
 [runtime decisions](implementation-decisions.md) and the
 [database runbook](database.md) for all applicable gates. Keep credentials in
-secret storage or ignored `.env.local`, never in plan values, URLs or reports.
+secret storage or ignored `.env.development`, never in plan values, URLs or reports.
 
 After the approved inputs and verifiers are available:
 

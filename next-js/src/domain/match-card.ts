@@ -5,6 +5,15 @@ import { recommendationMarket, type DisplayedMarketPick } from "./recommendation
 import { sameMarketOdds } from "./in-play-odds.ts";
 import type { UtcInstant } from "./calendar.ts";
 import { isSlipMarketSelection, type SlipMarketSelection } from "./slip-markets.ts";
+import type { FeaturedPrediction } from "./extended-markets.ts";
+
+export function featuredCardPrediction(pick: FeaturedPrediction, publishedAt: UtcInstant | null, provisional: boolean) {
+  const roundedPercent = Math.round(pick.probability * 100);
+  const labelKey: ProbabilityLabelKey = roundedPercent === 0 && pick.probability > 0 ? "probability.less-than-one"
+    : roundedPercent === 100 && pick.probability < 1 ? "probability.more-than-ninety-nine" : "probability.percent";
+  return { item: { market: { family: pick.family, selection: pick.selection, source: pick.source, selectedProbability: pick.probability } },
+    probability: { probability: pick.probability, roundedPercent, labelKey }, status: "pending" as const, publishedAt, provisional };
+}
 
 /** An original saved selection has one probability, not a complete current forecast distribution. */
 export type CardSnapshotPick = Readonly<{
@@ -91,7 +100,11 @@ export function sameCardFixture(previous: FixtureSnapshot, next: FixtureSnapshot
     previous.partialCoverage === next.partialCoverage && previous.availabilityMessage === next.availabilityMessage &&
     previous.update?.prediction === next.update?.prediction && previous.update?.result === next.update?.result &&
     previous.forecast?.updateDelayed === next.forecast?.updateDelayed && samePrices(previous.prices, next.prices) &&
-    sameMarketOdds(previous.marketOdds, next.marketOdds);
+    sameMarketOdds(previous.marketOdds, next.marketOdds) && sameFeatured(previous.featuredPrediction, next.featuredPrediction);
+}
+function sameFeatured(left: FixtureSnapshot["featuredPrediction"], right: FixtureSnapshot["featuredPrediction"]): boolean {
+  return left === right || !!left && !!right && left.key === right.key && left.selection === right.selection &&
+    left.probability === right.probability && left.odds === right.odds && left.source === right.source;
 }
 function samePrices(previous: FixtureSnapshot["prices"], next: FixtureSnapshot["prices"]): boolean {
   const left = previous ?? [], right = next ?? [];

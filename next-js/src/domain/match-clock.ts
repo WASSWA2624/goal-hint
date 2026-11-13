@@ -28,5 +28,8 @@ export function liveClockLabel(clock: FixtureSnapshot["liveClock"], messages: Me
     : phase === "in-play" ? null : phaseLabel,
     minute === null ? null : messages.text("match.clock.minuteLabel", { minute: messages.number(minute) }),
     stoppage ? messages.text("match.clock.stoppageLabel", { minute: messages.number(stoppage) }) : null].filter(Boolean).join(", ");
-  return { minute, visible, spoken, phaseLabel };
+  const extra = phase === "extra-time" ? messages.text("match.clock.extra-timeShort") : null;
+  const badgeTime = minute === null ? null : stoppage ? `${messages.number(minute)}+${messages.number(stoppage)}` : visible;
+  const badge = extra ? [extra, badgeTime].filter(Boolean).join(" ") : badgeTime ?? (running ? messages.text("match.status.live") : phaseLabel);
+  return { minute, visible, spoken, phaseLabel, badge, badgeTicks: minute !== null && !stoppage };
 }

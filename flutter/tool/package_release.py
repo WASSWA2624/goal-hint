@@ -171,7 +171,36 @@ def validate_dmg(dmg: Path, staging: Path, release: str, build: str) -> Path:
     return dmg
 
 
-def publish(artifact: Path, platform: str, release: str, staging: Path, force: bool) -> Path:
+def build_linux(flutter: str, signing_key: str, staging: Path, release: str, build: str) -> Path:
+    run(flutter, "build", "linux", "--release", "--target=lib/main.dart", "--dart-define=APP_ENV=production")
+    architecture = run("dpkg", "--print-architecture", capture=True).strip()
+    target = {"amd64": "x64", "arm64": "arm64"}.get(architecture)
+    if not target:
+        raise ValueError("The Linux release requires an amd64 or arm64 Debian-compatible build host.")
+    bundle = PROJECT / f"build/linux/{target}/release/bundle"
+    if not (bundle / "goal_hint").is_file() or not (bundle / "lib/libapp.so").is_file():
+        raise ValueError("Missing production Linux bundle outputs.")
+    package = staging / "deb"
+    shutil.copytree(bundle, package / "opt/goal-hint", symlinks=True)
+    shutil.copytree(bundle / "share", package / "usr/share")
+    bin_dir = package / "usr/bin"
+    bin_dir.mkdir(parents=True)
+    (bin_dir / "goal_hint").symlink_to("/opt/goal-hint/goal_hint")
+    control = package / "DEBIAN"
+    control.mkdir()
+    (control / "control").write_text(
+        f"Package: goal-hint\nVersion: {release}+{build}\nArchitecture: {architecture}\n"
+        "Maintainer: Goal Hint <support@goalhint.com>\n"
+        "Depends: libwebkit2gtk-4.1-0, libgtk-3-0\n"
+        "Description: Goal Hint desktop app\n", encoding="utf-8")
+    artifact = staging / f"goal-hint-{release}.deb"
+    run("dpkg-deb", "--root-owner-group", "--build", package, artifact)
+    run("debsigs", "--sign=origin", f"--default-key={signing_key}", artifact)
+    run("debsig-verify", artifact)
+    return artifact
+
+
+def publish(artifact: Path, platform: str, release: str, build: str, staging: Path, force: bool) -> Path:
     target = DEPLOY / f"goal-hint-{platform}-{release}.zip"
     if target.exists() and not force:
         raise FileExistsError("Archive exists. Use --force to replace the unpublished package explicitly.")
@@ -180,10 +209,17 @@ def publish(artifact: Path, platform: str, release: str, staging: Path, force: b
         "android": "Extract the ZIP and install the signed APK on an accepted Android device.\n",
         "ios": "Extract the ZIP and distribute the IPA through its provisioned Apple channel (TestFlight/App Store or authorized managed devices).\n",
         "macos": "Extract the ZIP, open the signed/notarized DMG and drag Goal Hint to Applications.\n",
+        "linux": "Verify the signed Debian package with the Goal Hint signing policy and install it using apt.\n",
     }
+    with artifact.open("rb") as stream:
+        artifact_hash = hashlib.file_digest(stream, "sha256").hexdigest()
     temporary = staging / target.name
     with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.write(artifact, name)
+        archive.writestr("download-manifest.json", json.dumps({
+            "schema": 1, "platform": platform, "environment": "production", "mode": "release",
+            "version": release, "build": int(build), "artifactSha256": artifact_hash, "signed": True,
+        }))
         archive.writestr("README.txt", f"Goal Hint {release}\n" + instructions[platform]
                          + "Production web origin: https://goalhint.com\n")
     with temporary.open("rb") as stream:
@@ -197,10 +233,11 @@ def publish(artifact: Path, platform: str, release: str, staging: Path, force: b
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("platform", choices=("android", "ios", "macos"))
+    parser.add_argument("platform", choices=("android", "ios", "macos", "linux"))
     parser.add_argument("--flutter", default="flutter")
     parser.add_argument("--export-options", type=Path, help="Owner's private iOS ExportOptions.plist")
     parser.add_argument("--dmg", type=Path, help="Owner-signed/notarized macOS DMG after the production Flutter build")
+    parser.add_argument("--linux-signing-key", help="Existing Debian package signing key ID")
     parser.add_argument("--force", action="store_true", help="Replace an unpublished ZIP of the same version")
     args = parser.parse_args()
     args.flutter = shutil.which(args.flutter) or args.flutter
@@ -212,6 +249,8 @@ def main() -> None:
             raise ValueError("iOS requires --export-options with the owner's Xcode export configuration.")
         if args.platform == "macos" and not args.dmg:
             raise ValueError("macOS requires --dmg with the owner's signed/notarized production disk image.")
+        if args.platform == "linux" and (sys.platform != "linux" or not args.linux_signing_key):
+            raise ValueError("Linux delivery requires a Linux build host and --linux-signing-key.")
         if args.platform == "android":
             check_android_signing()
         target = DEPLOY / f"goal-hint-{args.platform}-{release}.zip"
@@ -227,9 +266,11 @@ def main() -> None:
                 artifact = build_android(args.flutter, release, build)
             elif args.platform == "ios":
                 artifact = build_ios(args.flutter, args.export_options, staging, release, build)
+            elif args.platform == "linux":
+                artifact = build_linux(args.flutter, args.linux_signing_key, staging, release, build)
             else:
                 artifact = validate_dmg(args.dmg.resolve(), staging, release, build)
-            print(f"Archive: {publish(artifact, args.platform, release, staging, args.force)}")
+            print(f"Archive: {publish(artifact, args.platform, release, build, staging, args.force)}")
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         parser.exit(1, f"Packaging failed: {error}\n")
 

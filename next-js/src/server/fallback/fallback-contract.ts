@@ -7,6 +7,7 @@ import type { ModelPin } from "../predictor/predictor-contract.ts";
 import type { PredictorCalibrationStatus, PredictorCalibratedOutput } from "../predictor/predictor-calibration.ts";
 import type { PredictorResult } from "../predictor/predictor-service.ts";
 import type { RecommendationDecision } from "../../domain/recommendation.ts";
+import type { LocalPoissonRates } from "../../domain/score-distribution-markets.ts";
 
 /** Identity for one eligible refresh; it never supplies an old published snapshot. */
 export type FallbackContext = Readonly<{ context: EvidenceContext; jobId: string; pin: ModelPin | null; evidenceHash: string }>;
@@ -49,7 +50,7 @@ export type ForecastProvenance = Readonly<{
   kind: "api-football"; source: ProviderFallbackProvenance; policyVersion: string; policyEvidenceRef: string;
 }> | Readonly<{
   kind: "local-engine"; modelVersion: string; historyHash: string; evidenceHash: string;
-  rates: Readonly<{ home: number; away: number }>;
+  rates: LocalPoissonRates;
   sample: Readonly<{ matches: number; homeEffectiveMatches: number; awayEffectiveMatches: number }>;
 }>;
 export type ResolvedForecastMarket = Readonly<{
@@ -66,6 +67,8 @@ export type ResolvedForecastCandidate = Readonly<{
     sourceOrder?: ForecastSourceOrder;
     sourceCascade?: typeof LIVE_FORECAST_CASCADE;
     localStatus?: "candidate" | "unavailable" | "not-requested";
+    /** Sealed rates for goal markets when the AI supplied some or all of the legacy groups. */
+    localGoalRates?: LocalPoissonRates;
     /** Immutable decision and private quote provenance, sealed in candidateJson with the revision. */
     recommendation?: RecommendationDecision }>;
 }>;

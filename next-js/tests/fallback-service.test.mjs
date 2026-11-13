@@ -37,16 +37,19 @@ function storedLocalResults(context) {
 const cascade = (setup) => setup.request({ order: "ai-first", sourceCascade: LIVE_FORECAST_CASCADE,
   bounds: { ...setup.request().bounds, timeoutMs: 1000, deadlineAt: FALLBACK_NOW + 10_000 }, maxElapsedMs: 5000 });
 
-test("live cascade keeps a usable AI forecast and spends no local reads or provider predictions", async () => {
+test("live cascade fills missing AI groups from verified local results without provider predictions", async () => {
   const setup = fallbackServiceSetup({ output: partialOutput });
   let reads = 0;
-  const service = setup.makeService({ localEngine: async () => { reads++; return null; } });
+  const rows = storedLocalResults(setup.expected.context);
+  const localEngine = createLiveLocalEngine({ query: async (operation) => operation({ $queryRaw: async () => { reads++; return rows; } }) });
+  const service = setup.makeService({ localEngine });
   const value = await service.resolve(cascade(setup));
   assert.equal(selected(value, "total-goals").market.source, "ai");
-  assert.equal(value.candidate.markets["match-result"].available, false);
-  assert.equal(value.candidate.audit.localStatus, "not-requested");
+  assert.equal(selected(value, "match-result").market.source, "local-engine");
+  assert.equal(selected(value, "double-chance").market.source, "local-engine");
+  assert.equal(value.candidate.audit.localStatus, "candidate");
   assert.equal(value.requestsDispatched, 0);
-  assert.equal(reads, 0);
+  assert.equal(reads, 1);
   assert.equal(setup.collected.length, 0);
 });
 

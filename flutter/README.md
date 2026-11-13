@@ -2,8 +2,7 @@
 
 The native project lives entirely in this directory. It has Android, iOS,
 Windows, macOS, and Linux runners. `GoalHintApp` embeds the shared website through
-platform browser adapters on Android, iOS, macOS, and Windows; Linux embedding
-remains an explicit integration gap.
+each platform's browser adapter. Linux uses WebKitGTK in the GTK runner.
 The Next.js app owns the product screens, authentication, data, and business logic.
 
 Native document failures use a bundled recovery page with the configured logo,
@@ -146,7 +145,7 @@ authentication, and appearance continue to come from the website.
 | Android | `flutter build apk --debug` | Windows/macOS/Linux with compatible JDK and Android SDK/NDK |
 | iOS simulator | `flutter build ios --simulator --debug` | macOS with Xcode and simulator runtime |
 | macOS | `flutter build macos --debug` | macOS with Xcode tools |
-| Linux | `flutter build linux --debug` | Linux with Clang, CMake, Ninja, pkg-config, and GTK development libraries |
+| Linux | `flutter build linux --debug` | Linux with Clang, CMake, Ninja, pkg-config, GTK and WebKitGTK 4.1 development libraries |
 
 Use `flutter devices`, then `flutter run -d <device-id>` for an available target;
 for this Windows host, use `flutter run -d windows`. These are development builds.
@@ -208,8 +207,8 @@ later builds that reuse its objects.
 
 The [support matrix](docs/platform-support.md) links primary evidence for build
 hosts, released WebView candidates, cookies/profiles, asset loading, and
-service-worker limitations. It distinguishes source documentation from the
-current integration's actual checks and leaves Linux embedding unproven.
+service-worker limitations. It distinguishes source implementation from installed
+runtime checks.
 
 The official system-WebView adapter serves Android/iOS/macOS, and the Windows
 adapter uses WebView2 with an app-owned persistent profile. Windows build hosts

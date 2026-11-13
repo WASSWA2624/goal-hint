@@ -139,7 +139,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         if (proposed.some(({ slip }) => slip.selections.some(({ probability }) => probability < slipBuilderRules.minimumPickPercent / 100)))
           return fail("invalid-input");
         const fixtureIds = [...ids].sort();
-        for (const fixtureId of fixtureIds) await tx.$queryRaw`SELECT id FROM FootballFixture WHERE id=${fixtureId} FOR SHARE`;
+        for (const fixtureId of fixtureIds) await tx.$queryRaw`SELECT id FROM FootballFixture WHERE id=${fixtureId} LOCK IN SHARE MODE`;
         const snapshots: z.infer<typeof snapshotSchema>[] = [];
         for (const item of proposed) {
           const slip = await bindForecasts(tx, item.slip, await databaseTime(tx));
@@ -159,7 +159,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         if (inserted === 0) {
           // IGNORE may suppress a non-duplicate constraint failure. Only a current locked row proves a prior publication;
           // a plain repeatable-read lookup could miss another publisher's intervening commit.
-          const existing = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM DailySlipPublication WHERE eatDate=${new Date(`${input.day}T00:00:00Z`)} AND oddsBand=${oddsBand} FOR SHARE`;
+          const existing = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM DailySlipPublication WHERE eatDate=${new Date(`${input.day}T00:00:00Z`)} AND oddsBand=${oddsBand} LOCK IN SHARE MODE`;
           if (existing[0]?.id !== id) fail("unavailable");
           return "already-published";
         }

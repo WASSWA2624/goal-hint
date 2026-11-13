@@ -42,7 +42,7 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
   async function resolve({ params, searchParams }: Props, includeSummary = false) {
     const route = await params, at = await instant(), access = await contentAccess(resolveAccess);
     const providerOdds = publicOddsEnabled();
-    let query, today, result, allowProbabilityDefault, summary: Promise<FeedPerformanceSeed> | undefined;
+    let query, today, result, summary: Promise<FeedPerformanceSeed> | undefined;
     // The canonical re-parse inside load() also enforces the byte limit, so it must map to 404 too.
     try {
       const { period, ...parameters } = await searchParams;
@@ -58,8 +58,7 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
       query = parseMatchFeedQuery(parameters, getReportingDate(at), { locale: route.locale, asOf: at,
         providerOdds: providerOdds || access.tier === "free",
         ...(dated && (period === undefined || period === "custom") ? { routeDate: route.date } : {}) });
-      allowProbabilityDefault = access.tier === "full" || query.status === "finished";
-      query = applyFeedPageDefaults(query, parameters, { dated, allowProbabilityDefault });
+      query = applyFeedPageDefaults(query, parameters, { dated });
       today = getFeedToday(query, at);
       if (!dated || query.status === "live" || period !== undefined) {
         const synchronized = synchronizeFeedStatusDates(query, today);
@@ -79,7 +78,7 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
         if (reply) summary = Promise.resolve({ href: feedPerformanceApiHref(query, today), reply });
       }
     } catch (error) { if (error instanceof MatchFeedError && error.code === "invalid-query") notFound(); throw error; }
-    const discovery = feedDiscovery(query, today, allowProbabilityDefault);
+    const discovery = feedDiscovery(query, today);
     // An empty day beyond the archive window is not a page; the day's cohort count ignores every filter. Strip,
     // calendar and adjacent-day taps keep the in-feed empty state, so only document requests answer 404.
     if (result.data && emptyArchiveIsMissing(discovery.range, today, result.data.coverage.knownFixtures) && await document()) notFound();

@@ -117,7 +117,14 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
     check(`${selector}, ${selector} dt, ${selector} dd${phone ? "" : `, ${selector} svg`}`, theme.color.outcome[outcome].text, "color");
     const percentage = summary?.querySelector(`[data-summary-percentage="${outcome}"]`);
     assert(percentage?.textContent === shares[outcome], `${outcome} percentage uses the predicted total`);
-    assert(!!percentage && visible(percentage) === !phone, `${outcome} percentage shows only in the desktop summary layout`);
+    assert(!!percentage && visible(percentage), `${outcome} percentage is visible on phone and desktop`);
+  }
+  if (phone) for (const card of document.querySelectorAll("#theme-narrow-performance [data-summary-card]")) {
+    const bounds = card.getBoundingClientRect();
+    for (const figure of card.querySelectorAll("dt, [data-summary-count], [data-summary-percentage]")) {
+      const { left, right } = figure.getBoundingClientRect();
+      assert(visible(figure) && left >= bounds.left - 1 && right <= bounds.right + 1, "Long counts and shares stay within narrow performance cards");
+    }
   }
   const headerSelector = phone ? "#theme-phone-header > div > div:first-child" : "[data-app-header]";
   check(headerSelector, phone ? theme.header.background : theme.header.desktopBackground);

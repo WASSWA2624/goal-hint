@@ -1,11 +1,13 @@
 import "server-only";
 
-import { extendedMarketSourceLabels, publicExtendedMarketSchema, type PublicExtendedMarket, type PublicExtendedMarketSnapshot } from "../../domain/extended-markets.ts";
+import { z } from "zod";
+import { extendedMarketSourceLabels, publicExtendedMarketSchema, type FeaturedGoalMarket, type PublicExtendedMarket, type PublicExtendedMarketSnapshot } from "../../domain/extended-markets.ts";
 import { predictionRuleLabel } from "../../domain/prediction-label.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
-import type { Prisma } from "../generated/prisma/client.ts";
+import { Prisma } from "../generated/prisma/client.ts";
 import { historyFail, type CycleDisplay } from "./history-contract.ts";
 import { historyId } from "./history-input.ts";
+import { assertHistorySeal, historyJson, type HistoryRow } from "./history-read.ts";
 import { storedCycleDisplay } from "./history-read.ts";
 import { readGoalMarketExtension, readGoalMarketSettlement, type StoredGoalMarketExtension, type GoalMarketSettlementRevision } from "./goal-market-store.ts";
 import { readImpliedMarketExtension } from "./implied-market-store.ts";
@@ -14,6 +16,33 @@ import { readImpliedMarketSettlement, type ImpliedMarketSettlementRevision } fro
 
 type Tx = Prisma.TransactionClient;
 const pending = Object.freeze({ status: "pending" as const, reason: "awaiting-final-result", correctedAt: null });
+const rankingMarket = publicExtendedMarketSchema.shape;
+const rankingExtension = z.object({ revisionId: historyId, contentHash: z.string(),
+  markets: z.array(z.object({ derivation: z.discriminatedUnion("available", [z.object({ available: z.literal(false) }),
+    z.object({ available: z.literal(true), market: z.object({ definition: z.object({ key: rankingMarket.key,
+      label: rankingMarket.label, code: rankingMarket.code }), source: z.enum(["local-poisson", "ai-score-distribution"]),
+      selections: z.array(z.object({ key: rankingMarket.selection, label: rankingMarket.selectionLabel,
+        winProbability: rankingMarket.selectedProbability })).min(2).max(1000) }) }),
+  ]) })).max(256) });
+
+/** Read the sealed goal sets for one bounded upcoming page and return only ranking inputs. */
+export async function readFeaturedGoalMarkets(tx: Tx, revisionIds: readonly string[]): Promise<ReadonlyMap<string, readonly FeaturedGoalMarket[]>> {
+  if (!revisionIds.length) return new Map();
+  const rows = await tx.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT *, integrity = SHA2(CAST(body AS CHAR), 256) AS validIntegrity
+    FROM GoalMarketExtension WHERE revisionId IN (${Prisma.join(revisionIds)})`);
+  return new Map(rows.map((row) => {
+    assertHistorySeal(row.validIntegrity);
+    const extension = rankingExtension.parse(historyJson(row.body));
+    if (extension.revisionId !== row.revisionId || extension.contentHash !== row.contentHash) return historyFail("invalid-state");
+    const markets = extension.markets.flatMap(({ derivation }) => {
+      if (!derivation.available) return [];
+      const { definition, source, selections } = derivation.market;
+      return [{ key: definition.key, label: definition.label, code: definition.code, source,
+        selections: selections.map(({ key, label, winProbability }) => ({ key, label, probability: winProbability })) }];
+    });
+    return [extension.revisionId, markets];
+  }));
+}
 
 /** Projection of a sealed snapshot. Raw score mass, provider catalog and bookmaker data stay private. */
 export function publicGoalMarketExtension(extension: StoredGoalMarketExtension,

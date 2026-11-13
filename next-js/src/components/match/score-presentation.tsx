@@ -40,12 +40,13 @@ const subscribeIdle = () => () => {};
 const Elapsed = styled.span`font-variant-numeric: tabular-nums; white-space: nowrap;`;
 
 /** Only the small clock text subscribes to the shared browser ticker. */
-export function LiveMatchTime({ clock, messages }: { clock: FixtureSnapshot["liveClock"]; messages: Messages }) {
+export function LiveMatchTime({ clock, messages, badge = false }: { clock: FixtureSnapshot["liveClock"]; messages: Messages; badge?: boolean }) {
   const initial = liveClockLabel(clock, messages);
-  const estimatesSeconds = initial.minute !== null && clock?.observedAt !== undefined;
+  const field = badge ? "badge" : "visible";
+  const estimatesSeconds = clock?.observedAt !== undefined && (badge ? initial.badgeTicks : initial.minute !== null);
   const value = useSyncExternalStore(estimatesSeconds ? subscribeClock : subscribeIdle,
-    () => estimatesSeconds ? liveClockLabel(clock, messages, Date.now()).visible : initial.visible,
-    () => initial.visible);
+    () => estimatesSeconds ? liveClockLabel(clock, messages, Date.now())[field] : initial[field],
+    () => initial[field]);
   return <Elapsed data-live-elapsed={initial.minute !== null || undefined}
     title={estimatesSeconds ? messages.text("match.clock.estimated") : undefined}>{value}</Elapsed>;
 }

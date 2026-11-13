@@ -13,7 +13,7 @@ remain in Next.js. See [the tracker](../dev-tracker.md) for actual platform chec
 | Android | Official `webview_flutter` 4.14.1 / Android 4.14.1 | Normal Android WebView cookie store and DOM storage |
 | iOS/macOS | Official `webview_flutter` 4.14.1 / WKWebView 3.26.2 | Default persistent WKWebsiteDataStore; no ephemeral configuration |
 | Windows | Locally patched `flutter_inappwebview_windows` 0.6.0, using WebView2 | App support directory, `webview2/<environment>`; never the executable directory |
-| Linux | No qualified embedded adapter yet | No browser/offline capability claimed |
+| Linux | GTK runner with WebKitGTK 4.1 | Separate development/production data, cache and SQLite cookie stores under XDG directories. Installed runtime and offline checks pending. |
 
 The WKWebView version is pinned to the installed Dart 3.12.2-compatible release.
 Do not substitute the latest package without checking its SDK minimum.
@@ -56,7 +56,7 @@ records each field's theme source and the standard `color-scheme`/`theme-color`
 metadata. Server rendering publishes no native metadata until the actual client
 preference resolves, so reload does not advertise an initial light override.
 
-A fixed native-initiated query checks both the actual top frame and exact
+A fixed native-initiated query on Android, Apple platforms and Windows checks both the actual top frame and exact
 configured origin before reading that one meta element. One serialized sampler
 runs while a trusted document is visible and loaded, scheduling the next read
 one second after completion and reading immediately on load/resume. Loading,

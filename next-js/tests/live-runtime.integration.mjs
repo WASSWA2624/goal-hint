@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { addReportingDays, getReportingDate } from '../src/domain/calendar.ts';
 import { parseRuntimePolicy } from '../src/server/config/runtime-policy.ts';
+import { historyImportEnvelopes, latestHistoryImportSlot } from '../src/server/football/history-import-jobs.ts';
+import { readFootballCoverage } from '../src/server/admin/football-coverage.ts';
 import { createJobWorker } from '../src/server/jobs/job-worker.ts';
 import { selectionTriggerBounds } from '../src/server/live/live-plan.ts';
 import { latestSelectionOccurrence } from '../src/server/live/live-runner.ts';
@@ -15,7 +17,7 @@ import { latestOddsSlot, ODDS_CATALOG_TYPE, ODDS_IMPORT_TYPE, ODDS_SWEEP_MS, odd
   oddsSlotDates } from '../src/server/odds/odds-jobs.ts';
 import { dailySelectionEnvelope } from '../src/server/selection/selection-trigger.ts';
 import { latestTeamCodesSlot, TEAM_CODES_HANDLER_VERSION, TEAM_CODES_SLOT_MS, TEAM_CODES_TYPE, teamCodesEnvelope } from '../src/server/teams/team-code-jobs.ts';
-import { catalogFixture, catalogResponse, catalogTeam } from './helpers/catalog-fixtures.mjs';
+import { catalogCompetition, catalogFixture, catalogResponse, catalogTeam } from './helpers/catalog-fixtures.mjs';
 import { fallbackRawPrediction, fallbackResponse } from './helpers/fallback-adapter-fixtures.mjs';
 import { MysqlServerUnavailableError, startIsolatedMysql } from './helpers/mysql-instance.mjs';
 import { launchBetCatalog, oddsResponse, offsetTime, rawOddsRow } from './helpers/odds-fixtures.mjs';
@@ -29,11 +31,13 @@ const appendOnly = ['DailyRunManifest','DurableJobEvent','DurableJobUsage','Evid
   'FixtureEvidenceSnapshotSource','FixtureLifecycleObservation','FixtureResult','FootballFixtureAudit','FootballImport','MarketPrediction',
   'MarketSettlementRevision','ModelVersion','PredictionAudit','PredictionChangeEvent','PredictionCycleOperation','PredictionPublicationBarrier',
   'PredictionRefreshIntent','PredictionRefreshOutcome','PredictionRefreshResult','PredictionRefreshStage','PredictionSchedule','PredictionSet',
-  'RecoveryAudit','ResultProviderObservation','SettlementBatch','SettlementEventReceipt','OddsImportBatch','OddsBetObservation','ProviderOddsSnapshot'];
+  'RecoveryAudit','ResultProviderObservation','SettlementBatch','SettlementEventReceipt','OddsImportBatch','OddsBetObservation','ProviderOddsSnapshot',
+  'FootballHistorySourcePage'];
 const mutable = ['ApiQuotaAccount','ApiQuotaAttempt','ApiQuotaPeriod','CostBudgetAccount','CostBudgetAttempt','CostBudgetJob','CostBudgetPeriod',
   'FixtureLifecycleState','FixtureResultState','FootballCatalogLock','FootballCompetition','FootballCompetitionAlias','FootballCompetitionProvider',
   'FootballFixture','FootballIdentityReview','FootballSeason','FootballTeam','FootballTeamAlias','FootballTeamProvider','ResultPollerLease'];
 const columns = {
+  FootballHistoryImportStatus: 'status, coverage, updatedAt',
   PublicCacheInvalidation: 'acknowledgedAt', SelectionCycleEligibility: 'actor, consumedRunId, eligibleAfter, evidenceRef, kickoffAt, previousVersion, recordedAt, state',
   DurableJob: 'attemptCount, attemptDeadlineAt, availableAt, fence, finishedAt, leaseExpiresAt, ownerId, state, terminalReason, updatedAt, version',
   PredictionCycle: 'closedAt, currentSetId, cutoffAt, kickoffAt, lockedAt, lockedSetId, scheduleVersion, state, version, voidReason, voidedAt',
@@ -90,6 +94,9 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
       ({ requirement: requirementFor[field], reference, approvedAt: '2026-10-10', decision: 'Synthetic test approval only.' })) };
 
     const now = Math.floor(Date.now() / 60_000) * 60_000, iso = (at) => new Date(at).toISOString();
+    const season = new Date(now).getUTCFullYear() - 1;
+    const historyFixture = catalogFixture(9040, { kickoff: `${season}-04-01T13:00:00Z`, status: 'FT', season,
+      goals: { home: 1, away: 0 }, score: { halftime: { home: 1, away: 0 }, fulltime: { home: 1, away: 0 }, extratime: null, penalty: null } });
     const rows = [catalogFixture(9001, { kickoff: iso(now + 2 * DAY), homeId: 501, awayId: 502 }),
       catalogFixture(9002, { kickoff: iso(now + 3 * DAY), homeId: 503, awayId: 504 }),
       // Competition 40's clubs arrive without codes, as /fixtures sends them: candidates for the team-code import.
@@ -110,6 +117,9 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
       if (url.pathname === '/odds/bets') return oddsResponse(url, launchBetCatalog());
       if (url.pathname === '/odds/bookmakers') return oddsResponse(url, [{ id: 8, name: 'Synthetic bookmaker' }]);
       if (url.pathname === '/odds') return oddsResponse(url, oddsRows.filter((row) => getReportingDate(row.fixture.timestamp * 1000) === url.searchParams.get('date')));
+      if (url.pathname === '/leagues') return catalogResponse(url, [catalogCompetition(39, season)]);
+      if (url.pathname === '/fixtures' && url.searchParams.get('league') === '39' && url.searchParams.get('season') === String(season))
+        return catalogResponse(url, [historyFixture]);
       if (url.pathname === '/teams') return catalogResponse(url, [{ team: catalogTeam(505) }, { team: catalogTeam(506) }]);
       if (url.pathname === '/predictions') {
         const row = rows.find((item) => String(item.fixture.id) === url.searchParams.get('fixture'));
@@ -286,6 +296,34 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
       assert.equal(enrichment, receipts._sum.requestsDispatched + await teamsReceipts(),
         'the gate reads the shared enrichment spend (odds and team codes) from the limiter ledger their receipts agree with');
     });
+    await t.test('historical fixture jobs seal provider evidence and resume from stored receipts', async () => {
+      const archive = await createLiveRuntime(parseRuntimePolicy({ ...policyEnv, GOAL_HINT_HISTORY_IMPORT_ENABLED: 'true' }),
+        { fetcher, approvals, syntheticArchive: true });
+      try {
+        assert.equal(archive.enrichment.historyEnabled, true);
+        const slot = latestHistoryImportSlot(Date.now());
+        const fixtureJob = (at) => historyImportEnvelopes(at).find(({ payload }) => payload.phase === 'fixtures');
+        const worker = createJobWorker({ queue: archive.queue, registry: archive.enrichment.registry, ownerId: hash('archive-worker') });
+        const before = network.length, job = await archive.queue.enqueue(fixtureJob(slot));
+        assert.equal((await archive.queue.enqueue(fixtureJob(slot))).id, job.id);
+        assert.equal(await worker.runOnce(), true);
+        assert.equal((await archive.queue.inspect(job.id)).state, 'succeeded');
+        assert.deepEqual(network.slice(before), ['/leagues?', '/fixtures?league,season']);
+        const result = await archive.database.query((tx) => tx.footballFixture.findUnique({ where: { provider_externalId: {
+          provider: 'api-football', externalId: 9040n } } }));
+        assert.equal(result.regulationHome, 1);
+        assert.ok(result.regulationVerifiedAt);
+        const report = await readFootballCoverage(archive.database, Date.now(), [39]);
+        assert.deepEqual(report.archive.find(({ phase }) => phase === 'fixtures'), {
+          phase: 'fixtures', status: 'caught-up', coverage: { imported: 1, remaining: 0, unavailable: 0 },
+        });
+        const beforeResume = network.length;
+        const repeat = await archive.historyBackfill({ maxRequests: 6 });
+        assert.equal(repeat.completed, 1);
+        assert.equal(repeat.requests, 0);
+        assert.equal(network.length, beforeResume);
+      } finally { await archive.close(); }
+    });
     await t.test('past the reserve the odds gate expires the sweep with zero /odds requests', { skip: oddsSkip }, async () => {
       // The provider reports 7,000 used: ordinary work ran past its plan, and 500 left is below the reserve 750 + 154.
       statusUsed = 7000; await oddsRuntime.quota.refresh();
@@ -302,7 +340,7 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
     await t.test('team codes are on by default on Pro, run only on the enrichment worker and spend nothing past the reserve', async () => {
       assert.equal(runtime.teamCodes.enabled, true, 'default on, and Pro has the odds spare');
       assert.deepEqual(runtime.teamCodes.registry.types.map((entry) => entry.type), [TEAM_CODES_TYPE]);
-      assert.deepEqual(runtime.enrichment.registry.types.map((entry) => entry.type), [...oddsTypes, TEAM_CODES_TYPE]);
+      assert.deepEqual(runtime.enrichment.registry.types.map((entry) => entry.type), [...oddsTypes, TEAM_CODES_TYPE, 'football.history']);
       assert.ok(runtime.registry.types.every((entry) => entry.type !== TEAM_CODES_TYPE), 'refresh and cutoff workers never claim team-code jobs');
       const off = await createLiveRuntime(parseRuntimePolicy({ ...policyEnv, GOAL_HINT_TEAM_CODES_IMPORT_ENABLED: 'false' }), { fetcher, approvals });
       try { assert.equal(off.teamCodes.enabled, false); } finally { await off.close(); }
@@ -320,6 +358,23 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
       assert.deepEqual(usages, []);
       assert.equal(teamCalls(), before.teams, 'zero /teams requests past the reserve');
       assert.equal(await runtime.database.query((tx) => tx.apiQuotaAttempt.count()), before.attempts, 'no quota was reserved');
+    });
+    await t.test('historical fixture jobs report quota refusal without transport', async () => {
+      const archive = await createLiveRuntime(parseRuntimePolicy({ ...policyEnv, GOAL_HINT_HISTORY_IMPORT_ENABLED: 'true' }),
+        { fetcher, approvals, syntheticArchive: true });
+      try {
+        assert.equal(archive.enrichment.historyEnabled, true);
+        const envelope = historyImportEnvelopes(latestHistoryImportSlot(Date.now())).find(({ payload }) => payload.phase === 'team-statistics');
+        const job = await archive.queue.enqueue(envelope);
+        assert.equal((await archive.queue.enqueue(envelope)).id, job.id);
+        const before = network.length;
+        const worker = createJobWorker({ queue: archive.queue, registry: archive.enrichment.registry, ownerId: hash('archive-quota-worker') });
+        assert.equal(await worker.runOnce(), true);
+        assert.equal(network.length, before, 'the archive shares the protected quota reserve');
+        assert.equal((await archive.queue.inspect(job.id)).state, 'succeeded');
+        const status = await readFootballCoverage(archive.database, Date.now(), [39]);
+        assert.equal(status.archive.find(({ phase }) => phase === 'team-statistics').status, 'waiting-quota');
+      } finally { await archive.close(); }
     });
   } finally {
     await oddsRuntime?.close().catch(() => {});

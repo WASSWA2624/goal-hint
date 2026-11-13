@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { featuredPredictionSchema } from "./extended-markets.ts";
 import { utcInstantFromEpochMilliseconds } from "./calendar.ts";
 import { isMarketFamily, validateMarketSnapshot, MARKET_RULE_VERSION, type AcceptedMarket } from "./markets.ts";
 import { isPlayedFinalStatus, settlementStatuses, type SettlementOutcomeStatus } from "./market-settlement.ts";
@@ -166,6 +167,7 @@ const fixtureSnapshotBaseSchema = z.strictObject({
   liveClock: liveClockSchema.nullable().optional(),
   prices: z.array(fixturePriceSchema).max(4).optional(),
   marketOdds: marketOddsObservationSchema.nullable().optional(),
+  featuredPrediction: featuredPredictionSchema.nullable().optional(),
 });
 export const publishedFamiliesSchema = z.array(marketFamilySchema).max(4).refine((families) => families.join() === publicPolicy.markets.filter((family) => families.includes(family)).join(), "Families must be unique and in policy order.");
 /** Public chance only: neither a selection nor the complete group from which it could be reconstructed. */
@@ -177,6 +179,9 @@ export const gatedForecastSchema = z.strictObject({ gated: z.literal(true), runI
 const wireFixtureBaseSchema = fixtureSnapshotBaseSchema.extend({ forecast: z.union([publicForecastSchema, gatedForecastSchema]).nullable() });
 function refineFixture(value: z.infer<typeof wireFixtureBaseSchema>, context: z.RefinementCtx) {
   const forecast = value.forecast && !("gated" in value.forecast) ? value.forecast : null;
+  if (value.featuredPrediction && (!forecast || value.status !== "scheduled")) {
+    context.addIssue({ code: "custom", message: "A featured outcome requires a current scheduled prediction." });
+  }
   if (value.prices) {
     const picks = new Map(forecast?.markets.map((item) => [item.market.family, item.market.selection]) ?? []);
     if (forecast?.recommendation?.selected) picks.set(forecast.recommendation.selected.family,

@@ -217,7 +217,7 @@ test('blank kickoff times are omitted from feed queries and per-selection criter
     reads++; assert.equal(parameters.has('timeFrom'), false); assert.equal(parameters.has('timeTo'), false); assert.equal(parameters.has('tz'), false);
     return page(parameters, records);
   }).query(criteria({ oddsMin: 210 }));
-  assert.equal(reads, 2); assert.equal(result.state, 'no-qualifying'); assert.equal(result.data.slips.length, 0);
+  assert.equal(reads, 2); assert.equal(result.state, 'odds-unavailable'); assert.equal(result.data.slips.length, 0);
   const noCombination = await service(async (parameters) => page(parameters, records)).query(criteria({ totalMin: 500, totalMax: 600 }));
   assert.equal(noCombination.state, 'no-combinations'); assert.equal(noCombination.data.qualifyingMatches, 2);
 });
@@ -228,7 +228,7 @@ test('bounded pagination marks a truncated cohort explicitly and does not scan b
     visited.push(Number(parameters.get('page'))); return page(parameters, records);
   }).query(criteria());
   assert.deepEqual(visited, [1, 2, 3, 4, 5, 1, 2, 3, 4, 5]); assert.equal(result.examined, 500);
-  assert.equal(result.searchLimited, true); assert.equal(result.state, 'no-qualifying');
+  assert.equal(result.searchLimited, true); assert.equal(result.state, 'odds-unavailable');
 });
 
 test('changed cohorts, overlapping pages and stale or malformed page envelopes fail atomically', async () => {

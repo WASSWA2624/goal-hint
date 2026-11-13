@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
-import { goalAsianHandicapMarket, goalResultMarket, goalTotalsMarket } from '../src/domain/goal-market-definitions.ts';
+import { goalAsianHandicapMarket, goalResultMarket, goalTotalsMarket, liveGoalMarketDefinitions } from '../src/domain/goal-market-definitions.ts';
+import { deriveLocalGoalMarket } from '../src/domain/score-distribution-markets.ts';
 import { SCORE_DISTRIBUTION_VERSION } from '../src/domain/score-distribution.ts';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
 import { goalMarketExtensionFromRow, goalMarketSettlementFromRow, goalMarketSettlementRevisionSchema,
@@ -10,6 +11,17 @@ import { PredictionHistoryError } from '../src/server/predictions/history-contra
 
 const at = Date.parse('2026-10-12T08:00:00Z'), fixtureId = randomUUID(), cycleId = randomUUID(), revisionId = randomUUID();
 const denied = (reason) => (error) => error instanceof PredictionHistoryError && error.reason === reason;
+
+test('the approved local catalog derives goal outcomes with verified half rates and no odds', () => {
+  const rates = { home: 1.4, away: 0.9, firstHalfShare: { home: 0.4, away: 0.45 } };
+  const derived = liveGoalMarketDefinitions.map((definition) => deriveLocalGoalMarket(rates, definition));
+  assert.equal(derived.length, 216);
+  assert.ok(derived.every((result) => result.available && result.market.selections.every(({ outcomes }) =>
+    Math.abs(Object.values(outcomes).reduce((sum, value) => sum + value, 0) - 1) < 1e-12)));
+  const zero = derived.find(({ market }) => market.definition.key === 'goal:half-time:exact-count:home').market.selections[0];
+  assert.equal(zero.key, '0');
+  assert.equal(zero.winProbability, Math.exp(-rates.home * rates.firstHalfShare.home));
+});
 const distribution = () => ({ version: SCORE_DISTRIBUTION_VERSION, unrepresentedProbability: 0, states: [
   { home: 0, away: 0, halfHome: 0, halfAway: 0, probability: .1 },
   { home: 1, away: 0, halfHome: 0, halfAway: 0, probability: .2 },

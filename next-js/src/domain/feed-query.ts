@@ -89,7 +89,7 @@ export const matchFeedPageDefaults = Object.freeze({
   sort: Object.freeze({ by: "live-first", direction: "desc" }),
   pageSize: feedQueryRules.pageSize,
   picks: "all",
-  probability: defaultMatchProbability,
+  probability: anyProbability,
 } as const satisfies Pick<FeedQuery, "dates" | "sort" | "pageSize" | "picks" | "probability">);
 export function defaultPageSort(dates: DateSelection): FeedSort {
   return dates.kind === "today" ? matchFeedPageDefaults.sort : kickoffSort;
@@ -307,9 +307,9 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
 const sameList = (left: readonly string[], right: readonly string[]) =>
   left.length === right.length && left.every((item, index) => item === right[index]);
 
-/** Explicit filters and archive dates take precedence. The probability default is only applied when authorized. */
+/** Explicit filters and archive dates take precedence over Matches defaults. */
 export function applyFeedPageDefaults(query: FeedQuery, input: FeedParameters,
-  { dated = false, allowProbabilityDefault = true }: { dated?: boolean; allowProbabilityDefault?: boolean } = {}): FeedQuery {
+  { dated = false }: { dated?: boolean } = {}): FeedQuery {
   const has = (key: string) => input instanceof URLSearchParams ? input.has(key) : input[key] !== undefined;
   const explicitDates = query.dates.kind === "date" || query.dates.kind === "range" || ["date", "from", "to", "when"].some(has);
   // A legacy summary-only link now sets the date for the entire view.
@@ -320,7 +320,6 @@ export function applyFeedPageDefaults(query: FeedQuery, input: FeedParameters,
     dates,
     sort: dated || has("sort") || has("dir") ? query.sort : defaultPageSort(dates),
     picks: has("picks") ? query.picks : matchFeedPageDefaults.picks,
-    probability: !dated && dates.kind === "today" && !has("prob") && allowProbabilityDefault ? defaultMatchProbability : query.probability,
   };
 }
 
@@ -405,7 +404,6 @@ export function feedQueryHref(query: FeedQuery, today: ReportingDate): string {
     path += "/matches";
     // These API defaults are explicit choices on Matches, whose entry defaults differ.
     if (dates.kind === defaultFeedDatePreset) parameters.set("when", dates.kind);
-    if (dates.kind === "today" && isAnyProbability(query.probability)) parameters.set("prob", "0-100");
     if (query.sort.by === "kickoff") parameters.set("sort", "kickoff");
   }
   const search = parameters.toString();

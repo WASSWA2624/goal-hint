@@ -1,4 +1,4 @@
-import { freezeDefinition, goalMarketDefinitionSchema, type GoalMarketDefinition, type GoalMarketPeriod, type GoalRule } from "./score-distribution-markets.ts";
+import { freezeDefinition, goalMarketDefinitionSchema, goalMarketPeriods, type GoalMarketDefinition, type GoalMarketPeriod, type GoalRule } from "./score-distribution-markets.ts";
 import { predictionRuleLabel } from "./prediction-label.ts";
 
 const resultLabels = { home: "Home", draw: "Draw", away: "Away" } as const;
@@ -37,7 +37,18 @@ export function goalTotalsMarket(line: number, metric: "total" | "home" | "away"
     .map((direction) => selected(direction, `${direction === "over" ? "Over" : "Under"} ${line}`,
       { kind: payout === "asian" ? "asian-total" : "total", metric, direction, line })), payout === "asian" ? "payout" : "partition");
 }
-export const liveGoalMarketDefinitions: readonly GoalMarketDefinition[] = Object.freeze([goalTotalsMarket(1.5)]);
+export const legacyLiveGoalMarketDefinitions: readonly GoalMarketDefinition[] = Object.freeze([goalTotalsMarket(1.5)]);
+
+function goalCountMarket(metric: "total" | "home" | "away", period: GoalMarketPeriod, ranges: boolean): GoalMarketDefinition {
+  const subject = metric === "total" ? "Total" : resultLabels[metric];
+  const bands = ranges ? [[0, 1], [2, 3], [4, 5], [6, null]] as const
+    : [[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 6], [7, null]] as const;
+  return definition(`${ranges ? "count-range" : "exact-count"}:${metric}`, period, `${subject} goals ${ranges ? "range" : "exact count"}`,
+    ranges ? "Range" : "Exact", bands.map(([min, max]) => {
+      const label = max === null ? `${min}+` : min === max ? `${min}` : `${min}–${max}`;
+      return selected(max === null ? `${min}+` : min === max ? `${min}` : `${min}-${max}`, label, { kind: "goal-count", metric, min, max });
+    }));
+}
 
 function binaryMarket(kind: string, period: GoalMarketPeriod, label: string, code: string,
   rule: (yes: boolean) => GoalRule): GoalMarketDefinition {
@@ -85,3 +96,15 @@ export function goalCombinationMarket(key: string, label: string, selections: re
   period: GoalMarketPeriod = "full-time", group: "partition" | "overlapping" = "partition"): GoalMarketDefinition {
   return definition(`combination:${key}`, period, label, `${periods[period]} combo`, [...selections], group);
 }
+
+/** Publish the model-supported goal lines independently of the provider's odds inventory. */
+export const liveGoalMarketDefinitions: readonly GoalMarketDefinition[] = Object.freeze([
+  ...legacyLiveGoalMarketDefinitions,
+  ...goalMarketPeriods.flatMap((period) => (["total", "home", "away"] as const).flatMap((metric) => [
+    ...[0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5].filter((line) => period !== "full-time" || metric !== "total" || line !== 1.5)
+      .map((line) => goalTotalsMarket(line, metric, period)),
+    ...Array.from({ length: 19 }, (_, index) => (index + 1) / 4).filter((line) => line % 1 !== 0.5)
+      .map((line) => goalTotalsMarket(line, metric, period, "asian")),
+    goalCountMarket(metric, period, false), goalCountMarket(metric, period, true), goalParityMarket(metric, period),
+  ])),
+]);

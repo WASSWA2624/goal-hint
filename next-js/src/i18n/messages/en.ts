@@ -574,7 +574,7 @@ export const en = {
   "slips.state.no-combinations.title": "No qualifying slips",
   "slips.state.no-combinations.description": "Qualifying matches are available, but we couldn’t build a slip within your set filters. Adjust the filters and try again.",
   "slips.state.odds-unavailable.title": "Odds unavailable",
-  "slips.state.odds-unavailable.description": "Slips need published bookmaker prices. Public odds are currently unavailable, so no slips can be built yet.",
+  "slips.state.odds-unavailable.description": "No qualifying selection has a current bookmaker price. Try again when prices are available.",
   "slips.state.model-unavailable.title": "Combined estimate unavailable",
   "slips.state.model-unavailable.description": "A reviewed combined probability estimate is unavailable. Clear the combined probability bounds to build using individual match forecasts.",
   "slips.state.data-unavailable.title": "Slip data unavailable",

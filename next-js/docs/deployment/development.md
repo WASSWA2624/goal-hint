@@ -24,9 +24,12 @@ MySQL 8.4+ executable to own a separate persistent loopback database. It include
 normal application screens and services. Set `GOAL_HINT_DEMO_MYSQL_BINARY` if
 MySQL is not discovered automatically.
 
-To use configured development services, copy `.env.example` to `.env.local`,
+To use configured development services, copy `.env.example` to `.env.development`,
 edit it privately and run `npm run dev:live`. Development packages do not contain
 production credentials or enable production services.
+
+The development launcher applies pending MySQL migrations and verifies that the
+selected local database is current before opening the web app.
 
 `BUILD_INFO.json` identifies the source revision and development configuration.
 The adjacent `.zip.sha256` file verifies the downloaded archive. From the full

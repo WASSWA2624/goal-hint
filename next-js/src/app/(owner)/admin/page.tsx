@@ -3,13 +3,15 @@ import { Suspense } from "react";
 import { AdminFrame } from "@/app/_components/admin-frame";
 import { getShellInstant } from "@/app/_components/shell-time";
 import { redirectToAccountLogin } from "@/server/members/account-login-redirect";
-import { OverviewLoading, OverviewReport } from "@/components/admin/owner-reports";
+import { FootballCoverageReport, OverviewLoading, OverviewReport } from "@/components/admin/owner-reports";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { createSubscribers, revenueBounds } from "@/server/admin/subscribers";
 import { createPaymentNoticeAdmin } from "@/server/admin/payment-notices";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { adminPageGate } from "@/server/admin/admin-http";
+import { readFootballCoverage } from "@/server/admin/football-coverage";
+import { getRuntimePolicy } from "@/server/config/runtime-policy";
 import type { DatabaseRuntime } from "@/server/database/client";
 import { LoadingTheme } from "@/styles/loading-theme";
 
@@ -43,5 +45,14 @@ async function OverviewMetrics({ database }: { database: DatabaseRuntime }) {
     endDate: getReportingDate(now) });
   return <AdminFrame pendingCount={value.pending}>
     <OverviewReport report={{ value, noticeCount, uploadAlertsHref: `/admin/audit?${auditQuery}` }} />
+    <Suspense fallback={<OverviewLoading />}>
+      <FootballCoverageMetrics database={database} />
+    </Suspense>
   </AdminFrame>;
+}
+
+async function FootballCoverageMetrics({ database }: { database: DatabaseRuntime }) {
+  const now = await getShellInstant();
+  const report = await readFootballCoverage(database, now, getRuntimePolicy().choices.competitionIds ?? []);
+  return <FootballCoverageReport report={report} />;
 }

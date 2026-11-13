@@ -21,7 +21,7 @@ test("page defaults leave recommendations unrestricted across date and status fi
   }
 });
 
-test("Matches opens with today's published forecasts strictly above 75%, live games first and 50 items", () => {
+test("Matches opens with today's fixtures, no probability or odds requirement, live games first and 50 items", () => {
   const query = page();
   assert.equal(query.status, "all");
   assert.deepEqual(query.dates, { kind: "today" });
@@ -30,26 +30,25 @@ test("Matches opens with today's published forecasts strictly above 75%, live ga
   assert.equal(query.search, "");
   assert.deepEqual(query.leagues, []);
   assert.deepEqual(query.countries, []);
-  assert.deepEqual(query.probability, defaultMatchProbability);
+  assert.deepEqual(query.probability, { min: 0, max: 100 });
   assert.equal(query.odds, null);
   assert.equal(query.time, undefined);
   assert.equal(query.page, 1); assert.equal(query.pageSize, 50); assert.equal(query.summary, undefined);
   const parameters = serializeFeedQuery(query, today);
   assert.equal(parameters.get("when"), "today");
-  assert.equal(parameters.get("prob"), "above-75");
+  assert.equal(parameters.has("prob"), false);
   assert.equal(parameters.get("sort"), "live-first");
   assert.deepEqual(parse().dates, { kind: "last-30-days" });
   assert.deepEqual(parse().sort, { by: "kickoff", direction: "desc" });
 });
 
-test("the probability default is reversible and never applied to a guest's private-prediction scope", () => {
+test("explicit probability filters round-trip including the legacy above-75 preset", () => {
   for (const [value, probability] of [["above-75", defaultMatchProbability], ["75-100", { min: 75, max: 100 }],
     ["0-100", { min: 0, max: 100 }]]) {
     const query = page(`when=today&prob=${value}`);
     assert.deepEqual(query.probability, probability);
     assert.deepEqual(page(new URL(feedQueryHref(query, today), "https://example.test").searchParams.toString()), query);
   }
-  assert.deepEqual(applyFeedPageDefaults(parse(), {}, { allowProbabilityDefault: false }).probability, { min: 0, max: 100 });
   assert.deepEqual(page("when=yesterday").probability, { min: 0, max: 100 });
   assert.deepEqual(page("date=2026-10-26&prob=40-75").probability, { min: 40, max: 75 });
 });

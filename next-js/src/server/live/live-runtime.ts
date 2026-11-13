@@ -12,12 +12,14 @@ import { createMysqlEvidenceStore } from "../evidence/evidence-mysql-store.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { createProviderFallbackAdapter } from "../fallback/fallback-adapter.ts";
 import { createFallbackService } from "../fallback/fallback-service.ts";
-import { createApiFootballAdapter } from "../football/api-football-adapter.ts";
+import { createApiFootballAdapter, type ApiFootballAdapterOptions } from "../football/api-football-adapter.ts";
 import { apiFootballFixtureRoundParameters, parseApiFootballFixtureRound, type FixtureRoundQuery } from "../football/api-football-contract.ts";
-import { createFootballCatalogStore } from "../football/catalog-mysql-store.ts";
+import { createFootballCatalogStore, historyReplayKind } from "../football/catalog-mysql-store.ts";
 import { createFootballCatalogImporter } from "../football/catalog-service.ts";
 import { createFootballHistoryBackfill, historyBackfillLimits, normalizeHistoryCompetition } from "../football/history-backfill.ts";
 import { createFootballHistoryDetails } from "../football/history-details.ts";
+import { createFootballHistoryFixtureReplay } from "../football/history-fixture-replay.ts";
+import { createHistoryImportJob } from "../football/history-import-jobs.ts";
 import { footballHistoryCatalogMaxAgeMs, readUpcomingFootballHistorySeasons } from "../football/history-fixture-scope.ts";
 import { createFootballHistoryOddsMapping } from "../football/history-odds-mapping.ts";
 import { createFootballHistoryPlayerProfiles, createFootballHistoryPlayerStatistics } from "../football/history-player-statistics.ts";
@@ -118,6 +120,8 @@ export function liveOptionalPolicy(input: RuntimePolicy, verify: EvidenceVerifie
 export type LiveRuntimeOverrides = Readonly<{
   /** Isolated tests only: a synthetic provider transport and owner register. */
   fetcher?: typeof fetch; aiFetcher?: typeof fetch; researchFetcher?: typeof fetch; approvals?: OwnerApprovals;
+  /** Isolated integration only, with a synthetic transport and dedicated database. */
+  syntheticArchive?: boolean;
   /** The development entry point verifies the owned MySQL datadir before setting this. */
   localFootball?: boolean;
   /** The historical archive command has already verified the owned target. */
@@ -128,9 +132,17 @@ export type LiveRuntimeOverrides = Readonly<{
 export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: LiveRuntimeOverrides = {}) {
   const verify = liveReadiness(inputPolicy, overrides.approvals), policy = liveOptionalPolicy(inputPolicy, verify), refs = liveReferences(policy);
   const localFootball = overrides.localFootball === true;
+  const archiveEnabled = policy.choices.historyImport.enabled;
+  const databaseTarget = new URL(policy.secrets.databaseUrl?.read() ?? "about:blank");
+  const smokeName = /^(?:[a-z0-9]+_)*smoke(?:_[a-z0-9]+)*$/u;
+  const loopback = databaseTarget.hostname === "127.0.0.1";
+  const syntheticArchive = overrides.syntheticArchive === true && overrides.fetcher !== undefined && overrides.approvals !== undefined && loopback &&
+    (policy.mode === "development" && databaseTarget.pathname === "/goal_hint_test" ||
+      policy.mode === "production" && smokeName.test(databaseTarget.pathname.slice(1)) && smokeName.test(decodeURIComponent(databaseTarget.username)));
+  const productionHistory = !localFootball && archiveEnabled && verify(refs.retention, "football-private-use") &&
+    (syntheticArchive || policy.mode === "production" && process.env.GOAL_HINT_DEPLOYMENT_ENVIRONMENT === "production");
   if (localFootball) {
-    const url = new URL(policy.secrets.databaseUrl?.read() ?? "about:blank");
-    if (policy.mode !== "development" || url.hostname !== "127.0.0.1" || !/^\/goal_hint_football_\d{6}$/u.test(url.pathname))
+    if (policy.mode !== "development" || databaseTarget.hostname !== "127.0.0.1" || !/^\/goal_hint_football_\d{6}$/u.test(databaseTarget.pathname))
       throw new LiveConfigurationError(["Local football requires the owned loopback snapshot database."]);
   }
   const fetcher = overrides.fetcher === undefined ? {} : { fetcher: overrides.fetcher };
@@ -141,7 +153,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     let activeWorkload: LiveWorkload | null = null;
     let stableAccountKey: string | null = null;
     const quota = createQuotaRouter({ store: createMysqlQuotaStore(database), readStatus: createAccountStatusReader({ policy, verifyEvidence: verify, ...fetcher }),
-      admit: createLiveQuotaAdmission(() => activeWorkload, () => stableAccountKey) });
+      admit: createLiveQuotaAdmission(() => activeWorkload, () => stableAccountKey, productionHistory) });
     const day: QuotaDay = await quota.refresh();
     stableAccountKey = day.status.accountKey;
     const workload = liveWorkload(day.status.dailyLimit, day.status.secondLimit, day.status.plan, day.status.minuteLimit, policy.capabilities.ai, policy.choices.liveDetails.enabled);
@@ -162,30 +174,29 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         verifyPrimaryCandidate: (candidate) => ai?.verifyPublishedCandidate(candidate) === true,
         verifyPrimaryGoals: (candidate, distribution) => ai?.verifyPublishedGoalDistribution(candidate, distribution) === true }) });
     const gateway = createPolicyQuotaGateway({ limiter: quota.limiter, policy, verifyEvidence: verify });
-    const historySource = localFootball && overrides.historyBackfill && verify(refs.retention, "football-private-use")
+    const historySource = productionHistory || localFootball && overrides.historyBackfill && verify(refs.retention, "football-private-use")
       ? createFootballHistorySource(database) : null;
     // The adapter identity is the stable provider account; daily limiter accounts sit behind the router.
-    const adapter = createApiFootballAdapter({ accountId: day.status.accountKey, credential: { read: () => policy.secrets.footballKey?.read() ?? "" },
+    const adapterOptions: ApiFootballAdapterOptions = { accountId: day.status.accountKey, credential: { read: () => policy.secrets.footballKey?.read() ?? "" },
       gateway, authorize: () => assertOperationAllowed(policy, "football", verify), ...fetcher,
-      ...(historySource ? {
-        retainPartiallyNormalizedFixturePages: true as const,
-        observeFixturePage: async (rows, source) => {
-          await historySource.savePage({ endpoint: "fixtures", rows, parameters: source.requestParameters, retrievedAt: source.retrievedAt });
-        },
-        observeCompetitionPage: async (rows, source) => {
-          await historySource.savePage({ endpoint: "competitions", rows, parameters: source.requestParameters, retrievedAt: source.retrievedAt });
-        },
-      } : {}),
       verifyLogo: authorities.catalog.verifyLogo, verifyRegulationScore: authorities.catalog.verifyRegulationScore,
       // API-Football documents up to 20 IDs per /fixtures?ids request.
       batchEvidence: { maximumIds: 20, evidenceRef: "api-football-documentation-v3:fixtures-ids-maximum-20" },
-      verifyBatchEvidence: (evidence) => evidence.maximumIds === 20 });
+      verifyBatchEvidence: (evidence) => evidence.maximumIds === 20 };
+    const adapter = createApiFootballAdapter(adapterOptions);
+    const historyAdapter = historySource ? createApiFootballAdapter({ ...adapterOptions, retainPartiallyNormalizedFixturePages: true,
+      observeFixturePage: async (rows, source) => {
+        await historySource.savePage({ endpoint: "fixtures", rows, parameters: source.requestParameters, retrievedAt: source.retrievedAt });
+      },
+      observeCompetitionPage: async (rows, source) => {
+        await historySource.savePage({ endpoint: "competitions", rows, parameters: source.requestParameters, retrievedAt: source.retrievedAt });
+      } }) : null;
     const cutoff = createCutoffLockingService({ database, queue, policy: cutoffPolicy(refs), authority: authorities.cutoff });
     const lifecycle = createScheduleLifecycleService({ database, cutoff, policy: lifecyclePolicy(refs), authority: authorities.lifecycle });
     const catalog = createFootballCatalogStore(database, { coordinateFixtureMutation: lifecycle.coordinateFixtureMutation,
       transactionTimeoutMs: 120_000, ...(sourceOrder === "ai-first" ? { sealTeamHistory: true } : {}) });
     const importer = createFootballCatalogImporter({ adapter, store: catalog, authority: authorities.catalog });
-    const historyBackfill = historySource ? (() => {
+    const historyBackfill = historySource && historyAdapter ? (() => {
       const store = createFootballCatalogStore(database, { historicalResults: true, transactionTimeoutMs: 120_000 });
       const roundSelection = (scope: FixtureRoundQuery) => ({ endpoint: "fixtureRounds", parameters: apiFootballFixtureRoundParameters(scope) } as const);
       return createFootballHistoryBackfill({ competitions: async (query, bounds) => {
@@ -205,14 +216,14 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         const cached = saved ?? (query.competitionId === undefined ? null : await read({ ...selector, parameters: {} }, expires));
         if (cached?.length) return { status: "partial", data: cached, error: null, requestsDispatched: 0 };
         const started = Date.now();
-        const response = await adapter.evidence.competitions(query, bounds);
+        const response = await historyAdapter.evidence.competitions(query, bounds);
         if (response.status !== "failed") {
           const fresh = await read(selector, started);
           if (fresh?.length) return { status: "partial", data: fresh, error: null, requestsDispatched: response.requestsDispatched };
         }
         return response;
       }, store,
-        importer: createFootballCatalogImporter({ adapter, store, authority: authorities.catalog, deferFixtureWritesAbove: 1_000 }),
+        importer: createFootballCatalogImporter({ adapter: historyAdapter, store, authority: authorities.catalog, deferFixtureWritesAbove: 1_000 }),
         competitionIds: policy.choices.competitionIds ?? [], retentionEvidenceRef: refs.retention,
         upcomingSeasons: () => readUpcomingFootballHistorySeasons(database, utcInstantFromEpochMilliseconds(Date.now())),
         hasFixtureSource: (parameters, observation) => {
@@ -228,7 +239,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
             const rows = page?.rows.map(parseApiFootballFixtureRound);
             return rows?.every((row) => row !== null) ? rows : null;
           },
-          fetch: adapter.evidence.fixtureRounds,
+          fetch: historyAdapter.evidence.fixtureRounds,
           save: (scope, rows, retrievedAt) => historySource.savePage({ ...roundSelection(scope), rows, retrievedAt }),
         },
         recordCoverage: async ({ competitionId, season }, coverage) => {
@@ -391,7 +402,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         const base = fallbackRefreshPlan(member, refs, workload.pacing);
         const reviewed = ai?.configure(member, sources) ??
           { ...base, evidence: { ...base.evidence, policy: liveAiEvidencePolicy(refs), cachedSources: sources } };
-        return sourceOrder === "ai-first" ? liveCascadePlan(reviewed, localFootball) : reviewed;
+        return sourceOrder === "ai-first" ? liveCascadePlan(reviewed) : reviewed;
       },
       models: ai?.models ?? { async resolve() { throw new ModelRegistryError("unavailable"); } },
       predictor: ai?.predictor ?? { async predict() { return { status: "denied", reason: "unconfigured", requestsDispatched: 0, requestCountUnknown: false }; } },
@@ -402,7 +413,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
           authorities.odds.verifyPolicy(odds) === true && authorities.odds.verifyRetention({ evidenceRef: refs.retention,
             purpose: "structured-odds-history", rawPayloadsStored: false }) === true }) },
       observation: createRefreshObservationCollector({ adapter: adapter.evidence, evidenceRef: statusEvidenceRef, verifyResponse: authorities.verifyStatusResponse }) });
-    const settlement = createMarketSettlementService({ database, queue, extendedMarketsEnabled: localFootball });
+    const settlement = createMarketSettlementService({ database, queue, extendedMarketsEnabled: sourceOrder === "ai-first" });
     const cache = createMysqlPublicCacheStore(database);
 
     // Only remaining outbound calls consume the reserve kept for selection and result checks.
@@ -443,10 +454,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         const deadline = utcInstantFromEpochMilliseconds(Math.min(Date.now() + ODDS_PROVIDER_WINDOW_MS, end));
         return request.kind === "prices" ? oddsImportBounds(deadline, workload.odds.maxPages) : oddsCatalogBounds(deadline);
       } });
-    /** The enrichment gate's counters. Null until the new UTC provider day has settled and opened its limiter. Odds and
-     * team codes are the only live callers at enrichment priority, so the limiter's own dispatched enrichment attempts
-     * on the open provider day are exactly what both have spent together, uncertain dispatches included: they share one
-     * spare, and neither can push the other past it. */
+    /** The odds, team code and history jobs share one spare. The limiter counts every enrichment dispatch,
+     * including uncertain ones. Null while the provider day is settling. */
     async function oddsUsage(): Promise<OddsQuotaUsage | null> {
       const counters = await quota.counters();
       if (counters === null) return null;
@@ -497,8 +506,54 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       service: createTeamCodeService({ store: createMysqlTeamCodeStore(database), importer, retentionEvidenceRef: refs.retention,
         bounds: teamCodeBounds }) });
     const teamCodesRegistry = createJobRegistry(teamCodeDefinitions);
-    // One enrichment worker runs both, so their quota gates are checked one job at a time; odds jobs claim first.
-    const enrichmentRegistry = createJobRegistry([...oddsDefinitions, ...teamCodeDefinitions]);
+    const replayHistory = productionHistory && historySource ? createFootballHistoryFixtureReplay(database, authorities.catalog, refs.retention) : null;
+    const archiveBatch = { maxRequests: 6 };
+    function referenceStep(dataset: HistoryReferenceDataset, endpoint: string) {
+      return async (signal: AbortSignal) => {
+        if (!historyReference) throw new Error("Reference coverage is unavailable.");
+        const report = await historyReference({ ...archiveBatch, dataset }, signal);
+        const imported = await database.query((client) => client.footballHistorySourcePage.count({ where: { endpoint } }));
+        const complete = report.status === "complete";
+        return { complete, stopped: report.stopped, coverage: { imported, remaining: complete ? 0 : null, unavailable: null } };
+      };
+    }
+    const historyJob = createHistoryImportJob({ database, queue, enabled: productionHistory,
+      steps: historySource && historyBackfill && historyDetails && historyReference && replayHistory ? {
+        async fixtures(signal) {
+          const result = await historyBackfill(archiveBatch, undefined, signal);
+          if (result.status === "catalog-unavailable") return { complete: false, stopped: result.reason ?? "catalog-unavailable",
+            coverage: { imported: null, remaining: null, unavailable: null } };
+          return { complete: result.status === "complete", stopped: result.stopped, coverage: {
+            imported: result.completed - result.verifiedEmpty, remaining: result.planned - result.completed,
+            unavailable: result.verifiedEmpty } };
+        },
+        async replay(signal) {
+          const result = await replayHistory(signal);
+          const imported = await database.query((client) => client.footballImport.count({ where: { provider: "api-football",
+            kind: historyReplayKind, status: "complete", retentionEvidenceRef: refs.retention } }));
+          return { complete: result.status === "complete", stopped: result.stopped,
+            coverage: { imported, remaining: result.pending, unavailable: null } };
+        },
+        async details(signal) {
+          const result = await historyDetails(archiveBatch, undefined, signal);
+          const { eligible, storedComplete, unsupported, exhausted, delayed, due } = result.coverage;
+          return { complete: result.passComplete && due + delayed + exhausted === 0, stopped: result.stopped,
+            coverage: { imported: storedComplete, remaining: eligible - storedComplete - unsupported, unavailable: unsupported } };
+        },
+        "half-statistics": referenceStep("half-statistics", "fixtureHalfStatistics"),
+        "team-statistics": referenceStep("team-statistics", "teamStatistics"),
+        "player-statistics": referenceStep("player-statistics", "playerStatistics"),
+        ...(oddsEnabled ? { async "odds-mapping"(signal) {
+          const result = await historyReference({ ...archiveBatch, dataset: "odds-mapping" }, signal);
+          if (!("totalPages" in result)) throw new Error("Odds mapping coverage is unavailable.");
+          return { complete: result.status === "complete", stopped: result.stopped,
+            coverage: { imported: result.pagesVerified, remaining: result.totalPages === null ? null : result.totalPages - result.pagesVerified,
+              unavailable: null } };
+        } } : {}),
+      } : {},
+    });
+    // The same worker serializes these gates. Odds and team codes claim before the archive.
+    const enrichmentRegistry = createJobRegistry([...oddsDefinitions, ...teamCodeDefinitions, historyJob]);
     const inPlayOdds = localFootball ? createInPlayOddsPoller({
       database, adapter: adapter.odds, now: Date.now, enabled: () => oddsEnabled && quota.current() !== null,
       displayAllowed: authorities.odds.verifyPublicDisplay,
@@ -554,7 +609,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         // Write-time staleness needs no provider call, so it runs even while imports are off.
         expire: (limit: number) => oddsService.expire(odds?.freshnessMs ?? ODDS_FRESHNESS_MS, limit) }),
       teamCodes: Object.freeze({ enabled: teamCodesEnabled, registry: teamCodesRegistry }),
-      enrichment: Object.freeze({ registry: enrichmentRegistry }),
+      enrichment: Object.freeze({ registry: enrichmentRegistry, historyEnabled: productionHistory }),
       now: () => utcInstantFromEpochMilliseconds(Date.now()), close: () => database.disconnect() });
   } catch (error) { await database.disconnect().catch(() => {}); throw error; }
 }

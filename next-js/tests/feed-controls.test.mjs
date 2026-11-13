@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { applyFeedDraft, parseProbabilityInputs, resetFeedFilterSection, resetFeedFilters } from '../src/domain/feed-controls.ts';
 import { compileFeedFilterDraft, feedFilterDraft } from '../src/domain/feed-filter-draft.ts';
-import { defaultMarkets, defaultMatchProbability, feedQueryHref, panelFilterCount, parseFeedQuery } from '../src/domain/feed-query.ts';
+import { anyProbability, defaultMarkets, feedQueryHref, panelFilterCount, parseFeedQuery } from '../src/domain/feed-query.ts';
 import { makeStore } from '../src/state/store.ts';
 import { draftChanged } from '../src/state/feed.ts';
 import { parseReportingDate } from '../src/domain/calendar.ts';
@@ -40,10 +40,10 @@ test('Clear filters resets status, dates and limits while retaining the browsing
     assert.equal(reset.time, undefined); assert.equal(reset.zone, query.zone);
     assert.equal(reset.search, ''); assert.deepEqual(reset.leagues, []); assert.deepEqual(reset.countries, []);
     assert.equal(reset.status, 'all', 'Live and Completed are filters on the unified Matches page');
-    assert.deepEqual(reset.markets, defaultMarkets); assert.deepEqual(reset.probability, defaultMatchProbability); assert.equal(reset.picks, 'all');
+    assert.deepEqual(reset.markets, defaultMarkets); assert.deepEqual(reset.probability, anyProbability); assert.equal(reset.picks, 'all');
     assert.deepEqual(reset.sort, { by: 'live-first', direction: 'desc' });
     assert.equal(reset.odds, null);
-    assert.equal(panelFilterCount(reset), 1);
+    assert.equal(panelFilterCount(reset), 0);
     assert.deepEqual(applyFeedDraft(reset, today), reset);
   }
 });
@@ -132,7 +132,7 @@ test('Reset clears odds bounds (052); Apply never carries them while provider od
   const query = parseFeedQuery({ odds: '1.50-3.00', prob: '60-100' }, { today, providerOdds: true });
   assert.deepEqual(query.odds, { min: 150, max: 300 });
   const reset = resetFeedFilters(query);
-  assert.equal(reset.odds, null); assert.equal(feedQueryHref(reset, today), '/en/matches?when=today&prob=above-75&sort=live-first&picks=all');
+  assert.equal(reset.odds, null); assert.equal(feedQueryHref(reset, today), '/en/matches?when=today&sort=live-first&picks=all');
   // The odds controls stay disabled while publicPolicy.features.providerOdds is false; a forged draft fails closed.
   assert.throws(() => applyFeedDraft(query, today));
   assert.equal(applyFeedDraft(reset, today).odds, null);

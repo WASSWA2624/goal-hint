@@ -31,7 +31,7 @@ export type DesktopMatchRowProps = Readonly<{
   predictionAction?: ReactNode;
   headingLevel?: 2 | 3 | 4; titleNote?: string; position?: number;
   matchState?: string; savedScore?: boolean; scoreDescription?: string; regulationOnly?: boolean;
-  details?: ReactNode; pickState?: string; interactive?: boolean;
+  details?: ReactNode; pickState?: string; interactive?: boolean; clockInBadge?: boolean;
   eagerLogos?: boolean; offline?: boolean; preview?: boolean;
   /** Feed timestamps follow the device; slips retain their reporting-zone default. */
   messages?: Messages;
@@ -43,13 +43,13 @@ export type DesktopMatchRowProps = Readonly<{
 export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTeam, competition, status, score, liveClock,
   outcome, market, marketFamily, marketDescription, odds, probability, predictionAction, analysisHref, analysisLabel, headingLevel = 4, titleNote, position,
   matchState: suppliedMatchState, savedScore = false, scoreDescription: suppliedScoreDescription, regulationOnly = false, details,
-  pickState, eagerLogos = false, offline = false, preview = false, messages, datePrefix, interactive = true }: DesktopMatchRowProps) {
+  pickState, eagerLogos = false, offline = false, preview = false, messages, datePrefix, interactive = true, clockInBadge = false }: DesktopMatchRowProps) {
   const m = messages ?? createMessages(locale), id = useId();
   const final = isPlayedFinalStatus(status), clock = !offline && status === "live" ? liveClock : null;
   const halftime = status === "live" && clock?.phase === "half-time";
   const matchState = suppliedMatchState ?? (status === "scheduled" ? "upcoming" : halftime ? "halftime" : final ? "finished" : status);
   const clockText = !offline && final ? m.text(`match.final.${status as "finished-regulation" | "finished-extra-time" | "finished-penalties"}`) + (regulationOnly ? "*" : "") : "";
-  const visibleClock = !!clock && (clock.minute !== null || clock.phase !== "in-play");
+  const visibleClock = !clockInBadge && !!clock && (clock.minute !== null || clock.phase !== "in-play");
   const home = homeTeam.name?.trim() || m.text("match.homeUnknown"), away = awayTeam.name?.trim() || m.text("match.awayUnknown");
   const title = `${home} ${m.text("match.versus")} ${away}`;
   const league = competition.name?.trim() || m.text("match.competitionUnknown"), country = countryDisplayName(competition.country) || "—";
@@ -69,7 +69,8 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
     <ScoreFigures home={m.number(score.home)} away={m.number(score.away)} /></Scoreline>
     : <span data-score {...scoreProps}>{status === "live" || final ? "–" : "VS"}</span>;
   const Heading = `h${headingLevel}` as "h2" | "h3" | "h4";
-  const descriptionIds = ["date", "time", "country", "league", "score", "clock", ...(predictionAction ? ["access"] : ["market", "odds", "probability"]), "status", ...(details ? ["details"] : [])]
+  const descriptionIds = ["date", "time", "country", "league", "score", ...(visibleClock || clockText ? ["clock"] : []),
+    ...(predictionAction ? ["access"] : ["market", "odds", "probability"]), "status", ...(details ? ["details"] : [])]
     .map((name) => `${id}-${name}`).join(" ");
   return <div data-desktop-row data-desktop-design="aligned-ledger" data-desktop-preview-row={preview || undefined}
     data-fixture-id={preview ? undefined : fixtureId} data-market={marketFamily} data-outcome={outcome} data-pick-state={pickState}
@@ -87,11 +88,11 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
     <Heading data-row-teams id={`${id}-teams`} aria-label={titleNote ? `${title}, ${titleNote}` : title}>
       {position !== undefined && <VisuallyHidden data-row-number>{m.number(position)}. </VisuallyHidden>}
       <span data-home><TruncatedText interactive={interactive} text={home} href={detailsHref} /><TeamLogo name={home} url={offline ? undefined : homeTeam.logoUrl ?? undefined} eager={eagerLogos} size={14} /></span>
-      <span data-centre data-live-clock={visibleClock || undefined}>{scoreContent}
-        <span data-clock id={`${id}-clock`} aria-hidden={!visibleClock && !clockText || undefined}
+      <span data-centre>{scoreContent}
+        {(visibleClock || clockText) && <span data-clock id={`${id}-clock`}
           title={clockTitle}>
           {visibleClock ? <LiveMatchTime clock={clock} messages={m} /> : clockText}{regulationOnly && <VisuallyHidden>. {m.text("match.regulationScoreNote")}</VisuallyHidden>}
-        </span></span>
+        </span>}</span>
       <span data-away><TeamLogo name={away} url={offline ? undefined : awayTeam.logoUrl ?? undefined} eager={eagerLogos} size={14} /><TruncatedText interactive={interactive} text={away} href={detailsHref} /></span>
     </Heading>
     {predictionAction ? <div data-row-unlock id={`${id}-access`}>{predictionAction}</div> : <>
@@ -100,7 +101,7 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
     <span data-row-probability id={`${id}-probability`}><span data-number-label data-row-number-label aria-hidden="true">{m.text("match.columns.probabilityCompact")}:</span><VisuallyHidden>{m.text("slips.probability")}: </VisuallyHidden><strong>{probability}</strong></span>
     </>}
     <span data-row-status id={`${id}-status`}><MatchStatus status={status} outcome={outcome} messages={m}
-      snapshot={matchState === "snapshot"} offline={offline} /></span>
+      snapshot={matchState === "snapshot"} offline={offline} {...(clockInBadge ? { liveClock: clock, desktopClock: true } : {})} /></span>
     {details && <div data-row-details id={`${id}-details`}>{details}</div>}
     {detailsHref && <Link data-row-analysis data-match-analysis-link href={detailsHref} prefetch={false}
       aria-label={analysisLabel ? `${analysisLabel}: ${title}` : m.text("match.analysisLabel", { home, away })} aria-describedby={descriptionIds}

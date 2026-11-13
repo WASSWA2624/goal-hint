@@ -232,7 +232,8 @@ export function createPredictionRefreshService(options: Readonly<{
         expected: { context: evidence.snapshot.context, jobId: lease.jobId, pin: saved.pin, evidenceHash: evidence.snapshot.hash },
         ai, bounds: plan.fallback.bounds, maxElapsedMs: plan.fallback.maxElapsedMs,
         ...(plan.sourceOrder === undefined ? {} : { order: plan.sourceOrder }),
-        ...(plan.sourceCascade === undefined ? {} : { sourceCascade: plan.sourceCascade }) };
+        ...(plan.sourceCascade === undefined ? {} : { sourceCascade: plan.sourceCascade }),
+        ...(plan.sourceCascade && plan.goalDefinitions?.length ? { includeGoalMarkets: true } : {}) };
       const snapshot = evidence.snapshot;
       function qualified(result: FallbackRefreshResult, quotes: readonly RecommendationQuote[]): FallbackRefreshResult {
         if (result.status === "denied" || plan.recommendationPolicy === undefined) return result;
@@ -262,15 +263,16 @@ export function createPredictionRefreshService(options: Readonly<{
       if (fallback.status === "denied") return finish("failed", `fallback:${fallback.reason}`);
       if (fallback.candidate.audit.providerReason !== null) phases.fallback = fallback.candidate.audit.providerReason;
       const candidate = parseResolvedForecastCandidate(fallback.candidate);
-      const selectedSource = Object.values(candidate.markets).find((market) => market.available)?.provenance;
       let goalExtension;
       if (plan.goalDefinitions !== undefined) {
-        if (selectedSource?.kind === "local-engine") goalExtension = parseGoalMarketExtensionInput({
-          localPoisson: selectedSource.rates, definitions: plan.goalDefinitions,
-        });
-        else if (Object.values(candidate.markets).some((market) => market.available && market.market.source === "ai") &&
-          ai.status === "candidate" && ai.output.scoreDistribution && ai.output.scoreDistribution.unrepresentedProbability === 0)
-          goalExtension = parseGoalMarketExtensionInput({ scoreDistribution: ai.output.scoreDistribution, definitions: plan.goalDefinitions });
+        const localMarket = Object.values(candidate.markets).find((market) => market.available && market.provenance.kind === "local-engine");
+        const localPoisson = candidate.audit.localGoalRates ?? (localMarket?.available && localMarket.provenance.kind === "local-engine"
+          ? localMarket.provenance.rates : undefined);
+        const scoreDistribution = ai.status === "candidate" && ai.output.scoreDistribution?.unrepresentedProbability === 0 &&
+          Object.values(candidate.markets).some((market) => market.available && market.market.source === "ai")
+          ? ai.output.scoreDistribution : undefined;
+        if (localPoisson || scoreDistribution) goalExtension = parseGoalMarketExtensionInput({ definitions: plan.goalDefinitions,
+          ...(localPoisson ? { localPoisson } : {}), ...(scoreDistribution ? { scoreDistribution } : {}) });
       }
       const generationCompletedAt = utcInstantFromEpochMilliseconds((await options.store.stage(lease.jobId, "fallback", "completed"))!.at);
       const observe = (name: "observation" | "status-retry") => phase<Observation | null>(name,

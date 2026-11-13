@@ -50,3 +50,22 @@ test("paused phases override stale minutes and missing clocks invent no time", (
   assert.equal(liveClockLabel(null, messages).visible, "In play");
   assert.equal(liveClockLabel({ phase: "extra-time", minute: null }, messages).visible, "Extra time");
 });
+
+test("desktop badges center running time, explicit added minutes and named phases without inferring added time", () => {
+  for (const [clock, badge, badgeTicks] of [
+    [{ phase: "first-half", minute: 44, observedAt: 100_000 }, "45:59", true],
+    [{ phase: "first-half", minute: 45, stoppageMinutes: 2 }, "45+2", false],
+    [{ phase: "second-half", minute: 90, stoppageMinutes: 4 }, "90+4", false],
+    [{ phase: "half-time", minute: 45, stoppageMinutes: 2 }, "HT", false],
+    [{ phase: "extra-time", minute: 104, observedAt: 100_000 }, "ET 105:59", true],
+    [{ phase: "extra-time", minute: 120, stoppageMinutes: 1 }, "ET 120+1", false],
+    [{ phase: "break", minute: 105, stoppageMinutes: 1 }, "Break", false],
+    [{ phase: "extra-time", minute: null }, "ET", false],
+    [{ phase: "first-half", minute: null }, "Live", false],
+    [null, "Live", false],
+  ]) {
+    const label = liveClockLabel(clock, messages, 600_000);
+    assert.equal(label.badge, badge);
+    assert.equal(label.badgeTicks, badgeTicks);
+  }
+});

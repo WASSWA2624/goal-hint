@@ -40,5 +40,5 @@ test("Clear filters restores Today in the device zone and removes optional time 
   assert.deepEqual(cleared.sort, { by: "live-first", direction: "desc" });
   assert.equal(cleared.summary, undefined);
   assert.equal(cleared.picks, "all");
-  assert.equal(feedQueryHref(cleared, today), "/en/matches?when=today&tz=America%2FLos_Angeles&prob=above-75&sort=live-first&picks=all");
+  assert.equal(feedQueryHref(cleared, today), "/en/matches?when=today&tz=America%2FLos_Angeles&sort=live-first&picks=all");
 });

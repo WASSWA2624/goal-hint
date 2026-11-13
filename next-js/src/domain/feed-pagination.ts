@@ -13,9 +13,9 @@ export function pinnedFeedQuery(query: FeedQuery, today: ReportingDate): FeedQue
   const range = resolveFeedDates(query, today);
   return { ...query, dates: pinnedDateSelection(range) };
 }
-export function feedPageHref(query: FeedQuery, today: ReportingDate, page: number, allowProbabilityDefault = false): string {
+export function feedPageHref(query: FeedQuery, today: ReportingDate, page: number): string {
   if (!Number.isInteger(page) || page < 1 || page > feedQueryRules.maximumPage) throw new FeedQueryError();
-  const discovery = feedDiscovery({ ...query, page }, today, allowProbabilityDefault);
+  const discovery = feedDiscovery({ ...query, page }, today);
   if (discovery.eligible) return discovery.path;
   // Ordinary navigation re-resolves the rolling collection at the next request,
   // including midnight. API appends keep the pinned cohort for safe reconciliation.

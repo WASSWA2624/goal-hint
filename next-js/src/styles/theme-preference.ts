@@ -1,6 +1,10 @@
 export type ThemeMode = "light" | "dark";
 
 export const themeStorageKey = "goal-hint-theme";
+export const themePreferenceAttribute = "data-goal-hint-theme";
+
+/** Set an explicit preference before styled controls can paint. CSS handles the system default. */
+export const themePreferenceBootstrap = `try{const mode=localStorage.getItem(${JSON.stringify(themeStorageKey)});if(mode==='light'||mode==='dark')document.documentElement.setAttribute(${JSON.stringify(themePreferenceAttribute)},mode)}catch{}`;
 
 export function storedThemeMode(value: string | null): ThemeMode | null {
   return value === "light" || value === "dark" ? value : null;
@@ -26,6 +30,7 @@ export const getServerThemeSnapshot = (): ThemeMode => "light";
 
 export function setThemePreference(mode: ThemeMode): void {
   memoryPreference = mode;
+  document.documentElement.setAttribute(themePreferenceAttribute, mode);
   try { window.localStorage.setItem(themeStorageKey, mode); } catch { /* Keep the preference for this page. */ }
   for (const listener of listeners) listener();
 }
@@ -38,6 +43,9 @@ export function subscribeThemePreference(listener: () => void): () => void {
   const onStorage = (event: StorageEvent) => {
     if (event.key !== null && event.key !== themeStorageKey) return;
     memoryPreference = null;
+    const mode = storedThemeMode(event.newValue);
+    if (mode) document.documentElement.setAttribute(themePreferenceAttribute, mode);
+    else document.documentElement.removeAttribute(themePreferenceAttribute);
     listener();
   };
   browser.addEventListener("storage", onStorage);

@@ -4,7 +4,7 @@ import { useState } from "react";
 import styled from "styled-components";
 import { appPlatforms, type AppPlatform } from "@/domain/app-download-presentation";
 import { Button, ButtonLink, TextLink } from "@/components/ui/controls";
-import { AndroidIcon, CheckIcon, DownloadIcon, WindowsIcon } from "@/components/ui/icons";
+import { AndroidIcon, CheckIcon, DownloadIcon, MonitorIcon, PhoneIcon, WindowsIcon } from "@/components/ui/icons";
 import { BrandMark } from "@/components/ui/brand";
 import { PageHeading, Stack } from "@/components/ui/layout";
 import { createMessages } from "@/i18n/messages";
@@ -79,13 +79,19 @@ const ReleaseHeading = styled.div`
   > small { color: ${({ theme }) => theme.color.mutedText}; }
 `;
 const ContinueLink = styled(TextLink)`justify-self: center; margin-inline: auto;`;
-const platformIcons = { android: AndroidIcon, windows: WindowsIcon };
+const platformIcons = { android: AndroidIcon, windows: WindowsIcon, ios: PhoneIcon, macos: MonitorIcon, linux: MonitorIcon };
+const fileLabels = { android: "downloads.androidFile", windows: "downloads.windowsFile", macos: "downloads.macosFile", linux: "downloads.linuxFile", ios: null } as const;
+const installerLabels = { file: "downloads.file", store: "downloads.store", testflight: "downloads.testflight" } as const;
 
 export function DownloadPage({ locale }: { locale: string }) {
   const downloads = useAppDownloads();
   const [choice, setChoice] = useState<AppPlatform | null>(null);
   const selected = choice ?? downloads?.platform ?? null;
   const release = downloads?.catalog.releases.find(candidate => candidate.platform === selected);
+  const fileLabel = selected ? fileLabels[selected] : null;
+  const installerLabel = release?.kind === "store" && release.platform === "ios"
+    ? "downloads.appStore"
+    : installerLabels[release?.kind ?? "file"];
   const messages = createMessages(locale);
   const development = downloads?.catalog.channel === "development";
   return <Page data-download-page><Stack $gap="lg">
@@ -103,13 +109,13 @@ export function DownloadPage({ locale }: { locale: string }) {
         {development && <small>{messages.text("downloads.development")}</small>}</ReleaseHeading>
       {release ? <>
         {release.version && <p>{messages.text("downloads.compactVersion", { version: release.version })}
-          {release.kind === "file" && <> · {messages.text(selected === "android" ? "downloads.androidFile" : "downloads.windowsFile")}</>}
+          {release.kind === "file" && fileLabel && <> · {messages.text(fileLabel)}</>}
           {release.size && <> · {messages.text("downloads.size", { size: messages.number(release.size / 1024 / 1024, { maximumFractionDigits: 1 }) })}</>}</p>}
         <ButtonLink href={release.href} prefetch={false} data-app-installer download={release.kind === "file" && !downloads?.native ? true : undefined}
-          onClick={() => downloads?.acknowledge(release)}><DownloadIcon />{messages.text(release.kind === "store" ? "downloads.store" : "downloads.file", { platform: messages.text(`downloads.${selected}`) })}</ButtonLink>
+          onClick={() => downloads?.acknowledge(release)}><DownloadIcon />{messages.text(installerLabel, { platform: messages.text(`downloads.${selected}`) })}</ButtonLink>
         {release.sha256 && <details><summary>{messages.text("downloads.checksum")}</summary>
           <p>{messages.text("downloads.version", { version: release.version ?? "", build: String(release.build) })}</p><code>SHA-256: {release.sha256}</code></details>}
-      </> : <p>{messages.text(!development && selected === "android" ? "downloads.playSoon" : "downloads.soon")}</p>}
+      </> : <p>{messages.text("downloads.soon")}</p>}
     </Panel>}
     <ContinueLink href={homeHref(locale)}>{messages.text("downloads.continue")}</ContinueLink>
   </Stack></Page>;

@@ -91,7 +91,7 @@ data directory for the importer. This preparation can run alongside the demo.
 From another terminal, download and load the November 2026 snapshot.
 
 ```sh
-node --conditions=react-server --env-file=.env.local --env-file=.env.operations --env-file=.goal-hint/local-football-2026-11/target.env scripts/fetch-football-snapshot.mjs 2026-11-01 2026-11-30 2026-11-11
+node --conditions=react-server --env-file=.env.development --env-file=.env.operations --env-file=.goal-hint/local-football-2026-11/target.env scripts/fetch-football-snapshot.mjs 2026-11-01 2026-11-30 2026-11-11
 node --conditions=react-server --env-file=.goal-hint/local-football-2026-11/target.env scripts/import-local-football.mjs .goal-hint/real-football-import/2026-11-01_2026-11-30/fixtures.ndjson 2026-11-01 2026-11-30 2026-11-11
 ```
 

@@ -8,6 +8,7 @@ import 'package:goal_hint/config/app_config.dart';
 import 'package:goal_hint/web/startup_loading.dart';
 import 'package:goal_hint/web/web_view_pull_to_refresh.dart';
 import 'package:goal_hint/web/native_recovery_view.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'support/fake_web_view.dart';
 
@@ -16,7 +17,7 @@ void main() {
 
   for (final brightness in Brightness.values) {
     testWidgets(
-      'Linux opens the production app in $brightness mode',
+      'Linux loads the production origin in its embedded browser in $brightness mode',
       (tester) async {
         tester.binding.platformDispatcher.platformBrightnessTestValue =
             brightness;
@@ -24,16 +25,20 @@ void main() {
           tester.binding.platformDispatcher.clearPlatformBrightnessTestValue,
         );
         final messenger = tester.binding.defaultBinaryMessenger;
-        const launcher = MethodChannel('plugins.flutter.io/url_launcher');
-        final opened = <String>[];
-        messenger.setMockMethodCallHandler(launcher, (call) async {
-          if (call.method == 'launch') {
-            opened.add(call.arguments['url'] as String);
-            expect(call.arguments['useWebView'], isFalse);
-          }
-          return true;
+        PackageInfo.setMockInitialValues(
+          appName: 'Goal Hint',
+          packageName: 'goal_hint',
+          version: '1.0.0',
+          buildNumber: '8',
+          buildSignature: '',
+        );
+        const browser = MethodChannel('com.goalhint.goal_hint/linux_web_view');
+        final calls = <MethodCall>[];
+        messenger.setMockMethodCallHandler(browser, (call) async {
+          calls.add(call);
+          return null;
         });
-        addTearDown(() => messenger.setMockMethodCallHandler(launcher, null));
+        addTearDown(() => messenger.setMockMethodCallHandler(browser, null));
 
         await tester.pumpWidget(
           GoalHintApp(
@@ -43,17 +48,27 @@ void main() {
             ),
           ),
         );
-        await tester.pumpAndSettle();
-        expect(opened, isEmpty);
-        expect(find.text('Open website'), findsOneWidget);
-        expect(find.text('Try again'), findsNothing);
-        expect(
-          Theme.of(tester.element(find.text('Open website'))).brightness,
-          brightness,
+        await tester.pump();
+        await tester.pump();
+        expect(calls.map((call) => call.method), ['initialize', 'load']);
+        expect(calls.first.arguments, contains('GoalHintNative/linux/'));
+        expect(calls.last.arguments, 'https://goalhint.com');
+        expect(find.byType(StartupLoading), findsOneWidget);
+
+        await messenger.handlePlatformMessage(
+          browser.name,
+          browser.codec.encodeMethodCall(
+            const MethodCall('state', {
+              'hasDocument': true,
+              'loading': false,
+              'canGoBack': false,
+            }),
+          ),
+          (_) {},
         );
-        await tester.tap(find.text('Open website'));
         await tester.pumpAndSettle();
-        expect(opened, ['https://goalhint.com']);
+        expect(find.byType(StartupLoading), findsNothing);
+        expect(find.byType(NativeRecoveryView), findsNothing);
       },
       variant: const TargetPlatformVariant({TargetPlatform.linux}),
     );

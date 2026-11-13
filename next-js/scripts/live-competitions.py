@@ -49,14 +49,14 @@ def main():
     if len(ids) > access["maximum"]:
         raise CommandError(f"The plan exposes {len(ids)} competitions; the application accepts at most {access['maximum']}.")
     if "--write" not in sys.argv:
-        print("Dry run: pass --write to update GOAL_HINT_COMPETITION_IDS in .env.local.")
+        print("Dry run: pass --write to update GOAL_HINT_COMPETITION_IDS in .env.development.")
         return
-    target = ROOT / ".env.local"
+    target = ROOT / ".env.development"
     source = target.read_text(encoding="utf-8")
     line = "GOAL_HINT_COMPETITION_IDS=" + ",".join(map(str, ids))
     source = re.sub(r"^GOAL_HINT_COMPETITION_IDS=.*$", lambda _: line, source, flags=re.M) if re.search(r"^GOAL_HINT_COMPETITION_IDS=", source, re.M) else source.rstrip() + "\n" + line + "\n"
     target.write_text(source, encoding="utf-8", newline="\n")
-    print("Updated GOAL_HINT_COMPETITION_IDS in .env.local; restart the web app and live runner.")
+    print("Updated GOAL_HINT_COMPETITION_IDS in .env.development; restart the web app and live runner.")
 
 
 if __name__ == "__main__":

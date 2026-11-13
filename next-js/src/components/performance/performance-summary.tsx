@@ -64,8 +64,11 @@ const Count = styled.div<{ $status: Status }>`
   ${media.desktop} { dt > svg { display: block; flex: none; font-size: var(--gh-font-secondary); } }
 `;
 const Percentage = styled.span`
-  display: none; margin-inline-start: var(--gh-spacing-1); font-size: var(--gh-font-caption); font-weight: var(--gh-weight-body);
-  ${media.desktop} { @container performance-summary (min-width: ${({ theme }) => theme.size[144]}) { display: inline; } }
+  font-size: var(--gh-font-caption); font-weight: var(--gh-weight-body); white-space: nowrap;
+  ${media.desktop} {
+    display: none; margin-inline-start: var(--gh-spacing-1);
+    @container performance-summary (min-width: ${({ theme }) => theme.size[144]}) { display: inline; }
+  }
 `;
 const Coverage = styled.dl`
   display: flex; flex-wrap: wrap; gap: var(--gh-spacing-1) var(--gh-spacing-3); margin: 0;

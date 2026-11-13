@@ -3,6 +3,9 @@ import { createReadStream } from "node:fs";
 import { Readable } from "node:stream";
 import { appReleaseFile, readAppFileReleases } from "./catalog.ts";
 
+const mediaTypes = { android: "application/vnd.android.package-archive", windows: "application/octet-stream",
+  ios: "application/octet-stream", macos: "application/x-apple-diskimage", linux: "application/vnd.debian.binary-package" };
+
 /** Public installer streams support interrupted-download resumption without buffering binaries. */
 export async function appDownloadResponse(request: Request, platform: string): Promise<Response> {
   const url = new URL(request.url);
@@ -13,7 +16,7 @@ export async function appDownloadResponse(request: Request, platform: string): P
   }
   const file = await appReleaseFile(release).catch(() => null);
   if (!file) return new Response("This download is temporarily unavailable.", { status: 404 });
-  const headers = new Headers({ "Content-Type": platform === "android" ? "application/vnd.android.package-archive" : "application/octet-stream",
+  const headers = new Headers({ "Content-Type": mediaTypes[release.platform],
     "Content-Disposition": `attachment; filename="${release.fileName}"`, "Cache-Control": "no-store", "Accept-Ranges": "bytes",
     "X-Content-Type-Options": "nosniff", ETag: `"${release.sha256}"` });
   const range = request.headers.get("range");

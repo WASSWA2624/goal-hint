@@ -17,11 +17,10 @@ closed instead of silently changing the sample.
 The Matches overview includes a **Predicted** total beside Won, Lost and Pending.
 It counts those three outcomes plus predictions later voided, excluding fixtures
 without a prediction and predictions outside the selected source/version. Its
-desktop percentages divide each outcome by that predicted total; they describe
-the selected cohort's composition, rather than the settled-sample win rate below.
+percentages divide each outcome by that predicted total and describe the
+composition of the selected cohort on both phone and desktop.
 Void counts remain separate, so the three shares can sum to less than 100%.
-An empty predicted sample shows no inferred percentage. Phone layouts keep the
-Predicted total and outcome counts while omitting percentages.
+An empty predicted sample shows no inferred percentage.
 
 Individual-prediction counts use fixture kickoff dates and one locked selection
 per market. A fixture can appear in multiple market cards, so their counts are

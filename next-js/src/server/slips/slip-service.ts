@@ -151,7 +151,9 @@ export function createSlipBuildService(options: Readonly<SlipReadSource & {
         || data.slips.some((slip) => slip.selections.some((selection) => returnedAt >= getPublicationDeadline(utcInstantFromEpochMilliseconds(selection.kickoffAt))))) {
         throw new MatchFeedError("unavailable");
       }
-      return { ...base, state: data.slips.length > 0 ? "generated" : data.qualifyingMatches === 0 ? "no-qualifying" : "no-combinations",
+      const state = data.slips.length > 0 ? "generated" : data.qualifyingMatches > 0 ? "no-combinations"
+        : data.excludedMissingOdds > 0 ? "odds-unavailable" : "no-qualifying";
+      return { ...base, state,
         data, asOf: returnedAt, examined: records.length, searchLimited: searchLimited || data.searchLimited, partialCoverage,
         matchStates: scheduledSlipMatchStates(data.slips, current) };
     } catch (error) {

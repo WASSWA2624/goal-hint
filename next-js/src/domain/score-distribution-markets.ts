@@ -17,6 +17,8 @@ const binaryRuleSchema = z.union([
   z.strictObject({ kind: z.literal("total"), metric, direction: z.enum(["over", "under"]), line: halfLine }),
   z.strictObject({ kind: z.literal("both-teams-score"), yes: z.boolean() }),
   z.strictObject({ kind: z.literal("odd-even"), metric, odd: z.boolean() }),
+  z.strictObject({ kind: z.literal("goal-count"), metric, min: goals, max: goals.nullable() })
+    .refine(({ min, max }) => max === null || max >= min),
   z.strictObject({ kind: z.literal("clean-sheet"), team, yes: z.boolean() }),
   z.strictObject({ kind: z.literal("win-to-nil"), team, yes: z.boolean() }),
   z.strictObject({ kind: z.literal("exact-score"), home: goals, away: goals }),
@@ -46,7 +48,9 @@ export const goalMarketDefinitionSchema = z.strictObject({
   }
 });
 export type GoalMarketDefinition = Readonly<z.infer<typeof goalMarketDefinitionSchema>>;
-export const localPoissonRatesSchema = z.strictObject({ home: z.number().finite().min(0.05).max(6), away: z.number().finite().min(0.05).max(6) });
+export const localPoissonRatesSchema = z.strictObject({ home: z.number().finite().min(0.05).max(6), away: z.number().finite().min(0.05).max(6),
+  firstHalfShare: z.strictObject({ home: z.number().gt(0).lt(1), away: z.number().gt(0).lt(1) }).optional() });
+export type LocalPoissonRates = Readonly<z.infer<typeof localPoissonRatesSchema>>;
 export type GoalGrade = ExtendedMarketGrade;
 const grades: readonly GoalGrade[] = ["win", "half-win", "push", "half-loss", "loss"];
 export type GoalSelectionProbabilities = Readonly<{
@@ -77,6 +81,49 @@ export function deriveLocalPoissonTotal15(rates: z.infer<typeof localPoissonRate
     selections: Object.freeze(selections), selection: selected.key, selectedProbability: selected.winProbability });
 }
 
+/** The sum of two independent Poisson counts is Poisson. The half rates use the
+ * observed first-half shares of each side from verified point-in-time results. */
+export function deriveLocalGoalMarket(rates: LocalPoissonRates, definition: GoalMarketDefinition): GoalDerivationResult {
+  if (definition.key === "goal:full-time:totals:total:1.5:binary")
+    return { available: true, market: deriveLocalPoissonTotal15(rates, definition) };
+  const share = rates.firstHalfShare;
+  if (definition.period !== "full-time" && share === undefined) return { available: false, reason: "missing-half-time-distribution" };
+  const rate = (side: "home" | "away") => rates[side] * (definition.period === "full-time" ? 1
+    : definition.period === "half-time" ? share![side] : 1 - share![side]);
+  const selections: GoalSelectionProbabilities[] = [];
+  for (const selection of definition.selections) {
+    const rule = selection.rule;
+    if (rule.kind !== "total" && rule.kind !== "asian-total" && rule.kind !== "odd-even" && rule.kind !== "goal-count")
+      return { available: false, reason: "invalid-definition" };
+    const lambda = rule.metric === "total" ? rate("home") + rate("away") : rate(rule.metric);
+    const outcomes = { win: 0, loss: 0, "half-win": 0, "half-loss": 0, push: 0 };
+    if (rule.kind === "odd-even") {
+      const even = (1 + Math.exp(-2 * lambda)) / 2;
+      outcomes.win = rule.odd ? 1 - even : even;
+      outcomes.loss = 1 - outcomes.win;
+    } else {
+      const cutoff = rule.kind === "goal-count" ? rule.max ?? rule.min : Math.ceil(rule.line);
+      const gradeCount = (count: number): GoalGrade => {
+        if (rule.kind === "goal-count") return count >= rule.min && (rule.max === null || count <= rule.max) ? "win" : "loss";
+        const direction = rule.direction === "over" ? 1 : -1;
+        if (rule.kind === "asian-total") return asianPayoutGrade(rule.line, (line) => (count - line) * direction);
+        return (count - rule.line) * direction > 0 ? "win" : "loss";
+      };
+      let mass = Math.exp(-lambda), represented = 0;
+      for (let count = 0; count <= cutoff; count++) {
+        outcomes[gradeCount(count)] += mass;
+        represented += mass;
+        mass *= lambda / (count + 1);
+      }
+      outcomes[gradeCount(cutoff + 1)] += Math.max(0, 1 - represented);
+    }
+    selections.push(Object.freeze({ ...selection, outcomes: Object.freeze(outcomes), winProbability: Math.min(1, outcomes.win + outcomes["half-win"]) }));
+  }
+  const selected = selections.reduce((best, item) => item.winProbability > best.winProbability ? item : best);
+  return { available: true, market: Object.freeze({ ruleVersion: GOAL_MARKET_RULE_VERSION, source: "local-poisson", definition,
+    selections: Object.freeze(selections), selection: selected.key, selectedProbability: selected.winProbability }) };
+}
+
 function score(state: ScoreState, period: GoalMarketPeriod): Readonly<{ home: number; away: number }> | null {
   if (period === "full-time") return state;
   if (state.halfHome === null || state.halfAway === null) return null;
@@ -99,6 +146,10 @@ function binary(state: ScoreState, period: GoalMarketPeriod, rule: BinaryRule): 
     case "total": return rule.direction === "over" ? amount(value, rule.metric) > rule.line : amount(value, rule.metric) < rule.line;
     case "both-teams-score": return (home > 0 && away > 0) === rule.yes;
     case "odd-even": return (amount(value, rule.metric) % 2 === 1) === rule.odd;
+    case "goal-count": {
+      const count = amount(value, rule.metric);
+      return count >= rule.min && (rule.max === null || count <= rule.max);
+    }
     case "clean-sheet": return (value[rule.team === "home" ? "away" : "home"] === 0) === rule.yes;
     case "win-to-nil": return (resultOf(home, away) === rule.team && value[rule.team === "home" ? "away" : "home"] === 0) === rule.yes;
     case "exact-score": return home === rule.home && away === rule.away;

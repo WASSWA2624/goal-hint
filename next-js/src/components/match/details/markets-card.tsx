@@ -10,9 +10,10 @@ import { predictionDescription } from "@/domain/prediction-label";
 import { detailAnalysis } from "@/domain/detail-presentation";
 import { fullDetailSnapshot } from "@/domain/detail-snapshot";
 import { SubscriberNotice } from "@/components/members/subscriber-notice";
-import { detailMarketValue, exclusiveFamily, featuredFamily, liveStanding, marketCategoryMembers, marketOutcomes, marketRow, selectedDetailPrice, visibleMarkets } from "@/domain/match-details";
+import { currentFeaturedOutcome, detailMarketValue, exclusiveFamily, featuredFamily, liveStanding, marketCategoryMembers, marketOutcomes, marketRow, selectedDetailPrice, visibleMarkets } from "@/domain/match-details";
 import { forecastExpectedReturn } from "@/domain/forecast-value";
-import { total15MarketKey, type PublicExtendedMarket } from "@/domain/extended-markets";
+import type { PublicExtendedMarket } from "@/domain/extended-markets";
+import { bookmakerGoalPrice } from "@/domain/bookmaker-odds";
 import { displayMarketOddsPrice } from "@/domain/in-play-odds";
 import { openDetailTab } from "@/domain/match-detail-tabs";
 import { marketCategories, parseMatchView, type MarketCategory } from "@/domain/match-view";
@@ -125,10 +126,12 @@ const GoalLine = styled.details`
   &[open] > summary > svg { transform: rotate(90deg); }
 `;
 
-function Total15Row({ market }: { market: PublicExtendedMarket }) {
+function GoalMarketRow({ market }: { market: PublicExtendedMarket }) {
   const { data, messages } = useStableDetails();
   const odds = data.extendedOdds?.marketKey === market.key ? data.extendedOdds : null;
-  const offer = (selection: string) => odds?.selections.find((item) => item.selection === selection)?.price ?? null;
+  const preMatch = data.bookmakerOdds?.kind === "pre-match" ? data.bookmakerOdds : null;
+  const offer = (selection: string) => odds?.selections.find((item) => item.selection === selection)?.price
+    ?? bookmakerGoalPrice(preMatch, market.key, selection);
   const price = offer(market.selection);
   const source = market.source === "local-poisson" ? "local-engine" : "ai";
   const Icon = familyIcon["total-goals"];
@@ -147,7 +150,7 @@ function Total15Row({ market }: { market: PublicExtendedMarket }) {
           return <li key={selection.key} data-selected={selection.key === market.selection || undefined}>
             <span>{selection.label}</span>
             <span>{quoted && <PredictionOdds odds={displayMarketOddsPrice(quoted)} />}
-              {odds?.kind === "pre-match" && <ForecastValueLabel expectedReturn={forecastExpectedReturn(selection.probability, quoted)} messages={messages} />}</span>
+              {(odds?.kind === "pre-match" || preMatch) && <ForecastValueLabel expectedReturn={forecastExpectedReturn(selection.probability, quoted)} messages={messages} />}</span>
             <b>{percent(messages, selection.probability)}</b>
           </li>;
         })}
@@ -271,21 +274,23 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
   const snapshot = fullDetailSnapshot(data);
   // As on the verdict, only a published forecast is locked.
   if ("gated" in data.history && data.snapshot) return <SubscriberRow><SubscriberNotice kind="markets" signedIn={data.access.signedIn} returnTo={data.route.path} /></SubscriberRow>;
-  const featured = embedded ? featuredFamily(data) : null;
-  const total15 = data.extendedMarkets?.markets.find((market) => market.key === total15MarketKey && market.source !== "market-implied");
-  const published = (snapshot?.markets.filter(entry => entry.market.family !== featured).length ?? 0) + Number(Boolean(total15));
+  const current = embedded ? currentFeaturedOutcome(data) : null;
+  const featured = embedded ? current ? current.key === current.family ? current.family : null : featuredFamily(data) : null;
+  const goalMarkets = data.extendedMarkets?.markets.filter(({ key, source }) => source !== "market-implied" &&
+    key !== "goal:full-time:totals:total:2.5:binary") ?? [];
+  const published = (snapshot?.markets.filter(entry => entry.market.family !== featured).length ?? 0) + goalMarkets.length;
   const label = (family: MarketFamily) => marketName(messages, family);
   const publishedFamilies = new Set(snapshot?.markets.map(({ market }) => market.family));
   const shown = visibleMarkets(view.marketCategory, query, label).filter(family => family !== featured && publishedFamilies.has(family));
   const needle = query.normalize("NFC").trim().toLocaleLowerCase();
-  const showTotal15 = total15 && (needle
-    ? [total15.label, ...total15.selections.map(({ label }) => label)].some((label) => label.toLocaleLowerCase().includes(needle))
-    : view.marketCategory === "popular" || view.marketCategory === "goals");
+  const shownGoals = goalMarkets.filter((market) => needle
+    ? [market.label, ...market.selections.map(({ label }) => label)].some((label) => label.toLocaleLowerCase().includes(needle))
+    : view.marketCategory === "goals" || view.marketCategory === "popular" && market.key === "goal:full-time:totals:total:1.5:binary");
   const categoryLabel = (category: MarketCategory) => messages.text(`details.category.${category}`);
   return <Card data-section="markets" data-open={view.marketsOpen || undefined} aria-label={embedded ? messages.text("details.allMarkets") : undefined} aria-labelledby={embedded ? undefined : "section-markets-title"}
     style={embedded ? { padding: 0, border: 0 } : undefined}>
     {!embedded && <CardHeader icon={<MarketsIcon />} title={messages.text("details.allMarkets")} open={view.marketsOpen} controls="section-markets"
-      meta={messages.text("details.publishedCount", { count: messages.number(published), total: messages.number(publicPolicy.markets.length + Number(Boolean(total15))) })}
+      meta={messages.text("details.publishedCount", { count: messages.number(published), total: messages.number(publicPolicy.markets.length + goalMarkets.length) })}
       onToggle={() => update((current) => ({ ...current, marketsOpen: !current.marketsOpen, market: current.marketsOpen ? null : current.market }))}
       headingId="section-markets-title" />}
     <div id="section-markets" hidden={!view.marketsOpen} style={{ minInlineSize: 0 }}>
@@ -300,7 +305,7 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
         <div>
           <Head aria-hidden="true"><span>{messages.text("details.market")}</span><span>{messages.text("details.prediction")}</span>
             <span>{messages.text("details.probability")}</span><span /></Head>
-          {shown.length > 0 || showTotal15 ? <RowList ref={list}>
+          {shown.length > 0 || shownGoals.length > 0 ? <RowList ref={list}>
             {shown.map((family) => {
               const { item, outcome } = marketRow(data, family), Icon = familyIcon[family];
               const settled = data.snapshot?.applicability !== "historical" && outcome && outcome.status !== "pending" ? outcome.status : null;
@@ -327,7 +332,7 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
                 </div>}
               </li>;
             })}
-            {showTotal15 && <Total15Row market={total15} />}
+            {shownGoals.map((market) => <GoalMarketRow key={market.key} market={market} />)}
           </RowList> : embedded && query && (data.bookmakerOdds || data.inPlayOdds?.prices.providerMarkets) ? null
             : <Note>{query ? messages.text("details.noMarketMatch", { query })
               : messages.text("details.noCategoryMarkets", { category: categoryLabel(view.marketCategory) })}</Note>}

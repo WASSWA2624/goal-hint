@@ -12,7 +12,8 @@ npm run package:cpanel
 ```
 
 The script copies the working tree to a temporary directory without git-ignored
-files, so `.env.local`, `.env.operations` and `.goal-hint/` are never included.
+files, so only the tracked `.env.example` is included. Private settings and
+`.goal-hint/` stay outside the release.
 It then runs `npm ci` and a `standalone` Next.js build, and writes
 `../deploy/goal-hint-nextjs-1.0.0.zip`. The zip itself is git-ignored.
 Its adjacent `.zip.sha256` file records the archive checksum. Temporary publication
@@ -27,7 +28,9 @@ explicit edits to `package.json` and the lockfile.
 goal-hint/
   app.js            Passenger startup file (loads standalone/server.js)
   package.json      no dependencies; "Run NPM Install" is unnecessary
-  BUILD_INFO.json   commit, build time, Node and Next.js versions
+  BUILD_INFO.json   commit, build versions and migration inventory fingerprint
+  prisma/           ordered MySQL migrations, MariaDB overlays and adopted checksums
+  scripts/          hosted activation and MariaDB migration verification
   DEPLOY.md         this guide
   .env.example      every supported setting, with comments
   standalone/       Next.js server, .next/, public/ and traced node_modules
@@ -49,6 +52,12 @@ own virtual-environment link.
   and providers off, and indexing off.
 
 ## Deploying
+
+The current VPS runs staging with private `.env.test` and production with private
+`.env.production` at promotion. The existing production deployment keeps its
+legacy settings until that promotion. Follow the [VPS activation procedure](how-to-deploy.md#vps-staging-and-release-promotion)
+for migration verification and HTTPS acceptance. The shared-host procedure below
+documents the earlier deployment.
 
 For a manual upload, extract the ZIP and upload the contents of its `goal-hint/`
 folder to the cPanel application root, outside the public document root. In
@@ -85,11 +94,11 @@ see it. Common production values:
 | `GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS`, `GOAL_HINT_BUDGET_APPROVAL_REF` | Approved infrastructure cap and its approval reference, required once the database is enabled in production. |
 
 The [database runbook](../database.md) explains each database setting. Your
-local `.env.local` values won't work as they are, because production mode applies
+local `.env.development` values won't work as they are, because production mode applies
 stricter checks than development.
 
-Android, iOS, Windows and macOS release builds, the Linux browser handoff and
-browser installations all use the HTTPS app. Database configuration is private
+Android, iOS, Windows, macOS and Linux release shells and browser installations
+all use the HTTPS app. Database configuration is private
 to the Next.js server. With the intended private production handoff files already
 present, run `python scripts/deploy-cpanel.py --check-database-config` from
 `next-js/` to check the production profile, database setting names and matching

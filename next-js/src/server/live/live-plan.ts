@@ -208,9 +208,9 @@ export function publicationPolicy(refs: LiveReferences): PublicationPolicy {
     "local-engine": { maxAgeMs: HOUR, basis: "generated", unknownGeneration: "reject", unknownUpdate: "allow-flagged" },
     "api-football": { maxAgeMs: HOUR, basis: "retrieved", unknownGeneration: "allow-flagged", unknownUpdate: "allow-flagged" } } } as const);
 }
-export function liveCascadePlan(plan: RefreshPlan, localFootball: boolean): RefreshPlan {
+export function liveCascadePlan(plan: RefreshPlan, includeGoals = true): RefreshPlan {
   return { ...plan, sourceCascade: LIVE_FORECAST_CASCADE,
-    ...(localFootball ? { goalDefinitions: liveGoalMarketDefinitions } : {}) };
+    ...(includeGoals ? { goalDefinitions: liveGoalMarketDefinitions } : {}) };
 }
 export function evidencePolicy(refs: LiveReferences): EvidencePolicy {
   const freshness = { maxAgeMs: 7 * DAY, basis: "retrieved", unknownTimestamp: "exclude", conflicts: "preserve" } as const;

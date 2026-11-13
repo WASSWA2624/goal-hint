@@ -3,10 +3,14 @@
 param(
     [string]$Flutter = 'flutter',
     [Parameter(Mandatory = $true)][string]$RedistDirectory,
+    [string]$SigningThumbprint,
+    [string]$TimestampUrl,
+    [string]$SignTool = 'signtool',
     [switch]$SkipBuild,
     [switch]$Force
 )
 $ErrorActionPreference = 'Stop'
+if ([bool]$SigningThumbprint -ne [bool]$TimestampUrl) { throw 'Specify both a code signing certificate thumbprint and timestamp URL.' }
 . (Join-Path $PSScriptRoot 'release-common.ps1')
 . (Join-Path $PSScriptRoot 'setup-builder.ps1')
 $project = Get-FullPath (Join-Path $PSScriptRoot '../..')
@@ -66,6 +70,11 @@ try {
     $null = @(Get-PackageFiles $bundle)
     New-Item -ItemType Directory -Path $package -Force | Out-Null
     Copy-Item -LiteralPath $exe -Destination $package
+    if ($SigningThumbprint) {
+        $stagedApp = Join-Path $package 'goal_hint.exe'
+        & $SignTool sign /fd SHA256 /sha1 $SigningThumbprint /tr $TimestampUrl /td SHA256 $stagedApp
+        if ($LASTEXITCODE -ne 0 -or (Get-AuthenticodeSignature -LiteralPath $stagedApp).Status -ne 'Valid') { throw 'Application signature verification failed.' }
+    }
     Get-ChildItem -LiteralPath $bundle -Filter '*.dll' -File | Copy-Item -Destination $package
     Copy-Item -LiteralPath (Join-Path $bundle 'data') -Destination $package -Recurse
     $crtFiles = @(Get-ChildItem -LiteralPath $redist -Filter '*.dll' -File)
@@ -80,7 +89,7 @@ try {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $script) -Destination $package
     }
     @'
-Goal Hint - unsigned Windows x64 production candidate
+Goal Hint - Windows x64 production build
 Verify the ZIP SHA256 supplied separately, extract it, and review manifest.json.
 From the extracted directory run: powershell -File .\install.ps1
 Use -DesktopShortcut to also create a desktop shortcut.
@@ -95,7 +104,7 @@ remain in the existing app support profile, outside the installation directory.
 Start Goal Hint from its Start Menu shortcut. Close it before updating/removing.
 Uninstall with the uninstall.ps1 in the installed version directory. It removes
 only manifest-owned files and app-owned shortcuts, preserving unknown files and
-the browser profile. This ZIP is not an MSIX, signed installer or store release.
+the browser profile.
 '@ | Set-Content -LiteralPath (Join-Path $package 'README.txt') -Encoding UTF8
     $base = (Get-FullPath $package) + [IO.Path]::DirectorySeparatorChar
     $files = @(Get-PackageFiles $package | Sort-Object FullName | ForEach-Object {
@@ -110,7 +119,7 @@ the browser profile. This ZIP is not an MSIX, signed installer or store release.
     $manifest = [ordered]@{
         schema = 1; appId = $script:GoalHintAppId; displayName = 'Goal Hint'; version = $version
         architecture = 'x64'; mode = 'release'; origin = $script:GoalHintOrigin; entryPoint = 'lib/main.dart'
-        createdUtc = [DateTime]::UtcNow.ToString('o'); signed = $false
+        createdUtc = [DateTime]::UtcNow.ToString('o'); signed = [bool]$SigningThumbprint
         source = [ordered]@{ revision = $revision; dirty = $dirty }
         toolchain = [ordered]@{ flutter = $sdk.frameworkVersion; revision = $sdk.frameworkRevision; dart = ($sdk.dartSdkVersion -split ' ')[0] }
         buildConfiguration = [ordered]@{ sha256 = Get-FileDigest (Join-Path $project 'windows/flutter/ephemeral/generated_config.cmake'); skippedBuild = [bool]$SkipBuild }
@@ -128,14 +137,18 @@ the browser profile. This ZIP is not an MSIX, signed installer or store release.
     New-Item -ItemType Directory -Path $delivery | Out-Null
     $setup = Join-Path $delivery ('Goal-Hint-Setup-' + $releaseVersion + '.exe')
     New-GoalHintSetup $installer $setup
+    if ($SigningThumbprint) {
+        & $SignTool sign /fd SHA256 /sha1 $SigningThumbprint /tr $TimestampUrl /td SHA256 $setup
+        if ($LASTEXITCODE -ne 0 -or (Get-AuthenticodeSignature -LiteralPath $setup).Status -ne 'Valid') { throw 'Setup signature verification failed.' }
+    }
     $downloadVersion = $version -split '\+'
     [ordered]@{ schema = 1; platform = 'windows'; environment = 'production'; mode = 'release'
-        version = $downloadVersion[0]; build = [int]$downloadVersion[1]; artifactSha256 = Get-FileDigest $setup
+        version = $downloadVersion[0]; build = [int]$downloadVersion[1]; artifactSha256 = Get-FileDigest $setup; signed = [bool]$SigningThumbprint
     } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $delivery 'download-manifest.json') -Encoding UTF8
     @"
 Goal Hint $releaseVersion for Windows x64
 Extract this ZIP, then run Goal-Hint-Setup-$releaseVersion.exe.
-The unsigned setup installs for the current user using the bundled verified installer.
+Setup installs for the current user using the bundled verified installer.
 Microsoft Edge WebView2 Evergreen Runtime is required.
 Source version: $version; production origin: https://goalhint.com.
 "@ | Set-Content -LiteralPath (Join-Path $delivery 'README.txt') -Encoding UTF8
@@ -147,7 +160,7 @@ Source version: $version; production origin: https://goalhint.com.
     Move-Item -LiteralPath $checksum -Destination ($zip + '.sha256') -Force:$Force
     Write-Output "Archive: $zip"
     Write-Output "SHA256: $(Get-FileDigest $zip)"
-    Write-Output "Source: $revision (dirty=$dirty); unsigned candidate, not a published release."
+    Write-Output "Source: $revision (dirty=$dirty); signed=$([bool]$SigningThumbprint)."
 } finally {
     Pop-Location
     if ($staging -and (Test-Path -LiteralPath $staging)) {

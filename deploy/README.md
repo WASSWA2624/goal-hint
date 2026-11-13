@@ -1,9 +1,7 @@
 # Deployment packages
 
-Current deliverables are **development versions, 1.0.0**. Keep that version until
-the first production deployment. All final ZIPs and SHA256 checksums belong here;
-Linux is excluded. Build scripts and this guide are committed, while generated
-packages and private configuration are ignored.
+This folder holds versioned release ZIPs and SHA-256 checksums. Build scripts and
+this guide are committed. Generated packages and private configuration are ignored.
 
 | Development ZIP | Use |
 | --- | --- |
@@ -12,6 +10,7 @@ packages and private configuration are ignored.
 | `goal-hint-windows-1.0.0-dev.zip` | Extract and run the development setup executable. Microsoft WebView2 and the documented developer runtime are required. |
 | iOS | Pending a Mac with Xcode and suitable Apple development provisioning for an installable IPA. |
 | macOS | Pending a Mac with Xcode. |
+| Linux | The release shell requires a Linux build host and WebKitGTK. |
 
 No empty or substitute Apple ZIPs are supplied. A missing ZIP means that platform
 has not been built. Development packages are for testing; production signing

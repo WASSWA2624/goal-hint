@@ -25,11 +25,16 @@ test('browser presentation preserves catalog version validation and compatibilit
     assert.equal(presentation.appVersionPattern.test(version), appVersionSchema.safeParse(version).success, version);
   }
 });
-test('detect OS independently of viewport size, without guessing unsupported platforms', () => {
+test('detect supported operating systems independently of viewport size', () => {
   assert.equal(detectAppPlatform('Mozilla/5.0 (Linux; Android 16)'), 'android');
   assert.equal(detectAppPlatform('Mozilla/5.0 (Windows NT 10.0; Win64; x64)'), 'windows');
-  for (const agent of ['iPhone', 'Macintosh', 'Linux x86_64', '']) assert.equal(detectAppPlatform(agent), null);
+  assert.equal(detectAppPlatform('Mozilla/5.0 (iPad; CPU OS 19_0 like Mac OS X)'), 'ios');
+  assert.equal(detectAppPlatform('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'), 'macos');
+  assert.equal(detectAppPlatform('Mozilla/5.0 (X11; Linux x86_64)'), 'linux');
+  for (const agent of ['CrOS', '']) assert.equal(detectAppPlatform(agent), null);
   assert.deepEqual(nativeAppIdentity('Mozilla GoalHintNative/windows/1.2.3/6/development'), native);
+  assert.equal(nativeAppIdentity('Mozilla GoalHintNative/macOS/1.2.3/6/production').platform, 'macos');
+  assert.equal(nativeAppIdentity('Mozilla GoalHintNative/iOS/1.2.3/6/production').platform, 'ios');
   assert.equal(nativeAppIdentity('GoalHintNative/windows/1.2.3/NaN/development'), null);
 });
 test('only newer native releases trigger updates, including build increments and rollbacks', () => {
@@ -54,14 +59,23 @@ test('production store links accept only actual HTTPS Google Play app listings',
   assert.equal(checkedPlayStoreUrl('https://play.google.com/store/apps/details?id=com.example.app'), 'https://play.google.com/store/apps/details?id=com.example.app');
   for (const value of ['https://example.com/app', 'https://play.google.com.evil.test/store/apps/details?id=a', 'http://play.google.com/store/apps/details?id=a', 'https://play.google.com/store/apps/details', 'javascript:alert(1)']) assert.equal(checkedPlayStoreUrl(value), null);
 });
+test('iOS offers only configured App Store or TestFlight links', () => {
+  assert.equal(presentation.checkedIosDistribution('https://apps.apple.com/us/app/goal-hint/id12345678').kind, 'store');
+  assert.equal(presentation.checkedIosDistribution('https://testflight.apple.com/join/a123Bcde').kind, 'testflight');
+  for (const value of ['http://apps.apple.com/app/id1', 'https://apps.apple.com.evil.test/app/id1', 'https://testflight.apple.com/', 'https://goalhint.com/app.ipa']) {
+    assert.equal(presentation.checkedIosDistribution(value), null);
+  }
+});
 test('file streams resume, reject bad ranges and never expose development files in production', async () => {
-  const keys = ['GOAL_HINT_APP_DOWNLOADS_ROOT', 'GOAL_HINT_DEPLOYMENT_ENVIRONMENT', 'GOAL_HINT_ANDROID_PLAY_STORE_URL', 'GOAL_HINT_ANDROID_PLAY_STORE_VERSION', 'GOAL_HINT_ANDROID_PLAY_STORE_BUILD'];
+  const keys = ['GOAL_HINT_APP_DOWNLOADS_ROOT', 'GOAL_HINT_DEPLOYMENT_ENVIRONMENT', 'GOAL_HINT_ANDROID_PLAY_STORE_URL', 'GOAL_HINT_ANDROID_PLAY_STORE_VERSION', 'GOAL_HINT_ANDROID_PLAY_STORE_BUILD',
+    'GOAL_HINT_IOS_DISTRIBUTION_URL', 'GOAL_HINT_IOS_DISTRIBUTION_VERSION', 'GOAL_HINT_IOS_DISTRIBUTION_BUILD'];
   const before = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   const root = await mkdtemp(path.join(tmpdir(), 'goal-hint-download-test-'));
   try {
     process.env.GOAL_HINT_APP_DOWNLOADS_ROOT = root;
     process.env.GOAL_HINT_DEPLOYMENT_ENVIRONMENT = 'development';
     process.env.GOAL_HINT_ANDROID_PLAY_STORE_URL = '';
+    process.env.GOAL_HINT_IOS_DISTRIBUTION_URL = '';
     const file = { platform: 'windows', version: '1.2.3', build: 7, fileName: 'Setup.exe', size: 10, sha256: 'a'.repeat(64) };
     await mkdir(path.join(root, 'files/windows/1.2.3-7'), { recursive: true });
     await writeFile(path.join(root, 'files/windows/1.2.3-7/Setup.exe'), '0123456789');
@@ -82,6 +96,14 @@ test('file streams resume, reject bad ranges and never expose development files 
     const store = (await getAppDownloads()).releases[0]; assert.equal(store.kind, 'store'); assert.equal(store.version, null);
     process.env.GOAL_HINT_ANDROID_PLAY_STORE_VERSION = '2.0.0'; process.env.GOAL_HINT_ANDROID_PLAY_STORE_BUILD = '20';
     assert.equal((await getAppDownloads()).releases[0].build, 20);
+    const android = { ...file, platform: 'android', fileName: 'GoalHint.apk' };
+    await mkdir(path.join(root, 'files/android/1.2.3-7'), { recursive: true });
+    await writeFile(path.join(root, 'files/android/1.2.3-7/GoalHint.apk'), '0123456789');
+    await writeFile(path.join(root, 'catalog.json'), JSON.stringify({ schema: 1, channel: 'production', releases: [android] }));
+    process.env.GOAL_HINT_IOS_DISTRIBUTION_URL = 'https://testflight.apple.com/join/a123Bcde';
+    const production = (await getAppDownloads()).releases;
+    assert.deepEqual(production.map(release => [release.platform, release.kind]), [['android', 'file'], ['ios', 'testflight']]);
+    assert.equal((await appDownloadResponse(request(), 'android')).headers.get('content-type'), 'application/vnd.android.package-archive');
   } finally {
     for (const key of keys) if (before[key] === undefined) delete process.env[key]; else process.env[key] = before[key];
     await rm(root, { recursive: true, force: true });

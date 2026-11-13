@@ -4,7 +4,9 @@ import { UnlockPanel } from "@/components/members/prediction-unlock";
 import { memo } from "react";
 import styled from "styled-components";
 import { ChevronRightIcon } from "@/components/ui/icons";
-import { detailMarketValue, featuredFamily, liveStanding, marketRow, selectedDetailPrice } from "@/domain/match-details";
+import { currentFeaturedOutcome, detailMarketValue, featuredFamily, liveStanding, marketRow, selectedDetailPrice } from "@/domain/match-details";
+import { displayMarketOddsPrice } from "@/domain/in-play-odds";
+import { forecastExpectedReturn } from "@/domain/forecast-value";
 import { hasMatchPredictionAccess, openDetailTab } from "@/domain/match-detail-tabs";
 import { detailRecordNotices } from "@/domain/detail-presentation";
 import { ForecastValueLabel } from "../forecast-labels";
@@ -50,19 +52,22 @@ export const TouchlineFeatured = memo(function TouchlineFeatured() {
       <UnlockPanel locale={locale} signedIn={data.access.signedIn} returnTo={data.route.path} />
     </Frame>
   </>;
-  const family = featuredFamily(data), row = family ? marketRow(data, family) : null;
-  if (!family || !row?.item) return <Verdict />;
-  const item = row.item, chance = item.market.selectedProbability, price = selectedDetailPrice(data, family);
-  const standing = liveStanding(data, family), outcome = data.snapshot?.applicability === "historical" ? null
-    : row.outcome?.status ?? (data.snapshot?.applicability === "void" ? "void" : null);
+  const featured = currentFeaturedOutcome(data);
+  const family = featured?.family ?? featuredFamily(data), row = family && !featured ? marketRow(data, family) : null;
+  if (!family || !featured && !row?.item) return <Verdict />;
+  const chance = featured?.probability ?? row!.item!.market.selectedProbability;
+  const price = featured ? featured.odds && displayMarketOddsPrice(featured.odds) : selectedDetailPrice(data, family);
+  const standing = featured ? null : liveStanding(data, family), outcome = data.snapshot?.applicability === "historical" ? null
+    : row?.outcome?.status ?? (data.snapshot?.applicability === "void" ? "void" : null);
   const notices = detailRecordNotices(data).map(key => messages.text(key));
   return <Frame as="section" id="match-prediction" aria-labelledby="touchline-prediction-title" data-featured-pick={family} data-verdict={family}>
     <Lead><ResultIcon aria-hidden="true" /><div><h2 id="touchline-prediction-title">{messages.text("touchline.featured")}</h2>
-      <strong>{marketName(messages, family)} · <span><PredictionOutcome messages={messages} selection={item.market.selection} /></span></strong>
+      <strong>{featured?.label ?? marketName(messages, family)} · <span>{featured?.selectionLabel
+        ?? <PredictionOutcome messages={messages} selection={row!.item!.market.selection} />}</span></strong>
       <p data-prediction-record>{[data.snapshot ? messages.text("details.publishedAt", { time: messages.reportingInstant(data.snapshot.publishedAt) }) : messages.text("touchline.featuredHint"), ...notices].join(" · ")}</p></div></Lead>
     <Numbers><div><b>{percent(messages, chance)}</b><small>{messages.text("details.estimatedProbability")}</small><i style={{ inlineSize: `${chance * 100}%` }} /></div>
       {price !== null && <div><b>{price}</b><small>{messages.text("details.odds")}</small>
-        <ForecastValueLabel expectedReturn={detailMarketValue(data, family)} messages={messages} /></div>}</Numbers>
+        <ForecastValueLabel expectedReturn={featured ? forecastExpectedReturn(chance, featured.odds) : detailMarketValue(data, family)} messages={messages} /></div>}</Numbers>
     <Actions>{standing ? <Standing standing={standing} /> : outcome && outcome !== "pending" ? <DetailOutcome status={outcome} /> : null}
       <TouchlineLinkButton type="button" onClick={() => update(current => openDetailTab(current, "analysis"))}>
         {messages.text("touchline.why")}<ChevronRightIcon aria-hidden="true" /></TouchlineLinkButton></Actions>

@@ -44,8 +44,16 @@ export function createLiveLocalEngine(database: DatabaseRuntime) {
       JOIN FixtureResult r ON r.id=recent.id AND r.fixtureId=recent.fixtureId`);
     check();
     if (rows.length < localGoalDefaults.minimumMatches) return null;
+    const halfTimeSample = { matches: 0, home: 0, away: 0, fullHome: 0, fullAway: 0 };
     const history = rows.map((row) => {
       const result = fixtureResultFromRow(row);
+      if (result.halfTime?.verified) {
+        halfTimeSample.matches++;
+        halfTimeSample.home += result.halfTime.home;
+        halfTimeSample.away += result.halfTime.away;
+        halfTimeSample.fullHome += result.regulation.home!;
+        halfTimeSample.fullAway += result.regulation.away!;
+      }
       return {
         fixtureId: result.fixtureId, competitionId: String(row.competitionId),
         homeTeamId: String(row.homeTeamId), awayTeamId: String(row.awayTeamId),
@@ -67,8 +75,12 @@ export function createLiveLocalEngine(database: DatabaseRuntime) {
     });
     if (!Object.values(result.markets).every((entry) => entry.available)) return null;
     const { matches, homeEffectiveMatches, awayEffectiveMatches } = forecast.diagnostics;
+    const firstHalfShare = halfTimeSample.matches >= localGoalDefaults.minimumMatches && halfTimeSample.fullHome > 0 && halfTimeSample.fullAway > 0
+      ? { home: (halfTimeSample.home + 0.5) / (halfTimeSample.fullHome + 1), away: (halfTimeSample.away + 0.5) / (halfTimeSample.fullAway + 1) }
+      : undefined;
     const provenance = { kind: "local-engine" as const, modelVersion: forecast.modelVersion,
-      historyHash: forecast.historyHash, evidenceHash: expected.evidenceHash, rates: forecast.expectedGoals,
+      historyHash: forecast.historyHash, evidenceHash: expected.evidenceHash,
+      rates: { ...forecast.expectedGoals, ...(firstHalfShare === undefined ? {} : { firstHalfShare }) },
       sample: { matches, homeEffectiveMatches, awayEffectiveMatches } };
     const markets = Object.fromEntries(Object.entries(result.markets).map(([family, market]) => [family, market.available ? {
       ...market, fallback: null, timestamps: { generatedAt: at, retrievedAt: at, providerUpdatedAt: null },

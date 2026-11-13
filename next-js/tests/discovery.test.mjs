@@ -215,7 +215,7 @@ test('supported WebSite structured data is minimal and safe inside an HTML scrip
 });
 
 test('the home page stays indexable on an empty or uncovered day; dated archives and failed reads do not', () => {
-  const home = applyFeedPageDefaults(query({}), {}, { allowProbabilityDefault: false });
+  const home = applyFeedPageDefaults(query({}), {});
   for (const state of ['no-fixtures', 'data-unavailable']) {
     const empty = { data: { records: [], state }, error: null };
     assert.equal(feedMetadata(home, today, empty, approved).robots.index, true, state);

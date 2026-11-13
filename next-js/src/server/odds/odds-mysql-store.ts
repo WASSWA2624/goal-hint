@@ -317,10 +317,10 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
         ${row.line === null ? null : row.line}, CAST(${row.priceDecimal} AS DECIMAL(10,4)), ${row.displayHundredths},
         CAST(${row.impliedProbability} AS DECIMAL(13,12)), CAST(${row.overround} AS DECIMAL(13,12)), ${row.method}, ${row.mappingVersion},
         ${row.snapshotId}, NULL, ${new Date(row.retrievedAt)}, ${row.providerUpdatedAt === null ? null : new Date(row.providerUpdatedAt)}, ${row.stale})
-      AS next ON DUPLICATE KEY UPDATE basis = next.basis, bookmakerExternalId = next.bookmakerExternalId, line = next.line,
-        priceDecimal = next.priceDecimal, displayHundredths = next.displayHundredths, impliedProbability = next.impliedProbability,
-        overround = next.overround, method = next.method, mappingVersion = next.mappingVersion, snapshotId = next.snapshotId,
-        basisJson = next.basisJson, retrievedAt = next.retrievedAt, providerUpdatedAt = next.providerUpdatedAt, stale = next.stale`;
+      ON DUPLICATE KEY UPDATE basis = VALUES(basis), bookmakerExternalId = VALUES(bookmakerExternalId), line = VALUES(line),
+        priceDecimal = VALUES(priceDecimal), displayHundredths = VALUES(displayHundredths), impliedProbability = VALUES(impliedProbability),
+        overround = VALUES(overround), method = VALUES(method), mappingVersion = VALUES(mappingVersion), snapshotId = VALUES(snapshotId),
+        basisJson = VALUES(basisJson), retrievedAt = VALUES(retrievedAt), providerUpdatedAt = VALUES(providerUpdatedAt), stale = VALUES(stale)`;
   }
   /** Marks every public price of one fixture stale; returns how many rows changed. */
   async function staleAll(tx: Tx, fixtureId: string): Promise<number> {

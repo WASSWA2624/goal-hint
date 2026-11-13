@@ -74,7 +74,7 @@ export class MarketValidationError extends Error {
   }
 }
 
-const sourceGroups = Object.freeze(["match-result", "total-goals", "both-teams-to-score"] as const);
+export const sourceGroups = Object.freeze(["match-result", "total-goals", "both-teams-to-score"] as const);
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
@@ -259,10 +259,9 @@ export function validateMarketSnapshot(input: unknown): MarketSnapshot {
     const constraints = checkMarketConsistency(result.market.probabilities, totals.market.probabilities, btts.market.probabilities);
     if (constraints.length > 0) {
       const participants = [result.market, totals.market, btts.market];
-      const fallback = participants.filter((market) => market.source === "api-football");
-      // Keep valid AI ahead of conflicting fallback. With one source, all joint
-      // participants are invalid; do not invent an arbitrary family preference.
-      for (const market of fallback.length > 0 ? fallback : participants) {
+      const priority = { ai: 2, "local-engine": 1, "api-football": 0 };
+      const lowestPriority = Math.min(...participants.map((market) => priority[market.source]));
+      for (const market of participants.filter((item) => priority[item.source] === lowestPriority)) {
         markets[market.family] = unavailable("cross-market-conflict");
         if (market.family === "match-result") markets["double-chance"] = unavailable("cross-market-conflict");
         issues.push(Object.freeze({

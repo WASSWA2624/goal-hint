@@ -11,7 +11,7 @@ function transaction(f) {
   return { footballFixture: { findMany: async () => [f.fixture] }, predictionCycle: { findUnique: async () => f.cycle },
     predictionSchedule: { findUnique: async () => f.schedule }, $queryRaw: async (query) => {
       const sql = Array.isArray(query) ? query.join('?') : query.sql;
-      if (sql.includes('FOR SHARE')) return [{ id: f.fixture.id }];
+      if (sql.includes('LOCK IN SHARE MODE')) return [{ id: f.fixture.id }];
       if (sql.includes('FROM PredictionSet')) return [f.row];
       if (sql.includes('FROM MarketPrediction')) return f.marketRows;
       throw new Error('Unexpected query');
@@ -80,14 +80,14 @@ test('desktop progress uses only coherent original-cycle live scores and provide
     reportedGoals: { home: 1, away: 0 }, regulationVerifiedAt: null,
     regulation: { verified: false, home: null, away: null, evidenceRef: null } };
   const live = projectSlipForecastResult(selection, { ...input, fixture, result });
-  assert.deepEqual(live.progress, { score: { home: 1, away: 0 }, liveClock: { phase: 'first-half', minute: 30 } });
+  assert.deepEqual(live.progress, { score: { home: 1, away: 0 }, liveClock: { phase: 'first-half', minute: 30, observedAt: result.observedAt } });
   assert.equal(live.completed, false); assert.equal(live.regulationVerified, false);
   const halfTime = projectSlipForecastResult(selection, { ...input, fixture, result: { ...result, providerStatus: 'HT', elapsedMinutes: 45 } });
   assert.deepEqual(halfTime.progress.liveClock, { phase: 'half-time', minute: null });
   const missingScore = projectSlipForecastResult(selection, { ...input, fixture,
     result: { ...result, reportedGoals: { home: null, away: null } } });
   assert.equal(missingScore.progress.score, null);
-  assert.deepEqual(missingScore.progress.liveClock, { phase: 'first-half', minute: 30 }, 'a coherent clock remains available without a score');
+  assert.deepEqual(missingScore.progress.liveClock, { phase: 'first-half', minute: 30, observedAt: result.observedAt }, 'a coherent clock remains available without a score');
   const incoherent = projectSlipForecastResult(selection, { ...input, fixture,
     result: { ...result, regulation: { ...result.regulation, home: 4 } } });
   assert.equal(incoherent.progress.score, null); assert.equal(incoherent.progress.liveClock, null);

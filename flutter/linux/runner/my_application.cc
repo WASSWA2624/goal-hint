@@ -6,6 +6,7 @@
 #endif
 
 #include "flutter/generated_plugin_registrant.h"
+#include "embedded_web_view.h"
 
 struct _MyApplication {
   GtkApplication parent_instance;
@@ -71,7 +72,10 @@ static void my_application_activate(GApplication* application) {
   gdk_rgba_parse(&background_color, "#FFFFFF");
   fl_view_set_background_color(view, &background_color);
   gtk_widget_show(GTK_WIDGET(view));
-  gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
+  GtkStack* surfaces = GTK_STACK(gtk_stack_new());
+  gtk_stack_add_named(surfaces, GTK_WIDGET(view), "flutter");
+  gtk_widget_show(GTK_WIDGET(surfaces));
+  gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(surfaces));
 
   // Show the window when Flutter renders.
   // Requires the view to be realized so we can start rendering.
@@ -80,6 +84,7 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_realize(GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+  install_embedded_web_view(surfaces, view);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }

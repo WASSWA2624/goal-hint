@@ -2446,6 +2446,14 @@ model FixtureFacts {
   @@index([venueExternalId])
 }
 
+// Latest bounded archive coverage per phase. The durable job lease owns updates.
+model FootballHistoryImportStatus {
+  phase      String   @id @db.VarChar(32)
+  status     String   @db.VarChar(24)
+  coverage   Json?
+  updatedAt  DateTime @db.DateTime(3)
+}
+
 model FootballHistoryDetailState {
   fixtureId   String          @id @db.Char(36)
   state       Json

@@ -15,7 +15,7 @@ import { defaultMarkets } from "@/domain/feed-query";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import { marketOddsPrice } from "@/domain/in-play-odds";
 import { forecastExpectedReturn } from "@/domain/forecast-value";
-import { cardResultStatus, hasFinalScoreStatus, sameCardFixture, selectedCardPrediction, selectedCardPrice, snapshotCardPrediction, type CardSnapshotPick } from "@/domain/match-card";
+import { cardResultStatus, featuredCardPrediction, hasFinalScoreStatus, sameCardFixture, selectedCardPrediction, selectedCardPrice, snapshotCardPrediction, type CardSnapshotPick } from "@/domain/match-card";
 import { liveClockLabel } from "@/domain/match-clock";
 import type { MarketFamily } from "@/domain/markets";
 import { isCompletedFixtureStatus } from "@/domain/market-settlement";
@@ -38,7 +38,7 @@ import { DesktopMatchRow } from "./desktop-match-row";
 import { MatchCardLayoutContext } from "./match-card-layout";
 import { MatchStatus } from "./match-status";
 import { MatchNumber } from "./match-number";
-import { LiveMatchTime, ScoreFigures, Scoreline } from "./score-presentation";
+import { ScoreFigures, Scoreline } from "./score-presentation";
 
 export type MatchCardProps = {
   fixture: FixtureSnapshot;
@@ -473,7 +473,7 @@ function MatchState({ fixture, home, away, lead, clock, messages, snapshot = fal
   if (snapshot) return <Center data-match-state="snapshot">{scoreline}</Center>;
   if (clock) return <Center data-match-state="live">{scoreline}<StateChip data-score-clock $tone="live" aria-hidden="true"
     data-desktop-only={fixture.liveClock?.phase === "in-play" ? "" : undefined}>
-    <span data-mobile-only>{fixture.liveClock?.phase === "in-play" ? null : clock.phaseLabel}</span><span data-desktop-only><LiveMatchTime clock={fixture.liveClock} messages={messages} /></span></StateChip>
+    <span data-mobile-only>{fixture.liveClock?.phase === "in-play" ? null : clock.phaseLabel}</span></StateChip>
     <VisuallyHidden>{clock.spoken}</VisuallyHidden></Center>;
   if (status === "live") return <Center data-match-state="live">{scoreline}</Center>;
   if (final && (status === "finished-regulation" || status === "finished-extra-time" || status === "finished-penalties")) {
@@ -520,7 +520,7 @@ function CardKickoff({ kickoff, locale }: { kickoff: FixtureSnapshot["kickoffAt"
 }
 
 function PredictionCell({ prediction, price, reason, locale, children }: {
-  prediction: ReturnType<typeof selectedCardPrediction> | ReturnType<typeof snapshotCardPrediction>;
+  prediction: ReturnType<typeof selectedCardPrediction> | ReturnType<typeof snapshotCardPrediction> | ReturnType<typeof featuredCardPrediction>;
   price: Pick<NonNullable<ReturnType<typeof selectedCardPrice>>, "price"> | null;
   reason: string | null; locale: string; children: ReactNode;
 }) {
@@ -536,7 +536,7 @@ function PredictionCell({ prediction, price, reason, locale, children }: {
 /** Only the desktop presentation subscribes to the device timezone, just as CardKickoff does on phones. */
 function DesktopCard(props: ComponentProps<typeof DesktopMatchRow>) {
   const messages = useMessages(props.locale);
-  return <DesktopMatchRow {...props} messages={messages} />;
+  return <DesktopMatchRow {...props} messages={messages} clockInBadge />;
 }
 
 function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, markets, publishedMarket = false, selectedFamily, locale: requestedLocale,
@@ -547,9 +547,10 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const desktop = useContext(MatchCardLayoutContext);
   const eligible = markets && markets.length > 0 ? markets : selectedFamily ? [selectedFamily] : defaultMarkets;
   const gatedForecast = fixture.forecast !== null && "gated" in fixture.forecast ? fixture.forecast : null;
+  const featured = publishedMarket && !snapshotPick && fixture.status === "scheduled" ? fixture.featuredPrediction : null;
   // Only a published eligible family is locked: forecast null means none was published, and the gated families already
   // name the published markets, so a filter outside them shows the subscriber's no-prediction reason.
-  const best = snapshotPick?.family ?? bestCardFamily(fixture, eligible, !publishedMarket);
+  const best = snapshotPick?.family ?? featured?.family ?? bestCardFamily(fixture, eligible, !publishedMarket);
   const gated = lockedPrediction || (snapshotPick ? requiresAccess || gatedForecast !== null
     : !isCompletedFixtureStatus(fixture.status) && best !== null && (requiresAccess || gatedForecast !== null));
   const detailHref = matchHref(fixture.fixtureId, analysisSlug, locale);
@@ -564,14 +565,17 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const country = fixture.competition.country?.trim();
   const countryName = countryDisplayName(country);
   const flagUrl = countryFlagUrl(fixture);
-  const prediction = offline || gated ? null : snapshotPick ? snapshotCardPrediction(snapshotPick) : selectedCardPrediction(fixture, shownFamily, !publishedMarket);
-  const observation = !prediction || snapshotPick || fixture.marketOdds?.kind !== (fixture.status === "live" ? "in-play" : "pre-match")
+  const prediction = offline || gated ? null : snapshotPick ? snapshotCardPrediction(snapshotPick)
+    : featured ? featuredCardPrediction(featured, fixture.forecast?.publishedAt ?? null, fixture.forecast?.provisional ?? true)
+      : selectedCardPrediction(fixture, shownFamily, !publishedMarket);
+  const observation = !prediction || snapshotPick || featured || fixture.marketOdds?.kind !== (fixture.status === "live" ? "in-play" : "pre-match")
     ? null : fixture.marketOdds;
   const selection = prediction?.item.market.selection;
   const livePrice = selection && observation?.kind === "in-play" ? marketOddsPrice(observation, shownFamily, selection) : null;
-  const preMatchPrice = selection && fixture.status === "scheduled" && observation?.kind === "pre-match"
-    ? marketOddsPrice(observation, shownFamily, selection) : null;
+  const preMatchPrice = featured?.odds ?? (selection && fixture.status === "scheduled" && observation?.kind === "pre-match"
+    ? marketOddsPrice(observation, shownFamily, selection) : null);
   const price = !selection ? null : snapshotPick ? { price: snapshotPick.odds }
+    : featured ? featured.odds ? { price: featured.odds } : null
     : fixture.status === "live" ? (livePrice ? { price: livePrice } : null)
       : preMatchPrice ? { price: preMatchPrice } : selectedCardPrice(fixture, shownFamily, !publishedMarket);
   const oddsCaption = messages.text("details.odds");
@@ -585,7 +589,9 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const sourceLabel = source ? <ForecastSourceLabel source={source} messages={messages}
     compactLabel={source === "local-engine" ? messages.text("match.source.localShort") : undefined} /> : null;
   const valueLabel = <ForecastValueLabel expectedReturn={expectedReturn} messages={messages} />;
-  const family = messages.text(`market.family.${shownFamily}`);
+  const family = featured?.label ?? messages.text(`market.family.${shownFamily}`);
+  const shortFamily = featured?.code ?? compactMarketName(shownFamily);
+  const selectionContext = featured?.code ? { marketKey: featured.key, label: featured.selectionLabel } : undefined;
   const locked = fixture.cycle?.state === "closed";
   const outcome = prediction?.status ?? "unavailable";
   const result = snapshotPick ? outcome : cardResultStatus(fixture.status, outcome);
@@ -612,7 +618,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   if (desktop) {
     const marketDescription = offline ? "Predictions are unavailable in the saved view."
       : gated ? messages.text("paywall.card")
-      : selection ? `${family}: ${predictionDescription(messages, selection)}` : reason ?? undefined;
+      : selection ? `${family}: ${predictionDescription(messages, selection, selectionContext)}` : reason ?? undefined;
     const publication = prediction && [source ? messages.text(`market.source.${source}`) : null,
       prediction.provisional ? messages.text("match.provisional") : null,
       prediction.publishedAt !== null ? `${messages.text("match.published")}: ${messages.reportingInstant(prediction.publishedAt)}` : null].filter(Boolean).join(" · ");
@@ -636,9 +642,9 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       offline={offline} interactive={interactive} eagerLogos={eagerLogos} {...(!gated && !offline ? { marketFamily: shownFamily } : {})}
       {...(marketDescription ? { marketDescription } : {})}
       market={offline ? <span>Unavailable offline</span> : gated ? <><SubscriberIcon /><span data-subscriber-notice>{messages.text("paywall.unlock")}</span></> : <>
-        {prediction && <span data-market-label aria-hidden="true">{compactMarketName(shownFamily)}:</span>}
+        {prediction && <span data-market-label aria-hidden="true">{shortFamily}:</span>}
         {selection ? <PickLine as="strong" data-pick-line="" data-pick-label title={publication || undefined}>
-          <span data-pick-selection>{predictionLabel(messages, selection)}</span>{sourceLabel}
+          <span data-pick-selection>{predictionLabel(messages, selection, selectionContext)}</span>{sourceLabel}
         </PickLine> : <strong data-pick-label data-no-pick={missing ?? undefined}>{noPickLabel}</strong>}
       </>}
       odds={<span data-card-odds data-pick-price={prediction ? "" : undefined} data-odds-kind={observation?.kind}
@@ -671,7 +677,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     </Teams>
     <Pick $family={shownFamily} data-ledger-facts data-pick-state={pickState} data-result={result}>
       <MarketName $family={shownFamily} data-ledger-field="market" aria-hidden={gated ? undefined : true} title={family}>
-        <span data-pick-value="" data-mobile-only="">{gated ? null : compactMarketName(shownFamily)}</span>
+        <span data-pick-value="" data-mobile-only="">{gated ? null : shortFamily}</span>
         <span data-pick-value="" data-desktop-only="">{gated ? null : family}</span>
       </MarketName>
       {offline ? <PredictionCell prediction={null} price={null} reason="Predictions are unavailable in the saved view." locale={locale}>
@@ -685,7 +691,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       </> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale}>
         <PickShort $family={shownFamily} $available={prediction !== null} data-ledger-field="prediction" aria-hidden="true"
           data-no-pick={missing ?? undefined}>
-          {selection ? <PickLine data-pick-line="" data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection)}>{predictionLabel(messages, selection)}</span>{sourceLabel}</PickLine> : <>
+          {selection ? <PickLine data-pick-line="" data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection, selectionContext)}>{predictionLabel(messages, selection, selectionContext)}</span>{sourceLabel}</PickLine> : <>
             <b data-mobile-only="">{noPickLabel}</b>
             <span data-pick-value="" data-mobile-only="">{messages.text(`match.noPickReason.short.${missing!}`)}</span>
             <span data-pick-value="" data-desktop-only="">{noPickLabel}</span>
@@ -697,7 +703,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
           {prediction && <ProbabilityBar $family={shownFamily} data-probability-meter=""><span style={{ inlineSize: `${Math.max(2, prediction.probability.roundedPercent)}%` }} /></ProbabilityBar>}
           <Percent data-pick-value="">{prediction ? percent : "—"}</Percent>
         </Probability></span>
-        {prediction && selection ? <VisuallyHidden>{messages.text("match.pickLabel", { market: family, selection: predictionDescription(messages, selection),
+        {prediction && selection ? <VisuallyHidden>{messages.text("match.pickLabel", { market: family, selection: predictionDescription(messages, selection, selectionContext),
           probability: messages.text(prediction.probability.labelKey, { percent: messages.number(prediction.probability.roundedPercent) }) })}
           {source && `. ${messages.text(`market.source.${source}`)}`}
           {locked && `. ${messages.text("match.lockedPrediction")}`}

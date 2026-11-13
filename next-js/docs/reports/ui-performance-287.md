@@ -77,9 +77,9 @@ features still load their needed validation code.
 - `python scripts/benchmark-development.py`: separate fresh Webpack/Turbopack
   fixtures, first-request compilation, warm response samples and resource context.
   This excludes actual app instrumentation/proxy and cannot qualify a bundler switch.
-- `node --conditions=react-server scripts/benchmark-analytics-scheduling.mjs
-  --baseline <baseline-analytics-report.ts> --output <report.json>`: repeatable
-  synthetic scheduling comparison, including source hashes and sample arrays.
+- The synthetic scheduling comparison ran the archived
+  `benchmark-analytics-scheduling.mjs` from the report's source revision against
+  a separate baseline checkout. The current scripts folder omits this one-off benchmark.
 
 ## Qualification
 

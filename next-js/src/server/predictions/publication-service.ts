@@ -134,19 +134,20 @@ export function createRevisionPublicationService(options: Readonly<{
               evidenceFingerprint(snapshot.snapshot.context) !== evidenceFingerprint(context)) return publicationFail("invalid-request");
             const model = candidate.context.pin === null ? null : await models.findInTransaction(tx, candidate.context.pin.modelVersionId);
             if (candidate.context.pin !== null && model === null) return publicationFail("invalid-request");
-            if (Object.values(candidate.markets).some((item) => item.available && item.provenance.kind === "local-engine")) {
+            if (candidate.audit.localGoalRates || Object.values(candidate.markets).some((item) => item.available && item.provenance.kind === "local-engine")) {
               const stage = await storedRefreshStage(tx, jobId, "fallback", "completed");
               const selected = stage?.value as { status?: unknown; candidate?: unknown } | undefined;
               if (stage?.at !== input.generationCompletedAt || selected?.status !== "candidate" ||
                 evidenceFingerprint(selected.candidate) !== evidenceFingerprint(candidate)) return publicationFail("invalid-request");
             }
             const goalExtension = input.goalExtension;
-            if (goalExtension && "localPoisson" in goalExtension) {
-              const local = Object.values(candidate.markets).filter((item) => item.available);
-              if (!local.length || local.some((item) => item.provenance.kind !== "local-engine" ||
-                evidenceFingerprint(item.provenance.rates) !== evidenceFingerprint(goalExtension.localPoisson)))
+            if (goalExtension?.localPoisson) {
+              const local = Object.values(candidate.markets).flatMap((item) => item.available && item.provenance.kind === "local-engine" ? [item.provenance.rates] : []);
+              if (candidate.audit.localGoalRates) local.push(candidate.audit.localGoalRates);
+              if (!local.length || local.some((rates) => evidenceFingerprint(rates) !== evidenceFingerprint(goalExtension.localPoisson)))
                 return publicationFail("invalid-request");
-            } else if (goalExtension) {
+            }
+            if (goalExtension?.scoreDistribution) {
               if (!model || !usesScoreDistribution(model) || model.calibration.kind !== "none" || candidate.audit.aiStatus !== "candidate")
                 return publicationFail("invalid-request");
               const derived = legacyMarketsFromScoreDistribution(goalExtension.scoreDistribution);

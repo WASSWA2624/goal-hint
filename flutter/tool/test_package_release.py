@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import plistlib
+import json
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -33,18 +34,19 @@ class PackagingTests(unittest.TestCase):
             artifact = root / "signed.apk"
             artifact.write_bytes(b"synthetic archive fixture; not an executable")
             with patch.object(release, "DEPLOY", output):
-                target = release.publish(artifact, "android", "1.0.0", staging, False)
+                target = release.publish(artifact, "android", "1.0.0", "1", staging, False)
                 before = target.read_bytes()
                 with zipfile.ZipFile(target) as archive:
-                    self.assertEqual(set(archive.namelist()), {"goal-hint-android-1.0.0.apk", "README.txt"})
+                    self.assertEqual(set(archive.namelist()), {"goal-hint-android-1.0.0.apk", "README.txt", "download-manifest.json"})
                     self.assertEqual(archive.read("goal-hint-android-1.0.0.apk"), artifact.read_bytes())
+                    self.assertEqual(json.loads(archive.read("download-manifest.json"))["build"], 1)
                     self.assertIsNone(archive.testzip())
                 self.assertTrue(target.with_suffix(".zip.sha256").is_file())
                 with self.assertRaises(FileExistsError):
-                    release.publish(artifact, "android", "1.0.0", staging, False)
+                    release.publish(artifact, "android", "1.0.0", "1", staging, False)
                 with patch.object(zipfile.ZipFile, "write", side_effect=OSError("simulated disk failure")):
                     with self.assertRaises(OSError):
-                        release.publish(artifact, "android", "1.0.0", staging, True)
+                        release.publish(artifact, "android", "1.0.0", "1", staging, True)
                 self.assertEqual(target.read_bytes(), before)
 
     def test_development_ios_export_is_rejected_before_build(self):

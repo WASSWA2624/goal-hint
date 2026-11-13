@@ -49,15 +49,15 @@ The root [`deploy/`](../../deploy/README.md) folder is the only delivery
 location. Initial packages keep public version **1.0.0**; `pubspec.yaml` is
 `1.0.0+8`. The internal build number stays distinct from the public ZIP filename.
 Do not increment the public version until the first production release.
-Compiler caches/intermediates remain ignored under `flutter/build/`; they are
-not additional release locations. Linux is excluded from these initial packages.
+Compiler caches/intermediates remain ignored under `flutter/build/`.
 
 | Target | Command from `flutter/` | Root deployment ZIP |
 | --- | --- | --- |
 | Android | `python tool/package_release.py android` | `deploy/goal-hint-android-1.0.0.zip` containing the signed universal APK |
-| Windows | `./tool/windows/package.ps1 -RedistDirectory <installed-x64-CRT-directory>` | `deploy/goal-hint-windows-1.0.0.zip` containing the installable setup EXE |
+| Windows | `./tool/windows/package.ps1 -RedistDirectory <installed-x64-CRT-directory> -SigningThumbprint <certificate-thumbprint> -TimestampUrl <timestamp-url>` | `deploy/goal-hint-windows-1.0.0.zip` containing the signed setup EXE |
 | iOS | `python tool/package_release.py ios --export-options /private/ExportOptions.plist` | `deploy/goal-hint-ios-1.0.0.zip` containing the distribution-signed IPA |
 | macOS | `python tool/package_release.py macos --dmg ../deploy/.staging/macos/goal-hint.dmg` | `deploy/goal-hint-macos-1.0.0.zip` containing the signed/notarized DMG |
+| Linux | `python tool/package_release.py linux --linux-signing-key <key-id>` | `deploy/goal-hint-linux-1.0.0.zip` containing the signed Debian package |
 
 The Android and iOS commands run a fresh production build before verification.
 The macOS command validates and wraps an owner-prepared production DMG; it does
@@ -65,6 +65,19 @@ not build or sign that DMG. Each command refuses missing prerequisites instead
 of publishing placeholders, and writes a ZIP SHA256 sidecar. Repeat an unpublished
 version only with explicit `--force` (Python) or `-Force` (PowerShell). Temporary
 delivery work uses root `deploy/.staging/`, not an application release directory.
+
+The Windows command signs the staged runner and setup EXE with the selected
+Authenticode certificate and RFC 3161 timestamp service. Windows packages built
+without signing are local candidates. Use `-SignTool` to select the installed
+Windows SDK tool if `signtool` is outside PATH.
+
+On a Debian-compatible Linux host, install the Flutter GTK dependencies and
+`libwebkit2gtk-4.1-dev`. Install `debsigs` and `debsig-verify` and provision the
+existing release key and verification policy. The packager builds the embedded
+shell, includes its GTK/WebKitGTK runtime dependencies in Debian metadata, and
+checks the package signature before creating the delivery ZIP. Verify and
+install the extracted `.deb` with `debsig-verify` and `apt install ./<file>.deb`
+on the intended distribution and architecture.
 
 For iOS, configure the existing Apple team, bundle identifier
 `com.goalhint.goalHint`, distribution certificate and provisioning in Xcode on
@@ -140,9 +153,9 @@ modes. Dart defines contain public configuration, never credentials. See
 
 ## Production app and database
 
-Android, iOS, Windows and macOS use the same production HTTPS origin in Profile
-and Release. On Linux the runner offers **Open website**, which opens that same
-origin in the system browser. The web target is the Next.js site. Browser
+Android, iOS, Windows, macOS and Linux use the same production HTTPS origin in
+Profile and Release. Linux embeds WebKitGTK in the application window. The web
+target is the Next.js site. Browser
 installation uses its same-origin manifest with `/en/matches` as the start URL.
 Browser support determines how the installation action is presented.
 
@@ -153,9 +166,9 @@ public HTTPS address. See the [production deployment checks](../../next-js/docs/
 On 13 November 2026 the production HTTPS site and public fixture feed responded
 successfully. The production download API listed zero native releases. The
 Windows x64 Release bundle built with the pinned SDK, and its compiled app
-contained the production HTTPS origin. The Linux browser handoff passed in light
-and dark widget tests. Android compilation was interrupted by dependency fetch
-failures. Apple builds and installed-device checks remain pending.
+contained the production HTTPS origin. Android compilation was interrupted by
+dependency fetch failures. Apple builds and installed-device checks remain
+pending. The Linux embedded runner needs build and runtime acceptance on Linux.
 
 ## Build hosts and deployment scope
 
@@ -165,7 +178,7 @@ failures. Apple builds and installed-device checks remain pending.
 | Windows | Windows with Visual Studio C++ desktop workload, CMake, Windows SDK and NuGet | Actual host: Windows 11 25H2 x64, OS 10.0.26200.9711; Visual Studio Community 2026 18.6.0, Windows SDK 10.0.26100.0. x64 is the local build/validation target. Target machines require WebView2 Runtime and the C++ runtime. See [Windows packaging/install](windows-release.md). |
 | iOS | macOS with Xcode, matching device/simulator runtimes and Apple signing/provisioning for device distribution | Runner source sets iOS 13.0; no Apple host or configured developer team was verified here. WKWebView and offline startup require actual device qualification. |
 | macOS | macOS with Xcode/command-line tools and Apple signing/notarization for distribution | Runner source sets macOS 10.15 and ad-hoc signing; no developer team or hardened-runtime distribution configuration is qualified. The sandbox permits outbound client networking. No Apple compilation/runtime is qualified. |
-| Linux | Linux with Clang, CMake, Ninja, pkg-config and GTK 3/C++ development libraries | The runner can hand off to the system browser. An embedded WebView and native release acceptance remain open. |
+| Linux | Linux with Clang, CMake, Ninja, pkg-config, GTK 3/C++ and WebKitGTK 4.1 development libraries | The runner embeds WebKitGTK. Native release acceptance is pending. |
 
 These are actual project settings and host findings, not a claim that every OS
 at a template minimum works with every plugin or distribution channel. Current
@@ -185,7 +198,7 @@ application evidence. No Arm64 desktop qualification is inferred from x64.
 | iOS production | `flutter build ipa --release --target=lib/main.dart --dart-define=APP_ENV=production` | Archive under `build/ios/archive/`, IPA under `build/ios/ipa/`; select the owner’s actual team, bundle ID and secured export/provisioning configuration in Xcode. Use Xcode/Transporter for the authorized distribution channel. No signing identity was invented here. |
 | macOS development | `flutter run -d macos --debug --target=lib/main.dart --dart-define=APP_ENV=development --dart-define=DEV_APP_ORIGIN=http://localhost:3000` | Native development app; no external distribution claim. |
 | macOS production | `flutter build macos --release --target=lib/main.dart --dart-define=APP_ENV=production` | `build/macos/Build/Products/Release/Goal Hint.app`; verify the actual generated product name on the Apple host, then sign, notarize and staple using the owner’s secured Developer ID workflow before external distribution. |
-| Linux | `flutter build linux --release --target=lib/main.dart --dart-define=APP_ENV=production` | Typically `build/linux/x64/release/bundle/` on an x64 host. Verify the default browser handoff on Linux before distributing the runner. |
+| Linux | `flutter build linux --release --target=lib/main.dart --dart-define=APP_ENV=production` | Typically `build/linux/x64/release/bundle/` on an x64 host. Verify embedded navigation, session persistence, recovery and production origin before distributing the runner. |
 
 Use `flutter devices` and an explicit target for development. See
 [wireless Android setup](development-urls.md#android-wireless-development) for

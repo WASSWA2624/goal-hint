@@ -41,7 +41,7 @@ export function selectFeedStatus(query: FeedQuery, status: FeedStatus, today: Re
   return synchronizeFeedStatusDates({ ...scope, ...(dates !== query.dates ? { interval: undefined } : {}), summary: undefined, status, dates, page: 1 }, today);
 }
 
-/** An explicit period can leave Live, and historical dates clear today's probability default. */
+/** An explicit period can leave Live. Historical dates clear the legacy above-75 preset. */
 export function selectFeedDateScope(query: FeedQuery, today: ReportingDate): FeedQuery {
   const range = resolveFeedDates(query, today);
   const includesHistory = range.startDate < today;
@@ -93,11 +93,10 @@ export function resetFeedFilterSection(draft: FeedQuery, section: FeedFilterSect
 }
 
 /** Restore every page filter and fifty-item limit, retaining the browsing zone. */
-export function resetFeedFilters(query: FeedQuery, allowProbabilityDefault = true): FeedQuery {
+export function resetFeedFilters(query: FeedQuery): FeedQuery {
   const reset = { ...query };
   delete reset.time; delete reset.result; delete reset.summary; delete reset.marketPicks;
   delete reset.interval;
   return { ...reset, ...matchFeedPageDefaults, status: "all", search: "", leagues: [], countries: [], markets: [...defaultMarkets],
-    probability: allowProbabilityDefault ? matchFeedPageDefaults.probability : anyProbability, odds: null,
-    page: 1 };
+    odds: null, page: 1 };
 }

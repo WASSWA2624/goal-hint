@@ -195,20 +195,36 @@ The production football worker uses the existing direct API-Football account.
 Paid checkout is off. Phone verification and password-reset delivery require
 messaging setup.
 
-Develop on `localhost`, test the release on `test.goalhint.com`, then promote the
-same release to `goalhint.com`. Each environment has its own database and
-configuration. Routine release promotions carry application code and reviewed
-schema migrations. The initial football import was a separate data migration.
+Develop on `localhost` with the private `.env.development`, then verify the
+release on `test.goalhint.com`. Promote the same tested release to `goalhint.com`
+after the owner reviews test and authorizes production. Each environment has its
+own database and configuration. Routine release promotions carry application
+code and reviewed schema migrations.
 
 1. Build the release with `npm run package:cpanel` from a clean checkout of the
    intended commit. Keep the ZIP and its SHA-256 together.
 2. Verify the ZIP after upload. Unpack it into
-   `~/goal-hint-releases/<commit>` under the staging account. Copy the staging
-   environment file and approval register from `~/goal-hint-private/` into
-   the release's `standalone/` directory with account-only permissions.
-3. Qualify pending migrations on MariaDB with the migration account. Verify
-   the schema and original Prisma migration checksums before switching
-   `~/goal-hint` to the new release and restarting the Passenger app.
+   `~/goal-hint-releases/<commit>` under the staging account. Copy private
+   `.env.test` and the approval register from `~/goal-hint-private/` into the
+   release's `standalone/` directory with account-only permissions. Passenger
+   loads `.env.test` explicitly while Next.js runs in production mode. Production
+   uses `.env.production` and its own approval register. Keep the existing hosted
+   settings when migrating filenames.
+3. Use the packaged activation script from the VPS operator account. It checks
+   the app's target, connects with the separate MariaDB migration account over
+   TLS, validates the Prisma ledger and runs all pending migrations in order.
+   When there are pending changes, pause any affected writers, verify a private
+   backup and set `GOAL_HINT_MIGRATION_BACKUP` to its SHA-256 manifest. The
+   script verifies zero pending migrations before switching the release and
+   restarting Passenger. A migration failure leaves the current release active.
+
+   ```sh
+   bash "$release/scripts/activate-hosted.sh" staging "$release" ghstage \
+     "$node_binary" "$migration_client_options" ghstage_localcopy
+   ```
+
+   Use `production`, `ghprod` and `ghprod_prod` with the production account's
+   private settings and migration options after production authorization.
 4. Check the public HTTPS Matches page and `/api/matches`, and verify the
    staging page returns a `noindex` directive. Review the release online before
    promoting the same ZIP to production with production's own configuration
@@ -233,6 +249,11 @@ Apply the MariaDB numeric JSON projection overlay where the durable-job check
 still compares extracted values as text. Verify row counts, constraints, and
 the app against the new database before switching the staging release. Keep
 the previous database for rollback. See the [durable-job overlay](../../prisma/mariadb/20261009123830_durable_job_numeric_projection.sql).
+
+Apply the [expanded goal markets overlay](../../prisma/mariadb/20261113140000_expand_local_goal_markets.sql)
+after verifying `20261111170100_local_goal_market_source` and its current check
+constraints. Verify existing O/U 1.5 history and a new local forecast publication
+and settlement in the isolated test database before enabling the production worker.
 
 ### VPS live football worker
 
@@ -269,6 +290,14 @@ cannot delay fixture imports. With AI off, the provider-first forecast path
 uses stored evidence and skips outbound preparation requests. Live score and
 result polling uses the same quota ledger. Odds, AI, research, and the separate
 statistics and events collector are off.
+
+#### Historical import and live detail rollout
+
+Apply the `20261113130000_football_history_import_status` [MariaDB overlay](../../prisma/mariadb/20261113130000_football_history_import_status.sql) on each isolated target before qualifying the worker. The web role needs `SELECT` on `FootballHistoryImportStatus`. The worker needs `SELECT` and `INSERT` on that table and `UPDATE` on `status`, `coverage` and `updatedAt`. Verify the worker's existing fixture, result and job grants plus `SELECT`/`INSERT` on `FootballHistorySourcePage` and `SELECT`/`INSERT`/`UPDATE` on `FootballHistoryDetailState` and `FixtureFacts`. The stored historical response pages use the recorded private-use terms.
+
+On the promoted production worker set `GOAL_HINT_DEPLOYMENT_ENVIRONMENT=production` and `GOAL_HINT_HISTORY_IMPORT_ENABLED=true`. Retain the existing shared provider account and competition scope. Enable `GOAL_HINT_LIVE_DETAILS_ENABLED=true` for an eligible verified plan. The history jobs share the enrichment budget and yield to daily selection, live scores and details. Keep hosted staging's provider jobs disabled. Qualify the same archive runtime with the synthetic fixture job in `tests/live-runtime.integration.mjs` before production activation.
+
+Check Admin Overview for counts at each stage of today's fixture coverage and for each historical phase's imported, remaining and unavailable coverage. An unknown count indicates that the stored receipts do not establish a total. Odds catalogs and prices use the existing rights and freshness gates. The historical job captures the available odds mapping when configured. Historical prices outside the provider's available pre-match window and historical in-play odds remain unavailable. The job resumes from persisted fixture, detail and reference receipts across restarts and quota resets.
 
 ## Paid access (066)
 

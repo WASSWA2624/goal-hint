@@ -19,7 +19,7 @@ import { storedFeedSearch } from "./feed-search.ts";
 import { storedFeedFixtures } from "./fixture-read.ts";
 import { feedPerformanceCacheKey, readFeedPerformance } from "./feed-performance.ts";
 import { filterFeedResult } from "./feed-result-filter.ts";
-import { withCurrentFeedOdds } from "./feed-odds.ts";
+import { withCurrentFeedOdds, withUpcomingFeaturedOutcomes } from "./feed-odds.ts";
 import { performanceFeedQuery } from "../../domain/feed-performance-summary.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
 import { readPublicCacheGenerations } from "../cache/mysql-public-cache.ts";
@@ -117,7 +117,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         const { run, window } = await storedFeedRunContext(tx, reportingToday, range);
         if (run?.phase === "updating") run.message = messages.text("feed.updating");
         const records = await storedFeedFixtures(tx, rows.map(({ id }) => id), false, window, query.locale,
-          { prices: providerOdds, preferRecommendation: !publishedOnly || query.picks === "only" });
+          { prices: providerOdds, preferRecommendation: !publishedOnly });
         for (const record of records) {
           const date = record.kickoffAt === null ? null : getReportingDate(record.kickoffAt);
           record.partialCoverage = dates.find((entry) => entry.date === date)?.authoritative !== true;
@@ -139,12 +139,19 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       const response = options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: 24, providerOdds, completedOnly: context.completedOnly === true, publishedOnly, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
+        query: { ...query, projection: 25, providerOdds, completedOnly: context.completedOnly === true, publishedOnly, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => storedMatchFeedResponseSchema.parse(value) }), read) : await read();
-      return providerOdds ? await withCurrentFeedOdds(database, response, asOf, allowInPlayOdds) : response;
+      const current = providerOdds ? await withCurrentFeedOdds(database, response, asOf, allowInPlayOdds) : response;
+      const useCompleteForecast = publishedOnly && isDefaultFeaturedScope(query);
+      return useCompleteForecast ? withUpcomingFeaturedOutcomes(database, current, asOf, providerOdds) : current;
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;
       throw new MatchFeedError("unavailable");
     }
   } });
+}
+
+function isDefaultFeaturedScope(query: FeedQuery): boolean {
+  return query.markets.length === publicPolicy.markets.length && !query.marketPicks?.length && !query.odds && !query.result &&
+    query.probability.min === 0 && query.probability.max === 100 && !query.probability.minExclusive && query.sort.by !== "probability";
 }

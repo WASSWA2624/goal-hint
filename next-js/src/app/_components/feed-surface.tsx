@@ -21,6 +21,7 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { FeedPerformancePlaceholder, FeedPerformanceSummary } from "@/components/match/feed-performance-summary";
 import type { FeedPerformanceSeed } from "@/domain/feed-performance-summary";
 import { ServerThemeUntilHydrated } from "@/styles/provider";
+import { LoadingTheme } from "@/styles/loading-theme";
 import type { ReportingDate } from "@/domain/calendar";
 import { feedQueryHref, isFeedDatePreset, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
 import { synchronizeFeedStatusDates } from "@/domain/feed-controls";
@@ -107,7 +108,7 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
             note={data.search?.exact === 0 ? messages.text("feed.search.noExact", { query: query.search }) : null} />}
           <li>
             <MatchCard fixture={fixture} gated={data.access.tier === "free"} signedIn={data.access.signedIn} analysisSlug={canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name)}
-              markets={query.markets} publishedMarket={query.picks !== "only"} locale={query.locale} position={first + index}
+              markets={query.markets} publishedMarket locale={query.locale} position={first + index}
               titleNote={similarFrom !== null && first + index >= similarFrom ? messages.text("feed.search.similarItem") : undefined} />
           </li>
         </Fragment>)}
@@ -179,8 +180,8 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
     : displayed ? searchAnnouncement(displayed.data, displayed.query) : messages.text("feed.state.data-unavailable"));
   return <FeedStack $gap="sm">
     <StableFeedHeader query={query} today={today} showAccount={showAccount} />
-    <FeedFilters key={`${href}:${today}`} subscriberOnly={subscriberOnly} providerOdds={providerOdds} query={query} today={today} leagues={leagues} onApply={apply} pending={pending}
-      searchText={text} onSearchChange={onSearchChange} onSearchSubmit={onSearchSubmit} />
+    <LoadingTheme><FeedFilters key={`${href}:${today}`} subscriberOnly={subscriberOnly} providerOdds={providerOdds} query={query} today={today} leagues={leagues} onApply={apply} pending={pending}
+      searchText={text} onSearchChange={onSearchChange} onSearchSubmit={onSearchSubmit} /></LoadingTheme>
     {controls}
     <VisuallyHidden role="status" aria-live="polite" aria-atomic="true">{announcement}</VisuallyHidden>
     <Results $gap="md" aria-busy={pending} data-feed-results>

@@ -21,6 +21,12 @@ const Label = styled(StatusBadge)`
   gap: var(--gh-spacing-1_5); font-size: var(--gh-font-body);
   &[data-match-status="upcoming"] { --status-ink: ${({ theme }) => theme.color.accent.blue.text}; --status-fill: ${({ theme }) => theme.color.accent.blue.soft}; }
   &[data-match-status="live"] { --status-ink: ${({ theme }) => theme.color.live.text}; --status-fill: ${({ theme }) => theme.color.live.soft}; }
+  &[data-live-badge-clock] {
+    display: inline-grid; grid-template-columns: minmax(var(--gh-size-1_25), 1fr) minmax(0, max-content) minmax(var(--gh-size-1_25), 1fr);
+    gap: 0; font-size: var(--gh-font-emphasis);
+    > [data-match-live-dot] { justify-self: start; }
+    > [data-pick-value] { overflow: hidden; text-overflow: ellipsis; }
+  }
   &[data-match-status="postponed"] {
     --status-ink: ${({ theme }) => theme.color.accent.orange.text}; --status-fill: ${({ theme }) => theme.color.accent.orange.soft};
   }
@@ -31,10 +37,10 @@ const Label = styled(StatusBadge)`
 `;
 
 /** Fixture progress takes precedence until a result can be shown. Saved results remain explicit snapshots. */
-export function MatchStatus({ status, outcome, messages, snapshot = false, offline = false, liveClock }: {
+export function MatchStatus({ status, outcome, messages, snapshot = false, offline = false, liveClock, desktopClock = false }: {
   status: FixtureSnapshot["status"]; outcome: OutcomeTone; messages: Messages; snapshot?: boolean; offline?: boolean;
-  /** Supplied on mobile only; desktop retains its approved Live badge. */
   liveClock?: FixtureSnapshot["liveClock"];
+  desktopClock?: boolean;
 }) {
   const result = offline ? "saved" : snapshot ? outcome : cardResultStatus(status, outcome);
   const isOutcome = result === "correct" || result === "incorrect" || result === "pending" || result === "void" || result === "unavailable";
@@ -48,9 +54,11 @@ export function MatchStatus({ status, outcome, messages, snapshot = false, offli
   const finalPhase = !offline && !snapshot && (status === "finished-regulation" || status === "finished-extra-time" || status === "finished-penalties")
     ? messages.text(`match.final.${status}`) : null;
   return <Label data-match-status={result} data-match-label={!isOutcome ? "" : undefined} data-outcome-label={isOutcome ? "" : undefined}
+    data-live-badge-clock={desktopClock && result === "live" ? "" : undefined}
     aria-label={clock?.spoken} title={clock?.spoken}>
     {result === "live" && <LiveDot data-match-live-dot aria-hidden="true" />}
-    <span data-pick-value="">{clock ? <><span data-mobile-only data-status-clock>{label} {extraTime && <>{messages.text("match.clock.extra-timeShort")} </>}<LiveMatchTime clock={liveClock} messages={messages} /></span><span data-desktop-only>{label}</span></> : label}</span>
-    {liveClock !== undefined && finalPhase && <span data-mobile-only data-status-phase>{finalPhase}</span>}
+    <span data-pick-value="">{clock ? desktopClock ? <LiveMatchTime clock={liveClock} messages={messages} badge />
+      : <><span data-mobile-only data-status-clock>{label} {extraTime && <>{messages.text("match.clock.extra-timeShort")} </>}<LiveMatchTime clock={liveClock} messages={messages} /></span><span data-desktop-only>{label}</span></> : label}</span>
+    {!desktopClock && liveClock !== undefined && finalPhase && <span data-mobile-only data-status-phase>{finalPhase}</span>}
   </Label>;
 }

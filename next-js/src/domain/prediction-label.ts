@@ -59,6 +59,8 @@ function ruleLabel(messages: LabelMessages, rule: GoalRule | NonGoalRule): strin
     case "total": case "asian-total": return lineLabel(messages, rule.direction, rule.line);
     case "both-teams-score": return messages.text(rule.yes ? "market.selection.yes" : "market.selection.no");
     case "odd-even": return messages.text(rule.odd ? "market.selection.odd" : "market.selection.even");
+    case "goal-count": return rule.max === rule.min ? messages.text("market.selection.exact-count", { count: String(rule.min) })
+      : rule.max === null ? `${rule.min}+` : `${rule.min}–${rule.max}`;
     case "clean-sheet": return messages.text(`market.selection.${rule.team}-${rule.yes ? "clean-sheet" : "concede"}`);
     case "win-to-nil": return messages.text(`market.selection.${rule.team}-${rule.yes ? "win-to-nil" : "not-win-to-nil"}`);
     case "asian-handicap": return messages.text(`market.selection.${rule.team}-handicap`, { line: signedLine(rule.line) });

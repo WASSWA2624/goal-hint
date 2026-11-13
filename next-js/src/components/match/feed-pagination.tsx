@@ -40,7 +40,6 @@ export function FeedPagination({ query, today, data, busy, error, onRetry, first
   const messages = createMessages(query.locale), page = data.page, total = data.totalPages;
   const first = data.total === 0 ? 0 : (firstPage - 1) * data.pageSize + 1, last = Math.min(data.total, (firstPage - 1) * data.pageSize + shown);
   const changed = error === "changed" || error === "stale-data";
-  const allowProbabilityDefault = data.access.tier === "full" || query.status === "finished";
   if (total < 1) return null;
   return <Bar data-feed-pagination>
     <p>{messages.text("feed.results.showing", { shown: `${messages.number(first)}–${messages.number(last)}`, total: messages.number(data.total) })}</p>
@@ -48,6 +47,6 @@ export function FeedPagination({ query, today, data, busy, error, onRetry, first
       {" "}<Button variant="quiet" onClick={onRetry} disabled={busy} data-pagination-retry>{messages.text(changed ? "feed.pagination.refresh" : "feed.pagination.retry")}</Button></p>}
     <NumberedPagination page={page} pages={Math.min(total, feedQueryRules.maximumPage)}
       labels={numberedPaginationLabels(messages, messages.text("feed.pagination.navigation"))}
-      href={(target) => feedPageHref(query, today, target, allowProbabilityDefault)} />
+      href={(target) => feedPageHref(query, today, target)} />
   </Bar>;
 }

@@ -7,6 +7,7 @@ import { BellIcon, CalendarIcon, CardIcon, ChartIcon, ChevronRightIcon, ImageIco
 import { AppLoading } from "@/components/navigation/navigation-progress";
 import { formatUgx } from "@/domain/subscription-plans";
 import type { OwnerOverview } from "@/domain/owner-members";
+import type { FootballCoverage } from "@/domain/football-coverage";
 import { media } from "@/styles/theme";
 
 type Report = Readonly<{ value: OwnerOverview; noticeCount: number | null; uploadAlertsHref: string }>;
@@ -17,6 +18,18 @@ type Metric = Readonly<{
   href?: string | undefined;
   attention?: boolean;
 }>;
+
+const numberFormat = new Intl.NumberFormat("en-UG");
+const coverageCount = (count: number | null | undefined) => count === null || count === undefined ? "Unknown" : numberFormat.format(count);
+const archivePhase = {
+  fixtures: "Historical league seasons", replay: "Deferred fixture imports", details: "Historical match details",
+  "half-statistics": "Half statistics pages", "team-statistics": "Team statistics pages",
+  "player-statistics": "Player statistics pages", "odds-mapping": "Odds mapping pages",
+} as const;
+const archiveStatus = {
+  running: "Running", "waiting-quota": "Waiting on quota", retrying: "Retrying", "caught-up": "Finished",
+  pending: "Pending", unavailable: "Unavailable", unreported: "No worker report yet",
+} as const;
 
 export function OverviewReport({ report }: { report: Report }) {
   const { value } = report;
@@ -34,9 +47,37 @@ export function OverviewReport({ report }: { report: Report }) {
     metrics.push({ label: "Credit owed after reversals", value: formatUgx(value.creditOwed), icon: CardIcon, attention: true });
   }
 
-  return <MetricGrid aria-label="Admin overview">
+  return <OverviewMetrics label="Admin overview" metrics={metrics} />;
+}
+
+export function FootballCoverageReport({ report }: { report: FootballCoverage }) {
+  const { fixtures, archive, odds } = report;
+  const oddsSummary = (isPrice: boolean) => {
+    if (odds === null) return "Unavailable";
+    const batches = odds.filter(({ kind }) => (kind === "prices") === isPrice);
+    if (!batches.length) return "No recent imports";
+    const complete = batches.reduce((total, batch) => total + (batch.status === "complete" ? batch.batches : 0), 0);
+    const incomplete = batches.reduce((total, batch) => total + (batch.status === "complete" ? 0 : batch.batches), 0);
+    return `${coverageCount(complete)} complete · ${coverageCount(incomplete)} incomplete`;
+  };
+  return <OverviewMetrics label="Football coverage" metrics={[
+    { label: `Latest provider fixture receipt (${fixtures.date})`, icon: CalendarIcon,
+      value: fixtures.receipt ? `${coverageCount(fixtures.receipt.receivedCount)} returned · ${coverageCount(fixtures.receipt.importedCount)} imported · ${coverageCount(fixtures.receipt.rejectedCount)} rejected (${fixtures.receipt.status})`
+        : fixtures.attemptFailed ? "Import failed" : "No receipt" },
+    { label: "Today's fixtures", icon: CalendarIcon,
+      value: `${coverageCount(fixtures.stored)} stored · ${coverageCount(fixtures.publicScope)} in public scope · ${coverageCount(fixtures.published)} published` },
+    { label: "Odds catalogs in the last 24 hours", icon: ChartIcon, value: oddsSummary(false) },
+    { label: "Odds price batches in the last 24 hours", icon: ChartIcon, value: oddsSummary(true) },
+    ...archive.map(({ phase, status, coverage }) => ({ label: archivePhase[phase], icon: ChartIcon,
+      value: `${archiveStatus[status]} · ${coverageCount(coverage?.imported)} imported · ${coverageCount(coverage?.remaining)} remaining · ${coverageCount(coverage?.unavailable)} unavailable`,
+    })),
+  ]} compact />;
+}
+
+function OverviewMetrics({ label, metrics, compact = false }: { label: string; metrics: readonly Metric[]; compact?: boolean }) {
+  return <MetricGrid aria-label={label}>
     {metrics.map(({ label, value, icon: Icon, href, attention }) => (
-      <MetricCard key={label} $attention={attention ?? false}>
+      <MetricCard key={label} $attention={attention ?? false} $compact={compact}>
         <dt>
           <MetricIcon><Icon /></MetricIcon>
           {href ? <MetricLink href={href} prefetch={false}>{label}<ChevronRightIcon /></MetricLink> : label}
@@ -95,7 +136,7 @@ const MetricLink = styled(Link)`
   &:focus-visible { outline: none; }
 `;
 
-const MetricCard = styled.div<{ $attention: boolean }>`
+const MetricCard = styled.div<{ $attention: boolean; $compact: boolean }>`
   position: relative;
   display: grid;
   grid-template-rows: 1fr auto;
@@ -121,10 +162,10 @@ const MetricCard = styled.div<{ $attention: boolean }>`
   dd {
     margin: 0;
     color: ${({ theme }) => theme.color.text};
-    font-size: var(--gh-font-heading);
-    font-weight: var(--gh-weight-heavy);
+    font-size: ${({ $compact }) => $compact ? "var(--gh-font-secondary)" : "var(--gh-font-heading)"};
+    font-weight: ${({ $compact }) => $compact ? "var(--gh-weight-bold)" : "var(--gh-weight-heavy)"};
     font-variant-numeric: tabular-nums;
-    line-height: var(--gh-leading-heading);
+    line-height: ${({ $compact }) => $compact ? "var(--gh-leading-body)" : "var(--gh-leading-heading)"};
     overflow-wrap: anywhere;
   }
 

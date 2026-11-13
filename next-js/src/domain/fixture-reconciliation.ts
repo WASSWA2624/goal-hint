@@ -31,5 +31,6 @@ export function mergeFixtureObservation<T extends FixtureSnapshot>(previous: T, 
     // Prices (052) are observation fields: they change without a fixture version bump.
     ...(next.prices === undefined ? {} : { prices: next.prices }),
     ...("marketOdds" in previous || "marketOdds" in next ? { marketOdds: next.marketOdds ?? null } : {}),
+    ...("featuredPrediction" in previous || "featuredPrediction" in next ? { featuredPrediction: next.featuredPrediction ?? null } : {}),
     forecast: previous.forecast && { ...previous.forecast, updateDelayed: next.forecast?.updateDelayed } };
 }

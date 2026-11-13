@@ -153,7 +153,8 @@ export function createFootballHistoryBackfill(options: Readonly<{
         }
         return { id, complete: false, archivedOnly: null, oversized, coolingDown: false };
       }
-      if (receipt.status === "complete" && await hasSource(scope, receipt)) return { id, complete: true, archivedOnly: null, oversized, coolingDown: false };
+      if (receipt.status === "complete" && await hasSource(scope, receipt)) return { id, complete: true, archivedOnly: null, oversized,
+        coolingDown: false, empty: receipt.receivedCount === 0 };
       const reviewed = reviewedHistoryFixtureRepair(id);
       if ((reviewed || receipt.reasons.includes(catalogPersistenceUnavailable)) && await options.store.hasReplayedImport?.(id)) {
         const archived = reviewed
@@ -213,7 +214,7 @@ export function createFootballHistoryBackfill(options: Readonly<{
     let archivedOnly = 0, roundsArchivedOnly = 0;
     let persistenceDeferred = 0, roundsPersistenceDeferred = 0;
     let consecutiveTransportErrors = 0;
-    let stopped: string | null = null;
+    let stopped: string | null = null, verifiedEmpty = 0;
     function canContinue() {
       if (signal?.aborted) stopped = "interrupted";
       else if (options.providerDayEndsAt() !== verifiedDayEnd || options.now() >= verifiedDayEnd) stopped = "provider-day-ended";
@@ -258,7 +259,7 @@ export function createFootballHistoryBackfill(options: Readonly<{
     for (const { scope: item, coverage } of plan) {
       if (!canContinue()) break;
       const whole = await progress(item);
-      if (whole.complete) { completed++; continue; }
+      if (whole.complete) { completed++; verifiedEmpty += Number(whole.empty === true); continue; }
       if (whole.archivedOnly) {
         archivedOnly++; deferred++;
         if (whole.archivedOnly === "persistence") persistenceDeferred++;
@@ -272,7 +273,7 @@ export function createFootballHistoryBackfill(options: Readonly<{
         if (!result.reasons.includes(catalogPersistenceUnavailable) && Object.values(coverage).some((value) => typeof value === "boolean")) {
           await options.recordCoverage?.(item, coverage);
         }
-        if (result.status === "complete" && await hasSource(item, result)) { completed++; continue; }
+        if (result.status === "complete" && await hasSource(item, result)) { completed++; verifiedEmpty += Number(result.receivedCount === 0); continue; }
         if (await archivedWithoutCanonicalResults(item, result)) { archivedOnly++; deferred++; continue; }
         oversized = requiresPartition(result.reasons);
       }
@@ -329,7 +330,7 @@ export function createFootballHistoryBackfill(options: Readonly<{
     const unlistedCompetitions = [...scoped].filter((competitionId) => !known.has(competitionId)).sort((left, right) => left - right);
     const complete = !stopped && deferred === 0 && unlistedCompetitions.length === 0;
     return { status: complete ? "complete" as const : "partial" as const,
-      requests, planned: plan.length, completed, archivedOnly, deferred, processed, imported, partitioned, roundsPlanned, roundsCompleted,
+      requests, planned: plan.length, completed, verifiedEmpty, archivedOnly, deferred, processed, imported, partitioned, roundsPlanned, roundsCompleted,
       ...(complete && { fixtureScopeFingerprint: footballHistoryFixtureScopeFingerprint(plan.map(({ scope }) => scope)) }),
       providerDayEndsAt: verifiedDayEnd,
       roundsArchivedOnly, persistenceDeferred, roundsPersistenceDeferred, consecutiveTransportErrors, unlistedCompetitions, stopped };

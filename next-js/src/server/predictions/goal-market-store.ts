@@ -2,9 +2,9 @@ import "server-only";
 
 import { z } from "zod";
 import { settledExtendedStatuses as settledStatuses } from "../../domain/extended-markets.ts";
-import { liveGoalMarketDefinitions } from "../../domain/goal-market-definitions.ts";
+import { legacyLiveGoalMarketDefinitions, liveGoalMarketDefinitions } from "../../domain/goal-market-definitions.ts";
 import { scoreDistributionSchema, type ScoreDistribution } from "../../domain/score-distribution.ts";
-import { deriveGoalMarket, deriveLocalPoissonTotal15, goalMarketDefinitionSchema, GOAL_MARKET_RULE_VERSION,
+import { deriveGoalMarket, deriveLocalGoalMarket, goalMarketDefinitionSchema, GOAL_MARKET_RULE_VERSION,
   localPoissonRatesSchema, settleGoalSelection,
   type GoalDerivationResult, type GoalMarketDefinition, type GoalSettlementContext } from "../../domain/score-distribution-markets.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
@@ -21,20 +21,23 @@ const definitionsSchema = z.array(goalMarketDefinitionSchema).max(goalMarketStor
 const inputSchema = z.union([
   z.strictObject({ scoreDistribution: scoreDistributionSchema, definitions: definitionsSchema }),
   z.strictObject({ localPoisson: localPoissonRatesSchema, definitions: definitionsSchema }),
+  z.strictObject({ scoreDistribution: scoreDistributionSchema, localPoisson: localPoissonRatesSchema, definitions: definitionsSchema }),
 ]).superRefine((value, context) => {
   const { definitions } = value;
   if (new Set(definitions.map(({ key }) => key)).size !== definitions.length ||
       definitions.some(({ key, period }) => !key.startsWith(`goal:${period}:`)) ||
-      "localPoisson" in value && evidenceFingerprint(definitions) !== evidenceFingerprint(liveGoalMarketDefinitions)) {
+      "localPoisson" in value && ![liveGoalMarketDefinitions, legacyLiveGoalMarketDefinitions]
+        .some((catalog) => evidenceFingerprint(definitions) === evidenceFingerprint(catalog))) {
     context.addIssue({ code: "custom", message: "Goal market definitions require unique period-qualified identities." });
   }
 });
-type GoalMarketModel = Readonly<{ scoreDistribution: ScoreDistribution }> |
-  Readonly<{ localPoisson: Readonly<z.infer<typeof localPoissonRatesSchema>> }>;
+type LocalPoisson = Readonly<z.infer<typeof localPoissonRatesSchema>>;
+type GoalMarketModel = Readonly<{ scoreDistribution: ScoreDistribution; localPoisson?: LocalPoisson }> |
+  Readonly<{ localPoisson: LocalPoisson; scoreDistribution?: ScoreDistribution }>;
 export type GoalMarketExtensionInput = GoalMarketModel & Readonly<{ definitions: readonly GoalMarketDefinition[] }>;
 export type PreparedGoalMarketExtension = Readonly<{
   version: 1; ruleVersion: typeof GOAL_MARKET_RULE_VERSION;
-  markets: readonly Readonly<{ definition: GoalMarketDefinition; derivation: GoalDerivationResult }>[];
+  markets: readonly Readonly<{ definition: GoalMarketDefinition; derivation: GoalDerivationResult; localDerivation?: GoalDerivationResult }>[];
 }> & GoalMarketModel;
 export type StoredGoalMarketExtension = PreparedGoalMarketExtension & Readonly<{
   revisionId: string; cycleId: string; fixtureId: string; recordedAt: number; contentHash: string;
@@ -50,8 +53,12 @@ export function parseGoalMarketExtensionInput(input: unknown): GoalMarketExtensi
 export function prepareGoalMarketExtension(input: unknown): PreparedGoalMarketExtension {
   const { definitions, ...model } = parseGoalMarketExtensionInput(input);
   const prepared: PreparedGoalMarketExtension = freezeEvidence({ version: 1 as const, ruleVersion: GOAL_MARKET_RULE_VERSION, ...model,
-    markets: definitions.map((definition) => ({ definition, derivation: "localPoisson" in model
-      ? { available: true as const, market: deriveLocalPoissonTotal15(model.localPoisson, definition) } : deriveGoalMarket(model.scoreDistribution, definition) })) });
+    markets: definitions.map((definition) => {
+      const primary = model.scoreDistribution && deriveGoalMarket(model.scoreDistribution, definition);
+      const local = model.localPoisson && deriveLocalGoalMarket(model.localPoisson, definition);
+      const derivation = primary?.available ? primary : local ?? primary!;
+      return { definition, derivation, ...(primary?.available && local?.available ? { localDerivation: local } : {}) };
+    }) });
   if (Buffer.byteLength(evidenceSerialize(prepared)) > goalMarketStorageLimits.bytes) return historyFail("invalid-request");
   return prepared;
 }
@@ -65,7 +72,8 @@ export function goalMarketExtensionFromRow(row: HistoryRow): StoredGoalMarketExt
     fixtureId: body?.fixtureId, recordedAt: body?.recordedAt });
   if (!identity.success || !Array.isArray(body.markets)) return historyFail("invalid-state");
   let prepared;
-  try { prepared = prepareGoalMarketExtension({ ...("localPoisson" in body ? { localPoisson: body.localPoisson } : { scoreDistribution: body.scoreDistribution }),
+  try { prepared = prepareGoalMarketExtension({ ...("localPoisson" in body ? { localPoisson: body.localPoisson } : {}),
+    ...("scoreDistribution" in body ? { scoreDistribution: body.scoreDistribution } : {}),
     definitions: body.markets.map((entry) => (entry as { definition?: unknown })?.definition) }); }
   catch { return historyFail("invalid-state"); }
   const contentHash = evidenceFingerprint(prepared), expected = { ...prepared, ...identity.data, contentHash };
@@ -161,7 +169,7 @@ export function projectGoalMarketSettlements(extension: StoredGoalMarketExtensio
       cycle.lockedSetId !== extension.revisionId || context.cycleEligibility.eligible !== (cycle.state !== "void")) return historyFail("invalid-state");
   return freezeEvidence(extension.markets.map(({ definition, derivation }) => {
     const market = derivation.available ? derivation.market : null, previous = recorded.get(definition.key) ?? null;
-    const source = "localPoisson" in extension ? "local-poisson" : "ai-score-distribution";
+    const source = market?.source ?? (extension.localPoisson ? "local-poisson" : "ai-score-distribution");
     if (previous && (previous.predictionRevisionId !== extension.revisionId || previous.fixtureId !== extension.fixtureId ||
         previous.cycleId !== cycle.id || previous.marketKey !== definition.key || previous.source !== source || previous.selection !== (market?.selection ?? null)))
       return historyFail("invalid-state");

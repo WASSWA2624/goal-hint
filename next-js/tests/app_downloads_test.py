@@ -21,11 +21,11 @@ class AppDownloadsTests(unittest.TestCase):
     def tearDown(self):
         self.temporary.cleanup()
 
-    def package(self, channel="development", build=7, content=b"installer", suffix=".exe"):
-        name = f"goal-hint-windows-1.0.0{'-dev' if channel == 'development' else ''}.zip"
+    def package(self, channel="development", build=7, content=b"installer", suffix=".exe", platform="windows", signed=True):
+        name = f"goal-hint-{platform}-1.0.0{'-dev' if channel == 'development' else ''}.zip"
         archive = self.packages / name
-        metadata = {"platform": "windows", "environment": channel, "mode": "debug" if channel == "development" else "release",
-                    "version": "1.0.0", "build": build, "artifactSha256": hashlib.sha256(content).hexdigest()}
+        metadata = {"platform": platform, "environment": channel, "mode": "debug" if channel == "development" else "release",
+                    "version": "1.0.0", "build": build, "artifactSha256": hashlib.sha256(content).hexdigest(), "signed": signed}
         with zipfile.ZipFile(archive, "w") as bundle:
             bundle.writestr("download-manifest.json", json.dumps(metadata))
             bundle.writestr("Setup" + suffix, content)
@@ -71,9 +71,19 @@ class AppDownloadsTests(unittest.TestCase):
             prepare_app_downloads("production", root, self.packages)
 
     def test_production_requires_valid_release_metadata(self):
-        self.package("production")
+        self.package("production", signed=False)
+        with self.assertRaisesRegex(CommandError, "verified release signature"):
+            prepare_app_downloads("production", self.directory / "downloads", self.packages)
+        windows = self.package("production")
         root = prepare_app_downloads("production", self.directory / "downloads", self.packages)
-        self.assertEqual(json.loads((root / "catalog.json").read_text())["releases"][0]["platform"], "windows")
+        windows.unlink()
+        self.package("production", suffix=".apk", platform="android")
+        self.package("production", suffix=".dmg", platform="macos")
+        self.package("production", suffix=".deb", platform="linux")
+        root = prepare_app_downloads("production", self.directory / "downloads", self.packages)
+        self.assertEqual({entry["platform"] for entry in json.loads((root / "catalog.json").read_text())["releases"]},
+                         {"windows", "android", "macos", "linux"})
+        self.assertTrue((root / "files/windows/1.0.0-7/Setup.exe").exists())
 
 
 if __name__ == "__main__":

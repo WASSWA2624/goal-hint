@@ -1,14 +1,20 @@
-# Android and Windows app downloads
+# App downloads
 
 The header, mobile icon, More menu and `/{locale}/download` are available in both
 development and production. They share the existing theme and control tokens.
-Only Android and Windows are offered; device detection never prevents choosing
-the other platform. Downloads start only after a user action.
+The page offers Android, Windows, iOS, macOS and Linux. Device detection
+recommends a platform and the user can choose any platform. Downloads start
+after a user action.
 
-| Environment | Android | Windows |
+| Platform | Development | Production |
 | --- | --- | --- |
-| Development | Local APK from `/api/downloads/android` | Local setup EXE from `/api/downloads/windows` |
-| Production | Configured Google Play listing | Hosted production setup EXE |
+| Android | Local APK | Hosted signed APK, with a configured Google Play fallback |
+| Windows | Local setup EXE | Hosted setup EXE |
+| iOS | Coming soon | Published App Store listing or public TestFlight invitation |
+| macOS | Coming soon | Hosted signed and notarized DMG |
+| Linux | Coming soon | Hosted signed Debian package |
+
+Platforms without a published release show “Coming soon.”
 
 ## Local development
 
@@ -28,7 +34,8 @@ the web server is already running. Published files live in ignored
 
 ## Production settings
 
-Set these in the private production environment after the store release exists:
+An existing Google Play release can serve as a fallback while a hosted APK is
+unavailable. Set these in the private production environment for that fallback:
 
 ```dotenv
 GOAL_HINT_ANDROID_PLAY_STORE_URL=
@@ -37,10 +44,15 @@ GOAL_HINT_ANDROID_PLAY_STORE_BUILD=
 ```
 
 The URL must be an HTTPS `play.google.com/store/apps/details?id=...` listing.
-While blank, the Android production page says the Play release is coming soon.
 The URL alone enables the store link. Set the actual published native semantic
 version and numeric build number to enable accurate in-app update checks; no
 version is inferred from the web package or an unreleased native source version.
+
+For iOS, set `GOAL_HINT_IOS_DISTRIBUTION_URL` to the actual App Store listing or
+public TestFlight invitation. `GOAL_HINT_IOS_DISTRIBUTION_VERSION` and
+`GOAL_HINT_IOS_DISTRIBUTION_BUILD` enable installed-version checks. The catalog
+uses the published Apple channel, and the provisioned IPA stays with the release
+owner.
 
 `GOAL_HINT_APP_DOWNLOADS_ROOT` optionally overrides the installer root. When
 blank, the runtime uses `.app-downloads` in its working directory. A custom root
@@ -49,23 +61,24 @@ Production/development catalogs cannot be interchanged.
 
 ## Production deployment
 
-Package Windows through `flutter/tool/windows/package.ps1` as usual. Its delivery
-ZIP includes a small `download-manifest.json` with the actual version/build and
-installer hash. Existing older packages need repackaging before web publication.
+Use the [native release packaging commands](../../flutter/docs/releases.md).
+Production delivery ZIPs include `download-manifest.json` with the actual
+version/build, signature verification and installer hash. Existing older
+packages need repackaging before new publication.
 
-`scripts/deploy-cpanel.py` automatically publishes the available production
-Windows package before activating a web release. It verifies the archive hash,
-extracts only the installer, verifies its hash again on the host, then switches
-the catalog after the file exists. Missing production archives preserve existing
-hosted downloads. Invalid present archives stop publication rather than
-promoting a development file. This step does not build native binaries or upload
-Android apps to Google Play.
+For manual VPS publication, prepare a production-only download root with
+`python scripts/app-downloads.py --channel production --root <download-root>`.
+Copy the validated, versioned `files/` entries into the private installer root,
+verify their SHA-256 on the host and publish the catalog atomically after all
+listed files exist. Configure `GOAL_HINT_APP_DOWNLOADS_ROOT` to use that root.
+The legacy `scripts/deploy-cpanel.py` uploader also verifies upload and installer
+hashes and retains active entries for platforms absent from a new upload.
 
 Hosted installers live under `~/<app>-downloads/`, linked into each web release.
 Old versioned installers are retained and a website rollback does not remove
 them. Replacing an existing version/build with different bytes is rejected;
-increment the native build number. Existing Windows packaging is unsigned;
-website hosting does not add an Authenticode signature.
+increment the native build number. Sign the Windows EXE during native packaging
+before publishing it.
 
 ## Invitations and updates
 
@@ -76,7 +89,7 @@ suppresses that release. A newer release can be offered again, while rollbacks
 do not trigger an older-release offer. Storage is per browser and platform; no
 account-level device tracking or claim of confirmed installation is made.
 
-Android/Windows native hosts append installed package identity before loading
+Native hosts append installed package identity before loading
 the website. The shared runtime suppresses install invitations inside the host
 and offers an update only when a newer native version/build is published in the
 same environment. Unknown package metadata suppresses the install invitation
@@ -99,5 +112,6 @@ unchanged by this work. See the local verification log under ignored `output/`.
 Android's existing universal debug APK remains a development artifact. Flutter
 debug engines, multiple CPU architectures and debug graphics tooling account
 for most of its size; it does not bundle the website. A native Android WebView
-host is the recommended follow-up for a small wrapper. The production Play
-listing stays unavailable until configured. No small-APK result is claimed yet.
+host is the recommended follow-up for a small wrapper. Signed production packages
+and native device acceptance depend on the platform toolchains and release
+signing configuration.

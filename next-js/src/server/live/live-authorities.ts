@@ -1,7 +1,7 @@
 import "server-only";
 
 import { utcInstantFromEpochMilliseconds, type Clock, type UtcInstant } from "../../domain/calendar.ts";
-import { liveGoalMarketDefinitions } from "../../domain/goal-market-definitions.ts";
+import { legacyLiveGoalMarketDefinitions, liveGoalMarketDefinitions } from "../../domain/goal-market-definitions.ts";
 import { assertOperationAllowed, type EvidenceVerifier, type RuntimePolicy } from "../config/runtime-policy.ts";
 import type { EvidenceAuthority } from "../evidence/evidence-contract.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
@@ -163,12 +163,14 @@ export function createLiveAuthorities(options: Readonly<{
       });
     },
     verifyGoalExtension: ({ candidate, goalExtension }) => {
-      if (!options.localFootball || !goalExtension || !same(goalExtension.definitions, liveGoalMarketDefinitions)) return false;
-      if ("localPoisson" in goalExtension) return cascadeEnabled && candidate.audit.sourceCascade === LIVE_FORECAST_CASCADE &&
-        Object.values(candidate.markets).some((market) => market.available && market.provenance.kind === "local-engine" &&
-          same(market.provenance.rates, goalExtension.localPoisson));
-      return options.verifyPrimaryCandidate?.(candidate) === true &&
+      if (!goalExtension || ![liveGoalMarketDefinitions, legacyLiveGoalMarketDefinitions].some((definitions) => same(goalExtension.definitions, definitions))) return false;
+      const localVerified = !goalExtension.localPoisson || cascadeEnabled && candidate.audit.sourceCascade === LIVE_FORECAST_CASCADE &&
+        verify(refs.retention, "football-private-use") && (same(candidate.audit.localGoalRates ?? null, goalExtension.localPoisson) ||
+          Object.values(candidate.markets).some((market) => market.available && market.provenance.kind === "local-engine" &&
+            same(market.provenance.rates, goalExtension.localPoisson)));
+      const aiVerified = !goalExtension.scoreDistribution || options.verifyPrimaryCandidate?.(candidate) === true &&
         options.verifyPrimaryGoals?.(candidate, goalExtension.scoreDistribution) === true;
+      return localVerified && aiVerified;
     },
   });
   const evidence: EvidenceAuthority = Object.freeze({
@@ -215,8 +217,11 @@ export function createLiveAuthorities(options: Readonly<{
             plan.evidence.cachedSources as import("../evidence/evidence-contract.ts").EvidenceSource[], options.refreshPacing,
             (plan.recommendationPolicy === undefined ? plan.sourceOrder : options.sourceOrder) ?? "ai-first"), ...frozenPolicy };
         if (reviewed === null) return false;
-        if (plan.sourceCascade !== undefined) return cascadeEnabled &&
-          same(plan, parseRefreshPlan(liveCascadePlan(reviewed, options.localFootball === true), member));
+        if (plan.sourceCascade !== undefined) {
+          const current = liveCascadePlan(reviewed);
+          return cascadeEnabled && [current, { ...current, goalDefinitions: legacyLiveGoalMarketDefinitions }, liveCascadePlan(reviewed, false)]
+            .some((intent) => same(plan, parseRefreshPlan(intent, member)));
+        }
         if (same(plan, parseRefreshPlan(reviewed, member))) return true;
         if (plan.modelVersionId === null && same(plan, parseRefreshPlan(baseline, member))) return true;
         // Old sealed intents predate recommendation selection and reserved only the two publication calls.

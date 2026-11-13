@@ -150,7 +150,7 @@ def main():
             raise CommandError("Use --continuous with an optional --requests value from 2 to 100.")
         if not args:
             args = ["--requests", "100"]
-    command = [node_binary(), "--conditions=react-server", "--env-file-if-exists=.env.local",
+    command = [node_binary(), "--conditions=react-server", "--env-file-if-exists=.env.development",
                "--env-file-if-exists=.env.operations", "scripts/backfill-football-history.mjs"]
     env = dict(os.environ, NODE_ENV="development", GOAL_HINT_DEMO="false",
                NEXT_PUBLIC_GOAL_HINT_DEMO="false", NEXT_PUBLIC_GOAL_HINT_LOCAL_FOOTBALL="true",
