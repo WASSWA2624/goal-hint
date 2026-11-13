@@ -25,8 +25,12 @@ export const detailRevisionSchema = z.strictObject({ revisionId: id, cycleId: id
   evidenceCutoffAt: at, generationCompletedAt: at, publishedAt: at });
 export const detailPublicationSchema = detailRevisionSchema.extend({
   runDate: z.iso.date(), sources: z.array(z.enum(marketSources)).min(1).max(marketSources.length), cycle: detailCycleSchema,
-}).refine((v) => v.cycleId === v.cycle.id && v.runSequence === v.runDate.replaceAll("-", "") && new Set(v.sources).size === v.sources.length,
-  { message: "Incoherent publication provenance." });
+}).refine((v) => {
+  const date = v.runDate.replaceAll("-", "");
+  const matchesRunDate = v.runSequence === date ||
+    v.runSequence.startsWith(date) && /^(?:0[1-9]|1[0-9]|2[0-3])$/u.test(v.runSequence.slice(date.length));
+  return v.cycleId === v.cycle.id && matchesRunDate && new Set(v.sources).size === v.sources.length;
+}, { message: "Incoherent publication provenance." });
 export const storedDetailSnapshotSchema = publicForecastSchema.safeExtend({
   ...detailRevisionSchema.shape, historical: z.boolean(), applicability: z.enum(["current", "locked", "void", "historical"]), cycle: detailCycleSchema,
   markets: z.array(publicForecastSchema.shape.markets.element.safeExtend({

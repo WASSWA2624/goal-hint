@@ -200,9 +200,10 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
     });
     await t.test('earlier revision selection and anchored history stay stable under new publication', async () => {
       const state = await publish(3010, { linkedEvidence: true });
-      async function nextRevision(date, options = {}) {
+      async function nextRevision(date, { slotHour = 0, ...options } = {}) {
         p.setTime(Date.parse(`${date}T08:00:04Z`)); readAt = p.now();
-        const fixture = await p.catalog.fixtureByProviderId(3010), cycle = await p.history.findCycle(state.cycle.id), run = await p.history.createRun(date, p.now() - 4000);
+        const fixture = await p.catalog.fixtureByProviderId(3010), cycle = await p.history.findCycle(state.cycle.id),
+          run = await p.history.createRun(date, p.now() - 4000, slotHour);
         const context = evidenceContext(fixture, { runId: run.id, cycleId: cycle.id, analysisAt: p.now() - 4000, cutoffAt: p.now() - 4000,
           home: { teamId: fixture.homeTeamId, externalId: fixture.homeExternalIds[0] }, away: { teamId: fixture.awayTeamId, externalId: fixture.awayExternalIds[0] } });
         const authority = evidenceAuthority(), snapshot = buildEvidenceSnapshot({ context, policy: evidencePolicy(),
@@ -216,7 +217,8 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
           return revision;
         });
       }
-      const second = await nextRevision('2026-10-10', { partial: true }), third = await nextRevision('2026-10-11');
+      const second = await nextRevision('2026-10-10', { partial: true }), third = await nextRevision('2026-10-11', { slotHour: 11 });
+      assert.equal(third.runSequence, 2026101111n);
       const firstPage = await read(state, `revision=${state.revision.id}&limit=1`);
       assert.equal(firstPage.snapshot.historical, true); assert.deepEqual(firstPage.snapshot.outcomes, []);
       assert.equal(firstPage.snapshot.analysis.state, 'available');

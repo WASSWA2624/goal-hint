@@ -6,7 +6,7 @@ import { createMatchDetailHandler } from '../src/server/matches/detail-http.ts';
 import { createMatchDetailService, canonicalMatchSlug } from '../src/server/matches/detail-service.ts';
 import { parseMatchDetailQuery, detailHistoryLink } from '../src/server/matches/detail-query.ts';
 import { publicRevisionAnalysis } from '../src/server/matches/detail-read.ts';
-import { detailOddsGroupSchema, detailRevisionSchema, matchDetailResponseSchema, storedMatchDetailResponseSchema } from '../src/domain/match-detail.ts';
+import { detailOddsGroupSchema, detailPublicationSchema, detailRevisionSchema, matchDetailResponseSchema, storedMatchDetailResponseSchema } from '../src/domain/match-detail.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 import { historyCandidate } from './helpers/prediction-history-fixtures.mjs';
 import { predictorSnapshot } from './helpers/predictor-output-fixtures.mjs';
@@ -59,6 +59,18 @@ test('revision DTO reuses safe UTC instants and unsigned decimal fixture version
   assert.equal(detailRevisionSchema.safeParse(revision).success, true);
   assert.equal(detailRevisionSchema.safeParse({ ...revision, fixtureDataVersion: '18446744073709551616' }).success, false);
   assert.equal(detailRevisionSchema.safeParse({ ...revision, publishedAt: 8_640_000_000_000_001 }).success, false);
+});
+test('publication history accepts only midnight and valid hourly sequences for its reporting date', () => {
+  const publication = { revisionId: id, cycleId: id, runId: id, runDate: '2026-10-09', fixtureRevision: 1, cycleRevision: 1,
+    fixtureDataVersion: '1', evidenceCutoffAt: 0, generationCompletedAt: 1, publishedAt: 2, sources: ['ai'],
+    cycle: { id, ordinal: 1, state: 'open', currentRevisionId: id, lockedRevisionId: null, kickoffAt: 400_000, cutoffAt: 100_000,
+      openedAt: 0, closedAt: null, lockedAt: null, voidedAt: null, voidReason: null } };
+  for (const runSequence of ['20261009', '2026100901', '2026100923']) {
+    assert.equal(detailPublicationSchema.safeParse({ ...publication, runSequence }).success, true, runSequence);
+  }
+  for (const runSequence of ['2026100900', '2026100924', '202610099', '2026101001', '20261009111']) {
+    assert.equal(detailPublicationSchema.safeParse({ ...publication, runSequence }).success, false, runSequence);
+  }
 });
 test('analysis permits original summaries and attribution, preserves unknown clocks, and withholds expired or unsafe citations', () => {
   const context = evidenceContext(), source = evidenceSource(context, { sourceUrl: 'https://example.com/fixture', providerUpdatedAt: null });

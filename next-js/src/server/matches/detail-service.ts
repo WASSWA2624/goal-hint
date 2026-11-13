@@ -107,7 +107,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
             return cycle;
           };
           const runs = await tx.dailyRun.findMany({ where: { id: { in: [...new Set(published.map((entry) => entry.runId))] } },
-            select: { id: true, sequence: true, eatDate: true, createdAt: true } });
+            select: { id: true, sequence: true, eatDate: true, slotHour: true, createdAt: true } });
           const runDates = new Map(runs.map((row) => { const run = runFromRow(row); return [run.id, run.eatDate]; }));
           const revisions = published.map((entry) => ({ ...publicDetailRevision(entry), runDate: runDates.get(entry.runId),
             sources: [...new Set(Object.values(entry.candidate.markets).flatMap((market) => market.available ? [market.market.source] : []))],
