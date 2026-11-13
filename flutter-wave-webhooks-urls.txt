@@ -1,0 +1,9 @@
+Flutterwave Webhook URLs
+
+Sandbox — Development and Hosted Test
+https://test.goalhint.com/api/payments/flutterwave/webhook
+Register this URL in the Flutterwave sandbox. The endpoint is deployed and verified on hosted test.
+
+Live — Production
+https://goalhint.com/api/payments/flutterwave/webhook
+For future live activation.
