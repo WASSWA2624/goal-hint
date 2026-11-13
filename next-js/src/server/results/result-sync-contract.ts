@@ -44,7 +44,7 @@ export type TrackedResultFixture = Readonly<{
   fixtureId: string; externalId: number; competitionId: number; season: number;
   kickoffAt: number | null; status: string; retrievedAt: number;
   firstTrackedAt: number; firstFinalAt: number | null;
-  lastSyncAt: number | null; nextCheckAt: number | null; failures: number;
+  lastSyncAt: number | null; lastVerifiedAt?: number | null; nextCheckAt: number | null; failures: number;
   finalConfirmed?: boolean;
 }>;
 export type ResultSyncBatch = Readonly<{

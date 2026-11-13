@@ -91,7 +91,7 @@ test('the feed and detail update from sealed live results without resetting the 
   ]) {
     feed = replaceFeedPages(feed, [liveFeed([record], { asOf })]);
     detail = mergeLiveDetail(detail, liveDetail(record, { asOf }));
-    const unchanged = { ...record, syncedAt: asOf + 1 };
+    const unchanged = { ...record, syncedAt: asOf + 1, resultVerifiedAt: asOf + 1 };
     feed = replaceFeedPages(feed, [liveFeed([unchanged], { asOf: asOf + 1 })]);
     detail = mergeLiveDetail(detail, liveDetail(unchanged, { asOf: asOf + 1 }));
     for (const projection of [feed.records[0], detail.fixture]) {
@@ -100,6 +100,7 @@ test('the feed and detail update from sealed live results without resetting the 
       assert.equal(projection.scorePeriod, record.scorePeriod);
       assert.deepEqual(projection.liveClock, record.liveClock);
       assert.equal(projection.syncedAt, asOf + 1);
+      assert.equal(projection.resultVerifiedAt, asOf + 1);
     }
   }
 });
@@ -137,6 +138,7 @@ test('RTK Query deduplicates consumers, cancels an obsolete consumer, and only m
   const response = liveFeed(); pending.shift()(Response.json(response));
   assert.deepEqual(await second.unwrap(), response); second.unsubscribe();
   assert.match(calls[0].href, /^\/api\/matches\?date=.*&leagues=0$/); assert.equal(calls[0].options.credentials, 'same-origin');
+  assert.equal(new Headers(calls[0].options.headers).get('x-goal-hint-result-freshness'), '1');
   assert.equal(calls[0].options.cache, 'no-store'); assert.equal(calls[0].options.method, undefined); assert.equal(calls[0].options.body, undefined);
   assert.equal(makeStore({ today, query: query(), data: null }).getState().publicRefresh.queries[calls[0].href], undefined);
 });
@@ -147,7 +149,10 @@ test('refresh endpoint errors and historical/foreign detail responses cannot bec
   const foreign = liveDetail(); foreign.fixture.fixtureId = randomUUID(); foreign.route.fixtureId = foreign.fixture.fixtureId;
   for (const [body, status, code] of [[{}, 503, 'unavailable'], [{}, 429, 'rate-limited'], [{}, 200, 'invalid-response'],
     [liveDetail(liveRecord(), { selection: 'cycle' }), 200, 'invalid-response'], [foreign, 200, 'invalid-response']]) {
-    globalThis.fetch = async () => Response.json(body, { status });
+    globalThis.fetch = async (_href, options) => {
+      assert.equal(new Headers(options.headers).get('x-goal-hint-result-freshness'), '1');
+      return Response.json(body, { status });
+    };
     const request = store.dispatch(detailApi.endpoints.detail.initiate(ids.fixture, { forceRefetch: true }));
     await assert.rejects(request.unwrap(), e => e.code === code); request.unsubscribe();
   }

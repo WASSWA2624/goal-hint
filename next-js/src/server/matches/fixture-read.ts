@@ -3,7 +3,7 @@ import "server-only";
 import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { liveClockFromProvider } from "../../domain/match-card.ts";
 import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
-import type { InstantWindow } from "../../domain/calendar.ts";
+import { utcInstantFromEpochMilliseconds, type InstantWindow } from "../../domain/calendar.ts";
 import type { StoredMatchFeedRecord } from "../../domain/match-feed.ts";
 import { createMessages } from "../../i18n/messages.ts";
 import { isSafeRemoteImageUrl } from "../../domain/remote-image.ts";
@@ -26,7 +26,7 @@ const fixtureSelect = {
   regulationHome: true, regulationAway: true, regulationVerifiedAt: true, regulationEvidenceRef: true,
   homeTeam: feedTeam, awayTeam: feedTeam,
   season: { select: { competition: { select: { id: true, name: true, country: true, logoUrl: true, countryFlagUrl: true } } } },
-  resultState: { select: { resultId: true, lastSyncAt: true, delayReason: true } }, lifecycleState: { select: { issue: true } },
+  resultState: { select: { resultId: true, lastSyncAt: true, lastVerifiedAt: true, delayReason: true } }, lifecycleState: { select: { issue: true } },
 } satisfies Prisma.FootballFixtureSelect;
 type FeedFixture = Prisma.FootballFixtureGetPayload<{ select: typeof fixtureSelect }>;
 type FeedPriceOptions = Readonly<{ prices?: boolean; preferRecommendation?: boolean }>;
@@ -113,6 +113,7 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
       logoUrl: isSafeRemoteImageUrl(competition.logoUrl) ? competition.logoUrl : null,
       countryFlagUrl: isSafeRemoteImageUrl(competition.countryFlagUrl) ? competition.countryFlagUrl : null },
     kickoffAt: fixture.kickoff ? historyTime(fixture.kickoff) : null, syncedAt: historyTime(fixture.resultState?.lastSyncAt ?? fixture.retrievedAt),
+    resultVerifiedAt: coherentResult ? utcInstantFromEpochMilliseconds(Math.max(result!.observedAt, fixture.resultState?.lastVerifiedAt?.getTime() ?? 0)) : null,
     status, score: isPlayedFinalStatus(status) && regulationScore
       ? regulationScore : live ? { home: result!.reportedGoals.home!, away: result!.reportedGoals.away! } : null,
     scorePeriod: isPlayedFinalStatus(status) && regulation ? "regulation" : live ? "live" : null,

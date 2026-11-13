@@ -8,6 +8,7 @@ import styled from "styled-components";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { CountryLabel } from "@/components/ui/country-label";
 import { CompetitionLogo } from "@/components/match/competition-media";
+import { useStartUnconfirmed } from "@/components/match/score-presentation";
 import type { InsightResult, InsightSections } from "@/domain/match-insights";
 import { pageOf } from "@/domain/match-insight-presentation";
 import { fullDetailSnapshot } from "@/domain/detail-snapshot";
@@ -127,6 +128,7 @@ export const ContextSection = memo(function ContextSection() {
   const context = useInsightSection(fixtureId, "context", open, preview);
   const value = context.data ?? preview?.sections.context ?? null;
   const fixture = data.fixture;
+  const startUnconfirmed = useStartUnconfirmed(fixture.status, fixture.kickoffAt);
   const lastResults = value ? [value.lastResults.home, value.lastResults.away].filter((entry): entry is InsightResult => entry !== null) : [];
   const record = view.item ? lastResults.find((entry) => entry.fixtureId === view.item) ?? null : null;
   const list = useRef<HTMLDivElement>(null);
@@ -150,7 +152,7 @@ export const ContextSection = memo(function ContextSection() {
         <dt>{messages.text("details.round")}</dt><dd>{value?.competition.round ?? messages.text("details.notAvailable")}</dd>
         <dt>{messages.text("match.kickoff")}</dt><dd>{kickoff === null ? messages.text("details.kickoffUnknown")
           : <time dateTime={toUtcIsoString(kickoff)}>{messages.reportingInstant(kickoff)}</time>}</dd>
-        <dt>{messages.text("details.status")}</dt><dd>{messages.text(`match.status.${fixture.status}`)}</dd>
+        <dt>{messages.text("details.status")}</dt><dd>{messages.text(startUnconfirmed ? "match.status.startUnconfirmed" : `match.status.${fixture.status}`)}</dd>
         <dt>{messages.text("details.venue")}</dt><dd>{value?.venue ? [value.venue.name, value.venue.city].filter(Boolean).join(", ") : messages.text("details.notAvailable")}</dd>
         <dt>{messages.text("details.weather")}</dt><dd>{messages.text("details.notAvailable")}</dd>
         <dt>{messages.text("details.standings")}</dt><dd>{value?.standings

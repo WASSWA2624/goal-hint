@@ -23,7 +23,7 @@ export type DesktopMatchRowProps = Readonly<{
   fixtureId: string; locale: string; kickoffAt: UtcInstant | null;
   homeTeam: RowTeam; awayTeam: RowTeam; competition: RowCompetition;
   status: FixtureSnapshot["status"]; score: Readonly<{ home: number; away: number }> | null;
-  liveClock?: FixtureSnapshot["liveClock"]; outcome: OutcomeTone;
+  liveClock?: FixtureSnapshot["liveClock"]; resultVerifiedAt?: FixtureSnapshot["resultVerifiedAt"]; outcome: OutcomeTone;
   /** A preformatted authorized market; the row never selects or fabricates a forecast. */
   market: ReactNode; marketFamily?: MarketFamily; marketDescription?: string;
   odds: ReactNode; probability: ReactNode; analysisHref?: string; analysisLabel?: string;
@@ -40,7 +40,7 @@ export type DesktopMatchRowProps = Readonly<{
 }>;
 
 /** One approved desktop match row for live feed records and immutable slip selections. */
-export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTeam, competition, status, score, liveClock,
+export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTeam, competition, status, score, liveClock, resultVerifiedAt,
   outcome, market, marketFamily, marketDescription, odds, probability, predictionAction, analysisHref, analysisLabel, headingLevel = 4, titleNote, position,
   matchState: suppliedMatchState, savedScore = false, scoreDescription: suppliedScoreDescription, regulationOnly = false, details,
   pickState, eagerLogos = false, offline = false, preview = false, messages, datePrefix, interactive = true, clockInBadge = false }: DesktopMatchRowProps) {
@@ -91,7 +91,7 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
       <span data-centre>{scoreContent}
         {(visibleClock || clockText) && <span data-clock id={`${id}-clock`}
           title={clockTitle}>
-          {visibleClock ? <LiveMatchTime clock={clock} messages={m} /> : clockText}{regulationOnly && <VisuallyHidden>. {m.text("match.regulationScoreNote")}</VisuallyHidden>}
+          {visibleClock ? <LiveMatchTime clock={clock} messages={m} resultVerifiedAt={resultVerifiedAt} /> : clockText}{regulationOnly && <VisuallyHidden>. {m.text("match.regulationScoreNote")}</VisuallyHidden>}
         </span>}</span>
       <span data-away><TeamLogo name={away} url={offline ? undefined : awayTeam.logoUrl ?? undefined} eager={eagerLogos} size={14} /><TruncatedText interactive={interactive} text={away} href={detailsHref} /></span>
     </Heading>
@@ -101,7 +101,8 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
     <span data-row-probability id={`${id}-probability`}><span data-number-label data-row-number-label aria-hidden="true">{m.text("match.columns.probabilityCompact")}:</span><VisuallyHidden>{m.text("slips.probability")}: </VisuallyHidden><strong>{probability}</strong></span>
     </>}
     <span data-row-status id={`${id}-status`}><MatchStatus status={status} outcome={outcome} messages={m}
-      snapshot={matchState === "snapshot"} offline={offline} {...(clockInBadge ? { liveClock: clock, desktopClock: true } : {})} /></span>
+      kickoffAt={clockInBadge ? kickoffAt : undefined} snapshot={matchState === "snapshot"} offline={offline}
+      {...(clockInBadge ? { liveClock: clock, resultVerifiedAt, desktopClock: true } : {})} /></span>
     {details && <div data-row-details id={`${id}-details`}>{details}</div>}
     {detailsHref && <Link data-row-analysis data-match-analysis-link href={detailsHref} prefetch={false}
       aria-label={analysisLabel ? `${analysisLabel}: ${title}` : m.text("match.analysisLabel", { home, away })} aria-describedby={descriptionIds}

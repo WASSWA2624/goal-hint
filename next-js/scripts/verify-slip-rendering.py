@@ -570,8 +570,8 @@ def verify(origin, directory):
     assert re.search(r"Score after 90 minutes: .+ 2, .+ 1", compact_row.nodes(attr="data-stack-progress")[0].text), "Compact saved regulation scores keep their full accessible meaning"
     print("PASS compact saved slip: original alternative, price/probability and supplied regulation score/outcome.", flush=True)
     live = Document(snapshots.text).root.nodes(attr="data-live-snapshot")[0].nodes("a", "data-fixture-id")
-    clocks = [("2nd half", "67:00"), ("HT", "HT"), ("1st half", "47:00"), ("2nd half", "94:00"),
-        ("Extra time", "ET 104:00"), ("Extra time", "ET 121:00"), ("Penalties", "Penalties")]
+    clocks = [("2nd half", "67:00"), ("HT", "HT"), ("1st half", "45+02:00"), ("2nd half", "90+04:00"),
+        ("Extra time", "ET 104:00"), ("Extra time", "ET 120+01:00"), ("Penalties", "Penalties")]
     assert len(live) == len(clocks), "Every supplied live observation is rendered"
     for row, (phase, badge) in zip(live, clocks):
         assert row.nodes(attr="data-score-home")[0].text == "1" and row.nodes(attr="data-score-away")[0].text == "0", "Live score uses the supplied progress"
