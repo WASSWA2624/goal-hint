@@ -20,6 +20,7 @@ import { loadMatchFeedPage } from "@/server/matches/feed-page";
 import { readPublicMatchFeedList } from "@/server/matches/public-feed";
 import { readGatedFeedSummary } from "@/server/matches/feed-summary-read";
 import { MatchFeedError } from "@/server/matches/feed-error";
+import { publicOddsEnabled } from "@/server/odds/public-odds-policy";
 import { feedMetadata } from "@/server/seo/metadata";
 import { getDiscoveryPolicy } from "@/server/seo/policy";
 import { isDocumentRequest, PublicReadUnavailableError } from "@/server/seo/read-status";
@@ -32,15 +33,16 @@ type Props = { params: Promise<{ locale: string; date?: string }>;
 /** Metadata and initial HTML share the same stored read and request-owned clock. */
 export function createFeedRoute({ dated = false, read = readPublicMatchFeedList, instant = getShellInstant, policy = getDiscoveryPolicy,
   resolveAccess = resolveViewerAccess, readSummary = readGatedFeedSummary, document = isDocumentRequest } = {}) {
-  const load = cache(async (parameters: string, locale: string, at: UtcInstant) => {
+  const load = cache(async (parameters: string, locale: string, at: UtcInstant, providerOdds: boolean) => {
     const query = parseMatchFeedQuery(new URLSearchParams(parameters), getReportingDate(at), { locale, asOf: at,
-      ...((await contentAccess(resolveAccess)).tier === "free" ? { providerOdds: true } : {}) });
+      providerOdds: providerOdds || (await contentAccess(resolveAccess)).tier === "free" });
     const today = getFeedToday(query, at);
     return loadMatchFeedPage(query, today, { now: () => at }, read, resolveAccess);
   });
   async function resolve({ params, searchParams }: Props, includeSummary = false) {
     const route = await params, at = await instant(), access = await contentAccess(resolveAccess);
-    let query, today, result, summary: Promise<FeedPerformanceSeed> | undefined;
+    const providerOdds = publicOddsEnabled();
+    let query, today, result, allowProbabilityDefault, summary: Promise<FeedPerformanceSeed> | undefined;
     // The canonical re-parse inside load() also enforces the byte limit, so it must map to 404 too.
     try {
       const { period, ...parameters } = await searchParams;
@@ -54,9 +56,10 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
         }
       }
       query = parseMatchFeedQuery(parameters, getReportingDate(at), { locale: route.locale, asOf: at,
-        ...(access.tier === "free" ? { providerOdds: true } : {}),
+        providerOdds: providerOdds || access.tier === "free",
         ...(dated && (period === undefined || period === "custom") ? { routeDate: route.date } : {}) });
-      query = applyFeedPageDefaults(query, parameters, { dated, allowProbabilityDefault: access.tier === "full" || query.status === "finished" });
+      allowProbabilityDefault = access.tier === "full" || query.status === "finished";
+      query = applyFeedPageDefaults(query, parameters, { dated, allowProbabilityDefault });
       today = getFeedToday(query, at);
       if (!dated || query.status === "live" || period !== undefined) {
         const synchronized = synchronizeFeedStatusDates(query, today);
@@ -69,34 +72,34 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
         summary = readSummary(serializeFeedQuery(scope, today), { now: () => at })
           .then((reply) => ({ href, reply }), () => ({ href, reply: null }));
       }
-      result = await load(serializeFeedQuery(query, today).toString(), route.locale, at);
+      result = await load(serializeFeedQuery(query, today).toString(), route.locale, at, providerOdds);
       if (result.error === "subscription-required") redirect(feedQueryHref(withoutSubscriberFeedOracle(query), today));
       if (includeSummary && result.data) {
         const reply = emptyFeedPerformanceReply(query, result.data);
         if (reply) summary = Promise.resolve({ href: feedPerformanceApiHref(query, today), reply });
       }
     } catch (error) { if (error instanceof MatchFeedError && error.code === "invalid-query") notFound(); throw error; }
-    const discovery = feedDiscovery(query, today);
+    const discovery = feedDiscovery(query, today, allowProbabilityDefault);
     // An empty day beyond the archive window is not a page; the day's cohort count ignores every filter. Strip,
     // calendar and adjacent-day taps keep the in-feed empty state, so only document requests answer 404.
     if (result.data && emptyArchiveIsMissing(discovery.range, today, result.data.coverage.knownFixtures) && await document()) notFound();
     if (result.error === "unavailable" && policy().index && discovery.eligible && await document()) throw new PublicReadUnavailableError();
-    return { query, today, result, discovery, access, summary };
+    return { query, today, result, discovery, access, summary, providerOdds };
   }
   return {
     async generateMetadata(props: Props) {
-      const { query, today, result } = await resolve(props);
-      return feedMetadata(query, today, result, policy());
+      const { query, today, result, discovery } = await resolve(props);
+      return feedMetadata(query, today, result, policy(), discovery);
     },
     async Page(props: Props) {
-      const { query, today, result, access, discovery, summary } = await resolve(props, true);
+      const { query, today, result, access, discovery, summary, providerOdds } = await resolve(props, true);
       const messages = createMessages(query.locale);
-      const structured = !discovery.eligible ? null : breadcrumbStructuredData([{ name: publicPolicy.name, path: homeHref(query.locale) },
+      const structured = !discovery.eligible || discovery.home ? null : breadcrumbStructuredData([{ name: publicPolicy.name, path: homeHref(query.locale) },
         { name: dated ? messages.text("metadata.breadcrumbArchive", { date: messages.reportingDate(discovery.range.startDate) }) : messages.text("navigation.matches") }]);
       return <>
-        {!dated && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(homeStructuredData()) }} />}
+        {discovery.home && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(homeStructuredData()) }} />}
         {structured && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(structured) }} />}
-        <MatchFeedPage query={query} today={today} result={result} showAccount subscriberOnly={access.tier === "free"}
+        <MatchFeedPage query={query} today={today} result={result} showAccount subscriberOnly={access.tier === "free"} providerOdds={providerOdds}
           {...(summary ? { summary } : {})} />
       </>;
     },

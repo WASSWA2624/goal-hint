@@ -182,7 +182,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       verifyBatchEvidence: (evidence) => evidence.maximumIds === 20 });
     const cutoff = createCutoffLockingService({ database, queue, policy: cutoffPolicy(refs), authority: authorities.cutoff });
     const lifecycle = createScheduleLifecycleService({ database, cutoff, policy: lifecyclePolicy(refs), authority: authorities.lifecycle });
-    const catalog = createFootballCatalogStore(database, { coordinateFixtureMutation: lifecycle.coordinateFixtureMutation, transactionTimeoutMs: 120_000 });
+    const catalog = createFootballCatalogStore(database, { coordinateFixtureMutation: lifecycle.coordinateFixtureMutation,
+      transactionTimeoutMs: 120_000, ...(sourceOrder === "ai-first" ? { sealTeamHistory: true } : {}) });
     const importer = createFootballCatalogImporter({ adapter, store: catalog, authority: authorities.catalog });
     const historyBackfill = historySource ? (() => {
       const store = createFootballCatalogStore(database, { historicalResults: true, transactionTimeoutMs: 120_000 });
@@ -348,7 +349,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     })() : null;
     const selectionStore = createMysqlDailySelectionStore(database, queue);
     const dailySelection = createDailySelectionService({ policy: selection, authority: authorities.selection, store: selectionStore, importer, cutoff });
-    // Original public quotes follow the published-slip precedent: the code flag and owner-recorded odds display rights.
+    // Long-lived performance quotes also require the development-only capture policy.
     const publisher = createRevisionPublicationService({ database, queue, policy: publicationPolicy(refs), authority: authorities.publication,
       quotes: { verify: () => publicPolicy.features.providerOdds && authorities.odds.verifyPublicDisplay() === true,
         freshnessMs: odds?.freshnessMs ?? ODDS_FRESHNESS_MS } });
@@ -369,11 +370,12 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     if (ai !== null && aiModel !== null && policy.capabilities.research) try { research = await createLiveResearchRuntime({ policy, verify, refs, model: aiModel,
       database, evidenceAuthority: authorities.evidence, fallbackReserveMs: refreshEnvelopeFor(workload.pacing, true).fallbackReserveMs,
       ...(overrides.researchFetcher ? { fetcher: overrides.researchFetcher } : {}) }); } catch { /* Optional research startup failure preserves the baseline and AI structured evidence. */ }
-    const footballPreparation = createLiveFootballPreparation({ importer, refs, pacing: workload.pacing, adapter: adapter.evidence, database });
+    const footballPreparation = ai !== null || sourceOrder === "ai-first"
+      ? createLiveFootballPreparation({ importer, refs, pacing: workload.pacing, adapter: adapter.evidence, database }) : null;
     const refresh = createPredictionRefreshService({ type: LIVE_REFRESH_TYPE, handlerVersion: 1, store: refreshStore,
       selection: selectionStore, authority: authorities.refresh,
       prepare: async (member, context) => {
-        const football = await footballPreparation(member, context);
+        const football = await footballPreparation?.(member, context);
         let news: readonly import("../evidence/evidence-contract.ts").EvidenceSource[] = [];
         let reason: string | null = policy.capabilities.research ? "unavailable" : "unconfigured";
         if (research) try { const result = await research.prepare(member, context); news = result.sources; reason = result.reason; }

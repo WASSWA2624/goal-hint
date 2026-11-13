@@ -84,7 +84,7 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
       DATABASE_URL: appUrl, GOAL_HINT_DATABASE_CONNECTION_MODE: 'direct', GOAL_HINT_DATABASE_POOL_LIMIT: '6', GOAL_HINT_DATABASE_TLS_MODE: 'disabled',
       GOAL_HINT_FOOTBALL_ENABLED: 'true', API_FOOTBALL_KEY: 'synthetic-live-key', API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS: '0',
       GOAL_HINT_COMPETITION_IDS: '39', GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS: '0', GOAL_HINT_JOB_REQUEST_LIMIT: '2',
-      GOAL_HINT_JOB_TIMEOUT_SECONDS: '120', ...refs };
+      GOAL_HINT_JOB_TIMEOUT_SECONDS: '120', GOAL_HINT_FORECAST_SOURCE_ORDER: 'provider-first', ...refs };
     const policy = parseRuntimePolicy(policyEnv);
     const approvals = { version: 1, owner: 'Synthetic owner', approvals: Object.entries(refs).map(([field, reference]) =>
       ({ requirement: requirementFor[field], reference, approvedAt: '2026-10-10', decision: 'Synthetic test approval only.' })) };
@@ -138,6 +138,8 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
     }
 
     await t.test('one selection imports eight dates for civil-day coverage and refreshes only selected competitions', async () => {
+      assert.ok(network.every((entry) => ['/status?', '/fixtures?date', '/predictions?fixture', '/fixtures?id'].includes(entry)),
+        'provider-first without AI does not dispatch forecast preparation requests');
       assert.equal(network.filter((entry) => entry === '/fixtures?date').length, 8);
       assert.equal(network.filter((entry) => entry === '/predictions?fixture').length, 2);
       assert.equal(network.filter((entry) => entry === '/fixtures?id').length, 2);

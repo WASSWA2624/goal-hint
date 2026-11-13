@@ -57,20 +57,23 @@ players and expected lineups are not confirmed absences or participation.
 
 ## Sources and fallback
 
-The live policy is `optional-ai-primary`. Provider distributions and both source
-receipts are retained independently, even when AI supplies complete families.
-Use the common selector on AI forecasts first; a usable AI recommendation wins
-even if the baseline chose a different market or price. If AI has no qualified
-priced recommendation, publish the independently resolved baseline candidate.
-Missing keys, disabled capability, exhausted allocation, transport/schema/evidence
-failure and timeout remain explicit fallback reasons. A parsed response alone is
-insufficient. Missing optional news does not automatically reject sufficient
-structured evidence. Complete-family and cross-market validation still apply.
+New live jobs use the configured `ai-first` cascade by default. A usable AI
+forecast takes precedence when AI is configured. The Local Engine runs next
+against sealed regulation results in the same league. Verified completed
+fixtures from bounded team-history imports can supply those results, even for
+fixtures that never had a prediction cycle. If the league or either team falls
+short of the model's effective sample requirements, the job can use API-Football's
+supported probability groups. `provider-first` retains the provider baseline
+policy. Older jobs retain their frozen source order and receipts.
 
-This owner-approved precedence supersedes the previous shadow-only product guard.
+The common selector still requires historical support, a qualifying probability,
+and a fresh, permitted quote for the exact selection. Missing AI credentials,
+exhausted allocation, invalid output and timeouts are recorded in the fallback
+audit. Complete-family and cross-market validation still apply.
+
 Model identity, source transmission/reuse rights, exact evidence ownership,
 accounting limits, canonical fixture/version, strict cutoff and atomic publication
-checks still apply. No evaluation or accuracy promotion evidence is fabricated.
+checks still apply. The local estimates remain provisional.
 
 ## Persistence, permissions and rollback
 
@@ -82,7 +85,7 @@ new paid calls. New observations can influence only a new eligible revision.
 
 Internal quote loading verifies acquisition and structured-retention permission
 and reads sealed bookmaker snapshots and their current observation manifest.
-It is independent of `publicPolicy.features.providerOdds`, which stays false.
+Hosted public display separately checks the recorded odds-rights approval.
 Historical receipts without a quote manifest conservatively cannot establish a
 priced recommendation. Public forecasts expose only the recommendation selection
 and source; private quote provenance is not a public-display grant.

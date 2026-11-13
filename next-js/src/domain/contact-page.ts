@@ -1,7 +1,7 @@
-import { publicSupportContactSettings, type PublicSupportSettings } from "./public-subscription-settings.ts";
+import { publicSupportContactSettings, type PublicSupportSettings } from "./public-support-settings.ts";
 import type { SubscriptionSettings } from "./subscription-settings.ts";
 import { parseContactPageEmail } from "./contact-page-email.ts";
-import { parseSupportContacts } from "./support-contacts-input.ts";
+import { parsePublicSupportContacts } from "./support-contacts-input.ts";
 export { contactPageRules, contactPageEmailHref, parseContactPageEmail } from "./contact-page-email.ts";
 
 export type PublicContactPageSettings = PublicSupportSettings & Readonly<{ email: string | null }>;
@@ -21,7 +21,7 @@ export function parsePublicContactPageSettings(input: unknown): PublicContactPag
   if (!input || typeof input !== "object" || Array.isArray(input)) return null;
   const body = input as Record<string, unknown>;
   if (!Object.hasOwn(body, "email")) return null;
-  const email = parseContactPageEmail(body.email), contacts = parseSupportContacts(body.supportContacts);
+  const email = parseContactPageEmail(body.email), contacts = parsePublicSupportContacts(body.supportContacts);
   if (!email.ok || !contacts.ok) return null;
   return publicContactPageSettings({ contactPhone: null, whatsappPhone: null, supportContacts: contacts.contacts,
     contactPageEmail: email.email, contactPageEmailVisible: true });

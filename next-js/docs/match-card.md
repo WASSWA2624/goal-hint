@@ -292,8 +292,10 @@ fall back to native lazy loading. The server carries the approved URL in
 `data-logo-src`; the observer sets `src` as the image approaches the viewport.
 Callers may explicitly opt into eager loading
 for known above-the-fold cards. Requests use `no-referrer`. The application
-cache fetches approved provider originals on demand and serves resized badges;
-there is no image database column or catalog-time binary download.
+cache fetches approved provider originals on demand. It serves resized WebP
+badges when a codec is available and can serve the validated original from
+the same route if conversion fails. There is no image database column or
+catalog-time binary download.
 
 Initials are derived from Unicode team names and remain beneath the image until
 it loads. Cached images that finish before hydration are recognized through the

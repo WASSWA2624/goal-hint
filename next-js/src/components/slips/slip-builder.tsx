@@ -101,11 +101,14 @@ type Props = Readonly<{
   initialOutcomes?: SlipCriteria["outcomes"];
   initialReuse?: boolean; showAccount?: boolean; subscriberOnly?: boolean; signedIn?: boolean;
   jointEstimates?: boolean;
+  providerOdds?: boolean;
   configurationId?: string | null; applyDefault?: boolean;
 }>;
 
 /** The native GET form and enhanced navigation use the same strict criteria parser. */
-export function SlipBuilder({ locale, today, criteria, result: receivedResult, error: initialError = null, initialInputs = {}, initialTimeZone, initialMarkets, initialOutcomes, initialReuse, showAccount = false, subscriberOnly = false, signedIn = false, jointEstimates = false, configurationId = null, applyDefault = false }: Props) {
+export function SlipBuilder({ locale, today, criteria, result: receivedResult, error: initialError = null, initialInputs = {}, initialTimeZone, initialMarkets,
+  initialOutcomes, initialReuse, showAccount = false, subscriberOnly = false, signedIn = false, jointEstimates = false, configurationId = null,
+  applyDefault = false, providerOdds = publicPolicy.features.providerOdds }: Props) {
   const messages = createMessages(locale), router = useRouter(), prefix = useId();
   const [clearedResult, setClearedResult] = useState<SlipBuildPageResult | null>(null);
   const result = clearedResult === receivedResult ? null : receivedResult;
@@ -463,7 +466,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       {result?.searchLimited && <Note>{messages.text("slips.limited")}</Note>}
       {result?.partialCoverage && <Note>{messages.text("slips.partial")}</Note>}
       {result && <Note>{messages.text(desktop ? "slips.generatedAt" : "slips.asOf", { time: messages.reportingInstant(utcInstantFromEpochMilliseconds(result.asOf)) })}</Note>}
-      {!result && !publicPolicy.features.providerOdds && <Note>{messages.text("slips.oddsNotice")}</Note>}
+      {!result && !providerOdds && <Note>{messages.text("slips.oddsNotice")}</Note>}
       <VisuallyHidden role="status" aria-live="polite">{pending ? messages.text("slips.building") : ""}</VisuallyHidden>
     </Results>
   </SlipStack>;

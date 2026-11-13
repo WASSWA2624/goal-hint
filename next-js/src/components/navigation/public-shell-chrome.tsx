@@ -74,10 +74,11 @@ export function PublicShellBoundary({ children, header, tabs, app, locale, works
   </PublicShellFrame></FallbackStyleProvider>;
 }
 
-/** Keep both viewport headers and the tab bar mounted across the three app entry pages. */
+/** Keep both viewport headers and the tab bar mounted across the main app pages. */
 export function PersistentAppShell({ children, locale, asOf }: { children: ReactNode; locale: string; asOf: UtcInstant }) {
   const segment = useSelectedLayoutSegment(), search = useSearchParams();
-  const current = segment === "matches" ? "today" : segment === "best-slips" || segment === "slips" ? segment : undefined;
+  const current = segment === "matches" ? "today"
+    : segment === "best-slips" || segment === "slips" || segment === "performance" ? segment : undefined;
   const candidate = current === "today" ? search.get("tz") : null;
   const zone = validTimeZone(candidate) ? candidate : null;
   const today = zone ? getDateInTimeZone(asOf, zone) : getReportingDate(asOf);

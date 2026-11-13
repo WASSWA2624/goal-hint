@@ -3,10 +3,12 @@ import { communityLinksSchema, defaultCommunityLinks, type CommunityLink } from 
 import { normalizePhone, outsideUgandaHint, phoneHint } from "./phone.ts";
 import { validMobilePhone } from "./phone-mobile.ts";
 import { supportContactsOf, type SupportContact } from "./support-contacts.ts";
-import { parseSupportContacts } from "./support-contacts-input.ts";
+import { parseSupportContacts as parseContacts } from "./support-contacts-input.ts";
 import { defaultMessageTemplates, parseMessageTemplates, type MessageTemplateSettings } from "./message-templates.ts";
 import { parseContactPageEmail } from "./contact-page-email.ts";
 import { contactNotice } from "./contact-notice.ts";
+
+export const parseSupportContacts = (input: unknown) => parseContacts(input, validMobilePhone);
 
 /**
  * Paid-access settings the owner edits on /admin/settings (prompts/monetization.md 5.7). They live in one row, id = 1, of

@@ -85,8 +85,9 @@ const publicPages = () => readdirSync(join(root, "src/app/[locale]"), { recursiv
 
 test("the root layout, public shell and public pages ship no phone library, country list or owner dashboard styles", () => {
   const pages = publicPages();
+  const routePaths = pages.map(path => path.replace(/\/\([^/]+\)(?=\/)/gu, ""));
   for (const page of ["page.tsx", "matches/page.tsx", "matches/[fixtureId]/[slug]/page.tsx", "performance/page.tsx", "slips/page.tsx", "predictions/[date]/page.tsx",
-    "contact/page.tsx", "privacy/page.tsx", "terms/page.tsx", "how-it-works/page.tsx", "help/page.tsx"]) assert.ok(pages.includes(`src/app/[locale]/${page}`), page);
+    "contact/page.tsx", "privacy/page.tsx", "terms/page.tsx", "how-it-works/page.tsx", "help/page.tsx"]) assert.ok(routePaths.includes(`src/app/[locale]/${page}`), page);
   assert.ok(!pages.some((path) => /\/(?:account|subscribe)\//u.test(path)), "the account and subscribe pages are left out");
   const roots = ["src/app/layout.tsx", "src/app/page.tsx", "src/app/not-found.tsx", "src/app/[locale]/layout.tsx", "src/app/_components/public-shell.tsx",
     "src/app/_components/information-shell.tsx", "src/app/_components/app-providers.tsx", "src/components/members/account-link.tsx",

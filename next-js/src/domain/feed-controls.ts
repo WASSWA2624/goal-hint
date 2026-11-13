@@ -1,6 +1,7 @@
 import type { ReportingDate } from "./calendar.ts";
 import { anyProbability, defaultFeedDatePreset, defaultMarkets, matchFeedPageDefaults, parseFeedQuery, parseProbabilityValue, resolveFeedDates, serializeFeedQuery, validProbabilityRange,
   type DateSelection, type FeedDatePreset, type FeedQuery, type FeedStatus, type ProbabilityRange } from "./feed-query.ts";
+import { publicPolicy } from "./public-policy.ts";
 
 const upcomingPeriods: Partial<Record<FeedDatePreset, FeedDatePreset>> = {
   "last-30-days": "next-30-days", "last-7-days": "next-7-days", "last-3-days": "next-3-days", yesterday: "today",
@@ -57,10 +58,10 @@ export function selectFeedDates(query: FeedQuery, dates: DateSelection, today: R
 }
 
 /** Draft text stays editable; normalization happens once, at submission. */
-export function applyFeedDraft(draft: FeedQuery, today: ReportingDate): FeedQuery {
+export function applyFeedDraft(draft: FeedQuery, today: ReportingDate, providerOdds = publicPolicy.features.providerOdds): FeedQuery {
   const parameters = serializeFeedQuery({ ...draft, summary: undefined, search: "", page: 1 }, today);
   parameters.set("q", draft.search);
-  return synchronizeFeedStatusDates(parseFeedQuery(parameters, { today, locale: draft.locale }), today);
+  return synchronizeFeedStatusDates(parseFeedQuery(parameters, { today, locale: draft.locale, providerOdds }), today);
 }
 
 /** Blank probability endpoints mean Any; incomplete numeric drafts remain invalid. */

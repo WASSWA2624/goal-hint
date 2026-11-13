@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { supportContactsOf } from "../src/domain/support-contacts.ts";
-import { parseSupportContacts } from "../src/domain/support-contacts-input.ts";
 import { copiedPaymentPhone } from "../src/domain/copied-payment-phone.ts";
 import { publicSubscriptionSettings, publicSupportContactSettings } from "../src/domain/public-subscription-settings.ts";
-import { defaultSubscriptionSettings } from "../src/domain/subscription-settings.ts";
+import { defaultSubscriptionSettings, parseSupportContacts } from "../src/domain/subscription-settings.ts";
 
 // Invented numbers only. No delivery provider or external messaging service is called.
 const contact = (changes = {}) => ({ id: "mtn-support", label: "MTN support", network: "mtn", phone: "0772 123 456",

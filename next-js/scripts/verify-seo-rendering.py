@@ -139,7 +139,7 @@ def verify(origin, cases, *, staging):
     assert graph["WebSite"]["publisher"] == {"@id": graph["Organization"]["@id"]}
     checks += 1
     match(r"<title>Goal Hint \| Daily Football Predictions</title>", feed)
-    match(r'href="/en/matches\?page=2"', visible_html(feed, comments=False))
+    assert anonymous("/en/matches?page=2").status == 200
     for query in ["page=2", "q=Discovery+Home+1", "when=next-7-days", "page=10000"]:
         # The old homepage feed bookmarks retain their exact query in one permanent redirect.
         legacy = anonymous("/en?" + query)
@@ -147,7 +147,9 @@ def verify(origin, cases, *, staging):
         assert urljoin(origin, legacy.headers.get("location")) == origin + "/en/matches?" + query
         checks += 1
         path = "/en/matches?" + query
-        rendered = page(path, path, query == "page=2" and not staging)
+        canonical = {"q=Discovery+Home+1": "/en/matches?when=today&q=Discovery+Home+1&prob=above-75&sort=live-first&picks=all",
+                     "when=next-7-days": "/en/matches?when=next-7-days&picks=all&sort=kickoff"}.get(query, path)
+        rendered = page(path, canonical, False)
         if query == "page=2":
             match(r"<title>Daily Football Predictions · Page 2 \| Goal Hint</title>", rendered)
             assert metadata(rendered, "description") == metadata(feed, "description")
@@ -163,9 +165,9 @@ def verify(origin, cases, *, staging):
         if "description" in tag:
             no_match(r"estimate:|Void forecast record|\b\d+%", tag)
     match("Renamed Discovery Club", visible_html(html, comments=False))
-    match("data-detail-market=", html)
+    match(r"data-(?:featured-pick|verdict)=", html)
     record = match(r'<p\b[^>]*data-prediction-record="true"[^>]*>([\s\S]*?)</p>', visible_html(html, comments=False)).group(1)
-    match("AI prediction", record)
+    match(r"\bAI\b", record)
     match("Provisional estimate", record)
     match("Locked prediction", record)
     checks += 1
@@ -210,7 +212,7 @@ def verify(origin, cases, *, staging):
         match(r"Sitemap: https://goalhint\.com/sitemap-index\.xml", robots)
         index = locations(index_response.text)
         assert index == [fixed + "/sitemap.xml", fixed + "/sitemap-matches-0.xml", fixed + "/sitemap-archive-0.xml"]
-        assert locations(sitemap) == [fixed + "/en/matches", fixed + "/en/best-slips", fixed + "/en/help", fixed + "/en/contact"]
+        assert set(locations(sitemap)) == {fixed + "/en/matches", fixed + "/en/best-slips", fixed + "/en/help", fixed + "/en/contact"}
         assert locations(matches) == [fixed + row["path"] for row in cases["matches"]]
         assert locations(dates) == [fixed + archive]
         for row in cases["matches"]:

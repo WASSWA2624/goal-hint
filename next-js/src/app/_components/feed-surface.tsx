@@ -128,9 +128,10 @@ function searchAnnouncement(data: MatchFeedResponse, query: FeedQuery): string {
 }
 
 /** Successful server projections remain visible if a later navigation fails. */
-function FeedSurfaceContent({ query, today, result, controls, pagination, showAccount = false, subscriberOnly = result.data?.access.tier === "free", summary }: {
+function FeedSurfaceContent({ query, today, result, controls, pagination, showAccount = false, subscriberOnly = result.data?.access.tier === "free", summary,
+  providerOdds = publicPolicy.features.providerOdds }: {
   query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode; showAccount?: boolean; subscriberOnly?: boolean;
-  summary?: Promise<FeedPerformanceSeed>;
+  summary?: Promise<FeedPerformanceSeed>; providerOdds?: boolean;
 }) {
   const router = useRouter(), [pending, startTransition] = useTransition();
   const [paginationStatus, setPaginationStatus] = useState<{ href: string; message: string } | null>(null);
@@ -178,7 +179,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
     : displayed ? searchAnnouncement(displayed.data, displayed.query) : messages.text("feed.state.data-unavailable"));
   return <FeedStack $gap="sm">
     <StableFeedHeader query={query} today={today} showAccount={showAccount} />
-    <FeedFilters key={`${href}:${today}`} subscriberOnly={subscriberOnly} query={query} today={today} leagues={leagues} onApply={apply} pending={pending}
+    <FeedFilters key={`${href}:${today}`} subscriberOnly={subscriberOnly} providerOdds={providerOdds} query={query} today={today} leagues={leagues} onApply={apply} pending={pending}
       searchText={text} onSearchChange={onSearchChange} onSearchSubmit={onSearchSubmit} />
     {controls}
     <VisuallyHidden role="status" aria-live="polite" aria-atomic="true">{announcement}</VisuallyHidden>

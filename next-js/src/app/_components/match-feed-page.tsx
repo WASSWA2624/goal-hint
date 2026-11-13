@@ -10,7 +10,7 @@ import { PublicShell } from "./public-shell";
 /** Server reads stay authoritative; the persistent surface owns UI transitions. */
 export function MatchFeedPage(props: {
   query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode; showAccount?: boolean; subscriberOnly?: boolean;
-  summary?: Promise<FeedPerformanceSeed>;
+  summary?: Promise<FeedPerformanceSeed>; providerOdds?: boolean;
 }) {
   const { query, today } = props;
   return <PublicShell locale={query.locale} today={today} zone={query.zone ?? query.time?.zone ?? null} current="today" showAccount={props.showAccount === true} app compact>

@@ -88,6 +88,18 @@ The [database runbook](../database.md) explains each database setting. Your
 local `.env.local` values won't work as they are, because production mode applies
 stricter checks than development.
 
+Android, iOS, Windows and macOS release builds, the Linux browser handoff and
+browser installations all use the HTTPS app. Database configuration is private
+to the Next.js server. With the intended private production handoff files already
+present, run `python scripts/deploy-cpanel.py --check-database-config` from
+`next-js/` to check the production profile, database setting names and matching
+approval references without making a network connection. Production may supply
+`GOAL_HINT_DEPLOYMENT_ENVIRONMENT=production` through the process environment.
+For the live connectivity and account-schema check, run `npm run db:health` on
+the host in the configured production runtime and require `Database readiness:
+ready`. From a browser, confirm the public HTTPS feed returns the expected
+fixture cohort and `/manifest.webmanifest` launches `/en/matches`.
+
 The runtime policy validates every setting when the server starts. If a value is
 invalid or a prerequisite is missing, every request returns 500 and the log lists
 the failing setting names, never their values. Unknown `GOAL_HINT_*` and any

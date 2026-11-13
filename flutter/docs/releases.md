@@ -138,13 +138,24 @@ Release builds use only `https://goalhint.com`; explicitly pass
 modes. Dart defines contain public configuration, never credentials. See
 [URL selection](development-urls.md) and [identity/signing boundaries](app-identity.md).
 
-The production HTTPS probe on 26 October 2026 followed a same-origin redirect
-to `/cgi-sys/suspendedpage.cgi` and returned **HTTP 403**, title **Account
-Suspended**, without Goal Hint appearance metadata. The owner chose to retain
-this origin. Production online launch and a real production website update
-remain blocked until the hosting service serves the application again; no
-alternate Release URL, certificate exception, DNS override or cached fixture
-is used to disguise that failure.
+## Production app and database
+
+Android, iOS, Windows and macOS use the same production HTTPS origin in Profile
+and Release. On Linux the runner offers **Open website**, which opens that same
+origin in the system browser. The web target is the Next.js site. Browser
+installation uses its same-origin manifest with `/en/matches` as the start URL.
+Browser support determines how the installation action is presented.
+
+The Next.js server connects to the database using private server configuration.
+Native binaries, browser installations and the Dart build defines carry the
+public HTTPS address. See the [production deployment checks](../../next-js/docs/deployment/README.md#configuration).
+
+On 13 November 2026 the production HTTPS site and public fixture feed responded
+successfully. The production download API listed zero native releases. The
+Windows x64 Release bundle built with the pinned SDK, and its compiled app
+contained the production HTTPS origin. The Linux browser handoff passed in light
+and dark widget tests. Android compilation was interrupted by dependency fetch
+failures. Apple builds and installed-device checks remain pending.
 
 ## Build hosts and deployment scope
 
@@ -154,7 +165,7 @@ is used to disguise that failure.
 | Windows | Windows with Visual Studio C++ desktop workload, CMake, Windows SDK and NuGet | Actual host: Windows 11 25H2 x64, OS 10.0.26200.9711; Visual Studio Community 2026 18.6.0, Windows SDK 10.0.26100.0. x64 is the local build/validation target. Target machines require WebView2 Runtime and the C++ runtime. See [Windows packaging/install](windows-release.md). |
 | iOS | macOS with Xcode, matching device/simulator runtimes and Apple signing/provisioning for device distribution | Runner source sets iOS 13.0; no Apple host or configured developer team was verified here. WKWebView and offline startup require actual device qualification. |
 | macOS | macOS with Xcode/command-line tools and Apple signing/notarization for distribution | Runner source sets macOS 10.15 and ad-hoc signing; no developer team or hardened-runtime distribution configuration is qualified. The sandbox permits outbound client networking. No Apple compilation/runtime is qualified. |
-| Linux | Linux with Clang, CMake, Ninja, pkg-config, GTK 3/C++ development libraries and the selected browser engine's dependencies | The current application has no Linux embedded browser adapter. A built runner's explicit unavailable-browser screen does not satisfy the app requirement; shell use is **Unsupported** until that integration is implemented and tested. |
+| Linux | Linux with Clang, CMake, Ninja, pkg-config and GTK 3/C++ development libraries | The runner can hand off to the system browser. An embedded WebView and native release acceptance remain open. |
 
 These are actual project settings and host findings, not a claim that every OS
 at a template minimum works with every plugin or distribution channel. Current
@@ -174,7 +185,7 @@ application evidence. No Arm64 desktop qualification is inferred from x64.
 | iOS production | `flutter build ipa --release --target=lib/main.dart --dart-define=APP_ENV=production` | Archive under `build/ios/archive/`, IPA under `build/ios/ipa/`; select the owner’s actual team, bundle ID and secured export/provisioning configuration in Xcode. Use Xcode/Transporter for the authorized distribution channel. No signing identity was invented here. |
 | macOS development | `flutter run -d macos --debug --target=lib/main.dart --dart-define=APP_ENV=development --dart-define=DEV_APP_ORIGIN=http://localhost:3000` | Native development app; no external distribution claim. |
 | macOS production | `flutter build macos --release --target=lib/main.dart --dart-define=APP_ENV=production` | `build/macos/Build/Products/Release/Goal Hint.app`; verify the actual generated product name on the Apple host, then sign, notarize and staple using the owner’s secured Developer ID workflow before external distribution. |
-| Linux | `flutter build linux --release --target=lib/main.dart --dart-define=APP_ENV=production` | Typically `build/linux/x64/release/bundle/` on an x64 host. This is a future runner-build command, **not a usable web-shell release** while embedding is missing. Distribute the whole bundle only after that gap and its system-library requirements are qualified. |
+| Linux | `flutter build linux --release --target=lib/main.dart --dart-define=APP_ENV=production` | Typically `build/linux/x64/release/bundle/` on an x64 host. Verify the default browser handoff on Linux before distributing the runner. |
 
 Use `flutter devices` and an explicit target for development. See
 [wireless Android setup](development-urls.md#android-wireless-development) for

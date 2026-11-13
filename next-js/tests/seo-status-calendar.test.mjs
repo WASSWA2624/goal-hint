@@ -6,12 +6,13 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { parseReportingDate, parseUtcInstant } from '../src/domain/calendar.ts';
 import { adjacentDays, archiveWindowDays, dayLinkRel, emptyArchiveIsMissing } from '../src/domain/feed-date-navigation.ts';
-import { parseFeedQuery } from '../src/domain/feed-query.ts';
+import { parseFeedQuery, resolveFeedDates } from '../src/domain/feed-query.ts';
 import { feedDiscovery } from '../src/domain/discovery.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 import { isDocumentRequest, PublicReadUnavailableError } from '../src/server/seo/read-status.ts';
 import { fullAccess } from './helpers/full-access.ts';
 import { liveDetail } from './helpers/live-refresh-fixtures.mjs';
+import { fixture } from './helpers/client-state-fixtures.mjs';
 
 const today = parseReportingDate('2026-10-26'), at = parseUtcInstant('2026-10-26T09:00:00Z');
 const day = (value) => ({ startDate: parseReportingDate(value), dayCount: 1 });
@@ -177,6 +178,42 @@ test('the paginated browsing feed keeps its retry and noindex metadata when a st
 test('the default Today collection uses its indexable document recovery', async () => {
   await assert.rejects(feed().Page(props({})), failed);
   await assert.rejects(feed().generateMetadata(props({})), failed);
+});
+
+test('Matches and dated archives publish stable, distinct canonicals for each access tier', async () => {
+  for (const tier of ['free', 'full']) {
+    const options = { instant: async () => at, policy: indexing, document: fullDocument,
+      resolveAccess: async () => ({ tier, signedIn: false, mode: tier === 'full' ? 'off' : 'free' }),
+      read: async (input) => {
+        const query = parseFeedQuery(input, { today });
+        const range = resolveFeedDates(query, today);
+        const records = Array.from({ length: query.page === 1 ? 50 : 25 }, (_, index) => ({
+          ...fixture({ fixtureId: `fixture-${index}` }), cycle: null, unavailableMarkets: [
+            { family: 'total-goals', reason: 'not-published' }, { family: 'both-teams-to-score', reason: 'not-published' },
+          ], update: { prediction: 'current', result: 'untracked' },
+          availabilityMessage: null, scorePeriod: null }));
+        return { records, total: 75, page: query.page, pageSize: query.pageSize, totalPages: 2, performance: null, leagues: [], search: null,
+          nextPage: query.page === 1 ? 2 : null, previousPage: query.page === 2 ? 1 : null,
+          links: { next: query.page === 1 ? '/api/matches?page=2' : null, previous: query.page === 2 ? '/api/matches?page=1' : null },
+          paginationVersion: null, asOf: at, today, state: 'ready', message: null, run: null,
+          range: { from: range.startDate, to: range.endDate, ...range.window },
+          coverage: { partial: false, knownFixtures: 75, matchingWithMarket: 75, dates: [{ date: today, status: 'complete', observedAt: at, authoritative: true }] } };
+      } };
+    const matches = createFeedRoute(options), archive = createFeedRoute({ ...options, dated: true });
+    for (const page of [1, 2]) {
+      const parameters = page === 1 ? {} : { page: String(page) };
+      const suffix = page === 1 ? '' : '?page=2';
+      const home = await matches.generateMetadata(props({}, parameters));
+      assert.equal(home.alternates.canonical, `https://goalhint.com/en/matches${suffix}`);
+      assert.equal(home.robots.index, true);
+      const dated = await archive.generateMetadata(props({ date: today }, { ...parameters, picks: 'all' }));
+      assert.equal(dated.alternates.canonical, `https://goalhint.com/en/predictions/${today}${suffix}`);
+      assert.equal(dated.robots.index, true);
+    }
+    const nonDefault = await matches.generateMetadata(props({}, tier === 'full' ? { prob: '0-100' } : { sort: 'kickoff' }));
+    assert.equal(nonDefault.robots.index, false);
+    assert.match(nonDefault.alternates.canonical, /\b(?:prob|sort)=/u);
+  }
 });
 
 test('client navigations, non-indexing deployments, variants and busy searches keep the 200 in-page retry', async () => {

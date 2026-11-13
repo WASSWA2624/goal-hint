@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 import json
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 from urllib.robotparser import RobotFileParser
 from xml.etree import ElementTree
 
@@ -65,15 +65,23 @@ def verify(origin, *, today=None):
             raise CommandError(f'Public SEO check expected HTTP {status}, received HTTP {response.status}.')
         return response
 
-    def page(path, canonical, index):
+    def page(path, canonical, index, *, filters=None):
         nonlocal checks
         response = read(path)
         head = PageMarkup(response.text)
         assert len(head.titles) == 1 and head.titles[0].strip(), 'One nonempty page title is required.'
         assert len(head.headings) == 1 and head.headings[0].strip(), 'One server-rendered main heading is required.'
-        assert head.canonicals == [ORIGIN + canonical], path
+        assert len(head.canonicals) == 1, path
+        target = head.canonicals[0]
+        if filters is None:
+            assert target == ORIGIN + canonical, path
+        else:
+            parsed = urlsplit(target)
+            assert f'{parsed.scheme}://{parsed.netloc}{parsed.path}' == ORIGIN + canonical, path
+            values = parse_qs(parsed.query)
+            assert all(values.get(key) == [value] for key, value in filters.items()), path
         assert head.meta.get('robots') == ['index, follow' if index else 'noindex, follow'], path
-        assert head.meta.get('og:url') == [ORIGIN + canonical], path
+        assert head.meta.get('og:url') == [target], path
         descriptions = head.meta.get('description', [])
         assert len(descriptions) == 1 and descriptions[0] and descriptions[0].strip(), path
         if index:
@@ -86,8 +94,8 @@ def verify(origin, *, today=None):
 
     page('/en/best-slips', '/en/best-slips', True)
     page('/en/matches', '/en/matches', True)
-    page('/en/matches?q=Arsenal', '/en/matches?q=Arsenal', False)
-    page('/en/matches?tz=America%2FLos_Angeles', '/en/matches?tz=America%2FLos_Angeles', False)
+    page('/en/matches?q=Arsenal', '/en/matches', False, filters={'q': 'Arsenal'})
+    page('/en/matches?tz=America%2FLos_Angeles', '/en/matches', False, filters={'tz': 'America/Los_Angeles'})
     publication = notices()
     page('/en/privacy', '/en/privacy', publication['privacyNotice']['releaseReady'])
     page('/en/terms', '/en/terms', publication['termsNotice']['releaseReady'])

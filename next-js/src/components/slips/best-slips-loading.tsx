@@ -17,11 +17,11 @@ const LoadingStack = styled(SlipStack)`
 `;
 
 /** Keep the homepage's real controls and period visible while its authorized stored read streams. */
-export function BestSlipsLoading({ locale, today }: { locale: string; today: ReportingDate }) {
+export function BestSlipsLoading({ locale, today, heading = true }: { locale: string; today: ReportingDate; heading?: boolean }) {
   const messages = createMessages(locale), date = yesterday(today);
   return <LoadingTheme><LoadingStack data-best-slips-loading>
     <AppBrandBar locale={locale} />
-    <VisuallyHidden as="h1">{messages.text("bestSlips.title")}</VisuallyHidden>
+    {heading && <VisuallyHidden as="h1">{messages.text("bestSlips.title")}</VisuallyHidden>}
     <div inert aria-busy="true"><BestSlipsFilters query={defaultBestSlipsQuery()} today={today} locale={locale} busy
       statistics={null} summary={{ from: date, to: date, statistics: null }} onChange={ignoreChange} /></div>
   </LoadingStack></LoadingTheme>;

@@ -11,6 +11,7 @@ import 'navigation_policy.dart';
 import 'native_appearance.dart';
 import 'native_recovery_view.dart';
 import 'startup_loading.dart';
+import 'unsupported_web_view.dart';
 import 'web_appearance.dart';
 import 'web_view_adapter.dart';
 import 'web_view_factory.dart';
@@ -315,6 +316,14 @@ class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
                           failure: failure,
                           busy: _retrying || _initializing || _browser.loading,
                           onRetry: () => unawaited(_retry()),
+                          onOpenWebsite: _browser is UnsupportedWebViewAdapter
+                              ? () => unawaited(
+                                  _openExternal(
+                                    widget.sharedSlipUri ??
+                                        widget.configuration.origin,
+                                  ),
+                                )
+                              : null,
                         ),
                       ),
                   ],

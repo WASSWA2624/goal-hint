@@ -154,7 +154,7 @@ test("the complete documented environment example parses safely without approval
     "GOAL_HINT_EXACT_SCORES_ENABLED", "GOAL_HINT_LOCALES", "GOAL_HINT_DEPLOYMENT_ENVIRONMENT", "GOAL_HINT_TRUSTED_PROXY_CIDRS",
     "GOAL_HINT_ANDROID_APP_LINK_SHA256", "GOAL_HINT_IOS_APP_LINK_TEAM_ID",
     "GOAL_HINT_APP_DOWNLOADS_ROOT", "GOAL_HINT_ANDROID_PLAY_STORE_URL", "GOAL_HINT_ANDROID_PLAY_STORE_VERSION", "GOAL_HINT_ANDROID_PLAY_STORE_BUILD",
-    "GOAL_HINT_ODDS_IMPORT_ENABLED", "GOAL_HINT_ODDS_BOOKMAKER_ID", "GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF",
+    "GOAL_HINT_FOOTBALL_EXISTING_PREPAID", "GOAL_HINT_ODDS_IMPORT_ENABLED", "GOAL_HINT_ODDS_BOOKMAKER_ID", "GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF",
     "GOAL_HINT_TEAM_CODES_IMPORT_ENABLED", "GOAL_HINT_LIVE_DETAILS_ENABLED", "GOAL_HINT_AI_BILLING_MODE",
     "GOAL_HINT_FORECAST_SOURCE_ORDER", "GOAL_HINT_AI_PROMOTION_REF", "GOAL_HINT_RESEARCH_HOSTS",
     "GOAL_HINT_ANALYTICS_ENABLED", "GOAL_HINT_ANALYTICS_SECRET", "GOAL_HINT_ANALYTICS_ADMIN_USERNAME",
@@ -177,14 +177,16 @@ test("the complete documented environment example parses safely without approval
       assert.equal(value, null);
     }
   }
-  const { database, probabilitySumTolerance, consistencyTolerance, odds, teamCodes, liveDetails, budgets, analytics, forecasts, ...unresolvedChoices } = policy.choices;
+  const { database, probabilitySumTolerance, consistencyTolerance, odds, teamCodes, liveDetails, budgets, analytics, forecasts, football, ...unresolvedChoices } = policy.choices;
   // With AI enabled the provider baseline publishes first; no promotion reference is assumed.
   assert.deepEqual(forecasts, { sourceOrder: "ai-first", aiPromotionRef: null });
   // Consent-gated analytics is on by default but has no credentials, secret or retention override until configured.
   assert.deepEqual(analytics, { enabled: true, adminUsername: null, retentionDays: null, geoSource: "timezone" });
   const { aiBillingMode, ...unresolvedBudgets } = budgets;
   assert.equal(aiBillingMode, "capped");
-  assertUnresolved({ ...unresolvedChoices, budgets: unresolvedBudgets });
+  const { existingPrepaid, ...unresolvedFootball } = football;
+  assert.equal(existingPrepaid, false);
+  assertUnresolved({ ...unresolvedChoices, budgets: unresolvedBudgets, football: unresolvedFootball });
   // Odds imports default off, with no bookmaker or display-rights reference assumed (052).
   assert.deepEqual(odds, { enabled: false, bookmakerId: null, rightsRef: null });
   // Team codes are on by default; the live runner's spare-quota gate still keeps them off on Free and slow plans.
@@ -470,6 +472,33 @@ test("bounded trial authorization does not invent later qualification prerequisi
   policyError(() => parseRuntimePolicy({ ...syntheticTrial, API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS: undefined }), ["API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS"]);
   policyError(() => parseRuntimePolicy({ ...syntheticTrial, API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS: "4501" }), ["API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS"]);
   policyError(() => parseRuntimePolicy({ ...syntheticTrial, GOAL_HINT_BUDGET_APPROVAL_REF: "" }), ["GOAL_HINT_BUDGET_APPROVAL_REF"]);
+});
+
+test("existing prepaid football access waives only the missing amount in hosted production operation", () => {
+  const flag = "GOAL_HINT_FOOTBALL_EXISTING_PREPAID";
+  const amount = "API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS";
+  const prepaid = { [flag]: "true", [amount]: undefined };
+  const production = { ...syntheticProduction, ...prepaid };
+  const policy = parseRuntimePolicy(production);
+  assert.equal(policy.choices.football.existingPrepaid, true);
+  assert.equal(policy.choices.football.payableMonthlyUsdCents, null);
+  assert.equal(parseRuntimePolicy(syntheticProduction).choices.football.existingPrepaid, false);
+  assert.doesNotThrow(() => assertOperationAllowed(policy, "football", verifySyntheticEvidence));
+  policyError(() => parseRuntimePolicy({ ...production, [flag]: "false" }), [amount]);
+  policyError(() => parseRuntimePolicy({ ...production, [amount]: "4501" }), [amount]);
+  policyError(() => parseRuntimePolicy({ ...syntheticTrial, ...prepaid }), [flag]);
+  policyError(() => parseRuntimePolicy({ ...syntheticShadow, ...prepaid }), [flag]);
+  policyError(() => parseRuntimePolicy({ ...production, NODE_ENV: "development", GOAL_HINT_DATABASE_ENABLED: "true",
+    DATABASE_URL: "mysql://synthetic:secret@127.0.0.1:3307/goal_hint_local" }), [flag]);
+  for (const [requirement, field] of [
+    ["budget-approval", "GOAL_HINT_BUDGET_APPROVAL_REF"],
+    ["football-account", "GOAL_HINT_FOOTBALL_ACCOUNT_EVIDENCE_REF"],
+    ["football-public-rights", "GOAL_HINT_FOOTBALL_PUBLIC_RIGHTS_REF"],
+    ["quality-qualification", "GOAL_HINT_QUALITY_QUALIFICATION_REF"],
+    ["release-approval", "GOAL_HINT_RELEASE_APPROVAL_REF"],
+  ]) {
+    policyError(() => assertOperationAllowed(policy, "football", (_reference, required) => required !== requirement), [field]);
+  }
 });
 
 test("separate AI and research caps must be positive and approved for paid calls", () => {

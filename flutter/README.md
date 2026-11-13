@@ -73,9 +73,10 @@ or `python tool/package_development.py windows --origin http://localhost:3000`
 on the Windows host. These produce clearly
 labelled `1.0.0-dev.zip` packages that use the development web server; production
 signing gates remain unchanged. See [development packaging](docs/releases.md#development-delivery-packages).
-The configured production hosting currently returns an Account Suspended page;
-production launch and publication remain blocked. No release is claimed merely
-because an artifact compiles.
+Production HTTPS serves the Next.js app and its fixture feed as of 13 November
+2026. The public production download catalog was empty on that date. See the
+[release guide](docs/releases.md#production-app-and-database) for the client
+origin and platform verification.
 
 Windows follow-up acceptance is reproducible through the
 [offline account-isolation guide](docs/offline-identity-acceptance.md) and

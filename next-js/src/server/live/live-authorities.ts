@@ -14,6 +14,7 @@ import type { NormalizedFixture, RegulationScoreCandidate } from "../football/ap
 import type { CatalogAuthority } from "../football/catalog-contract.ts";
 import type { OddsAuthority, OddsPolicy } from "../odds/odds-contract.ts";
 import { oddsRequestParameters } from "../odds/odds-input.ts";
+import { approvedOddsDisplay } from "../odds/public-odds-policy.ts";
 import type { CutoffAuthority, CutoffPolicy } from "../predictions/cutoff-contract.ts";
 import type { LifecycleAuthority, LifecyclePolicy } from "../predictions/lifecycle-contract.ts";
 import type { PublicationAuthority, PublicationPolicy } from "../predictions/publication-contract.ts";
@@ -275,8 +276,7 @@ export function createLiveAuthorities(options: Readonly<{
       const { page: _page, ...selectors } = page.requestParameters;
       void _page; return same(selectors, oddsRequestParameters(request));
     }),
-    verifyPublicDisplay: () => options.localFootball === true ||
-      refs.oddsRights !== null && verify(refs.oddsRights, "football-odds-rights"),
+    verifyPublicDisplay: () => options.localFootball === true || approvedOddsDisplay(refs.oddsRights, verify),
   });
   return Object.freeze({ catalog, selection, cutoff, lifecycle, publication, evidence, providerFallback, fallback, verifyFallbackRequest,
     refresh, results, verifyStatusResponse, odds, liveMatch });

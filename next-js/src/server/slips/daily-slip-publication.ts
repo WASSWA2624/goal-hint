@@ -3,7 +3,6 @@ import "server-only";
 import { setTimeout as sleep } from "node:timers/promises";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { qualifiedJointModel, type JointSlipModel } from "../../domain/best-slips.ts";
-import { publicPolicy } from "../../domain/public-policy.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { provenTrue } from "../shared/authority-proof.ts";
 import { bestSlipOddsBands } from "../../domain/best-slip-odds-bands.ts";
@@ -15,18 +14,20 @@ export type DailySlipPublicationResult = Readonly<{ day: string; status:
   "published" | "already-published" | "model-unavailable" | "odds-unavailable" | "no-qualifying" | "unavailable" }>;
 /** The private worker alone owns generation/publication. Visitors read the first committed daily snapshot. */
 export function createDailySlipPublisher({ database, competitionIds, model, verifyModel, verifyPublicOdds,
-  providerOdds = publicPolicy.features.providerOdds, now = Date.now, read,
+  providerOdds = true, now = Date.now, read,
   store = createPublishedSlips(database) }: Readonly<{
   database: DatabaseRuntime; competitionIds: readonly number[]; model: JointSlipModel | null;
   verifyModel: (model: JointSlipModel) => boolean; verifyPublicOdds: () => boolean;
   providerOdds?: boolean; now?: () => number; read?: typeof readPublicSlipBuild;
   store?: Pick<ReturnType<typeof createPublishedSlips>, "publishedBands" | "publish">;
 }>) {
-  const storedRead = read ?? createStoredSlipBuild({ database: () => database, competitionIds: () => competitionIds, consume: async () => {} });
+  const oddsEnabled = () => providerOdds && provenTrue(verifyPublicOdds);
+  const storedRead = read ?? createStoredSlipBuild({ database: () => database, competitionIds: () => competitionIds, oddsEnabled,
+    consume: async () => {} });
   return Object.freeze({
     async publish(): Promise<DailySlipPublicationResult> {
       const day = getReportingDate(utcInstantFromEpochMilliseconds(now()));
-      if (!providerOdds || !provenTrue(verifyPublicOdds)) return { day, status: "odds-unavailable" };
+      if (!oddsEnabled()) return { day, status: "odds-unavailable" };
       if (!qualifiedJointModel(model, now()) || !provenTrue(() => verifyModel(model))) return { day, status: "model-unavailable" };
       const existing = await store.publishedBands(day);
       if (existing.includes("legacy") || bestSlipOddsBands.every(band => existing.includes(band.id))) return { day, status: "already-published" };

@@ -73,11 +73,11 @@ export function compileFeedFilterDraft(draft: FeedFilterDraft, today: ReportingD
       draft.probability.max === original.probability.max ? draft.query.probability : parsed;
     const query = { ...draft.query, probability, odds, page: 1 };
     if (original.dateTimes.from === draft.dateTimes.from && original.dateTimes.to === draft.dateTimes.to) {
-      return applyFeedDraft(query, today);
+      return applyFeedDraft(query, today, oddsEnabled);
     }
     const range = dateTimeIntervalRange(draft.dateTimes, draft.zone);
     const dates: FeedQuery["dates"] = range.startDate === range.endDate ? { kind: "date", date: parseReportingDate(range.startDate) }
       : { kind: "range", from: range.startDate, to: range.endDate };
-    return applyFeedDraft(selectFeedDateScope({ ...query, summary: undefined, time: null, interval: draft.dateTimes, zone: draft.zone, dates }, today), today);
+    return applyFeedDraft(selectFeedDateScope({ ...query, summary: undefined, time: null, interval: draft.dateTimes, zone: draft.zone, dates }, today), today, oddsEnabled);
   } catch { return null; }
 }

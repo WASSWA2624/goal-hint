@@ -4,9 +4,9 @@ import type { BestSlipsResult } from "../../domain/best-slips.ts";
 import { bestSlipsQueryRules, parseBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "../../domain/best-slips-query.ts";
 import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "../../domain/calendar.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
-import { publicPolicy } from "../../domain/public-policy.ts";
 import { getDatabase } from "../database/client.ts";
 import type { ViewerAccess } from "../members/viewer-access.ts";
+import { publicOddsEnabled } from "../odds/public-odds-policy.ts";
 import { gateBestSlips } from "./slip-preview.ts";
 import { createPublishedSlips } from "./published-slips.ts";
 
@@ -25,7 +25,7 @@ const readPublishedBestSlips: BestSlipsBrowseReader = async (query, today, _loca
   return createPublishedSlips(database).browse(query, today, completedOnly);
 };
 
-function createBestSlipsSnapshotReader({ read = readPublishedBestSlips, providerOdds = publicPolicy.features.providerOdds, now = Date.now }: {
+function createBestSlipsSnapshotReader({ read = readPublishedBestSlips, providerOdds, now = Date.now }: {
   read?: typeof readPublishedBestSlips; providerOdds?: boolean; now?: () => number;
 } = {}) {
   return async (input: BestSlipsQuery, locale = "en"): Promise<BestSlipsResult> => {
@@ -34,12 +34,14 @@ function createBestSlipsSnapshotReader({ read = readPublishedBestSlips, provider
     const empty = { day, slips: [], searchLimited: false, partialCoverage: false, statistics: null,
       browse: { query, total: query.period === "all" ? null : 0, pageSize: bestSlipsQueryRules.pageSize,
         hasMore: false, nextCursor: null, ...dates } } as const;
-    if (!providerOdds) return { ...empty, state: "odds-unavailable" };
+    if (!(providerOdds ?? publicOddsEnabled())) return { ...empty, state: "odds-unavailable" };
     try {
       // The browse reader aggregates the entire selected period before outcome
       // filtering and pagination. Reuse that snapshot for both list and summary.
       const result = await read(query, day, locale, false);
-      return { ...result, summary: { asOf, ...dates, statistics: result.statistics ?? null } };
+      const state = result.state === "generated" && dates.from === day && dates.to === day && result.statistics?.total === 0
+        ? "awaiting-publication" : result.state;
+      return { ...result, state, summary: { asOf, ...dates, statistics: result.statistics ?? null } };
     }
     catch { return { ...empty, state: "data-unavailable" }; }
   };

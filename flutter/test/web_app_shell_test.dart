@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:goal_hint/app.dart';
 import 'package:goal_hint/config/app_config.dart';
@@ -12,6 +13,51 @@ import 'support/fake_web_view.dart';
 
 void main() {
   final configuration = AppConfig.resolve(isDebugBuild: true, isAndroid: false);
+
+  for (final brightness in Brightness.values) {
+    testWidgets(
+      'Linux opens the production app in $brightness mode',
+      (tester) async {
+        tester.binding.platformDispatcher.platformBrightnessTestValue =
+            brightness;
+        addTearDown(
+          tester.binding.platformDispatcher.clearPlatformBrightnessTestValue,
+        );
+        final messenger = tester.binding.defaultBinaryMessenger;
+        const launcher = MethodChannel('plugins.flutter.io/url_launcher');
+        final opened = <String>[];
+        messenger.setMockMethodCallHandler(launcher, (call) async {
+          if (call.method == 'launch') {
+            opened.add(call.arguments['url'] as String);
+            expect(call.arguments['useWebView'], isFalse);
+          }
+          return true;
+        });
+        addTearDown(() => messenger.setMockMethodCallHandler(launcher, null));
+
+        await tester.pumpWidget(
+          GoalHintApp(
+            configuration: AppConfig.resolve(
+              isDebugBuild: false,
+              isAndroid: false,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(opened, isEmpty);
+        expect(find.text('Open website'), findsOneWidget);
+        expect(find.text('Try again'), findsNothing);
+        expect(
+          Theme.of(tester.element(find.text('Open website'))).brightness,
+          brightness,
+        );
+        await tester.tap(find.text('Open website'));
+        await tester.pumpAndSettle();
+        expect(opened, ['https://goalhint.com']);
+      },
+      variant: const TargetPlatformVariant({TargetPlatform.linux}),
+    );
+  }
 
   testWidgets(
     'a supported top pull reloads the existing browser without replacing it',

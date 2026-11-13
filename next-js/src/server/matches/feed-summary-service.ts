@@ -42,7 +42,8 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
       await prepareDemoRange(database, sourceRange, asOf);
       if (query.search) await createMysqlPublicSearchLimiter(database).consume();
       const read = () => database.transaction(async (tx) => {
-        const { performanceVersion: paginationVersion } = await storedFeedVersions(tx, query, today, sourceRange, competitionIds, context.completedOnly, publishedOnly, historyBefore);
+        const { performanceVersion: paginationVersion } = await storedFeedVersions(tx, query, today, sourceRange, competitionIds, context.completedOnly,
+          publishedOnly, historyBefore, providerOdds);
         const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale, context.completedOnly);
         const sql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly, publishedOnly, historyBefore);
         const [matching] = await tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null; void: bigint | Prisma.Decimal | null; cancelled: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
@@ -58,7 +59,7 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 90_000 });
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: "feed-summary-v10", completedOnly: context.completedOnly === true, publishedOnly, today, dates: { from: range.startDate, to: range.endDate } },
+        query: { ...query, projection: "feed-summary-v11", providerOdds, completedOnly: context.completedOnly === true, publishedOnly, today, dates: { from: range.startDate, to: range.endDate } },
         scope: [...competitionIds].sort((a, b) => a - b), parse: (value) => storedSummarySchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;

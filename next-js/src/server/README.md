@@ -110,8 +110,8 @@ observation. The public price projection is written only while the authority
 verifies `football-odds-rights`; without it, `expire()` stales every fresh price.
 Job gates use `oddsQuotaAllows`, which gives odds only the day's spare (their own
 enrichment dispatches) and never the reserve. Feed and detail read prices through
-`odds-read.ts` with the effective `publicPolicy.features.providerOdds` flag, which
-stays off until OP-36 display rights are recorded. Odds never reach AI, evidence or
+`odds-read.ts` with the effective permission from `publicOddsEnabled()`, which
+verifies hosted display rights against the private owner register. Odds never reach AI, evidence or
 fallback inputs. `storedQuoteSource` feeds `predictions/prediction-quote-store.ts`,
 which captures the public price beside each published family inside the
 publication transaction, only when the publisher's `quotes.verify` proves both the

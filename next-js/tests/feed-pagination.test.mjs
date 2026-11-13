@@ -32,10 +32,13 @@ test('rolling default navigation stays on the feed while API appends pin its cur
   assert.equal(feedPageHref(filtered,today,2),'/en/matches?q=Alias&country=England&status=finished&page=2&pageSize=40&picks=all&when=last-30-days&sort=kickoff');
   assert.equal(feedPageApiHref(filtered,today,2),'/api/matches?from=2026-09-10&to=2026-10-09&q=Alias&country=England&status=finished&page=2&pageSize=40');
 });
-test('live-first pages retain the sort when the browsing day is pinned', () => {
+test('default Today pages keep stable Matches links while API pagination pins the browsing day', () => {
   const q = query('when=today&sort=live-first');
   assert.equal(feedPageApiHref(q, today, 2), '/api/matches?date=2026-10-09&sort=live-first&page=2');
-  assert.equal(feedPageHref(q, today, 2), '/en/predictions/2026-10-09?sort=live-first&page=2&picks=all');
+  assert.equal(feedPageHref(q, today, 2), '/en/matches?page=2');
+  assert.throws(() => feedPageHref(q, today, 0));
+  assert.equal(feedPageHref(query('date=2026-10-09'), today, 2), '/en/predictions/2026-10-09?page=2');
+  assert.equal(feedPageHref(query('when=today&sort=live-first&prob=above-75'), today, 2, true), '/en/matches?page=2');
   assert.notEqual(feedQueryKey(q, today), feedQueryKey(query('when=today&sort=kickoff'), today));
 });
 test('append uses contiguous, stable cohorts and fails atomically on drift or overlap', () => {

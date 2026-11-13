@@ -89,8 +89,8 @@ test("feed SQL ranks the candidate's exact fresh price only when provider odds a
   assert.match(enabled.joins.sql, /op.marketKey=m.family\s+AND op.selection=CASE WHEN/u);
   assert.match(enabled.where.sql, /ELSE m.selectedProbability END>=\?/u);
   assert.match(enabled.where.sql, /ELSE m.selectedProbability END<=\?/u);
-  assert.match(enabled.where.sql, /ELSE op.displayHundredths END BETWEEN \? AND \?/u);
-  assert.match(enabled.where.sql, /rp\.feedRecommendation,[\s\S]*'\$\.decimal'/u);
+  assert.match(enabled.where.sql, /op.displayHundredths BETWEEN \? AND \?/u);
+  assert.doesNotMatch(enabled.where.sql, /'\$\.decimal'/u);
   assert.match(enabled.order.sql, /ELSE m.selectedProbability END IS NULL ASC,/u);
   assert.match(enabled.order.sql, /ELSE m.selectedProbability END DESC/u);
   assert.match(enabled.joins.sql, /LEFT JOIN PredictionSet rp ON rp.id=/u);

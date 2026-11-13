@@ -1,11 +1,11 @@
-import { validMobilePhone } from "./phone-mobile.ts";
+import { isCanonicalPhone } from "./phone.ts";
 import { supportContactRules, type SupportContact } from "./support-contacts.ts";
 
 const fields = new Set(["id", "label", "network", "phone", "calls", "whatsapp", "enabled", "primary", "showOnContactPage"]);
 type ParsedSupportContacts = Readonly<{ ok: true; contacts: readonly SupportContact[] }> | Readonly<{ ok: false; error: string }>;
 
 /** Save only complete, canonical contacts; one number carries all of its available contact methods. */
-export function parseSupportContacts(input: unknown): ParsedSupportContacts {
+export function parseSupportContacts(input: unknown, parsePhone: (value: unknown) => string | null): ParsedSupportContacts {
   if (!Array.isArray(input)) return { ok: false, error: "Send the support numbers as a list." };
   if (input.length > supportContactRules.max) return { ok: false, error: `Use at most ${supportContactRules.max} support numbers.` };
   const contacts: SupportContact[] = [], ids = new Set<string>(), numbers = new Set<string>();
@@ -23,7 +23,7 @@ export function parseSupportContacts(input: unknown): ParsedSupportContacts {
       return invalid(`enter a label of 1–${supportContactRules.labelMaxLength} characters.`);
     }
     if (contact.network !== "mtn" && contact.network !== "airtel" && contact.network !== "other") return invalid("choose MTN, Airtel, or Other.");
-    const phone = validMobilePhone(contact.phone);
+    const phone = parsePhone(contact.phone);
     if (!phone) return invalid("enter a valid mobile number with its country code.");
     if (numbers.has(phone)) return invalid("this phone number is already listed; combine its contact methods in one row.");
     if (["calls", "whatsapp", "enabled", "primary"].some(key => typeof contact[key] !== "boolean")) return invalid("choose the contact methods and availability.");
@@ -36,4 +36,8 @@ export function parseSupportContacts(input: unknown): ParsedSupportContacts {
       ...(typeof contact.showOnContactPage === "boolean" ? { showOnContactPage: contact.showOnContactPage } : {}) }));
   }
   return { ok: true, contacts: Object.freeze(contacts) };
+}
+
+export function parsePublicSupportContacts(input: unknown): ParsedSupportContacts {
+  return parseSupportContacts(input, value => isCanonicalPhone(value) ? value : null);
 }

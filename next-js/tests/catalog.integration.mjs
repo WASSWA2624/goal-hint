@@ -13,6 +13,7 @@ import { createFootballCatalogImporter } from "../src/server/football/catalog-se
 import { validateCatalogBatch } from "../src/server/football/catalog-input.ts";
 import { createFootballHistoryFixtureReplay } from "../src/server/football/history-fixture-replay.ts";
 import { createFootballHistorySource } from "../src/server/football/history-source.ts";
+import { createLiveLocalEngine } from "../src/server/intelligence/live-local-engine.ts";
 import { storedFixtureResult } from "../src/server/results/result-read.ts";
 import { createMysqlResultSyncStore } from "../src/server/results/result-sync-mysql-store.ts";
 import { MysqlServerUnavailableError, startIsolatedMysql } from "./helpers/mysql-instance.mjs";
@@ -191,6 +192,52 @@ test("canonical football catalog invariants on isolated genuine MySQL", { timeou
       const tracked = await resultStore.tracked({ coverage: [{ competitionId: 810, season: 2025 }], approachMs: 900_000,
         activeWindowMs: 10_800_000, unresolved: [{ untilAgeMs: 7 * 86_400_000 }], corrections: [{ untilAgeMs: 3 * 86_400_000 }] }, CATALOG_NOW + 2000);
       assert.deepEqual(tracked.map((row) => row.externalId), [8102], "an old final with a fresh capture stays out of hosted polling");
+    });
+
+    await t.test("bounded live team history supplies sealed results to the local engine without AI", async () => {
+      const store = createFootballCatalogStore(firstDatabase, { clock, sealTeamHistory: true });
+      const competitionId = 890, homeId = 8910, awayId = 8911, day = 86_400_000;
+      const scope = { kind: "fixtures", query: { teamId: homeId, from: "2026-08-01", to: "2026-10-09" } };
+      const finals = Array.from({ length: 50 }, (_, index) => catalogFixture(8900 + index, {
+        competitionId, homeId, awayId: index % 2 ? awayId : 8912,
+        kickoff: new Date(CATALOG_NOW - (index + 2) * day).toISOString(), status: "FT",
+        goals: { home: 2, away: 1 }, score: { fulltime: { home: 2, away: 1 } },
+      }));
+      await operation([finals[0]]).run(fixtureSelection(8900));
+      const existingId = (await fixture(8900)).id;
+      assert.equal(await firstDatabase.query((tx) => tx.fixtureResultState.findUnique({ where: { fixtureId: existingId } })), null);
+      const imported = await operation(finals, { store, now: CATALOG_NOW + 1000 }).run(scope);
+      assert.equal(imported.status, "complete");
+      const unrelated = catalogFixture(8998, { competitionId, homeId, awayId, status: "FT",
+        kickoff: new Date(CATALOG_NOW - day).toISOString(), goals: { home: 2, away: 1 } });
+      await operation([unrelated], { store, now: CATALOG_NOW + 2000 }).run(scope);
+      await operation(finals, { store, now: CATALOG_NOW + 3000 }).run(scope);
+      const targetId = 8999;
+      await operation([catalogFixture(targetId, { competitionId, homeId, awayId })], { store, now: CATALOG_NOW + 4000 }).run(fixtureSelection(targetId));
+      const target = await fixture(targetId), cutoffAt = CATALOG_NOW + 5000;
+      const context = { fixtureId: target.id, fixtureVersion: target.dataVersion, externalFixtureId: targetId,
+        home: { teamId: target.homeTeamId }, away: { teamId: target.awayTeamId },
+        cutoffAt, analysisAt: cutoffAt, kickoffAt: target.kickoff.getTime() };
+      const existing = await fixture(8900);
+      const result = await firstDatabase.transaction(async (tx) => {
+        const state = await tx.fixtureResultState.findUniqueOrThrow({ where: { fixtureId: existing.id } });
+        return storedFixtureResult(tx, existing.id, state.resultId);
+      });
+      assert.equal(result.observedAt, CATALOG_NOW + 1000);
+      assert.equal(existing.regulationVerifiedAt.getTime(), CATALOG_NOW);
+      const unrelatedId = (await fixture(8998)).id;
+      assert.equal(await firstDatabase.query((tx) => tx.fixtureResult.count({
+        where: { fixtureId: { in: [...imported.fixtureIds, unrelatedId, target.id] } },
+      })), 50);
+      const ai = { aiStatus: "denied", aiReason: "unconfigured" };
+      const engine = createLiveLocalEngine(firstDatabase);
+      const expected = { context, evidenceHash: catalogHash("live-team-history"), pin: null, jobId: catalogHash("live-team-history-job") };
+      assert.equal(await engine({ ...expected, context: { ...context, cutoffAt: CATALOG_NOW } }, ai, () => cutoffAt, () => {}), null);
+      const candidate = await engine(expected, ai, () => cutoffAt, () => {});
+      assert.equal(candidate.audit.providerStatus, "not-requested");
+      assert.equal(candidate.audit.aiReason, "unconfigured");
+      assert.deepEqual(Object.values(candidate.markets).map((entry) => entry.market.source), Array(4).fill("local-engine"));
+      assert.equal(candidate.markets["match-result"].provenance.sample.matches, 50);
     });
 
     await t.test("historical partial receipts bypass the catalog lock and preserve duplicate and conflicting IDs", async () => {

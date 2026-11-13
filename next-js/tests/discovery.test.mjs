@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { breadcrumbStructuredData, canonicalUrl, feedDiscovery, homeStructuredData, matchPageIndexable, resolveDiscoveryPolicy, serializeStructuredData, sitemapIndexXml, sitemapPage, websiteStructuredData } from '../src/domain/discovery.ts';
-import { parseFeedQuery } from '../src/domain/feed-query.ts';
+import { applyFeedPageDefaults, parseFeedQuery } from '../src/domain/feed-query.ts';
 import { feedPageHref } from '../src/domain/feed-pagination.ts';
 import { parseReportingDate } from '../src/domain/calendar.ts';
 import { feedMetadata, createInformationMetadata } from '../src/server/seo/metadata.ts';
@@ -95,10 +95,10 @@ test('canonical origin is fixed and genuine pagination retains its dated page id
   // An explicit all-fixture page cannot canonicalize to a page that defaults to predictions only.
   assert.equal(feedDiscovery(query({}), today).path, '/en/matches?picks=all&when=last-30-days&sort=kickoff');
   assert.equal(feedDiscovery(query({ page: '2' }), today).path, '/en/matches?page=2&picks=all&when=last-30-days&sort=kickoff');
-  assert.equal(feedDiscovery(query({ when: 'today' }), today).path, '/en/predictions/2026-10-09?picks=all');
-  assert.deepEqual(feedDiscovery(query({ when: 'today', sort: 'live-first' }), today), feedDiscovery(query({ when: 'today' }), today));
-  assert.equal(feedDiscovery(query({ when: 'tomorrow', page: '3' }), today).path, '/en/predictions/2026-10-10?page=3&picks=all');
-  assert.equal(feedDiscovery(query({ date: '2026-10-08' }), today).path, '/en/predictions/2026-10-08?picks=all');
+  assert.equal(feedDiscovery(query({ when: 'today', sort: 'live-first' }), today).path, '/en/matches');
+  assert.equal(feedDiscovery(query({ when: 'today', sort: 'kickoff' }), today).eligible, false);
+  assert.equal(feedDiscovery(query({ when: 'tomorrow', page: '3' }), today).path, '/en/predictions/2026-10-10?page=3');
+  assert.equal(feedDiscovery(query({ date: '2026-10-08' }), today).path, '/en/predictions/2026-10-08');
   for (const values of [{ q: '<script>' }, { league: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }, { status: 'live' },
     { market: 'total-goals' }, { market: 'match-result', sort: 'probability' }, { dir: 'asc' }, { pageSize: '10' }, { when: 'next-7-days' }]) {
     assert.equal(feedDiscovery(query(values), today).eligible, false);
@@ -127,8 +127,8 @@ test('rolling default pagination has distinct indexable canonical destinations',
   assert.equal(paths.size, 3, 'Pagination never canonicalizes to page one.');
   assert.equal(feedDiscovery(query({ from: '2026-09-10', to: today, page: '2' }), today).eligible, false,
     'Explicit multiday archives retain their noindex policy.');
-  const dated = feedMetadata(query({ when: 'today', page: '2' }), today, populated, approved);
-  assert.equal(dated.alternates.canonical, 'https://goalhint.com/en/predictions/2026-10-09?page=2&picks=all');
+  const dated = feedMetadata(query({ date: today, page: '2' }), today, populated, approved);
+  assert.equal(dated.alternates.canonical, 'https://goalhint.com/en/predictions/2026-10-09?page=2');
   assert.equal(dated.robots.index, true);
 });
 
@@ -215,13 +215,14 @@ test('supported WebSite structured data is minimal and safe inside an HTML scrip
 });
 
 test('the home page stays indexable on an empty or uncovered day; dated archives and failed reads do not', () => {
+  const home = applyFeedPageDefaults(query({}), {}, { allowProbabilityDefault: false });
   for (const state of ['no-fixtures', 'data-unavailable']) {
     const empty = { data: { records: [], state }, error: null };
-    assert.equal(feedMetadata(query({}), today, empty, approved).robots.index, true, state);
+    assert.equal(feedMetadata(home, today, empty, approved).robots.index, true, state);
     assert.equal(feedMetadata(query({ date: '2026-10-08' }), today, empty, approved).robots.index, false, state);
   }
-  assert.equal(feedMetadata(query({}), today, { data: null, error: 'unavailable' }, approved).robots.index, false);
-  assert.equal(feedMetadata(query({}), today, { data: { records: [], state: 'no-fixtures' }, error: null },
+  assert.equal(feedMetadata(home, today, { data: null, error: 'unavailable' }, approved).robots.index, false);
+  assert.equal(feedMetadata(home, today, { data: { records: [], state: 'no-fixtures' }, error: null },
     { deployment: 'staging', index: false }).robots.index, false, 'The release gate still applies to the home page.');
 });
 

@@ -20,7 +20,7 @@ function emptyView(): LoadedView {
   return { ids: [], firstPage: null, lastPage: null, nextPage: null, scrollY: 0, error: null, phase: "idle" };
 }
 function normalizeQuery(query: FeedQuery, today: FeedState["today"]): FeedQuery {
-  return parseFeedQuery(serializeFeedQuery(query, today), { today, locale: query.locale });
+  return parseFeedQuery(serializeFeedQuery(query, today), { today, locale: query.locale, providerOdds: true });
 }
 function normalizeDraft(query: FeedQuery, today: FeedState["today"]): FeedQuery {
   return { ...normalizeQuery({ ...query, search: "" }, today), search: query.search };

@@ -25,10 +25,11 @@ export function pageMetadata({ title, description, path, index = false }: {
     twitter: { card: "summary_large_image", title, description, images: [{ url: image.url, alt: image.alt }] } };
 }
 
-export function feedMetadata(query: FeedQuery, today: ReportingDate, result: FeedPageResult, policy: DiscoveryPolicy = getDiscoveryPolicy()): Metadata {
-  const messages = createMessages(query.locale), discovery = feedDiscovery(query, today);
+export function feedMetadata(query: FeedQuery, today: ReportingDate, result: FeedPageResult, policy: DiscoveryPolicy = getDiscoveryPolicy(),
+  discovery = feedDiscovery(query, today)): Metadata {
+  const messages = createMessages(query.locale);
   const values = { date: messages.reportingDate(discovery.range.startDate), page: messages.number(query.page) };
-  const rolling = query.dates.kind === defaultFeedDatePreset;
+  const rolling = discovery.matchesToday || query.dates.kind === defaultFeedDatePreset;
   const title = rolling ? messages.text("metadata.homeTitle") : messages.text("metadata.archiveTitle", values);
   const pageTitle = query.page === 1 ? title : messages.text("metadata.paginationTitle", { title: title.replace(/^Goal Hint \| | \| Goal Hint$/gu, ""), page: values.page });
   // Keep the default feed landing page indexable on quiet days. Dated archives

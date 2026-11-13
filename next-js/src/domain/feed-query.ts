@@ -63,7 +63,7 @@ export type FeedQuery = Readonly<{
   /** Unrounded percentage bounds on the shown pick. Custom bounds are inclusive; the page default is strict. */
   probability: ProbabilityRange;
   /** Inclusive two-place price bounds (hundredths) on the shown pick's own market price; null applies no
-   * filter. Accepted only while publicPolicy.features.providerOdds is on (052). */
+   * filter. Accepted when the caller permits provider odds (052). */
   odds: OddsRange | null;
   picks: PicksFilter;
   sort: FeedSort;
@@ -241,7 +241,7 @@ function oddsRange(value: string | undefined, enabled: boolean): OddsRange | nul
 }
 
 /** Shared by pages, future public endpoints and browser URL controls. No clock reads.
- * `providerOdds` defaults to publicPolicy.features.providerOdds; only isolated tests override it. */
+ * Hosted callers pass their effective provider odds permission. */
 export function parseFeedQuery(input: FeedParameters, context: { today: ReportingDate; asOf?: number; locale?: string; routeDate?: string; providerOdds?: boolean }): FeedQuery {
   const values = parameters(input);
   const get = (key: string) => values.get(key);

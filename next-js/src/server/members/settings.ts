@@ -3,11 +3,10 @@ import { communityLinksSchema, communityLinksWithDefaults } from "../../domain/c
 
 import { privacyNotice } from "../../domain/privacy-notice.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
-import { applySettingsChanges, checkoutReadiness, copyFormats, defaultSubscriptionSettings, paywallModes, parseSettingsChanges,
+import { applySettingsChanges, checkoutReadiness, copyFormats, defaultSubscriptionSettings, paywallModes, parseSettingsChanges, parseSupportContacts,
   type CheckoutReadinessFacts, type CheckoutReadinessIssue, type CopyFormat, type EditableSettingField, type PaywallMode, type ProtectedSettingField,
   type ShortcutField, type SubscriptionSettings } from "../../domain/subscription-settings.ts";
 import { supportContactsOf } from "../../domain/support-contacts.ts";
-import { parseSupportContacts } from "../../domain/support-contacts-input.ts";
 import { parseContactPageEmail } from "../../domain/contact-page-email.ts";
 import { defaultMessageTemplates, parseMessageTemplates } from "../../domain/message-templates.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";

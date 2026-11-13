@@ -13,6 +13,7 @@ import { approvedSlipJointModel, boundJointSlipModel } from "@/server/slips/join
 import { readPublicSlipBuild } from "@/server/slips/public-slips";
 import { createGatedReads, contentAccess } from "@/server/members/gated-reads";
 import { resolveViewerAccess } from "@/server/members/viewer-access";
+import { publicOddsEnabled } from "@/server/odds/public-odds-policy";
 import { pageMetadata } from "@/server/seo/metadata";
 import { getShellInstant, PublicShell } from "./public-shell";
 import { slipConfigurationIdSchema } from "@/domain/slip-configurations";
@@ -85,6 +86,7 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
       const key = `${Object.keys(query).length ? "draft" : "defaults"}|${serializeSlipCriteria(criteria)}|${JSON.stringify(initialInputs)}|${initialTimeZone ?? ""}|${initialMarkets?.join(",") ?? ""}|${JSON.stringify(initialOutcomes)}|${initialReuse}|${error?.code ?? ""}|${jointEstimates}|${configurationId ?? ""}`;
       return <PublicShell showAccount={showAccount} locale={locale} today={today} current="slips" app compact>
         <SlipBuilder subscriberOnly={access.tier === "free"} signedIn={access.signedIn} showAccount={showAccount} key={key} locale={locale} today={today} criteria={criteria} result={result}
+          providerOdds={publicOddsEnabled()}
           error={error} initialInputs={initialInputs} {...(initialTimeZone ? { initialTimeZone } : {})}
           initialOutcomes={initialOutcomes} initialReuse={initialReuse} jointEstimates={jointEstimates}
           configurationId={configurationId} applyDefault={Object.keys(rawQuery).length === 0} {...(initialMarkets ? { initialMarkets } : {})} />

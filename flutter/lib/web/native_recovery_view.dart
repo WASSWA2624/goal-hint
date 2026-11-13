@@ -11,16 +11,20 @@ class NativeRecoveryView extends StatelessWidget {
     required this.failure,
     required this.onRetry,
     this.busy = false,
+    this.onOpenWebsite,
   });
 
   final WebViewFailure failure;
   final VoidCallback onRetry;
   final bool busy;
+  final VoidCallback? onOpenWebsite;
 
   @override
   Widget build(BuildContext context) => NativeErrorView(
     title: failure.title(AppBrandingScope.of(context).name),
-    message: failure.message(AppBrandingScope.of(context).name),
+    message: onOpenWebsite == null
+        ? failure.message(AppBrandingScope.of(context).name)
+        : 'Open ${AppBrandingScope.of(context).name} in your web browser.',
     icon: switch (failure) {
       WebViewFailure.connection => Icons.wifi_off_outlined,
       WebViewFailure.timeout => Icons.hourglass_empty_rounded,
@@ -75,20 +79,23 @@ class NativeRecoveryView extends StatelessWidget {
                 'Try another connection. If the problem continues, try again later.',
           ),
         ],
-        WebViewFailure.browser => [
-          _RecoveryTip(
-            icon: Icons.restart_alt,
-            title: 'Restart the app',
-            message:
-                'Close ${AppBrandingScope.of(context).name}, open it again and retry.',
-          ),
-          const _RecoveryTip(
-            icon: Icons.system_update_outlined,
-            title: 'Check for updates',
-            message:
-                'Update the app and your device’s browser components if an update is available.',
-          ),
-        ],
+        WebViewFailure.browser =>
+          onOpenWebsite != null
+              ? const []
+              : [
+                  _RecoveryTip(
+                    icon: Icons.restart_alt,
+                    title: 'Restart the app',
+                    message:
+                        'Close ${AppBrandingScope.of(context).name}, open it again and retry.',
+                  ),
+                  const _RecoveryTip(
+                    icon: Icons.system_update_outlined,
+                    title: 'Check for updates',
+                    message:
+                        'Update the app and your device’s browser components if an update is available.',
+                  ),
+                ],
       },
     ),
     action: SizedBox(
@@ -99,14 +106,23 @@ class NativeRecoveryView extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           shape: const RoundedRectangleBorder(),
         ),
-        onPressed: busy ? null : onRetry,
+        onPressed: busy ? null : onOpenWebsite ?? onRetry,
         icon: busy && !MediaQuery.disableAnimationsOf(context)
             ? const SizedBox.square(
                 dimension: 18,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : const Icon(Icons.refresh, size: 20),
-        label: Text(busy ? 'Reconnecting…' : 'Try again'),
+            : Icon(
+                onOpenWebsite == null ? Icons.refresh : Icons.open_in_new,
+                size: 20,
+              ),
+        label: Text(
+          onOpenWebsite != null
+              ? 'Open website'
+              : busy
+              ? 'Reconnecting…'
+              : 'Try again',
+        ),
       ),
     ),
   );

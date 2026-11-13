@@ -17,9 +17,8 @@ prices only after independently estimated probabilities and football evidence
 qualify. New sealed per-fixture quote manifests record bet hashes and original
 kickoff; the immutable recommendation keeps the exact quote and observation
 receipt. Older receipts remain readable but cannot establish a newly priced
-recommendation until a permitted observation supplies a manifest. Hosted odds
-display remains disabled. Acquisition, internal retention/use and public display
-retain separate permission checks.
+recommendation until a permitted observation supplies a manifest. Acquisition,
+internal retention/use and public display retain separate permission checks.
 
 ## In-play odds in local development
 
@@ -55,13 +54,16 @@ snapshots without repeating a fixture sweep.
 
 ## Hosted configuration
 
-- **Imports are off.** `GOAL_HINT_ODDS_IMPORT_ENABLED` defaults to `false`, and
-  the runner also requires a plan with spare ordinary quota. The Free plan is
-  never eligible. The counted odds trial has not been run; it needs the upgraded
-  plan.
-- **Display rights are not confirmed (OP-36).** Odds are stored privately.
-  `publicPolicy.features.providerOdds` stays `false`, so the public price
-  projection stays empty and `odds=` is an unknown feed key.
+- `GOAL_HINT_ODDS_IMPORT_ENABLED` defaults to `false`. For hosted imports, set
+  it to `true` with the verified `GOAL_HINT_ODDS_BOOKMAKER_ID` on the worker
+  after confirming the provider plan and ordinary-quota spare. The Free plan
+  remains ineligible.
+- For approved hosted display, set `GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF` on the
+  web and worker runtimes and record the exact `football-odds-rights` approval
+  in each runtime's private `.goal-hint/owner-approvals.json`. The web checks
+  the record before reading prices and shares only the permission boolean with
+  the browser. The worker needs a fresh authorized observation to project
+  prices. Deployment or the presence of a reference alone grants no permission.
 - **Launch bet ids are provisional.** `launch-odds-v1` pins Match Winner (1),
   Double Chance (12), Goals Over/Under (5) and Both Teams Score (8) from the
   documented examples. A price exists only when the id **and** the exact name
@@ -144,8 +146,8 @@ are no longer `scheduled`, and fixtures no sweep reaches. The sweep makes no
 provider call, is bounded per tick (500 fixtures) and raises each changed
 fixture's `publicVersion` once, so caches invalidate. Restoring the rights brings
 nothing back by itself: only a new pre-match observation publishes again.
-`publicPolicy.features.providerOdds` still hides every price from public reads
-on its own.
+The web's server-side permission check also withholds public price reads
+when display approval is missing or invalid.
 
 - A family gets rows only when its **whole group** is complete in the current
   observation, from one bookmaker and one bet. A missing selection, a renamed
@@ -200,21 +202,17 @@ trigger is inert because new rows start at version 0. Neither trigger uses
 
 ## Public read path
 
-Everything below is built and tested, but it is **inert** while
-`publicPolicy.features.providerOdds` is `false`, which it must stay until the
-owner records odds display rights (OP-36). Flipping it is a code change made only
-with that recorded decision. Only isolated tests override it, through the
-`providerOdds` option of `createMatchFeedService`, `createMatchDetailService`,
-`parseMatchFeedQuery` and `parseFeedQuery`. Public routes always parse with the
-global flag.
+`publicOddsEnabled()` supplies the effective permission for hosted Matches,
+Match Details and the slip routes. Subscription rules still govern unfinished
+fixtures. In-play price acquisition stays limited to owned local development.
 
-| Surface | While off (today) | Once on |
+| Surface | Without display approval | With display approval |
 | --- | --- | --- |
-| `odds=MIN-MAX` | An unknown key: 400 on `/api/matches`, `notFound()` on pages, and the browser parser refuses it too. | Two-place bounds, 1.01 ≤ MIN ≤ MAX ≤ 1000.00, inclusive on `displayHundredths`. `1.01-1000.00` (both slider extremes; the top stop reads "20.00+") means no filter and is omitted from canonical URLs. It counts as one panel filter. Reset clears it. |
+| `odds=MIN-MAX` | Priced filters stay unavailable. Existing subscription checks apply to restricted filter requests. | Two-place bounds, 1.01 ≤ MIN ≤ MAX ≤ 1000.00, inclusive on `displayHundredths`. `1.01-1000.00` means no filter and is omitted from canonical URLs. Reset clears it. |
 | Feed SQL (`feedSql`) | Never references the odds tables. | `LEFT JOIN FixtureOddsPrice op` on fixture, shown family, shown selection and `stale = FALSE` (1:1 by the primary key, so no fan-out). The filter is `m.available = TRUE AND op.displayHundredths BETWEEN min AND max`. |
 | Feed record `prices` | `[]`. | One entry per published family's pick that has a fresh price, read by the same rule in the same snapshot (`storedFixturePrices`). |
 | Detail `odds` | `[]`. | One complete market-implied group per family (`storedFixtureOddsGroups`): every selection fresh and from one snapshot. |
-| Cache | Feed projection 6 and detail projection 4 hold `prices: []` and `odds: []`. | The same projections. `odds` bounds are part of the feed key through the canonical query. The odds triggers bump `fixture:` and `date:` tags when a public price changes. |
+| Cache | Feed and detail responses use keys scoped to disabled permission. | Approved permission has separate keys. Odds bounds are part of the feed key. The odds triggers bump `fixture:` and `date:` tags when a public price changes. |
 | Client state | Nothing to merge. | `prices` and `odds` are observation fields adopted at an equal fixture version (`mergeFixtureObservation`, `mergeLiveDetail`). `selectedCardPrice` returns only the shown pick's own price. |
 
 Rules that hold either way:
@@ -224,8 +222,11 @@ Rules that hold either way:
   substitute.
 - Stale and withdrawn prices are excluded by the `stale = FALSE` join, both from
   the filter and from record prices.
-- Responses carry no bookmaker name, id, snapshot id or link. `basis` and the
-  method are the only provenance exposed.
+- The recommended-only Matches view uses the same public projection for the
+  recommended selection. The recommendation's frozen audit quote remains in
+  its original record.
+- Feed prices and the market-implied detail envelope expose the price basis.
+  The separately verified bookmaker detail panel can show book names and IDs.
 - Market-implied probabilities exist only in the detail `odds` envelope, labelled
   `market-implied`. They never enter forecasts, AI inputs, fallback inputs or
   `snapshot`.
@@ -241,10 +242,9 @@ rules:
   revision and its extensions and before the cycle pointer moves; the final
   eligibility re-check rolls it back with the revision. No retrospective
   attachment, backfill or reconstruction from snapshot history.
-- **Gate.** The live publisher passes `quotes.verify`, which requires
-  `publicPolicy.features.providerOdds` **and** a verified owner-recorded
-  `football-odds-rights` approval, evaluated before capture and rechecked before commit. Without the
-  option (every test harness by default) nothing touches the table.
+- **Gate.** The live publisher still limits this longer-lived performance quote
+  capture to development with verified odds permission. Hosted display approval
+  enables current and closing offers through the public read path.
 - **Source.** One non-locking statement (`storedQuoteSource` in
   `src/server/odds/odds-read.ts`) reads the state and fresh public rows, so the
   READ COMMITTED publication sees one commit and adds no lock order against odds
@@ -263,7 +263,7 @@ rules:
 Public historical returns separately require a verified `PerformanceQuoteBinding`; enabling capture alone does not enable those returns.
 
 Captured hundredths outlive the snapshots' `retainUntil`, like the published-slip
-archive; the owner must confirm this retention before enabling the flag.
+archive. Hosted capture requires a separate retention decision.
 
 ## Retention
 
@@ -311,9 +311,9 @@ GRANT SELECT, INSERT, UPDATE (basis, bookmakerExternalId, line, priceDecimal, di
 ```
 
 Prediction quotes (`20261025180538_prediction_quotes`) add one append-only grant.
-Apply it after `npm run db:deploy` has created the table and **before** the odds
-display flag is turned on: once capture is enabled, a missing grant fails the
-forecast publication itself.
+Apply it after `npm run db:deploy` has created the table and before enabling
+longer-lived performance quote capture. A missing grant during capture fails
+the forecast publication.
 
 ```sql
 GRANT SELECT, INSERT ON goal_hint_db.PredictionQuote TO 'goal_hint_app'@'<existing host>';

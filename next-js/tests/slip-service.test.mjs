@@ -402,15 +402,23 @@ test('supplementary price-pool drift or a future observation rejects the entire 
   }
 });
 
-test('alternative-price projection respects the odds policy and reuses only complete published market groups', async () => {
+test('reviewed price pools batch current primary quotes and supplement only complete published groups', async () => {
   let reads = 0;
+  const source = record('fixture-1');
   const at = new Date(now - 1000), rows = [
     ['match-result', 'home-win', 200], ['match-result', 'draw', 300], ['match-result', 'away-win', 400],
     ['double-chance', 'home-or-draw', 150], ['both-teams-to-score', 'yes', 180], ['both-teams-to-score', 'no', 220],
   ].map(([marketKey, selection, displayHundredths]) => ({ marketKey, selection, displayHundredths,
     basis: 'bookmaker', impliedProbability: '0.5', overround: '1.1', method: 'proportional-v1', snapshotId: 'synthetic-snapshot',
-    retrievedAt: at, providerUpdatedAt: null, bookmakerExternalId: 'private-identifier' }));
-  const tx = { $queryRaw: async () => { reads++; return rows; } }, source = record('fixture-1');
+    fixtureId: source.fixtureId, kickoff: new Date(source.kickoffAt), checkedAt: at,
+    retrievedAt: new Date(now - 2000), providerUpdatedAt: null, bookmakerExternalId: 'private-identifier' }));
+  const tx = { $queryRaw: async ({ sql, values }) => {
+    reads++;
+    assert.match(sql, /s\.withdrawnAt IS NULL/);
+    assert.match(sql, /s\.lastRetrievedAt BETWEEN/);
+    assert.ok(values.includes(source.fixtureId));
+    return rows;
+  } };
   const disabled = await storedSlipPricePools(tx, [source], now, { enabled: false, primaryBookmakerOnly: true });
   assert.deepEqual(disabled, { 'fixture-1': [] }); assert.equal(reads, 0);
   const enabled = await storedSlipPricePools(tx, [source], now, { enabled: true, primaryBookmakerOnly: true });
@@ -418,21 +426,25 @@ test('alternative-price projection respects the odds policy and reuses only comp
   assert.ok(enabled['fixture-1'].every(price => price.family === 'match-result'));
   assert.doesNotMatch(JSON.stringify(enabled), /private-identifier|bookmakerExternalId|impliedProbability|overround|snapshotId/);
   rows[1].snapshotId = 'different-snapshot';
-  assert.deepEqual(await storedSlipPricePools(tx, [source], now, { enabled: true, primaryBookmakerOnly: true }), { 'fixture-1': source.prices });
+  assert.deepEqual((await storedSlipPricePools(tx, [source], now, { enabled: true, primaryBookmakerOnly: true }))['fixture-1']
+    .map(({ selection }) => selection), ['home-win']);
 });
 
-test('enabled price pools preserve standalone approved selected quotes and prefer complete supplemental quotes', async () => {
+test('reviewed price pools ignore old publication quotes and require the current fixture kickoff', async () => {
   const source = record('fixture-1', { prices: [{ family: 'match-result', selection: 'home-win', price: '1.80', basis: 'bookmaker',
     retrievedAt: now - 2000, providerUpdatedAt: null }] });
   const settings = { enabled: true, primaryBookmakerOnly: true };
-  assert.deepEqual(await storedSlipPricePools({ $queryRaw: async () => [] }, [source], now, settings), { 'fixture-1': source.prices });
+  assert.deepEqual(await storedSlipPricePools({ $queryRaw: async () => [] }, [source], now, settings), { 'fixture-1': [] });
   const rows = [['home-win', 210], ['draw', 300], ['away-win', 400]].map(([selection, displayHundredths]) => ({
     marketKey: 'match-result', selection, displayHundredths, basis: 'bookmaker', impliedProbability: '0.5', overround: '1.1',
-    method: 'proportional-v1', snapshotId: 'complete-snapshot', retrievedAt: new Date(now - 1000), providerUpdatedAt: null,
+    method: 'proportional-v1', snapshotId: 'complete-snapshot', retrievedAt: new Date(now - 2000), providerUpdatedAt: null,
+    fixtureId: source.fixtureId, kickoff: new Date(source.kickoffAt), checkedAt: new Date(now - 1000),
   }));
   const prices = await storedSlipPricePools({ $queryRaw: async () => rows }, [source], now, settings);
   assert.equal(prices['fixture-1'].length, 3); assert.equal(prices['fixture-1'].find(price => price.selection === 'home-win').price, '2.10');
   assert.equal(prices['fixture-1'].find(price => price.selection === 'home-win').retrievedAt, now - 1000);
+  assert.deepEqual(await storedSlipPricePools({ $queryRaw: async () => rows }, [{ ...source, kickoffAt: source.kickoffAt + 1 }], now, settings),
+    { 'fixture-1': [] });
   assert.deepEqual(await storedSlipPricePools({ $queryRaw: async () => rows }, [source], now, { ...settings, enabled: false }), { 'fixture-1': [] });
 });
 

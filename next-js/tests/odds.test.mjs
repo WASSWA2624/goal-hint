@@ -3,10 +3,23 @@ import test from "node:test";
 import { deMargin, DE_MARGIN_METHOD, formatOddsHundredths, formatOddsRange, oddsDisplayHundredths, oddsRules,
   parseDecimalOdds, parseOddsRange } from "../src/domain/odds.ts";
 import { launchOddsGroup, launchOddsMapping, ODDS_MAPPING_VERSION } from "../src/domain/odds-markets.ts";
+import { approvedOddsDisplay } from "../src/server/odds/public-odds-policy.ts";
+import { ownerEvidenceVerifier, parseOwnerApprovals } from "../src/server/live/live-approvals.ts";
 
 // Synthetic prices only; no provider payloads or bookmaker data.
 const odds = (value) => { const parsed = parseDecimalOdds(value); assert.notEqual(parsed, null, value); return parsed; };
 const sum = (values) => values.reduce((total, value) => total + BigInt(value.replace(".", "")), 0n);
+
+test("hosted odds require the exact recorded owner decision for odds display", () => {
+  const verify = ownerEvidenceVerifier(parseOwnerApprovals({ version: 1, owner: "owner", approvals: [
+    { requirement: "football-public-rights", reference: "fixture-rights", approvedAt: "2026-11-01", decision: "Fixtures" },
+    { requirement: "football-odds-rights", reference: "odds-rights", approvedAt: "2026-11-01", decision: "Bookmaker quotes" },
+  ] }));
+  assert.equal(approvedOddsDisplay("odds-rights", verify), true);
+  for (const reference of [null, "unknown-rights", "fixture-rights"]) assert.equal(approvedOddsDisplay(reference, verify), false);
+  assert.equal(approvedOddsDisplay("odds-rights", async () => true), false);
+  assert.equal(approvedOddsDisplay("odds-rights", () => { throw new Error("read failed"); }), false);
+});
 
 test("decimal odds are strict text, canonical without trailing zeros, with an inclusive 1.01 floor", () => {
   assert.deepEqual(parseDecimalOdds("1.850"), { text: "1.85", scaled: 18_500n });

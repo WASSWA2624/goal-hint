@@ -7,6 +7,7 @@ import { randomBytes } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { calendarRules } from "../../domain/calendar.ts";
 import type { RuntimePolicy } from "../config/runtime-policy.ts";
+import { createJobRegistry } from "../jobs/job-registry.ts";
 import { createJobWorker } from "../jobs/job-worker.ts";
 import { resultCadence } from "../results/result-sync-policy.ts";
 import { dailySelectionEnvelope } from "../selection/selection-trigger.ts";
@@ -174,7 +175,16 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
       teamCodes: runtime.teamCodes.enabled, teamCodesSwitch: policy.choices.teamCodes.enabled,
       liveDetails: workload.liveDetails.eligible, liveDetailsSwitch: policy.choices.liveDetails.enabled,
       liveDetailsRequests: workload.liveDetails.requests });
-    const workers = Array.from({ length: workersPerRun }, () => createJobWorker({ queue: runtime.queue, registry: runtime.registry,
+    let selectionRegistry = runtime.registry, refreshAndCutoffRegistry = runtime.registry;
+    if (!localFootball && workersPerRun > 1) {
+      // Reserve a slot so an older refresh backlog cannot delay the next daily import.
+      const selection = runtime.registry.find("daily.selection", 1)!;
+      const definitions = runtime.registry.types.map(({ type, handlerVersion }) => runtime.registry.find(type, handlerVersion)!);
+      selectionRegistry = createJobRegistry([selection]);
+      refreshAndCutoffRegistry = createJobRegistry(definitions.filter((definition) => definition !== selection));
+    }
+    const workers = Array.from({ length: workersPerRun }, (_, index) => createJobWorker({
+      queue: runtime.queue, registry: index === 0 ? selectionRegistry : refreshAndCutoffRegistry,
       ownerId: randomBytes(32).toString("hex"), onEvent: (event) => {
         if (event.kind !== "claimed") log({ event: `job-${event.kind}`, jobId: event.jobId?.slice(0, 12) ?? null, reason: event.reason });
       } }).run(stop));

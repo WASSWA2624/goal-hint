@@ -165,6 +165,8 @@ const environmentSchema = z.object({
   RESEARCH_API_KEY: token.describe("Supply a server-only credential without whitespace (011)."),
   API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS: optional(integer.pipe(z.int().nonnegative().max(operatingRules.football.monthlyPayableCeilingUsdCents)))
     .describe("Use integer US cents within the settled US$45 payable ceiling (008)."),
+  GOAL_HINT_FOOTBALL_EXISTING_PREPAID: enabled
+    .describe("Use true only in production mode and operation scope for an existing direct prepaid subscription with no new spend."),
   GOAL_HINT_COMPETITION_IDS: optional(
     z.string().regex(/^[1-9]\d*(,[1-9]\d*)*$/)
       .transform((value) => value.split(",").map(Number))
@@ -285,6 +287,7 @@ function assemble(settings: z.output<typeof environmentSchema>) {
       competitionIds: settings.GOAL_HINT_COMPETITION_IDS,
       football: {
         payableMonthlyUsdCents: settings.API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS,
+        existingPrepaid: settings.GOAL_HINT_FOOTBALL_EXISTING_PREPAID,
         privateUseRef: settings.GOAL_HINT_FOOTBALL_PRIVATE_USE_REF,
         accountEvidenceRef: settings.GOAL_HINT_FOOTBALL_ACCOUNT_EVIDENCE_REF,
         publicRightsRef: settings.GOAL_HINT_FOOTBALL_PUBLIC_RIGHTS_REF,
@@ -402,8 +405,10 @@ function validateOperationConfiguration(policy: RuntimePolicy, operation: Operat
     const football = () => {
       need("GOAL_HINT_FOOTBALL_ENABLED", policy.capabilities.football);
       need("API_FOOTBALL_KEY", policy.secrets.footballKey);
-      // A free plan truthfully pays zero; the amount must still be recorded and stays within the ceiling.
-      if (policy.choices.football.payableMonthlyUsdCents === null) need("API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS", null);
+      const { existingPrepaid, payableMonthlyUsdCents } = policy.choices.football;
+      if (payableMonthlyUsdCents === null && (!existingPrepaid || policy.mode !== "production" || policy.scope !== "production")) {
+        need("API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS", null);
+      }
       need("GOAL_HINT_BUDGET_APPROVAL_REF", policy.choices.budgets.approvalRef);
       need("GOAL_HINT_FOOTBALL_PRIVATE_USE_REF", policy.choices.football.privateUseRef);
       if (policy.scope === "trial") need("GOAL_HINT_FOOTBALL_TRIAL_REQUEST_LIMIT", policy.choices.football.trialRequestLimit);
@@ -482,6 +487,9 @@ function consistencyIssues(policy: RuntimePolicy): PolicyIssue[] {
     isLoopbackDatabaseHost(new URL(policy.secrets.databaseUrl.read()).hostname);
   if (policy.scope === "production" && policy.mode !== "production" && !localDevelopment) {
     issues.push({ field: "NODE_ENV", reason: "Public production publication requires production mode (or a loopback development database)." });
+  }
+  if (policy.choices.football.existingPrepaid && (policy.mode !== "production" || policy.scope !== "production")) {
+    issues.push({ field: "GOAL_HINT_FOOTBALL_EXISTING_PREPAID", reason: "Existing direct prepaid access requires production mode and operation scope." });
   }
   if (policy.secrets.databaseUrl !== null && policy.secrets.testDatabaseUrl !== null
     && new URL(policy.secrets.databaseUrl.read()).href === new URL(policy.secrets.testDatabaseUrl.read()).href) {

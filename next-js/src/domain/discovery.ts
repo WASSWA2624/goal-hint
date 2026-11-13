@@ -1,7 +1,7 @@
-import { activeFeedFilterCount, anyProbability, defaultFeedDatePreset, defaultSortDirection, pinnedDateSelection, resolveFeedDates, feedQueryHref, feedQueryRules, type FeedQuery } from "./feed-query.ts";
+import { activeFeedFilterCount, anyProbability, defaultFeedDatePreset, defaultPageSort, resolveFeedDates, feedQueryHref, feedQueryRules, type FeedQuery } from "./feed-query.ts";
 import type { ReportingDate } from "./calendar.ts";
 import { publicPolicy } from "./public-policy.ts";
-import { homeHref } from "./navigation-paths.ts";
+import { homeHref, localePath } from "./navigation-paths.ts";
 
 export type DiscoveryPolicy = Readonly<{ deployment: "development" | "staging" | "production"; index: boolean }>;
 export function resolveDiscoveryPolicy(input: { deployment?: string | undefined; runtime?: string | undefined; releaseVerified: boolean }): DiscoveryPolicy {
@@ -17,21 +17,20 @@ export function canonicalUrl(path: string): string {
   return url.href;
 }
 
-export function feedDiscovery(query: FeedQuery, today: ReportingDate) {
+export function feedDiscovery(query: FeedQuery, today: ReportingDate, allowProbabilityDefault = false) {
   const range = resolveFeedDates(query, today);
-  const defaultOrder = query.sort.direction === defaultSortDirection.kickoff
-    && (query.sort.by === "kickoff" || query.dates.kind === "today" && query.sort.by === "live-first");
-  // The standard member view shares its public archive canonical. Explicit numeric bounds remain filters.
-  const publicScope = query.dates.kind === "today" && query.probability.minExclusive ? { ...query, probability: anyProbability } : query;
-  const filtered = Boolean(query.zone) || activeFeedFilterCount(publicScope) > 0 || !defaultOrder ||
+  const order = defaultPageSort(query.dates);
+  const defaultOrder = query.sort.direction === order.direction && query.sort.by === order.by;
+  const matchesToday = query.dates.kind === "today";
+  const usesTodayDefault = Boolean(query.probability.minExclusive) === allowProbabilityDefault;
+  // The stable Matches URL applies its own live sort and the viewer's default probability on each request.
+  const scope = matchesToday && usesTodayDefault && query.probability.minExclusive ? { ...query, probability: anyProbability } : query;
+  const filtered = Boolean(query.zone) || activeFeedFilterCount(scope) > 0 || !defaultOrder || (matchesToday && !usesTodayDefault) ||
     query.pageSize !== feedQueryRules.pageSize || range.dayCount !== 1 && query.dates.kind !== defaultFeedDatePreset;
-  // The rolling default collection keeps its own pagination: pinning its 30-day
-  // range would point an indexable page at a deliberately noindex multiday archive.
-  // Single-day aliases still pin to a dated collection.
-  const home = query.dates.kind === defaultFeedDatePreset && query.page === 1;
-  const canonicalQuery: FeedQuery = filtered || query.dates.kind === defaultFeedDatePreset ? query
-    : { ...publicScope, dates: pinnedDateSelection(range), sort: { by: "kickoff", direction: defaultSortDirection.kickoff } };
-  return { path: feedQueryHref(canonicalQuery, today), eligible: !filtered, home, range };
+  const page = query.page === 1 ? "" : `?page=${query.page}`;
+  const path = filtered || query.dates.kind === defaultFeedDatePreset ? feedQueryHref(query, today)
+    : matchesToday ? `${homeHref(query.locale)}${page}` : `${localePath(query.locale)}/predictions/${range.startDate}${page}`;
+  return { path, eligible: !filtered, home: !filtered && matchesToday && query.page === 1, matchesToday, range };
 }
 
 export const discoveryRules = Object.freeze({ sitemapBatchSize: 2000 });

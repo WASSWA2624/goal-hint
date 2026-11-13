@@ -8,6 +8,7 @@ import { BestSlips } from "@/components/slips/best-slips";
 import { CriteriaPanel } from "@/components/slips/slip-styles";
 import { TextLink } from "@/components/ui/controls";
 import { Inline, Stack } from "@/components/ui/layout";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { defaultBestSlipsQuery } from "@/domain/best-slips-query";
 import { createMessages } from "@/i18n/messages";
 import { resolveViewerAccessFresh } from "@/server/members/viewer-access";
@@ -47,7 +48,8 @@ export function createBestSlipsRoute({ read = readBestSlipsBrowseSnapshot, acces
       const { locale } = await params;
       const today = await getShellDate();
       return <PublicShell locale={locale} today={today} current="best-slips" app compact>
-        <Suspense fallback={<BestSlipsLoading locale={locale} today={today} />}>
+        <VisuallyHidden as="h1">{createMessages(locale).text("bestSlips.title")}</VisuallyHidden>
+        <Suspense fallback={<BestSlipsLoading locale={locale} today={today} heading={false} />}>
           <ServerThemeUntilHydrated><Content locale={locale} /></ServerThemeUntilHydrated>
         </Suspense>
       </PublicShell>;

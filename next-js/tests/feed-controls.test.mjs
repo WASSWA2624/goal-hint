@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { applyFeedDraft, parseProbabilityInputs, resetFeedFilterSection, resetFeedFilters } from '../src/domain/feed-controls.ts';
+import { compileFeedFilterDraft, feedFilterDraft } from '../src/domain/feed-filter-draft.ts';
 import { defaultMarkets, defaultMatchProbability, feedQueryHref, panelFilterCount, parseFeedQuery } from '../src/domain/feed-query.ts';
 import { makeStore } from '../src/state/store.ts';
 import { draftChanged } from '../src/state/feed.ts';
@@ -135,4 +136,13 @@ test('Reset clears odds bounds (052); Apply never carries them while provider od
   // The odds controls stay disabled while publicPolicy.features.providerOdds is false; a forged draft fails closed.
   assert.throws(() => applyFeedDraft(query, today));
   assert.equal(applyFeedDraft(reset, today).odds, null);
+});
+
+test('server-enabled odds bounds survive the browser filter and state handoff', () => {
+  const query = parseFeedQuery({ odds: '1.50-3.00', tz: 'Africa/Kampala' }, { today, providerOdds: true });
+  const draft = feedFilterDraft(query, today, 'Africa/Kampala');
+  const next = compileFeedFilterDraft(draft, today, true);
+  assert.deepEqual(next.odds, { min: 150, max: 300 });
+  assert.deepEqual(makeStore({ query: next, today, data: null }).getState().feed.query.odds, next.odds);
+  assert.equal(compileFeedFilterDraft(draft, today, false).odds, null);
 });

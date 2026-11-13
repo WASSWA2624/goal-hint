@@ -55,8 +55,7 @@ function publishedOutcomeFilter(picks: readonly FeedMarketPick[]): Prisma.Sql {
   return clauses.length ? Prisma.sql`(${Prisma.join(clauses, " OR ")})` : Prisma.sql`FALSE`;
 }
 
-/** `providerOdds` is the caller's effective odds flag (publicPolicy.features.providerOdds unless an isolated test
- * overrides it), so the SQL join and filter always follow the same rule as the record prices. */
+/** The effective display permission keeps the SQL join and filter in sync with the record prices. */
 export function feedSql(query: FeedQuery, range: ReportingDateRange, competitionIds: readonly number[],
   providerOdds: boolean = publicPolicy.features.providerOdds, search: FeedSearch | null = null, completedOnly = false, publishedOnly = false,
   historyBefore: UtcInstant | null = null) {
@@ -75,10 +74,6 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
     '$.probability'))+0e0) ELSE m.selectedProbability END` : Prisma.sql`m.selectedProbability`;
   const pickSelection = preferRecommendation ? Prisma.sql`CASE WHEN ${chosen} THEN JSON_UNQUOTE(JSON_EXTRACT(rp.feedRecommendation,
     '$.selection')) ELSE m.selection END` : Prisma.sql`m.selection`;
-  const recommendedPrice = Prisma.sql`CAST(JSON_UNQUOTE(JSON_EXTRACT(rp.feedRecommendation,'$.decimal')) AS DECIMAL(10,4))`;
-  const pickPrice = preferRecommendation ? Prisma.sql`CASE WHEN ${chosen}
-    THEN CASE WHEN ${recommendedPrice}>=${minimumFixturePrice} THEN FLOOR(${recommendedPrice}*100+0.5) END
-    ELSE op.displayHundredths END` : Prisma.sql`op.displayHundredths`;
   const candidateMarket = Prisma.sql`b.family IN (${markets}) AND b.available=TRUE`;
   const rankedCandidateMarket = preferRecommendation
     ? Prisma.sql`CASE WHEN ${useRecommendation} THEN b.family=${recommendedFamily} ELSE ${candidateMarket} END`
@@ -143,7 +138,7 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
   // that family and selection drops out through NULL semantics; another family's price never qualifies it.
   // Odds stay unread while provider odds are not public, so the feed never depends on the odds tables then
   // (parseFeedQuery already rejects `odds` in that case; this guard keeps a hand-built query from joining).
-  if (query.odds && providerOdds) filters.push(Prisma.sql`m.available=TRUE AND ${pickPrice} BETWEEN ${query.odds.min} AND ${query.odds.max}`);
+  if (query.odds && providerOdds) filters.push(Prisma.sql`m.available=TRUE AND op.displayHundredths BETWEEN ${query.odds.min} AND ${query.odds.max}`);
   let searchJoin = Prisma.empty, exact: Prisma.Sql | null = null, ranking: Prisma.Sql | null = null;
   if (query.search) {
     if (!search || search.query !== query.search) throw new MatchFeedError("unavailable");

@@ -31,10 +31,11 @@ import { OptionLogo } from "./filter-parts";
 import { DialogContent, Muted, Panel } from "./feed-filter-styles";
 
 /** One applied draft and shared field tree serve every viewport. */
-export function FeedFilters({ query, today, leagues, onApply, searchText, onSearchChange, onSearchSubmit, subscriberOnly = false, pending = false }: {
+export function FeedFilters({ query, today, leagues, onApply, searchText, onSearchChange, onSearchSubmit, subscriberOnly = false, pending = false,
+  providerOdds = publicPolicy.features.providerOdds }: {
   query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"]; onApply: (next: FeedQuery) => void;
   searchText: string; onSearchChange: (text: string, composing: boolean) => void; onSearchSubmit: (text: string) => void;
-  subscriberOnly?: boolean; pending?: boolean;
+  subscriberOnly?: boolean; pending?: boolean; providerOdds?: boolean;
 }) {
   const messages = createMessages(query.locale), prefix = useId(), dispatch = useAppDispatch();
   const deviceZone = useDeviceTimeZone();
@@ -47,7 +48,7 @@ export function FeedFilters({ query, today, leagues, onApply, searchText, onSear
   const [lastOdds, setLastOdds] = useState<"min" | "max">("max"), [oddsFocus, setOddsFocus] = useState<"min" | "max" | null>(null);
   const snapshot = useRef<FeedFilterDraft | null>(null), form = useRef<HTMLFormElement>(null), composing = useRef(false);
   const locked = subscriberOnly && draft.query.status !== "finished", live = draft.query.status === "live";
-  const oddsEnabled = publicPolicy.features.providerOdds && !locked;
+  const oddsEnabled = providerOdds && !locked;
   const complete = useMemo(() => compileFeedFilterDraft(draft, today, oddsEnabled), [draft, today, oddsEnabled]);
   useEffect(() => { dispatch(queryApplied(query)); }, [dispatch, query]);
   useEffect(() => { if (complete) dispatch(draftChanged(complete)); }, [complete, dispatch]);
@@ -98,7 +99,7 @@ export function FeedFilters({ query, today, leagues, onApply, searchText, onSear
     const label = messages.text(field === "min" ? "filters.minimum" : "filters.maximum");
     const accessibleLabel = messages.text(field === "min" ? "feed.filters.minOdds" : "feed.filters.maxOdds");
     if (!oddsEnabled) return <UnavailableField label={label} accessibleLabel={accessibleLabel}
-      reason={messages.text(publicPolicy.features.providerOdds ? "feed.filters.oddsLocked" : "feed.filters.oddsUnavailable")} />;
+      reason={messages.text(providerOdds ? "feed.filters.oddsLocked" : "feed.filters.oddsUnavailable")} />;
     const invalid = field === "min" ? issues.oddsMinInvalid : issues.oddsMaxInvalid;
     const typingDecimal = oddsFocus === field && /^\d*\.$/u.test(draft.odds[field]);
     const error = invalid && !typingDecimal ? messages.text("feed.filters.invalidOdds", {

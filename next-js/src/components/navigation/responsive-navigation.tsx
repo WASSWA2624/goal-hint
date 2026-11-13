@@ -14,6 +14,11 @@ import { MoreList, MoreMenu, TabButton, TabLink, TabList, TabMeasure, TopNavButt
 
 const icons = { matches: HomeIcon, live: LiveIcon, results: ResultsIcon, slips: SlipIcon, builder: WrenchIcon,
   help: HelpIcon, privacy: ShieldIcon, terms: DocumentIcon, contact: MailIcon, dashboard: DashboardIcon, invite: GiftIcon, download: DownloadIcon, community: GroupIcon };
+// These two destinations have a route-level loading boundary. Next can warm
+// their shells without running their stored reads or prefetching private data.
+function prefetchLoadingShell(key: NavigationDestination["key"], current: NavigationLocation | undefined): "auto" | false {
+  return key !== current && (key === "best-slips" || key === "slips") ? "auto" : false;
+}
 export type NavigationDestination = Readonly<{
   label: string; tab: string; icon: keyof typeof icons; tone: AccentName;
 } & ({ key: NavigationLocation; href: string } | { key: "community"; href?: never })>;
@@ -142,7 +147,7 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
         if (action) return <li key={key}><Action type="button" $tone={tone} data-nav-key={key}
           data-community-entry={key === "community" ? "" : undefined} aria-haspopup="dialog"
           onClick={event => openAction(event, action)}><Icon /><span>{mobile ? tab : label}</span></Action></li>;
-        return href && <li key={key}><Primary href={href} prefetch={false} $tone={tone} data-nav-key={key}
+        return href && <li key={key}><Primary href={href} prefetch={prefetchLoadingShell(key, current)} $tone={tone} data-nav-key={key}
           aria-current={current === key ? "page" : undefined}><Icon /><span>{mobile ? tab : label}</span></Primary></li>;
       })}
       {overflow.length > 0 && <li data-nav-more>
@@ -152,7 +157,7 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
             const Icon = icons[icon], action = actionFor(key);
             if (action) return <li key={key}><button type="button" data-nav-key={key} data-community-entry={key === "community" ? "" : undefined}
               aria-haspopup="dialog" onClick={event => openAction(event, action)}><Icon /><span>{label}</span></button></li>;
-            return href && <li key={key}><TextLink href={href} prefetch={false} data-nav-key={key}
+            return href && <li key={key}><TextLink href={href} prefetch={prefetchLoadingShell(key, current)} data-nav-key={key}
               aria-current={current === key ? "page" : undefined}><Icon /><span>{label}</span></TextLink></li>;
           })}</MoreList>
         </MoreMenu>

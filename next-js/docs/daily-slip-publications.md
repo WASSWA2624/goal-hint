@@ -9,9 +9,10 @@ account erasure. Personal saved slips retain their separate privacy lifecycle.
 
 `createDailySlipPublisher` generates a bounded current-day cohort from the
 existing stored feed and price reader. It requires both a currently qualified
-joint model and current public-odds permission. Missing evidence returns an
-explicit unavailable state. No probability product, fabricated model, provider
-request, research call or billing allowance is introduced.
+joint model and verified public-odds permission. It uses current confirmed
+primary-bookmaker offers at the fixture's scheduled kickoff. A frozen quote
+from a prediction publication cannot qualify a new slip. Missing odds or model
+evidence produces an explicit worker status.
 
 `createPublishedSlips.publish` validates the original quoted total, marginal
 average, joint estimate, daily odds target, diversity and current EAT day. It
@@ -67,6 +68,11 @@ constructs `createDailySlipPublisher` with its reviewed joint model,
 `verifyModel` and `verifyPublicOdds`. The worker rechecks the existing publication
 and database operation gates. A reference string or a verifier hardcoded to true
 does not establish calibration, rights or promotion evidence.
+
+The hosted web runtime reads the archive when the matching
+`GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF` is verified in its private owner register.
+An empty odds band for today shows that it is awaiting publication. Archived
+dates and empty outcome filters retain their own empty-result state.
 
 Without `--once`, the worker checks the current EAT day once a minute, including
 after midnight or restart. It retries sparse/unavailable cohorts and stops

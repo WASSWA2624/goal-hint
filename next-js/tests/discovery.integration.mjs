@@ -11,7 +11,7 @@ import { createMatchDetailService } from '../src/server/matches/detail-service.t
 import { createMysqlPublicResponseCache } from '../src/server/cache/mysql-public-cache.ts';
 import { loadMatchFeedPage } from '../src/server/matches/feed-page.ts';
 import { loadMatchDetailPage } from '../src/server/matches/detail-page.ts';
-import { parseFeedQuery } from '../src/domain/feed-query.ts';
+import { applyFeedPageDefaults, parseFeedQuery } from '../src/domain/feed-query.ts';
 import { parseReportingDate } from '../src/domain/calendar.ts';
 import { savePageScenarios } from './helpers/page-capture.mjs';
 
@@ -63,7 +63,7 @@ test('discovery reads genuine stored identity, historical scope and material cha
       matches: await discovery.matches(0), dates: await discovery.dates(0), oldPath: before.path };
     for (const parameters of [{}, { page: '2' }, { date: today }, { date: today, page: '2' }, { q: 'Discovery Home 1' },
       { page: '10000' }, { when: 'next-7-days' }]) {
-      const query = parseFeedQuery(parameters, { today });
+      const query = applyFeedPageDefaults(parseFeedQuery(parameters, { today }), parameters, { dated: 'date' in parameters });
       const result = await loadMatchFeedPage(query, today, clock, (values, context) => feed.query(values, context), fullAccess);
       assert.equal(result.error, null); captured.feeds[JSON.stringify(parameters)] = { query, today, result };
     }

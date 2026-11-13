@@ -1,6 +1,7 @@
 import type { ReportingDate } from "./calendar.ts";
+import { feedDiscovery } from "./discovery.ts";
 import { FeedPaginationError } from "./feed-pagination-error.ts";
-import { defaultFeedDatePreset, feedQueryHref, pinnedDateSelection, resolveFeedDates, serializeFeedQuery, type FeedQuery } from "./feed-query.ts";
+import { defaultFeedDatePreset, FeedQueryError, feedQueryHref, feedQueryRules, pinnedDateSelection, resolveFeedDates, serializeFeedQuery, type FeedQuery } from "./feed-query.ts";
 import { fixtureAdvance, mergeFixtureObservation } from "./fixture-reconciliation.ts";
 import { matchFeedResponseSchema, type MatchFeedRecord, type MatchFeedResponse } from "./match-feed.ts";
 
@@ -12,7 +13,10 @@ export function pinnedFeedQuery(query: FeedQuery, today: ReportingDate): FeedQue
   const range = resolveFeedDates(query, today);
   return { ...query, dates: pinnedDateSelection(range) };
 }
-export function feedPageHref(query: FeedQuery, today: ReportingDate, page: number): string {
+export function feedPageHref(query: FeedQuery, today: ReportingDate, page: number, allowProbabilityDefault = false): string {
+  if (!Number.isInteger(page) || page < 1 || page > feedQueryRules.maximumPage) throw new FeedQueryError();
+  const discovery = feedDiscovery({ ...query, page }, today, allowProbabilityDefault);
+  if (discovery.eligible) return discovery.path;
   // Ordinary navigation re-resolves the rolling collection at the next request,
   // including midnight. API appends keep the pinned cohort for safe reconciliation.
   const collection = query.dates.kind === defaultFeedDatePreset ? query : pinnedFeedQuery(query, today);

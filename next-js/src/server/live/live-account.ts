@@ -16,7 +16,7 @@ export const PROVIDER_DAY_SETTLE_MS = 60_000;
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 
 export class LiveAccountError extends Error {
-  readonly reason: "credential-failure" | "subscription-expired" | "subscription-inactive" | "unavailable" | "settling";
+  readonly reason: "credential-failure" | "subscription-expired" | "subscription-inactive" | "prepaid-subscription-unverified" | "unavailable" | "settling";
   constructor(reason: LiveAccountError["reason"]) {
     super(`API-Football account check failed (${reason}); private provider diagnostics are withheld.`);
     this.name = "LiveAccountError"; this.reason = reason;
@@ -34,10 +34,10 @@ export type AccountStatus = Readonly<{
   accountKey: string; plan: string; active: boolean; expiresAt: UtcInstant | null;
   dailyLimit: number; usedToday: number; minuteLimit: number; secondLimit: number; retrievedAt: UtcInstant;
 }>;
+const paidPlanMinuteLimits = new Map([["pro", 300], ["ultra", 450], ["mega", 900]]);
 /** Documented API-Football per-minute plan limits; unknown plans use the free floor until headers lower them further. */
 export function planMinuteLimit(plan: string): number {
-  const limits: Readonly<Record<string, number>> = { free: 10, pro: 300, ultra: 450, mega: 900 };
-  return limits[plan.trim().toLowerCase()] ?? 10;
+  return paidPlanMinuteLimits.get(plan.trim().toLowerCase()) ?? 10;
 }
 export function parseAccountStatus(body: unknown, retrievedAt: UtcInstant): AccountStatus {
   const parsed = statusSchema.safeParse(body);
@@ -74,7 +74,12 @@ export function createAccountStatusReader(options: Readonly<{ policy: RuntimePol
       if (!response.ok) throw new LiveAccountError("unavailable");
       body = await response.json();
     } catch (error) { throw error instanceof LiveAccountError ? error : new LiveAccountError("unavailable"); }
-    return parseAccountStatus(body, clock.now());
+    const status = parseAccountStatus(body, clock.now());
+    if (options.policy.choices.football.existingPrepaid &&
+      (!status.active || status.expiresAt === null || status.expiresAt <= status.retrievedAt || !paidPlanMinuteLimits.has(status.plan.toLowerCase()))) {
+      throw new LiveAccountError("prepaid-subscription-unverified");
+    }
+    return status;
   };
 }
 
@@ -103,7 +108,7 @@ export function createQuotaRouter(options: Readonly<{ store: QuotaStore; readSta
       const day = active;
       return day && clock.now() < day.endsAt ? day.limiter.reserve(request) : deny("reset-unconfirmed");
     },
-    claimLaunch: async (permit: QuotaPermit) => limiters.get(permit.periodId)?.claimLaunch(permit) ?? deny("dispatch-expired"),
+    claimLaunch: async (permit: QuotaPermit) => (active ? limiters.get(permit.periodId) : undefined)?.claimLaunch(permit) ?? deny("dispatch-expired"),
     complete: async (permit: QuotaPermit, feedback: QuotaFeedback) => limiters.get(permit.periodId)?.complete(permit, feedback) ?? deny("dispatch-expired"),
     // Only the provider-day limiter that queued the request knows it; the others report unchanged.
     abandon: async (requestId: string) => {
@@ -114,7 +119,13 @@ export function createQuotaRouter(options: Readonly<{ store: QuotaStore; readSta
   return Object.freeze({
     /** Re-reads the account and initializes or tightens today's limiter. */
     async refresh(): Promise<QuotaDay> {
-      const status = await options.readStatus(), now = clock.now();
+      let status: AccountStatus;
+      try { status = await options.readStatus(); }
+      catch (error) {
+        if (error instanceof LiveAccountError && error.reason === "prepaid-subscription-unverified") active = null;
+        throw error;
+      }
+      const now = clock.now();
       if (!status.active) throw new LiveAccountError("subscription-inactive");
       if (status.expiresAt !== null && status.expiresAt <= now) throw new LiveAccountError("subscription-expired");
       const startsAt = utcInstantFromEpochMilliseconds(Math.floor(now / DAY_MS) * DAY_MS);

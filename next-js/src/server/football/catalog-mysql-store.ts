@@ -184,6 +184,7 @@ function sharedChanges<Entity extends FootballTeam | FootballCompetition>(histor
 export function createFootballCatalogStore(database: DatabaseRuntime, options: Readonly<{
   clock?: Clock; coordinateFixtureMutation?: CatalogMutationCoordinator; transactionTimeoutMs?: number;
   historicalResults?: true;
+  sealTeamHistory?: true;
 }> = {}) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const transactionTimeout = options.transactionTimeoutMs ?? 30_000;
@@ -357,6 +358,8 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
     if (historical && (batch.selection.kind !== "fixtures" || batch.selection.query.competitionId === undefined ||
       batch.selection.query.season === undefined)) fail("invalid-state");
     const receiptOnly = historical && (persistenceDeferred || batch.status !== "complete" || batch.rows.fixtures.length === 0);
+    const sealTeamHistory = !historical && options.sealTeamHistory === true && batch.status === "complete" &&
+      batch.selection.kind === "fixtures" && batch.selection.query.teamId !== undefined && batch.selection.query.from !== undefined;
     const importId = replay?.id ?? batch.request.id, fingerprint = replay?.fingerprint ?? batch.fingerprint;
     const fixtures = replay ? batch.rows.fixtures.slice(replay.start, replay.end) : batch.rows.fixtures;
     return write(async (transaction) => {
@@ -402,8 +405,9 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
         const proof = score === null ? null : { fixtureId: score.fixtureId, providerStatus: score.providerStatus,
           sourceField: score.sourceField, period: score.period, home: score.home, away: score.away };
         const verified = score?.verified === true && scoreEvidence && proof !== null && trusted(authority.verifyRegulationScore, proof);
-        if (historical && (!verified || !isPlayedFinalStatus(input.status) || input.kickoff === null ||
-          input.kickoff >= input.source.retrievedAt || input.source.retrievedAt > recordedAt.getTime())) continue;
+        const sealResult = verified && isPlayedFinalStatus(input.status) && input.kickoff !== null &&
+          input.kickoff < input.source.retrievedAt && input.source.retrievedAt <= recordedAt.getTime();
+        if (historical && !sealResult) continue;
         const findExisting = () => transaction.footballFixture.findUnique({ where: { provider_externalId: {
           provider: PROVIDER, externalId: BigInt(input.id),
         } }, include: fixtureRelations });
@@ -448,17 +452,21 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
         const kickoff = input.kickoff === null ? previous?.kickoff ?? null : new Date(input.kickoff);
         const providerStatus = input.status === "unknown" && previous ? previous.providerStatus : input.providerStatus ?? previous?.providerStatus ?? null;
         const keepScore = previous && previous.status === status && previous.providerStatus === providerStatus;
+        // A team-history re-observation must not detach an unchanged score from its original sealed result.
+        const keepProof = sealTeamHistory && sealResult && keepScore && previous.regulationVerifiedAt !== null &&
+          previous.regulationEvidenceRef !== null && previous.regulationHome === score.home && previous.regulationAway === score.away &&
+          previous.homeTeamId === homeTeamId && previous.awayTeamId === awayTeamId && previous.seasonId === season.id && same(previous.kickoff, kickoff);
         const proposed: FixtureFields = { homeTeamId, awayTeamId, seasonId: season.id, round: input.competition.round ?? previous?.round ?? null, kickoff,
           eatDate: kickoff === null ? null : new Date(`${getReportingDate(instant(kickoff))}T00:00:00.000Z`), status,
           providerStatus, elapsedMinutes: input.elapsedMinutes ?? previous?.elapsedMinutes ?? null,
           regulationHome: verified ? score.home : keepScore ? previous.regulationHome : null,
           regulationAway: verified ? score.away : keepScore ? previous.regulationAway : null,
-          regulationEvidenceRef: verified ? scoreEvidence : keepScore ? previous.regulationEvidenceRef : null,
-          regulationVerifiedAt: verified ? new Date(input.source.retrievedAt) : keepScore ? previous.regulationVerifiedAt : null };
+          regulationEvidenceRef: verified && !keepProof ? scoreEvidence : keepScore ? previous.regulationEvidenceRef : null,
+          regulationVerifiedAt: verified && !keepProof ? new Date(input.source.retrievedAt) : keepScore ? previous.regulationVerifiedAt : null };
         const changes = materialChanges(previous ? fields(previous) : null, proposed), material = Object.keys(changes).length > 0;
         if (previous && previous.dataVersion >= MAX_VERSION && material) fail("invalid-state");
         const metadata = { retrievedAt: new Date(input.source.retrievedAt), providerUpdatedAt: timestamp(input.source.providerUpdatedAt) ?? previous?.providerUpdatedAt ?? null };
-        if (!previous || material || options.coordinateFixtureMutation) {
+        if (!previous || material || options.coordinateFixtureMutation || sealTeamHistory && sealResult) {
           const { row, applied } = await applyMutation(transaction, previous ? priorSnapshot(previous) : null, proposed, () => previous
             ? transaction.footballFixture.update({ where: { id: previous.id }, data: { ...proposed, ...metadata,
               ...(material ? { dataVersion: { increment: 1n } } : {}) }, include: fixtureRelations })
@@ -468,6 +476,8 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
             fixtureIds.push(row.id); insertedFixtures.add(row.id);
             if (historical) await recordHistoricalResult(transaction, row, input, importId, false);
           }
+          if (sealTeamHistory && sealResult && applied)
+            await recordHistoricalResult(transaction, row, input, importId, previous !== null);
           if (applied && material) { changedFixtures.add(row.id); audit(row, input.source.retrievedAt, changes); }
         } else await transaction.footballFixture.update({ where: { id: previous.id }, data: { ...metadata,
           regulationEvidenceRef: proposed.regulationEvidenceRef, regulationVerifiedAt: proposed.regulationVerifiedAt } });

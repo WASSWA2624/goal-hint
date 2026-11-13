@@ -51,7 +51,7 @@ export function fixturePricesFromRows(rows: readonly FixturePriceRow[], picks: r
 
 /** Complete market-implied groups for the detail page, outside the immutable revision cache. A group appears only
  * when every selection of its family is fresh and from one snapshot. */
-function completePriceGroups<T extends FixturePriceRow>(rows: readonly T[]) {
+export function completePriceGroups<T extends FixturePriceRow>(rows: readonly T[]) {
   return publicPolicy.markets.flatMap((family) => {
     const selections = marketSelections[family] as readonly string[];
     const members = selections.map((selection) => rows.find((row) => row.marketKey === family && row.selection === selection));
@@ -73,9 +73,11 @@ export async function storedFixtureOddsGroups(tx: Tx, fixtureId: string,
 }
 
 type UpcomingPriceRow = FixturePriceRow & { fixtureId: string; kickoff: Date; checkedAt: Date; priceDecimal: string };
-/** Read only scheduled, confirmed quotes for the current page. A closing price stays in history. */
-export async function storedUpcomingOddsForFixtures(tx: Tx, ids: readonly string[], asOf: number) {
-  if (!ids.length) return [];
+
+/** Read only scheduled, confirmed quotes for the current cohort. A closing price stays in history. */
+export async function storedUpcomingOddsRows(tx: Tx, ids: readonly string[], asOf: number) {
+  const byFixture = new Map<string, UpcomingPriceRow[]>();
+  if (!ids.length) return byFixture;
   const at = new Date(asOf);
   const rows = await tx.$queryRaw<UpcomingPriceRow[]>(Prisma.sql`SELECT ${priceFields},p.fixtureId,f.kickoff,
     s.lastRetrievedAt AS checkedAt,CAST(p.priceDecimal AS CHAR) AS priceDecimal
@@ -83,14 +85,18 @@ export async function storedUpcomingOddsForFixtures(tx: Tx, ids: readonly string
     JOIN FootballFixture f ON f.id=p.fixtureId WHERE p.fixtureId IN (${Prisma.join(ids)})
       AND f.status='scheduled' AND f.kickoff>${at} AND p.stale=FALSE AND s.withdrawnAt IS NULL
       AND p.priceDecimal>=${minimumFixturePrice} AND p.retrievedAt<=s.lastRetrievedAt
+      AND (p.providerUpdatedAt IS NULL OR p.providerUpdatedAt<=s.lastRetrievedAt)
       AND s.lastRetrievedAt BETWEEN ${new Date(asOf - preMatchOddsFreshMs)} AND ${at}`);
-  const byFixture = new Map<string, UpcomingPriceRow[]>();
   for (const row of rows) {
     const group = byFixture.get(row.fixtureId);
     if (group) group.push(row);
     else byFixture.set(row.fixtureId, [row]);
   }
-  return [...byFixture].flatMap(([fixtureId, group]) => {
+  return byFixture;
+}
+
+export async function storedUpcomingOddsForFixtures(tx: Tx, ids: readonly string[], asOf: number) {
+  return [...await storedUpcomingOddsRows(tx, ids, asOf)].flatMap(([fixtureId, group]) => {
     const markets = completePriceGroups(group).flatMap(({ family, members }) => {
       const selections = members.flatMap(({ selection, priceDecimal }) => {
         const price = parseDecimalOdds(priceDecimal);

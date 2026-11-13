@@ -23,8 +23,7 @@ export const publicPolicy = Object.freeze({
     additionalLocales: false,
     darkMode: false,
     exactScores: false,
-    /** Development prices are available in the synthetic or loopback snapshot app.
-     * Hosted odds remain subject to their display policy. */
+    /** Development defaults. The server supplies hosted permission after checking the private owner register. */
     providerOdds: isDevelopmentDemo() || isLocalFootballDevelopment(),
     /** Stored match statistics/events use the existing verified football public-display rights. */
     liveMatchDetails: true,

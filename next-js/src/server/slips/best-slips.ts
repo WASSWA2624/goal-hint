@@ -4,8 +4,8 @@ import { bestSlipBuilder, bestSlipBandCriteria, bestSlipViews, qualifiedJointMod
 import { defaultBestSlipOddsBand, type BestSlipOddsBand } from "../../domain/best-slip-odds-bands.ts";
 import type { BestSlipsQuery } from "../../domain/best-slips-query.ts";
 import { getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "../../domain/calendar.ts";
-import { publicPolicy } from "../../domain/public-policy.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
+import { publicOddsEnabled } from "../odds/public-odds-policy.ts";
 import { gateBestSlips } from "./slip-preview.ts";
 import type { ViewerAccess } from "../members/viewer-access.ts";
 import { readPublicSlipBuild } from "./public-slips.ts";
@@ -15,12 +15,12 @@ import { createPublishedSlips } from "./published-slips.ts";
 export { gateBestSlips } from "./slip-preview.ts";
 
 /** Recomputed from today's current stored cohort; no shared cache ever contains a viewer response. */
-export function createBestSlipsService({ read = readPublicSlipBuild, model = null, providerOdds = publicPolicy.features.providerOdds,
+export function createBestSlipsService({ read = readPublicSlipBuild, model = null, providerOdds,
   now = Date.now, oddsBand = defaultBestSlipOddsBand }: { read?: typeof readPublicSlipBuild; model?: JointSlipModel | null; providerOdds?: boolean; now?: () => number; oddsBand?: BestSlipOddsBand } = {}) {
   return async (access: ViewerAccess, locale = "en"): Promise<BestSlipsResult> => {
     const at = utcInstantFromEpochMilliseconds(now()), day = getReportingDate(at);
     const base = { day, entitled: access.tier === "full", slips: [], searchLimited: false, partialCoverage: false } as const;
-    if (!providerOdds) return { ...base, state: "odds-unavailable" };
+    if (!(providerOdds ?? publicOddsEnabled())) return { ...base, state: "odds-unavailable" };
     if (!qualifiedJointModel(model, at)) return { ...base, state: "model-unavailable" };
     let started = false;
     const clock = { now: () => { if (!started) { started = true; return at; } return utcInstantFromEpochMilliseconds(now()); } };
@@ -32,10 +32,10 @@ export function createBestSlipsService({ read = readPublicSlipBuild, model = nul
     }
     const slips = (result.data?.slips ?? []) as readonly BestSlip[];
     if (slips.some((slip) => !Number.isFinite(slip.estimatedProbability))) return { ...base, state: "model-unavailable" };
-    const visible = slips;
-    return gateBestSlips({ day, state: result.state, slips: bestSlipViews(visible, true, result.matchStates),
+    const state = result.state === "no-qualifying" && (result.data?.excludedMissingOdds ?? 0) > 0 ? "odds-unavailable" : result.state;
+    return gateBestSlips({ day, state, slips: bestSlipViews(slips, true, result.matchStates),
       searchLimited: result.searchLimited, partialCoverage: result.partialCoverage,
-      statistics: { total: visible.length, won: 0, lost: 0, pending: visible.length, void: 0 } }, access);
+      statistics: { total: slips.length, won: 0, lost: 0, pending: slips.length, void: 0 } }, access);
   };
 }
 
@@ -50,12 +50,12 @@ const readPublishedDay: PublishedBestSlipsReader = async (day, _locale, complete
 };
 
 /** Canonical ranks address the original complete day, independently of current browsing bounds. */
-export function createPublicBestSlipDayService({ read = readPublishedDay, providerOdds = publicPolicy.features.providerOdds }: {
+export function createPublicBestSlipDayService({ read = readPublishedDay, providerOdds }: {
   read?: PublishedBestSlipsReader; providerOdds?: boolean;
 } = {}) {
   return async (access: ViewerAccess, { from: day }: BestSlipsQuery & { from: ReportingDate }, locale = "en"): Promise<BestSlipsResult> => {
     const empty = { day, slips: [], searchLimited: false, partialCoverage: false } as const;
-    if (!providerOdds) return gateBestSlips({ ...empty, state: "odds-unavailable" }, access);
+    if (!(providerOdds ?? publicOddsEnabled())) return gateBestSlips({ ...empty, state: "odds-unavailable" }, access);
     try {
       const result = await read(day, locale, false, null);
       return gateBestSlips(result ?? { ...empty, state: "data-unavailable" }, access);
@@ -66,13 +66,13 @@ export function createPublicBestSlipDayService({ read = readPublishedDay, provid
 export const readPublicBestSlipDay = createPublicBestSlipDayService();
 
 /** All viewers browse today; the projection withholds unfinished per-match predictions. */
-export function createPublishedBestSlipsService({ read = readPublishedDay, providerOdds = publicPolicy.features.providerOdds, now = Date.now }: {
+export function createPublishedBestSlipsService({ read = readPublishedDay, providerOdds, now = Date.now }: {
   read?: PublishedBestSlipsReader; providerOdds?: boolean; now?: () => number;
 } = {}) {
   return async (access: ViewerAccess, locale = "en"): Promise<BestSlipsResult> => {
     const day = getReportingDate(utcInstantFromEpochMilliseconds(now()));
     const empty = { day, entitled: access.tier === "full", slips: [], searchLimited: false, partialCoverage: false } as const;
-    if (!providerOdds) return { ...empty, state: "odds-unavailable" };
+    if (!(providerOdds ?? publicOddsEnabled())) return { ...empty, state: "odds-unavailable" };
     try {
       const published = await read(day, locale, false);
       return published ? gateBestSlips({ ...published, day }, access) : { ...empty, state: "model-unavailable" };

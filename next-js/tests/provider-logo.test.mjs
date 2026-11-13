@@ -63,11 +63,25 @@ test('a provider JPEG mislabeled as PNG is safely optimized', async () => {
   const original = globalThis.fetch;
   try {
     globalThis.fetch = async () => new Response(jpeg, { headers: { 'content-type': 'image/png' } });
-    const output = await loadProviderBadge('https://media.api-sports.io/football/leagues/396.png', 32);
-    const metadata = await sharp(output).metadata();
+    const { body, contentType } = await loadProviderBadge('https://media.api-sports.io/football/leagues/396.png', 32);
+    const metadata = await sharp(body).metadata();
+    assert.equal(contentType, 'image/webp');
     assert.equal(metadata.format, 'webp');
     assert.equal(metadata.width, 24);
     assert.equal(metadata.height, 32);
+  } finally { globalThis.fetch = original; }
+});
+
+test('a codec failure serves the original bounded raster from the first-party badge route', async () => {
+  const { default: sharp } = await import('sharp');
+  const jpeg = await sharp({ create: { width: 96, height: 128, channels: 3, background: '#049893' } }).jpeg().toBuffer();
+  const original = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response(jpeg, { headers: { 'content-type': 'image/png' } });
+    const unavailable = async () => { throw new Error('No WebP codec'); };
+    const { body, contentType } = await loadProviderBadge('https://media.api-sports.io/football/leagues/396.png', 32, unavailable);
+    assert.equal(contentType, 'image/jpeg');
+    assert.deepEqual(body, jpeg);
   } finally { globalThis.fetch = original; }
 });
 

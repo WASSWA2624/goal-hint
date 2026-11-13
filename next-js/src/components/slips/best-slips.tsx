@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
 import { TextLink } from "@/components/ui/controls";
 import { Stack } from "@/components/ui/layout";
-import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { matchesHref } from "@/domain/navigation";
 import type { SlipsBrowseResult } from "@/domain/best-slips";
@@ -32,7 +31,6 @@ export function BestSlips({ result, locale, signedIn = false }: { result: SlipsB
   const initialStates = useMemo(() => content.slips.flatMap((view) => view.matchStates ?? []), [content.slips]);
   return <SlipStack data-best-slips-page>
     <AppBrandBar locale={locale} />
-    <VisuallyHidden as="h1">{m.text("bestSlips.title")}</VisuallyHidden>
     <BestSlipsFilters query={browse.query} appliedQuery={browse.displayQuery} today={result.day} locale={locale}
       entitled={browse.entitled} busy={browse.loading || browse.updating}
       scannedDates={content?.browse?.total === null ? content.browse : undefined}
@@ -52,7 +50,8 @@ export function BestSlips({ result, locale, signedIn = false }: { result: SlipsB
     : content && content.slips.length === 0 ? <CriteriaPanel role="status"><Stack $gap="sm">
       <h2>{m.text("bestSlips.emptyTitle")}</h2>
       <p>{m.text(content.state === "odds-unavailable" ? "bestSlips.oddsUnavailable" : content.state === "model-unavailable"
-        ? "bestSlips.modelUnavailable" : content.state === "rate-limited" ? "slips.state.rate-limited.description" : "bestSlips.insufficient")}</p>
+        ? "bestSlips.modelUnavailable" : content.state === "awaiting-publication" ? "bestSlips.awaitingPublication"
+        : content.state === "rate-limited" ? "slips.state.rate-limited.description" : "bestSlips.insufficient")}</p>
       <TextLink href={matchesHref(locale)} prefetch={false}>{m.text("bestSlips.browseMatches")}</TextLink>
     </Stack></CriteriaPanel> : content && <>
       {(content.searchLimited || content.partialCoverage) && <Note role="status">{m.text("bestSlips.partial")}</Note>}

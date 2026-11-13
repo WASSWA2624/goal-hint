@@ -2,9 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { contactNotice } from "../src/domain/contact-notice.ts";
 import { contactPageEmailHref, parseContactPageEmail, parsePublicContactPageSettings, publicContactPageSettings } from "../src/domain/contact-page.ts";
-import { defaultSubscriptionSettings, parseSettingsChanges } from "../src/domain/subscription-settings.ts";
+import { defaultSubscriptionSettings, parseSettingsChanges, parseSupportContacts } from "../src/domain/subscription-settings.ts";
 import { publicSupportContactSettings } from "../src/domain/public-subscription-settings.ts";
-import { parseSupportContacts } from "../src/domain/support-contacts-input.ts";
 import { createSettingsService } from "../src/server/members/settings.ts";
 
 const contact = (id, phone, fields = {}) => ({ id, phone, label: `${id} support`, network: "other", calls: true,

@@ -66,7 +66,7 @@ export function createStoredSlipCohort(options: Readonly<{
       const batchSize = primaryOnly ? slipCohortRules.hydrationBatchSize : feedQueryRules.maximumPageSize;
       for (let offset = 0; offset < selected.length; offset += batchSize) {
         const ids = selected.slice(offset, offset + batchSize).map(({ id }) => id);
-        const hydrated = await storedFeedFixtures(tx, ids, false, window, query.locale, { prices: primaryOnly && enabled,
+        const hydrated = await storedFeedFixtures(tx, ids, false, window, query.locale, { prices: false,
           preferRecommendation: primaryOnly });
         const batch = hydrated.map((record, index) => {
           if (record.fixtureId !== ids[index]) throw new MatchFeedError("unavailable");

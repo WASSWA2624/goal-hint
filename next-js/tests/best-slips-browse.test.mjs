@@ -255,6 +255,19 @@ test('invalid ranges, unsealed publications and read failures fail closed; disab
   assert.doesNotMatch(JSON.stringify(failure), /private database detail/);
 });
 
+test('an unpublished odds range today differs from an empty result filter or archive range', async () => {
+  const f = fixture(1, 4);
+  const service = createBestSlipsBrowseService({ read: (selected, day, _locale, completedOnly) => f.store.browse(selected, day, completedOnly),
+    providerOdds: true, now: () => now });
+  const unpublished = await service(full, query({ period: 'today', oddsBand: '10-20' }));
+  assert.equal(unpublished.state, 'awaiting-publication');
+  assert.deepEqual(unpublished.slips, []);
+  const paged = await service(full, query({ period: 'today', page: '2' }));
+  assert.equal(paged.state, 'generated');
+  assert.deepEqual(paged.slips, []);
+  assert.equal((await service(full, query({ period: 'yesterday' }))).state, 'generated');
+});
+
 
 test('public completion eligibility precedes statistics, result filtering and every page boundary', async () => {
   const f = fixture(2, 100), rows = [];

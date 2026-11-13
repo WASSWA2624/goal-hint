@@ -3,7 +3,7 @@ import "server-only";
 import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { liveClockFromProvider } from "../../domain/match-card.ts";
 import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
-import { utcInstantFromEpochMilliseconds, type InstantWindow } from "../../domain/calendar.ts";
+import type { InstantWindow } from "../../domain/calendar.ts";
 import type { StoredMatchFeedRecord } from "../../domain/match-feed.ts";
 import { createMessages } from "../../i18n/messages.ts";
 import { isSafeRemoteImageUrl } from "../../domain/remote-image.ts";
@@ -18,7 +18,6 @@ import { fixtureResultFromRow, fixtureResultMatchesCanonical, resultStatus, stor
 import { fixturePricesFromRows, minimumFixturePrice, storedFixturePrices, type FixturePriceRow } from "../odds/odds-read.ts";
 import { publicRecommendation, recommendationMarket } from "../../domain/recommendation-view.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
-import { formatOddsHundredths, oddsDisplayHundredths, parseDecimalOdds } from "../../domain/odds.ts";
 
 const families = Object.keys(marketSelections) as MarketFamily[];
 const feedTeam = { select: { id: true, name: true, code: true, logoUrl: true } } as const;
@@ -92,18 +91,6 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
     return { family: selected.family, selection: selected.selection };
   });
   const prices = options.source ? fixturePricesFromRows(options.source.priceRows, picks) : await storedFixturePrices(tx, id, picks, options.prices);
-  const chosen = options.preferRecommendation === false ? undefined : revision?.candidate.audit.recommendation?.selected;
-  if ((options.prices ?? publicPolicy.features.providerOdds) && chosen) {
-    const quote = chosen.quote, decimal = parseDecimalOdds(quote.decimal);
-    // The recommended pick keeps its original publication quote; later odds updates do not replace it.
-    const index = prices.findIndex((price) => price.family === chosen.family);
-    if (index >= 0) prices.splice(index, 1);
-    if (decimal) {
-      prices.push({ family: chosen.family, selection: chosen.selection, price: formatOddsHundredths(oddsDisplayHundredths(decimal)),
-        basis: "bookmaker", retrievedAt: utcInstantFromEpochMilliseconds(quote.observedAt),
-        providerUpdatedAt: quote.providerUpdatedAt === null ? null : utcInstantFromEpochMilliseconds(quote.providerUpdatedAt) });
-    }
-  }
   const status = resultStatus.parse(fixture.status);
   const issue = fixture.lifecycleState?.issue ?? null;
   const coherentResult = fixtureResultMatchesCanonical(fixture, result, issue);

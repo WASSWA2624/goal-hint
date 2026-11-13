@@ -93,6 +93,31 @@ test('the status reader enforces the football gate before sending the server-onl
   await assert.rejects(denied());
 });
 
+test('prepaid operation requires an active paid plan with a future expiry on every account check', async () => {
+  const policy = parseRuntimePolicy({ ...refsEnv, API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS: undefined, GOAL_HINT_FOOTBALL_EXISTING_PREPAID: 'true' });
+  const clock = { now: () => NOW };
+  const subscription = { plan: 'Ultra', end: '2027-01-01T00:00:00Z', active: true };
+  let body = status({ subscription, requests: { current: 10, limit_day: 75000 } });
+  const readStatus = createAccountStatusReader({ policy, verifyEvidence: () => true, clock,
+    fetcher: async (url, init) => {
+      assert.equal(String(url), 'https://v3.football.api-sports.io/status');
+      assert.equal(init.redirect, 'error');
+      return Response.json(body);
+    } });
+  const store = memoryQuotaStore({ now: NOW });
+  const router = createQuotaRouter({ store, readStatus, clock });
+  assert.equal((await router.refresh()).status.plan, 'Ultra');
+  const reserved = await router.limiter.reserve({ requestId: 'a'.repeat(64), workKey: 'b'.repeat(64), priority: 'daily-inputs',
+    deadlineAt: NOW + 60_000, timeoutMs: 1000 });
+  assert.equal(reserved.status, 'reserved');
+  for (const override of [{ plan: 'Free' }, { plan: 'Unknown' }, { active: false }, { end: null }, { end: new Date(NOW).toISOString() }]) {
+    body = status({ subscription: { ...subscription, ...override } });
+    await assert.rejects(router.refresh(), (error) => error instanceof LiveAccountError && error.reason === 'prepaid-subscription-unverified');
+    assert.equal(router.current(), null);
+    assert.deepEqual(await router.limiter.claimLaunch(reserved.permit), { status: 'denied', reason: 'dispatch-expired' });
+  }
+});
+
 test('quota router opens one durable limiter per account plan and settled UTC provider day', async () => {
   const clock = { now: Date.parse('2026-10-10T00:00:30.000Z') }, store = memoryQuotaStore(clock);
   let body = status();

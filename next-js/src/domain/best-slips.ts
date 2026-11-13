@@ -36,7 +36,7 @@ export type SlipPreviewView = Omit<BestSlipSummary, "estimatedProbability"> & Re
 }>;
 export type BestSlipView = SlipPreviewView & Readonly<{ estimatedProbability: number; slip?: BestSlip }>;
 export type SlipsBrowseResult<T extends SlipPreviewView = SlipPreviewView> = Readonly<{
-  day: ReportingDate; state: SlipBuildState | "model-unavailable"; slips: readonly T[];
+  day: ReportingDate; state: SlipBuildState | "awaiting-publication"; slips: readonly T[];
   /** Unfinished prediction access, freshly checked at the response boundary. */
   entitled?: boolean;
   access?: ContentAccess;

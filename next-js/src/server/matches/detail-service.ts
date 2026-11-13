@@ -30,13 +30,13 @@ import { createSettlementProjectionReader } from "../settlement/settlement-read.
 
 export { canonicalMatchSlug } from "../../domain/match-slug.ts";
 
-/** `providerOdds` defaults to publicPolicy.features.providerOdds; isolated tests may enable it. */
+/** Public readers supply their verified odds permission. */
 export function createMatchDetailService(options: Readonly<{ database: DatabaseRuntime; clock?: Clock; cache?: PublicResponseCache;
   providerOdds?: boolean; allowLiveMatch?: boolean; allowInPlayOdds?: boolean; extendedMarketsEnabled?: boolean }>) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const providerOdds = options.providerOdds ?? publicPolicy.features.providerOdds;
   const allowLiveMatch = options.allowLiveMatch ?? publicPolicy.features.liveMatchDetails;
-  const allowInPlayOdds = options.allowInPlayOdds ?? isLocalFootballDevelopment();
+  const allowInPlayOdds = providerOdds && (options.allowInPlayOdds ?? isLocalFootballDevelopment());
   const extendedMarketsEnabled = options.extendedMarketsEnabled ?? isLocalFootballDevelopment();
   const evidenceStore = createMysqlEvidenceStore(options.database);
   return Object.freeze({ async query(id: string, parameters = new URLSearchParams()): Promise<StoredMatchDetailResponse> {
@@ -126,7 +126,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
         } catch (error) { if (error instanceof MatchFeedError) refused = error; throw error; }
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       const descriptor = publicCacheDescriptor({ kind: "detail", locale: "en", now: asOf, fixtureId: id,
-        query: { id, projection: 12, extendedMarketsEnabled, ...query }, parse: (value) => storedMatchDetailResponseSchema.parse(value) });
+        query: { id, projection: 13, providerOdds, extendedMarketsEnabled, ...query }, parse: (value) => storedMatchDetailResponseSchema.parse(value) });
       const response = options.cache ? await options.cache.read({ ...descriptor, validUntil: () => permissionDeadline }, read) : await read();
       const historical = response.selection !== "applicable", kickoffAt = response.fixture.kickoffAt;
       const total15Available = response.extendedMarkets?.markets.some(({ key, source }) => key === total15MarketKey && source !== "market-implied");

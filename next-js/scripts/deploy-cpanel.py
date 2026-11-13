@@ -9,6 +9,7 @@ Usage:
   python scripts/deploy-cpanel.py --config-pull             server settings -> ../deploy/.private/nextjs/.env.production.local
                                                             and ../deploy/.private/nextjs/.goal-hint/owner-approvals.json
   python scripts/deploy-cpanel.py --config-push             check those files, upload them, restart
+  python scripts/deploy-cpanel.py --check-database-config  validate local private production database settings
   python scripts/deploy-cpanel.py --repair                  restore the domain's .htaccess routing, restart
 
 Each release is extracted to ~/goal-hint-releases/<stamp>/ and activated by
@@ -281,7 +282,7 @@ def config_pull() -> None:
             print(f"The server has no {name} yet.")
 
 
-def check_config(env_text: str | None, approvals_text: str | None) -> list[str]:
+def check_config(env_text: str | None, approvals_text: str | None, *, require_production_database: bool = False) -> list[str]:
     """Catch the mistakes that otherwise surface only as an unlogged 503 or a 500. Names only, never values."""
     problems, env = [], {}
     known = set(re.findall(r"^[A-Z][A-Z0-9_]*(?==)", (ROOT / ".env.example").read_text(encoding="utf-8"), re.M))
@@ -293,12 +294,22 @@ def check_config(env_text: str | None, approvals_text: str | None) -> list[str]:
         if not separator or not re.fullmatch(r"[A-Z][A-Z0-9_]*", key.strip()):
             problems.append(f".env.production.local line {number} is not NAME=value")
             continue
-        env[key.strip()] = value.strip().strip("\"'")
+        key = key.strip()
+        if require_production_database and key in env:
+            problems.append(f"{key} is set more than once")
+        env[key] = value.strip().strip("\"'")
     for key in env:
         if key.startswith("NEXT_PUBLIC_") or key in ("PORT", "HOSTNAME", "DEBUG", "NODE_ENV"):
             problems.append(f"{key} must not be set in production")
         elif key.startswith("GOAL_HINT_") and key not in known:
             problems.append(f"{key} is not a known setting (see .env.example)")
+    if require_production_database:
+        if env.get("GOAL_HINT_DEPLOYMENT_ENVIRONMENT", INITIAL_ENV["GOAL_HINT_DEPLOYMENT_ENVIRONMENT"]) != "production":
+            problems.append("Set GOAL_HINT_DEPLOYMENT_ENVIRONMENT=production")
+        if env.get("GOAL_HINT_DATABASE_ENABLED") != "true":
+            problems.append("Set GOAL_HINT_DATABASE_ENABLED=true")
+        if approvals_text is None:
+            problems.append("The private owner approval register is required")
     if env.get("GOAL_HINT_DATABASE_ENABLED") == "true":
         for key in ("DATABASE_URL", "GOAL_HINT_DATABASE_ACCESS_REF", "GOAL_HINT_BUDGET_APPROVAL_REF", "GOAL_HINT_COMPETITION_IDS"):
             if not env.get(key):
@@ -348,6 +359,19 @@ def config_push() -> None:
             scp(staged, f"{APP_ROOT}-private/{name}.new")
     print(remote("config-install"))
     verify()
+
+
+def check_database_config() -> None:
+    """Validate the local production handoff files without connecting to a database or host."""
+    env_file = LOCAL_CONFIG[".env.production.local"]
+    approvals_file = LOCAL_CONFIG[".goal-hint/owner-approvals.json"]
+    if not env_file.is_file() or not approvals_file.is_file():
+        raise CommandError("The private production environment and owner approvals files are required.")
+    problems = check_config(env_file.read_text(encoding="utf-8-sig"), approvals_file.read_text(encoding="utf-8-sig"),
+                            require_production_database=True)
+    if problems:
+        raise CommandError("Production database settings failed validation:\n- " + "\n- ".join(problems))
+    print("Production database settings and matching owner approval references passed local validation.")
 
 
 def build() -> None:
@@ -437,6 +461,7 @@ def main():
     action.add_argument("--rollback", action="store_true", help="reactivate the previously active release")
     action.add_argument("--restart", action="store_true", help="reapply ~/goal-hint-private files and restart")
     action.add_argument("--config-pull", action="store_true", help="download settings into ../deploy/.private/nextjs/ (git-ignored)")
+    action.add_argument("--check-database-config", action="store_true", help="validate local private production database settings without a network connection")
     action.add_argument("--config-push", action="store_true", help="check private deployment settings, upload them and restart")
     action.add_argument("--repair", action="store_true", help="restore the domain's .htaccess routing and restart")
     parser.add_argument("--build", action="store_true", help="rebuild the zip with the pinned Node.js first")
@@ -450,6 +475,8 @@ def main():
         print(remote("logs", str(max(options.logs, 1))))
     elif options.config_pull:
         config_pull()
+    elif options.check_database_config:
+        check_database_config()
     elif options.config_push:
         config_push()
     elif options.repair:

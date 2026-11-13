@@ -21,11 +21,16 @@ when an indexable page's stored read fails, bounds the date-archive calendar,
 links match pages to their day archive and related results, and removes the
 phone library from public pages. The site was still suspended by the host.
 
+On 13 November 2026 production served the fixture feed, robots and sitemap index.
+The live Matches and dated archive pages both declared a parameterized dated
+canonical. The current source aligns those canonicals with the stable Matches
+entry and the clean dated URLs already advertised in the sitemaps.
+
 ## Canonical pages and metadata
 
 `publicPolicy.origin` fixes the metadata base and canonical origin to
 `https://goalhint.com`. Request hosts and preview URLs never supply it. Root
-navigation redirects permanently to `/en`. The application configuration also
+navigation and `/en` redirect permanently to `/en/matches`. The application configuration also
 redirects `www.goalhint.com` to the canonical HTTPS origin, preserving path and
 query. Actual DNS, certificates and hosting rules still belong to deployment.
 
@@ -43,8 +48,8 @@ outside the page proxy and retains its strict input contract.
 
 Shared `pageMetadata` supplies complete page-specific Open Graph and Twitter
 fields because Next metadata objects merge shallowly; `og:locale` is `en_US` and
-the Twitter image carries the same alt text. The homepage at `/en` shows Best
-Slips, titled `Best Slips — Daily football prediction slips | Goal Hint`; while no
+the Twitter image carries the same alt text. `/en/best-slips` is titled
+`Best Slips — Daily football prediction slips | Goal Hint`; while no
 slips are available it also server-renders plain links to yesterday's, today's
 and tomorrow's dated archives, Help and Results & performance. `/en/matches` is
 the default match feed, titled
@@ -58,16 +63,14 @@ social tags, with no canonical. Existing
 named first-party favicon, touch icon and 1200 × 630 social PNG assets are reused.
 
 `createFeedRoute` shares its stored read and request-owned reporting clock between
-metadata and meaningful initial HTML. Dated collections and pagination keep their
-own canonical identities. The default rolling collection keeps
-`/en/matches?page=2`, never page one or an explicit noindex multiday range.
-Its ordinary numbered links use the same canonical URLs. API pagination still
-pins the date range to prevent mixed cohorts across midnight; a full document
-navigation to the rolling collection resolves its dates at request time.
-Single-day aliases pin to the corresponding dated collection. Legacy homepage
-feed URLs (any feed query key) redirect permanently (308) to `/en/matches` with
-their query parameters preserved; other home query variants render the home page
-with its `/en` canonical and noindex.
+metadata and meaningful initial HTML. The Today feed and its pages use
+`/en/matches` and `/en/matches?page=2`, retaining their standard viewer settings.
+Dated archives use `/en/predictions/YYYY-MM-DD` with only a page parameter when
+needed. The explicit rolling 30-day collection keeps its own query identity.
+Ordinary numbered links use these canonical URLs. API pagination pins the date
+range to prevent mixed cohorts across midnight. Other unfiltered single-day
+aliases use the corresponding dated collection. Legacy `/en` feed bookmarks
+redirect permanently to `/en/matches` with their query parameters preserved.
 
 Every feed and archive card links its canonical match page for every viewer;
 locked panels on the match page offer sign-up. Only an unfinished fixture with a
@@ -104,7 +107,7 @@ so the generated calendar cannot be walked endlessly.
 OP-17 (public performance claims): it shows win/loss counts, losing streaks and
 illustrative returns. `/en/slips` stays noindex because anonymous visitors see
 only the builder. The Best Slips
-homepage `/en` has independent metadata and remains indexable under the production
+page `/en/best-slips` has independent metadata and remains indexable under the production
 release policy even when no slips are available.
 Match pages are indexable only when the displayed revision publishes at least
 one market (`matchPageIndexable`). Fixtures without a published forecast remain

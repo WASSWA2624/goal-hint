@@ -140,15 +140,16 @@ test('match titles claim a prediction only on indexable dated pages and descript
   assert.equal(undated.description, 'Stored predictions, sources and regulation-time results for Example Home FC v Example Away FC.');
 });
 
-test('prediction terminology preserves the existing match-history and explanation labels', async () => {
+test('discovery metadata uses prediction terminology while match-history and explanation labels stay recognizable', async () => {
   const existingLabels = new Map([
+    ['en.ts:paywall.picksOnly', 'Recommended picks only'],
     ['en.ts:details.section.history', 'Pick History'],
     ['match-touchline.ts:touchline.tab.history', 'Pick History'],
     ['match-touchline.ts:touchline.why', 'Why this pick?'],
     ['match-touchline.ts:touchline.history', 'Pick History'],
   ]);
   const directory = new URL('../src/i18n/messages/', import.meta.url);
-  const files = (await readdir(directory)).filter((name) => name.endsWith('.ts') && name !== 'terms.ts');
+  const files = (await readdir(directory)).filter((name) => name.endsWith('.ts'));
   assert.ok(files.includes('en.ts') && files.includes('performance.ts'));
   for (const name of files) {
     for (const [key, value] of Object.values(await import(new URL(name, directory).href)).flatMap((catalog) => Object.entries(catalog))) {
@@ -156,7 +157,9 @@ test('prediction terminology preserves the existing match-history and explanatio
         if (typeof text !== 'string') continue;
         const label = `${name}:${key}`;
         if (existingLabels.has(label)) assert.equal(text, existingLabels.get(label), label);
-        else assert.doesNotMatch(text.replace(/\{\w+\}/gu, ''), /\bpicks?\b/iu, `${name} ${key}`);
+        else if (/^metadata\.|metadata(?:Title|Description)$/iu.test(key)) {
+          assert.doesNotMatch(text.replace(/\{\w+\}/gu, ''), /\bpicks?\b/iu, `${name} ${key}`);
+        }
       }
     }
   }

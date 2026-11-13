@@ -16,27 +16,32 @@ export function createLiveLocalEngine(database: DatabaseRuntime) {
     check: () => void): Promise<ResolvedForecastCandidate | null> => {
     const context = expected.context, cutoff = new Date(context.cutoffAt);
     check();
+    // Sort and cap the narrow result identities before reading and hashing their sealed bodies.
     const rows = await database.query((tx) => tx.$queryRaw<HistoryRow[]> `
-      SELECT /*+ MAX_EXECUTION_TIME(2500) */ r.*, s.competitionId, f.homeTeamId, f.awayTeamId, f.kickoff,
+      SELECT /*+ MAX_EXECUTION_TIME(2500) */ r.*, recent.competitionId, recent.homeTeamId, recent.awayTeamId, recent.kickoff,
         r.integrity = SHA2(CAST(r.body AS CHAR), 256) AS validIntegrity
-      FROM FootballFixture target
-      JOIN FootballSeason ts ON ts.id=target.seasonId
-      JOIN FootballSeason s ON s.competitionId=ts.competitionId
-      JOIN FootballFixture f ON f.seasonId=s.id
-      JOIN FixtureResultState state ON state.fixtureId=f.id
-      JOIN FixtureResult r ON r.id=state.resultId AND r.fixtureId=f.id
-      LEFT JOIN FixtureLifecycleState life ON life.fixtureId=f.id
-      WHERE target.id=${context.fixtureId} AND target.provider='api-football'
-        AND target.externalId=${BigInt(context.externalFixtureId)} AND target.homeTeamId=${context.home.teamId}
-        AND target.awayTeamId=${context.away.teamId} AND target.kickoff=${new Date(context.kickoffAt)}
-        AND f.provider='api-football' AND f.id<>target.id
-        AND f.kickoff>=${new Date(context.cutoffAt - localGoalDefaults.lookbackMs)} AND f.kickoff<${cutoff}
-        AND f.retrievedAt<=${cutoff} AND r.observedAt<=${cutoff} AND r.observedAt>=f.kickoff
-        AND f.status IN ('finished-regulation','finished-extra-time','finished-penalties') AND r.status=f.status
-        AND r.regulationVerified=TRUE AND r.regulationHome=f.regulationHome AND r.regulationAway=f.regulationAway
-        AND f.regulationVerifiedAt<=${cutoff} AND life.issue IS NULL
-        AND f.regulationEvidenceRef=JSON_UNQUOTE(JSON_EXTRACT(r.body,'$.regulation.evidenceRef'))
-      ORDER BY f.kickoff DESC, f.id DESC LIMIT 1500`);
+      FROM (
+        SELECT r.id, f.id AS fixtureId, s.competitionId, f.homeTeamId, f.awayTeamId, f.kickoff
+        FROM FootballFixture target
+        JOIN FootballSeason ts ON ts.id=target.seasonId
+        JOIN FootballSeason s ON s.competitionId=ts.competitionId
+        JOIN FootballFixture f ON f.seasonId=s.id
+        JOIN FixtureResultState state ON state.fixtureId=f.id
+        JOIN FixtureResult r FORCE INDEX (PRIMARY) ON r.id=state.resultId AND r.fixtureId=f.id
+        LEFT JOIN FixtureLifecycleState life ON life.fixtureId=f.id
+        WHERE target.id=${context.fixtureId} AND target.provider='api-football'
+          AND target.externalId=${BigInt(context.externalFixtureId)} AND target.homeTeamId=${context.home.teamId}
+          AND target.awayTeamId=${context.away.teamId} AND target.kickoff=${new Date(context.kickoffAt)}
+          AND f.provider='api-football' AND f.id<>target.id
+          AND f.kickoff>=${new Date(context.cutoffAt - localGoalDefaults.lookbackMs)} AND f.kickoff<${cutoff}
+          AND f.retrievedAt<=${cutoff} AND r.observedAt<=${cutoff} AND r.observedAt>=f.kickoff
+          AND f.status IN ('finished-regulation','finished-extra-time','finished-penalties') AND r.status=f.status
+          AND r.regulationVerified=TRUE AND r.regulationHome=f.regulationHome AND r.regulationAway=f.regulationAway
+          AND f.regulationVerifiedAt<=${cutoff} AND life.issue IS NULL
+          AND f.regulationEvidenceRef=JSON_UNQUOTE(JSON_EXTRACT(r.body,'$.regulation.evidenceRef'))
+        ORDER BY f.kickoff DESC, f.id DESC LIMIT 1500
+      ) recent
+      JOIN FixtureResult r ON r.id=recent.id AND r.fixtureId=recent.fixtureId`);
     check();
     if (rows.length < localGoalDefaults.minimumMatches) return null;
     const history = rows.map((row) => {
