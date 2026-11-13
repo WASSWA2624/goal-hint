@@ -622,7 +622,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     const publication = prediction && [source ? messages.text(`market.source.${source}`) : null,
       prediction.provisional ? messages.text("match.provisional") : null,
       prediction.publishedAt !== null ? `${messages.text("match.published")}: ${messages.reportingInstant(prediction.publishedAt)}` : null].filter(Boolean).join(" · ");
-    return <DesktopCard fixtureId={fixture.fixtureId} locale={locale} kickoffAt={fixture.kickoffAt}
+    return <DesktopCard fixtureId={fixture.fixtureId} locale={locale} kickoffAt={fixture.kickoffAt} resultVerifiedAt={fixture.resultVerifiedAt}
       homeTeam={{ name: fixture.homeTeam.name, logoUrl: isSafeRemoteImageUrl(fixture.homeTeam.logoUrl) ? fixture.homeTeam.logoUrl : null }}
       awayTeam={{ name: fixture.awayTeam.name, logoUrl: isSafeRemoteImageUrl(fixture.awayTeam.logoUrl) ? fixture.awayTeam.logoUrl : null }}
       competition={{ name: fixture.competition.name, country: fixture.competition.country,
@@ -716,7 +716,8 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     </MobileUnlockArea>}
     <Result data-result-badge={offline ? "saved" : result} data-stack-result
       data-live-minute={clock ? clock.minute ?? "" : undefined}>
-      <MatchStatus status={fixture.status} outcome={outcome} messages={messages} snapshot={snapshotPick !== undefined} offline={offline} liveClock={fixture.liveClock ?? null} />
+      <MatchStatus status={fixture.status} kickoffAt={fixture.kickoffAt} outcome={outcome} messages={messages}
+        snapshot={snapshotPick !== undefined} offline={offline} liveClock={fixture.liveClock ?? null} resultVerifiedAt={fixture.resultVerifiedAt} />
     </Result>
     {!offline && interactive && <Open data-match-open href={targetHref} prefetch={false}>
       <VisuallyHidden>{gated ? `${messages.text("paywall.unlock")}: ${title}` : messages.text("match.analysisLabel", { home, away })}</VisuallyHidden><ChevronIcon />

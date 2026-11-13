@@ -1,5 +1,6 @@
 import { FeedPaginationError } from "../domain/feed-pagination-error.ts";
 import type { MatchDetailResponse } from "../domain/match-detail.ts";
+import { resultFreshnessHeader, resultFreshnessVersion } from "../domain/live-refresh.ts";
 import type { InsightSections } from "../domain/match-insights.ts";
 import { matchSections, type MatchSection } from "../domain/match-view.ts";
 import { failure, readJson, publicRefreshApi } from "./refresh-base.ts";
@@ -32,7 +33,7 @@ export const detailApi = publicRefreshApi.injectEndpoints({
         try {
           if (!/^[a-f0-9-]{36}$/u.test(id)) throw new FeedPaginationError("invalid-response");
           const [response, { matchDetailResponseSchema }] = await Promise.all([
-            readJson(`/api/matches/${id}`, api.signal), import("../domain/match-detail.ts"),
+            readJson(`/api/matches/${id}`, api.signal, { [resultFreshnessHeader]: resultFreshnessVersion }), import("../domain/match-detail.ts"),
           ]);
           const parsed = matchDetailResponseSchema.safeParse(response);
           if (!parsed.success || parsed.data.fixture.fixtureId !== id || parsed.data.selection !== "applicable") throw new FeedPaginationError("invalid-response");

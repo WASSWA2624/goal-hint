@@ -5,13 +5,13 @@ import { matchFeedRules } from "../domain/match-feed-rules.ts";
 import { startRequestDeadline } from "../domain/request-deadline.ts";
 
 export type RefreshError = { code: FeedPaginationError["code"] };
-export async function readJson(href: string, signal: AbortSignal): Promise<unknown> {
+export async function readJson(href: string, signal: AbortSignal, headers?: HeadersInit): Promise<unknown> {
   const controller = new AbortController();
   const canceled = () => controller.abort(signal.reason), clearDeadline = startRequestDeadline(controller, liveRefreshRules.timeoutMs);
   if (signal.aborted) canceled(); else signal.addEventListener("abort", canceled, { once: true });
   try {
     const response = await fetch(href, { signal: controller.signal,
-      cache: "no-store", credentials: "same-origin" });
+      cache: "no-store", credentials: "same-origin", ...(headers ? { headers } : {}) });
     if (!response.ok) throw new FeedPaginationError(response.status === 403 ? "subscription-required" : response.status === 429 ? "rate-limited" : "unavailable");
     const text = await response.text(), max = matchFeedRules.maximumResponseBytes;
     // A UTF-16 code unit encodes to at most 3 UTF-8 bytes, so only a possibly oversized body is encoded.

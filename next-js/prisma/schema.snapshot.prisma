@@ -1233,6 +1233,7 @@ model FixtureResultState {
   firstTrackedAt DateTime        @db.DateTime(3)
   firstFinalAt   DateTime?       @db.DateTime(3)
   lastSyncAt     DateTime?       @db.DateTime(3)
+  lastVerifiedAt DateTime?       @db.DateTime(3)
   lastAttemptAt  DateTime?       @db.DateTime(3)
   nextCheckAt    DateTime?       @db.DateTime(3)
   failures       Int             @default(0) @db.UnsignedInt

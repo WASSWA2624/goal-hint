@@ -6,7 +6,7 @@ import { viewerAccessFromRequest } from "../members/viewer-access.ts";
 import { matchFeedRules } from "../../domain/match-feed.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import { parseMatchDetailQuery } from "./detail-query.ts";
-import { publicMatchFailure, privateMatchHeaders } from "./public-http.ts";
+import { acceptsResultFreshness, privateResultFreshnessHeaders, publicMatchFailure, withoutResultFreshness } from "./public-http.ts";
 
 export function createMatchDetailHandler(read: typeof readPublicMatchDetail, resolveAccess = viewerAccessFromRequest) {
   return async function GET(request: Request, context: { params: Promise<{ id: string }> }): Promise<Response> {
@@ -16,7 +16,8 @@ export function createMatchDetailHandler(read: typeof readPublicMatchDetail, res
       parseMatchDetailQuery(id, url.searchParams);
       const result = await createGatedReads({ readDetail: read, resolveAccess: () => resolveAccess(request) }).detail(id, url.searchParams);
       const next = "gated" in result.history ? null : result.history.revisions.next;
-      return Response.json(result, { headers: { ...privateMatchHeaders, ...(next ? { link: `<${next}>; rel="next"` } : {}) } });
-    } catch (error) { return publicMatchFailure(error, privateMatchHeaders); }
+      const fixture = acceptsResultFreshness(request) ? result.fixture : withoutResultFreshness(result.fixture);
+      return Response.json({ ...result, fixture }, { headers: { ...privateResultFreshnessHeaders, ...(next ? { link: `<${next}>; rel="next"` } : {}) } });
+    } catch (error) { return publicMatchFailure(error, privateResultFreshnessHeaders); }
   };
 }

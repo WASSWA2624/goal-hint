@@ -2,6 +2,7 @@ import type { ReportingDate } from "../domain/calendar.ts";
 import { checkedFeedPage, FeedPaginationError, feedPageApiHref } from "../domain/feed-pagination.ts";
 import type { FeedQuery } from "../domain/feed-query.ts";
 import type { MatchFeedResponse } from "../domain/match-feed.ts";
+import { resultFreshnessHeader, resultFreshnessVersion } from "../domain/live-refresh.ts";
 import { feedPerformanceApiHref, feedPerformanceReplySchema, type FeedPerformanceReply } from "../domain/feed-performance-summary.ts";
 import { failure, publicRefreshApi, readJson } from "./refresh-base.ts";
 
@@ -26,7 +27,8 @@ export const refreshApi = publicRefreshApi.injectEndpoints({
       serializeQueryArgs: ({ queryArgs: { query, today, page } }) => feedPageApiHref(query, today, page),
       async queryFn({ query, today, page }, api) {
         // Polls never read the filter options, so the server omits them (`leagues: []`).
-        try { return { data: checkedFeedPage(await readJson(`${feedPageApiHref(query, today, page)}&leagues=0`, api.signal), query, today, page) }; }
+        try { return { data: checkedFeedPage(await readJson(`${feedPageApiHref(query, today, page)}&leagues=0`, api.signal,
+          { [resultFreshnessHeader]: resultFreshnessVersion }), query, today, page) }; }
         catch (cause) { return failure(cause); }
       },
     }),

@@ -21,7 +21,8 @@ type Tx = Prisma.TransactionClient;
 type TrackedFixtureRow = Readonly<{
   fixtureId: string; externalId: bigint; competitionId: bigint; season: number; kickoff: Date | null;
   status: string; retrievedAt: Date; createdAt: Date; regulationVerifiedAt: Date | null;
-  firstTrackedAt: Date | null; firstFinalAt: Date | null; lastSyncAt: Date | null; nextCheckAt: Date | null; failures: bigint | number | null;
+  firstTrackedAt: Date | null; firstFinalAt: Date | null; lastSyncAt: Date | null; lastVerifiedAt: Date | null;
+  nextCheckAt: Date | null; failures: bigint | number | null;
 }>;
 const batchSchema = z.strictObject({ id: historyHash, accountId: historyHash, policyHash: historyHash,
   receivedAt: historyInstant, channel: z.enum(["date", "live", "ids"]), date: z.string().nullable(),
@@ -110,7 +111,7 @@ export function createMysqlResultSyncStore(options: Readonly<{
             GROUP BY s.id, s.year
           )
           SELECT f.id AS fixtureId, f.externalId, s.competitionId, s.year AS season, f.kickoff, f.status, f.retrievedAt,
-            f.createdAt, f.regulationVerifiedAt, r.firstTrackedAt, r.firstFinalAt, r.lastSyncAt, r.nextCheckAt, r.failures
+            f.createdAt, f.regulationVerifiedAt, r.firstTrackedAt, r.firstFinalAt, r.lastSyncAt, r.lastVerifiedAt, r.nextCheckAt, r.failures
           FROM FootballFixture f JOIN coveredSeasons s ON s.id = f.seasonId
           LEFT JOIN FixtureResultState r ON r.fixtureId = f.id
           WHERE f.provider = 'api-football' AND (
@@ -129,6 +130,7 @@ export function createMysqlResultSyncStore(options: Readonly<{
           firstTrackedAt: fixture.firstTrackedAt?.getTime() ?? Math.min(at, fixture.createdAt.getTime()),
           firstFinalAt: fixture.firstFinalAt?.getTime() ?? (finalStatus(fixture.status) ? fixture.retrievedAt.getTime() : null),
           lastSyncAt: fixture.lastSyncAt?.getTime() ?? null,
+          lastVerifiedAt: fixture.lastVerifiedAt?.getTime() ?? null,
           nextCheckAt: fixture.firstTrackedAt === null ? 0 : fixture.nextCheckAt?.getTime() ?? null,
           failures: Number(fixture.failures ?? 0),
           ...(policy.skipConfirmedFinals ? { finalConfirmed: finalStatus(fixture.status) &&
@@ -190,7 +192,8 @@ export function createMysqlResultSyncStore(options: Readonly<{
             const firstFinalAt = state?.firstFinalAt ?? (finalStatus(before.status) ? before.retrievedAt
               : accepted && finalStatus(fixture.status) ? new Date(observation.retrievedAt) : null);
             const data = { resultId, lastSyncAt, firstFinalAt,
-              ...(accepted ? { failures: 0, delayReason: null } : { delayReason: outcome === "stale" ? "older-observation" : receipt.reason }) };
+              ...(accepted ? { lastVerifiedAt: new Date(Math.max(state?.lastVerifiedAt?.getTime() ?? 0, observation.retrievedAt)),
+                failures: 0, delayReason: null } : { delayReason: outcome === "stale" ? "older-observation" : receipt.reason }) };
             await tx.fixtureResultState.upsert({ where: { fixtureId: fixture.id },
               create: { fixtureId: fixture.id, firstTrackedAt: new Date(at), nextCheckAt: epoch, ...data }, update: data });
             const body = evidenceSerialize({ observation, lifecycleId: receipt.id, outcome, lifecycleOutcome: receipt.outcome, resultId, appliedAt: at });

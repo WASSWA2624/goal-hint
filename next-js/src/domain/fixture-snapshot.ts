@@ -156,6 +156,8 @@ const fixtureSnapshotBaseSchema = z.strictObject({
      * Decoration only: a flag change alone does not bump `dataVersion`. */
     countryFlagUrl: z.string().refine(isSafeRemoteImageUrl, "Unsafe flag URL.").nullable().optional() }),
   kickoffAt: instant.nullable(), syncedAt: instant.nullable(),
+  /** Latest verified result observation, including an unchanged score or match phase. */
+  resultVerifiedAt: instant.nullable().optional(),
   status: z.enum(statuses), score: score.nullable(),
   partialCoverage: z.boolean().optional(),
   cycleId: identity.nullable(), forecast: publicForecastSchema.nullable(),

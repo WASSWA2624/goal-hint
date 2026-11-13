@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { failureDelay, nextLiveCheckAfterDate, parseResultSyncPolicy, pollingInterval, resultCadence, shouldPollLive } from '../src/server/results/result-sync-policy.ts';
+import { dueResultFixtures, failureDelay, nextLiveCheckAfterDate, parseResultSyncPolicy, pollingInterval, prioritizeResultFixtures,
+  resultCadence, shouldPollLive } from '../src/server/results/result-sync-policy.ts';
 import { ResultSyncError } from '../src/server/results/result-sync-contract.ts';
 import { runResultSyncCommand } from '../src/server/results/result-sync-command.ts';
 import { resultPolicy } from './helpers/result-sync-fixtures.mjs';
@@ -54,6 +55,19 @@ test('unresolved and corrections slow at exact tier boundaries and stop without 
 });
 test('outage backoff grows to its configured ceiling', () => {
   assert.deepEqual([1,2,3,4,5,99].map((n) => failureDelay(policy, n)), [60000,120000,240000,480000,900000,900000]);
+});
+test('due ID checks rank live and overdue scheduled matches first without bypassing their deadlines', () => {
+  const now = fixture.kickoffAt + 120_000;
+  const base = { ...fixture, retrievedAt: now - 120_000, lastSyncAt: null, lastVerifiedAt: null, nextCheckAt: now - 30_000 };
+  const rows = [
+    { ...base, externalId: 2, kickoffAt: now + 1_000, nextCheckAt: 0 },
+    { ...base, externalId: 3, status: 'live', lastVerifiedAt: now - 300_000 },
+    { ...base, externalId: 4, status: 'live', nextCheckAt: now + 1 },
+    { ...base, externalId: 5, lastSyncAt: now - 1 },
+    { ...base, externalId: 6, kickoffAt: now - policy.activeWindowMs, retrievedAt: now - 400_000 },
+    { ...base, externalId: 7, lastVerifiedAt: now - 120_000 },
+  ];
+  assert.deepEqual(prioritizeResultFixtures(dueResultFixtures(rows, policy, now), policy, now).map(({ externalId }) => externalId), [3, 7, 2, 6]);
 });
 test('private poller command refuses invalid invocation before importing any binding', async () => {
   for (const args of [[], ['--binding'], ['--binding', 'example.json'], ['--binding', 'example.ts', 'extra']])

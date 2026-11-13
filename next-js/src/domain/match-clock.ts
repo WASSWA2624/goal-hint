@@ -4,6 +4,18 @@ import type { Messages } from "../i18n/messages";
 const secondsPerMinute = 60;
 // Allow for one delayed minute update before holding the last estimate.
 const maximumEstimatedSeconds = 2 * secondsPerMinute - 1;
+export const liveClockFreshnessMs = 2 * 60_000;
+export const startConfirmationGraceMs = 10 * 60_000;
+
+export function startConfirmationDeadline(kickoffAt: number | null | undefined): number | null {
+  return kickoffAt == null ? null : kickoffAt + startConfirmationGraceMs;
+}
+
+export function liveClockFreshness(now: number, changedAt: number | null, verifiedAt: number | null, hasMinute: boolean) {
+  if (verifiedAt !== null && now - verifiedAt >= liveClockFreshnessMs) return "status-stale";
+  if (hasMinute && changedAt !== null && now - changedAt >= liveClockFreshnessMs) return "last-verified";
+  return null;
+}
 
 /** Render observed football time; paused phases take precedence over stale minutes. */
 export function liveClockLabel(clock: FixtureSnapshot["liveClock"], messages: Messages, now?: number) {
@@ -22,14 +34,15 @@ export function liveClockLabel(clock: FixtureSnapshot["liveClock"], messages: Me
     const phaseSeconds = (Math.max(phaseEnd, observedMinute) - observedMinute + 1) * secondsPerMinute - 1;
     const elapsedSeconds = now === undefined || clock?.observedAt === undefined ? 0
       : Math.min(phaseSeconds, maximumEstimatedSeconds, Math.max(0, Math.floor((now - clock.observedAt) / 1000)));
-    visible = `${digits(observedMinute + Math.floor(elapsedSeconds / secondsPerMinute))}:${digits(elapsedSeconds % secondsPerMinute)}`;
+    const displayedMinute = stoppage ? `${digits(minute)}+${digits(stoppage)}` : digits(minute + Math.floor(elapsedSeconds / secondsPerMinute));
+    visible = `${displayedMinute}:${digits(elapsedSeconds % secondsPerMinute)}`;
   }
   const spoken = [messages.text("match.status.live"), phase === "half-time" ? messages.text("match.clock.halfTimeLabel")
     : phase === "in-play" ? null : phaseLabel,
     minute === null ? null : messages.text("match.clock.minuteLabel", { minute: messages.number(minute) }),
     stoppage ? messages.text("match.clock.stoppageLabel", { minute: messages.number(stoppage) }) : null].filter(Boolean).join(", ");
   const extra = phase === "extra-time" ? messages.text("match.clock.extra-timeShort") : null;
-  const badgeTime = minute === null ? null : stoppage ? `${messages.number(minute)}+${messages.number(stoppage)}` : visible;
+  const badgeTime = minute === null ? null : visible;
   const badge = extra ? [extra, badgeTime].filter(Boolean).join(" ") : badgeTime ?? (running ? messages.text("match.status.live") : phaseLabel);
-  return { minute, visible, spoken, phaseLabel, badge, badgeTicks: minute !== null && !stoppage };
+  return { minute, visible, spoken, phaseLabel, badge, badgeTicks: minute !== null };
 }

@@ -25,8 +25,12 @@ export function mergeFixtureObservation<T extends FixtureSnapshot>(previous: T, 
   if (!!(previous.forecast && "gated" in previous.forecast) !== !!(next.forecast && "gated" in next.forecast)) return next;
   if (next.cycleId !== previous.cycleId || next.forecast?.revisionId !== previous.forecast?.revisionId ||
       next.forecast?.runId !== previous.forecast?.runId) return previous;
+  const resultVerifiedAt = next.resultVerifiedAt === undefined ? previous.resultVerifiedAt
+    : next.resultVerifiedAt === null || previous.resultVerifiedAt == null ? next.resultVerifiedAt
+      : Math.max(next.resultVerifiedAt, previous.resultVerifiedAt);
   return { ...previous, syncedAt: next.syncedAt !== null && (previous.syncedAt === null || next.syncedAt >= previous.syncedAt)
     ? next.syncedAt : previous.syncedAt, partialCoverage: next.partialCoverage, update: next.update,
+    ...(resultVerifiedAt === undefined ? {} : { resultVerifiedAt }),
     availabilityMessage: next.availabilityMessage,
     // Prices (052) are observation fields: they change without a fixture version bump.
     ...(next.prices === undefined ? {} : { prices: next.prices }),

@@ -98,6 +98,7 @@ export function sameCardFixture(previous: FixtureSnapshot, next: FixtureSnapshot
   return previous === next || previous.fixtureId === next.fixtureId && previous.dataVersion === next.dataVersion &&
     !!(previous.forecast && "gated" in previous.forecast) === !!(next.forecast && "gated" in next.forecast) &&
     previous.partialCoverage === next.partialCoverage && previous.availabilityMessage === next.availabilityMessage &&
+    previous.resultVerifiedAt === next.resultVerifiedAt &&
     previous.update?.prediction === next.update?.prediction && previous.update?.result === next.update?.result &&
     previous.forecast?.updateDelayed === next.forecast?.updateDelayed && samePrices(previous.prices, next.prices) &&
     sameMarketOdds(previous.marketOdds, next.marketOdds) && sameFeatured(previous.featuredPrediction, next.featuredPrediction);

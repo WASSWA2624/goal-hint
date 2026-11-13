@@ -54,6 +54,29 @@ export function pollingInterval(fixture: TrackedResultFixture, policy: ResultSyn
   if (age < policy.activeWindowMs) return resultCadence(policy).activeMs;
   return policy.unresolved.find((tier) => age - policy.activeWindowMs < tier.untilAgeMs)?.intervalMs ?? null;
 }
+const lastCheckedAt = (fixture: TrackedResultFixture) => Math.max(fixture.retrievedAt, fixture.lastSyncAt ?? 0);
+
+export function activeResultCheck(fixture: TrackedResultFixture, policy: ResultSyncPolicy, now: number): boolean {
+  if (fixture.firstFinalAt !== null || now - (fixture.kickoffAt ?? fixture.firstTrackedAt) >= policy.activeWindowMs) return false;
+  return fixture.status === "live" || fixture.status === "scheduled" && fixture.kickoffAt !== null && fixture.kickoffAt <= now;
+}
+
+export function dueResultFixtures(fixtures: readonly TrackedResultFixture[], policy: ResultSyncPolicy, now: number) {
+  return fixtures.filter((fixture) => {
+    const interval = pollingInterval(fixture, policy, now);
+    return interval !== null && (fixture.nextCheckAt === null || fixture.nextCheckAt <= now) && now - lastCheckedAt(fixture) >= interval;
+  });
+}
+
+/** Retain the due-time fence and use the existing ID budget for active matches first. */
+export function prioritizeResultFixtures(fixtures: readonly TrackedResultFixture[], policy: ResultSyncPolicy, now: number) {
+  return [...fixtures].sort((left, right) =>
+    Number(activeResultCheck(right, policy, now)) - Number(activeResultCheck(left, policy, now)) ||
+    (left.nextCheckAt ?? 0) - (right.nextCheckAt ?? 0) ||
+    (left.lastVerifiedAt ?? lastCheckedAt(left)) - (right.lastVerifiedAt ?? lastCheckedAt(right)) ||
+    left.externalId - right.externalId);
+}
+
 export function shouldPollLive(fixtures: readonly TrackedResultFixture[], policy: ResultSyncPolicy, now: number) {
   return sharedLiveFixtures(fixtures, policy, now).length > 0;
 }
