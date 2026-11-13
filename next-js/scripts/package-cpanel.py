@@ -52,11 +52,12 @@ def main():
         shutil.copytree(built, standalone, symlinks=False)
         shutil.copytree(source / ".next/static", standalone / ".next/static", dirs_exist_ok=True)
         shutil.copytree(source / "public", standalone / "public", dirs_exist_ok=True)
-        if not any("/usr/bin/convert" in chunk.read_text(encoding="utf-8")
-                   for chunk in (standalone / ".next/server/chunks").glob("*.js")):
-            raise CommandError("The Linux badge codec is missing from the compiled server; refusing an incompatible release.")
+        if not any("/usr/bin/convert" in content and "/usr/bin/gm" in content
+                   for chunk in (standalone / ".next/server/chunks").glob("*.js")
+                   for content in [chunk.read_text(encoding="utf-8")]):
+            raise CommandError("The Linux badge codecs are missing from the compiled server; refusing an incompatible release.")
         # Windows codecs cannot run on Linux. Hosted badges use the verified
-        # system ImageMagick codec; Sharp remains available for local tooling.
+        # system GraphicsMagick or ImageMagick codec.
         for prune in ("node_modules/sharp", "node_modules/@img"):
             target = standalone / prune
             if target.exists():
@@ -79,7 +80,7 @@ import(pathToFileURL(path.join(__dirname, "standalone", "server.js")).href).catc
         next_version = json.loads((source / "node_modules/next/package.json").read_text(encoding="utf-8"))["version"]
         write_json(bundle / "BUILD_INFO.json", {"name": package["name"], "version": package["version"], "commit": commit,
                    "uncommittedChanges": dirty, "builtAt": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
-                   "node": version, "next": next_version, "badgeCodec": "imagemagick"})
+                   "node": version, "next": next_version, "badgeCodec": "system-webp"})
         shutil.copy2(ROOT / "docs/deployment/README.md", bundle / "DEPLOY.md")
         shutil.copy2(ROOT / ".env.example", bundle / ".env.example")
         archive = web_archive()

@@ -85,6 +85,35 @@ test('a codec failure serves the original bounded raster from the first-party ba
   } finally { globalThis.fetch = original; }
 });
 
+const staticGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+
+test('badge loader recognizes mislabeled static GIFs and reports their real MIME type on fallback', async () => {
+  assert.equal(badgeInputFormat(staticGif), 'gif');
+  const gif87a = Buffer.from(staticGif);
+  gif87a.write('GIF87a', 0, 'ascii');
+  assert.equal(badgeInputFormat(gif87a), 'gif');
+  const original = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response(gif87a, { headers: { 'content-type': 'image/png' } });
+    const unavailable = async () => { throw new Error('No WebP codec'); };
+    const { body, contentType } = await loadProviderBadge('https://media.api-sports.io/football/teams/8207.png', 32, unavailable);
+    assert.equal(contentType, 'image/gif');
+    assert.deepEqual(body, gif87a);
+  } finally { globalThis.fetch = original; }
+});
+
+test('GIF badges reject oversized, incomplete, out-of-bounds or multi-frame images', () => {
+  const large = Buffer.from(staticGif);
+  large.writeUInt16LE(2049, 6);
+  const overflows = Buffer.from(staticGif);
+  const descriptor = staticGif.indexOf(0x2c);
+  overflows.writeUInt16LE(2, descriptor + 5);
+  const animated = Buffer.concat([staticGif.subarray(0, -1), staticGif.subarray(descriptor)]);
+  for (const invalid of [large, overflows, animated, staticGif.subarray(0, -1), Buffer.concat([staticGif, Buffer.from([0])])]) {
+    assert.equal(badgeInputFormat(invalid), null);
+  }
+});
+
 test('JPEG dimensions and segment bounds are checked before decoding', () => {
   const frame = Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0, 8, 8, 0, 32, 0, 32, 1]);
   assert.equal(badgeInputFormat(frame), 'jpeg');

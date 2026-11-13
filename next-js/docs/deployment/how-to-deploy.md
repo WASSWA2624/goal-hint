@@ -1,5 +1,8 @@
 # How to deploy
 
+The first sections describe the previous shared host. See [VPS staging and
+release promotion](#vps-staging-and-release-promotion) for the Ubuntu VPS.
+
 | | |
 | --- | --- |
 | Site | `https://goalhint.com` (before DNS: `http://goalhint.com.hosspi.com/en`) |
@@ -45,9 +48,9 @@ activates the new release, restarts the app and checks that the site returns HTT
 
 The package removes Windows codecs and records the hosted badge codec.
 Before activation, deployment verifies WebP conversion with the host's installed
-`/usr/bin/convert` (ImageMagick). Badge responses use Next.js route caching with
-seven-day revalidation. Local Windows tooling uses the pinned Sharp dependency.
-This host lacks the CPU features required by native Sharp and Wasm SIMD.
+GraphicsMagick (`/usr/bin/gm`) or ImageMagick (`/usr/bin/convert`). Badge responses
+use Next.js route caching with seven-day revalidation. Local Windows tooling uses
+the pinned Sharp dependency.
 A failed codec check leaves the active release untouched; earlier releases remain
 eligible for rollback.
 
@@ -180,7 +183,22 @@ rollback; do not reset job, forecast or quota data.
 Ubuntu VPS. Apache serves the Next.js bundle through Passenger using the
 repository's pinned Node.js. The VPS keeps MariaDB on loopback. The staging
 database uses separate application and migration accounts with verified TLS.
-Staging starts with an empty app database and disabled provider jobs.
+Staging uses the verified 12 November 2026 snapshot of the active local football
+database. The app's member sign-in is active and provider jobs are disabled.
+
+`https://goalhint.com` runs under the separate `ghprod` cPanel account and uses
+`ghprod_prod` with its own TLS application and migration credentials. The initial
+production load copied 240,229 fixtures and related browsing and historical data
+from staging. Accounts, wallets, and payments start fresh. AutoSSL covers both
+production hostnames, and `www.goalhint.com` redirects to `goalhint.com`.
+The production football worker uses the existing direct API-Football account.
+Paid checkout is off. Phone verification and password-reset delivery require
+messaging setup.
+
+Develop on `localhost`, test the release on `test.goalhint.com`, then promote the
+same release to `goalhint.com`. Each environment has its own database and
+configuration. Routine release promotions carry application code and reviewed
+schema migrations. The initial football import was a separate data migration.
 
 1. Build the release with `npm run package:cpanel` from a clean checkout of the
    intended commit. Keep the ZIP and its SHA-256 together.
@@ -194,12 +212,63 @@ Staging starts with an empty app database and disabled provider jobs.
 4. Check the public HTTPS Matches page and `/api/matches`, and verify the
    staging page returns a `noindex` directive. Review the release online before
    promoting the same ZIP to production with production's own configuration
-   and database. Verify the previous production database backup and restore
-   before moving the main domain.
+   and database.
+5. Load the agreed production data. If migrating existing hosted accounts,
+   verify the old production backup and its restore first. Check migration
+   history, row counts, database constraints, and the new origin's app and API
+   before routing public traffic to it.
+6. For the initial VPS cutover, update the existing apex A record in Namecheap
+   Advanced DNS. Keep the `www` alias, staging record, and mail records in
+   place. Run AutoSSL for `ghprod`, verify HTTPS on both production names, and
+   confirm HTTP redirects to HTTPS.
 
 Keep the prior app release available for rollback. Switching releases does
 not roll back the database. The shared-host deployment commands above target
 the previous production host.
+
+To refresh staging data, take a consistent data-only MySQL export into a new
+cPanel database with the verified MariaDB table definitions. Load the data
+before restoring the staging triggers, and preserve the target's Prisma history.
+Apply the MariaDB numeric JSON projection overlay where the durable-job check
+still compares extracted values as text. Verify row counts, constraints, and
+the app against the new database before switching the staging release. Keep
+the previous database for rollback. See the [durable-job overlay](../../prisma/mariadb/20261009123830_durable_job_numeric_projection.sql).
+
+### VPS live football worker
+
+The VPS runs `goalhint-live@ghprod.service` and starts it at boot.
+`goalhint-live@ghstage.service` is disabled. Each unit reads its account's private
+`~/goal-hint-worker/private/worker.env` and the approval register in its active
+worker release. The worker has a dedicated TLS database user with football and
+job permissions. The hosted MariaDB smoke test verified fixture import,
+provisional predictions, score polling, settlement, and public feed reads with
+simulated provider responses.
+
+The owner confirmed publication rights and authorized quota use on production.
+`GOAL_HINT_FOOTBALL_EXISTING_PREPAID=true` uses the current direct prepaid term
+with zero new spending. The worker verifies that the account has an active paid
+plan and an expiry in the future. The private register records the owner's
+authorization and the provider account status. The invoice total is unverified.
+
+Keep the shared provider account's quota use on production. The local live
+worker and `Goal Hint Football Archive` scheduled task are paused. Test worker
+changes on staging with simulated responses. The VPS units share a lock to
+prevent overlap. Check the production journal for `ready` and
+`selection-scheduled`, then check the import receipts, result observations,
+and published prediction revisions. Compare fresh quota dispatches in
+production and staging when checking isolation.
+
+On 13 November 2026 the first production selection committed with partial
+coverage. Six reporting dates imported successfully. The 14 and 20 November
+imports did not commit, so the run uses retained fixtures for those dates.
+The public match API served a newly published revision and a score applied by
+the results poller.
+
+The production worker keeps a slot for daily selection so pending predictions
+cannot delay fixture imports. With AI off, the provider-first forecast path
+uses stored evidence and skips outbound preparation requests. Live score and
+result polling uses the same quota ledger. Odds, AI, research, and the separate
+statistics and events collector are off.
 
 ## Paid access (066)
 
