@@ -280,7 +280,7 @@ grant media rights: the server catalog/provider approval still decides which
 exact URLs may be projected to visitors.
 
 Logos use native `styled.img`, empty alt text, size-matched width/height
-attributes and `object-fit: contain`. Approved API-Sports team and league PNGs
+attributes and `object-fit: contain`. Approved API-Sports team and league badge URLs
 use the shared `providerImageSource` helper and a Next.js cached badge route,
 with bounded provider paths/sizes, no redirects and seven-day revalidation.
 Other approved hosts keep their original URLs. The importer still stores URLs
@@ -292,7 +292,8 @@ fall back to native lazy loading. The server carries the approved URL in
 `data-logo-src`; the observer sets `src` as the image approaches the viewport.
 Callers may explicitly opt into eager loading
 for known above-the-fold cards. Requests use `no-referrer`. The application
-cache fetches approved provider originals on demand. It serves resized WebP
+cache fetches approved provider originals on demand and validates bounded PNG,
+JPEG and static GIF bytes independently of the upstream MIME label. It serves resized WebP
 badges when a codec is available and can serve the validated original from
 the same route if conversion fails. There is no image database column or
 catalog-time binary download.
