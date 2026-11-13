@@ -532,7 +532,7 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
         reviewed.duplicates.some(({ fixtureId }) => batch.rows.fixtures.some(({ id }) => id === fixtureId))) fail("invalid-state");
       for (const entry of reviewedEntries) {
         const row = batch.rows.fixtures.find(({ id }) => id === entry.fixtureId);
-        if (!row || !reviewedFixtureMatches(reviewed, entry, row) || reviewed.corrections.includes(entry) && entry.expected.score !== null &&
+        if (!row || !reviewedFixtureMatches(reviewed, entry, row) || reviewed.corrections.includes(entry) &&
           batch.scoreEvidenceRefs[String(entry.fixtureId)] !== entry.evidenceRef) fail("invalid-state");
       }
     }
@@ -592,7 +592,6 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
         if (importedCount !== reviewed.expectedVerifiedResults) fail("invalid-state");
         for (const entry of reviewedEntries) {
           const { score, kickoff, providerStatus } = entry.expected;
-          if (score === null) continue;
           const fixture = await client.footballFixture.findUnique({ where: { provider_externalId: {
             provider: PROVIDER, externalId: BigInt(entry.fixtureId),
           } }, select: { id: true, kickoff: true, status: true, providerStatus: true, regulationEvidenceRef: true,

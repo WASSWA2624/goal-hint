@@ -2,28 +2,21 @@ import "server-only";
 
 import { z } from "zod";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
-import type { NormalizedFixture, RegulationScoreCandidate } from "./api-football-normalize.ts";
+import type { NormalizationResult, NormalizedFixture, RegulationScoreCandidate } from "./api-football-normalize.ts";
 import { reviewedHistoryFixtureRepairRecords } from "./history-fixture-correction-records.ts";
 
 type Score = Readonly<{ home: number; away: number }>;
-type ScorePatch = Readonly<{ home: number | null; away: number | null }>;
-type FixturePatch = Readonly<{
-  fixture?: Readonly<{ date?: string; timestamp?: number; timezone?: string;
-    status?: Readonly<{ short?: string; elapsed?: number | null; extra?: number | null }> }>;
-  teams?: Readonly<{ home?: Readonly<Record<string, unknown>>; away?: Readonly<Record<string, unknown>> }>;
-  goals?: ScorePatch;
-  score?: Readonly<{ fulltime?: ScorePatch | null; halftime?: ScorePatch | null;
-    extratime?: ScorePatch | null; penalty?: ScorePatch | null }>;
-}>;
+type FixturePatch = Readonly<{ goals?: Score; score?: Readonly<{ fulltime: Score }> }>;
 type ReviewedFixture = Readonly<{
   fixtureId: number;
-  expected: Readonly<{ homeTeamId: number; awayTeamId: number; kickoff: number | null; providerStatus: string | null; score: Score | null }>;
+  expected: Readonly<{ homeTeamId: number; awayTeamId: number; kickoff: number;
+    providerStatus: RegulationScoreCandidate["providerStatus"]; score: Score }>;
   evidenceRef: string;
   existingEvidenceRef?: string;
 }>;
 type ReviewedFixtureRecord = ReviewedFixture & Readonly<{ rawFingerprint: string; patch: FixturePatch }>;
 type ReviewedFixtureDuplicate = Readonly<{ fixtureId: number; rawFingerprint: string;
-  canonicalFixtureId: number; canonicalRawFingerprint: string; expected: ReviewedFixture["expected"] & Readonly<{ score: Score }>;
+  canonicalFixtureId: number; canonicalRawFingerprint: string; expected: ReviewedFixture["expected"];
   evidenceRef: string }>;
 type ReviewedFixtureScope = Readonly<{
   receiptId: string; pageId: string; competitionId: number; season: number; round?: string;
@@ -90,26 +83,16 @@ const originalReview: ReviewedFixture = {
   expected: { homeTeamId: correction.homeTeamId, awayTeamId: correction.awayTeamId, kickoff: correction.kickoff,
     providerStatus: "FT", score: { home: correction.home, away: correction.away } },
 };
-const identifiedRow = z.looseObject({ fixture: z.looseObject({ id: z.number().int().positive() }) });
-
-function fields(value: unknown): Readonly<Record<string, unknown>> {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
+const identifiedRow = z.looseObject({ fixture: z.looseObject({ id: z.number().int().positive() }), score: z.looseObject({}).nullish() });
 
 function applyFixturePatch(raw: z.infer<typeof identifiedRow>, patch: FixturePatch) {
-  const teams = fields(raw.teams);
   return { ...raw,
-    ...(patch.fixture && { fixture: { ...raw.fixture, ...patch.fixture,
-      ...(patch.fixture.status && { status: { ...fields(raw.fixture.status), ...patch.fixture.status } }) } }),
-    ...(patch.teams && { teams: { ...teams,
-      ...(patch.teams.home && { home: { ...fields(teams.home), ...patch.teams.home } }),
-      ...(patch.teams.away && { away: { ...fields(teams.away), ...patch.teams.away } }) } }),
     ...(patch.goals && { goals: patch.goals }),
-    ...(patch.score && { score: { ...fields(raw.score), ...patch.score } }),
+    ...(patch.score && { score: { ...raw.score, fulltime: patch.score.fulltime } }),
   };
 }
 
-function reviewedRepair(record: ReviewedHistoryFixtureRepairRecord): ReviewedHistoryFixtureRepair {
+export function createReviewedHistoryFixtureRepair(record: ReviewedHistoryFixtureRepairRecord): ReviewedHistoryFixtureRepair {
   return { ...record, duplicates: record.duplicates ?? [],
     reference: `history-source:${record.pageId}:import:${record.receiptId}:review:v2:${evidenceFingerprint(record)}`,
     project(raw) {
@@ -132,7 +115,7 @@ const originalRepair: ReviewedHistoryFixtureRepair = {
 };
 
 export const reviewedHistoryFixtureRepairs: readonly ReviewedHistoryFixtureRepair[] = Object.freeze([
-  originalRepair, ...reviewedHistoryFixtureRepairRecords.map(reviewedRepair),
+  originalRepair, ...reviewedHistoryFixtureRepairRecords.map(createReviewedHistoryFixtureRepair),
 ]);
 
 export function reviewedHistoryFixtureRepair(receiptId: string) {
@@ -143,7 +126,7 @@ export function reviewedFixtureRejectionCount(repair: ReviewedHistoryFixtureRepa
   return repair.corrections.length + repair.duplicates.length;
 }
 
-export function rawReviewedFixtureId(raw: unknown) {
+function rawReviewedFixtureId(raw: unknown) {
   const parsed = identifiedRow.safeParse(raw);
   return parsed.success ? parsed.data.fixture.id : null;
 }
@@ -152,9 +135,27 @@ export function reviewedDuplicateReplacement(duplicate: ReviewedFixtureDuplicate
   return { fixtureId: duplicate.canonicalFixtureId, expected: duplicate.expected, evidenceRef: duplicate.evidenceRef };
 }
 
+/** Omit a rejected duplicate only when its valid replacement is in the same observation. */
+export function reviewedFixtureOmissions(repair: ReviewedHistoryFixtureRepair, rows: readonly unknown[],
+  normalize: (row: unknown) => NormalizationResult<NormalizedFixture>): ReadonlyMap<unknown, number> | null {
+  const omissions = new Map<unknown, number>();
+  if (!repair.duplicates.length) return omissions;
+  const rawById = new Map(rows.map((row) => [rawReviewedFixtureId(row), row]));
+  for (const duplicate of repair.duplicates) {
+    const raw = rawById.get(duplicate.fixtureId), canonical = rawById.get(duplicate.canonicalFixtureId);
+    if (!raw || !canonical || duplicate.fixtureId === duplicate.canonicalFixtureId || omissions.has(raw) ||
+      evidenceFingerprint(raw) !== duplicate.rawFingerprint || evidenceFingerprint(canonical) !== duplicate.canonicalRawFingerprint ||
+      normalize(raw).valid) return null;
+    const result = normalize(canonical);
+    if (!result.valid || !reviewedFixtureMatches(repair, reviewedDuplicateReplacement(duplicate), result.data)) return null;
+    omissions.set(raw, duplicate.fixtureId);
+  }
+  return omissions;
+}
+
 export function reviewedFixtureScoreMatches(entry: ReviewedFixture, candidate: RegulationScoreCandidate) {
   const { score, providerStatus } = entry.expected;
-  return score !== null && candidate.fixtureId === entry.fixtureId && candidate.providerStatus === providerStatus &&
+  return candidate.fixtureId === entry.fixtureId && candidate.providerStatus === providerStatus &&
     candidate.sourceField === "score.fulltime" && candidate.period === "regulation-including-stoppage-time" &&
     candidate.home === score.home && candidate.away === score.away;
 }
@@ -164,8 +165,7 @@ export function reviewedFixtureMatches(repair: ReviewedHistoryFixtureRepair, ent
   return fixture.id === entry.fixtureId && fixture.competition.id === repair.competitionId && fixture.competition.season === repair.season &&
     (repair.round === undefined || fixture.competition.round === repair.round) && fixture.homeTeam.id === expected.homeTeamId &&
     fixture.awayTeam.id === expected.awayTeamId && fixture.kickoff === expected.kickoff && fixture.providerStatus === expected.providerStatus &&
-    (expected.score === null ? fixture.regulationScore === null : fixture.regulationScore?.verified === true &&
-      reviewedFixtureScoreMatches(entry, fixture.regulationScore));
+    fixture.regulationScore?.verified === true && reviewedFixtureScoreMatches(entry, fixture.regulationScore);
 }
 
 export function reviewedFixtureReplayMarkerMatches(repair: ReviewedHistoryFixtureRepair, marker: Readonly<{

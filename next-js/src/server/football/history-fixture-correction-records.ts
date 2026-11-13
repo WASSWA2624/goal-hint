@@ -1,3 +1,5 @@
+import "server-only";
+
 import type { ReviewedHistoryFixtureRepairRecord } from "./history-fixture-correction.ts";
 
 const rejectedScoreReasons = ["invalid-rows", "retrieval-incomplete", "schema-error"] as const;

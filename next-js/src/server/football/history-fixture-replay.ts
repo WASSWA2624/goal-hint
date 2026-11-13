@@ -4,14 +4,13 @@ import { z } from "zod";
 import { utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
 import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
-import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import type { CatalogAuthority, CatalogImportRequest } from "./catalog-contract.ts";
 import { catalogScopeKey, CatalogInputError, validateCatalogBatch } from "./catalog-input.ts";
 import { catalogPersistenceUnavailable, createFootballCatalogStore, historyReplayKind, historyReplayScopePrefix } from "./catalog-mysql-store.ts";
 import { API_FOOTBALL_CONTRACT_VERSION } from "./api-football-contract.ts";
 import { normalizeFixture, type NormalizedFixture } from "./api-football-normalize.ts";
-import { rawReviewedFixtureId, reviewedDuplicateReplacement, reviewedFixtureMatches, reviewedFixtureRejectionCount,
+import { reviewedFixtureMatches, reviewedFixtureOmissions, reviewedFixtureRejectionCount,
   reviewedFixtureScoreMatches, reviewedHistoryFixtureRepair,
   reviewedHistoryFixtureRepairs } from "./history-fixture-correction.ts";
 import { createFootballHistorySource, footballHistorySourceMaxRows } from "./history-source.ts";
@@ -61,27 +60,16 @@ export function createFootballHistoryFixtureReplay(database: DatabaseRuntime, au
     const data: NormalizedFixture[] = [], missing = new Set<string>();
     const normalize = (row: unknown) => normalizeFixture(row, { endpoint: "/fixtures", retrievedAt,
       verifyLogo: authority.verifyLogo, verifyRegulationScore: authority.verifyRegulationScore });
-    const omissions = new Map<number, string>();
-    if (reviewed?.duplicates.length) {
-      const rawById = new Map(archived.rows.map((row) => [rawReviewedFixtureId(row), row]));
-      for (const duplicate of reviewed.duplicates) {
-        const canonical = rawById.get(duplicate.canonicalFixtureId);
-        if (!canonical || duplicate.fixtureId === duplicate.canonicalFixtureId || omissions.has(duplicate.fixtureId) ||
-          evidenceFingerprint(canonical) !== duplicate.canonicalRawFingerprint) return null;
-        const result = normalize(canonical);
-        if (!result.valid || !reviewedFixtureMatches(reviewed, reviewedDuplicateReplacement(duplicate), result.data)) return null;
-        omissions.set(duplicate.fixtureId, duplicate.rawFingerprint);
-      }
-    }
+    const omissions = reviewed ? reviewedFixtureOmissions(reviewed, archived.rows, normalize) : undefined;
+    if (omissions === null) return null;
     const corrections = new Set<number>();
     for (const row of archived.rows) {
       let result = normalize(row);
       if (!result.valid && reviewed) {
-        const rawId = omissions.size ? rawReviewedFixtureId(row) : null;
-        const omission = rawId === null ? undefined : omissions.get(rawId);
-        if (rawId !== null && omission !== undefined) {
-          if (evidenceFingerprint(row) !== omission || corrections.has(rawId)) return null;
-          corrections.add(rawId);
+        const omittedId = omissions?.get(row);
+        if (omittedId !== undefined) {
+          if (corrections.has(omittedId)) return null;
+          corrections.add(omittedId);
           continue;
         }
         const projected = reviewed.project(row);
