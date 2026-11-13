@@ -6,6 +6,7 @@ import { decodeDraftProgress, readDraftMemory, readDraftProgress, writeDraftProg
 
 export type CheckoutDraft = { requestKey: string; step: 0 | 1 | 2 | 3; purpose: CheckoutSelection["purpose"]; planId: string;
   usePackage?: boolean; mobileMethod?: "mtn" | "airtel" | undefined;
+  flutterwaveAttempt?: string | undefined;
   method: CheckoutSelection["method"] | ""; useWallet: boolean; useReferral: boolean; walletUgx: string; referralDays: string; topUpUgx: string;
   transactionId: string; amountUgx: string; payerPhone: string; paidAt: string; text: string;
   extracted: Record<string, string | number | null>; originalText: string; accepted: boolean; attachingId: string | null; screenshot?: ScreenshotMetadata | null;
@@ -20,11 +21,13 @@ export function restoredCheckoutStep(step: CheckoutDraft["step"], { validPackage
 }
 
 /** Only preselect a transfer provider before evidence entry; wallet spending remains explicit. */
-export function withCheckoutProvider(draft: CheckoutDraft, settings: ManualPaymentSettings, lastMethod: string | null): CheckoutDraft {
+export function withCheckoutProvider(draft: CheckoutDraft, settings: ManualPaymentSettings, lastMethod: string | null,
+  flutterwaveAvailable = false): CheckoutDraft {
   if (draft.step >= 2 || draft.attachingId) return draft;
   const provider = [draft.method, draft.mobileMethod, lastMethod, "mtn", "airtel"].find(
     (method): method is "mtn" | "airtel" => (method === "mtn" || method === "airtel") && !manualPaymentProvider(settings, method).reason);
-  const method = draft.method === "wallet" || draft.method === "referral" ? draft.method : provider ?? "";
+  const method = draft.method === "wallet" || draft.method === "referral" || draft.method === "flw" && flutterwaveAvailable
+    ? draft.method : provider ?? (flutterwaveAvailable && !draft.useWallet ? "flw" : "");
   return method === draft.method && provider === draft.mobileMethod ? draft
     : { ...draft, method, mobileMethod: provider, accepted: false };
 }
@@ -60,6 +63,8 @@ export function chooseCheckoutMethod(draft: CheckoutDraft, method: CheckoutSelec
   if (method === "wallet") return capCheckoutFunding({ ...draft, purpose: "plan", usePackage: true, useWallet: selected,
     method: draft.method === "mtn" || draft.method === "airtel" ? draft.method : selected ? "wallet" : "",
     walletUgx: selected ? String(Math.min(balances.availableWalletUgx, price)) : "0", accepted: false }, balances, plans);
+  if (method === "flw") return capCheckoutFunding({ ...draft, usePackage: true, method, useWallet: false, useReferral: false,
+    walletUgx: "0", referralDays: "0", accepted: false }, balances, plans);
   if (method === "referral") return capCheckoutFunding({ ...draft, useReferral: selected,
     referralDays: selected ? String(Math.min(365, balances.availableReferralDays)) : "0", accepted: false }, balances, plans);
   const walletUgx = Number(draft.walletUgx) >= price ? "0" : draft.walletUgx;
@@ -69,7 +74,7 @@ export function chooseCheckoutMethod(draft: CheckoutDraft, method: CheckoutSelec
 type Stored = { draft: CheckoutDraft; image: Blob | null };
 type CheckoutDraftKind = "plan" | "topup";
 const savedMethod = (value: unknown): value is CheckoutDraft["method"] =>
-  value === "" || value === "mtn" || value === "airtel" || value === "wallet" || value === "referral";
+  value === "" || value === "mtn" || value === "airtel" || value === "wallet" || value === "referral" || value === "flw";
 const savedAmount = (value: unknown) => typeof value === "string" && /^\d{0,9}$/u.test(value) ? value : "";
 const isRequestKey = (value: unknown): value is string => typeof value === "string" && /^[a-f0-9-]{36}$/u.test(value);
 
@@ -84,12 +89,14 @@ export function loadCheckoutDraft(scope: string, kind: CheckoutDraftKind, initia
     step: stored.step === 3 ? external ? 2 : 3 : stored.step === 2 || stored.step === 1 ? stored.step : 0,
     method: stored.method, mobileMethod: stored.mobileMethod === "mtn" || stored.mobileMethod === "airtel" ? stored.mobileMethod : undefined,
     usePackage: stored.usePackage === true, useWallet: stored.useWallet === true, useReferral: stored.useReferral === true,
-    walletUgx: savedAmount(stored.walletUgx), referralDays: savedAmount(stored.referralDays), topUpUgx: savedAmount(stored.topUpUgx) } };
+    walletUgx: savedAmount(stored.walletUgx), referralDays: savedAmount(stored.referralDays), topUpUgx: savedAmount(stored.topUpUgx),
+    flutterwaveAttempt: typeof stored.flutterwaveAttempt === "string" && /^(?:plan:[a-f0-9-]{36}|topup:\d{1,9})$/iu.test(stored.flutterwaveAttempt)
+      ? stored.flutterwaveAttempt : undefined } };
 }
 
 export function saveCheckoutDraft(scope: string, kind: CheckoutDraftKind, value: Stored) {
-  const { requestKey, step, purpose, planId, usePackage, method, mobileMethod, useWallet, useReferral, walletUgx, referralDays, topUpUgx, attachingId } = value.draft;
+  const { requestKey, step, purpose, planId, usePackage, method, mobileMethod, useWallet, useReferral, walletUgx, referralDays, topUpUgx, attachingId, flutterwaveAttempt } = value.draft;
   // A receipt attachment can resume in memory. Never restore its record ID or evidence from browser storage.
   writeDraftProgress(scope, kind, attachingId ? null : { requestKey, step, purpose, planId, usePackage,
-    method, mobileMethod, useWallet, useReferral, walletUgx, referralDays, topUpUgx }, value);
+    method, mobileMethod, useWallet, useReferral, walletUgx, referralDays, topUpUgx, flutterwaveAttempt }, value);
 }

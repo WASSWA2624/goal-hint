@@ -109,7 +109,7 @@ export function CheckoutPaySummary({ quote: q }: { quote: CheckoutPayPreview }) 
     {q.walletUgx > 0 && q.amountToSend > 0 && <small>Package {formatUgx(q.priceUgx)} · wallet {formatUgx(q.walletUgx)}</small>}
   </PayLine>;
 }
-export function FundingBreakdown({ quote: q, reportedUgx }: { quote: Pick<CheckoutQuote, "purpose" | "planName" | "priceUgx" | "durationDays" | "referralDays" | "walletUgx" | "amountToSend">; reportedUgx?: number }) {
+export function FundingBreakdown({ quote: q, reportedUgx, automatic = false }: { quote: Pick<CheckoutQuote, "purpose" | "planName" | "priceUgx" | "durationDays" | "referralDays" | "walletUgx" | "amountToSend">; reportedUgx?: number; automatic?: boolean }) {
   const amounts = fundingAmounts(q.priceUgx, q.walletUgx, reportedUgx ?? 0);
   return <div data-funding-breakdown>
     <WizardReview>
@@ -118,7 +118,7 @@ export function FundingBreakdown({ quote: q, reportedUgx }: { quote: Pick<Checko
         {q.walletUgx > 0 && <div><dt>Wallet contribution</dt><dd>{formatUgx(q.walletUgx)}</dd></div>}
         {q.durationDays > 0 && <div><dt>Access time</dt><dd>{q.durationDays} purchased {q.durationDays === 1 ? "day" : "days"}{q.referralDays > 0 ? ` + ${q.referralDays} earned ${q.referralDays === 1 ? "day" : "days"}` : ""}</dd></div>}
       </>}
-      <div><dt>{q.amountToSend > 0 ? "Amount to send" : "Cash due"}</dt><dd><strong>{formatUgx(q.amountToSend)}</strong></dd></div>
+      <div><dt>{automatic ? "Amount to pay" : q.amountToSend > 0 ? "Amount to send" : "Cash due"}</dt><dd><strong>{formatUgx(q.amountToSend)}</strong></dd></div>
       {reportedUgx !== undefined && <div><dt>Amount paid</dt><dd>{formatUgx(reportedUgx)}</dd></div>}
       {reportedUgx !== undefined && amounts.remainingUgx > 0 && <div><dt>Remaining if confirmed</dt><dd>{formatUgx(amounts.remainingUgx)}</dd></div>}
     </WizardReview>

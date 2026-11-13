@@ -127,6 +127,27 @@ test('shared result synchronization on isolated genuine MySQL', { timeout: 420_0
         advance(15_000); await s.poller.runOnce();
         assert.equal(channels(s.source, 'live')[0].url.searchParams.get('live'), 'all');
       });
+      await t.test('bounded ID work preserves an early historical batch and prioritizes due active fixtures', async () => {
+        p.setTime(Date.parse('2026-10-10T13:50:00Z'));
+        const kickoff = new Date(p.now() - 600_000).toISOString();
+        const historical = Array.from({ length: 41 }, (_, index) => catalogFixture(12100 + index, {
+          kickoff: '2026-10-09T20:30:00Z', status: 'FT', score: { fulltime: score(1, 0) },
+        }));
+        const s = await seed([...historical, catalogFixture(12201, { kickoff, status: '1H' }),
+          catalogFixture(12202, { kickoff, status: 'NS' })],
+        { maxBatchesPerTick: 2, cadence: { liveMs: null, dateMs: 60_000, activeMs: 60_000 } }, { importAgeMs: 21_600_000 });
+        s.source.state.respond = (url) => {
+          const ids = (url.searchParams.get('ids') ?? '').split('-').map(Number);
+          return catalogResponse(url, s.rows.filter((row) => ids.includes(row.fixture.id)));
+        };
+        assert.equal(await s.poller.runOnce(), true);
+        const ids = channels(s.source, 'ids').map(({ url }) => url.searchParams.get('ids').split('-').map(Number));
+        assert.deepEqual(ids.map((batch) => batch.length), [20, 20]);
+        assert.ok(ids[0].every((id) => id < 12200));
+        assert.ok(ids[1].includes(12201) && ids[1].includes(12202));
+        assert.deepEqual(s.source.network.map(({ url }) => url.searchParams.has('date') ? 'date' : 'ids'), ['ids', 'date', 'ids']);
+        assert.equal((await s.store.result((await s.fixture(42)).id)).result.status, 'scheduled');
+      });
       await t.test('unverified extra-time/shootout totals stay separate; verified regulation and corrections append revisions', async () => {
         const s = await seed([catalogFixture(10005, { kickoff: new Date(p.now()-300_000).toISOString() })]);
         const row = s.rows[0]; row.fixture.status.short = 'PEN'; row.goals = score(3,2);
@@ -152,9 +173,30 @@ test('shared result synchronization on isolated genuine MySQL', { timeout: 420_0
         advance(60_000); await s.poller.runOnce(); const latest = await s.store.result(fixture.id);
         assert.equal(latest.result.id, original.result.id); assert.equal(latest.result.observedAt, at);
         assert.equal(latest.result.providerUpdatedAt, null); assert.equal(latest.state.lastSyncAt.getTime(), p.now());
+        assert.equal(latest.state.lastVerifiedAt.getTime(), p.now());
         assert.deepEqual(await counts(fixture.id), { results: 1, observations: 2, events: 1 });
         advance(60_000); s.rows[0].score.fulltime = null; await s.poller.runOnce();
         assert.equal((await s.store.result(fixture.id)).result.regulation.home, 1);
+      });
+      await t.test('repeated provider NS and live minute advance verification without inventing kickoff or clock changes', async () => {
+        const kickoff = new Date(p.now() - 60_000).toISOString();
+        const scheduled = catalogFixture(12203, { kickoff, status: 'NS' });
+        const live = catalogFixture(12204, { kickoff, status: '1H' });
+        live.fixture.status.elapsed = 5;
+        const s = await seed([scheduled, live], { cadence: { liveMs: null, dateMs: 60_000, activeMs: 60_000 } });
+        assert.equal(await s.poller.runOnce(), true);
+        const fixtures = [await s.fixture(), await s.fixture(1)];
+        const originals = await Promise.all(fixtures.map(({ id }) => s.store.result(id)));
+        advance(60_000);
+        assert.equal(await s.poller.runOnce(), true);
+        const latest = await Promise.all(fixtures.map(({ id }) => s.store.result(id)));
+        assert.deepEqual(latest.map(({ result }) => result.status), ['scheduled', 'live']);
+        assert.equal(latest[1].result.elapsedMinutes, 5);
+        for (const [index, { result, state }] of latest.entries()) {
+          assert.equal(result.id, originals[index].result.id);
+          assert.equal(result.observedAt, originals[index].result.observedAt);
+          assert.equal(state.lastVerifiedAt.getTime(), p.now());
+        }
       });
       await t.test('a saved response survives interruption and replays original timestamps without another fetch', async () => {
         const s = await seed([catalogFixture(10007, { kickoff: new Date(p.now()-300_000).toISOString(), status: 'FT', score: { fulltime: score(0,0) } })]);
@@ -226,6 +268,7 @@ test('shared result synchronization on isolated genuine MySQL', { timeout: 420_0
         await apply(at-1, 'synthetic-stale'); assert.equal((await s.store.result(fixture.id)).result.id, original.result.id);
         await apply(at, 'synthetic-conflict'); const latest = await s.store.result(fixture.id);
         assert.equal(latest.result.id, original.result.id); assert.equal(latest.state.lastSyncAt.getTime(), at);
+        assert.equal(latest.state.lastVerifiedAt.getTime(), original.state.lastVerifiedAt.getTime());
         assert.equal(latest.state.delayReason, 'same-time-conflicting-evidence');
         assert.deepEqual(await counts(fixture.id), { results: 1, observations: 3, events: 1 }); await s.store.release(owned);
       });

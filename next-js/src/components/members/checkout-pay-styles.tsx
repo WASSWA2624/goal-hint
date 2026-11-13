@@ -138,7 +138,7 @@ export const PayRewards = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--gh-spacing-1) var(--gh-spacing-2);
   padding-block-start: var(--gh-spacing-2); border-block-start: ${({ theme }) => theme.border.thin} solid ${({ theme }) => theme.color.border};
   > p { flex: 1; }
-  > button { padding-inline: 0; font-size: var(--gh-font-secondary); }
+  > :is(button, a) { padding-inline: 0; font-size: var(--gh-font-secondary); }
 `;
 export const PayFooter = styled.div`
   display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--gh-spacing-3); min-inline-size: 0;

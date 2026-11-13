@@ -14,8 +14,9 @@ export function accountSectionHref(locale: string, section: AccountSection = "ov
   return `/${resolveLocale(locale)}/account${parameters.size ? `?${parameters}` : ""}`;
 }
 
-export function walletTopUpHref(locale: string, returnTo?: string | null): string {
+export function walletTopUpHref(locale: string, returnTo?: string | null, resumePlan = false): string {
   const parameters = new URLSearchParams({ add: "credit" });
+  if (resumePlan) parameters.set("resume", "plan");
   const safeReturn = memberReturnPath(returnTo);
   if (safeReturn) parameters.set("return", safeReturn);
   return `/${resolveLocale(locale)}/subscribe?${parameters}#plans`;

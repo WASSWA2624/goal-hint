@@ -11,7 +11,8 @@ import { parseLifecycleInput } from "../predictions/lifecycle-input.ts";
 import { historyHash } from "../predictions/history-input.ts";
 import { ResultSyncError, resultSyncFail, type PollChannel, type PollLease, type ResultSyncAuthority, type ResultSyncBatch,
   type ResultSyncStore, type TrackedResultFixture } from "./result-sync-contract.ts";
-import { failureDelay, nextLiveCheckAfterDate, parseResultSyncPolicy, pollingInterval, resultCadence, sharedLiveFixtures } from "./result-sync-policy.ts";
+import { activeResultCheck, dueResultFixtures, failureDelay, nextLiveCheckAfterDate, parseResultSyncPolicy, pollingInterval,
+  prioritizeResultFixtures, resultCadence, sharedLiveFixtures } from "./result-sync-policy.ts";
 
 export function createResultSyncService(options: Readonly<{
   accountId: string; ownerId?: string; policy: unknown; authority: ResultSyncAuthority; store: ResultSyncStore;
@@ -140,15 +141,15 @@ export function createResultSyncService(options: Readonly<{
       let fixtures = await store.tracked(policy, clock.now());
       let remainingBatches = policy.maxBatchesPerTick;
       // Historical finals cannot be found in today's response. Give their
-      // essential checks the first slots before optional live/date work.
-      const urgent = fixtures.filter((fixture) => {
-        const interval = pollingInterval(fixture, policy, clock.now());
-        return fixture.firstFinalAt !== null && interval !== null && (fixture.nextCheckAt === null || fixture.nextCheckAt <= clock.now()) &&
-          clock.now() - Math.max(fixture.retrievedAt, fixture.lastSyncAt ?? 0) >= interval &&
-          (lease!.nextDateAt > clock.now() || fixture.kickoffAt === null ||
-            getReportingDate(utcInstantFromEpochMilliseconds(fixture.kickoffAt)) !== getReportingDate(clock.now()));
-      }).sort((a, b) => Math.max(a.retrievedAt, a.lastSyncAt ?? 0) - Math.max(b.retrievedAt, b.lastSyncAt ?? 0) || a.externalId - b.externalId);
-      for (let offset = 0; offset < urgent.length && remainingBatches > 0; offset += 20, remainingBatches--) {
+      // essential checks early slots and leave one for due active fixtures.
+      const beforeShared = clock.now(), reportingDate = getReportingDate(beforeShared);
+      const beforeSharedDue = dueResultFixtures(fixtures, policy, beforeShared);
+      const reservedBatches = remainingBatches > 1 && beforeSharedDue.some((fixture) => activeResultCheck(fixture, policy, beforeShared)) ? 1 : 0;
+      const urgent = beforeSharedDue.filter((fixture) => fixture.firstFinalAt !== null &&
+        (lease!.nextDateAt > beforeShared || fixture.kickoffAt === null ||
+          getReportingDate(utcInstantFromEpochMilliseconds(fixture.kickoffAt)) !== reportingDate))
+        .sort((a, b) => Math.max(a.retrievedAt, a.lastSyncAt ?? 0) - Math.max(b.retrievedAt, b.lastSyncAt ?? 0) || a.externalId - b.externalId);
+      for (let offset = 0; offset < urgent.length && remainingBatches > reservedBatches; offset += 20, remainingBatches--) {
         const group = urgent.slice(offset, offset + 20); await poll("ids", group, group.map((fixture) => fixture.externalId), signal);
       }
       if (urgent.length) fixtures = await store.tracked(policy, clock.now());
@@ -167,12 +168,8 @@ export function createResultSyncService(options: Readonly<{
           await poll("live", fixtures, [], signal); fixtures = await store.tracked(policy, clock.now());
         }
       }
-      const due = fixtures.filter((fixture) => {
-        const interval = pollingInterval(fixture, policy, clock.now());
-        return interval !== null && (fixture.nextCheckAt === null || fixture.nextCheckAt <= clock.now()) &&
-          clock.now() - Math.max(fixture.retrievedAt, fixture.lastSyncAt ?? 0) >= interval;
-      }).sort((a, b) => (a.nextCheckAt ?? 0) - (b.nextCheckAt ?? 0) ||
-        Math.max(a.retrievedAt, a.lastSyncAt ?? 0) - Math.max(b.retrievedAt, b.lastSyncAt ?? 0) || a.externalId - b.externalId);
+      const afterShared = clock.now();
+      const due = prioritizeResultFixtures(dueResultFixtures(fixtures, policy, afterShared), policy, afterShared);
       const exhausted = fixtures.filter((fixture) => fixture.nextCheckAt !== null && pollingInterval(fixture, policy, clock.now()) === null &&
         (fixture.firstFinalAt !== null || clock.now() - (fixture.kickoffAt ?? fixture.firstTrackedAt) >= policy.activeWindowMs));
       if (exhausted.length) await store.attempts(lease!, exhausted.map((fixture) => ({ fixtureId: fixture.fixtureId,

@@ -10,7 +10,7 @@ const state = globalThis as typeof globalThis & { syntheticPayments?: Record<str
   syntheticCredit?: { balanceUgx: number; autoRenew: boolean; autoRenewPlanId: string | null; bought: number } };
 export const paymentScenarios = ["default", "signed-out", "signed-in", "active", "pending", "pending-active", "pending-terms-required",
   "pending-call-only", "pending-whatsapp-only", "pending-no-contact", "approved",
-  "rejected", "rejected-active", "rejected-fallback", "rejected-terms-required", "reversed", "reversed-terms-required", "reversed-active", "blocked", "off", "credit", "wallet-empty"] as const;
+  "rejected", "rejected-active", "rejected-fallback", "rejected-terms-required", "reversed", "reversed-terms-required", "reversed-active", "blocked", "off", "credit", "wallet-empty", "expired", "staging-expired", "production-expired"] as const;
 export function fixtureScenarioFromHeaders(headers: Headers) {
   const scenario = headers.get("cookie")?.match(/(?:^|;\s*)payment-fixture-state=([^;]+)/u)?.[1];
   return paymentScenarios.find(value => value === scenario) ?? "default";
@@ -34,13 +34,15 @@ export const plans: SubscriptionPlanView[] = [1, 7, 30].map((days, index) => ({ 
 export function fixtureServices(scenario = "default"): MemberServices {
   const now = new Date();
   const statusName = scenario.split("-")[0]!, hasReport = ["pending", "rejected", "reversed", "approved"].includes(statusName);
-  const approved = state.syntheticApproved?.[scenario] === true;
+  const approved = state.syntheticApproved?.[scenario] === true, expired = scenario.endsWith("expired");
   const acceptedTerms = () => (scenario === "active" || scenario === "credit" || hasReport) && !scenario.endsWith("terms-required") || state.syntheticTerms?.[scenario] === true;
   // The credit scenario: an active member holding UGX 12,000 credit from a top-up, who can buy plans with it at once.
   const credit = scenario === "credit" ? state.syntheticCredit ??= { balanceUgx: 12_000, autoRenew: false, autoRenewPlanId: null, bought: 0 } : null;
   const activeEnd = new Date(Math.floor(+now / 86_400_000) * 86_400_000 + 7 * 86_400_000 + 10 * 3_600_000);
-  const periods = approved || scenario === "active" || scenario === "credit" || scenario === "approved" || scenario.endsWith("-active") ? [{ id: "synthetic", planName: "Weekly", durationDays: 7, extensionDays: 0,
-    revokedAt: null, startsAt: new Date(+now - 86_400_000), endsAt: new Date(+activeEnd + (credit?.bought ?? 0)) }] : [];
+  const active = approved || scenario === "active" || scenario === "credit" || scenario === "approved" || scenario.endsWith("-active");
+  const periods = active || expired ? [{ id: "synthetic", planName: "Weekly", durationDays: 7, extensionDays: 0,
+    revokedAt: null, startsAt: new Date(+now - (expired ? 8 : 1) * 86_400_000),
+    endsAt: expired ? new Date(+now - 86_400_000) : new Date(+activeEnd + (credit?.bought ?? 0)) }] : [];
   const paymentStatus = (): PaymentStatus | null => {
     const report = state.syntheticPayments?.[scenario] ?? (hasReport ? {
       reference: "PFAKE", status: statusName, rejectText: statusName === "rejected" && scenario !== "rejected-fallback" ? "Synthetic rejection reason" : null,
@@ -63,18 +65,19 @@ export function fixtureServices(scenario = "default"): MemberServices {
       return { status: "saved" };
     },
   };
-  return { config: { production: false, cookies: { secure: false } }, settings: { settings: { ...settings, paywallMode: scenario === "off" ? "off" : "on",
+  return { config: { production: scenario === "staging-expired" || scenario === "production-expired",
+    staging: scenario === "staging-expired", cookies: { secure: false } }, settings: { settings: { ...settings, paywallMode: scenario === "off" ? "off" : "on",
     contactPhone: ["pending-whatsapp-only", "pending-no-contact"].includes(scenario) ? null : settings.contactPhone,
     whatsappPhone: ["pending-call-only", "pending-no-contact"].includes(scenario) ? null : settings.whatsappPhone }, source: "stored" },
     sessions: {
-      async verify(token?: string) { return scenario === "signed-out" || !token && !["signed-in", "active", "blocked", "credit", "wallet-empty"].includes(scenario) && !hasReport ? null
+      async verify(token?: string) { return scenario === "signed-out" || !token && !["signed-in", "active", "blocked", "credit", "wallet-empty"].includes(scenario) && !hasReport && !expired ? null
         : { accountId: "00000000-0000-4000-8000-000000000100", tokenHash: "synthetic", phone: "256700000101", blocked: scenario === "blocked",
           codeEnteredAt: scenario === "active" || scenario === "credit" ? new Date() : null, accessCodeId: null, expiresAt: new Date(Date.now() + 86_400_000) }; },
       async signIn() { return { status: "signed-in", token: "p".repeat(43) }; }, async signOut() {},
     },
     codes: { ...creditCodes,
       async accountView() { return { codes: periods, devices: [] }; },
-      async subscriptionStatus() { return { activeUntil: activeSubscriptionUntil(periods, new Date()),
+      async subscriptionStatus() { return { activeUntil: activeSubscriptionUntil(periods, new Date()), expired,
         paymentPending: ["pending", "superseded"].includes(paymentStatus()?.status ?? ""), creditUgx: credit?.balanceUgx ?? 0, autoRenew: credit?.autoRenew ?? false,
         renewsFromCredit: !!credit?.autoRenew && credit.balanceUgx >= (plans.find((plan) => plan.id === credit.autoRenewPlanId)?.priceUgx ?? Infinity) }; },
       async renewDue() { return "skipped"; },

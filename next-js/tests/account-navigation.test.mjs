@@ -11,6 +11,7 @@ test("account sections validate deep links and default unknown or repeated input
 test("the Wallet opens the top-up checkout and keeps only safe return destinations", () => {
   assert.equal(walletTopUpHref("en"), "/en/subscribe?add=credit#plans");
   assert.equal(walletTopUpHref("en", "/en/slips"), "/en/subscribe?add=credit&return=%2Fen%2Fslips#plans");
+  assert.equal(walletTopUpHref("en", "/en/slips", true), "/en/subscribe?add=credit&resume=plan&return=%2Fen%2Fslips#plans");
   assert.equal(walletTopUpHref("bad-locale", "https://example.test"), "/en/subscribe?add=credit#plans");
 });
 

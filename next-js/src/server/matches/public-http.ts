@@ -1,11 +1,24 @@
 import "server-only";
 
 import { matchFeedErrorSchema } from "../../domain/match-feed.ts";
+import { resultFreshnessHeader, resultFreshnessVersion } from "../../domain/live-refresh.ts";
 import { createMessages } from "../../i18n/messages.ts";
 import { MatchFeedError } from "./feed-error.ts";
 
 export const publicMatchHeaders = { "cache-control": "no-store, max-age=0", "cdn-cache-control": "no-store", "x-content-type-options": "nosniff" };
 export const privateMatchHeaders = { ...publicMatchHeaders, "cache-control": "private, no-store", vary: "Cookie" };
+export const privateResultFreshnessHeaders = { ...privateMatchHeaders, vary: `Cookie, ${resultFreshnessHeader}` };
+
+/** The default HTTP shape also serves pages still running a strict older bundle. */
+export function acceptsResultFreshness(request: Request) {
+  return request.headers.get(resultFreshnessHeader) === resultFreshnessVersion;
+}
+
+export function withoutResultFreshness<T extends { resultVerifiedAt?: number | null | undefined }>(fixture: T) {
+  const legacy = { ...fixture };
+  delete legacy.resultVerifiedAt;
+  return legacy;
+}
 
 export function publicMatchFailure(error: unknown, headers: Readonly<Record<string, string>> = publicMatchHeaders): Response {
   const failure = error instanceof MatchFeedError ? error : new MatchFeedError("unavailable");

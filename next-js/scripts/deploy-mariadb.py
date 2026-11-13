@@ -19,6 +19,24 @@ NAME = re.compile(r"\d{14}_[a-z][a-z0-9_]*\Z")
 DIGEST = re.compile(r"[a-f0-9]{64}\Z")
 TARGETS = {"staging": re.compile(r"ghstage_[a-z0-9_]{1,48}\Z"), "production": re.compile(r"ghprod_prod\Z")}
 FOLLOWUP = "20261009123830_durable_jobs"
+FLUTTERWAVE_CHECKOUT = (
+    "20261113150000_flutterwave_checkout",
+    "4e9cefb1abbadd091e39f11385cd42c9367ebc0dff8753b5c92c0593b16ccf15",
+)
+HOURLY_FIXTURE_RECHECK = (
+    "20261113150000_hourly_fixture_recheck",
+    "9f21108d0af303c88c529cd30076e47dd52fc852f9f37a8c6037990b0a4153b4",
+)
+VERIFIED_RESULT_FRESHNESS = (
+    "20261113160000_verified_result_freshness",
+    "930444c38bdfeb277de9f96344bf2f3bffaf1e2009db0b8b564c770b8cab5526",
+)
+# The hosted branches applied these independent migrations in different orders.
+# Each pair is (pending migration, already applied migration) with original checksums.
+HOSTED_BRANCH_GAPS = frozenset({
+    (FLUTTERWAVE_CHECKOUT, HOURLY_FIXTURE_RECHECK),
+    (HOURLY_FIXTURE_RECHECK, VERIFIED_RESULT_FRESHNESS),
+})
 LEDGER = """SELECT migration_name, checksum, finished_at IS NOT NULL, rolled_back_at IS NOT NULL
 FROM _prisma_migrations ORDER BY migration_name"""
 
@@ -90,7 +108,12 @@ def pending_migrations(rows, migrations, adopted):
             raise MigrationError(f"Migration ledger has an interrupted or duplicate entry for {name}.")
         completed.add(name)
     pending = [migration for migration in migrations if migration.name not in completed]
-    if pending and any(migration.name > pending[0].name and migration.name in completed for migration in migrations):
+    applied = [migration for migration in migrations if migration.name in completed]
+    if any(
+        done.name > missing.name and ((missing.name, missing.checksum), (done.name, done.checksum)) not in HOSTED_BRANCH_GAPS
+        for missing in pending
+        for done in applied
+    ):
         raise MigrationError("Migration ledger has a gap before an applied release migration.")
     return pending
 
@@ -101,11 +124,12 @@ def canonical_sql(sql):
 
 
 class MariaDb:
-    def __init__(self, defaults_file, database, port):
+    def __init__(self, defaults_file, database, port, *, lock_wait_timeout=None):
         binary = shutil.which("mariadb")
         if binary is None:
             raise MigrationError("MariaDB command-line client is unavailable.")
         self.database = database
+        self.lock_wait_timeout = lock_wait_timeout
         self.command = [binary, f"--defaults-file={defaults_file}", f"--database={database}", "--host=127.0.0.1", f"--port={port}",
                         "--protocol=tcp", "--ssl", "--ssl-verify-server-cert", "--batch", "--raw", "--skip-column-names",
                         "--binary-mode", "--local-infile=0", "--skip-reconnect", "--connect-timeout=10"]
@@ -145,6 +169,8 @@ WHERE migration_name='{name}' AND checksum='{digest}' AND finished_at IS NULL AN
             body = migration.overlay
         else:
             body = start.encode() + b"\n" + canonical_sql(migration.sql) + b"\n" + (migration.followup or b"") + b"\n" + finish.encode()
+        if self.lock_wait_timeout is not None:
+            body = f"SET SESSION lock_wait_timeout = {self.lock_wait_timeout:d};\n".encode() + body
         self.execute(body, name)
 
 
@@ -205,15 +231,19 @@ def main(argv=None):
     parser.add_argument("--database", required=True)
     parser.add_argument("--defaults-file", required=True, type=Path)
     parser.add_argument("--port", type=int, default=3306)
+    parser.add_argument("--lock-wait-timeout", type=int,
+                        help="Set a migration session's metadata lock wait in seconds (1-60).")
     parser.add_argument("--prisma-dir", type=Path, default=Path(__file__).resolve().parents[1] / "prisma")
     parser.add_argument("--status", action="store_true", help="Report pending migrations without changing the database.")
     args = parser.parse_args(argv)
     try:
         if not 1 <= args.port <= 65535:
             raise MigrationError("Invalid MariaDB port.")
+        if args.lock_wait_timeout is not None and not 1 <= args.lock_wait_timeout <= 60:
+            raise MigrationError("Migration lock wait must be between 1 and 60 seconds.")
         defaults_file = target_options(args.environment, args.database, args.defaults_file)
         migrations, adopted = release_migrations(args.prisma_dir)
-        database = MariaDb(defaults_file, args.database, args.port)
+        database = MariaDb(defaults_file, args.database, args.port, lock_wait_timeout=args.lock_wait_timeout)
         with migration_lock(defaults_file, args.database):
             return migrate(database, migrations, adopted, args.status)
     except MigrationError as error:

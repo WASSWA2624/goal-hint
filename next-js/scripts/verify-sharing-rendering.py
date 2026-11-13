@@ -1,5 +1,6 @@
 """Production sharing/recipient fixture; all storage and access states are synthetic."""
 from pathlib import Path
+from urllib.parse import quote
 from lib.rendering import Server, build_fixture, create_fixture, environment, parse_args, request, visible_html
 from lib.runtime import ROOT, main_guard
 
@@ -13,7 +14,12 @@ def verify(origin):
         if viewer != "eligible":
             for private in ["Arsenal", "home-win", "Premier League", "fixtureId", "totalOdds", "averageProbability"]:
                 assert private not in response.text, (viewer, private)
-            assert "return=%2Fs%2F" + token in response.text
+            subscriptions = "/en/account?section=subscription&return=%2Fs%2F" + token
+            if viewer == "member":
+                assert f'href="{subscriptions.replace("&", "&amp;")}"' in response.text
+            else:
+                assert 'href="/en/account?view=login&amp;return=' + quote(subscriptions, safe="") + '"' in response.text
+                assert 'href="/en/account?view=login&amp;return=%2Fs%2F' + token + '"' in response.text
         # Generic metadata is independent of entitlement and never includes slip facts.
         head = response.text.split("</head>", 1)[0]
         assert 'noindex' in head and 'og:description' in head

@@ -10,7 +10,7 @@ import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { formatCredit, type CreditView } from "@/domain/wallet";
 import { createMessages } from "@/i18n/messages";
 import { AccountFine } from "./account-overview";
-import { AccountPanel } from "./account-workspace";
+import { AccountPanel, AccountSectionActions } from "./account-workspace";
 import { WalletAutoRenewal, WalletHistory } from "./credit-controls";
 import { PaymentNotice, type StatusSettings } from "./payment-status";
 
@@ -20,17 +20,22 @@ const Balance = styled.p`
   font-variant-numeric: tabular-nums;
 `;
 
-export function AccountWallet({ locale, credit, topUpStatus, contact, phone, returnTo, topUpOpen, salesOpen, plans, acceptedTerms, active }: {
+export function AccountWallet({ locale, credit, topUpStatus, contact, phone, returnTo, topUpOpen, salesOpen, plans, acceptedTerms, active, subscriptionAction }: {
   locale: string; credit: CreditView | null; topUpStatus: PaymentStatus | null; contact: StatusSettings; phone: string;
   returnTo: string | null; topUpOpen: boolean; salesOpen: boolean; plans: readonly SubscriptionPlanView[];
-  acceptedTerms: boolean; active: boolean;
+  acceptedTerms: boolean; active: boolean; subscriptionAction: { href: string; label: string } | null;
 }) {
   const m = createMessages(locale);
   return <>
     <AccountPanel title={m.text("wallet.balance")} data-account-wallet-balance
-      actions={topUpOpen && <ButtonLink href={walletTopUpHref(locale, returnTo)} prefetch={false} data-credit-add>
-        <PlusIcon />{m.text("wallet.topUp")}
-      </ButtonLink>}>
+      actions={(topUpOpen || subscriptionAction) && <AccountSectionActions>
+        {subscriptionAction && <ButtonLink href={subscriptionAction.href} variant={topUpOpen ? "secondary" : "primary"} prefetch={false} data-account-subscription-action>
+          {subscriptionAction.label}
+        </ButtonLink>}
+        {topUpOpen && <ButtonLink href={walletTopUpHref(locale, returnTo)} prefetch={false} data-credit-add>
+          <PlusIcon />{m.text("wallet.topUp")}
+        </ButtonLink>}
+      </AccountSectionActions>}>
       <Stack $gap="sm">
         {credit ? <>
           <Balance>{formatCredit(credit.balanceUgx)}</Balance>

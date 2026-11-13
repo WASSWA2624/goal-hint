@@ -152,6 +152,7 @@ test("the complete documented environment example parses safely without approval
     "GOAL_HINT_DATABASE_ACCESS_REF",
     "GOAL_HINT_CUSTOMER_SUPPORT_NUMBER", "GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER",
     "GOAL_HINT_EXACT_SCORES_ENABLED", "GOAL_HINT_LOCALES", "GOAL_HINT_DEPLOYMENT_ENVIRONMENT", "GOAL_HINT_TRUSTED_PROXY_CIDRS",
+    "GOAL_HINT_FLUTTERWAVE_SECRET_KEY", "GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET", "GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL",
     "GOAL_HINT_ANDROID_APP_LINK_SHA256", "GOAL_HINT_IOS_APP_LINK_TEAM_ID",
     "GOAL_HINT_APP_DOWNLOADS_ROOT", "GOAL_HINT_ANDROID_PLAY_STORE_URL", "GOAL_HINT_ANDROID_PLAY_STORE_VERSION", "GOAL_HINT_ANDROID_PLAY_STORE_BUILD",
     "GOAL_HINT_IOS_DISTRIBUTION_URL", "GOAL_HINT_IOS_DISTRIBUTION_VERSION", "GOAL_HINT_IOS_DISTRIBUTION_BUILD",
@@ -161,7 +162,7 @@ test("the complete documented environment example parses safely without approval
     "GOAL_HINT_ANALYTICS_ENABLED", "GOAL_HINT_ANALYTICS_SECRET", "GOAL_HINT_ANALYTICS_ADMIN_USERNAME",
     "GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH", "GOAL_HINT_ANALYTICS_RETENTION_DAYS", "GOAL_HINT_ANALYTICS_GEO_SOURCE",
     // Administrator credentials are private configuration and do not grant provider capabilities.
-    "GOAL_HINT_ADMIN_PHONES", "GOAL_HINT_ADMIN_PASSWORD", "GOAL_HINT_ADMIN_PASSWORD_HASH",
+    "GOAL_HINT_ADMIN_PHONES", "GOAL_HINT_ADMIN_PASSWORD",
     // Member messaging credentials do not grant football, research, AI or publication capabilities.
     "YOOLA_SMS_API_KEY", "YOOLA_SMS_SENDER",
   ]);
@@ -178,7 +179,9 @@ test("the complete documented environment example parses safely without approval
       assert.equal(value, null);
     }
   }
-  const { database, probabilitySumTolerance, consistencyTolerance, odds, teamCodes, liveDetails, historyImport, budgets, analytics, forecasts, football, ...unresolvedChoices } = policy.choices;
+  const { database, probabilitySumTolerance, consistencyTolerance, odds, teamCodes, liveDetails, historyImport,
+    budgets, analytics, forecasts, football, flutterwaveWebhookUrl, ...unresolvedChoices } = policy.choices;
+  assert.equal(flutterwaveWebhookUrl, "https://test.goalhint.com/api/payments/flutterwave/webhook");
   // With AI enabled the provider baseline publishes first; no promotion reference is assumed.
   assert.deepEqual(forecasts, { sourceOrder: "ai-first", aiPromotionRef: null });
   // Consent-gated analytics is on by default but has no credentials, secret or retention override until configured.
@@ -389,7 +392,8 @@ test("secret serialization and validation errors stay redacted while explicit re
   const smsSentinels = ["synthetic-sms-token-sentinel", "synthetic-sms-user-sentinel", "synthetic-sms-password-sentinel"];
   const whatsappSentinel = "synthetic-whatsapp-access-token-sentinel";
   const adminSentinel = "256700009999";
-  const adminPassword = "synthetic-admin-password-sentinel", adminPasswordHash = `scrypt:16384:8:1:${"A".repeat(22)}:${"B".repeat(43)}`;
+  const adminPassword = "synthetic-admin-password-sentinel", retiredAdminHash = "synthetic-retired-admin-hash-sentinel";
+  const flutterwaveKey = "synthetic-flutterwave-key-sentinel", flutterwaveWebhookSecret = "synthetic-flutterwave-webhook-secret-sentinel";
   const policy = parseRuntimePolicy({
     API_FOOTBALL_KEY: sentinels[0], AI_API_KEY: sentinels[1], RESEARCH_API_KEY: sentinels[2],
     DATABASE_URL: `mysql://synthetic:${databaseSentinels[0]}@synthetic.invalid/synthetic_main`,
@@ -401,7 +405,8 @@ test("secret serialization and validation errors stay redacted while explicit re
     GOAL_HINT_WHATSAPP_TEMPLATE_NAME: "goal_hint_verification", GOAL_HINT_WHATSAPP_TEMPLATE_LANGUAGE: "en_US",
     GOAL_HINT_WHATSAPP_API_VERSION: "v25.0",
     GOAL_HINT_ADMIN_PHONES: JSON.stringify([adminSentinel]),
-    GOAL_HINT_ADMIN_PASSWORD: adminPassword, GOAL_HINT_ADMIN_PASSWORD_HASH: adminPasswordHash,
+    GOAL_HINT_ADMIN_PASSWORD: adminPassword, GOAL_HINT_ADMIN_PASSWORD_HASH: retiredAdminHash,
+    GOAL_HINT_FLUTTERWAVE_SECRET_KEY: flutterwaveKey, GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET: flutterwaveWebhookSecret,
   });
   assert.equal(policy.secrets.footballKey.read(), sentinels[0]);
   assert.equal(policy.secrets.aiKey.read(), sentinels[1]);
@@ -409,12 +414,15 @@ test("secret serialization and validation errors stay redacted while explicit re
   assert.ok(!Object.keys(policy.secrets).some((key) => /^(sms|whatsapp)/u.test(key)), "Retired delivery configuration is not retained.");
   assert.equal(policy.secrets.adminPhones.read(), JSON.stringify([adminSentinel]));
   assert.equal(policy.secrets.adminPassword.read(), adminPassword);
-  assert.equal(policy.secrets.adminPasswordHash.read(), adminPasswordHash);
+  assert.ok(!Object.hasOwn(policy.secrets, "adminPasswordHash"));
+  assert.equal(policy.secrets.flutterwaveKey.read(), flutterwaveKey);
+  assert.equal(policy.secrets.flutterwaveWebhookSecret.read(), flutterwaveWebhookSecret);
   for (const [index, key] of ["databaseUrl", "testDatabaseUrl", "migrationDatabaseUrl"].entries()) {
     assert.ok(policy.secrets[key].read().includes(databaseSentinels[index]));
   }
   for (const output of [JSON.stringify(policy), inspect(policy, { depth: null }), String(policy.secrets.footballKey)]) {
-    for (const sentinel of [...sentinels, ...databaseSentinels, ...smsSentinels, whatsappSentinel, adminSentinel, adminPassword, adminPasswordHash]) assert.ok(!output.includes(sentinel));
+    for (const sentinel of [...sentinels, ...databaseSentinels, ...smsSentinels, whatsappSentinel, adminSentinel, adminPassword,
+      retiredAdminHash, flutterwaveKey, flutterwaveWebhookSecret]) assert.ok(!output.includes(sentinel));
   }
   assert.equal(JSON.parse(JSON.stringify(policy)).secrets.aiKey, "[REDACTED]");
 
@@ -443,10 +451,11 @@ test("retired delivery settings are ignored and admin credentials validate priva
   assert.ok(Object.values(valid.capabilities).every((value) => value === false));
   const retired = { GOAL_HINT_WHATSAPP_ACCESS_TOKEN: "synthetic token\nsecret", GOAL_HINT_WHATSAPP_PHONE_NUMBER_ID: "synthetic-private-id",
     GOAL_HINT_WHATSAPP_TEMPLATE_NAME: "synthetic-private/template", GOAL_HINT_WHATSAPP_TEMPLATE_LANGUAGE: "synthetic_private",
-    GOAL_HINT_WHATSAPP_API_VERSION: "v25.0/private", GOAL_HINT_SMS_GATEWAY_URL: "retired-malformed-url" };
+    GOAL_HINT_WHATSAPP_API_VERSION: "v25.0/private", GOAL_HINT_SMS_GATEWAY_URL: "retired-malformed-url",
+    GOAL_HINT_ADMIN_PASSWORD_HASH: "synthetic-invalid-hash" };
   assert.doesNotThrow(() => parseRuntimePolicy(retired));
   for (const [name, value] of Object.entries({ GOAL_HINT_ADMIN_PHONES: '["+256700009999"]',
-    GOAL_HINT_ADMIN_PASSWORD: "short", GOAL_HINT_ADMIN_PASSWORD_HASH: "synthetic-invalid-hash" })) {
+    GOAL_HINT_ADMIN_PASSWORD: "short" })) {
     const error = policyError(() => parseRuntimePolicy({ [name]: value }), [name]);
     for (const output of [error.message, JSON.stringify(error), inspect(error)]) assert.ok(!output.includes(value));
   }

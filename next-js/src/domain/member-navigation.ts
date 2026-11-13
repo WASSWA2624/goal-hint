@@ -18,16 +18,29 @@ export function memberAuthPath(view: MemberAuthView = "login", returnTo?: unknow
   return `/en/account?${query}`;
 }
 
-/** Ordinary authentication finishes at home; only explicit sharing/review journeys take precedence. */
+/** Ordinary authentication finishes at home; explicit member and owner journeys take precedence. */
 export function memberLandingPath(administrator = false, returnTo?: unknown): string {
-  return administrator ? reviewReturnPath(returnTo) ?? adminLandingPath : sharedSlipReturnPath(returnTo) ?? memberHomePath;
+  return administrator ? reviewReturnPath(returnTo) ?? adminLandingPath
+    : purchaseReturnPath(returnTo) ?? sharedSlipReturnPath(returnTo) ?? memberHomePath;
 }
 
-/** Only known feeds, canonical matches/shared slips, or a validated payment review can be carried through authentication. */
-export function memberReturnPath(value: unknown): string | null {
-  const review = reviewReturnPath(value);
-  if (review) return review;
+function browsingReturnPath(value: unknown): string | null {
   return typeof value === "string" && value.length <= 512 && (["/en", memberHomePath, "/en/best-slips", "/en/slips"].includes(value) || /^\/en\/best-slips\/\d{4}-\d{2}-\d{2}\/[1-9]\d{0,2}$/u.test(value) || sharedSlipReturnPath(value) || /^\/en\/matches\/[A-Za-z0-9_-]+\/[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value)) ? value : null;
+}
+
+function purchaseReturnPath(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 1024) return null;
+  const match = /^(\/en\/account\?section=subscription|\/en\/subscribe\?add=credit(?:&resume=plan)?)(?:&return=([^&#]+))?$/u.exec(value);
+  if (!match?.[1]) return null;
+  const encodedReturn = match[2];
+  if (!encodedReturn) return match[1];
+  const returnTo = browsingReturnPath(new URLSearchParams(`return=${encodedReturn}`).get("return"));
+  return returnTo ? `${match[1]}&${new URLSearchParams({ return: returnTo })}` : null;
+}
+
+/** Auth accepts only local browsing and purchase journeys or a validated owner review. */
+export function memberReturnPath(value: unknown): string | null {
+  return reviewReturnPath(value) ?? purchaseReturnPath(value) ?? browsingReturnPath(value);
 }
 
 /** Shared tokens are opaque, canonical paths only; no queries, escapes or external origins. */

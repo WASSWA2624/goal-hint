@@ -133,7 +133,10 @@ const environmentSchema = z.object({
   GOAL_HINT_OPERATION_SCOPE: z.enum(["disabled", "trial", "shadow", "production"]).default("disabled")
     .describe("Use disabled, trial, shadow or production; deployment mode does not qualify forecasts."),
   GOAL_HINT_DEPLOYMENT_ENVIRONMENT: text
-    .describe("Deployment classification for SEO and native download channels; missing or unknown values disable indexing and production does not grant release approval."),
+    .describe("Deployment classification for SEO, downloads and checkout. Only explicit staging relaxes the hosted sales publication check."),
+  GOAL_HINT_FLUTTERWAVE_SECRET_KEY: token.describe("Private Flutterwave sandbox API key. Only test keys are supported."),
+  GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET: token.describe("Private Flutterwave sandbox webhook secret hash."),
+  GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL: text.describe("Canonical public staging endpoint to register for sandbox webhook delivery."),
   GOAL_HINT_ANDROID_APP_LINK_SHA256: optional(z.string().trim().refine((value) => androidAppLinkFingerprints(value).length > 0))
     .describe("Comma-separated SHA-256 signing fingerprints in colon-separated hexadecimal; blank leaves app links unconfigured."),
   GOAL_HINT_IOS_APP_LINK_TEAM_ID: optional(z.string().trim().regex(/^[A-Z0-9]{10}$/))
@@ -252,6 +255,7 @@ const secret = (value: string | null) => value === null ? null : new Secret(valu
 function assemble(settings: z.output<typeof environmentSchema>) {
   return freeze({
     mode: settings.NODE_ENV,
+    deployment: settings.GOAL_HINT_DEPLOYMENT_ENVIRONMENT,
     scope: settings.GOAL_HINT_OPERATION_SCOPE,
     public: publicPolicy,
     rules: operatingRules,
@@ -269,11 +273,14 @@ function assemble(settings: z.output<typeof environmentSchema>) {
       aiKey: secret(settings.AI_API_KEY),
       researchKey: secret(settings.RESEARCH_API_KEY),
       analyticsSecret: secret(settings.GOAL_HINT_ANALYTICS_SECRET),
+      flutterwaveKey: secret(settings.GOAL_HINT_FLUTTERWAVE_SECRET_KEY),
+      flutterwaveWebhookSecret: secret(settings.GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET),
       analyticsPasswordHash: secret(settings.GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH),
       adminPhones: secret(settings.GOAL_HINT_ADMIN_PHONES),
       adminPassword: secret(settings.GOAL_HINT_ADMIN_PASSWORD),
     },
     choices: {
+      flutterwaveWebhookUrl: settings.GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL,
       subscriptionIdentity: {
         contactPhone: settings.GOAL_HINT_CUSTOMER_SUPPORT_NUMBER, whatsappPhone: settings.GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER,
       },

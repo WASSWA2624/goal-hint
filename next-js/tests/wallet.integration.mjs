@@ -5,6 +5,7 @@ import { createAccessCodes } from "../src/server/members/access-codes.ts";
 import { createAutoRenew } from "../src/server/members/auto-renew.ts";
 import { createMembersPurge } from "../src/server/members/purge.ts";
 import { createPayments } from "../src/server/members/payments.ts";
+import { createSettingsService } from "../src/server/members/settings.ts";
 import { createSubscribers } from "../src/server/admin/subscribers.ts";
 import { createAuthenticatedTestSessions as createMemberSessions } from "./helpers/member-fixtures.mjs";
 import { paidDatabase } from "./helpers/paid-database.mjs";
@@ -317,6 +318,37 @@ test("account credit on restricted real MySQL", { timeout: 240000 }, async (t) =
       assert.equal((await post({ action: "auto-renew", on: false })).status, 200, "turning auto-renewal off works while sales are closed");
       assert.equal((await db.query(tx => tx.memberAccount.findUniqueOrThrow({ where: { id: who.accountId } }))).autoRenew, false);
     } finally { await db.query(tx => tx.subscriptionSettings.update({ where: { id: 1 }, data: { paywallMode: "on" } })); }
+  });
+
+  await t.test("a due auto-renewal pauses while access is free and spends once after paid access resumes", async () => {
+    const who = await member(), previousClock = clock;
+    const settings = createSettingsService(db, { now, environment: null });
+    await topUp(who, 2000);
+    const purchase = await buy(who, daily);
+    assert.equal(purchase.status, "created");
+    assert.equal((await codes.setAutoRenew(who, { on: true, planId: daily, accepted: true })).status, "saved");
+    clock = +purchase.grant.endsAt - 10 * 60_000;
+    try {
+      assert.equal((await settings.setMode("owner", "off")).status, "saved");
+      assert.equal(await codes.renewDue(who.accountId), "skipped");
+      assert.equal(await balance(who.accountId), 1000);
+      assert.equal((await codes.subscriptionStatus(who)).renewsFromCredit, false);
+
+      assert.equal((await settings.setMode("owner", "on")).status, "saved");
+      const outcomes = await Promise.all([codes.renewDue(who.accountId), codes.renewDue(who.accountId)]);
+      assert.deepEqual(outcomes.sort(), ["renewed", "skipped"]);
+      assert.equal(await balance(who.accountId), 0);
+      const renewalEntries = (await ledger(who.accountId)).filter(entry => entry.kind === "renewal");
+      assert.equal(renewalEntries.length, 1);
+      const [renewal] = renewalEntries;
+      assert.equal(renewal.amountUgx, -1000);
+      const period = await db.query(tx => tx.accessCode.findUniqueOrThrow({ where: { id: renewal.accessCodeId } }));
+      assert.equal(+period.startsAt, +purchase.grant.endsAt);
+      assert.equal(+period.endsAt, +purchase.grant.endsAt + day);
+    } finally {
+      clock = previousClock;
+      await settings.setMode("owner", "on");
+    }
   });
 
   await t.test("a correction's reason never holds a phone number, however it is written", async () => {

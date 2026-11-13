@@ -45,6 +45,9 @@ JS
 
 migrate=(python3 "$release/scripts/deploy-mariadb.py" --environment "$environment"
   --defaults-file "$migration_config" --database "$database" --prisma-dir "$release/prisma")
+if [[ -n "${GOAL_HINT_MIGRATION_LOCK_WAIT_TIMEOUT:-}" ]]; then
+  migrate+=(--lock-wait-timeout "$GOAL_HINT_MIGRATION_LOCK_WAIT_TIMEOUT")
+fi
 if "${migrate[@]}" --status; then
   echo 'The target database is current.'
 else

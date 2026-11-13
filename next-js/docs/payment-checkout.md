@@ -1,5 +1,47 @@
 # Payment checkout and reconciliation
 
+## Flutterwave sandbox
+
+Local development reads `GOAL_HINT_FLUTTERWAVE_SECRET_KEY` and
+`GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET` from its private `.env.development`.
+Hosted test reads the same settings from
+`/home/ghstage/goal-hint-private/.env.test` on activation. Supply a Flutterwave
+Standard v3 test key and the same secret hash used in the sandbox dashboard.
+Blank values leave the option hidden. The application accepts sandbox
+credentials in local development and explicitly classified staging.
+
+Set `GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL` to the canonical hosted test URL in
+both private environment files when using the hosted sandbox webhook.
+Checkout checks this setting and uses its origin for hosted test returns.
+After activation, register
+`https://test.goalhint.com/api/payments/flutterwave/webhook` in Flutterwave's
+sandbox dashboard and enable webhook retries. Staging uses this URL for its own
+checkout records. Localhost uses the authenticated browser return to verify
+local checkout records. Testing webhook delivery into the local database
+requires a separately configured HTTPS tunnel and sandbox webhook destination.
+The future live registration URL is
+`https://goalhint.com/api/payments/flutterwave/webhook`. It will use its own
+live API key and secret hash after a separate production release.
+
+Test a subscription and top-up,
+including a pending or failed attempt, a successful return and repeated
+delivery. Check the wallet ledger and access period once each. Checkout
+uses full UGX payment for Flutterwave, with wallet-only and manual mixed
+funding available separately. The customer supplies an email for the hosted
+checkout. Goal Hint does not store that email.
+
+The server checks the v3 `verif-hash` header against the configured secret hash,
+then independently verifies the
+transaction with Flutterwave before allocation. A browser return can also
+verify a payment belonging to the signed-in account. The provider
+transaction ID and checkout reference bind to one settlement through the
+existing ledger. A pending verification returns a retry response to the
+webhook. Sandbox transactions that cannot allocate, such as when the account
+is blocked, retain their verified receipt for investigation. Live credentials
+and production activation require separate
+approval. See [Flutterwave Standard checkout](https://developer.flutterwave.com/docs/collections-inflow/flutterwave-standard)
+and [Flutterwave webhooks](https://developer.flutterwave.com/docs/webhooks).
+
 `20261101120000_payment_checkout` adds the subscription and wallet top-up checkout. The customer flow now uses Package, Pay, Payment Details and Review. Package prices and durations are unchanged. Existing access, referral periods, wallet history and payment references remain intact. An eligible friend's first phone verification awards one redeemable day, independently of payment; existing rewards are not awarded again or converted into money.
 
 Pay preselects an available MTN/Airtel provider from the current draft, then the last approved unreversed subscription, then MTN or Airtel. Its compact package summary keeps name, duration, price and Change on one row. Provider switching updates configured receiving details in place while revalidating the quote; Copy and continuation retain server verification. Available wallet credit is explicitly selected and can cover part or all of the price; zero balances stay hidden. **Redeem earned days** opens a separate day selector and redemption review. The UI calls these rewards earned days; storage and accounting continue to use referral-day fields.

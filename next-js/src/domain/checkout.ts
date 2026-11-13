@@ -4,17 +4,19 @@ import { paymentMessageSource } from "./checkout-evidence.ts";
 import { parseScreenshotOcr } from "./payment-screenshot.ts";
 
 export const checkoutRules = Object.freeze({ reservationMs: 48 * 3_600_000, pageSize: 30, maximumUgx: 2_000_000_000 });
+export const automaticCheckoutPending = "provider-pending";
+export const checkoutEmail = z.email().trim().max(254);
 export const checkoutOpenStatuses = ["pending", "remaining", "disputed", "correction", "reconfirm"] as const;
 export const duplicateReceiptMessage = "This transaction is already linked to a payment request. Contact support with your request ID.";
 export const checkoutLabels: Record<string, string> = {
   pending: "Submitted — awaiting admin approval", remaining: "Awaiting remaining payment", disputed: "Disputed — under review",
   approved: "Approved", rejected: "Rejected", cancelled: "Cancelled", correction: "Correction requested", reconfirm: "Confirmation required",
-  superseded: "Replaced report",
+  superseded: "Replaced report", [automaticCheckoutPending]: "Waiting for Flutterwave confirmation",
 };
 const money = z.number().int().min(0).max(checkoutRules.maximumUgx);
 export const checkoutSelectionSchema = z.object({
   purpose: z.enum(["plan", "referral", "topup"]), planId: z.uuid().nullable(), topUpUgx: money.default(0),
-  method: z.enum(["mtn", "airtel", "wallet", "referral"]), walletUgx: money, referralDays: z.number().int().min(0).max(365),
+  method: z.enum(["mtn", "airtel", "wallet", "referral", "flw"]), walletUgx: money, referralDays: z.number().int().min(0).max(365),
 }).strict();
 export type CheckoutSelection = z.infer<typeof checkoutSelectionSchema>;
 export const receiptInputSchema = z.object({
@@ -37,11 +39,13 @@ export type CheckoutQuote = CheckoutSelection & { quoteKey: string; planName: st
 export type CheckoutRequest = { id: string; reference: string; status: string; purpose: string; method: string; planId: string | null;
   planName: string; priceUgx: number; durationDays: number; walletUgx: number; referralDays: number; amountToSend: number;
   reportedUgx: number; verifiedUgx: number; remainingUgx: number; excessUgx: number; endsAt: string | null;
-  reservationUntil: string | null; reason: string | null; revision: number;
+  reservationUntil: string | null; reason: string | null; revision: number; checkoutUrl?: string | null; checkoutExpiresAt?: string | null;
+  requestKey?: string;
   receipts: { id: string; transactionId: string; amountUgx: number; paidAt: string; verified: boolean; disputed: boolean; withdrawn: boolean }[] };
 export type CheckoutView = { availableWalletUgx: number; availableReferralDays: number; lastMethod: string | null; requests: CheckoutRequest[] };
 export function checkoutMethodAvailable(method: string, balances: Pick<CheckoutView, "availableWalletUgx" | "availableReferralDays">,
-  providers: ManualPaymentSettings) {
+  providers: ManualPaymentSettings, flutterwaveAvailable = false) {
+  if (method === "flw") return flutterwaveAvailable;
   return method === "mtn" || method === "airtel" ? manualPaymentProvider(providers, method).reason === null
     : method === "wallet" ? balances.availableWalletUgx > 0 : method === "referral" && balances.availableReferralDays > 0;
 }

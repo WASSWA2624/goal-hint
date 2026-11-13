@@ -16,6 +16,7 @@ export type AdminProblem = "not-configured" | "insecure-default" | "missing-secr
 
 export type AnalyticsConfig = Readonly<{
   production: boolean;
+  staging: boolean;
   /** Tracking accepted only when enabled, the database is available and a keying secret exists. */
   collecting: boolean;
   admin: Readonly<{ username: string; passwordHash: string }> | null;
@@ -48,6 +49,7 @@ export async function createAnalyticsConfig(policy: RuntimePolicy): Promise<Anal
   const prefix = production ? "__Host-" : "";
   return Object.freeze({
     production,
+    staging: policy.deployment === "staging",
     collecting: settings.enabled && policy.capabilities.database && secret !== null,
     admin, adminProblem, usingDevelopmentCredentials,
     retentionDays: settings.retentionDays ?? analyticsRules.defaultRetentionDays,

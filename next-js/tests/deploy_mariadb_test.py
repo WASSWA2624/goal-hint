@@ -1,10 +1,12 @@
 """Hosted migration inventory, safety, and pre-activation exit behavior."""
 
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
+from dataclasses import replace
 import io
 from pathlib import Path
 import runpy
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,6 +39,13 @@ def ledger_entry(migration):
 class DeployMariaDbTests(unittest.TestCase):
     def setUp(self):
         self.migrations, self.adopted = HOSTED["release_migrations"](ROOT / "prisma")
+        self.hosted_branch_migrations = [
+            migration for migration in self.migrations
+            if HOSTED["FLUTTERWAVE_CHECKOUT"][0] <= migration.name <= HOSTED["VERIFIED_RESULT_FRESHNESS"][0]
+        ]
+        self.hosted_branch_baseline = [
+            migration for migration in self.migrations if migration.name < HOSTED["FLUTTERWAVE_CHECKOUT"][0]
+        ]
 
     def test_release_overlays_verify_original_migration_checksums(self):
         self.assertGreater(len(self.migrations), 2)
@@ -56,6 +65,61 @@ class DeployMariaDbTests(unittest.TestCase):
         for entries in cases:
             with self.subTest(entries=entries), self.assertRaises(MigrationError):
                 HOSTED["pending_migrations"](entries, self.migrations, self.adopted)
+
+    def test_hosted_branches_apply_only_each_others_missing_migrations(self):
+        flutterwave, hourly, freshness = self.hosted_branch_migrations
+        inventory = self.hosted_branch_baseline + self.hosted_branch_migrations
+        baseline = [ledger_entry(migration) for migration in self.hosted_branch_baseline]
+        histories = [
+            ("production", [hourly], [flutterwave, freshness]),
+            ("staging", [flutterwave, freshness], [hourly]),
+        ]
+        for environment, completed, expected in histories:
+            with self.subTest(environment=environment), redirect_stdout(io.StringIO()):
+                starting_ledger = baseline + [ledger_entry(migration) for migration in completed]
+                db = MigrationDatabase(starting_ledger)
+                self.assertEqual(HOSTED["pending_migrations"](db.ledger(), inventory, self.adopted), expected)
+                self.assertEqual(HOSTED["migrate"](db, inventory, self.adopted, False), 0)
+                self.assertEqual(db.applied, [migration.name for migration in expected])
+                self.assertEqual(db.ledger(), starting_ledger + [ledger_entry(migration) for migration in expected])
+
+    def test_hosted_branch_exception_rejects_other_gaps_and_edited_inventory(self):
+        flutterwave, hourly, freshness = self.hosted_branch_migrations
+        inventory = self.hosted_branch_baseline + self.hosted_branch_migrations
+        baseline = [ledger_entry(migration) for migration in self.hosted_branch_baseline]
+        edited = replace(flutterwave, checksum="0" * 64, compatible_checksums=frozenset({"0" * 64}))
+        cases = [
+            (baseline[1:] + [ledger_entry(hourly)], inventory),
+            (baseline + [ledger_entry(hourly), ledger_entry(freshness)], inventory),
+            (baseline + [ledger_entry(hourly)], [*self.hosted_branch_baseline, edited, hourly, freshness]),
+        ]
+        for ledger, migrations in cases:
+            with self.subTest(ledger=ledger[-2:]), self.assertRaisesRegex(MigrationError, "gap before"):
+                HOSTED["pending_migrations"](ledger, migrations, self.adopted)
+
+    def test_lock_wait_timeout_precedes_migration_sql_on_same_connection(self):
+        flutterwave, _, freshness = self.hosted_branch_migrations
+        MariaDb = HOSTED["MariaDb"]
+        with patch("shutil.which", return_value="mariadb"):
+            db = MariaDb(Path("options.cnf"), "ghprod_prod", 3306, lock_wait_timeout=5)
+        with patch.object(db, "execute") as execute:
+            db.apply(flutterwave)
+            execute.assert_called_once_with(b"SET SESSION lock_wait_timeout = 5;\n" + flutterwave.overlay, flutterwave.name)
+            execute.reset_mock()
+            db.apply(freshness)
+            execute.assert_called_once()
+            sql, label = execute.call_args.args
+            self.assertTrue(sql.startswith(b"SET SESSION lock_wait_timeout = 5;\nINSERT INTO _prisma_migrations"))
+            self.assertEqual(label, freshness.name)
+
+    def test_lock_wait_timeout_is_bounded(self):
+        for timeout in ("-1", "0", "61"):
+            with self.subTest(timeout=timeout), redirect_stderr(io.StringIO()) as output:
+                self.assertEqual(HOSTED["main"]([
+                    "--environment", "production", "--database", "ghprod_prod", "--defaults-file", "missing.cnf",
+                    "--lock-wait-timeout", timeout,
+                ]), 1)
+                self.assertIn("Migration lock wait must be between 1 and 60 seconds.", output.getvalue())
 
     def test_recognized_adopted_history_does_not_replace_canonical_adoption(self):
         name, (digest, adoption) = next(iter(self.adopted.items()))

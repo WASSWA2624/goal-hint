@@ -9,6 +9,8 @@ import type { MatchFeedResponse } from "./match-feed.ts";
 import type { LiveMatchSnapshot } from "./live-match.ts";
 
 export const liveRefreshRules = Object.freeze({ activeMs: 20_000, quietMs: 60_000, timeoutMs: 30_000, kickoffLeadMs: 30 * 60_000 });
+export const resultFreshnessHeader = "x-goal-hint-result-freshness";
+export const resultFreshnessVersion = "1";
 
 /** Fast polling only while something can change soon: an updating run, a live match or a scheduled
  * kickoff within the lead either side of now. Other views, relative dates included, poll quietly;

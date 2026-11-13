@@ -145,7 +145,8 @@ export const alignedLedgerStyles = css`
     position: absolute; inset: 0; z-index: var(--gh-layer-content); color: inherit; text-decoration: none;
     &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
   }
-  [data-clock] { pointer-events: none; }
+  [data-clock] { position: relative; pointer-events: none; }
+  [data-clock] [data-match-freshness] { inset-inline-end: calc(-1 * var(--gh-size-2_5)); }
   @media (pointer: coarse) {
     [data-desktop-row] { min-block-size: var(--gh-size-11); }
   }

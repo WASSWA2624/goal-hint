@@ -185,6 +185,8 @@ def account_wallet(origin):
         assert top_up and "Top up" in top_up.group(2), state
         destination = urlsplit(unescape(top_up.group(1)))
         assert destination.path == "/en/subscribe" and parse_qs(destination.query).get("add") == ["credit"], state
+        action = re.search(r'<a\b(?=[^>]*data-account-subscription-action)[^>]*href="/en/subscribe#plans"[^>]*>\s*([^<]+)\s*</a>', html)
+        assert action and action.group(1).strip() == ("Renew" if state == "credit" else "Subscribe"), state
         for action in re.findall(r'<(?:a|button)\b[^>]*>([\s\S]*?)</(?:a|button)>', html):
             assert "withdraw" not in re.sub(r'<[^>]+>', "", action).lower(), state
         turn_on = re.search(r'<button\b(?=[^>]*data-credit-auto-renew="on")[^>]*>', html)
@@ -197,6 +199,20 @@ def account_wallet(origin):
     assert "data-account-auth" in guest and "data-account-wallet-balance" not in guest, "Sign-in protects the wallet."
     payments = visible_html(request(origin, "/en/account?state=credit&section=payments").text)
     assert 'data-account-section="payments"' in payments and "data-account-wallet-balance" not in payments, "Wallet and Payments are separate Account sections."
+
+
+def account_subscription_actions(origin):
+    for state, label in [("signed-in", "Subscribe"), ("expired", "Renew"), ("staging-expired", "Renew")]:
+        html = visible_html(request(origin, f"/en/account?state={state}&section=subscription").text)
+        action = re.search(r'<a\b(?=[^>]*data-account-subscription-action)[^>]*href="/en/subscribe#plans"[^>]*>\s*([^<]+)\s*</a>', html)
+        assert action and action.group(1).strip() == label, state
+        if state.endswith("expired"):
+            assert ">Expired<" in html, state
+    production = visible_html(request(origin, "/en/account?state=production-expired&section=subscription").text)
+    assert ">Expired<" in production and "data-account-subscription-action" not in production
+    guest = visible_html(request(origin, "/en/account?state=signed-out&section=subscription&return=%2Fen%2Fslips").text)
+    assert "data-account-auth" in guest and "data-account-subscription-action" not in guest
+    assert "return=%2Fen%2Faccount%3Fsection%3Dsubscription%26return%3D%252Fen%252Fslips" in guest
 
 
 def main():
@@ -219,6 +235,7 @@ def main():
         config.write_text(config.read_text().replace("agentRules: false,", "agentRules: false, typescript: { ignoreBuildErrors: true },"))
         build_fixture(directory, env, timeout=240)
     with Server(directory, env, ready="/fixture") as server:
+        account_subscription_actions(server.origin)
         if args.wallet_only:
             account_wallet(server.origin)
             print("PASS private Account Wallet, funded and empty balances, renewal eligibility, and the top-up entry point.", flush=True)

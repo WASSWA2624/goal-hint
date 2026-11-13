@@ -1,29 +1,7 @@
 # Keep the pinned third-party source's original formatting intact.
 flutter/packages/flutter_inappwebview_windows/** whitespace=-blank-at-eol
 # Migration checksums must stay identical on Windows and the MariaDB deployment host.
-next-js/prisma/migrations/20261031040514_saved_slip_configurations/migration.sql text eol=lf
-next-js/prisma/mariadb/20261031040514_saved_slip_configurations.sql text eol=lf
-next-js/prisma/migrations/20261031120000_referral_rewards/migration.sql text eol=lf
-next-js/prisma/mariadb/20261031120000_referral_rewards.sql text eol=lf
-next-js/prisma/migrations/20261031104143_account_notifications/migration.sql text eol=lf
-next-js/prisma/mariadb/20261031104143_account_notifications.sql text eol=lf
-next-js/prisma/migrations/20261101120000_payment_checkout/migration.sql text eol=lf
-next-js/prisma/mariadb/20261101120000_payment_checkout.sql text eol=lf
-next-js/prisma/migrations/20261103120000_transient_slips_and_odds_bands/migration.sql text eol=lf
-next-js/prisma/mariadb/20261103120000_transient_slips_and_odds_bands.sql text eol=lf
-next-js/prisma/migrations/20261104090000_six_best_slip_odds_bands/migration.sql text eol=lf
-next-js/prisma/mariadb/20261104090000_six_best_slip_odds_bands.sql text eol=lf
-next-js/prisma/migrations/20261104140000_manual_providers_and_opt_in_trials/migration.sql text eol=lf
-next-js/prisma/mariadb/20261104140000_manual_providers_and_opt_in_trials.sql text eol=lf
-next-js/prisma/migrations/20261111171000_paid_access_settings/migration.sql text eol=lf
-next-js/prisma/mariadb/20261111171000_paid_access_settings.sql text eol=lf
-next-js/prisma/migrations/20261112023331_football_history_detail_state/migration.sql text eol=lf
-next-js/prisma/mariadb/20261112023331_football_history_detail_state.sql text eol=lf
-next-js/prisma/migrations/20261112023610_football_history_source_pages/migration.sql text eol=lf
-next-js/prisma/mariadb/20261112023610_football_history_source_pages.sql text eol=lf
-next-js/prisma/migrations/20261112090000_refresh_status_retry/migration.sql text eol=lf
-next-js/prisma/mariadb/20261112090000_refresh_status_retry.sql text eol=lf
-next-js/prisma/migrations/20261113130000_football_history_import_status/migration.sql text eol=lf
-next-js/prisma/mariadb/20261113130000_football_history_import_status.sql text eol=lf
-next-js/prisma/migrations/20261113140000_expand_local_goal_markets/migration.sql text eol=lf
-next-js/prisma/mariadb/20261113140000_expand_local_goal_markets.sql text eol=lf
+next-js/prisma/migrations/*/migration.sql text eol=lf
+next-js/prisma/mariadb/*.sql text eol=lf
+# Passenger activation runs as a shell script on Linux.
+next-js/scripts/activate-hosted.sh text eol=lf

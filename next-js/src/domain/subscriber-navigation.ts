@@ -1,10 +1,8 @@
+import { accountSectionHref } from "./account-navigation.ts";
 import { memberAuthPath, memberReturnPath } from "./member-navigation.ts";
 
-/** Locked surfaces retain their return destination and can choose the guest's authentication form. */
+/** Locked surfaces lead to Subscriptions and retain the feature the visitor came from. */
 export function subscriberHref(signedIn: boolean, returnTo: unknown = "/en", guestView: "login" | "register" = "register") {
-  if (!signedIn) return memberAuthPath(guestView, returnTo);
-  const query = new URLSearchParams();
-  const path = memberReturnPath(returnTo);
-  if (path) query.set("return", path);
-  return `/en/subscribe${query.size ? `?${query}` : ""}`;
+  const subscriptions = accountSectionHref("en", "subscription", memberReturnPath(returnTo));
+  return signedIn ? subscriptions : memberAuthPath(guestView, subscriptions);
 }

@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { liveClockLabel } from "../src/domain/match-clock.ts";
+import { liveClockFreshness, liveClockLabel, startConfirmationDeadline } from "../src/domain/match-clock.ts";
 import { createMessages } from "../src/i18n/messages.ts";
 
 const messages = createMessages("en");
 
 test("football clocks retain minute zero, both stoppage periods and extra time", () => {
   for (const [phase, minute, stoppageMinutes, badge] of [
-    ["first-half", 0, null, "00:00"], ["first-half", 45, 2, "47:00"],
-    ["second-half", 67, null, "67:00"], ["second-half", 90, 4, "94:00"],
-    ["extra-time", 104, null, "104:00"], ["extra-time", 120, 1, "121:00"],
+    ["first-half", 0, null, "00:00"], ["first-half", 45, 2, "45+02:00"],
+    ["second-half", 67, null, "67:00"], ["second-half", 90, 4, "90+04:00"],
+    ["extra-time", 104, null, "104:00"], ["extra-time", 120, 1, "120+01:00"],
   ]) {
     const label = liveClockLabel({ phase, minute, stoppageMinutes }, messages);
     assert.equal(label.visible, badge);
@@ -32,7 +32,7 @@ test("the browser clock advances through a delayed minute and then holds the est
 test("running clocks wait for a stored observation before showing stoppage or the next period", () => {
   for (const [phase, minute, stoppageMinutes, expected] of [
     ["first-half", 44, null, "45:59"], ["first-half", 45, null, "45:59"],
-    ["first-half", 45, 2, "47:59"], ["second-half", 90, 4, "94:59"],
+    ["first-half", 45, 2, "45+02:59"], ["second-half", 90, 4, "90+04:59"],
     ["extra-time", 105, null, "105:59"], ["extra-time", 106, null, "107:59"],
     ["extra-time", 120, null, "120:59"], ["in-play", 67, null, "68:59"],
   ]) {
@@ -51,14 +51,14 @@ test("paused phases override stale minutes and missing clocks invent no time", (
   assert.equal(liveClockLabel({ phase: "extra-time", minute: null }, messages).visible, "Extra time");
 });
 
-test("desktop badges center running time, explicit added minutes and named phases without inferring added time", () => {
+test("desktop badges center running time, observed stoppage and named phases without an announced allowance", () => {
   for (const [clock, badge, badgeTicks] of [
     [{ phase: "first-half", minute: 44, observedAt: 100_000 }, "45:59", true],
-    [{ phase: "first-half", minute: 45, stoppageMinutes: 2 }, "45+2", false],
-    [{ phase: "second-half", minute: 90, stoppageMinutes: 4 }, "90+4", false],
+    [{ phase: "first-half", minute: 45, stoppageMinutes: 2 }, "45+02:00", true],
+    [{ phase: "second-half", minute: 90, stoppageMinutes: 4 }, "90+04:00", true],
     [{ phase: "half-time", minute: 45, stoppageMinutes: 2 }, "HT", false],
     [{ phase: "extra-time", minute: 104, observedAt: 100_000 }, "ET 105:59", true],
-    [{ phase: "extra-time", minute: 120, stoppageMinutes: 1 }, "ET 120+1", false],
+    [{ phase: "extra-time", minute: 120, stoppageMinutes: 1 }, "ET 120+01:00", true],
     [{ phase: "break", minute: 105, stoppageMinutes: 1 }, "Break", false],
     [{ phase: "extra-time", minute: null }, "ET", false],
     [{ phase: "first-half", minute: null }, "Live", false],
@@ -68,4 +68,28 @@ test("desktop badges center running time, explicit added minutes and named phase
     assert.equal(label.badge, badge);
     assert.equal(label.badgeTicks, badgeTicks);
   }
+});
+
+test("stoppage shows base minute, observed added minutes and estimated seconds", () => {
+  const clock = { phase: "second-half", minute: 90, stoppageMinutes: 7, observedAt: 100_000 };
+  const label = liveClockLabel(clock, messages, 112_000);
+  assert.equal(label.visible, "90+07:12");
+  assert.equal(label.badge, "90+07:12");
+  assert.equal(liveClockLabel(clock, messages, 220_000).badge, "90+07:59");
+  assert.equal(liveClockLabel(clock, messages).badge, "90+07:00");
+  assert.equal(liveClockLabel({ ...clock, phase: "half-time" }, messages, 112_000).badge, "HT");
+});
+
+test("fresh repeated status does not restart an unchanged running clock", () => {
+  assert.equal(liveClockFreshness(219_999, 100_000, 210_000, true), null);
+  assert.equal(liveClockFreshness(220_000, 100_000, 210_000, true), "last-verified");
+  assert.equal(liveClockFreshness(220_000, 100_000, 210_000, false), null);
+  assert.equal(liveClockFreshness(330_000, 100_000, 210_000, true), "status-stale");
+  assert.equal(liveClockFreshness(330_000, null, 210_000, false), "status-stale");
+});
+
+test("start confirmation allows ten minutes after a known kickoff", () => {
+  assert.equal(startConfirmationDeadline(10_000), 610_000);
+  assert.equal(startConfirmationDeadline(null), null);
+  assert.equal(startConfirmationDeadline(undefined), null);
 });

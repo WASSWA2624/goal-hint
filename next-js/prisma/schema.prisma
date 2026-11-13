@@ -1245,6 +1245,7 @@ model FixtureResultState {
   firstTrackedAt DateTime        @db.DateTime(3)
   firstFinalAt   DateTime?       @db.DateTime(3)
   lastSyncAt     DateTime?       @db.DateTime(3)
+  lastVerifiedAt DateTime?       @db.DateTime(3)
   lastAttemptAt  DateTime?       @db.DateTime(3)
   nextCheckAt    DateTime?       @db.DateTime(3)
   failures       Int             @default(0) @db.UnsignedInt
@@ -2047,6 +2048,10 @@ model PaymentSubmission {
   reservationActive    Boolean            @default(false)
   reservationUntil     DateTime?          @db.DateTime(3)
   revision             Int                @default(0) @db.UnsignedInt
+  checkoutUrl          String?            @db.VarChar(255)
+  checkoutUrlExpiresAt DateTime?          @db.DateTime(3)
+  checkoutLease        String?            @db.Char(36)
+  checkoutLeaseUntil   DateTime?          @db.DateTime(3)
   account              MemberAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   plan                 SubscriptionPlan?  @relation(fields: [planId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   screenshot           PaymentScreenshot?

@@ -10,6 +10,7 @@ import { createGatedReads } from '../src/server/members/gated-reads.ts';
 import { createViewerAccess } from '../src/server/members/viewer-access.ts';
 import { defaultSubscriptionSettings } from '../src/domain/subscription-settings.ts';
 import { createMatchFeedHandler } from '../src/server/matches/feed-http.ts';
+import { createMatchDetailHandler } from '../src/server/matches/detail-http.ts';
 import { publicMatchFailure } from '../src/server/matches/public-http.ts';
 import { sameCardFixture } from '../src/domain/match-card.ts';
 import { cheapestActivePlan } from '../src/domain/subscription-offer.ts';
@@ -82,11 +83,38 @@ test('finished filters are public; active probability, selection and price oracl
 test('oracle requests return nonrecoverable private 403 before any raw read', async () => {
   for (const query of ['picks=only', 'odds=1.50-3.00', 'prob=1-100', 'prob=0-99', 'marketPick=match-result:home-win', 'status=scheduled&marketPick=total-goals:over-1.5']) {
     const response = await createMatchFeedHandler(async () => { assert.fail('oracle read'); }, { now: () => now }, async () => free)(new Request(`https://example.test/api/matches?${query}`));
-    assert.equal(response.status, 403); assert.equal(response.headers.get('cache-control'), 'private, no-store'); assert.equal(response.headers.get('vary'), 'Cookie');
+    assert.equal(response.status, 403); assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    assert.equal(response.headers.get('vary'), 'Cookie, x-goal-hint-result-freshness');
     assert.equal(response.headers.get('set-cookie'), null);
     const body = await response.json(); assert.equal(body.error.code, 'subscription-required'); assert.equal(body.error.recoverable, false);
   }
   assert.equal(publicMatchFailure(new MatchFeedError('subscription-required')).status, 403);
+});
+test('feed and detail negotiate result freshness without exposing gated content or caching either shape', async () => {
+  const { feed, detail } = scenarios.scheduled, resultVerifiedAt = now - 1;
+  const fixture = { ...detail.fixture, resultVerifiedAt };
+  const feedHandler = createMatchFeedHandler(async () => ({ ...feed, records: [fixture] }), { now: () => now }, async () => free);
+  const detailHandler = createMatchDetailHandler(async () => ({ ...detail, fixture }), async () => free);
+  for (const version of [null, '0', '1']) {
+    const headers = version === null ? {} : { 'x-goal-hint-result-freshness': version };
+    const responses = await Promise.all([
+      feedHandler(new Request('https://example.test/api/matches', { headers })),
+      detailHandler(new Request(`https://example.test/api/matches/${fixture.fixtureId}`, { headers }),
+        { params: Promise.resolve({ id: fixture.fixtureId }) }),
+    ]);
+    for (const response of responses) {
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get('cache-control'), 'private, no-store');
+      assert.equal(response.headers.get('cdn-cache-control'), 'no-store');
+      assert.equal(response.headers.get('vary'), 'Cookie, x-goal-hint-result-freshness');
+      const body = await response.json();
+      const record = body.fixture ?? body.records[0];
+      if (version === '1') assert.equal(record.resultVerifiedAt, resultVerifiedAt);
+      else assert.equal(Object.hasOwn(record, 'resultVerifiedAt'), false);
+      assert.equal(record.forecast.gated, true);
+      assert.doesNotMatch(JSON.stringify(body), /SENTINEL-|7\.73|home-win/);
+    }
+  }
 });
 test('an unavailable member lookup returns a quiet, recoverable 503 instead of a subscription denial', async () => {
   let failed = true;
@@ -177,14 +205,21 @@ test('completed analysis is public only with verified canonical terminal status'
     readStatus: async () => { throw Error('unavailable'); } }).insights(fixture.detail.fixture.fixtureId), (error) => error.code === 'subscription-required');
 });
 
-test('locked destinations preserve safe return paths and distinguish guests from members', () => {
-  assert.equal(subscriberHref(false, '/en/best-slips/2026-10-09/1'), '/en/account?view=register&return=%2Fen%2Fbest-slips%2F2026-10-09%2F1');
-  assert.equal(subscriberHref(false, '/en/matches'), '/en/account?view=register&return=%2Fen%2Fmatches');
-  assert.equal(subscriberHref(true, '/en/slips'), '/en/subscribe?return=%2Fen%2Fslips');
-  assert.equal(subscriberHref(false, 'https://outside.test'), '/en/account?view=register');
-  assert.equal(subscriberHref(false, '/en', 'login'), '/en/account?view=login&return=%2Fen');
-  assert.equal(subscriberHref(true, '/en', 'login'), '/en/subscribe?return=%2Fen');
-  assert.equal(subscriberHref(false, 'https://outside.test', 'login'), '/en/account?view=login');
+test('locked features lead to Subscriptions, preserving safe feature returns and the guest authentication form', () => {
+  const section = '/en/account?section=subscription';
+  const bestSlip = '/en/best-slips/2026-10-09/1';
+  const matches = '/en/matches';
+  const shared = `/s/${'a'.repeat(32)}`;
+  const destination = path => path ? `${section}&return=${encodeURIComponent(path)}` : section;
+  const authenticate = (view, path) => `/en/account?view=${view}&return=${encodeURIComponent(destination(path))}`;
+
+  assert.equal(subscriberHref(false, bestSlip), authenticate('register', bestSlip));
+  assert.equal(subscriberHref(false, matches), authenticate('register', matches));
+  assert.equal(subscriberHref(true, '/en/slips'), destination('/en/slips'));
+  assert.equal(subscriberHref(false, 'https://outside.test'), authenticate('register'));
+  assert.equal(subscriberHref(false, '/en', 'login'), authenticate('login', '/en'));
+  assert.equal(subscriberHref(true, shared, 'login'), destination(shared));
+  assert.equal(subscriberHref(false, 'https://outside.test', 'login'), authenticate('login'));
 });
 
 test('the final access check redacts unfinished feed rows after expiry without hiding matches', async () => {

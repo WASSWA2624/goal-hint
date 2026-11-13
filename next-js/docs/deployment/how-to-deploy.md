@@ -217,6 +217,10 @@ code and reviewed schema migrations.
    backup and set `GOAL_HINT_MIGRATION_BACKUP` to its SHA-256 manifest. The
    script verifies zero pending migrations before switching the release and
    restarting Passenger. A migration failure leaves the current release active.
+   Use `GOAL_HINT_MIGRATION_LOCK_WAIT_TIMEOUT` to bound each session's
+   metadata lock wait to the number of seconds measured and approved for the
+   release. If an ALTER fails, inspect the schema before retrying because
+   MariaDB commits each DDL statement separately.
 
    ```sh
    bash "$release/scripts/activate-hosted.sh" staging "$release" ghstage \
@@ -241,6 +245,16 @@ code and reviewed schema migrations.
 Keep the prior app release available for rollback. Switching releases does
 not roll back the database. The shared-host deployment commands above target
 the previous production host.
+
+The combined hourly fixture and verified-clock release preserves the original
+migration checksums on both hosts. Production already has the hourly
+migration and needs Flutterwave checkout and result freshness. Staging already
+has those two migrations and needs hourly fixture recheck. The hosted migrator
+accepts these independent orderings. Rehearse against an isolated production
+restore with the combined web and worker code before scheduling the upgrade.
+Keep paid checkout off in production and use the existing production
+environment and approval register. The Flutterwave credentials are used by
+staging only.
 
 To refresh staging data, take a consistent data-only MySQL export into a new
 cPanel database with the verified MariaDB table definitions. Load the data
