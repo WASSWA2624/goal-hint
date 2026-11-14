@@ -8,8 +8,6 @@ GoalHint is a **prediction and analysis platform**, not a staking platform. Maxi
 
 Preserve the existing stack, routes, authentication, subscription controls, unrelated features, and established visual design. Inspect the repository before choosing infrastructure or changing schemas. Reuse and repair existing components and workers instead of creating competing implementations. Do not disable paid access as part of this work.
 
-**Source boundary:** These requirements come from the discussion and five supplied screenshots of the match lists, filters, and admin dashboard. No source code or market-definition file was supplied while this prompt was prepared. Therefore, investigate the current implementation rather than assuming how it works. API references are listed at the end. The GSB page was supplied as a market-vocabulary reference, but its dynamic market inventory was not readable during preparation; do not claim that its complete inventory has been verified.
-
 **Implementation defaults:** Operational intervals, retry settings, and layout measurements below are proposed implementation defaults, not claims about existing behavior. Make them named configuration values with these defaults. Provider limits and actual account permissions take precedence. Document any necessary deviation with evidence; do not silently omit requirements.
 
 ---
