@@ -1,9 +1,10 @@
 "use client";
 
 import styled from "styled-components";
+import { controlRow } from "@/components/ui/control-layout";
 import { contentGutter } from "@/components/ui/layout";
 import { focusRing } from "@/components/ui/filter-chrome";
-import { FilterDialogContent } from "@/components/ui/advanced-filter-dialog";
+import { FilterDialogContent, FilterFieldRow } from "@/components/ui/advanced-filter-dialog";
 import { darkTheme, lightTheme, media } from "@/styles/theme";
 import { themeColorVariables } from "@/styles/theme-css";
 import { themePreferenceAttribute } from "@/styles/theme-preference";
@@ -30,6 +31,10 @@ export const Panel = styled.form`
 
 export const DialogContent = styled(FilterDialogContent)`
   fieldset { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
+  [data-filter-section] > fieldset > legend {
+    font-size: var(--gh-font-reading);
+    font-weight: var(--gh-weight-bold);
+  }
   && [data-status-sort-fields] [data-floating-control] > select {
     font-size: var(--gh-font-body); padding-inline-end: var(--gh-spacing-4); text-overflow: ellipsis;
   }
@@ -39,6 +44,26 @@ export const DialogContent = styled(FilterDialogContent)`
   input[type="checkbox"] { flex: none; inline-size: var(--gh-size-4); block-size: var(--gh-size-4); margin: 0; accent-color: ${({ theme }) => theme.color.brand}; ${focusRing} }
   [data-options] { max-block-size: var(--gh-size-45); overflow-y: auto; overscroll-behavior: contain; }
   [data-help] { margin-block-start: var(--gh-spacing-1_75); color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-compact); }
+`;
+
+export const DraftDateFields = styled.div`
+  display: grid;
+  gap: var(--gh-spacing-1_5);
+  min-inline-size: 0;
+`;
+
+export const LocationFields = styled(FilterFieldRow)`
+  ${controlRow}
+  && [data-select-popup] { inline-size: calc(200% + var(--gh-spacing-2_5)); }
+  && [data-select-trigger] { padding-block: var(--gh-spacing-1); }
+  && [data-current] {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: var(--gh-leading-caption);
+  }
 `;
 
 export const Muted = styled.p`

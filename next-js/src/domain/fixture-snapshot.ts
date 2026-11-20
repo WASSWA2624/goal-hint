@@ -178,6 +178,7 @@ const fixtureSnapshotBaseSchema = z.strictObject({
   prices: z.array(fixturePriceSchema).max(4).optional(),
   marketOdds: marketOddsObservationSchema.nullable().optional(),
   featuredPrediction: featuredPredictionSchema.nullable().optional(),
+  filteredPrediction: featuredPredictionSchema.nullable().optional(),
   retrospective: z.strictObject({
     revisionId: identity, sourceRevisionId: identity, evidenceCutoffAt: instant, generatedAt: instant, activatedAt: instant,
     pick: featuredPredictionSchema.extend({ source: z.literal("local-engine") }),
@@ -195,6 +196,9 @@ function refineFixture(value: z.infer<typeof wireFixtureBaseSchema>, context: z.
   const forecast = value.forecast && !("gated" in value.forecast) ? value.forecast : null;
   if (value.featuredPrediction && (!forecast || value.status !== "scheduled")) {
     context.addIssue({ code: "custom", message: "A featured outcome requires a current scheduled prediction." });
+  }
+  if (value.filteredPrediction && !forecast) {
+    context.addIssue({ code: "custom", message: "A filtered outcome requires a published forecast." });
   }
   const replay = value.retrospective;
   if (replay && (!forecast || replay.sourceRevisionId !== forecast.revisionId || replay.revisionId === forecast.revisionId ||

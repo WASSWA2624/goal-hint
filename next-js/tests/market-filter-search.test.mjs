@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { searchMarketFilters } from '../src/domain/market-filter-search.ts';
+import { searchMarketFilters, searchPublishedMarkets } from '../src/domain/market-filter-search.ts';
 import { slipMarketSelections } from '../src/domain/slip-markets.ts';
 import { createMessages } from '../src/i18n/messages.ts';
 
@@ -47,4 +47,22 @@ test('directions and decimal goal lines stay exact even with compact forms, reor
   for (const query of ['1.5', 'O/U1.5', 'total goals 1.5']) matches(query, 'total-goals', ['over-1.5', 'under-1.5']);
   matches('over', 'total-goals', ['over-2.5', 'over-1.5']);
   matches('total goals 2.5', 'total-goals', ['over-2.5', 'under-2.5'], true);
+});
+
+test('published search keeps exact lines, named periods and directions within offered options', () => {
+  const total = (period, direction, line) => ({ id: `${period}:${direction}:${line}`, direction, line,
+    label: `${direction} ${line}`, detail: `${period} total goals over/under O/U` });
+  const offered = [total('full match FT', 'over', 6.5), total('first half HT 1H', 'over', 6.5), total('full match FT', 'under', 6.5),
+    total('full match FT', 'under', 5.5), total('full match FT', 'under', 5),
+    { id: 'signed-handicap', label: 'Away +0.25', detail: 'Asian handicap AH', line: 0.25, direction: null },
+    { id: 'negative-handicap', label: 'Away -0.25', detail: 'Asian handicap AH', line: -0.25, direction: null }];
+  const find = (needle) => searchPublishedMarkets(offered, needle).map(({ id }) => id);
+  for (const query of ['Over 6.5', 'O6.5', 'over 6,50']) assert.deepEqual(find(query), ['full match FT:over:6.5', 'first half HT 1H:over:6.5']);
+  assert.deepEqual(find('first half over 6.5'), ['first half HT 1H:over:6.5']);
+  assert.deepEqual(find('under 6.5'), ['full match FT:under:6.5']);
+  assert.deepEqual(find('U5'), ['full match FT:under:5']);
+  assert.deepEqual(find('Away +0.25'), ['signed-handicap']);
+  assert.deepEqual(find('Away -0.25'), ['negative-handicap']);
+  assert.deepEqual(find('Over 0.5'), []);
+  assert.deepEqual(find('Corners'), []);
 });

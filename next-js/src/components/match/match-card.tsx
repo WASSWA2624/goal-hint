@@ -562,10 +562,13 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const eligible = markets && markets.length > 0 ? markets : selectedFamily ? [selectedFamily] : defaultMarkets;
   const gatedForecast = fixture.forecast !== null && "gated" in fixture.forecast ? fixture.forecast : null;
   const retrospective = publishedMarket && !snapshotPick ? fixture.retrospective : null;
-  const featured = retrospective?.pick ?? (publishedMarket && !snapshotPick && fixture.status === "scheduled" ? fixture.featuredPrediction : null);
+  const filtered = publishedMarket && !snapshotPick ? fixture.filteredPrediction : undefined;
+  const missingFilteredPick = filtered === null && gatedForecast === null;
+  const featured = retrospective?.pick ?? filtered ??
+    (publishedMarket && !snapshotPick && !missingFilteredPick && fixture.status === "scheduled" ? fixture.featuredPrediction : null);
   // Only a published eligible family is locked: forecast null means none was published, and the gated families already
   // name the published markets, so a filter outside them shows the subscriber's no-prediction reason.
-  const best = snapshotPick?.family ?? featured?.family ?? bestCardFamily(fixture, eligible, !publishedMarket);
+  const best = snapshotPick?.family ?? featured?.family ?? (missingFilteredPick ? null : bestCardFamily(fixture, eligible, !publishedMarket));
   const gated = lockedPrediction || (snapshotPick ? requiresAccess || gatedForecast !== null
     : !isCompletedFixtureStatus(fixture.status) && best !== null && (requiresAccess || gatedForecast !== null));
   const detailHref = matchHref(fixture.fixtureId, analysisSlug, locale);
@@ -580,7 +583,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const country = fixture.competition.country?.trim();
   const countryName = countryDisplayName(country);
   const flagUrl = countryFlagUrl(fixture);
-  const prediction = offline || gated ? null : snapshotPick ? snapshotCardPrediction(snapshotPick)
+  const prediction = offline || gated || missingFilteredPick ? null : snapshotPick ? snapshotCardPrediction(snapshotPick)
     : featured ? featuredCardPrediction(featured, retrospective ? null : fixture.forecast?.publishedAt ?? null,
       retrospective ? false : fixture.forecast?.provisional ?? true)
       : selectedCardPrediction(fixture, shownFamily, !publishedMarket);
@@ -590,11 +593,12 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const livePrice = selection && observation?.kind === "in-play" ? marketOddsPrice(observation, shownFamily, selection) : null;
   const preMatchPrice = featured?.odds ?? (selection && fixture.status === "scheduled" && observation?.kind === "pre-match"
     ? marketOddsPrice(observation, shownFamily, selection) : null);
-  const storedPrice = selectedCardPrice(fixture, shownFamily, !publishedMarket);
-  const confirmedPrice = fixture.status === "live" ? livePrice : preMatchPrice;
+  const storedPrice = filtered ? fixture.prices?.find((quote) => quote.family === filtered.key && quote.selection === selection) ?? null
+    : featured || fixture.status === "live" ? null : selectedCardPrice(fixture, shownFamily, !publishedMarket);
+  const confirmedPrice = filtered ? filtered.odds : fixture.status === "live" ? livePrice : preMatchPrice;
   const price = !selection ? null : snapshotPick ? { price: snapshotPick.odds }
-    : confirmedPrice ? { price: confirmedPrice } : featured || fixture.status === "live" ? null : storedPrice;
-  const oddsKind = (price && price === storedPrice ? storedPrice.recovery?.kind : undefined) ?? observation?.kind;
+    : confirmedPrice ? { price: confirmedPrice } : storedPrice;
+  const oddsKind = (price === storedPrice ? storedPrice?.recovery?.kind : undefined) ?? observation?.kind ?? (filtered && price ? "pre-match" : undefined);
   const oddsCaption = messages.text("details.odds");
   const stackOddsCaption = `${oddsCaption}:`;
   const stackProbabilityCaption = `${messages.text("match.columns.probabilityCompact")}:`;
@@ -614,7 +618,9 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const selectionContext = featured?.code ? { marketKey: featured.key, label: featured.selectionLabel } : undefined;
   const mobileSelection = selection && (phoneFeed && shownFamily === "total-goals" ? predictionText : predictionLabel)(messages, selection, selectionContext);
   const locked = !retrospective && fixture.cycle?.state === "closed";
-  const outcome = retrospective ? "unavailable" : prediction?.status ?? "unavailable";
+  const originalOutcome = filtered && filtered.key === filtered.family ? selectedCardPrediction(fixture, filtered.family, false) : null;
+  const outcome = retrospective || filtered && originalOutcome?.item.market.selection !== filtered.selection ? "unavailable"
+    : originalOutcome?.status ?? prediction?.status ?? "unavailable";
   const awaitingResult = fixture.update?.statusFreshness?.state === "awaiting-update";
   const result = snapshotPick ? outcome : cardResultStatus(fixture.status, outcome, awaitingResult);
   const percent = prediction && (prediction.probability.labelKey === "probability.percent"

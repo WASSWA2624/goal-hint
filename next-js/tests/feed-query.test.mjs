@@ -5,6 +5,7 @@ import { activeFeedFilterCount, defaultMarkets, feedQueryHref, feedQueryKey, Fee
 import { publicPolicy } from "../src/domain/public-policy.ts";
 import { parseReportingDate } from "../src/domain/calendar.ts";
 import { fullDayKickoffTime } from "../src/domain/kickoff-time.ts";
+import { feedMarketPickId, feedMarketPickIdentity } from "../src/domain/feed-market-picks.ts";
 import { resetFeedFilters, resetFeedFilterSection } from "../src/domain/feed-controls.ts";
 import { query, today } from "./helpers/client-state-fixtures.mjs";
 
@@ -55,6 +56,32 @@ test("published outcome choices round trip separately from market families and r
   assert.equal(resetFeedFilters(selected).marketPicks, undefined);
   for (const value of ["", "corners:over-1.5", "double-chance:home-win", "total-goals:over-3.5", "total-goals:over-1.5,total-goals:over-1.5"]) {
     assert.throws(() => query(`marketPick=${encodeURIComponent(value)}`), FeedQueryError);
+  }
+});
+
+test("registered exact URLs distinguish periods and preserve every full-time half-goal line", () => {
+  for (let whole = 0; whole <= 6; whole++) {
+    for (const selection of ["over", "under"]) {
+      const marketKey = `goal:full-time:totals:total:${whole}.5:binary`;
+      const id = feedMarketPickId(marketKey, selection);
+      assert.ok(id);
+      assert.equal(feedMarketPickIdentity(id)?.marketKey, marketKey);
+      assert.equal(feedMarketPickIdentity(id)?.selection, selection);
+    }
+  }
+  const halftime = "goal:half-time:totals:total:1.5:binary~over";
+  const count = "goal:full-time:exact-count:home~7+";
+  const inputs = new URLSearchParams();
+  for (const id of [halftime, count, "total-goals:over-1.5"]) inputs.append("marketPick", id);
+  const parsed = query(inputs.toString());
+  assert.deepEqual(parsed.marketPicks, ["total-goals:over-1.5", count, halftime]);
+  const encoded = serializeFeedQuery(parsed, today).toString();
+  assert.match(encoded, /7%2B/);
+  assert.deepEqual(query(encoded), parsed);
+  inputs.append("marketPick", "goal:full-time:totals:total:1.5:binary~over");
+  assert.throws(() => query(inputs.toString()), FeedQueryError, "aliases cannot repeat the same market and outcome");
+  for (const invalid of ["goal:full-time:totals:total:7.5:binary~over", "goal:full-time:totals:total:6.5:binary~home"]) {
+    assert.throws(() => query(new URLSearchParams({ marketPick: invalid }).toString()), FeedQueryError);
   }
 });
 

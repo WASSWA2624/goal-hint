@@ -14,6 +14,12 @@ const ResetButton = styled(CriteriaDialogButton)`
   }
 `;
 
+const ApplyError = styled.p`
+  flex-basis: 100%; margin: 0;
+  color: ${({ theme }) => theme.color.outcome.incorrect.text};
+  font-size: var(--gh-font-secondary); line-height: var(--gh-leading-compact);
+`;
+
 export const FilterDialogSurface = styled(CriteriaDialog)`
   @media (max-width: ${({ theme }) => theme.viewport[22.5]}) {
     &&[data-enhanced="true"] {
@@ -26,20 +32,22 @@ export const FilterDialogSurface = styled(CriteriaDialog)`
 
 type FiltersDialogProps = {
   id: string; open: boolean; onCancel: () => void; closeLabel: string; group?: string; className?: string;
-  locale?: string; onReset: () => void; onApply: () => void; applyDisabled?: boolean;
+  locale?: string; onReset: () => void; onApply: () => void; applyDisabled?: boolean; applyError?: string | undefined;
   children: ReactNode; title?: string;
 };
 
 /** Shared heading and footer actions for screen-specific filter drafts. */
-export function FiltersDialog({ locale, onReset, onApply, applyDisabled = false, children, title, ...props }: FiltersDialogProps) {
+export function FiltersDialog({ locale, onReset, onApply, applyDisabled = false, applyError, children, title, ...props }: FiltersDialogProps) {
   const messages = createMessages(locale);
+  const applyErrorId = applyError ? `${props.id}-apply-error` : undefined;
   return <FilterDialogSurface {...props} onApply={onApply} applyDisabled={applyDisabled}
     title={<CriteriaDialogTitle><SlidersIcon />{title ?? messages.text("filters.title")}</CriteriaDialogTitle>}
     footer={<>
+      {applyError && <ApplyError id={applyErrorId} role="alert">{applyError}</ApplyError>}
       <ResetButton type="button" variant="secondary" data-dialog-reset onClick={onReset}>
         <ResetIcon />{messages.text("feed.filters.resetFilters")}
       </ResetButton>
-      <CriteriaDialogButton type="button" disabled={applyDisabled} onClick={onApply}>
+      <CriteriaDialogButton type="button" disabled={applyDisabled} aria-describedby={applyErrorId} onClick={onApply}>
         <CheckIcon />{messages.text("feed.filters.applyFilters")}
       </CriteriaDialogButton>
     </>}>

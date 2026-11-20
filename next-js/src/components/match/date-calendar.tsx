@@ -6,6 +6,7 @@ import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from "@/components/ui/ic
 import { addReportingDays, parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { feedQueryRules, type FeedQuery } from "@/domain/feed-query";
 import { createMessages } from "@/i18n/messages";
+import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { dialogFooterSurface, dialogHeaderSurface } from "@/components/ui/dialog-surfaces";
 import { media } from "@/styles/theme";
 import { focusRing } from "./filter-parts";
@@ -36,9 +37,11 @@ const Frame = styled.div`
   display: flex;
   ${media.desktop} { display: none; }
 `;
-const Body = styled.div`
+const CalendarFields = styled.div`
   display: grid;
   gap: var(--gh-spacing-1_5);
+`;
+const Body = styled(CalendarFields)`
   min-block-size: 0;
   padding: var(--gh-spacing-2) var(--gh-spacing-3_5) var(--gh-spacing-2_5);
   overflow-y: auto;
@@ -147,14 +150,14 @@ const Footer = styled.div`
  * Month calendar in a phone sheet. The first tap picks a day; a later tap within a year ends a
  * range, and any other tap starts again. Apply with one day picked selects that day.
  */
-export function DateCalendar({ id, locale, today, from, to, onApply, onClose }: {
-  id?: string; locale: FeedQuery["locale"]; today: ReportingDate; from: ReportingDate; to: ReportingDate;
+export function DateCalendar({ id, presentation = "sheet", locale, today, from, to, onApply, onClose }: {
+  id?: string; presentation?: "sheet" | "dialog"; locale: FeedQuery["locale"]; today: ReportingDate; from: ReportingDate; to: ReportingDate;
   onApply: (from: ReportingDate, to: ReportingDate) => void; onClose: () => void;
 }) {
   const messages = createMessages(locale), sheet = useRef<HTMLDivElement>(null), titleId = useId();
   const [month, setMonth] = useState(() => monthOf(from));
   const [start, setStart] = useState(from), [end, setEnd] = useState<ReportingDate | null>(to);
-  usePhoneSheet(true, sheet, onClose);
+  usePhoneSheet(presentation === "sheet", sheet, onClose);
   const choose = (date: ReportingDate) => {
     if (end === null && date >= start && spanDays(start, date) <= feedQueryRules.maximumDays) setEnd(date);
     else { setStart(date); setEnd(null); }
@@ -163,19 +166,7 @@ export function DateCalendar({ id, locale, today, from, to, onApply, onClose }: 
   const summary = end === null ? <>{messages.reportingDateShort(start)}<small>{messages.text("feed.calendar.pickEnd")}</small></>
     : start === end ? <>{messages.reportingDate(start)}<small>{messages.text("feed.calendar.limit")}</small></>
     : <>{messages.reportingDateSpan(start, end)} · {messages.plural("feed.calendar.days", spanDays(start, end))}<small>{messages.text("feed.calendar.limit")}</small></>;
-  return <>
-    <SheetScrim aria-hidden="true" />
-    <Frame id={id} ref={sheet} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onKeyDown={(event) => {
-      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onClose(); }
-      else keepFocusInSheet(event);
-    }}>
-      <SheetHeader>
-        <h2 id={titleId}>{messages.text("feed.calendar.title")}</h2>
-        <SheetClose type="button" aria-label={messages.text("feed.calendar.close")} title={messages.text("feed.calendar.close")} onClick={onClose}>
-          <CloseIcon />
-        </SheetClose>
-      </SheetHeader>
-      <Body>
+  const fields = <>
         <MonthBar>
           <h3 aria-live="polite">{messages.reportingMonth(month)}</h3>
           <BarButton type="button" aria-label={messages.text("feed.calendar.thisMonthLabel")} onClick={() => setMonth(monthOf(today))}>
@@ -199,10 +190,28 @@ export function DateCalendar({ id, locale, today, from, to, onApply, onClose }: 
           })}
         </Grid>
         <Summary role="status" aria-live="polite">{summary}</Summary>
-      </Body>
+  </>;
+  const title = messages.text("feed.calendar.title"), closeLabel = messages.text("feed.calendar.close");
+  const applyLabel = messages.text("feed.calendar.apply"), cancelLabel = messages.text("feed.calendar.cancel");
+  const apply = () => onApply(start, end ?? start);
+  if (presentation === "dialog") return <CriteriaDialog id={id ?? titleId} title={title} open onCancel={onClose}
+    closeLabel={closeLabel} cancelLabel={cancelLabel} applyLabel={applyLabel} onApply={apply}>
+    <CalendarFields>{fields}</CalendarFields>
+  </CriteriaDialog>;
+  return <>
+    <SheetScrim aria-hidden="true" />
+    <Frame id={id} ref={sheet} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onKeyDown={(event) => {
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onClose(); }
+      else keepFocusInSheet(event);
+    }}>
+      <SheetHeader>
+        <h2 id={titleId}>{title}</h2>
+        <SheetClose type="button" aria-label={closeLabel} title={closeLabel} onClick={onClose}><CloseIcon /></SheetClose>
+      </SheetHeader>
+      <Body>{fields}</Body>
       <Footer>
-        <button type="button" onClick={onClose}>{messages.text("feed.calendar.cancel")}</button>
-        <button type="button" onClick={() => onApply(start, end ?? start)}>{messages.text("feed.calendar.apply")}</button>
+        <button type="button" onClick={onClose}>{cancelLabel}</button>
+        <button type="button" onClick={apply}>{applyLabel}</button>
       </Footer>
     </Frame>
   </>;

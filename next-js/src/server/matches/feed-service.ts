@@ -28,7 +28,8 @@ import { publicOddsEnabled } from "../odds/public-odds-policy.ts";
 import { isNovemberReplayKickoff } from "../../domain/november-replay.ts";
 import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { readNovemberReplayProjections } from "../intelligence/november-replay-store.ts";
-import { projectRetrospectiveForecast, retrospectiveOutcomeKeys } from "./retrospective-picks.ts";
+import { displayFeedSelectedPick, projectRetrospectiveForecast } from "./retrospective-picks.ts";
+import { selectedFeedPickColumns, type FeedSelectedPick } from "./feed-selected-picks.ts";
 
 export function parseMatchFeedQuery(input: FeedParameters, today: ReportingDate,
   context: Readonly<{ locale?: string; routeDate?: string; providerOdds?: boolean; asOf?: number }> = {}) {
@@ -54,7 +55,7 @@ export async function storedFeedVersions(tx: Prisma.TransactionClient, query: Fe
   historyBefore: number | null = null, providerOdds = publicPolicy.features.providerOdds, publishedForecasts = publishedOnly) {
   const tags = ["global:catalog", ...Array.from({ length: sourceRange.dayCount }, (_, day) => `date:${addReportingDays(sourceRange.startDate, day)}`)];
   const generations = await readPublicCacheGenerations(tx, tags), scope = [...competitionIds].sort((a, b) => a - b);
-  const version = (query: FeedQuery) => evidenceFingerprint({ contract: "feed-pagination-v11",
+  const version = (query: FeedQuery) => evidenceFingerprint({ contract: "feed-pagination-v12",
     completedOnly, publishedOnly, historyBefore, providerOdds, publishedForecasts,
     query: feedQueryKey(query, today), scope, generations });
   return { paginationVersion: version(query), performanceVersion: version(performanceFeedQuery(query)) };
@@ -105,7 +106,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           logoUrl: isSafeRemoteImageUrl(row.logoUrl) ? row.logoUrl : null, fixtures: Number(row.fixtures) }));
         const [matching] = await tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null; performanceAvailable: bigint | Prisma.Decimal | null;
           void: bigint | Prisma.Decimal | null; exact: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
-          SELECT STRAIGHT_JOIN COUNT(*) AS total, SUM(CASE WHEN m.available=TRUE THEN 1 ELSE 0 END) AS available,
+          SELECT STRAIGHT_JOIN COUNT(*) AS total, SUM(CASE WHEN ${sql.displayAvailable} THEN 1 ELSE 0 END) AS available,
             SUM(CASE WHEN ${sql.pickAvailable} THEN 1 ELSE 0 END) AS performanceAvailable,
             SUM(CASE WHEN ${sql.pickAvailable} AND c.state='void' THEN 1 ELSE 0 END) AS void,
             ${sql.exact ? Prisma.sql`SUM(CASE WHEN ${sql.exact} THEN 1 ELSE 0 END)` : Prisma.sql`NULL`} AS exact
@@ -118,7 +119,11 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
             key: feedPerformanceCacheKey(sql, query.locale, providerOdds), nowMs: asOf } : undefined);
         // Exact matches precede similar results, so a record's position on its page tells which kind it is.
         const exactMatches = sql.exact ? Number(matching.exact ?? 0) : null;
-        const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT STRAIGHT_JOIN f.id ${sql.pageJoins} ${sql.searchJoin} WHERE ${sql.where}
+        type SelectedRow = { id: string; projected?: number | bigint | boolean } &
+          Partial<{ [Field in keyof FeedSelectedPick]: FeedSelectedPick[Field] | null }>;
+        const rows = await tx.$queryRaw<SelectedRow[]>(Prisma.sql`SELECT STRAIGHT_JOIN f.id
+          ${sql.projectPick ? Prisma.sql`,(${sql.displayUsesProjection}) AS projected,${selectedFeedPickColumns}` : Prisma.empty}
+          ${sql.pageJoins} ${sql.searchJoin} WHERE ${sql.where}
           ORDER BY ${sql.order} LIMIT ${query.pageSize} OFFSET ${(query.page - 1) * query.pageSize}`);
         const dates = await storedFeedCoverage(tx, sourceRange), partial = dates.some((date) => !date.authoritative);
         const { run, window } = await storedFeedRunContext(tx, reportingToday, range);
@@ -129,12 +134,23 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           isNovemberReplayKickoff(kickoffAt) && (status === "live" || isPlayedFinalStatus(status)) && forecast && cycle?.state === "closed")
           .map(({ fixtureId }) => fixtureId) : [];
         const replays = await readNovemberReplayProjections(tx, replayIds);
-        const replayPicks = retrospectiveOutcomeKeys(query.marketPicks ?? []);
+        const pageRows = new Map(rows.map((row) => [row.id, row]));
         for (const record of records) {
           const date = record.kickoffAt === null ? null : getReportingDate(record.kickoffAt);
           record.partialCoverage = dates.find((entry) => entry.date === date)?.authoritative !== true;
-          const replay = projectRetrospectiveForecast(record, replays.get(record.fixtureId), query.locale, replayPicks);
-          if (replay) record.retrospective = replay.card;
+          const { projected, marketKey, selection, probability, source, priceHundredths } = pageRows.get(record.fixtureId)!;
+          const shown = marketKey != null && selection != null && probability != null && source != null
+            ? { marketKey, selection, probability, source, priceHundredths: priceHundredths ?? null } : null;
+          const replay = replays.get(record.fixtureId);
+          if (replay && (!projected || shown)) {
+            const display = projectRetrospectiveForecast(record, replay, query.locale, shown ?? undefined);
+            if (!display) throw new MatchFeedError("unavailable");
+            record.retrospective = display.card;
+          } else if (projected) {
+            const display = shown ? displayFeedSelectedPick(shown, query.locale) : null;
+            if (shown && !display) throw new MatchFeedError("unavailable");
+            record.filteredPrediction = display;
+          }
         }
         const totalPages = Math.ceil(total / query.pageSize);
         const nextPage = query.page < totalPages && query.page < feedQueryRules.maximumPage ? query.page + 1 : null;
@@ -154,7 +170,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       const response = options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: 29, providerOdds, completedOnly: context.completedOnly === true,
+        query: { ...query, projection: 30, providerOdds, completedOnly: context.completedOnly === true,
           publishedOnly, publishedForecasts, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } },
         scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => storedMatchFeedResponseSchema.parse(value) }), read) : await read();

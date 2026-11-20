@@ -118,6 +118,7 @@ export function sameCardFixture(previous: FixtureSnapshot, next: FixtureSnapshot
     sameScore(previous.phaseScores?.extraTime, next.phaseScores?.extraTime) && sameScore(previous.phaseScores?.shootout, next.phaseScores?.shootout) &&
     previous.forecast?.updateDelayed === next.forecast?.updateDelayed && samePrices(previous.prices, next.prices) &&
     sameMarketOdds(previous.marketOdds, next.marketOdds) && sameFeatured(previous.featuredPrediction, next.featuredPrediction) &&
+    sameFeatured(previous.filteredPrediction, next.filteredPrediction) &&
     previous.retrospective?.revisionId === next.retrospective?.revisionId &&
     sameFeatured(previous.retrospective?.pick, next.retrospective?.pick);
 }

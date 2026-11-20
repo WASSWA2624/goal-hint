@@ -63,7 +63,7 @@ function refineFeed(value: Omit<z.infer<typeof storedFeedBaseSchema>, "records">
     (value.links.next === null) !== (value.nextPage === null) || (value.links.previous === null) !== (value.previousPage === null) ||
     value.coverage.partial !== value.coverage.dates.some((entry) => !entry.authoritative) ||
     value.coverage.dates.some((entry) => entry.authoritative !== (entry.status === "complete")) ||
-    (value.coverage.matchingWithPerformancePick ?? 0) > value.coverage.matchingWithMarket ||
+    (value.coverage.matchingWithPerformancePick ?? 0) > value.total ||
     value.coverage.matchingWithMarket > value.total || value.total > value.coverage.knownFixtures ||
     value.search !== null && value.search.exact + value.search.similar !== value.total ||
     value.performance !== null && value.performance.total !== value.total) {
@@ -74,7 +74,7 @@ export const storedMatchFeedResponseSchema = storedFeedBaseSchema.superRefine(re
 export const matchFeedResponseSchema = z.strictObject({ ...storedFeedBaseSchema.shape,
   records: z.array(matchFeedRecordSchema).max(feedQueryRules.maximumPageSize), access: contentAccessSchema,
 }).superRefine(refineFeed).refine((value) => value.access.tier === "full" || value.records.every((record) =>
-  isCompletedFixtureStatus(record.status) || (!record.prices?.length && record.marketOdds == null && record.retrospective == null &&
+  isCompletedFixtureStatus(record.status) || (!record.prices?.length && record.marketOdds == null && record.retrospective == null && record.filteredPrediction == null &&
     (record.forecast === null || "gated" in record.forecast))),
 "Unfinished public matches must not contain prices or predictions.");
 export type StoredMatchFeedResponse = z.infer<typeof storedMatchFeedResponseSchema>;

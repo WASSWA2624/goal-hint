@@ -60,7 +60,7 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 90_000 });
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: "feed-summary-v12", providerOdds, completedOnly: context.completedOnly === true,
+        query: { ...query, projection: "feed-summary-v13", providerOdds, completedOnly: context.completedOnly === true,
           publishedOnly, publishedForecasts, today, dates: { from: range.startDate, to: range.endDate } },
         scope: [...competitionIds].sort((a, b) => a - b), parse: (value) => storedSummarySchema.parse(value) }), read) : await read();
     } catch (error) {

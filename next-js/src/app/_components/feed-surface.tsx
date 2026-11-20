@@ -13,6 +13,7 @@ import { feedRefreshInterval } from "@/domain/live-refresh";
 import { FeedPagination } from "@/components/match/feed-pagination";
 import { useFeedPagination } from "@/components/match/use-feed-pagination";
 import { useLiveFeedSearch } from "@/components/match/use-live-feed-search";
+import { usePublishedFeedMarkets } from "@/components/match/use-published-feed-markets";
 import { MatchCard } from "@/components/match/match-card";
 import { MatchCardList, MatchListDivider } from "@/components/match/match-card-list";
 import { ButtonLink, TextButton } from "@/components/ui/controls";
@@ -148,6 +149,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
   const [confirmed, setConfirmed] = useState<FeedPerformanceSeed | null>(null);
   if (result.data && previous?.data !== result.data) setPrevious({ query, today, data: result.data });
   const visible = result.data ? { query, today, data: result.data } : previous;
+  const markets = usePublishedFeedMarkets(subscriberOnly || visible?.data.access.tier !== "full");
   const messages = createMessages(query.locale);
   const href = feedQueryHref(query, today), leagues = result.data?.leagues ?? previous?.data.leagues ?? noLeagues;
   const failed = result.error !== null;
@@ -187,7 +189,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
     : displayed ? searchAnnouncement(displayed.data, displayed.query) : messages.text("feed.state.data-unavailable"));
   return <FeedStack $gap="sm" data-matches-feed>
     <StableFeedHeader query={query} today={today} showAccount={showAccount} />
-    <LoadingTheme><FeedFilters key={`${href}:${today}`} subscriberOnly={subscriberOnly} providerOdds={providerOdds} query={query} today={today} leagues={leagues} onApply={apply} pending={pending}
+    <LoadingTheme><FeedFilters key={`${href}:${today}`} subscriberOnly={subscriberOnly} providerOdds={providerOdds} query={query} today={today} leagues={leagues} onApply={apply} pending={pending} {...markets}
       searchText={text} onSearchChange={onSearchChange} onSearchSubmit={onSearchSubmit} /></LoadingTheme>
     <DayStrip query={displayed?.query ?? query} today={displayed?.today ?? today} onApply={apply} />
     {controls}

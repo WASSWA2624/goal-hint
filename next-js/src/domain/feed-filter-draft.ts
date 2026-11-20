@@ -1,9 +1,9 @@
-import { parseReportingDate, type ReportingDate } from "./calendar.ts";
-import { dateTimeIntervalRange, localDateTimeValue, type DateTimeInterval } from "./date-time.ts";
+import { parseReportingDate, validateReportingDateRange, type ReportingDate } from "./calendar.ts";
+import { dateTimeIntervalRange, localDateTimeValue, parseLocalDateTime, type DateTimeInterval } from "./date-time.ts";
 import { applyFeedDraft, parseProbabilityInputs, selectFeedDateScope } from "./feed-controls.ts";
-import { feedQueryRules, formatProbabilityValue, parseProbabilityValue, resolveFeedDates, type FeedQuery } from "./feed-query.ts";
-import { parseLocalDateTime } from "./date-time.ts";
+import { feedQueryRules, formatProbabilityValue, parseProbabilityValue, pinnedDateSelection, resolveFeedDates, serializeFeedQuery, type FeedQuery } from "./feed-query.ts";
 import { kickoffTimeWindows } from "./kickoff-time.ts";
+import { matchFeedRules } from "./match-feed-rules.ts";
 import { formatOddsHundredths, oddsDisplayHundredths, oddsRules, parseDecimalOdds, type OddsRange } from "./odds.ts";
 import { publicPolicy } from "./public-policy.ts";
 
@@ -13,6 +13,28 @@ export type FeedFilterDraft = Readonly<{
   query: FeedQuery; dateTimes: DateTimeInterval; zone: string; probability: RangeFields; odds: RangeFields;
   probabilityEdited?: boolean;
 }>;
+
+function draftDay(value: string): ReportingDate | null {
+  const day = value.slice(0, 10);
+  if (day < "1000-01-01") return null;
+  try { return parseReportingDate(day); } catch { return null; }
+}
+
+/** Seed the calendar even when an incomplete or invalid time interval is still being edited. */
+export function feedFilterDraftDays({ dateTimes }: FeedFilterDraft, today: ReportingDate) {
+  const from = draftDay(dateTimes.from) ?? draftDay(dateTimes.to) ?? today;
+  const to = draftDay(dateTimes.to) ?? from;
+  try {
+    validateReportingDateRange(from, to, feedQueryRules.maximumDays);
+    return { from, to };
+  } catch { return { from, to: from }; }
+}
+
+/** Change only the civil dates. The existing interval compiler owns time, zone, and status validation. */
+export function selectFeedFilterDraftDays(draft: FeedFilterDraft, from: ReportingDate, to: ReportingDate): FeedFilterDraft {
+  const startTime = draft.dateTimes.from.slice(11) || "00:00", endTime = draft.dateTimes.to.slice(11) || "23:59";
+  return { ...draft, dateTimes: { from: `${from}T${startTime}`, to: `${to}T${endTime}` } };
+}
 
 function parseOddsBound(value: string, fallback: number): number | null {
   if (value === "") return fallback;
@@ -41,6 +63,14 @@ export function feedFilterDraftIssues(draft: FeedFilterDraft) {
   const odds = oddsDraftValues(draft.odds);
   return { range, minInvalid: min === null, maxInvalid: max === null, probabilityOrder: min !== null && max !== null && min > max,
     oddsMinInvalid: odds.min === null, oddsMaxInvalid: odds.max === null, oddsOrder: odds.reversed };
+}
+
+/** Reserve the pinned dates and longest page number used by feed API requests. */
+export function feedFilterQueryTooLong(query: FeedQuery, today: ReportingDate): boolean {
+  const dates = pinnedDateSelection(resolveFeedDates(query, today));
+  const parameters = serializeFeedQuery({ ...query, dates, page: feedQueryRules.maximumPage }, today);
+  // URLSearchParams percent-encodes to ASCII. The API counts the leading question mark as well.
+  return 1 + parameters.toString().length > matchFeedRules.maximumQueryBytes;
 }
 
 /** Prefill applied instants in the device zone, including shared links created in another zone. */

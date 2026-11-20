@@ -88,3 +88,29 @@ export function searchMarketFilters(needle: string, messages: LabelMessages): Ma
     detail !== undefined && (coversQuery(detail) || coversQuery(`${label} ${detail}`)));
   return collectMatches(complete, line);
 }
+
+type PublishedMarketSearchOption = Readonly<{ label: string; detail: string; line: number | null; direction: "over" | "under" | null }>;
+const publishedMarketSearchText = (value: string) => marketSearchText(value).replace(/\bu(\d{1,2})\b/gu, "under $1");
+
+/** Match offered outcomes by their labels and structured line, never by a nearby decimal. */
+export function searchPublishedMarkets<Option extends PublishedMarketSearchOption>(options: readonly Option[], needle: string) {
+  const exactLine = /(?<![\p{L}\p{N}.])(?:(over|under|ou|o|u)\s*)?([+-]?\d+(?:[.,]\d+)?)(?![\p{L}\p{N}.])/giu;
+  const lines = new Set<number>();
+  let query = needle.replace(exactLine, (text, kind: string | undefined, amount: string) => {
+    if (!kind && !/[.,+-]/u.test(amount)) return text;
+    const line = Number(amount.replace(",", "."));
+    lines.add(line);
+    return kind ? `${kind.toLowerCase().replace(/^o$/u, "over").replace(/^u$/u, "under")} ${line}` : String(line);
+  });
+  query = publishedMarketSearchText(marketShortCode(query, query));
+  if (query === "o" || query === "u") query = query === "o" ? "over" : "under";
+  if (!query) return options;
+  if (lines.size > 1) return [];
+  const [line] = lines, direction = /\b(over|under)\b/u.exec(query)?.[1];
+  const eligible = options.filter((option) => (line === undefined || option.line === line) && (!direction || option.direction === direction))
+    .map((option) => ({ option, label: publishedMarketSearchText(option.label), detail: publishedMarketSearchText(option.detail) }));
+  const ranked = searchFilterOptions(eligible, query);
+  const search = prepareFootballSearch(query), full = 2 ** search.tokens.length - 1;
+  const complete = ranked.similar.filter(({ label, detail }) => search.match(`${label} ${detail}`)?.covered === full);
+  return [...ranked.exact, ...complete].map(({ option }) => option);
+}

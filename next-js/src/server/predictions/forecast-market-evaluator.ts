@@ -5,7 +5,9 @@ import { goalDefinitionsForLocalFirstProfile, isEligibleLocalFirstGoalDefinition
   type RegisteredGoalMarketDefinition } from "../../domain/goal-market-definitions.ts";
 import { LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION, LOCAL_FIRST_MARKET_REGISTRY_VERSION, MARKET_REGISTRY_VERSION, marketRegistry,
   type RegisteredMarketFamily } from "../../domain/market-registry.ts";
-import { marketRules, type MarketFamily, type MarketSource, type SelectionFor } from "../../domain/markets.ts";
+import { type MarketFamily, type MarketSource } from "../../domain/markets.ts";
+import { legacyFamilyByGoalKey as legacyByKey, legacyGoalMarketIdentities as legacy } from "../../domain/legacy-goal-market-identities.ts";
+export { canonicalLegacyForecastSelection, legacyForecastMarketKey, legacyForecastOutcome } from "../../domain/legacy-goal-market-identities.ts";
 import { deriveBoundedGoalMarket, GOAL_DERIVATION_TAIL_BOUND, type GoalDerivationResult, type GoalGrade,
   type GoalMarketDefinition, type GoalMarketPeriod } from "../../domain/score-distribution-markets.ts";
 import { parseScoreDistribution, scoreDistributionRules, type ScoreDistribution } from "../../domain/score-distribution.ts";
@@ -27,22 +29,6 @@ export type QualifiedForecastGoalModel = Readonly<{
   qualifiedMarkets: readonly string[];
 }>;
 
-const legacy = {
-  "match-result": { key: "goal:full-time:result", choices: { home: "home-win", draw: "draw", away: "away-win" } },
-  "double-chance": { key: "goal:full-time:double-chance", choices: { "home-draw": "home-or-draw", "draw-away": "away-or-draw", "home-away": "home-or-away" } },
-  "total-goals": { key: `goal:full-time:totals:total:${marketRules.totalGoalsLine}:binary`, choices: { over: "over-2.5", under: "under-2.5" } },
-  "both-teams-to-score": { key: "goal:full-time:btts", choices: { yes: "yes", no: "no" } },
-} satisfies { [Family in MarketFamily]: { key: string; choices: Readonly<Record<string, SelectionFor<Family>>> } };
-const legacyByKey = new Map(Object.entries(legacy).map(([family, mapping]) => [mapping.key, family as MarketFamily]));
-export function legacyForecastMarketKey(family: MarketFamily): string { return legacy[family].key; }
-export function canonicalLegacyForecastSelection(family: MarketFamily, selection: string): string | null {
-  return Object.entries(legacy[family].choices).find(([, key]) => key === selection)?.[0] ?? null;
-}
-export function legacyForecastOutcome(marketKey: string, selection: string) {
-  const family = legacyByKey.get(marketKey);
-  const displayed = family ? Object.entries(legacy[family].choices).find(([key]) => key === selection)?.[1] : undefined;
-  return family && displayed ? { family, selection: displayed } : null;
-}
 const goalMarkets = registeredForecastGoalMarkets();
 const publishedLocalKeys = new Map(localFirstGoalEvaluationProfiles.map((profile) =>
   [profile, new Set(goalDefinitionsForLocalFirstProfile(profile).map(({ key }) => key))]));

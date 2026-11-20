@@ -2,12 +2,16 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseReportingDate } from '../src/domain/calendar.ts';
 import { dateTimeIntervalRange, localDateTimeValue, parseLocalDateTime } from '../src/domain/date-time.ts';
-import { compileFeedFilterDraft, feedFilterDraft, feedFilterDraftIssues } from '../src/domain/feed-filter-draft.ts';
-import { applyFeedPageDefaults, feedQueryHref, feedQueryKey, parseFeedQuery, resolveFeedDates, serializeFeedQuery } from '../src/domain/feed-query.ts';
+import { compileFeedFilterDraft, feedFilterDraft, feedFilterDraftDays, feedFilterDraftIssues, feedFilterQueryTooLong, selectFeedFilterDraftDays } from '../src/domain/feed-filter-draft.ts';
+import { applyFeedPageDefaults, feedQueryHref, feedQueryKey, feedQueryRules, parseFeedQuery, resolveFeedDates, serializeFeedQuery } from '../src/domain/feed-query.ts';
 import { resetFeedFilters, selectFeedStatus } from '../src/domain/feed-controls.ts';
 import { performanceFeedQuery } from '../src/domain/feed-performance-summary.ts';
 import { feedDateNavigation } from '../src/domain/feed-date-navigation.ts';
 import { feedDiscovery } from '../src/domain/discovery.ts';
+import { feedMarketPickId } from '../src/domain/feed-market-picks.ts';
+import { feedPageApiHref } from '../src/domain/feed-pagination.ts';
+import { registeredForecastGoalMarkets } from '../src/domain/goal-market-definitions.ts';
+import { matchFeedRules } from '../src/domain/match-feed-rules.ts';
 import { publicPolicy } from '../src/domain/public-policy.ts';
 import { feedSql } from '../src/server/matches/feed-read.ts';
 
@@ -25,6 +29,60 @@ test('draft validation separates incomplete dates, range limits and individual p
   assert.equal(feedFilterDraftIssues({ ...draft, probability: { min: '101', max: '' } }).minInvalid, true);
   assert.equal(feedFilterDraftIssues({ ...draft, probability: { min: '', max: 'no' } }).maxInvalid, true);
   assert.equal(feedFilterDraftIssues({ ...draft, probability: { min: '80', max: '20' } }).probabilityOrder, true);
+});
+
+test('choosing days edits just the draft and keeps interval clocks in the browsing zone', () => {
+  const browserZone = 'America/New_York';
+  const query = parse({ start: sample.from, end: sample.to, tz: browserZone, q: 'Club', country: 'Uganda', page: '2' });
+  const draft = feedFilterDraft(query, today, browserZone);
+  const from = parseReportingDate('2026-11-05'), to = parseReportingDate('2026-11-07');
+  const changed = selectFeedFilterDraftDays(draft, from, to);
+  assert.equal(changed.query, query);
+  assert.deepEqual(draft.dateTimes, sample);
+  assert.deepEqual(feedFilterDraftDays(changed, today), { from, to });
+  assert.deepEqual(changed.dateTimes, { from: `${from}T09:00`, to: `${to}T17:00` });
+  const selected = compileFeedFilterDraft(changed, today);
+  assert.deepEqual(selected.interval, changed.dateTimes);
+  assert.equal(selected.zone, browserZone);
+  assert.equal(selected.page, 1);
+  assert.equal(selected.search, query.search);
+  assert.deepEqual(selected.countries, query.countries);
+});
+
+test('the draft calendar can repair incomplete dates and preserves same-day order and Live validation', () => {
+  const draft = feedFilterDraft(parse({ status: 'live', when: 'today', tz: zone }), today, zone);
+  const yesterday = parseReportingDate('2026-11-03');
+  const invalid = { ...draft, dateTimes: { from: '', to: `${yesterday}T08:00` } };
+  assert.deepEqual(feedFilterDraftDays(invalid, today), { from: yesterday, to: yesterday });
+  assert.equal(compileFeedFilterDraft(invalid, today), null);
+  const selected = selectFeedFilterDraftDays(invalid, yesterday, yesterday);
+  assert.deepEqual(selected.dateTimes, { from: `${yesterday}T00:00`, to: `${yesterday}T08:00` });
+  assert.equal(compileFeedFilterDraft(selected, today).status, 'all');
+  const overMidnight = { ...draft, dateTimes: { from: `${yesterday}T23:00`, to: `${today}T02:00` } };
+  assert.equal(feedFilterDraftIssues(selectFeedFilterDraftDays(overMidnight, today, today)).range, 'order');
+  assert.equal(compileFeedFilterDraft(selectFeedFilterDraftDays(overMidnight, today, today), today), null);
+});
+
+test('filter size reserves encoded pinned dates, the question mark and the longest page number', () => {
+  const ids = [...new Set(registeredForecastGoalMarkets(true).flatMap(({ definition }) =>
+    definition.selections.map(({ key }) => feedMarketPickId(definition.key, key))).filter(Boolean))];
+  const bytes = (query, page = feedQueryRules.maximumPage) => Buffer.byteLength(new URL(feedPageApiHref(query, today, page), 'https://goalhint.com').search);
+  const { maximumQueryBytes } = matchFeedRules;
+  const qPrefixBytes = '&q='.length;
+  const queryWithPicks = count => parse({ when: 'last-30-days', tz: zone, marketPick: ids.slice(0, count).join(',') });
+  const lastPick = ids.findIndex((_, index) => {
+    const remaining = maximumQueryBytes - bytes(queryWithPicks(index + 1)) - qPrefixBytes;
+    return remaining >= 1 && remaining < feedQueryRules.maximumSearchLength;
+  });
+  assert.ok(lastPick >= 0);
+  const query = queryWithPicks(lastPick + 1);
+  const search = 'x'.repeat(maximumQueryBytes - bytes(query) - qPrefixBytes);
+  const atLimit = { ...query, search }, aboveLimit = { ...query, search: `${search}x` };
+  assert.equal(bytes(atLimit), maximumQueryBytes);
+  assert.equal(feedFilterQueryTooLong(atLimit, today), false);
+  assert.equal(bytes(aboveLimit), maximumQueryBytes + 1);
+  assert.ok(bytes(aboveLimit, 1) < maximumQueryBytes);
+  assert.equal(feedFilterQueryTooLong(compileFeedFilterDraft(feedFilterDraft(aboveLimit, today, zone), today), today), true);
 });
 
 test('odds drafts prefill shared links, validate decimal bounds and omit unavailable criteria', () => {

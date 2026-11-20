@@ -27,7 +27,7 @@ type SummaryCacheContext = Readonly<{ key: string; nowMs: number }>;
  * SQL cohort, filters and pick-ranking rules are exactly the same. */
 export function feedPerformanceCacheKey(sql: ReturnType<typeof feedSql>, locale: string, providerOdds: boolean): string {
   const statement = (value: Prisma.Sql) => ({ text: value.sql, values: value.values.map(item => item instanceof Date ? item.getTime() : item) });
-  return evidenceFingerprint({ contract: "feed-performance-query-v2", locale, providerOdds, ruleVersion: MARKET_RULE_VERSION,
+  return evidenceFingerprint({ contract: "feed-performance-query-v3", locale, providerOdds, ruleVersion: MARKET_RULE_VERSION,
     joins: statement(sql.joins), where: statement(sql.where) });
 }
 type Sample = HistoryRow & Readonly<{

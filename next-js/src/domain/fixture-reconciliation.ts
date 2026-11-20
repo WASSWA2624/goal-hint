@@ -34,6 +34,7 @@ export function mergeFixtureObservation<T extends FixtureSnapshot>(previous: T, 
     ...(next.prices === undefined ? {} : { prices: next.prices }),
     ...("marketOdds" in previous || "marketOdds" in next ? { marketOdds: next.marketOdds ?? null } : {}),
     ...("featuredPrediction" in previous || "featuredPrediction" in next ? { featuredPrediction: next.featuredPrediction ?? null } : {}),
+    ...("filteredPrediction" in previous || "filteredPrediction" in next ? { filteredPrediction: next.filteredPrediction } : {}),
     ...("retrospective" in previous || "retrospective" in next ? { retrospective: next.retrospective ?? null } : {}),
     forecast: previous.forecast && { ...previous.forecast, updateDelayed: next.forecast?.updateDelayed } };
 }
