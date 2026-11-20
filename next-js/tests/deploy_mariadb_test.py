@@ -50,6 +50,25 @@ class DeployMariaDbTests(unittest.TestCase):
         self.assertIn(b"DROP CONSTRAINT named", result)
         self.assertIn(b"ADD CONSTRAINT untouched CHECK (1)", result)
 
+    def test_local_goal_extension_overlay_preserves_the_seal_and_validates_models(self):
+        name = "20261120140000_local_goal_extension_shape"
+        migration = next(row for row in self.migrations if row.name == name)
+        sql = migration.sql.replace(b"\r\n", b"\n")
+        overlay = migration.overlay.replace(b"\r\n", b"\n")
+        self.assertIn(sql, overlay)
+        alter = overlay.index(b"ALTER TABLE GoalMarketExtension")
+        guard = overlay[:alter]
+        verification = overlay[alter + len(sql):]
+        self.assertIn(b"20261113140000_expand_local_goal_markets", guard)
+        self.assertIn(b"GoalMarketExtension_shape_v2", guard)
+        self.assertNotIn(b"DROP CONSTRAINT GoalMarketExtension_seal", sql)
+        self.assertIn(b"GoalMarketExtension_seal", verification)
+        self.assertLess(verification.index(b"SIGNAL SQLSTATE"), verification.index(b"INSERT INTO _prisma_migrations"))
+        self.assertIn(migration.checksum.encode(), verification)
+        for name in (b"scoreDistribution", b"localPoisson"):
+            self.assertIn(b"JSON_TYPE(JSON_EXTRACT(body, '$." + name + b"')) = 'OBJECT'", sql)
+            self.assertIn(b"JSON_CONTAINS_PATH(body, 'one', '$." + name + b"') = 0", sql)
+
     def test_ledger_rejects_gaps_incomplete_duplicate_and_edited_migrations(self):
         first, second = self.migrations[:2]
         cases = [[ledger_entry(second)], [ledger_entry(first)] * 2,
