@@ -261,8 +261,9 @@ export function providerFallbackPolicy(refs: LiveReferences): ProviderFallbackPo
     sourceUrl: "https://www.api-football.com/documentation-v3" });
 }
 export function resultSyncPolicy(refs: LiveReferences, workload: LiveWorkload,
-  coverage: ResultSyncPolicy["coverage"], local = false): ResultSyncPolicy {
+  coverage: ResultSyncPolicy["coverage"], local = false, coordinated = false): ResultSyncPolicy {
   return Object.freeze({ version: 1, evidenceRef: refs.results, coverage, approachMs: 15 * MINUTE, activeWindowMs: 3 * HOUR,
+    ...(coordinated ? { coordinated: true as const } : {}),
     unresolved: workload.unresolved, corrections: workload.corrections,
     cadence: local ? { ...workload.cadence, dateMs: Math.max(5 * MINUTE, workload.cadence.dateMs) } : workload.cadence,
     ...(local ? { skipConfirmedFinals: true as const } : {}), leaseMs: MINUTE, tickMs: 5 * SECOND,
@@ -271,9 +272,10 @@ export function resultSyncPolicy(refs: LiveReferences, workload: LiveWorkload,
       retry: { maxAttempts: 4, baseDelayMs: 500, maxDelayMs: 5 * SECOND }, cacheMaxAgeMs: 0 } });
 }
 
-export function liveMatchPolicy(refs: LiveReferences, workload: LiveWorkload, coverage: LiveMatchPolicy["coverage"], batch = false): LiveMatchPolicy {
+export function liveMatchPolicy(refs: LiveReferences, workload: LiveWorkload, coverage: LiveMatchPolicy["coverage"], batch = false,
+  coordinated = false): LiveMatchPolicy {
   return Object.freeze({ version: 1, evidenceRef: `${refs.freshness}#live-match-details`, coverage,
-    ...(batch ? { stopAfterFinal: true as const } : {}),
+    ...(coordinated ? { coordinated: true as const } : batch ? { stopAfterFinal: true as const } : {}),
     intervalMs: workload.liveDetails.intervalMs, finalIntervalMs: workload.liveDetails.finalIntervalMs,
     finalWindowMs: workload.liveDetails.finalWindowMs, staleAfterMs: 5 * MINUTE,
     leaseMs: MINUTE, tickMs: 5 * SECOND, maxFixturesPerTick: batch ? 20 : workload.liveDetails.maxFixturesPerTick, requestWindowMs: 25 * SECOND,

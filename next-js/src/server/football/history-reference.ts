@@ -97,9 +97,10 @@ export function createFootballHistoryReference(options: Readonly<{
   now(): UtcInstant;
   providerDayEndsAt(): number | null;
   replayMaxAgeMs?: number;
+  priority?: "enrichment" | "historical-backfill";
   checkpoint?: FootballHistoryReferenceCheckpoint;
 }>) {
-  const { reference, hasPage, savePage, now, providerDayEndsAt, replayMaxAgeMs = 0, checkpoint } = options;
+  const { reference, hasPage, savePage, now, providerDayEndsAt, replayMaxAgeMs = 0, checkpoint, priority: dispatchPriority = "historical-backfill" } = options;
 
   return {
     async run(input: Readonly<{ targets: readonly FootballHistoryReferenceTarget[]; maxRequests: number; hasMoreTargets?: boolean; signal?: AbortSignal }>) {
@@ -114,7 +115,8 @@ export function createFootballHistoryReference(options: Readonly<{
         const selector = { endpoint: target.endpoint, parameters };
         plan.set(JSON.stringify(selector), { target, selector });
       }
-      const planned = [...plan.values()].sort(({ target: left }, { target: right }) => {
+      const planned = [...plan.values()];
+      if (dispatchPriority === "historical-backfill") planned.sort(({ target: left }, { target: right }) => {
         const leftPriority = priority(left), rightPriority = priority(right);
         if (leftPriority !== rightPriority) return rightPriority - leftPriority;
         if (leftPriority === 0) return 0;
@@ -144,7 +146,7 @@ export function createFootballHistoryReference(options: Readonly<{
           if (dayStop() || now() >= deadlineAt) throw new Error("The historical reference request expired.");
         };
         totals.requested++;
-        const response = await reference.page(target, { priority: "historical-backfill", deadlineAt, timeoutMs: 30_000,
+        const response = await reference.page(target, { priority: dispatchPriority, deadlineAt, timeoutMs: 30_000,
           maxRequests: 1, maxPages: 1, maxRows: 10_000, maxResponseBytes: 24_000_000,
           retry: { maxAttempts: 4, baseDelayMs: 500, maxDelayMs: 2500 }, cacheMaxAgeMs: 0,
           ...(replayMaxAgeMs > 0 ? { replayMaxAgeMs } : {}) },

@@ -157,7 +157,7 @@ test("the complete documented environment example parses safely without approval
     "GOAL_HINT_IOS_DISTRIBUTION_URL", "GOAL_HINT_IOS_DISTRIBUTION_VERSION", "GOAL_HINT_IOS_DISTRIBUTION_BUILD",
     "GOAL_HINT_FOOTBALL_EXISTING_PREPAID", "GOAL_HINT_ODDS_IMPORT_ENABLED", "GOAL_HINT_ODDS_BOOKMAKER_ID", "GOAL_HINT_ODDS_BOOKMAKER_SCOPE", "GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF",
     "GOAL_HINT_TEAM_CODES_IMPORT_ENABLED", "GOAL_HINT_LIVE_DETAILS_ENABLED", "GOAL_HINT_HISTORY_IMPORT_ENABLED",
-    "GOAL_HINT_FOOTBALL_RESPONSE_ARCHIVE_ENABLED", "GOAL_HINT_AI_BILLING_MODE",
+    "GOAL_HINT_FOOTBALL_RESPONSE_ARCHIVE_ENABLED", "GOAL_HINT_COORDINATED_FOOTBALL_ENABLED", "GOAL_HINT_FOOTBALL_FORECAST_CONCURRENCY", "GOAL_HINT_AI_BILLING_MODE",
     "GOAL_HINT_FORECAST_SOURCE_ORDER", "GOAL_HINT_RESEARCH_HOSTS",
     "GOAL_HINT_ANALYTICS_ENABLED", "GOAL_HINT_ANALYTICS_SECRET", "GOAL_HINT_ANALYTICS_RETENTION_DAYS", "GOAL_HINT_ANALYTICS_GEO_SOURCE",
     // Administrator credentials are private configuration and do not grant provider capabilities.
@@ -180,7 +180,7 @@ test("the complete documented environment example parses safely without approval
     }
   }
   const { database, probabilitySumTolerance, consistencyTolerance, odds, teamCodes, liveDetails, historyImport,
-    footballResponseArchive, budgets, analytics, forecasts, football, ...unresolvedChoices } = policy.choices;
+    footballResponseArchive, coordinatedFootball, budgets, analytics, forecasts, football, ...unresolvedChoices } = policy.choices;
   // With AI enabled the provider baseline publishes first; no promotion reference is assumed.
   assert.deepEqual(forecasts, { sourceOrder: "ai-first", aiPromotionRef: null });
   // Consent-gated analytics is on by default but has no credentials, secret or retention override until configured.
@@ -197,6 +197,7 @@ test("the complete documented environment example parses safely without approval
   assert.deepEqual(liveDetails, { enabled: false });
   assert.deepEqual(historyImport, { enabled: false });
   assert.deepEqual(footballResponseArchive, { enabled: false });
+  assert.deepEqual(coordinatedFootball, { enabled: false, forecastConcurrency: 1 });
   assert.equal(probabilitySumTolerance, marketRules.probabilitySumTolerance);
   assert.equal(consistencyTolerance, marketRules.consistencyTolerance);
   assert.deepEqual(database, {

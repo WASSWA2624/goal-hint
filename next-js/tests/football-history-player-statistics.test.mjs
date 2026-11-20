@@ -256,6 +256,53 @@ test("raw page envelopes share a source selector and restore their verified play
   assert.equal(await source.readPlayerStatisticsPages(target), null);
 });
 
+test("active player snapshots resume exact pages and never borrow another day's or the historical scan's pages", async () => {
+  const { saved, source } = archiveMemory();
+  let now = NOW;
+  const calls = [];
+  const run = (date) => createFootballHistoryPlayerStatistics({ ...source.playerStatisticsSnapshot(date),
+    now: () => now, providerDayEndsAt: () => NOW + 3 * 86_400_000, priority: "enrichment",
+    async playerStatisticsPage(selector, bounds) {
+      assert.equal(bounds.priority, "enrichment");
+      assert.deepEqual(Object.keys(selector), ["competitionId", "season", "page"]);
+      calls.push(selector.page);
+      return response(selector, ++now);
+    },
+  }).run({ targets: [target], maxRequests: 1 });
+  const firstDate = "2026-11-12";
+  const legacySelector = { ...target, page: 1 }, rows = players(legacySelector);
+  await source.savePlayerStatisticsPage({ ...legacySelector, rows, totalPages: 2, retrievedAt: now,
+    rowCount: rows.length, playerIds: rows.map(({ player }) => player.id) });
+  assert.equal((await run(firstDate)).status, "partial");
+  assert.equal((await run(firstDate)).status, "complete");
+  assert.equal((await run(firstDate)).requests, 0);
+  now += 86_400_000;
+  assert.equal((await run("2026-11-13")).status, "partial");
+  assert.deepEqual(calls, [1, 2, 1]);
+  assert.equal((await source.readPlayerStatisticsPages(target)).receipts.length, 1);
+  assert.deepEqual(saved.map(({ endpoint, parameters }) => [endpoint, parameters.snapshotDay]),
+    [["playerStatistics", undefined], ["activePlayerStatistics", firstDate], ["activePlayerStatistics", firstDate],
+      ["activePlayerStatistics", "2026-11-13"]]);
+  await assert.rejects(source.playerStatisticsSnapshot(firstDate).savePage({ ...legacySelector, rows, totalPages: 2, retrievedAt: now,
+    rowCount: rows.length, playerIds: rows.map(({ player }) => player.id) }), /Invalid historical player archive page/u);
+});
+
+test("active player pagination gives separate due scopes a turn in caller order", async () => {
+  const { source } = archiveMemory();
+  let now = NOW;
+  const calls = [], older = { competitionId: 11, season: 2024 }, current = { competitionId: 39, season: 2026 };
+  const pager = createFootballHistoryPlayerStatistics({ ...source.playerStatisticsSnapshot("2026-11-12"),
+    now: () => now, providerDayEndsAt: () => NOW + 86_400_000, priority: "enrichment", maxRequestsPerTarget: 1,
+    async playerStatisticsPage(selector) {
+      calls.push([selector.competitionId, selector.page]);
+      return response(selector, ++now);
+    },
+  });
+  await pager.run({ targets: [older, current], maxRequests: 2 });
+  await pager.run({ targets: [current, older], maxRequests: 2 });
+  assert.deepEqual(calls, [[11, 1], [39, 1], [39, 2], [11, 2]]);
+});
+
 test("player-statistics planning uses observed approved seasons and skips explicit noncoverage", async () => {
   const season = (year, ids, coverage) => ({ year, coverage, competition: { providers: ids.map((externalId) => ({ externalId })) } });
   const database = { async query(operation) { return operation({ footballSeason: { async findMany(query) {

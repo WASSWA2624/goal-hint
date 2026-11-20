@@ -8,6 +8,10 @@ test("archive batches use bounded, stable envelopes and the lowest enrichment pr
   assert.deepEqual(batch, historyImportEnvelopes(slot));
   assert.equal(new Set(batch.map(({ idempotencyKey }) => idempotencyKey)).size, batch.length);
   assert.ok(batch.every(({ priority, notBefore, expiresAt, timeoutMs }) => priority === 0 && notBefore === slot && expiresAt - slot > timeoutMs));
+  assert.ok(!batch.some(({ payload }) => payload.phase === "reference"));
+  const coordinated = historyImportEnvelopes(slot, { includeReference: true });
+  assert.deepEqual(coordinated.slice(0, -1), batch);
+  assert.equal(coordinated.at(-1).payload.phase, "reference");
 });
 
 test("archive progress uses the owned job lease and keeps quota, retry and provider coverage distinct", async () => {

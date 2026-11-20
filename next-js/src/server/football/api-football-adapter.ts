@@ -25,7 +25,7 @@ import { isFootballHistoryPersonRecord, isFootballHistoryPersonRecordEndpoint, r
 import { archivedCoachRowId, archivedPlayerProfileRowId, archivedPlayerStatisticsRowId, playerStatisticsProviderId } from "./history-player-statistics-input.ts";
 import type { FootballHistoryPlayerProfileSelector, FootballHistoryPlayerStatisticsSelector } from "./history-player-statistics.ts";
 
-export type FixtureQuery = Readonly<{ date?: string; competitionId?: number; season?: number;
+export type FixtureQuery = Readonly<{ date?: string; live?: true; competitionId?: number; season?: number;
   teamId?: number; from?: string; to?: string; round?: string; fixtureId?: number; fixtureIds?: readonly number[] }>;
 export type FixtureHeadToHeadQuery = Readonly<{ teamIds: readonly [number, number] } & Pick<FixtureQuery, "competitionId" | "season" | "from" | "to" | "date">>;
 export type FixturePlayersQuery = Readonly<{ fixtureId: number; homeTeamId: number; awayTeamId: number }>;
@@ -201,7 +201,8 @@ function validBounds(bounds: ApiFootballBounds, now: UtcInstant, fallback: boole
     && (!fallback || (typeof bounds.cacheScope === "string" && bounds.cacheScope.trim().length > 0 && bounds.cacheScope.length <= 256));
 }
 function queryParams(query: FixtureQuery): Params | null {
-  if (!keysAllowed(query, ["date", "competitionId", "season", "teamId", "from", "to", "round", "fixtureId"]) || Object.keys(query).length === 0) return null;
+  if (!keysAllowed(query, ["date", "live", "competitionId", "season", "teamId", "from", "to", "round", "fixtureId"]) || Object.keys(query).length === 0) return null;
+  if (query.live !== undefined) return query.live === true && Object.keys(query).length === 1 ? { live: "all", timezone: "Africa/Kampala" } : null;
   if ([query.competitionId, query.teamId, query.fixtureId].some((id) => id !== undefined && !positive(id))) return null;
   if (query.season !== undefined && (!positive(query.season) || query.season > 9999)) return null;
   if (query.competitionId !== undefined && query.season === undefined) return null;
@@ -713,16 +714,18 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
           if (lastError.reason === "archive-unavailable" || !lastError.retryable) return { error: lastError };
           const networkFailure = lastError.reason === "transport-error";
           const retryDelay = networkFailure ? providerNetworkRetryDelaysMs[networkRetries++] : undefined;
-          if (attempt + 1 >= bounds.retry.maxAttempts || budget.requests >= bounds.maxRequests || networkFailure && retryDelay === undefined) {
-            return { error: networkFailure ? { ...lastError, retryAfterMs: Math.max(providerRetryAfterExhaustedMs, lastError.retryAfterMs ?? 0) } : lastError };
+          if (networkFailure && retryDelay === undefined) {
+            return { error: { ...lastError, retryAfterMs: Math.max(providerRetryAfterExhaustedMs, lastError.retryAfterMs ?? 0) } };
           }
+          // A tighter caller budget can defer the first attempt to its durable schedule.
+          if (attempt + 1 >= bounds.retry.maxAttempts || budget.requests >= bounds.maxRequests) return { error: lastError };
           const randomFraction = Math.min(1, Math.max(0, random()));
           const backoff = retryDelay === undefined
             ? Math.ceil(Math.min(bounds.retry.maxDelayMs, bounds.retry.baseDelayMs * 2 ** Math.min(attempt, 30)) * randomFraction)
             : Math.min(bounds.retry.maxDelayMs, Math.ceil(retryDelay * (1 + providerRetryJitterRatio * randomFraction)));
           const delay = Math.max(backoff, lastError.retryAfterMs ?? 0, lastError.retryAt === undefined ? 0 : lastError.retryAt - clock.now());
           if (!nonnegative(delay) || delay >= deadlineAt - clock.now() || delay > 2_147_483_647) {
-            return { error: networkFailure ? { ...lastError, retryAfterMs: Math.max(providerRetryAfterExhaustedMs, lastError.retryAfterMs ?? 0) } : lastError };
+            return { error: lastError };
           }
           await sleep(delay);
         }
@@ -848,6 +851,8 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
       },
       fixturesByDate: (date: string, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => fixtureQueries({ date }, bounds, workflow),
       liveFixtures: (bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => run("fixtures", [{ live: "all", timezone: "Africa/Kampala" }], bounds, normalizeFixture, undefined, workflow),
+      liveFixtureDetails: (bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => run("fixtures", [{ live: "all", timezone: "Africa/Kampala" }],
+        { ...bounds, cacheMaxAgeMs: 0 }, normalizeFixtureMatchDetails, undefined, workflow),
       unresolvedFixtures(ids: readonly number[], bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow): Promise<ApiFootballResult<NormalizedFixture>> {
         return fixtureIds(ids, bounds, normalizeFixture, workflow);
       },
@@ -884,8 +889,9 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
       },
       statistics: (fixtureId: number, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => run("statistics", positive(fixtureId) ? [{ fixture: String(fixtureId) }] : null, bounds, normalizeStatistics, undefined, workflow),
       events: (fixtureId: number, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => run("events", positive(fixtureId) ? [{ fixture: String(fixtureId) }] : null, bounds, normalizeEvent, undefined, workflow),
-      availability: (fixtureId: number, kind: "lineups" | "injuries", bounds: ApiFootballBounds) => run(kind === "injuries" ? "injuries" : "lineups",
-        positive(fixtureId) && ["lineups", "injuries"].includes(kind) ? [{ fixture: String(fixtureId) }] : null, bounds, (raw, context) => normalizeAvailability(raw, kind, context)),
+      availability: (fixtureId: number, kind: "lineups" | "injuries", bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => run(kind === "injuries" ? "injuries" : "lineups",
+        positive(fixtureId) && ["lineups", "injuries"].includes(kind) ? [{ fixture: String(fixtureId) }] : null, bounds,
+        (raw, context) => normalizeAvailability(raw, kind, context), undefined, workflow),
       injuriesByFixtures(ids: readonly number[], bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) {
         const queries: Params[] = [];
         if (Array.isArray(ids) && ids.every(positive)) {

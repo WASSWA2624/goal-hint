@@ -5,6 +5,7 @@ import { normalizeFixture } from "../src/server/football/api-football-normalize.
 import { catalogPersistenceUnavailable, CatalogStoreError } from "../src/server/football/catalog-mysql-store.ts";
 import { createFootballCatalogImporter } from "../src/server/football/catalog-service.ts";
 import { createFootballHistoryBackfill, normalizeHistoryCompetition } from "../src/server/football/history-backfill.ts";
+import { createFixtureBackfillManifestStore } from "../src/server/football/history-fixture-manifest.ts";
 import { CATALOG_NOW, catalogFixture, catalogRequest } from "./helpers/catalog-fixtures.mjs";
 
 test("duplicate league season records share one fixture selector and retain reported coverage", () => {
@@ -20,13 +21,15 @@ test("duplicate league season records share one fixture selector and retain repo
   assert.equal(competition.seasons[0].coverage.odds, null);
 });
 
-function harness(failures = [], upcomingSeasons) {
+function harness(failures = [], upcomingSeasons, progress = {}) {
   const receipts = new Map(), requests = [], imported = [];
+  const reads = [];
   const instant = Date.parse("2026-11-12T02:00:00Z");
   let now = instant;
   const run = createFootballHistoryBackfill({
     competitionIds: [11, 7], retentionEvidenceRef: "verified-history-retention",
     upcomingSeasons,
+    ...progress,
     now: () => now, providerDayEndsAt: () => instant + 24 * 3_600_000,
     async competitions(query, bounds) {
       requests.push({ query, bounds });
@@ -35,7 +38,7 @@ function harness(failures = [], upcomingSeasons) {
         .map(({ id, seasons }) => ({ id, seasons: seasons.map(year => ({ year })) }));
       return { status: "complete", requestsDispatched: 1, data };
     },
-    store: { findImport: async id => receipts.get(id) ?? null },
+    store: { findImport: async id => { reads.push(id); return receipts.get(id) ?? null; } },
     importer: { async import(request) {
       assert.equal(request.bounds.maxRequests, 1);
       assert.equal(request.bounds.priority, "historical-backfill");
@@ -52,8 +55,71 @@ function harness(failures = [], upcomingSeasons) {
       return receipt;
     } },
   });
-  return { run, imported, requests, advance: (ms) => { now += ms; } };
+  return { run, imported, requests, reads, advance: (ms) => { now += ms; } };
 }
+
+test("the persisted scan anchors current-day discovery and resumes the exact unscanned season after midnight", async () => {
+  let manifest = null;
+  const days = [], h = harness([], undefined, {
+    manifest: { read: async () => structuredClone(manifest), save: async (_ids, _oldest, value) => { manifest = structuredClone(value); } },
+    async initializeDate(date) {
+      days.push(date);
+      return { status: "scanned", reason: null, requests: 0 };
+    },
+  });
+  const first = await h.run({ maxRequests: 3 });
+  assert.equal(first.dateScanned, true);
+  assert.equal(first.scannedSeasons, 2);
+  assert.deepEqual(first.nextScope, { competitionId: 11, season: 2025 });
+  h.advance(20 * 3_600_000);
+  const next = await h.run({ maxRequests: 2 });
+  assert.equal(next.status, "complete");
+  assert.equal(next.scannedSeasons, 4);
+  assert.equal(next.partialSeasons, 0);
+  assert.equal(h.requests.length, 1, "the fixed manifest does not re-read the league catalog after a restart");
+  assert.deepEqual(days, ["2026-11-12"], "a verified discovery receipt is not checked again as the cursor advances");
+  assert.deepEqual(h.imported.map(({ selection }) => selection.query), [
+    { competitionId: 7, season: 2026 }, { competitionId: 11, season: 2026 },
+    { competitionId: 11, season: 2025 }, { competitionId: 7, season: 2024 },
+  ]);
+  const reads = h.reads.length;
+  assert.equal((await h.run({ maxRequests: 2 })).requests, 0);
+  assert.equal(h.reads.length, reads, "a completed prefix is not scanned again to locate the next scope");
+});
+
+test("archive manifest keys canonical approval scope and rejects invalid cursor progress", async () => {
+  let stored;
+  const source = { async savePage(page) { stored = structuredClone(page); }, async latestPage(selector) {
+    return stored?.parameters.scope === selector.parameters.scope ? stored : null;
+  } };
+  const store = createFixtureBackfillManifestStore(source);
+  const manifest = { version: 1, anchorDate: "2026-11-12", catalogAt: CATALOG_NOW, dateScanned: true,
+    seasons: [{ scope: { competitionId: 11, season: 2026 }, coverage: {} }], unlistedCompetitions: [],
+    cursor: { next: 1, completed: 1, empty: 0, deferred: [] } };
+  await store.save([11, 7], 2020, manifest, CATALOG_NOW);
+  assert.deepEqual(await store.read([7, 11], 2020), manifest);
+  assert.equal(await store.read([11, 7], 2021), null);
+  stored.rows[0].cursor.deferred.push(0);
+  await assert.rejects(store.read([11, 7], 2020), /approved scope/u);
+});
+
+test("a deferred season remains visible while the fixed scan advances to other history", async () => {
+  let manifest = null;
+  const h = harness(["transport-error"], undefined, {
+    manifest: { read: async () => structuredClone(manifest), save: async (_ids, _oldest, value) => { manifest = structuredClone(value); } },
+  });
+  const first = await h.run({ maxRequests: 3 });
+  assert.equal(first.scannedSeasons, 2);
+  assert.equal(first.completed, 1);
+  assert.equal(first.partialSeasons, 1);
+  const next = await h.run({ maxRequests: 2 });
+  assert.equal(next.scannedSeasons, 4);
+  assert.equal(next.partialSeasons, 1);
+  assert.equal(next.status, "partial");
+  h.advance(16 * 60_000);
+  assert.equal((await h.run({ maxRequests: 2 })).status, "complete");
+  assert.deepEqual(h.imported.at(-1).selection.query, { competitionId: 7, season: 2026 });
+});
 
 test("historical batches share a bounded budget, proceed newest first and resume from completed receipts", async () => {
   const h = harness();

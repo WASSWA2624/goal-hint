@@ -26,6 +26,7 @@ import type { EvidenceContext } from "../evidence/evidence-contract.ts";
 import { assessBaselineEvidence } from "../evidence/baseline-evidence.ts";
 import type { RecommendationQuote } from "../../domain/recommendation.ts";
 import { selectRecommendation } from "./recommendation-selection.ts";
+import type { ForecastLifecyclePolicy } from "./forecast-orchestration.ts";
 
 class PhaseTimeout extends Error {}
 type CostReader = Pick<ReturnType<typeof createCostService>, "jobSummary">;
@@ -38,6 +39,7 @@ function checked(value: unknown, expected: unknown) {
 export function createPredictionRefreshService(options: Readonly<{
   type: string; handlerVersion: number; store: RefreshStore; selection: Pick<DailySelectionStore, "progress" | "inspect">;
   authority: RefreshAuthority; configure(member: RefreshMember): RefreshPlan | Promise<RefreshPlan>;
+  forecastLifecycle?: ForecastLifecyclePolicy;
   /** Optional bounded input imports before the immutable analysis cutoff is captured. */
   prepare?(member: RefreshMember, context: JobHandlerContext): Promise<void | Readonly<{ sources: readonly import("../evidence/evidence-contract.ts").EvidenceSource[]; research?: Readonly<{ status: "completed" | "denied"; reason: string | null }> }>>;
   models: Pick<ModelRegistry, "resolve">; evidence: Pick<ReturnType<typeof createEvidenceService>, "collect">;
@@ -69,7 +71,7 @@ export function createPredictionRefreshService(options: Readonly<{
     const progress = await options.selection.progress(runId);
     return freezeEvidence({ ...progress, finished: progress.terminal === progress.total });
   }
-  async function handle(context: JobHandlerContext): Promise<JobOutcome> {
+  async function handle(context: JobHandlerContext, planned?: ForecastLifecyclePolicy): Promise<JobOutcome> {
     const lease = context.lease;
     if (!lease.job.envelope.refresh) return { status: "failed", reason: "invalid-payload", retryable: false };
     const identity = lease.job.envelope.refresh;
@@ -93,6 +95,9 @@ export function createPredictionRefreshService(options: Readonly<{
     }
     let intent = await options.store.intent(lease.jobId);
     if (!intent) {
+      if (planned && (!options.forecastLifecycle || evidenceFingerprint(options.forecastLifecycle) !== evidenceFingerprint(planned))) {
+        return finish("skipped", "forecast-configuration-changed");
+      }
       if (options.prepare) {
         const prepared = await options.store.stage(lease.jobId, "preparation", "completed");
         if (prepared) phases.preparation = "reused";
@@ -315,7 +320,7 @@ export function createPredictionRefreshService(options: Readonly<{
   const definition = defineJob({ type: options.type, handlerVersion: options.handlerVersion, payload: refreshPayload,
     handle: async (payload, context) => {
       if (evidenceFingerprint(payload) !== evidenceFingerprint(context.lease.job.envelope.payload)) return refreshFail("invalid-request");
-      try { return await handle(context); }
+      try { return await handle(context, payload.forecastLifecycle); }
       catch (error) {
         const identity = context.lease.job.envelope.refresh;
         if (!identity || context.signal.aborted || error instanceof PredictionRefreshError && error.reason === "unavailable" ||

@@ -31,10 +31,12 @@ test('live details on genuine MySQL use fenced stable ownership, bounded occurre
       ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
     CREATE TABLE FixtureResultState (fixtureId CHAR(36) PRIMARY KEY, firstFinalAt DATETIME(3) NULL)
       ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+    CREATE TABLE FixtureFacts (fixtureId CHAR(36) PRIMARY KEY, lineups JSON NULL, statistics JSON NULL, detailsRetrievedAt DATETIME(3) NULL)
+      ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
     CREATE TABLE PublicCacheTag (tag VARCHAR(64) PRIMARY KEY, generation BIGINT UNSIGNED NOT NULL)
       ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;`);
   await root.query(await readFile(new URL('../prisma/migrations/20261025170000_live_match_details/migration.sql', import.meta.url), 'utf8'));
-  for (const table of ['FootballFixture', 'PredictionCycle', 'FootballTeamProvider', 'FootballCompetitionProvider', 'FootballSeason', 'FixtureResultState', 'PublicCacheTag'])
+  for (const table of ['FootballFixture', 'PredictionCycle', 'FootballTeamProvider', 'FootballCompetitionProvider', 'FootballSeason', 'FixtureResultState', 'FixtureFacts', 'PublicCacheTag'])
     await root.query(`GRANT SELECT ON goal_hint_test.${table} TO 'paid_application'@'127.0.0.1'`);
   for (const table of ['LiveMatchPollerLease', 'LiveMatchSnapshot'])
     await root.query(`GRANT SELECT,INSERT,UPDATE ON goal_hint_test.${table} TO 'paid_application'@'127.0.0.1'`);
@@ -84,6 +86,24 @@ test('live details on genuine MySQL use fenced stable ownership, bounded occurre
     const first = targets[0]; await store.schedule(lease, first, await now() + 60_000);
     assert.equal((await due()).some(value => value.fixtureId === first.fixtureId), false);
     await root.query('UPDATE LiveMatchSnapshot SET nextPollAt=attemptedAt');
+  });
+  await t.test('coordinated schedules offer missing lineups within 90 minutes and delay initial final details 15 minutes', async () => {
+    const settings = { ...policy, coordinated: true }, minute = 60_000;
+    const [upcoming, confirmed, outside, mature] = await Promise.all([
+      seed(130, 'scheduled'), seed(131, 'scheduled'), seed(132, 'scheduled'), seed(133, 'finished-regulation', -16 * minute),
+    ]);
+    for (const [fixture, minutes] of [[upcoming, 90], [confirmed, 60], [outside, 91]]) {
+      await root.query('UPDATE FootballFixture SET kickoff=? WHERE id=?', [new Date(initial + minutes * minute), fixture.id]);
+    }
+    const lineups = [10, 20].map(id => ({ team: { id }, startXI: Array.from({ length: 11 }, (_, index) => ({ player: { id: id * 100 + index } })) }));
+    await root.query('INSERT INTO FixtureFacts (fixtureId,lineups,detailsRetrievedAt) VALUES (?,?,?)', [confirmed.id, JSON.stringify(lineups), new Date(initial)]);
+    const dueNow = new Set((await store.due(settings, initial, 100)).map(value => value.fixtureId));
+    assert.ok(dueNow.has(upcoming.id) && dueNow.has(mature.id));
+    assert.ok(!dueNow.has(confirmed.id) && !dueNow.has(outside.id) && !dueNow.has(final.id));
+    const later = new Set((await store.due(settings, initial + 15 * minute, 100)).map(value => value.fixtureId));
+    assert.ok(later.has(final.id));
+    await root.query('DELETE FROM FixtureFacts WHERE fixtureId=?', [confirmed.id]);
+    for (const fixture of [upcoming, confirmed, outside, mature]) await root.query('DELETE FROM FootballFixture WHERE id=?', [fixture.id]);
   });
   await t.test('snapshots replace a single bounded body, preserve zeros and invalidate cached detail only on data change', async () => {
     const item = await target(live.id); await store.schedule(lease, item, await now() + 60_000);

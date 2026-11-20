@@ -8,6 +8,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { calendarRules } from "../../domain/calendar.ts";
 import type { RuntimePolicy } from "../config/runtime-policy.ts";
 import { historyImportEnvelopes, latestHistoryImportSlot } from "../football/history-import-jobs.ts";
+import { currentDayContextEnvelope, footballRefreshCadence } from "../football/current-day-refresh.ts";
 import { createJobRegistry } from "../jobs/job-registry.ts";
 import { createJobWorker } from "../jobs/job-worker.ts";
 import { resultCadence } from "../results/result-sync-policy.ts";
@@ -15,7 +16,8 @@ import { DAILY_SELECTION_TYPE, dailySelectionEnvelope, HOURLY_SELECTION_TYPE, ho
 import { latestOddsSlot, oddsScheduleEnvelopes, ODDS_SWEEP_MS } from "../odds/odds-jobs.ts";
 import { latestTeamCodesSlot, teamCodesEnvelope, TEAM_CODES_SLOT_MS } from "../teams/team-code-jobs.ts";
 import { LiveAccountError } from "./live-account.ts";
-import { assessLiveCapacity, selectionTriggerBounds } from "./live-plan.ts";
+import { FORECAST_RECOVERY_INTERVAL_MS } from "../refresh/forecast-orchestration.ts";
+import { assessLiveCapacity, LIVE_REFRESH_TYPE, selectionTriggerBounds } from "./live-plan.ts";
 import { createLiveRuntime, LiveConfigurationError, type LiveRuntime } from "./live-runtime.ts";
 
 const MINUTE = 60_000, DAY = 86_400_000;
@@ -37,6 +39,7 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
   localFootball: boolean) {
   let accountCheckedAt = Date.now(), scheduled = 0, pollerCheckedAt = 0, oddsScheduled = 0, teamCodesScheduled = 0;
   let hourlyScheduled: number | null = null, historyScheduled = 0;
+  let currentDayScheduled = -1, recoveredForecastSlot = -1;
   let capacity: ReturnType<typeof assessLiveCapacity> | null = null, capacityWarning: string | null = null;
   type Poller = Readonly<{ controller: AbortController; done: Promise<void>; policy: unknown }>;
   const owned: { poller: Poller | null; details: Poller | null } = { poller: null, details: null };
@@ -99,6 +102,25 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
           } catch (error) { log({ event: "hourly-selection-schedule-failed", reason: reason(error) }); }
         }
       }
+      if (runtime.currentDayContextEnabled) {
+        const interval = footballRefreshCadence.currentDay;
+        const slot = Math.floor(now / interval) * interval;
+        if (slot !== currentDayScheduled && slot % (interval * enrichmentMultiplier) === 0) {
+          try {
+            const job = await runtime.queue.enqueue(currentDayContextEnvelope(slot));
+            currentDayScheduled = slot;
+            log({ event: "current-context-scheduled", scheduledFor: new Date(slot).toISOString(), state: job.state });
+          } catch (error) { log({ event: "current-context-schedule-failed", reason: reason(error) }); }
+        }
+      }
+      if (runtime.forecastRecovery) {
+        const slot = Math.floor(now / FORECAST_RECOVERY_INTERVAL_MS);
+        if (slot !== recoveredForecastSlot) try {
+          const report = await runtime.forecastRecovery.run();
+          if (!report.hasMore || report.restored + report.retried === 0) recoveredForecastSlot = slot;
+          log({ event: "forecast-recovery", ...report });
+        } catch (error) { log({ event: "forecast-recovery-failed", reason: reason(error) }); }
+      }
       // Odds: the UTC day's catalog, then one import per EAT date for each 3-hour slot (nearest date first).
       // Durable idempotency keys make restarts, plan rebuilds and a retried tick re-enqueue the same rows.
       if (runtime.odds.enabled) {
@@ -126,7 +148,7 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
         const slot = latestHistoryImportSlot(now);
         if (slot !== historyScheduled) {
           try {
-            for (const envelope of historyImportEnvelopes(slot)) await runtime.queue.enqueue(envelope);
+            for (const envelope of historyImportEnvelopes(slot, { includeReference: runtime.coordinated })) await runtime.queue.enqueue(envelope);
             historyScheduled = slot;
           } catch (error) { log({ event: "football-history-schedule-failed", reason: reason(error) }); }
         }
@@ -199,7 +221,9 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
     const pollerStates = new Map<string, string>();
     try { runtime = await createLiveRuntime(policy, { localFootball,
       onHourlyLookupFailure: (reason, fixtureCount) => log({ event: "hourly-fixture-reconcile-failed", reason, fixtureCount }),
-      ...(localFootball ? { onPollerState: (kind, state) => {
+      onCurrentDayCoverage: (report) => log({ event: "current-context", requested: report.requested,
+        archived: report.archived, skipped: report.skipped, deferred: report.deferred, stopped: report.stopped }),
+      ...(localFootball || policy.choices.coordinatedFootball.enabled ? { onPollerState: (kind, state) => {
       if (pollerStates.get(kind) === state) return;
       pollerStates.set(kind, state);
       log({ event: "poller-state", kind, state });
@@ -215,7 +239,8 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
     // Bound background claim concurrency so browsing can share it during a large catch-up.
     const workersPerRun = localFootball ? Math.min(2, workload.workers) : workload.workers;
     log({ event: "ready", plan: runtime.day.status.plan, dailyLimit: workload.dailyLimit, usedToday: runtime.day.status.usedToday,
-      refreshCapacity: workload.refreshCapacity, workers: workersPerRun, liveMs: workload.cadence.liveMs, dateMs: workload.cadence.dateMs,
+      refreshCapacity: workload.refreshCapacity, workers: runtime.coordinated ? runtime.forecastConcurrency + 2 : workersPerRun,
+      forecastConcurrency: runtime.coordinated ? runtime.forecastConcurrency : null, liveMs: workload.cadence.liveMs, dateMs: workload.cadence.dateMs,
       // `oddsSwitch` true with `odds` false means the owner enabled imports but this plan is not eligible; the same
       // holds for `teamCodesSwitch` and `teamCodes`, which share the odds spare.
       odds: runtime.odds.enabled, oddsSwitch: policy.choices.odds.enabled, oddsSpare: workload.odds.spare,
@@ -230,8 +255,17 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
       selectionRegistry = createJobRegistry(definitions.filter((definition) => selectionTypes.has(definition.type)));
       refreshAndCutoffRegistry = createJobRegistry(definitions.filter((definition) => !selectionTypes.has(definition.type)));
     }
-    const workers = Array.from({ length: workersPerRun }, (_, index) => createJobWorker({
-      queue: runtime.queue, registry: index === 0 ? selectionRegistry : refreshAndCutoffRegistry,
+    let workerRegistries = Array.from({ length: workersPerRun }, (_, index) => index === 0 ? selectionRegistry : refreshAndCutoffRegistry);
+    if (runtime.coordinated) {
+      const definitions = runtime.registry.types.map(({ type, handlerVersion }) => runtime.registry.find(type, handlerVersion)!);
+      const isSelection = (type: string) => type === DAILY_SELECTION_TYPE || type === HOURLY_SELECTION_TYPE;
+      const forecast = createJobRegistry(definitions.filter(({ type }) => type === LIVE_REFRESH_TYPE));
+      const schedules = createJobRegistry(definitions.filter(({ type }) => isSelection(type)));
+      const cutoff = createJobRegistry(definitions.filter(({ type }) => !isSelection(type) && type !== LIVE_REFRESH_TYPE));
+      workerRegistries = [schedules, cutoff, ...Array.from({ length: runtime.forecastConcurrency }, () => forecast)];
+    }
+    const workers = workerRegistries.map(registry => createJobWorker({
+      queue: runtime.queue, registry,
       ownerId: randomBytes(32).toString("hex"), onEvent: (event) => {
         if (event.kind !== "claimed") log({ event: `job-${event.kind}`, jobId: event.jobId?.slice(0, 12) ?? null, reason: event.reason });
       } }).run(stop));

@@ -30,7 +30,7 @@ const searchableText = (maximum: number) => string(maximum).refine((value) => {
 const text = string(512).nullable();
 const country = searchableText(256);
 const fixtureQuery = z.object({
-  date: date.optional(), competitionId: identity.optional(), season: season.optional(), teamId: identity.optional(),
+  date: date.optional(), live: z.literal(true).optional(), competitionId: identity.optional(), season: season.optional(), teamId: identity.optional(),
   from: date.optional(), to: date.optional(), round: z.string().min(1).max(200).optional(), fixtureId: identity.optional(),
   fixtureIds: z.array(identity).min(1).max(20).refine((ids) => new Set(ids).size === ids.length)
     .transform((ids) => ids.sort((left, right) => left - right)).optional(),
@@ -40,7 +40,7 @@ const fixtureQuery = z.object({
   if ((query.from === undefined) !== (query.to === undefined) || query.date !== undefined && query.from !== undefined) return false;
   if (query.from !== undefined && query.to !== undefined && query.from > query.to) return false;
   if (query.round !== undefined && query.competitionId === undefined) return false;
-  return query.fixtureId === undefined && query.fixtureIds === undefined ||
+  return query.fixtureId === undefined && query.fixtureIds === undefined && query.live === undefined ||
     Object.values(query).filter((value) => value !== undefined).length === 1;
 });
 const selectionSchema = z.discriminatedUnion("kind", [
@@ -170,6 +170,7 @@ function parameters(selection: CatalogSelection): Record<string, string> {
   const params: Record<string, string> = {};
   if (selection.kind === "fixtures") {
     params.timezone = "Africa/Kampala";
+    if (selection.query.live) params.live = "all";
     for (const [field, name] of [["date", "date"], ["competitionId", "league"], ["season", "season"], ["teamId", "team"],
       ["from", "from"], ["to", "to"], ["round", "round"], ["fixtureId", "id"]] as const) {
       const value = selection.query[field];

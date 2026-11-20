@@ -118,6 +118,32 @@ test('shared result synchronization on isolated genuine MySQL', { timeout: 420_0
         advance(45_000); await s.poller.runOnce(); assert.equal(channels(s.source, 'ids').length, 6);
         assert.ok(s.source.reservations.filter((request) => request.priority === 'results-cutoff').length >= 6);
       });
+      await t.test('coordinated disappearance persists before confirmation and old unresolved fixtures keep a durable daily check', async () => {
+        const now = Date.parse('2026-11-20T21:04:00Z'), hour = 3_600_000;
+        p.setTime(now);
+        const s = await seed([
+          catalogFixture(11200, { kickoff: new Date(now - 30 * 60_000).toISOString(), status: '1H' }),
+          catalogFixture(11201, { kickoff: new Date(now - 90 * 24 * hour).toISOString(), status: 'NS' }),
+        ], { coordinated: true, approachMs: 15 * 60_000 }, { importAgeMs: 25 * hour });
+        const current = await s.fixture(0), overdue = await s.fixture(1);
+        const trackedBefore = await s.store.tracked(s.policy, now);
+        assert.deepEqual(new Set(trackedBefore.map(row => row.externalId)), new Set([11200, 11201]));
+        s.source.state.respond = async (url) => {
+          if (url.searchParams.has('live') || url.searchParams.has('date')) return catalogResponse(url, []);
+          const ids = (url.searchParams.get('ids') ?? url.searchParams.get('id')).split('-').map(Number);
+          const before = await s.store.result(current.id);
+          assert.equal(before.state.delayReason, 'missing-from-live-feed');
+          assert.equal(before.result, null);
+          return catalogResponse(url, s.rows.filter(row => ids.includes(row.fixture.id)));
+        };
+        assert.equal(await s.poller.runOnce(), true);
+        assert.equal(channels(s.source, 'live').length, 1);
+        assert.equal(channels(s.source, 'ids').length, 1);
+        assert.equal((await catalog.fixtureByProviderId(11200)).status, 'live');
+        const state = (await s.store.result(overdue.id)).state;
+        assert.equal(state.delayReason, 'unresolved-investigation');
+        assert.equal(state.nextCheckAt.getTime(), now + 24 * hour);
+      });
       await t.test('date/live responses deduplicate ID work and coverage is filtered locally', async () => {
         const s = await seed([catalogFixture(10004, { kickoff: new Date(p.now()-60_000).toISOString(), status: '1H' })]);
         s.source.state.rows.push(catalogFixture(999999, { competitionId: 99999, kickoff: new Date(p.now()).toISOString(), status: '1H' }));

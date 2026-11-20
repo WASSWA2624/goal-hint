@@ -13,7 +13,7 @@ import { footballHistoryFixtureScopeFingerprint, readUpcomingFootballHistorySeas
 import { createFootballHistorySource } from "./history-source.ts";
 
 const provider = "api-football";
-const localArchiveMetadata = new Set(["playerArchiveConflict", "playerArchiveGeneration", "trophiesOmitted", "sidelinedOmitted"]);
+const localArchiveMetadata = new Set(["playerArchiveConflict", "playerArchiveGeneration", "trophiesOmitted", "sidelinedOmitted", "fixtureBackfillManifest"]);
 const league = z.object({ league: z.object({ id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER) }),
   seasons: z.array(z.unknown()) });
 const season = z.object({ year: z.number().int().min(1000).max(9999) });
@@ -154,6 +154,8 @@ export async function readFootballArchiveCoverage(database: DatabaseRuntime, at:
       verifiedComplete: entries.length > 0 && invalidLeagues === 0 && invalidSeasons === 0 && leaguesWithoutSeasons === 0 &&
         unlisted === 0 && unlistedActiveSeasons === 0 && fixtureSeasons.verifiedData + fixtureSeasons.verifiedEmpty === entries.length },
     matchDetails: details,
+    // Provider observation windows, independent of the prices already retained by this application.
+    oddsHistory: { preMatchRetentionDays: 7, preMatchAvailabilityVaries: true, liveArchiveAvailable: false },
     archiveObservations: observations.filter(({ endpoint }) => !localArchiveMetadata.has(endpoint)),
     archiveMarkers: observations.filter(({ endpoint }) => localArchiveMetadata.has(endpoint)),
     indexedSubjects: subjects.map(({ kind, total }) => ({ kind, count: Number(total) })),

@@ -39,6 +39,8 @@ type ArchiveOptions<Target> = Readonly<{
   providerDayEndsAt(): number | null;
   maximumPage?: number;
   replayMaxAgeMs?: number;
+  priority?: "historical-backfill" | "enrichment";
+  maxRequestsPerTarget?: number;
 }>;
 type BatchInput = Readonly<{ maxRequests: number; signal?: AbortSignal }>;
 
@@ -90,8 +92,10 @@ function acceptedPage<Target>(response: ApiFootballResult<Readonly<{ raw: unknow
 
 /** Each target requires a consistent receipt for every page reported by the provider. */
 function playerArchive<Target>(options: ArchiveOptions<Target>, transport: PlayerPageTransport<Target>, rules: PageRules<Target>) {
-  const { readPages, savePage, recordConflict, now, providerDayEndsAt, maximumPage, replayMaxAgeMs = 0 } = options, { pageSize } = rules;
+  const { readPages, savePage, recordConflict, now, providerDayEndsAt, maximumPage, replayMaxAgeMs = 0,
+    priority = "historical-backfill", maxRequestsPerTarget } = options, { pageSize } = rules;
   if (maximumPage !== undefined && !positive(maximumPage)) throw new RangeError("Invalid player-statistics page limit.");
+  if (maxRequestsPerTarget !== undefined && !positive(maxRequestsPerTarget)) throw new RangeError("Invalid player-statistics target request limit.");
 
   return {
     async run(input: BatchInput & Readonly<{ targets: readonly Target[] }>, onPage?: (report: PageReport<Target>) => void) {
@@ -117,9 +121,11 @@ function playerArchive<Target>(options: ArchiveOptions<Target>, transport: Playe
         totals.skipped += state.pages.size;
         let { totalPages, empty } = state;
         let page = 1;
+        const beforeTarget = totals.requests;
         while (totalPages === null || page <= totalPages) {
           if (state.pages.has(page)) { page++; continue; }
           if (maximumPage !== undefined && page > maximumPage) { totals.limited++; continue targetLoop; }
+          if (maxRequestsPerTarget !== undefined && totals.requests - beforeTarget >= maxRequestsPerTarget) continue targetLoop;
           stopped = dayStop();
           if (stopped) break targetLoop;
           if (totals.requests >= maxRequests) { stopped = "request-budget"; break targetLoop; }
@@ -130,7 +136,7 @@ function playerArchive<Target>(options: ArchiveOptions<Target>, transport: Playe
           };
           const selector = { ...target, page };
           totals.requested++;
-          const response = await transport(selector, { priority: "historical-backfill", deadlineAt, timeoutMs: 30_000,
+          const response = await transport(selector, { priority, deadlineAt, timeoutMs: 30_000,
             maxRequests: 1, maxPages: 1, maxRows: pageSize, maxResponseBytes: 4_000_000,
             retry: { maxAttempts: 4, baseDelayMs: 500, maxDelayMs: 2500 }, cacheMaxAgeMs: 0,
             ...(replayMaxAgeMs > 0 ? { replayMaxAgeMs } : {}) },
@@ -191,7 +197,9 @@ export function createFootballHistoryPlayerStatistics(options: ArchiveOptions<Fo
         }
         unique.set(`${target.competitionId}:${target.season}`, { competitionId: target.competitionId, season: target.season });
       }
-      return archive.run({ ...input, targets: [...unique.values()].sort((left, right) => right.season - left.season) }, onPage);
+      const targets = [...unique.values()];
+      if (options.priority !== "enrichment") targets.sort((left, right) => right.season - left.season);
+      return archive.run({ ...input, targets }, onPage);
     },
   };
 }

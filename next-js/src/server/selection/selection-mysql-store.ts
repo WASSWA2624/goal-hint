@@ -13,6 +13,7 @@ import type { JobQueue } from "../jobs/job-contract.ts";
 import { durableJobId, jobHash, parseJobEnvelope } from "../jobs/job-input.ts";
 import type { CreateCycleInput } from "../predictions/history-contract.ts";
 import { createMysqlPredictionHistoryStore } from "../predictions/history-mysql-store.ts";
+import { FORECAST_JOB_COALESCE_MS, forecastJobIdentity, forecastLineupHash } from "../refresh/forecast-orchestration.ts";
 import { DailySelectionError, selectionFail, type CycleSelectionEligibility, type DegradedSelectionAction,
   type SelectionAuthority, type SelectionCoverage, type SelectionEntry, type SelectionImport,
   type SelectionLease, type SelectionManifest, type SelectionPolicy } from "./selection-contract.ts";
@@ -213,6 +214,10 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
       });
     },
     async commit(lease: SelectionLease, policy: SelectionPolicy, degradedAction: DegradedSelectionAction | null, confirmed: readonly string[] = []): Promise<SelectionManifest> {
+      const lifecycle = policy.forecastLifecycle;
+      const leadMs = lifecycle ? FORECAST_JOB_COALESCE_MS : policy.refreshLeadMs ?? 0;
+      const requiredMissing = (dates: readonly SelectionCoverage[], hourly: boolean) =>
+        (hourly && lifecycle ? dates.slice(0, 1) : dates).some(({ status }) => status !== "complete");
       const evidenceByFixture = new Map<string, { identity: string; fingerprint: string; evidenceReady: boolean }>();
       if (options.hourly?.localEvidence) {
         const prepared = await database.query(async (tx) => {
@@ -221,11 +226,11 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
           const at = await serverNow(tx);
           const window = selectionRunWindow(run);
           const dates = await coverage(tx, run.id, window.runDate, policy.windowDays ?? 7, run.slotHour > 0);
-          if (degradedAction === null && dates.some((date) => date.status !== "complete")) return null;
+          if (degradedAction === null && requiredMissing(dates, run.slotHour > 0)) return null;
           const ids = [...new Set([...dates.flatMap((date) => date.fixtureIds), ...confirmed])];
           if (ids.length > policy.maxFixtures) return null;
           const candidates = await tx.footballFixture.findMany({ where: { id: { in: ids }, status: "scheduled",
-            kickoff: { gt: new Date(at + (policy.refreshLeadMs ?? 0)) },
+            kickoff: { gt: new Date(at + leadMs) },
             season: { competition: { providers: { some: { provider: "api-football", externalId: { in: policy.competitionIds.map(BigInt) } } } } } },
           select: { id: true, kickoff: true, homeTeamId: true, awayTeamId: true, season: { select: { competitionId: true } } } });
           return { at, candidates };
@@ -253,11 +258,11 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
         const runDate = row.eatDate.toISOString().slice(0, 10), window = selectionRunWindow(row);
         const hourly = row.slotHour > 0;
         const dates = await coverage(tx, row.id, runDate, policy.windowDays ?? 7, hourly), partial = dates.some((date) => date.status !== "complete");
-        if (partial && degradedAction === null) return selectionFail("incomplete-import");
+        if (degradedAction === null && requiredMissing(dates, hourly)) return selectionFail("incomplete-import");
         const ids = [...new Set([...dates.flatMap((date) => date.fixtureIds), ...confirmed])].sort();
         if (ids.length > policy.maxFixtures) return selectionFail("capacity-exceeded");
         const entries: Omit<SelectionEntry, "rank" | "envelope">[] = [], exclusions: { fixtureId: string; reason: string }[] = [];
-        const capacity = hourly && policy.refreshCapacity !== undefined
+        const capacity = lifecycle ? undefined : hourly && policy.refreshCapacity !== undefined
           ? Math.ceil(policy.refreshCapacity / 24) : policy.refreshCapacity;
         const competitions = new Set(policy.competitionIds), initial: CreateCycleInput[] = [];
         const fixtures = await selectionFixtures(tx, ids);
@@ -266,17 +271,31 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
           (b.kickoff?.getTime() ?? Number.MAX_SAFE_INTEGER) || a.id.localeCompare(b.id));
         const { now: selectedAt } = await assertOwned(tx, lease);
         const inputByFixture = new Map<string, MaterialInput>();
+        const lineups = new Map<string, string | null>();
+        if (lifecycle) for (let offset = 0; offset < ids.length; offset += 500) {
+          const facts = await tx.fixtureFacts.findMany({ where: { fixtureId: { in: ids.slice(offset, offset + 500) },
+            detailsRetrievedAt: { lte: new Date(selectedAt) } }, select: { fixtureId: true, lineups: true } });
+          for (const entry of facts) lineups.set(entry.fixtureId, forecastLineupHash(entry.lineups));
+        }
+        const forecastKey = (fixtureId: string, cycleId: string) => {
+          if (!lifecycle) return null;
+          const input = inputByFixture.get(fixtureId);
+          if (!input) return selectionFail("unavailable");
+          return forecastJobIdentity({ fixtureId, cycleId, scheduleHash: input.scheduleHash, evidenceHash: input.evidenceHash,
+            lineupHash: lineups.get(fixtureId) ?? null, ...lifecycle });
+        };
         const cycles = fixtures.flatMap((fixture) => fixture.activeCycle?.state === "open" ? [fixture.activeCycle.id] : []);
-        const latest = new Map<string, { cycleId: string; kickoffAt: Date; sequence: bigint; jobState: string | null }>();
-        if (hourly) for (let offset = 0; offset < cycles.length; offset += 500) {
-          const rows = await tx.$queryRaw<{ cycleId: string; kickoffAt: Date; sequence: bigint; jobState: string | null }[]>(Prisma.sql`
-            SELECT r.cycleId, r.kickoffAt, d.sequence, j.state AS jobState FROM RunFixture r
+        type PreviousJob = { cycleId: string; kickoffAt: Date; sequence: bigint; jobState: string | null; identity: string | null };
+        const latest = new Map<string, PreviousJob>();
+        if (hourly || lifecycle) for (let offset = 0; offset < cycles.length; offset += 500) {
+          const rows = await tx.$queryRaw<PreviousJob[]>(Prisma.sql`
+            SELECT r.cycleId, r.kickoffAt, d.sequence, j.state AS jobState, j.idempotencyKey AS identity FROM RunFixture r
             JOIN DailyRun d ON d.id = r.runId LEFT JOIN DurableJob j ON j.id = r.jobId
             WHERE r.cycleId IN (${Prisma.join(cycles.slice(offset, offset + 500))})
             ORDER BY d.eatDate DESC, d.slotHour DESC`);
           for (const entry of rows) if (!latest.has(entry.cycleId)) latest.set(entry.cycleId, entry);
         }
-        const previousInputs = options.hourly && ids.length
+        const previousInputs = (options.hourly || lifecycle) && ids.length
           ? await tx.selectionFixtureInput.findMany({ where: { fixtureId: { in: ids } } }) : [];
         const inputs = new Map(previousInputs.map((entry) => [entry.fixtureId, entry]));
         for (const fixture of fixtures) {
@@ -288,11 +307,12 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
           if (fixture.kickoff === null || !isInWindow(utcInstantFromEpochMilliseconds(fixture.kickoff.getTime()), window)) { exclude("outside-window"); continue; }
           const kickoffAt = utcInstantFromEpochMilliseconds(fixture.kickoff.getTime()), cutoffAt = getPublicationDeadline(kickoffAt);
           if (cutoffAt <= selectedAt) { exclude("cutoff-passed"); continue; }
-          if (policy.refreshLeadMs !== undefined && cutoffAt <= selectedAt + policy.refreshLeadMs) { exclude("cutoff-too-close"); continue; }
+          if (cutoffAt <= selectedAt + leadMs) { exclude("cutoff-too-close"); continue; }
           const cycle = fixture.activeCycle;
-          if (options.hourly) {
+          if (options.hourly || lifecycle) {
+            const round = lifecycle ? fixture.round?.trim().replace(/\s+/gu, " ").toLowerCase() ?? null : fixture.round;
             const scheduleHash = evidenceFingerprint({ kickoffAt, homeTeamId: fixture.homeTeamId, awayTeamId: fixture.awayTeamId,
-              seasonId: fixture.seasonId, round: fixture.round });
+              seasonId: fixture.seasonId, round });
             const target = { id: fixtureId, competitionId: fixture.season.competitionId,
               homeTeamId: fixture.homeTeamId, awayTeamId: fixture.awayTeamId, kickoffAt };
             const candidateEvidence = evidenceByFixture.get(fixtureId);
@@ -302,23 +322,28 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
             const evidenceReady = evidence?.evidenceReady ?? retainedEvidence?.evidenceReady ?? false;
             const evidenceHash = evidence?.fingerprint ?? retainedEvidence?.evidenceHash ?? emptyEvidenceHash;
             inputByFixture.set(fixtureId, { scheduleHash, evidenceHash, evidenceReady });
-            if (hourly && cycle?.state === "open") {
+            if ((hourly || lifecycle) && cycle?.state === "open") {
               const lastRun = latest.get(cycle.id);
               if (lastRun && predictionRunOrder(lastRun.sequence) >= predictionRunOrder(row.sequence)) { exclude("newer-run"); continue; }
-              const known = previous?.cycleId === cycle.id;
-              const scheduleChanged = known ? previous.scheduleHash !== scheduleHash
-                : lastRun !== undefined && lastRun.kickoffAt.getTime() !== kickoffAt;
               const pending = lastRun !== undefined && (lastRun.jobState === null || ["pending", "running"].includes(lastRun.jobState));
-              const newCandidate = !lastRun && cycle.currentSetId === null;
-              const nowReady = evidenceReady && (known ? !previous.evidenceReady : cycle.currentSetId === null);
-              const evidenceChanged = evidenceReady && known && previous.evidenceHash !== evidenceHash;
-              const becameInsufficient = known && previous.evidenceReady && !evidenceReady && evidence !== undefined;
-              if ((!scheduleChanged && (!newCandidate && !nowReady && !evidenceChanged)) ||
-                  (pending && lastRun.kickoffAt.getTime() === kickoffAt)) {
-                if ((!known || becameInsufficient) && !pending) {
-                  await recordInput(tx, fixtureId, { cycleId: cycle.id, runId: row.id, scheduleHash, evidenceHash, evidenceReady });
+              if (lifecycle) {
+                if (pending) { exclude("refresh-pending"); continue; }
+                if (lastRun?.identity === forecastKey(fixtureId, cycle.id)) { exclude("inputs-unchanged"); continue; }
+              } else {
+                const known = previous?.cycleId === cycle.id;
+                const scheduleChanged = known ? previous.scheduleHash !== scheduleHash
+                  : lastRun !== undefined && lastRun.kickoffAt.getTime() !== kickoffAt;
+                const newCandidate = !lastRun && cycle.currentSetId === null;
+                const nowReady = evidenceReady && (known ? !previous.evidenceReady : cycle.currentSetId === null);
+                const evidenceChanged = evidenceReady && known && previous.evidenceHash !== evidenceHash;
+                const becameInsufficient = known && previous.evidenceReady && !evidenceReady && evidence !== undefined;
+                if ((!scheduleChanged && (!newCandidate && !nowReady && !evidenceChanged)) ||
+                    (pending && lastRun.kickoffAt.getTime() === kickoffAt)) {
+                  if ((!known || becameInsufficient) && !pending) {
+                    await recordInput(tx, fixtureId, { cycleId: cycle.id, runId: row.id, scheduleHash, evidenceHash, evidenceReady });
+                  }
+                  exclude(pending ? "refresh-pending" : "inputs-unchanged"); continue;
                 }
-                exclude(pending ? "refresh-pending" : "inputs-unchanged"); continue;
               }
             }
           }
@@ -347,16 +372,29 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
         for (const cycle of await history.createInitialCyclesInTransaction(tx, initial, selectedAt))
           entries.push({ fixtureId: cycle.fixtureId, cycleId: cycle.id, kickoffAt: cycle.kickoffAt });
         entries.sort((a, b) => a.kickoffAt - b.kickoffAt || a.fixtureId.localeCompare(b.fixtureId));
-        // Kickoff-ordered visits restore the original identifier order for the manifest.
-        if (capacity !== undefined) exclusions.sort((a, b) => a.fixtureId < b.fixtureId ? -1 : a.fixtureId > b.fixtureId ? 1 : 0);
-        const selected = entries.map((entry, rank): SelectionEntry => {
+        const candidates = entries.map((entry) => ({ entry, identity: forecastKey(entry.fixtureId, entry.cycleId) }));
+        const knownJobKeys = new Set<string>();
+        if (lifecycle) for (let offset = 0; offset < candidates.length; offset += 500) {
+          const keys = candidates.slice(offset, offset + 500).map(({ identity }) => identity!);
+          const rows = await tx.durableJob.findMany({ where: { type: policy.refresh.type, handlerVersion: policy.refresh.handlerVersion,
+            idempotencyKey: { in: keys } }, select: { idempotencyKey: true } });
+          for (const row of rows) knownJobKeys.add(row.idempotencyKey);
+        }
+        const selected = candidates.filter(({ entry, identity }) => {
+          if (identity === null || !knownJobKeys.has(identity)) return true;
+          exclusions.push({ fixtureId: entry.fixtureId, reason: "inputs-unchanged" });
+          return false;
+        }).map(({ entry, identity }, rank): SelectionEntry => {
           const refresh = { runId: row.id, fixtureId: entry.fixtureId, cycleId: entry.cycleId };
-          const envelope = parseJobEnvelope({ ...policy.refresh, version: 1, idempotencyKey: evidenceFingerprint(refresh), refresh,
-            payload: { input: policy.refresh.payload, ...refresh, runDate, rank },
-            notBefore: (hourly ? selectedAt : window.startInclusive) + rank, expiresAt: getPublicationDeadline(utcInstantFromEpochMilliseconds(entry.kickoffAt)),
-            priority: 255 - Math.min(rank, 255) });
+          const envelope = parseJobEnvelope({ ...policy.refresh, version: 1, idempotencyKey: identity ?? evidenceFingerprint(refresh), refresh,
+            payload: { input: policy.refresh.payload, ...refresh, runDate, rank, ...(lifecycle ? { forecastLifecycle: lifecycle } : {}) },
+            notBefore: lifecycle ? selectedAt + FORECAST_JOB_COALESCE_MS : (hourly ? selectedAt : window.startInclusive) + rank,
+            expiresAt: getPublicationDeadline(utcInstantFromEpochMilliseconds(entry.kickoffAt)),
+            priority: lifecycle ? 128 : 255 - Math.min(rank, 255) });
           return { ...entry, rank, envelope };
         });
+        // Restore canonical exclusion order after the kickoff and material-identity reads.
+        if (capacity !== undefined || lifecycle) exclusions.sort((a, b) => a.fixtureId < b.fixtureId ? -1 : a.fixtureId > b.fixtureId ? 1 : 0);
         for (let offset = 0; offset < selected.length; offset += 200)
           await tx.runFixture.createMany({ data: selected.slice(offset, offset + 200).map((entry) => ({ runId: row.id, fixtureId: entry.fixtureId,
             cycleId: entry.cycleId, rank: entry.rank, kickoffAt: new Date(entry.kickoffAt), envelopeJson: json(entry.envelope) })) });
@@ -370,7 +408,7 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
           }
           await recordInput(tx, entry.fixtureId, { cycleId: entry.cycleId, runId: row.id, ...input });
         }
-        if (hourly) for (const entry of selected) {
+        if (hourly && !lifecycle) for (const entry of selected) {
           const job = await queue.enqueueInTransaction(tx, entry.envelope);
           await tx.runFixture.update({ where: { runId_fixtureId_cycleId: { runId: row.id, fixtureId: entry.fixtureId, cycleId: entry.cycleId } },
             data: { jobId: job.id, jobState: job.state, terminalReason: job.terminalReason } });
@@ -393,7 +431,7 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
       for (const entry of manifest.entries) {
         // One transaction per entry avoids shard lock ordering and preserves recovery prefixes.
         await queue.withTransaction(async (enqueue, tx) => {
-          await assertOwned(tx, lease);
+          const { row } = await assertOwned(tx, lease);
           const key = { runId: lease.runId, fixtureId: entry.fixtureId, cycleId: entry.cycleId };
           const stored = await tx.runFixture.findUniqueOrThrow({ where: { runId_fixtureId_cycleId: key } });
           if (evidenceFingerprint(stored.envelopeJson) !== evidenceFingerprint(entry.envelope) || stored.rank !== entry.rank ||
@@ -404,6 +442,9 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
           }
           const job = await enqueue(entry.envelope);
           await tx.runFixture.update({ where: { runId_fixtureId_cycleId: key }, data: { jobId: job.id, jobState: job.state, terminalReason: job.terminalReason } });
+          if (row.slotHour > 0 && (row.selectionJson as unknown as SelectionPolicy).forecastLifecycle) {
+            await options.hourly?.scheduleCutoff?.(entry, tx);
+          }
         });
       }
       return this.progress(lease.runId);

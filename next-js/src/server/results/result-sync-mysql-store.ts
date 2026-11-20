@@ -12,7 +12,7 @@ import { assertHistorySeal, historyJson } from "../predictions/history-read.ts";
 import type { createScheduleLifecycleService } from "../predictions/lifecycle-service.ts";
 import { lifecycleObservationSchema } from "../predictions/lifecycle-input.ts";
 import { lifecycleContentHash } from "../predictions/lifecycle-policy.ts";
-import { finalStatus } from "./result-sync-policy.ts";
+import { coordinatedResultDefaults, finalStatus, missingFromLiveFeed, requiresResultInvestigation, resultCadence, unresolvedInvestigation } from "./result-sync-policy.ts";
 import { ResultSyncError, resultSyncFail, type PollLease, type ResultSyncStore } from "./result-sync-contract.ts";
 import { storedFixtureResult } from "./result-read.ts";
 import { fixtureResultValue, insertFixtureResult } from "./result-write.ts";
@@ -22,11 +22,15 @@ type TrackedFixtureRow = Readonly<{
   fixtureId: string; externalId: bigint; competitionId: bigint; season: number; kickoff: Date | null;
   status: string; retrievedAt: Date; createdAt: Date; regulationVerifiedAt: Date | null;
   firstTrackedAt: Date | null; firstFinalAt: Date | null; lastSyncAt: Date | null; nextCheckAt: Date | null; failures: bigint | number | null;
+  delayReason: string | null;
 }>;
 const batchSchema = z.strictObject({ id: historyHash, accountId: historyHash, policyHash: historyHash,
   receivedAt: historyInstant, channel: z.enum(["date", "live", "ids"]), date: z.string().nullable(),
   requestedIds: z.array(z.number().int().positive()), observations: z.array(lifecycleObservationSchema),
-  error: z.string().max(128).nullable(), requestsDispatched: z.number().int().nonnegative() });
+  error: z.string().max(128).nullable(), requestsDispatched: z.number().int().nonnegative(), coordinated: z.literal(true).exactOptional(),
+  missingLiveFixtures: z.array(z.strictObject({ fixtureId: z.uuid(), competitionId: z.number().int().positive(), season: z.number().int().positive() })).exactOptional(),
+}).refine(batch => !batch.missingLiveFixtures || batch.channel === "live" && batch.coordinated === true && batch.error === null &&
+  new Set(batch.missingLiveFixtures.map(row => row.fixtureId)).size === batch.missingLiveFixtures.length);
 const now = async (tx: Tx) => utcInstantFromEpochMilliseconds((await tx.$queryRaw<{ at: Date }[]>`SELECT UTC_TIMESTAMP(3) AS at`)[0]!.at.getTime());
 const epoch = new Date(0);
 
@@ -99,6 +103,9 @@ export function createMysqlResultSyncStore(options: Readonly<{
         const correctionLower = new Date(lower.getTime() - (policy.corrections.at(-1)?.untilAgeMs ?? 0));
         const upper = new Date(at + policy.approachMs);
         const scope = JSON.stringify(policy.coverage);
+        const older = new Date(at - coordinatedResultDefaults.investigateAfterMs), current = new Date(at);
+        const recentDue = new Date(at - coordinatedResultDefaults.unresolvedRecentMs), oldDue = new Date(at - coordinatedResultDefaults.unresolvedLaterMs);
+        const liveDue = new Date(at - resultCadence(policy).activeMs), liveWindow = new Date(at - policy.activeWindowMs);
         // A single relation join per table supports large competition lists.
         // Group provider aliases before joining fixtures to avoid duplicates.
         const fixtures = await tx.$queryRaw<TrackedFixtureRow[]>`
@@ -108,29 +115,48 @@ export function createMysqlResultSyncStore(options: Readonly<{
             JOIN FootballCompetitionProvider cp ON cp.provider = 'api-football' AND cp.externalId = wanted.competitionId
             JOIN FootballSeason s ON s.competitionId = cp.competitionId AND s.year = wanted.season
             GROUP BY s.id, s.year
+          ), overdue AS (
+            SELECT f.id FROM FootballFixture f JOIN coveredSeasons s ON s.id = f.seasonId
+            LEFT JOIN FixtureResultState r ON r.fixtureId = f.id
+            WHERE ${policy.coordinated === true} AND f.provider = 'api-football'
+              AND f.status NOT IN ('finished-regulation','finished-extra-time','finished-penalties','canceled','abandoned','awarded')
+              AND COALESCE(f.kickoff,r.firstTrackedAt,f.createdAt) <= ${current}
+              AND (r.nextCheckAt IS NULL OR r.nextCheckAt <= ${current})
+              AND (r.delayReason = ${missingFromLiveFeed} OR COALESCE(f.kickoff,r.firstTrackedAt,f.createdAt) <= ${older}
+                AND COALESCE(r.delayReason,'') <> ${unresolvedInvestigation} OR GREATEST(f.retrievedAt, COALESCE(r.lastSyncAt, ${epoch})) <=
+                CASE WHEN f.status = 'live' AND COALESCE(f.kickoff,r.firstTrackedAt,f.createdAt) >= ${liveWindow} THEN ${liveDue}
+                  WHEN COALESCE(f.kickoff,r.firstTrackedAt,f.createdAt) > ${older} THEN ${recentDue} ELSE ${oldDue} END)
+            ORDER BY (r.delayReason = ${missingFromLiveFeed}) DESC, COALESCE(r.nextCheckAt, ${epoch}), f.retrievedAt, f.id
+            LIMIT ${policy.maxBatchesPerTick * 20}
           )
           SELECT f.id AS fixtureId, f.externalId, s.competitionId, s.year AS season, f.kickoff, f.status, f.retrievedAt,
-            f.createdAt, f.regulationVerifiedAt, r.firstTrackedAt, r.firstFinalAt, r.lastSyncAt, r.nextCheckAt, r.failures
+            f.createdAt, f.regulationVerifiedAt, r.firstTrackedAt, r.firstFinalAt, r.lastSyncAt, r.nextCheckAt, r.failures, r.delayReason
           FROM FootballFixture f JOIN coveredSeasons s ON s.id = f.seasonId
           LEFT JOIN FixtureResultState r ON r.fixtureId = f.id
           WHERE f.provider = 'api-football' AND (
             (f.kickoff >= ${new Date(day.startInclusive)} AND f.kickoff < ${new Date(day.endExclusive)})
-            OR (${policy.skipConfirmedFinals !== true} AND f.kickoff BETWEEN ${correctionLower} AND ${upper})
+            OR (${policy.skipConfirmedFinals !== true} AND f.kickoff BETWEEN ${correctionLower} AND ${upper} AND
+              (${policy.coordinated !== true} OR f.status IN ('finished-regulation','finished-extra-time','finished-penalties','canceled','abandoned','awarded')))
             OR (f.kickoff BETWEEN ${lower} AND ${upper} AND (
-              f.status NOT IN ('finished-regulation', 'finished-extra-time', 'finished-penalties', 'canceled', 'abandoned', 'awarded')
+              (${policy.coordinated !== true} AND f.status NOT IN ('finished-regulation', 'finished-extra-time', 'finished-penalties', 'canceled', 'abandoned', 'awarded'))
               OR (f.regulationVerifiedAt IS NULL AND f.status IN ('finished-regulation', 'finished-extra-time', 'finished-penalties'))))
-            OR (f.kickoff IS NULL AND f.createdAt >= ${lower} AND (
+            OR (${policy.coordinated !== true} AND f.kickoff IS NULL AND f.createdAt >= ${lower} AND (
               ${policy.skipConfirmedFinals !== true}
               OR f.status NOT IN ('finished-regulation', 'finished-extra-time', 'finished-penalties', 'canceled', 'abandoned', 'awarded')))
+            OR (${policy.coordinated !== true} AND r.nextCheckAt <= ${current}
+              AND COALESCE(f.kickoff,r.firstTrackedAt,f.createdAt) < ${lower})
+            OR (${policy.coordinated === true} AND (f.status = 'live' OR f.status = 'scheduled' AND f.kickoff BETWEEN ${current} AND ${upper}))
+            OR f.id IN (SELECT id FROM overdue)
           )`;
         return freezeEvidence(fixtures.map((fixture) => ({ fixtureId: fixture.fixtureId, externalId: Number(fixture.externalId),
           competitionId: Number(fixture.competitionId), season: fixture.season, kickoffAt: fixture.kickoff?.getTime() ?? null,
           status: fixture.status, retrievedAt: fixture.retrievedAt.getTime(),
           firstTrackedAt: fixture.firstTrackedAt?.getTime() ?? Math.min(at, fixture.createdAt.getTime()),
-          firstFinalAt: fixture.firstFinalAt?.getTime() ?? (finalStatus(fixture.status) ? fixture.retrievedAt.getTime() : null),
+          firstFinalAt: policy.coordinated && !finalStatus(fixture.status) ? null :
+            fixture.firstFinalAt?.getTime() ?? (finalStatus(fixture.status) ? fixture.retrievedAt.getTime() : null),
           lastSyncAt: fixture.lastSyncAt?.getTime() ?? null,
           nextCheckAt: fixture.firstTrackedAt === null ? 0 : fixture.nextCheckAt?.getTime() ?? null,
-          failures: Number(fixture.failures ?? 0),
+          failures: Number(fixture.failures ?? 0), ...(policy.coordinated ? { delayReason: fixture.delayReason } : {}),
           ...(policy.skipConfirmedFinals ? { finalConfirmed: finalStatus(fixture.status) &&
             (!isPlayedFinalStatus(fixture.status as SettlementStatus) || fixture.regulationVerifiedAt !== null) } : {}) })));
       });
@@ -198,10 +224,14 @@ export function createMysqlResultSyncStore(options: Readonly<{
               await tx.predictionChangeEvent.create({ data: { fixtureId: fixture.id, version, fixtureResultId: resultId, kind: "fixture-result", at: new Date(at) } });
             }
             const lastSyncAt = new Date(Math.max(state?.lastSyncAt?.getTime() ?? 0, observation.retrievedAt));
-            const firstFinalAt = state?.firstFinalAt ?? (finalStatus(before.status) ? before.retrievedAt
+            const firstFinalAt = batch.coordinated && accepted && !finalStatus(fixture.status) ? null :
+              state?.firstFinalAt ?? (finalStatus(before.status) ? before.retrievedAt
               : accepted && finalStatus(fixture.status) ? new Date(observation.retrievedAt) : null);
+            const investigate = batch.coordinated && requiresResultInvestigation({ kickoffAt: fixture.kickoff?.getTime() ?? null,
+              firstTrackedAt: state?.firstTrackedAt.getTime() ?? fixture.createdAt.getTime(), firstFinalAt: firstFinalAt?.getTime() ?? null }, at);
             const data = { resultId, lastSyncAt, firstFinalAt,
-              ...(accepted ? { failures: 0, delayReason: null } : { delayReason: outcome === "stale" ? "older-observation" : receipt.reason }) };
+              ...(accepted ? { failures: 0, delayReason: investigate ? unresolvedInvestigation : null } :
+                { delayReason: outcome === "stale" ? "older-observation" : receipt.reason }) };
             await tx.fixtureResultState.upsert({ where: { fixtureId: fixture.id },
               create: { fixtureId: fixture.id, firstTrackedAt: new Date(at), nextCheckAt: epoch, ...data }, update: data });
             await record(outcome, resultId);
@@ -210,6 +240,16 @@ export function createMysqlResultSyncStore(options: Readonly<{
         });
       }
       await transaction(async (tx) => { const { at } = await locked(tx, lease);
+        if (batch.missingLiveFixtures?.length) {
+          const ids = JSON.stringify(batch.missingLiveFixtures.map(fixture => fixture.fixtureId)), observedAt = new Date(batch.receivedAt);
+          await tx.$executeRaw`INSERT INTO FixtureResultState (fixtureId, firstTrackedAt, nextCheckAt, failures, delayReason)
+            SELECT f.id, ${observedAt}, ${observedAt}, 0, ${missingFromLiveFeed}
+            FROM JSON_TABLE(${ids}, '$[*]' COLUMNS (id VARCHAR(36) PATH '$')) missing
+            JOIN FootballFixture f ON f.id = missing.id AND f.provider = 'api-football'
+            WHERE f.status = 'live' AND f.retrievedAt <= ${observedAt}
+            ON DUPLICATE KEY UPDATE nextCheckAt = IF(FixtureResultState.delayReason = ${missingFromLiveFeed} AND
+              FixtureResultState.nextCheckAt > ${observedAt}, FixtureResultState.nextCheckAt, ${observedAt}), delayReason = ${missingFromLiveFeed}`;
+        }
         await tx.resultSyncBatch.update({ where: { id: batch.id }, data: { completedAt: new Date(at) } }); });
     },
     schedule(lease, channel, nextAt, failures, error) {

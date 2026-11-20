@@ -261,8 +261,11 @@ export function createLiveAuthorities(options: Readonly<{
     },
     verifyResponse(response) {
       const endpoint = response.provenance[0]?.endpoint;
+      const coordinated = options.liveMatchPolicy?.()?.coordinated === true;
       return response.provenance.length === 1 &&
-        (endpoint === "statistics" || endpoint === "events" || options.localFootball === true && endpoint === "fixtures") &&
+        (endpoint === "statistics" || endpoint === "events" ||
+          endpoint === "fixtures" && (options.localFootball === true || coordinated) ||
+          coordinated && (endpoint === "lineups" || endpoint === "fixturePlayerStatistics" || endpoint === "fixtureHalfStatistics")) &&
         pages(response, endpoint, now());
     },
   });

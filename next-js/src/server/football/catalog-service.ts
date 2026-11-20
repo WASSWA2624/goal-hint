@@ -103,6 +103,12 @@ export function createFootballCatalogImporter(options: Readonly<{
     }
   }
   return Object.freeze({
+    /** Apply the validated observation already captured by the result worker without another provider request. */
+    async importObservation(input: unknown, observation: ApiFootballResult<CatalogProviderRow>) {
+      const request = parseCatalogImportRequest(input);
+      authorize(request);
+      return options.store.importBatch(validateCatalogBatch(request, observation, options.authority, clock), options.authority);
+    },
     async import(input: unknown, verifySavedFixtureScope?: VerifySavedFixtureScope, workflow?: ApiFootballFallbackWorkflow): Promise<CatalogImportSummary> {
       const request = parseCatalogImportRequest(input);
       authorize(request);

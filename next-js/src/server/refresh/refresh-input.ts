@@ -12,9 +12,10 @@ import { refreshFail, type RefreshMember, type RefreshPlan } from "./refresh-con
 import { goalMarketDefinitionSchema } from "../../domain/score-distribution-markets.ts";
 import { parseImpliedMarketExtensionInput } from "../predictions/implied-market-contract.ts";
 import { matchFrozenRecommendationPolicy } from "../predictions/recommendation-input.ts";
+import { forecastLifecyclePolicy } from "./forecast-orchestration.ts";
 
 export const refreshPayload = z.strictObject({ input: z.unknown(), runId: z.uuid(), fixtureId: z.uuid(), cycleId: z.uuid(),
-  runDate: z.iso.date(), rank: z.number().int().nonnegative() });
+  runDate: z.iso.date(), rank: z.number().int().nonnegative(), forecastLifecycle: forecastLifecyclePolicy.optional() });
 export const refreshReference = (jobId: string, phase: string) => evidenceFingerprint({ jobId, phase, version: 1 });
 const duration = (value: number) => Number.isSafeInteger(value) && value > 0 && value <= 2_147_483_647;
 /** One HTTP dispatch per phase. Retries only wait out undispatched quota pacing, because a

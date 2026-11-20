@@ -421,6 +421,33 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
         assert.equal(status.archive.find(({ phase }) => phase === 'team-statistics').status, 'waiting-quota');
       } finally { await archive.close(); }
     });
+    await t.test('the coordinated runtime adopts an unknown fixture from one broad live request', async () => {
+      const discovered = catalogFixture(9099, { kickoff: iso(now - 2 * 60_000), status: '1H',
+        goals: { home: 1, away: 0 }, homeId: 701, awayId: 702 });
+      let liveCalls = 0;
+      const coordinated = await createLiveRuntime(parseRuntimePolicy({ ...policyEnv, GOAL_HINT_COORDINATED_FOOTBALL_ENABLED: 'true' }), {
+        approvals, syntheticArchive: true, fetcher: async (input, init) => {
+          const url = new URL(input instanceof URL || typeof input === 'string' ? input : input.url);
+          if (url.pathname !== '/fixtures' || url.searchParams.get('live') !== 'all') return fetcher(input, init);
+          liveCalls++;
+          return catalogResponse(url, [discovered]);
+        },
+      });
+      try {
+        assert.equal(coordinated.coordinated, true);
+        assert.equal(coordinated.forecastConcurrency, 1);
+        assert.equal(coordinated.currentDayContextEnabled, true);
+        const poller = await coordinated.resultPoller();
+        assert.equal(poller.policy.coordinated, true);
+        try { await poller.service.runOnce(); } finally { await poller.service.stop(); }
+        const fixture = await coordinated.database.query(tx => tx.footballFixture.findUnique({
+          where: { provider_externalId: { provider: 'api-football', externalId: 9099n } },
+        }));
+        assert.equal(liveCalls, 1);
+        assert.equal(fixture?.status, 'live');
+        assert.equal(fixture?.activeCycleId, null);
+      } finally { await coordinated.close(); }
+    });
   } finally {
     await oddsRuntime?.close().catch(() => {});
     await runtime?.close().catch(() => {}); await instance.stop();

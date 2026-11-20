@@ -6,7 +6,7 @@ import { maximumCompetitionScope } from "../src/domain/feed-query.ts";
 import { liveMatchSnapshotSchema } from "../src/domain/live-match.ts";
 import { normalizeEvent } from "../src/server/football/api-football-normalize.ts";
 import { API_FOOTBALL_CONTRACT_VERSION } from "../src/server/football/api-football-contract.ts";
-import { createLiveMatchService, liveEvents, liveStatistics, parseLiveMatchPolicy } from "../src/server/live-match/live-match-service.ts";
+import { coordinatedLiveDetailNextAt, createLiveMatchService, liveEvents, liveStatistics, parseLiveMatchPolicy } from "../src/server/live-match/live-match-service.ts";
 import { createMysqlLiveMatchStore } from "../src/server/live-match/live-match-mysql-store.ts";
 import { resultProvider } from "./helpers/result-sync-fixtures.mjs";
 import { catalogResponse } from "./helpers/catalog-fixtures.mjs";
@@ -112,6 +112,106 @@ test("local live detail batches live and final fixtures and ends routine polling
   assert.ok(state.saved[1].nextAt > NOW + policy().finalWindowMs);
   assert.deepEqual(state.saved.map(({ snapshot }) => snapshot.statistics.items[0].home), [0, 0]);
   await state.service.stop();
+});
+
+test("a coordinated collector reuses fresh events from the broad sweep and batches only missing detail", async () => {
+  const requests = [], detail = {
+    id: 101, status: "live", kickoff: NOW - 3_600_000, homeTeam: { id: 10 }, awayTeam: { id: 20 },
+    competition: { id: 39, season: 2026 }, source: source("batch"),
+    matchStatistics: null, matchEvents: [event()], facts: { events: [{ elapsed: 45 }], statistics: null, lineups: null, players: null },
+  };
+  const state = setup({ options: { policy: policy({ coordinated: true }),
+    async batchDetails(ids, _bounds, workflow) {
+      workflow.check(); requests.push(ids);
+      return response("fixtures", [{ ...detail, matchEvents: null, matchStatistics: [statistic(10), statistic(20)] }], {
+        provenance: [{ ...response("fixtures").provenance[0], requestParameters: { id: "101", timezone: "Africa/Kampala" } }],
+      });
+    },
+  } });
+  state.service.observeLiveFixtureDetails(response("fixtures", [detail], {
+    provenance: [{ ...response("fixtures").provenance[0], requestParameters: { live: "all", timezone: "Africa/Kampala" } }],
+  }));
+  assert.equal(await state.service.runOnce(), true);
+  assert.deepEqual(requests, [[101]]);
+  assert.equal(state.calls.length, 0, "the live timeline already arrived in the broad response");
+  assert.equal(state.saved[0].snapshot.events.items[0].elapsed, 45);
+  assert.equal(state.saved[0].snapshot.events.items[0].extra, 2);
+  assert.equal(state.saved[0].nextAt, NOW + 120_000);
+});
+
+test("complete broad live details avoid the follow-up batch entirely", async () => {
+  const state = setup({ options: { policy: policy({ coordinated: true }),
+    async batchDetails() { assert.fail("complete enriched live observations must be reused"); },
+  } });
+  state.service.observeLiveFixtureDetails(response("fixtures", [{ id: 101, status: "live", kickoff: NOW - 3_600_000,
+    homeTeam: { id: 10 }, awayTeam: { id: 20 }, competition: { id: 39, season: 2026 }, source: source("batch"),
+    matchStatistics: [statistic(10), statistic(20)], matchEvents: [], facts: { statistics: [], events: [], lineups: null, players: null } }], {
+    provenance: [{ ...response("fixtures").provenance[0], requestParameters: { live: "all", timezone: "Africa/Kampala" } }],
+  }));
+  assert.equal(await state.service.runOnce(), true);
+  assert.equal(state.saved[0].snapshot.statistics.items[0].home, 0);
+  assert.equal(state.calls.length, 0);
+});
+
+test("coordinated details retry missing lineups every fifteen minutes and run both final reconciliations", () => {
+  const config = policy({ coordinated: true, finalWindowMs: 3 * 86_400_000 });
+  const scheduled = target({ status: "scheduled", kickoffAt: NOW + 90 * 60_000 });
+  assert.equal(coordinatedLiveDetailNextAt(scheduled, config, NOW, false), NOW + 15 * 60_000);
+  const final = target({ status: "finished-regulation", firstFinalAt: NOW });
+  assert.equal(coordinatedLiveDetailNextAt(final, config, NOW + 15 * 60_000, true), NOW + 86_400_000);
+  assert.equal(coordinatedLiveDetailNextAt(final, config, NOW + 86_400_000, true), NOW + config.finalWindowMs + config.finalIntervalMs);
+  assert.equal(coordinatedLiveDetailNextAt(final, config, NOW + 15 * 60_000, false), NOW + 30 * 60_000);
+});
+
+test("missing scheduled lineups use only the supported fallback and complete starters stop lineup-only polling", async () => {
+  const kickoff = NOW + 60 * 60_000, calls = [];
+  const state = setup({ options: { policy: policy({ coordinated: true }),
+    async batchDetails() {
+      return response("fixtures", [{ id: 101, kickoff, homeTeam: { id: 10 }, awayTeam: { id: 20 }, source: source("batch"),
+        matchStatistics: null, matchEvents: null, facts: { statistics: null, events: null, lineups: null, players: null } }], {
+        provenance: [{ ...response("fixtures").provenance[0], requestParameters: { id: "101", timezone: "Africa/Kampala" } }],
+      });
+    }, supplements: {
+      async lineups(id, kind) {
+        calls.push([id, kind]);
+        return response("lineups", [10, 20].map(team => ({ team: { id: team }, formation: "4-4-2", substitutes: [],
+          startingPlayers: Array.from({ length: 11 }, (_, index) => ({ id: team * 100 + index, position: "M" })) })));
+      },
+      async players() { assert.fail("pre-match player statistics are not expected"); },
+      async halfStatistics() { assert.fail("pre-match half statistics are not expected"); },
+    },
+  } });
+  state.targets[0] = target({ status: "scheduled", kickoffAt: kickoff, lineupsCoverage: true });
+  assert.equal(await state.service.runOnce(), true);
+  assert.deepEqual(calls, [[101, "lineups"]]);
+  assert.equal(state.scheduled[0].nextAt, NOW + 15 * 60_000);
+  assert.equal(state.saved[0].nextAt, kickoff);
+  assert.deepEqual(state.calls, []);
+});
+
+test("the half-statistics fallback also reuses its full-match section", async () => {
+  const detail = { id: 101, kickoff: NOW - 3_600_000, homeTeam: { id: 10 }, awayTeam: { id: 20 }, source: source("batch"),
+    providerStatus: "HT", matchStatistics: null, matchEvents: [], facts: { statistics: null, events: [], lineups: null, players: null } };
+  const statistics = [{ type: "Corner Kicks", value: 2 }];
+  const rows = [10, 20].map(id => ({ raw: { team: { id }, statistics, statistics_1h: statistics, statistics_2h: [] } }));
+  const state = setup({ options: { policy: policy({ coordinated: true }),
+    async batchDetails() { return response("fixtures", [detail], {
+      provenance: [{ ...response("fixtures").provenance[0], requestParameters: { id: "101", timezone: "Africa/Kampala" } }],
+    }); }, supplements: {
+      async lineups() { assert.fail("no lineup lookup requested"); },
+      async players() { assert.fail("no player lookup requested"); },
+      async halfStatistics(input) {
+        assert.equal(input.fixtureId, 101);
+        return response("fixtureHalfStatistics", rows, {
+          provenance: [{ ...response("fixtureHalfStatistics").provenance[0], requestParameters: { fixture: "101", half: "true" } }],
+        });
+      },
+    },
+  } });
+  state.targets[0] = target({ season: 2026 });
+  assert.equal(await state.service.runOnce(), true);
+  assert.deepEqual(state.calls, []);
+  assert.equal(state.saved[0].snapshot.statistics.items[0].home, 2);
 });
 
 test("quota pacing may wait before launch but a failed provider dispatch cannot be repeated", async () => {
