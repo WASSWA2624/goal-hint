@@ -1,13 +1,16 @@
 import "server-only";
 
 import { utcInstantFromEpochMilliseconds, type Clock, type UtcInstant } from "../../domain/calendar.ts";
-import { legacyLiveGoalMarketDefinitions, liveGoalMarketDefinitions } from "../../domain/goal-market-definitions.ts";
+import { legacyLiveGoalMarketDefinitions, liveGoalMarketDefinitions, localFirstGoalMarketDefinitions,
+  LOCAL_FIRST_GOAL_EVALUATION_PROFILE } from "../../domain/goal-market-definitions.ts";
 import { evidenceFirstRecommendationPolicy } from "../../domain/recommendation.ts";
 import { assertOperationAllowed, type EvidenceVerifier, type RuntimePolicy } from "../config/runtime-policy.ts";
 import type { EvidenceAuthority } from "../evidence/evidence-contract.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import type { ProviderFallbackAuthority, ProviderFallbackPolicy } from "../fallback/fallback-adapter.ts";
-import { LIVE_FORECAST_CASCADE, QUALIFIED_FORECAST_CASCADE, type FallbackContext, type FallbackResolutionAuthority, type ForecastSourceOrder } from "../fallback/fallback-contract.ts";
+import { LIVE_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE, QUALIFIED_FORECAST_CASCADE,
+  type FallbackContext, type FallbackResolutionAuthority, type ForecastSourceOrder } from "../fallback/fallback-contract.ts";
+import { verifiesLocalBaselineMarket } from "../intelligence/live-local-engine.ts";
 import { localGoalModelVersion } from "../intelligence/local-goals-model.ts";
 import type { FallbackRefreshRequest } from "../fallback/fallback-service.ts";
 import { API_FOOTBALL_CONTRACT_VERSION, type ApiFootballEndpoint, type ApiFootballResult } from "../football/api-football-contract.ts";
@@ -32,7 +35,7 @@ import { resultRecoveryMatchesPolicy } from "../results/result-sync-policy.ts";
 import type { LiveMatchAuthority, LiveMatchPolicy } from "../live-match/live-match-contract.ts";
 import type { SelectionAuthority, SelectionPolicy } from "../selection/selection-contract.ts";
 import { parseSelectionPolicy } from "../selection/selection-input.ts";
-import { cutoffPolicy, evidencePolicy, fallbackRefreshPlan, liveCascadePlan, lifecyclePolicy, providerFallbackPolicy, providerStatusMappings,
+import { cutoffPolicy, evidencePolicy, fallbackRefreshPlan, liveCascadePlan, liveLocalFirstPlan, lifecyclePolicy, providerFallbackPolicy, providerStatusMappings,
   publicationPolicy, type LiveReferences, type RefreshPacing } from "./live-plan.ts";
 
 /** Clock skew tolerated between provider retrieval stamps and this process. */
@@ -89,6 +92,7 @@ export function createLiveAuthorities(options: Readonly<{
   /** The order frozen into AI plans by the same runtime; provider-first when omitted. */
   sourceOrder?: ForecastSourceOrder;
   coordinatedForecasts?: boolean;
+  localFirstForecasts?: boolean;
   verifyPrimary?(result: PredictorResult, context: FallbackContext): boolean;
   verifyPrimaryCandidate?(candidate: ResolvedForecastCandidate): boolean;
   verifyPrimaryGoals?(candidate: ResolvedForecastCandidate, distribution: unknown): boolean;
@@ -102,7 +106,8 @@ export function createLiveAuthorities(options: Readonly<{
     publication: publicationPolicy(refs) as PublicationPolicy, evidence: evidencePolicy(refs), fallback: providerFallbackPolicy(refs) as ProviderFallbackPolicy,
   });
   const statuses = new Map(providerStatusMappings.map((entry) => [entry.providerStatus, entry.status]));
-  const cascadeEnabled = options.sourceOrder !== "provider-first";
+  const cascadeEnabled = options.sourceOrder !== "provider-first" || options.localFirstForecasts === true;
+  const replayQualified = options.coordinatedForecasts === true || options.localFirstForecasts === true;
   const localModelVersion = localGoalModelVersion();
 
   const catalog = createLiveCatalogAuthority(policy, verify, refs, now);
@@ -144,7 +149,8 @@ export function createLiveAuthorities(options: Readonly<{
       if (!decision?.selected) return true;
       const { selected } = decision;
       const evidenceFirst = decision.policyVersion === evidenceFirstRecommendationPolicy.version;
-      if (evidenceFirst && input.candidate.audit.sourceCascade !== QUALIFIED_FORECAST_CASCADE) return false;
+      if (evidenceFirst && input.candidate.audit.sourceCascade !== QUALIFIED_FORECAST_CASCADE &&
+        input.candidate.audit.sourceCascade !== LOCAL_FIRST_FORECAST_CASCADE) return false;
       const quote = selected.quote;
       if (quote === null) return evidenceFirst;
       const configured = options.oddsPolicy;
@@ -158,9 +164,14 @@ export function createLiveAuthorities(options: Readonly<{
         if (!market.available) return true;
         if (market.provenance.kind === "api-football") return market.provenance.policyVersion === expected.fallback.version &&
           market.provenance.policyEvidenceRef === expected.fallback.evidenceRef;
-        if (market.provenance.kind === "local-engine") return cascadeEnabled &&
-          input.candidate.audit.sourceCascade === LIVE_FORECAST_CASCADE && market.provenance.modelVersion === localModelVersion &&
-          market.provenance.evidenceHash === input.candidate.context.evidenceHash && verify(refs.retention, "football-private-use");
+        if (market.provenance.kind === "local-engine") {
+          if (!verify(refs.retention, "football-private-use")) return false;
+          if (input.candidate.audit.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE) return options.localFirstForecasts === true &&
+            market.provenance.numericalBasis === "qualified-local-model" && verifiesLocalBaselineMarket(input.candidate, input.candidate.context,
+              market.market.family === "double-chance" ? "match-result" : market.market.family);
+          return cascadeEnabled && input.candidate.audit.sourceCascade === LIVE_FORECAST_CASCADE && market.provenance.modelVersion === localModelVersion &&
+            market.provenance.evidenceHash === input.candidate.context.evidenceHash;
+        }
         return policy.capabilities.ai && options.aiModel !== undefined &&
           market.provenance.modelVersionId === options.aiModel.id &&
           same(market.provenance.pin, input.candidate.context.pin) &&
@@ -170,8 +181,12 @@ export function createLiveAuthorities(options: Readonly<{
       });
     },
     verifyGoalExtension: ({ candidate, goalExtension }) => {
-      if (!goalExtension || ![liveGoalMarketDefinitions, legacyLiveGoalMarketDefinitions].some((definitions) => same(goalExtension.definitions, definitions))) return false;
-      const localVerified = !goalExtension.localPoisson || cascadeEnabled && candidate.audit.sourceCascade === LIVE_FORECAST_CASCADE &&
+      if (!goalExtension) return false;
+      const localFirst = candidate.audit.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE;
+      if (localFirst ? options.localFirstForecasts !== true || goalExtension.evaluationProfile !== LOCAL_FIRST_GOAL_EVALUATION_PROFILE ||
+        !same(goalExtension.definitions, localFirstGoalMarketDefinitions) : goalExtension.evaluationProfile !== undefined ||
+        ![liveGoalMarketDefinitions, legacyLiveGoalMarketDefinitions].some((definitions) => same(goalExtension.definitions, definitions))) return false;
+      const localVerified = !goalExtension.localPoisson || cascadeEnabled && (candidate.audit.sourceCascade === LIVE_FORECAST_CASCADE || localFirst) &&
         verify(refs.retention, "football-private-use") && (same(candidate.audit.localGoalRates ?? null, goalExtension.localPoisson) ||
           Object.values(candidate.markets).some((market) => market.available && market.provenance.kind === "local-engine" &&
             same(market.provenance.rates, goalExtension.localPoisson)));
@@ -209,9 +224,10 @@ export function createLiveAuthorities(options: Readonly<{
   });
   const verifyFallbackRequest = (request: FallbackRefreshRequest) =>
     (request.expected.pin === null ? unconfiguredAi(request.ai) : options.verifyPrimary?.(request.ai, request.expected) === true) &&
-    request.bounds !== null && request.bounds.priority === "near-kickoff-fallback" &&
-    (request.sourceCascade === undefined || request.sourceCascade === LIVE_FORECAST_CASCADE && cascadeEnabled ||
-      request.sourceCascade === QUALIFIED_FORECAST_CASCADE && options.coordinatedForecasts === true);
+    (request.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE ? options.localFirstForecasts === true &&
+      (request.bounds === null || request.bounds.priority === "near-kickoff-fallback") :
+      request.bounds?.priority === "near-kickoff-fallback" && (request.sourceCascade === undefined ||
+        request.sourceCascade === LIVE_FORECAST_CASCADE && cascadeEnabled || request.sourceCascade === QUALIFIED_FORECAST_CASCADE && replayQualified));
   const refresh: RefreshAuthority = Object.freeze({
     authorize() { publish(); },
     verifyPlan: (plan, member: RefreshMember) => {
@@ -226,7 +242,9 @@ export function createLiveAuthorities(options: Readonly<{
             (plan.recommendationPolicy === undefined ? plan.sourceOrder : options.sourceOrder) ?? "ai-first",
             plan.sourceCascade === QUALIFIED_FORECAST_CASCADE), ...frozenPolicy };
         if (reviewed === null) return false;
-        if (plan.sourceCascade === QUALIFIED_FORECAST_CASCADE) return options.coordinatedForecasts === true &&
+        if (plan.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE) return options.localFirstForecasts === true && plan.modelVersionId === null &&
+          same(plan, parseRefreshPlan(liveLocalFirstPlan(reviewed, plan.fallback.bounds !== null), member));
+        if (plan.sourceCascade === QUALIFIED_FORECAST_CASCADE) return replayQualified &&
           plan.recommendationPolicy?.version === evidenceFirstRecommendationPolicy.version && plan.sourceOrder !== "provider-first" &&
           same(plan, parseRefreshPlan(liveCascadePlan(reviewed, false, QUALIFIED_FORECAST_CASCADE), member));
         if (plan.recommendationPolicy?.version === evidenceFirstRecommendationPolicy.version) return false;

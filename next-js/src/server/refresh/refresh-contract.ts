@@ -25,7 +25,7 @@ export type RefreshMember = Readonly<{
   context: EvidenceCollectionRequest["context"]; now: number;
 }>;
 /** Explicit reviewed allocations. No live provider/model/budget/freshness defaults.
- * A null model and AI allocation together select provider fallback only. */
+ * A null model and AI allocation together skip remote AI. The cascade pins the numerical workflow. */
 export type RefreshPlan = Readonly<{
   version: 1; evidenceRef: string; modelVersionId: string | null;
   evidence: EvidenceCollectionRequest;

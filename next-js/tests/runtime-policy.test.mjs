@@ -159,7 +159,7 @@ test("the complete documented environment example parses safely without approval
     "GOAL_HINT_ODDS_BOOKMAKER_FALLBACK_IDS", "GOAL_HINT_ODDS_BOOKMAKER_SCOPE", "GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF",
     "GOAL_HINT_TEAM_CODES_IMPORT_ENABLED", "GOAL_HINT_LIVE_DETAILS_ENABLED", "GOAL_HINT_HISTORY_IMPORT_ENABLED",
     "GOAL_HINT_FOOTBALL_RESPONSE_ARCHIVE_ENABLED", "GOAL_HINT_COORDINATED_FOOTBALL_ENABLED", "GOAL_HINT_FOOTBALL_FORECAST_CONCURRENCY", "GOAL_HINT_AI_BILLING_MODE",
-    "GOAL_HINT_FORECAST_SOURCE_ORDER", "GOAL_HINT_RESEARCH_HOSTS",
+    "GOAL_HINT_FORECAST_SOURCE_ORDER", "GOAL_HINT_API_PREDICTION_FALLBACK_ENABLED", "GOAL_HINT_RESEARCH_HOSTS",
     "GOAL_HINT_ANALYTICS_ENABLED", "GOAL_HINT_ANALYTICS_SECRET", "GOAL_HINT_ANALYTICS_RETENTION_DAYS", "GOAL_HINT_ANALYTICS_GEO_SOURCE",
     // Administrator credentials are private configuration and do not grant provider capabilities.
     "GOAL_HINT_ADMIN_PHONES", "GOAL_HINT_ADMIN_PASSWORD",
@@ -182,8 +182,7 @@ test("the complete documented environment example parses safely without approval
   }
   const { database, probabilitySumTolerance, consistencyTolerance, odds, teamCodes, liveDetails, historyImport,
     footballResponseArchive, coordinatedFootball, budgets, analytics, forecasts, football, ...unresolvedChoices } = policy.choices;
-  // With AI enabled the provider baseline publishes first; no promotion reference is assumed.
-  assert.deepEqual(forecasts, { sourceOrder: "ai-first", aiPromotionRef: null });
+  assert.deepEqual(forecasts, { sourceOrder: "ai-first", apiFallbackEnabled: true, aiPromotionRef: null });
   // Consent-gated analytics is on by default but has no credentials, secret or retention override until configured.
   assert.deepEqual(analytics, { enabled: true, adminUsername: null, retentionDays: null, geoSource: "timezone" });
   const { aiBillingMode, ...unresolvedBudgets } = budgets;
@@ -253,6 +252,9 @@ test("optional AI publication defaults to AI-first without claiming accuracy pro
   assert.equal(off.capabilities.ai, false);
   assertOperationAllowed(off, "publication", (_reference, requirement) => !["ai-promotion", "calibration-configuration"].includes(requirement));
   assert.equal(parseRuntimePolicy({ ...syntheticProduction, GOAL_HINT_FORECAST_SOURCE_ORDER: "provider-first" }).choices.forecasts.sourceOrder, "provider-first");
+  assert.equal(production.choices.forecasts.apiFallbackEnabled, true);
+  assert.equal(parseRuntimePolicy({ ...syntheticProduction, GOAL_HINT_API_PREDICTION_FALLBACK_ENABLED: "false" }).choices.forecasts.apiFallbackEnabled, false);
+  policyError(() => parseRuntimePolicy({ ...syntheticProduction, GOAL_HINT_API_PREDICTION_FALLBACK_ENABLED: "off" }), ["GOAL_HINT_API_PREDICTION_FALLBACK_ENABLED"]);
 });
 
 test("approved market tolerances cannot drift through environment overrides", () => {

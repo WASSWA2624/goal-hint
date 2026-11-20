@@ -60,24 +60,26 @@ the verified account plan changes. OpenAI cannot fill missing fixture schedules.
 
 ### Forecast source order
 
-`GOAL_HINT_FORECAST_SOURCE_ORDER` applies only with AI enabled and defaults to
-`provider-first`. Every AI refresh plan freezes it, so changing it affects new
-jobs only. Intents saved before source orders existed stay structurally readable
-without receipts; the independent live baseline policy still forbids publishing
-new AI markets from them. Fallback-only plans keep their existing shape.
+New pre-match intents on the authorized production worker and owned local
+football worker pin `qualified-local-provider-v1`. The Local Engine uses the
+established regularized Poisson baseline, cutoff-bound regulation results and
+minimum effective sample sizes. The worker checks each launch market against
+the baseline's coherent probabilities. Only API-Football match-result
+probabilities and double chance derived from them are eligible for fallback.
+Provider identity, mapping, time and authority remain independently verified.
+Local evidence gaps and local execution failures have distinct abstention reasons.
 
-The evaluation command can print a model/report-bound promotion reference only
-for a prospective frozen final test whose gates demonstrate improvement against
-the matched provider at every protocol horizon. That reference is input to
-independent review, not publication authority. Preserve the report, protocol and
-authenticated source/result evidence; owner review and the future trusted frozen
-evidence binding remain required.
+Set `GOAL_HINT_API_PREDICTION_FALLBACK_ENABLED=false` in the worker profile and
+restart it to seal new Local Engine first intents without a provider prediction
+allowance. It defaults to `true`. Changing it creates a new forecast job identity
+for subsequent selection. A previously sealed intent keeps its original provider
+allowance. The final fixture status check remains required before publication.
 
-The current live runner rejects `ai-first` even when its configured reference
-matches the model and has an owner approval. No concrete promotion-evidence
-binding is mounted. The independent publication authority also rejects every AI
-market. Keep provider-first configured; changing references or environment
-settings cannot activate AI publication.
+`GOAL_HINT_FORECAST_SOURCE_ORDER` defaults to `ai-first` and continues to govern
+legacy execution. The original evidence, source order and policy proofs still
+validate older sealed plans and revisions. New Local Engine first intents use
+stored football evidence and skip remote AI and research. Fitted replacements,
+period models and context effects require independent chronological qualification.
 
 ## What the runner does
 

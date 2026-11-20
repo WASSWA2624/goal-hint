@@ -137,14 +137,23 @@ const registeredCountMarkets = [
 /** Preserve the current public goal extension's definitions and their order. */
 export const liveGoalMarketDefinitions: readonly GoalMarketDefinition[] = Object.freeze(registeredCountMarkets.map((row) => row.definition));
 
+export const LOCAL_FIRST_GOAL_EVALUATION_PROFILE = "local-regulation-count-v1";
+const additionalFullTimeTotals = [5, 5.25].map((line) => registered("total-goals", goalTotalsMarket(line, "total", "full-time", "asian")));
+
+/** The new full-match totals range changes forecast admission only. */
+export function isEligibleLocalFirstGoalDefinition({ period, selections }: GoalMarketDefinition) {
+  return period !== "full-time" || selections.every(({ rule }) =>
+    (rule.kind !== "total" && rule.kind !== "asian-total") || rule.metric !== "total" || rule.line >= 1.5 && rule.line <= 5.5);
+}
+
 function goalTeamToScoreMarket(team: "home" | "away", period: GoalMarketPeriod): GoalMarketDefinition {
   return binaryMarket(`team-to-score:${team}`, period, `${resultLabels[team]} team to score`, "TTS", (yes) =>
     ({ kind: "goal-count", metric: team, min: yes ? 1 : 0, max: yes ? null : 0 }));
 }
 
-function goalRangeSelectionMarket(max: number, period: GoalMarketPeriod): GoalMarketDefinition {
+function goalRangeSelectionMarket(max: number, period: GoalMarketPeriod, key = "goal-range"): GoalMarketDefinition {
   const range = { kind: "goal-count", metric: "total", min: 1, max } as const;
-  return binaryMarket(`goal-range:total:1-${max}`, period, `Total goals 1–${max}`, "Range", (yes) =>
+  return binaryMarket(`${key}:total:1-${max}`, period, `Total goals 1–${max}`, "Range", (yes) =>
     yes ? range : { kind: "none", rules: [range] });
 }
 
@@ -163,10 +172,7 @@ const europeanHandicapLines = [-1, 1] as const;
 const exactScoreValues = [0, 1, 2, 3, 4] as const;
 const exactScores = exactScoreValues.flatMap((home) => exactScoreValues.map((away) => ({ home, away })));
 
-/** Reviewed modeled instances of the shared registry. Model qualification and
- * observed offers still determine the available output for each fixture. */
-export function registeredForecastGoalMarkets(): readonly RegisteredGoalMarketDefinition[] {
-  return Object.freeze([
+const forecastGoalMarkets = Object.freeze([
     ...registeredCountMarkets,
     ...goalMarketPeriods.flatMap((period) => [
       registered("match-result", goalResultMarket(period)), registered("double-chance", goalDoubleChanceMarket(period)),
@@ -183,5 +189,20 @@ export function registeredForecastGoalMarkets(): readonly RegisteredGoalMarketDe
     registered("combined-outcomes", goalAndTotalsMarket(goalResultMarket(), "Result and total goals 2.5")),
     registered("combined-outcomes", goalAndTotalsMarket(goalDoubleChanceMarket(), "Double chance and total goals 2.5")),
     registered("combined-outcomes", goalAndTotalsMarket(goalBothTeamsScoreMarket(), "Both teams to score and total goals 2.5")),
-  ]);
+]);
+const namedRegulationCountRanges = [2, 3, 4].map((max) => registered("goal-ranges", goalRangeSelectionMarket(max, "full-time", "count-range")));
+const localFirstForecastGoalMarkets = Object.freeze([...forecastGoalMarkets, ...additionalFullTimeTotals, ...namedRegulationCountRanges]);
+
+/** Regulation-count events with a verified public pick and settlement identity. */
+const localCountFamilies = new Set<RegisteredMarketFamily>([
+  "total-goals", "team-goals", "goal-ranges", "exact-goals", "odd-even-goals",
+]);
+export const localFirstGoalMarketDefinitions: readonly GoalMarketDefinition[] = Object.freeze(localFirstForecastGoalMarkets.flatMap(({ family, definition }) =>
+  definition.period === "full-time" && localCountFamilies.has(family) && isEligibleLocalFirstGoalDefinition(definition) &&
+    !definition.key.startsWith("goal:full-time:goal-range:") ? [definition] : []));
+
+/** Reviewed modeled instances of the shared registry. Model qualification and
+ * observed offers still determine the available output for each fixture. */
+export function registeredForecastGoalMarkets(localFirst = false): readonly RegisteredGoalMarketDefinition[] {
+  return localFirst ? localFirstForecastGoalMarkets : forecastGoalMarkets;
 }

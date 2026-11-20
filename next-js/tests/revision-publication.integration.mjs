@@ -5,13 +5,15 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import test from 'node:test';
 import { getReportingDate } from '../src/domain/calendar.ts';
-import { liveGoalMarketDefinitions } from '../src/domain/goal-market-definitions.ts';
+import { liveGoalMarketDefinitions, LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localFirstGoalMarketDefinitions } from '../src/domain/goal-market-definitions.ts';
+import { marketRules, validateMarketSnapshot } from '../src/domain/markets.ts';
 import { parseRuntimePolicy } from '../src/server/config/runtime-policy.ts';
 import { createDatabase } from '../src/server/database/client.ts';
 import { buildEvidenceSnapshot } from '../src/server/evidence/evidence-snapshot.ts';
 import { createMysqlEvidenceStore } from '../src/server/evidence/evidence-mysql-store.ts';
 import { createFootballCatalogStore } from '../src/server/football/catalog-mysql-store.ts';
 import { createFootballCatalogImporter } from '../src/server/football/catalog-service.ts';
+import { goalProbabilities, localGoalModelVersion } from '../src/server/intelligence/local-goals-model.ts';
 import { createMysqlJobQueue } from '../src/server/jobs/job-mysql-store.ts';
 import { createMysqlModelVersionStore } from '../src/server/predictor/predictor-mysql-store.ts';
 import { createModelPin } from '../src/server/predictor/predictor-input.ts';
@@ -22,7 +24,7 @@ import { readGoalMarketExtension } from '../src/server/predictions/goal-market-s
 import { createRevisionPublicationService } from '../src/server/predictions/publication-service.ts';
 import { RevisionPublicationError } from '../src/server/predictions/publication-contract.ts';
 import { unavailableForecastMarkets } from '../src/server/predictions/forecast-decision.ts';
-import { LIVE_FORECAST_CASCADE } from '../src/server/fallback/fallback-contract.ts';
+import { LIVE_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE } from '../src/server/fallback/fallback-contract.ts';
 import { createForecastRecovery } from '../src/server/refresh/forecast-recovery.ts';
 import { createMysqlRefreshStore } from '../src/server/refresh/refresh-mysql-store.ts';
 import { createMysqlDailySelectionStore } from '../src/server/selection/selection-mysql-store.ts';
@@ -207,6 +209,7 @@ test('atomic revision publication on isolated genuine MySQL', { timeout: 600_000
         assert.equal(await refresh.start(target.lease, 'fallback'), true);
         await refresh.complete(target.lease, 'fallback', { status: available ? 'candidate' : 'retain-previous-or-unavailable', candidate });
         const result = await coordinated.publish(input, target.lease), decision = result.refresh.forecastDecision;
+        assert.equal(decision.version, 'prematch-forecast-decision-v1');
         assert.equal(decision.forecastType, 'pre-match');
         assert.equal(decision.status, available ? 'estimated' : 'abstained');
         assert.equal(decision.evidenceHash, target.snapshot.hash);
@@ -282,6 +285,69 @@ test('atomic revision publication on isolated genuine MySQL', { timeout: 600_000
         assert.equal(violation?.code, 'P2010');
         assert.match(violation.message, /GoalMarketExtension_shape_v2/u);
       }
+    });
+    await t.test('local-first decisions seal exact extended probabilities without odds and replay across replicas', async () => {
+      const target = await setup(), { lease } = target;
+      const rates = { home: 1.6, away: 1 }, observedAt = target.snapshot.context.analysisAt + 1000;
+      const base = target.input.candidate;
+      const probabilities = goalProbabilities(rates.home, rates.away);
+      const markets = validateMarketSnapshot(Object.fromEntries(Object.entries(probabilities).map(([family, values]) => [family, {
+        source: 'local-engine', period: marketRules.period, probabilities: values,
+        ...(family === 'total-goals' ? { line: marketRules.totalGoalsLine } : {}),
+      }]))).markets;
+      const provenance = { kind: 'local-engine', modelVersion: localGoalModelVersion(), historyHash: evidenceHash('v2-local-stored-history'),
+        evidenceHash: target.snapshot.hash, rates, sample: { matches: 200, homeEffectiveMatches: 20.123456789012344, awayEffectiveMatches: 24 },
+        numericalBasis: 'qualified-local-model' };
+      const candidate = { ...base, context: { ...base.context, pin: null },
+        markets: Object.fromEntries(Object.entries(markets).map(([family, item]) => [family, { ...item, provenance, fallback: null,
+          timestamps: { generatedAt: observedAt, retrievedAt: observedAt, providerUpdatedAt: null }, flags: ['unknown-provider-update-time'] }])),
+        audit: { aiStatus: 'denied', aiReason: 'unconfigured', providerStatus: 'not-requested', providerReason: null,
+          sourceCascade: LOCAL_FIRST_FORECAST_CASCADE, localStatus: 'candidate', transitions: Object.fromEntries(Object.keys(markets)
+            .map((family) => [family, { ai: 'not-requested', local: 'candidate', provider: 'not-requested', selected: 'local-engine' }])) } };
+      const basePolicy = publicationPolicy();
+      const options = { recordForecastDecision: true, authority: publicationAuthority({ verifyGoalExtension: () => true }),
+        policy: publicationPolicy({ sources: { ...basePolicy.sources, 'local-engine': basePolicy.sources.ai } }) };
+      const service = publisher(a, options), replica = publisher(b, options), refresh = createMysqlRefreshStore(a, queue);
+      assert.equal(await refresh.start(lease, 'fallback'), true);
+      await refresh.complete(lease, 'fallback', { status: 'candidate', candidate });
+      const input = { ...target.input, candidate, generationCompletedAt: at, goalExtension: {
+        evaluationProfile: LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localPoisson: rates, definitions: localFirstGoalMarketDefinitions,
+      } };
+      const result = await service.publish(input, lease);
+      assert.equal(result.refresh.outcome, 'published');
+      const decision = result.refresh.forecastDecision, revisionId = result.revision.id;
+      assert.equal(decision.version, 'prematch-forecast-decision-v2');
+      assert.equal(decision.status, 'estimated');
+      assert.equal(decision.evidenceHash, target.snapshot.hash);
+      assert.deepEqual(result.revision.candidate.markets, candidate.markets);
+      const extension = await b.query((tx) => readGoalMarketExtension(tx, revisionId));
+      assert.equal(extension.evaluationProfile, LOCAL_FIRST_GOAL_EVALUATION_PROFILE);
+      assert.equal(decision.goalExtensionHash, extension.contentHash);
+      const { marketKey, selection, winProbability } = decision.topPick;
+      const extendedPick = extension.markets.find(({ definition }) => definition.key === marketKey);
+      assert.equal(extendedPick?.derivation.available, true, 'a supported extended market wins the fixture ranking');
+      const selected = extendedPick.derivation.market.selections.find(({ key }) => key === selection);
+      assert.equal(winProbability, String(selected.winProbability));
+      assert.notEqual(winProbability, selected.winProbability.toFixed(6));
+      const decisionMarket = decision.markets.find((row) => row.marketKey === marketKey);
+      assert.equal(decisionMarket.recommendation.winProbability, winProbability);
+      assert.equal(decisionMarket.confidence.sample.homeEffectiveMatches, String(provenance.sample.homeEffectiveMatches));
+      assert.ok(decision.markets.some((row) => row.marketKey === 'goal:full-time:totals:total:5.5:binary'));
+      assert.equal(await b.query((tx) => tx.predictionQuote.count({ where: { revisionId } })), 0);
+      const [stored] = await b.query((tx) => tx.$queryRaw`SELECT
+        JSON_TYPE(JSON_EXTRACT(resultJson, '$.forecastDecision.topPick.winProbability')) AS probabilityType,
+        JSON_UNQUOTE(JSON_EXTRACT(resultJson, '$.forecastDecision.topPick.winProbability')) AS probability
+        FROM PredictionRefreshResult WHERE id=${result.refresh.id}`);
+      assert.deepEqual(stored, { probabilityType: 'STRING', probability: winProbability });
+      const [numeric] = await b.query((tx) => tx.$queryRaw`SELECT
+        JSON_TYPE(JSON_EXTRACT(candidateJson, '$.markets."match-result".market.probabilities."away-win"')) AS probabilityType,
+        market.probability3 AS probability
+        FROM PredictionSet published JOIN MarketPrediction market ON market.setId=published.id
+        WHERE published.id=${revisionId} AND market.family='match-result'`);
+      assert.deepEqual(numeric, { probabilityType: 'DOUBLE', probability: probabilities['match-result']['away-win'] });
+      assert.deepEqual(await replica.resultForAttempt(result.refresh.id), result);
+      assert.deepEqual(await replica.publish(input, lease), result);
+      assert.deepEqual(await counts(target.fixture.id), { sets: 1, results: 1, events: 1 });
     });
     await t.test('forecast recovery skips exhausted jobs and repairs sealed abstention without a new attempt', async () => {
       const target = await setup(), { lease } = target, { type, handlerVersion } = lease.job.envelope;

@@ -1,16 +1,32 @@
 import "server-only";
 
 import type { UtcInstant } from "../../domain/calendar.ts";
-import { marketRules, validateMarketSnapshot } from "../../domain/markets.ts";
+import { marketRules, validateMarketGroup, validateMarketSnapshot, type SourceGroup } from "../../domain/markets.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { readArchivedFixtureContext } from "../evidence/fixture-context-evidence.ts";
-import { freezeEvidence } from "../evidence/evidence-input.ts";
+import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import { buildFixtureModelEvidence } from "../evidence/fixture-model-evidence.ts";
 import { LIVE_FORECAST_CASCADE, type FallbackContext, type ResolvedForecastCandidate } from "../fallback/fallback-contract.ts";
 import { localGoalFirstHalfShare, readLiveLocalGoalHistory } from "./live-local-history.ts";
-import { estimateLocalGoals } from "./local-goals-model.ts";
+import { estimateLocalGoals, goalProbabilities, hasLocalGoalSamples, localGoalModelVersion } from "./local-goals-model.ts";
 
 const archiveContextBudgetMs = 300;
+
+/** The established baseline alone can supply this version's regulation-time groups. */
+export function verifiesLocalBaselineMarket(candidate: ResolvedForecastCandidate, expected: FallbackContext, group: SourceGroup): boolean {
+  const item = candidate.markets[group];
+  if (!item.available || item.provenance.kind !== "local-engine" || item.provenance.modelVersion !== localGoalModelVersion() ||
+    item.provenance.evidenceHash !== expected.evidenceHash || evidenceFingerprint(candidate.context) !== evidenceFingerprint(expected) ||
+    item.timestamps.generatedAt !== item.timestamps.retrievedAt || item.timestamps.retrievedAt < expected.context.analysisAt ||
+    item.timestamps.retrievedAt >= expected.context.kickoffAt) return false;
+  const { rates, sample } = item.provenance;
+  if (!hasLocalGoalSamples(sample.matches, sample.homeEffectiveMatches, sample.awayEffectiveMatches)) return false;
+  try {
+    const expectedGroup = validateMarketGroup(group, { source: "local-engine", period: marketRules.period,
+      probabilities: goalProbabilities(rates.home, rates.away)[group], ...(group === "total-goals" ? { line: marketRules.totalGoalsLine } : {}) });
+    return expectedGroup.valid && evidenceFingerprint(expectedGroup.markets[0]) === evidenceFingerprint(item.market);
+  } catch { return false; }
+}
 
 /** Read only point-in-time regulation results for the target's canonical league.
  * No fixture needs a prediction cycle to be useful as historical evidence. */

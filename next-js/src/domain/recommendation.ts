@@ -31,6 +31,10 @@ export function recommendationPolicyForVersion(version: unknown): Recommendation
 }
 export const forecastConfidence = ["limited", "supported", "calibrated"] as const;
 export type ForecastConfidence = typeof forecastConfidence[number];
+export function forecastSourceConfidence(source: MarketSource | undefined): ForecastConfidence | undefined {
+  if (source === undefined) return undefined;
+  return source === "local-engine" ? "supported" : "limited";
+}
 export type ComparableForecastPick = Readonly<{ key: string; selection: string; probability: number;
   confidence?: ForecastConfidence; odds: string | null }>;
 

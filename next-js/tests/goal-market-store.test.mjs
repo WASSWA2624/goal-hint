@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
-import { goalAsianHandicapMarket, goalResultMarket, goalTotalsMarket, liveGoalMarketDefinitions } from '../src/domain/goal-market-definitions.ts';
-import { deriveLocalGoalMarket } from '../src/domain/score-distribution-markets.ts';
+import { goalAsianHandicapMarket, goalResultMarket, goalTotalsMarket, liveGoalMarketDefinitions,
+  LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localFirstGoalMarketDefinitions } from '../src/domain/goal-market-definitions.ts';
+import { deriveLocalGoalMarket, settleGoalSelection } from '../src/domain/score-distribution-markets.ts';
 import { SCORE_DISTRIBUTION_VERSION } from '../src/domain/score-distribution.ts';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
 import { goalMarketExtensionFromRow, goalMarketSettlementFromRow, goalMarketSettlementRevisionSchema,
   parseGoalMarketExtensionInput, prepareGoalMarketExtension, projectGoalMarketSettlements } from '../src/server/predictions/goal-market-store.ts';
+import { preparePublishedExtendedPicks } from '../src/server/predictions/extended-market-picks.ts';
 import { PredictionHistoryError } from '../src/server/predictions/history-contract.ts';
 
 const at = Date.parse('2026-10-12T08:00:00Z'), fixtureId = randomUUID(), cycleId = randomUUID(), revisionId = randomUUID();
@@ -36,6 +38,42 @@ const cycle = (overrides = {}) => ({ fixtureId, id: cycleId, state: 'closed', lo
 const context = (overrides = {}) => ({ status: 'finished-regulation', cycleEligibility: { eligible: true },
   regulationScore: { verified: true, period: 'regulation-including-stoppage-time', home: 1, away: 0 }, halfTimeScore: null, ...overrides });
 const row = (body) => ({ ...body, body, validIntegrity: 1, recordedAt: new Date(body.recordedAt ?? at), at: new Date(body.at ?? at) });
+
+test('new local publication covers 1.5–5.5 full-match totals with separate payouts and retains old profiles', () => {
+  const rates = { home: 1.7, away: 1.3, firstHalfShare: { home: 0.4, away: 0.45 } };
+  const profile = { evaluationProfile: LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localPoisson: rates, definitions: localFirstGoalMarketDefinitions };
+  const current = extension(profile);
+  assert.deepEqual(goalMarketExtensionFromRow(row(current)), current);
+  const picks = preparePublishedExtendedPicks(current, null);
+  assert.equal(picks.length, current.markets.length);
+  assert.ok(picks.every(({ probabilityBasis }) => probabilityBasis === 'model-event'));
+  assert.ok(current.markets.every(({ definition, derivation }) => definition.period === 'full-time' && derivation.available));
+  const totals = current.markets.filter(({ definition }) => definition.key.startsWith('goal:full-time:totals:total:'))
+    .map(({ definition, derivation }) => ({ line: definition.selections[0].rule.line, ...derivation.market }))
+    .sort((left, right) => left.line - right.line);
+  assert.deepEqual(totals.map(({ line }) => line), Array.from({ length: 17 }, (_, index) => 1.5 + index / 4));
+  for (const [index, { selections: [over, under] }] of totals.entries()) {
+    for (const selection of [over, under]) {
+      assert.equal(selection.winProbability, selection.outcomes.win);
+      assert.ok(Math.abs(Object.values(selection.outcomes).reduce((sum, probability) => sum + probability, 0) - 1) < 1e-12);
+    }
+    if (index > 0) assert.ok(over.winProbability <= totals[index - 1].selections[0].winProbability);
+  }
+  const integer = totals.find(({ line }) => line === 5), quarter = totals.find(({ line }) => line === 5.25);
+  const verifiedFive = context({ regulationScore: { verified: true, period: 'regulation-including-stoppage-time', home: 2, away: 3 } });
+  assert.ok(integer.selections[1].outcomes.push > 0);
+  assert.ok(quarter.selections[1].outcomes['half-win'] > 0);
+  assert.equal(settleGoalSelection(integer.definition, 'under', verifiedFive).status, 'push');
+  assert.equal(settleGoalSelection(quarter.definition, 'under', verifiedFive).status, 'half-win');
+  assert.equal(settleGoalSelection(quarter.definition, 'over', verifiedFive).status, 'half-loss');
+  assert.throws(() => prepareGoalMarketExtension({ ...profile, definitions: [...profile.definitions, goalTotalsMarket(6.5)] }), denied('invalid-request'));
+  const previous = extension({ localPoisson: rates, definitions: liveGoalMarketDefinitions });
+  assert.deepEqual(goalMarketExtensionFromRow(row(previous)), previous);
+  assert.ok(preparePublishedExtendedPicks(previous, null).some(({ probabilityBasis }) => probabilityBasis === 'model-positive-payout'));
+  for (const key of [goalTotalsMarket(0.5).key, goalTotalsMarket(6.5).key, goalTotalsMarket(0.5, 'total', 'half-time').key]) {
+    assert.ok(previous.markets.some(({ definition, derivation }) => definition.key === key && derivation.available));
+  }
+});
 
 test('extension derives reviewed period/line definitions, preserving immutable PMF mass and legacy separation', () => {
   const input = { scoreDistribution: distribution(), definitions: [goalTotalsMarket(1.5), goalTotalsMarket(2.5), goalResultMarket('half-time')] };

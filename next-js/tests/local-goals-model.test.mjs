@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { goalTotalsMarket } from "../src/domain/goal-market-definitions.ts";
 import { checkMarketConsistency } from "../src/domain/markets.ts";
+import { deriveLocalGoalMarket } from "../src/domain/score-distribution-markets.ts";
 import { estimateLocalGoals, goalProbabilities } from "../src/server/intelligence/local-goals-model.ts";
 import { intelligenceFixture, intelligenceHistory, intelligenceResult, INTELLIGENCE_DAY } from "./helpers/intelligence-fixtures.mjs";
 
@@ -13,6 +15,26 @@ test("Poisson score model produces exact binary marginals and coherent mutually 
   assert.deepEqual(checkMarketConsistency(p["match-result"], p["total-goals"], p["both-teams-to-score"]), []);
   const symmetric = goalProbabilities(1.3, 1.3)["match-result"];
   assert.ok(Math.abs(symmetric["home-win"] - symmetric["away-win"]) < 1e-12);
+});
+
+test("approved full-match half-goal lines are exact, complementary and monotonic for the local baseline", () => {
+  for (const rates of [{ home: 0.05, away: 0.05 }, { home: 1.5, away: 0.75 }, { home: 6, away: 6 }]) {
+    const mean = rates.home + rates.away;
+    let lastOver = 1;
+    for (const line of [1.5, 2.5, 3.5, 4.5, 5.5]) {
+      const result = deriveLocalGoalMarket(rates, goalTotalsMarket(line));
+      assert.equal(result.available, true);
+      const [over, under] = result.market.selections;
+      const expectedUnder = Array.from({ length: Math.floor(line) + 1 }, (_, goals) => {
+        const factorial = Array.from({ length: goals }, (_, index) => index + 1).reduce((total, value) => total * value, 1);
+        return Math.exp(-mean) * mean ** goals / factorial;
+      }).reduce((sum, probability) => sum + probability, 0);
+      assert.ok(Math.abs(under.winProbability - expectedUnder) < 1e-12);
+      assert.ok(Math.abs(over.winProbability + under.winProbability - 1) < 1e-12);
+      assert.ok(over.winProbability < lastOver);
+      lastOver = over.winProbability;
+    }
+  }
 });
 
 test("regularized fit is reproducible regardless of row order and retains compact tail mass", () => {

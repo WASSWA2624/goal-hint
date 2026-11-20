@@ -3,10 +3,14 @@ import { execFile } from './helpers/command-runtime.mjs';
 import { promisify } from 'node:util';
 import test from 'node:test';
 import { getReportingDate } from '../src/domain/calendar.ts';
-import { goalAsianHandicapMarket, goalResultMarket, goalHalfFullMarket, goalTotalsMarket } from '../src/domain/goal-market-definitions.ts';
+import { goalAsianHandicapMarket, goalResultMarket, goalHalfFullMarket, goalTotalsMarket,
+  LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localFirstGoalMarketDefinitions } from '../src/domain/goal-market-definitions.ts';
+import { marketRules, validateMarketSnapshot } from '../src/domain/markets.ts';
 import { SCORE_DISTRIBUTION_VERSION } from '../src/domain/score-distribution.ts';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
+import { LOCAL_FIRST_FORECAST_CASCADE } from '../src/server/fallback/fallback-contract.ts';
 import { resolveFallbackCandidate } from '../src/server/fallback/fallback-resolution.ts';
+import { goalProbabilities } from '../src/server/intelligence/local-goals-model.ts';
 import { applyPredictorCalibration } from '../src/server/predictor/predictor-calibration.ts';
 import { createModelPin } from '../src/server/predictor/predictor-input.ts';
 import { createMysqlModelVersionStore } from '../src/server/predictor/predictor-mysql-store.ts';
@@ -17,6 +21,7 @@ import { PredictionHistoryError } from '../src/server/predictions/history-contra
 import { createRevisionPublicationService } from '../src/server/predictions/publication-service.ts';
 import { RevisionPublicationError } from '../src/server/predictions/publication-contract.ts';
 import { createScheduleLifecycleService } from '../src/server/predictions/lifecycle-service.ts';
+import { createMysqlRefreshStore } from '../src/server/refresh/refresh-mysql-store.ts';
 import { parseLifecycleInput } from '../src/server/predictions/lifecycle-input.ts';
 import { createMysqlResultSyncStore } from '../src/server/results/result-sync-mysql-store.ts';
 import { createMarketSettlementService } from '../src/server/settlement/settlement-service.ts';
@@ -243,6 +248,48 @@ test('additive score extensions publish and settle atomically on genuine owned M
         await persistGoalMarketSettlements(tx, plans, resultHash('forged-batch'), p.now());
       }), (error) => error instanceof PredictionHistoryError && error.reason === 'invalid-state');
       assert.deepEqual(await counts(), before);
+    });
+    await t.test('the new count profile publishes without prices and reconstructs the exact sealed outcomes', async () => {
+      p.setTime(PUBLICATION_NOW);
+      const target = await p.setup(3007), base = target.input.candidate;
+      const rates = { home: 1.6, away: 1.0 };
+      const probabilities = goalProbabilities(rates.home, rates.away);
+      const resolved = validateMarketSnapshot({
+        'match-result': { source: 'local-engine', period: marketRules.period, probabilities: probabilities['match-result'] },
+        'total-goals': { source: 'local-engine', period: marketRules.period, line: marketRules.totalGoalsLine, probabilities: probabilities['total-goals'] },
+        'both-teams-to-score': { source: 'local-engine', period: marketRules.period, probabilities: probabilities['both-teams-to-score'] },
+      });
+      const at = target.snapshot.context.analysisAt + 1000;
+      const provenance = { kind: 'local-engine', modelVersion: 'synthetic-authorized-local-count-model', historyHash: resultHash('count-profile-history'),
+        evidenceHash: target.snapshot.hash, rates, sample: { matches: 200, homeEffectiveMatches: 20, awayEffectiveMatches: 24 },
+        numericalBasis: 'qualified-local-model' };
+      const transitions = Object.fromEntries(Object.keys(resolved.markets).map((family) => [family,
+        { selected: 'local-engine', ai: 'not-requested', local: 'candidate', provider: 'not-requested' }]));
+      const candidate = { ...base, context: { ...base.context, pin: null },
+        markets: Object.fromEntries(Object.entries(resolved.markets).map(([family, market]) => [family, market.available ? {
+          ...market, provenance, fallback: null, timestamps: { generatedAt: at, retrievedAt: at, providerUpdatedAt: null },
+          flags: ['unknown-provider-update-time'],
+        } : market])), issues: resolved.issues,
+        audit: { aiStatus: 'denied', aiReason: 'unconfigured', providerStatus: 'not-requested', providerReason: null,
+          sourceCascade: LOCAL_FIRST_FORECAST_CASCADE, localStatus: 'candidate', transitions } };
+      const refresh = createMysqlRefreshStore(p.a, p.queue);
+      assert.equal(await refresh.start(target.lease, 'fallback'), true);
+      await refresh.complete(target.lease, 'fallback', { status: 'candidate', candidate });
+      const staged = await refresh.stage(target.lease.jobId, 'fallback', 'completed');
+      assert.equal(evidenceFingerprint(staged.value.candidate), evidenceFingerprint(candidate));
+      const policy = publicationPolicy();
+      const localPublisher = createRevisionPublicationService({ database: p.a, queue: p.queue,
+        policy: publicationPolicy({ sources: { ...policy.sources, 'local-engine': policy.sources.ai } }),
+        authority: publicationAuthority({ verifyGoalExtension: () => true }) });
+      const goalExtension = { evaluationProfile: LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localPoisson: rates, definitions: localFirstGoalMarketDefinitions };
+      const accepted = await localPublisher.publish({ ...target.input, candidate, generationCompletedAt: staged.at, goalExtension }, target.lease);
+      assert.equal(accepted.refresh.outcome, 'published');
+      const extension = await p.b.query((tx) => readGoalMarketExtension(tx, accepted.revision.id));
+      assert.equal(extension.evaluationProfile, LOCAL_FIRST_GOAL_EVALUATION_PROFILE);
+      assert.equal(extension.markets.length, localFirstGoalMarketDefinitions.length);
+      const quarter = extension.markets.find(({ definition }) => definition.key === goalTotalsMarket(5.25, 'total', 'full-time', 'asian').key);
+      assert.ok(quarter.derivation.available && quarter.derivation.market.selections.every(({ winProbability, outcomes }) => winProbability === outcomes.win));
+      assert.equal(await p.b.query((tx) => tx.extendedMarketPublishedPick.count({ where: { revisionId: accepted.revision.id } })), extension.markets.length);
     });
   }, { migrationTimeoutMs: 180_000 });
 });

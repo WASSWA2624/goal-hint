@@ -56,7 +56,7 @@ test("the Any default selects the highest-probability available family and keeps
   assert.equal(prices.find((entry) => entry.family === family)?.price, "1.30");
   assert.equal(bestCardFamily({ forecast: { markets: items.filter((entry) => entry.market.family !== family) }, prices }, query.markets), "both-teams-to-score");
   const sql = feedSql(query, validateReportingDateRange("2026-10-14", "2026-10-14", 31), [39], true);
-  assert.match(sql.joins.sql, /ORDER BY b.selectedProbability DESC,\s+bp.displayHundredths DESC/u);
+  assert.match(sql.joins.sql, /ORDER BY b.selectedProbability DESC, CASE b.source WHEN 'local-engine' THEN 1 ELSE 0 END DESC,\s+bp.displayHundredths DESC/u);
   assert.equal(sql.pickAvailable.sql, "m.available=TRUE", "an explicit recommendation abstention can still have a published forecast");
   assert.match(sql.joins.sql, /op.marketKey=m.family\s+AND op.selection=CASE WHEN/u);
   assert.doesNotMatch(sql.where.sql, /op.displayHundredths BETWEEN/u);
@@ -80,6 +80,18 @@ test("confidence breaks exact probability ties before odds, followed by a stable
     { ...assessed[1], market: { ...assessed[1].market, selectedProbability: 0.7000001 } }], prices, families), "total-goals");
   const same = [...tied, pick("double-chance", "home-or-draw", 0.7)];
   assert.equal(bestPublishedFamily(same.reverse(), [], [...families, "double-chance"]), "double-chance");
+});
+
+test("qualified local extended picks win equal-probability ties over comparably priced fallback picks", () => {
+  const fallback = { market: { family: "match-result", source: "api-football", selection: "home-win", selectedProbability: 0.7,
+    probabilities: { "home-win": 0.7, draw: 0.2, "away-win": 0.1 } } };
+  const local = { key: "goal:full-time:totals:total:4.5:binary", label: "Total goals 4.5", code: "O/U 4.5", source: "local-poisson",
+    selections: [{ key: "under", label: "Under 4.5", probability: 0.7 }, { key: "over", label: "Over 4.5", probability: 0.3 }] };
+  const prices = { fixtureId: "fixture", kind: "pre-match", checkedAt: 10, books: [{ bookmakerId: 8, markets: [
+    { betId: 1, name: "Match Winner", selections: [{ label: "Home", line: null, price: "1.9" }] },
+  ] }] };
+  const result = rankFixtureOutcomes([fallback], [local], prices);
+  assert.deepEqual([result.key, result.odds, result.probability, result.source], [local.key, null, 0.7, "local-engine"]);
 });
 
 test("public forecast rows require a published market without applying the recommendation decision", () => {
@@ -121,7 +133,7 @@ test("feed SQL ranks the candidate's exact fresh price only when provider odds a
   const query = parseFeedQuery(new URLSearchParams("market=match-result,total-goals&prob=60-100&odds=1.50-3.00&sort=probability"), { today, providerOdds: true });
   const enabled = feedSql(query, range, [39], true);
   assert.match(enabled.joins.sql, /LEFT JOIN FixtureOddsPrice bp ON bp.fixtureId=f.id\s+AND bp.marketKey=b.family AND bp.selection=b.selection AND bp.stale=FALSE/u);
-  assert.match(enabled.joins.sql, /ROW_NUMBER\(\) OVER \(PARTITION BY f.id ORDER BY b.selectedProbability DESC,\s+bp.displayHundredths DESC, b.family ASC, b.selection ASC/u);
+  assert.match(enabled.joins.sql, /ROW_NUMBER\(\) OVER \(PARTITION BY f.id ORDER BY b.selectedProbability DESC, CASE b.source WHEN 'local-engine' THEN 1 ELSE 0 END DESC,\s+bp.displayHundredths DESC, b.family ASC, b.selection ASC/u);
   assert.match(enabled.joins.sql, /op.marketKey=m.family\s+AND op.selection=CASE WHEN/u);
   assert.match(enabled.where.sql, /ELSE m.selectedProbability END>=\?/u);
   assert.match(enabled.where.sql, /ELSE m.selectedProbability END<=\?/u);
@@ -135,7 +147,7 @@ test("feed SQL ranks the candidate's exact fresh price only when provider odds a
   const disabled = feedSql(query, range, [39], false);
   assert.doesNotMatch(disabled.joins.sql, /FixtureOdds|\bbp\.|\bop\./u);
   assert.doesNotMatch(disabled.where.sql, /\bop\./u);
-  assert.match(disabled.joins.sql, /ORDER BY\s+b.selectedProbability DESC,\s+b.family ASC, b.selection ASC/u);
+  assert.match(disabled.joins.sql, /ORDER BY\s+b.selectedProbability DESC, CASE b.source WHEN 'local-engine' THEN 1 ELSE 0 END DESC,\s+b.family ASC, b.selection ASC/u);
   const equalDecimal = feedSql({ ...query, probability: { min: 58.2, max: 58.2 } }, range, [39], true);
   assert.equal(equalDecimal.where.values.filter((value) => value === 0.582).length, 2, "equal decimal bounds compare against the same exact fraction");
 });

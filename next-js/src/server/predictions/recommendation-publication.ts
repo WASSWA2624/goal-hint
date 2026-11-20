@@ -7,7 +7,7 @@ import { recommendationQuotesFromSnapshots } from "../odds/recommendation-quotes
 import { storedOddsBatchSchema, storedOddsSnapshotSchema } from "../odds/odds-mysql-store.ts";
 import type { OddsBatchBody } from "../odds/odds-contract.ts";
 import { assertHistorySeal, historyJson } from "./history-read.ts";
-import { refreshArchiveJson } from "../refresh/refresh-archive.ts";
+import { decodeFallbackStage, refreshArchiveJson } from "../refresh/refresh-archive.ts";
 import { publicationFail, type PublishRevisionInput } from "./publication-contract.ts";
 import { matchFrozenRecommendationPolicy } from "./recommendation-input.ts";
 
@@ -29,7 +29,7 @@ export async function validatePublishedRecommendation(tx: Tx, input: PublishRevi
   const context = input.candidate.context, jobId = context.jobId;
   const stage = body((await tx.$queryRaw<Sealed[]>`SELECT body,integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity
     FROM PredictionRefreshStage WHERE jobId=${jobId} AND phase='fallback' AND kind='completed'`)[0], refreshArchiveJson);
-  const resolved = stage.value as { candidate?: unknown } | undefined;
+  const resolved = decodeFallbackStage(stage.value) as { candidate?: unknown } | undefined;
   const intent = body((await tx.$queryRaw<Sealed[]>`SELECT body,integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity
     FROM PredictionRefreshIntent WHERE jobId=${jobId}`)[0], refreshArchiveJson);
   const frozen = intent.plan as { recommendationPolicy?: unknown } | undefined;

@@ -13,7 +13,7 @@ import { parseModelPin } from "../predictor/predictor-input.ts";
 import { fourDigitYearInstant as instant } from "../shared/utc-instant.ts";
 import type { PredictorResult } from "../predictor/predictor-service.ts";
 import { predictorRetryAttemptId } from "../predictor/predictor-resilience.ts";
-import { forecastCascades, QUALIFIED_FORECAST_CASCADE, type FallbackContext, type ForecastTimestamps, type ProviderFallbackCandidate,
+import { forecastCascades, LOCAL_FIRST_FORECAST_CASCADE, localForecastAbstentions, QUALIFIED_FORECAST_CASCADE, type FallbackContext, type ForecastTimestamps, type ProviderFallbackCandidate,
   type ProviderFallbackResult, type ResolvedForecastCandidate } from "./fallback-contract.ts";
 
 export class FallbackInputError extends Error {
@@ -22,7 +22,7 @@ export class FallbackInputError extends Error {
 }
 export const fallbackProviderReasons = ["invalid-request", "not-authorized", "unconfigured", "invalid-response", "wrong-identity",
   "unsupported-markets", "stale", "unknown-source-time", "future-source-time", "timeout", "quota-denied", "request-budget-exhausted",
-  "provider-unavailable", "clock-regression", "unverified-mapping", "stale-context", "ineligible-refresh"] as const;
+  "provider-unavailable", "clock-regression", "unverified-mapping", "stale-context", "ineligible-refresh", "disabled"] as const;
 export const fallbackAiReasons = ["not-authorized", "invalid-response", "unavailable", "invalid-request", "operation-not-authorized",
   "unverified-policy", "unconfigured", "unpriced", "service-unavailable", "unknown-account", "unknown-job", "unknown-attempt",
   "conflicting-policy", "clock-regression", "period-inactive", "budget-exhausted", "job-budget-exhausted", "request-limit", "token-limit",
@@ -182,8 +182,8 @@ const resolvedProvenance = z.discriminatedUnion("kind", [
 const resolvedMarket = z.discriminatedUnion("available", [
   z.object({ available: z.literal(true), market: z.unknown(), timestamps, flags, provenance: resolvedProvenance,
     fallback: z.object({ reason: z.enum(["ai-failure", "ai-timeout", "ai-insufficient-evidence", "ai-budget-exhausted",
-      "ai-missing-group", "ai-invalid-group", "provider-first", "provider-baseline"]), detail: text }).strict().nullable() }).strict(),
-  z.object({ available: z.literal(false), reason: z.enum([...marketReasons, ...fallbackProviderReasons, "invalid-timing"]) }).strict(),
+      "ai-missing-group", "ai-invalid-group", "provider-first", "provider-baseline", "local-unavailable"]), detail: text }).strict().nullable() }).strict(),
+  z.object({ available: z.literal(false), reason: z.enum([...marketReasons, ...fallbackProviderReasons, ...localForecastAbstentions, "invalid-timing"]) }).strict(),
 ]);
 const publicExplanation = z.object({ text: plain, sourceUrls: z.array(link).max(10_000) }).strict();
 const transition = z.strictObject({ selected: z.enum(["ai", "local-engine", "api-football"]).nullable(), ai: text, local: text, provider: text });
@@ -214,7 +214,10 @@ export function parseResolvedForecastCandidate(value: unknown): ResolvedForecast
         ...(family === "total-goals" ? { line: market.line } : {}) };
     }
     const checked = validateMarketSnapshot(inputs);
-    const qualified = parsed.audit.sourceCascade === QUALIFIED_FORECAST_CASCADE;
+    const localFirst = parsed.audit.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE;
+    const qualified = localFirst || parsed.audit.sourceCascade === QUALIFIED_FORECAST_CASCADE;
+    if (localFirst && (context.pin !== null || parsed.audit.sourceOrder !== undefined || parsed.audit.aiStatus !== "denied" ||
+      parsed.audit.aiReason !== "unconfigured")) throw new Error();
     if (qualified !== (parsed.audit.transitions !== undefined) || (qualified && parsed.audit.localGoalRates !== undefined)) throw new Error();
     for (const family of Object.keys(parsed.markets) as (keyof typeof parsed.markets)[]) {
       const item = parsed.markets[family], expected = checked.markets[family];
@@ -240,6 +243,8 @@ export function parseResolvedForecastCandidate(value: unknown): ResolvedForecast
       } else {
         if (item.fallback === null || provenance.source.jobId !== context.jobId ||
           provenance.source.externalFixtureId !== context.context.externalFixtureId) throw new Error();
+        if (localFirst !== (item.fallback.reason === "local-unavailable") || localFirst &&
+          family !== "match-result" && family !== "double-chance") throw new Error();
         // Preserve older provider-first rows while accepting the stricter live baseline reason.
         if (item.fallback.reason === "provider-first" && parsed.audit.sourceOrder !== "provider-first" ||
           parsed.audit.sourceOrder === "provider-first" && !["provider-first", "provider-baseline"].includes(item.fallback.reason)) throw new Error();

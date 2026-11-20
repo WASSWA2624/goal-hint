@@ -7,7 +7,7 @@ import { compareForecastPicks, evidenceFirstRecommendationPolicy, recommendation
   type RecommendationPolicy, type RecommendationQuote } from "../../domain/recommendation.ts";
 import type { EvidenceSnapshot } from "../evidence/evidence-contract.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
-import type { ResolvedForecastCandidate } from "../fallback/fallback-contract.ts";
+import { LOCAL_FIRST_FORECAST_CASCADE, type ResolvedForecastCandidate } from "../fallback/fallback-contract.ts";
 
 export type RecommendationEvidenceAssessment = Readonly<{
   eligible: boolean; reasons: readonly string[]; confidence?: ForecastConfidence;
@@ -94,7 +94,11 @@ export function selectRecommendation(input: Readonly<{
   const local = evidenceFirst ? null : pool(input.candidate, "local-engine");
   const baseline = evidenceFirst ? null : pool(baselineCandidate, "api-football");
   const selected = evidenceFirst ? pool(input.candidate) : ai ?? local ?? baseline;
-  const fallbackReason = (evidenceFirst ? selected?.source === "ai" : ai !== null) ? null : input.candidate.audit.aiReason ?? "ai-no-qualified-recommendation";
+  const localFirst = input.candidate.audit.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE;
+  const selectedMarket = selected === null ? null : input.candidate.markets[selected.family];
+  const fallbackReason = localFirst ? selectedMarket?.available && selectedMarket.market.source === "api-football"
+    ? selectedMarket.fallback?.detail ?? "local-unavailable" : null :
+    (evidenceFirst ? selected?.source === "ai" : ai !== null) ? null : input.candidate.audit.aiReason ?? "ai-no-qualified-recommendation";
   const support = selected && decisions.find((entry) => entry.eligible && entry.source === selected.source &&
     entry.family === selected.family && entry.selection === selected.selection)?.evidence;
   const cohorts = Array.isArray(support?.cohorts) ? support.cohorts.filter((cohort): cohort is { sampleSize: number } =>
@@ -104,7 +108,8 @@ export function selectRecommendation(input: Readonly<{
     ? ` Smoothed historical event support is ${support.historicalSupport.toFixed(3)}; this is an evidence eligibility measure.` : "";
   const priceLabel = probabilityFirst || evidenceFirst ? "eligible decimal odds" : "highest eligible decimal odds";
   const priceExplanation = selected?.quote ? ` ${priceLabel} ${selected.quote.decimal}.` : "";
-  const sourceLabel = selected?.source === "ai" ? "AI" : selected?.source === "local-engine" ? "Local Engine" : "API-Football baseline";
+  const sourceLabel = selected?.source === "ai" ? "AI" : selected?.source === "local-engine" ? "Local Engine" :
+    localFirst ? "API-Football fallback" : "API-Football baseline";
   const decision: RecommendationDecision = freezeEvidence({ version: 1, policyVersion: policy.version,
     fixtureId: context.fixtureId, fixtureVersion: String(context.fixtureVersion), homeTeamId: context.home.teamId, awayTeamId: context.away.teamId,
     analysisAt: context.analysisAt, evidenceSnapshotId: input.evidenceSnapshotId ?? input.snapshot.id, evidenceHash: input.snapshot.hash,

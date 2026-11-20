@@ -27,25 +27,28 @@ export type ProviderFallbackCandidate = Readonly<{
 export type ProviderFallbackReason = "invalid-request" | "not-authorized" | "unconfigured" | "invalid-response" |
   "wrong-identity" | "unsupported-markets" | "stale" | "unknown-source-time" | "future-source-time" |
   "timeout" | "quota-denied" | "request-budget-exhausted" | "provider-unavailable" | "clock-regression" |
-  "unverified-mapping" | "stale-context" | "ineligible-refresh";
+  "unverified-mapping" | "stale-context" | "ineligible-refresh" | "disabled";
 export type ProviderFallbackResult = Readonly<{
   status: "candidate"; candidate: ProviderFallbackCandidate; requestsDispatched: number; requestCountUnknown: false;
 }> | Readonly<{ status: "denied"; reason: ProviderFallbackReason; requestsDispatched: number; requestCountUnknown: boolean }>;
 /** Why API-Football supplied a published group. "provider-first": the reviewed source order prefers the provider
  * baseline; the AI receipt is recorded separately. AI groups never carry a fallback reason (a database check). */
 export type FallbackTrigger = "ai-failure" | "ai-timeout" | "ai-insufficient-evidence" | "ai-budget-exhausted" |
-  "ai-missing-group" | "ai-invalid-group" | "provider-first" | "provider-baseline";
+  "ai-missing-group" | "ai-invalid-group" | "provider-first" | "provider-baseline" | "local-unavailable";
 /** Frozen per AI refresh intent. Absent means the original AI-first resolution without contemporaneous capture. */
 export type ForecastSourceOrder = "provider-first" | "ai-first";
 export const LIVE_FORECAST_CASCADE = "ai-local-provider";
 export const QUALIFIED_FORECAST_CASCADE = "qualified-ai-local-provider-v1";
-export const forecastCascades = [LIVE_FORECAST_CASCADE, QUALIFIED_FORECAST_CASCADE] as const;
+export const LOCAL_FIRST_FORECAST_CASCADE = "qualified-local-provider-v1";
+export const forecastCascades = [LIVE_FORECAST_CASCADE, QUALIFIED_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE] as const;
 export type ForecastCascade = typeof forecastCascades[number];
 export type ForecastQualification = Readonly<{
   verifyAiNumericalBasis?(candidate: Extract<PredictorResult, { status: "candidate" }>, context: FallbackContext, family: SourceGroup): boolean;
   verifyLocalNumericalBasis?(candidate: ResolvedForecastCandidate, context: FallbackContext, family: SourceGroup): boolean;
 }>;
 export type ForecastEngineTransition = Readonly<{ selected: MarketSource | null; ai: string; local: string; provider: string }>;
+export const localForecastAbstentions = ["insufficient-local-evidence", "unqualified-local-model", "local-evaluation-unavailable"] as const;
+export type LocalForecastAbstention = typeof localForecastAbstentions[number];
 /** Versioned runtime source policy; legacy baseline remains readable for historical jobs. */
 export type ForecastSelectionPolicy = "legacy-ai-primary" | "provider-baseline" | "optional-ai-primary";
 export type FallbackReason = Readonly<{ reason: FallbackTrigger; detail: string }>;
@@ -66,7 +69,7 @@ export type ForecastProvenance = Readonly<{
 export type ResolvedForecastMarket = Readonly<{
   available: true; market: AcceptedMarket; fallback: FallbackReason | null;
   timestamps: ForecastTimestamps; provenance: ForecastProvenance; flags: readonly ForecastFlag[];
-}> | Readonly<{ available: false; reason: MarketRejectionReason | ProviderFallbackReason | "invalid-timing" }>;
+}> | Readonly<{ available: false; reason: MarketRejectionReason | ProviderFallbackReason | LocalForecastAbstention | "invalid-timing" }>;
 export type ForecastExplanation = Readonly<{ text: string; sourceUrls: readonly string[] }>;
 export type ResolvedForecastCandidate = Readonly<{
   context: FallbackContext; markets: Readonly<Record<MarketFamily, ResolvedForecastMarket>>;

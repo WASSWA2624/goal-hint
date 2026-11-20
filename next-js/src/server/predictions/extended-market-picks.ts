@@ -4,7 +4,7 @@ import { z } from "zod";
 import { extendedMarketSourceLabels, publicExtendedPickSchema, type PublicExtendedPick } from "../../domain/extended-markets.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
-import { readGoalMarketExtension, type StoredGoalMarketExtension } from "./goal-market-store.ts";
+import { goalPickProbabilityBasis, readGoalMarketExtension, type StoredGoalMarketExtension } from "./goal-market-store.ts";
 import { readImpliedMarketExtension } from "./implied-market-store.ts";
 import type { StoredImpliedMarketExtension } from "./implied-market-contract.ts";
 import { historyFail } from "./history-contract.ts";
@@ -38,7 +38,7 @@ export function preparePublishedExtendedPicks(goal: StoredGoalMarketExtension | 
     const market = derivation.market, selected = market.selections.find(({ key }) => key === market.selection)!;
     add(goal, sortOrder, { key: definition.key, label: definition.label, code: definition.code, period: definition.period,
       ruleVersion: market.ruleVersion, source: market.source, sourceLabel: extendedMarketSourceLabels[market.source],
-      probabilityBasis: definition.group === "payout" ? "model-positive-payout" : "model-event",
+      probabilityBasis: goalPickProbabilityBasis(goal, definition.group),
       selection: selected.key, selectionLabel: selected.label, selectedProbability: selected.winProbability });
   });
   implied?.markets.forEach(({ definition, derivation }, sortOrder) => {

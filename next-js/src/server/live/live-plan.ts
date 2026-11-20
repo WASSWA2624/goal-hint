@@ -1,13 +1,13 @@
 import "server-only";
-import { recommendationPolicy } from "../../domain/recommendation.ts";
+import { evidenceFirstRecommendationPolicy, recommendationPolicy } from "../../domain/recommendation.ts";
 
 import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
 import { marketRules } from "../../domain/markets.ts";
-import { liveGoalMarketDefinitions } from "../../domain/goal-market-definitions.ts";
+import { liveGoalMarketDefinitions, localFirstGoalMarketDefinitions } from "../../domain/goal-market-definitions.ts";
 import { operatingRules, type RuntimePolicy } from "../config/runtime-policy.ts";
 import type { EvidencePolicy } from "../evidence/evidence-contract.ts";
 import type { ProviderFallbackPolicy } from "../fallback/fallback-adapter.ts";
-import { LIVE_FORECAST_CASCADE, type ForecastCascade } from "../fallback/fallback-contract.ts";
+import { LIVE_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE, type ForecastCascade } from "../fallback/fallback-contract.ts";
 import { ODDS_CONTRACT_VERSION, type ApiFootballBounds } from "../football/api-football-contract.ts";
 import { criticalWorkReserveRatio, providerDayReserveRatio } from "../football/quota-contract.ts";
 import { DE_MARGIN_METHOD } from "../../domain/odds.ts";
@@ -242,6 +242,13 @@ export function publicationPolicy(refs: LiveReferences): PublicationPolicy {
 export function liveCascadePlan(plan: RefreshPlan, includeGoals = true, sourceCascade: ForecastCascade = LIVE_FORECAST_CASCADE): RefreshPlan {
   return { ...plan, sourceCascade,
     ...(includeGoals ? { goalDefinitions: liveGoalMarketDefinitions } : {}) };
+}
+/** New intents pin the numerical workflow and whether a fresh provider fallback is permitted. */
+export function liveLocalFirstPlan(baseline: RefreshPlan, providerAllowed: boolean): RefreshPlan {
+  return { ...baseline, sourceCascade: LOCAL_FIRST_FORECAST_CASCADE, goalDefinitions: localFirstGoalMarketDefinitions,
+    recommendationPolicy: evidenceFirstRecommendationPolicy,
+    fallback: providerAllowed ? baseline.fallback : { ...baseline.fallback, bounds: null },
+    footballRequestLimit: baseline.observation.bounds.maxRequests + (providerAllowed ? baseline.fallback.bounds?.maxRequests ?? 0 : 0) };
 }
 export function evidencePolicy(refs: LiveReferences): EvidencePolicy {
   const freshness = { maxAgeMs: 7 * DAY, basis: "retrieved", unknownTimestamp: "exclude", conflicts: "preserve" } as const;

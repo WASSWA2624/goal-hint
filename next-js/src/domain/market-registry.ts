@@ -5,6 +5,7 @@ import { LIVE_ODDS_MAPPING_VERSION, ODDS_MAPPING_VERSION, binaryGoalTotalOddsMap
 import { GOAL_MARKET_RULE_VERSION, goalMarketPeriods, type GoalMarketPeriod, type GoalRule } from "./score-distribution-markets.ts";
 
 export const MARKET_REGISTRY_VERSION = "football-market-registry-v3";
+export const LOCAL_FIRST_MARKET_REGISTRY_VERSION = "football-market-registry-v4";
 
 type SelectionSet =
   | Readonly<{ kind: "fixed"; keys: readonly string[] }>

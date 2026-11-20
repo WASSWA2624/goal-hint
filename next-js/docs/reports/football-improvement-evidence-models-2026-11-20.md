@@ -22,6 +22,22 @@ A read-only replay of the owned API-Football snapshot examined 23,025 sealed res
 
 The replay supplies a small matched diagnostic and identifies data gaps. The fitted path remains ineligible for publication. Prospective data, sufficient cohorts and a frozen independent final test are needed to qualify evidence thresholds, calibration, period forecasts and context adjustments. The existing publication path stays in place for this step.
 
+## Local Engine full-match totals audit
+
+The rollout audit re-used the frozen November windows and scored the published baseline model version `regularized-poisson-v1:8a30b9b01d3cacd8` on the owned development snapshot. The read-only cohort required the matching stored schedule to have been observed at least 30 minutes before kickoff and the label to have independently sealed, canonical regulation evidence. Training used only earlier matches whose sealed result and canonical evidence clocks were at or before the forecast cutoff. These gates yielded 22,419 readable sealed result rows, 156 labeled targets and 56 competitions. The cohort and eligible evidence identities hash to `1872a7c8c5a09135c2b2d1fde29f212c980124971e0b16492e33c254273b98ab`. No provider requests or publication writes ran.
+
+The model estimated 0 of 69 validation fixtures, 1 of 5 calibration fixtures and 31 of 82 final-test fixtures. The other 51 final-test fixtures had insufficient point-in-time history. No calibration was fitted. Each comparison uses the same 31 fixtures and the same pre-cutoff history. The comparison estimates the league's observed over frequency with Laplace smoothing. Calibration error averages the weighted absolute difference between forecast and observed rate across fixed 0.2-wide bands, computed separately for Over and Under. Lower values are better in the three score columns.
+
+| Full-match line | Observed Over | Top-pick hits of 31, local / league | Brier, local / league | Log loss, local / league | Calibration error, local / league |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1.5 | 18/31 | 17 / 18 | 0.2628 / 0.2278 | 0.7161 / 0.6406 | 0.1913 / 0.1392 |
+| 2.5 | 11/31 | 19 / 23 | 0.2629 / 0.2094 | 0.7302 / 0.6101 | 0.2075 / 0.0967 |
+| 3.5 | 8/31 | 21 / 23 | 0.2331 / 0.1885 | 0.6839 / 0.5623 | 0.1848 / 0.0385 |
+| 4.5 | 3/31 | 27 / 28 | 0.0965 / 0.0816 | 0.3305 / 0.2924 | 0.0318 / 0.0331 |
+| 5.5 | 1/31 | 30 / 30 | 0.0331 / 0.0267 | 0.1308 / 0.1083 | 0.0267 / 0.0176 |
+
+The league comparison had lower Brier and log loss on every line. The five thresholds share the same fixtures and outcomes. Only two of the 31 matches ended on exactly five goals, which leaves little evidence for the calibration of payout grades near that threshold. The inclusive 1.5–5.5 publishing range uses the existing regulation-count model authorization. This cohort does not establish accuracy gains, support new calibration, or qualify the fitted, period, player, cards or corners models. The aggregate reliability bins are retained in the private development audit `.tmp/prompt-03-baseline-holdout.json`.
+
 ## Validation and handoff
 
 The 135-check focused suite covers the numerical, period, evidence and existing intelligence paths. The chronological tests use a synthetic cohort with sufficient training and calibration coverage, verify that a late result stays unavailable at the next boundary and confirm that editing the final outcome cannot change the earlier fit or calibration. The archive evidence replay also checked selection identity, cutoff, staleness, conflicting or tampered pages, and exclusion of raw source text. TypeScript, ESLint and all 15 isolated MySQL runtime checks passed. The historical diagnostic is stored privately in `next-js/.tmp/prompt-06-local-chronological-goal-report.json`. Step 07 can consume fitted artifacts, score distributions, the fixture evidence bundle and typed market capability decisions through the existing prediction infrastructure.

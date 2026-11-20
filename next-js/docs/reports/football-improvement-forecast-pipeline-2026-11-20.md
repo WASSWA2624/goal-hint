@@ -13,3 +13,37 @@ The `probability-confidence-odds-v3` recommendation selects the greatest estimat
 ## Validation
 
 The 160-check routing and resilience suite covered per-family authority, partial success, transient retries, separately counted reservations, the circuit threshold, timeouts and invalid responses. The 42-check evaluator suite covered exact lines and Asian grades, period dependence, bounded score mass and unsupported definitions. The coordinated refresh test passed through the live plan, fallback and publication authorities with a supported recommendation and no odds. Recommendation, feed ranking, match details and slip regressions passed with synthetic inputs. All 21 isolated MySQL publication and recovery checks passed, including cutoff rollback, accepted and abstained receipts, replay from a second connection, and repair of an exhausted queue entry without a new forecast attempt. TypeScript and ESLint passed. The step adds no schema migration and used no live provider requests.
+
+## Local-first rollout
+
+New prospective worker intents seal `qualified-local-provider-v1` and the
+recorded fallback allowance. Qualified Local Engine estimates supply each
+eligible group first. Trusted API-Football match result and derived double
+chance can fill an unresolved result group. Set
+`GOAL_HINT_API_PREDICTION_FALLBACK_ENABLED=false` on the forecast worker to
+disable that fallback for new intents. Previously sealed intents retain their
+original source order and allowance.
+
+The local-first registry applies the approved full-match total-goals range
+from 1.5 through 5.5 inclusive. It records the regulation count model's
+exact lines and separate outright, push and half grades. Legacy odds and
+published markets outside the range retain their identities. The regulation
+count projection also supports team totals, exact counts, count ranges and
+odd/even. Team-to-score and clean-sheet have registered identities and abstain
+while the public projection lacks support. Unqualified model scopes also keep
+an abstention reason. The chronological check for the existing count model
+records coverage and the comparison results separately.
+[Chronological model evidence](football-improvement-evidence-models-2026-11-20.md)
+
+Version 2 seals the model-backed outcome distributions together with the
+same revision's goal extension, exact evidence cutoff and generation clocks.
+The decision records decimal probability text so MySQL cannot change the
+binary64 value when reading JSON back. A price is optional for every market.
+The top pick uses win probability, confidence, an exact price verified at
+cutoff when available, and the stable market and selection keys. Immutable
+version 1 receipts remain readable under their original rules.
+
+An isolated MySQL 8.4.11 run published and reread the unrounded top pick
+without any odds and verified idempotent replay from a second connection. A
+MariaDB 10.4.32 probe verified numeric-column compatibility and exact decimal
+readback. This update uses the existing publication tables.

@@ -94,7 +94,7 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
   const rankedCandidateMarket = preferRecommendation
     ? Prisma.sql`CASE WHEN ${useRecommendation} THEN b.family=${recommendedFamily} ELSE ${candidateMarket} END`
     : candidateMarket;
-  // Honor a frozen recommendation first. Older rows rank by unrounded probability, then an exact fresh quote and stable key.
+  // Honor a frozen recommendation first. Otherwise rank by probability, support, the exact fresh quote, and stable identity.
   const candidatePriceJoin = providerOdds ? Prisma.sql`LEFT JOIN FixtureOddsPrice bp ON bp.fixtureId=f.id
       AND bp.marketKey=b.family AND bp.selection=b.selection AND bp.stale=FALSE AND bp.priceDecimal>=${minimumFixturePrice}` : Prisma.empty;
   const candidatePriceOrder = providerOdds ? Prisma.sql`bp.displayHundredths DESC,` : Prisma.empty;
@@ -125,7 +125,7 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
     const fixtures = ids ? Prisma.sql`AND f.id IN (${Prisma.join(ids)})` : Prisma.empty;
     const source = ids ? Prisma.sql`FROM FootballFixture f FORCE INDEX (PRIMARY) ${fixtureRelations}` : cohortJoins;
     const ranked = Prisma.sql`SELECT STRAIGHT_JOIN f.id AS fixtureId,b.setId,b.family,
-    ROW_NUMBER() OVER (PARTITION BY f.id ORDER BY b.selectedProbability DESC,
+    ROW_NUMBER() OVER (PARTITION BY f.id ORDER BY b.selectedProbability DESC, CASE b.source WHEN 'local-engine' THEN 1 ELSE 0 END DESC,
       ${candidatePriceOrder} b.family ASC, b.selection ASC) AS pickRank
     ${source} LEFT JOIN PredictionSet rp ON rp.id=${displayedSet}
     JOIN MarketPrediction b FORCE INDEX (MarketPrediction_feed_choice_idx) ON b.setId=rp.id AND ${rankedCandidateMarket}

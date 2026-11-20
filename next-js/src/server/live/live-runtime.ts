@@ -1,10 +1,11 @@
 import "server-only";
 import { createRecommendationQuoteLoader } from "../odds/recommendation-quotes.ts";
 import { evidenceFirstRecommendationPolicy } from "../../domain/recommendation.ts";
-import { QUALIFIED_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
+import { LOCAL_FIRST_FORECAST_CASCADE, QUALIFIED_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
+import { LOCAL_FIRST_GOAL_EVALUATION_PROFILE } from "../../domain/goal-market-definitions.ts";
 
 import { getReportingDayBounds, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
-import { MARKET_REGISTRY_VERSION } from "../../domain/market-registry.ts";
+import { LOCAL_FIRST_MARKET_REGISTRY_VERSION, MARKET_REGISTRY_VERSION } from "../../domain/market-registry.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { maximumCompetitionScope } from "../../domain/feed-query.ts";
 import { assertOperationAllowed, type RuntimePolicy, type EvidenceVerifier } from "../config/runtime-policy.ts";
@@ -40,7 +41,7 @@ import { readPendingHistorySubjectIds, type FootballHistoryPlayerSubjectDataset 
 import { quotaPriorities } from "../football/quota-contract.ts";
 import { createPolicyQuotaGateway } from "../football/quota-gateway.ts";
 import { createMysqlQuotaStore } from "../football/quota-mysql-store.ts";
-import { createLiveLocalEngine } from "../intelligence/live-local-engine.ts";
+import { createLiveLocalEngine, verifiesLocalBaselineMarket } from "../intelligence/live-local-engine.ts";
 import { LOCAL_GOALS_VERSION } from "../intelligence/local-goals-model.ts";
 import { createMysqlJobQueue } from "../jobs/job-mysql-store.ts";
 import { createJobRegistry, defineJob, type JobDefinition } from "../jobs/job-registry.ts";
@@ -74,7 +75,7 @@ import { createLiveFootballPreparation, fitLiveFootballSources, readLiveFootball
 import { createLiveResearchRuntime } from "./live-research.ts";
 import { liveAiEvidencePolicy } from "./live-ai-plan.ts";
 import { canRunLiveRefresh } from "./live-refresh-quota.ts";
-import { fallbackRefreshPlan, LIVE_REFRESH_TYPE, liveCascadePlan, liveReferences, liveWorkload,
+import { fallbackRefreshPlan, LIVE_REFRESH_TYPE, liveCascadePlan, liveLocalFirstPlan, liveReferences, liveWorkload,
   resultSyncPolicy, selectionPolicy, cutoffPolicy, lifecyclePolicy, providerFallbackPolicy, publicationPolicy,
   oddsPolicy, oddsImportBounds, oddsCatalogBounds, oddsMaxRequests, ODDS_FRESHNESS_MS, teamCodeBounds, teamCodeImportsEnabled,
   refreshEnvelopeFor } from "./live-plan.ts";
@@ -172,6 +173,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
   const privateRetention = verify(refs.retention, "football-private-use");
   const productionHistory = !localFootball && archiveEnabled && privateRetention && (syntheticArchive || productionTarget);
   const coordinated = policy.choices.coordinatedFootball.enabled && (productionTarget || syntheticArchive || localFootball);
+  const localFirstForecasts = privateRetention && (productionTarget || coordinated || localFootball);
+  const apiFallbackEnabled = policy.choices.forecasts.apiFallbackEnabled;
   const forecastConcurrency = coordinated ? policy.choices.coordinatedFootball.forecastConcurrency : 0;
   if (localFootball) {
     if (policy.mode !== "development" || databaseTarget.hostname !== "127.0.0.1" || !/^\/goal_hint_football_\d{6}$/u.test(databaseTarget.pathname))
@@ -207,17 +210,19 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     const odds = oddsPolicy(policy, refs, workload, localFootball || coordinated || productionTarget && privateRetention);
     let aiModel: ReturnType<typeof liveAiModel> | null = null;
     if (policy.capabilities.ai) try { aiModel = liveAiModel(policy); } catch { /* An unsupported optional model leaves the baseline active. */ }
-    // The coordinated cascade can only dispatch models with reviewed numerical eligibility.
-    if (coordinated && aiModel?.evaluation.status !== "evaluated") aiModel = null;
+    // New local-first intents omit AI. Retain the configured model for compatible sealed legacy intents.
+    if (coordinated && !localFirstForecasts && aiModel?.evaluation.status !== "evaluated") aiModel = null;
     const sourceOrder = coordinated || localFootball ? "ai-first" : liveSourceOrder(policy);
-    const selection = Object.freeze({ ...selectionPolicy(policy, refs, workload), ...(coordinated ? { forecastLifecycle: {
-      engineVersion: evidenceFingerprint([QUALIFIED_FORECAST_CASCADE, evidenceFirstRecommendationPolicy.version,
-        aiModel, LOCAL_GOALS_VERSION, API_FOOTBALL_CONTRACT_VERSION]),
-      marketRegistryVersion: MARKET_REGISTRY_VERSION,
+    const localEvidence = localFirstForecasts || sourceOrder === "ai-first";
+    const selection = Object.freeze({ ...selectionPolicy(policy, refs, workload), ...(coordinated || localFirstForecasts ? { forecastLifecycle: {
+      engineVersion: evidenceFingerprint(localFirstForecasts ? [LOCAL_FIRST_FORECAST_CASCADE, LOCAL_FIRST_GOAL_EVALUATION_PROFILE,
+        evidenceFirstRecommendationPolicy.version, apiFallbackEnabled, LOCAL_GOALS_VERSION, API_FOOTBALL_CONTRACT_VERSION] :
+        [QUALIFIED_FORECAST_CASCADE, evidenceFirstRecommendationPolicy.version, aiModel, LOCAL_GOALS_VERSION, API_FOOTBALL_CONTRACT_VERSION]),
+      marketRegistryVersion: localFirstForecasts ? LOCAL_FIRST_MARKET_REGISTRY_VERSION : MARKET_REGISTRY_VERSION,
     } } : {}) });
     let ai: LiveAiRuntime | null = null;
     const authorities = createLiveAuthorities({ policy, verify, refs, selection, statusEvidenceRef, resultPolicy: () => results, localFootball,
-      refreshPacing: workload.pacing, oddsPolicy: odds, liveMatchPolicy: () => liveDetailsPolicy, sourceOrder, coordinatedForecasts: coordinated,
+      refreshPacing: workload.pacing, oddsPolicy: odds, liveMatchPolicy: () => liveDetailsPolicy, sourceOrder, coordinatedForecasts: coordinated, localFirstForecasts,
       ...(aiModel === null ? {} : { aiModel, verifyPrimary: (...args) => ai?.verifyAi(...args) === true,
         verifyPrimaryCandidate: (candidate) => ai?.verifyPublishedCandidate(candidate) === true,
         verifyPrimaryGoals: (candidate, distribution) => ai?.verifyPublishedGoalDistribution(candidate, distribution) === true }) });
@@ -246,7 +251,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     const lifecycle = createScheduleLifecycleService({ database, cutoff, policy: lifecyclePolicy(refs), authority: authorities.lifecycle });
     const catalog = createFootballCatalogStore(database, { coordinateFixtureMutation: lifecycle.coordinateFixtureMutation,
       transactionTimeoutMs: 120_000, ...(coordinated ? { sealFixtureResults: true } : {}),
-      ...(sourceOrder === "ai-first" ? { sealTeamHistory: true } : {}) });
+      ...(localEvidence ? { sealTeamHistory: true } : {}) });
     const importer = createFootballCatalogImporter({ adapter, store: catalog, authority: authorities.catalog });
     const discoverFixtures = coordinated ? createLiveDiscoveryImport({ importer, competitionIds: policy.choices.competitionIds ?? [],
       retentionEvidenceRef: refs.retention }) : null;
@@ -322,7 +327,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     })() : null;
     const historyDetails = historySource ? createFootballHistoryDetails({ database, adapter: adapter.evidence,
       competitionIds: policy.choices.competitionIds ?? [], batchSize: 20,
-      ...(sourceOrder === "ai-first" && privateRetention ? {
+      ...(localEvidence && privateRetention ? {
         onFinalDetails: createFinalImpliedCountCapture(database, () => verify(refs.retention, "football-private-use")),
       } : {}),
       now: () => utcInstantFromEpochMilliseconds(Date.now()), providerDayEndsAt: () => quota.current()?.endsAt ?? null }) : null;
@@ -447,7 +452,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       },
     };
     const selectionStore = createMysqlDailySelectionStore(database, queue, hourlySelectionEnabled
-      ? { hourly: { localEvidence: sourceOrder === "ai-first",
+      ? { hourly: { localEvidence,
         ...(coordinated ? { reuseFutureDates: workload.importDays } : {}),
         scheduleCutoff: ({ fixtureId, cycleId }, tx) => cutoff.scheduleCycle({ fixtureId, cycleId }, undefined, tx) } } : {});
     const hourlyFixtureReconciler = hourlySelectionEnabled ? createHourlyFixtureReconciler({ database, importer: hourlyImporter,
@@ -476,6 +481,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     const fallback = createFallbackService({ fallback: providerFallback, authority: authorities.fallback, maxInflight: 100,
       localEngine: createLiveLocalEngine(database, coordinated && providerArchive
         ? { verifyPrivateUse: () => verify(refs.retention, "football-private-use") } : undefined),
+      ...(localFirstForecasts ? { localFirstQualification: { verifyLocalNumericalBasis: (candidate, context, group) =>
+        verify(refs.retention, "football-private-use") && verifiesLocalBaselineMarket(candidate, context, group) } } : {}),
       selectionPolicy: sourceOrder === "provider-first" ? "provider-baseline" : "optional-ai-primary", verifyRequest: authorities.verifyFallbackRequest });
     const refreshStore = createMysqlRefreshStore(database, queue);
     if (aiModel !== null) try { ai = await createLiveAiRuntime({ policy, verify, refs, model: aiModel, database, store: refreshStore,
@@ -486,28 +493,29 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     if (ai !== null && aiModel !== null && policy.capabilities.research) try { research = await createLiveResearchRuntime({ policy, verify, refs, model: aiModel,
       database, evidenceAuthority: authorities.evidence, fallbackReserveMs: refreshEnvelopeFor(workload.pacing, true).fallbackReserveMs,
       ...(overrides.researchFetcher ? { fetcher: overrides.researchFetcher } : {}) }); } catch { /* Optional research startup failure preserves the baseline and AI structured evidence. */ }
-    const footballPreparation = ai !== null || sourceOrder === "ai-first"
+    const footballPreparation = !localFirstForecasts && (ai !== null || sourceOrder === "ai-first")
       ? createLiveFootballPreparation({ importer, refs, pacing: workload.pacing,
         ...(ai !== null || localFootball ? { adapter: adapter.evidence, database } : {}) }) : null;
     const refresh = createPredictionRefreshService({ type: LIVE_REFRESH_TYPE, handlerVersion: 1, store: refreshStore,
       selection: selectionStore, authority: authorities.refresh,
       ...(selection.forecastLifecycle ? { forecastLifecycle: selection.forecastLifecycle } : {}),
-      prepare: async (member, context) => {
+      ...(!localFirstForecasts ? { prepare: async (member, context) => {
         const football = await footballPreparation?.(member, context);
         let news: readonly import("../evidence/evidence-contract.ts").EvidenceSource[] = [];
         let reason: string | null = policy.capabilities.research ? "unavailable" : "unconfigured";
         if (research) try { const result = await research.prepare(member, context); news = result.sources; reason = result.reason; }
         catch { reason = "unavailable"; }
         return { sources: [...(football?.sources ?? []), ...news], research: { status: reason === null ? "completed" as const : "denied" as const, reason } };
-      },
+      } } : {}),
       configure: async (member) => {
         const history = await readLiveFootballSources(database, member.context, liveAiEvidencePolicy(refs), refs).catch(() => []);
         const stage = await refreshStore.stage(member.jobId, "preparation", "completed");
         const extra = (stage?.value as { sources?: import("../evidence/evidence-contract.ts").EvidenceSource[] } | undefined)?.sources ?? [];
         const sources = fitLiveFootballSources(member.context, liveAiEvidencePolicy(refs), authorities.evidence, history, extra);
         const base = fallbackRefreshPlan(member, refs, workload.pacing);
-        const reviewed = ai?.configure(member, sources) ??
-          { ...base, evidence: { ...base.evidence, policy: liveAiEvidencePolicy(refs), cachedSources: sources } };
+        const storedEvidence = { ...base, evidence: { ...base.evidence, policy: liveAiEvidencePolicy(refs), cachedSources: sources } };
+        if (localFirstForecasts) return liveLocalFirstPlan(storedEvidence, apiFallbackEnabled);
+        const reviewed = ai?.configure(member, sources) ?? storedEvidence;
         if (coordinated) return liveCascadePlan({ ...reviewed, recommendationPolicy: evidenceFirstRecommendationPolicy }, false, QUALIFIED_FORECAST_CASCADE);
         return sourceOrder === "ai-first" ? liveCascadePlan(reviewed) : reviewed;
       },
@@ -521,12 +529,13 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
           authorities.odds.verifyPolicy(odds) === true && authorities.odds.verifyRetention({ evidenceRef: refs.retention,
             purpose: "structured-odds-history", rawPayloadsStored: false }) === true }) },
       observation: createRefreshObservationCollector({ adapter: adapter.evidence, evidenceRef: statusEvidenceRef, verifyResponse: authorities.verifyStatusResponse }) });
-    const settlement = createMarketSettlementService({ database, queue, extendedMarketsEnabled: sourceOrder === "ai-first" });
+    const settlement = createMarketSettlementService({ database, queue, extendedMarketsEnabled: localEvidence });
     const cache = createMysqlPublicCacheStore(database);
 
     // Only remaining outbound calls consume the reserve kept for selection and result checks.
     const refreshDefinition: JobDefinition = Object.freeze({ ...refresh.definition, async handle(payload, context) {
       if (!await canRunLiveRefresh({ store: refreshStore, jobId: context.lease.jobId, primaryEnabled: ai !== null,
+        ...(localFirstForecasts ? { localFirstFallbackEnabled: apiFallbackEnabled } : {}),
         floor: workload.refreshFloor, remaining: () => quota.remaining() })) return { status: "failed", reason: "rate-limited", retryable: true };
       try { return await refresh.definition.handle(payload, context); }
       finally { ai?.release(context.lease.jobId); }
@@ -799,7 +808,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     }
     return Object.freeze({ policy, database, queue, quota, workload, registry, hourlySelectionEnabled, settlement, cache, catalog: importer,
       historyBackfill, historyDetails, historyReference, resultPoller, liveMatchPoller, inPlayOdds, day,
-      coordinated, forecastConcurrency, forecastRecovery, currentDayContextEnabled: currentDayContext !== null,
+      coordinated, forecastConcurrency, forecastRecovery, localFirstForecasts, apiFallbackEnabled, currentDayContextEnabled: currentDayContext !== null,
       odds: Object.freeze({ enabled: oddsEnabled, recoveryEnabled: oddsRecoveryEnabled, registry: oddsRegistry, horizonDays: workload.odds.dates,
         bookmakerScope: odds?.bookmakerScope,
         requalifyLocal: requalifyLocalOdds, projectAuthorizedStored: projectAuthorizedStoredOdds,

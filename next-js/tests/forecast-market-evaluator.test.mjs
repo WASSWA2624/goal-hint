@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { goalHighestScoringHalfMarket, goalScoringInBothHalvesMarket, liveGoalMarketDefinitions, registeredForecastGoalMarkets } from '../src/domain/goal-market-definitions.ts';
-import { MARKET_REGISTRY_VERSION, marketRegistry } from '../src/domain/market-registry.ts';
+import { goalHighestScoringHalfMarket, goalScoringInBothHalvesMarket, liveGoalMarketDefinitions, LOCAL_FIRST_GOAL_EVALUATION_PROFILE,
+  localFirstGoalMarketDefinitions, registeredForecastGoalMarkets } from '../src/domain/goal-market-definitions.ts';
+import { LOCAL_FIRST_MARKET_REGISTRY_VERSION, MARKET_REGISTRY_VERSION, marketRegistry } from '../src/domain/market-registry.ts';
 import { marketRules, validateMarketSnapshot } from '../src/domain/markets.ts';
 import { settleGoalSelection } from '../src/domain/score-distribution-markets.ts';
 import { SCORE_DISTRIBUTION_VERSION } from '../src/domain/score-distribution.ts';
-import { evaluateForecastMarkets, FORECAST_MARKET_EVALUATION_VERSION } from '../src/server/predictions/forecast-market-evaluator.ts';
+import { evaluateForecastMarkets, FORECAST_MARKET_EVALUATION_VERSION, legacyForecastMarketKey,
+  LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION } from '../src/server/predictions/forecast-market-evaluator.ts';
+import { prepareGoalMarketExtension } from '../src/server/predictions/goal-market-store.ts';
 
 const state = (home, away, halfHome, halfAway, probability) => ({ home, away, halfHome, halfAway, probability });
 const modelGrid = { version: SCORE_DISTRIBUTION_VERSION, unrepresentedProbability: 0, states: [
@@ -23,6 +26,34 @@ const resolved = (source = 'ai', home = 0.48, draw = 0.32, away = 0.20) => valid
 const rowsByKey = (result) => new Map(result.markets.map((row) => [row.marketKey, row]));
 const wins = (row, key) => row.selections.find((selection) => selection.key === key).outcomes.win;
 const assertNear = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-12, `${actual} differs from ${expected}`);
+
+test('new decisions seal approved exact lines and retain independent family and period abstentions', () => {
+  const candidateMarkets = resolved('local-engine');
+  const rates = { home: 1.7, away: 1.3, firstHalfShare: { home: 0.4, away: 0.45 } };
+  const published = prepareGoalMarketExtension({ evaluationProfile: LOCAL_FIRST_GOAL_EVALUATION_PROFILE,
+    localPoisson: rates, definitions: localFirstGoalMarketDefinitions });
+  const evaluated = evaluateForecastMarkets({ candidateMarkets, localFirst: true, publishedLocalMarkets: published.markets });
+  assert.equal(evaluated.registryVersion, LOCAL_FIRST_MARKET_REGISTRY_VERSION);
+  assert.equal(evaluated.version, LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION);
+  const rows = rowsByKey(evaluated), quarter = rows.get('goal:full-time:totals:total:5.25:asian');
+  assert.equal(quarter.source, 'local-engine');
+  assert.ok(quarter.selections.find((selection) => selection.key === 'under').outcomes['half-win'] > 0);
+  assert.equal(rows.get(legacyForecastMarketKey('match-result')).source, 'local-engine');
+  for (const line of [0.5, 6.5]) assert.equal(rows.get(`goal:full-time:totals:total:${line}:binary`).reason, 'outside-full-match-totals-range');
+  assert.equal(rows.get('goal:full-time:totals:home:6.5:binary').status, 'estimated');
+  assert.equal(rows.get('goal:full-time:team-to-score:away').reason, 'unsupported-publication-projection');
+  assert.equal(rows.get('goal:full-time:clean-sheet:home').reason, 'unsupported-publication-projection');
+  assertNear(wins(rows.get('goal:full-time:count-range:total:1-3'), 'yes'), (3 + 9 / 2 + 27 / 6) * Math.exp(-3));
+  assert.equal(rows.get('goal:second-half:totals:total:1.5:binary').reason, 'no-qualified-period-model');
+  assert.equal(rows.get('goal:full-time:asian-handicap:-0.25').reason, 'no-qualified-goal-model');
+  assert.equal(rows.get('registry:statistic-totals').detail, 'no-qualified-statistic-model');
+  assert.equal(rows.get('registry:player-totals').reason, 'unsupported-settlement');
+  const supportedMatureModel = model(['goal:half-time:totals:total:0.5:binary', 'goal:full-time:totals:total:0.5:binary']);
+  const independent = rowsByKey(evaluateForecastMarkets({ candidateMarkets: resolved('api-football', .5, .3, .2), localFirst: true,
+    goalModel: supportedMatureModel, verifyGoalModel: () => true }));
+  assert.equal(independent.get('goal:half-time:totals:total:0.5:binary').status, 'estimated');
+  assert.equal(independent.get('goal:full-time:totals:total:0.5:binary').reason, 'outside-full-match-totals-range');
+});
 
 test('the sealed legacy candidate survives while every registered family gets an explicit result or abstention', () => {
   const candidateMarkets = resolved('api-football');

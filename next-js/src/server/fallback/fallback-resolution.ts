@@ -7,7 +7,8 @@ import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.
 import type { PredictorResult } from "../predictor/predictor-service.ts";
 import { isPredictorForecastCurrent } from "../predictor/predictor-output.ts";
 import { synchronous, provenTrue as verified } from "../shared/authority-proof.ts";
-import { QUALIFIED_FORECAST_CASCADE, type FallbackContext, type FallbackReason, type FallbackResolutionAuthority, type FallbackResolutionResult, type ForecastExplanation,
+import { LOCAL_FIRST_FORECAST_CASCADE, localForecastAbstentions, QUALIFIED_FORECAST_CASCADE, type FallbackContext, type FallbackReason,
+  type LocalForecastAbstention, type FallbackResolutionAuthority, type FallbackResolutionResult, type ForecastExplanation,
   type ForecastProvenance, type ForecastQualification, type ForecastSelectionPolicy, type ForecastSourceOrder, type ProviderFallbackCandidate, type ProviderFallbackResult, type ResolvedForecastCandidate,
   type ResolvedForecastMarket } from "./fallback-contract.ts";
 import { parseFallbackAiResult, parseFallbackContext, parseProviderFallbackResult } from "./fallback-input.ts";
@@ -150,6 +151,8 @@ export function resolveFallbackCandidate(value: Readonly<{
   order?: ForecastSourceOrder;
   local?: ResolvedForecastCandidate;
   qualification?: ForecastQualification;
+  cascade?: typeof LOCAL_FIRST_FORECAST_CASCADE;
+  localAbstention?: LocalForecastAbstention;
 }>, authority: FallbackResolutionAuthority, policy: ForecastSelectionPolicy = "legacy-ai-primary"): FallbackResolutionResult {
   const denied = (reason: "invalid-request" | "not-authorized" | "ineligible-refresh"): FallbackResolutionResult => Object.freeze({ status: "denied", reason });
   const providerOnly = policy === "provider-baseline";
@@ -157,11 +160,16 @@ export function resolveFallbackCandidate(value: Readonly<{
     providerOnly && value?.order === "ai-first") return denied("invalid-request");
   let expected: FallbackContext, ai: PredictorResult, provider: ProviderFallbackResult | null, now: UtcInstant;
   const order = value?.order, qualification = value?.qualification, qualified = qualification !== undefined;
+  const localFirst = value?.cascade === LOCAL_FIRST_FORECAST_CASCADE;
   try {
-    if (value === null || typeof value !== "object" || Object.keys(value).some((key) => !["expected", "ai", "provider", "now", "order", "local", "qualification"].includes(key)) ||
+    if (value === null || typeof value !== "object" || Object.keys(value).some((key) =>
+      !["expected", "ai", "provider", "now", "order", "local", "qualification", "cascade", "localAbstention"].includes(key)) ||
       order !== undefined && order !== "provider-first" && order !== "ai-first" ||
-      qualified && (!qualification || typeof qualification !== "object" || providerOnly || order === "provider-first")) throw new Error();
+      qualified && (!qualification || typeof qualification !== "object" || providerOnly || order === "provider-first") ||
+      value.cascade !== undefined && (!localFirst || !qualified || order !== undefined) ||
+      value.localAbstention !== undefined && (!localFirst || !localForecastAbstentions.includes(value.localAbstention))) throw new Error();
     expected = parseFallbackContext(value.expected); ai = parseFallbackAiResult(value.ai);
+    if (localFirst && (expected.pin !== null || ai.status !== "denied" || ai.reason !== "unconfigured")) throw new Error();
     if (value.local && (providerOnly || order === "provider-first" || evidenceFingerprint(value.local.context) !== evidenceFingerprint(expected))) throw new Error();
     provider = value.provider === null ? null : parseProviderFallbackResult(value.provider); now = utcInstantFromEpochMilliseconds(value.now);
     if (ai.status === "candidate" && (expected.pin === null || ai.pin.id !== expected.pin.id || ai.pin.jobId !== expected.jobId ||
@@ -207,10 +215,13 @@ export function resolveFallbackCandidate(value: Readonly<{
           !ai.output.evidence.coverage.sufficient || !ai.output.scoreDistribution ||
           !verified(() => qualification.verifyAiNumericalBasis?.(ai, expected, family) === true) ? "unqualified-numerical-output" : null;
       const localReason = !qualification.verifyLocalNumericalBasis || localMarket?.available &&
-        !verified(() => qualification.verifyLocalNumericalBasis?.(value.local!, expected, family) === true) ? "unqualified-local-model" : null;
+        !verified(() => qualification.verifyLocalNumericalBasis?.(value.local!, expected, family) === true) ? "unqualified-local-model" :
+        localFirst && localMarket === undefined ? value.localAbstention ?? "insufficient-local-evidence" : null;
       const providerMarket = supplied?.markets.markets[family];
+      const providerReason = localFirst && family !== "match-result" ? "unsupported-family" :
+        localFirst && localMarket?.available && localReason === null ? "higher-priority-engine" : provider?.status === "denied" ? provider.reason : null;
       return [family, { ai: offer(aiMarket, aiReason), "local-engine": offer(localMarket, localReason),
-        "api-football": offer(providerMarket, provider?.status === "denied" ? provider.reason : null) }];
+        "api-football": offer(providerMarket, providerReason) }];
     })) as EngineOffers : null;
     let selected: MarketSnapshot = offers === null
       ? validateMarketSnapshot(Object.fromEntries(Object.entries(chosen).map(([family, market]) => [family, sourceCandidate(market)])))
@@ -238,7 +249,9 @@ export function resolveFallbackCandidate(value: Readonly<{
         const unavailable = supplied?.markets.markets[family];
         const originalAi = ai.status === "candidate" ? ai.output.markets.markets[family] : null;
         const conflict = trace && Object.values(trace).includes("cross-market-conflict");
-        const reason = conflict ? "cross-market-conflict" : availability.reason !== "missing-group" ? availability.reason : unavailable && !unavailable.available ? unavailable.reason
+        const localReason = trace?.local as LocalForecastAbstention | undefined;
+        const reason = conflict ? "cross-market-conflict" : availability.reason !== "missing-group" ? availability.reason :
+          localFirst && localReason && localForecastAbstentions.includes(localReason) ? localReason : unavailable && !unavailable.available ? unavailable.reason
           : provider?.status === "denied" ? provider.reason : ai.status === "candidate" && !isFallbackAiCurrent(ai, now) ? "invalid-timing"
             : originalAi && !originalAi.available ? originalAi.reason : "missing-group";
         markets[family] = Object.freeze({ available: false, reason }); continue;
@@ -253,7 +266,8 @@ export function resolveFallbackCandidate(value: Readonly<{
         if (local.provenance.kind !== "local-engine") throw new Error("Local numerical source is missing.");
         markets[family] = qualified ? freezeEvidence({ ...local, provenance: { ...local.provenance, numericalBasis: "qualified-local-model" } }) : local;
       } else if (market.source === "api-football" && supplied !== null && fallbackProvenance !== null) {
-        markets[family] = freezeEvidence({ available: true, market, fallback: policy === "provider-baseline"
+        markets[family] = freezeEvidence({ available: true, market, fallback: localFirst
+          ? { reason: "local-unavailable", detail: trace?.local ?? "insufficient-local-evidence" } : policy === "provider-baseline"
           ? { reason: "provider-baseline", detail: "independent-provider-baseline" }
           : providerFirst ? providerFirstReason(ai, now) : trace?.ai === "unqualified-numerical-output" ?
             { reason: "ai-invalid-group", detail: trace.ai } : fallbackReason(ai, group, now),
@@ -265,7 +279,7 @@ export function resolveFallbackCandidate(value: Readonly<{
       audit: { aiStatus: ai.status, aiReason: ai.status === "denied" ? ai.reason : !isFallbackAiCurrent(ai, now) ? "invalid-timing"
         : unqualifiedAi ? "unqualified-numerical-output" : null,
         providerStatus: provider?.status ?? "not-requested", providerReason: provider?.status === "denied" ? provider.reason : null,
-        ...(qualified ? { transitions, sourceCascade: QUALIFIED_FORECAST_CASCADE, localStatus:
+        ...(qualified ? { transitions, sourceCascade: localFirst ? LOCAL_FIRST_FORECAST_CASCADE : QUALIFIED_FORECAST_CASCADE, localStatus:
           Object.values(transitions).some((trace) => trace.selected === "local-engine") ? "candidate" as const
             : value.local ? "unavailable" as const : "not-requested" as const } : {}),
         ...(order === undefined ? {} : { sourceOrder: order }) } });

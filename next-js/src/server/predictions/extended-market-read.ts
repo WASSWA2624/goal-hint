@@ -9,7 +9,8 @@ import { historyFail, type CycleDisplay } from "./history-contract.ts";
 import { historyId } from "./history-input.ts";
 import { assertHistorySeal, historyJson, type HistoryRow } from "./history-read.ts";
 import { storedCycleDisplay } from "./history-read.ts";
-import { readGoalMarketExtension, readGoalMarketSettlement, type StoredGoalMarketExtension, type GoalMarketSettlementRevision } from "./goal-market-store.ts";
+import { goalPickProbabilityBasis, readGoalMarketExtension, readGoalMarketSettlement,
+  type StoredGoalMarketExtension, type GoalMarketSettlementRevision } from "./goal-market-store.ts";
 import { readImpliedMarketExtension } from "./implied-market-store.ts";
 import type { StoredImpliedMarketExtension } from "./implied-market-contract.ts";
 import { readImpliedMarketSettlement, type ImpliedMarketSettlementRevision } from "../settlement/implied-market-settlement.ts";
@@ -57,7 +58,7 @@ export function publicGoalMarketExtension(extension: StoredGoalMarketExtension,
         recorded.selectedProbability !== market.selectedProbability || recorded.source !== market.source)) return historyFail("invalid-state");
     return [publicExtendedMarketSchema.parse({ key: definition.key, label: definition.label, code: definition.code, period: definition.period,
       ruleVersion: market.ruleVersion, source: market.source, sourceLabel: extendedMarketSourceLabels[market.source],
-      probabilityBasis: definition.group === "payout" ? "model-positive-payout" : "model-event",
+      probabilityBasis: goalPickProbabilityBasis(extension, definition.group),
       selection: selected.key, selectionLabel: predictionRuleLabel(selected.rule), selectedProbability: selected.winProbability,
       selections: market.selections.map(({ key, rule, winProbability, outcomes }) => ({ key, label: predictionRuleLabel(rule), probability: winProbability,
         settlementProbabilities: outcomes })),

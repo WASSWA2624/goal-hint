@@ -14,7 +14,7 @@ import type { SelectionManifest } from "../selection/selection-contract.ts";
 import { selectionRunWindow } from "../selection/selection-read.ts";
 import { PredictionRefreshError, refreshFail, type RefreshIntent, type RefreshMember, type RefreshOutcome, type RefreshPhase } from "./refresh-contract.ts";
 import { parseRefreshPlan, refreshPin } from "./refresh-input.ts";
-import { refreshArchiveJson } from "./refresh-archive.ts";
+import { decodeFallbackStage, encodeFallbackStage, refreshArchiveJson } from "./refresh-archive.ts";
 
 type Transaction = Prisma.TransactionClient;
 type Table = "PredictionRefreshIntent" | "PredictionRefreshStage" | "PredictionRefreshOutcome";
@@ -30,7 +30,8 @@ async function read<Value>(tx: Transaction, table: Table, jobId: string, phase?:
 export async function storedRefreshStage(tx: Transaction, jobId: string, phase: RefreshPhase, kind: Stage["kind"]) {
   const value = await read<Stage>(tx, "PredictionRefreshStage", jobId, phase, kind);
   if (value && (value.jobId !== jobId || value.phase !== phase || value.kind !== kind)) return refreshFail("unavailable");
-  return value;
+  return value && phase === "fallback" && kind === "completed"
+    ? freezeEvidence({ ...value, value: decodeFallbackStage(value.value) }) : value;
 }
 async function insert(tx: Transaction, table: Table, jobId: string, body: unknown, phase?: RefreshPhase, kind?: Stage["kind"]) {
   const encoded = evidenceSerialize(body);
@@ -129,11 +130,12 @@ export function createMysqlRefreshStore(database: DatabaseRuntime, queue: JobQue
     }),
     complete: (lease: JobLease, phase: RefreshPhase, value: unknown, usage: readonly JobUsage[] = []) => transact(async (tx) => {
       const at = await queue.assertOwned(tx, lease);
-      const known = await read<Stage>(tx, "PredictionRefreshStage", lease.jobId, phase, "completed");
+      const known = await storedRefreshStage(tx, lease.jobId, phase, "completed");
       if (known) { if (evidenceFingerprint(known.value) !== evidenceFingerprint(value)) return refreshFail("invalid-request"); return; }
       if (!await read(tx, "PredictionRefreshStage", lease.jobId, phase, "started")) return refreshFail("invalid-request");
       for (const item of usage) await queue.recordUsageInTransaction(tx, lease, item);
-      await insert(tx, "PredictionRefreshStage", lease.jobId, { jobId: lease.jobId, phase, kind: "completed", attemptId: lease.attemptId, at, value }, phase, "completed");
+      await insert(tx, "PredictionRefreshStage", lease.jobId, { jobId: lease.jobId, phase, kind: "completed", attemptId: lease.attemptId, at,
+        value: phase === "fallback" ? encodeFallbackStage(value) : value }, phase, "completed");
     }),
     outcome: (jobId: string) => transact((tx) => read<RefreshOutcome>(tx, "PredictionRefreshOutcome", jobId)),
     finish: (lease: JobLease, value: RefreshOutcome) => transact(async (tx) => {

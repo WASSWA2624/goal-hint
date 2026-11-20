@@ -286,7 +286,8 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
     const workersPerRun = localFootball ? Math.min(2, workload.workers) : workload.workers;
     log({ event: "ready", plan: runtime.day.status.plan, dailyLimit: workload.dailyLimit, usedToday: runtime.day.status.usedToday,
       refreshCapacity: workload.refreshCapacity, workers: runtime.coordinated ? runtime.forecastConcurrency + 2 : workersPerRun,
-      forecastConcurrency: runtime.coordinated ? runtime.forecastConcurrency : null, liveMs: workload.cadence.liveMs, dateMs: workload.cadence.dateMs,
+      forecastConcurrency: runtime.coordinated ? runtime.forecastConcurrency : null, localFirstForecasts: runtime.localFirstForecasts,
+      apiPredictionFallback: runtime.localFirstForecasts ? runtime.apiFallbackEnabled : null, liveMs: workload.cadence.liveMs, dateMs: workload.cadence.dateMs,
       // `oddsSwitch` true with `odds` false means the owner enabled imports but this plan is not eligible; the same
       // holds for `teamCodesSwitch` and `teamCodes`, which share the odds spare.
       odds: runtime.odds.enabled, oddsSwitch: policy.choices.odds.enabled, oddsSpare: workload.odds.spare,

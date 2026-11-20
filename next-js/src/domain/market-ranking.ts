@@ -6,11 +6,12 @@ import { marketOddsPrice, type MarketOddsObservation } from "./in-play-odds.ts";
 import type { FeaturedGoalMarket, FeaturedPrediction } from "./extended-markets.ts";
 import { predictionText } from "./prediction-label.ts";
 import { createMessages } from "../i18n/messages.ts";
-import { compareForecastPicks, type ComparableForecastPick, type ForecastConfidence } from "./recommendation.ts";
+import { compareForecastPicks, forecastSourceConfidence, type ComparableForecastPick, type ForecastConfidence } from "./recommendation.ts";
 import type { PublicRecommendation } from "./recommendation-view.ts";
 
-type PublishedMarket = Readonly<{ market: Pick<AcceptedMarket, "family" | "selection" | "selectedProbability">; confidence?: ForecastConfidence }>;
-type MarketPrice = Pick<FixturePrice, "family" | "selection" | "price">;
+type PublishedMarket = Readonly<{ market: Pick<AcceptedMarket, "family" | "selection" | "selectedProbability"> & Partial<Pick<AcceptedMarket, "source">>;
+  confidence?: ForecastConfidence }>;
+type MarketPrice = Pick<FixturePrice, "family" | "selection" | "price" | "recovery">;
 
 export function featuredPrediction<T extends ComparableForecastPick>(outcomes: readonly T[]): T | null {
   return outcomes.reduce<T | null>((best, item) => Number.isFinite(item.probability) && item.probability > 0 && item.probability <= 1 &&
@@ -29,7 +30,7 @@ export function rankFixtureOutcomes(markets: readonly Readonly<{ market: Accepte
     const entry = markets.find((item) => item.market.family === family);
     if (!entry) continue;
     const { market: { source } } = entry;
-    const confidence = recommended?.confidence ?? entry.confidence;
+    const confidence = recommended?.confidence ?? entry.confidence ?? forecastSourceConfidence(source);
     const tied = recommended ? [[recommended.selection, recommended.probability] as const]
       : Object.entries(entry.market.probabilities).filter(([, probability]) => probability === entry.market.selectedProbability);
     for (const [selection, probability] of tied) {
@@ -41,10 +42,13 @@ export function rankFixtureOutcomes(markets: readonly Readonly<{ market: Accepte
   }
   for (const market of goalMarkets) {
     if (market.source === "market-implied" || market.key === "goal:full-time:totals:total:2.5:binary") continue;
-    const best = featuredPrediction(market.selections.map((selection): FeaturedPrediction => ({ key: market.key, family: "total-goals", label: market.label,
+    const source = market.source === "local-poisson" ? "local-engine" : "ai";
+    const confidence = forecastSourceConfidence(source);
+    const best = featuredPrediction(market.selections.map((selection): FeaturedPrediction & { confidence?: ForecastConfidence } => ({ key: market.key,
+      family: "total-goals", label: market.label,
       code: market.code, selection: selection.key, selectionLabel: selection.label,
       probability: selection.settlementProbabilities?.win ?? selection.probability,
-      source: market.source === "local-poisson" ? "local-engine" : "ai", odds: bookmakerGoalPrice(prices, market.key, selection.key) })));
+      source, odds: bookmakerGoalPrice(prices, market.key, selection.key), ...(confidence ? { confidence } : {}) })));
     if (best) outcomes.push(best);
   }
   const best = featuredPrediction(outcomes);
@@ -56,14 +60,17 @@ export function rankFixtureOutcomes(markets: readonly Readonly<{ market: Accepte
 
 /** The stored two-place quote must describe this exact published pick. */
 function pickPrice(prices: readonly MarketPrice[], market: PublishedMarket["market"]): string | null {
-  const value = prices.find((price) => price.family === market.family && price.selection === market.selection)?.price;
+  const value = prices.find((price) => price.family === market.family && price.selection === market.selection && !price.recovery)?.price;
   return value && /^[1-9]\d{0,3}\.\d{2}$/u.test(value) ? value : null;
 }
 
 /** Rank stored published picks by unrounded probability, evidence confidence and exact fresh price. */
 export function bestPublishedFamily(items: readonly PublishedMarket[] | undefined, prices: readonly MarketPrice[],
   eligible: readonly MarketFamily[] = publicPolicy.markets): MarketFamily | null {
-  return featuredPrediction((items ?? []).flatMap(({ market, confidence }) => eligible.includes(market.family)
-    ? [{ key: market.family, selection: market.selection, probability: market.selectedProbability, odds: pickPrice(prices, market),
-      ...(confidence ? { confidence } : {}) }] : []))?.key ?? null;
+  return featuredPrediction((items ?? []).flatMap(({ market, confidence }) => {
+    if (!eligible.includes(market.family)) return [];
+    const support = confidence ?? forecastSourceConfidence(market.source);
+    return [{ key: market.family, selection: market.selection, probability: market.selectedProbability, odds: pickPrice(prices, market),
+      ...(support ? { confidence: support } : {}) }];
+  }))?.key ?? null;
 }

@@ -1,11 +1,13 @@
 import "server-only";
 
 import { utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
+import { LOCAL_FIRST_GOAL_EVALUATION_PROFILE } from "../../domain/goal-market-definitions.ts";
 import type { EvidenceWorkflow } from "../evidence/evidence-contract.ts";
 import type { createCostService } from "../cost-control/cost-service.ts";
 import type { createEvidenceService, EvidenceServiceResult } from "../evidence/evidence-service.ts";
 import { freezeEvidence, evidenceFingerprint } from "../evidence/evidence-input.ts";
 import type { createFallbackService, FallbackRefreshRequest, FallbackRefreshResult } from "../fallback/fallback-service.ts";
+import { LOCAL_FIRST_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
 import { parseFallbackAiResult, parseResolvedForecastCandidate } from "../fallback/fallback-input.ts";
 import { defineJob, type JobHandlerContext, type JobOutcome } from "../jobs/job-registry.ts";
 import type { JobUsage } from "../jobs/job-contract.ts";
@@ -293,7 +295,10 @@ export function createPredictionRefreshService(options: Readonly<{
         const scoreDistribution = ai.status === "candidate" && ai.output.scoreDistribution?.unrepresentedProbability === 0 &&
           Object.values(candidate.markets).some((market) => market.available && market.market.source === "ai")
           ? ai.output.scoreDistribution : undefined;
-        if (localPoisson || scoreDistribution) goalExtension = parseGoalMarketExtensionInput({ definitions: plan.goalDefinitions,
+        if (plan.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE) {
+          if (localPoisson) goalExtension = parseGoalMarketExtensionInput({ definitions: plan.goalDefinitions, localPoisson,
+            evaluationProfile: LOCAL_FIRST_GOAL_EVALUATION_PROFILE });
+        } else if (localPoisson || scoreDistribution) goalExtension = parseGoalMarketExtensionInput({ definitions: plan.goalDefinitions,
           ...(localPoisson ? { localPoisson } : {}), ...(scoreDistribution ? { scoreDistribution } : {}) });
       }
       const generationCompletedAt = utcInstantFromEpochMilliseconds((await options.store.stage(lease.jobId, "fallback", "completed"))!.at);

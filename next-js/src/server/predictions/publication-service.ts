@@ -6,9 +6,13 @@ import type { SettlementStatus } from "../../domain/market-settlement.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
 import { createMysqlEvidenceStore } from "../evidence/evidence-mysql-store.ts";
+import { LOCAL_FIRST_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { JobQueueError, type JobLease, type JobQueue } from "../jobs/job-contract.ts";
 import { durableJobId, parseJobEnvelope } from "../jobs/job-input.ts";
+import { projectBookmakerOdds } from "../odds/bookmaker-odds-read.ts";
+import { storedCurrentBookmakerQuotes } from "../odds/odds-mysql-store.ts";
+import { publicOddsEnabled } from "../odds/public-odds-policy.ts";
 import { createMysqlModelVersionStore } from "../predictor/predictor-mysql-store.ts";
 import type { SelectionManifest } from "../selection/selection-contract.ts";
 import { selectionRunWindow } from "../selection/selection-read.ts";
@@ -22,7 +26,7 @@ import { observationShowsPlay, publicationEligibility, publicationSourceIsFresh,
 import { parsePublication, parsePublicationPolicy, parsePublishRevision } from "./publication-input.ts";
 import { publicationResult, storedPublicationBarrier, storedRefreshResult } from "./publication-read.ts";
 import { recordPublicationBarrier } from "./publication-barrier.ts";
-import { appendGoalMarketExtension } from "./goal-market-store.ts";
+import { appendGoalMarketExtension, type StoredGoalMarketExtension } from "./goal-market-store.ts";
 import { appendImpliedMarketExtension } from "./implied-market-store.ts";
 import type { StoredImpliedMarketExtension } from "./implied-market-contract.ts";
 import { appendPublishedExtendedPicks } from "./extended-market-picks.ts";
@@ -32,7 +36,7 @@ import { usesScoreDistribution } from "../predictor/predictor-prompt.ts";
 import { legacyMarketsFromScoreDistribution } from "../../domain/score-distribution-legacy.ts";
 import { validatePublishedRecommendation } from "./recommendation-publication.ts";
 import { storedRefreshStage } from "../refresh/refresh-mysql-store.ts";
-import { buildForecastDecision, type ForecastDecision } from "./forecast-decision.ts";
+import { buildForecastDecision, buildLocalFirstForecastDecision, type ForecastDecision } from "./forecast-decision.ts";
 
 type Transaction = Prisma.TransactionClient;
 async function serverNow(tx: Transaction) {
@@ -128,7 +132,9 @@ export function createRevisionPublicationService(options: Readonly<{
           const latest = await tx.predictionSet.findFirst({ where: { fixtureId: fixture.id }, orderBy: { fixtureRevision: "desc" } });
           if (reason === null && latest && predictionRunOrder(latest.runSequence) >= predictionRunOrder(run.sequence)) reason = "older-run";
           let quoteCapture = false, forecastDecision: ForecastDecision | undefined;
-          const recordDecision = options.recordForecastDecision && candidate.audit.sourceCascade !== undefined;
+          const localFirstPublication = candidate.audit.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE;
+          const recordDecision = localFirstPublication || options.recordForecastDecision && candidate.audit.sourceCascade !== undefined;
+          let storedGoalExtension: StoredGoalMarketExtension | null = null;
           let revision = null, impliedSnapshot: StoredImpliedMarketExtension | null = null,
             outcome: RefreshPublicationResult["outcome"] = "skipped";
           if (reason === null) {
@@ -195,7 +201,7 @@ export function createRevisionPublicationService(options: Readonly<{
               const actor = { actor: "revision-publication", reason: "Eligible complete snapshot accepted", evidenceRef: policy.evidenceRef };
               revision = await writer.appendRevision({ ...actor, candidate, evidenceSnapshotId: input.evidenceSnapshotId,
                 scheduleVersion: input.scheduleVersion, generationCompletedAt: input.generationCompletedAt, publishedAt: now });
-              if (input.goalExtension !== undefined) await appendGoalMarketExtension(tx, { ...input.goalExtension,
+              if (input.goalExtension !== undefined) storedGoalExtension = await appendGoalMarketExtension(tx, { ...input.goalExtension,
                 revisionId: revision.id, cycleId: cycle.id, fixtureId: fixture.id, recordedAt: now });
               if (input.impliedExtension !== undefined) impliedSnapshot = await appendImpliedMarketExtension(tx, { ...input.impliedExtension,
                 revisionId: revision.id, cycleId: cycle.id, fixtureId: fixture.id, recordedAt: now });
@@ -212,9 +218,16 @@ export function createRevisionPublicationService(options: Readonly<{
                 next: { state: "open", currentSetId: revision.id, lockedSetId: null, closedAt: null, lockedAt: null, voidedAt: null, voidReason: null } });
               outcome = "published"; reason = "accepted";
             }
-            if (recordDecision && outcome !== "skipped") forecastDecision = buildForecastDecision({ candidate, snapshot: snapshot.snapshot,
-              evidenceSnapshotId: input.evidenceSnapshotId, scheduleVersion: input.scheduleVersion, generationCompletedAt: input.generationCompletedAt,
-              publicationCutoffAt: cycle.cutoffAt });
+            if (recordDecision && outcome !== "skipped") {
+              const decision = { candidate, snapshot: snapshot.snapshot, evidenceSnapshotId: input.evidenceSnapshotId,
+                scheduleVersion: input.scheduleVersion, generationCompletedAt: input.generationCompletedAt, publicationCutoffAt: cycle.cutoffAt };
+              forecastDecision = localFirstPublication
+                ? await buildLocalFirstForecastDecision({ ...decision, goalExtension: storedGoalExtension, loadOdds: async () => {
+                  if (!publicOddsEnabled()) return null;
+                  const prices = await storedCurrentBookmakerQuotes(tx, [{ fixtureId: fixture.id, kickoffAt: cycle.kickoffAt }], context.cutoffAt).catch(() => null);
+                  return projectBookmakerOdds(prices?.get(fixture.id), "pre-match");
+                } }) : buildForecastDecision(decision);
+            }
           }
           // History mutations already advance the fixture version. Operational
           // refresh outcomes also change its public freshness/delay projection.

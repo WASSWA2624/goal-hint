@@ -4,8 +4,8 @@ import { getPublicationDeadline, utcInstantFromEpochMilliseconds, type Clock } f
 import type { ApiFootballBounds, ApiFootballFallbackWorkflow } from "../football/api-football-contract.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { PredictorResult } from "../predictor/predictor-service.ts";
-import { forecastCascades, QUALIFIED_FORECAST_CASCADE, type FallbackContext, type FallbackResolutionAuthority, type FallbackResolutionResult,
-  type ForecastCascade, type ForecastQualification, type ForecastSelectionPolicy, type ForecastSourceOrder,
+import { forecastCascades, LOCAL_FIRST_FORECAST_CASCADE, QUALIFIED_FORECAST_CASCADE, type FallbackContext, type FallbackResolutionAuthority,
+  type FallbackResolutionResult, type ForecastCascade, type ForecastQualification, type ForecastSelectionPolicy, type ForecastSourceOrder, type LocalForecastAbstention,
   type ProviderFallbackResult, type ResolvedForecastCandidate } from "./fallback-contract.ts";
 import { FallbackInputError, parseFallbackAiResult, parseFallbackContext, parseProviderFallbackResult, parseResolvedForecastCandidate } from "./fallback-input.ts";
 import { isProviderFallbackCurrent, parseProviderFallbackRequest, type createProviderFallbackAdapter } from "./fallback-adapter.ts";
@@ -45,6 +45,8 @@ export function parseFallbackRefreshRequest(input: unknown): FallbackRefreshRequ
       !Number.isSafeInteger(value.maxElapsedMs) || value.maxElapsedMs < 1 || value.maxElapsedMs > 2_147_483_647 ||
       value.order !== undefined && value.order !== "provider-first" && value.order !== "ai-first" ||
       value.sourceCascade !== undefined && (!forecastCascades.includes(value.sourceCascade) || value.order === "provider-first") ||
+      value.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE && (value.order !== undefined || expected.pin !== null ||
+        ai.status !== "denied" || ai.reason !== "unconfigured") ||
       value.includeGoalMarkets !== undefined && (value.includeGoalMarkets !== true || value.sourceCascade === undefined)) throw new Error();
     const bounds = value.bounds === null ? null : parseProviderFallbackRequest({ context: expected.context,
       jobId: expected.jobId, requestedGroups: ["match-result", "total-goals", "both-teams-to-score"], bounds: value.bounds }).bounds;
@@ -65,6 +67,7 @@ export function createFallbackService(options: Readonly<{
   selectionPolicy?: ForecastSelectionPolicy;
   localEngine?: ReturnType<typeof createLiveLocalEngine>;
   qualification?: ForecastQualification;
+  localFirstQualification?: ForecastQualification;
   /** Binds the owning refresh, AI receipt, original job deadline and quota allowance. */
   verifyRequest(request: FallbackRefreshRequest): boolean;
 }>) {
@@ -79,7 +82,8 @@ export function createFallbackService(options: Readonly<{
   function withCascade(result: FallbackResolutionResult, request: FallbackRefreshRequest,
     localStatus: NonNullable<ResolvedForecastCandidate["audit"]["localStatus"]>, localGoalRates?: ResolvedForecastCandidate["audit"]["localGoalRates"]): FallbackResolutionResult {
     if (result.status === "denied" || request.sourceCascade === undefined) return result;
-    const status = request.sourceCascade === QUALIFIED_FORECAST_CASCADE && result.candidate.audit.localStatus === "candidate"
+    const status = (request.sourceCascade === QUALIFIED_FORECAST_CASCADE || request.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE) &&
+      result.candidate.audit.localStatus === "candidate"
       ? "candidate" : localStatus;
     return { ...result, candidate: parseResolvedForecastCandidate({ ...result.candidate, audit: {
       ...result.candidate.audit, sourceCascade: request.sourceCascade, localStatus: status,
@@ -131,8 +135,9 @@ export function createFallbackService(options: Readonly<{
       check();
       if (selectionPolicy === "provider-baseline" && request.order === "ai-first") return denied("not-authorized");
       const cascade = request.sourceCascade !== undefined;
-      const qualified = request.sourceCascade === QUALIFIED_FORECAST_CASCADE;
-      const qualification = qualified ? { qualification: options.qualification ?? {} } : {};
+      const localFirst = request.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE;
+      const qualified = localFirst || request.sourceCascade === QUALIFIED_FORECAST_CASCADE;
+      const qualification = qualified ? { qualification: (localFirst ? options.localFirstQualification : options.qualification) ?? {} } : {};
       const authority: FallbackResolutionAuthority = Object.freeze({
         authorize(expected) { if (evidenceFingerprint(expected) !== evidenceFingerprint(request.expected)) throw new Error(); check(); },
         verifyContext: options.authority.verifyContext, verifyAi: options.authority.verifyAi, verifyProvider: options.authority.verifyProvider,
@@ -144,32 +149,46 @@ export function createFallbackService(options: Readonly<{
       });
       let local: ResolvedForecastCandidate | null = null;
       let localGoalRates: ResolvedForecastCandidate["audit"]["localGoalRates"];
+      let localAbstention: LocalForecastAbstention = "unqualified-local-model";
+      let provider: ProviderFallbackResult | null = null;
       let missingGroups: readonly typeof sourceGroups[number][] = sourceGroups;
+      const resolve = (at: ReturnType<typeof now>) => withCascade(resolveFallbackCandidate({
+        expected: request.expected, ai: request.ai, provider, now: at, ...order, ...(local ? { local } : {}), ...qualification,
+        ...(localFirst ? { cascade: LOCAL_FIRST_FORECAST_CASCADE, localAbstention } as const : {}),
+      }, authority, cascade ? "legacy-ai-primary" : selectionPolicy), request, localGoalRates ? "candidate" : "unavailable", localGoalRates);
       if (cascade) {
-        const aiOnly = withCascade(resolveFallbackCandidate({ expected: request.expected, ai: request.ai, provider: null, now: now(), ...order, ...qualification },
-          authority, "legacy-ai-primary"), request, "not-requested");
-        if (aiOnly.status === "denied") return denied(aiOnly.reason);
-        check();
-        if (aiOnly.status === "candidate" && sourceGroups.every((group) => aiOnly.candidate.markets[group].available) &&
-          !request.includeGoalMarkets)
-          return finishEarly(aiOnly.candidate);
+        let aiReason: ResolvedForecastCandidate["audit"]["aiReason"] = "unconfigured";
+        if (!localFirst) {
+          const aiOnly = withCascade(resolveFallbackCandidate({ expected: request.expected, ai: request.ai, provider: null, now: now(), ...order, ...qualification },
+            authority, "legacy-ai-primary"), request, "not-requested");
+          if (aiOnly.status === "denied") return denied(aiOnly.reason);
+          check();
+          if (aiOnly.status === "candidate" && sourceGroups.every((group) => aiOnly.candidate.markets[group].available) &&
+            !request.includeGoalMarkets) return finishEarly(aiOnly.candidate);
+          aiReason = aiOnly.candidate.audit.aiReason;
+        }
         const engine = qualified && !qualification.qualification?.verifyLocalNumericalBasis ? undefined : options.localEngine;
         if (engine) {
+          localAbstention = "local-evaluation-unavailable";
           let localTimer: ReturnType<typeof setTimeout> | undefined;
           const localLimit = Math.min(3000, allowanceMs - (performance.now() - startedAt) - (request.bounds?.timeoutMs ?? 0));
+          const timedOut = Symbol();
           if (localLimit > 0) {
             try {
               const output = await Promise.race([
                 wait(() => engine(request.expected, { aiStatus: request.ai.status,
                   aiReason: request.ai.status === "candidate" && !isPredictorForecastCurrent(request.ai.output, now())
-                    ? "invalid-timing" : aiOnly.candidate.audit.aiReason }, now, check)),
-                new Promise<null>((resolve) => { localTimer = setTimeout(() => resolve(null), localLimit); }),
+                    ? "invalid-timing" : aiReason }, now, check)),
+                new Promise<typeof timedOut>((resolve) => { localTimer = setTimeout(() => resolve(timedOut), localLimit); }),
               ]);
-              if (output) {
+              if (output === null) localAbstention = "insufficient-local-evidence";
+              if (output && output !== timedOut) {
                 const parsed = parseResolvedForecastCandidate({ ...output, audit: { ...output.audit,
                   ...(request.order === undefined ? {} : { sourceOrder: request.order }) } });
-                if (parsed.audit.localStatus === "candidate" && evidenceFingerprint(parsed.context) === evidenceFingerprint(request.expected))
+                if (parsed.audit.localStatus === "candidate" && evidenceFingerprint(parsed.context) === evidenceFingerprint(request.expected)) {
                   local = parsed;
+                  localAbstention = "insufficient-local-evidence";
+                }
               }
             } catch (error) {
               if (error instanceof RefreshFailure) throw error;
@@ -179,19 +198,19 @@ export function createFallbackService(options: Readonly<{
         }
         const localMatch = local?.markets["match-result"];
         if (!qualified && localMatch?.available && localMatch.provenance.kind === "local-engine") localGoalRates = localMatch.provenance.rates;
-        const combined = withCascade(resolveFallbackCandidate({ expected: request.expected, ai: request.ai, provider: null, now: now(), ...order,
-          ...(local ? { local } : {}), ...qualification }, authority), request, localGoalRates ? "candidate" : "unavailable", localGoalRates);
+        const combined = resolve(now());
         if (combined.status === "denied") return denied(combined.reason);
         missingGroups = sourceGroups.filter((group) => !combined.candidate.markets[group].available);
         if (combined.status === "candidate" && missingGroups.length === 0) return finishEarly(combined.candidate);
       }
       // Legacy frozen orders capture the provider beside AI. Cascades request only groups the earlier sources could not supply.
-      const groups = cascade ? missingGroups : request.order === undefined && selectionPolicy !== "optional-ai-primary" ? fallbackRequestedGroups(request.ai, now(), selectionPolicy)
+      const groups = localFirst ? missingGroups.filter((group) => group === "match-result") : cascade ? missingGroups :
+        request.order === undefined && selectionPolicy !== "optional-ai-primary" ? fallbackRequestedGroups(request.ai, now(), selectionPolicy)
         : ["match-result", "total-goals", "both-teams-to-score"] as const;
-      let provider: ProviderFallbackResult | null = null;
-      if (groups.length > 0) {
+      if (groups.length > 0 && (!localFirst || localAbstention !== "local-evaluation-unavailable")) {
         if (options.fallback === null || request.bounds === null) {
-          provider = Object.freeze({ status: "denied", reason: "unconfigured", requestsDispatched: 0, requestCountUnknown: false });
+          provider = Object.freeze({ status: "denied", reason: localFirst && request.bounds === null ? "disabled" : "unconfigured",
+            requestsDispatched: 0, requestCountUnknown: false });
         } else {
           try {
             provider = await wait(() => {
@@ -215,9 +234,6 @@ export function createFallbackService(options: Readonly<{
         }
       }
       check();
-      const resolve = (at: ReturnType<typeof now>) => withCascade(resolveFallbackCandidate({
-        expected: request.expected, ai: request.ai, provider, now: at, ...order, ...(local ? { local } : {}), ...qualification,
-      }, authority, cascade ? "legacy-ai-primary" : selectionPolicy), request, localGoalRates ? "candidate" : "unavailable", localGoalRates);
       let result = resolve(now());
       check();
       if (result.status === "denied") return denied(result.reason, requestsDispatched, requestCountUnknown);
@@ -256,12 +272,17 @@ export function createFallbackService(options: Readonly<{
         const request = parseFallbackRefreshRequest(value);
         if (selectionPolicy === "provider-baseline" && request.order === "ai-first") return denied("not-authorized");
         if (synchronous(options.verifyRequest(request)) !== true) return denied("not-authorized");
-        const provider: ProviderFallbackResult = { status: "denied", reason: "provider-unavailable", requestsDispatched: 0, requestCountUnknown: true };
+        const localFirst = request.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE;
+        const requestCountUnknown = !localFirst || request.bounds !== null;
+        const provider: ProviderFallbackResult = { status: "denied", reason: requestCountUnknown ? "provider-unavailable" : "disabled",
+          requestsDispatched: 0, requestCountUnknown };
         const result = withCascade(resolveFallbackCandidate({ expected: request.expected, ai: request.ai, now: now(), provider,
           ...(request.order === undefined ? {} : { order: request.order }),
-          ...(request.sourceCascade === QUALIFIED_FORECAST_CASCADE ? { qualification: options.qualification ?? {} } : {}) }, options.authority,
+          ...(localFirst ? { qualification: options.localFirstQualification ?? {}, cascade: LOCAL_FIRST_FORECAST_CASCADE,
+            localAbstention: "local-evaluation-unavailable" } as const : request.sourceCascade === QUALIFIED_FORECAST_CASCADE ?
+            { qualification: options.qualification ?? {} } : {}) }, options.authority,
         request.sourceCascade === undefined ? selectionPolicy : "legacy-ai-primary"), request, "not-requested");
-        return freezeEvidence({ ...result, requestsDispatched: 0, requestCountUnknown: true,
+        return freezeEvidence({ ...result, requestsDispatched: 0, requestCountUnknown,
           ...(request.order === undefined || result.status === "denied" ? {} : {
             sources: forecastSourceReceipts({ ai: request.ai, provider, audit: result.candidate.audit, order: request.order }) }) });
       } catch { return denied("unavailable", 0, true); }

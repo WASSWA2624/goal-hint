@@ -4,7 +4,7 @@ import { createAccountStatusReader, createQuotaRouter, LiveAccountError, parseAc
   PROVIDER_DAY_SETTLE_MS } from '../src/server/live/live-account.ts';
 import { missingOwnerApprovals, OwnerApprovalError, ownerEvidenceVerifier, parseOwnerApprovals } from '../src/server/live/live-approvals.ts';
 import { assessLiveCapacity, liveWorkload, REFRESH_REQUESTS_PER_JOB, resultSyncPolicy, selectionPolicy, liveReferences, publicationPolicy,
-  providerFallbackPolicy, cutoffPolicy, lifecyclePolicy, fallbackRefreshPlan, refreshEnvelopeFor, oddsPolicy, oddsImportBounds, oddsCatalogBounds,
+  providerFallbackPolicy, cutoffPolicy, lifecyclePolicy, fallbackRefreshPlan, liveLocalFirstPlan, refreshEnvelopeFor, oddsPolicy, oddsImportBounds, oddsCatalogBounds,
   oddsMaxRequests, ODDS_MINIMUM_SPARE } from '../src/server/live/live-plan.ts';
 import { parseOddsPolicy } from '../src/server/odds/odds-input.ts';
 import { ODDS_SWEEP_MS, oddsQuotaAllows } from '../src/server/odds/odds-jobs.ts';
@@ -13,6 +13,7 @@ import { refreshReference } from '../src/server/refresh/refresh-input.ts';
 import { latestSelectionOccurrence } from '../src/server/live/live-runner.ts';
 import { liveReadiness, LiveConfigurationError } from '../src/server/live/live-runtime.ts';
 import { createLiveAuthorities } from '../src/server/live/live-authorities.ts';
+import { liveAiEvidencePolicy } from '../src/server/live/live-ai-plan.ts';
 import { parseRuntimePolicy } from '../src/server/config/runtime-policy.ts';
 import { parseResultSyncPolicy } from '../src/server/results/result-sync-policy.ts';
 import { parseSelectionPolicy, selectionWindow } from '../src/server/selection/selection-input.ts';
@@ -409,6 +410,20 @@ test('slow per-minute plans wait out the rolling minute and skip cutoffs the que
     assert.equal(authorities.refresh.verifyPlan({ ...parsed, fallback: { ...parsed.fallback,
       bounds: { ...parsed.fallback.bounds, timeoutMs: parsed.fallback.bounds.timeoutMs + 1 } } }, candidate), false,
     `${pacing} authority rejects timing changes outside its approved plan`);
+    const localWorker = createLiveAuthorities({ policy: parseRuntimePolicy({ ...refsEnv, GOAL_HINT_API_PREDICTION_FALLBACK_ENABLED: 'false' }),
+      verify: () => true, refs, selection, statusEvidenceRef: `${refs.freshness}#status`, resultPolicy: () => null,
+      refreshPacing: pacing, localFirstForecasts: true });
+    const localBase = { ...plan, evidence: { ...plan.evidence, policy: liveAiEvidencePolicy(refs) } };
+    const disabled = parseRefreshPlan(liveLocalFirstPlan(localBase, false), candidate);
+    const previouslyAllowed = parseRefreshPlan(liveLocalFirstPlan(localBase, true), candidate);
+    assert.equal(disabled.fallback.bounds, null);
+    assert.equal(disabled.footballRequestLimit, 1);
+    assert.equal(previouslyAllowed.footballRequestLimit, 2);
+    assert.equal(localWorker.refresh.verifyPlan(disabled, candidate), true);
+    assert.equal(localWorker.refresh.verifyPlan(previouslyAllowed, candidate), true, 'an existing intent retains its sealed allowance');
+    assert.equal(localWorker.refresh.verifyPlan(parseRefreshPlan(previousPlan, candidate), candidate), true,
+      'a legacy intent is still verified with its own policy');
+    assert.equal(authorities.refresh.verifyPlan(disabled, candidate), false, 'the legacy worker cannot approve a new cascade');
     if (pacing === 'slow') {
       assert.equal(plan.observation.bounds.timeoutMs, 75_000, 'a status read can wait for the next rolling-minute slot');
       assert.ok(plan.fallback.bounds.retry.maxAttempts * plan.fallback.bounds.retry.maxDelayMs >= 60_000);

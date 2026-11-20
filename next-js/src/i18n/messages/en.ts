@@ -1281,6 +1281,7 @@ export const en = {
   "detail.fallback.ai-invalid-group": "API-Football statistical fallback replaced an invalid AI probability group.",
   "detail.fallback.provider-first": "API-Football supplied this prediction as the reviewed baseline; AI review is recorded separately and not shown.",
   "detail.fallback.provider-baseline": "API-Football supplies this baseline forecast. AI forecasts require comparative evaluation before publication.",
+  "detail.fallback.local-unavailable": "API-Football supplied this forecast because a verified Local Engine estimate was unavailable.",
   "history.title": "Prediction revision history",
   "history.readOnly": "Inspect stored publications and schedule cycles. Viewing history does not change the current or locked prediction, results or performance counts.",
   "history.backToSummary": "Back to current match summary",

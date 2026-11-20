@@ -92,10 +92,18 @@ export function deriveLocalPoissonTotal15(rates: z.infer<typeof localPoissonRate
     selections: Object.freeze(selections), selection: selected.key, selectedProbability: selected.winProbability });
 }
 
+function negatedGoalCount(rule: GoalRule): Extract<GoalRule, { kind: "goal-count" }> | null {
+  if (rule.kind === "none" && rule.rules.length === 1 && rule.rules[0]?.kind === "goal-count") {
+    return rule.rules[0];
+  }
+  return null;
+}
+
 /** The sum of two independent Poisson counts is Poisson. The half rates use the
  * observed first-half shares of each side from verified point-in-time results. */
-export function deriveLocalGoalMarket(rates: LocalPoissonRates, definition: GoalMarketDefinition): GoalDerivationResult {
-  if (definition.key === "goal:full-time:totals:total:1.5:binary")
+export function deriveLocalGoalMarket(rates: LocalPoissonRates, definition: GoalMarketDefinition,
+  ranking: "any-win" | "outright-win" = "any-win"): GoalDerivationResult {
+  if (ranking === "any-win" && definition.key === "goal:full-time:totals:total:1.5:binary")
     return { available: true, market: deriveLocalPoissonTotal15(rates, definition) };
   const share = rates.firstHalfShare;
   if (definition.period !== "full-time" && share === undefined) return { available: false, reason: "missing-half-time-distribution" };
@@ -103,7 +111,8 @@ export function deriveLocalGoalMarket(rates: LocalPoissonRates, definition: Goal
     : definition.period === "half-time" ? share![side] : 1 - share![side]);
   const selections: GoalSelectionProbabilities[] = [];
   for (const selection of definition.selections) {
-    const rule = selection.rule;
+    const complement = ranking === "outright-win" ? negatedGoalCount(selection.rule) : null;
+    const rule = complement ?? selection.rule;
     if (rule.kind !== "total" && rule.kind !== "asian-total" && rule.kind !== "odd-even" && rule.kind !== "goal-count")
       return { available: false, reason: "invalid-definition" };
     const lambda = rule.metric === "total" ? rate("home") + rate("away") : rate(rule.metric);
@@ -113,24 +122,33 @@ export function deriveLocalGoalMarket(rates: LocalPoissonRates, definition: Goal
       outcomes.win = rule.odd ? 1 - even : even;
       outcomes.loss = 1 - outcomes.win;
     } else {
-      const cutoff = rule.kind === "goal-count" ? rule.max ?? rule.min : Math.ceil(rule.line);
+      let cutoff = rule.kind === "goal-count" ? rule.max ?? rule.min : Math.ceil(rule.line);
       const gradeCount = (count: number): GoalGrade => {
-        if (rule.kind === "goal-count") return count >= rule.min && (rule.max === null || count <= rule.max) ? "win" : "loss";
+        if (rule.kind === "goal-count") {
+          const inside = count >= rule.min && (rule.max === null || count <= rule.max);
+          return inside === (complement === null) ? "win" : "loss";
+        }
         const direction = rule.direction === "over" ? 1 : -1;
         if (rule.kind === "asian-total") return asianPayoutGrade(rule.line, (line) => (count - line) * direction);
         return (count - rule.line) * direction > 0 ? "win" : "loss";
       };
+      const tailGrade = gradeCount(cutoff + 1);
+      // The new profile uses the same tail boundary for identical outright events across payout lines.
+      if (ranking === "outright-win") while (cutoff >= 0 && gradeCount(cutoff) === tailGrade) cutoff--;
       let mass = Math.exp(-lambda), represented = 0;
       for (let count = 0; count <= cutoff; count++) {
         outcomes[gradeCount(count)] += mass;
         represented += mass;
         mass *= lambda / (count + 1);
       }
-      outcomes[gradeCount(cutoff + 1)] += Math.max(0, 1 - represented);
+      outcomes[tailGrade] += Math.max(0, 1 - represented);
     }
-    selections.push(Object.freeze({ ...selection, outcomes: Object.freeze(outcomes), winProbability: Math.min(1, outcomes.win + outcomes["half-win"]) }));
+    if (ranking === "outright-win") for (const outcome of grades) outcomes[outcome] = Math.min(1, outcomes[outcome]);
+    const winProbability = ranking === "outright-win" ? outcomes.win : Math.min(1, outcomes.win + outcomes["half-win"]);
+    selections.push(Object.freeze({ ...selection, outcomes: Object.freeze(outcomes), winProbability }));
   }
-  const selected = selections.reduce((best, item) => item.winProbability > best.winProbability ? item : best);
+  const selected = selections.reduce((best, item) => item.winProbability > best.winProbability ||
+    ranking === "outright-win" && item.winProbability === best.winProbability && item.key < best.key ? item : best);
   return { available: true, market: Object.freeze({ ruleVersion: GOAL_MARKET_RULE_VERSION, source: "local-poisson", definition,
     selections: Object.freeze(selections), selection: selected.key, selectedProbability: selected.winProbability }) };
 }

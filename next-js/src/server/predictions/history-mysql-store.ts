@@ -6,6 +6,7 @@ import { getPublicationDeadline, parseReportingDate, type Clock } from "../../do
 import { MARKET_RULE_VERSION, marketSelections, type MarketFamily } from "../../domain/markets.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
+import { LOCAL_FIRST_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
 import { createFootballCatalogStore, type FootballCatalogStore } from "../football/catalog-mysql-store.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { PredictionHistoryError, historyFail, type AppendRevisionInput, type ChangeCycleInput, type CreateCycleInput,
@@ -55,6 +56,27 @@ async function insertAudits(transaction: HistoryTransaction, values: readonly Pr
   await transaction.$executeRaw(Prisma.sql`INSERT INTO PredictionAudit
     (id, fixtureId, cycleId, version, eventKey, requestHash, kind, recordedAt, actor, reason, evidenceRef, beforeJson, afterJson, integrity)
     VALUES ${Prisma.join(values)}`);
+}
+
+/** Native MySQL's JSON decimal parser can change a double by one bit. Set fresh
+ * local-first fractions from bound double values while preserving JSON scalars
+ * for existing constraints, indexes and readers. MariaDB stores the JSON text. */
+function forecastArchiveDocument(value: unknown, exact: boolean): Prisma.Sql {
+  const document = Prisma.sql`JSON_EXTRACT(${evidenceSerialize(value)}, '$')`;
+  if (!exact) return document;
+  const fractions: Prisma.Sql[] = [];
+  function collect(value: unknown, path: string) {
+    if (typeof value === "number" && Number.isFinite(value) && !Number.isInteger(value)) {
+      fractions.push(Prisma.sql`${path}, CAST(${value} AS DOUBLE)`);
+    } else if (Array.isArray(value)) {
+      value.forEach((item, index) => collect(item, `${path}[${index}]`));
+    } else if (value !== null && typeof value === "object") {
+      for (const [key, item] of Object.entries(value)) collect(item, `${path}.${JSON.stringify(key)}`);
+    }
+  }
+  collect(value, "$");
+  return fractions.length > 0 ? Prisma.sql`CASE WHEN LOCATE('MariaDB', VERSION()) = 0
+    THEN JSON_SET(${document}, ${Prisma.join(fractions)}) ELSE ${document} END` : document;
 }
 
 /** Store first cycles in batches while the caller holds the catalog and fixture locks.
@@ -206,7 +228,8 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
             if (predecessor && predictionRunOrder(predecessor.runSequence) >= predictionRunOrder(run.sequence)) return historyFail("out-of-order");
             const latestFixture = await transaction.predictionSet.findFirst({ where: { fixtureId }, orderBy: { fixtureRevision: "desc" } });
             const at = await now(); if (at < request.publishedAt || at < previousCycle.openedAt) return historyFail("invalid-request");
-            const id = randomUUID(), candidateJson = evidenceSerialize(request.candidate);
+            const exact = request.candidate.audit.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE;
+            const id = randomUUID(), candidateJson = forecastArchiveDocument(request.candidate, exact);
             await transaction.$executeRaw`INSERT INTO PredictionSet
               (id, fixtureId, fixtureVersion, cycleId, runId, runSequence, jobId, fixtureRevision, cycleRevision,
                predecessorId, scheduleVersion, modelVersionId, evidenceSnapshotId, evidenceHash, evidenceCutoffAt,
@@ -216,9 +239,9 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
                 ${predecessor?.id ?? null}, ${request.scheduleVersion}, ${request.candidate.context.pin?.modelVersionId ?? null},
                 ${request.evidenceSnapshotId}, ${request.candidate.context.evidenceHash}, ${new Date(context.cutoffAt)},
                 ${new Date(request.generationCompletedAt)}, ${new Date(request.publishedAt)}, ${new Date(at)}, ${MARKET_RULE_VERSION},
-                ${requestHash}, SHA2(CONCAT(${id}, ':', ${requestHash}, ':', CAST(JSON_EXTRACT(${candidateJson}, '$') AS CHAR)), 256), JSON_EXTRACT(${candidateJson}, '$'))`;
+                ${requestHash}, SHA2(CONCAT(${id}, ':', ${requestHash}, ':', CAST(${candidateJson} AS CHAR)), 256), ${candidateJson})`;
             for (const family of Object.keys(marketSelections) as MarketFamily[]) {
-              const item = request.candidate.markets[family], payload = evidenceSerialize(item);
+              const item = request.candidate.markets[family], payload = forecastArchiveDocument(item, exact);
               const values = item.available ? marketSelections[family].map((selection) =>
                 (item.market.probabilities as Readonly<Record<string, number>>)[selection]) : [];
               await transaction.$executeRaw`INSERT INTO MarketPrediction
@@ -228,7 +251,7 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
                   ${item.available ? item.market.selection : null}, ${item.available ? item.market.selectedProbability : null},
                   ${values[0] ?? null}, ${values[1] ?? null}, ${values[2] ?? null}, ${item.available ? null : item.reason},
                   ${historyDate(item.available ? item.timestamps.generatedAt : null)}, ${historyDate(item.available ? item.timestamps.retrievedAt : null)},
-                  ${historyDate(item.available ? item.timestamps.providerUpdatedAt : null)}, SHA2(CAST(JSON_EXTRACT(${payload}, '$') AS CHAR), 256), JSON_EXTRACT(${payload}, '$'))`;
+                  ${historyDate(item.available ? item.timestamps.providerUpdatedAt : null)}, SHA2(CAST(${payload} AS CHAR), 256), ${payload})`;
             }
             const value = { ...previousCycle, version: nextHistoryVersion(previousCycle.version) };
             await transaction.predictionCycle.update({ where: { id: cycleId }, data: { version: value.version } });

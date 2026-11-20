@@ -370,6 +370,29 @@ Exporting sealed receipts into a frozen
 prospective dataset for this harness is a follow-up (the dataset still needs a
 trusted authority module that verifies stage seals).
 
+### Local regulation-count scope
+
+The local-first forecast decision uses `football-market-registry-v4` and
+`forecast-market-evaluation-v2`. Its `local-regulation-count-v1` extension
+uses the existing regulation score/count model. It admits every registered
+full-match total from 1.5 through 5.5, including the 5 and 5.25 payout lines.
+Team totals, counts, ranges and parity retain their own regulation-count scope.
+Named regulation ranges publish under the approved count-range identity.
+Separate team-to-score and clean-sheet publications require their own supported
+public pick and settlement identities.
+The exact definitions remain available to read and settle historical forecasts
+under their original versions. Earlier forecasts retain their original ranking
+and source semantics when replayed.
+
+The stored selection distribution carries outright win, loss, push, half-win
+and half-loss separately. An integer-line push or quarter-line half grade stays
+separate from the outright probability used for ranking. Prices are optional
+and join against the exact selection separately. The count model carries
+provisional confidence. First-half, second-half, joint, player and statistic
+instances need qualification for their respective evidence before publication.
+See the [November holdout report](reports/football-improvement-evidence-models-2026-11-20.md)
+for the sample sizes, scores, calibration and abstention coverage.
+
 ## Local command
 
 With no data arguments, generate factual readiness artifacts only:

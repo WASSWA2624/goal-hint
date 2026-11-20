@@ -3,9 +3,11 @@ import test from "node:test";
 import { marketRules, validateMarketSnapshot } from "../src/domain/markets.ts";
 import { SCORE_DISTRIBUTION_VERSION } from "../src/domain/score-distribution.ts";
 import { legacyMarketsFromScoreDistribution } from "../src/domain/score-distribution-legacy.ts";
-import { LIVE_FORECAST_CASCADE, QUALIFIED_FORECAST_CASCADE } from "../src/server/fallback/fallback-contract.ts";
+import { LIVE_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE, QUALIFIED_FORECAST_CASCADE } from "../src/server/fallback/fallback-contract.ts";
 import { parseFallbackAiResult, parseResolvedForecastCandidate } from "../src/server/fallback/fallback-input.ts";
 import { resolveFallbackCandidate } from "../src/server/fallback/fallback-resolution.ts";
+import { verifiesLocalBaselineMarket } from "../src/server/intelligence/live-local-engine.ts";
+import { goalProbabilities, localGoalModelVersion } from "../src/server/intelligence/local-goals-model.ts";
 import { OpenAiTransportError } from "../src/server/predictor/openai-transport.ts";
 import { SCORE_SCHEMA_VERSION } from "../src/server/predictor/predictor-prompt.ts";
 import { createPredictorCircuitBreaker, predictorResilience, predictorRetryRequest } from "../src/server/predictor/predictor-resilience.ts";
@@ -38,21 +40,87 @@ test("qualified refresh skips provisional AI and unavailable numerical local sup
 const candidateMarket = (probabilities, source, line) =>
   ({ source, period: marketRules.period, probabilities, ...(line === undefined ? {} : { line }) });
 
-function localCandidate({ expected, ai, now }) {
-  const snapshot = validateMarketSnapshot({
+function localCandidate({ expected, ai, now, baseline = false, result = false }) {
+  const rates = { home: 1.5, away: .8 };
+  const probabilities = goalProbabilities(rates.home, rates.away);
+  const snapshot = validateMarketSnapshot(baseline ? {
+    ...(result ? { "match-result": candidateMarket(probabilities["match-result"], "local-engine") } : {}),
+    "total-goals": candidateMarket(probabilities["total-goals"], "local-engine", 2.5),
+    "both-teams-to-score": candidateMarket(probabilities["both-teams-to-score"], "local-engine"),
+  } : {
     "total-goals": candidateMarket({ "over-2.5": .8, "under-2.5": .2 }, "local-engine", 2.5),
     "both-teams-to-score": candidateMarket({ yes: .1, no: .9 }, "local-engine"),
   });
   const markets = Object.fromEntries(Object.entries(snapshot.markets).map(([family, item]) =>
     [family, item.available ? { ...item, fallback: null, timestamps: { generatedAt: now, retrievedAt: now, providerUpdatedAt: null },
       flags: ["unknown-provider-update-time"], provenance: { kind: "local-engine", evidenceHash: expected.evidenceHash,
-        modelVersion: "synthetic-qualified-local-fit", historyHash: evidenceHash("synthetic-fit"), rates: { home: 1.5, away: .8 },
+        modelVersion: baseline ? localGoalModelVersion() : "synthetic-qualified-local-fit", historyHash: evidenceHash("synthetic-fit"), rates,
         sample: { matches: 200, homeEffectiveMatches: 30, awayEffectiveMatches: 30 } } } : item]));
   return { context: expected, markets, reasons: [{ text: "Historical estimates.", sourceUrls: [] },
     { text: "Synthetic only.", sourceUrls: [] }], uncertainty: { text: "Synthetic fixture.", sourceUrls: [] }, issues: snapshot.issues,
   audit: { aiStatus: ai.status, aiReason: ai.reason, sourceCascade: LIVE_FORECAST_CASCADE,
     localStatus: "candidate", providerStatus: "not-requested", providerReason: null } };
 }
+
+test("new decisions publish the verified Local Engine groups without dispatching API-Football", async () => {
+  let calls = 0;
+  const h = fallbackServiceSetup({ reason: "unconfigured", service: { localFirstQualification: { verifyLocalNumericalBasis: verifiesLocalBaselineMarket },
+    async localEngine(expected, ai, current) {
+      calls++;
+      return localCandidate({ expected, ai: { status: ai.aiStatus, reason: ai.aiReason }, now: current(), baseline: true, result: true });
+    } } });
+  const result = await h.service.resolve(h.request({ sourceCascade: LOCAL_FIRST_FORECAST_CASCADE,
+    bounds: { ...h.request().bounds, deadlineAt: h.clock.now() + 5000 }, maxElapsedMs: 5000, includeGoalMarkets: true }));
+  assert.equal(result.status, "candidate", result.reason);
+  assert.equal(calls, 1);
+  assert.equal(h.collected.length, 0);
+  assert.equal(result.candidate.audit.sourceCascade, LOCAL_FIRST_FORECAST_CASCADE);
+  assert.equal(result.candidate.audit.localStatus, "candidate");
+  assert.ok(Object.values(result.candidate.markets).every(market => market.available && market.provenance.kind === "local-engine" &&
+    market.provenance.numericalBasis === "qualified-local-model"));
+  assert.deepEqual(parseResolvedForecastCandidate(result.candidate), result.candidate);
+});
+
+test("Local Engine gaps can use independently verified API result and double chance without replacing supported goal groups", async () => {
+  const h = fallbackServiceSetup({ reason: "unconfigured", service: { localFirstQualification: { verifyLocalNumericalBasis: verifiesLocalBaselineMarket },
+    async localEngine(expected, ai, current) {
+      return localCandidate({ expected, ai: { status: ai.aiStatus, reason: ai.aiReason }, now: current(), baseline: true });
+    } } });
+  const request = h.request({ sourceCascade: LOCAL_FIRST_FORECAST_CASCADE,
+    bounds: { ...h.request().bounds, deadlineAt: h.clock.now() + 5000 }, maxElapsedMs: 5000 });
+  const result = await h.service.resolve(request);
+  assert.equal(result.status, "candidate", result.reason);
+  assert.deepEqual(h.collected.map(({ requestedGroups }) => requestedGroups), [["match-result"]]);
+  assert.equal(result.candidate.markets["match-result"].provenance.kind, "api-football");
+  assert.equal(result.candidate.markets["match-result"].fallback.reason, "local-unavailable");
+  assert.deepEqual(result.candidate.markets["match-result"].fallback, result.candidate.markets["double-chance"].fallback);
+  assert.equal(result.candidate.markets["total-goals"].provenance.kind, "local-engine");
+  h.permissions.provider = false;
+  const revoked = await h.service.resolve(request);
+  assert.equal(revoked.status, "candidate");
+  assert.equal(revoked.candidate.markets["match-result"].available, false);
+  assert.equal(revoked.candidate.markets["total-goals"].available, true);
+});
+
+test("disabling new fallback abstains, and local operational failure cannot trigger an API call", async () => {
+  const qualification = { verifyLocalNumericalBasis: verifiesLocalBaselineMarket };
+  const disabled = fallbackServiceSetup({ reason: "unconfigured", service: { localFirstQualification: qualification, async localEngine() { return null; } } });
+  const request = disabled.request({ sourceCascade: LOCAL_FIRST_FORECAST_CASCADE, bounds: null, maxElapsedMs: 5000 });
+  const result = await disabled.service.resolve(request);
+  assert.equal(result.status, "retain-previous-or-unavailable");
+  assert.equal(result.candidate.audit.providerReason, "disabled");
+  assert.equal(result.candidate.markets["match-result"].reason, "insufficient-local-evidence");
+  assert.equal(result.requestCountUnknown, false);
+  assert.equal(disabled.collected.length, 0);
+
+  const broken = fallbackServiceSetup({ reason: "unconfigured", service: { localFirstQualification: qualification,
+    async localEngine() { throw new Error("Synthetic local evidence storage outage"); } } });
+  const unavailable = await broken.service.resolve(broken.request({ sourceCascade: LOCAL_FIRST_FORECAST_CASCADE,
+    bounds: { ...broken.request().bounds, deadlineAt: broken.clock.now() + 5000 }, maxElapsedMs: 5000 }));
+  assert.equal(unavailable.status, "retain-previous-or-unavailable");
+  assert.equal(unavailable.candidate.markets["match-result"].reason, "local-evaluation-unavailable");
+  assert.equal(broken.collected.length, 0);
+});
 
 test("qualified resolution preserves independent local families, reconciles compatible provider 1X2 and abstains on conflicting replacements", () => {
   const h = fallbackFixture(), expected = { ...h.expected, pin: null }, ai = fallbackAiDenied("provider-circuit-open");
