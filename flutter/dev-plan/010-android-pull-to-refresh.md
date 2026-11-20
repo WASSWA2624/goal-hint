@@ -15,6 +15,12 @@ new refreshes. The Material indicator follows web appearance and ends when the
 adapter reports completion, failure or cancelled navigation. The browser widget
 and its persistent session stay mounted.
 
+On Matches and its dated archive, the rebuilt Android host passes the release of
+the gesture to the owned web document. Next.js requests the current page in
+place and uses the shared progress bar below the app header. A pull that arrives
+during a passive read joins it. The native ring and document-load indicator are
+unused on this path. Other pages retain the original native reload behavior.
+
 ## References and platform boundary
 
 - [Official controller scroll callback](https://pub.dev/documentation/webview_flutter/4.14.1/webview_flutter/WebViewController/setOnScrollPositionChange.html)

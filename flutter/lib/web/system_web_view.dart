@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -43,6 +44,10 @@ class SystemWebViewAdapter extends WebViewAdapter {
 
   static const _browserStore = MethodChannel(
     'com.goalhint.goal_hint/browser_store',
+  );
+  static final _matchesFeedPath = RegExp(
+    r'^/(?:[a-z]{2,3}(?:-[a-z0-9]{2,8})*/)?(?:matches|predictions/\d{4}-\d{2}-\d{2})/?$',
+    caseSensitive: false,
   );
 
   WebViewController? _controller;
@@ -91,6 +96,12 @@ class SystemWebViewAdapter extends WebViewAdapter {
 
   @override
   bool get atTop => _atTop;
+
+  @override
+  bool get webOwnsPullToRefresh =>
+      supportsPullToRefresh &&
+      _currentUri.origin == configuration.origin.origin &&
+      _matchesFeedPath.hasMatch(_currentUri.path);
 
   @override
   String? get error => _failure?.message(const AppBranding().name);
@@ -218,7 +229,9 @@ class SystemWebViewAdapter extends WebViewAdapter {
             final url = change.url;
             if (url != null &&
                 navigationPolicy.evaluate(url) == NavigationAction.allow) {
+              final previousRefreshOwner = webOwnsPullToRefresh;
               _currentUri = Uri.parse(url);
+              if (previousRefreshOwner != webOwnsPullToRefresh) _notify();
             }
             unawaited(_refreshHistory());
           },
@@ -320,6 +333,32 @@ class SystemWebViewAdapter extends WebViewAdapter {
       await load(_retryUri);
     } else {
       await _load(() => _controller!.reload());
+    }
+  }
+
+  @override
+  Future<void> refreshInPage() async {
+    if (_disposed ||
+        !_ready ||
+        !_hasDocument ||
+        _loading ||
+        _failure != null ||
+        _hidden ||
+        !_atTop ||
+        !webOwnsPullToRefresh) {
+      return;
+    }
+    final origin = jsonEncode(configuration.origin.origin);
+    try {
+      await _controller!.runJavaScript('''
+(() => {
+  if (location.origin !== $origin ||
+      !document.querySelector('[data-matches-feed]')) return;
+  document.dispatchEvent(new Event('goalhint:matches-refresh'));
+})();
+''');
+    } on Exception {
+      // A navigation can remove the document before JavaScript is delivered.
     }
   }
 

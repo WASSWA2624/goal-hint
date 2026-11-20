@@ -10,6 +10,7 @@ export const performanceMessages = {
   "performance.summary.unavailable": "Overall performance is temporarily unavailable.",
   "performance.summary.matches": "Matches",
   "performance.summary.predicted": "Predicted",
+  "performance.summary.predictionsForPercentages": "Predictions used for percentages",
   "performance.summary.percentageOfPredicted": "{percentage} of predicted matches",
   "performance.summary.noPredicted": "No predicted matches",
   "performance.summary.slips": "Slips",

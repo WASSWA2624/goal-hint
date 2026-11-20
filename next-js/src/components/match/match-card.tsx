@@ -15,12 +15,12 @@ import { defaultMarkets } from "@/domain/feed-query";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import { marketOddsPrice } from "@/domain/in-play-odds";
 import { forecastExpectedReturn } from "@/domain/forecast-value";
-import { cardResultStatus, featuredCardPrediction, hasFinalScoreStatus, sameCardFixture, selectedCardPrediction, selectedCardPrice, snapshotCardPrediction, type CardSnapshotPick } from "@/domain/match-card";
+import { cardResultStatus, featuredCardPrediction, hasFinalScoreStatus, matchCardScore, sameCardFixture, selectedCardPrediction, selectedCardPrice, snapshotCardPrediction, type CardSnapshotPick } from "@/domain/match-card";
 import { liveClockLabel } from "@/domain/match-clock";
 import type { MarketFamily } from "@/domain/markets";
 import { isCompletedFixtureStatus } from "@/domain/market-settlement";
 import { matchHref } from "@/domain/navigation";
-import { predictionDescription, predictionLabel } from "@/domain/prediction-label";
+import { predictionDescription, predictionLabel, predictionText } from "@/domain/prediction-label";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import { createMessages, type Messages } from "@/i18n/messages";
 import { useMessages } from "@/i18n/use-messages";
@@ -38,7 +38,7 @@ import { DesktopMatchRow } from "./desktop-match-row";
 import { MatchCardLayoutContext } from "./match-card-layout";
 import { MatchStatus } from "./match-status";
 import { MatchNumber } from "./match-number";
-import { ScoreFigures, Scoreline } from "./score-presentation";
+import { matchScoreDescription, ScoreFigures, Scoreline } from "./score-presentation";
 
 export type MatchCardProps = {
   fixture: FixtureSnapshot;
@@ -458,20 +458,23 @@ const Open = styled(Link)`
 type LiveClock = ReturnType<typeof liveClockLabel>;
 
 /** `lead` names the winner of a decided final score; live phase and minute stay beside the score. */
-function MatchState({ fixture, home, away, lead, clock, messages, snapshot = false }: {
-  fixture: FixtureSnapshot; home: string; away: string; lead: number; clock: LiveClock | null; messages: Messages; snapshot?: boolean;
+function MatchState({ fixture, display, description, lead, clock, messages, snapshot = false, phoneFeed }: {
+  fixture: FixtureSnapshot; display: ReturnType<typeof matchCardScore>; description: string | undefined;
+  lead: number; clock: LiveClock | null; messages: Messages; snapshot?: boolean; phoneFeed: boolean;
 }) {
-  const { status, score } = fixture;
+  const { status } = fixture, { score, shootout, regulationOnly } = display;
   const final = hasFinalScoreStatus(status);
-  const scoreline = score && (snapshot || status === "live" || final) ? <>
-    <Score data-score aria-hidden="true"><ScoreFigures home={messages.number(score.home)} away={messages.number(score.away)} lead={lead} /></Score>
-    <VisuallyHidden>{messages.text("match.scoreline", { label: messages.text(snapshot ? "match.regulationScoreNote" : final ? "match.finalScore" : "match.liveScore"),
-      home, away, homeScore: messages.number(score.home), awayScore: messages.number(score.away) })}</VisuallyHidden>
+  const showFigures = (score || shootout) && (snapshot || status === "live" || final) || phoneFeed && (status === "live" || final || status === "scheduled");
+  const scoreline = showFigures ? <>
+    <Score data-score aria-hidden="true"><ScoreFigures home={score ? messages.number(score.home) : "—"}
+      away={score ? messages.number(score.away) : "—"} lead={lead}
+      shootout={shootout && { home: messages.number(shootout.home), away: messages.number(shootout.away) }} /></Score>
+    {description && <VisuallyHidden>{description}</VisuallyHidden>}
   </> : <>
     <Versus data-ledger-versus aria-hidden="true">{status === "live" || final ? "–" : <>
       <span data-mobile-only>VS</span><span data-desktop-only>{messages.text("match.versus")}</span>
     </>}</Versus>
-    {(status === "live" || final) && <VisuallyHidden>{messages.text(final ? "match.finalScoreUnknown" : "match.scoreUnknown")}</VisuallyHidden>}
+    {description && <VisuallyHidden>{description}</VisuallyHidden>}
   </>;
   if (snapshot) return <Center data-match-state="snapshot">{scoreline}</Center>;
   if (clock) return <Center data-match-state="live">{scoreline}<StateChip data-score-clock $tone="live" aria-hidden="true"
@@ -480,7 +483,6 @@ function MatchState({ fixture, home, away, lead, clock, messages, snapshot = fal
     <VisuallyHidden>{clock.spoken}</VisuallyHidden></Center>;
   if (status === "live") return <Center data-match-state="live">{scoreline}</Center>;
   if (final && (status === "finished-regulation" || status === "finished-extra-time" || status === "finished-penalties")) {
-    const regulationOnly = fixture.scorePeriod === "regulation" && status !== "finished-regulation";
     return <Center data-match-state="final">{scoreline}
       <StateChip data-score-clock $tone="final" title={regulationOnly ? messages.text("match.regulationScoreNote") : undefined}>
         <span aria-hidden="true">{messages.text(`match.final.${status}`)}{regulationOnly && "*"}</span>
@@ -530,18 +532,18 @@ function CardKickoff({ kickoff, locale, phoneFeed }: { kickoff: FixtureSnapshot[
     </When>;
 }
 
-function PredictionCell({ prediction, price, reason, locale, children }: {
+function PredictionCell({ prediction, price, reason, locale, children, compact = false }: {
   prediction: ReturnType<typeof selectedCardPrediction> | ReturnType<typeof snapshotCardPrediction> | ReturnType<typeof featuredCardPrediction>;
   price: Pick<NonNullable<ReturnType<typeof selectedCardPrice>>, "price"> | null;
-  reason: string | null; locale: string; children: ReactNode;
+  reason: string | null; locale: string; children: ReactNode; compact?: boolean;
 }) {
   const messages = useMessages(locale);
-  const details = prediction && [prediction.item.market.source ? messages.text(`market.source.${prediction.item.market.source}`) : null,
+  const details = !compact && prediction && [prediction.item.market.source ? messages.text(`market.source.${prediction.item.market.source}`) : null,
     prediction.provisional ? messages.text("match.provisional") : null,
     prediction.publishedAt !== null ? `${messages.text("match.published")}: ${messages.reportingInstant(prediction.publishedAt)}` : null,
     price ? `${messages.text("details.odds")}: ${price.price}` : null].filter(Boolean).join(" · ");
   return <Prediction $available={prediction !== null} data-prediction={prediction?.item.market.selection ?? "none"}
-    data-outcome={prediction?.status ?? "unavailable"} title={details ?? reason ?? undefined}>{children}</Prediction>;
+    data-outcome={prediction?.status ?? "unavailable"} title={details || reason || undefined}>{children}</Prediction>;
 }
 
 /** Only the desktop presentation subscribes to the device timezone, just as CardKickoff does on phones. */
@@ -602,12 +604,15 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const expectedReturn = market?.source ? forecastExpectedReturn(market.selectedProbability, preMatchPrice) : null;
   const source = prediction?.item.market.source;
   const sourceLabel = source ? <ForecastSourceLabel source={source} messages={messages}
-    label={retrospective ? messages.text("touchline.retrospective") : undefined}
+    label={retrospective && !phoneFeed ? messages.text("touchline.retrospective") : undefined}
     compactLabel={source === "local-engine" ? messages.text("match.source.localShort") : undefined} /> : null;
   const valueLabel = <ForecastValueLabel expectedReturn={expectedReturn} messages={messages} />;
   const family = featured?.label ?? messages.text(`market.family.${shownFamily}`);
-  const shortFamily = featured?.code ?? compactMarketName(shownFamily);
+  const teamTotal = /^goal:[^:]+:totals:(home|away):/u.exec(featured?.key ?? "")?.[1];
+  const shortFamily = teamTotal === "home" || teamTotal === "away" ? messages.text(`match.teamTotal.${teamTotal}`)
+    : featured?.code ?? compactMarketName(shownFamily);
   const selectionContext = featured?.code ? { marketKey: featured.key, label: featured.selectionLabel } : undefined;
+  const mobileSelection = selection && (phoneFeed && shownFamily === "total-goals" ? predictionText : predictionLabel)(messages, selection, selectionContext);
   const locked = !retrospective && fixture.cycle?.state === "closed";
   const outcome = retrospective ? "unavailable" : prediction?.status ?? "unavailable";
   const awaitingResult = fixture.update?.statusFreshness?.state === "awaiting-update";
@@ -617,17 +622,19 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       ? { minimumFractionDigits: 1, maximumFractionDigits: 1 } : undefined) })
     : messages.text(prediction.probability.labelKey === "probability.less-than-one" ? "probability.compact.less-than-one" : "probability.compact.more-than-ninety-nine"));
   const final = hasFinalScoreStatus(fixture.status);
-  const regulationOnly = final && fixture.status !== "finished-regulation" && fixture.scorePeriod === "regulation";
-  const showScore = fixture.score !== null && (fixture.status === "live" || final);
-  // Only a decided final score names a winner; a 90-minute score shown for an extra-time or penalties finish does not.
-  const decided = showScore && final && !(fixture.scorePeriod === "regulation" && fixture.status !== "finished-regulation");
-  const lead = decided ? Math.sign(fixture.score!.home - fixture.score!.away) : 0;
+  const display = matchCardScore(fixture, phoneFeed && !snapshotPick);
+  const { score, shootout, regulationOnly } = display;
+  const showScore = (score !== null || shootout !== null) && (fixture.status === "live" || final);
+  const finalScore = shootout ?? (!regulationOnly ? score : null);
+  const lead = final && finalScore ? Math.sign(finalScore.home - finalScore.away) : 0;
   // A live score bolds the side currently ahead.
-  const liveLead = showScore && fixture.status === "live" ? Math.sign(fixture.score!.home - fixture.score!.away) : 0;
+  const liveLead = score && fixture.status === "live" ? Math.sign(score.home - score.away) : 0;
   const clock = !offline && fixture.status === "live" && fixture.liveClock && (fixture.liveClock.minute !== null || fixture.liveClock.phase !== "in-play")
     ? liveClockLabel(fixture.liveClock, messages) : null;
-  const showProgress = !offline && (showScore || final || clock !== null || snapshotPick !== undefined && fixture.score !== null
+  const showProgress = !offline && (showScore || final || clock !== null || phoneFeed && (fixture.status === "scheduled" || fixture.status === "live") || snapshotPick !== undefined && score !== null
     || fixture.status !== "scheduled" && fixture.status !== "unknown" && fixture.status !== result);
+  const scoreDescription = final || fixture.status === "live" || snapshotPick && score
+    ? matchScoreDescription(display, { home, away }, messages, final, snapshotPick !== undefined) : undefined;
   const missing = gated || prediction ? null : noPickReason(fixture);
   const noPickLabel = messages.text("match.noPick");
   const reason = missing ? messages.text(`match.noPickReason.${missing}`) : null;
@@ -636,7 +643,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     const marketDescription = offline ? "Predictions are unavailable in the saved view."
       : gated ? messages.text("paywall.card")
       : selection ? `${family}: ${predictionDescription(messages, selection, selectionContext)}` : reason ?? undefined;
-    const publication = prediction && [retrospective ? messages.text("touchline.retrospective") : source ? messages.text(`market.source.${source}`) : null,
+    const publication = !phoneFeed && prediction && [retrospective ? messages.text("touchline.retrospective") : source ? messages.text(`market.source.${source}`) : null,
       prediction.provisional ? messages.text("match.provisional") : null,
       prediction.publishedAt !== null ? `${messages.text("match.published")}: ${messages.reportingInstant(prediction.publishedAt)}` : null].filter(Boolean).join(" · ");
     return <DesktopCard fixtureId={fixture.fixtureId} locale={locale} kickoffAt={fixture.kickoffAt}
@@ -644,12 +651,8 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       awayTeam={{ name: fixture.awayTeam.name, logoUrl: isSafeRemoteImageUrl(fixture.awayTeam.logoUrl) ? fixture.awayTeam.logoUrl : null }}
       competition={{ name: fixture.competition.name, country: fixture.competition.country,
         logoUrl: fixture.competition.logoUrl, countryFlagUrl: flagUrl }}
-      status={fixture.status} score={showScore || snapshotPick ? fixture.score : null} liveClock={offline ? null : fixture.liveClock ?? null}
-      regulationOnly={regulationOnly}
-      {...(fixture.score && (showScore || snapshotPick) ? { scoreDescription: messages.text("match.scoreline", {
-        label: messages.text(snapshotPick || regulationOnly ? "match.regulationScoreNote" : final ? "match.finalScore" : "match.liveScore"),
-        home, away, homeScore: messages.number(fixture.score.home), awayScore: messages.number(fixture.score.away),
-      }) } : {})}
+      status={fixture.status} score={showScore || snapshotPick ? score : null} shootout={shootout} liveClock={offline ? null : fixture.liveClock ?? null}
+      regulationOnly={regulationOnly} compactMatch={phoneFeed} {...(scoreDescription ? { scoreDescription } : {})}
       outcome={offline ? "unavailable" : outcome} awaitingResult={awaitingResult} headingLevel={headingLevel} pickState={pickState}
       {...(position !== undefined ? { position } : {})} {...(titleNote ? { titleNote } : {})}
       {...(!offline && interactive && !gated ? { analysisHref: detailHref } : {})}
@@ -673,7 +676,8 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   }
   return <Card tabIndex={-1} aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={gated ? undefined : shownFamily}
     data-status={fixture.status} data-mobile-locked={gated && !offline ? "" : undefined} data-mobile-design="team-stack"
-    data-numbered={position !== undefined ? "" : undefined} data-phone-feed-card={phoneFeed || undefined}>
+    data-numbered={position !== undefined ? "" : undefined} data-phone-feed-card={phoneFeed || undefined}
+    data-extended-market={featured?.code ? "" : undefined}>
     <VisuallyHidden as={`h${headingLevel}`} id={titleId}>{titleNote ? `${title}, ${titleNote}` : title}</VisuallyHidden>
     <Meta data-ledger-meta>
       {position !== undefined && <Index position={position} $wrap={position > 9_999} aria-hidden="true" data-row-number>{messages.number(position)}</Index>}
@@ -691,7 +695,8 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
         standing={liveLead > 0 ? "ahead" : liveLead < 0 ? "behind" : null} />
       <CardTeam team={fixture.awayTeam} side="away" name={away} eager={eagerLogos} result={lead < 0 ? "win" : lead > 0 ? "loss" : null}
         standing={liveLead < 0 ? "ahead" : liveLead > 0 ? "behind" : null} />
-      {showProgress && <MatchState fixture={fixture} home={home} away={away} lead={lead} clock={clock} messages={messages} snapshot={snapshotPick !== undefined} />}
+      {showProgress && <MatchState fixture={fixture} display={display} description={scoreDescription} lead={lead} clock={clock}
+        messages={messages} snapshot={snapshotPick !== undefined} phoneFeed={phoneFeed} />}
     </Teams>
     <Pick $family={shownFamily} data-ledger-facts data-pick-state={pickState} data-result={result}>
       <MarketName $family={shownFamily} data-ledger-field="market" aria-hidden={gated ? undefined : true} title={family}>
@@ -706,10 +711,10 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       </GatedPick>
         <span data-match-metrics><Odds data-ledger-field="odds" aria-hidden="true">—</Odds>
         <Probability data-ledger-field="probability" data-stack-label={stackProbabilityCaption} aria-label={messages.text("details.probability")}><Percent data-public-probability>{publicChanceLabel}</Percent></Probability></span>
-      </> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale}>
+      </> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale} compact={phoneFeed}>
         <PickShort $family={shownFamily} $available={prediction !== null} data-ledger-field="prediction" aria-hidden="true"
           data-no-pick={missing ?? undefined}>
-          {selection ? <PickLine data-pick-line="" data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection, selectionContext)}>{predictionLabel(messages, selection, selectionContext)}</span>{sourceLabel}</PickLine> : <>
+          {selection ? <PickLine data-pick-line="" data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection, selectionContext)}>{mobileSelection}</span>{sourceLabel}</PickLine> : <>
             <b data-mobile-only="">{noPickLabel}</b>
             <span data-pick-value="" data-mobile-only="">{messages.text(`match.noPickReason.short.${missing!}`)}</span>
             <span data-pick-value="" data-desktop-only="">{noPickLabel}</span>
@@ -735,7 +740,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     <Result data-result-badge={offline ? "saved" : result} data-stack-result
       data-live-minute={clock ? clock.minute ?? "" : undefined}>
       <MatchStatus status={fixture.status} outcome={outcome} messages={messages} snapshot={snapshotPick !== undefined} offline={offline}
-        liveClock={fixture.liveClock ?? null} awaitingResult={awaitingResult} />
+        liveClock={fixture.liveClock ?? null} awaitingResult={awaitingResult} compactMatch={phoneFeed} regulationOnly={regulationOnly} />
     </Result>
     {!offline && interactive && <Open data-match-open href={targetHref} prefetch={false}>
       <VisuallyHidden>{gated ? `${messages.text("paywall.unlock")}: ${title}` : messages.text("match.analysisLabel", { home, away })}</VisuallyHidden><ChevronIcon />

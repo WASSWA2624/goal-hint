@@ -93,6 +93,60 @@ void main() {
     },
   );
 
+  for (final brightness in Brightness.values) {
+    testWidgets('a Matches pull delegates silently in $brightness mode', (
+      tester,
+    ) async {
+      tester.binding.platformDispatcher.platformBrightnessTestValue =
+          brightness;
+      addTearDown(
+        tester.binding.platformDispatcher.clearPlatformBrightnessTestValue,
+      );
+      final browser = FakeWebViewAdapter()
+        ..supportsPullToRefresh = true
+        ..webOwnsPullToRefresh = true;
+      await tester.pumpWidget(
+        GoalHintApp(configuration: configuration, webViewAdapter: browser),
+      );
+      await tester.pumpAndSettle();
+      final view = find.byType(WebViewPullToRefresh);
+      final touch = await tester.startGesture(tester.getCenter(view));
+      await touch.moveBy(const Offset(0, 150));
+      await tester.pump();
+      expect(browser.inPageRefreshes, 0);
+      expect(find.byType(RefreshProgressIndicator), findsNothing);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      await touch.up();
+      await tester.pumpAndSettle();
+      expect(browser.inPageRefreshes, 1);
+      expect(browser.reloads, 0);
+      expect(find.byType(RefreshProgressIndicator), findsNothing);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      expect(find.text('Embedded web application'), findsOneWidget);
+      expect(browser.disposed, isFalse);
+
+      // The legacy document path owns both indicators. Verify its phases
+      // alongside the silent Matches transport using the same mounted host.
+      browser.webOwnsPullToRefresh = false;
+      browser.reloadCompletion = Completer<void>();
+      browser.finishDocument();
+      await tester.pump();
+      final documentPull = await tester.startGesture(tester.getCenter(view));
+      await documentPull.moveBy(const Offset(0, 150));
+      await tester.pump();
+      expect(find.byType(RefreshProgressIndicator), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      await documentPull.up();
+      await tester.pump();
+      expect(browser.reloads, 1);
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      browser.reloadCompletion!.complete();
+      await tester.pumpAndSettle();
+      expect(find.byType(RefreshProgressIndicator), findsNothing);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+    });
+  }
+
   testWidgets('white branded loading stays until the first document is ready', (
     tester,
   ) async {

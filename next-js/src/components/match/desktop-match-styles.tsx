@@ -108,6 +108,7 @@ export const alignedLedgerStyles = css`
   [data-row-teams] {
     display: grid; grid-template-columns: minmax(0, 1fr) var(--review-centre-width) minmax(0, 1fr);
     column-gap: var(--gh-spacing-1); justify-content: normal; align-items: center;
+    &:has([data-shootout-score]) { --review-centre-width: minmax(var(--gh-size-20), max-content); }
   }
   [data-home], [data-away] {
     display: grid; flex: none; inline-size: 100%; max-inline-size: none; gap: var(--gh-spacing-1);

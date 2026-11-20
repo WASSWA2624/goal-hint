@@ -3,6 +3,7 @@
 import styled from "styled-components";
 import { LiveDot } from "@/components/ui/live-dot";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { cardResultStatus } from "@/domain/match-card";
 import { liveClockLabel } from "@/domain/match-clock";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
@@ -49,10 +50,11 @@ const Label = styled(StatusBadge)`
 `;
 
 /** Fixture progress takes precedence until a result can be shown. Saved results remain explicit snapshots. */
-export function MatchStatus({ status, outcome, messages, snapshot = false, offline = false, liveClock, desktopClock = false, awaitingResult = false }: {
+export function MatchStatus({ status, outcome, messages, snapshot = false, offline = false, liveClock, desktopClock = false, awaitingResult = false,
+  compactMatch = false, regulationOnly = false }: {
   status: FixtureSnapshot["status"]; outcome: OutcomeTone; messages: Messages; snapshot?: boolean; offline?: boolean;
   liveClock?: FixtureSnapshot["liveClock"];
-  desktopClock?: boolean; awaitingResult?: boolean;
+  desktopClock?: boolean; awaitingResult?: boolean; compactMatch?: boolean; regulationOnly?: boolean;
 }) {
   const result = offline ? "saved" : snapshot ? outcome : cardResultStatus(status, outcome, awaitingResult);
   const isOutcome = result === "correct" || result === "incorrect" || result === "pending" || result === "void" || result === "unavailable";
@@ -64,16 +66,26 @@ export function MatchStatus({ status, outcome, messages, snapshot = false, offli
     ? liveClockLabel(liveClock, messages) : null;
   const extraTime = clock !== null && clock.minute !== null && liveClock?.phase === "extra-time";
   const halfTime = clock !== null && liveClock?.phase === "half-time";
-  const finalPhase = !offline && !snapshot && (status === "finished-regulation" || status === "finished-extra-time" || status === "finished-penalties")
-    ? messages.text(`match.final.${status}`) : null;
+  const finished = !offline && !snapshot && (status === "finished-regulation" || status === "finished-extra-time" || status === "finished-penalties");
+  const finalPhase = finished ? messages.text(compactMatch && status === "finished-penalties"
+    ? "match.final.shootoutCompact" : `match.final.${status}`) : null;
+  const compactFinish = compactMatch && !desktopClock && finalPhase !== null;
+  const decided = result === "correct" || result === "incorrect";
+  const visible = compactFinish && decided ? messages.text("match.resultWithPhase", { result: label, phase: finalPhase })
+    : compactFinish && !isOutcome ? finalPhase : label;
+  const spokenFinish = compactFinish ? [isOutcome ? label : null, messages.text(`match.status.${status}`),
+    regulationOnly ? messages.text("match.regulationScoreNote") : null].filter(Boolean).join(", ") : undefined;
+  const accessibleStatus = compactMatch ? clock?.spoken ?? spokenFinish : undefined;
   return <Label data-match-status={result} data-match-label={!isOutcome ? "" : undefined} data-outcome-label={isOutcome ? "" : undefined}
     data-match-half-time={halfTime || undefined}
-    data-live-badge-clock={desktopClock && result === "live" ? "" : undefined}
-    aria-label={clock?.spoken} title={clock?.spoken ?? (awaitingResult && result === "pending" ? messages.text("slips.outcome.pending") : undefined)}>
-    {result === "live" && <LiveDot data-match-live-dot aria-hidden="true" />}
-    <span data-pick-value="">{clock ? desktopClock ? <LiveMatchTime clock={liveClock} messages={messages} badge />
+    data-live-badge-clock={desktopClock && result === "live" && !compactMatch ? "" : undefined}
+    aria-label={compactMatch ? undefined : clock?.spoken}
+    title={clock?.spoken ?? (awaitingResult && result === "pending" ? messages.text("slips.outcome.pending") : spokenFinish)}>
+    {result === "live" && !compactMatch && <LiveDot data-match-live-dot aria-hidden="true" />}
+    <span data-pick-value="" aria-hidden={accessibleStatus ? true : undefined}>{clock ? desktopClock || compactMatch ? <span data-status-clock><LiveMatchTime clock={liveClock} messages={messages} badge /></span>
       : <><span data-mobile-only data-status-clock>{halfTime ? <span data-half-time-prefix>{label} </span> : <>{label} </>}
-        {extraTime && <>{messages.text("match.clock.extra-timeShort")} </>}<LiveMatchTime clock={liveClock} messages={messages} /></span><span data-desktop-only>{label}</span></> : label}</span>
-    {!desktopClock && liveClock !== undefined && finalPhase && <span data-mobile-only data-status-phase>{finalPhase}</span>}
+        {extraTime && <>{messages.text("match.clock.extra-timeShort")} </>}<LiveMatchTime clock={liveClock} messages={messages} /></span><span data-desktop-only>{label}</span></> : visible}</span>
+    {!compactMatch && !desktopClock && liveClock !== undefined && finalPhase && <span data-mobile-only data-status-phase>{finalPhase}</span>}
+    {accessibleStatus && <VisuallyHidden>{accessibleStatus}</VisuallyHidden>}
   </Label>;
 }

@@ -169,7 +169,7 @@ export const teamStackStyles = css`
 export const phoneFeedRowStyles = css`
   --feed-league-mark-size: var(--gh-size-4);
   --feed-kickoff-width: var(--gh-size-15);
-  grid-template-columns: var(--feed-kickoff-width) minmax(0, 1fr) minmax(min-content, clamp(var(--gh-size-23), 28cqi, var(--gh-size-26)));
+  grid-template-columns: var(--feed-kickoff-width) minmax(0, 1fr) minmax(min-content, clamp(var(--gh-size-23), 31cqi, var(--gh-size-30)));
   grid-template-areas: "league league status" "kickoff teams facts";
 
   [data-ledger-meta] { display: contents; }
@@ -177,6 +177,8 @@ export const phoneFeedRowStyles = css`
   [data-ledger-competition] {
     align-self: center;
     grid-area: league;
+    font-size: var(--gh-font-body);
+    font-weight: var(--gh-weight-medium);
     > [data-competition-logo] { --gh-league-mark-size: var(--feed-league-mark-size); }
     &:has([data-country-flag] > img) {
       > [data-competition-logo] { display: none; }
@@ -199,7 +201,8 @@ export const phoneFeedRowStyles = css`
       > [data-mobile-only] { display: none; }
       > [data-phone-kickoff] { display: inline; white-space: nowrap; }
     }
-    [data-kickoff-date] { font-size: var(--gh-font-micro); font-weight: var(--gh-weight-semibold); }
+    [data-kickoff-date] { font-size: var(--gh-font-caption); font-weight: var(--gh-weight-semibold); }
+    [data-kickoff-time] { font-size: var(--gh-font-secondary); }
   }
   [data-ledger-teams] {
     --gh-logo-size: var(--gh-size-4);
@@ -208,12 +211,32 @@ export const phoneFeedRowStyles = css`
     border-inline: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};
     [data-team-logo] { overflow: hidden; white-space: nowrap; }
     [data-match-state] [data-ledger-versus] { display: none; }
+    [data-score-home], [data-score-away] { font-weight: var(--gh-weight-bold); white-space: nowrap; }
   }
   &:not([data-mobile-locked]) [data-ledger-teams] {
     grid-template-columns: minmax(0, 1fr) minmax(var(--gh-size-3), max-content);
     column-gap: var(--gh-spacing-1);
   }
-  [data-ledger-facts] [data-match-metrics] { grid-template-columns: max-content minmax(min-content, 1fr); }
+  [data-ledger-facts] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, max-content);
+    [data-match-metrics] { grid-template-columns: max-content minmax(min-content, 1fr); }
+    [data-ledger-field="odds"], [data-ledger-field="probability"] [data-pick-value] { font-size: var(--gh-font-body); }
+    [data-ledger-field][data-stack-label]::before { font-size: var(--gh-font-caption); font-weight: var(--gh-weight-medium); }
+    [data-pick-line] > [data-forecast-source] { font-size: var(--gh-font-caption); }
+  }
+  [data-stack-result] [data-match-status] { font-size: var(--gh-font-body); }
+
+  @container (max-width: ${({ theme }) => theme.viewport[20]}) {
+    grid-template-columns: var(--feed-kickoff-width) minmax(0, 1fr) var(--gh-size-21);
+    [data-ledger-facts] [data-match-metrics] {
+      grid-template-columns: minmax(0, 1fr);
+      row-gap: 0;
+      [data-ledger-field="probability"] { grid-column: 1; justify-content: flex-start; }
+    }
+    &[data-extended-market] [data-ledger-facts] {
+      grid-template-areas: "metrics metrics" "market market" "pick pick";
+    }
+  }
 
   @container (max-width: ${({ theme }) => theme.viewport[16]}) {
     grid-template-columns: var(--feed-kickoff-width) minmax(0, 1fr);

@@ -147,8 +147,8 @@ const Footer = styled.div`
  * Month calendar in a phone sheet. The first tap picks a day; a later tap within a year ends a
  * range, and any other tap starts again. Apply with one day picked selects that day.
  */
-export function DateCalendar({ locale, today, from, to, onApply, onClose }: {
-  locale: FeedQuery["locale"]; today: ReportingDate; from: ReportingDate; to: ReportingDate;
+export function DateCalendar({ id, locale, today, from, to, onApply, onClose }: {
+  id?: string; locale: FeedQuery["locale"]; today: ReportingDate; from: ReportingDate; to: ReportingDate;
   onApply: (from: ReportingDate, to: ReportingDate) => void; onClose: () => void;
 }) {
   const messages = createMessages(locale), sheet = useRef<HTMLDivElement>(null), titleId = useId();
@@ -165,7 +165,7 @@ export function DateCalendar({ locale, today, from, to, onApply, onClose }: {
     : <>{messages.reportingDateSpan(start, end)} · {messages.plural("feed.calendar.days", spanDays(start, end))}<small>{messages.text("feed.calendar.limit")}</small></>;
   return <>
     <SheetScrim aria-hidden="true" />
-    <Frame ref={sheet} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onKeyDown={(event) => {
+    <Frame id={id} ref={sheet} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onKeyDown={(event) => {
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onClose(); }
       else keepFocusInSheet(event);
     }}>

@@ -159,6 +159,33 @@ def verify(origin, directory):
     print(f"Match card SSR verification passed: {len(articles)} single-copy Team stack fallbacks, readable predictions, exact selected prices, every outcome/source, live minute and no former desktop column header.")
 
 
+def verify_feed_cards(origin):
+    response = request(origin, "/feed")
+    assert response.status == 200
+    cards = dict(re.findall(r'<article\b[^>]*data-fixture-id="(feed-[^"]+)"[^>]*>([\s\S]*?)</article>', visible_html(response.text)))
+    assert len(cards) == 11
+    for key, label in {"live": "67:00", "stoppage": r"45\+2", "halftime": "HT"}.items():
+        card = cards[f"feed-{key}"]
+        match(rf'data-status-clock[^>]*><span[^>]*>{label}</span>', card)
+        no_match(r'data-match-live-dot|data-status-clock[^>]*>Live', card)
+    match(r'data-score-home[^>]*>2</span>[\s\S]*?data-score-away[^>]*>1</span>', cards["feed-aet"])
+    match(r'data-match-status="finished-extra-time"[^>]*>[\s\S]*?data-pick-value[^>]*>AET</span>', cards["feed-aet"])
+    match(r'data-score-home[^>]*>1<span[^>]*data-shootout-score[^>]*>\(3\)</span>', cards["feed-pen"])
+    match(r'data-score-away[^>]*>1<span[^>]*data-shootout-score[^>]*>\(4\)</span>', cards["feed-pen"])
+    match(r'data-match-status="finished-penalties"[^>]*>[\s\S]*?data-pick-value[^>]*>PEN</span>', cards["feed-pen"])
+    match("Penalty shootout score", cards["feed-pen"])
+    match("Score after 90 minutes", cards["feed-incomplete"])
+    no_match("data-shootout-score", cards["feed-incomplete"])
+    match(r'data-card-odds[^>]*>—</span>[\s\S]*?data-pick-value[^>]*>54%</span>', cards["feed-missing-odds"])
+    match(r'data-match-status="correct"[^>]*>[\s\S]*?data-pick-value[^>]*>Won FT</span>', cards["feed-missing-odds"])
+    match("Unlock", cards["feed-gated"])
+    no_match(r'data-prediction="home-win"', cards["feed-gated"])
+    match(r'data-match-status="pending"', cards["feed-overdue"])
+    match(r'data-match-status="upcoming"', cards["feed-upcoming"])
+    match(r'data-pick-selection[^>]*>Under 5\.5</span>', cards["feed-extended"])
+    print("Matches card score, clock, compact status, missing-price and access rendering passed.")
+
+
 def main():
     args = parse_args("match card")
     directory = create_fixture("match-card")
@@ -168,6 +195,7 @@ def main():
     build_fixture(directory, timeout=300)
     with Server(directory) as server:
         verify(server.origin, directory)
+        verify_feed_cards(server.origin)
         print(f"Fixture artifacts: {directory}", flush=True)
         if args.serve:
             server.serve()

@@ -8,7 +8,7 @@ import { DayStrip } from "@/components/match/feed-dates";
 import { FeedFilters } from "@/components/match/feed-filters";
 import { FeedHeader, ResultsToolbar } from "@/components/match/feed-header";
 import { plainClick } from "@/components/match/filter-parts";
-import { useLiveRefresh } from "@/components/match/use-live-refresh";
+import { useLiveRefresh, useMatchesPullToRefresh } from "@/components/match/use-live-refresh";
 import { feedRefreshInterval } from "@/domain/live-refresh";
 import { FeedPagination } from "@/components/match/feed-pagination";
 import { useFeedPagination } from "@/components/match/use-feed-pagination";
@@ -72,21 +72,20 @@ const PreviousNote = styled(FeedNote)`${media.desktop} { color: inherit; }`;
 const StableFeedHeader = memo(FeedHeader);
 
 /** Memoized with stable callbacks, so header and filter state changes skip the list. */
-const FeedResults = memo(function FeedResults({ data: initial, query, today, enabled, searchPending, performanceQuery, performanceData,
+const FeedResults = memo(function FeedResults({ data: initial, query, today, enabled, searchPending,
   onStatus, onApply, onRollover, summary, confirmed, onConfirmed }: {
   data: MatchFeedResponse; query: FeedQuery; today: ReportingDate; enabled: boolean;
-  searchPending: boolean; performanceQuery: FeedQuery; performanceData: MatchFeedResponse; onRollover: () => void;
+  searchPending: boolean; onRollover: () => void;
   summary?: Promise<FeedPerformanceSeed> | undefined;
   confirmed: FeedPerformanceSeed | null; onConfirmed: (seed: FeedPerformanceSeed) => void;
   onStatus: (href: string, message: string) => void; onApply: (query: FeedQuery) => void;
 }) {
   const messages = createMessages(query.locale, undefined, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone);
   const router = useRouter();
-  const { view, phase, error, root, retry, refresh } = useFeedPagination({ data: initial, query, today, enabled: enabled && !searchPending, onStatus });
+  const canRefresh = enabled && !searchPending;
+  const { view, phase, error, root, retry, refresh, refreshInPlace } = useFeedPagination({ data: initial, query, today, enabled: canRefresh, onStatus });
   const { data, records } = view;
-  const [performance, setPerformance] = useState({ seed: performanceData, data: performanceData });
-  const summaryData = query.search === performanceQuery.search ? data : performanceData === performance.seed ? performance.data : performanceData;
-  if (summaryData !== performance.data || performanceData !== performance.seed) setPerformance({ seed: performanceData, data: summaryData });
+  useMatchesPullToRefresh(canRefresh, refreshInPlace);
   // Read when each wait is armed, so the kickoff window always uses the current clock.
   useLiveRefresh({ today, zone: query.zone ?? query.time?.zone ?? null, enabled, interval: () => feedRefreshInterval(data, records, Date.now()), refresh,
     rollover: (day) => {
@@ -100,8 +99,8 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
   const similarFrom = data.search && data.search.similar > 0 ? data.search.exact + 1 : null;
   return <FeedStack $gap="sm" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
     aria-busy={phase !== null} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
-    <PerformanceSection data-feed-performance-section><Suspense fallback={<FeedPerformancePlaceholder query={performanceQuery} data={summaryData} />}>
-      <ServerThemeUntilHydrated><FeedPerformanceSummary query={performanceQuery} today={today} data={summaryData} enabled={enabled} onApply={onApply}
+    <PerformanceSection data-feed-performance-section><Suspense fallback={<FeedPerformancePlaceholder query={query} data={data} />}>
+      <ServerThemeUntilHydrated><FeedPerformanceSummary query={query} today={today} data={data} enabled={enabled} onApply={onApply}
         initial={summary} confirmed={confirmed} onConfirmed={onConfirmed} /></ServerThemeUntilHydrated>
     </Suspense></PerformanceSection>
     <MatchResults data-feed-match-results aria-busy={searchPending || phase !== null}>
@@ -186,7 +185,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
     ? messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")
     : paginationStatus?.href === displayedHref ? paginationStatus.message
     : displayed ? searchAnnouncement(displayed.data, displayed.query) : messages.text("feed.state.data-unavailable"));
-  return <FeedStack $gap="sm">
+  return <FeedStack $gap="sm" data-matches-feed>
     <StableFeedHeader query={query} today={today} showAccount={showAccount} />
     <LoadingTheme><FeedFilters key={`${href}:${today}`} subscriberOnly={subscriberOnly} providerOdds={providerOdds} query={query} today={today} leagues={leagues} onApply={apply} pending={pending}
       searchText={text} onSearchChange={onSearchChange} onSearchSubmit={onSearchSubmit} /></LoadingTheme>
@@ -206,8 +205,8 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
       {searchFailure && <FeedNote>{searchFailure}{" "}<TextButton onClick={() => onSearchSubmit(text)}>{messages.text("feed.retry")}</TextButton></FeedNote>}
       {displayed && visible && <FeedResults key={feedQueryHref(visible.query, visible.today) + ":" + resolveFeedDates(visible.query, visible.today).startDate + ":" + visible.data.access.tier + ":" + visible.data.access.signedIn}
         data={displayed.data} query={displayed.query} today={displayed.today} enabled={!pending && !result.error} onStatus={onPaginationStatus} onApply={applyPerformance}
-        searchPending={searchPending} performanceQuery={visible.query} performanceData={visible.data} onRollover={cancel}
-        summary={summary} confirmed={confirmed} onConfirmed={setConfirmed} />}
+        searchPending={searchPending} onRollover={cancel}
+        summary={accepted ? undefined : summary} confirmed={confirmed} onConfirmed={setConfirmed} />}
       {!result.error && pagination}
     </Results>
   </FeedStack>;

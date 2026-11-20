@@ -16,6 +16,7 @@ abstract class WebViewAdapter extends ChangeNotifier {
   WebAppearance? get appearance => null;
   bool get supportsPullToRefresh => false;
   bool get atTop => false;
+  bool get webOwnsPullToRefresh => false;
   WebThemePreference? _pendingTheme;
   bool _applyingTheme = false;
 
@@ -49,6 +50,7 @@ abstract class WebViewAdapter extends ChangeNotifier {
   Future<void> initialize();
   Future<void> load(Uri uri);
   Future<void> reload();
+  Future<void> refreshInPage() async {}
   Future<void> goBack();
 
   /// Reconcile browser state without reloading or discarding an unfinished form.

@@ -20,11 +20,11 @@ and points to a bundled asset, so branding also works offline. Native bundle/app
 IDs and installed launcher names retain their platform configuration. Shipping
 this host change requires rebuilt native apps; a website update alone is insufficient.
 
-Android pull-to-refresh is implemented in the native host: pull down from the top
-of the document and release to reload the current page. Normal scrolling,
-horizontal gestures, multi-touch and keyboard input retain their web behavior.
-The existing browser and cookies remain intact. Installing a rebuilt Android
-binary is required; a shared-website update alone cannot add this native feature.
+On Android, pull down from the top and release to refresh. Matches updates its
+current list in place and uses the shared app-header progress bar. Other pages
+continue to reload through the system WebView. Normal scrolling, horizontal
+gestures, multi-touch and keyboard input retain their behavior. The Matches
+gesture handoff is available in a rebuilt Android app.
 See [implementation and verification](dev-plan/010-android-pull-to-refresh.md).
 
 Shared slip HTTPS links can target the existing browser on cold launch or while

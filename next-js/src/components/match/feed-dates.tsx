@@ -1,8 +1,6 @@
 "use client";
 
 import { DateTimeField } from "@/components/ui/date-time-field";
-
-
 import Link from "@/components/navigation/navigation-link";
 import dynamic from "next/dynamic";
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -124,7 +122,7 @@ const dayCell = css`
   line-height: var(--gh-leading-tight);
   text-decoration: none;
   cursor: pointer;
-  > small { font-size: var(--gh-font-micro); font-weight: var(--gh-weight-semibold); white-space: nowrap; }
+  > small { font-size: var(--gh-font-caption); font-weight: var(--gh-weight-semibold); white-space: nowrap; }
 `;
 const Day = styled(Link)`
   ${dayCell}
@@ -180,9 +178,9 @@ const smooth = (): ScrollBehavior => window.matchMedia("(prefers-reduced-motion:
 const daysAround = (date: ReportingDate) => [...adjacentDays(date, -2), date, ...adjacentDays(date, 8)];
 
 function stripMetrics(strip: HTMLUListElement) {
-  const gap = parseFloat(getComputedStyle(strip).columnGap);
+  const gap = Number.parseFloat(getComputedStyle(strip).columnGap) || 0;
   const step = (strip.firstElementChild?.getBoundingClientRect().width ?? 0) + gap;
-  return { step, visible: Math.round((strip.clientWidth + gap) / step) };
+  return { step, visible: Math.max(1, Math.round((strip.clientWidth + gap) / step)) };
 }
 
 export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: ReportingDate; onApply: (next: FeedQuery) => void }) {
@@ -190,13 +188,13 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
   const selected = dayCount === 1 ? startDate : null;
   const anchor = today < startDate ? startDate : today > endDate ? endDate : today;
   const list = useRef<HTMLUListElement>(null), calendarButton = useRef<HTMLButtonElement>(null);
-  const listId = useId();
+  const listId = useId(), calendarId = useId();
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [days, setDays] = useState(() => daysAround(anchor));
   const [visible, setVisible] = useState<{ first: ReportingDate; last: ReportingDate } | null>(null);
   if (anchor < days[0]! || anchor > days.at(-1)!) setDays(daysAround(anchor));
   const prepended = useRef<{ offset: number; count: number } | null>(null);
-  const growing = useRef(false), activated = useRef(false), scrollAfter = useRef(0), handled = useRef(days);
+  const growing = useRef(false), activated = useRef(false), arrowTarget = useRef<ReportingDate | null>(null), handled = useRef(days);
   const [tomorrow] = adjacentDays(today, 1);
   const selection = useCallback((date: ReportingDate): DateSelection => date === today ? { kind: "today" }
     : query.status !== "finished" && date === tomorrow ? { kind: "tomorrow" } : { kind: "date", date }, [query.status, today, tomorrow]);
@@ -211,12 +209,22 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
     const strip = list.current, cell = strip?.querySelector<HTMLElement>(`[data-date="${date}"]`);
     if (strip && cell) strip.scrollTo({ left: cell.offsetLeft - (strip.clientWidth - cell.offsetWidth) / 2, behavior });
   }, []);
+  const reveal = useCallback((date: ReportingDate) => {
+    const strip = list.current, cell = strip?.querySelector<HTMLElement>(`[data-date="${date}"]`);
+    if (strip && cell) strip.scrollTo({ left: strip.scrollLeft + cell.getBoundingClientRect().left - strip.getBoundingClientRect().left,
+      behavior: smooth() });
+  }, []);
   const extend = useCallback(() => {
     const strip = list.current;
-    if (!strip || growing.current || strip.clientWidth === 0) return false;
+    if (!strip?.clientWidth) return false;
+    if (growing.current) return true;
     const current = handled.current;
-    const earlier = strip.scrollLeft < strip.clientWidth ? adjacentDays(current[0]!, -block) : [];
-    const later = strip.scrollLeft + strip.clientWidth * 2 > strip.scrollWidth ? adjacentDays(current.at(-1)!, block) : [];
+    const target = arrowTarget.current;
+    const cell = target && strip.querySelector<HTMLElement>(`[data-date="${target}"]`);
+    const offset = cell ? cell.offsetLeft : strip.scrollLeft;
+    const first = current[0]!, last = current.at(-1)!;
+    const earlier = (target !== null && target < first || offset < strip.clientWidth) ? adjacentDays(first, -block) : [];
+    const later = (target !== null && target > last || offset + strip.clientWidth * 2 > strip.scrollWidth) ? adjacentDays(last, block) : [];
     if (!earlier.length && !later.length) return false;
     growing.current = true;
     if (earlier.length) prepended.current = { offset: strip.scrollLeft, count: earlier.length };
@@ -240,12 +248,14 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
       const { offset, count } = prepended.current;
       strip.scrollLeft = offset + count * stripMetrics(strip).step;
     }
-    if (strip && scrollAfter.current) strip.scrollBy({ left: scrollAfter.current, behavior: smooth() });
-    prepended.current = null; growing.current = false; scrollAfter.current = 0;
+    prepended.current = null;
+    growing.current = false;
+    if (arrowTarget.current && !extend()) reveal(arrowTarget.current);
     updateVisible();
-  }, [days, updateVisible]);
+  }, [days, extend, reveal, updateVisible]);
   useLayoutEffect(() => {
     if (!list.current?.clientWidth) return;
+    arrowTarget.current = null;
     center(anchor, "auto");
     updateVisible();
   }, [anchor, center, endDate, startDate, updateVisible]);
@@ -258,6 +268,7 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
       if (nextWidth === width) return;
       width = nextWidth;
       if (width) {
+        arrowTarget.current = null;
         center(anchor, "auto");
         updateVisible();
       } else setCalendarOpen(false);
@@ -265,24 +276,27 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
     observer.observe(strip);
     return () => observer.disconnect();
   }, [anchor, center, updateVisible]);
-  const activate = () => { activated.current = true; extend(); };
-  /** Scrolls by whole days: a page of them, keeping one day from the previous view. */
-  const page = (direction: -1 | 1) => {
+  const activate = () => { arrowTarget.current = null; activated.current = true; extend(); };
+  /** Accumulate button presses against the requested date while smooth scrolling catches up. */
+  const move = (direction: -1 | 1) => {
     const strip = list.current;
     if (!strip?.clientWidth) return;
     const { step, visible } = stripMetrics(strip);
-    activated.current = true;
-    const distance = direction * Math.max(1, visible - 1) * step;
-    if (extend()) scrollAfter.current = distance;
-    else strip.scrollBy({ left: distance, behavior: smooth() });
+    const first = arrowTarget.current ?? handled.current[Math.max(0, Math.round(strip.scrollLeft / step))];
+    if (!first) return;
+    const [next] = adjacentDays(first, direction);
+    if (!next || (direction === 1 && adjacentDays(next, visible - 1).length < visible - 1)) return;
+    arrowTarget.current = next;
+    if (!extend()) reveal(next);
   };
   const closeCalendar = () => { setCalendarOpen(false); calendarButton.current?.focus({ preventScroll: true }); };
   return <Strip aria-label={messages.text("feed.date.days")}>
-    <Scroll type="button" aria-controls={listId} aria-label={messages.text("feed.date.earlier")} onClick={() => page(-1)}>
+    <Scroll type="button" aria-controls={listId} aria-label={messages.text("feed.date.earlier")} onClick={() => move(-1)}>
       <ChevronLeftIcon />
     </Scroll>
-    <Days id={listId} ref={list} onScroll={() => { updateVisible(); if (activated.current) extend(); }}
-      onPointerDown={activate} onWheel={activate}>
+    <Days id={listId} ref={list} onScroll={() => { updateVisible(); if (activated.current && !arrowTarget.current) extend(); }}
+      onPointerDown={activate} onWheel={activate} onFocus={activate}
+      onKeyDown={(event) => { if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) activate(); }}>
       {chips.map(({ date, day, month, isToday, next, href, label }) =>
         <li key={date} data-date={date}>
           <Day href={href} prefetch={false} scroll={false} rel={dayLinkRel(date, today)}
@@ -295,15 +309,15 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
           </Day>
         </li>)}
     </Days>
-    <Scroll type="button" aria-controls={listId} aria-label={messages.text("feed.date.later")} onClick={() => page(1)}>
+    <Scroll type="button" aria-controls={listId} aria-label={messages.text("feed.date.later")} onClick={() => move(1)}>
       <ChevronRightIcon />
     </Scroll>
     <CalendarButton ref={calendarButton} type="button"
-      aria-haspopup="dialog" aria-expanded={calendarOpen} onClick={() => setCalendarOpen(true)}
+      aria-haspopup="dialog" aria-expanded={calendarOpen} aria-controls={calendarOpen ? calendarId : undefined} onClick={() => setCalendarOpen(true)}
       aria-label={selected === null ? messages.text("feed.date.rangeCurrent", { range: messages.reportingDateSpan(startDate, endDate) }) : messages.text("feed.date.rangeOpen")}>
       <CalendarIcon />
     </CalendarButton>
-    {calendarOpen && <DateCalendar locale={query.locale} today={today} from={startDate} to={endDate} onClose={closeCalendar}
+    {calendarOpen && <DateCalendar id={calendarId} locale={query.locale} today={today} from={startDate} to={endDate} onClose={closeCalendar}
       onApply={(from, to) => {
         closeCalendar();
         onApply(selectFeedDates(query, from === to ? selection(from) : { kind: "range", from, to }, today));

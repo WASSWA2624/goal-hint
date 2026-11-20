@@ -26,6 +26,8 @@ export const GlobalStyle = createGlobalStyle<{ $windowsHost: boolean }>`
   html:has([data-admin-shell], [data-match-detail]) { scrollbar-gutter: ${({ $windowsHost }) => $windowsHost ? "auto" : "stable"}; }
   /* Match tabs reserve their own space; anchoring a visible footer would move the page instead. */
   html:has([data-match-detail]) { overflow-anchor: none; }
+  /* Matches handles deliberate pulls in place. Suppress the browser's own pull and top-edge effect. */
+  html:has([data-matches-feed]), body:has([data-matches-feed]) { overscroll-behavior-y: none; }
 
   body {
     margin: 0;

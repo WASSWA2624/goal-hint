@@ -194,6 +194,9 @@ class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _pullToRefresh() =>
+      _browser.webOwnsPullToRefresh ? _browser.refreshInPage() : _retry();
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -294,7 +297,8 @@ class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
                             loading: _browser.loading,
                             color: _browser.appearance?.accent,
                             backgroundColor: _browser.appearance?.surface,
-                            onRefresh: () => unawaited(_retry()),
+                            showIndicator: !_browser.webOwnsPullToRefresh,
+                            onRefresh: () => unawaited(_pullToRefresh()),
                             child: _browser.buildView(),
                           ),
                         ),

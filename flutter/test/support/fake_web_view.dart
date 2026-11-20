@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:goal_hint/web/web_view_adapter.dart';
 
@@ -15,13 +17,17 @@ class FakeWebViewAdapter extends WebViewAdapter {
   @override
   bool atTop = true;
   @override
+  bool webOwnsPullToRefresh = false;
+  @override
   String? error;
   Uri? loadedUri;
   int reloads = 0;
+  int inPageRefreshes = 0;
   int backs = 0;
   int resumes = 0;
   int suspends = 0;
   bool disposed = false;
+  Completer<void>? reloadCompletion;
 
   void finishDocument() {
     hasDocument = true;
@@ -39,7 +45,18 @@ class FakeWebViewAdapter extends WebViewAdapter {
   Future<void> reload() async {
     reloads++;
     error = null;
+    final completion = reloadCompletion;
+    if (completion != null) loading = true;
     notifyListeners();
+    if (completion != null) {
+      await completion.future;
+      finishDocument();
+    }
+  }
+
+  @override
+  Future<void> refreshInPage() async {
+    inPageRefreshes++;
   }
 
   @override

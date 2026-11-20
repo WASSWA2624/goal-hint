@@ -16,6 +16,7 @@ import { acceptRun, feedRefreshInterval } from "@/domain/live-refresh";
 import { ensureFeedEntry, restoreFeedCheckpoint, saveFeedCheckpoint } from "./feed-restoration";
 
 type Mode = "refresh" | "restore" | "background";
+type FeedWork = { controller: AbortController; mode: Mode; completion?: Promise<void> };
 type FocusTarget = { fixtureId: string | null; checkpoint?: FeedCheckpoint; retry?: boolean };
 export function useFeedPagination({ query, today, data, enabled, onStatus }: {
   query: FeedQuery; today: ReportingDate; data: MatchFeedResponse; enabled: boolean;
@@ -36,7 +37,7 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
   }
   // A refreshed server query with the same canonical href must not tear down the listeners below.
   const root = useRef<HTMLDivElement>(null), viewRef = useRef(view), enabledRef = useRef(enabled), queryRef = useRef(query);
-  const mounted = useRef(false), request = useRef<AbortController | null>(null), entryId = useRef<string | null>(null);
+  const mounted = useRef(false), request = useRef<FeedWork | null>(null), entryId = useRef<string | null>(null);
   const restored = useRef(true), retryCheckpoint = useRef<FeedCheckpoint | null>(null), failedMode = useRef<Mode>("refresh");
   const focusTarget = useRef<FocusTarget | null>(null);
   const announce = useCallback((key: "loading" | "restoring" | "loaded" | "restored" | "refreshed" | "changed" | "failed" | "busy", loaded?: LoadedFeed, added = 0) => {
@@ -68,45 +69,60 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
   }, [save]);
 
   const run = useCallback(async (mode: Mode, checkpoint?: FeedCheckpoint) => {
-    // The synchronous lock also handles two clicks before React paints disabled.
-    if (request.current || !enabledRef.current || !mounted.current) return;
+    if (!enabledRef.current || !mounted.current) return;
+    const foreground = (phase: Exclude<Mode, "background">) => {
+      setPhase(phase); setError(null); announce(phase === "restore" ? "restoring" : "loading");
+    };
+    const pending = request.current;
+    if (pending) {
+      // A pull joins the in-flight read and makes it foreground. Further pulls
+      // and passive polls attach to the same operation.
+      if (mode === "refresh" && pending.mode === "background") {
+        pending.mode = "refresh";
+        foreground("refresh");
+      }
+      return pending.completion;
+    }
     const base = viewRef.current;
-    const controller = new AbortController(); request.current = controller;
+    const controller = new AbortController(), work: FeedWork = { controller, mode };
+    request.current = work;
     const deadline = window.setTimeout(() => controller.abort(new DOMException("Refresh timed out.", "TimeoutError")), 30_000);
-    if (mode !== "background") { setPhase(mode); setError(null); announce(mode === "restore" ? "restoring" : "loading"); }
+    if (mode !== "background") foreground(mode);
     const applied = queryRef.current;
     const fetchPage = (page: number) => consumeRefresh(dispatch(refreshApi.endpoints.feed.initiate({ query: applied, today, page },
       { forceRefetch: true })), controller.signal);
-    try {
-      const page = checkpoint?.firstPage ?? base.firstPage;
-      const observed = await fetchPage(page);
-      if (controller.signal.aborted || !mounted.current || !enabledRef.current) return;
-      const current = viewRef.current;
-      const next = replaceFeedPages({ ...current, firstPage: page }, [observed]);
-      acceptRun(current.data.run, next.data.run, getReportingDate(utcInstantFromEpochMilliseconds(next.data.asOf)));
-      restored.current = true; retryCheckpoint.current = null;
-      if (mode !== "background") focusTarget.current = { fixtureId: checkpoint?.focusFixtureId ?? null,
-        ...(checkpoint ? { checkpoint } : {}) };
-      viewRef.current = next; setView(next);
-      if (checkpoint) announce(checkpoint.paginationVersion === next.data.paginationVersion ? "restored" : "refreshed", next);
-      else if (mode !== "background") announce("refreshed", next);
-    } catch (cause) {
-      if (!mounted.current || !enabledRef.current || controller.signal.aborted && controller.signal.reason?.name !== "TimeoutError") return;
-      const code = cause instanceof FeedPaginationError ? cause.code : "unavailable";
-      if (code === "subscription-required" || code === "changed") { router.refresh(); return; }
-      if (mode === "background") return;
-      failedMode.current = mode; retryCheckpoint.current = checkpoint ?? null; setError(code);
-      focusTarget.current = { fixtureId: null, retry: true };
-      announce(code === "stale-data" ? "changed" : code === "rate-limited" ? "busy" : "failed");
-    } finally {
-      clearTimeout(deadline);
-      if (request.current === controller) { request.current = null; if (mounted.current) setPhase(null); }
-    }
+    work.completion = (async () => {
+      try {
+        const page = checkpoint?.firstPage ?? base.firstPage;
+        const observed = await fetchPage(page);
+        if (controller.signal.aborted || !mounted.current || !enabledRef.current) return;
+        const current = viewRef.current;
+        const next = replaceFeedPages({ ...current, firstPage: page }, [observed]);
+        acceptRun(current.data.run, next.data.run, getReportingDate(utcInstantFromEpochMilliseconds(next.data.asOf)));
+        restored.current = true; retryCheckpoint.current = null;
+        if (checkpoint) focusTarget.current = { fixtureId: checkpoint.focusFixtureId, checkpoint };
+        viewRef.current = next; setView(next);
+        if (checkpoint) announce(checkpoint.paginationVersion === next.data.paginationVersion ? "restored" : "refreshed", next);
+        else if (work.mode === "refresh") announce("refreshed", next);
+      } catch (cause) {
+        if (!mounted.current || !enabledRef.current || controller.signal.aborted && controller.signal.reason?.name !== "TimeoutError") return;
+        const code = cause instanceof FeedPaginationError ? cause.code : "unavailable";
+        if (code === "subscription-required" || code === "changed") { router.refresh(); return; }
+        if (work.mode === "background") return;
+        failedMode.current = work.mode; retryCheckpoint.current = checkpoint ?? null; setError(code);
+        if (checkpoint) focusTarget.current = { fixtureId: null, retry: true };
+        announce(code === "stale-data" ? "changed" : code === "rate-limited" ? "busy" : "failed");
+      } finally {
+        clearTimeout(deadline);
+        if (request.current === work) { request.current = null; if (mounted.current && work.mode !== "background") setPhase(null); }
+      }
+    })();
+    return work.completion;
   }, [announce, dispatch, router, today]);
 
   useLayoutEffect(() => { queryRef.current = query; }, [query]);
   useLayoutEffect(() => {
-    request.current?.abort(); request.current = null; retryCheckpoint.current = null; focusTarget.current = null;
+    request.current?.controller.abort(); request.current = null; retryCheckpoint.current = null; focusTarget.current = null;
   }, [href]);
   useLayoutEffect(() => {
     viewRef.current = view; enabledRef.current = enabled;
@@ -116,7 +132,7 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
     const frame = requestAnimationFrame(() => focusAndSave(target));
     return () => cancelAnimationFrame(frame);
   }, [enabled, error, focusAndSave, view]);
-  useEffect(() => { if (!enabled) request.current?.abort(); }, [enabled]);
+  useEffect(() => { if (!enabled) request.current?.controller.abort(); }, [enabled]);
   useEffect(() => {
     // A shallow-search return can briefly have the old server seed. Keep the real entry's checkpoint until the search is restored.
     if (restoredLiveFeedSearch(window.location.pathname + window.location.search, queryRef.current, today) !== null) return;
@@ -155,7 +171,7 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
     window.addEventListener("pagehide", save);
     window.addEventListener("popstate", save);
     return () => {
-      active = false; mounted.current = false; request.current?.abort();
+      active = false; mounted.current = false; request.current?.controller.abort();
       if (frame !== undefined) cancelAnimationFrame(frame);
       document.removeEventListener("click", leaving, true); document.removeEventListener("submit", save, true);
       window.removeEventListener("pagehide", save); window.removeEventListener("popstate", save);
@@ -163,7 +179,8 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
     };
   }, [announce, data.page, focusAndSave, href, queryKey, run, save, today]);
 
-  return { view, phase, error, root, refresh: useCallback(() => run("background"), [run]), retry: () => {
+  return { view, phase, error, root, refresh: useCallback(() => run("background"), [run]),
+    refreshInPlace: useCallback(() => run("refresh"), [run]), retry: () => {
     const checkpoint = retryCheckpoint.current;
     return run(checkpoint ? "restore" : error === "changed" || error === "stale-data" ? "refresh" : failedMode.current, checkpoint ?? undefined);
   } };

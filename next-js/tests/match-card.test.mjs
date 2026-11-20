@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { fixtureSnapshotSchema, parseFixtureSnapshot } from "../src/domain/fixture-snapshot.ts";
-import { cardResultStatus, hasFinalScoreStatus, liveClockFromProvider, probabilityEntry, sameCardFixture, selectedCardPrediction, selectedCardPrice, teamInitials } from "../src/domain/match-card.ts";
+import { cardResultStatus, hasFinalScoreStatus, liveClockFromProvider, matchCardScore, probabilityEntry, sameCardFixture, selectedCardPrediction, selectedCardPrice, teamInitials } from "../src/domain/match-card.ts";
 import { mergeFixtureObservation } from "../src/domain/fixture-reconciliation.ts";
 import { compactLeagueName, compactMarketName, compactTeamName } from "../src/domain/compact-fixture-label.ts";
 import { marketRules, marketSelections, validateMarketGroup } from "../src/domain/markets.ts";
@@ -46,6 +46,22 @@ test("a supported Local Engine pick keeps its probability when no price was capt
   const prediction = selectedCardPrediction(record);
   assert.equal(prediction.item.market.source, "local-engine");
   assert.equal(prediction.probability.roundedPercent, 54);
+});
+
+test("a verified phase score is displayed separately and a fallback never replaces the regulation score", () => {
+  const fixture = cardFixture({ status: "finished-penalties", score: { home: 0, away: 0 }, scorePeriod: "regulation",
+    phaseScores: { extraTime: { home: 1, away: 1 }, shootout: { home: 3, away: 4 } } });
+  assert.deepEqual(matchCardScore(fixture, true), { score: { home: 1, away: 1 }, shootout: { home: 3, away: 4 }, regulationOnly: false });
+  assert.deepEqual(matchCardScore(fixture, false), { score: { home: 0, away: 0 }, shootout: null, regulationOnly: true });
+  assert.deepEqual(fixture.score, { home: 0, away: 0 });
+
+  const { phaseScores, ...fallback } = fixture;
+  assert.deepEqual(matchCardScore(fallback, true), { score: { home: 0, away: 0 }, shootout: null, regulationOnly: true });
+  assert.equal(sameCardFixture(fixture, fallback), false);
+  assert.deepEqual(mergeFixtureObservation(fallback, fixture).phaseScores, phaseScores);
+  assert.deepEqual(mergeFixtureObservation(fixture, fallback).phaseScores, phaseScores);
+  const shootoutOnly = { ...fixture, score: null, scorePeriod: null, phaseScores: { ...phaseScores, extraTime: null } };
+  assert.deepEqual(matchCardScore(shootoutOnly, true), { score: null, shootout: { home: 3, away: 4 }, regulationOnly: false });
 });
 
 test("cards show fixture progress until completion without altering market settlement", () => {

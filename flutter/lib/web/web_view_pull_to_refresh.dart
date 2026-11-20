@@ -12,6 +12,7 @@ class WebViewPullToRefresh extends StatefulWidget {
     required this.loading,
     required this.onRefresh,
     required this.child,
+    this.showIndicator = true,
     this.color,
     this.backgroundColor,
   });
@@ -21,6 +22,7 @@ class WebViewPullToRefresh extends StatefulWidget {
   final bool loading;
   final VoidCallback onRefresh;
   final Widget child;
+  final bool showIndicator;
   final Color? color;
   final Color? backgroundColor;
 
@@ -46,8 +48,13 @@ class _WebViewPullToRefreshState extends State<WebViewPullToRefresh> {
   @override
   void didUpdateWidget(WebViewPullToRefresh oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!widget.enabled || !widget.loading) _refreshing = false;
-    if (!widget.enabled || !widget.atTop || widget.loading) {
+    if (!widget.enabled || !widget.loading || !widget.showIndicator) {
+      _refreshing = false;
+    }
+    if (!widget.enabled ||
+        !widget.atTop ||
+        widget.loading ||
+        oldWidget.showIndicator != widget.showIndicator) {
       _pointer = null;
       _origin = null;
       _distance = 0;
@@ -76,7 +83,12 @@ class _WebViewPullToRefreshState extends State<WebViewPullToRefresh> {
       return;
     }
     final distance = delta.dy.clamp(0.0, _triggerDistance * 1.5).toDouble();
-    if (_distance != distance) setState(() => _distance = distance);
+    if (_distance == distance) return;
+    if (widget.showIndicator) {
+      setState(() => _distance = distance);
+    } else {
+      _distance = distance;
+    }
   }
 
   void _up(PointerUpEvent event) {
@@ -91,10 +103,10 @@ class _WebViewPullToRefreshState extends State<WebViewPullToRefresh> {
       _pointer = null;
       _origin = null;
       _distance = 0;
-      _refreshing = refresh;
+      _refreshing = refresh && widget.showIndicator;
     });
-    // The adapter publishes loading before this callback returns, then clears it
-    // when the document finishes, fails, or its navigation is cancelled.
+    // Only document reloads own native feedback. An in-page refresh is
+    // coalesced and announced by the web view's existing screen.
     if (refresh) widget.onRefresh();
   }
 
@@ -112,7 +124,8 @@ class _WebViewPullToRefreshState extends State<WebViewPullToRefresh> {
   @override
   Widget build(BuildContext context) {
     final progress = (_distance / _triggerDistance).clamp(0.0, 1.0);
-    final show = _refreshing || _distance > kTouchSlop;
+    final show =
+        widget.showIndicator && (_refreshing || _distance > kTouchSlop);
     return Stack(
       fit: StackFit.expand,
       children: [

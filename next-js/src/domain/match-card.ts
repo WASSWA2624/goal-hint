@@ -59,6 +59,20 @@ export function probabilityEntry(market: AcceptedMarket | DisplayedMarketPick, s
   return entry;
 }
 
+/** Pick the score for presentation while keeping the regulation result available for settlement. */
+export function matchCardScore(fixture: Pick<FixtureSnapshot, "status" | "score" | "scorePeriod" | "phaseScores">, showPhases: boolean) {
+  const phase = showPhases && isPlayedFinalStatus(fixture.status) ? fixture.phaseScores : undefined;
+  const score = phase?.extraTime ?? fixture.score;
+  return { score, shootout: fixture.status === "finished-penalties" ? phase?.shootout ?? null : null,
+    regulationOnly: !!score && !phase?.extraTime && fixture.scorePeriod === "regulation" &&
+      (fixture.status === "finished-extra-time" || fixture.status === "finished-penalties") };
+}
+
+function sameScore(left: NonNullable<FixtureSnapshot["phaseScores"]>["extraTime"] | undefined,
+  right: NonNullable<FixtureSnapshot["phaseScores"]>["extraTime"] | undefined) {
+  return left?.home === right?.home && left?.away === right?.away;
+}
+
 /** Present supplied facts only; the card never adjudicates a score or combines families. */
 export function selectedCardPrediction(fixture: FixtureSnapshot, family: MarketFamily = "match-result", preferRecommendation = true) {
   const forecast = fixture.forecast;
@@ -101,6 +115,7 @@ export function sameCardFixture(previous: FixtureSnapshot, next: FixtureSnapshot
     previous.partialCoverage === next.partialCoverage && previous.availabilityMessage === next.availabilityMessage &&
     previous.update?.prediction === next.update?.prediction && previous.update?.result === next.update?.result &&
     previous.update?.statusFreshness?.state === next.update?.statusFreshness?.state &&
+    sameScore(previous.phaseScores?.extraTime, next.phaseScores?.extraTime) && sameScore(previous.phaseScores?.shootout, next.phaseScores?.shootout) &&
     previous.forecast?.updateDelayed === next.forecast?.updateDelayed && samePrices(previous.prices, next.prices) &&
     sameMarketOdds(previous.marketOdds, next.marketOdds) && sameFeatured(previous.featuredPrediction, next.featuredPrediction) &&
     previous.retrospective?.revisionId === next.retrospective?.revisionId &&

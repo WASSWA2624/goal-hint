@@ -29,6 +29,7 @@ export function mergeFixtureObservation<T extends FixtureSnapshot>(previous: T, 
   return { ...previous, syncedAt: next.syncedAt !== null && (previous.syncedAt === null || next.syncedAt >= previous.syncedAt)
     ? next.syncedAt : previous.syncedAt, partialCoverage: next.partialCoverage, update: next.update,
     availabilityMessage: next.availabilityMessage,
+    ...(next.phaseScores ? { phaseScores: next.phaseScores } : {}),
     // Prices (052) are observation fields: they change without a fixture version bump.
     ...(next.prices === undefined ? {} : { prices: next.prices }),
     ...("marketOdds" in previous || "marketOdds" in next ? { marketOdds: next.marketOdds ?? null } : {}),
