@@ -16,7 +16,7 @@ const offer = (bookmakerId, recent = 1000, patch = {}) => ({ ...under, bookmaker
   price: "1.87", observedAt: at - recent, checkedAt: at - recent, providerUpdatedAt: null, state: "open", ...patch });
 
 test("catalog reconciliation accounts for all rows and separates namespaces, mismatches, duplicates and unsupported definitions", () => {
-  const extra = { namespace: "pre-match", id: 300, name: "Synthetic scoring in both halves", family: "scoring-in-both-halves", period: "full-time" };
+  const extra = { namespace: "pre-match", id: 300, name: "Synthetic player goals total", family: "player-totals", period: "full-time" };
   const listed = reconcileOddsCatalog("pre-match", [
     { id: 1, name: "Match Winner" }, { id: 6, name: "Goals Over/Under First Half" },
     { id: 8, name: "Different Name" }, { id: 299, name: null },

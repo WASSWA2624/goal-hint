@@ -10,7 +10,7 @@ import { createMatchFeedService, type MatchFeedReadContext } from "./feed-servic
 import { createMatchFeedSummaryService } from "./feed-summary-service.ts";
 import { publicOddsEnabled } from "../odds/public-odds-policy.ts";
 
-const publicMatchProjection = { publishedOnly: false, publishedForecasts: true } as const;
+export const publicMatchProjection = { publishedOnly: false, publishedForecasts: true } as const;
 
 /** Pages and HTTP reads share the same stored projection, scope and cache. */
 export function readPublicMatchFeed(parameters: FeedParameters, context: MatchFeedReadContext = {}, clock?: Clock) {

@@ -12,7 +12,7 @@ test("startup validates both page and unrestricted summaries with one captured c
     calls.push({ query: parameters.toString(), locale: context.locale, at: clock.now() });
     current += 90_000;
     return { total: 3, performance: counts };
-  });
+  }, "only");
   assert.equal(clockReads, 1);
   assert.deepEqual(calls, [{ query: "picks=only", locale: "en", at }, { query: "", locale: "en", at }]);
 });
@@ -22,7 +22,7 @@ test("equivalent page and API SQL scopes warm only once", async () => {
   await warmDemoFeedSummaries({ now: () => at }, [39], async parameters => {
     calls.push(parameters.toString());
     return { total: 3, performance: counts };
-  }, "all");
+  });
   assert.deepEqual(calls, ["picks=all"]);
 });
 

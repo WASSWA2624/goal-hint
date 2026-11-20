@@ -68,6 +68,7 @@ export async function createLiveAiRuntime(options: {
   fallbackReserveMs: number; fetcher?: typeof fetch; clock?: Clock;
   /** Frozen into every AI plan; live startup permits provider-first until verified promotion evidence is bound. */
   sourceOrder?: ForecastSourceOrder;
+  coordinated?: boolean;
 }) {
   const { policy, model, verify, refs } = options, clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const authorize = () => assertOperationAllowed(policy, "ai", verify);
@@ -82,7 +83,7 @@ export async function createLiveAiRuntime(options: {
   const work = new Map<string, AiIntent>();
   const accepted = new Map<string, Extract<PredictorResult, { status: "candidate" }>>();
   const transport = createOpenAiBinding({ model, clock, ...(options.fetcher ? { fetcher: options.fetcher } : {}) });
-  const allocation = liveAiAllocation(policy, model, clock.now(), options.fallbackReserveMs), accountId = liveAiAccountId(policy);
+  const allocation = liveAiAllocation(policy, model, clock.now(), options.fallbackReserveMs, options.coordinated), accountId = liveAiAccountId(policy);
   const billingMode = policy.choices.budgets.aiBillingMode;
   function period(at: number): CostPeriodPolicy {
     const window = liveAiAccountingWindow(utcInstantFromEpochMilliseconds(at));
@@ -174,7 +175,7 @@ export async function createLiveAiRuntime(options: {
     }
   return Object.freeze({ model, models, costs,
     configure(member: RefreshMember, sources: readonly import("../evidence/evidence-contract.ts").EvidenceSource[]) {
-      return liveAiRefreshPlan(member, refs, policy, model, sources, options.pacing, options.sourceOrder ?? "ai-first");
+      return liveAiRefreshPlan(member, refs, policy, model, sources, options.pacing, options.sourceOrder ?? "ai-first", options.coordinated);
     },
     predictor: { async predict(...args: Parameters<typeof predictor.predict>) { await initialize(); return predictor.predict(...args); } },
     verifyAi,

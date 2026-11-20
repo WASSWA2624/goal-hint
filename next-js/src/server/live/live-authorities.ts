@@ -223,7 +223,8 @@ export function createLiveAuthorities(options: Readonly<{
           policy: liveAiEvidencePolicy(refs), cachedSources: plan.evidence.cachedSources } } :
           options.aiModel === undefined ? null : { ...liveAiRefreshPlan(member, refs, policy, options.aiModel,
             plan.evidence.cachedSources as import("../evidence/evidence-contract.ts").EvidenceSource[], options.refreshPacing,
-            plan.sourceOrder ?? options.sourceOrder ?? "ai-first"), ...frozenPolicy };
+            (plan.recommendationPolicy === undefined ? plan.sourceOrder : options.sourceOrder) ?? "ai-first",
+            plan.sourceCascade === QUALIFIED_FORECAST_CASCADE), ...frozenPolicy };
         if (reviewed === null) return false;
         if (plan.sourceCascade === QUALIFIED_FORECAST_CASCADE) return options.coordinatedForecasts === true &&
           plan.recommendationPolicy?.version === evidenceFirstRecommendationPolicy.version && plan.sourceOrder !== "provider-first" &&

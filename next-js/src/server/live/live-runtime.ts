@@ -452,7 +452,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     const refreshStore = createMysqlRefreshStore(database, queue);
     if (aiModel !== null) try { ai = await createLiveAiRuntime({ policy, verify, refs, model: aiModel, database, store: refreshStore,
       evidenceAuthority: authorities.evidence, pacing: workload.pacing, fallbackReserveMs: refreshEnvelopeFor(workload.pacing, true).fallbackReserveMs,
-      sourceOrder,
+      sourceOrder, coordinated,
       ...(overrides.aiFetcher === undefined ? {} : { fetcher: overrides.aiFetcher }) }); } catch { /* Optional AI startup/accounting failure preserves baseline publication. */ }
     let research: Awaited<ReturnType<typeof createLiveResearchRuntime>> | null = null;
     if (ai !== null && aiModel !== null && policy.capabilities.research) try { research = await createLiveResearchRuntime({ policy, verify, refs, model: aiModel,
