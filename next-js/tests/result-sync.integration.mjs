@@ -241,19 +241,25 @@ test('shared result synchronization on isolated genuine MySQL', { timeout: 420_0
         await s.poller.runOnce(); const fixture = await s.fixture(), original = await s.store.result(fixture.id), at = p.now();
         advance(1000); const lease = await s.store.acquire(resultHash('stale-result-owner'), 30_000);
         assert.equal(lease, null); await s.poller.stop(); const owned = await s.store.acquire(resultHash('stale-result-owner'), 30_000);
-        const apply = async (retrievedAt, reason) => {
-          const raw = structuredClone(s.rows[0]); raw.score.fulltime = score(9,9);
+        const apply = async (retrievedAt, reason, status = 'FT') => {
+          const raw = structuredClone(s.rows[0]); raw.score.fulltime = score(9,9); raw.fixture.status.short = status;
           const normalized = normalizeFixture(raw, { retrievedAt, endpoint: '/fixtures', verifyRegulationScore: () => true }); assert.equal(normalized.valid, true);
           const observation = parseLifecycleInput({ fixtureId: fixture.id, fixture: normalized.data, actualStartedAt: null, actor: 'synthetic-stale-sync', evidenceRef: reason });
           const value = { accountId: s.accountId, policyHash: evidenceFingerprint(s.policy), receivedAt: p.now(), channel: 'ids', date: null,
             requestedIds: [fixture.externalId], observations: [observation], error: null, requestsDispatched: 0 };
-          const batch = { id: evidenceFingerprint(value), ...value }; await s.store.save(owned, batch); await s.store.apply(owned, batch);
+          const batch = { id: evidenceFingerprint(value), ...value }; await s.store.save(owned, batch); return s.store.apply(owned, batch);
         };
         await apply(at-1, 'synthetic-stale'); assert.equal((await s.store.result(fixture.id)).result.id, original.result.id);
         await apply(at, 'synthetic-conflict'); const latest = await s.store.result(fixture.id);
         assert.equal(latest.result.id, original.result.id); assert.equal(latest.state.lastSyncAt.getTime(), at);
         assert.equal(latest.state.delayReason, 'same-time-conflicting-evidence');
-        assert.deepEqual(await counts(fixture.id), { results: 1, observations: 3, events: 1 }); await s.store.release(owned);
+        assert.deepEqual(await apply(p.now(), 'synthetic-new-conflict', '1H'), []);
+        const conflicted = await s.store.result(fixture.id);
+        assert.equal(conflicted.state.lastSyncAt.getTime(), p.now());
+        assert.equal(conflicted.state.lastVerifiedAt.getTime(), at);
+        assert.equal(conflicted.result.id, original.result.id);
+        assert.equal((await s.fixture()).status, 'finished-regulation');
+        assert.deepEqual(await counts(fixture.id), { results: 1, observations: 4, events: 1 }); await s.store.release(owned);
       });
       await t.test('an in-flight response from an expired owner cannot persist after takeover', async () => {
         const s = await seed([catalogFixture(10015, { kickoff: new Date(p.now()+3_600_000).toISOString() })]);
@@ -311,6 +317,20 @@ test('shared result synchronization on isolated genuine MySQL', { timeout: 420_0
         assert.equal((await catalog.fixtureByProviderId(fixture.externalId)).status, 'live');
         const exhausted = (await s.store.result(fixture.id)).state;
         assert.equal(exhausted.nextCheckAt, null); assert.equal(exhausted.delayReason, 'polling-horizon-exhausted');
+      });
+      await t.test('old provider finals without regulation evidence keep a daily verified-result recheck', async () => {
+        const day = 86_400_000, at = p.now();
+        const s = await seed([catalogFixture(10023, { kickoff: new Date(at - 70 * day).toISOString(), status: 'AET',
+          score: { fulltime: score(null, null), extratime: score(2, 1) } })], { coordinated: true });
+        s.source.state.respond = (url) => catalogResponse(url, url.searchParams.has('ids') || url.searchParams.has('id') ? s.rows : []);
+        assert.equal(await s.poller.runOnce(), true);
+        assert.equal(channels(s.source, 'ids').length, 1);
+        const fixture = await s.fixture(), outstanding = await s.store.result(fixture.id);
+        assert.equal(fixture.status, 'finished-extra-time');
+        assert.equal(outstanding.result.regulation.verified, false);
+        assert.equal(outstanding.state.lastVerifiedAt.getTime(), at);
+        assert.equal(outstanding.state.nextCheckAt.getTime(), at + day);
+        assert.equal(outstanding.state.delayReason, 'unresolved-investigation');
       });
       await t.test('polling early play/corrections preserves manifests, refresh jobs and locked forecasts', async () => {
         const state = await p.setup(3000), manifest = evidenceFingerprint(state.selected.manifest);

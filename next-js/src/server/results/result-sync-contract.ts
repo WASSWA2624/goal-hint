@@ -46,8 +46,12 @@ export type TrackedResultFixture = Readonly<{
   kickoffAt: number | null; status: string; retrievedAt: number;
   firstTrackedAt: number; firstFinalAt: number | null;
   lastSyncAt: number | null; nextCheckAt: number | null; failures: number;
+  lastVerifiedAt?: number | null;
   delayReason?: string | null;
   finalConfirmed?: boolean;
+}>;
+export type AppliedResultObservation = Readonly<{
+  fixtureId: string; kickoffAt: number | null; status: string; retrievedAt: number; firstFinalAt: number | null; finalConfirmed: boolean;
 }>;
 export type ResultSyncBatch = Readonly<{
   id: string; accountId: string; policyHash: string; receivedAt: UtcInstant;
@@ -65,7 +69,7 @@ export type ResultSyncStore = Readonly<{
   tracked(policy: ResultSyncPolicy, now: UtcInstant): Promise<readonly TrackedResultFixture[]>;
   pending(lease: PollLease): Promise<readonly ResultSyncBatch[]>;
   save(lease: PollLease, batch: ResultSyncBatch): Promise<void>;
-  apply(lease: PollLease, batch: ResultSyncBatch): Promise<void>;
+  apply(lease: PollLease, batch: ResultSyncBatch): Promise<readonly AppliedResultObservation[]>;
   schedule(lease: PollLease, channel: "live" | "date", nextAt: number, failures: number, error: string | null): Promise<void>;
   attempts(lease: PollLease, entries: readonly Readonly<{ fixtureId: string; nextAt: number | null; failures: number; error: string | null }>[]): Promise<void>;
 }>;

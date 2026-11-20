@@ -77,18 +77,15 @@ function liveProgressOrder(): Prisma.Sql {
 /** The effective display permission keeps the SQL join and filter in sync with the record prices. */
 export function feedSql(query: FeedQuery, range: ReportingDateRange, competitionIds: readonly number[],
   providerOdds: boolean = publicPolicy.features.providerOdds, search: FeedSearch | null = null, completedOnly = false, publishedOnly = false,
-  historyBefore: UtcInstant | null = null) {
+  historyBefore: UtcInstant | null = null, publishedForecasts = publishedOnly) {
   const markets = Prisma.join(query.markets);
   const hasDecision = Prisma.sql`rp.feedRecommendation IS NOT NULL`;
   const recommendedFamily = Prisma.sql`NULLIF(JSON_UNQUOTE(JSON_EXTRACT(rp.feedRecommendation,'$.family')),'null')`;
-  const preferRecommendation = !publishedOnly;
+  const preferRecommendation = !publishedForecasts;
   const useRecommendation = Prisma.sql`${recommendedFamily} IN (${markets})`;
   const chosen = Prisma.sql`(${hasDecision} AND m.family=${recommendedFamily})`;
-  const forecastAvailable = Prisma.sql`m.available=TRUE`;
-  const recommendationAvailable = query.markets.length === publicPolicy.markets.length || publishedOnly
-    ? Prisma.sql`(${forecastAvailable} AND (NOT (${hasDecision}) OR ${useRecommendation}))` : forecastAvailable;
-  // The public forecast view grades the displayed published pick at any probability.
-  const pickAvailable = preferRecommendation ? recommendationAvailable : forecastAvailable;
+  // An explicit recommendation abstention can still have a published market prediction.
+  const pickAvailable = Prisma.sql`m.available=TRUE`;
   const pickProbability = preferRecommendation ? Prisma.sql`CASE WHEN ${chosen} THEN (JSON_UNQUOTE(JSON_EXTRACT(rp.feedRecommendation,
     '$.probability'))+0e0) ELSE m.selectedProbability END` : Prisma.sql`m.selectedProbability`;
   const pickSelection = preferRecommendation ? Prisma.sql`CASE WHEN ${chosen} THEN JSON_UNQUOTE(JSON_EXTRACT(rp.feedRecommendation,

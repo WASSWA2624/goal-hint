@@ -13,7 +13,7 @@ import type { createScheduleLifecycleService } from "../predictions/lifecycle-se
 import { lifecycleObservationSchema } from "../predictions/lifecycle-input.ts";
 import { lifecycleContentHash } from "../predictions/lifecycle-policy.ts";
 import { coordinatedResultDefaults, finalStatus, missingFromLiveFeed, requiresResultInvestigation, resultCadence, unresolvedInvestigation } from "./result-sync-policy.ts";
-import { ResultSyncError, resultSyncFail, type PollLease, type ResultSyncStore } from "./result-sync-contract.ts";
+import { ResultSyncError, resultSyncFail, type AppliedResultObservation, type PollLease, type ResultSyncStore } from "./result-sync-contract.ts";
 import { storedFixtureResult } from "./result-read.ts";
 import { fixtureResultValue, insertFixtureResult } from "./result-write.ts";
 
@@ -21,7 +21,8 @@ type Tx = Prisma.TransactionClient;
 type TrackedFixtureRow = Readonly<{
   fixtureId: string; externalId: bigint; competitionId: bigint; season: number; kickoff: Date | null;
   status: string; retrievedAt: Date; createdAt: Date; regulationVerifiedAt: Date | null;
-  firstTrackedAt: Date | null; firstFinalAt: Date | null; lastSyncAt: Date | null; nextCheckAt: Date | null; failures: bigint | number | null;
+  firstTrackedAt: Date | null; firstFinalAt: Date | null; lastSyncAt: Date | null; lastVerifiedAt: Date | null;
+  nextCheckAt: Date | null; failures: bigint | number | null;
   delayReason: string | null;
 }>;
 const batchSchema = z.strictObject({ id: historyHash, accountId: historyHash, policyHash: historyHash,
@@ -33,6 +34,8 @@ const batchSchema = z.strictObject({ id: historyHash, accountId: historyHash, po
   new Set(batch.missingLiveFixtures.map(row => row.fixtureId)).size === batch.missingLiveFixtures.length);
 const now = async (tx: Tx) => utcInstantFromEpochMilliseconds((await tx.$queryRaw<{ at: Date }[]>`SELECT UTC_TIMESTAMP(3) AS at`)[0]!.at.getTime());
 const epoch = new Date(0);
+const confirmedFinal = (status: string, verifiedAt: Date | null) => finalStatus(status) &&
+  (!isPlayedFinalStatus(status as SettlementStatus) || verifiedAt !== null);
 
 export function createMysqlResultSyncStore(options: Readonly<{
   database: DatabaseRuntime; accountId: string; lifecycle: ReturnType<typeof createScheduleLifecycleService>;
@@ -119,18 +122,19 @@ export function createMysqlResultSyncStore(options: Readonly<{
             SELECT f.id FROM FootballFixture f JOIN coveredSeasons s ON s.id = f.seasonId
             LEFT JOIN FixtureResultState r ON r.fixtureId = f.id
             WHERE ${policy.coordinated === true} AND f.provider = 'api-football'
-              AND f.status NOT IN ('finished-regulation','finished-extra-time','finished-penalties','canceled','abandoned','awarded')
+              AND (f.status NOT IN ('finished-regulation','finished-extra-time','finished-penalties','canceled','abandoned','awarded')
+                OR f.status IN ('finished-regulation','finished-extra-time','finished-penalties') AND f.regulationVerifiedAt IS NULL)
               AND COALESCE(f.kickoff,r.firstTrackedAt,f.createdAt) <= ${current}
               AND (r.nextCheckAt IS NULL OR r.nextCheckAt <= ${current})
               AND (r.delayReason = ${missingFromLiveFeed} OR COALESCE(f.kickoff,r.firstTrackedAt,f.createdAt) <= ${older}
-                AND COALESCE(r.delayReason,'') <> ${unresolvedInvestigation} OR GREATEST(f.retrievedAt, COALESCE(r.lastSyncAt, ${epoch})) <=
+                AND COALESCE(r.delayReason,'') <> ${unresolvedInvestigation} OR GREATEST(f.retrievedAt, COALESCE(r.lastVerifiedAt, ${epoch})) <=
                 CASE WHEN f.status = 'live' AND COALESCE(f.kickoff,r.firstTrackedAt,f.createdAt) >= ${liveWindow} THEN ${liveDue}
                   WHEN COALESCE(f.kickoff,r.firstTrackedAt,f.createdAt) > ${older} THEN ${recentDue} ELSE ${oldDue} END)
             ORDER BY (r.delayReason = ${missingFromLiveFeed}) DESC, COALESCE(r.nextCheckAt, ${epoch}), f.retrievedAt, f.id
             LIMIT ${policy.maxBatchesPerTick * 20}
           )
           SELECT f.id AS fixtureId, f.externalId, s.competitionId, s.year AS season, f.kickoff, f.status, f.retrievedAt,
-            f.createdAt, f.regulationVerifiedAt, r.firstTrackedAt, r.firstFinalAt, r.lastSyncAt, r.nextCheckAt, r.failures, r.delayReason
+            f.createdAt, f.regulationVerifiedAt, r.firstTrackedAt, r.firstFinalAt, r.lastSyncAt, r.lastVerifiedAt, r.nextCheckAt, r.failures, r.delayReason
           FROM FootballFixture f JOIN coveredSeasons s ON s.id = f.seasonId
           LEFT JOIN FixtureResultState r ON r.fixtureId = f.id
           WHERE f.provider = 'api-football' AND (
@@ -156,9 +160,10 @@ export function createMysqlResultSyncStore(options: Readonly<{
             fixture.firstFinalAt?.getTime() ?? (finalStatus(fixture.status) ? fixture.retrievedAt.getTime() : null),
           lastSyncAt: fixture.lastSyncAt?.getTime() ?? null,
           nextCheckAt: fixture.firstTrackedAt === null ? 0 : fixture.nextCheckAt?.getTime() ?? null,
-          failures: Number(fixture.failures ?? 0), ...(policy.coordinated ? { delayReason: fixture.delayReason } : {}),
-          ...(policy.skipConfirmedFinals ? { finalConfirmed: finalStatus(fixture.status) &&
-            (!isPlayedFinalStatus(fixture.status as SettlementStatus) || fixture.regulationVerifiedAt !== null) } : {}) })));
+          failures: Number(fixture.failures ?? 0), ...(policy.coordinated ? {
+            delayReason: fixture.delayReason, lastVerifiedAt: fixture.lastVerifiedAt?.getTime() ?? null,
+          } : {}),
+          ...(policy.coordinated || policy.skipConfirmedFinals ? { finalConfirmed: confirmedFinal(fixture.status, fixture.regulationVerifiedAt) } : {}) })));
       });
     },
     pending(lease) {
@@ -181,14 +186,15 @@ export function createMysqlResultSyncStore(options: Readonly<{
       // Recover from the sealed source, never caller-modified normalized data.
       const batch = await transaction(async (tx) => { await locked(tx, lease); return sealedBatch(tx, input.id); });
       const renewalMs = await transaction(async (tx) => { const { row, at } = await locked(tx, lease); return row.leaseUntil.getTime() - at; });
+      const verified: AppliedResultObservation[] = [];
       for (const observation of batch.observations) {
-        await transaction(async (tx) => {
+        const projection = await transaction(async (tx) => {
           const { at, row } = await locked(tx, lease);
           if (row.leaseUntil.getTime() - at < renewalMs / 2)
             await tx.resultPollerLease.update({ where: { accountId }, data: { leaseUntil: new Date(at + renewalMs) } });
-          await history.withFixtureTransaction(observation.fixtureId, async (_writer, tx) => {
+          const saved = await history.withFixtureTransaction(observation.fixtureId, async (_writer, tx): Promise<AppliedResultObservation | null> => {
             const id = evidenceFingerprint({ batchId: batch.id, fixtureId: observation.fixtureId });
-            if (await tx.resultProviderObservation.findUnique({ where: { id } })) return;
+            if (await tx.resultProviderObservation.findUnique({ where: { id } })) return null;
             const before = await tx.footballFixture.findUniqueOrThrow({ where: { id: observation.fixtureId }, select: { status: true, retrievedAt: true } });
             const receipt = await lifecycle.observeProjection(observation, tx);
             async function record(outcome: string, resultId: string | null, reason?: string) {
@@ -200,7 +206,7 @@ export function createMysqlResultSyncStore(options: Readonly<{
             }
             if (receipt.outcome === "conflict" && receipt.reason === "identity-unresolved") {
               await record("conflict", null, receipt.reason);
-              return;
+              return null;
             }
             const fixture = await tx.footballFixture.findUniqueOrThrow({ where: { id: observation.fixtureId } });
             const state = await tx.fixtureResultState.findUnique({ where: { fixtureId: fixture.id } });
@@ -227,17 +233,22 @@ export function createMysqlResultSyncStore(options: Readonly<{
             const firstFinalAt = batch.coordinated && accepted && !finalStatus(fixture.status) ? null :
               state?.firstFinalAt ?? (finalStatus(before.status) ? before.retrievedAt
               : accepted && finalStatus(fixture.status) ? new Date(observation.retrievedAt) : null);
-            const investigate = batch.coordinated && requiresResultInvestigation({ kickoffAt: fixture.kickoff?.getTime() ?? null,
+            const kickoffAt = fixture.kickoff?.getTime() ?? null, finalConfirmed = confirmedFinal(fixture.status, fixture.regulationVerifiedAt);
+            const investigate = batch.coordinated && requiresResultInvestigation({ kickoffAt, finalConfirmed,
               firstTrackedAt: state?.firstTrackedAt.getTime() ?? fixture.createdAt.getTime(), firstFinalAt: firstFinalAt?.getTime() ?? null }, at);
             const data = { resultId, lastSyncAt, firstFinalAt,
-              ...(accepted ? { failures: 0, delayReason: investigate ? unresolvedInvestigation : null } :
+              ...(accepted ? { lastVerifiedAt: new Date(observation.retrievedAt), failures: 0, delayReason: investigate ? unresolvedInvestigation : null } :
                 { delayReason: outcome === "stale" ? "older-observation" : receipt.reason }) };
             await tx.fixtureResultState.upsert({ where: { fixtureId: fixture.id },
               create: { fixtureId: fixture.id, firstTrackedAt: new Date(at), nextCheckAt: epoch, ...data }, update: data });
             await record(outcome, resultId);
+            return accepted ? { fixtureId: fixture.id, kickoffAt, status: fixture.status, retrievedAt: observation.retrievedAt,
+              firstFinalAt: firstFinalAt?.getTime() ?? null, finalConfirmed } : null;
           }, tx);
           await locked(tx, lease);
+          return saved;
         });
+        if (projection) verified.push(projection);
       }
       await transaction(async (tx) => { const { at } = await locked(tx, lease);
         if (batch.missingLiveFixtures?.length) {
@@ -251,6 +262,7 @@ export function createMysqlResultSyncStore(options: Readonly<{
               FixtureResultState.nextCheckAt > ${observedAt}, FixtureResultState.nextCheckAt, ${observedAt}), delayReason = ${missingFromLiveFeed}`;
         }
         await tx.resultSyncBatch.update({ where: { id: batch.id }, data: { completedAt: new Date(at) } }); });
+      return freezeEvidence(verified);
     },
     schedule(lease, channel, nextAt, failures, error) {
       return transaction(async (tx) => { await locked(tx, lease);

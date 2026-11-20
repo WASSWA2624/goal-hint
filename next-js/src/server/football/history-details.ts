@@ -203,6 +203,7 @@ export function createFootballHistoryDetails(options: Readonly<{
   batchSize?: number;
   now(): UtcInstant;
   providerDayEndsAt(): number | null;
+  onFinalDetails?(input: Readonly<{ fixtureId: string; detail: NormalizedFixtureMatchDetails; checkedAt: number }>): Promise<unknown>;
 }>) {
   const { database, adapter, now, providerDayEndsAt } = options;
   const approved = new Set(options.competitionIds), batchSize = options.batchSize ?? 1;
@@ -258,9 +259,16 @@ export function createFootballHistoryDetails(options: Readonly<{
         const nextCheckAt = done || observations >= 3 ? null : new Date(checkedAt + (accepted === null ? 15 * MINUTE : observations * DAY));
         await tx.footballHistoryDetailState.update({ where: { fixtureId: row.fixtureId }, data: { checkedAt: new Date(checkedAt), nextCheckAt,
           state: { version: 1, attempts: item.previous.attempts + requests, observations, reservation: null, sections } } });
-        return { received: Boolean(detail), saved, done };
+        return { detail, saved, done };
       }, { isolationLevel: "ReadCommitted", timeout: 15_000 });
-      if (result) { received += Number(result.received); written += Number(result.saved); completed += Number(result.done); }
+      if (result) {
+        received += Number(Boolean(result.detail)); written += Number(result.saved); completed += Number(result.done);
+        // Optional settlement evidence has its own fixture transaction. A
+        // projection failure cannot roll back the authoritative detail import.
+        if (options.onFinalDetails && result.detail) {
+          try { await options.onFinalDetails({ fixtureId: item.target.fixtureId, detail: result.detail, checkedAt }); } catch { /* evidence remains unavailable */ }
+        }
+      }
     }
     return { requested: claimed.length, received, written, completed, deferred: claimed.length - completed, requests };
   }

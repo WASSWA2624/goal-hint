@@ -42,6 +42,17 @@ test('counts reconcile distinct sources, void, unavailable and pending without a
   assert.equal(cell(data).metrics.hitRate, null); assert.equal(cell(data).metrics.state, 'unavailable');
   assert.equal(data.policy.publicClaimAuthorized, false); assert.equal(data.policy.provisional, true);
 });
+test('resolved-pick hit rate excludes pending, void and unavailable fixtures and keeps family samples separate', () => {
+  const data = report([performanceRecord(), performanceRecord({ score: [0, 1] }), performanceRecord({ score: null }),
+    performanceRecord({ state: 'void' }), performanceRecord({ state: 'open' })], performanceProtocol());
+  const result = cell(data);
+  assert.equal(data.cohort.fixtureCount, 5);
+  assert.equal(result.coverage.total, 5);
+  assert.equal(result.metrics.denominator, 2);
+  assert.equal(result.metrics.hitRate, 0.5);
+  assert.equal(cell(data, 'double-chance').metrics.denominator, 2);
+  assert.equal(cell(data, 'total-goals').metrics.denominator, 2);
+});
 test('full precision harness scores, binary double chance and uncertainty match hand calculations', () => {
   const data = report([performanceRecord(), performanceRecord({ score: [0, 1] })], performanceProtocol());
   const mr = cell(data).metrics, dc = cell(data, 'double-chance').metrics;

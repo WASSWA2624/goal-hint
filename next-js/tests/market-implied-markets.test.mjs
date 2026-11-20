@@ -100,12 +100,54 @@ test("event ordering and scorer identity require a complete verified stored even
   assert.equal(settleNonGoalSelection(definition, "away", facts).status, "pending");
   facts.evidence.events[0].complete = true; facts.evidence.events[0].entries = [];
   assert.equal(settleNonGoalSelection(definition, "none", facts).status, "correct");
-  const scorer = nonGoalEventMarket("goals", "any", {}, 101), scored = context(scorer, 0, 0);
+  const scorer = nonGoalEventMarket("goals", "any", { participationRequirement: "appeared-in-period" }, 101), scored = context(scorer, 0, 0);
   scored.evidence.counts = []; scored.evidence.events = [{ ...facts.evidence.events[0], metric: "goals", countingRule: scorer.countingRule,
     entries: [{ sequence: 1, team: "home", playerId: null, minute: 50, extra: null }] }];
+  scored.evidence.participation = [{ playerId: 101, team: "home", period: "full-time", scope: "regulation-including-stoppage-time",
+    verified: true, appeared: true, started: null }];
   assert.equal(settleNonGoalSelection(scorer, "no", scored).reason, "missing-player-identity");
   scored.evidence.events[0].entries[0].playerId = 101;
   assert.equal(settleNonGoalSelection(scorer, "yes", scored).status, "correct");
+});
+
+test("settlement separates unavailable participation, verified no appearance and reviewed starting requirements", () => {
+  const period = "half-time", scope = "regulation-including-stoppage-time", playerId = 101;
+  const scorer = nonGoalEventMarket("goals", "first", { period, participationRequirement: "appeared-in-period" }, playerId);
+  const starter = nonGoalEventMarket("goals", "first", { period, participationRequirement: "started-period" }, playerId);
+  const legacy = nonGoalEventMarket("goals", "first", { period }, playerId);
+  assert.notEqual(scorer.key, starter.key); assert.notEqual(scorer.key, legacy.key);
+  const facts = context(scorer, 0, 0, { status: "finished-penalties" });
+  facts.evidence.counts = [];
+  facts.evidence.events = [{ metric: "goals", period, scope, countingRule: scorer.countingRule,
+    verified: true, complete: true, entries: [] }];
+  assert.deepEqual(settleNonGoalSelection(scorer, "yes", facts), { status: "pending", reason: "missing-verified-participation" });
+  assert.equal(settleNonGoalSelection(legacy, "yes", facts).reason, "unverified-participation-rule");
+  const known = { playerId, period, scope, team: "home", verified: true, appeared: false, started: false };
+  facts.evidence.participation = [known];
+  assert.deepEqual(settleNonGoalSelection(scorer, "yes", facts), { status: "void", reason: "player-did-not-participate" });
+  facts.evidence.events[0].entries = [{ sequence: 1, team: "home", playerId, minute: 45, extra: 4 }];
+  assert.equal(settleNonGoalSelection(scorer, "yes", facts).reason, "conflicting-player-participation");
+  known.appeared = true;
+  assert.equal(settleNonGoalSelection(scorer, "yes", facts).status, "correct");
+  assert.deepEqual(settleNonGoalSelection(starter, "yes", facts), { status: "void", reason: "player-did-not-start-period" });
+  known.started = null;
+  assert.equal(settleNonGoalSelection(starter, "yes", facts).reason, "missing-verified-participation");
+});
+
+test("only authoritative event validity can overturn a period event, and stoppage time stays in regulation", () => {
+  const definition = nonGoalEventTeamMarket("goals", "first"), facts = context(definition, 0, 0, { status: "finished-extra-time" });
+  const first = { sequence: 1, team: "home", playerId: 101, minute: 45, extra: 5, validity: "confirmed" };
+  const next = { sequence: 2, team: "away", playerId: 102, minute: 90, extra: 3, validity: "confirmed" };
+  facts.evidence.counts = [];
+  facts.evidence.events = [{ metric: "goals", period: "full-time", scope: "regulation-including-stoppage-time",
+    countingRule: definition.countingRule, verified: true, complete: true, entries: [first, next] }];
+  assert.equal(settleNonGoalSelection(definition, "home", facts).status, "correct");
+  first.validity = "unresolved";
+  assert.deepEqual(settleNonGoalSelection(definition, "home", facts), { status: "pending", reason: "unresolved-event-decision" });
+  first.validity = "overturned";
+  assert.equal(settleNonGoalSelection(definition, "away", facts).status, "correct");
+  next.minute = 104;
+  assert.deepEqual(settleNonGoalSelection(definition, "away", facts), { status: "pending", reason: "conflicting-event-period" });
 });
 
 test("market-implied performance excludes AI, unavailable, pending and ineligible rows and keeps payouts separate", () => {

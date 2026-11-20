@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseUtcInstant } from "../src/domain/calendar.ts";
-import { coordinatedResultDefaults, liveDiscoveryInterval, missingFromLiveFeed, pollingInterval, requiresResultInvestigation,
+import { coordinatedResultDefaults, finalStatus, liveDiscoveryInterval, missingFromLiveFeed, pollingInterval, requiresResultInvestigation,
   sharedLiveFixtures } from "../src/server/results/result-sync-policy.ts";
 import { createResultSyncService } from "../src/server/results/result-sync-service.ts";
 import { catalogFixture, catalogResponse } from "./helpers/catalog-fixtures.mjs";
@@ -14,7 +14,7 @@ const fixture = (overrides = {}) => ({ fixtureId: "6998da8a-27b0-4586-910d-513c6
   competitionId: 39, season: 2026, kickoffAt: at - 10 * minute, status: "live", retrievedAt: at,
   firstTrackedAt: at - hour, firstFinalAt: null, lastSyncAt: at, nextCheckAt: null, failures: 0, delayReason: null, ...overrides });
 
-function setup(rows, respond, discovery, firstLiveAt = 0) {
+function setup(rows, respond, discovery, firstLiveAt = 0, accept = () => true) {
   const clock = { now: () => at }, provider = resultProvider(clock, { accountId, respond }), events = [];
   let owned;
   const apply = async (_lease, batch) => {
@@ -23,6 +23,10 @@ function setup(rows, respond, discovery, firstLiveAt = 0) {
       const index = rows.findIndex(row => row.fixtureId === fixtureId);
       rows[index] = { ...rows[index], delayReason: missingFromLiveFeed, nextCheckAt: at };
     }
+    return batch.observations.filter(accept).map(({ fixtureId, kickoffAt, status, retrievedAt, regulationScore }) => ({
+      fixtureId, kickoffAt, status, retrievedAt, firstFinalAt: finalStatus(status) ? retrievedAt : null,
+      finalConfirmed: finalStatus(status) && regulationScore?.verified === true,
+    }));
   };
   const store = {
     async acquire(ownerId, ms) { return owned = { accountId, ownerId, fence: 1n, until: at + ms, nextLiveAt: firstLiveAt,
@@ -96,4 +100,22 @@ test("overdue fixtures stay queued hourly through 48 hours and daily thereafter"
   assert.equal(requiresResultInvestigation(investigation, at), true);
   assert.equal(pollingInterval(investigation, policy, at), 24 * hour);
   assert.equal(pollingInterval(longUnresolved, policy, at), 24 * hour);
+  const finalWithoutRegulation = { ...longUnresolved, status: "finished-extra-time", firstFinalAt: at - 65 * 24 * hour, finalConfirmed: false };
+  assert.equal(pollingInterval(finalWithoutRegulation, policy, at), 24 * hour);
+  assert.equal(requiresResultInvestigation(finalWithoutRegulation, at), true);
+  assert.equal(pollingInterval({ ...finalWithoutRegulation, finalConfirmed: true }, policy, at), null);
+});
+
+test("an unapplied provider status cannot refresh a fixture or shorten an overdue retry", async () => {
+  const known = fixture({ status: "scheduled", kickoffAt: at - 40 * hour, retrievedAt: at - hour,
+    lastSyncAt: at, lastVerifiedAt: at - hour });
+  const syntheticFinal = catalogFixture(known.externalId, { kickoff: new Date(known.kickoffAt).toISOString(), status: "FT" });
+  const state = setup([known], url => catalogResponse(url, [syntheticFinal]), undefined, at + hour, () => false);
+  assert.equal(await state.service.runOnce(), true);
+  assert.equal(state.network.length, 1, "an attempted clock may not postpone the verified-status recheck");
+  const batch = state.events.find(([kind]) => kind === "save")[1];
+  assert.equal(batch.observations[0].status, "finished-regulation");
+  assert.equal(known.status, "scheduled");
+  assert.deepEqual(state.events.at(-1), ["attempts", [{ fixtureId: known.fixtureId, nextAt: at + hour, failures: 1,
+    error: "unverified-provider-fixture" }]]);
 });

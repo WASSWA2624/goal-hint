@@ -29,13 +29,15 @@ export function rankFixtureOutcomes(markets: readonly Readonly<{ market: Accepte
     const entry = markets.find((item) => item.market.family === family);
     if (!entry) continue;
     const { market: { source } } = entry;
-    const selection = recommended?.selection ?? entry.market.selection;
-    const probability = recommended?.probability ?? entry.market.selectedProbability;
     const confidence = recommended?.confidence ?? entry.confidence;
-    outcomes.push({ key: family, family, label: messages.text(`market.family.${family}`), code: null, selection,
-      selectionLabel: predictionText(messages, selection), probability, source,
-      odds: bookmakerMarketPrice(prices, family, selection) ??
-        (observedOdds?.kind === "pre-match" ? marketOddsPrice(observedOdds, family, selection) : null), ...(confidence ? { confidence } : {}) });
+    const tied = recommended ? [[recommended.selection, recommended.probability] as const]
+      : Object.entries(entry.market.probabilities).filter(([, probability]) => probability === entry.market.selectedProbability);
+    for (const [selection, probability] of tied) {
+      outcomes.push({ key: family, family, label: messages.text(`market.family.${family}`), code: null, selection,
+        selectionLabel: predictionText(messages, selection), probability, source,
+        odds: bookmakerMarketPrice(prices, family, selection) ??
+          (observedOdds?.kind === "pre-match" ? marketOddsPrice(observedOdds, family, selection) : null), ...(confidence ? { confidence } : {}) });
+    }
   }
   for (const market of goalMarkets) {
     if (market.source === "market-implied" || market.key === "goal:full-time:totals:total:2.5:binary") continue;

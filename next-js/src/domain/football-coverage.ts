@@ -10,10 +10,29 @@ export const historyImportCoverage = z.strictObject({ imported: z.number().int()
     nextScope: z.strictObject({ competitionId: z.number().int().positive(), season: z.number().int().positive(),
       round: z.string().exactOptional() }).nullable() }).exactOptional() });
 
+export type FootballWorkerHealth = Readonly<{
+  at: number; workerWindowHours: number;
+  lanes: readonly Readonly<{ type: string; ready: number; active: number; future: number; stalled: number; queueLagMs: number;
+    nextRunAt: number | null; lastSuccessAt: number | null; lastErrorAt: number | null }>[];
+  quota: Readonly<{ periodStartsAt: number; resetAt: number; used: number; remaining: number; dailyLimit: number;
+    providerDailyLimit: number; providerUsage: Readonly<{ observedAt: number; limit: number; remaining: number }> | null;
+    minuteLimit: number; reserve: number; resetPending: boolean }> | null;
+  resultPoller: Readonly<{ leaseUntil: number; nextLiveAt: number; nextDateAt: number; liveFailures: number; dateFailures: number;
+    liveError: string | null; dateError: string | null }> | null;
+  lastCompletedResultAt: number | null; detailsLeaseUntil: number | null;
+}>;
+
 export type FootballCoverage = Readonly<{
   archive: readonly Readonly<{ phase: HistoryImportPhase; status: z.infer<typeof historyImportStatus> | "unreported";
-    coverage: z.infer<typeof historyImportCoverage> | null }>[];
+    coverage: z.infer<typeof historyImportCoverage> | null; checkpointAt?: number | null }>[];
   fixtures: Readonly<{ date: string; receipt: Readonly<{ status: string; receivedCount: number; importedCount: number; rejectedCount: number }> | null;
-    attemptFailed: boolean; stored: number | null; publicScope: number | null; published: number | null }>;
+    attemptFailed: boolean; stored: number | null; publicScope: number | null; published: number | null;
+    discovered?: number | null; discoveryComplete?: boolean; discoveryObservedAt?: number | null; reportedMissingIds?: number | null;
+    forecastPublished?: number | null; predictionReady?: number | null; marketPredictions?: number | null;
+    awaitingData?: number | null; excluded?: number | null;
+    priced?: number | null; observedOdds?: number | null; observedWithoutFreshPrice?: number | null }>;
   odds: readonly Readonly<{ kind: string; status: string; batches: number }>[] | null;
+  sections?: readonly Readonly<{ resource: string; status: string; count: number; lastCheckpointAt: number | null }>[] | null;
+  marketMapping?: Readonly<Record<"pre-match" | "in-play", Readonly<{ checkedAt: number | null; mapped: number; unmapped: number; unsupported: number }> | null>>;
+  workers?: FootballWorkerHealth | null;
 }>;

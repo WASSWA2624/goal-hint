@@ -7,7 +7,7 @@ import { marketSelections } from "../src/domain/markets.ts";
 import { launchOddsMapping } from "../src/domain/odds-markets.ts";
 
 test("market family metadata binds existing identity, temporal evidence and grading", () => {
-  assert.equal(MARKET_REGISTRY_VERSION, "football-market-registry-v2");
+  assert.equal(MARKET_REGISTRY_VERSION, "football-market-registry-v3");
   assert.deepEqual(marketRegistry["double-chance"].selections.keys, goalDoubleChanceMarket().selections.map(({ key }) => key));
   assert.equal(marketRegistry["double-chance"].grading, "overlapping");
   assert.deepEqual(marketRegistry["draw-no-bet"].selections.keys, goalDrawNoBetMarket().selections.map(({ key }) => key));
@@ -43,7 +43,7 @@ test("reviewed settlement rules and missing models remain separately visible", (
   assert.equal(marketRegistry["scoring-in-both-halves"].models.evidence, "verified-first-and-second-half-scores");
   assert.deepEqual(marketRegistry["player-scorer"].parameters.eventOrder, ["any", "first", "last"]);
   assert.equal(marketRegistry["player-scorer"].parameters.player, "required");
-  assert.equal(marketRegistry["player-scorer"].settlement.evidence, "complete-verified-period-events");
+  assert.equal(marketRegistry["player-scorer"].settlement.evidence, "complete-verified-period-events-and-participation");
   assert.equal(marketRegistry["player-scorer"].models.basis, "unsupported");
   assert.equal(marketRegistry["player-totals"].bookmakerEvidence, "unmapped");
   assert.equal(marketRegistry["statistic-totals"].settlement.evidence, "verified-period-counts");

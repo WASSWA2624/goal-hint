@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { evidenceFingerprint, evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
 import { fixtureResultFromRow } from '../src/server/results/result-read.ts';
+import { fixtureResultValue } from '../src/server/results/result-write.ts';
 import { lifecycleObservationSchema } from '../src/server/predictions/lifecycle-input.ts';
 import { lifecycleContentHash } from '../src/server/predictions/lifecycle-policy.ts';
 import { parseLifecycleInput } from '../src/server/predictions/lifecycle-input.ts';
@@ -55,4 +56,18 @@ test('half-time corrections change lifecycle content without affecting old absen
     { ...halfTimeScore, home: 3 }, { ...halfTimeScore, sourceField: 'goals' }]) {
     assert.equal(lifecycleObservationSchema.safeParse({ ...old, halfTimeScore: malformed }).success, false);
   }
+});
+
+test('the result writer binds separately verified first-half evidence to the same fixture, source status and named period', () => {
+  const fixture = { status: 'finished-extra-time', providerStatus: 'AET', elapsedMinutes: 120, regulationHome: 2, regulationAway: 1,
+    regulationEvidenceRef: 'synthetic-regulation', regulationVerifiedAt: new Date(at) };
+  const half = { fixtureId: 101, providerStatus: 'AET', sourceField: 'score.halftime', verified: true,
+    period: 'first-half-including-stoppage-time', home: 1, away: 0 };
+  const observation = { externalFixtureId: 101, reportedGoals: { home: 4, away: 2 }, extraTimeScore: { home: 4, away: 2 },
+    penaltyScore: { home: 1, away: 1 }, halfTimeScore: half };
+  const correct = fixtureResultValue(fixture, observation);
+  assert.deepEqual(correct.halfTime, halfTime());
+  assert.deepEqual([correct.regulation.home, correct.regulation.away], [2, 1]);
+  for (const mutation of [{ fixtureId: 102 }, { providerStatus: 'PEN' }, { sourceField: 'score.fulltime' }, { home: 3 }])
+    assert.equal(fixtureResultValue(fixture, { ...observation, halfTimeScore: { ...half, ...mutation } }).halfTime, undefined);
 });

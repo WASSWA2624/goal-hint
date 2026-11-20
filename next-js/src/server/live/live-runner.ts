@@ -38,6 +38,8 @@ async function pause(ms: number, signal: AbortSignal) { await sleep(ms, undefine
 async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () => void, log: (event: LiveEvent) => void,
   localFootball: boolean) {
   let accountCheckedAt = Date.now(), scheduled = 0, pollerCheckedAt = 0, oddsScheduled = 0, teamCodesScheduled = 0;
+  let heartbeatAt = 0;
+  let quotaObservation: Readonly<{ periodId: string; at: number; remaining: number; used: number }> | null = null;
   let hourlyScheduled: number | null = null, historyScheduled = 0;
   let currentDayScheduled = -1, recoveredForecastSlot = -1;
   let capacity: ReturnType<typeof assessLiveCapacity> | null = null, capacityWarning: string | null = null;
@@ -67,6 +69,7 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
       if (now - pollerCheckedAt >= POLLER_REVIEW_MS) {
         try {
           const counters = await runtime.quota.counters();
+          quotaObservation = counters ? { periodId: counters.day.periodId, at: now, remaining: counters.remaining, used: counters.used } : null;
           if (counters) {
             capacity = assessLiveCapacity(runtime.workload, counters.day.endsAt - now, counters.day.status.dailyLimit,
               counters.remaining, counters.minuteLimit);
@@ -213,6 +216,20 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
         if (settled > 0) log({ event: "settled", fixtures: settled });
       } catch (error) { log({ event: "settlement-failed", reason: reason(error) }); }
       try { await runtime.cache.reconcile(100); } catch (error) { log({ event: "cache-reconcile-failed", reason: reason(error) }); }
+      const finishedAt = Date.now();
+      if (finishedAt - heartbeatAt >= POLLER_REVIEW_MS) {
+        heartbeatAt = finishedAt;
+        const activeDay = runtime.quota.current();
+        const quota = activeDay?.periodId === quotaObservation?.periodId ? quotaObservation : null;
+        const oddsCadence = ODDS_SWEEP_MS * enrichmentMultiplier;
+        log({ event: "football-worker-heartbeat", at: finishedAt, coordinated: runtime.coordinated,
+          maintenanceMs: Math.max(0, finishedAt - now), nextDailySelectionAt: latestSelectionOccurrence(finishedAt) + DAY,
+          nextOddsSweepAt: runtime.odds.enabled ? (Math.floor(finishedAt / oddsCadence) + 1) * oddsCadence : null,
+          resultPollerAttached: owned.poller !== null, liveDetailPollerAttached: owned.details !== null,
+          providerQuotaObservedAt: quota?.at ?? null, providerDayResetAt: activeDay?.endsAt ?? null,
+          quotaUsed: quota?.used ?? null, quotaRemaining: quota?.remaining ?? null,
+          estimatedReserve: quota ? capacity?.reserve ?? null : null });
+      }
       await pause(MAINTENANCE_INTERVAL_MS, signal);
     }
   } finally {

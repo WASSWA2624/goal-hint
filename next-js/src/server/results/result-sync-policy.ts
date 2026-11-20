@@ -59,11 +59,14 @@ export function finalStatus(status: string) {
   return ["finished-regulation", "finished-extra-time", "finished-penalties", "canceled", "abandoned", "awarded"].includes(status);
 }
 /** Horizons stop outbound work; they never remove the stored unresolved result. */
-export function requiresResultInvestigation(fixture: Pick<TrackedResultFixture, "kickoffAt" | "firstTrackedAt" | "firstFinalAt">, now: number) {
-  return fixture.firstFinalAt === null && now - (fixture.kickoffAt ?? fixture.firstTrackedAt) >= coordinatedResultDefaults.investigateAfterMs;
+export function resultAwaitingVerification(fixture: Pick<TrackedResultFixture, "firstFinalAt" | "finalConfirmed">) {
+  return fixture.firstFinalAt === null || fixture.finalConfirmed === false;
+}
+export function requiresResultInvestigation(fixture: Pick<TrackedResultFixture, "kickoffAt" | "firstTrackedAt" | "firstFinalAt" | "finalConfirmed">, now: number) {
+  return resultAwaitingVerification(fixture) && now - (fixture.kickoffAt ?? fixture.firstTrackedAt) >= coordinatedResultDefaults.investigateAfterMs;
 }
 export function pollingInterval(fixture: TrackedResultFixture, policy: ResultSyncPolicy, now: number): number | null {
-  if (fixture.firstFinalAt !== null) {
+  if (fixture.firstFinalAt !== null && (!policy.coordinated || !resultAwaitingVerification(fixture))) {
     if (policy.skipConfirmedFinals && fixture.finalConfirmed) return null;
     return policy.corrections.find((tier) => now - fixture.firstFinalAt! < tier.untilAgeMs)?.intervalMs ?? null;
   }

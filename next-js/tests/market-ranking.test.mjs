@@ -37,6 +37,16 @@ test("rank unrounded probability ahead of price availability and amount", () => 
   assert.equal(bestPublishedFamily(items, [], families), "match-result");
 });
 
+test("upcoming tied outcomes within the same family can use an exact fresh price without changing the stored pick", () => {
+  const market = { family: "match-result", source: "ai", selection: "home-win", selectedProbability: 0.45,
+    probabilities: { "home-win": 0.45, draw: 0.10, "away-win": 0.45 } };
+  const offers = { fixtureId: "fixture", kind: "pre-match", checkedAt: 10, books: [{ bookmakerId: 8,
+    markets: [{ betId: 1, name: "Match Winner", selections: [{ label: "Home", line: null, price: "2" },
+      { label: "Away", line: null, price: "3" }, { label: "Draw", line: null, price: "6" }] }] }] };
+  assert.equal(rankFixtureOutcomes([{ market }], [], offers).selection, "away-win");
+  assert.equal(market.selection, "home-win");
+});
+
 test("the Any default selects the highest-probability available family and keeps its own price", () => {
   const query = parseFeedQuery({}, { today: parseReportingDate("2026-10-14") });
   const items = [...tied, pick("double-chance", "home-or-draw", 0.82), pick("both-teams-to-score", "yes", 0.71)];
@@ -47,8 +57,7 @@ test("the Any default selects the highest-probability available family and keeps
   assert.equal(bestCardFamily({ forecast: { markets: items.filter((entry) => entry.market.family !== family) }, prices }, query.markets), "both-teams-to-score");
   const sql = feedSql(query, validateReportingDateRange("2026-10-14", "2026-10-14", 31), [39], true);
   assert.match(sql.joins.sql, /ORDER BY b.selectedProbability DESC,\s+bp.displayHundredths DESC/u);
-  assert.match(sql.pickAvailable.sql, /rp\.feedRecommendation IS NOT NULL[\s\S]*\$\.family/u,
-    "published fallback markets stay separate from full-market recommendation coverage");
+  assert.equal(sql.pickAvailable.sql, "m.available=TRUE", "an explicit recommendation abstention can still have a published forecast");
   assert.match(sql.joins.sql, /op.marketKey=m.family\s+AND op.selection=CASE WHEN/u);
   assert.doesNotMatch(sql.where.sql, /op.displayHundredths BETWEEN/u);
   assert.doesNotMatch(sql.countJoins.sql, /ROW_NUMBER|FixtureOddsPrice|selectedProbability DESC/u,

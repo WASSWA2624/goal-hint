@@ -31,14 +31,17 @@ export type NonGoalRule = Readonly<z.infer<typeof nonGoalRuleSchema>>;
 const text = z.string().min(1).max(128).refine((value) => value === value.trim() && !/[\p{Cc}<>]/u.test(value));
 const kinds = ["result", "double-chance", "totals", "asian-total", "asian-handicap", "handicap-result", "odd-even", "exact-count",
   "event-any", "event-first", "event-last", "first-event-team", "last-event-team"] as const;
+const participationRequirement = z.enum(["appeared-in-period", "started-period"]);
 const identitySchema = z.strictObject({ metric, period: z.enum(goalMarketPeriods), kind: z.enum(kinds), scope,
   line: quarter.nullable(), playerId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable(),
+  participationRequirement: participationRequirement.optional(),
   countingRule: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,31}$/u) });
 export type NonGoalMarketIdentity = Readonly<z.infer<typeof identitySchema>>;
 
 /** Stable machine identity never depends on translated labels or guessed provider ids. */
 export function nonGoalMarketKey(identity: NonGoalMarketIdentity): string {
-  return `implied:${identity.period}:${identity.metric}:${identity.kind}:${identity.scope}:${identity.line ?? "none"}:${identity.playerId ?? "all"}:${identity.countingRule}`;
+  const base = `implied:${identity.period}:${identity.metric}:${identity.kind}:${identity.scope}:${identity.line ?? "none"}:${identity.playerId ?? "all"}:${identity.countingRule}`;
+  return identity.participationRequirement === undefined ? base : `${base}:${identity.participationRequirement}`;
 }
 
 export const nonGoalMarketDefinitionSchema = z.strictObject({ ...identitySchema.shape,
@@ -77,6 +80,7 @@ export const nonGoalMarketDefinitionSchema = z.strictObject({ ...identitySchema.
   const event = type.startsWith("event-") || type.endsWith("-event-team");
   valid &&= event ? (eventMetrics as readonly string[]).includes(definition.metric) :
     (countMetrics as readonly string[]).includes(definition.metric) && definition.playerId === null;
+  valid &&= definition.participationRequirement === undefined || (definition.playerId !== null && type.startsWith("event-"));
   if (!valid) context.addIssue({ code: "custom", message: "Definitions require a complete known settlement partition and canonical period/metric/team/line identity." });
 });
 export type NonGoalMarketDefinition = Readonly<Omit<z.infer<typeof nonGoalMarketDefinitionSchema>, "selections"> & {
@@ -86,11 +90,13 @@ export type NonGoalMarketDefinition = Readonly<Omit<z.infer<typeof nonGoalMarket
 type Selection = NonGoalMarketDefinition["selections"][number];
 const choice = (key: string, label: string, rule: NonGoalRule): Selection => ({ key, label, rule });
 const labels = { home: "Home", draw: "Draw", away: "Away" } as const;
-type Options = Readonly<{ period?: GoalMarketPeriod; scope?: "total" | "home" | "away"; countingRule?: string }>;
+type Options = Readonly<{ period?: GoalMarketPeriod; scope?: "total" | "home" | "away"; countingRule?: string;
+  participationRequirement?: z.infer<typeof participationRequirement> }>;
 function define(kind: NonGoalMarketIdentity["kind"], metric: NonGoalMarketIdentity["metric"], label: string, code: string,
   selections: Selection[], options: Options = {}, line: number | null = null, playerId: number | null = null): NonGoalMarketDefinition {
   const identity: NonGoalMarketIdentity = { kind, metric, period: options.period ?? "full-time", scope: options.scope ?? "total", line, playerId,
-    countingRule: options.countingRule ?? "provider-reported-count-v1" };
+    countingRule: options.countingRule ?? "provider-reported-count-v1",
+    ...(options.participationRequirement === undefined ? {} : { participationRequirement: options.participationRequirement }) };
   const parsed = nonGoalMarketDefinitionSchema.parse({ ...identity, key: nonGoalMarketKey(identity), label, code,
     selections: selections.map((selection) => ({ ...selection, label: predictionRuleLabel(selection.rule) })) });
   return Object.freeze({ ...parsed, selections: Object.freeze(parsed.selections.map((item) => Object.freeze({ ...item, rule: Object.freeze(item.rule) }))) });

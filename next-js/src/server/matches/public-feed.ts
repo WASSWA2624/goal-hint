@@ -10,26 +10,28 @@ import { createMatchFeedService, type MatchFeedReadContext } from "./feed-servic
 import { createMatchFeedSummaryService } from "./feed-summary-service.ts";
 import { publicOddsEnabled } from "../odds/public-odds-policy.ts";
 
+const publicMatchProjection = { publishedOnly: false, publishedForecasts: true } as const;
+
 /** Pages and HTTP reads share the same stored projection, scope and cache. */
 export function readPublicMatchFeed(parameters: FeedParameters, context: MatchFeedReadContext = {}, clock?: Clock) {
-  return readStoredFeed(parameters, { ...context, publishedOnly: true }, clock, true);
+  return readStoredFeed(parameters, { ...context, ...publicMatchProjection }, clock, true);
 }
 
 /** The offline snapshot contains fixtures and scores independently of forecast availability. */
 export function readOfflineFixtureFeed(parameters: FeedParameters, context: MatchFeedReadContext = {}, clock?: Clock) {
-  return readStoredFeed(parameters, { ...context, publishedOnly: false }, clock, false, publicPolicy.features.providerOdds);
+  return readStoredFeed(parameters, { ...context, publishedOnly: false, publishedForecasts: false }, clock, false, publicPolicy.features.providerOdds);
 }
 
 /** Match cards and their exact pagination do not wait for a historical audit. */
 export function readPublicMatchFeedList(parameters: FeedParameters, context: MatchFeedReadContext = {}, clock?: Clock) {
-  return readStoredFeed(parameters, { ...context, publishedOnly: true }, clock, false);
+  return readStoredFeed(parameters, { ...context, ...publicMatchProjection }, clock, false);
 }
 
 /** Independently bounded aggregate request; list navigation keeps its 30s limit. */
 export function readPublicMatchFeedSummary(parameters: FeedParameters, context: MatchFeedReadContext = {}, clock?: Clock) {
   const database = getDatabase();
   return createMatchFeedSummaryService({ database, cache: createMysqlPublicResponseCache(database), ...(clock ? { clock } : {}),
-    providerOdds: publicOddsEnabled(), competitionIds: getRuntimePolicy().choices.competitionIds ?? [] }).query(parameters, { ...context, publishedOnly: true });
+    providerOdds: publicOddsEnabled(), competitionIds: getRuntimePolicy().choices.competitionIds ?? [] }).query(parameters, { ...context, ...publicMatchProjection });
 }
 
 function readStoredFeed(parameters: FeedParameters, context: MatchFeedReadContext, clock: Clock | undefined, includePerformance: boolean,

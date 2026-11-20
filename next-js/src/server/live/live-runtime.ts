@@ -56,6 +56,7 @@ import { coordinatedResultDefaults } from "../results/result-sync-policy.ts";
 import { createMysqlResultSyncStore } from "../results/result-sync-mysql-store.ts";
 import { createResultSyncService } from "../results/result-sync-service.ts";
 import { createMarketSettlementService } from "../settlement/settlement-service.ts";
+import { createFinalImpliedCountCapture } from "../settlement/final-implied-counts.ts";
 import { DailySelectionError } from "../selection/selection-contract.ts";
 import { hourlySelectionWindow, scheduledHourlySelection, scheduledSelection, selectionWindow } from "../selection/selection-input.ts";
 import { createMysqlDailySelectionStore } from "../selection/selection-mysql-store.ts";
@@ -303,6 +304,9 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     })() : null;
     const historyDetails = historySource ? createFootballHistoryDetails({ database, adapter: adapter.evidence,
       competitionIds: policy.choices.competitionIds ?? [], batchSize: 20,
+      ...(sourceOrder === "ai-first" && privateRetention ? {
+        onFinalDetails: createFinalImpliedCountCapture(database, () => verify(refs.retention, "football-private-use")),
+      } : {}),
       now: () => utcInstantFromEpochMilliseconds(Date.now()), providerDayEndsAt: () => quota.current()?.endsAt ?? null }) : null;
     const historyReference = historySource ? (() => {
       const now = () => utcInstantFromEpochMilliseconds(Date.now()), providerDayEndsAt = () => quota.current()?.endsAt ?? null;

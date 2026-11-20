@@ -4,7 +4,7 @@ import { NON_GOAL_MARKET_RULE_VERSION, countMetrics, eventMetrics, type NonGoalR
 import { LIVE_ODDS_MAPPING_VERSION, ODDS_MAPPING_VERSION, binaryGoalTotalOddsMapping, launchLiveOddsMapping, launchOddsMapping } from "./odds-markets.ts";
 import { GOAL_MARKET_RULE_VERSION, goalMarketPeriods, type GoalMarketPeriod, type GoalRule } from "./score-distribution-markets.ts";
 
-export const MARKET_REGISTRY_VERSION = "football-market-registry-v2";
+export const MARKET_REGISTRY_VERSION = "football-market-registry-v3";
 
 type SelectionSet =
   | Readonly<{ kind: "fixed"; keys: readonly string[] }>
@@ -22,7 +22,7 @@ type Settlement =
   | Readonly<{ basis: "score"; version: typeof GOAL_MARKET_RULE_VERSION; rules: readonly GoalRule["kind"][];
     evidence: "verified-regulation-score-and-required-half-time-score" }>
   | Readonly<{ basis: "count" | "event"; version: typeof NON_GOAL_MARKET_RULE_VERSION; rules: readonly NonGoalRule["kind"][];
-    evidence: "verified-period-counts" | "complete-verified-period-events" }>
+    evidence: "verified-period-counts" | "complete-verified-period-events" | "complete-verified-period-events-and-participation" }>
   | Readonly<{ basis: "unsupported"; reason: string }>;
 
 type Model =
@@ -80,7 +80,8 @@ function reviewedStatisticMarket(entry: Pick<MarketRegistryEntry, "name" | "sele
   return Object.freeze({ ...entry, periods: allPeriods, legacyFamily: null, providerForecast: "unsupported",
     bookmakerEvidence: "reviewed-count-or-event-mapping",
     settlement: Object.freeze({ basis, version: NON_GOAL_MARKET_RULE_VERSION, rules: Object.freeze(rules),
-      evidence: basis === "count" ? "verified-period-counts" : "complete-verified-period-events" }),
+      evidence: basis === "count" ? "verified-period-counts" : entry.parameters.player === "required"
+        ? "complete-verified-period-events-and-participation" : "complete-verified-period-events" }),
   });
 }
 

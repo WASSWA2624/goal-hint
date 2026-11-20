@@ -47,16 +47,17 @@ function pageLink(query: FeedQuery, today: ReportingDate, number: number | null)
 /** List membership and period totals share a source snapshot, with independent filter identities. */
 export async function storedFeedVersions(tx: Prisma.TransactionClient, query: FeedQuery, today: ReportingDate,
   sourceRange: ReportingDateRange, competitionIds: readonly number[], completedOnly = false, publishedOnly = false,
-  historyBefore: number | null = null, providerOdds = publicPolicy.features.providerOdds) {
+  historyBefore: number | null = null, providerOdds = publicPolicy.features.providerOdds, publishedForecasts = publishedOnly) {
   const tags = ["global:catalog", ...Array.from({ length: sourceRange.dayCount }, (_, day) => `date:${addReportingDays(sourceRange.startDate, day)}`)];
   const generations = await readPublicCacheGenerations(tx, tags), scope = [...competitionIds].sort((a, b) => a - b);
-  const version = (query: FeedQuery) => evidenceFingerprint({ contract: query.sort.by === "live-first" ? "feed-pagination-v10" : "feed-pagination-v9",
-    completedOnly, publishedOnly, historyBefore, providerOdds,
+  const version = (query: FeedQuery) => evidenceFingerprint({ contract: "feed-pagination-v11",
+    completedOnly, publishedOnly, historyBefore, providerOdds, publishedForecasts,
     query: feedQueryKey(query, today), scope, generations });
   return { paginationVersion: version(query), performanceVersion: version(performanceFeedQuery(query)) };
 }
 
-export type MatchFeedReadContext = Readonly<{ locale?: string; routeDate?: string; completedOnly?: boolean; publishedOnly?: boolean }>;
+export type MatchFeedReadContext = Readonly<{ locale?: string; routeDate?: string; completedOnly?: boolean;
+  publishedOnly?: boolean; publishedForecasts?: boolean }>;
 
 /** Public readers supply their verified odds permission. */
 export function createMatchFeedService(options: Readonly<{ database: DatabaseRuntime; competitionIds: readonly number[]; clock?: Clock; cache?: PublicResponseCache;
@@ -69,6 +70,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
   const allowInPlayOdds = options.allowInPlayOdds ?? isLocalFootballDevelopment();
   return Object.freeze({ async query(input: FeedParameters, context: MatchFeedReadContext = {}): Promise<StoredMatchFeedResponse> {
     const publishedOnly = context.publishedOnly === true;
+    const publishedForecasts = context.publishedForecasts ?? publishedOnly;
     const asOf = clock.now(), reportingToday = getReportingDate(asOf);
     const query = parseMatchFeedQuery(input, reportingToday, { ...context, providerOdds, asOf });
     const today = getFeedToday(query, asOf), range = resolveFeedDates(query, today);
@@ -82,9 +84,10 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       if (query.search) await limiter.consume();
       const read = () => database.transaction(async (tx) => {
         // Source writes (including live clock updates) and the generations commit atomically.
-        const versions = await storedFeedVersions(tx, query, today, sourceRange, competitionIds, context.completedOnly, publishedOnly, historyBefore, providerOdds);
+        const versions = await storedFeedVersions(tx, query, today, sourceRange, competitionIds, context.completedOnly,
+          publishedOnly, historyBefore, providerOdds, publishedForecasts);
         const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale, context.completedOnly);
-        const baseSql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly, publishedOnly, historyBefore);
+        const baseSql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly, publishedOnly, historyBefore, publishedForecasts);
         const sql = query.result ? await filterFeedResult(tx, baseSql, query.result) : baseSql;
         // Start with the indexed date cohort. Choosing the competition/season
         // join first scans its entire archive before applying the date window.
@@ -117,7 +120,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         const { run, window } = await storedFeedRunContext(tx, reportingToday, range);
         if (run?.phase === "updating") run.message = messages.text("feed.updating");
         const records = await storedFeedFixtures(tx, rows.map(({ id }) => id), false, window, query.locale,
-          { prices: providerOdds, preferRecommendation: !publishedOnly });
+          { prices: providerOdds, preferRecommendation: !publishedForecasts, asOf });
         for (const record of records) {
           const date = record.kickoffAt === null ? null : getReportingDate(record.kickoffAt);
           record.partialCoverage = dates.find((entry) => entry.date === date)?.authoritative !== true;
@@ -139,12 +142,12 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       const response = options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: query.sort.by === "live-first" ? 26 : 25, providerOdds, completedOnly: context.completedOnly === true,
-          publishedOnly, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } },
+        query: { ...query, projection: 27, providerOdds, completedOnly: context.completedOnly === true,
+          publishedOnly, publishedForecasts, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } },
         scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => storedMatchFeedResponseSchema.parse(value) }), read) : await read();
       const current = providerOdds ? await withCurrentFeedOdds(database, response, asOf, allowInPlayOdds) : response;
-      const useCompleteForecast = publishedOnly && isDefaultFeaturedScope(query);
+      const useCompleteForecast = publishedForecasts && isDefaultFeaturedScope(query);
       return useCompleteForecast ? withUpcomingFeaturedOutcomes(database, current, asOf, providerOdds) : current;
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;

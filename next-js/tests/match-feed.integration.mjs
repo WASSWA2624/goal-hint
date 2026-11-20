@@ -7,7 +7,11 @@ import { matchFeedResponseSchema, matchFeedRules } from '../src/domain/match-fee
 import { parseFixtureSnapshot } from '../src/domain/fixture-snapshot.ts';
 import { selectedCardPrice } from '../src/domain/match-card.ts';
 import { bestCardFamily } from '../src/domain/feed-presentation.ts';
+import { gateFeedResponse } from '../src/domain/paywall.ts';
+import { normalizeFixture } from '../src/server/football/api-football-normalize.ts';
+import { providerStatusMappings } from '../src/server/live/live-plan.ts';
 import { createMatchFeedService } from '../src/server/matches/feed-service.ts';
+import { createMatchFeedSummaryService } from '../src/server/matches/feed-summary-service.ts';
 import { createMatchFeedHandler } from '../src/server/matches/feed-http.ts';
 import { createMysqlPublicSearchLimiter } from '../src/server/matches/search-limit.ts';
 import { createFootballCatalogImporter } from '../src/server/football/catalog-service.ts';
@@ -239,6 +243,40 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
         && item.forecast.markets.some(market => market.market.selectedProbability === 0.43)));
       assert.equal((await service.query({ date: '2026-10-10' }, context)).total, 0);
     });
+    await t.test('public fixture visibility and summary reconcile without predictions while explicit pick filters still apply', async () => {
+      const context = { publishedForecasts: true }, date = '2026-10-09';
+      const result = await service.query({ date, pageSize: '100' }, context);
+      assert.equal(result.total, 72);
+      assert.equal(result.coverage.knownFixtures, 72);
+      assert.equal(result.coverage.matchingWithMarket, 9);
+      assert.equal(result.records.filter(({ forecast }) => forecast === null).length, 63);
+      const tomorrow = await service.query({ date: '2026-10-10' }, context);
+      assert.equal(tomorrow.total, 1);
+      assert.equal(tomorrow.records[0].forecast, null);
+      assert.equal(tomorrow.records[0].unavailableMarkets.length, 4);
+      const priorRead = readAt;
+      try {
+        readAt = tomorrow.records[0].kickoffAt + 5 * 60_000;
+        const overdue = (await service.query({ date: '2026-10-10' }, context)).records[0];
+        assert.equal(overdue.status, 'scheduled');
+        assert.equal(overdue.update.statusFreshness.state, 'awaiting-update');
+        assert.equal(overdue.update.statusFreshness.providerStatus, 'NS');
+        assert.equal(overdue.score, null);
+        assert.equal(overdue.forecast, null);
+      } finally { readAt = priorRead; }
+      const picks = await service.query({ date, picks: 'only' }, context);
+      assert.equal(picks.total, 9);
+      assert.ok(picks.records.every(({ forecast }) => forecast?.markets.length > 0));
+      const summary = createMatchFeedSummaryService({ database: p.a, competitionIds: [39], clock: { now: () => readAt } });
+      const { total, performance, paginationVersion } = await summary.query({ date }, context);
+      assert.equal(total, 72);
+      assert.equal(paginationVersion, result.performanceVersion);
+      assert.equal(performance.unavailable, 63);
+      assert.equal(performance.pending, 9);
+      const free = gateFeedResponse(result, { tier: 'free', signedIn: false });
+      assert.equal(free.records.length, result.records.length);
+      assert.ok(free.records.every(({ forecast }) => forecast === null || 'gated' in forecast));
+    });
     await t.test('anonymous HTTP shares the card snapshot, references and real sync timestamps', async () => {
       // Inspect the earliest published fixture without assuming it belongs to the default Latest first page.
       const response = await createMatchFeedHandler((parameters) => service.query(parameters), undefined, fullAccess)(new Request('http://localhost/api/matches?date=2026-10-09&dir=asc'));
@@ -350,7 +388,7 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       await sweep([3000, 3001, 3004, 3010]);
       const staleTie = record(3005, await read({ market: 'total-goals,both-teams-to-score' }));
       assert.deepEqual(staleTie.prices, []);
-      assert.equal(bestCardFamily(staleTie, ['total-goals', 'both-teams-to-score']), 'total-goals', 'withdrawn odds no longer break the probability tie');
+      assert.equal(bestCardFamily(staleTie, ['total-goals', 'both-teams-to-score']), 'both-teams-to-score', 'withdrawn odds leave the stable market key to break the tie');
       assert.equal((await read({ market: 'total-goals,both-teams-to-score', odds: '2.20-2.20' })).total, 0, 'the SQL filter also stops reading withdrawn prices');
 
       const fixtureId = published.get(3000).fixture.id;
@@ -546,10 +584,17 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
     });
     await t.test('Live first uses stored match progress and earliest upcoming kickoffs before pagination', async () => {
       const phases = [[3020, 'ET', 107], [3021, '2H', 81], [3022, '2H', 52], [3023, 'HT', 45], [3024, '1H', 28], [3025, '1H', 3]];
+      const lifecycle = createScheduleLifecycleService({ database: p.a, cutoff: p.first,
+        policy: lifecyclePolicy({ mappings: providerStatusMappings }), authority: lifecycleAuthority() });
       async function observe([number, short, elapsed]) {
         const original = rows[number - 3000];
         const sample = { ...original, fixture: { ...original.fixture, status: { short, elapsed } } };
-        assert.notEqual((await importRows([sample], { kind: 'fixtures', query: { fixtureId: number } })).status, 'failed');
+        p.setTime(Math.max(p.now() + 1_000, Date.parse(sample.fixture.date) + elapsed * 60_000));
+        const observation = normalizeFixture(sample, { retrievedAt: p.now(), endpoint: '/fixtures' });
+        assert.equal(observation.valid, true);
+        const receipt = await lifecycle.observe({ fixtureId: (await fixture(number)).id, fixture: observation.data,
+          actualStartedAt: null, actor: 'synthetic-feed-status', evidenceRef: 'synthetic-live-provider-proof' });
+        assert.ok(['accepted', 'unchanged'].includes(receipt.outcome), receipt.reason);
       }
       for (const phase of phases) await observe(phase);
       const expected = await Promise.all(phases.map(async ([number]) => (await fixture(number)).id));

@@ -19,7 +19,11 @@ function setup(options = {}) {
     async renew(_lease, leaseMs) { return owned = { ...owned, until: NOW + leaseMs }; }, async release() { owned = null; },
     async tracked() { return tracked; }, async pending() { return pending; },
     async save(_lease, batch) { order.push("save"); saved.push(batch); },
-    async apply(_lease, batch) { order.push(`apply:${batch.id}`); applied.push(batch); pending.splice(0, pending.length); },
+    async apply(_lease, batch) {
+      order.push(`apply:${batch.id}`); applied.push(batch); pending.splice(0, pending.length);
+      return batch.observations.map(({ fixtureId, kickoffAt, status, retrievedAt }) =>
+        ({ fixtureId, kickoffAt, status, retrievedAt, firstFinalAt: null, finalConfirmed: false }));
+    },
     async schedule(_lease, channel, nextAt, failures, error) {
       order.push("schedule"); schedules.push({ channel, nextAt, failures, error });
       if (options.loseLeaseAtSchedule && schedules.length > 1) throw new Error("synthetic expired fence");

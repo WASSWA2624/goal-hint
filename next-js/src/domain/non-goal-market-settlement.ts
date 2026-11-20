@@ -6,18 +6,25 @@ import { countMetrics, eventMetrics, nonGoalMarketDefinitionSchema, type NonGoal
 
 const count = z.number().int().min(0).max(1_000_000), countingRule = z.string().min(1).max(64);
 const period = z.enum(goalMarketPeriods), scope = z.literal("regulation-including-stoppage-time");
+const playerId = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const side = z.enum(["home", "away"]);
 export const nonGoalResultEvidenceSchema = z.strictObject({
   counts: z.array(z.strictObject({ metric: z.enum(countMetrics), period, scope, countingRule, verified: z.boolean(), home: count.nullable(), away: count.nullable() })).max(1024),
   events: z.array(z.strictObject({ metric: z.enum(eventMetrics), period, scope, countingRule, verified: z.boolean(), complete: z.boolean(),
-    entries: z.array(z.strictObject({ sequence: z.number().int().min(0).max(1_000_000), team: z.enum(["home", "away"]),
-      playerId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable(), minute: z.number().int().min(0).max(200).nullable(),
-      extra: z.number().int().min(0).max(1000).nullable() })).max(10_000),
+    entries: z.array(z.strictObject({ sequence: z.number().int().min(0).max(1_000_000), team: side,
+      playerId: playerId.nullable(), minute: z.number().int().min(0).max(200).nullable(),
+      extra: z.number().int().min(0).max(1000).nullable(), validity: z.enum(["confirmed", "overturned", "unresolved"]).optional() })).max(10_000),
   }).refine(({ entries }) => new Set(entries.map(({ sequence }) => sequence)).size === entries.length)).max(1024),
+  participation: z.array(z.strictObject({ playerId, team: side, period, scope, verified: z.boolean(),
+    appeared: z.boolean(), started: z.boolean().nullable() }).refine((row) => row.started !== true || row.appeared)).max(1024).optional(),
 }).superRefine((evidence, context) => {
   for (const items of [evidence.counts, evidence.events]) {
     const keys = items.map((item) => `${item.period}:${item.metric}:${item.countingRule}`);
     if (new Set(keys).size !== keys.length) context.addIssue({ code: "custom", message: "Conflicting evidence for one period, metric and counting rule." });
   }
+  const players = evidence.participation?.map((row) => `${row.period}:${row.playerId}`) ?? [];
+  if (new Set(players).size !== players.length)
+    context.addIssue({ code: "custom", message: "Conflicting participation evidence for one player and period." });
 });
 export type NonGoalResultEvidence = Readonly<z.infer<typeof nonGoalResultEvidenceSchema>>;
 export type NonGoalSettlementContext = Readonly<{ status: SettlementStatus; cycleEligibility: CycleEligibility;
@@ -52,7 +59,14 @@ function gradeEvent(definition: NonGoalMarketDefinition, rule: Extract<NonGoalRu
   facts: NonGoalResultEvidence): ExtendedMarketGrade | string {
   const rows = facts.events.filter((item) => item.metric === definition.metric && item.period === definition.period && item.countingRule === definition.countingRule);
   if (rows.length !== 1 || !rows[0]!.verified || !rows[0]!.complete) return "missing-complete-verified-events";
-  const entries = [...rows[0]!.entries].sort((a, b) => a.sequence - b.sequence);
+  const entries = rows[0]!.entries.filter((entry) => entry.validity !== "overturned").sort((a, b) => a.sequence - b.sequence);
+  if (entries.some((entry, index) => {
+    const prior = entries[index - 1];
+    return entry.minute !== null && (entry.minute > 90 || (definition.period === "half-time" && entry.minute > 45) ||
+      (definition.period === "second-half" && entry.minute <= 45) || (prior?.minute != null &&
+        (entry.minute < prior.minute || entry.minute === prior.minute && (entry.extra ?? 0) < (prior.extra ?? 0))));
+  })) return "conflicting-event-period";
+  if (entries.some((entry) => entry.validity === "unresolved")) return "unresolved-event-decision";
   const observed = rule.position === "any" ? entries : [rule.position === "first" ? entries[0] : entries.at(-1)].filter((item) => item !== undefined);
   if (rule.kind === "event-team") return (observed[0]?.team ?? "none") === rule.team ? "win" : "loss";
   if (definition.playerId !== null && observed.some((entry) => entry.playerId === null)) return "missing-player-identity";
@@ -73,6 +87,21 @@ export function settleNonGoalSelection(definitionInput: unknown, selection: stri
   if (!context.resultUsable) return output("pending", "missing-coherent-final-result");
   const facts = nonGoalResultEvidenceSchema.safeParse(context.evidence);
   if (!facts.success) return output("pending", "missing-verified-period-evidence");
+  if (definition.data.playerId !== null) {
+    const { playerId, participationRequirement, period, scope, metric, countingRule } = definition.data;
+    if (participationRequirement === undefined) return output("pending", "unverified-participation-rule");
+    const participant = facts.data.participation?.find((row) => row.playerId === playerId && row.period === period);
+    if (!participant?.verified || (scope !== "total" && participant.team !== scope) ||
+      (participationRequirement === "started-period" && participant.started === null))
+      return output("pending", "missing-verified-participation");
+    if (!participant.appeared) {
+      const observed = facts.data.events.some((row) => row.verified && row.metric === metric && row.period === period &&
+        row.countingRule === countingRule && row.entries.some((entry) =>
+          entry.playerId === playerId && entry.validity !== "overturned" && entry.validity !== "unresolved"));
+      return observed ? output("pending", "conflicting-player-participation") : output("void", "player-did-not-participate");
+    }
+    if (participationRequirement === "started-period" && !participant.started) return output("void", "player-did-not-start-period");
+  }
   const rule = pick.rule, grade = rule.kind === "event-occurs" || rule.kind === "event-team"
     ? gradeEvent(definition.data, rule, facts.data) : gradeCount(definition.data, rule, facts.data);
   if (grade === "win") return output("correct", "selection-occurred");
