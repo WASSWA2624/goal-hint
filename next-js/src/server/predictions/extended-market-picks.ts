@@ -88,9 +88,16 @@ export async function appendPublishedExtendedPicks(tx: Tx, revisionId: string, r
     return picks;
   }
   if (!picks.length) return picks;
-  const values = picks.map((pick) => { const body = evidenceSerialize(pick); return Prisma.sql`(${pick.revisionId}, ${pick.cycleId}, ${pick.fixtureId},
-    ${pick.key}, ${pick.source}, ${pick.ruleVersion}, ${pick.period}, ${pick.selection}, ${pick.selectedProbability}, ${pick.sortOrder},
-    SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`; });
+  const values = picks.map((pick) => {
+    const serialized = evidenceSerialize(pick);
+    const probability = Prisma.sql`CAST(${pick.selectedProbability} AS DOUBLE)`;
+    const json = Prisma.sql`JSON_EXTRACT(${serialized}, '$')`;
+    // Bind the canonical double directly when the native JSON parser rounds its decimal representation.
+    const body = Prisma.sql`IF(CAST(JSON_EXTRACT(${serialized}, '$.selectedProbability') AS DOUBLE) = ${probability},
+      ${json}, JSON_SET(${json}, '$.selectedProbability', ${probability}))`;
+    return Prisma.sql`(${pick.revisionId}, ${pick.cycleId}, ${pick.fixtureId}, ${pick.key}, ${pick.source}, ${pick.ruleVersion},
+      ${pick.period}, ${pick.selection}, ${probability}, ${pick.sortOrder}, SHA2(CAST(${body} AS CHAR), 256), ${body})`;
+  });
   await tx.$executeRaw(Prisma.sql`INSERT INTO ExtendedMarketPublishedPick
     (revisionId, cycleId, fixtureId, marketKey, source, ruleVersion, period, selection, selectedProbability, sortOrder, integrity, body)
     VALUES ${Prisma.join(values)}`);
