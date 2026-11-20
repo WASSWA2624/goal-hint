@@ -7,9 +7,24 @@ import type { createFootballHistorySource } from "./history-source.ts";
 
 const competitionId = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const count = z.number().int().nonnegative();
+const reportingDate = z.string().transform(parseReportingDate);
+const pendingRepairStatus = z.enum(["partial", "failed", "deferred"]);
+const repairReason = z.string().min(1).max(128);
+const dateRepair = z.strictObject({
+  nextOlder: reportingDate,
+  nextRecent: reportingDate,
+  completed: count,
+  unavailable: count,
+  fixtures: count,
+  changed: count,
+  retryTurn: z.boolean(),
+  pending: z.array(z.strictObject({ date: reportingDate, attempt: count.positive(), retryAt: count, status: pendingRepairStatus, reason: repairReason })),
+  last: z.strictObject({ date: reportingDate, status: z.enum(["complete", "unavailable", "partial", "failed", "deferred"]),
+    reason: repairReason.nullable() }).nullable(),
+});
 const manifestSchema = z.strictObject({
   version: z.literal(1),
-  anchorDate: z.string().transform(parseReportingDate),
+  anchorDate: reportingDate,
   dateScanned: z.literal(true).exactOptional(),
   catalogAt: count,
   seasons: z.array(z.strictObject({
@@ -18,6 +33,7 @@ const manifestSchema = z.strictObject({
   })),
   unlistedCompetitions: z.array(competitionId),
   cursor: z.strictObject({ next: count, completed: count, empty: count, deferred: z.array(count) }).exactOptional(),
+  dateRepair: dateRepair.exactOptional(),
 });
 export type FixtureBackfillManifest = z.output<typeof manifestSchema>;
 export type FixtureBackfillManifestStore = Readonly<{
@@ -36,10 +52,13 @@ export function createFixtureBackfillManifestStore(source: Pick<ReturnType<typeo
       const [manifest] = z.tuple([manifestSchema]).parse(page.rows);
       const allowed = new Set(ids), unique = new Set(manifest.seasons.map(({ scope }) => `${scope.competitionId}:${scope.season}`));
       const cursor = manifest.cursor;
+      const repair = manifest.dateRepair;
       if (unique.size !== manifest.seasons.length || manifest.seasons.some(({ scope }) => !allowed.has(scope.competitionId) || scope.season < oldestSeason) ||
           manifest.unlistedCompetitions.some((id) => !allowed.has(id)) || cursor && (cursor.next > manifest.seasons.length ||
             cursor.completed + cursor.deferred.length !== cursor.next || cursor.empty > cursor.completed ||
-            cursor.deferred.some((index) => index >= cursor.next) || new Set(cursor.deferred).size !== cursor.deferred.length)) {
+            cursor.deferred.some((index) => index >= cursor.next) || new Set(cursor.deferred).size !== cursor.deferred.length) ||
+          repair && (repair.nextOlder >= repair.nextRecent || new Set(repair.pending.map(({ date }) => date)).size !== repair.pending.length ||
+            repair.pending.some(({ date }) => date <= repair.nextOlder || date >= repair.nextRecent))) {
         throw new Error("Archived fixture work manifest does not match the approved scope.");
       }
       return manifest;

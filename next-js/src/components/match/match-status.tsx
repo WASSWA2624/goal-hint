@@ -49,12 +49,12 @@ const Label = styled(StatusBadge)`
 `;
 
 /** Fixture progress takes precedence until a result can be shown. Saved results remain explicit snapshots. */
-export function MatchStatus({ status, outcome, messages, snapshot = false, offline = false, liveClock, desktopClock = false }: {
+export function MatchStatus({ status, outcome, messages, snapshot = false, offline = false, liveClock, desktopClock = false, awaitingResult = false }: {
   status: FixtureSnapshot["status"]; outcome: OutcomeTone; messages: Messages; snapshot?: boolean; offline?: boolean;
   liveClock?: FixtureSnapshot["liveClock"];
-  desktopClock?: boolean;
+  desktopClock?: boolean; awaitingResult?: boolean;
 }) {
-  const result = offline ? "saved" : snapshot ? outcome : cardResultStatus(status, outcome);
+  const result = offline ? "saved" : snapshot ? outcome : cardResultStatus(status, outcome, awaitingResult);
   const isOutcome = result === "correct" || result === "incorrect" || result === "pending" || result === "void" || result === "unavailable";
   const label = result === "saved" ? "Saved" : result === "upcoming" ? messages.text("match.result.upcoming")
     : result === "correct" ? messages.text("slips.result.won") : result === "incorrect" ? messages.text("slips.result.lost")
@@ -69,7 +69,7 @@ export function MatchStatus({ status, outcome, messages, snapshot = false, offli
   return <Label data-match-status={result} data-match-label={!isOutcome ? "" : undefined} data-outcome-label={isOutcome ? "" : undefined}
     data-match-half-time={halfTime || undefined}
     data-live-badge-clock={desktopClock && result === "live" ? "" : undefined}
-    aria-label={clock?.spoken} title={clock?.spoken}>
+    aria-label={clock?.spoken} title={clock?.spoken ?? (awaitingResult && result === "pending" ? messages.text("slips.outcome.pending") : undefined)}>
     {result === "live" && <LiveDot data-match-live-dot aria-hidden="true" />}
     <span data-pick-value="">{clock ? desktopClock ? <LiveMatchTime clock={liveClock} messages={messages} badge />
       : <><span data-mobile-only data-status-clock>{halfTime ? <span data-half-time-prefix>{label} </span> : <>{label} </>}

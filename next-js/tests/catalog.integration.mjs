@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { getReportingDate } from "../src/domain/calendar.ts";
 import { parseRuntimePolicy } from "../src/server/config/runtime-policy.ts";
-import { createDatabase } from "../src/server/database/client.ts";
+import { createDatabase, DatabaseOperationError } from "../src/server/database/client.ts";
 import { createFootballCatalogStore, lockCatalog } from "../src/server/football/catalog-mysql-store.ts";
 import { createFootballCatalogImporter } from "../src/server/football/catalog-service.ts";
 import { validateCatalogBatch } from "../src/server/football/catalog-input.ts";
@@ -195,6 +195,31 @@ test("canonical football catalog invariants on isolated genuine MySQL", { timeou
       assert.equal(partialReceipt.importedCount, 42);
       assert.equal(partialReceipt.rejectedCount, 1);
       assert.equal((await firstStore.dateCoverage(selection)).lastCompleteImportId, request.id);
+    });
+
+    await t.test("a transient catalog-coordinator lock failure retries the prepared observation without provider I/O", async () => {
+      const selection = { kind: "fixtures", query: { competitionId: 390, season: 2026, status: "TBD-NS-PST" } };
+      const { adapter, network, authority, clock: providerClock } = operation([catalogFixture(3909, { competitionId: 390 })]);
+      let coordinated = 0;
+      const store = createFootballCatalogStore(firstDatabase, { clock: providerClock, async coordinateFixtureMutation({ apply }) {
+        if (++coordinated === 1) throw new DatabaseOperationError("lock-timeout");
+        await apply();
+      } });
+      const importer = createFootballCatalogImporter({ adapter, store, authority, clock: providerClock });
+      const receipt = await importer.import(catalogRequest(selection));
+      assert.equal(receipt.status, "complete");
+      assert.equal(receipt.changedFixtureIds.length, 1);
+      assert.equal(coordinated, 2);
+      assert.equal(network.length, 1);
+      assert.deepEqual((await store.dateCoverage(selection)).knownFixtureIds, receipt.fixtureIds);
+      const later = operation([catalogFixture(3909, { competitionId: 390 })]);
+      later.clock.value += 1000;
+      const next = createFootballCatalogImporter({ ...later, store });
+      const retained = await next.import(catalogRequest(selection, later.clock.value));
+      assert.equal(retained.status, "complete");
+      assert.deepEqual(retained.fixtureIds, receipt.fixtureIds);
+      assert.deepEqual(retained.changedFixtureIds, []);
+      assert.equal(coordinated, 2, "unchanged signed season scope should not rewrite a fixture");
     });
 
     await t.test("historical imports seal verified results without changing canonical history or polling old finals", async () => {

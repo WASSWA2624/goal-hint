@@ -25,6 +25,7 @@ export function createDailySelectionService(options: Readonly<{
   hourlyImporter?: Pick<ReturnType<typeof createFootballCatalogImporter>, "import">;
   cutoff: Readonly<{ scheduleRun(runId: string): Promise<unknown> }>;
   reconcileHourly?(lease: SelectionLease, scheduledFor: number, signal?: AbortSignal, replayOnly?: boolean): Promise<readonly string[]>;
+  sweepUpcoming?(lease: SelectionLease, scheduledFor: number, signal?: AbortSignal): Promise<void>;
   onDateImportFailure?(date: string, hourly: boolean, reason: string): void;
 }>) {
   const policy = parseSelectionPolicy(options.policy);
@@ -100,6 +101,7 @@ export function createDailySelectionService(options: Readonly<{
       const progress = await options.store.reconcile(lease);
       await checkpoint();
       if (!hourly) await options.cutoff.scheduleRun(lease.runId);
+      else await options.sweepUpcoming?.(lease, scheduledFor, signal);
       await checkpoint();
       return { status: "committed" as const, runId: lease.runId, ...progress };
     } finally {

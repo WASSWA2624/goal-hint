@@ -425,6 +425,29 @@ test('daily and hourly selection manifests and recovery on isolated genuine MySQ
       assert.ok(!manifest.coverage.some((date) => date.fixtureIds.includes(confirmed.id)), 'identity confirmation stays separate from date coverage');
       assert.equal(await database.query((tx) => tx.predictionCycle.count({ where: { fixtureId: unconfirmed.id } })), 0);
     });
+    await t.test('hourly selection reuses a verified future date receipt while still requesting today and uncovered dates', async () => {
+      const hour = 3_600_000, scheduledFor = occurrence(45) + hour;
+      const date = reportingDate(46), future = catalogFixture(4501, { kickoff: kickoff(46) });
+      const policy = policyFor([future]); policy.refresh.type = 'test.selection-fresh-date';
+      const provider = createSyntheticCatalogAdapter({ respond: (url) => catalogResponse(url,
+        url.searchParams.get('date') === date ? [future] : []) });
+      provider.clock.value = scheduledFor - hour;
+      const importer = createFootballCatalogImporter({ adapter: provider.adapter, store: catalog, authority: catalogSelectionAuthority, clock: provider.clock });
+      const saved = await importer.import(catalogRequest({ kind: 'fixtures', query: { date } }, provider.clock.value));
+      const selectionStore = createMysqlDailySelectionStore(database, queue, { hourly: { localEvidence: false, reuseFutureDates: 7 } });
+      const parsed = parseSelectionPolicy(policy), today = reportingDate(45);
+      const lease = await selectionStore.acquire(today, parsed, selectionHash('fresh-date-owner'), 1);
+      try {
+        assert.equal(await selectionStore.beginImport(lease, date, parsed), null);
+        assert.equal((await selectionStore.beginImport(lease, today, parsed)).request.selection.query.date, today);
+        const uncovered = reportingDate(47);
+        assert.equal((await selectionStore.beginImport(lease, uncovered, parsed)).request.selection.query.date, uncovered);
+        const { coverage } = await selectionStore.inspect(lease.runId);
+        assert.equal(coverage.find((entry) => entry.date === date).importId, saved.id);
+        assert.equal(coverage.find((entry) => entry.date === date).status, 'complete');
+        assert.equal(provider.network.length, 1, 'the retained date needs no second provider call');
+      } finally { await selectionStore.release(lease); }
+    });
     await t.test('an hourly selection retries one stale observation per unchanged unpublished fixture', async () => {
       const hour = 3_600_000, scheduledFor = occurrence(37) + hour;
       const rows = [catalogFixture(3701, { kickoff: kickoff(38) }), catalogFixture(3702, { kickoff: kickoff(38, 13) })];

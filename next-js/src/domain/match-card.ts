@@ -83,7 +83,8 @@ export function selectedCardPrediction(fixture: FixtureSnapshot, family: MarketF
 }
 
 /** Show fixture progress until completion, without changing the market's audited settlement. */
-export function cardResultStatus(status: FixtureSnapshot["status"], outcome: SettlementOutcomeStatus | "unavailable") {
+export function cardResultStatus(status: FixtureSnapshot["status"], outcome: SettlementOutcomeStatus | "unavailable", awaitingResult = false) {
+  if (awaitingResult && (status === "scheduled" || status === "unknown" || isPlayedFinalStatus(status) && outcome === "unavailable")) return "pending";
   if (status === "scheduled") return "upcoming";
   return status !== "canceled" && isCompletedFixtureStatus(status) && outcome !== "unavailable" ? outcome : status;
 }
@@ -99,6 +100,7 @@ export function sameCardFixture(previous: FixtureSnapshot, next: FixtureSnapshot
     !!(previous.forecast && "gated" in previous.forecast) === !!(next.forecast && "gated" in next.forecast) &&
     previous.partialCoverage === next.partialCoverage && previous.availabilityMessage === next.availabilityMessage &&
     previous.update?.prediction === next.update?.prediction && previous.update?.result === next.update?.result &&
+    previous.update?.statusFreshness?.state === next.update?.statusFreshness?.state &&
     previous.forecast?.updateDelayed === next.forecast?.updateDelayed && samePrices(previous.prices, next.prices) &&
     sameMarketOdds(previous.marketOdds, next.marketOdds) && sameFeatured(previous.featuredPrediction, next.featuredPrediction);
 }

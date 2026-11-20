@@ -606,7 +606,8 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const selectionContext = featured?.code ? { marketKey: featured.key, label: featured.selectionLabel } : undefined;
   const locked = fixture.cycle?.state === "closed";
   const outcome = prediction?.status ?? "unavailable";
-  const result = snapshotPick ? outcome : cardResultStatus(fixture.status, outcome);
+  const awaitingResult = fixture.update?.statusFreshness?.state === "awaiting-update";
+  const result = snapshotPick ? outcome : cardResultStatus(fixture.status, outcome, awaitingResult);
   const percent = prediction && (prediction.probability.labelKey === "probability.percent"
     ? messages.text("probability.percent", { percent: messages.number(prediction.probability.roundedPercent, snapshotPick
       ? { minimumFractionDigits: 1, maximumFractionDigits: 1 } : undefined) })
@@ -645,7 +646,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
         label: messages.text(snapshotPick || regulationOnly ? "match.regulationScoreNote" : final ? "match.finalScore" : "match.liveScore"),
         home, away, homeScore: messages.number(fixture.score.home), awayScore: messages.number(fixture.score.away),
       }) } : {})}
-      outcome={offline ? "unavailable" : outcome} headingLevel={headingLevel} pickState={pickState}
+      outcome={offline ? "unavailable" : outcome} awaitingResult={awaitingResult} headingLevel={headingLevel} pickState={pickState}
       {...(position !== undefined ? { position } : {})} {...(titleNote ? { titleNote } : {})}
       {...(!offline && interactive && !gated ? { analysisHref: detailHref } : {})}
       {...(gated && !offline ? { predictionAction: <UnlockButton locale={locale} signedIn={signedIn}
@@ -729,7 +730,8 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     </MobileUnlockArea>}
     <Result data-result-badge={offline ? "saved" : result} data-stack-result
       data-live-minute={clock ? clock.minute ?? "" : undefined}>
-      <MatchStatus status={fixture.status} outcome={outcome} messages={messages} snapshot={snapshotPick !== undefined} offline={offline} liveClock={fixture.liveClock ?? null} />
+      <MatchStatus status={fixture.status} outcome={outcome} messages={messages} snapshot={snapshotPick !== undefined} offline={offline}
+        liveClock={fixture.liveClock ?? null} awaitingResult={awaitingResult} />
     </Result>
     {!offline && interactive && <Open data-match-open href={targetHref} prefetch={false}>
       <VisuallyHidden>{gated ? `${messages.text("paywall.unlock")}: ${title}` : messages.text("match.analysisLabel", { home, away })}</VisuallyHidden><ChevronIcon />

@@ -283,7 +283,11 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
         catch (error) { if (error instanceof PredictionHistoryError) domainError = error; throw error; }
         finally { active = false; }
       }, existingTransaction);
-    } catch { if (domainError) throw domainError; return historyFail("unavailable"); }
+    } catch (error) {
+      if (domainError) throw domainError;
+      if (existingTransaction) throw error;
+      return historyFail("unavailable");
+    }
   }
 
   async function referenced(transaction: HistoryTransaction, cycleId: string, key: "currentSetId" | "lockedSetId") {

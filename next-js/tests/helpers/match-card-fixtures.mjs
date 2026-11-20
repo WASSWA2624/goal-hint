@@ -43,6 +43,10 @@ export function cardExamples() {
       liveClock: { phase: "second-half", minute: 67 } }, "ai", null) },
     { label: "Example: void cycle", fixture: cardFixture({ fixtureId: "card-void", status: "postponed", score: null }, "ai", "void") },
     { label: "Example: unavailable forecast, known final score", fixture: cardFixture({ fixtureId: "card-unavailable", forecast: null }) },
+    { label: "Example: overdue fixture awaiting a verified result", fixture: cardFixture({ fixtureId: "card-overdue", status: "scheduled",
+      score: null, forecast: null, update: { prediction: "unavailable", result: "delayed", statusFreshness: {
+        state: "awaiting-update", providerStatus: "NS", lastVerifiedAt: now, nextCheckAt: now + 60_000,
+      } } }) },
     { label: "Example: delayed prediction retains publication time", fixture: delayed },
     { label: "Example: limited news", fixture: limited, selectedFamily: "both-teams-to-score" },
     { label: "Example: partial fixture coverage and fallback", fixture: cardFixture({ fixtureId: "card-partial", partialCoverage: true }, "api-football") },

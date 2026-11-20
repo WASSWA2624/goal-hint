@@ -23,7 +23,7 @@ export type DesktopMatchRowProps = Readonly<{
   fixtureId: string; locale: string; kickoffAt: UtcInstant | null;
   homeTeam: RowTeam; awayTeam: RowTeam; competition: RowCompetition;
   status: FixtureSnapshot["status"]; score: Readonly<{ home: number; away: number }> | null;
-  liveClock?: FixtureSnapshot["liveClock"]; outcome: OutcomeTone;
+  liveClock?: FixtureSnapshot["liveClock"]; outcome: OutcomeTone; awaitingResult?: boolean;
   /** A preformatted authorized market; the row never selects or fabricates a forecast. */
   market: ReactNode; marketFamily?: MarketFamily; marketDescription?: string;
   odds: ReactNode; probability: ReactNode; analysisHref?: string; analysisLabel?: string;
@@ -41,7 +41,7 @@ export type DesktopMatchRowProps = Readonly<{
 
 /** One approved desktop match row for live feed records and immutable slip selections. */
 export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTeam, competition, status, score, liveClock,
-  outcome, market, marketFamily, marketDescription, odds, probability, predictionAction, analysisHref, analysisLabel, headingLevel = 4, titleNote, position,
+  outcome, awaitingResult = false, market, marketFamily, marketDescription, odds, probability, predictionAction, analysisHref, analysisLabel, headingLevel = 4, titleNote, position,
   matchState: suppliedMatchState, savedScore = false, scoreDescription: suppliedScoreDescription, regulationOnly = false, details,
   pickState, eagerLogos = false, offline = false, preview = false, messages, datePrefix, interactive = true, clockInBadge = false }: DesktopMatchRowProps) {
   const m = messages ?? createMessages(locale), id = useId();
@@ -100,7 +100,7 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
     <span data-row-odds id={`${id}-odds`}><span data-number-label data-row-number-label>{m.text("details.odds")}:</span><strong>{odds}</strong></span>
     <span data-row-probability id={`${id}-probability`}><span data-number-label data-row-number-label aria-hidden="true">{m.text("match.columns.probabilityCompact")}:</span><VisuallyHidden>{m.text("slips.probability")}: </VisuallyHidden><strong>{probability}</strong></span>
     </>}
-    <span data-row-status id={`${id}-status`}><MatchStatus status={status} outcome={outcome} messages={m}
+    <span data-row-status id={`${id}-status`}><MatchStatus status={status} outcome={outcome} messages={m} awaitingResult={awaitingResult}
       snapshot={matchState === "snapshot"} offline={offline} {...(clockInBadge ? { liveClock: clock, desktopClock: true } : {})} /></span>
     {details && <div data-row-details id={`${id}-details`}>{details}</div>}
     {detailsHref && <Link data-row-analysis data-match-analysis-link href={detailsHref} prefetch={false}

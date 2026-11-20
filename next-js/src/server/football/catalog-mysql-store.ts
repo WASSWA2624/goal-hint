@@ -8,7 +8,8 @@ import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, 
 import { isPlayedFinalStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { fixtureResultMatchesCanonical, storedFixtureResult } from "../results/result-read.ts";
-import { fixtureResultValue, insertFixtureResult } from "../results/result-write.ts";
+import { fixtureResultValue, insertFixtureResult, preserveRegulationEvidence, projectFixtureResult } from "../results/result-write.ts";
+import { finalStatus, incompleteResultEvidence, requiresResultInvestigation, unresolvedInvestigation } from "../results/result-sync-policy.ts";
 import type { NormalizedFixture, NormalizedTeam, NormalizedCompetition, SourceTimestamps } from "./api-football-normalize.ts";
 import type { CatalogAuthority, CatalogPreparedBatch, CatalogSelection, CatalogTeamMapping } from "./catalog-contract.ts";
 import { normalizeCatalogSearch, isSafeCatalogLogo, parseCatalogTeamMapping, catalogScopeKey, assertCatalogPreparedBatch, parseCatalogEvidenceRef } from "./catalog-input.ts";
@@ -188,6 +189,7 @@ function sharedChanges<Entity extends FootballTeam | FootballCompetition>(histor
 /** All provider I/O happens before this bounded transaction, which serializes catalog identity writes. */
 export function createFootballCatalogStore(database: DatabaseRuntime, options: Readonly<{
   clock?: Clock; coordinateFixtureMutation?: CatalogMutationCoordinator; transactionTimeoutMs?: number;
+  sealFixtureResults?: boolean;
   historicalResults?: true;
   sealTeamHistory?: true;
 }> = {}) {
@@ -198,9 +200,7 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
   async function write<Result>(operation: (transaction: Prisma.TransactionClient) => Promise<Result>,
     mode: "catalog" | "fixture-transaction" | "historical" | "receipt-only" | "fixture-date-checkpoint" = "catalog"): Promise<Result> {
     const receiptOnly = mode === "receipt-only";
-    const historicalWrite = mode === "historical" || receiptOnly;
-    const checkpointWrite = mode === "fixture-date-checkpoint";
-    const retryConflicts = checkpointWrite || (mode !== "fixture-transaction" && options.coordinateFixtureMutation === undefined);
+    const retryConflicts = mode !== "fixture-transaction";
     try {
       // Reuse the prepared batch on a retry. Provider I/O has already finished.
       for (let attempt = 0; ; attempt++) {
@@ -215,10 +215,10 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
         catch (error) {
           if (domainError) throw domainError;
           const code = error !== null && typeof error === "object" && "code" in error ? error.code : null;
-          const transient = retryConflicts && (code === "conflict" || (historicalWrite || checkpointWrite) && code === "lock-timeout");
+          const transient = retryConflicts && (code === "conflict" || code === "lock-timeout");
           // The primary key arbitrates receipt-only races; the next read checks both fingerprints.
           if (attempt >= 2 || !(transient || receiptOnly && code === "constraint")) throw error;
-          if ((historicalWrite || checkpointWrite) && transient) await delay(100 * (attempt + 1));
+          if (transient) await delay(100 * (attempt + 1));
         }
       }
     } catch (error) {
@@ -256,6 +256,8 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
     } catch (error) {
       await pending?.catch(() => {});
       if (historical && !options.coordinateFixtureMutation) throw error;
+      if (error instanceof DatabaseOperationError || error !== null && typeof error === "object" &&
+        "code" in error && typeof error.code === "string" && /^P\d{4}$/u.test(error.code)) throw error;
       fail("coordination-failed");
     }
     if (calls !== 1 || pending === undefined) fail("coordination-failed");
@@ -474,19 +476,27 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
         const status = input.status === "unknown" && previous ? previous.status : input.status;
         const kickoff = input.kickoff === null ? previous?.kickoff ?? null : new Date(input.kickoff);
         const providerStatus = input.status === "unknown" && previous ? previous.providerStatus : input.providerStatus ?? previous?.providerStatus ?? null;
-        const keepScore = previous && previous.status === status && previous.providerStatus === providerStatus;
+        const sameOccurrence = previous !== null && previous.homeTeamId === homeTeamId && previous.awayTeamId === awayTeamId &&
+          previous.seasonId === season.id && same(previous.kickoff, kickoff);
+        const samePhase = previous !== null && previous.status === status && previous.providerStatus === providerStatus;
+        const keepCoordinatedProof = options.sealFixtureResults === true && previous !== null && sameOccurrence &&
+          preserveRegulationEvidence(previous, status, verified ? score : null);
+        const keepScore = keepCoordinatedProof || samePhase && (!options.sealFixtureResults || sameOccurrence);
         // A team-history re-observation must not detach an unchanged score from its original sealed result.
-        const keepProof = sealTeamHistory && sealResult && keepScore && previous.regulationVerifiedAt !== null &&
+        const keepProof = keepCoordinatedProof || previous !== null && sealTeamHistory && sealResult && keepScore && previous.regulationVerifiedAt !== null &&
           previous.regulationEvidenceRef !== null && previous.regulationHome === score.home && previous.regulationAway === score.away &&
           previous.homeTeamId === homeTeamId && previous.awayTeamId === awayTeamId && previous.seasonId === season.id && same(previous.kickoff, kickoff);
         const proposed: FixtureFields = { homeTeamId, awayTeamId, seasonId: season.id, round: input.competition.round ?? previous?.round ?? null, kickoff,
           eatDate: kickoff === null ? null : new Date(`${getReportingDate(instant(kickoff))}T00:00:00.000Z`), status,
-          providerStatus, elapsedMinutes: input.elapsedMinutes ?? previous?.elapsedMinutes ?? null,
-          regulationHome: verified ? score.home : keepScore ? previous.regulationHome : null,
-          regulationAway: verified ? score.away : keepScore ? previous.regulationAway : null,
-          regulationEvidenceRef: verified && !keepProof ? scoreEvidence : keepScore ? previous.regulationEvidenceRef : null,
-          regulationVerifiedAt: verified && !keepProof ? new Date(input.source.retrievedAt) : keepScore ? previous.regulationVerifiedAt : null };
+          providerStatus, elapsedMinutes: input.elapsedMinutes ?? (!options.sealFixtureResults || sameOccurrence && samePhase ? previous?.elapsedMinutes ?? null : null),
+          regulationHome: verified ? score.home : keepScore ? previous?.regulationHome ?? null : null,
+          regulationAway: verified ? score.away : keepScore ? previous?.regulationAway ?? null : null,
+          regulationEvidenceRef: verified && !keepProof ? scoreEvidence : keepScore ? previous?.regulationEvidenceRef ?? null : null,
+          regulationVerifiedAt: verified && !keepProof ? new Date(input.source.retrievedAt) : keepScore ? previous?.regulationVerifiedAt ?? null : null };
         const changes = materialChanges(previous ? fields(previous) : null, proposed), material = Object.keys(changes).length > 0;
+        // The scoped sweep receipt seals a recheck without rewriting unchanged, untracked schedules.
+        if (batch.selection.kind === "fixtures" && batch.selection.query.status !== undefined && previous &&
+          previous.activeCycleId === null && !material) continue;
         if (previous && previous.dataVersion >= MAX_VERSION && material) fail("invalid-state");
         const metadata = { retrievedAt: new Date(input.source.retrievedAt), providerUpdatedAt: timestamp(input.source.providerUpdatedAt) ?? previous?.providerUpdatedAt ?? null };
         if (!previous || material || options.coordinateFixtureMutation || sealTeamHistory && sealResult) {
@@ -499,9 +509,37 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
             fixtureIds.push(row.id); insertedFixtures.add(row.id);
             if (historical) await recordHistoricalResult(transaction, row, input, importId, false);
           }
-          if (sealTeamHistory && sealResult && applied)
+          if (sealTeamHistory && sealResult && applied && !options.sealFixtureResults)
             await recordHistoricalResult(transaction, row, input, importId, previous !== null);
-          if (applied && material) { changedFixtures.add(row.id); audit(row, input.source.retrievedAt, changes); }
+          let auditedRow = row, resultChanged = false;
+          if (options.sealFixtureResults && applied && row.status === input.status && row.providerStatus === input.providerStatus &&
+            row.retrievedAt.getTime() === input.source.retrievedAt && (row.status === "live" || finalStatus(row.status))) {
+            const state = await transaction.fixtureResultState.findUnique({ where: { fixtureId: row.id } });
+            const observedAt = row.retrievedAt;
+            const projection = await projectFixtureResult(transaction, row, { ...input, externalFixtureId: input.id }, {
+              previousId: state?.resultId ?? null, observationId: evidenceFingerprint({ importId, fixtureId: row.id }),
+              appliedAt: recordedAt.getTime(), observedAt: input.source.retrievedAt,
+              providerUpdatedAt: input.source.providerUpdatedAt, sameOccurrence,
+            });
+            const firstFinalAt = finalStatus(row.status) ? state?.firstFinalAt ?? observedAt : null;
+            const firstTrackedAt = state?.firstTrackedAt ?? recordedAt;
+            const finalConfirmed = finalStatus(row.status) && projection.phaseConfirmed &&
+              (!isPlayedFinalStatus(input.status) || row.regulationVerifiedAt !== null);
+            const investigate = requiresResultInvestigation({ kickoffAt: row.kickoff?.getTime() ?? null,
+              finalConfirmed, firstTrackedAt: firstTrackedAt.getTime(), firstFinalAt: firstFinalAt?.getTime() ?? null }, recordedAt.getTime());
+            const needsEvidence = isPlayedFinalStatus(input.status) && !finalConfirmed;
+            const data = { resultId: projection.resultId, firstFinalAt, lastSyncAt: observedAt, lastVerifiedAt: observedAt,
+              failures: 0, delayReason: needsEvidence ? incompleteResultEvidence : investigate ? unresolvedInvestigation : null,
+              ...(needsEvidence && state?.delayReason !== incompleteResultEvidence ? { nextCheckAt: recordedAt } : {}) };
+            if (state) await transaction.fixtureResultState.update({ where: { fixtureId: row.id }, data });
+            else await transaction.fixtureResultState.create({ data: { fixtureId: row.id, firstTrackedAt, ...data } });
+            if (state?.resultId !== projection.resultId) {
+              resultChanged = true;
+              changes.resultId = { before: state?.resultId ?? null, after: projection.resultId };
+              auditedRow = await transaction.footballFixture.findUniqueOrThrow({ where: { id: row.id }, include: fixtureRelations });
+            }
+          }
+          if (applied && (material || resultChanged)) { changedFixtures.add(row.id); audit(auditedRow, input.source.retrievedAt, changes); }
         } else await transaction.footballFixture.update({ where: { id: previous.id }, data: { ...metadata,
           regulationEvidenceRef: proposed.regulationEvidenceRef, regulationVerifiedAt: proposed.regulationVerifiedAt } });
       }
@@ -541,7 +579,8 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
   async function writeFixtureDate(batch: CatalogPreparedBatch, authority: CatalogAuthority, check?: () => void) {
     assertCatalogPreparedBatch(batch, authority);
     const selection = batch.selection;
-    if (historical || selection.kind !== "fixtures" || selection.query.date === undefined || batch.rows.fixtures.length <= fixtureDateChunkSize)
+    if (historical || selection.kind !== "fixtures" || selection.query.date === undefined && selection.query.status === undefined ||
+      batch.rows.fixtures.length <= fixtureDateChunkSize)
       return writeImport(batch, authority);
     authorize(batch, authority);
     const { id: parentId } = batch.request;
@@ -746,6 +785,7 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
         ...(query.fixtureId === undefined ? {} : { externalId: BigInt(query.fixtureId) }),
         ...(query.fixtureIds === undefined ? {} : { externalId: { in: query.fixtureIds.map(BigInt) } }),
         ...(query.round === undefined ? {} : { round: query.round }),
+        ...(query.status === undefined ? {} : { providerStatus: { in: query.status.split("-") } }),
         ...(query.date === undefined ? {} : { eatDate: new Date(`${parseReportingDate(query.date)}T00:00:00.000Z`) }),
         ...(query.from === undefined ? {} : { eatDate: { gte: new Date(`${parseReportingDate(query.from)}T00:00:00.000Z`), lte: new Date(`${parseReportingDate(query.to)}T00:00:00.000Z`) } }),
         ...(query.competitionId === undefined && query.season === undefined ? {} : { season: {

@@ -24,7 +24,8 @@ export function projectFixtureStatusFreshness(input: StatusFreshnessInput) {
   const lastVerifiedAt = [canonical, clock(input.lastVerifiedAt)].reduce<UtcInstant | null>((latest, at) =>
     at !== null && at <= asOf && (latest === null || latest < at) ? at : latest, null);
   const nextCheckAt = clock(input.nextCheckAt);
-  const scheduleUnconfirmed = status === "scheduled" && (providerStatus === "TBD" || kickoffAt !== null && kickoffAt <= asOf);
+  const overdue = kickoffAt !== null && kickoffAt <= asOf;
+  const scheduleUnconfirmed = status === "scheduled" && (providerStatus === "TBD" || overdue) || status === "unknown" && overdue;
   const liveStale = status === "live" && lastVerifiedAt !== null && asOf - lastVerifiedAt > coordinatedResultDefaults.liveMs;
   const missingResult = isPlayedFinalStatus(status) && !hasVerifiedRegulation;
   const state = delayed || scheduleUnconfirmed || liveStale || missingResult ? "awaiting-update"

@@ -40,7 +40,8 @@ test('played-final status is retained while regulation evidence is awaited and a
     lastVerifiedAt: finished.canonicalRetrievedAt, nextCheckAt: null });
   assert.equal(projectFixtureStatusFreshness({ ...finished, hasVerifiedRegulation: true }).state, 'current');
   assert.equal(projectFixtureStatusFreshness({ ...finished, status: 'canceled', providerStatus: 'CANC' }).state, 'current');
-  assert.equal(projectFixtureStatusFreshness({ ...finished, status: 'unknown', providerStatus: 'TBD' }).state, 'unverified');
+  assert.equal(projectFixtureStatusFreshness({ ...finished, status: 'unknown', providerStatus: 'TBD' }).state, 'awaiting-update');
+  assert.equal(projectFixtureStatusFreshness({ ...finished, status: 'unknown', providerStatus: 'TBD', kickoffAt: null }).state, 'unverified');
 });
 
 test('the wire schema accepts old records and rejects impossible new assertions of verified freshness', () => {

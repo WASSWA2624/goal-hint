@@ -26,7 +26,8 @@ import { archivedCoachRowId, archivedPlayerProfileRowId, archivedPlayerStatistic
 import type { FootballHistoryPlayerProfileSelector, FootballHistoryPlayerStatisticsSelector } from "./history-player-statistics.ts";
 
 export type FixtureQuery = Readonly<{ date?: string; live?: true; competitionId?: number; season?: number;
-  teamId?: number; from?: string; to?: string; round?: string; fixtureId?: number; fixtureIds?: readonly number[] }>;
+  teamId?: number; from?: string; to?: string; round?: string; fixtureId?: number; fixtureIds?: readonly number[];
+  status?: "TBD-NS-PST" }>;
 export type FixtureHeadToHeadQuery = Readonly<{ teamIds: readonly [number, number] } & Pick<FixtureQuery, "competitionId" | "season" | "from" | "to" | "date">>;
 export type FixturePlayersQuery = Readonly<{ fixtureId: number; homeTeamId: number; awayTeamId: number }>;
 export type TeamQuery = Readonly<{ teamId: number }> | Readonly<{ competitionId: number; season: number }>;
@@ -201,7 +202,7 @@ function validBounds(bounds: ApiFootballBounds, now: UtcInstant, fallback: boole
     && (!fallback || (typeof bounds.cacheScope === "string" && bounds.cacheScope.trim().length > 0 && bounds.cacheScope.length <= 256));
 }
 function queryParams(query: FixtureQuery): Params | null {
-  if (!keysAllowed(query, ["date", "live", "competitionId", "season", "teamId", "from", "to", "round", "fixtureId"]) || Object.keys(query).length === 0) return null;
+  if (!keysAllowed(query, ["date", "live", "competitionId", "season", "teamId", "from", "to", "round", "fixtureId", "status"]) || Object.keys(query).length === 0) return null;
   if (query.live !== undefined) return query.live === true && Object.keys(query).length === 1 ? { live: "all", timezone: "Africa/Kampala" } : null;
   if ([query.competitionId, query.teamId, query.fixtureId].some((id) => id !== undefined && !positive(id))) return null;
   if (query.season !== undefined && (!positive(query.season) || query.season > 9999)) return null;
@@ -210,6 +211,7 @@ function queryParams(query: FixtureQuery): Params | null {
   if ((query.from === undefined) !== (query.to === undefined)) return null;
   if (query.date !== undefined && query.from !== undefined) return null;
   if (query.round !== undefined && (typeof query.round !== "string" || query.round.length < 1 || query.round.length > 200 || query.competitionId === undefined)) return null;
+  if (query.status !== undefined && (query.status !== "TBD-NS-PST" || query.competitionId === undefined)) return null;
   if (query.fixtureId !== undefined && Object.keys(query).length !== 1) return null;
   const params: Record<string, string> = { timezone: "Africa/Kampala" };
   try {
@@ -219,7 +221,8 @@ function queryParams(query: FixtureQuery): Params | null {
       if (params.from > params.to) return null;
     }
   } catch { return null; }
-  for (const [field, parameter] of [["competitionId", "league"], ["teamId", "team"], ["fixtureId", "id"], ["season", "season"], ["round", "round"]] as const) {
+  for (const [field, parameter] of [["competitionId", "league"], ["teamId", "team"], ["fixtureId", "id"], ["season", "season"],
+    ["round", "round"], ["status", "status"]] as const) {
     if (query[field] !== undefined) params[parameter] = String(query[field]);
   }
   return Object.keys(params).length > 1 ? params : null;
@@ -272,6 +275,7 @@ function matchesScope(endpoint: ApiFootballEndpoint, params: Params, row: unknow
     if (params.team && ![fixture.homeTeam.id, fixture.awayTeam.id].includes(Number(params.team))) return false;
     if (params.h2h && [fixture.homeTeam.id, fixture.awayTeam.id].sort((a, b) => a - b).join("-") !== params.h2h) return false;
     if (params.round && fixture.competition.round !== params.round) return false;
+    if (params.status && !params.status.split("-").includes(fixture.providerStatus ?? "")) return false;
     if (params.date || params.from) {
       if (fixture.kickoff === null) return false;
       const date = getReportingDate(fixture.kickoff);

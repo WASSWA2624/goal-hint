@@ -5,17 +5,17 @@ import { getReportingDate, getReportingDayBounds, utcInstantFromEpochMillisecond
 import { isPlayedFinalStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
-import type { Prisma } from "../generated/prisma/client.ts";
+import { Prisma } from "../generated/prisma/client.ts";
 import { createMysqlPredictionHistoryStore } from "../predictions/history-mysql-store.ts";
 import { historyHash, historyInstant } from "../predictions/history-input.ts";
 import { assertHistorySeal, historyJson } from "../predictions/history-read.ts";
 import type { createScheduleLifecycleService } from "../predictions/lifecycle-service.ts";
 import { lifecycleObservationSchema } from "../predictions/lifecycle-input.ts";
 import { lifecycleContentHash } from "../predictions/lifecycle-policy.ts";
-import { coordinatedResultDefaults, finalStatus, missingFromLiveFeed, requiresResultInvestigation, resultCadence, unresolvedInvestigation } from "./result-sync-policy.ts";
+import { coordinatedResultDefaults, finalStatus, incompleteResultEvidence, missingFromLiveFeed, requiresResultInvestigation, resultCadence, unresolvedInvestigation } from "./result-sync-policy.ts";
 import { ResultSyncError, resultSyncFail, type AppliedResultObservation, type PollLease, type ResultSyncStore } from "./result-sync-contract.ts";
 import { storedFixtureResult } from "./result-read.ts";
-import { fixtureResultValue, insertFixtureResult } from "./result-write.ts";
+import { projectFixtureResult } from "./result-write.ts";
 
 type Tx = Prisma.TransactionClient;
 type TrackedFixtureRow = Readonly<{
@@ -24,6 +24,7 @@ type TrackedFixtureRow = Readonly<{
   firstTrackedAt: Date | null; firstFinalAt: Date | null; lastSyncAt: Date | null; lastVerifiedAt: Date | null;
   nextCheckAt: Date | null; failures: bigint | number | null;
   delayReason: string | null;
+  canonicalResultVerified: bigint | number | boolean | null;
 }>;
 const batchSchema = z.strictObject({ id: historyHash, accountId: historyHash, policyHash: historyHash,
   receivedAt: historyInstant, channel: z.enum(["date", "live", "ids"]), date: z.string().nullable(),
@@ -36,6 +37,16 @@ const now = async (tx: Tx) => utcInstantFromEpochMilliseconds((await tx.$queryRa
 const epoch = new Date(0);
 const confirmedFinal = (status: string, verifiedAt: Date | null) => finalStatus(status) &&
   (!isPlayedFinalStatus(status as SettlementStatus) || verifiedAt !== null);
+const playedFinal = Prisma.sql`f.status IN ('finished-regulation','finished-extra-time','finished-penalties')`;
+// Same named fields as hasRequiredFinalPhase. Select only canonical proof for retries.
+const verifiedPlayedResult = Prisma.sql`COALESCE(rr.status = f.status AND rr.regulationVerified = TRUE
+  AND rr.regulationHome = f.regulationHome AND rr.regulationAway = f.regulationAway
+  AND COALESCE(r.delayReason,'') <> ${incompleteResultEvidence}
+  AND f.regulationVerifiedAt IS NOT NULL AND f.regulationEvidenceRef IS NOT NULL AND CASE f.status
+    WHEN 'finished-extra-time' THEN JSON_VALUE(rr.body,'$.extraTimeScore.home') IS NOT NULL
+      AND JSON_VALUE(rr.body,'$.extraTimeScore.away') IS NOT NULL
+    WHEN 'finished-penalties' THEN JSON_VALUE(rr.body,'$.penaltyScore.home') <> JSON_VALUE(rr.body,'$.penaltyScore.away')
+    ELSE TRUE END, FALSE)`;
 
 export function createMysqlResultSyncStore(options: Readonly<{
   database: DatabaseRuntime; accountId: string; lifecycle: ReturnType<typeof createScheduleLifecycleService>;
@@ -98,7 +109,7 @@ export function createMysqlResultSyncStore(options: Readonly<{
           await tx.resultPollerLease.update({ where: { accountId }, data: { ownerId: null, leaseUntil: epoch } });
       });
     },
-    tracked(policy, at) {
+    tracked(policy, at, work) {
       return database.query(async (tx) => {
         const day = getReportingDayBounds(getReportingDate(at));
         const lower = new Date(at - policy.activeWindowMs - (policy.unresolved.at(-1)?.untilAgeMs ?? 0));
@@ -106,39 +117,65 @@ export function createMysqlResultSyncStore(options: Readonly<{
         const correctionLower = new Date(lower.getTime() - (policy.corrections.at(-1)?.untilAgeMs ?? 0));
         const upper = new Date(at + policy.approachMs);
         const scope = JSON.stringify(policy.coverage);
+        const archivedCompetitions = JSON.stringify(work === "current" ? [] : policy.archiveCompetitionIds ?? []);
         const older = new Date(at - coordinatedResultDefaults.investigateAfterMs), current = new Date(at);
         const recentDue = new Date(at - coordinatedResultDefaults.unresolvedRecentMs), oldDue = new Date(at - coordinatedResultDefaults.unresolvedLaterMs);
         const liveDue = new Date(at - resultCadence(policy).activeMs), liveWindow = new Date(at - policy.activeWindowMs);
+        const recentScope = work === "current" ? Prisma.sql`AND
+          (f.kickoff > ${older} OR f.kickoff IS NULL AND COALESCE(r.firstTrackedAt,f.createdAt) > ${older})` : Prisma.empty;
+        const archiveScope = work === "archive" ? Prisma.sql`AND
+          (f.kickoff <= ${older} OR f.kickoff IS NULL AND COALESCE(r.firstTrackedAt,f.createdAt) <= ${older})` : Prisma.empty;
+        const overdueFixtures = work === "archive"
+          ? Prisma.sql`FootballFixture f FORCE INDEX (FootballFixture_kickoff_idx) STRAIGHT_JOIN coveredSeasons s ON s.id = f.seasonId`
+          : Prisma.sql`FootballFixture f JOIN coveredSeasons s ON s.id = f.seasonId`;
+        const overdueOrder = work === "archive" ? Prisma.sql`f.kickoff DESC, f.id DESC` : Prisma.sql`
+          (COALESCE(f.kickoff,r.firstTrackedAt,f.createdAt) > ${older}) DESC,
+          (r.delayReason = ${missingFromLiveFeed}) DESC, COALESCE(r.nextCheckAt, r.lastAttemptAt, ${epoch}), f.retrievedAt, f.id`;
         // A single relation join per table supports large competition lists.
         // Group provider aliases before joining fixtures to avoid duplicates.
         const fixtures = await tx.$queryRaw<TrackedFixtureRow[]>`
           WITH coveredSeasons AS (
-            SELECT s.id, s.year, MIN(cp.externalId) AS competitionId
+            SELECT s.id, s.year, MIN(cp.externalId) AS competitionId, TRUE AS activeScope
             FROM JSON_TABLE(${scope}, '$[*]' COLUMNS (competitionId BIGINT PATH '$.competitionId', season INTEGER PATH '$.season')) wanted
             JOIN FootballCompetitionProvider cp ON cp.provider = 'api-football' AND cp.externalId = wanted.competitionId
             JOIN FootballSeason s ON s.competitionId = cp.competitionId AND s.year = wanted.season
             GROUP BY s.id, s.year
+            UNION ALL
+            SELECT s.id, s.year, MIN(cp.externalId) AS competitionId, FALSE AS activeScope
+            FROM JSON_TABLE(${archivedCompetitions}, '$[*]' COLUMNS (competitionId BIGINT PATH '$')) wanted
+            JOIN FootballCompetitionProvider cp ON cp.provider = 'api-football' AND cp.externalId = wanted.competitionId
+            JOIN FootballSeason s ON s.competitionId = cp.competitionId
+            WHERE NOT EXISTS (SELECT 1 FROM JSON_TABLE(${scope}, '$[*]'
+              COLUMNS (competitionId BIGINT PATH '$.competitionId', season INTEGER PATH '$.season')) active
+              JOIN FootballCompetitionProvider mapped ON mapped.provider = 'api-football' AND mapped.externalId = active.competitionId
+              WHERE mapped.competitionId = s.competitionId AND active.season = s.year)
+            GROUP BY s.id, s.year
           ), overdue AS (
-            SELECT f.id FROM FootballFixture f JOIN coveredSeasons s ON s.id = f.seasonId
+            SELECT f.id FROM ${overdueFixtures}
             LEFT JOIN FixtureResultState r ON r.fixtureId = f.id
+            LEFT JOIN FixtureResult rr ON rr.id = r.resultId AND rr.fixtureId = f.id
             WHERE ${policy.coordinated === true} AND f.provider = 'api-football'
+              ${recentScope} ${archiveScope}
               AND (f.status NOT IN ('finished-regulation','finished-extra-time','finished-penalties','canceled','abandoned','awarded')
-                OR f.status IN ('finished-regulation','finished-extra-time','finished-penalties') AND f.regulationVerifiedAt IS NULL)
+                OR ${playedFinal} AND NOT ${verifiedPlayedResult})
               AND COALESCE(f.kickoff,r.firstTrackedAt,f.createdAt) <= ${current}
               AND (r.nextCheckAt IS NULL OR r.nextCheckAt <= ${current})
-              AND (r.delayReason = ${missingFromLiveFeed} OR COALESCE(f.kickoff,r.firstTrackedAt,f.createdAt) <= ${older}
+              AND (r.delayReason IN (${missingFromLiveFeed}, ${incompleteResultEvidence}) OR COALESCE(f.kickoff,r.firstTrackedAt,f.createdAt) <= ${older}
                 AND COALESCE(r.delayReason,'') <> ${unresolvedInvestigation} OR GREATEST(f.retrievedAt, COALESCE(r.lastVerifiedAt, ${epoch})) <=
                 CASE WHEN f.status = 'live' AND COALESCE(f.kickoff,r.firstTrackedAt,f.createdAt) >= ${liveWindow} THEN ${liveDue}
                   WHEN COALESCE(f.kickoff,r.firstTrackedAt,f.createdAt) > ${older} THEN ${recentDue} ELSE ${oldDue} END)
-            ORDER BY (r.delayReason = ${missingFromLiveFeed}) DESC, COALESCE(r.nextCheckAt, ${epoch}), f.retrievedAt, f.id
-            LIMIT ${policy.maxBatchesPerTick * 20}
+            ORDER BY ${overdueOrder}
+            LIMIT ${work === "archive" ? 20 : policy.maxBatchesPerTick * 20}
           )
           SELECT f.id AS fixtureId, f.externalId, s.competitionId, s.year AS season, f.kickoff, f.status, f.retrievedAt,
-            f.createdAt, f.regulationVerifiedAt, r.firstTrackedAt, r.firstFinalAt, r.lastSyncAt, r.lastVerifiedAt, r.nextCheckAt, r.failures, r.delayReason
+            f.createdAt, f.regulationVerifiedAt, r.firstTrackedAt, r.firstFinalAt, r.lastSyncAt, r.lastVerifiedAt, r.nextCheckAt, r.failures, r.delayReason,
+            ${policy.coordinated ? verifiedPlayedResult : Prisma.sql`NULL`} AS canonicalResultVerified
           FROM FootballFixture f JOIN coveredSeasons s ON s.id = f.seasonId
           LEFT JOIN FixtureResultState r ON r.fixtureId = f.id
+          LEFT JOIN FixtureResult rr ON rr.id = r.resultId AND rr.fixtureId = f.id AND ${policy.coordinated === true}
           WHERE f.provider = 'api-football' AND (
-            (f.kickoff >= ${new Date(day.startInclusive)} AND f.kickoff < ${new Date(day.endExclusive)})
+            ${work !== "archive"} AND s.activeScope = TRUE AND (TRUE ${recentScope})
+            AND ((f.kickoff >= ${new Date(day.startInclusive)} AND f.kickoff < ${new Date(day.endExclusive)})
             OR (${policy.skipConfirmedFinals !== true} AND f.kickoff BETWEEN ${correctionLower} AND ${upper} AND
               (${policy.coordinated !== true} OR f.status IN ('finished-regulation','finished-extra-time','finished-penalties','canceled','abandoned','awarded')))
             OR (f.kickoff BETWEEN ${lower} AND ${upper} AND (
@@ -149,7 +186,8 @@ export function createMysqlResultSyncStore(options: Readonly<{
               OR f.status NOT IN ('finished-regulation', 'finished-extra-time', 'finished-penalties', 'canceled', 'abandoned', 'awarded')))
             OR (${policy.coordinated !== true} AND r.nextCheckAt <= ${current}
               AND COALESCE(f.kickoff,r.firstTrackedAt,f.createdAt) < ${lower})
-            OR (${policy.coordinated === true} AND (f.status = 'live' OR f.status = 'scheduled' AND f.kickoff BETWEEN ${current} AND ${upper}))
+            OR (${policy.coordinated === true} AND (f.status = 'live' AND COALESCE(f.kickoff,f.createdAt) >= ${liveWindow}
+              OR f.status = 'scheduled' AND f.kickoff BETWEEN ${current} AND ${upper})))
             OR f.id IN (SELECT id FROM overdue)
           )`;
         return freezeEvidence(fixtures.map((fixture) => ({ fixtureId: fixture.fixtureId, externalId: Number(fixture.externalId),
@@ -163,7 +201,8 @@ export function createMysqlResultSyncStore(options: Readonly<{
           failures: Number(fixture.failures ?? 0), ...(policy.coordinated ? {
             delayReason: fixture.delayReason, lastVerifiedAt: fixture.lastVerifiedAt?.getTime() ?? null,
           } : {}),
-          ...(policy.coordinated || policy.skipConfirmedFinals ? { finalConfirmed: confirmedFinal(fixture.status, fixture.regulationVerifiedAt) } : {}) })));
+          ...(policy.coordinated || policy.skipConfirmedFinals ? { finalConfirmed: confirmedFinal(fixture.status, fixture.regulationVerifiedAt) &&
+            (!policy.coordinated || !isPlayedFinalStatus(fixture.status as SettlementStatus) || Boolean(fixture.canonicalResultVerified)) } : {}) })));
       });
     },
     pending(lease) {
@@ -195,7 +234,8 @@ export function createMysqlResultSyncStore(options: Readonly<{
           const saved = await history.withFixtureTransaction(observation.fixtureId, async (_writer, tx): Promise<AppliedResultObservation | null> => {
             const id = evidenceFingerprint({ batchId: batch.id, fixtureId: observation.fixtureId });
             if (await tx.resultProviderObservation.findUnique({ where: { id } })) return null;
-            const before = await tx.footballFixture.findUniqueOrThrow({ where: { id: observation.fixtureId }, select: { status: true, retrievedAt: true } });
+            const before = await tx.footballFixture.findUniqueOrThrow({ where: { id: observation.fixtureId },
+              select: { status: true, retrievedAt: true, kickoff: true } });
             const receipt = await lifecycle.observeProjection(observation, tx);
             async function record(outcome: string, resultId: string | null, reason?: string) {
               const body = evidenceSerialize({ observation, lifecycleId: receipt.id, outcome, lifecycleOutcome: receipt.outcome,
@@ -210,7 +250,6 @@ export function createMysqlResultSyncStore(options: Readonly<{
             }
             const fixture = await tx.footballFixture.findUniqueOrThrow({ where: { id: observation.fixtureId } });
             const state = await tx.fixtureResultState.findUnique({ where: { fixtureId: fixture.id } });
-            const previous = state?.resultId ? await tx.fixtureResult.findUniqueOrThrow({ where: { id: state.resultId } }) : null;
             const cursor = await tx.fixtureLifecycleState.findUniqueOrThrow({ where: { fixtureId: fixture.id } });
             // An exact lifecycle replay returns its original accepted receipt.
             // It cannot authorize old scores after a newer cursor has advanced.
@@ -219,26 +258,26 @@ export function createMysqlResultSyncStore(options: Readonly<{
               cursor.contentHash === lifecycleContentHash(observation) && fixture.retrievedAt.getTime() === observation.retrievedAt &&
               fixture.status === observation.status && fixture.providerStatus === observation.providerStatus;
             const outcome = originallyAccepted && !accepted ? "stale" : receipt.outcome;
-            const value = fixtureResultValue(fixture, observation);
-            const contentHash = evidenceFingerprint(value);
-            let resultId = previous?.id ?? null;
-            if (accepted && previous?.contentHash !== contentHash) {
-              const version = (await tx.footballFixture.update({ where: { id: fixture.id }, data: { dataVersion: { increment: 1 } }, select: { dataVersion: true } })).dataVersion;
-              resultId = await insertFixtureResult(tx, { fixtureId: fixture.id, fixtureVersion: version, previousId: previous?.id ?? null,
-                observationId: id, observedAt: observation.retrievedAt, providerUpdatedAt: observation.providerUpdatedAt,
-                regulationVerifiedAt: fixture.regulationVerifiedAt, value, contentHash });
-              await tx.predictionChangeEvent.create({ data: { fixtureId: fixture.id, version, fixtureResultId: resultId, kind: "fixture-result", at: new Date(at) } });
-            }
+            const projection = accepted ? await projectFixtureResult(tx, fixture, observation, { previousId: state?.resultId ?? null,
+              observationId: id, appliedAt: at, observedAt: observation.retrievedAt, providerUpdatedAt: observation.providerUpdatedAt,
+              sameOccurrence: before.kickoff?.getTime() === fixture.kickoff?.getTime() }) : null;
+            const resultId = projection?.resultId ?? state?.resultId ?? null;
             const lastSyncAt = new Date(Math.max(state?.lastSyncAt?.getTime() ?? 0, observation.retrievedAt));
             const firstFinalAt = batch.coordinated && accepted && !finalStatus(fixture.status) ? null :
               state?.firstFinalAt ?? (finalStatus(before.status) ? before.retrievedAt
               : accepted && finalStatus(fixture.status) ? new Date(observation.retrievedAt) : null);
-            const kickoffAt = fixture.kickoff?.getTime() ?? null, finalConfirmed = confirmedFinal(fixture.status, fixture.regulationVerifiedAt);
+            const kickoffAt = fixture.kickoff?.getTime() ?? null;
+            const finalConfirmed = confirmedFinal(fixture.status, fixture.regulationVerifiedAt) &&
+              (!batch.coordinated || projection?.phaseConfirmed === true);
             const investigate = batch.coordinated && requiresResultInvestigation({ kickoffAt, finalConfirmed,
               firstTrackedAt: state?.firstTrackedAt.getTime() ?? fixture.createdAt.getTime(), firstFinalAt: firstFinalAt?.getTime() ?? null }, at);
+            const needsEvidence = batch.coordinated && isPlayedFinalStatus(observation.status) && !finalConfirmed;
             const data = { resultId, lastSyncAt, firstFinalAt,
-              ...(accepted ? { lastVerifiedAt: new Date(observation.retrievedAt), failures: 0, delayReason: investigate ? unresolvedInvestigation : null } :
-                { delayReason: outcome === "stale" ? "older-observation" : receipt.reason }) };
+              ...(accepted ? { lastVerifiedAt: new Date(observation.retrievedAt), failures: 0,
+                ...(needsEvidence && batch.channel !== "ids" && state?.delayReason !== incompleteResultEvidence ? { nextCheckAt: new Date(at) } : {}),
+                delayReason: needsEvidence ? incompleteResultEvidence :
+                  investigate ? unresolvedInvestigation : null } : { delayReason: state?.delayReason === incompleteResultEvidence
+                    ? incompleteResultEvidence : outcome === "stale" ? "older-observation" : receipt.reason }) };
             await tx.fixtureResultState.upsert({ where: { fixtureId: fixture.id },
               create: { fixtureId: fixture.id, firstTrackedAt: new Date(at), nextCheckAt: epoch, ...data }, update: data });
             await record(outcome, resultId);

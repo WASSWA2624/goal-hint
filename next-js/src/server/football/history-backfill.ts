@@ -1,13 +1,15 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate, type UtcInstant } from "../../domain/calendar.ts";
+import { addReportingDays, getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds,
+  type ReportingDate, type UtcInstant } from "../../domain/calendar.ts";
 import type { createApiFootballAdapter } from "./api-football-adapter.ts";
 import { API_FOOTBALL_CONTRACT_VERSION, apiFootballFixtureRoundParameters, type ApiFootballBounds, type ApiFootballFallbackWorkflow,
   type ApiFootballFixtureRound, type ApiFootballResult, type FixtureRoundQuery } from "./api-football-contract.ts";
 import { normalizeCompetition, type NormalizationContext, type NormalizedCompetition } from "./api-football-normalize.ts";
 import { catalogPersistenceUnavailable, type FootballCatalogStore } from "./catalog-mysql-store.ts";
 import { CatalogPersistenceDeferredError, type createFootballCatalogImporter } from "./catalog-service.ts";
+import type { HistoricalDateRepair } from "./history-date-repair.ts";
 import { reviewedHistoryFixtureRepair } from "./history-fixture-correction.ts";
 import { footballHistoryCatalogMaxAgeMs, footballHistoryFixtureScopeFingerprint } from "./history-fixture-scope.ts";
 import { footballHistorySourceMaxRows } from "./history-source.ts";
@@ -15,6 +17,7 @@ import type { FixtureBackfillManifest, FixtureBackfillManifestStore } from "./hi
 
 export const historyBackfillLimits = Object.freeze({ defaultRequests: 6, maximumRequests: 100 });
 const retryDelayMs = 15 * 60_000;
+const dateRepairMaxRetryDelayMs = 24 * 60 * 60_000;
 const consecutiveTransportLimit = 3;
 const previousWholeSeasonRowLimit = 5_000;
 const transportFailures = new Set(["transport-error", "deadline-exceeded"]);
@@ -106,6 +109,7 @@ export function createFootballHistoryBackfill(options: Readonly<{
   competitionIds: readonly number[];
   manifest?: FixtureBackfillManifestStore;
   initializeDate?(date: ReportingDate, requestBounds: ApiFootballBounds, signal?: AbortSignal): Promise<HistoricalDateDiscovery>;
+  repairDate?(date: ReportingDate, attempt: number, requestBounds: ApiFootballBounds, workflow: ApiFootballFallbackWorkflow): Promise<HistoricalDateRepair>;
   upcomingSeasons?(): Promise<readonly (LeagueSeason & Readonly<{ fixtures: number }>)[]>;
   hasFixtureSource?(parameters: FixtureSelector, observation?: FixtureSourceObservation): Promise<boolean>;
   hasExactFixtureScope?(parameters: FixtureSelector, observation: FixtureSourceObservation): Promise<boolean>;
@@ -236,7 +240,8 @@ export function createFootballHistoryBackfill(options: Readonly<{
         seasons: [...(existing?.seasons ?? []).map((item) => seasons.get(key(item.scope)) ?? item),
           ...planned.filter(({ scope }) => !included.has(key(scope)))],
         unlistedCompetitions: competitionIds.filter((id) => !known.has(id)),
-        ...(existing?.cursor && !input.rediscover && { cursor: existing.cursor }) };
+        ...(existing?.cursor && !input.rediscover && { cursor: existing.cursor }),
+        ...(existing?.dateRepair && { dateRepair: existing.dateRepair }) };
       await options.manifest?.save(competitionIds, minSeason, next, options.now());
       manifest = next;
     }
@@ -261,6 +266,51 @@ export function createFootballHistoryBackfill(options: Readonly<{
       if (requests >= input.maxRequests) { stopped = "request-budget"; return false; }
       return true;
     }
+
+    // Reserve at most one dated request per archive job. The season scan continues to make progress with the remaining budget.
+    let dateRepair = manifest.dateRepair;
+    const oldestCoveredSeason = plan.reduce((oldest, { scope }) => Math.min(oldest, scope.season), currentYear);
+    const oldestDate = parseReportingDate(`${oldestCoveredSeason}-01-01`);
+    if (options.repairDate && options.manifest && input.competitionId === undefined && canDispatch()) {
+      const state = dateRepair ?? { nextOlder: addReportingDays(today, -1), nextRecent: today, completed: 0, unavailable: 0,
+        fixtures: 0, changed: 0, pending: [], retryTurn: false, last: null };
+      const now = options.now();
+      const retry = state.pending.find((entry) => entry.retryAt <= now);
+      const unscanned = state.nextRecent < today ? state.nextRecent : state.nextOlder >= oldestDate ? state.nextOlder : null;
+      const pending = state.retryTurn || unscanned === null ? retry : undefined;
+      const date = pending?.date ?? unscanned;
+      if (date !== null) {
+        const attempt = pending?.attempt ?? 1;
+        const requestBounds = bounds(now, verifiedDayEnd);
+        const check = () => {
+          if (signal?.aborted || options.providerDayEndsAt() !== verifiedDayEnd || options.now() >= requestBounds.deadlineAt) {
+            throw new Error("The historical date repair request expired.");
+          }
+        };
+        const outcome = await options.repairDate(date, attempt, requestBounds, { signal: signal ?? new AbortController().signal,
+          deadlineAt: requestBounds.deadlineAt, check, beforeReserve: check, beforeDispatch: check });
+        requests += outcome.requests;
+        const waiting = state.pending.filter((entry) => entry.date !== date);
+        if (outcome.status === "partial" || outcome.status === "failed" || outcome.status === "deferred") {
+          const delay = Math.min(dateRepairMaxRetryDelayMs, retryDelayMs * 2 ** Math.min(attempt - 1, 7));
+          waiting.push({ date, status: outcome.status, reason: outcome.reason ?? "incomplete-date-coverage",
+            attempt: outcome.resumeObservation ? attempt : attempt + 1, retryAt: options.now() + delay });
+        }
+        dateRepair = {
+          nextOlder: !pending && date === state.nextOlder ? addReportingDays(state.nextOlder, -1) : state.nextOlder,
+          nextRecent: !pending && date === state.nextRecent ? addReportingDays(state.nextRecent, 1) : state.nextRecent,
+          completed: state.completed + Number(outcome.status === "complete"),
+          unavailable: state.unavailable + Number(outcome.status === "unavailable"),
+          fixtures: state.fixtures + outcome.fixtures, changed: state.changed + outcome.changed,
+          pending: waiting, retryTurn: !pending, last: { date, status: outcome.status, reason: outcome.reason },
+        };
+        manifest = { ...manifest, dateRepair };
+        await options.manifest.save(competitionIds, minSeason, manifest, options.now());
+        if (outcome.reason !== null && stopReasons.has(outcome.reason)) stopped = outcome.reason;
+        if (outcome.status === "failed") recordTransport(outcome.requests, outcome.reason !== null && transportFailures.has(outcome.reason), false);
+      }
+    }
+
     function recordTransport(dispatched: number, failed: boolean, retrieved: boolean) {
       if (dispatched === 0) return;
       if (failed) {
@@ -388,15 +438,24 @@ export function createFootballHistoryBackfill(options: Readonly<{
       await options.manifest.save(competitionIds, minSeason, { ...manifest, ...(dateScanned && { dateScanned: true }),
         cursor: { next: nextSeasonIndex, completed, empty: verifiedEmpty, deferred: [...pendingSeasons] } }, options.now());
     }
-    const complete = plan.length > 0 && !stopped && pendingSeasons.size === 0 && unlistedCompetitions.length === 0;
+    // Details totals use the fully verified league/season scan, independently of the supplemental date scan.
+    const seasonsComplete = plan.length > 0 && !stopped && pendingSeasons.size === 0 && unlistedCompetitions.length === 0;
+    const dateComplete = dateRepair === undefined ? null : dateRepair.pending.length === 0 && dateRepair.nextOlder < oldestDate && dateRepair.nextRecent >= today;
+    const complete = seasonsComplete && dateComplete !== false;
     const nextDeferred = [...pendingSeasons].sort((left, right) => left - right).at(0);
     return { status: complete ? "complete" as const : "partial" as const,
       requests, planned: plan.length, completed, verifiedEmpty, archivedOnly, deferred: options.manifest ? pendingSeasons.size : deferred,
       processed, imported, partitioned, roundsPlanned, roundsCompleted,
-      ...(complete && { fixtureScopeFingerprint: footballHistoryFixtureScopeFingerprint(plan.map(({ scope }) => scope)) }),
+      ...(seasonsComplete && { fixtureScopeFingerprint: footballHistoryFixtureScopeFingerprint(plan.map(({ scope }) => scope)) }),
       providerDayEndsAt: verifiedDayEnd, anchorDate: manifest.anchorDate, dateScanned,
       dateDiscovery: anchor, scannedSeasons: nextSeasonIndex, partialSeasons: pendingSeasons.size,
       nextScope: stopped ? nextScope : nextDeferred === undefined ? null : plan[nextDeferred]!.scope,
-      roundsArchivedOnly, persistenceDeferred, roundsPersistenceDeferred, consecutiveTransportErrors, unlistedCompetitions, stopped };
+      dateComplete, ...(dateRepair && { dateRepair: {
+        nextOlder: dateRepair.nextOlder, nextRecent: dateRepair.nextRecent, completed: dateRepair.completed, unavailable: dateRepair.unavailable,
+        fixtures: dateRepair.fixtures, changed: dateRepair.changed, last: dateRepair.last,
+        partial: dateRepair.pending.filter(({ status }) => status === "partial").length,
+        failed: dateRepair.pending.filter(({ status }) => status === "failed").length,
+        deferred: dateRepair.pending.filter(({ status }) => status === "deferred").length,
+      } }), roundsArchivedOnly, persistenceDeferred, roundsPersistenceDeferred, consecutiveTransportErrors, unlistedCompetitions, stopped };
   };
 }

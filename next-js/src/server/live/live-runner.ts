@@ -247,6 +247,7 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
     try { runtime = await createLiveRuntime(policy, { localFootball,
       onHistoryDetailBatch: (report) => log({ event: "history-detail-batch", ...report }),
       onHourlyLookupFailure: (reason, fixtureCount) => log({ event: "hourly-fixture-reconcile-failed", reason, fixtureCount }),
+      onForwardFixtureSweep: (report) => log({ event: "hourly-fixture-forward-sweep", ...report }),
       onDateImportFailure: (date, hourly, reason) => log({ event: "selection-date-import-failed", date, hourly, reason }),
       onCurrentDayCoverage: (report) => log({ event: "current-context", requested: report.requested,
         archived: report.archived, skipped: report.skipped, deferred: report.deferred, stopped: report.stopped }),

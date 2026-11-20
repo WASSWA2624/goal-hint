@@ -168,6 +168,7 @@ const fixtureSnapshotBaseSchema = z.strictObject({
   update: fixtureUpdateSchema.optional(),
   availabilityMessage: z.string().max(256).nullable().optional(),
   scorePeriod: z.enum(["regulation", "live"]).nullable().optional(),
+  phaseScores: z.strictObject({ extraTime: score.nullable(), shootout: score.nullable() }).optional(),
   liveClock: liveClockSchema.nullable().optional(),
   prices: z.array(fixturePriceSchema).max(4).optional(),
   marketOdds: marketOddsObservationSchema.nullable().optional(),
@@ -196,6 +197,11 @@ function refineFixture(value: z.infer<typeof wireFixtureBaseSchema>, context: z.
     }
   }
   if (value.liveClock && value.status !== "live") context.addIssue({ code: "custom", message: "A live clock requires a live fixture." });
+  if (value.phaseScores && ((value.status !== "finished-extra-time" && value.status !== "finished-penalties") ||
+      value.status !== "finished-penalties" && value.phaseScores.shootout !== null ||
+      value.phaseScores.extraTime === null && value.phaseScores.shootout === null)) {
+    context.addIssue({ code: "custom", message: "Phase scores require the corresponding completed phase." });
+  }
   if (value.marketOdds && value.status !== (value.marketOdds.kind === "in-play" ? "live" : "scheduled")) {
     context.addIssue({ code: "custom", message: "Current odds must match the fixture phase." });
   }

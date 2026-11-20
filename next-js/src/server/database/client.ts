@@ -21,18 +21,20 @@ export class DatabaseOperationError extends Error {
 }
 
 function sanitized(error: unknown): DatabaseOperationError {
+  if (error instanceof DatabaseOperationError) return error;
   let code: unknown;
   try {
     code = error !== null && typeof error === "object" && "code" in error ? error.code : null;
     if (code === "P2010" || code === "P2039") {
       const cause = (error as { meta?: { driverAdapterError?: { cause?: { kind?: unknown; code?: unknown } } } }).meta?.driverAdapterError?.cause;
       if (cause?.kind === "mysql" && cause.code === 1205) return new DatabaseOperationError("lock-timeout");
+      if (cause?.kind === "mysql" && cause.code === 1213) return new DatabaseOperationError("conflict");
     }
   } catch { return new DatabaseOperationError("failed"); }
   if (typeof code !== "string") return new DatabaseOperationError("failed");
   if (code === "P2034") return new DatabaseOperationError("conflict");
   if (["P2002", "P2003", "P2011", "P2014"].includes(code)) return new DatabaseOperationError("constraint");
-  if (["P1000", "P1001", "P1002", "P1017", "P2024"].includes(code)) return new DatabaseOperationError("unavailable");
+  if (["P1000", "P1001", "P1002", "P1017", "P2024", "P2028"].includes(code)) return new DatabaseOperationError("unavailable");
   return new DatabaseOperationError("failed");
 }
 

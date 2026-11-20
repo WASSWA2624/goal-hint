@@ -243,6 +243,24 @@ test('audited schedule lifecycle on isolated genuine MySQL', { timeout: 300_000 
       await assert.rejects(failed.observe(input), denied('unavailable'));
       assert.deepEqual(await totals(state), before); assert.equal((await lifecycle.history(state.fixture.id)).length, 0);
     });
+    await t.test('one contradictory catalog identity retains its canonical fixture and lets verified neighbors commit', async () => {
+      setTime(PUBLICATION_NOW); const state = await setup(3003);
+      const kickoff = new Date(state.cycle.kickoffAt).toISOString();
+      const provider = createSyntheticCatalogAdapter({ rows: [catalogFixture(3003, { kickoff, homeId: 999 }), catalogFixture(37232, { kickoff })],
+        batchEvidence: { maximumIds: 20, evidenceRef: 'synthetic-batch' } });
+      provider.clock.value = PUBLICATION_NOW + 10_000; setTime(provider.clock.value);
+      const store = createFootballCatalogStore(a, { clock: provider.clock, coordinateFixtureMutation: lifecycle.coordinateFixtureMutation });
+      const importer = createFootballCatalogImporter({ adapter: provider.adapter, store, authority: catalogSelectionAuthority, clock: provider.clock });
+      const receipt = await importer.import(catalogRequest({ kind: 'fixtures', query: { fixtureIds: [3003, 37232] } }, provider.clock.value));
+      assert.equal(receipt.status, 'complete');
+      assert.equal((await catalog.fixtureByProviderId(3003)).homeTeamId, state.fixture.homeTeamId);
+      const imported = await catalog.fixtureByProviderId(37232);
+      assert.deepEqual(receipt.changedFixtureIds, [imported.id]);
+      const [conflict] = await lifecycle.history(state.fixture.id);
+      assert.equal(conflict.outcome, 'conflict');
+      assert.equal(conflict.reason, 'identity-unresolved');
+      assert.equal((await cycle(state)).state, 'open');
+    });
     await t.test('commit response loss replays the exact receipt with no duplicate transitions', async () => {
       setTime(PUBLICATION_NOW); const state = await setup(3025), input = observed(state, { status: 'PST' });
       let lose = true;

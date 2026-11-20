@@ -48,6 +48,10 @@ test("cards show fixture progress until completion without altering market settl
   const noPick = { ...scheduled, forecast: null };
   assert.equal(selectedCardPrediction(noPick), null);
   assert.equal(cardResultStatus(noPick.status, "unavailable"), "upcoming");
+  assert.equal(cardResultStatus(noPick.status, "unavailable", true), "pending");
+  assert.equal(cardResultStatus("live", "pending", true), "live");
+  assert.equal(cardResultStatus("finished-extra-time", "unavailable", true), "pending");
+  assert.equal(cardResultStatus("finished-extra-time", "correct", true), "correct");
   assert.equal(createMessages().text("match.result.upcoming"), "Upcoming");
   for (const status of ["scheduled", "live", "postponed", "unknown"]) {
     for (const outcome of ["pending", "correct", "incorrect", "void", "unavailable"]) {

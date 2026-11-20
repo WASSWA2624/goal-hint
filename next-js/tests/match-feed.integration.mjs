@@ -254,6 +254,7 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       assert.equal(tomorrow.total, 1);
       assert.equal(tomorrow.records[0].forecast, null);
       assert.equal(tomorrow.records[0].unavailableMarkets.length, 4);
+      assert.equal(tomorrow.records[0].update.statusFreshness.state, 'current');
       const priorRead = readAt;
       try {
         readAt = tomorrow.records[0].kickoffAt + 5 * 60_000;
@@ -496,9 +497,9 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       const lifecycle = createScheduleLifecycleService({ database: p.a, cutoff: p.first, policy: lifecyclePolicy(), authority: lifecycleAuthority() });
       const store = createMysqlResultSyncStore({ database: p.a, accountId, lifecycle });
       const settlement = createMarketSettlementService({ database: p.a, queue: p.queue });
-      async function result(home, away, number) {
+      async function result(home, away, number, { status = 'FT', score = {}, goals = { home, away } } = {}) {
         p.setTime(Math.max(p.now() + 1000, state.cycle.kickoffAt + 7_200_000));
-        const observation = parseLifecycleInput(lifecycleInput(state, p.now(), { status: 'FT', raw: { goals: { home, away }, score: { fulltime: { home, away } } } }));
+        const observation = parseLifecycleInput(lifecycleInput(state, p.now(), { status, raw: { goals, score: { fulltime: { home, away }, ...score } } }));
         const lease = await store.acquire(resultHash(`feed-result-owner:${number}`), 30_000); assert.ok(lease);
         const batch = { id: resultHash(`feed-result:${number}`), accountId, policyHash: resultHash('feed-result-policy'), receivedAt: p.now(),
           channel: 'ids', date: null, requestedIds: [3000], observations: [observation], error: null, requestsDispatched: 1 };
@@ -523,6 +524,19 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       assert.deepEqual(await performance(), { total: 1, won: 0, lost: 1, pending: 0, void: 0, unavailable: 0 });
       assert.ok(record.forecast.markets.find((item) => item.market.family === 'match-result').outcome.correctedAt);
       assert.equal(record.forecast.revisionId, original); assert.ok(BigInt(record.dataVersion) > BigInt(before));
+
+      const extraTime = { home: 2, away: 2 }, shootout = { home: 4, away: 5 };
+      await result(1, 1, 3, { status: 'PEN', goals: extraTime, score: { extratime: extraTime, penalty: shootout } });
+      record = matchFeedResponseSchema.parse(gateFeedResponse(await query({ status: 'finished' }), await fullAccess()))
+        .records.find((item) => item.fixtureId === state.fixture.id);
+      assert.equal(record.status, 'finished-penalties');
+      assert.equal(record.scorePeriod, 'regulation');
+      assert.deepEqual(record.score, { home: 1, away: 1 });
+      assert.deepEqual(record.phaseScores, { extraTime, shootout });
+      await settlement.settleFixture(state.fixture.id);
+      record = await card(3000);
+      assert.equal(record.forecast.revisionId, original);
+      assert.equal(record.forecast.markets.find((item) => item.market.family === 'match-result').outcome.status, 'incorrect');
     });
     await t.test('visitor reads never invoke adapters or mutate fixtures, forecasts, results or jobs', async () => {
       const counts = () => p.a.query(async (tx) => ({ jobs: await tx.durableJob.count(), forecasts: await tx.predictionSet.count(),

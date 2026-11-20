@@ -27,9 +27,9 @@ export function createLiveDiscoveryImport(options: Readonly<{
     const data = response.data.filter(row => ids.has(row.id) && competitions.has(row.competition.id)).map(row => {
       // Enriched fixture views carry separate raw fact blocks outside the canonical catalog schema.
       const { id, homeTeam, awayTeam, competition, kickoff, status, providerStatus, elapsedMinutes, stoppageMinutes, regulationScore,
-        reportedGoals, extraTimeScore, penaltyScore, source } = row;
+        halfTimeScore, reportedGoals, extraTimeScore, penaltyScore, source } = row;
       return { id, homeTeam, awayTeam, competition, kickoff, status, providerStatus, elapsedMinutes, stoppageMinutes,
-        regulationScore, reportedGoals, extraTimeScore, penaltyScore, source };
+        regulationScore, ...(halfTimeScore === undefined ? {} : { halfTimeScore }), reportedGoals, extraTimeScore, penaltyScore, source };
     });
     if (signal?.aborted || !data.length) return;
     const subset = data.length !== response.data.length;

@@ -32,6 +32,7 @@ const country = searchableText(256);
 const fixtureQuery = z.object({
   date: date.optional(), live: z.literal(true).optional(), competitionId: identity.optional(), season: season.optional(), teamId: identity.optional(),
   from: date.optional(), to: date.optional(), round: z.string().min(1).max(200).optional(), fixtureId: identity.optional(),
+  status: z.literal("TBD-NS-PST").optional(),
   fixtureIds: z.array(identity).min(1).max(20).refine((ids) => new Set(ids).size === ids.length)
     .transform((ids) => ids.sort((left, right) => left - right)).optional(),
 }).strict().refine((query) => {
@@ -39,7 +40,7 @@ const fixtureQuery = z.object({
   if (query.season !== undefined && query.competitionId === undefined && query.teamId === undefined) return false;
   if ((query.from === undefined) !== (query.to === undefined) || query.date !== undefined && query.from !== undefined) return false;
   if (query.from !== undefined && query.to !== undefined && query.from > query.to) return false;
-  if (query.round !== undefined && query.competitionId === undefined) return false;
+  if ((query.round !== undefined || query.status !== undefined) && query.competitionId === undefined) return false;
   return query.fixtureId === undefined && query.fixtureIds === undefined && query.live === undefined ||
     Object.values(query).filter((value) => value !== undefined).length === 1;
 });
@@ -84,11 +85,16 @@ const goal = nonnegative.max(1000);
 const pair = z.object({ home: goal.nullable(), away: goal.nullable() }).strict();
 const score = z.object({ fixtureId: identity, providerStatus: z.enum(["FT", "AET", "PEN"]), sourceField: z.literal("score.fulltime"),
   period: z.literal("regulation-including-stoppage-time"), home: goal, away: goal, verified: z.boolean() }).strict();
+const halfTimeScore = score.extend({ sourceField: z.literal("score.halftime"), period: z.literal("first-half-including-stoppage-time") });
 const fixtureSchema = z.object({ id: identity, homeTeam: teamSchema, awayTeam: teamSchema, competition: competitionSchema,
   kickoff: instant.nullable(), status: z.enum(settlementStatuses), providerStatus: string(32).nullable(), elapsedMinutes: goal.nullable(),
   stoppageMinutes: goal.nullable().optional(),
-  regulationScore: score.nullable(), reportedGoals: pair, extraTimeScore: pair, penaltyScore: pair, source: sourceSchema,
-}).strict().refine((fixture) => fixture.homeTeam.id !== fixture.awayTeam.id && fixture.competition.season !== null);
+  regulationScore: score.nullable(), halfTimeScore: halfTimeScore.nullable().exactOptional(),
+  reportedGoals: pair, extraTimeScore: pair, penaltyScore: pair, source: sourceSchema,
+}).strict().refine((fixture) => fixture.homeTeam.id !== fixture.awayTeam.id && fixture.competition.season !== null &&
+  (fixture.halfTimeScore == null || fixture.halfTimeScore.fixtureId === fixture.id && fixture.halfTimeScore.providerStatus === fixture.providerStatus &&
+    fixture.regulationScore !== null && fixture.halfTimeScore.home <= fixture.regulationScore.home &&
+    fixture.halfTimeScore.away <= fixture.regulationScore.away && (!fixture.halfTimeScore.verified || fixture.regulationScore.verified)));
 const failures = ["invalid-request", "invalid-credential", "operation-not-authorized", "authentication-error", "subscription-expired",
   "rate-limited", "transport-error", "response-body-error", "coverage-error", "schema-error", "response-too-large", "quota-denied",
   "shared-work-pending", "deadline-exceeded", "request-budget-exhausted", "pagination-incomplete", "archive-unavailable"] as const;
@@ -172,7 +178,7 @@ function parameters(selection: CatalogSelection): Record<string, string> {
     params.timezone = "Africa/Kampala";
     if (selection.query.live) params.live = "all";
     for (const [field, name] of [["date", "date"], ["competitionId", "league"], ["season", "season"], ["teamId", "team"],
-      ["from", "from"], ["to", "to"], ["round", "round"], ["fixtureId", "id"]] as const) {
+      ["from", "from"], ["to", "to"], ["round", "round"], ["fixtureId", "id"], ["status", "status"]] as const) {
       const value = selection.query[field];
       if (value !== undefined) params[name] = String(value);
     }
@@ -197,7 +203,8 @@ function inScope(row: CatalogProviderRow, selection: CatalogSelection): boolean 
     if (query.fixtureId !== undefined && row.id !== query.fixtureId || query.fixtureIds !== undefined && !query.fixtureIds.includes(row.id) ||
       query.competitionId !== undefined && row.competition.id !== query.competitionId ||
       query.season !== undefined && row.competition.season !== query.season || query.teamId !== undefined && ![row.homeTeam.id, row.awayTeam.id].includes(query.teamId) ||
-      query.round !== undefined && row.competition.round !== query.round) return false;
+      query.round !== undefined && row.competition.round !== query.round ||
+      query.status !== undefined && !["TBD", "NS", "PST"].includes(row.providerStatus ?? "")) return false;
     if (row.kickoff !== null) {
       let date;
       try { date = getReportingDate(row.kickoff); } catch { return false; }
@@ -248,9 +255,11 @@ function approvedRow(row: CatalogProviderRow, authority: CatalogAuthority, missi
         missing.add("regulation-score-verification");
       }
     }
+    const half = row.halfTimeScore;
     return { ...row, homeTeam: approvedTeam(row.homeTeam, authority, missing), awayTeam: approvedTeam(row.awayTeam, authority, missing),
       competition: { ...row.competition, logo: approvedLogo(row.competition.logo, authority, missing),
-        countryFlag: approvedLogo(row.competition.countryFlag, authority, missing) }, regulationScore };
+        countryFlag: approvedLogo(row.competition.countryFlag, authority, missing) }, regulationScore,
+      ...(half === undefined ? {} : { halfTimeScore: half === null || regulationScore?.verified !== true ? null : half }) };
   }
   // Country flags are remote provider media too: the same structural check and rights verifier as logos.
   return "seasons" in row ? { ...row, logo: approvedLogo(row.logo, authority, missing), countryFlag: approvedLogo(row.countryFlag, authority, missing) }

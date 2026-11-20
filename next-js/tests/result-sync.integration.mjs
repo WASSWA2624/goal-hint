@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { execFile } from "./helpers/command-runtime.mjs";
 import { promisify } from 'node:util';
 import test from 'node:test';
+import { getReportingDate } from '../src/domain/calendar.ts';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
 import { createFootballCatalogImporter } from '../src/server/football/catalog-service.ts';
+import { createFootballCatalogStore } from '../src/server/football/catalog-mysql-store.ts';
 import { createScheduleLifecycleService } from '../src/server/predictions/lifecycle-service.ts';
 import { parseLifecycleInput } from '../src/server/predictions/lifecycle-input.ts';
 import { historyJson } from '../src/server/predictions/history-read.ts';
@@ -12,6 +14,7 @@ import { createMysqlDailySelectionStore } from '../src/server/selection/selectio
 import { createMysqlResultSyncStore } from '../src/server/results/result-sync-mysql-store.ts';
 import { createResultSyncService } from '../src/server/results/result-sync-service.ts';
 import { ResultSyncError } from '../src/server/results/result-sync-contract.ts';
+import { createMarketSettlementService } from '../src/server/settlement/settlement-service.ts';
 import { createQuotaLimiter } from '../src/server/football/quota-limiter.ts';
 import { createMysqlQuotaStore } from '../src/server/football/quota-mysql-store.ts';
 import { catalogFixture, catalogRequest, catalogResponse, createSyntheticCatalogAdapter } from './helpers/catalog-fixtures.mjs';
@@ -30,14 +33,16 @@ test('shared result synchronization on isolated genuine MySQL', { timeout: 420_0
     let sequence = 0;
     async function seed(rawRows, overrides = {}, options = {}) {
       const label = ++sequence, accountId = resultHash(`result-account:${label}`), competitionId = 1000 + label;
-      const at = p.now(), rows = rawRows.map((row) => ({ ...row, league: { ...row.league, id: competitionId } }));
+      const season = options.season ?? 2026;
+      const at = p.now(), rows = rawRows.map((row) => ({ ...row, league: { ...row.league, id: competitionId, season } }));
       const provider = createSyntheticCatalogAdapter({ rows }); provider.clock.value = at - (options.importAgeMs ?? 61_000);
       p.setTime(provider.clock.value);
       const imported = await createFootballCatalogImporter({ adapter: provider.adapter, store: catalog, authority: catalogSelectionAuthority, clock: provider.clock })
-        .import(catalogRequest({ kind: 'fixtures', query: { competitionId, season: 2026 } }, p.now()));
+        .import(catalogRequest({ kind: 'fixtures', query: { competitionId, season } }, p.now()));
       assert.equal(imported.importedCount, rows.length); p.setTime(at);
       await a.query((tx) => tx.apiQuotaAccount.create({ data: { id: accountId } }));
-      const policy = resultPolicy({ coverage: [{ competitionId, season: 2026 }], ...overrides });
+      const policy = resultPolicy({ coverage: [{ competitionId, season: options.activeSeason ?? season }],
+        ...(options.activeSeason !== undefined ? { archiveCompetitionIds: [competitionId] } : {}), ...overrides });
       const source = resultProvider(clock, { accountId, rows });
       const makeStore = (database = a, extra = {}) => createMysqlResultSyncStore({ database, accountId, lifecycle: lifecycle(database), ...extra });
       const store = makeStore();
@@ -138,11 +143,41 @@ test('shared result synchronization on isolated genuine MySQL', { timeout: 420_0
         };
         assert.equal(await s.poller.runOnce(), true);
         assert.equal(channels(s.source, 'live').length, 1);
-        assert.equal(channels(s.source, 'ids').length, 1);
+        assert.equal(channels(s.source, 'ids').length, 2);
+        assert.deepEqual(s.source.reservations.slice(-2).map(row => row.priority), ['results-cutoff', 'historical-backfill']);
         assert.equal((await catalog.fixtureByProviderId(11200)).status, 'live');
         const state = (await s.store.result(overdue.id)).state;
         assert.equal(state.delayReason, 'unresolved-investigation');
         assert.equal(state.nextCheckAt.getTime(), now + 24 * hour);
+      });
+      await t.test('old mapped seasons use 20 and 1 scoped repair lookups after live work and retain genuine Pending', async () => {
+        const now = Date.parse('2026-11-20T21:04:00Z'), hour = 3_600_000;
+        const kickoff = '2025-11-18T19:00:00Z';
+        p.setTime(now);
+        const rows = Array.from({ length: 21 }, (_, index) => catalogFixture(11500 + index, { kickoff }));
+        const s = await seed([...rows, catalogFixture(11521, { kickoff: '2026-11-21T15:00:00Z' })],
+          { coordinated: true }, { season: 2025, activeSeason: 2026, importAgeMs: 25 * hour });
+        for (const row of s.rows.slice(0, 20)) {
+          row.fixture.status.short = 'FT'; row.goals = score(2,1); row.score.fulltime = score(2,1);
+        }
+        s.source.state.rows = s.rows.filter(row => row.fixture.id !== 11520);
+        assert.equal(await s.poller.runOnce(), true);
+        assert.equal(await s.poller.runOnce(), true);
+        assert.equal(channels(s.source, 'ids').length, 1, 'the archive query does not run again during a live slot');
+        advance(60_000);
+        assert.equal(await s.poller.runOnce(), true);
+        assert.deepEqual(s.source.network.map(({ url }) => [...url.searchParams.keys()][0]), ['live','date','ids','ids']);
+        assert.deepEqual(channels(s.source, 'ids').map(({ url }) => url.searchParams.get('ids').split('-').length), [20,1]);
+        assert.deepEqual(s.source.reservations.slice(-2).map(row => row.priority), ['historical-backfill','historical-backfill']);
+        assert.equal((await s.store.result((await s.fixture(0)).id)).result.regulation.home, 2);
+        const unresolved = await s.store.result((await s.fixture(20)).id);
+        assert.equal(unresolved.result, null);
+        assert.equal(unresolved.state.delayReason, 'unresolved-investigation');
+        const pending = await s.fixture(21);
+        assert.equal(pending.status, 'scheduled');
+        assert.deepEqual(await s.store.result(pending.id), { state: null, result: null });
+        assert.equal(await s.poller.runOnce(), true);
+        assert.equal(channels(s.source, 'ids').length, 2);
       });
       await t.test('date/live responses deduplicate ID work and coverage is filtered locally', async () => {
         const s = await seed([catalogFixture(10004, { kickoff: new Date(p.now()-60_000).toISOString(), status: '1H' })]);
@@ -330,7 +365,7 @@ test('shared result synchronization on isolated genuine MySQL', { timeout: 420_0
         assert.equal(outstanding.result.regulation.verified, false);
         assert.equal(outstanding.state.lastVerifiedAt.getTime(), at);
         assert.equal(outstanding.state.nextCheckAt.getTime(), at + day);
-        assert.equal(outstanding.state.delayReason, 'unresolved-investigation');
+        assert.equal(outstanding.state.delayReason, 'incomplete-result-evidence');
       });
       await t.test('polling early play/corrections preserves manifests, refresh jobs and locked forecasts', async () => {
         const state = await p.setup(3000), manifest = evidenceFingerprint(state.selected.manifest);
@@ -349,6 +384,72 @@ test('shared result synchronization on isolated genuine MySQL', { timeout: 420_0
         assert.equal(await a.query((tx) => tx.durableJob.count({ where: { refreshFixtureId: state.fixture.id } })), beforeJobs);
         assert.equal(evidenceFingerprint((await createMysqlDailySelectionStore(a, queue).inspect(state.selected.selected.runId)).manifest), manifest);
         assert.ok(source.network.every((request) => request.url.pathname === '/fixtures'));
+      });
+      await t.test('dated reconciliation repairs results and settlement and checkpoints phase-only changes without duplicate revisions', async () => {
+        const state = await p.setup(3001);
+        p.setTime(state.input.candidate.context.context.analysisAt + 4000);
+        const published = await p.publisher.publish(state.input, state.lease);
+        const original = await history.findRevision(published.revision.id);
+        p.setTime(state.cycle.kickoffAt); await p.first.close(p.target(state));
+        const accountId = resultHash('catalog-corrections');
+        const locked = (await history.findCycle(state.cycle.id)).lockedSetId;
+        const store = createMysqlResultSyncStore({ database: a, accountId, lifecycle: lifecycle() });
+        const basePolicy = lifecyclePolicy();
+        const coordinator = lifecycle(a, { policy: { ...basePolicy, mappings: [...basePolicy.mappings, { providerStatus: '2H', status: 'live' }] } });
+        const coordinatingCatalog = createFootballCatalogStore(a, { coordinateFixtureMutation: coordinator.coordinateFixtureMutation,
+          sealFixtureResults: true, clock });
+        const settle = createMarketSettlementService({ database: a, queue });
+        const row = catalogFixture(3001, { kickoff: new Date(state.cycle.kickoffAt).toISOString(), status: '2H' });
+        const source = resultProvider(clock, { accountId, rows: [row] });
+        const importer = createFootballCatalogImporter({ adapter: source.adapter, store: coordinatingCatalog, authority: catalogSelectionAuthority, clock });
+        const importDate = () => importer.import(catalogRequest({ kind: 'fixtures', query: { date: getReportingDate(state.cycle.kickoffAt) } }, p.now()));
+        row.fixture.status.elapsed = 89; row.fixture.status.extra = 4; row.goals = score(1,0);
+        advance(1_000); assert.equal((await importDate()).importedCount, 1);
+        let live = (await store.result(state.fixture.id)).result;
+        assert.deepEqual([live.status, live.elapsedMinutes, live.stoppageMinutes, live.reportedGoals], ['live',89,4,score(1,0)]);
+        row.fixture.status.elapsed = 90; row.fixture.status.extra = 5; row.goals = score(2,0);
+        advance(1_000); await importDate();
+        live = (await store.result(state.fixture.id)).result;
+        assert.deepEqual([live.elapsedMinutes, live.stoppageMinutes, live.reportedGoals], [90,5,score(2,0)]);
+        row.fixture.status.short = 'PEN'; row.fixture.status.elapsed = 120; row.goals = score(1,1);
+        row.score = { fulltime: score(1,1), extratime: score(null,null), penalty: score(null,null) };
+        advance(8_000_000); await importDate();
+        const missing = await store.result(state.fixture.id);
+        assert.equal(missing.state.delayReason, 'incomplete-result-evidence');
+        assert.equal(missing.result.regulation.home, 1);
+        await settle.settleFixture(state.fixture.id);
+        const settled = await settle.forFixture(state.fixture.id);
+        assert.ok(settled.cycles[0].markets.some(market => market.eligibleForCounting));
+        row.score.penalty = score(5,4);
+        advance(1_000);
+        const phaseOnly = await importDate();
+        const verified = await store.result(state.fixture.id);
+        assert.deepEqual(phaseOnly.changedFixtureIds, [state.fixture.id]);
+        assert.deepEqual(verified.result.penaltyScore, score(5,4));
+        assert.deepEqual(verified.result.extraTimeScore, score(null,null));
+        assert.equal(verified.state.delayReason, null);
+        assert.equal(verified.result.previousId, missing.result.id);
+        assert.equal(verified.result.regulationVerifiedAt, missing.result.regulationVerifiedAt);
+        row.score.fulltime = score(null,null); row.score.penalty = score(5,5);
+        advance(1_000); await importDate();
+        const conflict = await store.result(state.fixture.id);
+        assert.equal(conflict.result.id, verified.result.id);
+        assert.equal(conflict.state.delayReason, 'incomplete-result-evidence');
+        row.score.penalty = score(null,null); row.goals = score(null,null);
+        advance(1_000); await importDate();
+        assert.equal((await store.result(state.fixture.id)).result.id, verified.result.id);
+        row.fixture.status.short = 'FT'; row.goals = score(2,0);
+        row.score = { fulltime: score(2,0) };
+        advance(1_000); await importDate();
+        const corrected = await store.result(state.fixture.id);
+        assert.equal(corrected.result.status, 'finished-regulation');
+        assert.equal(corrected.result.regulation.home, 2);
+        await settle.settleFixture(state.fixture.id);
+        const revisions = await settle.audit(state.cycle.id, 'match-result');
+        assert.equal(revisions.at(-1).kind, 'correction');
+        assert.equal(revisions.at(-1).result.id, corrected.result.id);
+        assert.equal((await history.findCycle(state.cycle.id)).lockedSetId, locked);
+        assert.deepEqual(await history.findRevision(locked), original);
       });
       await t.test('real shared limiter protects reserve and stops result batches exactly at the account cap', async () => {
         await p.instance.executeAdmin(`GRANT SELECT, INSERT, UPDATE ON goal_hint_test.ApiQuotaPeriod TO 'cutoff_app'@'127.0.0.1';

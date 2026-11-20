@@ -8,7 +8,13 @@ export const historyImportCoverage = z.strictObject({ imported: z.number().int()
   scan: z.strictObject({ date: z.string(), dateScanned: z.boolean(), dateComplete: z.boolean().nullable(),
     scannedSeasons: z.number().int().nonnegative(), partialSeasons: z.number().int().nonnegative(),
     nextScope: z.strictObject({ competitionId: z.number().int().positive(), season: z.number().int().positive(),
-      round: z.string().exactOptional() }).nullable() }).exactOptional() });
+      round: z.string().exactOptional() }).nullable(),
+    dateRepair: z.strictObject({ complete: z.boolean(), nextOlder: z.string(), nextRecent: z.string(),
+      completed: z.number().int().nonnegative(), unavailable: z.number().int().nonnegative(), fixtures: z.number().int().nonnegative(),
+      changed: z.number().int().nonnegative(), partial: z.number().int().nonnegative(), failed: z.number().int().nonnegative(),
+      deferred: z.number().int().nonnegative(), last: z.strictObject({ date: z.string(),
+        status: z.enum(["complete", "unavailable", "partial", "failed", "deferred"]), reason: z.string().nullable() }).nullable() }).exactOptional(),
+  }).exactOptional() });
 
 export type FootballWorkerHealth = Readonly<{
   at: number; workerWindowHours: number;

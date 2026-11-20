@@ -5,8 +5,9 @@ import { normalizeFixture } from "../src/server/football/api-football-normalize.
 import { catalogPersistenceUnavailable, CatalogStoreError } from "../src/server/football/catalog-mysql-store.ts";
 import { createFootballCatalogImporter } from "../src/server/football/catalog-service.ts";
 import { createFootballHistoryBackfill, normalizeHistoryCompetition } from "../src/server/football/history-backfill.ts";
+import { createFootballHistoryDateRepair } from "../src/server/football/history-date-repair.ts";
 import { createFixtureBackfillManifestStore } from "../src/server/football/history-fixture-manifest.ts";
-import { CATALOG_NOW, catalogFixture, catalogRequest } from "./helpers/catalog-fixtures.mjs";
+import { CATALOG_NOW, catalogBounds, catalogFixture, catalogRequest, catalogResponse, createSyntheticCatalogAdapter } from "./helpers/catalog-fixtures.mjs";
 
 test("duplicate league season records share one fixture selector and retain reported coverage", () => {
   const context = { endpoint: "/leagues", retrievedAt: Date.parse("2026-11-12T02:00:00Z") };
@@ -119,6 +120,99 @@ test("a deferred season remains visible while the fixed scan advances to other h
   h.advance(16 * 60_000);
   assert.equal((await h.run({ maxRequests: 2 })).status, "complete");
   assert.deepEqual(h.imported.at(-1).selection.query, { competitionId: 7, season: 2026 });
+});
+
+test("the backward date checkpoint continues across midnight, revisits gaps, and never repeats completed dates", async () => {
+  let manifest = null;
+  const observations = [];
+  const h = harness([], undefined, {
+    manifest: { read: async () => structuredClone(manifest), save: async (_ids, _oldest, value) => { manifest = structuredClone(value); } },
+    async repairDate(date, attempt, bounds, workflow) {
+      workflow.beforeDispatch();
+      assert.equal(bounds.priority, "historical-backfill");
+      observations.push([date, attempt]);
+      return date === "2026-11-11" && attempt === 1 ? { status: "partial", reason: "schema-error", requests: 1, fixtures: 9, changed: 3 }
+        : date === "2026-11-10" ? { status: "unavailable", reason: "no-covered-fixtures", requests: 1, fixtures: 0, changed: 0 }
+        : { status: "complete", reason: null, requests: 1, fixtures: 10, changed: 1 };
+    },
+  });
+  const first = await h.run({ maxRequests: 2 });
+  assert.equal(first.stopped, "request-budget");
+  assert.equal(first.dateRepair.partial, 1);
+  assert.equal(first.dateRepair.nextOlder, "2026-11-10");
+  h.advance(20 * 3_600_000);
+  const next = await h.run({ maxRequests: 2 });
+  assert.equal(next.dateRepair.partial, 0);
+  assert.equal(next.dateRepair.completed, 1);
+  const recent = await h.run({ maxRequests: 2 });
+  assert.equal(recent.dateRepair.nextRecent, "2026-11-13");
+  const older = await h.run({ maxRequests: 2 });
+  assert.equal(older.dateRepair.unavailable, 1);
+  assert.equal(older.dateRepair.nextOlder, "2026-11-09");
+  assert.equal(older.dateRepair.fixtures, 29);
+  assert.equal(older.dateRepair.changed, 5);
+  assert.equal(older.dateComplete, false);
+  assert.deepEqual(observations, [["2026-11-11", 1], ["2026-11-11", 2], ["2026-11-12", 1], ["2026-11-10", 1]]);
+});
+
+test("date repair replays its saved observation after catalog coordination failure without a second provider request", async () => {
+  const date = "2026-10-08";
+  const completed = catalogFixture(818, { kickoff: `${date}T15:00:00Z`, status: "PEN", goals: { home: 2, away: 2 },
+    score: { fulltime: { home: 1, away: 1 }, extratime: { home: 2, away: 2 }, penalty: { home: 4, away: 3 } } });
+  const outOfScope = catalogFixture(819, { kickoff: `${date}T16:00:00Z`, competitionId: 999 });
+  const { adapter, network, clock } = createSyntheticCatalogAdapter({ rows: [completed, outOfScope] });
+  const pages = new Map(), writes = [];
+  const key = ({ endpoint, parameters }) => JSON.stringify([endpoint, parameters]);
+  const repair = createFootballHistoryDateRepair({ competitionIds: [39], retentionEvidenceRef: "verified-history-retention",
+    fetch: adapter.evidence.fixturesByDate, now: () => clock.value, readComplete: async () => null,
+    source: { async latestPage(input) { return pages.get(key(input)) ?? null; }, async savePage(input) {
+      pages.set(key(input), { rows: structuredClone(input.rows), retrievedAt: new Date(input.retrievedAt), contract: API_FOOTBALL_CONTRACT_VERSION });
+    } },
+    importer: { async importObservation(request, response, check) {
+      check();
+      writes.push({ request, response });
+      assert.equal(pages.size, 1, "the evidence must be durable before any canonical write");
+      if (writes.length === 1) throw new CatalogStoreError("unavailable");
+      return { status: "partial", receivedCount: 1, importedCount: 1, rejectedCount: 0, changedFixtureIds: ["fixture-818"] };
+    } },
+  });
+  const signal = new AbortController().signal;
+  const run = () => {
+    const bounds = catalogBounds(clock.value);
+    return repair(date, 1, bounds, { signal, deadlineAt: bounds.deadlineAt, check() {} });
+  };
+  const first = await run();
+  assert.deepEqual(first, { status: "deferred", reason: catalogPersistenceUnavailable, requests: 1, fixtures: 0, changed: 0, resumeObservation: true });
+  clock.value += 30 * 60_000;
+  const resumed = await run();
+  assert.deepEqual(resumed, { status: "complete", reason: null, requests: 0, fixtures: 1, changed: 1 });
+  assert.equal(network.length, 1);
+  assert.deepEqual(writes[0], writes[1]);
+  assert.equal(writes[1].response.data.length, 1);
+  assert.deepEqual(writes[1].response.data[0].extraTimeScore, { home: 2, away: 2 });
+  assert.deepEqual(writes[1].response.data[0].penaltyScore, { home: 4, away: 3 });
+});
+
+test("verified empty historical coverage and an authenticated provider error remain distinct", async () => {
+  const { adapter, clock } = createSyntheticCatalogAdapter({ respond(url, _init, call) {
+    return call === 1 ? catalogResponse(url, [], { paging: { current: 1, total: 0 } }) : catalogResponse(url, [], { status: 401 });
+  } });
+  const repair = createFootballHistoryDateRepair({ competitionIds: [39], retentionEvidenceRef: "verified-history-retention",
+    fetch: adapter.evidence.fixturesByDate, now: () => clock.value, readComplete: async () => null,
+    source: { latestPage: async () => null, savePage: async () => {} },
+    importer: { importObservation() { throw new Error("No verified rows are available."); } },
+  });
+  const signal = new AbortController().signal;
+  const run = (date) => {
+    const bounds = catalogBounds(clock.value);
+    return repair(date, 1, bounds, { signal, deadlineAt: bounds.deadlineAt, check() {} });
+  };
+  const empty = await run("2026-10-07");
+  assert.equal(empty.status, "unavailable");
+  assert.equal(empty.reason, "no-covered-fixtures");
+  const blocked = await run("2026-10-06");
+  assert.equal(blocked.status, "deferred");
+  assert.equal(blocked.reason, "authentication-error");
 });
 
 test("historical batches share a bounded budget, proceed newest first and resume from completed receipts", async () => {

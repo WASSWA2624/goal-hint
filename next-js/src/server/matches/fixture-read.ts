@@ -15,6 +15,7 @@ import { projectSettlementCycle, settlementRevisionFromRow, storedSettlementProj
 import type { SettlementRevision } from "../settlement/settlement-contract.ts";
 import { fixtureResultFromRow, fixtureResultMatchesCanonical, resultStatus, storedFixtureResult, type StoredFixtureResult } from "../results/result-read.ts";
 import { projectFixtureStatusFreshness } from "../results/result-status-freshness.ts";
+import { hasRequiredFinalPhase, verifiedFinalPhaseScores } from "../results/result-phases.ts";
 import { fixturePricesFromRows, minimumFixturePrice, storedFixturePrices, type FixturePriceRow } from "../odds/odds-read.ts";
 import { publicRecommendation, recommendationMarket } from "../../domain/recommendation-view.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
@@ -96,6 +97,8 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
   const status = resultStatus.parse(fixture.status);
   const issue = fixture.lifecycleState?.issue ?? null;
   const coherentResult = fixtureResultMatchesCanonical(fixture, result, issue);
+  const phaseResult = coherentResult ? result : null;
+  const phaseScores = verifiedFinalPhaseScores(status, phaseResult);
   const sealedRegulation = coherentResult && result!.regulation.verified && result!.regulation.home === fixture.regulationHome && result!.regulation.away === fixture.regulationAway;
   // Fixtures outside result tracking keep the catalog's provider-proven regulation score. A stored result that conflicts still hides it.
   const catalogRegulation = result === null && issue === null && fixture.regulationHome !== null && fixture.regulationAway !== null &&
@@ -109,7 +112,7 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
     asOf: options.asOf ?? utcInstantFromEpochMilliseconds(Date.now()), canonicalRetrievedAt: fixture.retrievedAt.getTime(),
     lastVerifiedAt: fixture.resultState?.lastVerifiedAt?.getTime() ?? (coherentResult ? result!.observedAt : null),
     nextCheckAt: fixture.resultState?.nextCheckAt?.getTime() ?? null, hasVerifiedRegulation: regulation,
-    delayed: issue !== null || !!fixture.resultState?.delayReason });
+    delayed: issue !== null || !!fixture.resultState?.delayReason || !hasRequiredFinalPhase(status, phaseResult) });
   // A stored code is published only in its validated form (2–5 letters or digits, uppercase); anything else reads as none.
   // Team fields change only with the fixture's dataVersion: a catalog change to a shared team bumps every fixture that renders it.
   const team = (value: typeof fixture.homeTeam) => ({ id: value.id, name: text(value.name), code: validTeamCode(value.code),
@@ -124,6 +127,7 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
     status, score: isPlayedFinalStatus(status) && regulationScore
       ? regulationScore : live ? { home: result!.reportedGoals.home!, away: result!.reportedGoals.away! } : null,
     scorePeriod: isPlayedFinalStatus(status) && regulation ? "regulation" : live ? "live" : null,
+    ...(phaseScores.extraTime || phaseScores.shootout ? { phaseScores } : {}),
     liveClock: coherentResult && status === "live" ? liveClockFromProvider(result!.providerStatus, result!.elapsedMinutes,
       result!.stoppageMinutes, result!.observedAt) : null,
     partialCoverage, cycleId: cycle?.id ?? null, cycle: cycle ? { state: cycle.state, mode: display!.mode, ordinal: cycle.ordinal,

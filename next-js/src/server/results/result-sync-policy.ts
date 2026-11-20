@@ -13,6 +13,8 @@ const schema = z.strictObject({ version: z.literal(1), evidenceRef: z.string().t
   coordinated: z.literal(true).exactOptional(),
   coverage: z.array(z.strictObject({ competitionId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
     season: z.number().int().min(1).max(9999) })).min(1).max(maximumCompetitionScope),
+  archiveCompetitionIds: z.array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER)).min(1)
+    .max(maximumCompetitionScope).exactOptional(),
   approachMs: duration, activeWindowMs: duration, unresolved: tiers, corrections: tiers,
   skipConfirmedFinals: z.literal(true).exactOptional(),
   // Omitted keeps the spec cadence and its original policy hash; budget-limited accounts may poll more slowly.
@@ -27,6 +29,7 @@ const schema = z.strictObject({ version: z.literal(1), evidenceRef: z.string().t
     cacheMaxAgeMs: z.number().int().min(0).max(15_000) }),
 }).refine((p) => p.leaseMs > p.requestWindowMs + 2 * p.tickMs && p.request.timeoutMs <= p.requestWindowMs &&
   p.failureMaxMs >= p.failureBaseMs && p.request.retry.maxDelayMs >= p.request.retry.baseDelayMs &&
+  (p.archiveCompetitionIds === undefined || p.coordinated === true && new Set(p.archiveCompetitionIds).size === p.archiveCompetitionIds.length) &&
   new Set(p.coverage.map((row) => `${row.competitionId}:${row.season}`)).size === p.coverage.length);
 
 export function parseResultSyncPolicy(value: unknown): ResultSyncPolicy {
@@ -37,10 +40,12 @@ export function parseResultSyncPolicy(value: unknown): ResultSyncPolicy {
 /** Compatible stored observations retain their original seal, clocks, and receipt identity. */
 export function resultRecoveryMatchesPolicy(batch: ResultSyncBatch, policy: ResultSyncPolicy): boolean {
   const covered = (id: number | null, year: number | null) => policy.coverage.some(({ competitionId, season }) => competitionId === id && season === year);
+  const coveredLookup = (observation: ResultSyncBatch["observations"][number]) => batch.channel === "ids" && batch.coordinated === true &&
+    batch.requestedIds.includes(observation.externalFixtureId) && policy.archiveCompetitionIds?.includes(observation.competitionExternalId);
   return (batch.coordinated !== true || policy.coordinated === true) &&
     (batch.missingLiveFixtures ?? []).every(({ competitionId, season }) => covered(competitionId, season)) &&
     batch.observations.every((observation) => observation.actor === "fixture-result-sync" && observation.evidenceRef === policy.evidenceRef &&
-      covered(observation.competitionExternalId, observation.season));
+      (covered(observation.competitionExternalId, observation.season) || coveredLookup(observation)));
 }
 const specCadence = Object.freeze({ liveMs: 15_000, dateMs: 60_000, activeMs: 60_000 });
 const minute = 60_000, hour = 60 * minute, day = 24 * hour;
@@ -48,6 +53,7 @@ export const coordinatedResultDefaults = Object.freeze({ liveMs: minute, idleLiv
   approachMs: 15 * minute, investigateAfterMs: 48 * hour, unresolvedRecentMs: hour, unresolvedLaterMs: day });
 export const missingFromLiveFeed = "missing-from-live-feed";
 export const unresolvedInvestigation = "unresolved-investigation";
+export const incompleteResultEvidence = "incomplete-result-evidence";
 export function resultCadence(policy: ResultSyncPolicy): NonNullable<ResultSyncPolicy["cadence"]> {
   return policy.cadence ?? (policy.coordinated ? coordinatedResultDefaults : specCadence);
 }
@@ -86,7 +92,8 @@ export function shouldPollLive(fixtures: readonly TrackedResultFixture[], policy
 
 export function sharedLiveFixtures(fixtures: readonly TrackedResultFixture[], policy: ResultSyncPolicy, now: number) {
   if (resultCadence(policy).liveMs === null) return [];
-  if (policy.coordinated) return fixtures.filter((fixture) => fixture.firstFinalAt === null && (fixture.status === "live" ||
+  if (policy.coordinated) return fixtures.filter((fixture) => fixture.firstFinalAt === null &&
+    (fixture.status === "live" && now - (fixture.kickoffAt ?? fixture.firstTrackedAt) < policy.activeWindowMs ||
     fixture.status === "scheduled" && fixture.kickoffAt !== null && fixture.kickoffAt >= now && fixture.kickoffAt <= now + policy.approachMs));
   return fixtures.filter((fixture) => fixture.firstFinalAt === null && now - (fixture.kickoffAt ?? fixture.firstTrackedAt) < policy.activeWindowMs &&
     !(fixture.kickoffAt !== null && now - fixture.kickoffAt < -policy.approachMs) &&

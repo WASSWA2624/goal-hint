@@ -7,6 +7,7 @@ import { normalizeFixture, normalizeTeam, normalizeCompetition } from "../src/se
 import { CatalogInputError, catalogRequestFingerprint, catalogScopeKey, isSafeCatalogLogo, normalizeCatalogSearch,
   assertCatalogPreparedBatch, parseCatalogEvidenceRef, parseCatalogImportRequest, parseCatalogTeamMapping,
   validateCatalogBatch } from "../src/server/football/catalog-input.ts";
+import { catalogBounds, catalogFixture, createSyntheticCatalogAdapter } from "./helpers/catalog-fixtures.mjs";
 
 // All identities, permissions and observations are synthetic contract fixtures.
 // They never qualify live provider evidence and perform no network or database I/O.
@@ -73,6 +74,19 @@ test("caller bounds and explicit known-subset intent remain mandatory and valida
   assert.throws(() => parseCatalogImportRequest(request(undefined, { knownSubset: { fixtureIds: [1, 1], evidenceRef: "synthetic-proof" } })), inputError("invalid-request"));
   assert.throws(() => parseCatalogImportRequest(request({ kind: "teams", query: { teamId: 10 } },
     { knownSubset: { fixtureIds: [1], evidenceRef: "synthetic-proof" } })), inputError("invalid-request"));
+});
+
+test("seasonal schedule discovery only imports the exact requested competition, season and upcoming statuses", async () => {
+  const query = { competitionId: 39, season: 2026, status: "TBD-NS-PST" };
+  const provider = createSyntheticCatalogAdapter({ rows: [catalogFixture(40), catalogFixture(41, { status: "PST" }),
+    catalogFixture(42, { status: "FT" }), catalogFixture(43, { competitionId: 40 })] });
+  const observation = await provider.adapter.evidence.fixtures(query, catalogBounds());
+  assert.deepEqual(Object.fromEntries(provider.network[0].url.searchParams),
+    { league: "39", season: "2026", status: "TBD-NS-PST", timezone: "Africa/Kampala" });
+  const batch = prepare(request({ kind: "fixtures", query }), observation, authority(), provider.clock);
+  assert.deepEqual(batch.rows.fixtures.map(({ id }) => id), [40, 41]);
+  assert.equal(batch.status, "partial");
+  assert.equal(batch.invalidRows, 2);
 });
 
 test("request fingerprints ignore object key order and preserve every immutable authorization bound", () => {

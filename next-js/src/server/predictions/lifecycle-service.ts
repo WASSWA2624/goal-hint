@@ -18,6 +18,7 @@ import { recordPublicationBarrier } from "./publication-barrier.ts";
 import { statusShowsPlay } from "./publication-eligibility.ts";
 import { storedPublicationBarrier } from "./publication-read.ts";
 import { selectionRunWindow, storedSelectionManifest } from "../selection/selection-read.ts";
+import { preserveRegulationEvidence } from "../results/result-write.ts";
 
 type Transaction = Prisma.TransactionClient;
 type Cutoff = ReturnType<typeof createCutoffLockingService>;
@@ -72,6 +73,7 @@ export function createScheduleLifecycleService(options: Readonly<{
           !mapped(fixture.homeTeam.providers, observation.homeExternalId) || !mapped(fixture.awayTeam.providers, observation.awayExternalId) ||
           !mapped(fixture.season.competition.providers, observation.competitionExternalId) || fixture.season.year !== observation.season) {
           if (!retainIdentityConflict) return lifecycleFail("identity-unresolved");
+          await canonical?.retain();
           await record(fixture.dataVersion, "conflict", "identity-unresolved");
           authorize(observation);
           return (await storedLifecycleReceipt(tx, id))!;
@@ -95,11 +97,14 @@ export function createScheduleLifecycleService(options: Readonly<{
         if (accepted) {
           const kickoff = observation.kickoffAt ?? fixture.kickoff?.getTime() ?? null;
           const score = observation.regulationScore?.verified ? observation.regulationScore : null;
-          const keepScore = fixture.status === observation.status && fixture.providerStatus === observation.providerStatus;
+          const sameOccurrence = kickoff === (fixture.kickoff?.getTime() ?? null);
+          const samePhase = fixture.status === observation.status && fixture.providerStatus === observation.providerStatus;
+          const keepScore = sameOccurrence && preserveRegulationEvidence(fixture, observation.status, score);
           const data = { kickoff: date(kickoff), eatDate: kickoff === null ? null : new Date(`${getReportingDate(utcInstantFromEpochMilliseconds(kickoff))}T00:00:00Z`),
-            status: observation.status, providerStatus: observation.providerStatus, elapsedMinutes: observation.elapsedMinutes,
-            regulationHome: score?.home ?? (keepScore ? fixture.regulationHome : null),
-            regulationAway: score?.away ?? (keepScore ? fixture.regulationAway : null) };
+            status: observation.status, providerStatus: observation.providerStatus,
+            elapsedMinutes: observation.elapsedMinutes ?? (sameOccurrence && samePhase ? fixture.elapsedMinutes : null),
+            regulationHome: keepScore ? fixture.regulationHome : score?.home ?? null,
+            regulationAway: keepScore ? fixture.regulationAway : score?.away ?? null };
           const visibleChanged = Object.entries(data).some(([key, value]) => {
             const previous = fixture[key as keyof typeof data];
             return value instanceof Date && previous instanceof Date ? value.getTime() !== previous.getTime() : value !== previous;
@@ -108,8 +113,8 @@ export function createScheduleLifecycleService(options: Readonly<{
           if (canonical) await canonical.apply();
           else await tx.footballFixture.update({ where: { id: fixture.id }, data: { ...data,
             retrievedAt: new Date(observation.retrievedAt), providerUpdatedAt: date(observation.providerUpdatedAt) ?? fixture.providerUpdatedAt,
-            regulationEvidenceRef: score ? observation.evidenceRef : keepScore ? fixture.regulationEvidenceRef : null,
-            regulationVerifiedAt: score ? new Date(observation.retrievedAt) : keepScore ? fixture.regulationVerifiedAt : null,
+            regulationEvidenceRef: keepScore ? fixture.regulationEvidenceRef : score ? observation.evidenceRef : null,
+            regulationVerifiedAt: keepScore ? fixture.regulationVerifiedAt : score ? new Date(observation.retrievedAt) : null,
             ...(visibleChanged ? { dataVersion: { increment: 1 } } : {}) } });
           if (cycle && observation.kickoffAt !== null && (cycle.kickoffAt !== observation.kickoffAt || earlierStart)) {
             cycle = await writer.changeCycle({ actor: observation.actor, reason: earlierStart ? "actual-start-observation" : "kickoff-adjustment",
@@ -185,15 +190,16 @@ export function createScheduleLifecycleService(options: Readonly<{
         authorize(observation);
         return (await storedLifecycleReceipt(tx, id))!;
       } catch (error) { failure = error; throw error; }
-    }, existingTransaction); } catch {
+    }, existingTransaction); } catch (error) {
       if (failure instanceof ScheduleLifecycleError) throw failure;
+      if (existingTransaction) throw failure ?? error;
       return lifecycleFail("unavailable");
     }
   }
   const coordinateFixtureMutation: CatalogMutationCoordinator = async (mutation) => {
     if (!mutation.before || !mutation.observation) { await mutation.apply(); return; }
     await ingest(parseLifecycleInput({ fixtureId: mutation.before.id, fixture: mutation.observation, actualStartedAt: null,
-      actor: "catalog-schedule-lifecycle", evidenceRef: mutation.evidenceRef! }), mutation.transaction, mutation);
+      actor: "catalog-schedule-lifecycle", evidenceRef: mutation.evidenceRef! }), mutation.transaction, mutation, true);
   };
   return Object.freeze({ observe: (input: LifecycleInput) => ingest(parseLifecycleInput(input)), coordinateFixtureMutation,
     /** The result batch retains identity conflicts without applying them to the fixture. */

@@ -21,6 +21,7 @@ const selectors = {
   fixtures: new Set(["id", "ids", "date", "league", "season", "team", "from", "to", "round", "timezone"]),
   fixtureRounds: new Set(["league", "season", "dates", "timezone"]),
   fixtureBackfillManifest: new Set(["scope"]),
+  fixtureRepairDate: new Set(["date", "attempt", "scope"]),
   fixtureHalfStatistics: new Set(["fixture", "half"]),
   oddsMapping: new Set(["archiveDay"]),
   countries: new Set<string>(),

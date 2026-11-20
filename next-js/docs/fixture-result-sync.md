@@ -59,6 +59,16 @@ through the existing adapter/limiter: 12/second, 720/minute, 120,000/day and the
 protected 20,000 essential reserve. Batches and operation requests are bounded.
 Unverified batching falls back to bounded single-ID adapter requests.
 
+The coordinated runtime serves active live and current-date work before archive
+repair. Its default shared live cadence is one minute while active and five
+minutes while idle, with hourly date discovery. Overdue fixtures and incomplete
+finals can receive one historical ID group per tick after current work.
+The scheduled archive fixtures job walks backward from yesterday in
+`Africa/Kampala`, using at most one date request from its six-request budget.
+It keeps independent season and round checkpoints, resumes saved date
+observations through the catalog after a partial write, and uses the same
+protected quota. Missing fixture IDs keep their own recheck path.
+
 Failures and quota denials retain sanitized reasons, use capped exponential
 backoff and honor longer provider/limiter retry times. Per-channel backoff and
 fixture attempts survive restart. Private `health()` exposes channel errors/due
@@ -165,3 +175,101 @@ Rollback stops the binding and preserves additive schema, observations, result
 revisions, manifests and forecasts. Inspect actual DDL state and repair forward.
 Disabling polling does not disable publication/cutoff protection or permit locked
 forecasts to change.
+
+## Verify a hosted repair
+
+Use the target's read-only database access. Record the UTC release and report
+times. Use a bounded half-open Kampala date cohort and repeat for a larger
+archive. Replace `@since` below with the actual UTC release time and reuse the
+same `@as_of` throughout a report.
+
+```sql
+SET @date_from = '2026-11-01', @date_until = '2026-12-01';
+SET @since = '2026-11-20 00:00:00', @as_of = UTC_TIMESTAMP(3);
+
+SELECT phase, status, updatedAt,
+       JSON_EXTRACT(coverage, '$.scan.dateRepair') AS dateRepair,
+       JSON_EXTRACT(coverage, '$.scan.scannedSeasons') AS scannedSeasons,
+       JSON_EXTRACT(coverage, '$.scan.partialSeasons') AS partialSeasons,
+       JSON_EXTRACT(coverage, '$.scan.nextScope') AS nextSeasonOrRound
+FROM FootballHistoryImportStatus
+WHERE phase IN ('fixtures', 'replay', 'details');
+```
+
+Attempted dates equal `completed + unavailable + partial + failed + deferred`.
+`fixtures` counts examined rows across attempts and `changed` counts material
+catalog fixture updates. The `last` date, status and reason show the most
+recent work. Retain the starting snapshot to compute release deltas.
+`FootballImport` holds selectors and reasons for season and round attempts.
+`FootballHistorySourcePage` holds saved date observations and manifest revisions
+for investigating catalog interruptions.
+
+```sql
+SELECT COUNT(DISTINCT CASE WHEN prior.id IS NULL OR prior.regulationVerified = 0
+                            OR prior.status NOT IN ('finished-regulation', 'finished-extra-time', 'finished-penalties')
+                           THEN f.id END) AS verifiedResultsRecovered,
+       COUNT(DISTINCT CASE WHEN prior.regulationVerified = 1
+                            AND (prior.regulationHome <> r.regulationHome OR prior.regulationAway <> r.regulationAway)
+                           THEN f.id END) AS regulationScoresCorrected
+FROM FootballFixture f
+JOIN FixtureResult r ON r.fixtureId = f.id
+LEFT JOIN FixtureResult prior ON prior.fixtureId = r.fixtureId
+  AND prior.id = JSON_UNQUOTE(JSON_EXTRACT(r.body, '$.previousId'))
+LEFT JOIN PredictionChangeEvent e ON e.fixtureResultId = r.id
+WHERE f.provider = 'api-football' AND f.eatDate >= @date_from AND f.eatDate < @date_until
+  AND COALESCE(e.at, r.observedAt) >= @since AND COALESCE(e.at, r.observedAt) < @as_of
+  AND r.status IN ('finished-regulation', 'finished-extra-time', 'finished-penalties')
+  AND r.regulationVerified = 1;
+
+SELECT 'legacy' AS scope, COUNT(*) AS correctedRevisions
+FROM FootballFixture f JOIN MarketSettlementRevision m ON m.fixtureId = f.id
+WHERE f.provider = 'api-football' AND f.eatDate >= @date_from AND f.eatDate < @date_until
+  AND m.at >= @since AND m.at < @as_of AND JSON_UNQUOTE(JSON_EXTRACT(m.body, '$.kind')) = 'correction'
+UNION ALL
+SELECT 'extended', COUNT(*)
+FROM FootballFixture f JOIN ExtendedMarketSettlementRevision m ON m.fixtureId = f.id
+WHERE f.provider = 'api-football' AND f.eatDate >= @date_from AND f.eatDate < @date_until
+  AND m.at >= @since AND m.at < @as_of AND JSON_UNQUOTE(JSON_EXTRACT(m.body, '$.kind')) = 'correction';
+```
+
+Result events give the application clock. Archive-only rows without an event
+give the observation clock. Use before-and-after pointers when those rows need
+release attribution. A new settlement from Pending is a transition. Count
+`kind = 'correction'` separately and compare `body.status` against its
+predecessor if the report needs changed grades.
+
+```sql
+SELECT f.status, f.providerStatus,
+       CASE
+         WHEN l.issue IS NOT NULL THEN l.issue
+         WHEN s.delayReason IS NOT NULL THEN s.delayReason
+         WHEN f.status = 'scheduled' AND f.providerStatus = 'NS' AND f.kickoff > @as_of THEN 'awaiting-kickoff'
+         WHEN f.status = 'scheduled' AND f.kickoff <= @as_of THEN 'awaiting-provider-status'
+         WHEN f.status = 'scheduled' AND (f.kickoff IS NULL OR f.providerStatus = 'TBD') THEN 'unconfirmed-schedule'
+         WHEN f.status IN ('finished-regulation', 'finished-extra-time', 'finished-penalties')
+           AND (r.id IS NULL OR r.regulationVerified = 0 OR r.status <> f.status) THEN 'result-needs-verification'
+         WHEN f.status = 'finished-extra-time' AND (
+           COALESCE(JSON_TYPE(JSON_EXTRACT(r.body, '$.extraTimeScore.home')), '') <> 'INTEGER'
+           OR COALESCE(JSON_TYPE(JSON_EXTRACT(r.body, '$.extraTimeScore.away')), '') <> 'INTEGER') THEN 'missing-extra-time-score'
+         WHEN f.status = 'finished-penalties' AND (
+           COALESCE(JSON_TYPE(JSON_EXTRACT(r.body, '$.penaltyScore.home')), '') <> 'INTEGER'
+           OR COALESCE(JSON_TYPE(JSON_EXTRACT(r.body, '$.penaltyScore.away')), '') <> 'INTEGER'
+           OR JSON_EXTRACT(r.body, '$.penaltyScore.home') = JSON_EXTRACT(r.body, '$.penaltyScore.away')) THEN 'missing-shootout-score'
+         ELSE 'no-recorded-gap'
+       END AS state, COUNT(*) AS fixtures, MIN(s.nextCheckAt) AS nextCheckAt
+FROM FootballFixture f
+LEFT JOIN FixtureLifecycleState l ON l.fixtureId = f.id
+LEFT JOIN FixtureResultState s ON s.fixtureId = f.id
+LEFT JOIN FixtureResult r ON r.id = s.resultId AND r.fixtureId = f.id
+WHERE f.provider = 'api-football' AND f.eatDate >= @date_from AND f.eatDate < @date_until
+GROUP BY f.status, f.providerStatus, state
+ORDER BY f.status, f.providerStatus, state;
+```
+
+Pick representative IDs from each bucket and refresh Matches for the same date
+in `Africa/Kampala` using `/api/matches?date=YYYY-MM-DD&tz=Africa%2FKampala`.
+Compare the verified status, elapsed and added time, regulation, extra-time and
+shootout fields with the sealed result. Check settled fixtures against the
+active settlement pointers and the Matches outcome drilldown with the intended
+viewer access. Awaiting kickoff, provider evidence gaps and forecasts awaiting
+settlement are separate counts.

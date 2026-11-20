@@ -15,12 +15,12 @@ def verify(origin, directory):
     visible = visible_html(html)
     no_match("Score and result updates delayed", visible)
     articles = re.findall(r'(<article\b[^>]*data-fixture-id="([^"]+)"[^>]*>)([\s\S]*?)</article>', visible)
-    assert len(articles) == 13
+    assert len(articles) == 14
     by_id = {fixture_id: article for _, fixture_id, article in articles}
     assert len(by_id) == len(articles), "Responsive rendering must not duplicate fixture identities in server HTML."
     no_match("data-match-table-header", visible, "Matches no longer renders the former desktop-only column labels.")
     assert 0 <= html.find("data-styled=") < html.find("<main")
-    for tag, _, article in articles:
+    for tag, fixture_id, article in articles:
         match(r'data-mobile-design="team-stack"', tag)
         no_match(r'\baria-describedby=', tag)
         no_match(r'<(?:ul|ol)\b|\bid="[^"]*-notes"|\baria-describedby="[^"]*-notes', article)
@@ -37,11 +37,14 @@ def verify(origin, directory):
         match(r"prediction: [^<]+, estimated probability|prediction unavailable", article)
         outcome = match(r'data-outcome="(correct|incorrect|pending|void|unavailable)"', article).group(1)
         fixture_status = match(r'data-status="([^"]+)"', tag).group(1)
-        result = "upcoming" if fixture_status == "scheduled" else fixture_status if fixture_status in {"live", "postponed", "unknown"} else outcome
-        assert article.count(f'data-result-badge="{result}"') == 1, "One truthful fixture/prediction result"
+        if fixture_status == "scheduled":
+            result = "pending" if fixture_id == "card-overdue" else "upcoming"
+        else:
+            result = fixture_status if fixture_status in {"live", "postponed", "unknown"} or outcome == "unavailable" else outcome
+        assert article.count(f'data-result-badge="{result}"') == 1, f"One truthful fixture/prediction result for {fixture_id}"
         if result != "live":
             label = {"upcoming": "Upcoming", "correct": "Won", "incorrect": "Lost", "pending": "Pending",
-                "void": "Void", "unavailable": "—", "postponed": "Postponed", "unknown": "Unknown"}[result]
+                "void": "Void", "finished-regulation": "Finished", "postponed": "Postponed", "unknown": "Unknown"}[result]
             match(rf'data-result-badge="{result}"[^>]*>[\s\S]*?<span data-pick-value[^>]*>{label}</span>', article)
         if fixture_status != "scheduled":
             no_match(r'data-result-badge="upcoming"', article)
@@ -90,7 +93,7 @@ def verify(origin, directory):
         match(r'data-outcome="pending"', by_id[card])
         no_match(r'data-result-badge="pending"|data-pick-value[^>]*>Pending</span>', by_id[card])
     for card in ["card-unavailable", "card-missing-family"]:
-        match(r'data-result-badge="unavailable"[^>]*>[\s\S]*?<span data-pick-value[^>]*>—</span>', by_id[card])
+        match(r'data-result-badge="finished-regulation"[^>]*>[\s\S]*?<span data-pick-value[^>]*>Finished</span>', by_id[card])
         no_match(r'data-pick-value[^>]*>(?:0%|Pending)</span>', by_id[card])
         match(r'data-pick-value[^>]*>No prediction</span>', by_id[card])
         match(r'data-pick-state="none"', by_id[card])
@@ -142,7 +145,7 @@ def verify(origin, directory):
     assert images
     for tag in images:
         if 'src="/flags/' in tag:
-            for pattern in ['src="/flags/ba.svg"', 'alt=""', 'width="16"', 'height="12"', 'loading="lazy"']:
+            for pattern in ['src="/flags/ba.svg"', 'alt=""', 'width="18"', 'height="12"', 'loading="lazy"']:
                 match(pattern, tag)
             continue
         for pattern in [r'(?:data-logo-src|src)="https://static\.match-card\.test/', 'alt=""', 'width="32"', 'height="32"']:

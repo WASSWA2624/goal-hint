@@ -6,7 +6,7 @@ import { addReportingDays, createPredictionWindow, getPublicationDeadline, getRe
   utcInstantFromEpochMilliseconds, type PredictionWindowDays } from "../../domain/calendar.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
-import { parseCatalogImportRequest } from "../football/catalog-input.ts";
+import { catalogScopeKey, parseCatalogImportRequest } from "../football/catalog-input.ts";
 import { lockCatalog } from "../football/catalog-mysql-store.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import type { JobQueue } from "../jobs/job-contract.ts";
@@ -20,6 +20,7 @@ import { DailySelectionError, selectionFail, type CycleSelectionEligibility, typ
 import { parseCycleSelectionEligibility, parseSelection, parseSelectionPolicy, SELECTION_HOUR_MS } from "./selection-input.ts";
 import { createHourlyEvidenceReader } from "./hourly-evidence.ts";
 import { selectionRunWindow, storedSelectionManifest } from "./selection-read.ts";
+import { verifiedFixturePage } from "./fixture-import-receipt.ts";
 
 type Transaction = Prisma.TransactionClient;
 const json = (value: unknown): Prisma.InputJsonValue => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -62,7 +63,8 @@ async function selectionFixtures(tx: Transaction, ids: readonly string[]) {
   return rows.length === ids.length ? rows : selectionFail("unavailable");
 }
 export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue: JobQueue, options: Readonly<{
-  hourly?: { localEvidence: boolean; scheduleCutoff?(entry: { fixtureId: string; cycleId: string }, tx: Transaction): Promise<unknown> };
+  hourly?: { localEvidence: boolean; reuseFutureDates?: number;
+    scheduleCutoff?(entry: { fixtureId: string; cycleId: string }, tx: Transaction): Promise<unknown> };
 }> = {}) {
   const history = createMysqlPredictionHistoryStore(database);
   const emptyEvidenceHash = evidenceFingerprint(null);
@@ -80,13 +82,24 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
     }, { isolationLevel: "ReadCommitted", timeout: 60_000 }); }
     catch { if (failure) throw failure; return selectionFail("unavailable"); }
   }
-  async function coverage(tx: Transaction, runId: string, runDate: string, days: PredictionWindowDays, hourly: boolean): Promise<SelectionCoverage[]> {
+  async function recentFixtureDate(tx: Transaction, date: string, slot: number, observedThrough: number) {
+    const selection = { kind: "fixtures", query: { date } } as const;
+    const receipt = await tx.footballImport.findFirst({ where: {
+      scopeKey: catalogScopeKey(selection), provider: "api-football", kind: "fixtures", status: "complete",
+      rejectedCount: 0, requestsDispatched: { gte: 1 }, observedAt: { gte: new Date(slot - 3 * SELECTION_HOUR_MS), lte: new Date(observedThrough) },
+    }, orderBy: [{ observedAt: "desc" }, { sequence: "desc" }] });
+    return receipt && verifiedFixturePage(receipt.provenance, { date }, receipt.observedAt.getTime()) ? receipt : null;
+  }
+  async function coverage(tx: Transaction, runId: string, runDate: string, days: PredictionWindowDays, slotHour: number): Promise<SelectionCoverage[]> {
+    const hourly = slotHour > 0;
+    const slot = createPredictionWindow(parseReportingDate(runDate), days).startInclusive + slotHour * SELECTION_HOUR_MS;
     const attempts = await tx.dailyRunImport.findMany({ where: { runId }, orderBy: { attempt: "desc" } });
     const result: SelectionCoverage[] = [];
     for (let offset = 0; offset < days; offset++) {
       const date = addReportingDays(parseReportingDate(runDate), offset);
       const latest = attempts.find((row) => row.eatDate.toISOString().slice(0, 10) === date);
-      const imported = latest ? await tx.footballImport.findUnique({ where: { id: latest.id } }) : null;
+      const imported = latest ? await tx.footballImport.findUnique({ where: { id: latest.id } }) :
+        hourly && offset > 0 && offset < (options.hourly?.reuseFutureDates ?? 0) ? await recentFixtureDate(tx, date, slot, slot) : null;
       const expected = { kind: "fixtures", query: { date } };
       if (imported && evidenceFingerprint(imported.selection) !== evidenceFingerprint(expected)) return selectionFail("unavailable");
       const retained = hourly ? [] : await tx.footballFixture.findMany({ where: { provider: "api-football", eatDate: new Date(`${date}T00:00:00Z`) }, select: { id: true } });
@@ -119,7 +132,7 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
       const manifest = await storedSelectionManifest(tx, row);
       return freezeEvidence({ manifest, total: row.totalJobs, completed: row.completedJobs,
         terminal: row.terminalJobs, coverage: manifest?.coverage ?? await coverage(tx, row.id, row.eatDate.toISOString().slice(0, 10),
-          predictionWindowDays(selectionRunWindow(row)), row.slotHour > 0) });
+          predictionWindowDays(selectionRunWindow(row)), row.slotHour) });
     });
   }
   return Object.freeze({
@@ -185,6 +198,9 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
         const window = selectionRunWindow(row);
         if (date < window.runDate || date >= window.endDateExclusive || row.selectionHash !== evidenceFingerprint(policy)) return selectionFail("invalid-request");
         const previous = await tx.dailyRunImport.findFirst({ where: { runId: row.id, eatDate }, orderBy: { attempt: "desc" } });
+        const slot = window.startInclusive + row.slotHour * SELECTION_HOUR_MS;
+        if (!previous && row.slotHour > 0 && date > window.runDate &&
+          date < addReportingDays(window.runDate, options.hourly?.reuseFutureDates ?? 0) && await recentFixtureDate(tx, date, slot, slot)) return null;
         if (previous) {
           const receipt = await tx.footballImport.findUnique({ where: { id: previous.id } });
           if (receipt?.status === "complete") {
@@ -252,7 +268,7 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
           if (run.committedAt !== null) return null;
           const at = await serverNow(tx);
           const window = selectionRunWindow(run);
-          const dates = await coverage(tx, run.id, window.runDate, policy.windowDays ?? 7, run.slotHour > 0);
+          const dates = await coverage(tx, run.id, window.runDate, policy.windowDays ?? 7, run.slotHour);
           if (degradedAction === null && requiredMissing(dates, run.slotHour > 0)) return null;
           const { ids, retainedOnly } = await selectionCandidateIds(tx, dates, confirmed, window, policy, at,
             recover && run.slotHour > 0 && degradedAction !== null);
@@ -287,7 +303,7 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
         if (row.selectionHash !== evidenceFingerprint(policy)) return selectionFail("conflicting-request");
         const runDate = row.eatDate.toISOString().slice(0, 10), window = selectionRunWindow(row);
         const hourly = row.slotHour > 0;
-        const dates = await coverage(tx, row.id, runDate, policy.windowDays ?? 7, hourly), partial = dates.some((date) => date.status !== "complete");
+        const dates = await coverage(tx, row.id, runDate, policy.windowDays ?? 7, row.slotHour), partial = dates.some((date) => date.status !== "complete");
         if (degradedAction === null && requiredMissing(dates, hourly)) return selectionFail("incomplete-import");
         const { ids, retainedOnly, incompleteDates } = await selectionCandidateIds(tx, dates, confirmed, window, policy, now,
           recover && hourly && degradedAction !== null);

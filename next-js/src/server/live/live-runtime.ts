@@ -3,13 +3,13 @@ import { createRecommendationQuoteLoader } from "../odds/recommendation-quotes.t
 import { evidenceFirstRecommendationPolicy } from "../../domain/recommendation.ts";
 import { QUALIFIED_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
 
-import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { getReportingDayBounds, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { MARKET_REGISTRY_VERSION } from "../../domain/market-registry.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { maximumCompetitionScope } from "../../domain/feed-query.ts";
 import { assertOperationAllowed, type RuntimePolicy, type EvidenceVerifier } from "../config/runtime-policy.ts";
 import { createMysqlPublicCacheStore } from "../cache/mysql-public-cache.ts";
-import { createDatabase } from "../database/client.ts";
+import { createDatabase, DatabaseOperationError } from "../database/client.ts";
 import { createEvidenceService } from "../evidence/evidence-service.ts";
 import { createMysqlEvidenceStore } from "../evidence/evidence-mysql-store.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
@@ -18,11 +18,12 @@ import { createFallbackService } from "../fallback/fallback-service.ts";
 import { createApiFootballAdapter, type ApiFootballAdapterOptions } from "../football/api-football-adapter.ts";
 import { API_FOOTBALL_CONTRACT_VERSION, apiFootballFixtureRoundParameters, parseApiFootballFixtureRound,
   type ApiFootballResult, type FixtureRoundQuery } from "../football/api-football-contract.ts";
-import { createFootballCatalogStore, historyReplayKind } from "../football/catalog-mysql-store.ts";
+import { catalogImportSummary, createFootballCatalogStore, historyReplayKind } from "../football/catalog-mysql-store.ts";
 import { catalogScopeKey, parseCatalogImportRequest } from "../football/catalog-input.ts";
 import { createFootballCatalogImporter } from "../football/catalog-service.ts";
 import { createCurrentDayContextJob, currentPlayerRequestLimit, currentReferenceFreshness } from "../football/current-day-refresh.ts";
 import { createFootballHistoryBackfill, historyBackfillLimits, normalizeHistoryCompetition } from "../football/history-backfill.ts";
+import { createFootballHistoryDateRepair } from "../football/history-date-repair.ts";
 import { createFootballHistoryDetails } from "../football/history-details.ts";
 import { createFootballHistoryFixtureReplay } from "../football/history-fixture-replay.ts";
 import { createFixtureBackfillManifestStore } from "../football/history-fixture-manifest.ts";
@@ -61,7 +62,8 @@ import { DailySelectionError } from "../selection/selection-contract.ts";
 import { hourlySelectionWindow, scheduledHourlySelection, scheduledSelection, selectionWindow } from "../selection/selection-input.ts";
 import { createMysqlDailySelectionStore } from "../selection/selection-mysql-store.ts";
 import { createDailySelectionService } from "../selection/selection-service.ts";
-import { createHourlyFixtureReconciler, HourlyScheduleQuotaUnavailable } from "../selection/selection-fixture-reconciliation.ts";
+import { verifiedFixturePage } from "../selection/fixture-import-receipt.ts";
+import { createHourlyFixtureReconciler, HourlyScheduleQuotaUnavailable, type ForwardFixtureSweep } from "../selection/selection-fixture-reconciliation.ts";
 import { HOURLY_SELECTION_TYPE } from "../selection/selection-trigger.ts";
 import { loadOwnerApprovals, missingOwnerApprovals, ownerEvidenceVerifier, type OwnerApprovals } from "./live-approvals.ts";
 import { createAccountStatusReader, createQuotaRouter, type QuotaDay } from "./live-account.ts";
@@ -148,6 +150,7 @@ export type LiveRuntimeOverrides = Readonly<{
   historyBackfill?: boolean;
   onPollerState?: (kind: "results" | "match-details", state: string) => void;
   onHourlyLookupFailure?: (reason: string, fixtureCount: number) => void;
+  onForwardFixtureSweep?: (report: ForwardFixtureSweep) => void;
   onHistoryDetailBatch?: Parameters<ReturnType<typeof createFootballHistoryDetails>>[1];
   onDateImportFailure?: Parameters<typeof createDailySelectionService>[0]["onDateImportFailure"];
   onCurrentDayCoverage?: Parameters<typeof createCurrentDayContextJob>[0]["onCoverage"];
@@ -240,7 +243,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       scheduleCutoff: (target, tx) => cutoff.scheduleCycle(target, undefined, tx) }) : null;
     const lifecycle = createScheduleLifecycleService({ database, cutoff, policy: lifecyclePolicy(refs), authority: authorities.lifecycle });
     const catalog = createFootballCatalogStore(database, { coordinateFixtureMutation: lifecycle.coordinateFixtureMutation,
-      transactionTimeoutMs: 120_000, ...(sourceOrder === "ai-first" ? { sealTeamHistory: true } : {}) });
+      transactionTimeoutMs: 120_000, ...(coordinated ? { sealFixtureResults: true } : {}),
+      ...(sourceOrder === "ai-first" ? { sealTeamHistory: true } : {}) });
     const importer = createFootballCatalogImporter({ adapter, store: catalog, authority: authorities.catalog });
     const discoverFixtures = coordinated ? createLiveDiscoveryImport({ importer, competitionIds: policy.choices.competitionIds ?? [],
       retentionEvidenceRef: refs.retention }) : null;
@@ -281,7 +285,16 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
           }));
           return receipt ? { status: "scanned", reason: null, requests: 0 } :
             { status: "deferred", reason: "current-date-awaiting-discovery", requests: 0 };
-        } } : {}),
+        }, repairDate: createFootballHistoryDateRepair({ source: historySource, importer, fetch: adapter.evidence.fixturesByDate,
+          competitionIds: policy.choices.competitionIds ?? [], retentionEvidenceRef: refs.retention,
+          now: () => utcInstantFromEpochMilliseconds(Date.now()), async readComplete(date) {
+            const receipts = await database.query((tx) => tx.footballImport.findMany({ where: { provider: "api-football", kind: "fixtures",
+              status: "complete", rejectedCount: 0, subsetEvidenceRef: null, retentionEvidenceRef: refs.retention,
+              scopeKey: catalogScopeKey({ kind: "fixtures", query: { date } }), observedAt: { gte: new Date(getReportingDayBounds(date).endExclusive) } },
+            orderBy: [{ observedAt: "desc" }, { sequence: "desc" }], take: 4 }));
+            const receipt = receipts.find((row) => verifiedFixturePage(row.provenance, { date }, row.observedAt.getTime()));
+            return receipt ? catalogImportSummary(receipt) : null;
+          } }), } : {}),
         upcomingSeasons: () => readUpcomingFootballHistorySeasons(database, utcInstantFromEpochMilliseconds(Date.now())),
         hasFixtureSource: (parameters, observation) => {
           const selection = { endpoint: "fixtures", parameters } as const;
@@ -433,12 +446,21 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     };
     const selectionStore = createMysqlDailySelectionStore(database, queue, hourlySelectionEnabled
       ? { hourly: { localEvidence: sourceOrder === "ai-first",
+        ...(coordinated ? { reuseFutureDates: workload.importDays } : {}),
         scheduleCutoff: ({ fixtureId, cycleId }, tx) => cutoff.scheduleCycle({ fixtureId, cycleId }, undefined, tx) } } : {});
+    const hourlyFixtureReconciler = hourlySelectionEnabled ? createHourlyFixtureReconciler({ database, importer: hourlyImporter,
+      policy: selection, includeOverdue: coordinated,
+      ...(overrides.onHourlyLookupFailure ? { onLookupFailure: overrides.onHourlyLookupFailure } : {}) }) : null;
     const dailySelection = createDailySelectionService({ policy: selection, authority: authorities.selection, store: selectionStore, importer, cutoff,
       ...(overrides.onDateImportFailure ? { onDateImportFailure: overrides.onDateImportFailure } : {}),
-      ...(hourlySelectionEnabled ? { hourlyImporter,
-        reconcileHourly: createHourlyFixtureReconciler({ database, importer: hourlyImporter, policy: selection, includeOverdue: coordinated,
-          ...(overrides.onHourlyLookupFailure ? { onLookupFailure: overrides.onHourlyLookupFailure } : {}) }).reconcile } : {}) });
+      ...(hourlyFixtureReconciler ? { hourlyImporter, reconcileHourly: hourlyFixtureReconciler.reconcile,
+        ...(coordinated ? { sweepUpcoming: async (...args: Parameters<typeof hourlyFixtureReconciler.sweepUpcoming>) => {
+          try {
+            const report = await hourlyFixtureReconciler.sweepUpcoming(...args);
+            overrides.onForwardFixtureSweep?.(report);
+          }
+          catch (error) { overrides.onHourlyLookupFailure?.(error instanceof DatabaseOperationError ? error.code : "forward-sweep-unavailable", 0); }
+        } } : {}) } : {}) });
     // Long-lived performance quotes also require the development-only capture policy.
     const publisher = createRevisionPublicationService({ database, queue, policy: publicationPolicy(refs), authority: authorities.publication,
       recordForecastDecision: coordinated,
@@ -662,6 +684,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
             unavailable: result.verifiedEmpty, ...(coordinated && result.anchorDate ? { scan: {
               date: result.anchorDate, dateScanned: result.dateScanned, dateComplete: null,
               scannedSeasons: result.scannedSeasons, partialSeasons: result.partialSeasons, nextScope: result.nextScope,
+              ...(result.dateRepair && { dateRepair: { ...result.dateRepair, complete: result.dateComplete === true } }),
             } } : {}) } };
         },
         async replay(signal) {
@@ -714,8 +737,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         SELECT DISTINCT cp.externalId AS competitionId, s.year AS season FROM FootballFixture f
         JOIN FootballSeason s ON s.id = f.seasonId
         JOIN FootballCompetitionProvider cp ON cp.competitionId = s.competitionId AND cp.provider = 'api-football'
-        WHERE cp.externalId IN (${ids}) AND (f.status = 'live' OR
-          (${coordinated} AND f.status = 'scheduled' AND EXISTS (SELECT 1 FROM FixtureResultState r WHERE r.fixtureId = f.id)) OR
+        WHERE cp.externalId IN (${ids}) AND (f.status = 'live' AND (${!coordinated} OR f.kickoff >= ${new Date(now - 3 * DAY_MS)}) OR
           (f.kickoff >= ${new Date(now - 3 * DAY_MS)} AND f.kickoff < ${new Date(now + 8 * DAY_MS)}))
         ${coordinated ? Prisma.sql`UNION DISTINCT
           SELECT cp.externalId AS competitionId, s.year AS season FROM FootballSeason s
@@ -732,7 +754,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       const current = quota.current(), coverage = await resultCoverage();
       if (current === null) return poller;
       if (coverage.length === 0) { results = null; poller = null; return null; }
-      const next = resultSyncPolicy(refs, cadence ? { ...workload, cadence } : workload, coverage, localFootball, coordinated);
+      const base = resultSyncPolicy(refs, cadence ? { ...workload, cadence } : workload, coverage, localFootball, coordinated);
+      const next = Object.freeze({ ...base, ...(coordinated ? { archiveCompetitionIds: policy.choices.competitionIds! } : {}) });
       if (poller && poller.accountId === current.accountId && evidenceFingerprint(poller.policy) === evidenceFingerprint(next)) return poller;
       results = next;
       // The poller lease belongs to the shared quota account row, so it follows the active provider day.

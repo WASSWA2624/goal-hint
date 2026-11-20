@@ -18,6 +18,8 @@ export type ResultSyncPolicy = Readonly<{
   version: 1; evidenceRef: string;
   coordinated?: true;
   coverage: readonly Readonly<{ competitionId: number; season: number }>[];
+  /** Authorizes fixture-ID repair of already-mapped fixtures from older seasons. */
+  archiveCompetitionIds?: readonly number[];
   approachMs: number; activeWindowMs: number;
   unresolved: readonly PollingTier[]; corrections: readonly PollingTier[];
   /** Skip dedicated rechecks of settled outcomes while still observing shared date sweeps. */
@@ -66,7 +68,7 @@ export type ResultSyncStore = Readonly<{
   acquire(ownerId: string, leaseMs: number): Promise<PollLease | null>;
   renew(lease: PollLease, leaseMs: number): Promise<PollLease>;
   release(lease: PollLease): Promise<void>;
-  tracked(policy: ResultSyncPolicy, now: UtcInstant): Promise<readonly TrackedResultFixture[]>;
+  tracked(policy: ResultSyncPolicy, now: UtcInstant, scope?: "current" | "archive"): Promise<readonly TrackedResultFixture[]>;
   pending(lease: PollLease): Promise<readonly ResultSyncBatch[]>;
   save(lease: PollLease, batch: ResultSyncBatch): Promise<void>;
   apply(lease: PollLease, batch: ResultSyncBatch): Promise<readonly AppliedResultObservation[]>;

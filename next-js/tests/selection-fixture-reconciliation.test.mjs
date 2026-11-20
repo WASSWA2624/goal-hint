@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseUtcInstant } from "../src/domain/calendar.ts";
 import { API_FOOTBALL_CONTRACT_VERSION } from "../src/server/football/api-football-contract.ts";
+import { catalogScopeKey } from "../src/server/football/catalog-input.ts";
 import { createHourlyFixtureReconciler, HourlyScheduleQuotaUnavailable } from "../src/server/selection/selection-fixture-reconciliation.ts";
 
 const slot = parseUtcInstant("2026-10-09T08:00:00Z");
@@ -72,4 +73,51 @@ test("quota floor refusal leaves earlier confirmations available to the cohort",
   } });
   assert.deepEqual(await reconcile(lease, slot), ["confirmed-schedule-change"]);
   assert.equal(calls.length, 2);
+});
+
+test("hourly forward season discovery resumes completed scopes across slots and reports deferred scope", async () => {
+  const hour = 3_600_000;
+  const season = 2026;
+  const observations = new Map();
+  const calls = [];
+  const controller = new AbortController();
+  let at = slot;
+  const client = {
+    dailyRun: { findFirst: async () => ({ leaseExpiresAt: new Date(at + 120_000) }) },
+    footballSeason: { findMany: async () => [39, 40, 41, 42].map(externalId => ({ year: season,
+      competition: { providers: [{ externalId: BigInt(externalId) }] } })) },
+    $queryRaw: async () => [...observations.values()],
+  };
+  const importer = { async import(request) {
+    const { competitionId, status } = request.selection.query;
+    assert.equal(status, "TBD-NS-PST");
+    assert.equal(request.bounds.priority, "enrichment");
+    assert.equal(request.bounds.maxRequests, 1);
+    calls.push(competitionId);
+    const scopeKey = catalogScopeKey(request.selection);
+    observations.set(scopeKey, { scopeKey, observedAt: new Date(at + 1000), completeAt: new Date(at + 1000) });
+    controller.abort();
+    return { receivedCount: 2, changedFixtureIds: [`match-${competitionId}`], requestsDispatched: 1, status: "complete" };
+  } };
+  const options = { database: { query: (operation) => operation(client) }, importer, clock: { now: () => at + 1000 },
+    policy: { competitionIds: [39, 40, 41, 42, 43], retentionEvidenceRef: "synthetic-retention", importBounds: {
+      priority: "daily-inputs", deadlineMs: 60_000, timeoutMs: 1000, maxRequests: 2, maxPages: 1,
+      maxRows: 100, maxResponseBytes: 100_000, retry: { maxAttempts: 1, baseDelayMs: 0, maxDelayMs: 0 }, cacheMaxAgeMs: 0,
+    } } };
+  const first = await createHourlyFixtureReconciler(options).sweepUpcoming(lease, at, controller.signal);
+  assert.deepEqual(first, { completeScopes: 1, partialScopes: 0, failedScopes: 0, unavailableScopes: 0, retainedScopes: 0,
+    deferredScopes: 3, competitionsWithoutSeason: 1, scannedFixtures: 2, changedFixtures: 1, requests: 1 });
+  at += hour;
+  const resumed = await createHourlyFixtureReconciler(options).sweepUpcoming({ ...lease, runId: "new-slot" }, at);
+  assert.equal(resumed.retainedScopes, 1);
+  assert.equal(resumed.completeScopes, 2);
+  assert.equal(resumed.deferredScopes, 1);
+  assert.equal(new Set(calls).size, 3);
+  await createHourlyFixtureReconciler(options).sweepUpcoming({ ...lease, runId: "new-slot" }, at);
+  assert.equal(calls.length, 3, "a resumed invocation cannot exceed the original slot budget");
+  at += hour;
+  const finished = await createHourlyFixtureReconciler(options).sweepUpcoming({ ...lease, runId: "third-slot" }, at);
+  assert.equal(finished.retainedScopes, 3);
+  assert.equal(finished.deferredScopes, 0);
+  assert.equal(new Set(calls).size, 4);
 });
