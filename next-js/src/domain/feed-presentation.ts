@@ -9,8 +9,8 @@ import { resolveFeedDates, type FeedQuery } from "./feed-query.ts";
 import type { createMessages } from "../i18n/messages.ts";
 
 /**
- * The shown pick mirrors feed SQL: highest unrounded probability, then exact fresh public odds,
- * then policy order. Ordering and filters therefore refer to the pick the card actually shows.
+ * The shown pick mirrors feed SQL and the frozen recommendation. A legacy pick compares unrounded
+ * probability, then exact fresh public odds, then a stable market and selection key.
  */
 export function bestCardFamily(fixture: Pick<FixtureSnapshot, "forecast" | "prices">, markets: readonly MarketFamily[], preferRecommendation = true): MarketFamily | null {
   if (fixture.forecast && "gated" in fixture.forecast) return fixture.forecast.families.find((family) => markets.includes(family)) ?? null;

@@ -32,6 +32,7 @@ import { usesScoreDistribution } from "../predictor/predictor-prompt.ts";
 import { legacyMarketsFromScoreDistribution } from "../../domain/score-distribution-legacy.ts";
 import { validatePublishedRecommendation } from "./recommendation-publication.ts";
 import { storedRefreshStage } from "../refresh/refresh-mysql-store.ts";
+import { buildForecastDecision, type ForecastDecision } from "./forecast-decision.ts";
 
 type Transaction = Prisma.TransactionClient;
 async function serverNow(tx: Transaction) {
@@ -59,6 +60,7 @@ function authorized(authority: PublicationAuthority, policy: PublicationPolicy, 
 export function createRevisionPublicationService(options: Readonly<{
   database: DatabaseRuntime; queue: Pick<JobQueue, "assertOwned">; policy: unknown; authority: PublicationAuthority;
   quotes?: Readonly<{ verify: () => boolean; freshnessMs: number }>;
+  recordForecastDecision?: boolean;
 }>) {
   const { database, authority, queue } = options, policy = parsePublicationPolicy(options.policy);
   const history = createMysqlPredictionHistoryStore(database), evidence = createMysqlEvidenceStore(database), models = createMysqlModelVersionStore(database);
@@ -125,7 +127,8 @@ export function createRevisionPublicationService(options: Readonly<{
             reason = "status-ineligible";
           const latest = await tx.predictionSet.findFirst({ where: { fixtureId: fixture.id }, orderBy: { fixtureRevision: "desc" } });
           if (reason === null && latest && predictionRunOrder(latest.runSequence) >= predictionRunOrder(run.sequence)) reason = "older-run";
-          let quoteCapture = false;
+          let quoteCapture = false, forecastDecision: ForecastDecision | undefined;
+          const recordDecision = options.recordForecastDecision && candidate.audit.sourceCascade !== undefined;
           let revision = null, impliedSnapshot: StoredImpliedMarketExtension | null = null,
             outcome: RefreshPublicationResult["outcome"] = "skipped";
           if (reason === null) {
@@ -135,10 +138,10 @@ export function createRevisionPublicationService(options: Readonly<{
               evidenceFingerprint(snapshot.snapshot.context) !== evidenceFingerprint(context)) return publicationFail("invalid-request");
             const model = candidate.context.pin === null ? null : await models.findInTransaction(tx, candidate.context.pin.modelVersionId);
             if (candidate.context.pin !== null && model === null) return publicationFail("invalid-request");
-            if (candidate.audit.localGoalRates || Object.values(candidate.markets).some((item) => item.available && item.provenance.kind === "local-engine")) {
+            if (recordDecision || candidate.audit.localGoalRates || Object.values(candidate.markets).some((item) => item.available && item.provenance.kind === "local-engine")) {
               const stage = await storedRefreshStage(tx, jobId, "fallback", "completed");
               const selected = stage?.value as { status?: unknown; candidate?: unknown } | undefined;
-              if (stage?.at !== input.generationCompletedAt || selected?.status !== "candidate" ||
+              if (stage?.at !== input.generationCompletedAt || (selected?.status !== "candidate" && selected?.status !== "retain-previous-or-unavailable") ||
                 evidenceFingerprint(selected.candidate) !== evidenceFingerprint(candidate)) return publicationFail("invalid-request");
             }
             const goalExtension = input.goalExtension;
@@ -209,6 +212,9 @@ export function createRevisionPublicationService(options: Readonly<{
                 next: { state: "open", currentSetId: revision.id, lockedSetId: null, closedAt: null, lockedAt: null, voidedAt: null, voidReason: null } });
               outcome = "published"; reason = "accepted";
             }
+            if (recordDecision && outcome !== "skipped") forecastDecision = buildForecastDecision({ candidate, snapshot: snapshot.snapshot,
+              evidenceSnapshotId: input.evidenceSnapshotId, scheduleVersion: input.scheduleVersion, generationCompletedAt: input.generationCompletedAt,
+              publicationCutoffAt: cycle.cutoffAt });
           }
           // History mutations already advance the fixture version. Operational
           // refresh outcomes also change its public freshness/delay projection.
@@ -217,7 +223,8 @@ export function createRevisionPublicationService(options: Readonly<{
           const refresh: RefreshPublicationResult = freezeEvidence({ id, requestHash, attemptKey: input.attemptKey, ...identity,
             runSequence: run.sequence, jobId, fixtureVersion: version, outcome, reason: reason!, revisionId: revision?.id ?? null, at: now,
             evidenceSnapshotId: input.evidenceSnapshotId, candidateHash: evidenceFingerprint(candidate), generationCompletedAt: input.generationCompletedAt,
-            policyHash: evidenceFingerprint(policy), observation: input.observation });
+            policyHash: evidenceFingerprint(policy), observation: input.observation,
+            ...(forecastDecision === undefined ? {} : { forecastDecision }) });
           const payload = evidenceSerialize(refresh);
           await tx.$executeRaw`INSERT INTO PredictionRefreshResult
             (id, requestHash, attemptKey, runId, runSequence, fixtureId, cycleId, jobId, fixtureVersion, outcome, reason, revisionId, at, integrity, resultJson)

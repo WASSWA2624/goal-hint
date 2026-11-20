@@ -25,6 +25,8 @@ const binaryRuleSchema = z.union([
   z.strictObject({ kind: z.literal("exact-score"), home: goals, away: goals }),
   z.strictObject({ kind: z.literal("handicap-result"), homeHandicap: z.number().int().min(-1000).max(1000), result }),
   z.strictObject({ kind: z.literal("half-full-result"), half: result, full: result }),
+  z.strictObject({ kind: z.literal("highest-scoring-half"), half: z.enum(["first-half", "equal", "second-half"]) }),
+  z.strictObject({ kind: z.literal("scoring-in-both-halves"), metric, yes: z.boolean() }),
 ]);
 export const goalRuleSchema = z.union([
   binaryRuleSchema,
@@ -43,8 +45,10 @@ export const goalMarketDefinitionSchema = z.strictObject({
 }).superRefine((definition, context) => {
   const keys = definition.selections.map((selection) => selection.key);
   const payout = definition.selections.some(({ rule }) => rule.kind === "asian-handicap" || rule.kind === "asian-total");
-  const atoms = definition.selections.reduce((count, { rule }) => count + (rule.kind === "all" || rule.kind === "none" ? rule.rules.length : 1), 0);
-  if (new Set(keys).size !== keys.length || (definition.group === "payout") !== payout || atoms > 2048) {
+  const atoms = definition.selections.flatMap(({ rule }) => rule.kind === "all" || rule.kind === "none" ? [...rule.rules] : [rule]);
+  const crossPeriod = atoms.some(({ kind }) => kind === "highest-scoring-half" || kind === "scoring-in-both-halves");
+  if (new Set(keys).size !== keys.length || (definition.group === "payout") !== payout || atoms.length > 2048 ||
+    (crossPeriod && definition.period !== "full-time")) {
     context.addIssue({ code: "custom", message: "Selection keys must be unique and payout groups must retain their Asian settlement semantics." });
   }
 });
@@ -163,6 +167,16 @@ function binary(state: ScoreState, period: GoalMarketPeriod, rule: BinaryRule): 
     case "handicap-result": return resultOf(home + rule.homeHandicap, away) === rule.result;
     case "half-full-result": return state.halfHome === null || state.halfAway === null ? null
       : resultOf(state.halfHome, state.halfAway) === rule.half && resultOf(state.home, state.away) === rule.full;
+    case "highest-scoring-half": {
+      const first = score(state, "half-time"), second = score(state, "second-half");
+      if (!first || !second) return null;
+      const firstTotal = amount(first, "total"), secondTotal = amount(second, "total");
+      return (firstTotal > secondTotal ? "first-half" : firstTotal < secondTotal ? "second-half" : "equal") === rule.half;
+    }
+    case "scoring-in-both-halves": {
+      const first = score(state, "half-time"), second = score(state, "second-half");
+      return first && second ? (amount(first, rule.metric) > 0 && amount(second, rule.metric) > 0) === rule.yes : null;
+    }
   }
 }
 function grade(state: ScoreState, period: GoalMarketPeriod, rule: GoalRule): GoalGrade | null {

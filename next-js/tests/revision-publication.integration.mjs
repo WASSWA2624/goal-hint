@@ -18,13 +18,17 @@ import { createMysqlPredictionHistoryStore } from '../src/server/predictions/his
 import { storedCycle } from '../src/server/predictions/history-read.ts';
 import { createRevisionPublicationService } from '../src/server/predictions/publication-service.ts';
 import { RevisionPublicationError } from '../src/server/predictions/publication-contract.ts';
+import { unavailableForecastMarkets } from '../src/server/predictions/forecast-decision.ts';
+import { LIVE_FORECAST_CASCADE } from '../src/server/fallback/fallback-contract.ts';
+import { createForecastRecovery } from '../src/server/refresh/forecast-recovery.ts';
+import { createMysqlRefreshStore } from '../src/server/refresh/refresh-mysql-store.ts';
 import { createMysqlDailySelectionStore } from '../src/server/selection/selection-mysql-store.ts';
 import { createDailySelectionService } from '../src/server/selection/selection-service.ts';
 import { catalogFixture, catalogResponse, createSyntheticCatalogAdapter, CATALOG_NOW } from './helpers/catalog-fixtures.mjs';
 import { evidenceContext, evidenceHash, evidenceAuthority, evidencePolicy, evidenceSource } from './helpers/evidence-fixtures.mjs';
 import { modelVersion, modelAuthority } from './helpers/predictor-fixtures.mjs';
 import { historyCandidate, cycleChange, cycleCreation } from './helpers/prediction-history-fixtures.mjs';
-import { jobTestEnvironment } from './helpers/job-fixtures.mjs';
+import { jobEnvelope, jobTestEnvironment } from './helpers/job-fixtures.mjs';
 import { selectionPolicy, selectionAuthority, catalogSelectionAuthority, SELECTION_FOR } from './helpers/selection-fixtures.mjs';
 import { publicationPolicy, publicationAuthority, publicationInput, emptyCandidate, PUBLICATION_NOW } from './helpers/publication-fixtures.mjs';
 import { MysqlServerUnavailableError, startIsolatedMysql } from './helpers/mysql-instance.mjs';
@@ -38,7 +42,7 @@ const catalogTables = ['FootballCatalogLock','FootballTeam','FootballTeamProvide
   'FootballCompetitionProvider','FootballCompetitionAlias','FootballSeason','FootballFixture','FootballIdentityReview', ...catalogAppendOnly];
 const appendOnly = ['EvidenceSourceVersion','FixtureEvidenceSnapshot','FixtureEvidenceSnapshotSource','ModelVersion',
   'PredictionSet','MarketPrediction','PredictionSchedule','PredictionAudit','DailyRunManifest',
-  'PredictionRefreshResult','PredictionPublicationBarrier','PredictionChangeEvent','PredictionQuote'];
+  'PredictionRefreshResult','PredictionRefreshStage','PredictionRefreshOutcome','PredictionPublicationBarrier','PredictionChangeEvent','PredictionQuote'];
 
 test('atomic revision publication on isolated genuine MySQL', { timeout: 300_000 }, async (t) => {
   let instance;
@@ -185,6 +189,71 @@ test('atomic revision publication on isolated genuine MySQL', { timeout: 300_000
       assert.equal(display.updateDelayed, true); assert.equal(display.revision.publishedAt, published.revision.publishedAt);
       assert.equal((await counts(previous.fixture.id)).sets, 1);
       assert.equal((await first.publish(empty.input, empty.lease)).refresh.reason, 'older-run');
+    });
+    await t.test('coordinated numerical decisions seal exact markets and abstentions atomically with cross-replica replay', async () => {
+      const refresh = createMysqlRefreshStore(a, queue), coordinated = publisher(a, { recordForecastDecision: true });
+      for (const available of [true, false]) {
+        const target = await setup();
+        const base = available ? target.input.candidate : emptyCandidate(target.input.candidate);
+        const candidate = { ...base, audit: { ...base.audit, sourceCascade: LIVE_FORECAST_CASCADE, localStatus: 'not-requested' } };
+        const input = { ...target.input, candidate, generationCompletedAt: at };
+        await assert.rejects(coordinated.publish(input, target.lease), denied('invalid-request'));
+        assert.deepEqual(await counts(target.fixture.id), { sets: 0, results: 0, events: 0 });
+        assert.equal(await refresh.start(target.lease, 'fallback'), true);
+        await refresh.complete(target.lease, 'fallback', { status: available ? 'candidate' : 'retain-previous-or-unavailable', candidate });
+        const result = await coordinated.publish(input, target.lease), decision = result.refresh.forecastDecision;
+        assert.equal(decision.forecastType, 'pre-match');
+        assert.equal(decision.status, available ? 'estimated' : 'abstained');
+        assert.equal(decision.evidenceHash, target.snapshot.hash);
+        assert.equal(decision.evidenceCutoffAt, target.snapshot.context.cutoffAt);
+        assert.equal(decision.generatedAt, at);
+        assert.equal(decision.publicationCutoffAt, target.cycle.cutoffAt);
+        assert.equal(decision.markets.length, available ? 4 : 0);
+        assert.ok(unavailableForecastMarkets(decision).some((row) => row.family === 'correct-score' && row.status === 'unavailable' &&
+          !Object.hasOwn(row, 'selections')));
+        assert.ok(decision.markets.every((row) => row.provenance.evidenceHash === target.snapshot.hash));
+        assert.deepEqual(await second.resultForAttempt(result.refresh.id), result);
+        assert.deepEqual(await second.publish(input, target.lease), result);
+        assert.deepEqual(await counts(target.fixture.id), { sets: available ? 1 : 0, results: 1, events: 1 });
+      }
+    });
+    await t.test('forecast recovery skips exhausted jobs and repairs sealed abstention without a new attempt', async () => {
+      const target = await setup(), { lease } = target, { type, handlerVersion } = lease.job.envelope;
+      const refresh = createMysqlRefreshStore(a, queue), coordinated = publisher(a, { recordForecastDecision: true });
+      const base = emptyCandidate(target.input.candidate);
+      const candidate = { ...base, audit: { ...base.audit, sourceCascade: LIVE_FORECAST_CASCADE, localStatus: 'not-requested' } };
+      await refresh.start(lease, 'fallback');
+      await refresh.complete(lease, 'fallback', { status: 'retain-previous-or-unavailable', candidate });
+      const receipt = await coordinated.publish({ ...target.input, candidate, generationCompletedAt: at }, lease);
+      for (let index = 0; index < 3; index++) {
+        const decoy = await queue.enqueue(jobEnvelope({ type, handlerVersion, maxAttempts: 1,
+          notBefore: lease.job.availableAt - 1000, expiresAt: at + 120_000 }));
+        const run = await queue.claim(evidenceHash(`exhausted-decoy-${index}`), [{ type, handlerVersion }]);
+        assert.equal(run.jobId, decoy.id);
+        assert.equal((await queue.retry(run, 'handler-failed', false)).state, 'failed');
+      }
+      const recoveryDatabase = { transaction: a.transaction, query: operation => a.transaction(operation) };
+      const recovery = createForecastRecovery({ database: recoveryDatabase, queue, jobType: type });
+      assert.equal((await recovery.run(1)).completed, 0, 'active leases are fenced even after writing a receipt');
+      assert.equal((await queue.inspect(lease.jobId)).state, 'running');
+      const failed = await queue.retry(lease, 'handler-failed', false);
+      const originalAttempts = await queue.attempts(lease.jobId);
+      const mismatched = await a.transaction(tx => queue.recoverInTransaction(tx, lease.jobId, failed.version - 1,
+        async () => assert.fail('an old version cannot authorize success repair')));
+      assert.equal(mismatched.version, failed.version);
+      const repaired = await recovery.run(1);
+      assert.equal(repaired.completed, 1);
+      assert.equal(repaired.retried, 0);
+      assert.equal(repaired.failed, 0);
+      assert.equal(repaired.hasMore, false);
+      const current = await queue.inspect(lease.jobId);
+      assert.equal(current.state, 'succeeded');
+      assert.equal(current.attemptCount, failed.attemptCount);
+      assert.deepEqual(await queue.attempts(lease.jobId), originalAttempts);
+      const completed = await refresh.outcome(lease.jobId);
+      assert.equal(completed.outcome, 'unavailable');
+      assert.equal(completed.forecastDecisionHash, receipt.refresh.forecastDecision.hash);
+      assert.deepEqual(await counts(target.fixture.id), { sets: 0, results: 1, events: 1 });
     });
     await t.test('restart/acknowledgement returns the original publication even with changed model pin, timing or observation', async () => {
       await queue.acknowledge(state.lease);

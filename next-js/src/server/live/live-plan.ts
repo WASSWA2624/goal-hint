@@ -7,7 +7,7 @@ import { liveGoalMarketDefinitions } from "../../domain/goal-market-definitions.
 import { operatingRules, type RuntimePolicy } from "../config/runtime-policy.ts";
 import type { EvidencePolicy } from "../evidence/evidence-contract.ts";
 import type { ProviderFallbackPolicy } from "../fallback/fallback-adapter.ts";
-import { LIVE_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
+import { LIVE_FORECAST_CASCADE, type ForecastCascade } from "../fallback/fallback-contract.ts";
 import { ODDS_CONTRACT_VERSION, type ApiFootballBounds } from "../football/api-football-contract.ts";
 import { criticalWorkReserveRatio, providerDayReserveRatio } from "../football/quota-contract.ts";
 import { DE_MARGIN_METHOD } from "../../domain/odds.ts";
@@ -239,8 +239,8 @@ export function publicationPolicy(refs: LiveReferences): PublicationPolicy {
     "local-engine": { maxAgeMs: HOUR, basis: "generated", unknownGeneration: "reject", unknownUpdate: "allow-flagged" },
     "api-football": { maxAgeMs: HOUR, basis: "retrieved", unknownGeneration: "allow-flagged", unknownUpdate: "allow-flagged" } } } as const);
 }
-export function liveCascadePlan(plan: RefreshPlan, includeGoals = true): RefreshPlan {
-  return { ...plan, sourceCascade: LIVE_FORECAST_CASCADE,
+export function liveCascadePlan(plan: RefreshPlan, includeGoals = true, sourceCascade: ForecastCascade = LIVE_FORECAST_CASCADE): RefreshPlan {
+  return { ...plan, sourceCascade,
     ...(includeGoals ? { goalDefinitions: liveGoalMarketDefinitions } : {}) };
 }
 export function evidencePolicy(refs: LiveReferences): EvidencePolicy {

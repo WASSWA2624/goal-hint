@@ -4,10 +4,12 @@ import { randomUUID } from 'node:crypto';
 import { parseRuntimePolicy } from '../src/server/config/runtime-policy.ts';
 import { createPredictionRefreshService } from '../src/server/refresh/refresh-service.ts';
 import { createFallbackService } from '../src/server/fallback/fallback-service.ts';
+import { QUALIFIED_FORECAST_CASCADE } from '../src/server/fallback/fallback-contract.ts';
+import { evidenceFirstRecommendationPolicy } from '../src/domain/recommendation.ts';
 import { createLiveAuthorities } from '../src/server/live/live-authorities.ts';
 import { liveAiModel } from '../src/server/live/live-ai-model.ts';
 import { liveAiEvidencePolicy, liveAiRefreshPlan } from '../src/server/live/live-ai-plan.ts';
-import { fallbackRefreshPlan, liveReferences, liveWorkload, providerFallbackPolicy, refreshEnvelopeFor, selectionPolicy } from '../src/server/live/live-plan.ts';
+import { fallbackRefreshPlan, liveCascadePlan, liveReferences, liveWorkload, providerFallbackPolicy, refreshEnvelopeFor, selectionPolicy } from '../src/server/live/live-plan.ts';
 import { buildEvidenceSnapshot } from '../src/server/evidence/evidence-snapshot.ts';
 import { evidenceFingerprint, evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
 import { recommendationQuotesFromSnapshots } from '../src/server/odds/recommendation-quotes.ts';
@@ -54,7 +56,7 @@ function quoteEvidence(context) {
 
 /** Actual refresh orchestration, fallback, archive validators and production publication authority.
  * Only durable storage, provider transports and the atomic commit boundary are injected in this test. */
-function harness({ ai = 'off', interrupt = false, denyFallback = false } = {}) {
+function harness({ ai = 'off', interrupt = false, denyFallback = false, coordinated = false } = {}) {
   let current = NOW, intent = null, outcome = null, accepted = null, originalAi = null, odds = null, pendingInterruption = interrupt;
   const policy = parseRuntimePolicy({ ...environment, GOAL_HINT_AI_ENABLED: ai === 'off' ? 'false' : 'true',
     ...(ai === 'off' ? {} : { AI_API_KEY: 'synthetic-only' }) });
@@ -71,7 +73,7 @@ function harness({ ai = 'off', interrupt = false, denyFallback = false } = {}) {
   const live = createLiveAuthorities({ policy, refs, verify: () => true, clock: { now: () => current },
     selection: selectionPolicy(policy, refs, liveWorkload(150000, 12, 'Mega', 900)), refreshPacing: 'standard',
     resultPolicy: () => null, statusEvidenceRef: `${refs.freshness}#status`, aiModel: model,
-    oddsPolicy: oddsPolicy({ retentionEvidenceRef: refs.retention }), sourceOrder: 'ai-first',
+    oddsPolicy: oddsPolicy({ retentionEvidenceRef: refs.retention }), sourceOrder: 'ai-first', coordinatedForecasts: coordinated,
     verifyPrimary: (result) => result === originalAi,
     verifyPrimaryCandidate: (candidate) => originalAi !== null && Object.values(candidate.markets).every((item) => !item.available || item.market.source !== 'ai' ||
       evidenceFingerprint(item.market) === evidenceFingerprint(originalAi.output.markets.markets[item.market.family].market)) });
@@ -109,7 +111,8 @@ function harness({ ai = 'off', interrupt = false, denyFallback = false } = {}) {
       const sources = recommendationFootballSources(loaded.context);
       if (ai !== 'off') return liveAiRefreshPlan(loaded, refs, policy, model, sources);
       const base = fallbackRefreshPlan(loaded, refs);
-      return { ...base, evidence: { ...base.evidence, policy: liveAiEvidencePolicy(refs), cachedSources: sources } };
+      const plan = { ...base, evidence: { ...base.evidence, policy: liveAiEvidencePolicy(refs), cachedSources: sources } };
+      return coordinated ? liveCascadePlan({ ...plan, recommendationPolicy: evidenceFirstRecommendationPolicy }, false, QUALIFIED_FORECAST_CASCADE) : plan;
     },
     models: { async resolve(pin) { return { pin, model }; } },
     evidence: { async collect(request) { calls.evidence++; current += 1000;
@@ -125,7 +128,9 @@ function harness({ ai = 'off', interrupt = false, denyFallback = false } = {}) {
     } }, fallback: denyFallback ? { ...fallback, async resolve() {
       return { status: 'denied', reason: 'timeout', requestsDispatched: 1, requestCountUnknown: true };
     } } : fallback,
-    recommendations: { async quotes(context) { calls.quotes++; odds = quoteEvidence(context);
+    recommendations: { async quotes(context) { calls.quotes++;
+      if (coordinated) return [];
+      odds = quoteEvidence(context);
       return recommendationQuotesFromSnapshots({ ...odds, context, bookmakerId: 8, freshnessMs: 10800000, permitted: true })
         .filter((quote) => quote.selection !== 'away-or-draw');
     } },
@@ -158,6 +163,20 @@ test('AI disabled and no key still publishes an enriched priced baseline through
   assert.equal(decision.selected.probability, .8); assert.equal(decision.selected.quote.decimal, '1.2');
   assert.equal(decision.evidenceSnapshotId, input.evidenceSnapshotId);
   assert.ok(decision.decisions.some((entry) => entry.eligible && entry.evidence.cohorts?.every((cohort) => cohort.sampleSize === 3)));
+});
+
+test('the coordinated authority seals and publishes a supported pre-match recommendation with no prices', async () => {
+  const h = harness({ coordinated: true });
+  assert.equal((await h.run()).status, 'succeeded');
+  const { candidate } = h.published[0];
+  assert.equal(candidate.audit.sourceCascade, QUALIFIED_FORECAST_CASCADE);
+  assert.equal(candidate.audit.recommendation.policyVersion, evidenceFirstRecommendationPolicy.version);
+  assert.equal(candidate.audit.recommendation.selected?.probability, .8);
+  assert.equal(candidate.audit.recommendation.selected?.quote, null);
+  assert.equal(candidate.audit.recommendation.selected?.source, 'api-football');
+  assert.equal(candidate.audit.transitions['match-result'].selected, 'api-football');
+  assert.equal(h.calls.ai, 0);
+  assert.equal(h.calls.fallback, 1);
 });
 
 test('unpriced AI falls back and usable AI wins through production resolution and publication authority', async () => {

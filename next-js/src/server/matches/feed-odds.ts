@@ -22,7 +22,8 @@ export async function withUpcomingFeaturedOutcomes(database: DatabaseRuntime, re
       { isolationLevel: "RepeatableRead", maxWait: 2000, timeout: 5000 }).catch(() => null) : null,
   ]);
   const featured = new Map(fixtures.map((record) => [record.fixtureId, rankFixtureOutcomes(record.forecast!.markets,
-    goals?.get(record.forecast!.revisionId) ?? [], projectBookmakerOdds(quotes?.get(record.fixtureId), "pre-match"), record.marketOdds)]));
+    goals?.get(record.forecast!.revisionId) ?? [], projectBookmakerOdds(quotes?.get(record.fixtureId), "pre-match"), record.marketOdds,
+    record.forecast!.recommendation)]));
   const records = response.records.map((record) => featured.has(record.fixtureId)
     ? { ...record, featuredPrediction: featured.get(record.fixtureId) ?? null } : record);
   const projected = { ...response, records };

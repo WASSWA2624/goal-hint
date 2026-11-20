@@ -4,7 +4,7 @@ import { NON_GOAL_MARKET_RULE_VERSION, countMetrics, eventMetrics, type NonGoalR
 import { LIVE_ODDS_MAPPING_VERSION, ODDS_MAPPING_VERSION, binaryGoalTotalOddsMapping, launchLiveOddsMapping, launchOddsMapping } from "./odds-markets.ts";
 import { GOAL_MARKET_RULE_VERSION, goalMarketPeriods, type GoalMarketPeriod, type GoalRule } from "./score-distribution-markets.ts";
 
-export const MARKET_REGISTRY_VERSION = "football-market-registry-v1";
+export const MARKET_REGISTRY_VERSION = "football-market-registry-v2";
 
 type SelectionSet =
   | Readonly<{ kind: "fixed"; keys: readonly string[] }>
@@ -26,9 +26,10 @@ type Settlement =
   | Readonly<{ basis: "unsupported"; reason: string }>;
 
 type Model =
-  | Readonly<{ basis: "score-distribution"; evidence: "point-in-time-regulation-score-evidence"; supportsLocalPoissonCounts: boolean }>
+  | Readonly<{ basis: "score-distribution"; evidence: "point-in-time-regulation-score-evidence" | "verified-first-and-second-half-scores";
+    supportsLocalPoissonCounts: boolean }>
   | Readonly<{ basis: "unsupported"; evidence: "point-in-time-player-participation-and-events" | "point-in-time-period-counts" |
-    "point-in-time-period-events" | "verified-first-and-second-half-scores"; reason: string }>;
+    "point-in-time-period-events"; reason: string }>;
 
 export type MarketRegistryEntry = Readonly<{
   name: string;
@@ -59,6 +60,7 @@ const scoreModel: Model = Object.freeze({
   basis: "score-distribution", evidence: "point-in-time-regulation-score-evidence", supportsLocalPoissonCounts: false,
 });
 const countModel: Model = Object.freeze({ ...scoreModel, supportsLocalPoissonCounts: true });
+const periodScoreModel: Model = Object.freeze({ ...scoreModel, evidence: "verified-first-and-second-half-scores" });
 const unsupportedModel = (evidence: Extract<Model, { basis: "unsupported" }>["evidence"], reason: string): Model =>
   Object.freeze({ basis: "unsupported", evidence, reason });
 const noPlayerModel = unsupportedModel("point-in-time-player-participation-and-events", "no-qualified-player-model");
@@ -124,19 +126,15 @@ export const marketRegistry = Object.freeze({
   "exact-goals": scoreMarket({ name: "Exact number of goals", selections: variable("counts"), models: countModel,
     parameters: Object.freeze({ ...noParameters, team: "match-or-side" }) }, "goal-count"),
   "goal-ranges": scoreMarket({ name: "Goal ranges", selections: variable("ranges"), models: countModel,
-    parameters: Object.freeze({ ...noParameters, team: "match-or-side" }), grading: "depends-on-definition" }, "goal-count"),
+    parameters: Object.freeze({ ...noParameters, team: "match-or-side" }), grading: "depends-on-definition" }, "goal-count", "none"),
   "odd-even-goals": scoreMarket({ name: "Odd or even goals", selections: fixed(["odd", "even"]), models: countModel,
     parameters: Object.freeze({ ...noParameters, team: "match-or-side" }) }, "odd-even"),
-  "half-time-full-time": scoreMarket({ name: "Half-time / full-time", periods: fullTime,
+  "half-time-full-time": scoreMarket({ name: "Half-time / full-time", periods: fullTime, models: periodScoreModel,
     selections: fixed(result.flatMap((half) => result.map((full) => `${half}-${full}`))) }, "half-full-result"),
-  "highest-scoring-half": unsupportedMarket({ name: "Highest-scoring half", periods: fullTime,
-    selections: fixed(["first-half", "equal", "second-half"]), parameters: noParameters, grading: "partition",
-    models: unsupportedModel("verified-first-and-second-half-scores", "no-shared-half-comparison-rule") },
-  "no-shared-half-comparison-rule"),
-  "scoring-in-both-halves": unsupportedMarket({ name: "Scoring in both halves", periods: fullTime, selections: fixed(yesNo),
-    parameters: Object.freeze({ ...noParameters, team: "match-or-side" }), grading: "partition",
-    models: unsupportedModel("verified-first-and-second-half-scores", "no-cross-period-combination-rule") },
-  "no-cross-period-combination-rule"),
+  "highest-scoring-half": scoreMarket({ name: "Highest-scoring half", periods: fullTime, models: periodScoreModel,
+    selections: fixed(["first-half", "equal", "second-half"]), parameters: noParameters }, "highest-scoring-half"),
+  "scoring-in-both-halves": scoreMarket({ name: "Scoring in both halves", periods: fullTime, selections: fixed(yesNo), models: periodScoreModel,
+    parameters: Object.freeze({ ...noParameters, team: "match-or-side" }) }, "scoring-in-both-halves"),
   "combined-outcomes": scoreMarket({ name: "Combined outcomes", selections: variable("combinations"),
     grading: "depends-on-definition" }, "all", "none"),
   "player-scorer": reviewedStatisticMarket({ name: "Player to score anytime, first or last", selections: fixed(yesNo),

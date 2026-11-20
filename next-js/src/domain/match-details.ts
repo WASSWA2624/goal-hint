@@ -11,6 +11,7 @@ import { displayMarketOddsPrice, marketOddsPrice } from "./in-play-odds.ts";
 import { bookmakerMarketPrice } from "./bookmaker-odds.ts";
 import { forecastExpectedReturn } from "./forecast-value.ts";
 import { resultFor } from "./match-insight-presentation.ts";
+import { recommendationFamily } from "./recommendation-view.ts";
 
 /**
  * Pure presentation rules for the match-details screen. Every value is read from the stored
@@ -70,10 +71,12 @@ export function selectedDetailPrice(data: MatchDetailResponse, family: MarketFam
     ?.selections.find((price) => price.selection === item.market.selection)?.price ?? null;
 }
 
-/** Rank the displayed revision's published picks by unrounded probability, exact fresh odds, then policy order. */
+/** Use the displayed revision's frozen recommendation or rank its published picks. */
 export function featuredFamily(data: MatchDetailResponse): MarketFamily | null {
   const snapshot = fullDetailSnapshot(data);
   if (!snapshot) return null;
+  const recommended = recommendationFamily(snapshot.recommendation, publicPolicy.markets);
+  if (recommended !== undefined) return recommended;
   // The fixture carries applicable-pick prices; the complete detail envelope also covers historical selections.
   const prices = [...(data.fixture.prices ?? []), ...(data.odds ?? []).flatMap((group) => group.selections.map((price) => ({
     family: group.family, selection: price.selection, price: price.price,
@@ -85,7 +88,7 @@ export function currentFeaturedOutcome(data: MatchDetailResponse) {
   const snapshot = fullDetailSnapshot(data);
   if (snapshot?.applicability !== "current" || data.fixture.status !== "scheduled") return null;
   return rankFixtureOutcomes(snapshot.markets, data.extendedMarkets?.markets ?? [],
-    data.bookmakerOdds?.kind === "pre-match" ? data.bookmakerOdds : null, data.fixture.marketOdds);
+    data.bookmakerOdds?.kind === "pre-match" ? data.bookmakerOdds : null, data.fixture.marketOdds, snapshot.recommendation);
 }
 
 export type LiveStanding = "on-track" | "off-track";

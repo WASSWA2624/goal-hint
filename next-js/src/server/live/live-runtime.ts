@@ -1,5 +1,7 @@
 import "server-only";
 import { createRecommendationQuoteLoader } from "../odds/recommendation-quotes.ts";
+import { evidenceFirstRecommendationPolicy } from "../../domain/recommendation.ts";
+import { QUALIFIED_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
 
 import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { MARKET_REGISTRY_VERSION } from "../../domain/market-registry.ts";
@@ -197,15 +199,17 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     const odds = oddsPolicy(policy, refs, workload, localFootball || coordinated);
     let aiModel: ReturnType<typeof liveAiModel> | null = null;
     if (policy.capabilities.ai) try { aiModel = liveAiModel(policy); } catch { /* An unsupported optional model leaves the baseline active. */ }
-    // Owned development follows the current cascade; hosted runs retain the explicit rollback setting.
-    const sourceOrder = localFootball ? "ai-first" : liveSourceOrder(policy);
+    // The coordinated cascade can only dispatch models with reviewed numerical eligibility.
+    if (coordinated && aiModel?.evaluation.status !== "evaluated") aiModel = null;
+    const sourceOrder = coordinated || localFootball ? "ai-first" : liveSourceOrder(policy);
     const selection = Object.freeze({ ...selectionPolicy(policy, refs, workload), ...(coordinated ? { forecastLifecycle: {
-      engineVersion: evidenceFingerprint([sourceOrder, aiModel, LOCAL_GOALS_VERSION, API_FOOTBALL_CONTRACT_VERSION]),
+      engineVersion: evidenceFingerprint([QUALIFIED_FORECAST_CASCADE, evidenceFirstRecommendationPolicy.version,
+        aiModel, LOCAL_GOALS_VERSION, API_FOOTBALL_CONTRACT_VERSION]),
       marketRegistryVersion: MARKET_REGISTRY_VERSION,
     } } : {}) });
     let ai: LiveAiRuntime | null = null;
     const authorities = createLiveAuthorities({ policy, verify, refs, selection, statusEvidenceRef, resultPolicy: () => results, localFootball,
-      refreshPacing: workload.pacing, oddsPolicy: odds, liveMatchPolicy: () => liveDetailsPolicy, sourceOrder,
+      refreshPacing: workload.pacing, oddsPolicy: odds, liveMatchPolicy: () => liveDetailsPolicy, sourceOrder, coordinatedForecasts: coordinated,
       ...(aiModel === null ? {} : { aiModel, verifyPrimary: (...args) => ai?.verifyAi(...args) === true,
         verifyPrimaryCandidate: (candidate) => ai?.verifyPublishedCandidate(candidate) === true,
         verifyPrimaryGoals: (candidate, distribution) => ai?.verifyPublishedGoalDistribution(candidate, distribution) === true }) });
@@ -429,6 +433,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
           ...(overrides.onHourlyLookupFailure ? { onLookupFailure: overrides.onHourlyLookupFailure } : {}) }).reconcile } : {}) });
     // Long-lived performance quotes also require the development-only capture policy.
     const publisher = createRevisionPublicationService({ database, queue, policy: publicationPolicy(refs), authority: authorities.publication,
+      recordForecastDecision: coordinated,
       quotes: { verify: () => publicPolicy.features.providerOdds && authorities.odds.verifyPublicDisplay() === true,
         freshnessMs: odds?.freshnessMs ?? ODDS_FRESHNESS_MS } });
     const evidence = createEvidenceService({ authority: authorities.evidence, store: createMysqlEvidenceStore(database), research: null,
@@ -471,6 +476,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         const base = fallbackRefreshPlan(member, refs, workload.pacing);
         const reviewed = ai?.configure(member, sources) ??
           { ...base, evidence: { ...base.evidence, policy: liveAiEvidencePolicy(refs), cachedSources: sources } };
+        if (coordinated) return liveCascadePlan({ ...reviewed, recommendationPolicy: evidenceFirstRecommendationPolicy }, false, QUALIFIED_FORECAST_CASCADE);
         return sourceOrder === "ai-first" ? liveCascadePlan(reviewed) : reviewed;
       },
       models: ai?.models ?? { async resolve() { throw new ModelRegistryError("unavailable"); } },

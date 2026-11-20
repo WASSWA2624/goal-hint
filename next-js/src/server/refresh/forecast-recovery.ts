@@ -3,12 +3,14 @@ import "server-only";
 import { calendarRules } from "../../domain/calendar.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
-import type { Prisma } from "../generated/prisma/client.ts";
+import { Prisma } from "../generated/prisma/client.ts";
 import type { JobQueue } from "../jobs/job-contract.ts";
 import { durableJobId, jobType, parseJob, parseJobEnvelope } from "../jobs/job-input.ts";
+import { storedRefreshResult } from "../predictions/publication-read.ts";
+import type { RefreshPublicationResult } from "../predictions/publication-contract.ts";
 import { storedSelectionManifest } from "../selection/selection-read.ts";
 import { PredictionRefreshError } from "./refresh-contract.ts";
-import { createMysqlRefreshStore } from "./refresh-mysql-store.ts";
+import { createMysqlRefreshStore, recoverPublicationOutcome } from "./refresh-mysql-store.ts";
 
 const transientFailures = ["handler-failed", "timeout", "lease-expired", "worker-stopping", "rate-limited"];
 const dbTime = async (tx: Prisma.TransactionClient) => (await tx.$queryRaw<{ at: Date }[]>`SELECT UTC_TIMESTAMP(3) AS at`)[0]!.at;
@@ -43,16 +45,20 @@ export function createForecastRecovery({ database, queue, jobType: type, schedul
 
   async function retry(row: Readonly<{ id: string; version: number }>) {
     return database.transaction(async (tx) => {
+      const sealed: { publication?: RefreshPublicationResult } = {};
       const recovered = await queue.recoverInTransaction(tx, row.id, row.version, async (client, job) => {
         if (job.envelope.type !== type || job.envelope.refresh === null) return "failed";
-        const published = await client.predictionRefreshResult.findFirst({ where: { jobId: job.id, outcome: "published" }, select: { id: true } });
-        if (published) return "succeeded";
+        const result = await client.predictionRefreshResult.findFirst({ where: { jobId: job.id }, select: { id: true } });
+        // A committed abstention or retained revision completes the original job just as a publication does.
+        const publication = result ? await storedRefreshResult(client, result.id) : null;
+        if (publication?.jobId === job.id) { sealed.publication = publication; return "succeeded"; }
         if (await client.predictionRefreshOutcome.findUnique({ where: { jobId: job.id }, select: { jobId: true } })) return "failed";
         try { await refresh.recoveryMember(client, job); }
         catch (error) { if (error instanceof PredictionRefreshError && error.reason === "ineligible") return "expired"; throw error; }
         return "retry";
       });
-      return recovered?.state === "pending" && recovered.version !== row.version;
+      if (recovered?.state === "succeeded" && sealed.publication) await recoverPublicationOutcome(tx, recovered, sealed.publication);
+      return recovered && recovered.version !== row.version ? recovered.state : null;
     }, { isolationLevel: "ReadCommitted", timeout: 15_000 });
   }
 
@@ -65,23 +71,29 @@ export function createForecastRecovery({ database, queue, jobType: type, schedul
           envelopeJson: { path: "$.type", equals: type } },
           orderBy: [{ kickoffAt: "asc" }, { runId: "asc" }, { fixtureId: "asc" }], take: maxJobs + 1,
           select: { runId: true, fixtureId: true, cycleId: true } });
-        const candidates = await tx.durableJob.findMany({ where: { type, expiresAt: { gt: now }, OR: [
-          { state: "running", OR: [{ leaseExpiresAt: { lte: now } }, { attemptDeadlineAt: { lte: now } }] },
-          { state: "failed", terminalReason: { in: transientFailures }, refreshOutcome: null },
-        ] }, orderBy: [{ availableAt: "asc" }, { id: "asc" }], take: maxJobs + 1,
-        select: { id: true, version: true, state: true, attemptCount: true, envelopeJson: true } });
-        const stalled = candidates.filter((job) => {
-          if (job.state === "running") return true;
-          try { return job.attemptCount < parseJobEnvelope(job.envelopeJson).maxAttempts; } catch { return false; }
-        });
+        // Filter exhausted jobs before taking the bounded oldest batch or they can starve later work.
+        const stalled = await tx.$queryRaw<{ id: string; version: number | bigint }[]>(Prisma.sql`
+          SELECT job.id, job.version FROM DurableJob job
+          WHERE job.type = ${type} AND job.expiresAt > ${now} AND (
+            (job.state = 'running' AND (job.leaseExpiresAt <= ${now} OR job.attemptDeadlineAt <= ${now})) OR
+            (job.state = 'failed' AND NOT EXISTS (SELECT 1 FROM PredictionRefreshOutcome outcome WHERE outcome.jobId = job.id) AND (
+              (job.terminalReason IN (${Prisma.join(transientFailures)}) AND
+                job.attemptCount < CAST(JSON_UNQUOTE(JSON_EXTRACT(job.envelopeJson, '$.maxAttempts')) AS UNSIGNED)) OR
+              EXISTS (SELECT 1 FROM PredictionRefreshResult result WHERE result.jobId = job.id)
+            ))
+          ) ORDER BY job.availableAt, job.id LIMIT ${maxJobs + 1}`);
         return { missing, stalled };
       });
-      let restored = 0, retried = 0, failed = 0, readMissing = 0, readStalled = 0;
+      let restored = 0, retried = 0, completed = 0, failed = 0, readMissing = 0, readStalled = 0;
       for (let index = 0; index < maxJobs && (readMissing < missing.length || readStalled < stalled.length); index++) {
         try {
           if (readMissing < missing.length && (index % 2 === 0 || readStalled >= stalled.length)) {
             if (await restore(missing[readMissing++]!)) restored++;
-          } else if (await retry(stalled[readStalled++]!)) retried++;
+          } else {
+            const row = stalled[readStalled++]!, state = await retry({ id: row.id, version: Number(row.version) });
+            if (state === "pending") retried++;
+            if (state === "succeeded") completed++;
+          }
         } catch { failed++; }
       }
       const counts = await database.query(async (tx) => {
@@ -93,7 +105,7 @@ export function createForecastRecovery({ database, queue, jobType: type, schedul
         return { pending: pending._count._all, active, lagMs: pending._min.availableAt === null ? 0
           : Math.max(0, now.getTime() - pending._min.availableAt.getTime()) };
       });
-      return { restored, retried, failed, ...counts, hasMore: readMissing < missing.length || readStalled < stalled.length };
+      return { restored, retried, completed, failed, ...counts, hasMore: readMissing < missing.length || readStalled < stalled.length };
     },
   };
 }

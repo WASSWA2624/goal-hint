@@ -7,7 +7,8 @@ import { parseCostJob, parseCostRequest } from "../cost-control/cost-input.ts";
 import { parseCatalogImportRequest, parseCatalogEvidenceRef } from "../football/catalog-input.ts";
 import { createModelPin } from "../predictor/predictor-input.ts";
 import { parseProviderFallbackRequest } from "../fallback/fallback-adapter.ts";
-import { LIVE_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
+import { forecastCascades } from "../fallback/fallback-contract.ts";
+import { permitsPredictorRetry } from "../predictor/predictor-resilience.ts";
 import { refreshFail, type RefreshMember, type RefreshPlan } from "./refresh-contract.ts";
 import { goalMarketDefinitionSchema } from "../../domain/score-distribution-markets.ts";
 import { parseImpliedMarketExtensionInput } from "../predictions/implied-market-contract.ts";
@@ -30,7 +31,7 @@ export function parseRefreshPlan(input: RefreshPlan, member: RefreshMember): Ref
       observation: z.strictObject({ bounds: z.unknown(), maxAgeMs: z.number() }), publicationReserveMs: z.number(),
       footballRequestLimit: z.number().int().positive().max(4_294_967_295),
       goalDefinitions: z.array(goalMarketDefinitionSchema).max(256).optional(), impliedExtension: z.unknown().optional(),
-      sourceOrder: z.enum(["provider-first", "ai-first"]).optional(), sourceCascade: z.literal(LIVE_FORECAST_CASCADE).optional(),
+      sourceOrder: z.enum(["provider-first", "ai-first"]).optional(), sourceCascade: z.enum(forecastCascades).optional(),
       recommendationPolicy: z.unknown().optional() });
     shape.parse(input);
     if (input.recommendationPolicy !== undefined && !matchFrozenRecommendationPolicy(input.recommendationPolicy)) throw new Error();
@@ -38,7 +39,7 @@ export function parseRefreshPlan(input: RefreshPlan, member: RefreshMember): Ref
     if ((input.ai === null) !== (input.modelVersionId === null) || input.sourceOrder !== undefined && input.ai === null) throw new Error();
     // AI joint-distribution extension markets are never published beside a provider match result.
     if ((input.goalDefinitions !== undefined || input.sourceCascade !== undefined) && input.sourceOrder === "provider-first") throw new Error();
-    if (input.goalDefinitions !== undefined && (input.ai === null && input.sourceCascade !== LIVE_FORECAST_CASCADE ||
+    if (input.goalDefinitions !== undefined && (input.ai === null && input.sourceCascade === undefined ||
         new Set(input.goalDefinitions.map(({ key }) => key)).size !== input.goalDefinitions.length)) throw new Error();
     const evidence = parseEvidenceCollectionRequest(input.evidence);
     const ai = input.ai === null ? null : { job: parseCostJob(input.ai.job), request: parseCostRequest(input.ai.request), maxElapsedMs: input.ai.maxElapsedMs };
@@ -58,7 +59,9 @@ export function parseRefreshPlan(input: RefreshPlan, member: RefreshMember): Ref
         request.priority.kind !== "fixture" || request.priority.kickoffAt !== member.context.kickoffAt || request.maximum.requests !== 1 ||
         request.maximum.inputTokens < 1 || request.maximum.outputTokens < 1 || job.requestLimit < 1 ||
         request.maximum.inputTokens > job.inputTokenLimit || request.maximum.outputTokens > job.outputTokenLimit ||
-        request.timeoutMs > ai.maxElapsedMs || !duration(ai.maxElapsedMs)) throw new Error();
+        request.timeoutMs > ai.maxElapsedMs || !duration(ai.maxElapsedMs) ||
+        job.requestLimit > 1 && (job.requestLimit !== 2 || !permitsPredictorRetry(job, request) ||
+          request.timeoutMs * 2 >= ai.maxElapsedMs)) throw new Error();
     }
     // Without AI, evidence and fallback share the refresh job's own deadline.
     const primaryLimitMs = ai === null ? hardDeadline - member.now : Math.min(ai.job.timeLimitMs, ai.job.deadlineAt - ai.job.startsAt);

@@ -165,7 +165,7 @@ export function createMysqlJobQueue(database: DatabaseRuntime,
         job.state === "running" && job.leaseExpiresAt !== null && job.leaseExpiresAt > at &&
         job.attemptDeadlineAt !== null && job.attemptDeadlineAt > at) return job;
       const mode = await eligibility(transaction, job);
-      if (job.state === "pending" && mode === "retry" || job.state === "failed" && mode !== "retry") return job;
+      if (job.state === "pending" && mode === "retry" || job.state === "failed" && mode !== "retry" && mode !== "succeeded") return job;
       const attempt = job.state === "running" ? await transaction.durableJobAttempt.findUniqueOrThrow({
         where: { jobId_number: { jobId: job.id, number: job.attemptCount } } }) : null;
       return finish(transaction, job, attempt?.id ?? null, at,

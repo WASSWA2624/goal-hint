@@ -117,7 +117,7 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
         const slot = Math.floor(now / FORECAST_RECOVERY_INTERVAL_MS);
         if (slot !== recoveredForecastSlot) try {
           const report = await runtime.forecastRecovery.run();
-          if (!report.hasMore || report.restored + report.retried === 0) recoveredForecastSlot = slot;
+            if (!report.hasMore || report.restored + report.retried + report.completed === 0) recoveredForecastSlot = slot;
           log({ event: "forecast-recovery", ...report });
         } catch (error) { log({ event: "forecast-recovery-failed", reason: reason(error) }); }
       }

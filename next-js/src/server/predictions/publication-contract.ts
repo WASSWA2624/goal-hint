@@ -6,6 +6,7 @@ import type { ResolvedForecastCandidate } from "../fallback/fallback-contract.ts
 import type { StoredRevision } from "./history-contract.ts";
 import type { GoalMarketExtensionInput } from "./goal-market-store.ts";
 import type { ImpliedMarketExtensionInput } from "./implied-market-contract.ts";
+import type { ForecastDecision } from "./forecast-decision.ts";
 
 export class RevisionPublicationError extends Error {
   readonly reason: "invalid-request" | "policy-required" | "unauthorized" | "conflicting-request" | "lost-lease" | "eligibility-expired" | "unavailable";
@@ -62,6 +63,8 @@ export type RefreshPublicationResult = Readonly<{
   reason: PublicationReason; revisionId: string | null; at: UtcInstant;
   evidenceSnapshotId: string; candidateHash: string; generationCompletedAt: UtcInstant;
   policyHash: string; observation: PublicationObservation;
+  /** Immutable private decision and evidence diagnostics, emitted by the coordinated worker. */
+  forecastDecision?: ForecastDecision;
 }>;
 export type PublicationResult = Readonly<{
   refresh: RefreshPublicationResult; revision: StoredRevision | null; updateDelayed: boolean;

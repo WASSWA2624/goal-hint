@@ -1,5 +1,6 @@
 import { freezeDefinition, goalMarketDefinitionSchema, goalMarketPeriods, type GoalMarketDefinition, type GoalMarketPeriod, type GoalRule } from "./score-distribution-markets.ts";
 import { predictionRuleLabel } from "./prediction-label.ts";
+import type { RegisteredMarketFamily } from "./market-registry.ts";
 
 const resultLabels = { home: "Home", draw: "Draw", away: "Away" } as const;
 const periodLabels = { "full-time": "Full time", "half-time": "First half", "second-half": "Second half" } as const;
@@ -68,11 +69,17 @@ export function goalCleanSheetMarket(team: "home" | "away", period: GoalMarketPe
 export function goalWinToNilMarket(team: "home" | "away", period: GoalMarketPeriod = "full-time"): GoalMarketDefinition {
   return binaryMarket(`win-to-nil:${team}`, period, `${resultLabels[team]} win to nil`, "WTN", (yes) => ({ kind: "win-to-nil", team, yes }));
 }
-export function goalAsianHandicapMarket(homeLine: number, period: GoalMarketPeriod = "full-time"): GoalMarketDefinition {
-  return definition(`asian-handicap:${homeLine}`, period, `Asian handicap ${homeLine}`, "AH", [
+function goalAsianHandicapSelections(homeLine: number): Selection[] {
+  return [
     selected("home", `Home ${homeLine}`, { kind: "asian-handicap", team: "home", line: homeLine }),
     selected("away", `Away ${-homeLine}`, { kind: "asian-handicap", team: "away", line: -homeLine }),
-  ], "payout");
+  ];
+}
+export function goalDrawNoBetMarket(period: GoalMarketPeriod = "full-time"): GoalMarketDefinition {
+  return definition("draw-no-bet", period, "Draw no bet", "DNB", goalAsianHandicapSelections(0), "payout");
+}
+export function goalAsianHandicapMarket(homeLine: number, period: GoalMarketPeriod = "full-time"): GoalMarketDefinition {
+  return definition(`asian-handicap:${homeLine}`, period, `Asian handicap ${homeLine}`, "AH", goalAsianHandicapSelections(homeLine), "payout");
 }
 export function goalEuropeanHandicapMarket(homeLine: number, period: GoalMarketPeriod = "full-time"): GoalMarketDefinition {
   return definition(`european-handicap:${homeLine}`, period, `European handicap ${homeLine}`, "EH", (["home", "draw", "away"] as const)
@@ -83,6 +90,15 @@ export function goalHalfFullMarket(): GoalMarketDefinition {
     .flatMap((half) => (["home", "draw", "away"] as const).map((full) =>
       selected(`${half}-${full}`, `${resultLabels[half]} / ${resultLabels[full]}`, { kind: "half-full-result", half, full }))));
 }
+export function goalHighestScoringHalfMarket(): GoalMarketDefinition {
+  return definition("highest-scoring-half", "full-time", "Highest-scoring half", "HSH", (["first-half", "equal", "second-half"] as const)
+    .map((half) => selected(half, half, { kind: "highest-scoring-half", half })));
+}
+export function goalScoringInBothHalvesMarket(metric: "total" | "home" | "away"): GoalMarketDefinition {
+  const label = metric === "total" ? "At least one goal in each half" : `${resultLabels[metric]} team to score in both halves`;
+  return binaryMarket(`scoring-in-both-halves:${metric}`, "full-time", label, "Both halves", (yes) =>
+    ({ kind: "scoring-in-both-halves", metric, yes }));
+}
 /** Provider-offered score selections; an Other group exists only when the caller explicitly maps that provider selection. */
 export function goalExactScoreMarket(scores: readonly Readonly<{ home: number; away: number }>[],
   period: GoalMarketPeriod = "full-time", includeOther = false): GoalMarketDefinition {
@@ -91,20 +107,81 @@ export function goalExactScoreMarket(scores: readonly Readonly<{ home: number; a
     item.rule as Extract<GoalRule, { kind: "exact-score" }>) }));
   return definition("exact-score", period, "Exact score", "CSCORE", selections);
 }
-/** Explicit source-mapped binary combinations; the caller names every complementary selection. */
+/** Reviewed binary combinations; the caller names every complementary selection. */
 export function goalCombinationMarket(key: string, label: string, selections: readonly Selection[],
   period: GoalMarketPeriod = "full-time", group: "partition" | "overlapping" = "partition"): GoalMarketDefinition {
   return definition(`combination:${key}`, period, label, `${periods[period]} combo`, [...selections], group);
 }
 
-/** Publish the model-supported goal lines independently of the provider's odds inventory. */
-export const liveGoalMarketDefinitions: readonly GoalMarketDefinition[] = Object.freeze([
-  ...legacyLiveGoalMarketDefinitions,
-  ...goalMarketPeriods.flatMap((period) => (["total", "home", "away"] as const).flatMap((metric) => [
-    ...[0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5].filter((line) => period !== "full-time" || metric !== "total" || line !== 1.5)
-      .map((line) => goalTotalsMarket(line, metric, period)),
-    ...Array.from({ length: 19 }, (_, index) => (index + 1) / 4).filter((line) => line % 1 !== 0.5)
-      .map((line) => goalTotalsMarket(line, metric, period, "asian")),
-    goalCountMarket(metric, period, false), goalCountMarket(metric, period, true), goalParityMarket(metric, period),
-  ])),
-]);
+export type RegisteredGoalMarketDefinition = Readonly<{ family: RegisteredMarketFamily; definition: GoalMarketDefinition }>;
+const registered = (family: RegisteredMarketFamily, definition: GoalMarketDefinition): RegisteredGoalMarketDefinition => Object.freeze({ family, definition });
+const metrics = ["total", "home", "away"] as const;
+const sides = ["home", "away"] as const;
+const binaryTotalLines = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5] as const;
+const asianTotalLines = Array.from({ length: 19 }, (_, index) => (index + 1) / 4).filter((line) => line % 1 !== 0.5);
+const registeredCountMarkets = [
+  registered("total-goals", legacyLiveGoalMarketDefinitions[0]!),
+  ...goalMarketPeriods.flatMap((period) => metrics.flatMap((metric) => {
+    const family = metric === "total" ? "total-goals" : "team-goals";
+    return [
+      ...binaryTotalLines.filter((line) => period !== "full-time" || metric !== "total" || line !== 1.5)
+        .map((line) => registered(family, goalTotalsMarket(line, metric, period))),
+      ...asianTotalLines.map((line) => registered(family, goalTotalsMarket(line, metric, period, "asian"))),
+      registered("exact-goals", goalCountMarket(metric, period, false)),
+      registered("goal-ranges", goalCountMarket(metric, period, true)),
+      registered("odd-even-goals", goalParityMarket(metric, period)),
+    ];
+  })),
+];
+
+/** Preserve the current public goal extension's definitions and their order. */
+export const liveGoalMarketDefinitions: readonly GoalMarketDefinition[] = Object.freeze(registeredCountMarkets.map((row) => row.definition));
+
+function goalTeamToScoreMarket(team: "home" | "away", period: GoalMarketPeriod): GoalMarketDefinition {
+  return binaryMarket(`team-to-score:${team}`, period, `${resultLabels[team]} team to score`, "TTS", (yes) =>
+    ({ kind: "goal-count", metric: team, min: yes ? 1 : 0, max: yes ? null : 0 }));
+}
+
+function goalRangeSelectionMarket(max: number, period: GoalMarketPeriod): GoalMarketDefinition {
+  const range = { kind: "goal-count", metric: "total", min: 1, max } as const;
+  return binaryMarket(`goal-range:total:1-${max}`, period, `Total goals 1–${max}`, "Range", (yes) =>
+    yes ? range : { kind: "none", rules: [range] });
+}
+
+function goalAndTotalsMarket(component: GoalMarketDefinition, label: string): GoalMarketDefinition {
+  const totals = goalTotalsMarket(2.5), combinations = component.selections.flatMap((left) => totals.selections.map((right) =>
+    selected(`${left.key}-${right.key}`, `${left.label} and ${right.label}`, {
+      kind: "all", rules: [left.rule, right.rule] as Extract<GoalRule, { kind: "all" }>["rules"],
+    })));
+  return goalCombinationMarket(`${component.key.split(":")[2]}:total:2.5`, label, combinations, "full-time",
+    component.group === "overlapping" ? "overlapping" : "partition");
+}
+
+// Fixed ordinary handicap and score selections, independent of bookmaker coverage.
+const asianHandicapLines = [-1, -0.75, -0.5, -0.25, 0.25, 0.5, 0.75, 1] as const;
+const europeanHandicapLines = [-1, 1] as const;
+const exactScoreValues = [0, 1, 2, 3, 4] as const;
+const exactScores = exactScoreValues.flatMap((home) => exactScoreValues.map((away) => ({ home, away })));
+
+/** Reviewed modeled instances of the shared registry. Model qualification and
+ * observed offers still determine the available output for each fixture. */
+export function registeredForecastGoalMarkets(): readonly RegisteredGoalMarketDefinition[] {
+  return Object.freeze([
+    ...registeredCountMarkets,
+    ...goalMarketPeriods.flatMap((period) => [
+      registered("match-result", goalResultMarket(period)), registered("double-chance", goalDoubleChanceMarket(period)),
+      registered("draw-no-bet", goalDrawNoBetMarket(period)),
+      ...asianHandicapLines.map((line) => registered("asian-handicap", goalAsianHandicapMarket(line, period))),
+      ...europeanHandicapLines.map((line) => registered("european-handicap", goalEuropeanHandicapMarket(line, period))),
+      registered("both-teams-to-score", goalBothTeamsScoreMarket(period)), registered("correct-score", goalExactScoreMarket(exactScores, period, true)),
+      ...sides.flatMap((team) => [registered("team-to-score", goalTeamToScoreMarket(team, period)), registered("clean-sheet", goalCleanSheetMarket(team, period)),
+        registered("win-to-nil", goalWinToNilMarket(team, period))]),
+      ...[2, 3, 4].map((max) => registered("goal-ranges", goalRangeSelectionMarket(max, period))),
+    ]),
+    registered("half-time-full-time", goalHalfFullMarket()), registered("highest-scoring-half", goalHighestScoringHalfMarket()),
+    ...metrics.map((metric) => registered("scoring-in-both-halves", goalScoringInBothHalvesMarket(metric))),
+    registered("combined-outcomes", goalAndTotalsMarket(goalResultMarket(), "Result and total goals 2.5")),
+    registered("combined-outcomes", goalAndTotalsMarket(goalDoubleChanceMarket(), "Double chance and total goals 2.5")),
+    registered("combined-outcomes", goalAndTotalsMarket(goalBothTeamsScoreMarket(), "Both teams to score and total goals 2.5")),
+  ]);
+}

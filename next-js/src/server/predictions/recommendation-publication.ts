@@ -1,6 +1,7 @@
 import "server-only";
 
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
+import { evidenceFirstRecommendationPolicy } from "../../domain/recommendation.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { recommendationQuotesFromSnapshots } from "../odds/recommendation-quotes.ts";
 import { storedOddsBatchSchema, storedOddsSnapshotSchema } from "../odds/odds-mysql-store.ts";
@@ -42,6 +43,8 @@ export async function validatePublishedRecommendation(tx: Tx, input: PublishRevi
   const selected = recommendation.selected;
   if (!selected) return true;
   const quote = selected.quote;
+  const evidenceFirst = policy.version === evidenceFirstRecommendationPolicy.version;
+  if (!quote) return evidenceFirst || publicationFail("unauthorized");
   const original = (await tx.$queryRaw<(Sealed & { batchId: string })[]>`SELECT batchId,body,
     integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity FROM ProviderOddsSnapshot WHERE id=${quote.snapshotId}`)[0];
   if (!original) return publicationFail("unauthorized");
@@ -65,6 +68,7 @@ export async function validatePublishedRecommendation(tx: Tx, input: PublishRevi
     !sourceBatch.pages.some((page) => page.endpoint === "odds" && page.retrievedAt === snapshot.retrievedAt) ||
     !sourceBatch.fixtures.some((fixture) => fixture.externalId === context.context.externalFixtureId && fixture.outcome === "apply") ||
     !quotes.some((item) => comparison(item) === comparison(quote))) return publicationFail("unauthorized");
+  if (evidenceFirst) return quote.observedAt <= now;
   return quote.observedAt <= now && now - quote.observedAt <= policy.quoteMaxAgeMs &&
     (quote.providerUpdatedAt === null || quote.providerUpdatedAt <= now && now - quote.providerUpdatedAt <= policy.quoteMaxAgeMs);
 }

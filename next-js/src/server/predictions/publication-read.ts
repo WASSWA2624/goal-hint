@@ -8,6 +8,7 @@ import { assertHistorySeal, historyJson, historyTime, storedRevision } from "./h
 import { publicationFail, type PublicationResult, type RefreshPublicationResult } from "./publication-contract.ts";
 import { parsePublication, parsePublicationObservation } from "./publication-input.ts";
 import { observationShowsPlay } from "./publication-eligibility.ts";
+import { forecastDecisionSchema } from "./forecast-decision.ts";
 
 export const publicationReasons = ["accepted", "no-valid-family", "not-selected", "outside-window", "wrong-cycle", "schedule-changed",
   "closed-cycle", "early-play", "status-ineligible", "cutoff-passed", "stale-observation", "future-observation", "stale-source", "older-run"] as const;
@@ -16,7 +17,7 @@ const resultSchema = z.strictObject({ id: historyHash, requestHash: historyHash,
   runId: historyId, runSequence: integer, fixtureId: historyId, cycleId: historyId, jobId: historyHash, fixtureVersion: integer,
   outcome: z.enum(["published", "retained-previous", "unavailable", "skipped"]), reason: z.enum(publicationReasons),
   revisionId: historyId.nullable(), at: historyInstant, evidenceSnapshotId: historyHash, candidateHash: historyHash,
-  generationCompletedAt: historyInstant, policyHash: historyHash, observation: z.unknown(),
+  generationCompletedAt: historyInstant, policyHash: historyHash, observation: z.unknown(), forecastDecision: forecastDecisionSchema.optional(),
 }).refine((value) => (value.outcome === "published" ? value.reason === "accepted" && value.revisionId !== null
   : value.outcome === "retained-previous" ? value.reason === "no-valid-family" && value.revisionId !== null
     : value.outcome === "unavailable" ? value.reason === "no-valid-family" && value.revisionId === null
@@ -38,7 +39,13 @@ export function refreshResultFromRow(row: Record<string, unknown>): RefreshPubli
     for (const key of ["id", "requestHash", "attemptKey", "runId", "runSequence", "fixtureId", "cycleId", "jobId", "fixtureVersion", "outcome", "reason", "revisionId"] as const)
       if (row[key] !== result[key]) return publicationFail("unavailable");
     if (historyTime(row.at) !== result.at || observation.fixtureId !== result.fixtureId || observation.cycleId !== result.cycleId) return publicationFail("unavailable");
-    return freezeEvidence({ ...result, observation });
+    const { forecastDecision, ...base } = result;
+    if (forecastDecision && (forecastDecision.fixtureId !== result.fixtureId || forecastDecision.cycleId !== result.cycleId ||
+      forecastDecision.evidenceSnapshotId !== result.evidenceSnapshotId || forecastDecision.candidateHash !== result.candidateHash ||
+      forecastDecision.generatedAt !== result.generationCompletedAt || forecastDecision.kickoffAt !== observation.kickoffAt ||
+      forecastDecision.generatedAt > result.at || result.at >= forecastDecision.publicationCutoffAt || result.outcome === "skipped" ||
+      (forecastDecision.status === "estimated") !== (result.outcome === "published"))) return publicationFail("unavailable");
+    return freezeEvidence({ ...base, observation, ...(forecastDecision === undefined ? {} : { forecastDecision }) });
   } catch { return publicationFail("unavailable"); }
 }
 export async function publicationResult(tx: Prisma.TransactionClient, refresh: RefreshPublicationResult): Promise<PublicationResult> {
