@@ -544,9 +544,11 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     // Odds (052): imported only when the owner enables them AND the verified plan leaves spare ordinary quota.
     // A separate registry runs on its own worker, so odds never occupy refresh or cutoff workers.
     const oddsEnabled = policy.choices.odds.enabled && workload.odds.eligible && odds !== null;
+    const hostedOddsArchive = oddsEnabled && privateRetention && (productionTarget || syntheticArchive);
+    const resumePricePages = coordinated || hostedOddsArchive;
     const oddsStore = createMysqlOddsStore(database);
     const oddsService = createOddsImportService({ adapter: adapter.odds, store: oddsStore, authority: authorities.odds,
-      resumePricePages: coordinated,
+      resumePricePages,
       accountId: () => quota.current()?.accountId ?? oddsFail("unavailable"),
       bounds: (request) => {
         const end = request.kind === "prices" ? request.slot + ODDS_SWEEP_MS : request.slot + DAY_MS;
@@ -594,7 +596,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       return { requests, status: "complete", ...await oddsStore.projectRetainedPrices({ policy: odds,
         policyHash: oddsPolicyHash(odds), catalog, limit: 500, verify: verifyProjection }) };
     }
-    const oddsDefinitions = createOddsJobDefinitions({ service: oddsService, policy: () => odds ?? oddsFail("unverified-policy"), resumePricePages: coordinated,
+    const oddsDefinitions = createOddsJobDefinitions({ service: oddsService, policy: () => odds ?? oddsFail("unverified-policy"), resumePricePages,
       enabled: () => oddsEnabled, usage: oddsUsage, allowance: enrichmentAllowance,
       maxRequests: (kind) => oddsMaxRequests(kind, workload.odds.maxPages) });
     const oddsRegistry = createJobRegistry(oddsDefinitions);
@@ -682,10 +684,11 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     });
     // The same worker serializes these gates. Odds and team codes claim before the archive.
     const enrichmentRegistry = createJobRegistry([...oddsDefinitions, ...teamCodeDefinitions, historyJob, ...(currentDayContext ? [currentDayContext] : [])]);
-    const inPlayOdds = localFootball || coordinated ? createInPlayOddsPoller({
+    const retainInPlayOdds = coordinated || hostedOddsArchive;
+    const inPlayOdds = localFootball || retainInPlayOdds ? createInPlayOddsPoller({
       database, adapter: adapter.odds, now: Date.now, enabled: () => oddsEnabled && quota.current() !== null,
       displayAllowed: authorities.odds.verifyPublicDisplay,
-      ...(coordinated ? { competitionIds: policy.choices.competitionIds ?? [],
+      ...(retainInPlayOdds ? { competitionIds: policy.choices.competitionIds ?? [],
         retentionAllowed: () => privateRetention && odds !== null && authorities.odds.verifyPolicy(odds) &&
         authorities.odds.verifyRetention({ evidenceRef: refs.retention, purpose: "structured-odds-history", rawPayloadsStored: false }) } : {}),
     }) : null;

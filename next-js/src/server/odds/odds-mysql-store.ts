@@ -417,10 +417,11 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
     // Pre-match only: after kickoff the last valid price is frozen as the closing price.
     if (!fixture || fixture.kickoff === null || fixture.kickoff.getTime() !== row.kickoff || fixture.status !== "scheduled" ||
       fixture.kickoff.getTime() <= Math.max(retrievedAt, at)) return "skipped";
-    await tx.$executeRaw`INSERT INTO FixtureOddsState (fixtureId, latestBatchId, policyHash, lastRetrievedAt, lastProviderUpdatedAt, withdrawnAt, publicVersion)
+    // The fixture key arbitrates first writers without giving the worker UPDATE
+    // permission on that identity. Validate the resulting state under lock.
+    await tx.$executeRaw`INSERT IGNORE INTO FixtureOddsState (fixtureId, latestBatchId, policyHash, lastRetrievedAt, lastProviderUpdatedAt, withdrawnAt, publicVersion)
       VALUES (${input.fixtureId}, ${input.batchId}, ${input.policyHash}, ${new Date(retrievedAt)},
-        ${providerUpdatedAt === null ? null : new Date(providerUpdatedAt)}, NULL, 0)
-      ON DUPLICATE KEY UPDATE publicVersion = publicVersion`;
+        ${providerUpdatedAt === null ? null : new Date(providerUpdatedAt)}, NULL, 0)`;
     const state = await lockState(tx, input.fixtureId);
     if (!state) return oddsFail("invalid-state");
     // Out-of-order observations never move a fixture backwards.
