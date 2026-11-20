@@ -63,14 +63,9 @@ const List = styled.ul`
   }
   ${media.phone} {
     [data-feed-match-results] & {
-      row-gap: var(--gh-spacing-1);
-      border: 0;
-      > li ~ li { border-block-start: 0; }
-      > li:has(> article) {
-        border: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};
-        border-radius: ${({ theme }) => theme.phoneCardFrame.radius};
-        > article { border-radius: inherit; }
-      }
+      border-inline: 0;
+      border-block-end: 0;
+      > li:has(> article) { box-shadow: none; }
     }
   }
 
