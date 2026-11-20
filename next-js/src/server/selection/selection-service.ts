@@ -98,11 +98,16 @@ export function createDailySelectionService(options: Readonly<{
         await options.store.commit(lease, policy, action, confirmed, recover);
       }
       await checkpoint();
+      if (hourly && options.sweepUpcoming) {
+        await options.sweepUpcoming(lease, scheduledFor, signal);
+        await checkpoint();
+      }
       const progress = await options.store.reconcile(lease);
       await checkpoint();
-      if (!hourly) await options.cutoff.scheduleRun(lease.runId);
-      else await options.sweepUpcoming?.(lease, scheduledFor, signal);
-      await checkpoint();
+      if (!hourly) {
+        await options.cutoff.scheduleRun(lease.runId);
+        await checkpoint();
+      }
       return { status: "committed" as const, runId: lease.runId, ...progress };
     } finally {
       clearInterval(timer); await renewal;

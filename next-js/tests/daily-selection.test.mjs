@@ -7,6 +7,7 @@ import { selectionDateState } from '../src/server/selection/selection-read.ts';
 import { createDailySelectionService } from '../src/server/selection/selection-service.ts';
 import { createHourlyFixtureReconciler } from '../src/server/selection/selection-fixture-reconciliation.ts';
 import { createDailySelectionTrigger, dailySelectionSchedule } from '../src/server/selection/selection-trigger.ts';
+import { JobQueueError } from '../src/server/jobs/job-contract.ts';
 import { createBearerJobIdentity } from '../src/server/jobs/job-trigger.ts';
 import { API_FOOTBALL_CONTRACT_VERSION } from '../src/server/football/api-football-contract.ts';
 import { CatalogStoreError } from '../src/server/football/catalog-mysql-store.ts';
@@ -68,6 +69,48 @@ test('lost renewal ownership prevents manifest commit and dispatch after a provi
     commit: async () => { committed++; }, reconcile: async () => { dispatched++; } };
   const service = createDailySelectionService({ cutoff: { scheduleRun: async () => {} }, policy: selectionPolicy(), authority: selectionAuthority(), store, importer: { import: async () => {} } });
   await assert.rejects(service.run(SELECTION_FOR)); assert.equal(committed, 0); assert.equal(dispatched, 0);
+});
+
+test('hourly forward discovery follows manifest commit and survives unavailable forecast dispatch without reimporting dates', async () => {
+  const scheduledFor = SELECTION_FOR + 3_600_000, policy = selectionPolicy({ importDays: 1 });
+  const phases = [], manifest = { runId: 'synthetic-hourly-run' };
+  let owned = null, committed = false, attempts = 0;
+  let failure = new JobQueueError('unavailable');
+  const store = {
+    async acquire() {
+      assert.equal(owned, null);
+      owned = { runId: manifest.runId, ownerId: 'synthetic-owner', fence: ++attempts };
+      return owned;
+    },
+    inspect: async () => ({ manifest: committed ? manifest : null }),
+    async renew(lease) { assert.equal(owned, lease); },
+    async release(lease) { assert.equal(owned, lease); owned = null; },
+    beginImport: async () => ({ id: 'date-import', request: { bounds: { deadlineAt: scheduledFor + 120_000 } } }),
+    finishImport: async (_lease, _id, failed) => assert.equal(failed, false),
+    async commit(lease) { assert.equal(owned, lease); assert.equal(committed, false); committed = true; phases.push('commit'); },
+    async reconcile(lease) {
+      assert.equal(owned, lease);
+      phases.push('dispatch');
+      if (failure) throw failure;
+      return { total: 1, completed: 0, terminal: 0 };
+    },
+  };
+  const service = createDailySelectionService({ policy, authority: selectionAuthority(), store,
+    cutoff: { scheduleRun: async () => assert.fail('hourly dispatch never uses daily cutoff scheduling') },
+    importer: { import: async () => { phases.push('date'); } },
+    async sweepUpcoming(lease, slot) {
+      assert.equal(owned, lease); assert.equal(slot, scheduledFor);
+      assert.equal((await store.inspect()).manifest, manifest);
+      phases.push('sweep');
+    },
+  });
+  await assert.rejects(service.runHourly(scheduledFor), (error) => error === failure);
+  assert.deepEqual(phases, ['date', 'commit', 'sweep', 'dispatch']);
+  failure = new JobQueueError('conflicting-request');
+  await assert.rejects(service.runHourly(scheduledFor), (error) => error === failure);
+  failure = null;
+  assert.equal((await service.runHourly(scheduledFor)).runId, manifest.runId);
+  assert.deepEqual(phases, ['date', 'commit', 'sweep', 'dispatch', 'sweep', 'dispatch', 'sweep', 'dispatch']);
 });
 
 test('failed optional fixture lookup leaves the date coverage retry and degraded commit intact', async () => {

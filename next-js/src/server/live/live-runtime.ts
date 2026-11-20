@@ -43,6 +43,7 @@ import { createPolicyQuotaGateway } from "../football/quota-gateway.ts";
 import { createMysqlQuotaStore } from "../football/quota-mysql-store.ts";
 import { createLiveLocalEngine, verifiesLocalBaselineMarket } from "../intelligence/live-local-engine.ts";
 import { LOCAL_GOALS_VERSION } from "../intelligence/local-goals-model.ts";
+import { JobQueueError } from "../jobs/job-contract.ts";
 import { createMysqlJobQueue } from "../jobs/job-mysql-store.ts";
 import { createJobRegistry, defineJob, type JobDefinition } from "../jobs/job-registry.ts";
 import { ModelRegistryError } from "../predictor/predictor-registry.ts";
@@ -580,8 +581,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
           await context.checkpoint();
           return result.status === "busy" ? { status: "failed", reason: "handler-failed", retryable: true } : { status: "succeeded" };
         } catch (error) {
-          return { status: "failed", reason: "handler-failed", retryable: error instanceof DailySelectionError &&
-            ["incomplete-import", "lost-lease", "unavailable"].includes(error.reason) };
+          return { status: "failed", reason: "handler-failed", retryable: error instanceof JobQueueError ? error.reason === "unavailable"
+            : error instanceof DailySelectionError && ["incomplete-import", "lost-lease", "unavailable"].includes(error.reason) };
         }
       } });
     const registry = createJobRegistry([selectionDefinition, hourlySelectionDefinition, refreshDefinition, createCutoffJob(cutoff)]);
