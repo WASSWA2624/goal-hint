@@ -126,8 +126,9 @@ leading league icon or flag. The date shows the year in smaller type and the
 12-hour time uses two-digit hours. Available scores align with their teams, and
 the score column stays blank until scores are available. Odds, probability,
 market and prediction use a compact right-hand column. The results header and
-rows share one square-edged frame along the shell's outer content rails. Thin
-horizontal rules separate adjacent rows. Access controls keep the locked layout.
+lightly rounded cards span the shell's outer content rails. The gaps between
+cards use the same background as the app header. Access controls keep the locked
+layout.
 
 Tablet feed cards and slip selections share the following geometry:
 

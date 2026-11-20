@@ -63,8 +63,8 @@ Desktop review themes can select a restrained corner through
 `theme.frame.desktopCardRadius`, taking its value from this same radius scale.
 Theme card frames, hover backgrounds, and their full-height rails consume the
 shared setting together.
-Phone Matches joins the results header and rows inside one square-edged frame.
-Matches rows use `theme.radius.none` and thin separators at every width.
+Phone Matches cards use `theme.phoneCardFrame.radius` and a small vertical gap.
+Tablet and desktop Matches rows use `theme.radius.none` and thin separators.
 Standalone Team stack mobile match cards use `theme.phoneCardFrame.radius`,
 mapped to `control` (4px). Slip selections use the same scale on mobile and
 desktop, with rounded top corners only on the first match and rounded bottom
