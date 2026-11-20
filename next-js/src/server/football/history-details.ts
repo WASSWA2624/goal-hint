@@ -195,7 +195,7 @@ function matchesDetail(row: Target, detail: NormalizedFixtureMatchDetails | unde
     Buffer.byteLength(JSON.stringify(detail.facts)) <= FIXTURE_FACTS_MAX_BYTES ? detail : undefined;
 }
 
-/** Private archive work shares the adapter's provider account and yields to live work at enrichment priority. */
+/** Private archive work shares the adapter's provider account and yields to current fixtures. */
 export function createFootballHistoryDetails(options: Readonly<{
   database: DatabaseRuntime;
   adapter: Pick<ReturnType<typeof createApiFootballAdapter>["evidence"], "matchDetails">;
@@ -289,7 +289,7 @@ export function createFootballHistoryDetails(options: Readonly<{
       let response: ApiFootballResult<NormalizedFixtureMatchDetails> | null = null;
       try {
         check();
-        response = await adapter.matchDetails(ids, { priority: "enrichment", deadlineAt, timeoutMs: 30_000, maxRequests: 1,
+        response = await adapter.matchDetails(ids, { priority: "historical-backfill", deadlineAt, timeoutMs: 30_000, maxRequests: 1,
           maxPages: 1, maxRows: batchSize, maxResponseBytes: 8_000_000, retry: { maxAttempts: 1, baseDelayMs: 0, maxDelayMs: 0 },
           cacheMaxAgeMs: 0 }, { signal: requestSignal, deadlineAt, check, beforeReserve: check, beforeDispatch: check });
       } catch { /* Unconfirmed work is deferred rather than recording it as an empty fixture. */ }

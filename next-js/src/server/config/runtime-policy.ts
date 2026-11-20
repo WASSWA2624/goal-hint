@@ -188,6 +188,7 @@ const environmentSchema = z.object({
   GOAL_HINT_TEAM_CODES_IMPORT_ENABLED: enabledByDefault.describe("Use true or false (default true); the live runner imports team codes only from spare quota, so they stay off on Free and slow plans."),
   GOAL_HINT_LIVE_DETAILS_ENABLED: enabled.describe("Use true or false (default false); centrally collect fixture statistics/events within the verified plan's bounded live-detail allowance."),
   GOAL_HINT_HISTORY_IMPORT_ENABLED: enabled.describe("Use true on the production football worker to resume historical imports under its verified spare quota."),
+  GOAL_HINT_FOOTBALL_RESPONSE_ARCHIVE_ENABLED: enabled.describe("Use true on a qualified private football worker to retain replayable provider response envelopes."),
   GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS: money.describe("Use an explicitly approved separate AI cap in integer US cents (010)."),
   GOAL_HINT_AI_BILLING_MODE: optional(z.enum(["capped", "usage-based"])).transform((value) => value ?? "capped")
     .describe("Capped requires the monthly AI allowance; explicitly approved usage-based billing has no monthly spending ceiling."),
@@ -305,6 +306,7 @@ function assemble(settings: z.output<typeof environmentSchema>) {
       teamCodes: { enabled: settings.GOAL_HINT_TEAM_CODES_IMPORT_ENABLED },
       liveDetails: { enabled: settings.GOAL_HINT_LIVE_DETAILS_ENABLED },
       historyImport: { enabled: settings.GOAL_HINT_HISTORY_IMPORT_ENABLED },
+      footballResponseArchive: { enabled: settings.GOAL_HINT_FOOTBALL_RESPONSE_ARCHIVE_ENABLED },
       budgets: {
         aiBillingMode: settings.GOAL_HINT_AI_BILLING_MODE,
         aiMonthlyUsdCents: settings.GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS,

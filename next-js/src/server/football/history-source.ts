@@ -1,8 +1,9 @@
 import "server-only";
 
 import { z } from "zod";
-import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { parseReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
+import type { Prisma } from "../generated/prisma/client.ts";
 import { API_FOOTBALL_CONTRACT_VERSION } from "./api-football-contract.ts";
 import { archivedFixtureCoachIds } from "./history-lineup-coaches.ts";
 import { parseFootballHistoryOddsMappingPage, type FootballHistoryOddsMappingPage } from "./history-odds-mapping.ts";
@@ -30,7 +31,7 @@ const selectors = {
   teams: new Set(["league", "season"]),
   teamsByCountry: new Set(["country"]),
   teamSeasons: new Set(["team"]),
-  teamStatistics: new Set(["league", "season", "team"]),
+  teamStatistics: new Set(["league", "season", "team", "date"]),
   playerStatistics: new Set(["league", "season", "generation"]),
   playerProfiles: new Set(["generation"]),
   playerArchiveGeneration: new Set(["dataset", "league", "season"]),
@@ -71,12 +72,13 @@ function archiveSelector({ endpoint, parameters: input }: Selection) {
   const allowedParameters = selectors[endpoint];
   const entries = Object.entries(input).sort(([left], [right]) => left.localeCompare(right));
   if ((!entries.length && allowedParameters.size > 0 && endpoint !== "competitions" && endpoint !== "playerProfiles") ||
-    (endpoint === "teamStatistics" && entries.length !== allowedParameters.size) ||
+      (endpoint === "teamStatistics" && ["league", "season", "team"].some((name) => !Object.hasOwn(input, name))) ||
     (endpoint === "playerStatistics" && entries.filter(([key]) => key !== "generation").length !== 2) ||
     entries.some(([key, value]) => !allowedParameters.has(key) || typeof value !== "string" || !value || value.length > 512)) {
     throw new Error("Invalid historical archive selector.");
   }
   const parameters = Object.fromEntries(entries) as Record<string, string>;
+  if (endpoint === "teamStatistics" && parameters.date !== undefined) parseReportingDate(parameters.date);
   if (parameters.generation !== undefined && !/^[a-f0-9]{64}$/u.test(parameters.generation)) {
     throw new Error("Invalid historical player archive generation.");
   }
@@ -214,19 +216,26 @@ export function createFootballHistorySource(database: DatabaseRuntime) {
       observedAt, rowCount, body: Buffer.from(JSON.stringify(value)) });
   }
 
-  async function writePage(endpoint: Endpoint, parameters: Record<string, string>, value: unknown, observedAt: number, rowCount: number) {
-    const data = await preparePage(endpoint, parameters, value, observedAt, rowCount);
+  async function writePages(data: Prisma.FootballHistorySourcePageCreateManyInput | Prisma.FootballHistorySourcePageCreateManyInput[],
+    tx?: Prisma.TransactionClient) {
+    if (tx) return tx.footballHistorySourcePage.createMany({ skipDuplicates: true, data });
     return database.query((client) => client.footballHistorySourcePage.createMany({ skipDuplicates: true, data }));
   }
 
+  async function writePage(endpoint: Endpoint, parameters: Record<string, string>, value: unknown, observedAt: number, rowCount: number,
+    tx?: Prisma.TransactionClient) {
+    const data = await preparePage(endpoint, parameters, value, observedAt, rowCount);
+    return writePages(data, tx);
+  }
+
   async function savePersonRecordPage(endpoint: FootballHistoryPersonRecordEndpoint, parameters: Record<string, string>,
-    rows: readonly unknown[], retrievedAt: number) {
+    rows: readonly unknown[], retrievedAt: number, tx?: Prisma.TransactionClient) {
     const selector = readFootballHistoryPersonSelector(parameters);
     if (!selector) throw new Error("Invalid historical person-record selector.");
     const { kind, subjectIds } = selector;
     if (subjectIds.length === 1) {
       if (!rows.every((row) => isFootballHistoryPersonRecord(endpoint, row))) throw new Error("Invalid historical person records.");
-      return writePage(endpoint, parameters, rows, retrievedAt, rows.length);
+      return writePage(endpoint, parameters, rows, retrievedAt, rows.length, tx);
     }
 
     const groups = new Map<number, readonly unknown[]>();
@@ -245,7 +254,7 @@ export function createFootballHistorySource(database: DatabaseRuntime) {
         { batchPageId: batch.id, batchParameters: parameters, rows: records ?? [] }, retrievedAt, records?.length ?? 0);
     }));
     // Store the original response and its subject receipts in the same insert.
-    return database.query((client) => client.footballHistorySourcePage.createMany({ skipDuplicates: true, data: [batch, ...subjects] }));
+    return writePages([batch, ...subjects], tx);
   }
 
   async function savePlayerPage(input: FootballHistoryPlayerProfilePage, source: PlayerPageSource) {
@@ -366,15 +375,15 @@ export function createFootballHistorySource(database: DatabaseRuntime) {
         return rows.length === 0 || sameFixtureScope(rows, selector) ? { id: page.id, rows } : null;
       } catch { return null; }
     },
-    async savePage(input: Selection & Readonly<{ rows: readonly unknown[]; retrievedAt: number }>) {
+    async savePage(input: Selection & Readonly<{ rows: readonly unknown[]; retrievedAt: number }>, tx?: Prisma.TransactionClient) {
       const { endpoint } = input, parameters = archiveSelector(input);
       if (endpoint === "playerStatistics" || endpoint === "playerProfiles" || endpoint === "oddsMapping" || isPlayerArchiveMarker(endpoint) ||
           endpoint === "trophiesOmitted" || endpoint === "sidelinedOmitted" ||
           !Array.isArray(input.rows) || input.rows.length > footballHistorySourceMaxRows) {
         throw new Error("Invalid historical archive page.");
       }
-      if (isFootballHistoryPersonRecordEndpoint(endpoint)) return savePersonRecordPage(endpoint, parameters, input.rows, input.retrievedAt);
-      return writePage(endpoint, parameters, input.rows, input.retrievedAt, input.rows.length);
+      if (isFootballHistoryPersonRecordEndpoint(endpoint)) return savePersonRecordPage(endpoint, parameters, input.rows, input.retrievedAt, tx);
+      return writePage(endpoint, parameters, input.rows, input.retrievedAt, input.rows.length, tx);
     },
     async savePlayerStatisticsPage(input: FootballHistoryPlayerStatisticsPage) {
       return savePlayerPage(input, playerStatisticsPages(input));

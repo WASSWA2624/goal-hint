@@ -38,6 +38,7 @@ type ArchiveOptions<Target> = Readonly<{
   now(): UtcInstant;
   providerDayEndsAt(): number | null;
   maximumPage?: number;
+  replayMaxAgeMs?: number;
 }>;
 type BatchInput = Readonly<{ maxRequests: number; signal?: AbortSignal }>;
 
@@ -64,14 +65,17 @@ function receiptState(receipts: readonly FootballHistoryPlayerStatisticsReceipt[
 }
 
 function acceptedPage<Target>(response: ApiFootballResult<Readonly<{ raw: unknown }>>, rules: PageRules<Target>,
-  selector: PlayerPageSelector<Target>, started: UtcInstant, finished: UtcInstant, deadlineAt: UtcInstant): PlayerPage<Target> | null {
+  selector: PlayerPageSelector<Target>, started: UtcInstant, finished: UtcInstant, deadlineAt: UtcInstant,
+  replayMaxAgeMs: number): PlayerPage<Target> | null {
   const [page] = response.provenance;
+  const replay = page?.fromCache === true;
   if (response.status !== "complete" || response.error !== null || !response.completeness.complete || response.completeness.invalidRows !== 0 ||
     response.completeness.reasons.length !== 0 || response.completeness.missingIds.length !== 0 ||
-    response.requestsDispatched !== 1 || response.provenance.length !== 1 || !page || page.provider !== "api-football" ||
-    page.endpoint !== rules.endpoint || page.contractVersion !== API_FOOTBALL_CONTRACT_VERSION || page.fromCache || page.quota.kind !== "success" ||
+    response.requestsDispatched !== (replay ? 0 : 1) || response.provenance.length !== 1 || !page || page.provider !== "api-football" ||
+    page.endpoint !== rules.endpoint || page.contractVersion !== API_FOOTBALL_CONTRACT_VERSION || page.quota.kind !== "success" ||
     page.currentPage !== selector.page || page.totalPages === null || !validPlayerArchivePageSize(selector.page, page.totalPages, response.data.length, rules.pageSize) ||
-    !Number.isSafeInteger(page.retrievedAt) || page.retrievedAt < started || page.retrievedAt > finished || page.retrievedAt >= deadlineAt) return null;
+    !Number.isSafeInteger(page.retrievedAt) || page.retrievedAt > finished || page.retrievedAt >= deadlineAt ||
+    (replay ? replayMaxAgeMs === 0 || page.retrievedAt < started - replayMaxAgeMs : page.retrievedAt < started)) return null;
   const requested = Object.entries(rules.parameters(selector));
   if (Object.keys(page.requestParameters).length !== requested.length || requested.some(([key, value]) => page.requestParameters[key] !== value)) return null;
 
@@ -86,7 +90,7 @@ function acceptedPage<Target>(response: ApiFootballResult<Readonly<{ raw: unknow
 
 /** Each target requires a consistent receipt for every page reported by the provider. */
 function playerArchive<Target>(options: ArchiveOptions<Target>, transport: PlayerPageTransport<Target>, rules: PageRules<Target>) {
-  const { readPages, savePage, recordConflict, now, providerDayEndsAt, maximumPage } = options, { pageSize } = rules;
+  const { readPages, savePage, recordConflict, now, providerDayEndsAt, maximumPage, replayMaxAgeMs = 0 } = options, { pageSize } = rules;
   if (maximumPage !== undefined && !positive(maximumPage)) throw new RangeError("Invalid player-statistics page limit.");
 
   return {
@@ -126,14 +130,15 @@ function playerArchive<Target>(options: ArchiveOptions<Target>, transport: Playe
           };
           const selector = { ...target, page };
           totals.requested++;
-          const response = await transport(selector, { priority: "enrichment", deadlineAt, timeoutMs: 30_000,
+          const response = await transport(selector, { priority: "historical-backfill", deadlineAt, timeoutMs: 30_000,
             maxRequests: 1, maxPages: 1, maxRows: pageSize, maxResponseBytes: 4_000_000,
-            retry: { maxAttempts: 4, baseDelayMs: 500, maxDelayMs: 2500 }, cacheMaxAgeMs: 0 },
+            retry: { maxAttempts: 4, baseDelayMs: 500, maxDelayMs: 2500 }, cacheMaxAgeMs: 0,
+            ...(replayMaxAgeMs > 0 ? { replayMaxAgeMs } : {}) },
           { signal, deadlineAt, check, beforeReserve: check, beforeDispatch: check });
           const requests = response.requestsDispatched;
           if (requests !== 0 && requests !== 1) throw new Error("Invalid player archive transport request count.");
           totals.requests += requests;
-          const observed = acceptedPage(response, rules, selector, started, now(), deadlineAt);
+          const observed = acceptedPage(response, rules, selector, started, now(), deadlineAt, replayMaxAgeMs);
           let reason: PageDeferral | null = null;
           if (!observed) reason = response.error?.reason ?? "unverified-page";
           else if (totalPages !== null && observed.totalPages !== totalPages) reason = "page-count-changed";

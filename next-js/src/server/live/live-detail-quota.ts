@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import type { QuotaAdmission, QuotaPeriodState, QuotaTransaction } from "../football/quota-contract.ts";
-import type { LiveWorkload } from "./live-plan.ts";
+import { projectedCriticalRequests, remainingCriticalReserve, type LiveWorkload } from "./live-plan.ts";
 
 /** Upgrade a running provider day once; subsequent admissions use constant-size counters.
  * No historical quota attempt or uncertain dispatch is deleted or refunded. */
@@ -15,28 +15,34 @@ async function priorityUse(tx: QuotaTransaction, period: QuotaPeriodState) {
     period.priorityUsed = counts;
     await tx.savePeriod(period);
   }
-  return { detail: period.priorityUsed["live-details"] ?? 0, enrichment: period.priorityUsed.enrichment ?? 0,
+  return { detail: period.priorityUsed["live-details"] ?? 0,
+    enrichment: (period.priorityUsed.enrichment ?? 0) + (period.priorityUsed["historical-backfill"] ?? 0),
     ordinary: Object.entries(period.priorityUsed).reduce((sum, [priority, count]) =>
-      sum + (priority === "live-details" || priority === "enrichment" ? 0 : count ?? 0), 0) };
+      sum + (priority === "live-details" || priority === "enrichment" || priority === "historical-backfill" ? 0 : count ?? 0), 0) };
 }
 
 /** Both detail and optional enrichment admission are atomic with the account's
  * dispatch counter, including across processes and uncertain provider responses. */
 export function createLiveQuotaAdmission(workload: () => LiveWorkload | null, accountKey?: () => string | null,
   archiveEnabled = false): QuotaAdmission {
-  return async (tx, period, attempt) => {
-    if (attempt.priority !== "live-details" && attempt.priority !== "enrichment") return true;
+  return async (tx, period, attempt, now) => {
+    const archive = attempt.priority === "historical-backfill";
+    if (attempt.priority !== "live-details" && attempt.priority !== "enrichment" && !archive) return true;
     const plan = workload();
     if (!plan) return false;
     if (!plan.liveDetails.eligible) {
       if (attempt.priority === "live-details") return false;
-      if (!archiveEnabled) return true;
+      if (!archiveEnabled && !archive) return true;
     }
     const used = await priorityUse(tx, period);
     // Provider-reported or prior-plan use is not proof that this runtime's
     // selection/result/refresh obligations have been completed.
     const owed = Math.max(0, plan.liveDetails.floor - used.ordinary);
     if (period.dayRemaining <= plan.liveDetails.reserve) return false;
+    if (archive) {
+      const criticalRequests = projectedCriticalRequests(plan, period.endsAt - now);
+      if (period.dayRemaining <= remainingCriticalReserve(period.providerDailyLimit, criticalRequests)) return false;
+    }
     if (attempt.priority === "live-details") {
       if (used.detail >= plan.liveDetails.requests || period.dayRemaining - owed < 1) return false;
       if (!accountKey) return true;

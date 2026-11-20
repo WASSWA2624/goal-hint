@@ -11,9 +11,19 @@ export const quotaPriorities = Object.freeze({
   "daily-inputs": Object.freeze({ rank: 2, essential: false }),
   enrichment: Object.freeze({ rank: 3, essential: false }),
   "live-details": Object.freeze({ rank: 3, essential: false }),
+  "historical-backfill": Object.freeze({ rank: 4, essential: false }),
 } as const);
 
 export type QuotaPriority = keyof typeof quotaPriorities;
+export const providerShortWindowShare = 0.8;
+export const unknownProviderRequestsPerMinute = 5;
+export const historicalBackfillMinuteShare = 0.2;
+export const criticalWorkReserveRatio = 1.2;
+export const providerDayReserveRatio = 0.05;
+export const providerResetGraceMs = 15_000;
+export const providerNetworkRetryDelaysMs: readonly number[] = Object.freeze([5_000, 30_000, 120_000]);
+export const providerRetryJitterRatio = 0.1;
+export const providerRetryAfterExhaustedMs = 3_600_000;
 /** Endpoint paths only, without request parameters or credentials. */
 export const quotaEndpointPattern = /^\/(?:[a-z][a-z0-9-]*)(?:\/[a-z][a-z0-9-]*){0,2}$/u;
 /** The essential reserve is 20,000 of the 120,000-request ceiling. Smaller verified
@@ -32,6 +42,8 @@ export type QuotaPeriodEvidence = Readonly<{
   dailyRemaining: number;
   secondLimit: number;
   minuteLimit: number;
+  /** Omitted for existing callers with verified provider limits. */
+  shortWindowKnown?: boolean | undefined;
   evidenceRef: string;
   /** Time of an exact provider account usage observation, when available. */
   observedAt?: UtcInstant;
@@ -60,6 +72,7 @@ export type QuotaPeriodState = {
   providerDailyLimit: number;
   secondLimit: number;
   minuteLimit: number;
+  singleConcurrent?: boolean | undefined;
   dayLimit: number;
   used: number;
   ordinaryUsed: number;
@@ -142,6 +155,8 @@ export interface QuotaTransaction {
   inFlight(workKey: string): Promise<QuotaAttempt | null>;
   saveAttempt(attempt: QuotaAttempt): Promise<void>;
   rollingAttempts(since: UtcInstant): Promise<QuotaAttempt[]>;
+  /** Furthest lease of a reserved or launched request for unknown provider limits. */
+  activeDispatchUntil?(now: UtcInstant): Promise<UtcInstant | null>;
   periodAttempts(periodId: string, afterSequence: number): Promise<QuotaAttempt[]>;
   /** Bounded aggregate for bootstrapping dispatch counts without loading historical payloads. */
   priorityCounts?(periodId: string): Promise<NonNullable<QuotaPeriodState["priorityUsed"]>>;
@@ -150,7 +165,7 @@ export interface QuotaTransaction {
 }
 
 /** Trusted workload admission runs under the same account lock as the dispatch count. */
-export type QuotaAdmission = (transaction: QuotaTransaction, period: QuotaPeriodState, attempt: Readonly<QuotaAttempt>) => Promise<boolean>;
+export type QuotaAdmission = (transaction: QuotaTransaction, period: QuotaPeriodState, attempt: Readonly<QuotaAttempt>, now: UtcInstant) => Promise<boolean>;
 export interface QuotaStore {
   transaction<Result>(accountId: string, operation: (transaction: QuotaTransaction) => Promise<Result>): Promise<Result>;
 }

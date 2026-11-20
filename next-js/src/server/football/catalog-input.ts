@@ -51,7 +51,7 @@ const selectionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("competitions"), query: z.object({ competitionId: identity.optional(), season: season.optional() }).strict() }).strict(),
 ]);
 const boundsSchema = z.object({
-  priority: z.enum(["results-cutoff", "recovery", "near-kickoff-fallback", "live-date-sync", "daily-inputs", "enrichment"]),
+  priority: z.enum(["results-cutoff", "recovery", "near-kickoff-fallback", "live-date-sync", "daily-inputs", "enrichment", "historical-backfill"]),
   deadlineAt: instant, timeoutMs: positive.max(2_147_483_647), maxRequests: positive, maxPages: positive,
   maxRows: positive, maxResponseBytes: positive, cacheMaxAgeMs: nonnegative, cacheScope: z.string().min(1).max(256).optional(),
   retry: z.object({ maxAttempts: positive, baseDelayMs: nonnegative.max(2_147_483_647), maxDelayMs: nonnegative.max(2_147_483_647) }).strict(),
@@ -91,11 +91,11 @@ const fixtureSchema = z.object({ id: identity, homeTeam: teamSchema, awayTeam: t
 }).strict().refine((fixture) => fixture.homeTeam.id !== fixture.awayTeam.id && fixture.competition.season !== null);
 const failures = ["invalid-request", "invalid-credential", "operation-not-authorized", "authentication-error", "subscription-expired",
   "rate-limited", "transport-error", "response-body-error", "coverage-error", "schema-error", "response-too-large", "quota-denied",
-  "shared-work-pending", "deadline-exceeded", "request-budget-exhausted", "pagination-incomplete"] as const;
+  "shared-work-pending", "deadline-exceeded", "request-budget-exhausted", "pagination-incomplete", "archive-unavailable"] as const;
 const quotaReasons = ["invalid-request", "unverified-account", "unknown-account", "storage-unavailable", "clock-regression",
   "credential-failure", "subscription-expired", "request-expired", "already-attempted", "priority-wait", "pacing", "second-limit",
   "minute-limit", "daily-limit", "essential-reserve", "retry-delay", "reset-unconfirmed", "invalid-reset-evidence",
-  "operation-not-authorized", "dispatch-expired"] as const;
+  "operation-not-authorized", "dispatch-expired", "workload-budget"] as const;
 const failureSchema = z.object({ reason: z.enum(failures), retryable: z.boolean(), httpStatus: positive.max(599).optional(),
   retryAfterMs: nonnegative.optional(), quotaReason: z.enum(quotaReasons).optional(), retryAt: instant.optional() }).strict();
 const quotaSchema = z.object({ kind: z.enum(["success", "uncertain", "rate-limited", "credential-failure", "subscription-expired", "provider-error"]),

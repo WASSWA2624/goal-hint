@@ -41,8 +41,8 @@ test("paging, embedded details, independent odds namespaces and schema retention
   assert.equal(paging.totalField, "paging.total");
   assert.ok(coverageSelectors.fixtures.some(selector => selector.includes("ids")));
   assert.deepEqual(coverageSelectors.fixtureHalfStatistics, [["fixture", "half"]]);
-  assert.equal(endpoints.fixtureHeadToHead.adapter, "unimplemented");
-  assert.equal(endpoints.fixturePlayerStatistics.adapter, "embedded");
+  assert.equal(endpoints.fixtureHeadToHead.adapter, "normalized");
+  assert.equal(endpoints.fixturePlayerStatistics.adapter, "reference");
   assert.ok(endpoints.fixturePlayerStatistics.fields.raw.includes("players.*.statistics.*.duels.won"));
   assert.ok(endpoints.predictions.fields.raw.includes("comparison"));
   assert.ok(endpoints.odds.fields.normalized.includes("bookmakers.*.bets.*.values.*.odd"));

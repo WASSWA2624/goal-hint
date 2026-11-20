@@ -91,7 +91,7 @@ function verifiedRoundObservation(response: ApiFootballResult<ApiFootballFixture
 }
 
 function bounds(now: UtcInstant, providerDayEndsAt: number): ApiFootballBounds {
-  return { priority: "enrichment", deadlineAt: utcInstantFromEpochMilliseconds(Math.min(providerDayEndsAt, now + 45_000)),
+  return { priority: "historical-backfill", deadlineAt: utcInstantFromEpochMilliseconds(Math.min(providerDayEndsAt, now + 45_000)),
     timeoutMs: 30_000, maxRequests: 1, maxPages: 1, maxRows: footballHistorySourceMaxRows, maxResponseBytes: 24_000_000,
     retry: { maxAttempts: 4, baseDelayMs: 500, maxDelayMs: 2500 }, cacheMaxAgeMs: 0 };
 }

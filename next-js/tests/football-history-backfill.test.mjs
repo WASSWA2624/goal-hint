@@ -38,7 +38,7 @@ function harness(failures = [], upcomingSeasons) {
     store: { findImport: async id => receipts.get(id) ?? null },
     importer: { async import(request) {
       assert.equal(request.bounds.maxRequests, 1);
-      assert.equal(request.bounds.priority, "enrichment");
+      assert.equal(request.bounds.priority, "historical-backfill");
       assert.equal(request.retentionEvidenceRef, "verified-history-retention");
       assert.equal(request.selection.kind, "fixtures");
       assert.match(request.id, /^[\da-f]{8}-[\da-f]{4}-8[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/u);

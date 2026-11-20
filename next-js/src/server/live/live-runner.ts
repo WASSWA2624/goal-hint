@@ -12,13 +12,14 @@ import { createJobRegistry } from "../jobs/job-registry.ts";
 import { createJobWorker } from "../jobs/job-worker.ts";
 import { resultCadence } from "../results/result-sync-policy.ts";
 import { DAILY_SELECTION_TYPE, dailySelectionEnvelope, HOURLY_SELECTION_TYPE, hourlySelectionEnvelope, latestHourlySelectionOccurrence } from "../selection/selection-trigger.ts";
-import { latestOddsSlot, oddsScheduleEnvelopes } from "../odds/odds-jobs.ts";
-import { latestTeamCodesSlot, teamCodesEnvelope } from "../teams/team-code-jobs.ts";
+import { latestOddsSlot, oddsScheduleEnvelopes, ODDS_SWEEP_MS } from "../odds/odds-jobs.ts";
+import { latestTeamCodesSlot, teamCodesEnvelope, TEAM_CODES_SLOT_MS } from "../teams/team-code-jobs.ts";
 import { LiveAccountError } from "./live-account.ts";
-import { selectionTriggerBounds } from "./live-plan.ts";
+import { assessLiveCapacity, selectionTriggerBounds } from "./live-plan.ts";
 import { createLiveRuntime, LiveConfigurationError, type LiveRuntime } from "./live-runtime.ts";
 
 const MINUTE = 60_000, DAY = 86_400_000;
+const MAINTENANCE_INTERVAL_MS = 30_000, POLLER_REVIEW_MS = 5 * MINUTE;
 const [runHour = 21, runMinute = 0] = calendarRules.dailyRunUtcCron.split(" ").slice(0, 2).reverse().map(Number);
 const RUN_OFFSET = runHour * 3_600_000 + runMinute * MINUTE;
 export type LiveEvent = Readonly<Record<string, string | number | boolean | null>>;
@@ -36,6 +37,7 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
   localFootball: boolean) {
   let accountCheckedAt = Date.now(), scheduled = 0, pollerCheckedAt = 0, oddsScheduled = 0, teamCodesScheduled = 0;
   let hourlyScheduled: number | null = null, historyScheduled = 0;
+  let capacity: ReturnType<typeof assessLiveCapacity> | null = null, capacityWarning: string | null = null;
   type Poller = Readonly<{ controller: AbortController; done: Promise<void>; policy: unknown }>;
   const owned: { poller: Poller | null; details: Poller | null } = { poller: null, details: null };
   const plan = runtime.day.status.plan, dailyLimit = runtime.day.status.dailyLimit;
@@ -53,11 +55,33 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
           if (next.periodId !== day?.periodId) log({ event: "provider-day", plan: next.status.plan, dailyLimit: next.status.dailyLimit,
             usedToday: next.status.usedToday });
           // A plan change resizes the whole workload from the new verified limits.
-          if (next.status.plan !== plan || next.status.dailyLimit !== dailyLimit) {
+          if (next.status.plan !== plan || next.status.dailyLimit !== dailyLimit ||
+            next.status.minuteLimit !== runtime.day.status.minuteLimit || next.status.shortWindowKnown !== runtime.day.status.shortWindowKnown) {
             log({ event: "plan-changed", from: plan, to: next.status.plan, dailyLimit: next.status.dailyLimit }); rebuild(); return;
           }
         } catch (error) { if (reason(error) !== "settling") log({ event: "account-check-failed", reason: reason(error) }); }
       }
+      if (now - pollerCheckedAt >= POLLER_REVIEW_MS) {
+        try {
+          const counters = await runtime.quota.counters();
+          if (counters) {
+            capacity = assessLiveCapacity(runtime.workload, counters.day.endsAt - now, counters.day.status.dailyLimit,
+              counters.remaining, counters.minuteLimit);
+            const { cadence, reserve, critical, criticalShortfall, archiveAllowed, enrichmentMultiplier } = capacity;
+            if (!archiveAllowed || counters.singleConcurrent) {
+              const warning = [counters.singleConcurrent, counters.minuteLimit, cadence.liveMs, cadence.dateMs, criticalShortfall].join(":");
+              if (capacityWarning !== warning) log({ event: "capacity-warning", quotaLimitsUnknown: counters.singleConcurrent,
+                minuteLimit: counters.minuteLimit, remaining: counters.remaining, criticalRequests: critical, reserve,
+                backfillPaused: !archiveAllowed, enrichmentMultiplier, liveMs: cadence.liveMs, dateMs: cadence.dateMs, criticalShortfall });
+              capacityWarning = warning;
+            } else if (capacityWarning !== null) {
+              capacityWarning = null;
+              log({ event: "capacity-recovered", remaining: counters.remaining, reserve, liveMs: cadence.liveMs });
+            }
+          }
+        } catch (error) { log({ event: "capacity-check-failed", reason: reason(error) }); }
+      }
+      const enrichmentMultiplier = capacity?.enrichmentMultiplier ?? 1;
       const occurrence = latestSelectionOccurrence(now);
       if (occurrence !== scheduled) {
         try {
@@ -79,7 +103,7 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
       // Durable idempotency keys make restarts, plan rebuilds and a retried tick re-enqueue the same rows.
       if (runtime.odds.enabled) {
         const slot = latestOddsSlot(now);
-        if (slot !== oddsScheduled) {
+        if (slot !== oddsScheduled && slot % (ODDS_SWEEP_MS * enrichmentMultiplier) === 0) {
           try {
             const envelopes = oddsScheduleEnvelopes(now, runtime.odds.horizonDays, runtime.odds.bookmakerScope);
             for (const envelope of envelopes) await runtime.queue.enqueue(envelope);
@@ -91,14 +115,14 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
       // idempotency key makes restarts and plan rebuilds re-enqueue the same row.
       if (runtime.teamCodes.enabled) {
         const slot = latestTeamCodesSlot(now);
-        if (slot !== teamCodesScheduled) {
+        if (slot !== teamCodesScheduled && slot % (TEAM_CODES_SLOT_MS * enrichmentMultiplier) === 0) {
           try {
             const job = await runtime.queue.enqueue(teamCodesEnvelope(slot));
             teamCodesScheduled = slot; log({ event: "team-codes-scheduled", slot: new Date(slot).toISOString(), state: job.state });
           } catch (error) { log({ event: "team-codes-schedule-failed", reason: reason(error) }); }
         }
       }
-      if (runtime.enrichment.historyEnabled) {
+      if (runtime.enrichment.historyEnabled && capacity?.archiveAllowed !== false) {
         const slot = latestHistoryImportSlot(now);
         if (slot !== historyScheduled) {
           try {
@@ -114,13 +138,13 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
         if (expired > 0) log({ event: "odds-expired", fixtures: expired });
       } catch (error) { log({ event: "odds-expire-failed", reason: reason(error) }); }
       try {
-        const inPlay = await runtime.inPlayOdds?.poll();
+        const inPlay = Math.floor(now / MAINTENANCE_INTERVAL_MS) % enrichmentMultiplier === 0 ? await runtime.inPlayOdds?.poll() : null;
         if (inPlay && (inPlay.requests > 0 || inPlay.changed > 0)) log({ event: "in-play-odds", ...inPlay });
       } catch (error) { log({ event: "in-play-odds-failed", reason: reason(error) }); }
-      if (now - pollerCheckedAt >= 5 * MINUTE) {
+      if (now - pollerCheckedAt >= POLLER_REVIEW_MS) {
         pollerCheckedAt = now;
         try {
-          const current = await runtime.resultPoller();
+          const current = await runtime.resultPoller(capacity?.cadence);
           if (current?.policy !== owned.poller?.policy) {
             if (owned.poller) { owned.poller.controller.abort(); await owned.poller.done; }
             owned.poller = null;
@@ -135,7 +159,7 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
           }
         } catch (error) { log({ event: "result-poller-failed", reason: reason(error) }); }
         try {
-          const current = await runtime.liveMatchPoller();
+          const current = await runtime.liveMatchPoller(enrichmentMultiplier);
           if (current?.policy !== owned.details?.policy) {
             if (owned.details) { owned.details.controller.abort(); await owned.details.done; }
             owned.details = null;
@@ -159,7 +183,7 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
         if (settled > 0) log({ event: "settled", fixtures: settled });
       } catch (error) { log({ event: "settlement-failed", reason: reason(error) }); }
       try { await runtime.cache.reconcile(100); } catch (error) { log({ event: "cache-reconcile-failed", reason: reason(error) }); }
-      await pause(30_000, signal);
+      await pause(MAINTENANCE_INTERVAL_MS, signal);
     }
   } finally {
     for (const poller of [owned.poller, owned.details]) poller?.controller.abort();

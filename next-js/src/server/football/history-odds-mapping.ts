@@ -112,7 +112,7 @@ export function createFootballHistoryOddsMapping(options: Readonly<{
         const before = currentStop();
         if (before) return report(before);
         totals.requested++;
-        const response = await options.mappingPage(page, { priority: "enrichment", deadlineAt, timeoutMs: 30_000, maxRequests: 1,
+        const response = await options.mappingPage(page, { priority: "historical-backfill", deadlineAt, timeoutMs: 30_000, maxRequests: 1,
           maxPages: 1, maxRows: pageSize, maxResponseBytes: 512_000, retry: { maxAttempts: 1, baseDelayMs: 0, maxDelayMs: 0 },
           cacheMaxAgeMs: 0 }, { signal, deadlineAt, check, beforeReserve: check, beforeDispatch: check });
         totals.requests += response.requestsDispatched;

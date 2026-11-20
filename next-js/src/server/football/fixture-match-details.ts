@@ -56,6 +56,19 @@ function fixtureInfo(value: unknown): FixtureDetailInfo | null {
   return Object.values(info).some((field) => field !== null) ? Object.freeze(info) : null;
 }
 
+/** Validate a team/player group independently for embedded and dedicated fixture responses. */
+export function readFixturePlayerGroup(value: unknown, teams: ReadonlySet<number>) {
+  const raw = object(value), teamId = object(raw?.team)?.id, players = section(raw?.players, 100);
+  if (!raw || typeof teamId !== "number" || !teams.has(teamId) || players === null) return null;
+  const playerIds = new Set<number>();
+  for (const item of players) {
+    const player = object(item), id = object(player?.player)?.id;
+    if (typeof id !== "number" || !Number.isSafeInteger(id) || id < 1 || playerIds.has(id) || section(player?.statistics, 10) === null) return null;
+    playerIds.add(id);
+  }
+  return { raw, id: teamId };
+}
+
 /** Retain only correlated sections. An invalid detail block does not discard the fixture or other blocks. */
 export function normalizeFixtureMatchDetails(raw: unknown, context: NormalizationContext): NormalizationResult<NormalizedFixtureMatchDetails> {
   const fixture = normalizeFixture(raw, context);
@@ -75,13 +88,10 @@ export function normalizeFixtureMatchDetails(raw: unknown, context: Normalizatio
     new Set(validLineups.map((entry) => entry.team.id)).size === validLineups.length ? lineups : null;
   const playerTeams = new Set<unknown>();
   const matchPlayers = players?.every((value) => {
-    const group = object(value), team = object(group?.team)?.id, items = section(group?.players, 100);
-    if (typeof team !== "number" || !teams.has(team) || playerTeams.has(team) || items === null) return false;
-    playerTeams.add(team);
-    return items.every((item) => {
-      const player = object(item), id = object(player?.player)?.id;
-      return typeof id === "number" && Number.isSafeInteger(id) && id > 0 && section(player?.statistics, 10) !== null;
-    });
+    const group = readFixturePlayerGroup(value, teams);
+    if (group === null || playerTeams.has(group.id)) return false;
+    playerTeams.add(group.id);
+    return true;
   }) ? players : null;
   return { ...fixture, data: Object.freeze({ ...data, matchEvents, matchStatistics,
     facts: Object.freeze({ events: matchEvents === null ? null : events, statistics: matchStatistics === null ? null : statistics,

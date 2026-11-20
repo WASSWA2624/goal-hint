@@ -3,16 +3,19 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { utcInstantFromEpochMilliseconds, type Clock, type UtcInstant } from "../../domain/calendar.ts";
-import { assertOperationAllowed, operatingRules, type EvidenceVerifier, type RuntimePolicy } from "../config/runtime-policy.ts";
+import { assertOperationAllowed, type EvidenceVerifier, type RuntimePolicy } from "../config/runtime-policy.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
+import { apiFootballEnvelopeMayBeArchived, readApiFootballResponseBody, validateApiFootballEnvelope } from "../football/api-football-adapter.ts";
 import { API_FOOTBALL_ORIGIN } from "../football/api-football-contract.ts";
-import type { QuotaAdmission, QuotaDecision, QuotaDenialReason, QuotaFeedback, QuotaPeriodEvidence, QuotaPermit, QuotaRequest, QuotaStore } from "../football/quota-contract.ts";
+import { providerResetGraceMs, unknownProviderRequestsPerMinute,
+  type QuotaAdmission, type QuotaDecision, type QuotaDenialReason, type QuotaFeedback, type QuotaPeriodEvidence,
+  type QuotaPermit, type QuotaRequest, type QuotaStore } from "../football/quota-contract.ts";
 import type { GatewayQuotaLimiter } from "../football/quota-gateway.ts";
 import { createQuotaLimiter, type QuotaLimiter } from "../football/quota-limiter.ts";
 
 const DAY_MS = 86_400_000;
 /** No new provider day opens until rolling minute windows from the old day have elapsed. */
-export const PROVIDER_DAY_SETTLE_MS = 60_000;
+export const PROVIDER_DAY_SETTLE_MS = Math.max(60_000, providerResetGraceMs);
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 
 export class LiveAccountError extends Error {
@@ -33,13 +36,15 @@ const statusSchema = z.object({
 export type AccountStatus = Readonly<{
   accountKey: string; plan: string; active: boolean; expiresAt: UtcInstant | null;
   dailyLimit: number; usedToday: number; minuteLimit: number; secondLimit: number; retrievedAt: UtcInstant;
+  shortWindowKnown?: boolean | undefined;
 }>;
 const paidPlanMinuteLimits = new Map([["pro", 300], ["ultra", 450], ["mega", 900]]);
-/** Documented API-Football per-minute plan limits; unknown plans use the free floor until headers lower them further. */
+const knownPlanMinuteLimit = (plan: string) => plan === "free" ? 10 : paidPlanMinuteLimits.get(plan);
+/** Published API-Football plan limits and conservative unknown-plan fallback. */
 export function planMinuteLimit(plan: string): number {
-  return paidPlanMinuteLimits.get(plan.trim().toLowerCase()) ?? 10;
+  return knownPlanMinuteLimit(plan.trim().toLowerCase()) ?? unknownProviderRequestsPerMinute;
 }
-export function parseAccountStatus(body: unknown, retrievedAt: UtcInstant): AccountStatus {
+export function parseAccountStatus(body: unknown, retrievedAt: UtcInstant, headerMinuteLimit?: number): AccountStatus {
   const parsed = statusSchema.safeParse(body);
   if (!parsed.success) throw new LiveAccountError("unavailable");
   const errors = parsed.data.errors;
@@ -47,37 +52,55 @@ export function parseAccountStatus(body: unknown, retrievedAt: UtcInstant): Acco
   const response = parsed.data.response;
   if (Array.isArray(response)) throw new LiveAccountError("unavailable");
   const end = response.subscription.end ? Date.parse(response.subscription.end) : NaN;
-  const minuteLimit = planMinuteLimit(response.subscription.plan);
+  const publishedLimit = knownPlanMinuteLimit(response.subscription.plan.trim().toLowerCase());
+  const observedLimit = headerMinuteLimit !== undefined && Number.isSafeInteger(headerMinuteLimit) && headerMinuteLimit > 0
+    ? headerMinuteLimit : undefined;
+  const minuteLimit = Math.min(publishedLimit ?? observedLimit ?? unknownProviderRequestsPerMinute, observedLimit ?? Infinity);
   return Object.freeze({
     // A stable account identity, never derived from the rotating credential.
     accountKey: hash(`api-football-account:v1:${response.account.email.toLowerCase()}`),
     plan: response.subscription.plan, active: response.subscription.active,
     expiresAt: Number.isFinite(end) ? utcInstantFromEpochMilliseconds(end) : null,
     dailyLimit: response.requests.limit_day, usedToday: Math.min(response.requests.current, response.requests.limit_day),
-    minuteLimit, secondLimit: Math.max(1, Math.min(operatingRules.football.requestsPerRollingSecond, Math.floor(minuteLimit / 60))),
+    minuteLimit, secondLimit: Math.max(1, Math.floor(minuteLimit / 60)),
+    ...((publishedLimit !== undefined || observedLimit !== undefined) ? {} : { shortWindowKnown: false }),
     retrievedAt,
   });
 }
 /** The documented account endpoint does not consume daily quota, so it can seed the limiter. */
 export function createAccountStatusReader(options: Readonly<{ policy: RuntimePolicy; verifyEvidence: EvidenceVerifier;
-  fetcher?: typeof fetch; clock?: Clock; timeoutMs?: number }>) {
+  fetcher?: typeof fetch; clock?: Clock; timeoutMs?: number;
+  observeStatus?: (status: AccountStatus, body: Uint8Array) => Promise<void> }>) {
   const fetcher = options.fetcher ?? fetch, clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   return async function readAccountStatus(): Promise<AccountStatus> {
     assertOperationAllowed(options.policy, "football", options.verifyEvidence);
     const credential = options.policy.secrets.footballKey?.read();
     if (!credential) throw new LiveAccountError("credential-failure");
-    let body: unknown;
+    let body: unknown, original: Uint8Array | null = null, minuteHeader: number | undefined;
     try {
+      const signal = AbortSignal.timeout(options.timeoutMs ?? 10_000);
       const response = await fetcher(new URL("/status", API_FOOTBALL_ORIGIN), { headers: { "x-apisports-key": credential },
-        redirect: "error", signal: AbortSignal.timeout(options.timeoutMs ?? 10_000) });
+        redirect: "error", signal });
       if (response.status === 401 || response.status === 403) throw new LiveAccountError("credential-failure");
       if (!response.ok) throw new LiveAccountError("unavailable");
-      body = await response.json();
+      const limit = response.headers.get("x-ratelimit-limit");
+      if (limit && /^\d{1,9}$/u.test(limit) && Number(limit) > 0) minuteHeader = Number(limit);
+      if (options.observeStatus) {
+        const parsed = await readApiFootballResponseBody(response, 64 * 1024, signal);
+        if ("reason" in validateApiFootballEnvelope("accountStatus", {}, parsed.body) ||
+            !apiFootballEnvelopeMayBeArchived(parsed.body, credential)) throw new LiveAccountError("unavailable");
+        body = parsed.body;
+        original = parsed.bytes;
+      } else body = await response.json();
     } catch (error) { throw error instanceof LiveAccountError ? error : new LiveAccountError("unavailable"); }
-    const status = parseAccountStatus(body, clock.now());
+    const status = parseAccountStatus(body, clock.now(), minuteHeader);
     if (options.policy.choices.football.existingPrepaid &&
       (!status.active || status.expiresAt === null || status.expiresAt <= status.retrievedAt || !paidPlanMinuteLimits.has(status.plan.toLowerCase()))) {
       throw new LiveAccountError("prepaid-subscription-unverified");
+    }
+    if (original && options.observeStatus) {
+      try { await options.observeStatus(status, original); }
+      catch { throw new LiveAccountError("unavailable"); }
     }
     return status;
   };
@@ -100,7 +123,9 @@ export function createQuotaRouter(options: Readonly<{ store: QuotaStore; readSta
     return Object.freeze({ accountId, periodId: hash(`${accountId}:period`), startsAt, endsAt,
       subscriptionExpiresAt: utcInstantFromEpochMilliseconds(Math.min(status.expiresAt ?? endsAt, 253_402_300_799_000)),
       providerDailyLimit: status.dailyLimit, dailyRemaining: Math.max(0, status.dailyLimit - status.usedToday),
-      secondLimit: status.secondLimit, minuteLimit: status.minuteLimit, evidenceRef: `api-football-status:${status.retrievedAt}`,
+      secondLimit: status.secondLimit, minuteLimit: status.minuteLimit,
+      ...(status.shortWindowKnown === false && { shortWindowKnown: false }),
+      evidenceRef: `api-football-status:${status.retrievedAt}`,
       observedAt: status.retrievedAt });
   }
   const routed: GatewayQuotaLimiter = Object.freeze({
@@ -119,6 +144,8 @@ export function createQuotaRouter(options: Readonly<{ store: QuotaStore; readSta
   return Object.freeze({
     /** Re-reads the account and initializes or tightens today's limiter. */
     async refresh(): Promise<QuotaDay> {
+      const beforeStatus = clock.now();
+      if (beforeStatus - Math.floor(beforeStatus / DAY_MS) * DAY_MS < PROVIDER_DAY_SETTLE_MS) throw new LiveAccountError("settling");
       let status: AccountStatus;
       try { status = await options.readStatus(); }
       catch (error) {
@@ -153,11 +180,12 @@ export function createQuotaRouter(options: Readonly<{ store: QuotaStore; readSta
       return options.store.transaction(day.accountId, async (tx) => (await tx.period(day.periodId))?.dayRemaining ?? 0);
     },
     /** Durable remaining allowance and total use of the active provider day, or null when no day is open. */
-    async counters(): Promise<Readonly<{ day: QuotaDay; remaining: number; used: number }> | null> {
+    async counters(): Promise<Readonly<{ day: QuotaDay; remaining: number; used: number; minuteLimit: number; singleConcurrent: boolean }> | null> {
       const day = active;
       if (!day || clock.now() >= day.endsAt) return null;
       const period = await options.store.transaction(day.accountId, (tx) => tx.period(day.periodId));
-      return period ? Object.freeze({ day: day as QuotaDay, remaining: period.dayRemaining, used: period.used }) : null;
+      return period ? Object.freeze({ day: day as QuotaDay, remaining: period.dayRemaining, used: period.used,
+        minuteLimit: period.minuteLimit, singleConcurrent: period.singleConcurrent === true }) : null;
     },
     limiter: routed,
   });

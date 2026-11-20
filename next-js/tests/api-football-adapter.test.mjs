@@ -106,6 +106,175 @@ test("fixture transport requires a counted launch, keeps credentials private and
   assert.equal(JSON.stringify(result).includes(KEY), false);
 });
 
+test("durable fixture ingestion saves exact validated bytes before normalizing and coalesces distinct projections", async () => {
+  let exact, captured, normalized = 0;
+  const enriched = { ...fixture(), events: [], lineups: [], statistics: [], players: [], future: { empty: null } };
+  const state = setup({
+    respond(url) {
+      exact = ` \n${JSON.stringify(envelope(url, [enriched]), null, 2)}\n`;
+      return new Response(exact, { headers: { "content-type": "application/json" } });
+    },
+    options: {
+      responseArchive: { async save(page) { assert.equal(normalized, 0); captured = page; } },
+      verifyRegulationScore: () => { normalized++; assert.ok(captured); return true; },
+    },
+  });
+  const [schedule, details] = await Promise.all([
+    state.adapter.evidence.fixtures({ fixtureId: 1 }, bounds()),
+    state.adapter.evidence.matchDetails([1], bounds()),
+  ]);
+  assert.equal(state.network.length, 1);
+  assert.equal(state.reservations.length, 1);
+  assert.equal(captured.requestKey, state.reservations[0].workKey);
+  assert.equal(new TextDecoder().decode(captured.body), exact);
+  assert.equal(captured.rowCount, 1);
+  assert.deepEqual(captured.provenance.requestParameters, { id: "1", timezone: "Africa/Kampala" });
+  assert.equal(captured.provenance.retrievedAt, NOW);
+  assert.equal(schedule.data[0].facts, undefined);
+  assert.deepEqual(details.data[0].facts.players, []);
+  assert.equal(normalized, 2);
+});
+
+test("an opt-in fresh private replay keeps original provenance and consumes zero dispatches", async () => {
+  const saved = new Map(), replayRequests = [];
+  const responseArchive = {
+    async save(page) { saved.set(page.requestKey, { body: page.body, retrievedAt: page.provenance.retrievedAt }); },
+    async replay(query) { replayRequests.push(query); return saved.get(query.requestKey) ?? null; },
+  };
+  const first = setup({ respond: url => jsonResponse(url, [fixture()]), options: { responseArchive } });
+  await first.adapter.evidence.fixtures({ fixtureId: 1 }, bounds());
+  assert.equal(replayRequests.length, 0);
+  const second = setup({ options: { responseArchive } });
+  second.setNow(NOW + 1000);
+  const replayed = await second.adapter.evidence.fixtures({ fixtureId: 1 }, bounds({ replayMaxAgeMs: 5000 }));
+  assert.equal(replayed.status, "complete");
+  assert.equal(replayed.requestsDispatched, 0);
+  assert.equal(replayed.data[0].source.retrievedAt, NOW);
+  assert.equal(replayed.provenance[0].fromCache, true);
+  assert.equal(replayRequests[0].notBefore, NOW - 4000);
+  assert.deepEqual(replayRequests[0].requestParameters, { id: "1", timezone: "Africa/Kampala" });
+  assert.equal(second.reservations.length, 0);
+  second.setNow(NOW + 5001);
+  await second.adapter.evidence.fixtures({ fixtureId: 1 }, bounds({ replayMaxAgeMs: 5000 }));
+  assert.equal(second.network.length, 1, "stale capture never substitutes for a fresh check");
+});
+
+test("capture withholds credentials, invalid provider pages and data that failed durable storage", async () => {
+  let writes = 0;
+  const options = { responseArchive: { async save() { writes++; throw new Error("private test storage failure"); } } };
+  const leaked = setup({ options, respond: url => jsonResponse(url, [{ ...fixture(), extra: { nested: [KEY] } }]) });
+  const leak = await leaked.adapter.evidence.fixtures({ fixtureId: 1 }, bounds());
+  assert.equal(leak.error.reason, "schema-error");
+  assert.equal(JSON.stringify(leak).includes(KEY), false);
+  const malformed = setup({ options, respond: url => jsonResponse(url, [fixture()], { paging: { current: 2, total: 2 } }) });
+  assert.equal((await malformed.adapter.evidence.fixtures({ fixtureId: 1 }, bounds())).error.reason, "pagination-incomplete");
+  assert.equal(writes, 0);
+  const failed = setup({ options, respond: url => jsonResponse(url, [fixture()]) });
+  const result = await failed.adapter.evidence.fixtures({ fixtureId: 1 }, bounds({ retry: { maxAttempts: 3, baseDelayMs: 10, maxDelayMs: 20 } }));
+  assert.equal(result.error.reason, "archive-unavailable");
+  assert.deepEqual(result.data, []);
+  assert.equal(failed.network.length, 1, "a storage failure does not spend another provider request");
+  assert.equal(writes, 1);
+});
+
+test("a valid empty provider page is archived with its reported paging and keeps coverage unestablished", async () => {
+  let receipt;
+  const state = setup({ respond: url => jsonResponse(url, [], { paging: { current: 1, total: 0 } }),
+    options: { responseArchive: { async save(page) { receipt = page; } } } });
+  const result = await state.adapter.evidence.fixturesByDate("2026-10-08", bounds());
+  assert.equal(receipt.rowCount, 0);
+  assert.equal(receipt.provenance.totalPages, 0);
+  assert.equal(result.status, "complete", "the request itself succeeded");
+  assert.ok(result.completeness.missingCoverage.includes("fixtures-coverage-not-established"));
+});
+
+test("head-to-head preserves the exact paired-team and historical scope", async () => {
+  const otherTeam = { ...fixture(2), teams: { ...fixture().teams, away: { id: 30 } } };
+  const state = setup({ respond: url => jsonResponse(url, [fixture(), otherTeam]) });
+  const result = await state.adapter.evidence.headToHead({ teamIds: [20, 10], competitionId: 39, season: 2026, from: "2026-10-01", to: "2026-10-10" }, bounds());
+  assert.equal(state.network[0].url.pathname, "/fixtures/headtohead");
+  assert.deepEqual(Object.fromEntries(state.network[0].url.searchParams), {
+    from: "2026-10-01", h2h: "10-20", league: "39", season: "2026", timezone: "Africa/Kampala", to: "2026-10-10",
+  });
+  assert.deepEqual(result.data.map(row => row.id), [1]);
+  assert.equal(result.error.reason, "schema-error");
+});
+
+test("the dedicated fixture-player fallback retains full raw player fields and rejects foreign teams", async () => {
+  const group = id => ({ team: { id }, players: [{ player: { id: 10 + id }, statistics: [{ futureMetric: null }] }] });
+  const selector = { fixtureId: 42, homeTeamId: 10, awayTeamId: 20 };
+  const state = setup({ respond: url => jsonResponse(url, [group(10), group(20)]) });
+  const result = await state.adapter.evidence.fixturePlayers(selector, bounds());
+  assert.equal(state.network[0].url.pathname, "/fixtures/players");
+  assert.equal(state.network[0].url.searchParams.toString(), "fixture=42");
+  assert.deepEqual(result.data.map(row => row.raw), [group(10), group(20)]);
+  const wrong = setup({ respond: url => jsonResponse(url, [group(10), group(30)]) });
+  const invalid = await wrong.adapter.evidence.fixturePlayers(selector, bounds());
+  assert.equal(invalid.error.reason, "schema-error");
+  assert.deepEqual(invalid.completeness.missingIds, [20]);
+});
+
+test("injuries divide 21 fixtures into a documented batch and tail, retaining one player's reports across matches", async () => {
+  const state = setup({ respond(url) {
+    const ids = (url.searchParams.get("ids") ?? url.searchParams.get("fixture")).split("-").map(Number);
+    return jsonResponse(url, ids.map(id => ({ fixture: { id }, team: { id: 10 }, player: { id: 1, type: "Questionable" } })));
+  } });
+  const result = await state.adapter.evidence.injuriesByFixtures(Array.from({ length: 21 }, (_, index) => 21 - index), bounds());
+  assert.equal(result.status, "complete");
+  assert.equal(state.network.length, 2);
+  assert.equal(state.network[0].url.searchParams.get("ids").split("-").length, 20);
+  assert.equal(state.network[1].url.searchParams.get("fixture"), "21");
+  assert.deepEqual(result.data.map(row => row.fixtureId), Array.from({ length: 21 }, (_, index) => index + 1));
+  const invalid = await state.adapter.evidence.injuriesByFixtures([1, "2-3", -1], bounds());
+  assert.equal(invalid.error.reason, "invalid-request");
+  assert.equal(state.network.length, 2, "unsanitized ID selectors never reach the provider");
+});
+
+test("a dated team-statistics request is one exact scope and keeps the whole aggregate", async () => {
+  const aggregate = { league: { id: 39, season: 2026 }, team: { id: 10 }, fixtures: {}, goals: {}, forwardField: null };
+  const state = setup({ respond(url) {
+    return Response.json({ ...envelope(url), results: Object.keys(aggregate).length, response: aggregate });
+  } });
+  const selector = { endpoint: "teamStatistics", competitionId: 39, season: 2026, teamId: 10, asOfDate: "2026-10-07" };
+  const result = await state.adapter.reference.page(selector, bounds());
+  assert.equal(result.status, "complete");
+  assert.equal(state.network[0].url.pathname, "/teams/statistics");
+  assert.deepEqual(Object.fromEntries(state.network[0].url.searchParams), { date: "2026-10-07", league: "39", season: "2026", team: "10" });
+  assert.deepEqual(result.data[0].raw, aggregate);
+  const invalid = await state.adapter.reference.page({ ...selector, asOfDate: "2026-02-30" }, bounds());
+  assert.equal(invalid.error.reason, "invalid-request");
+  assert.equal(state.network.length, 1);
+});
+
+test("a known player profile is read with its documented identity selector", async () => {
+  const raw = { player: { id: 23, name: "Synthetic player", forwardField: null } };
+  const state = setup({ respond: url => jsonResponse(url, [raw]) });
+  const result = await state.adapter.reference.playerProfile(23, bounds());
+  assert.equal(result.status, "complete");
+  assert.equal(state.network[0].url.pathname, "/players/profiles");
+  assert.deepEqual(Object.fromEntries(state.network[0].url.searchParams), { page: "1", player: "23" });
+  assert.deepEqual(result.data[0].raw, raw);
+});
+
+test("temporary provider failures use 5s, 30s, and 120s plus positive jitter before the one-hour retry", async () => {
+  const state = setup({ respond: url => jsonResponse(url, [], { status: 503 }) });
+  const result = await state.adapter.evidence.fixtures({ fixtureId: 1 }, bounds({ deadlineAt: NOW + 200_000,
+    retry: { maxAttempts: 6, baseDelayMs: 5000, maxDelayMs: 132_000 } }));
+  assert.equal(state.network.length, 4);
+  assert.deepEqual(state.sleeps, [5250, 31500, 126000]);
+  assert.equal(result.error.retryAfterMs, 3_600_000);
+});
+
+test("HTTP selector and access failures are permanent and preserve no private diagnostics", async () => {
+  for (const [status, reason] of [[400, "invalid-request"], [403, "operation-not-authorized"]]) {
+    const state = setup({ respond: url => jsonResponse(url, [], { status, errors: { message: KEY } }) });
+    const result = await state.adapter.evidence.fixtures({ fixtureId: 1 }, bounds({ retry: { maxAttempts: 4, baseDelayMs: 5000, maxDelayMs: 132_000 } }));
+    assert.deepEqual(result.error, { reason, retryable: false, httpStatus: status });
+    assert.equal(state.network.length, 1);
+    assert.equal(JSON.stringify(result).includes(KEY), false);
+  }
+});
+
 test("one schedule catalog ID batch uses the approved, canonical fixtures selector", async () => {
   const options = { batchEvidence: { maximumIds: 20, evidenceRef: "synthetic-provider-documentation" },
     verifyBatchEvidence: () => true };
@@ -1114,6 +1283,18 @@ test("an explicit all-bookmaker date sweep retains both bookmakers on the same c
   assert.deepEqual(result.data[0].bookmakers.map(({ id }) => id), [6, 8]);
   assert.equal(result.requestsDispatched, 1);
   assert.deepEqual(Object.fromEntries(state.network[0].url.searchParams), { date: "2026-10-08", page: "1", timezone: "Africa/Kampala" });
+});
+
+test("all-bookmaker odds also support exact fixture and league-season scopes without a bet or bookmaker filter", async () => {
+  const row = oddsRow(7);
+  const state = setup({ respond: url => jsonResponse(url, [row]) });
+  assert.equal((await state.adapter.odds.prices({ fixtureId: 7, allBookmakers: true }, bounds())).status, "complete");
+  assert.equal((await state.adapter.odds.prices({ competitionId: 39, season: 2026, allBookmakers: true }, bounds())).status, "complete");
+  assert.deepEqual(state.network.map(({ url }) => Object.fromEntries(url.searchParams)), [
+    { fixture: "7", page: "1", timezone: "Africa/Kampala" },
+    { league: "39", page: "1", season: "2026", timezone: "Africa/Kampala" },
+  ]);
+  assert.equal((await state.adapter.odds.prices({ competitionId: 40, season: 2026, allBookmakers: true }, bounds())).error.reason, "schema-error");
 });
 
 test("odds pagination follows the documented 10-row page, reserving every page", async () => {

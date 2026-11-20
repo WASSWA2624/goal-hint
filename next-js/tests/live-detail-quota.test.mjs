@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseRuntimePolicy } from '../src/server/config/runtime-policy.ts';
-import { liveWorkload, liveMatchPolicy, liveReferences } from '../src/server/live/live-plan.ts';
+import { liveWorkload, liveMatchPolicy, liveReferences, projectedCriticalRequests, remainingCriticalReserve } from '../src/server/live/live-plan.ts';
 import { createLiveQuotaAdmission } from '../src/server/live/live-detail-quota.ts';
 import { parseLiveMatchPolicy } from '../src/server/live-match/live-match-service.ts';
 
@@ -62,6 +62,20 @@ test('remaining ordinary obligations and the reserve stop optional dispatches ex
   assert.equal(await admit(noHistory, period({ used: owed, priorityUsed: { 'daily-inputs': owed }, dayRemaining: plan.liveDetails.reserve + 1 }), request('live-details')), true);
   assert.equal(await createLiveQuotaAdmission(() => workload(7500, false))(noHistory, period(), request('live-details')), false);
   assert.equal(await createLiveQuotaAdmission(() => null)(noHistory, period(), request('enrichment')), false);
+});
+
+test('archive reserve scales with time to provider reset and shares remaining enrichment capacity', async () => {
+  const plan = liveWorkload(150_000, 15, 'Mega', 900, false, true);
+  const admit = createLiveQuotaAdmission(() => plan, undefined, true), now = 1_800_000_000_000, endsAt = now + 86_400_000;
+  const reserve = remainingCriticalReserve(150_000, projectedCriticalRequests(plan, endsAt - now));
+  assert.ok(reserve > plan.liveDetails.reserve);
+  const day = { providerDailyLimit: 150_000, endsAt,
+    priorityUsed: { 'daily-inputs': plan.liveDetails.floor, 'live-details': plan.liveDetails.requests }, dayRemaining: reserve };
+  assert.equal(await admit(noHistory, period(day), request('historical-backfill'), now), false);
+  assert.equal(await admit(noHistory, period({ ...day, dayRemaining: reserve + 1 }), request('historical-backfill'), now), true);
+  assert.equal(await admit(noHistory, period(day), request('historical-backfill'), now + 3_600_000), true);
+  assert.equal(await admit(noHistory, period({ ...day, dayRemaining: reserve + 1,
+    priorityUsed: { ...day.priorityUsed, 'historical-backfill': plan.odds.spare } }), request('enrichment'), now), false);
 });
 
 test('external and previous-plan spending cannot masquerade as completed ordinary work', async () => {

@@ -50,6 +50,17 @@ test("private envelope replay preserves bytes, unknown fields and null without i
   assert.equal((await prepareProviderResponsePage({ target, observedAt, body: empty })).rowCount, 0);
   const wrong = Buffer.from(input.toString().replace('"current":2', '"current":1'));
   await assert.rejects(prepareProviderResponsePage({ target, observedAt, body: wrong }), /archive scope/u);
+  const wrongScope = Buffer.from(input.toString().replace('"league":"39"', '"league":"40"'));
+  await assert.rejects(prepareProviderResponsePage({ target, observedAt, body: wrongScope }), /archive scope/u);
   const failed = Buffer.from(input.toString().replace('"errors":[]', '"errors":{"requests":"rate limit"}'));
   await assert.rejects(prepareProviderResponsePage({ target, observedAt, body: failed }));
+});
+
+test("a provider-confirmed empty first page is archived without making the scope complete", async () => {
+  const target = parseProviderCoverageTarget({ ...request, page: 1 });
+  const source = { get: "players", parameters: request.parameters, errors: [], results: 0,
+    paging: { current: 1, total: 0 }, response: [] };
+  const prepare = (body) => prepareProviderResponsePage({ target, observedAt, body: Buffer.from(JSON.stringify(body)) });
+  assert.equal((await prepare(source)).rowCount, 0);
+  await assert.rejects(prepare({ ...source, results: 1, response: [{ id: 1 }] }), /archive scope/u);
 });

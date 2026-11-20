@@ -256,23 +256,41 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       const second = createQuotaLimiter({ accountId: f.accountId, store: clockStore(secondDatabase, f.clock), verifyEvidence: () => true });
       for (let index = 0; index < 5; index++) {
         await dispatch(index % 2 ? second : f.limiter, f.request());
-        f.clock.now += 11999;
+        f.clock.now += 14999;
         const tooSoon = f.request();
         denied(await second.reserve(tooSoon), ["pacing", "minute-limit"]);
         f.clock.now += 1;
         await dispatch(second, tooSoon);
         // The extra accepted dispatch is included in the next period of the
         // rolling proof; advance to the following evenly paced slot.
-        f.clock.now += 12000;
+        f.clock.now += 15000;
       }
       const attempts = await f.store.transaction(f.accountId, (transaction) => transaction.rollingAttempts(initialNow - 1));
       for (const attempt of attempts) {
         const inMinute = attempts.filter((candidate) => candidate.dispatchedAt > attempt.dispatchedAt - 60000 && candidate.dispatchedAt <= attempt.dispatchedAt);
-        assert.ok(inMinute.length <= 5);
+        assert.ok(inMinute.length <= 4);
       }
       const state = await f.state();
-      assert.equal(state.period.secondLimit, 2);
-      assert.equal(state.period.minuteLimit, 5);
+      assert.equal(state.period.secondLimit, 1);
+      assert.equal(state.period.minuteLimit, 4);
+    });
+
+    await t.test("unknown account limits enforce one shared dispatch and a distinct lower historical rate", async () => {
+      const f = fixture(firstDatabase, "unknown-rates", { secondLimit: 1, minuteLimit: 5, shortWindowKnown: false });
+      await f.initialize();
+      const second = createQuotaLimiter({ accountId: f.accountId, store: clockStore(secondDatabase, f.clock), verifyEvidence: () => true });
+      const current = await dispatch(f.limiter, f.request("results-cutoff", { timeoutMs: 20_000 }));
+      f.clock.now += 12_000;
+      const next = f.request("historical-backfill");
+      assert.deepEqual(await second.reserve(next), { status: "denied", reason: "pacing", retryAt: initialNow + 20_000 });
+      await f.limiter.complete(current, { kind: "success" });
+      const archive = await dispatch(second, next);
+      await second.complete(archive, { kind: "success" });
+      f.clock.now += 12_000;
+      assert.deepEqual(await f.limiter.reserve(f.request("historical-backfill")),
+        { status: "denied", reason: "minute-limit", retryAt: initialNow + 72_000 });
+      await dispatch(second, f.request("results-cutoff"));
+      assert.equal((await f.state()).period.priorityUsed["historical-backfill"], 1);
     });
 
     await t.test("daily ordinary work cannot enter the protected essential reserve and all callers stop at the cap", async () => {
@@ -330,7 +348,7 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       await f.initialize();
       const ordinary = await dispatch(f.limiter, f.request("daily-inputs"));
       await f.limiter.complete(ordinary, { kind: "success", dailyLimit: 100, dailyRemaining: 16 });
-      f.clock.now += 6000;
+      f.clock.now += 7500;
       // 100/day keeps 16 essential requests: after 84 are used only essential work may continue.
       denied(await f.limiter.reserve(f.request("daily-inputs")), "essential-reserve");
       const essential = await dispatch(f.limiter, f.request("results-cutoff"));
@@ -513,9 +531,9 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       const state = (await f.state(candidate.periodId)).period;
       assert.equal(state.providerDailyLimit, 100000);
       assert.equal(state.dayLimit, 100000);
-      assert.equal(state.minuteLimit, 5);
+      assert.equal(state.minuteLimit, 4);
       assert.equal(state.dayRemaining, 99999);
-      f.clock.now += 11999;
+      f.clock.now += 14999;
       const queued = f.request("daily-inputs");
       denied(await f.limiter.reserve(queued), "pacing");
       f.clock.now += 1;
@@ -684,15 +702,15 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       let state = await f.state();
       assert.equal(state.period.used, 1);
       assert.equal(state.period.secondLimit, 1);
-      assert.equal(state.period.minuteLimit, 5);
-      assert.ok(state.account.nextDispatchAt >= initialNow + 12000);
+      assert.equal(state.period.minuteLimit, 4);
+      assert.ok(state.account.nextDispatchAt >= initialNow + 15000);
       const higher = await f.limiter.initialize(f.evidence);
       assert.equal(higher.status, "initialized");
       state = await f.state();
       assert.equal(state.period.used, 1);
       assert.equal(state.period.secondLimit, 1);
-      assert.equal(state.period.minuteLimit, 5);
-      f.clock.now += 11999;
+      assert.equal(state.period.minuteLimit, 4);
+      f.clock.now += 14999;
       const queued = f.request();
       denied(await f.limiter.reserve(queued), "pacing");
       f.clock.now += 1;

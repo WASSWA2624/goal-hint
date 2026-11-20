@@ -39,6 +39,7 @@ const mutable = ['ApiQuotaAccount','ApiQuotaAttempt','ApiQuotaPeriod','CostBudge
 const columns = {
   SelectionFixtureInput: 'cycleId, scheduleHash, evidenceHash, evidenceReady, runId',
   FootballHistoryImportStatus: 'status, coverage, updatedAt',
+  FootballProviderCoverage: 'revision, status, reason, attempts, updatedAt, lastAttemptAt, lastResponseId, lastCompleteAt, nextRetryAt, remaining',
   PublicCacheInvalidation: 'acknowledgedAt', SelectionCycleEligibility: 'actor, consumedRunId, eligibleAfter, evidenceRef, kickoffAt, previousVersion, recordedAt, state',
   DurableJob: 'attemptCount, attemptDeadlineAt, availableAt, fence, finishedAt, leaseExpiresAt, ownerId, state, terminalReason, updatedAt, version',
   PredictionCycle: 'closedAt, currentSetId, cutoffAt, kickoffAt, lockedAt, lockedSetId, scheduleVersion, state, version, voidReason, voidedAt',
@@ -336,7 +337,8 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
         'the gate reads the shared enrichment spend (odds and team codes) from the limiter ledger their receipts agree with');
     });
     await t.test('historical fixture jobs seal provider evidence and resume from stored receipts', async () => {
-      const archive = await createLiveRuntime(parseRuntimePolicy({ ...policyEnv, GOAL_HINT_HISTORY_IMPORT_ENABLED: 'true' }),
+      const archive = await createLiveRuntime(parseRuntimePolicy({ ...policyEnv, GOAL_HINT_HISTORY_IMPORT_ENABLED: 'true',
+        GOAL_HINT_FOOTBALL_RESPONSE_ARCHIVE_ENABLED: 'true' }),
         { fetcher, approvals, syntheticArchive: true });
       try {
         assert.equal(archive.enrichment.historyEnabled, true);
@@ -348,6 +350,10 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
         assert.equal(await worker.runOnce(), true);
         assert.equal((await archive.queue.inspect(job.id)).state, 'succeeded');
         assert.deepEqual(network.slice(before), ['/leagues?', '/fixtures?league,season']);
+        const envelopeNames = await archive.database.query((tx) => tx.footballHistorySourcePage.findMany({
+          where: { endpoint: { startsWith: 'raw:' } }, select: { endpoint: true }, distinct: ['endpoint'], orderBy: { endpoint: 'asc' },
+        }));
+        assert.deepEqual(envelopeNames.map(({ endpoint }) => endpoint), ['raw:accountStatus', 'raw:competitions', 'raw:fixtures']);
         const result = await archive.database.query((tx) => tx.footballFixture.findUnique({ where: { provider_externalId: {
           provider: 'api-football', externalId: 9040n } } }));
         assert.equal(result.regulationHome, 1);

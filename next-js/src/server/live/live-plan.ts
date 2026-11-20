@@ -9,6 +9,7 @@ import type { EvidencePolicy } from "../evidence/evidence-contract.ts";
 import type { ProviderFallbackPolicy } from "../fallback/fallback-adapter.ts";
 import { LIVE_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
 import { ODDS_CONTRACT_VERSION, type ApiFootballBounds } from "../football/api-football-contract.ts";
+import { criticalWorkReserveRatio, providerDayReserveRatio } from "../football/quota-contract.ts";
 import { DE_MARGIN_METHOD } from "../../domain/odds.ts";
 import { ODDS_MAPPING_VERSION } from "../../domain/odds-markets.ts";
 import type { OddsImportKind, OddsPolicy } from "../odds/odds-contract.ts";
@@ -61,6 +62,35 @@ export type LiveWorkload = Readonly<{
   cadence: NonNullable<ResultSyncPolicy["cadence"]>; unresolved: ResultSyncPolicy["unresolved"]; corrections: ResultSyncPolicy["corrections"];
   maxBatchesPerTick: number;
 }>;
+/** One broad live/date refresh and one active confirmation batch per scheduled tick,
+ * plus two allowed discovery calls per supported date and remaining hourly slot. */
+export function projectedCriticalRequests(workload: LiveWorkload, remainingMs: number, cadence = workload.cadence): number {
+  const remaining = Math.max(0, remainingMs);
+  const scheduled = (interval: number | null): number => interval === null ? 0 : Math.ceil(remaining / interval);
+  return scheduled(cadence.liveMs) + scheduled(cadence.dateMs) + scheduled(cadence.activeMs) +
+    scheduled(HOUR) * 2 * workload.importDays;
+}
+export function remainingCriticalReserve(providerDailyLimit: number, criticalRequests: number): number {
+  return Math.ceil(criticalRequests * criticalWorkReserveRatio) + Math.ceil(providerDailyLimit * providerDayReserveRatio);
+}
+const capacityCadenceSteps = [MINUTE, 2 * MINUTE, 5 * MINUTE] as const;
+/** Prefer normal live cadence, preserving the time to reset and the current short-window ceiling. */
+export function assessLiveCapacity(workload: LiveWorkload, remainingMs: number, providerDailyLimit: number,
+  dailyRemaining: number, minuteLimit: number) {
+  const capacity = Math.min(dailyRemaining, Math.floor(Math.max(0, remainingMs) / MINUTE * minuteLimit));
+  let cadence = workload.cadence;
+  let critical = projectedCriticalRequests(workload, remainingMs, cadence);
+  for (const interval of capacityCadenceSteps) {
+    if (critical <= capacity) break;
+    cadence = { liveMs: workload.cadence.liveMs === null ? null : Math.max(interval, workload.cadence.liveMs),
+      dateMs: Math.max(interval, workload.cadence.dateMs), activeMs: Math.max(interval, workload.cadence.activeMs) };
+    critical = projectedCriticalRequests(workload, remainingMs, cadence);
+  }
+  const reserve = remainingCriticalReserve(providerDailyLimit, critical);
+  const archiveAllowed = cadence === workload.cadence && dailyRemaining > reserve;
+  return { cadence, critical, capacity, reserve, archiveAllowed, enrichmentMultiplier: archiveAllowed ? 1 : 2,
+    criticalShortfall: critical > capacity };
+}
 /** Sizes work from the verified account limit so a plan change needs no code change.
  * A quarter of the day goes to result polling and refresh jobs stop above a floor
  * that keeps tomorrow's selection and result checks possible. */
@@ -234,7 +264,7 @@ export function resultSyncPolicy(refs: LiveReferences, workload: LiveWorkload,
   coverage: ResultSyncPolicy["coverage"], local = false): ResultSyncPolicy {
   return Object.freeze({ version: 1, evidenceRef: refs.results, coverage, approachMs: 15 * MINUTE, activeWindowMs: 3 * HOUR,
     unresolved: workload.unresolved, corrections: workload.corrections,
-    cadence: local ? { ...workload.cadence, dateMs: 5 * MINUTE } : workload.cadence,
+    cadence: local ? { ...workload.cadence, dateMs: Math.max(5 * MINUTE, workload.cadence.dateMs) } : workload.cadence,
     ...(local ? { skipConfirmedFinals: true as const } : {}), leaseMs: MINUTE, tickMs: 5 * SECOND,
     maxBatchesPerTick: workload.maxBatchesPerTick, failureBaseMs: MINUTE, failureMaxMs: HOUR, requestWindowMs: 30 * SECOND,
     request: { timeoutMs: 20 * SECOND, maxRequests: 1, maxPages: 1, maxRows: 5000, maxResponseBytes: 40_000_000,

@@ -56,7 +56,7 @@ function harness({ respond = response, maximumPage, afterRead } = {}) {
       assert.equal(bounds.maxRequests, 1);
       assert.equal(bounds.maxPages, 1);
       assert.equal(bounds.maxRows, 20);
-      assert.equal(bounds.priority, "enrichment");
+      assert.equal(bounds.priority, "historical-backfill");
       workflow.beforeReserve();
       workflow.beforeDispatch();
       requests.push(selector);

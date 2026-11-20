@@ -20,6 +20,8 @@ const selectorName = z.string().regex(/^[a-z][a-z0-9_-]{0,31}$/iu).refine(key =>
 const selectorValue = z.string().min(1).max(1_024).refine(value => value.trim() === value && !/\p{Cc}/u.test(value));
 const scope = z.strictObject({
   context: z.enum(["account", "current", "historical", "reference"]),
+  accountKey: z.string().regex(/^[a-f0-9]{64}$/u).optional(),
+  requestKey: z.string().regex(/^[a-f0-9]{64}$/u).optional(),
   competitionId: positive.optional(), season: z.number().int().min(1000).max(9999).optional(), teamId: positive.optional(),
   fixtureId: positive.optional(), playerId: positive.optional(), coachId: positive.optional(), venueId: positive.optional(),
   bookmakerId: positive.optional(),
@@ -43,7 +45,7 @@ export function parseProviderCoverageTarget(value: unknown) {
   const parameters = Object.fromEntries(Object.entries(parsed.parameters).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0));
   const { resource, endpoint, scope, page, section } = parsed;
   const key = footballSourceHash(JSON.stringify([resource, endpoint, scope, parameters, page, section]));
-  return { key, resource, endpoint, scope, parameters, page, section };
+  return Object.freeze({ key, resource, endpoint, scope: Object.freeze(scope), parameters: Object.freeze(parameters), page, section });
 }
 
 const reasonRequired = new Set<string>(["partial", "unavailable", "not_applicable", "retryable_failure", "blocked_by_quota", "blocked_by_access"]);
@@ -66,29 +68,42 @@ export const providerCoverageProgress = z.strictObject({
   (!reasonRequired.has(value.status) || value.reason !== null) &&
   (value.status !== "complete" || value.remaining === 0 && value.lastCompleteAt !== null));
 
-type CoverageTarget = ReturnType<typeof parseProviderCoverageTarget>;
+export type ProviderCoverageTarget = z.input<typeof target>;
+export type ParsedProviderCoverageTarget = ReturnType<typeof parseProviderCoverageTarget>;
+export type ProviderCoverageProgress = z.infer<typeof providerCoverageProgress>;
 const envelope = z.looseObject({
   get: z.string(),
   parameters: z.union([z.record(z.string().refine(key => !secretName.test(key)), z.unknown()), z.tuple([])]),
   errors: z.union([z.record(z.string(), z.never()), z.tuple([])]),
   results: counter,
-  paging: z.object({ current: positive, total: positive }).optional(),
+  paging: z.object({ current: positive, total: counter }).optional(),
   response: z.union([z.array(z.unknown()), z.record(z.string(), z.unknown())]),
 });
 
+export function providerResponsePageLocator(target: ParsedProviderCoverageTarget) {
+  const parameters = { ...target.parameters, resourceKey: target.key, page: String(target.page) };
+  return { endpoint: `raw:${target.endpoint}`, parameters, selectorHash: footballSourceHash(JSON.stringify(parameters)) };
+}
+
 /** Retain the exact validated response bytes. The raw namespace is isolated from legacy row projections. */
 export async function prepareProviderResponsePage(input: Readonly<{
-  target: CoverageTarget; observedAt: number; body: Uint8Array;
+  target: ParsedProviderCoverageTarget; observedAt: number; body: Uint8Array;
 }>) {
   const { target, body, observedAt } = input;
   if (body.byteLength > maximumFootballSourcePageBytes) throw new RangeError("Provider response exceeds the archive limit.");
   const parsed = envelope.parse(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body)));
   const endpoint = apiFootballEndpoints[target.endpoint];
-  if (parsed.get !== endpoint.path.slice(1) || (parsed.paging === undefined && target.endpoint !== "accountStatus") ||
-      (parsed.paging && (parsed.paging.current !== target.page || parsed.paging.total < target.page || !endpoint.paginated && parsed.paging.total !== 1))) {
+  const emptyPage = parsed.results === 0 && Array.isArray(parsed.response) && parsed.response.length === 0 &&
+    parsed.paging?.current === 1 && parsed.paging.total === 0 && target.page === 1;
+  const echoed = Array.isArray(parsed.parameters) ? {} : parsed.parameters;
+  const selectorMatches = Object.entries(target.parameters).every(([key, value]) =>
+    Object.hasOwn(echoed, key) ? String(echoed[key]) === value : key === "timezone") &&
+    (!Object.hasOwn(echoed, "page") || String(echoed.page) === String(target.page));
+  if (!selectorMatches || parsed.get !== endpoint.path.slice(1) || (parsed.paging === undefined && target.endpoint !== "accountStatus") ||
+      (parsed.paging && !emptyPage &&
+        (parsed.paging.current !== target.page || parsed.paging.total < target.page || !endpoint.paginated && parsed.paging.total !== 1))) {
     throw new Error("Provider response does not match the archive scope.");
   }
-  const parameters = { ...target.parameters, resourceKey: target.key, page: String(target.page) };
-  return encodeFootballSourcePage({ endpoint: `raw:${target.endpoint}`, parameters, contract: API_FOOTBALL_CONTRACT_VERSION,
+  return encodeFootballSourcePage({ ...providerResponsePageLocator(target), contract: API_FOOTBALL_CONTRACT_VERSION,
     observedAt, rowCount: Array.isArray(parsed.response) ? parsed.response.length : 1, body });
 }

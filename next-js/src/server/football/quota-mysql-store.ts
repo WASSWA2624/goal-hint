@@ -10,6 +10,7 @@ import {
   type QuotaAccountState,
   type QuotaAttempt,
   type QuotaPeriodState,
+  type QuotaPriority,
   type QuotaStore,
   type QuotaTransaction,
 } from "./quota-contract.ts";
@@ -36,6 +37,7 @@ const periodSchema = z.object({
   providerDailyLimit: counter,
   secondLimit: counter,
   minuteLimit: counter,
+  singleConcurrent: z.boolean().optional(),
   dayLimit: counter,
   used: counter,
   ordinaryUsed: counter,
@@ -56,9 +58,7 @@ export { accountSchema as quotaAccountStateSchema, periodSchema as quotaPeriodSt
 const attemptSchema = z.object({
   id: identifier,
   workKey: identifier.nullable(),
-  priority: z.enum([
-    "results-cutoff", "recovery", "near-kickoff-fallback", "live-date-sync", "daily-inputs", "enrichment", "live-details",
-  ]),
+  priority: z.custom<QuotaPriority>((value) => typeof value === "string" && Object.hasOwn(quotaPriorities, value)),
   rank: counter,
   essential: z.boolean(),
   queuedAt: instant,
@@ -260,6 +260,18 @@ function quotaTransaction(transaction: Prisma.TransactionClient, accountId: stri
         ORDER BY dispatchedAt, id
       `;
       return rows.map(decodeAttempt);
+    },
+    async activeDispatchUntil(now: UtcInstant) {
+      const rows = await transaction.$queryRaw<{ expiresAt: bigint | number | null }[]>`
+        SELECT MAX(CAST(JSON_UNQUOTE(JSON_EXTRACT(payloadJson, '$.leaseUntil')) AS UNSIGNED)) AS expiresAt
+        FROM ApiQuotaAttempt WHERE accountId = ${accountId} AND state = 'attempted' AND deadlineAt > ${sqlDate(now)}
+      `;
+      if (rows.length !== 1) throw new QuotaStorageError();
+      const value = rows[0]!.expiresAt;
+      if (value === null) return null;
+      const lease = instant.safeParse(Number(value));
+      if (!lease.success) throw new QuotaStorageError();
+      return lease.data > now ? lease.data : null;
     },
     async periodAttempts(periodId: string, afterSequence: number) {
       checkedIdentifier(periodId);

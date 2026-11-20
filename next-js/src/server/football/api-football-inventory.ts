@@ -2,7 +2,7 @@ import "server-only";
 
 import { apiFootballEndpoints, type ApiFootballEndpoint } from "./api-football-contract.ts";
 
-type AdapterCoverage = "diagnostic" | "normalized" | "normalized-and-reference" | "reference" | "embedded" | "unimplemented";
+type AdapterCoverage = "diagnostic" | "normalized" | "normalized-and-reference" | "reference";
 type EndpointInventory = Readonly<{
   parameters: readonly string[];
   scope: readonly string[];
@@ -112,7 +112,7 @@ const endpoints = {
   },
   teamStatistics: {
     parameters: [...leagueSeason, "team", "date"], scope: ["team", "league", "season", "as-of-date"],
-    traversal: "Fetch with team, league and season. The provider supports an optional date cutoff for historical aggregates. The current reference adapter reads undated aggregates.",
+    traversal: "Fetch with team, league and season. Set the optional date cutoff for a historical aggregate when the provider supports it for the selected season.",
     refresh: "Updated twice daily. Prefer daily refreshes on match days and less often for idle teams.",
     historical: "An undated aggregate describes observation-time form. It cannot serve as an earlier kickoff snapshot.", adapter: "reference",
     fields: fields([], ["league.id", "league.season", "team.id", "form", "fixtures.played", "fixtures.wins", "fixtures.draws", "fixtures.loses",
@@ -156,7 +156,8 @@ const endpoints = {
     scope: ["team-pair", "fixture", "league", "season", "time-window"],
     traversal: "Prefer equivalent local fixture history. When reconciliation requires provider data, use the h2h team IDs separated by a dash and request the appropriate date scope.",
     refresh: "Shares the fixture status update cadence. Stored eligible historical fixtures are the first input.", historical: seasonCoverage,
-    adapter: "unimplemented", fields: fields([], [...fixtureFields, ...fixtureDetailFields, ...fixtureRawFields], "The documented direct endpoint has no current dispatch or normalizer. Existing local fixture reads provide the history path."),
+    adapter: "normalized", fields: fields(fixtureFields, [...fixtureDetailFields, ...fixtureRawFields],
+      "The adapter reuses the schedule normalization. Keep source-only fixture fields for reconciliation or future use."),
   },
   statistics: {
     parameters: [...fixtureTeam, "type", "half"], scope: ["fixture", "team", "period", "statistic-type"],
@@ -183,15 +184,15 @@ const endpoints = {
   },
   fixturePlayerStatistics: {
     parameters: fixtureTeam, scope: ["fixture", "team", "player", "section"], traversal: "Read the entire fixture without a team filter to cover both squads, using the embedded players block first.",
-    refresh: "Updated every minute in play. Reconcile after full time.", historical: seasonCoverage, adapter: "embedded",
+    refresh: "Updated every minute in play. Reconcile after full time.", historical: seasonCoverage, adapter: "reference",
     fields: fields([], [...prefixed("team", teamFields), "team.update", ...prefixed("players.*.player", profileFields),
       ...prefixed("players.*.statistics.*", ["games.minutes", "goals.total", "goals.assists", ...metrics])],
-    "The embedded path validates fixture-team and player identity and retains the nested player statistics. The dedicated endpoint is inventory-only."),
+    "Both embedded and dedicated paths validate fixture teams and player identity and retain all nested statistics."),
   },
   injuries: {
     parameters: ["fixture", "ids", ...leagueSeason, "team", "player", "date", "timezone"], batch: batch("ids"),
     scope: ["fixture", "team", "player", "league", "season", "reporting-date"],
-    traversal: "Use fixture or fixture IDs, a date, or league-season. A league, team or player filter requires season. The existing adapter dispatches single fixture and league-season selectors.",
+    traversal: "Use fixture IDs in bounded batches for match coverage or use league-season. The provider also supports date, team-season and player-season lookup.",
     refresh: "Provider updates every four hours and recommends daily calls outside targeted refreshes.",
     historical: "Documented fixture absence data begins in April 2021 and depends on coverage. Missing and questionable are distinct report types.",
     adapter: "normalized-and-reference", fields: fields([...prefixed("team", teamFields), "fixture.id", "player.id", "player.name", "player.type", "player.reason"],
@@ -281,7 +282,7 @@ const endpoints = {
   },
   odds: {
     parameters: ["fixture", ...leagueSeason, "date", "timezone", "page", "bookmaker", "bet"], scope: ["fixture", "league", "season", "reporting-date", "page", "bookmaker", "market", "outcome", "line", "observation"],
-    traversal: "Use a fixture, league-season or date scope and walk all pages. Omit bookmaker and bet filters to collect all returned bookmakers and markets. The adapter currently supports all-bookmaker date sweeps and selected-bookmaker date or fixture requests.",
+    traversal: "Use a fixture, league-season or date scope and walk all pages. Omit bookmaker and bet filters to collect all returned bookmakers and markets. Selected-bookmaker requests remain available for fixture and date lookups.",
     refresh: "Provider updates every three hours. Keep provider update time distinct from observation time.",
     historical: "Provider advertises pre-match availability 1–14 days ahead and seven-day history. Older odds require already stored observations and may be unavailable.", adapter: "normalized",
     fields: fields(["fixture.id", "fixture.date", "fixture.timestamp", "fixture.timezone", "league.id", "league.season", "update", "bookmakers.*.id", "bookmakers.*.name",
@@ -330,7 +331,7 @@ const selectors = {
 
 /** Review metadata for ingestion. Transport paths and page sizes remain in the existing adapter contract. */
 export const apiFootballInventory = {
-  version: "1.0.0",
+  version: "1.1.0",
   documentationVersion: "3.9.3",
   reviewedOn: "2026-11-20",
   sources: {
