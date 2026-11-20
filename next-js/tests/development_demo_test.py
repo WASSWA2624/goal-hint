@@ -92,12 +92,15 @@ class DemoEnvironmentTests(unittest.TestCase):
                   "AI_API_KEY": "private-ai-key", "GOAL_HINT_OPERATION_SCOPE": "production",
                   "GOAL_HINT_ADMIN_PASSWORD": "private-admin-password", "GOAL_HINT_ADMIN_PASSWORD_HASH": "configured-hash",
                   "GOAL_HINT_ADMIN_PHONES": '["256700009991"]', "GOAL_HINT_FOOTBALL_ENABLED": "true",
+                  "GOAL_HINT_FOOTBALL_RESPONSE_ARCHIVE_ENABLED": "true", "GOAL_HINT_COORDINATED_FOOTBALL_ENABLED": "true",
                   "GOAL_HINT_AI_ENABLED": "true", "NEXT_PUBLIC_OTHER_FLAG": "secret", "PATH": "runtime-path"}
         env = MODULE.demo_environment("mysql://root@127.0.0.1:43210/goal_hint_demo", source)
         self.assertEqual(env["DATABASE_URL"], "mysql://root@127.0.0.1:43210/goal_hint_demo")
         self.assertEqual(env["MIGRATION_DATABASE_URL"], env["DATABASE_URL"])
         self.assertEqual(env["GOAL_HINT_OPERATION_SCOPE"], "disabled")
         self.assertEqual(env["GOAL_HINT_FOOTBALL_ENABLED"], "false")
+        self.assertEqual(env["GOAL_HINT_FOOTBALL_RESPONSE_ARCHIVE_ENABLED"], "false")
+        self.assertEqual(env["GOAL_HINT_COORDINATED_FOOTBALL_ENABLED"], "false")
         self.assertEqual(env["GOAL_HINT_AI_ENABLED"], "false")
         self.assertEqual(env["GOAL_HINT_ADMIN_PASSWORD"], "private-admin-password")
         self.assertEqual(env["GOAL_HINT_ADMIN_PHONES"], '["256700009991"]')

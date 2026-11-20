@@ -56,3 +56,72 @@ test('worker does not claim after shutdown or when its registry is unconfigured'
   assert.equal(await createJobWorker({ queue, registry: createJobRegistry([]), ownerId: jobTestHash('empty') }).runOnce(), false);
   assert.equal(claims, 0);
 });
+
+function leaseQueue(renew, leaseMs = 900) {
+  const envelope = jobEnvelope({ leaseMs }), serverNow = Date.now(), id = durableJobId(envelope);
+  const job = { id, envelope };
+  const lease = { job, jobId: id, attemptId: jobTestHash('renewal-attempt'), ownerId: jobTestHash('worker'),
+    fence: 1, deadlineAt: serverNow + envelope.timeoutMs, serverNow, leaseExpiresAt: serverNow + leaseMs };
+  const outcome = { renewals: 0, acknowledged: 0, retries: [] };
+  return { outcome, queue: {
+    async claim() { return lease; },
+    async renew(current) {
+      assert.equal(current.fence, lease.fence);
+      assert.equal(current.attemptId, lease.attemptId);
+      await renew(++outcome.renewals);
+      const serverNow = Date.now();
+      return { ...current, serverNow, leaseExpiresAt: Math.min(serverNow + leaseMs, current.deadlineAt) };
+    },
+    async acknowledge() { outcome.acknowledged++; return job; },
+    async retry(_lease, reason) { outcome.retries.push(reason); return job; },
+  } };
+}
+
+test('a transient heartbeat failure retries the same fence without replaying the running handler', { timeout: 5000 }, async () => {
+  let release, calls = 0;
+  const complete = new Promise((resolve) => { release = resolve; });
+  const { queue, outcome } = leaseQueue((attempt) => {
+    if (attempt === 2) throw new JobQueueError('unavailable');
+    if (attempt === 3) release();
+  });
+  const registry = jobTestRegistry(async (_payload, context) => {
+    calls++;
+    await complete;
+    assert.equal(context.signal.aborted, false);
+    return { status: 'succeeded' };
+  });
+  assert.equal(await createJobWorker({ queue, registry, ownerId: jobTestHash('worker') }).runOnce(), true);
+  assert.deepEqual(outcome, { renewals: 4, acknowledged: 1, retries: [] });
+  assert.equal(calls, 1);
+});
+
+test('a fenced heartbeat never retries renewal or acknowledges the old attempt', { timeout: 5000 }, async () => {
+  let calls = 0;
+  const { queue, outcome } = leaseQueue((attempt) => {
+    if (attempt === 2) throw new JobQueueError('lost-lease');
+  });
+  const registry = jobTestRegistry(async (_payload, context) => {
+    calls++;
+    await new Promise((resolve) => context.signal.addEventListener('abort', resolve, { once: true }));
+    return { status: 'succeeded' };
+  });
+  assert.equal(await createJobWorker({ queue, registry, ownerId: jobTestHash('worker') }).runOnce(), true);
+  assert.deepEqual(outcome, { renewals: 2, acknowledged: 0, retries: ['lease-expired'] });
+  assert.equal(calls, 1);
+});
+
+test('renewal does not start a transient retry when its delay would exceed the confirmed lease', async () => {
+  let calls = 0;
+  const { queue, outcome } = leaseQueue(() => { throw new JobQueueError('unavailable'); }, 150);
+  const registry = jobTestRegistry(async () => { calls++; return { status: 'succeeded' }; });
+  assert.equal(await createJobWorker({ queue, registry, ownerId: jobTestHash('worker') }).runOnce(), true);
+  assert.deepEqual(outcome, { renewals: 1, acknowledged: 0, retries: ['handler-failed'] });
+  assert.equal(calls, 0);
+});
+
+test('a transient renewal retry is attempted only once', async () => {
+  const { queue, outcome } = leaseQueue(() => { throw new JobQueueError('unavailable'); });
+  const registry = jobTestRegistry(async () => assert.fail('handler must wait for a confirmed renewal'));
+  assert.equal(await createJobWorker({ queue, registry, ownerId: jobTestHash('worker') }).runOnce(), true);
+  assert.deepEqual(outcome, { renewals: 2, acknowledged: 0, retries: ['handler-failed'] });
+});

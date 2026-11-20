@@ -424,6 +424,42 @@ test('daily and hourly selection manifests and recovery on isolated genuine MySQ
       assert.ok(!manifest.coverage.some((date) => date.fixtureIds.includes(confirmed.id)), 'identity confirmation stays separate from date coverage');
       assert.equal(await database.query((tx) => tx.predictionCycle.count({ where: { fixtureId: unconfirmed.id } })), 0);
     });
+    await t.test('authorized hourly recovery queues retained fixtures only on incomplete dates without provider calls', async () => {
+      const hour = 3_600_000, scheduledFor = occurrence(38) + hour;
+      const rows = [
+        catalogFixture(3801, { kickoff: kickoff(39) }),
+        catalogFixture(3802, { kickoff: kickoff(40) }),
+        catalogFixture(3803, { kickoff: kickoff(39, 13), status: 'PST' }),
+        catalogFixture(3804, { kickoff: kickoff(39, 14), competitionId: 190 }),
+      ];
+      const policy = policyFor(rows); policy.refresh.type = 'test.selection-recovery';
+      const seed = setup({ rows, policy });
+      for (const offset of [39, 40]) {
+        await seed.importer.import(catalogRequest({ kind: 'fixtures', query: { date: reportingDate(offset) } }, seed.provider.clock.value));
+      }
+      const hourlyStore = createMysqlDailySelectionStore(database, queue, { hourly: { localEvidence: false } });
+      const failedDate = reportingDate(39), completeDate = reportingDate(40);
+      const state = setup({ policy, selectionStore: hourlyStore,
+        authority: selectionAuthority({ verifyDegradedAction: (action) => action.actor === degradedAction.actor }), respond(url) {
+        return catalogResponse(url, [], url.searchParams.get('date') === failedDate ? { paging: { current: 1, total: 2 } } : {});
+      } });
+      await assert.rejects(state.service.runHourly(scheduledFor), denied('incomplete-import'));
+      const calls = state.provider.network.length;
+      assert.ok(calls > 0, 'the initial attempt uses normal provider acquisition');
+      await assert.rejects(state.service.runHourly(scheduledFor, undefined, { ...degradedAction, actor: 'unapproved' }), denied('unauthorized'));
+      const result = await state.service.runHourly(scheduledFor, undefined, degradedAction);
+      assert.equal(state.provider.network.length, calls, 'the authorized retry uses stored receipts and schedules');
+      const manifest = (await hourlyStore.inspect(result.runId)).manifest;
+      assert.equal(manifest.partial, true);
+      assert.deepEqual(manifest.degradedAction, degradedAction);
+      const failed = manifest.coverage.find(({ date }) => date === failedDate);
+      assert.notEqual(failed.status, 'complete');
+      assert.deepEqual(failed.fixtureIds, []);
+      assert.equal(selectionDateState(manifest, failedDate).state, 'partial');
+      assert.equal(manifest.coverage.find(({ date }) => date === completeDate).status, 'complete');
+      assert.equal(result.total, 1);
+      assert.equal(manifest.entries[0].fixtureId, (await catalog.fixtureByProviderId(3801)).id);
+    });
     await t.test('coordinated forecasts keep the full cohort, suppress duplicate inputs, and fence active workers', async () => {
       const hour = 3_600_000, scheduledFor = occurrence(42) + hour;
       const rows = [catalogFixture(4201, { kickoff: kickoff(42) }), catalogFixture(4202, { kickoff: kickoff(42, 13) })];
