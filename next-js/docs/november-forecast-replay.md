@@ -98,5 +98,14 @@ replacement. The owned snapshot activated all 17. Twelve display Away Under
 5.5 and five display Home Under 5.5. The other 936 original API forecasts
 remain displayed. The earlier v4 drafts are retained as private audit records.
 A normal Matches result and its Match Details agreed on the replayed pick,
-while explicit revision history displayed the original API forecast. Hosted
-activation remains part of release promotion.
+while explicit revision history displayed the original API forecast.
+
+## Hosted outcome
+
+Production independently audited 13,705 fixtures and activated 857 reviewed
+display projections at 01:29 Kampala time on 21 November. It preserved the
+locked forecasts, saved prices, results and settlement history. Staging
+rehearsed 13 independent projections and restored their original display
+through the same rollback workflow. Later fixtures continue through the
+ordinary prospective worker as provider coverage and evidence arrive.
+[Hosted rollout evidence](reports/football-improvement-rollout-2026-11-20.md#hosted-november-replay)
