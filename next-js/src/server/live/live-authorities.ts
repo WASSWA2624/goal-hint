@@ -2,11 +2,12 @@ import "server-only";
 
 import { utcInstantFromEpochMilliseconds, type Clock, type UtcInstant } from "../../domain/calendar.ts";
 import { legacyLiveGoalMarketDefinitions, liveGoalMarketDefinitions } from "../../domain/goal-market-definitions.ts";
+import { evidenceFirstRecommendationPolicy } from "../../domain/recommendation.ts";
 import { assertOperationAllowed, type EvidenceVerifier, type RuntimePolicy } from "../config/runtime-policy.ts";
 import type { EvidenceAuthority } from "../evidence/evidence-contract.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import type { ProviderFallbackAuthority, ProviderFallbackPolicy } from "../fallback/fallback-adapter.ts";
-import { LIVE_FORECAST_CASCADE, type FallbackContext, type FallbackResolutionAuthority, type ForecastSourceOrder } from "../fallback/fallback-contract.ts";
+import { LIVE_FORECAST_CASCADE, QUALIFIED_FORECAST_CASCADE, type FallbackContext, type FallbackResolutionAuthority, type ForecastSourceOrder } from "../fallback/fallback-contract.ts";
 import { localGoalModelVersion } from "../intelligence/local-goals-model.ts";
 import type { FallbackRefreshRequest } from "../fallback/fallback-service.ts";
 import { API_FOOTBALL_CONTRACT_VERSION, type ApiFootballEndpoint, type ApiFootballResult } from "../football/api-football-contract.ts";
@@ -87,6 +88,7 @@ export function createLiveAuthorities(options: Readonly<{
   aiModel?: ModelVersion;
   /** The order frozen into AI plans by the same runtime; provider-first when omitted. */
   sourceOrder?: ForecastSourceOrder;
+  coordinatedForecasts?: boolean;
   verifyPrimary?(result: PredictorResult, context: FallbackContext): boolean;
   verifyPrimaryCandidate?(candidate: ResolvedForecastCandidate): boolean;
   verifyPrimaryGoals?(candidate: ResolvedForecastCandidate, distribution: unknown): boolean;
@@ -138,12 +140,17 @@ export function createLiveAuthorities(options: Readonly<{
     verifyObservation: (observation) => observation.provider === "api-football" && observation.evidenceRef === options.statusEvidenceRef &&
       observation.retrievedAt <= now() + SKEW_MS,
     verifyRecommendation: (input) => {
-      const selected = input.candidate.audit.recommendation?.selected;
-      if (!selected) return true;
+      const decision = input.candidate.audit.recommendation;
+      if (!decision?.selected) return true;
+      const { selected } = decision;
+      const evidenceFirst = decision.policyVersion === evidenceFirstRecommendationPolicy.version;
+      if (evidenceFirst && input.candidate.audit.sourceCascade !== QUALIFIED_FORECAST_CASCADE) return false;
+      const quote = selected.quote;
+      if (quote === null) return evidenceFirst;
       const configured = options.oddsPolicy;
       return policy.capabilities.football && verify(refs.retention, "football-private-use") && configured !== null &&
-        configured !== undefined && selected.quote.bookmakerId === configured.bookmakerId &&
-        configured.retentionEvidenceRef === refs.retention && selected.quote.permitted && !selected.quote.suspended;
+        configured !== undefined && (quote.bookmakerId === configured.bookmakerId || evidenceFirst && configured.bookmakerScope === "all") &&
+        configured.retentionEvidenceRef === refs.retention && quote.permitted && !quote.suspended;
     },
     verifyCandidate: (input) => {
       if (!verify(refs.publicRights, "football-public-rights")) return false;
@@ -203,7 +210,8 @@ export function createLiveAuthorities(options: Readonly<{
   const verifyFallbackRequest = (request: FallbackRefreshRequest) =>
     (request.expected.pin === null ? unconfiguredAi(request.ai) : options.verifyPrimary?.(request.ai, request.expected) === true) &&
     request.bounds !== null && request.bounds.priority === "near-kickoff-fallback" &&
-    (request.sourceCascade === undefined || cascadeEnabled);
+    (request.sourceCascade === undefined || request.sourceCascade === LIVE_FORECAST_CASCADE && cascadeEnabled ||
+      request.sourceCascade === QUALIFIED_FORECAST_CASCADE && options.coordinatedForecasts === true);
   const refresh: RefreshAuthority = Object.freeze({
     authorize() { publish(); },
     verifyPlan: (plan, member: RefreshMember) => {
@@ -215,8 +223,12 @@ export function createLiveAuthorities(options: Readonly<{
           policy: liveAiEvidencePolicy(refs), cachedSources: plan.evidence.cachedSources } } :
           options.aiModel === undefined ? null : { ...liveAiRefreshPlan(member, refs, policy, options.aiModel,
             plan.evidence.cachedSources as import("../evidence/evidence-contract.ts").EvidenceSource[], options.refreshPacing,
-            (plan.recommendationPolicy === undefined ? plan.sourceOrder : options.sourceOrder) ?? "ai-first"), ...frozenPolicy };
+            plan.sourceOrder ?? options.sourceOrder ?? "ai-first"), ...frozenPolicy };
         if (reviewed === null) return false;
+        if (plan.sourceCascade === QUALIFIED_FORECAST_CASCADE) return options.coordinatedForecasts === true &&
+          plan.recommendationPolicy?.version === evidenceFirstRecommendationPolicy.version && plan.sourceOrder !== "provider-first" &&
+          same(plan, parseRefreshPlan(liveCascadePlan(reviewed, false, QUALIFIED_FORECAST_CASCADE), member));
+        if (plan.recommendationPolicy?.version === evidenceFirstRecommendationPolicy.version) return false;
         if (plan.sourceCascade !== undefined) {
           const current = liveCascadePlan(reviewed);
           return cascadeEnabled && [current, { ...current, goalDefinitions: legacyLiveGoalMarketDefinitions }, liveCascadePlan(reviewed, false)]
@@ -261,8 +273,11 @@ export function createLiveAuthorities(options: Readonly<{
     },
     verifyResponse(response) {
       const endpoint = response.provenance[0]?.endpoint;
+      const coordinated = options.liveMatchPolicy?.()?.coordinated === true;
       return response.provenance.length === 1 &&
-        (endpoint === "statistics" || endpoint === "events" || options.localFootball === true && endpoint === "fixtures") &&
+        (endpoint === "statistics" || endpoint === "events" ||
+          endpoint === "fixtures" && (options.localFootball === true || coordinated) ||
+          coordinated && (endpoint === "lineups" || endpoint === "fixturePlayerStatistics" || endpoint === "fixtureHalfStatistics")) &&
         pages(response, endpoint, now());
     },
   });

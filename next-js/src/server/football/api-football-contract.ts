@@ -22,6 +22,7 @@ export const isFootballHistoryReferenceDictionary = (endpoint: string): endpoint
 
 export const apiFootballEndpoints = Object.freeze({
   fixtures: Object.freeze({ path: "/fixtures", paginated: false }),
+  fixtureHeadToHead: Object.freeze({ path: "/fixtures/headtohead", paginated: false }),
   fixtureRounds: Object.freeze({ path: "/fixtures/rounds", paginated: false }),
   countries: Object.freeze({ path: "/countries", paginated: false }),
   timezones: Object.freeze({ path: "/timezone", paginated: false }),
@@ -45,6 +46,7 @@ export const apiFootballEndpoints = Object.freeze({
   fixtureHalfStatistics: Object.freeze({ path: "/fixtures/statistics", paginated: false }),
   events: Object.freeze({ path: "/fixtures/events", paginated: false }),
   lineups: Object.freeze({ path: "/fixtures/lineups", paginated: false }),
+  fixturePlayerStatistics: Object.freeze({ path: "/fixtures/players", paginated: false }),
   injuries: Object.freeze({ path: "/injuries", paginated: false }),
   ...apiFootballLeaderboards,
   playerStatistics: Object.freeze({ path: "/players", paginated: true, pageSize: 20 }),
@@ -83,7 +85,7 @@ export function parseApiFootballFixtureRound(raw: unknown): ApiFootballFixtureRo
 export type FootballHistoryReferenceTarget = Readonly<
   { endpoint: HistoryReferenceDictionary }
   | { endpoint: "teams" | "standings" | "injuries" | "fixtureRounds" | ApiFootballLeaderboard; competitionId: number; season: number }
-  | { endpoint: "teamStatistics"; competitionId: number; season: number; teamId: number }
+  | { endpoint: "teamStatistics"; competitionId: number; season: number; teamId: number; asOfDate?: string }
   | { endpoint: "fixtureHalfStatistics"; fixtureId: number; homeTeamId: number; awayTeamId: number }
   | { endpoint: "venues"; venueId: number }
   | { endpoint: "teamsByCountry" | "venuesByCountry"; country: string }
@@ -120,8 +122,11 @@ export function apiFootballReferenceParameters(target: FootballHistoryReferenceT
       return providerId(target.fixtureId) && providerId(target.homeTeamId) && providerId(target.awayTeamId) && target.homeTeamId !== target.awayTeamId
         ? { fixture: String(target.fixtureId), half: "true" } : null;
     case "teamStatistics":
-      return providerId(target.competitionId) && validSeason(target.season) && providerId(target.teamId)
-        ? { league: String(target.competitionId), season: String(target.season), team: String(target.teamId) } : null;
+      if (!providerId(target.competitionId) || !validSeason(target.season) || !providerId(target.teamId)) return null;
+      try {
+        return { league: String(target.competitionId), season: String(target.season), team: String(target.teamId),
+          ...(target.asOfDate === undefined ? {} : { date: parseReportingDate(target.asOfDate) }) };
+      } catch { return null; }
     case "teams":
     case "standings":
     case "injuries":
@@ -156,6 +161,8 @@ export type ApiFootballBounds = Readonly<{
   maxResponseBytes: number;
   retry: Readonly<{ maxAttempts: number; baseDelayMs: number; maxDelayMs: number }>;
   cacheMaxAgeMs: number;
+  /** Opt-in window for replaying a previously validated private page. */
+  replayMaxAgeMs?: number;
   /** Required for predictions, so ready-made predictions remain within one fallback job. */
   cacheScope?: string;
 }>;
@@ -174,7 +181,7 @@ export type ApiFootballErrorReason =
   | "authentication-error" | "subscription-expired" | "rate-limited"
   | "transport-error" | "response-body-error" | "coverage-error" | "schema-error"
   | "response-too-large" | "quota-denied" | "shared-work-pending"
-  | "deadline-exceeded" | "request-budget-exhausted" | "pagination-incomplete";
+  | "deadline-exceeded" | "request-budget-exhausted" | "pagination-incomplete" | "archive-unavailable";
 export type ApiFootballFailure = Readonly<{
   reason: ApiFootballErrorReason;
   retryable: boolean;
@@ -195,6 +202,25 @@ export type ApiFootballPageProvenance = Readonly<{
   currentPage: number | null;
   totalPages: number | null;
   quota: QuotaFeedback;
+}>;
+export type ApiFootballValidatedResponse = Readonly<{
+  requestKey: string;
+  body: Uint8Array;
+  provenance: ApiFootballPageProvenance;
+  rowCount: number;
+}>;
+export type ApiFootballArchiveReplayRequest = Readonly<{
+  requestKey: string;
+  endpoint: ApiFootballEndpoint;
+  requestParameters: Readonly<Record<string, string>>;
+  contractVersion: typeof API_FOOTBALL_CONTRACT_VERSION;
+  notBefore: UtcInstant;
+  now: UtcInstant;
+  maxResponseBytes: number;
+}>;
+export type ApiFootballResponseArchive = Readonly<{
+  save(page: ApiFootballValidatedResponse): Promise<void>;
+  replay?(request: ApiFootballArchiveReplayRequest): Promise<Readonly<{ body: Uint8Array; retrievedAt: UtcInstant }> | null>;
 }>;
 export type ApiFootballResult<Data> = Readonly<{
   status: "complete" | "partial" | "failed";

@@ -4,6 +4,7 @@ import type { PredictionWindowDays, ReportingDate } from "../../domain/calendar.
 import type { ApiFootballBounds } from "../football/api-football-contract.ts";
 import type { CatalogImportRequest } from "../football/catalog-contract.ts";
 import type { JobEnvelope } from "../jobs/job-contract.ts";
+import type { ForecastLifecyclePolicy } from "../refresh/forecast-orchestration.ts";
 
 export class DailySelectionError extends Error {
   readonly reason: "invalid-request" | "unauthorized" | "policy-required" | "conflicting-request" |
@@ -27,6 +28,8 @@ export type SelectionPolicy = Readonly<{
   importDays?: number;
   /** Budgeted runs skip fixtures whose publication cutoff is closer than this, so queued refreshes can still finish. */
   refreshLeadMs?: number;
+  /** Sealed material identity and recovery policy for new coordinated runs. */
+  forecastLifecycle?: ForecastLifecyclePolicy;
   importBounds: Omit<ApiFootballBounds, "deadlineAt"> & Readonly<{ deadlineMs: number }>;
   refresh: Omit<JobEnvelope, "version" | "idempotencyKey" | "refresh" | "notBefore" | "expiresAt" | "priority">;
 }>;

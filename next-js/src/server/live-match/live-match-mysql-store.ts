@@ -7,11 +7,11 @@ import { liveMatchRules, liveMatchSnapshotSchema, type LiveMatchSnapshot } from 
 import { settlementStatuses, type SettlementStatus } from "../../domain/market-settlement.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
-import { saveFixtureFacts } from "../football/fixture-facts-store.ts";
-import type { Prisma } from "../generated/prisma/client.ts";
+import { saveFixtureFacts, type FixtureFactObservation } from "../football/fixture-facts-store.ts";
+import { Prisma } from "../generated/prisma/client.ts";
 import { historyJson } from "../predictions/history-read.ts";
 import { fourDigitYearInstant } from "../shared/utc-instant.ts";
-import { LiveMatchError, liveMatchFail, type LiveMatchLease, type LiveMatchStore, type LiveMatchTarget } from "./live-match-contract.ts";
+import { coordinatedLiveDetailDefaults, LiveMatchError, liveMatchFail, type LiveMatchLease, type LiveMatchStore, type LiveMatchTarget } from "./live-match-contract.ts";
 
 type Tx = Prisma.TransactionClient;
 const key = z.string().regex(/^[a-f0-9]{64}$/u), uuid = z.uuid(), epoch = new Date(0);
@@ -118,9 +118,27 @@ export function createMysqlLiveMatchStore(options: Readonly<{ database: Database
       if (policy.coverage.length === 0) return [];
       try {
         const scope = JSON.stringify(policy.coverage);
-        const rows = await database.query((tx) => tx.$queryRaw<(FixtureRow & SnapshotRow & { seasonCoverage: unknown })[]>`
+        const confirmedLineups = Prisma.sql`(ff.detailsRetrievedAt >= TIMESTAMPADD(MICROSECOND,
+          ${-coordinatedLiveDetailDefaults.lineupLeadMs * 1000}, f.kickoff) AND
+          COALESCE(JSON_LENGTH(JSON_EXTRACT(ff.lineups,'$[0].startXI')),0) >= 11 AND
+          COALESCE(JSON_LENGTH(JSON_EXTRACT(ff.lineups,'$[1].startXI')),0) >= 11)`;
+        const factsJoin = policy.coordinated ? Prisma.sql`LEFT JOIN FixtureFacts ff ON ff.fixtureId=f.id` : Prisma.empty;
+        const factsColumns = policy.coordinated ? Prisma.sql`${confirmedLineups} AS lineupsKnown,
+          (JSON_TYPE(JSON_EXTRACT(ff.statistics,'$[0].statistics_1h')) = 'ARRAY' AND
+            JSON_TYPE(JSON_EXTRACT(ff.statistics,'$[0].statistics_2h')) = 'ARRAY' AND
+            JSON_TYPE(JSON_EXTRACT(ff.statistics,'$[1].statistics_1h')) = 'ARRAY' AND
+            JSON_TYPE(JSON_EXTRACT(ff.statistics,'$[1].statistics_2h')) = 'ARRAY') AS halfStatisticsKnown`
+          : Prisma.sql`0 AS lineupsKnown, 0 AS halfStatisticsKnown`;
+        const upcoming = policy.coordinated ? Prisma.sql`(f.status='scheduled'
+          AND f.kickoff > ${new Date(now)} AND f.kickoff <= ${new Date(now + coordinatedLiveDetailDefaults.lineupLeadMs)}
+          AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(s.coverage,'$."fixtures.lineups"')),'') <> 'false'
+          AND NOT COALESCE(${confirmedLineups},0)) OR` : Prisma.empty;
+        const rows = await database.query((tx) => tx.$queryRaw<(FixtureRow & SnapshotRow & {
+          seasonCoverage: unknown; season: number; lineupsKnown: bigint | number; halfStatisticsKnown: bigint | number;
+        })[]>`
           SELECT f.id AS fixtureId, f.externalId, f.activeCycleId AS cycleId, f.kickoff AS kickoffAt, f.homeTeamId, f.awayTeamId,
-            f.status, h.externalId AS homeExternalId, a.externalId AS awayExternalId, s.coverage AS seasonCoverage,
+            f.status, h.externalId AS homeExternalId, a.externalId AS awayExternalId, s.coverage AS seasonCoverage, s.year AS season,
+            COALESCE(l.firstFinalAt,rs.firstFinalAt,f.retrievedAt) AS firstFinalAt, ${factsColumns},
             l.receivedAt, l.bodyJson, l.integrity=SHA2(CAST(l.bodyJson AS CHAR),256) AS validIntegrity, COALESCE(l.failures,0) AS failures
           FROM FootballFixture f JOIN FootballSeason s ON s.id=f.seasonId
           JOIN FootballCompetitionProvider cp ON cp.competitionId=s.competitionId AND cp.provider='api-football'
@@ -131,10 +149,14 @@ export function createMysqlLiveMatchStore(options: Readonly<{ database: Database
           LEFT JOIN LiveMatchSnapshot l ON l.fixtureId=f.id AND l.cycleId <=> f.activeCycleId AND l.kickoffAt <=> f.kickoff
             AND l.homeTeamId=f.homeTeamId AND l.awayTeamId=f.awayTeamId
           LEFT JOIN FixtureResultState rs ON rs.fixtureId=f.id
+          ${factsJoin}
           WHERE f.provider='api-football' AND (f.status='live' OR
+            ${upcoming}
             (f.status IN ('finished-regulation','finished-extra-time','finished-penalties','abandoned')
               AND COALESCE(l.firstFinalAt,rs.firstFinalAt,f.retrievedAt) >= ${new Date(now - policy.finalWindowMs)}
-              AND (${policy.stopAfterFinal !== true} OR
+              AND (${policy.coordinated !== true} OR COALESCE(l.firstFinalAt,rs.firstFinalAt,f.retrievedAt) <=
+                ${new Date(now - coordinatedLiveDetailDefaults.finalFirstMs)})
+              AND (${policy.coordinated === true || policy.stopAfterFinal !== true} OR
                 (f.kickoff >= ${new Date(now - policy.finalWindowMs)} AND
                   (l.firstFinalAt IS NOT NULL OR l.bodyJson IS NULL OR JSON_UNQUOTE(JSON_EXTRACT(l.bodyJson,'$.status')) <> f.status)))))
             AND (l.nextPollAt IS NULL OR l.nextPollAt <= ${new Date(now)})
@@ -142,7 +164,7 @@ export function createMysqlLiveMatchStore(options: Readonly<{ database: Database
               AND otherHome.provider='api-football' AND otherHome.externalId<>h.externalId)
             AND NOT EXISTS (SELECT 1 FROM FootballTeamProvider otherAway WHERE otherAway.teamId=f.awayTeamId
               AND otherAway.provider='api-football' AND otherAway.externalId<>a.externalId)
-          ORDER BY COALESCE(l.attemptedAt,${epoch}), f.kickoff, f.id LIMIT ${limit}`);
+          ORDER BY (${policy.coordinated === true} AND f.status <> 'live'), COALESCE(l.attemptedAt,${epoch}), f.kickoff, f.id LIMIT ${limit}`);
         return freezeEvidence(rows.map((row) => {
           const target = { occurrenceId: occurrence(row), fixtureId: uuid.parse(row.fixtureId), externalId: Number(row.externalId),
             cycleId: row.cycleId, kickoffAt: stamp(row.kickoffAt), homeExternalId: Number(row.homeExternalId), awayExternalId: Number(row.awayExternalId),
@@ -150,7 +172,13 @@ export function createMysqlLiveMatchStore(options: Readonly<{ database: Database
             eventsCoverage: coverage(row.seasonCoverage, "fixtures.events"), failures: Number(row.failures) };
           if (![target.externalId, target.homeExternalId, target.awayExternalId].every((v) => bounded(v, Number.MAX_SAFE_INTEGER)))
             return liveMatchFail("unavailable");
-          return { ...target, previous: snapshot(row, target) };
+          return { ...target, previous: snapshot(row, target), ...(policy.coordinated ? {
+            firstFinalAt: finalStatuses.has(target.status) ? stamp(row.firstFinalAt ?? null) : null,
+            season: row.season, lineupsKnown: Number(row.lineupsKnown) === 1,
+            lineupsCoverage: coverage(row.seasonCoverage, "fixtures.lineups"),
+            playersCoverage: coverage(row.seasonCoverage, "fixtures.statistics_players"),
+            halfStatisticsKnown: Number(row.halfStatisticsKnown) === 1,
+          } : {}) };
         }));
       } catch (error) { if (error instanceof LiveMatchError) throw error; return liveMatchFail("unavailable"); }
     },
@@ -188,7 +216,12 @@ export function createMysqlLiveMatchStore(options: Readonly<{ database: Database
         await tx.$executeRaw`UPDATE LiveMatchSnapshot SET receivedAt=${new Date(value.collectedAt)},bodyJson=JSON_EXTRACT(${body},'$'),
           integrity=SHA2(CAST(JSON_EXTRACT(${body},'$') AS CHAR),256),nextPollAt=${new Date(nextAt)},failures=${failures}
           WHERE id=${target.occurrenceId}`;
-        if (facts) await saveFixtureFacts(tx, target, facts, new Date(now));
+        if (facts) {
+          const observations = Array.isArray(facts) ? [...facts] : [facts as FixtureFactObservation];
+          for (const observation of observations.sort((a, b) => a.retrievedAt - b.retrievedAt)) {
+            await saveFixtureFacts(tx, target, observation, new Date(now));
+          }
+        }
         await locked(tx, lease);
       });
     },

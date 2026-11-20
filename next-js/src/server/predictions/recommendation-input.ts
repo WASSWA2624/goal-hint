@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { marketSelections, marketSources, type MarketFamily } from "../../domain/markets.ts";
 import { parseRecordedDecimalOdds } from "../../domain/odds.ts";
-import { recommendationPolicyForVersion, type RecommendationDecision } from "../../domain/recommendation.ts";
+import { evidenceFirstRecommendationPolicy, forecastConfidence, recommendationPolicyForVersion, type RecommendationDecision } from "../../domain/recommendation.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import type { FallbackContext, ResolvedForecastMarket } from "../fallback/fallback-contract.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
@@ -26,7 +26,7 @@ const quote = z.strictObject({ fixtureId: id, fixtureVersion: version, homeTeamI
   observationReceiptId: hash.optional(),
   providerUpdatedAt: instant.nullable(), permitted: z.boolean(), suspended: z.boolean() });
 const pick = z.strictObject({ family, selection, period: z.literal(publicPolicy.matchPeriod), line: z.number().nullable(),
-  source: z.enum(marketSources), probability, forecastTimestamps: timing, quote });
+  source: z.enum(marketSources), probability, forecastTimestamps: timing, quote: quote.nullable(), confidence: z.enum(forecastConfidence).optional() });
 export const recommendationDecisionSchema = z.strictObject({ version: z.literal(1), policyVersion: z.string().min(1).max(128),
   fixtureId: id, fixtureVersion: version, homeTeamId: id, awayTeamId: id, analysisAt: instant, evidenceSnapshotId: hash, evidenceHash: hash,
   status: z.enum(["selected", "no-qualified-recommendation"]), selected: pick.nullable(),
@@ -43,15 +43,18 @@ export const recommendationDecisionSchema = z.strictObject({ version: z.literal(
   if ((value.status === "selected") !== (selected !== null)) ctx.addIssue({ code: "custom", message: "Incoherent recommendation availability." });
   if (!selected) return;
   const price = selected.quote;
+  const evidenceFirst = policy.version === evidenceFirstRecommendationPolicy.version;
   if (!(marketSelections[selected.family] as readonly string[]).includes(selected.selection) ||
     selected.line !== (selected.family === "total-goals" ? publicPolicy.totalGoalsLine : null) ||
-    selected.probability < policy.minimumProbability || !price.permitted || price.suspended ||
-    price.fixtureId !== value.fixtureId || price.fixtureVersion !== value.fixtureVersion ||
-    price.homeTeamId !== value.homeTeamId || price.awayTeamId !== value.awayTeamId ||
-    price.family !== selected.family || price.selection !== selected.selection || price.period !== selected.period || price.line !== selected.line ||
-    price.providerUpdatedAt !== null && price.providerUpdatedAt > price.observedAt ||
+    selected.probability < policy.minimumProbability || (selected.confidence !== undefined) !== evidenceFirst ||
+    (price === null ? !evidenceFirst : !price.permitted || price.suspended ||
+      price.fixtureId !== value.fixtureId || price.fixtureVersion !== value.fixtureVersion ||
+      price.homeTeamId !== value.homeTeamId || price.awayTeamId !== value.awayTeamId ||
+      price.family !== selected.family || price.selection !== selected.selection || price.period !== selected.period || price.line !== selected.line ||
+      price.providerUpdatedAt !== null && price.providerUpdatedAt > price.observedAt) ||
     !value.decisions.some((entry) => entry.eligible && entry.family === selected.family && entry.selection === selected.selection &&
-      entry.source === selected.source && entry.probability === selected.probability)) ctx.addIssue({ code: "custom", message: "Invalid recommendation identity or eligibility." });
+      entry.source === selected.source && entry.probability === selected.probability &&
+      (!evidenceFirst || entry.evidence.confidence === selected.confidence))) ctx.addIssue({ code: "custom", message: "Invalid recommendation identity or eligibility." });
 });
 
 /** Archive validation keeps the recommendation separate from the complete-family argmax contract. */
@@ -62,8 +65,8 @@ export function parseRecommendationDecision(value: unknown, context: FallbackCon
   if (!policy || parsed.fixtureId !== expected.fixtureId || parsed.fixtureVersion !== String(expected.fixtureVersion) ||
     parsed.homeTeamId !== expected.home.teamId || parsed.awayTeamId !== expected.away.teamId ||
     parsed.analysisAt !== expected.analysisAt || parsed.evidenceHash !== context.evidenceHash ||
-    selected && (selected.quote.observedAt > expected.cutoffAt ||
-      expected.cutoffAt - selected.quote.observedAt > policy.quoteMaxAgeMs ||
+    selected && (selected.quote !== null && (selected.quote.observedAt > expected.cutoffAt ||
+      expected.cutoffAt - selected.quote.observedAt > policy.quoteMaxAgeMs) ||
       selected.forecastTimestamps.retrievedAt > expected.kickoffAt)) throw new RangeError("Invalid recommendation context.");
   if (selected) {
     const item = markets[selected.family];

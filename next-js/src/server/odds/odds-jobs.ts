@@ -65,8 +65,7 @@ export type OddsQuotaUsage = Readonly<{ remaining: number; used: number; oddsUse
 /** The plan's odds allowance: the whole day's ordinary need (`floor`), the odds share above it (`spare`) and the
  * reserve odds never take even when ordinary work has overspent its plan. */
 export type OddsQuotaAllowance = Readonly<{ floor: number; spare: number; reserve: number }>;
-/** The quota gate, checked before any provider call. Odds spend only their own share of the day: a sweep starts only
- * while its whole dispatch ceiling still fits under the spare, so ordinary work keeps its full floor whenever it runs.
+/** The quota gate checks the requested dispatch allowance before provider work, so ordinary work keeps its full floor.
  * Ordinary requests already spent are not reserved twice: the remaining allowance must still cover the ordinary need
  * that is left (floor minus what ordinary work has used), and never less than the reserve. The second check only binds
  * when the provider reports fewer requests left than the limiter counted, or ordinary work has run past its plan. */
@@ -86,6 +85,8 @@ export type OddsJobDependencies = Readonly<{
   usage: () => Promise<OddsQuotaUsage | null>;
   allowance: OddsQuotaAllowance;
   maxRequests: (kind: OddsImportRequest["kind"]) => number;
+  /** Each resumed price page spends the shared atomic quota independently. */
+  resumePricePages?: boolean;
   now?: () => number;
 }>;
 /** Expired, not failed: the next slot sweeps again, and the failed-jobs alert stays for real faults. */
@@ -94,9 +95,11 @@ const EXPIRED: JobOutcome = Object.freeze({ status: "failed", reason: "eligibili
 const transientReasons = new Set(["transport-error", "rate-limited", "quota-denied", "deadline-exceeded", "shared-work-pending"]);
 /** Failures that need the owner or a code fix (credentials, subscription, authorization, a malformed request). */
 const refusedReasons = new Set(["invalid-credential", "authentication-error", "subscription-expired", "operation-not-authorized", "invalid-request"]);
-/** The job outcome for a stored receipt. Partial sweeps keep what they retrieved and never retry the whole date. */
-export function oddsJobOutcome(summary: Pick<OddsImportSummary, "status" | "error">): JobOutcome {
+/** The job outcome for a stored receipt. A resumable sweep can retry from its next page within the slot. */
+export function oddsJobOutcome(summary: Pick<OddsImportSummary, "status" | "error" | "continuation">): JobOutcome {
   const error = summary.error;
+  if (summary.continuation && error?.retryable) return { status: "failed",
+    reason: error.reason === "quota-denied" || error.reason === "rate-limited" ? "rate-limited" : "handler-failed", retryable: true };
   if (summary.status !== "failed" || error === null) return { status: "succeeded" };
   // The essential reserve and the daily limit only tighten within a provider day, and a slot never spans two.
   if (error.reason === "quota-denied" && !error.retryable) return EXPIRED;
@@ -121,7 +124,8 @@ async function run(context: JobHandlerContext, dependencies: OddsJobDependencies
   // The gate's slack never grows within a provider day (odds spend only rises; an ordinary request lowers the remaining
   // allowance and the ordinary need left by one each), and UTC-aligned slots never span two days, so a refused slot
   // cannot recover: it expires without a provider call and the next slot checks again.
-  if (!oddsQuotaAllows(usage, dependencies.allowance, dependencies.maxRequests(request.kind))) return EXPIRED;
+  const resume = request.kind === "prices" && dependencies.resumePricePages;
+  if (!oddsQuotaAllows(usage, dependencies.allowance, resume ? 1 : dependencies.maxRequests(request.kind))) return EXPIRED;
   const reference = evidenceFingerprint({ jobId: context.lease.jobId, attemptId: context.lease.attemptId, phase: `odds-${request.kind}`, version: 1 });
   const started = now();
   let summary: OddsImportSummary;
@@ -144,7 +148,8 @@ export function createOddsJobDefinitions(dependencies: OddsJobDependencies): rea
   const eligible = () => dependencies.enabled();
   const importDefinition = defineJob({ type: ODDS_IMPORT_TYPE, handlerVersion: ODDS_HANDLER_VERSION, payload: oddsImportPayload, eligible,
     handle: (payload, context) => run(context, dependencies, { kind: "prices", slot: payload.slot as UtcInstant, date: payload.date },
-      (request) => dependencies.service.importDate(request, context.signal), payload.slot + ODDS_SWEEP_MS, payload.bookmakerScope) });
+      (request) => dependencies.service.importDate(request, context.signal, dependencies.resumePricePages ? () => context.checkpoint() : undefined),
+      payload.slot + ODDS_SWEEP_MS, payload.bookmakerScope) });
   const catalogDefinition = defineJob({ type: ODDS_CATALOG_TYPE, handlerVersion: ODDS_HANDLER_VERSION, payload: oddsCatalogPayload, eligible,
     async handle(payload, context) {
       const start = Date.parse(`${payload.utcDay}T00:00:00Z`);

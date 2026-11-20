@@ -156,8 +156,10 @@ test("the complete documented environment example parses safely without approval
     "GOAL_HINT_ANDROID_APP_LINK_SHA256", "GOAL_HINT_IOS_APP_LINK_TEAM_ID",
     "GOAL_HINT_APP_DOWNLOADS_ROOT", "GOAL_HINT_ANDROID_PLAY_STORE_URL", "GOAL_HINT_ANDROID_PLAY_STORE_VERSION", "GOAL_HINT_ANDROID_PLAY_STORE_BUILD",
     "GOAL_HINT_IOS_DISTRIBUTION_URL", "GOAL_HINT_IOS_DISTRIBUTION_VERSION", "GOAL_HINT_IOS_DISTRIBUTION_BUILD",
-    "GOAL_HINT_FOOTBALL_EXISTING_PREPAID", "GOAL_HINT_ODDS_IMPORT_ENABLED", "GOAL_HINT_ODDS_BOOKMAKER_ID", "GOAL_HINT_ODDS_BOOKMAKER_SCOPE", "GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF",
-    "GOAL_HINT_TEAM_CODES_IMPORT_ENABLED", "GOAL_HINT_LIVE_DETAILS_ENABLED", "GOAL_HINT_HISTORY_IMPORT_ENABLED", "GOAL_HINT_AI_BILLING_MODE",
+    "GOAL_HINT_FOOTBALL_EXISTING_PREPAID", "GOAL_HINT_ODDS_IMPORT_ENABLED", "GOAL_HINT_ODDS_BOOKMAKER_ID",
+    "GOAL_HINT_ODDS_BOOKMAKER_FALLBACK_IDS", "GOAL_HINT_ODDS_BOOKMAKER_SCOPE", "GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF",
+    "GOAL_HINT_TEAM_CODES_IMPORT_ENABLED", "GOAL_HINT_LIVE_DETAILS_ENABLED", "GOAL_HINT_HISTORY_IMPORT_ENABLED",
+    "GOAL_HINT_FOOTBALL_RESPONSE_ARCHIVE_ENABLED", "GOAL_HINT_COORDINATED_FOOTBALL_ENABLED", "GOAL_HINT_FOOTBALL_FORECAST_CONCURRENCY", "GOAL_HINT_AI_BILLING_MODE",
     "GOAL_HINT_FORECAST_SOURCE_ORDER", "GOAL_HINT_AI_PROMOTION_REF", "GOAL_HINT_RESEARCH_HOSTS",
     "GOAL_HINT_ANALYTICS_ENABLED", "GOAL_HINT_ANALYTICS_SECRET", "GOAL_HINT_ANALYTICS_ADMIN_USERNAME",
     "GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH", "GOAL_HINT_ANALYTICS_RETENTION_DAYS", "GOAL_HINT_ANALYTICS_GEO_SOURCE",
@@ -180,7 +182,7 @@ test("the complete documented environment example parses safely without approval
     }
   }
   const { database, probabilitySumTolerance, consistencyTolerance, odds, teamCodes, liveDetails, historyImport,
-    budgets, analytics, forecasts, football, flutterwaveWebhookUrl, ...unresolvedChoices } = policy.choices;
+    footballResponseArchive, coordinatedFootball, budgets, analytics, forecasts, football, flutterwaveWebhookUrl, ...unresolvedChoices } = policy.choices;
   assert.equal(flutterwaveWebhookUrl, "https://test.goalhint.com/api/payments/flutterwave/webhook");
   // With AI enabled the provider baseline publishes first; no promotion reference is assumed.
   assert.deepEqual(forecasts, { sourceOrder: "ai-first", aiPromotionRef: null });
@@ -192,11 +194,13 @@ test("the complete documented environment example parses safely without approval
   assert.equal(existingPrepaid, false);
   assertUnresolved({ ...unresolvedChoices, budgets: unresolvedBudgets, football: unresolvedFootball });
   // Odds imports default off, with no bookmaker or display-rights reference assumed (052).
-  assert.deepEqual(odds, { enabled: false, bookmakerId: null, bookmakerScope: "primary", rightsRef: null });
+  assert.deepEqual(odds, { enabled: false, bookmakerId: null, fallbackBookmakerIds: [], bookmakerScope: "primary", rightsRef: null });
   // Team codes are on by default; the live runner's spare-quota gate still keeps them off on Free and slow plans.
   assert.deepEqual(teamCodes, { enabled: true });
   assert.deepEqual(liveDetails, { enabled: false });
   assert.deepEqual(historyImport, { enabled: false });
+  assert.deepEqual(footballResponseArchive, { enabled: false });
+  assert.deepEqual(coordinatedFootball, { enabled: false, forecastConcurrency: 1 });
   assert.equal(probabilitySumTolerance, marketRules.probabilitySumTolerance);
   assert.equal(consistencyTolerance, marketRules.consistencyTolerance);
   assert.deepEqual(database, {
@@ -360,9 +364,15 @@ test("odds imports default off, need one documented bookmaker and never assume d
   policyError(() => parseRuntimePolicy({ GOAL_HINT_ODDS_IMPORT_ENABLED: "true", GOAL_HINT_ODDS_BOOKMAKER_SCOPE: "all" }), ["GOAL_HINT_ODDS_BOOKMAKER_ID"]);
   const enabled = parseRuntimePolicy({ GOAL_HINT_ODDS_IMPORT_ENABLED: "true", GOAL_HINT_ODDS_BOOKMAKER_ID: "8",
     GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF: "synthetic-odds-rights" });
-  assert.deepEqual(enabled.choices.odds, { enabled: true, bookmakerId: 8, bookmakerScope: "primary", rightsRef: "synthetic-odds-rights" });
+  assert.deepEqual(enabled.choices.odds, { enabled: true, bookmakerId: 8, fallbackBookmakerIds: [], bookmakerScope: "primary", rightsRef: "synthetic-odds-rights" });
   assert.deepEqual(parseRuntimePolicy({ GOAL_HINT_ODDS_BOOKMAKER_SCOPE: "all" }).choices.odds,
-    { enabled: false, bookmakerId: null, bookmakerScope: "all", rightsRef: null });
+    { enabled: false, bookmakerId: null, fallbackBookmakerIds: [], bookmakerScope: "all", rightsRef: null });
+  assert.deepEqual(parseRuntimePolicy({ GOAL_HINT_ODDS_BOOKMAKER_FALLBACK_IDS: "9,2,17" }).choices.odds.fallbackBookmakerIds, [9, 2, 17]);
+  for (const value of ["0,2", "2,2", "2,", "4294967296", "9007199254740993"]) {
+    policyError(() => parseRuntimePolicy({ GOAL_HINT_ODDS_BOOKMAKER_FALLBACK_IDS: value }), ["GOAL_HINT_ODDS_BOOKMAKER_FALLBACK_IDS"]);
+  }
+  policyError(() => parseRuntimePolicy({ GOAL_HINT_ODDS_BOOKMAKER_ID: "8", GOAL_HINT_ODDS_BOOKMAKER_FALLBACK_IDS: "9,8" }),
+    ["GOAL_HINT_ODDS_BOOKMAKER_FALLBACK_IDS"]);
   assert.equal(enabled.public.features.providerOdds, false);
 });
 

@@ -83,6 +83,21 @@ class DeployMariaDbTests(unittest.TestCase):
                 self.assertEqual(db.applied, [migration.name for migration in expected])
                 self.assertEqual(db.ledger(), starting_ledger + [ledger_entry(migration) for migration in expected])
 
+    def test_backend_rollout_respects_both_active_hosted_ledgers(self):
+        flutterwave, hourly, freshness = self.hosted_branch_migrations
+        backend = [migration for migration in self.migrations if migration.name > freshness.name]
+        self.assertEqual([migration.name for migration in backend], [
+            "20261120123000_football_provider_coverage", "20261120130000_in_play_odds_history",
+        ])
+        histories = [
+            ("production", [flutterwave, hourly, freshness], backend),
+            ("staging", [flutterwave, freshness], [hourly, *backend]),
+        ]
+        for environment, applied, expected in histories:
+            with self.subTest(environment=environment):
+                ledger = [ledger_entry(migration) for migration in [*self.hosted_branch_baseline, *applied]]
+                self.assertEqual(HOSTED["pending_migrations"](ledger, self.migrations, self.adopted), expected)
+
     def test_hosted_branch_exception_rejects_other_gaps_and_edited_inventory(self):
         flutterwave, hourly, freshness = self.hosted_branch_migrations
         inventory = self.hosted_branch_baseline + self.hosted_branch_migrations

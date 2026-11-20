@@ -7,8 +7,9 @@ import { liveGoalMarketDefinitions } from "../../domain/goal-market-definitions.
 import { operatingRules, type RuntimePolicy } from "../config/runtime-policy.ts";
 import type { EvidencePolicy } from "../evidence/evidence-contract.ts";
 import type { ProviderFallbackPolicy } from "../fallback/fallback-adapter.ts";
-import { LIVE_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
+import { LIVE_FORECAST_CASCADE, type ForecastCascade } from "../fallback/fallback-contract.ts";
 import { ODDS_CONTRACT_VERSION, type ApiFootballBounds } from "../football/api-football-contract.ts";
+import { criticalWorkReserveRatio, providerDayReserveRatio } from "../football/quota-contract.ts";
 import { DE_MARGIN_METHOD } from "../../domain/odds.ts";
 import { ODDS_MAPPING_VERSION } from "../../domain/odds-markets.ts";
 import type { OddsImportKind, OddsPolicy } from "../odds/odds-contract.ts";
@@ -61,6 +62,35 @@ export type LiveWorkload = Readonly<{
   cadence: NonNullable<ResultSyncPolicy["cadence"]>; unresolved: ResultSyncPolicy["unresolved"]; corrections: ResultSyncPolicy["corrections"];
   maxBatchesPerTick: number;
 }>;
+/** One broad live/date refresh and one active confirmation batch per scheduled tick,
+ * plus two allowed discovery calls per supported date and remaining hourly slot. */
+export function projectedCriticalRequests(workload: LiveWorkload, remainingMs: number, cadence = workload.cadence): number {
+  const remaining = Math.max(0, remainingMs);
+  const scheduled = (interval: number | null): number => interval === null ? 0 : Math.ceil(remaining / interval);
+  return scheduled(cadence.liveMs) + scheduled(cadence.dateMs) + scheduled(cadence.activeMs) +
+    scheduled(HOUR) * 2 * workload.importDays;
+}
+export function remainingCriticalReserve(providerDailyLimit: number, criticalRequests: number): number {
+  return Math.ceil(criticalRequests * criticalWorkReserveRatio) + Math.ceil(providerDailyLimit * providerDayReserveRatio);
+}
+const capacityCadenceSteps = [MINUTE, 2 * MINUTE, 5 * MINUTE] as const;
+/** Prefer normal live cadence, preserving the time to reset and the current short-window ceiling. */
+export function assessLiveCapacity(workload: LiveWorkload, remainingMs: number, providerDailyLimit: number,
+  dailyRemaining: number, minuteLimit: number) {
+  const capacity = Math.min(dailyRemaining, Math.floor(Math.max(0, remainingMs) / MINUTE * minuteLimit));
+  let cadence = workload.cadence;
+  let critical = projectedCriticalRequests(workload, remainingMs, cadence);
+  for (const interval of capacityCadenceSteps) {
+    if (critical <= capacity) break;
+    cadence = { liveMs: workload.cadence.liveMs === null ? null : Math.max(interval, workload.cadence.liveMs),
+      dateMs: Math.max(interval, workload.cadence.dateMs), activeMs: Math.max(interval, workload.cadence.activeMs) };
+    critical = projectedCriticalRequests(workload, remainingMs, cadence);
+  }
+  const reserve = remainingCriticalReserve(providerDailyLimit, critical);
+  const archiveAllowed = cadence === workload.cadence && dailyRemaining > reserve;
+  return { cadence, critical, capacity, reserve, archiveAllowed, enrichmentMultiplier: archiveAllowed ? 1 : 2,
+    criticalShortfall: critical > capacity };
+}
 /** Sizes work from the verified account limit so a plan change needs no code change.
  * A quarter of the day goes to result polling and refresh jobs stop above a floor
  * that keeps tomorrow's selection and result checks possible. */
@@ -129,11 +159,12 @@ export function liveReferences(policy: RuntimePolicy): LiveReferences {
     odds: `${freshness}#odds`, oddsRights: choices.odds.rightsRef });
 }
 /** The exact odds policy for this plan, or null when no documented bookmaker is configured. */
-export function oddsPolicy(policy: RuntimePolicy, refs: LiveReferences, workload: LiveWorkload, localFootball = false): OddsPolicy | null {
-  const bookmakerId = policy.choices.odds.bookmakerId;
+export function oddsPolicy(policy: RuntimePolicy, refs: LiveReferences, workload: LiveWorkload, allBookmakers = false): OddsPolicy | null {
+  const { bookmakerId, fallbackBookmakerIds } = policy.choices.odds;
   if (bookmakerId === null) return null;
   return Object.freeze({ version: 1, evidenceRef: refs.odds, retentionEvidenceRef: refs.retention, basis: "bookmaker", bookmakerId,
-    ...(localFootball || policy.choices.odds.bookmakerScope === "all" ? { bookmakerScope: "all" as const } : {}),
+    ...(allBookmakers || fallbackBookmakerIds.length || policy.choices.odds.bookmakerScope === "all" ? { bookmakerScope: "all" as const } : {}),
+    ...(fallbackBookmakerIds.length ? { fallbackBookmakerIds } : {}),
     method: DE_MARGIN_METHOD, mappingVersion: ODDS_MAPPING_VERSION, contractVersion: ODDS_CONTRACT_VERSION, freshnessMs: ODDS_FRESHNESS_MS,
     retainAfterKickoffMs: ODDS_RETAIN_AFTER_KICKOFF_MS, horizonDays: workload.odds.dates, sweepMs: workload.odds.sweepMs });
 }
@@ -208,8 +239,8 @@ export function publicationPolicy(refs: LiveReferences): PublicationPolicy {
     "local-engine": { maxAgeMs: HOUR, basis: "generated", unknownGeneration: "reject", unknownUpdate: "allow-flagged" },
     "api-football": { maxAgeMs: HOUR, basis: "retrieved", unknownGeneration: "allow-flagged", unknownUpdate: "allow-flagged" } } } as const);
 }
-export function liveCascadePlan(plan: RefreshPlan, includeGoals = true): RefreshPlan {
-  return { ...plan, sourceCascade: LIVE_FORECAST_CASCADE,
+export function liveCascadePlan(plan: RefreshPlan, includeGoals = true, sourceCascade: ForecastCascade = LIVE_FORECAST_CASCADE): RefreshPlan {
+  return { ...plan, sourceCascade,
     ...(includeGoals ? { goalDefinitions: liveGoalMarketDefinitions } : {}) };
 }
 export function evidencePolicy(refs: LiveReferences): EvidencePolicy {
@@ -231,19 +262,21 @@ export function providerFallbackPolicy(refs: LiveReferences): ProviderFallbackPo
     sourceUrl: "https://www.api-football.com/documentation-v3" });
 }
 export function resultSyncPolicy(refs: LiveReferences, workload: LiveWorkload,
-  coverage: ResultSyncPolicy["coverage"], local = false): ResultSyncPolicy {
+  coverage: ResultSyncPolicy["coverage"], local = false, coordinated = false): ResultSyncPolicy {
   return Object.freeze({ version: 1, evidenceRef: refs.results, coverage, approachMs: 15 * MINUTE, activeWindowMs: 3 * HOUR,
+    ...(coordinated ? { coordinated: true as const } : {}),
     unresolved: workload.unresolved, corrections: workload.corrections,
-    cadence: local ? { ...workload.cadence, dateMs: 5 * MINUTE } : workload.cadence,
+    cadence: local ? { ...workload.cadence, dateMs: Math.max(5 * MINUTE, workload.cadence.dateMs) } : workload.cadence,
     ...(local ? { skipConfirmedFinals: true as const } : {}), leaseMs: MINUTE, tickMs: 5 * SECOND,
     maxBatchesPerTick: workload.maxBatchesPerTick, failureBaseMs: MINUTE, failureMaxMs: HOUR, requestWindowMs: 30 * SECOND,
     request: { timeoutMs: 20 * SECOND, maxRequests: 1, maxPages: 1, maxRows: 5000, maxResponseBytes: 40_000_000,
       retry: { maxAttempts: 4, baseDelayMs: 500, maxDelayMs: 5 * SECOND }, cacheMaxAgeMs: 0 } });
 }
 
-export function liveMatchPolicy(refs: LiveReferences, workload: LiveWorkload, coverage: LiveMatchPolicy["coverage"], batch = false): LiveMatchPolicy {
+export function liveMatchPolicy(refs: LiveReferences, workload: LiveWorkload, coverage: LiveMatchPolicy["coverage"], batch = false,
+  coordinated = false): LiveMatchPolicy {
   return Object.freeze({ version: 1, evidenceRef: `${refs.freshness}#live-match-details`, coverage,
-    ...(batch ? { stopAfterFinal: true as const } : {}),
+    ...(coordinated ? { coordinated: true as const } : batch ? { stopAfterFinal: true as const } : {}),
     intervalMs: workload.liveDetails.intervalMs, finalIntervalMs: workload.liveDetails.finalIntervalMs,
     finalWindowMs: workload.liveDetails.finalWindowMs, staleAfterMs: 5 * MINUTE,
     leaseMs: MINUTE, tickMs: 5 * SECOND, maxFixturesPerTick: batch ? 20 : workload.liveDetails.maxFixturesPerTick, requestWindowMs: 25 * SECOND,

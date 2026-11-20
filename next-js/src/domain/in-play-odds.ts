@@ -26,6 +26,7 @@ export const inPlayOddsObservationSchema = z.strictObject({
   fixtureId: z.uuid(), kickoffAt: at, checkedAt: at, providerUpdatedAt: at.nullable(),
   prices: inPlayOddsBodySchema,
   version: oddsVersionSchema.optional(),
+  source: z.strictObject({ provider: z.literal("api-football"), sourceId: z.literal("api-football-live"), bookmakerId: z.null() }).optional(),
 }).refine(({ checkedAt, providerUpdatedAt, version, prices }) => (providerUpdatedAt === null || providerUpdatedAt <= checkedAt) &&
   (version === undefined || prices.providerMarkets !== undefined));
 export type InPlayOddsBody = z.infer<typeof inPlayOddsBodySchema>;

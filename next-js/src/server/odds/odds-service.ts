@@ -2,23 +2,26 @@ import "server-only";
 
 import { utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
-import type { ApiFootballBounds, ApiFootballResult } from "../football/api-football-contract.ts";
+import type { ApiFootballBounds, ApiFootballFallbackWorkflow, ApiFootballResult } from "../football/api-football-contract.ts";
 import type { NormalizedFixtureOdds, NormalizedOddsCatalogEntry } from "../football/api-football-normalize.ts";
 import type { OddsSweepQuery } from "../football/api-football-adapter.ts";
 import { provenTrue as verified } from "../shared/authority-proof.ts";
 import { oddsFail, type OddsAuthority, type OddsBatchBody, type OddsFixtureOutcome, type OddsImportRequest,
   type OddsImportSummary, type ValidatedOddsObservation } from "./odds-contract.ts";
-import { assertValidatedOdds, authorizeOddsRequest, validateOddsObservation } from "./odds-input.ts";
+import { assertValidatedOdds, authorizeOddsRequest, oddsPolicyHash, oddsPricePageScopeKey, oddsScopeKey, validateOddsObservation } from "./odds-input.ts";
 import { fixtureQuoteManifests } from "./odds-mysql-store.ts";
 import type { MysqlOddsStore, OddsFixtureTarget } from "./odds-mysql-store.ts";
 
 /** The odds namespace of the API-Football adapter; it is separate from evidence and fallback. */
 export type OddsProvider = Readonly<{
-  prices(query: OddsSweepQuery, bounds: ApiFootballBounds): Promise<ApiFootballResult<NormalizedFixtureOdds>>;
+  prices(query: OddsSweepQuery, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow): Promise<ApiFootballResult<NormalizedFixtureOdds>>;
+  pricesPage?(query: OddsSweepQuery, page: number, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow): Promise<ApiFootballResult<NormalizedFixtureOdds>>;
   bets(bounds: ApiFootballBounds): Promise<ApiFootballResult<NormalizedOddsCatalogEntry>>;
   bookmakers(bounds: ApiFootballBounds): Promise<ApiFootballResult<NormalizedOddsCatalogEntry>>;
 }>;
 const MAX_RETAINED_COVERAGE = 1_000;
+const PRICE_PAGE_SIZE = 10;
+const MAX_COMMITTED_PRICE_PAGES = 1_000;
 
 /** Pure receipt classification; prices for unknown, started, rescheduled or non-scheduled fixtures are never applied. */
 export function classifyOddsRow(row: NormalizedFixtureOdds, target: OddsFixtureTarget | undefined): OddsFixtureOutcome {
@@ -34,39 +37,131 @@ function emptyOutcomes(): Record<OddsImportSummary["outcomes"] extends Readonly<
   return { apply: 0, "unknown-fixture": 0, "after-kickoff": 0, "kickoff-mismatch": 0, "not-scheduled": 0, changed: 0, unchanged: 0, skipped: 0, withdrawn: 0 };
 }
 
-/** Quota-limited odds imports. All provider I/O happens before any transaction; receipts are written first,
- * then each fixture is applied in its own short transaction. Withdrawal happens only after a complete sweep. */
+/** Quota-limited odds imports. The coordinated worker seals each page with its fixture snapshots after the
+ * provider returns. The legacy worker applies fixtures after sealing its aggregate. Withdrawal requires a complete sweep. */
 export function createOddsImportService(options: Readonly<{
   adapter: OddsProvider; store: MysqlOddsStore; authority: OddsAuthority;
   /** Provider-day quota account that owns the receipts (an ApiQuotaAccount row). */
   accountId: () => string;
   bounds: (request: OddsImportRequest) => ApiFootballBounds;
+  resumePricePages?: boolean;
   clock?: Clock;
 }>) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
-  async function receipt(observation: ValidatedOddsObservation, fixtures: OddsBatchBody["fixtures"]): Promise<OddsBatchBody> {
+  function receiptBody(observation: ValidatedOddsObservation, fixtures: OddsBatchBody["fixtures"], checkpoint?: OddsBatchBody["checkpoint"]): OddsBatchBody {
     const valid = assertValidatedOdds(observation), { request } = valid;
-    const content = { accountId: options.accountId(), kind: request.kind, scopeKey: valid.scopeKey, policyHash: valid.policyHash,
+    const content = { accountId: options.accountId(), kind: request.kind,
+      scopeKey: checkpoint ? oddsPricePageScopeKey(request.id) : valid.scopeKey, policyHash: valid.policyHash,
       status: valid.status, requestsDispatched: valid.requestsDispatched, receivedAt: valid.receivedAt, requestId: request.id, slot: request.slot,
       date: request.date, contractVersion: request.policy.contractVersion, reasons: valid.reasons,
       missingCoverage: valid.missingCoverage.slice(0, MAX_RETAINED_COVERAGE), pages: valid.provenance, fixtures,
-      catalog: valid.catalog.map(({ id, name }) => ({ id, name })) };
-    return options.store.saveBatch({ id: evidenceFingerprint(content), ...content } as OddsBatchBody);
+      catalog: valid.catalog.map(({ id, name }) => ({ id, name })), ...(checkpoint && { checkpoint }) };
+    return { id: evidenceFingerprint(content), ...content } as OddsBatchBody;
+  }
+  async function classify(observation: ValidatedOddsObservation) {
+    const targets = await options.store.resolveFixtures(observation.rows.map((row) => row.fixtureId));
+    return observation.rows.map((row) => ({ row, target: targets.get(row.fixtureId), outcome: classifyOddsRow(row, targets.get(row.fixtureId)) }));
+  }
+  function fixturesOf(classified: Awaited<ReturnType<typeof classify>>, bookmakerId: number) {
+    return classified.map(({ row, outcome }) => ({ externalId: row.fixtureId, outcome, observationHash: evidenceFingerprint(row),
+      ...fixtureQuoteManifests(row, bookmakerId) }));
+  }
+  function workflow(bounds: ApiFootballBounds, signal: AbortSignal | undefined): ApiFootballFallbackWorkflow {
+    const check = () => { if (signal?.aborted || clock.now() >= bounds.deadlineAt) oddsFail("unavailable"); };
+    return { signal: signal ?? new AbortController().signal, deadlineAt: bounds.deadlineAt, check, beforeReserve: check, beforeDispatch: check };
+  }
+  async function importPages(request: OddsImportRequest, query: OddsSweepQuery, bounds: ApiFootballBounds,
+    signal?: AbortSignal, checkpoint?: () => Promise<void>): Promise<OddsImportSummary> {
+    const readPage = options.adapter.pricesPage;
+    if (!readPage) return oddsFail("unavailable");
+    const policyHash = oddsPolicyHash(request.policy), committed = [...await options.store.pricePageBatches(request.id, policyHash)];
+    if (committed.some((batch) => !batch.checkpoint)) return oddsFail("invalid-state");
+    committed.sort((left, right) => left.checkpoint!.page - right.checkpoint!.page);
+    const previouslyCommitted = committed.length;
+    const accountId = options.accountId(), expected = committed[0]?.checkpoint?.totalPages;
+    const known = new Set<number>();
+    for (const [index, batch] of committed.entries()) {
+      if (batch.checkpoint?.page !== index + 1 || batch.checkpoint.totalPages !== expected || batch.accountId !== accountId ||
+        batch.requestId !== request.id || batch.date !== request.date || batch.slot !== request.slot || batch.status === "failed" ||
+        batch.fixtures.some(({ externalId }) => known.has(externalId))) return oddsFail("invalid-state");
+      for (const { externalId } of batch.fixtures) known.add(externalId);
+    }
+    let totalPages = expected, requestsDispatched = 0, countedInPages = 0;
+    let error: OddsImportSummary["error"] = null;
+    const outcomes = emptyOutcomes();
+    const providerWorkflow = workflow(bounds, signal);
+    const publicDisplay = verified(() => options.authority.verifyPublicDisplay());
+    const catalog = publicDisplay ? await options.store.latestBetCatalog() : null;
+    while (totalPages === undefined || committed.length < totalPages) {
+      if (signal?.aborted) return oddsFail("unavailable");
+      if (clock.now() >= bounds.deadlineAt || requestsDispatched >= bounds.maxRequests || committed.length - previouslyCommitted >= bounds.maxPages) {
+        error = { reason: "request-budget-exhausted", retryable: true }; break;
+      }
+      if (committed.length >= MAX_COMMITTED_PRICE_PAGES) { error = { reason: "pagination-incomplete", retryable: false }; break; }
+      await checkpoint?.();
+      const page = committed.length + 1;
+      const pageBounds = { ...bounds, maxRequests: Math.min(2, bounds.maxRequests - requestsDispatched), maxPages: 1,
+        maxRows: Math.min(PRICE_PAGE_SIZE, bounds.maxRows), cacheMaxAgeMs: 0 };
+      const result = await readPage(query, page, pageBounds, providerWorkflow);
+      requestsDispatched += result.requestsDispatched;
+      const observation = validateOddsObservation(request, result, pageBounds, options.authority, clock, page);
+      const pages = observation.provenance[0]?.totalPages;
+      if (observation.status === "failed" || pages == null) { error = providerError(result) ?? { reason: "schema-error", retryable: false }; break; }
+      if (totalPages !== undefined && pages !== totalPages || observation.rows.some(({ fixtureId }) => known.has(fixtureId)) ||
+        page < pages && observation.rows.length !== PRICE_PAGE_SIZE && observation.status === "complete") {
+        error = { reason: "pagination-incomplete", retryable: false }; break;
+      }
+      totalPages = pages;
+      const classified = await classify(observation);
+      const batch = receiptBody(observation, fixturesOf(classified, request.policy.bookmakerId), { page, totalPages });
+      await checkpoint?.();
+      if (signal?.aborted || batch.accountId !== accountId) return oddsFail("unavailable");
+      const saved = await options.store.saveAndApplyPricePage(batch, classified.flatMap(({ row, target, outcome }) => outcome === "apply" ?
+        [{ batchId: batch.id, policy: request.policy, policyHash, fixtureId: target!.fixtureId, row, publicDisplay, catalog }] : []));
+      committed.push(saved.batch);
+      countedInPages += saved.batch.requestsDispatched;
+      for (const { externalId } of saved.batch.fixtures) known.add(externalId);
+      for (const outcome of saved.outcomes) outcomes[outcome]++;
+    }
+    const complete = error === null && committed.length === totalPages && committed.every(({ status }) => status === "complete");
+    const reasons = [...new Set([...committed.flatMap((batch) => batch.reasons), ...(error ? [error.reason] : [])])].sort();
+    // Per-offer manifests already live on the atomic pages. The terminal receipt only proves date coverage.
+    const fixtures = committed.flatMap((batch) => batch.fixtures.map(({ externalId, outcome, observationHash }) =>
+      ({ externalId, outcome, observationHash })));
+    const content = { accountId, kind: "prices" as const, scopeKey: oddsScopeKey(request), policyHash,
+      status: complete ? "complete" as const : committed.length === 0 ? "failed" as const : "partial" as const,
+      // Atomic page receipts already count their physical attempts. Attribute only uncommitted requests here.
+      requestsDispatched: requestsDispatched - countedInPages,
+      receivedAt: error === null ? committed.at(-1)?.receivedAt ?? clock.now() : clock.now(), requestId: request.id, slot: request.slot,
+      date: request.date, contractVersion: request.policy.contractVersion, reasons,
+      missingCoverage: [...new Set(committed.flatMap((batch) => batch.missingCoverage))].sort().slice(0, MAX_RETAINED_COVERAGE),
+      pages: committed.flatMap((batch) => batch.pages), fixtures, catalog: [] };
+    await checkpoint?.();
+    if (signal?.aborted) return oddsFail("unavailable");
+    const batch = await options.store.saveBatch({ id: evidenceFingerprint(content), ...content });
+    for (const { outcome } of fixtures) outcomes[outcome]++;
+    if (complete) {
+      const targets = await options.store.resolveFixtures([...known]);
+      outcomes.withdrawn = await options.store.markWithdrawn({ batchId: batch.id, date: request.date!,
+        seenFixtureIds: [...targets.values()].map((target) => target.fixtureId) });
+    }
+    return Object.freeze({ batchId: batch.id, status: batch.status, requestsDispatched, outcomes: Object.freeze(outcomes), error,
+      continuation: error?.retryable === true });
   }
   return Object.freeze({
     /** One bounded EAT date sweep. Returns counts only; prices stay in the store. */
-    async importDate(input: OddsImportRequest, signal?: AbortSignal): Promise<OddsImportSummary> {
+    async importDate(input: OddsImportRequest, signal?: AbortSignal, checkpoint?: () => Promise<void>): Promise<OddsImportSummary> {
       const request = authorizeOddsRequest(input, options.authority);
       if (request.kind !== "prices" || request.date === null) return oddsFail("invalid-request");
       const bounds = options.bounds(request);
-      const result = await options.adapter.prices(request.policy.bookmakerScope === "all"
-        ? { date: request.date, allBookmakers: true } : { date: request.date, bookmakerId: request.policy.bookmakerId }, bounds);
+      const query: OddsSweepQuery = request.policy.bookmakerScope === "all"
+        ? { date: request.date, allBookmakers: true } : { date: request.date, bookmakerId: request.policy.bookmakerId };
+      if (options.resumePricePages) return importPages(request, query, bounds, signal, checkpoint);
+      const result = await options.adapter.prices(query, bounds, signal && workflow(bounds, signal));
       // Authorization, policy and retention are re-verified after I/O, inside validation.
       const observation = validateOddsObservation(request, result, bounds, options.authority, clock);
-      const targets = await options.store.resolveFixtures(observation.rows.map((row) => row.fixtureId));
-      const classified = observation.rows.map((row) => ({ row, target: targets.get(row.fixtureId), outcome: classifyOddsRow(row, targets.get(row.fixtureId)) }));
-      const batch = await receipt(observation, classified.map(({ row, outcome }) => ({ externalId: row.fixtureId, outcome,
-        observationHash: evidenceFingerprint(row), ...fixtureQuoteManifests(row, request.policy.bookmakerId) })));
+      const classified = await classify(observation);
+      const batch = await options.store.saveBatch(receiptBody(observation, fixturesOf(classified, request.policy.bookmakerId)));
       const outcomes = emptyOutcomes();
       for (const { outcome } of classified) outcomes[outcome]++;
       const publicDisplay = verified(() => options.authority.verifyPublicDisplay());
@@ -93,7 +188,7 @@ export function createOddsImportService(options: Readonly<{
       const bounds = options.bounds(request);
       const result = request.kind === "bets" ? await options.adapter.bets(bounds) : await options.adapter.bookmakers(bounds);
       const observation = validateOddsObservation(request, result, bounds, options.authority, clock);
-      const batch = await receipt(observation, []);
+      const batch = await options.store.saveBatch(receiptBody(observation, []));
       if (request.kind === "bets" && batch.catalog.length > 0) await options.store.saveBetObservations(batch.id, batch.catalog);
       return Object.freeze({ batchId: batch.id, status: batch.status, requestsDispatched: batch.requestsDispatched, outcomes: Object.freeze(emptyOutcomes()),
         error: providerError(result) });

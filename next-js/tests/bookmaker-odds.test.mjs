@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bookmakerMarketPrice } from "../src/domain/bookmaker-odds.ts";
+import { bookmakerMarketPrice, bookmakerReferencePrice } from "../src/domain/bookmaker-odds.ts";
 import { mergeLiveDetail } from "../src/domain/live-refresh.ts";
 import { matchDetailResponseSchema } from "../src/domain/match-detail.ts";
 import { gateDetailResponse } from "../src/domain/paywall.ts";
-import { projectBookmakerOdds } from "../src/server/odds/bookmaker-odds-read.ts";
+import { projectBookmakerOdds, storedPreMatchCatalogCoverage } from "../src/server/odds/bookmaker-odds-read.ts";
 import { mapInPlayOdds, reviewedInPlayCatalog } from "../src/server/odds/in-play-odds-mapping.ts";
 import { oddsValuesHash, storedCurrentBookmakerQuotes } from "../src/server/odds/odds-mysql-store.ts";
 import { liveDetail, liveRecord, now } from "./helpers/live-refresh-fixtures.mjs";
@@ -42,8 +42,29 @@ test("one sealed receipt exposes exact partial and alternate-line prices separat
   assert.deepEqual(odds.books.map(({ bookmakerId }) => bookmakerId), [8, 3]);
   assert.deepEqual(odds.books[0].markets[0].selections.map(({ label }) => label), ["Over 1.5", "Under 1.5"]);
   assert.equal(bookmakerMarketPrice(odds, "total-goals", "over-2.5"), "2.0123");
+  assert.equal(bookmakerMarketPrice(odds, "total-goals", "over-2.5", 8), null);
+  assert.equal(bookmakerMarketPrice(odds, "total-goals", "over-2.5", 3), "2.0123");
   assert.equal(bookmakerMarketPrice(odds, "total-goals", "under-2.5"), null);
   assert.equal(projectBookmakerOdds(found.get(fixtureId), "pre-match", 480).limited, true);
+  const fallbackIds = [3, ...Array.from({ length: 63 }, (_, index) => 100 + index)];
+  const extensivePolicy = projectBookmakerOdds(found.get(fixtureId), "pre-match", Infinity, fallbackIds);
+  assert.equal(extensivePolicy.fallbackBookmakerIds.length, 64);
+  const reference = bookmakerReferencePrice(extensivePolicy, { betId: 5, betName: "Goals Over/Under" }, "Over 2.5", "full-time");
+  assert.equal(reference.actualBookmakerId, 3);
+  assert.equal(reference.fallback, "configured");
+  assert.equal(reference.offer.observedAt, checkedAt - 30_000);
+  assert.equal(bookmakerReferencePrice(extensivePolicy, { betId: 5, betName: "Goals Over/Under" }, "Over 2.5", "half-time").state, "unavailable");
+});
+
+test("the private catalog report exposes named, renamed, unknown and unnamed sealed observations", async () => {
+  const receipt = batch(catalogId, "bets", { catalog: [{ id: 5, name: "Goals Over/Under" }, { id: 8, name: "Renamed without review" },
+    { id: 999, name: "Novel provider market" }], missingCoverage: ["odds-catalog-name:1000", "odds-catalog-name:1000"] });
+  const report = await storedPreMatchCatalogCoverage({ $queryRaw: async () => [receipt] }, asOf);
+  assert.equal(report.receiptId, catalogId);
+  assert.deepEqual(report.entries.map(({ id, status, reason }) => [id, status, reason]), [
+    [5, "mapped", null], [8, "unmapped", "provider-name-mismatch"], [999, "unmapped", "no-reviewed-provider-mapping"],
+    [1000, "unmapped", "provider-name-unavailable"],
+  ]);
 });
 
 test("detail odds remain independent of a forecast and keep access, occurrence, and semantic-refresh checks", () => {

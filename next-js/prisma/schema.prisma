@@ -195,6 +195,7 @@ model FootballSeason {
 
 model FootballFixture {
   intelligenceShadow    IntelligenceShadowState?
+  inPlayOddsHistory     FixtureInPlayOddsHistory[]
   liveMatchSnapshots    LiveMatchSnapshot[]
   historyDetailState    FootballHistoryDetailState?
   publishedSlipLegs     PublishedSlipLeg[]
@@ -1622,6 +1623,24 @@ model FixtureInPlayOdds {
   @@index([checkedAt])
 }
 
+// Private structured live offers. Unchanged observations extend the same span.
+model FixtureInPlayOddsHistory {
+  id                    String          @id @db.Char(64)
+  fixtureId             String          @db.Char(36)
+  occurrenceHash        String          @db.Char(64)
+  semanticHash          String          @db.Char(64)
+  firstObservedAt       DateTime        @db.DateTime(3)
+  lastObservedAt        DateTime        @db.DateTime(3)
+  providerUpdatedAt     DateTime?       @db.DateTime(3)
+  lastProviderUpdatedAt DateTime?       @db.DateTime(3)
+  outOfOrder            Boolean
+  bodyJson              Json
+  fixture               FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([fixtureId, occurrenceHash, outOfOrder, firstObservedAt, id], map: "fixture_in_play_odds_history_lookup_idx")
+  @@index([lastObservedAt, fixtureId], map: "fixture_in_play_odds_history_recent_idx")
+}
+
 model InPlayOddsPollState {
   provider     String   @id @db.VarChar(32)
   nextPollAt   DateTime @db.DateTime(3)
@@ -2493,9 +2512,35 @@ model FootballHistorySourcePage {
   contentHash        String   @db.Char(64)
   compressedRows     Bytes    @db.LongBlob
   subjectIndexStatus String?  @db.VarChar(8)
+  coverage           FootballProviderCoverage[]
 
   @@index([endpoint, selectorHash, retrievedAt])
   @@index([endpoint, subjectIndexStatus, id], map: "football_history_source_subject_idx")
+}
+
+// Stable provider resource checkpoint. Raw envelopes share FootballHistorySourcePage.
+model FootballProviderCoverage {
+  key            String   @id @db.Char(64)
+  resource       String   @db.VarChar(40)
+  endpoint       String   @db.VarChar(40)
+  scope          Json
+  parameters     Json
+  page           Int      @db.UnsignedInt
+  section        String   @db.VarChar(40)
+  status         String   @db.VarChar(24)
+  reason         String?  @db.VarChar(64)
+  attempts       Int      @db.UnsignedInt
+  revision       Int      @db.UnsignedInt
+  updatedAt      DateTime @db.DateTime(3)
+  lastAttemptAt  DateTime? @db.DateTime(3)
+  lastResponseId String?  @db.Char(64)
+  lastCompleteAt DateTime? @db.DateTime(3)
+  nextRetryAt    DateTime? @db.DateTime(3)
+  remaining      Int?     @db.UnsignedInt
+  lastResponse   FootballHistorySourcePage? @relation(fields: [lastResponseId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([endpoint, status, nextRetryAt], map: "football_provider_coverage_retry_idx")
+  @@index([lastResponseId], map: "football_provider_coverage_response_idx")
 }
 
 model FootballHistorySubject {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createFootballHistoryDetails } from "../src/server/football/history-details.ts";
+import { finalRegulationStatisticCounts } from "../src/server/settlement/final-implied-counts.ts";
 import { catalogFixture } from "./helpers/catalog-fixtures.mjs";
 import { resultProvider } from "./helpers/result-sync-fixtures.mjs";
 
@@ -21,7 +22,7 @@ function fixture(overrides = {}) {
   return row;
 }
 
-function harness(previousFacts = null, { eligible = true } = {}) {
+function harness(previousFacts = null, { eligible = true, onFinalDetails } = {}) {
   let now = NOW, facts = previousFacts, archive = null;
   const provider = resultProvider({ now: () => now });
   const target = { fixtureId, externalId: 101n, competitionId: 39n, season: 2026, kickoffAt: new Date(KICKOFF),
@@ -70,7 +71,7 @@ function harness(previousFacts = null, { eligible = true } = {}) {
   };
   const database = { async query(operation) { return operation(tx); }, async transaction(operation) { return operation(tx); } };
   const run = createFootballHistoryDetails({ database, adapter: provider.adapter.evidence, batchSize: 20, competitionIds: [39],
-    now: () => now, providerDayEndsAt: () => NOW + 7 * 86_400_000 });
+    now: () => now, providerDayEndsAt: () => NOW + 7 * 86_400_000, onFinalDetails });
   return { run, provider, get facts() { return facts; }, get archive() { return archive; }, advance(ms) { now += ms; } };
 }
 
@@ -94,6 +95,25 @@ test("historical detail preserves saved facts, adds missing team and fixture inf
   assert.equal(repeat.requests, 0);
   assert.equal(repeat.status, "partial");
   assert.deepEqual(repeat.coverage, result.coverage);
+});
+
+test("verified FT counts reach the separate settlement projection from the exact response even when archival rows already exist", async () => {
+  const captured = [];
+  const state = harness({ statistics: [statistics(10, 3)] }, { async onFinalDetails({ fixtureId: id, detail, checkedAt }) {
+    assert.equal(id, fixtureId); assert.equal(checkedAt, NOW);
+    captured.push(finalRegulationStatisticCounts(detail));
+    assert.deepEqual(finalRegulationStatisticCounts({ ...detail, status: "finished-extra-time", providerStatus: "AET" }), []);
+    assert.deepEqual(finalRegulationStatisticCounts({ ...detail, matchStatistics: [detail.matchStatistics[0]] }), []);
+    assert.deepEqual(finalRegulationStatisticCounts({ ...detail, regulationScore: { ...detail.regulationScore, verified: false } }), []);
+    throw new Error("Synthetic optional settlement projection failure");
+  } });
+  state.provider.state.rows = [fixture({ events: [], statistics: [statistics(20, 0), statistics(10, 9)] })];
+  const result = await state.run({ maxRequests: 2 });
+  assert.equal(result.written, 1);
+  assert.equal(result.requests, 1);
+  assert.deepEqual(captured, [[{ metric: "corners", period: "full-time", scope: "regulation-including-stoppage-time",
+    countingRule: "provider-reported-count-v1", verified: true, home: 9, away: 0 }]]);
+  assert.deepEqual(state.facts.statistics, [statistics(10, 3), statistics(20, 0)]);
 });
 
 test("an uncorrelated fixture and a failed dispatch preserve facts and retry without inventing evidence", async () => {

@@ -43,6 +43,7 @@ export function createHourlyFixtureReconciler(options: Readonly<{
   importer: Pick<ReturnType<typeof createFootballCatalogImporter>, "import">;
   policy: SelectionPolicy;
   clock?: Clock;
+  includeOverdue?: boolean;
   onLookupFailure?(reason: string, fixtureCount: number): void;
 }>) {
   const { database, importer, policy } = options;
@@ -109,7 +110,7 @@ export function createHourlyFixtureReconciler(options: Readonly<{
       const candidates = await database.query((client) => client.footballFixture.findMany({
         where: {
           provider, eatDate: { in: completeDates }, retrievedAt: { lt: new Date(scheduledFor) },
-          OR: [{ status: "scheduled", kickoff: { gte: new Date(scheduledFor) } }, { status: "postponed" }],
+          OR: [{ status: "scheduled", kickoff: options.includeOverdue ? { not: null } : { gte: new Date(scheduledFor) } }, { status: "postponed" }],
           externalId: { gt: 0n, lte: BigInt(Number.MAX_SAFE_INTEGER), notIn: [...lookedUp].map(BigInt) },
           season: { competition: { providers: { some: { provider, externalId: { in: competitionIds } } } } },
         },

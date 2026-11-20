@@ -81,7 +81,7 @@ test("archives all five documented nonpaginated reference scopes with provider r
   assert.deepEqual(report, { status: "complete", requested: 5, archived: 5, skipped: 0, deferred: 0, requests: 5, stopped: null });
   assert.deepEqual(pages, scenarios.map(([target, parameters, rows], index) => ({ endpoint: target.endpoint,
     parameters, rows, retrievedAt: CATALOG_NOW + (index + 1) * 100 })));
-  assert.ok(reservations.every(({ priority }) => priority === "enrichment"));
+  assert.ok(reservations.every(({ priority }) => priority === "historical-backfill"));
   assert.equal(transport.length, 5);
   assert.equal((await importer.run({ targets: [...targets, targets[0]], maxRequests: 1 })).skipped, 5);
   assert.equal(transport.length, 5);
@@ -95,6 +95,28 @@ test("handles a complete empty response durably and starts with the newest unres
   assert.equal((await importer.run({ targets, maxRequests: 1 })).skipped, 1);
   assert.deepEqual(transport.map((url) => url.searchParams.get("season")), ["2026", "2025"]);
   assert.deepEqual(pages.map(({ rows }) => rows), [[], []]);
+});
+
+test("replays a verified archive receipt after interruption without spending reference quota", async () => {
+  const [target,, rows] = scenarios[1];
+  const { adapter } = setup(url => catalogResponse(url, rows));
+  const observed = await adapter.reference.page(target, catalogBounds());
+  const clock = CATALOG_NOW + 1000, saved = [];
+  const options = {
+    reference: { async page(_target, bounds) {
+      assert.ok(bounds.replayMaxAgeMs > 0);
+      return { ...observed, requestsDispatched: 0, provenance: [{ ...observed.provenance[0], fromCache: true }] };
+    } },
+    now: () => clock, providerDayEndsAt: () => clock + 60_000,
+    hasPage: async () => false, savePage: async page => { saved.push(page); },
+  };
+  const replayed = await createFootballHistoryReference({ ...options, replayMaxAgeMs: 5000 }).run({ targets: [target], maxRequests: 1 });
+  assert.equal(replayed.archived, 1);
+  assert.equal(replayed.requests, 0);
+  assert.equal(saved[0].retrievedAt, observed.provenance[0].retrievedAt);
+  const expired = await createFootballHistoryReference({ ...options, replayMaxAgeMs: 1 }).run({ targets: [target], maxRequests: 1 });
+  assert.equal(expired.archived, 0);
+  assert.equal(expired.deferred, 1);
 });
 
 test("leaves mismatched rows, truncated pagination, and omitted selector echoes unresolved", async () => {
@@ -167,7 +189,7 @@ test("reference verification needs all phases, a settled discovery scope, and on
   }
 });
 
-test("does not share the raw teams projection with an overlapping normalized teams request", async () => {
+test("shares one provider request while producing distinct raw and normalized teams projections", async () => {
   const { adapter, transport } = setup((url) => catalogResponse(url, [{ team: catalogTeam(10), venue }]));
   const [target] = scenarios[0];
   const bounds = catalogBounds();
@@ -179,7 +201,7 @@ test("does not share the raw teams projection with an overlapping normalized tea
   assert.equal(normal.data[0].name, "Synthetic club 10");
   assert.equal(archived.status, "complete");
   assert.deepEqual(archived.data[0].raw.venue, venue);
-  assert.equal(transport.length, 2);
+  assert.equal(transport.length, 1);
 });
 
 test("does not dispatch after a provider day rollover while checking stored coverage", async () => {

@@ -3,7 +3,7 @@ import "server-only";
 import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
 import type { createApiFootballAdapter } from "./api-football-adapter.ts";
 import { API_FOOTBALL_CONTRACT_VERSION, apiFootballReferenceParameters, isApiFootballLeaderboard, isFootballHistoryReferenceDictionary,
-  type ApiFootballErrorReason, type FootballHistoryReferenceTarget } from "./api-football-contract.ts";
+  type ApiFootballErrorReason, type ApiFootballFailure, type FootballHistoryReferenceTarget } from "./api-football-contract.ts";
 import { historyBackfillLimits } from "./history-backfill.ts";
 import { isFootballHistoryPersonRecordEndpoint } from "./history-person-records.ts";
 import { footballHistoryReferencePhases, type FootballHistoryReferencePhase } from "./history-source.ts";
@@ -17,7 +17,13 @@ export type FootballHistoryReferenceSelector = Readonly<{
 
 type ReferenceAdapter = ReturnType<typeof createApiFootballAdapter>["reference"];
 type ReferenceResponse = Awaited<ReturnType<ReferenceAdapter["page"]>>;
-type ReferencePage = FootballHistoryReferenceSelector & Readonly<{ rows: readonly unknown[]; retrievedAt: UtcInstant }>;
+export type FootballHistoryReferencePage = FootballHistoryReferenceSelector & Readonly<{ rows: readonly unknown[]; retrievedAt: UtcInstant }>;
+export type FootballHistoryReferenceCheckpoint = Readonly<{
+  begin(selector: FootballHistoryReferenceSelector): Promise<Readonly<{
+    save(page: FootballHistoryReferencePage, remaining: number): Promise<boolean>;
+    fail(error: ApiFootballFailure | null): Promise<unknown>;
+  }> | null>;
+}>;
 type PhaseReport = Readonly<{ status: "complete" | "partial"; stopped: string | null; archived: number; deferred: number; day?: string }>;
 
 /** Confirm that a full pass observed no unfinished work in the discovered scope. */
@@ -66,14 +72,16 @@ function priority({ endpoint }: FootballHistoryReferenceTarget) {
 }
 
 function acceptedPage(response: ReferenceResponse, selector: FootballHistoryReferenceSelector,
-  started: UtcInstant, finished: UtcInstant, deadlineAt: UtcInstant) {
+  started: UtcInstant, finished: UtcInstant, deadlineAt: UtcInstant, replayMaxAgeMs: number) {
   const [page] = response.provenance;
+  const replay = page?.fromCache === true;
   if (response.status !== "complete" || response.error !== null || !response.completeness.complete || response.completeness.invalidRows !== 0 ||
     response.completeness.reasons.length !== 0 || response.completeness.missingIds.length !== 0 ||
-    response.requestsDispatched !== 1 || response.provenance.length !== 1 || !page ||
+    response.requestsDispatched !== (replay ? 0 : 1) || response.provenance.length !== 1 || !page ||
     page.provider !== "api-football" || page.endpoint !== selector.endpoint || page.contractVersion !== API_FOOTBALL_CONTRACT_VERSION ||
-    page.fromCache || page.quota.kind !== "success" || page.currentPage !== 1 || page.totalPages !== 1 ||
-    !Number.isSafeInteger(page.retrievedAt) || page.retrievedAt < started || page.retrievedAt > finished || page.retrievedAt >= deadlineAt) return null;
+    page.quota.kind !== "success" || page.currentPage !== 1 || (page.totalPages !== 1 && !(page.totalPages === 0 && response.data.length === 0)) ||
+    !Number.isSafeInteger(page.retrievedAt) || page.retrievedAt > finished || page.retrievedAt >= deadlineAt ||
+    (replay ? replayMaxAgeMs === 0 || page.retrievedAt < started - replayMaxAgeMs : page.retrievedAt < started)) return null;
   const parameters = Object.entries(selector.parameters);
   if (Object.keys(page.requestParameters).length !== parameters.length ||
     parameters.some(([key, value]) => page.requestParameters[key] !== value)) return null;
@@ -85,11 +93,14 @@ function acceptedPage(response: ReferenceResponse, selector: FootballHistoryRefe
 export function createFootballHistoryReference(options: Readonly<{
   reference: ReferenceAdapter;
   hasPage(selector: FootballHistoryReferenceSelector): Promise<boolean>;
-  savePage(page: ReferencePage): Promise<unknown>;
+  savePage(page: FootballHistoryReferencePage): Promise<unknown>;
   now(): UtcInstant;
   providerDayEndsAt(): number | null;
+  replayMaxAgeMs?: number;
+  priority?: "enrichment" | "historical-backfill";
+  checkpoint?: FootballHistoryReferenceCheckpoint;
 }>) {
-  const { reference, hasPage, savePage, now, providerDayEndsAt } = options;
+  const { reference, hasPage, savePage, now, providerDayEndsAt, replayMaxAgeMs = 0, checkpoint, priority: dispatchPriority = "historical-backfill" } = options;
 
   return {
     async run(input: Readonly<{ targets: readonly FootballHistoryReferenceTarget[]; maxRequests: number; hasMoreTargets?: boolean; signal?: AbortSignal }>) {
@@ -104,7 +115,8 @@ export function createFootballHistoryReference(options: Readonly<{
         const selector = { endpoint: target.endpoint, parameters };
         plan.set(JSON.stringify(selector), { target, selector });
       }
-      const planned = [...plan.values()].sort(({ target: left }, { target: right }) => {
+      const planned = [...plan.values()];
+      if (dispatchPriority === "historical-backfill") planned.sort(({ target: left }, { target: right }) => {
         const leftPriority = priority(left), rightPriority = priority(right);
         if (leftPriority !== rightPriority) return rightPriority - leftPriority;
         if (leftPriority === 0) return 0;
@@ -126,23 +138,32 @@ export function createFootballHistoryReference(options: Readonly<{
         if (stopped) break;
         if (archived) { totals.skipped++; continue; }
         if (totals.requests >= maxRequests) { stopped = "request-budget"; break; }
+        const attempt = await checkpoint?.begin(selector);
+        if (checkpoint && !attempt) { totals.deferred++; continue; }
 
         const started = now(), deadlineAt = utcInstantFromEpochMilliseconds(Math.min(dayEnd, started + 45_000));
         const check = () => {
           if (dayStop() || now() >= deadlineAt) throw new Error("The historical reference request expired.");
         };
         totals.requested++;
-        const response = await reference.page(target, { priority: "enrichment", deadlineAt, timeoutMs: 30_000,
+        const response = await reference.page(target, { priority: dispatchPriority, deadlineAt, timeoutMs: 30_000,
           maxRequests: 1, maxPages: 1, maxRows: 10_000, maxResponseBytes: 24_000_000,
-          retry: { maxAttempts: 4, baseDelayMs: 500, maxDelayMs: 2500 }, cacheMaxAgeMs: 0 },
+          retry: { maxAttempts: 4, baseDelayMs: 500, maxDelayMs: 2500 }, cacheMaxAgeMs: 0,
+          ...(replayMaxAgeMs > 0 ? { replayMaxAgeMs } : {}) },
         { signal, deadlineAt, check, beforeReserve: check, beforeDispatch: check });
         totals.requests += response.requestsDispatched;
-        const page = acceptedPage(response, selector, started, now(), deadlineAt);
+        const page = acceptedPage(response, selector, started, now(), deadlineAt, replayMaxAgeMs);
         if (page) {
-          await savePage(page);
-          totals.archived++;
-          if ("subjectIds" in target && target.subjectIds.length > 1 && page.rows.length < target.subjectIds.length) totals.deferred++;
-        } else totals.deferred++;
+          const remaining = "subjectIds" in target && target.subjectIds.length > 1
+            ? Math.max(0, target.subjectIds.length - page.rows.length) : 0;
+          if (!attempt) await savePage(page);
+          const saved = !attempt || await attempt.save(page, remaining);
+          if (saved) totals.archived++;
+          if (!saved || remaining > 0) totals.deferred++;
+        } else {
+          await attempt?.fail(response.error);
+          totals.deferred++;
+        }
 
         const reason = response.error?.reason;
         stopped = dayStop() ?? (reason && stopReasons.has(reason) ? reason : null);
@@ -150,7 +171,7 @@ export function createFootballHistoryReference(options: Readonly<{
         const transportFailure = reason === "transport-error" || reason === "deadline-exceeded";
         consecutiveTransportFailures = transportFailure ? consecutiveTransportFailures + 1 : 0;
         if (consecutiveTransportFailures >= 3) { stopped = "provider-transport-unavailable"; break; }
-        if (response.requestsDispatched !== 1 && !transportFailure) { stopped = reason ?? "reference-unavailable"; break; }
+        if (response.requestsDispatched !== 1 && !page && !transportFailure) { stopped = reason ?? "reference-unavailable"; break; }
       }
       stopped ??= dayStop();
       if (!stopped && input.hasMoreTargets) stopped = totals.requests >= maxRequests ? "request-budget" : "target-limit";

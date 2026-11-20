@@ -77,18 +77,15 @@ function liveProgressOrder(): Prisma.Sql {
 /** The effective display permission keeps the SQL join and filter in sync with the record prices. */
 export function feedSql(query: FeedQuery, range: ReportingDateRange, competitionIds: readonly number[],
   providerOdds: boolean = publicPolicy.features.providerOdds, search: FeedSearch | null = null, completedOnly = false, publishedOnly = false,
-  historyBefore: UtcInstant | null = null) {
+  historyBefore: UtcInstant | null = null, publishedForecasts = publishedOnly) {
   const markets = Prisma.join(query.markets);
   const hasDecision = Prisma.sql`rp.feedRecommendation IS NOT NULL`;
   const recommendedFamily = Prisma.sql`NULLIF(JSON_UNQUOTE(JSON_EXTRACT(rp.feedRecommendation,'$.family')),'null')`;
-  const preferRecommendation = !publishedOnly;
+  const preferRecommendation = !publishedForecasts;
   const useRecommendation = Prisma.sql`${recommendedFamily} IN (${markets})`;
   const chosen = Prisma.sql`(${hasDecision} AND m.family=${recommendedFamily})`;
-  const forecastAvailable = Prisma.sql`m.available=TRUE`;
-  const recommendationAvailable = query.markets.length === publicPolicy.markets.length || publishedOnly
-    ? Prisma.sql`(${forecastAvailable} AND (NOT (${hasDecision}) OR ${useRecommendation}))` : forecastAvailable;
-  // The public forecast view grades the displayed published pick at any probability.
-  const pickAvailable = preferRecommendation ? recommendationAvailable : forecastAvailable;
+  // An explicit recommendation abstention can still have a published market prediction.
+  const pickAvailable = Prisma.sql`m.available=TRUE`;
   const pickProbability = preferRecommendation ? Prisma.sql`CASE WHEN ${chosen} THEN (JSON_UNQUOTE(JSON_EXTRACT(rp.feedRecommendation,
     '$.probability'))+0e0) ELSE m.selectedProbability END` : Prisma.sql`m.selectedProbability`;
   const pickSelection = preferRecommendation ? Prisma.sql`CASE WHEN ${chosen} THEN JSON_UNQUOTE(JSON_EXTRACT(rp.feedRecommendation,
@@ -97,12 +94,10 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
   const rankedCandidateMarket = preferRecommendation
     ? Prisma.sql`CASE WHEN ${useRecommendation} THEN b.family=${recommendedFamily} ELSE ${candidateMarket} END`
     : candidateMarket;
-  // One shown pick per fixture: prioritize exact fresh quotes, then rank by unrounded probability,
-  // quote and policy order. Candidate odds remain unread while their public feature is disabled.
+  // Honor a frozen recommendation first. Older rows rank by unrounded probability, then an exact fresh quote and stable key.
   const candidatePriceJoin = providerOdds ? Prisma.sql`LEFT JOIN FixtureOddsPrice bp ON bp.fixtureId=f.id
       AND bp.marketKey=b.family AND bp.selection=b.selection AND bp.stale=FALSE AND bp.priceDecimal>=${minimumFixturePrice}` : Prisma.empty;
   const candidatePriceOrder = providerOdds ? Prisma.sql`bp.displayHundredths DESC,` : Prisma.empty;
-  const pricedFirst = providerOdds ? Prisma.sql`(bp.displayHundredths IS NOT NULL) DESC,` : Prisma.empty;
   // The cohort joins alone serve the known count and league options: each shown-pick join below matches a full primary
   // key, (setId, family) and (fixtureId, marketKey, selection), so it never adds or removes a cohort row.
   // The provider equality is low-selectivity across a season archive. Keep this
@@ -130,8 +125,8 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
     const fixtures = ids ? Prisma.sql`AND f.id IN (${Prisma.join(ids)})` : Prisma.empty;
     const source = ids ? Prisma.sql`FROM FootballFixture f FORCE INDEX (PRIMARY) ${fixtureRelations}` : cohortJoins;
     const ranked = Prisma.sql`SELECT STRAIGHT_JOIN f.id AS fixtureId,b.setId,b.family,
-    ROW_NUMBER() OVER (PARTITION BY f.id ORDER BY ${pricedFirst} b.selectedProbability DESC,
-      ${candidatePriceOrder} FIELD(b.family,${Prisma.join(publicPolicy.markets)}) ASC) AS pickRank
+    ROW_NUMBER() OVER (PARTITION BY f.id ORDER BY b.selectedProbability DESC,
+      ${candidatePriceOrder} b.family ASC, b.selection ASC) AS pickRank
     ${source} LEFT JOIN PredictionSet rp ON rp.id=${displayedSet}
     JOIN MarketPrediction b FORCE INDEX (MarketPrediction_feed_choice_idx) ON b.setId=rp.id AND ${rankedCandidateMarket}
     ${candidatePriceJoin} ${searchJoin} WHERE ${Prisma.join(cohortFilters, " AND ")} ${fixtures}`;

@@ -66,6 +66,8 @@ function ruleLabel(messages: LabelMessages, rule: GoalRule | NonGoalRule): strin
     case "asian-handicap": return messages.text(`market.selection.${rule.team}-handicap`, { line: signedLine(rule.line) });
     case "exact-score": return messages.text("market.selection.exact-score", { home: String(rule.home), away: String(rule.away) });
     case "half-full-result": return messages.text("market.selection.half-full", { half: result(messages, rule.half), full: result(messages, rule.full) });
+    case "highest-scoring-half": return { "first-half": "First half", equal: "Equal", "second-half": "Second half" }[rule.half];
+    case "scoring-in-both-halves": return messages.text(rule.yes ? "market.selection.answer.yes" : "market.selection.answer.no");
     case "all": return rule.rules.map((part) => ruleLabel(messages, part)).join(messages.text("market.selection.and"));
     case "none": return rule.rules.every((part) => part.kind === "exact-score") ? messages.text("market.selection.other-score")
       : messages.text("market.selection.none-of");

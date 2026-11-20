@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeInPlayOdds } from "../src/server/football/api-football-normalize.ts";
 import { marketOddsPrice, sameMarketOdds } from "../src/domain/in-play-odds.ts";
+import { structuredInPlayOdds } from "../src/server/odds/in-play-odds-history.ts";
 import { mapInPlayOdds, reviewedInPlayCatalog } from "../src/server/odds/in-play-odds-mapping.ts";
+import { resultProvider } from "./helpers/result-sync-fixtures.mjs";
+import { catalogResponse } from "./helpers/catalog-fixtures.mjs";
 
 const now = Date.parse("2026-11-11T15:00:00Z");
 const price = (value, odd, overrides = {}) => ({ value, odd, handicap: null, main: null, suspended: false, ...overrides });
@@ -57,4 +60,46 @@ test("exact current prices keep their precision and suspended markets do not bor
   assert.equal(sameMarketOdds(odds, { ...odds, checkedAt: now + 30_000 }), true);
   assert.equal(sameMarketOdds(odds, suspended), false);
   assert.equal(sameMarketOdds(odds, null), false);
+});
+
+test("private source-less history is independent of offer order and records only reviewed period semantics", () => {
+  const identified = { id: 59, name: "Fulltime Result", values: [price("Home", "1.45"), price("Away", "3.7")] };
+  const unreviewed = { id: 187, name: "Unreviewed team or player selection", values: [
+    price("Player / Side A", "3.15", { handicap: "-2.00", suspended: true }),
+    price("Player / Side A", "3.16", { handicap: "-2.00", main: true }),
+  ] };
+  const source = normal([identified, unreviewed]).data;
+  const reordered = normal([{ ...unreviewed, values: [...unreviewed.values].reverse() }, identified]).data;
+  const first = structuredInPlayOdds(source, catalogue);
+  assert.deepEqual(first, structuredInPlayOdds(reordered, catalogue));
+  assert.equal(first.source.bookmakerId, null);
+  assert.equal(first.markets[0].period, "full-time");
+  assert.equal(first.markets[1].period, null);
+  assert.equal(first.markets[1].review.reason, "catalog-entry-unavailable");
+  assert.equal(first.markets[1].values[0].line, "-2");
+  assert.deepEqual(first.markets[1].values.map(({ suspended }) => suspended), [true, false]);
+});
+
+test("valid sibling values from a malformed live group remain private and never become current offers", () => {
+  const normalized = normal([{ id: 59, name: "Fulltime Result", values: [price("Home", "1.45"), price("Draw", "bad"),
+    price("Away", "3.7")] }]);
+  assert.equal(normalized.valid, true);
+  assert.deepEqual(normalized.data.bets, []);
+  assert.ok(normalized.missingCoverage.includes("in-play-bet-rejected:59"));
+  const capture = structuredInPlayOdds(normalized.data, catalogue);
+  assert.equal(capture.availability, "partial-offers");
+  assert.equal(capture.markets[0].complete, false);
+  assert.deepEqual(capture.markets[0].values.map(value => value.price), ["3.7", "1.45"]);
+  assert.equal(mapInPlayOdds(normalized.data, catalogue, true).state, "unavailable");
+});
+
+test("the broad live catalog marks unnamed identities without rejecting named siblings", async () => {
+  const provider = resultProvider({ now: () => now }, { respond: url => catalogResponse(url, [{ id: 59, name: "Fulltime Result" }, { id: 815, name: null }]) });
+  const result = await provider.adapter.odds.inPlayBets({ priority: "enrichment", deadlineAt: now + 20_000, timeoutMs: 3000,
+    maxRequests: 1, maxPages: 1, maxRows: 1000, maxResponseBytes: 100_000,
+    retry: { maxAttempts: 1, baseDelayMs: 0, maxDelayMs: 0 }, cacheMaxAgeMs: 0 });
+  assert.equal(result.status, "complete");
+  assert.deepEqual(result.data.map(value => value.id), [59]);
+  assert.ok(result.completeness.missingCoverage.includes("odds-catalog-name:815"));
+  assert.equal(provider.network[0].url.search, "");
 });

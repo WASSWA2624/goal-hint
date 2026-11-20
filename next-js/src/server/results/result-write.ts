@@ -12,14 +12,17 @@ type ResultObservation = Pick<LifecycleObservation, "externalFixtureId" | "stopp
 
 /** Result scores come from canonical regulation evidence, never from the display score. */
 export function fixtureResultValue(fixture: ResultFixture, observation: ResultObservation) {
-  const verified = fixture.regulationHome !== null && fixture.regulationAway !== null && fixture.regulationVerifiedAt !== null;
+  const verified = fixture.regulationHome !== null && fixture.regulationAway !== null &&
+    fixture.regulationVerifiedAt !== null && fixture.regulationEvidenceRef !== null;
   const halfTime = observation.halfTimeScore;
   return { status: fixture.status, providerStatus: fixture.providerStatus, elapsedMinutes: fixture.elapsedMinutes,
     ...(observation.stoppageMinutes !== undefined ? { stoppageMinutes: observation.stoppageMinutes } : {}),
     reportedGoals: observation.reportedGoals, extraTimeScore: observation.extraTimeScore, penaltyScore: observation.penaltyScore,
     regulation: { verified, home: verified ? fixture.regulationHome : null, away: verified ? fixture.regulationAway : null,
       evidenceRef: verified ? fixture.regulationEvidenceRef : null },
-    ...(verified && finalStatus(fixture.status) && halfTime?.verified &&
+    ...(verified && finalStatus(fixture.status) && halfTime?.verified && halfTime.fixtureId === observation.externalFixtureId &&
+      halfTime.providerStatus === fixture.providerStatus && halfTime.sourceField === "score.halftime" &&
+      halfTime.period === "first-half-including-stoppage-time" &&
       halfTime.home <= fixture.regulationHome! && halfTime.away <= fixture.regulationAway!
       ? { halfTime: { verified: true as const, period: halfTime.period, home: halfTime.home, away: halfTime.away,
         evidenceRef: `api-football:fixture:${observation.externalFixtureId}:${halfTime.providerStatus}:score.halftime` } } : {}) };

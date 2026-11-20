@@ -10,22 +10,24 @@ import { defineJob, type JobHandlerContext, type JobOutcome } from "../jobs/job-
 
 type HistoryImportReport = Readonly<{ coverage: z.infer<typeof historyImportCoverage>; complete: boolean; stopped: string | null }>;
 type ArchiveStep = (signal: AbortSignal) => Promise<HistoryImportReport>;
+const workerPhases = [...historyImportPhases, "reference"] as const;
+type WorkerPhase = HistoryImportPhase | "reference";
 
 const type = "football.history";
 const handlerVersion = 1;
 const intervalMs = 30 * 60_000;
 const timeoutMs = 5 * 60_000;
-const payload = z.strictObject({ phase: z.enum(historyImportPhases), slot: jobInstant });
+const payload = z.strictObject({ phase: z.enum(workerPhases), slot: jobInstant });
 const quotaStops = new Set(["quota-denied", "rate-limited", "provider-day-ended", "odds-mapping-quota-unavailable"]);
 const unavailableStops = new Set(["operation-not-authorized", "authentication-error", "invalid-credential", "subscription-expired", "unconfigured"]);
-const plannedStops = new Set(["request-budget", "target-limit", "chunk-budget"]);
+const plannedStops = new Set(["request-budget", "target-limit", "chunk-budget", "interrupted", "shared-work-pending", "detail-work-busy"]);
 
 export function latestHistoryImportSlot(now: number) {
   return Math.floor(now / intervalMs) * intervalMs;
 }
 
-export function historyImportEnvelopes(slot: number) {
-  return historyImportPhases.map((phase) => {
+export function historyImportEnvelopes(slot: number, { includeReference = false } = {}) {
+  return (includeReference ? workerPhases : historyImportPhases).map((phase) => {
     const identity = { phase, slot };
     return parseJobEnvelope({ version: 1, type, handlerVersion, idempotencyKey: jobFingerprint(identity),
       payload: identity, refresh: null, priority: 0, notBefore: slot, expiresAt: slot + intervalMs,
@@ -36,9 +38,9 @@ export function historyImportEnvelopes(slot: number) {
 
 export function createHistoryImportJob({ database, queue, enabled, steps }: Readonly<{
   database: DatabaseRuntime; queue: Pick<JobQueue, "assertOwned">; enabled: boolean;
-  steps: Readonly<Partial<Record<HistoryImportPhase, ArchiveStep>>>;
+  steps: Readonly<Partial<Record<WorkerPhase, ArchiveStep>>>;
 }>) {
-  async function record(context: JobHandlerContext, phase: HistoryImportPhase, status: z.infer<typeof historyImportStatus>,
+  async function record(context: JobHandlerContext, phase: WorkerPhase, status: z.infer<typeof historyImportStatus>,
     coverage?: HistoryImportReport["coverage"]) {
     await context.checkpoint();
     await database.transaction(async (tx) => {

@@ -2,13 +2,13 @@ import { z } from "zod";
 import type { FixtureSnapshot } from "./fixture-snapshot.ts";
 import { isMarketSelection, marketSelections, marketSources, type AcceptedMarket, type MarketFamily } from "./markets.ts";
 import { publicPolicy } from "./public-policy.ts";
-import type { RecommendationDecision } from "./recommendation.ts";
+import { forecastConfidence, type RecommendationDecision } from "./recommendation.ts";
 
 /** Subscriber forecast projection: private bookmaker, price, receipt and eligibility audits never leave the server. */
 export const publicRecommendationSchema = z.strictObject({ status: z.enum(["selected", "no-qualified-recommendation"]),
   selected: z.strictObject({ family: z.enum(publicPolicy.markets), selection: z.enum(Object.values(marketSelections).flat()),
     probability: z.number().gt(0).lt(1), source: z.enum(marketSources),
-    period: z.literal(publicPolicy.matchPeriod), line: z.number().nullable() }).nullable(),
+    period: z.literal(publicPolicy.matchPeriod), line: z.number().nullable(), confidence: z.enum(forecastConfidence).optional() }).nullable(),
 }).refine((value) => (value.status === "selected") === (value.selected !== null) &&
   (value.selected === null || isMarketSelection(value.selected.family, value.selected.selection) &&
     value.selected.line === (value.selected.family === "total-goals" ? publicPolicy.totalGoalsLine : null)));
@@ -18,7 +18,7 @@ export function publicRecommendation(decision: RecommendationDecision | undefine
   if (decision === undefined) return undefined;
   const value = decision.selected;
   return { status: decision.status, selected: value ? { family: value.family, selection: value.selection, probability: value.probability,
-    source: value.source, period: value.period, line: value.line } : null };
+    source: value.source, period: value.period, line: value.line, ...(value.confidence ? { confidence: value.confidence } : {}) } : null };
 }
 
 /** Display selection is a separate contract: it need not be the complete family's argmax. */

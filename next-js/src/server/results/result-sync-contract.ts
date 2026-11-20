@@ -16,13 +16,14 @@ export const resultSyncFail = (reason: ResultSyncError["reason"]): never => { th
 export type PollingTier = Readonly<{ untilAgeMs: number; intervalMs: number }>;
 export type ResultSyncPolicy = Readonly<{
   version: 1; evidenceRef: string;
+  coordinated?: true;
   coverage: readonly Readonly<{ competitionId: number; season: number }>[];
   approachMs: number; activeWindowMs: number;
   unresolved: readonly PollingTier[]; corrections: readonly PollingTier[];
   /** Skip dedicated rechecks of settled outcomes while still observing shared date sweeps. */
   skipConfirmedFinals?: true;
   /** Omitted uses the spec cadence. Live null disables the shared live feed; date sync still observes today's statuses. */
-  cadence?: Readonly<{ liveMs: number | null; dateMs: number; activeMs: number }>;
+  cadence?: Readonly<{ liveMs: number | null; dateMs: number; activeMs: number; idleLiveMs?: number }>;
   leaseMs: number; tickMs: number; maxBatchesPerTick: number;
   failureBaseMs: number; failureMaxMs: number;
   requestWindowMs: number;
@@ -44,13 +45,21 @@ export type TrackedResultFixture = Readonly<{
   fixtureId: string; externalId: number; competitionId: number; season: number;
   kickoffAt: number | null; status: string; retrievedAt: number;
   firstTrackedAt: number; firstFinalAt: number | null;
-  lastSyncAt: number | null; lastVerifiedAt?: number | null; nextCheckAt: number | null; failures: number;
+  lastSyncAt: number | null; nextCheckAt: number | null; failures: number;
+  lastVerifiedAt?: number | null;
+  delayReason?: string | null;
   finalConfirmed?: boolean;
+}>;
+export type AppliedResultObservation = Readonly<{
+  fixtureId: string; kickoffAt: number | null; status: string; retrievedAt: number; firstFinalAt: number | null; finalConfirmed: boolean;
 }>;
 export type ResultSyncBatch = Readonly<{
   id: string; accountId: string; policyHash: string; receivedAt: UtcInstant;
   channel: PollChannel; date: string | null; requestedIds: readonly number[];
   observations: readonly LifecycleObservation[];
+  /** Sent by the coordinated poller. A missing live ID queues confirmation, never a result. */
+  missingLiveFixtures?: readonly Readonly<{ fixtureId: string; competitionId: number; season: number }>[];
+  coordinated?: true;
   error: string | null; requestsDispatched: number;
 }>;
 export type ResultSyncStore = Readonly<{
@@ -60,7 +69,7 @@ export type ResultSyncStore = Readonly<{
   tracked(policy: ResultSyncPolicy, now: UtcInstant): Promise<readonly TrackedResultFixture[]>;
   pending(lease: PollLease): Promise<readonly ResultSyncBatch[]>;
   save(lease: PollLease, batch: ResultSyncBatch): Promise<void>;
-  apply(lease: PollLease, batch: ResultSyncBatch): Promise<void>;
+  apply(lease: PollLease, batch: ResultSyncBatch): Promise<readonly AppliedResultObservation[]>;
   schedule(lease: PollLease, channel: "live" | "date", nextAt: number, failures: number, error: string | null): Promise<void>;
   attempts(lease: PollLease, entries: readonly Readonly<{ fixtureId: string; nextAt: number | null; failures: number; error: string | null }>[]): Promise<void>;
 }>;

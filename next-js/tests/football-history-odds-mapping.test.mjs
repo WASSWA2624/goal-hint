@@ -23,7 +23,7 @@ function setup(pages, overrides = {}) {
     authorized: () => true, canDispatch: async () => true, now: () => now, providerDayEndsAt: () => dayEnd,
     readPages: source.readOddsMappingPages, savePage: source.saveOddsMappingPage, ...overrides,
     async mappingPage(page, bounds, workflow) {
-      assert.equal(bounds.priority, "enrichment");
+      assert.equal(bounds.priority, "historical-backfill");
       assert.equal(bounds.maxRequests, 1);
       workflow.beforeDispatch();
       dispatched.push(page);

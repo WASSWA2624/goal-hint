@@ -32,6 +32,7 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
   const providerOdds = options.providerOdds ?? publicPolicy.features.providerOdds;
   return Object.freeze({ async query(input: FeedParameters, context: MatchFeedReadContext = {}) {
     const publishedOnly = context.publishedOnly === true;
+    const publishedForecasts = context.publishedForecasts ?? publishedOnly;
     const asOf = clock.now(), reportingToday = getReportingDate(asOf);
     const query = performanceFeedQuery(parseMatchFeedQuery(input, reportingToday, { ...context, providerOdds, asOf }));
     const today = getFeedToday(query, asOf), range = resolveFeedDates(query, today);
@@ -43,9 +44,9 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
       if (query.search) await createMysqlPublicSearchLimiter(database).consume();
       const read = () => database.transaction(async (tx) => {
         const { performanceVersion: paginationVersion } = await storedFeedVersions(tx, query, today, sourceRange, competitionIds, context.completedOnly,
-          publishedOnly, historyBefore, providerOdds);
+          publishedOnly, historyBefore, providerOdds, publishedForecasts);
         const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale, context.completedOnly);
-        const sql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly, publishedOnly, historyBefore);
+        const sql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly, publishedOnly, historyBefore, publishedForecasts);
         const [matching] = await tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null; void: bigint | Prisma.Decimal | null; cancelled: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
           SELECT STRAIGHT_JOIN COUNT(*) AS total, SUM(CASE WHEN ${sql.pickAvailable} THEN 1 ELSE 0 END) AS available,
             SUM(CASE WHEN ${sql.pickAvailable} AND c.state='void' AND f.status<>'canceled' THEN 1 ELSE 0 END) AS void,
@@ -59,7 +60,8 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 90_000 });
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: "feed-summary-v11", providerOdds, completedOnly: context.completedOnly === true, publishedOnly, today, dates: { from: range.startDate, to: range.endDate } },
+        query: { ...query, projection: "feed-summary-v12", providerOdds, completedOnly: context.completedOnly === true,
+          publishedOnly, publishedForecasts, today, dates: { from: range.startDate, to: range.endDate } },
         scope: [...competitionIds].sort((a, b) => a - b), parse: (value) => storedSummarySchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;

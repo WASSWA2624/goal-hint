@@ -9,6 +9,8 @@ import type { EvidencePolicy, EvidenceSource } from "../evidence/evidence-contra
 import { freezeEvidence } from "../evidence/evidence-input.ts";
 import type { ForecastSourceOrder } from "../fallback/fallback-contract.ts";
 import type { ModelVersion } from "../predictor/predictor-contract.ts";
+import { predictorResilience } from "../predictor/predictor-resilience.ts";
+import { openAiTransportRules } from "../predictor/openai-transport.ts";
 import type { RefreshMember, RefreshPlan } from "../refresh/refresh-contract.ts";
 import { refreshReference } from "../refresh/refresh-input.ts";
 import { fallbackRefreshPlan, type LiveReferences, type RefreshPacing } from "./live-plan.ts";
@@ -30,16 +32,23 @@ export function liveAiAllocation(policy: RuntimePolicy, model: ModelVersion, at:
     throw new Error("AI needs explicit request, token and time limits.");
   const evidenceRef = policy.choices.budgets.approvalRef;
   if (evidenceRef === null) throw new Error("AI accounting approval is required.");
-  // UTF-8 bytes provide a conservative transport bound; ordinary ten-match inputs exceed 24k bytes.
-  const inputTokenLimit = Math.min(70_000, Math.floor(tokenLimit * 0.85)), outputTokenLimit = Math.min(8192, tokenLimit - inputTokenLimit);
   const research = policy.capabilities.research ? { costCapUsdPicos: liveResearchRules.requestUsdPicos,
     requestLimit: 1, inputTokenLimit: 0, outputTokenLimit: 0, billedUnitLimit: 0, primaryTimeLimitMs: liveResearchRules.timeoutMs } : null;
   if (research !== null && requestLimit < 2) throw new Error("AI and research require two bounded requests.");
+  // The retry reserves a full second request and cannot use the fallback time or
+  // shrink the primary request below the reviewed transport's input budget.
+  const maximumRequests = 1 + predictorResilience.transientRetries;
+  const fullInputBudget = model.bounds.maxInputBytes + 4096 + openAiTransportRules.inputFramingTokens;
+  const attempts = requestLimit - (research?.requestLimit ?? 0) >= maximumRequests &&
+    Math.floor(tokenLimit * 0.85 / maximumRequests) >= fullInputBudget ? maximumRequests : 1;
+  const inputPerAttempt = Math.min(70_000, Math.floor(tokenLimit * 0.85 / attempts));
+  const outputPerAttempt = Math.min(8192, Math.floor((tokenLimit - attempts * inputPerAttempt) / attempts));
   const primaryTimeLimitMs = Math.min(120_000, timeoutSeconds * 1000 - fallbackReserveMs - (research?.primaryTimeLimitMs ?? 0));
-  if (outputTokenLimit < 1024 || primaryTimeLimitMs < 20_000) throw new Error("The job does not leave usable AI and fallback time.");
-  const maximum = { requests: 1, inputTokens: inputTokenLimit, outputTokens: outputTokenLimit, billedUnits: inputTokenLimit };
-  return freezeEvidence({ ai: { costCapUsdPicos: priceCost(liveAiRate(model, utcInstantFromEpochMilliseconds(at)), maximum),
-    requestLimit: 1, inputTokenLimit, outputTokenLimit, billedUnitLimit: inputTokenLimit, primaryTimeLimitMs },
+  if (outputPerAttempt < 1024 || primaryTimeLimitMs < 20_000) throw new Error("The job does not leave usable AI and fallback time.");
+  const maximum = { requests: 1, inputTokens: inputPerAttempt, outputTokens: outputPerAttempt, billedUnits: inputPerAttempt };
+  return freezeEvidence({ ai: { costCapUsdPicos: BigInt(attempts) * priceCost(liveAiRate(model, utcInstantFromEpochMilliseconds(at)), maximum),
+    requestLimit: attempts, inputTokenLimit: attempts * inputPerAttempt, outputTokenLimit: attempts * outputPerAttempt,
+    billedUnitLimit: attempts * inputPerAttempt, primaryTimeLimitMs },
     research, fallbackReserveMs, evidenceRef });
 }
 
@@ -55,14 +64,16 @@ export function liveAiRefreshPlan(member: RefreshMember, refs: LiveReferences, p
   if (maximumMs < 1000) return base;
   const accountId = liveAiAccountId(policy), rate = liveAiRate(model, member.context.analysisAt);
   const job: CostJobPolicy = { accountId, category: "ai", jobId: member.jobId, workKey: refreshReference(member.jobId, "primary-ai"),
-    costCapUsdPicos: allocation.costCapUsdPicos, requestLimit: 1, inputTokenLimit: allocation.inputTokenLimit,
+    costCapUsdPicos: allocation.costCapUsdPicos, requestLimit: allocation.requestLimit, inputTokenLimit: allocation.inputTokenLimit,
     outputTokenLimit: allocation.outputTokenLimit, billedUnitLimit: allocation.billedUnitLimit,
     startsAt: base.evidence.context.analysisAt, deadlineAt: base.observation.bounds.deadlineAt, timeLimitMs,
     fallbackReserveMs: reserve, evidenceRef: policy.choices.budgets.approvalRef! };
   const request: CostRequest = { accountId, category: "ai", attemptId: refreshReference(member.jobId, "ai"), jobId: member.jobId,
     rateVersion: rate.version, provider: model.provider, model: model.model,
-    maximum: { requests: 1, inputTokens: allocation.inputTokenLimit, outputTokens: allocation.outputTokenLimit, billedUnits: allocation.billedUnitLimit },
-    timeoutMs: maximumMs, priority: { kind: "fixture", kickoffAt: member.context.kickoffAt }, evidenceRef: refs.refresh };
+    maximum: { requests: 1, inputTokens: allocation.inputTokenLimit / allocation.requestLimit,
+      outputTokens: allocation.outputTokenLimit / allocation.requestLimit, billedUnits: allocation.billedUnitLimit / allocation.requestLimit },
+    timeoutMs: Math.min(predictorResilience.callTimeoutMs, Math.max(1, Math.floor((maximumMs - 1000) / allocation.requestLimit))),
+    priority: { kind: "fixture", kickoffAt: member.context.kickoffAt }, evidenceRef: refs.refresh };
   return freezeEvidence({ ...base, modelVersionId: model.id,
     evidence: { ...base.evidence, policy: liveAiEvidencePolicy(refs), cachedSources: sources, maxElapsedMs: evidenceMs },
     ai: { job, request, maxElapsedMs: maximumMs }, sourceOrder });

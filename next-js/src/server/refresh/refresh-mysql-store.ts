@@ -5,7 +5,8 @@ import { createPredictionWindow, getReportingDate, isInWindow, predictionWindowD
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence, parseEvidenceContext } from "../evidence/evidence-input.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
-import { JobQueueError, type JobLease, type JobQueue, type JobUsage } from "../jobs/job-contract.ts";
+import { JobQueueError, type JobLease, type JobQueue, type JobUsage, type StoredJob } from "../jobs/job-contract.ts";
+import type { RefreshPublicationResult } from "../predictions/publication-contract.ts";
 import { durableJobId, parseJobEnvelope } from "../jobs/job-input.ts";
 import { storedCycle } from "../predictions/history-read.ts";
 import { publicationResult, storedRefreshResult } from "../predictions/publication-read.ts";
@@ -37,6 +38,20 @@ async function insert(tx: Transaction, table: Table, jobId: string, body: unknow
   await tx.$executeRawUnsafe(`INSERT INTO ${table} (jobId, ${phase === undefined ? "" : "phase, kind,"} integrity, body)
     VALUES (?, ${phase === undefined ? "" : "?, ?,"} SHA2(CAST(JSON_EXTRACT(?, '$') AS CHAR), 256), JSON_EXTRACT(?, '$'))`,
     jobId, ...(phase === undefined ? [] : [phase, kind]), encoded, encoded);
+}
+
+/** Repair the outcome in the same transaction as an authenticated queue acknowledgement. */
+export async function recoverPublicationOutcome(tx: Transaction, job: StoredJob, publication: RefreshPublicationResult) {
+  const identity = job.envelope.refresh;
+  if (!identity || job.state !== "succeeded" || job.finishedAt === null || publication.jobId !== job.id ||
+    publication.runId !== identity.runId || publication.fixtureId !== identity.fixtureId || publication.cycleId !== identity.cycleId)
+    return refreshFail("invalid-request");
+  if (await read(tx, "PredictionRefreshOutcome", job.id)) return;
+  const value: RefreshOutcome = { ...identity, jobId: job.id, at: job.finishedAt, outcome: publication.outcome, reason: publication.reason,
+    revisionId: publication.revisionId, publicationId: publication.id,
+    ...(publication.forecastDecision === undefined ? {} : { forecastDecisionHash: publication.forecastDecision.hash }),
+    costs: { ai: { status: "denied", reason: "service-unavailable" }, research: null }, phases: {} };
+  await insert(tx, "PredictionRefreshOutcome", job.id, value);
 }
 export function createMysqlRefreshStore(database: DatabaseRuntime, queue: JobQueue) {
   async function transact<Value>(operation: (tx: Transaction) => Promise<Value>): Promise<Value> {
@@ -139,7 +154,8 @@ export function createMysqlRefreshStore(database: DatabaseRuntime, queue: JobQue
       // dies between publication/queue completion/progress, including pre-claim expiry.
       return transact(async (tx) => {
         await tx.$queryRaw`SELECT id FROM DailyRun WHERE id = ${runId} FOR UPDATE`;
-        const entries = await tx.runFixture.findMany({ where: { runId }, include: { job: true } });
+        const entries = await tx.runFixture.findMany({ where: { runId,
+          job: { state: { in: ["succeeded", "failed", "expired"] }, refreshOutcome: null } }, include: { job: true } });
         for (const entry of entries) {
           const job = entry.job;
           if (!job || !["succeeded", "failed", "expired"].includes(job.state) || await read(tx, "PredictionRefreshOutcome", job.id)) continue;
@@ -148,7 +164,9 @@ export function createMysqlRefreshStore(database: DatabaseRuntime, queue: JobQue
           const value: RefreshOutcome = { jobId: job.id, runId, fixtureId: entry.fixtureId, cycleId: entry.cycleId,
             at: job.finishedAt!.getTime(), outcome: published?.outcome ?? (job.state === "expired" ? "skipped" : "failed"),
             reason: published?.reason ?? job.terminalReason ?? "handler-failed", revisionId: published?.revisionId ?? null,
-            publicationId: published?.id ?? null, costs: summaries.get(job.id) ?? { ai: { status: "denied", reason: "service-unavailable" }, research: null }, phases: {} };
+            publicationId: published?.id ?? null,
+            ...(published?.forecastDecision === undefined ? {} : { forecastDecisionHash: published.forecastDecision.hash }),
+            costs: summaries.get(job.id) ?? { ai: { status: "denied", reason: "service-unavailable" }, research: null }, phases: {} };
           await insert(tx, "PredictionRefreshOutcome", job.id, value);
         }
       });

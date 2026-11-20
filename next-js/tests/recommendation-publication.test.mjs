@@ -19,7 +19,8 @@ import { historyCandidate, revisionInput } from './helpers/prediction-history-fi
 import { candidateRecommendation } from './helpers/recommendation-fixtures.mjs';
 import { evidenceFingerprint, evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
 import { validatePublishedRecommendation } from '../src/server/predictions/recommendation-publication.ts';
-import { recommendationPolicy, recommendationPolicyForVersion } from '../src/domain/recommendation.ts';
+import { evidenceFirstRecommendationPolicy, recommendationPolicy, recommendationPolicyForVersion } from '../src/domain/recommendation.ts';
+import { selectRecommendation } from '../src/server/refresh/recommendation-selection.ts';
 
 function card() {
   const fixture = cardFixture({ status: 'scheduled', score: null }, 'ai', null);
@@ -58,6 +59,22 @@ test('an explicit abstention still displays the leading published probability wi
   assert.equal(featuredFamily({ fixture, snapshot: { ...fixture.forecast } }), family);
   assert.equal(fixture.forecast.recommendation.selected, null);
   assert.equal(fixture.forecast.markets.length, 4);
+});
+
+test('evidence-first recommendation seals a supported pick with no quote and keeps the original markets', () => {
+  const snapshot = predictorSnapshot(undefined, undefined, evidenceContext(undefined, { cycleId: randomUUID(), runId: randomUUID() }));
+  const candidate = historyCandidate({ snapshot });
+  const decisionAt = Math.max(...Object.values(candidate.markets).filter(market => market.available).map(market => market.timestamps.retrievedAt));
+  const result = selectRecommendation({ candidate, snapshot, quotes: [], decisionAt,
+    policy: evidenceFirstRecommendationPolicy }, () => ({ eligible: true, reasons: [], confidence: 'supported' }));
+  assert.equal(result.decision.selected.family, 'double-chance');
+  assert.equal(result.decision.selected.probability, candidate.markets['double-chance'].market.selectedProbability);
+  assert.equal(result.decision.selected.confidence, 'supported');
+  assert.equal(result.decision.selected.quote, null);
+  assert.equal(result.decision.decisions.some(row => row.reasons.includes('no-valid-permitted-quote')), false);
+  assert.deepEqual(result.candidate.markets, candidate.markets);
+  assert.equal(parseResolvedForecastCandidate(result.candidate).audit.recommendation.selected.quote, null);
+  assert.equal(publicRecommendation(result.decision).selected.confidence, 'supported');
 });
 
 test('custom slips rank complete published distributions independently of the featured recommendation', () => {

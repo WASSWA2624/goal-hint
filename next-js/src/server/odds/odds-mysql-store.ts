@@ -12,6 +12,7 @@ import { Prisma } from "../generated/prisma/client.ts";
 import { assertHistorySeal, historyJson } from "../predictions/history-read.ts";
 import { provenTrue } from "../shared/authority-proof.ts";
 import { OddsError, oddsFail, preMatchOddsFreshMs, type OddsApplyResult, type OddsBatchBody, type OddsPolicy } from "./odds-contract.ts";
+import { oddsPricePageScopeKey } from "./odds-input.ts";
 
 type Tx = Prisma.TransactionClient;
 const hash = z.string().regex(/^[a-f0-9]{64}$/u);
@@ -28,13 +29,16 @@ const batchSchema = z.strictObject({
   receivedAt: instant, requestId: hash, slot: instant, date: z.iso.date().nullable(), contractVersion: z.string().min(1).max(64),
   reasons: z.array(z.string().regex(/^[a-z-]{1,64}$/u)).max(64), missingCoverage: z.array(z.string().max(128)).max(5_000),
   pages: z.array(provenanceSchema).max(1_000),
+  checkpoint: z.strictObject({ page: z.number().int().positive().max(1000), totalPages: z.number().int().positive() }).optional(),
   fixtures: z.array(z.strictObject({ externalId: z.number().int().positive(), observationHash: hash,
     quoteManifest: quoteManifestSchema.optional(), additionalQuoteManifests: z.array(quoteManifestSchema).max(200).optional(),
     outcome: z.enum(["apply", "unknown-fixture", "after-kickoff", "kickoff-mismatch", "not-scheduled"]) }).refine(({ quoteManifest, additionalQuoteManifests }) =>
     !additionalQuoteManifests || !!quoteManifest && new Set([quoteManifest.bookmakerId, ...additionalQuoteManifests.map(({ bookmakerId }) => bookmakerId)]).size
       === additionalQuoteManifests.length + 1 && additionalQuoteManifests.every(({ kickoffAt }) => kickoffAt === quoteManifest.kickoffAt))).max(10_000),
   catalog: z.array(z.strictObject({ id: z.number().int().positive(), name: z.string().min(1).max(256) })).max(5_000),
-});
+}).refine(({ checkpoint, kind, requestId, scopeKey, pages }) => !checkpoint || kind === "prices" &&
+  scopeKey === oddsPricePageScopeKey(requestId) && pages.length === 1 && checkpoint.page <= checkpoint.totalPages &&
+  pages[0]?.currentPage === checkpoint.page && pages[0].totalPages === checkpoint.totalPages);
 export const storedOddsBatchSchema = batchSchema;
 const snapshotValues = z.array(z.strictObject({ label: z.string().min(1).max(64), odd: z.string().min(1).max(12) })).min(1).max(1_000);
 export const storedOddsSnapshotSchema = z.strictObject({ id: hash, fixtureId: z.uuid(), previousId: hash.nullable(), bookmakerId: z.number().int().positive(),
@@ -44,6 +48,8 @@ const snapshotSchema = storedOddsSnapshotSchema;
 export type StoredOddsSnapshot = z.infer<typeof snapshotSchema>;
 
 export type OddsFixtureTarget = Readonly<{ fixtureId: string; externalId: number; kickoff: UtcInstant | null; status: string }>;
+type OddsFixtureApplication = Readonly<{ batchId: string; policy: OddsPolicy; policyHash: string; fixtureId: string; row: NormalizedFixtureOdds;
+  publicDisplay: boolean; catalog: ReadonlyMap<number, string> | null }>;
 type PriceRow = Readonly<{ marketKey: string; selection: string; basis: string; bookmakerExternalId: number | null; line: string | null;
   priceDecimal: string; displayHundredths: number; impliedProbability: string; overround: string; method: string; mappingVersion: string;
   snapshotId: string | null; retrievedAt: number; providerUpdatedAt: number | null; stale: boolean }>;
@@ -102,10 +108,12 @@ function parsedSnapshot(row: SealedRow) {
 
 type StoredBookmaker = Readonly<{
   bookmakerId: number; bookmakerName: string | null;
-  offers: readonly Readonly<{ betId: number; betName: string; values: StoredOddsSnapshot["values"]; providerUpdatedAt: UtcInstant | null }>[];
+  offers: readonly Readonly<{ betId: number; betName: string; values: StoredOddsSnapshot["values"]; providerUpdatedAt: UtcInstant | null;
+    snapshotId?: string; observedAt?: UtcInstant; checkedAt?: UtcInstant; receiptId?: string }>[];
 }>;
 export type StoredCurrentBookmakerQuotes = Readonly<{
   fixtureId: string; kickoffAt: number; checkedAt: UtcInstant; primaryBookmakerId: number; bookmakers: readonly StoredBookmaker[];
+  policyHash?: string;
 }>;
 type BookmakerFixture = Readonly<{ fixtureId: string; kickoffAt: number | null }>;
 
@@ -157,7 +165,8 @@ async function storedBookmakerQuotes(tx: Tx, fixtures: readonly BookmakerFixture
         (betIds === undefined || wanted.has(bet.betId)) ? [[bet.betId, bet]] : []));
       return bets.size ? [[book.bookmakerId, bets]] : [];
     }));
-    return books.size ? [[state.fixtureId, { kickoffAt, checkedAt, providerUpdatedAt, primaryBookmakerId: manifest.bookmakerId, books }]] : [];
+    return books.size ? [[state.fixtureId, { kickoffAt, checkedAt, providerUpdatedAt, primaryBookmakerId: manifest.bookmakerId,
+      receiptId: state.latestBatchId, policyHash: state.policyHash, books }]] : [];
   }));
   if (!eligible.size) return found;
   const heads = await tx.$queryRaw<(SealedRow & { fixtureId: string; bookmakerId: number; betId: number })[]>(Prisma.sql`
@@ -178,10 +187,13 @@ async function storedBookmakerQuotes(tx: Tx, fixtures: readonly BookmakerFixture
     const key = quoteKey(bookmakerId, bet.betId);
     if (group.has(key)) { group.set(key, null); continue; }
     const snapshot = parsedSnapshot(row);
+    const sourceUpdate = scope.providerUpdatedAt ?? snapshot.providerUpdatedAt;
+    const freshnessPoint = closing ? scope.kickoffAt : asOf;
     group.set(key, snapshot.fixtureId === row.fixtureId && snapshot.bookmakerId === bookmakerId &&
       snapshot.betId === bet.betId && snapshot.betName === bet.betName && snapshot.valuesHash === bet.valuesHash &&
       snapshot.valuesHash === oddsValuesHash(snapshot.values) && snapshot.retrievedAt <= scope.checkedAt && snapshot.retainUntil >= asOf &&
-      (snapshot.providerUpdatedAt === null || snapshot.providerUpdatedAt <= snapshot.retrievedAt) ? snapshot : null);
+      (snapshot.providerUpdatedAt === null || snapshot.providerUpdatedAt <= snapshot.retrievedAt) &&
+      (sourceUpdate === null || sourceUpdate >= freshnessPoint - preMatchOddsFreshMs) ? snapshot : null);
   }
   for (const [fixtureId, group] of byFixture) {
     const scope = eligible.get(fixtureId)!;
@@ -196,11 +208,13 @@ async function storedBookmakerQuotes(tx: Tx, fixtures: readonly BookmakerFixture
     const bookmakers = [...grouped.entries()].sort(([left], [right]) => left - right).map(([bookmakerId, snapshots]) => {
       const bookmakerName = snapshots.reduce<StoredOddsSnapshot | null>((latest, snapshot) => snapshot.bookmakerName !== null &&
         (latest === null || snapshot.retrievedAt > latest.retrievedAt) ? snapshot : latest, null)?.bookmakerName ?? null;
-      return { bookmakerId, bookmakerName, offers: snapshots.map(({ betId, betName, values }) =>
-        ({ betId, betName: betName!, values, providerUpdatedAt: scope.providerUpdatedAt })) };
+      return { bookmakerId, bookmakerName, offers: snapshots.map(({ id, betId, betName, values, retrievedAt, providerUpdatedAt }) =>
+        ({ betId, betName: betName!, values, providerUpdatedAt: scope.providerUpdatedAt ??
+          (providerUpdatedAt === null ? null : utcInstantFromEpochMilliseconds(providerUpdatedAt)),
+        snapshotId: id, observedAt: utcInstantFromEpochMilliseconds(retrievedAt), checkedAt: scope.checkedAt, receiptId: scope.receiptId })) };
     });
     if (bookmakers.length) found.set(fixtureId, { fixtureId, kickoffAt: scope.kickoffAt, checkedAt: scope.checkedAt,
-      primaryBookmakerId: scope.primaryBookmakerId, bookmakers });
+      primaryBookmakerId: scope.primaryBookmakerId, policyHash: scope.policyHash, bookmakers });
   }
   return found;
 }
@@ -270,13 +284,28 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
       FROM OddsImportBatch WHERE id = ${id}`)[0];
     return row ? parsedBatch(row) : null;
   }
+  function indexBatch(batch: OddsBatchBody): VerifiedBatch {
+    return { batch, fixtures: new Map(batch.fixtures.map((entry) => [entry.externalId, entry])),
+      pages: new Set(batch.pages.map((page) => page.retrievedAt)) };
+  }
+  async function writeBatch(tx: Tx, input: OddsBatchBody): Promise<OddsBatchBody> {
+    const parsed = batchSchema.safeParse(input);
+    if (!parsed.success) return oddsFail("invalid-request");
+    const { id, ...content } = parsed.data, body = evidenceSerialize(parsed.data);
+    if (evidenceFingerprint(content) !== id) return oddsFail("invalid-request");
+    await tx.$executeRaw`INSERT IGNORE INTO OddsImportBatch (id, accountId, kind, scopeKey, policyHash, status, requestsDispatched, receivedAt, integrity, body)
+      VALUES (${id}, ${parsed.data.accountId}, ${parsed.data.kind}, ${parsed.data.scopeKey}, ${parsed.data.policyHash}, ${parsed.data.status},
+        ${parsed.data.requestsDispatched}, ${new Date(parsed.data.receivedAt)}, SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`;
+    const sealed = await sealedBatch(tx, id);
+    if (!sealed || evidenceFingerprint(sealed) !== evidenceFingerprint(parsed.data)) return oddsFail("conflicting-request");
+    return sealed;
+  }
   const verifiedBatches = new Map<string, VerifiedBatch>();
   /** Indexes and keeps a receipt that is known to be committed. Callers never remember a receipt read inside the
    * transaction that inserted it, since that transaction could still roll back. */
   function remember(batch: OddsBatchBody | null): VerifiedBatch | null {
     if (batch === null) return null;
-    const verified = Object.freeze({ batch, fixtures: new Map(batch.fixtures.map((entry) => [entry.externalId, entry])),
-      pages: new Set(batch.pages.map((page) => page.retrievedAt)) });
+    const verified = indexBatch(batch);
     verifiedBatches.delete(batch.id); verifiedBatches.set(batch.id, verified);
     while (verifiedBatches.size > MAX_VERIFIED_BATCHES) verifiedBatches.delete(verifiedBatches.keys().next().value!);
     return verified;
@@ -295,8 +324,10 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
     return (await sealedSnapshots(tx, [id])).get(id) ?? null;
   }
   async function lockState(tx: Tx, fixtureId: string) {
-    return (await tx.$queryRaw<{ latestBatchId: string; policyHash: string; lastRetrievedAt: Date; withdrawnAt: Date | null; publicVersion: unknown }[]>`
-      SELECT latestBatchId, policyHash, lastRetrievedAt, withdrawnAt, publicVersion FROM FixtureOddsState WHERE fixtureId = ${fixtureId} FOR UPDATE`)[0];
+    return (await tx.$queryRaw<{ latestBatchId: string; policyHash: string; lastRetrievedAt: Date; lastProviderUpdatedAt: Date | null;
+      withdrawnAt: Date | null; publicVersion: unknown }[]>`
+      SELECT latestBatchId, policyHash, lastRetrievedAt, lastProviderUpdatedAt, withdrawnAt, publicVersion
+      FROM FixtureOddsState WHERE fixtureId = ${fixtureId} FOR UPDATE`)[0];
   }
   async function prices(tx: Tx, fixtureId: string): Promise<Map<string, PriceRow>> {
     const rows = await tx.$queryRaw<Record<string, unknown>[]>`SELECT marketKey, selection, basis, bookmakerExternalId,
@@ -327,10 +358,13 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
     return tx.$executeRaw`UPDATE FixtureOddsPrice SET stale = TRUE WHERE fixtureId = ${fixtureId} AND stale = FALSE`;
   }
   async function projectPrices(tx: Tx, fixtureId: string, bookmakerId: number, catalog: ReadonlyMap<number, string> | null,
-    offers: readonly ProjectionOffer[]): Promise<number> {
+    offers: readonly ProjectionOffer[], oldestProviderUpdate: number, confirmedProviderUpdatedAt: number | null): Promise<number> {
     const existing = await prices(tx, fixtureId), desired = new Map<string, PriceRow>();
     for (const mapping of launchOddsMapping) {
-      const offer = offers.find(({ betId }) => betId === mapping.betId);
+      const offer = offers.find(({ betId, providerUpdatedAt }) => {
+        const update = confirmedProviderUpdatedAt ?? providerUpdatedAt;
+        return betId === mapping.betId && (update === null || update >= oldestProviderUpdate);
+      });
       const group = offer ? launchOddsGroup(mapping, offer, catalog?.get(mapping.betId)) : null;
       if (!group || !offer) continue;
       for (const selection of group.selections) desired.set(`${mapping.family}\u0000${selection.selection}`, Object.freeze({
@@ -362,6 +396,91 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
       withdrawnAt = ${fields.withdrawnAt ?? state.withdrawnAt}, publicVersion = ${version} WHERE fixtureId = ${fixtureId}`;
   }
 
+  async function applyFixtureTransaction(tx: Tx, input: OddsFixtureApplication, pageReceipt?: VerifiedBatch): Promise<OddsApplyResult> {
+    const { row, policy } = input, retrievedAt = row.source.retrievedAt, providerUpdatedAt = row.source.providerUpdatedAt;
+    const bookmaker = row.bookmakers.find((entry) => entry.id === policy.bookmakerId);
+    if (row.kickoff === null || policy.bookmakerScope !== "all" && row.bookmakers.some((entry) => entry.id !== policy.bookmakerId)) return oddsFail("invalid-request");
+    const observationHash = evidenceFingerprint(row);
+    // A page receipt may be inserted in this transaction. Only already committed receipts enter the cache here.
+    const receipt = pageReceipt ?? verifiedBatches.get(input.batchId) ?? remember(await sealedBatch(tx, input.batchId));
+    const entry = receipt?.fixtures.get(row.fixtureId);
+    if (!receipt || receipt.batch.kind !== "prices" || receipt.batch.policyHash !== input.policyHash || entry?.outcome !== "apply" ||
+      entry.observationHash !== observationHash || !receipt.pages.has(retrievedAt)) return oddsFail("invalid-request");
+    if (entry.quoteManifest || policy.bookmakerScope === "all") {
+      const { quoteManifest, additionalQuoteManifests } = fixtureQuoteManifests(row, policy.bookmakerId);
+      if (!entry.quoteManifest || evidenceFingerprint(entry.quoteManifest) !== evidenceFingerprint(quoteManifest) ||
+        evidenceFingerprint(entry.additionalQuoteManifests ?? []) !== evidenceFingerprint(additionalQuoteManifests ?? [])) return oddsFail("invalid-request");
+    }
+    const at = await now(tx);
+    const fixture = (await tx.$queryRaw<{ kickoff: Date | null; status: string }[]>`SELECT kickoff, status FROM FootballFixture
+      WHERE id = ${input.fixtureId} AND provider = 'api-football' AND externalId = ${BigInt(row.fixtureId)}`)[0];
+    // Pre-match only: after kickoff the last valid price is frozen as the closing price.
+    if (!fixture || fixture.kickoff === null || fixture.kickoff.getTime() !== row.kickoff || fixture.status !== "scheduled" ||
+      fixture.kickoff.getTime() <= Math.max(retrievedAt, at)) return "skipped";
+    await tx.$executeRaw`INSERT INTO FixtureOddsState (fixtureId, latestBatchId, policyHash, lastRetrievedAt, lastProviderUpdatedAt, withdrawnAt, publicVersion)
+      VALUES (${input.fixtureId}, ${input.batchId}, ${input.policyHash}, ${new Date(retrievedAt)},
+        ${providerUpdatedAt === null ? null : new Date(providerUpdatedAt)}, NULL, 0)
+      ON DUPLICATE KEY UPDATE publicVersion = publicVersion`;
+    const state = await lockState(tx, input.fixtureId);
+    if (!state) return oddsFail("invalid-state");
+    // Out-of-order observations never move a fixture backwards.
+    if (state.lastRetrievedAt.getTime() > retrievedAt) return "skipped";
+    const heads = new Map((row.bookmakers.length === 0 ? [] : await tx.$queryRaw<{ id: string; betExternalId: unknown; bookmakerExternalId: unknown; valuesHash: string; bookmakerName: string | null;
+      betName: string | null; retrievedAt: Date; providerUpdatedAt: Date | null }[]>`
+      SELECT s.id, s.bookmakerExternalId, s.betExternalId, s.valuesHash, s.bookmakerName, s.betName, s.retrievedAt, s.providerUpdatedAt FROM ProviderOddsSnapshot s
+      LEFT JOIN ProviderOddsSnapshot n ON n.previousId = s.id
+      WHERE s.fixtureId = ${input.fixtureId} AND s.bookmakerExternalId IN (${Prisma.join(row.bookmakers.map(({ id }) => id))}) AND n.id IS NULL`)
+      .map((head) => [quoteKey(asNumber(head.bookmakerExternalId), asNumber(head.betExternalId)), head]));
+    const current = new Map<string, Readonly<{ id: string; retrievedAt: number; providerUpdatedAt: number | null }>>();
+    const pending: StoredOddsSnapshot[] = [];
+    for (const { id: bookmakerId, name: bookmakerName, bets } of row.bookmakers) for (const bet of bets) {
+      const key = quoteKey(bookmakerId, bet.id);
+      const values = canonicalOddsValues(bet.values), valuesHash = oddsValuesHash(values), head = heads.get(key);
+      // Unchanged content (canonical values and the recorded names) adds no row; a renamed bet or bookmaker is recorded.
+      if (head && head.valuesHash === valuesHash && head.betName === bet.name && head.bookmakerName === bookmakerName) {
+        current.set(key, { id: head.id, retrievedAt: head.retrievedAt.getTime(), providerUpdatedAt: head.providerUpdatedAt?.getTime() ?? null });
+        continue;
+      }
+      const previousId = head?.id ?? null, retainUntil = row.kickoff + policy.retainAfterKickoffMs;
+      const id = evidenceFingerprint({ fixtureId: input.fixtureId, bookmakerId, bookmakerName, betId: bet.id,
+        betName: bet.name, valuesHash, previousId });
+      pending.push({ id, fixtureId: input.fixtureId, previousId, bookmakerId, bookmakerName,
+        betId: bet.id, betName: bet.name, valuesHash, retrievedAt, providerUpdatedAt, retainUntil, values });
+    }
+    // Changed bets are written together: multi-row INSERT IGNORE statements, then one sealed re-read that must
+    // reproduce every body exactly (a concurrent replica may have written the same content-addressed rows).
+    for (const part of chunks(pending, SNAPSHOT_CHUNK)) {
+      await tx.$executeRaw(Prisma.sql`INSERT IGNORE INTO ProviderOddsSnapshot (id, fixtureId, batchId, previousId, bookmakerExternalId, bookmakerName,
+        betExternalId, betName, valuesHash, selectionCount, retrievedAt, providerUpdatedAt, retainUntil, integrity, body)
+        VALUES ${Prisma.join(part.map((body) => {
+          const json = evidenceSerialize(body);
+          return Prisma.sql`(${body.id}, ${body.fixtureId}, ${input.batchId}, ${body.previousId}, ${body.bookmakerId}, ${body.bookmakerName}, ${body.betId},
+            ${body.betName}, ${body.valuesHash}, ${body.values.length}, ${new Date(retrievedAt)},
+            ${providerUpdatedAt === null ? null : new Date(providerUpdatedAt)}, ${new Date(body.retainUntil)},
+            SHA2(CAST(JSON_EXTRACT(${json}, '$') AS CHAR), 256), JSON_EXTRACT(${json}, '$'))`;
+        }))}`);
+    }
+    const sealed = pending.length === 0 ? new Map<string, StoredOddsSnapshot>() : await sealedSnapshots(tx, pending.map((body) => body.id));
+    for (const body of pending) {
+      const stored = sealed.get(body.id);
+      if (!stored || evidenceFingerprint(stored) !== evidenceFingerprint(body)) return oddsFail("invalid-state");
+      current.set(quoteKey(body.bookmakerId, body.betId), { id: body.id, retrievedAt, providerUpdatedAt });
+    }
+    const snapshots = pending.length;
+    const offers = (bookmaker?.bets ?? []).flatMap((bet) => {
+      const snapshot = current.get(quoteKey(policy.bookmakerId, bet.id));
+      return snapshot ? [{ ...snapshot, betId: bet.id, betName: bet.name, values: bet.values }] : [];
+    });
+    const publicChanges = input.publicDisplay ? await projectPrices(tx, input.fixtureId, policy.bookmakerId, input.catalog, offers,
+      at - policy.freshnessMs, providerUpdatedAt)
+      : await staleAll(tx, input.fixtureId);
+    const version = asNumber(state.publicVersion) + (publicChanges > 0 ? 1 : 0);
+    await tx.$executeRaw`UPDATE FixtureOddsState SET latestBatchId = ${input.batchId}, policyHash = ${input.policyHash},
+      lastRetrievedAt = ${new Date(retrievedAt)}, lastProviderUpdatedAt = ${providerUpdatedAt === null ? null : new Date(providerUpdatedAt)},
+      withdrawnAt = NULL, publicVersion = ${version} WHERE fixtureId = ${input.fixtureId}`;
+    return snapshots > 0 || publicChanges > 0 ? "changed" : "unchanged";
+  }
+
   return Object.freeze({
     /** Maps provider fixture ids to stored fixtures. Unknown fixtures are reported, never created. */
     resolveFixtures(externalIds: readonly number[]): Promise<Map<number, OddsFixtureTarget>> {
@@ -376,23 +495,36 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
     },
     /** Receipt first: insert-if-absent, then a sealed re-read must reproduce the exact body. */
     async saveBatch(input: OddsBatchBody): Promise<OddsBatchBody> {
-      const parsed = batchSchema.safeParse(input);
-      if (!parsed.success) return oddsFail("invalid-request");
-      const { id, ...content } = parsed.data, body = evidenceSerialize(parsed.data);
-      if (evidenceFingerprint(content) !== id) return oddsFail("invalid-request");
-      const stored = await write(async (tx) => {
-        await tx.$executeRaw`INSERT IGNORE INTO OddsImportBatch (id, accountId, kind, scopeKey, policyHash, status, requestsDispatched, receivedAt, integrity, body)
-          VALUES (${id}, ${parsed.data.accountId}, ${parsed.data.kind}, ${parsed.data.scopeKey}, ${parsed.data.policyHash}, ${parsed.data.status},
-            ${parsed.data.requestsDispatched}, ${new Date(parsed.data.receivedAt)}, SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`;
-        const sealed = await sealedBatch(tx, id);
-        if (!sealed || evidenceFingerprint(sealed) !== evidenceFingerprint(parsed.data)) return oddsFail("conflicting-request");
-        return sealed;
-      });
+      if (input.checkpoint) return oddsFail("invalid-request");
+      const stored = await write((tx) => writeBatch(tx, input));
       // Committed: the import's per-fixture writes reuse this verified body instead of re-reading it each time.
       remember(stored);
       return stored;
     },
     batch(id: string) { return read((tx) => sealedBatch(tx, id)); },
+    /** Commit exactly one verified provider page together with the offers it describes. */
+    async saveAndApplyPricePage(input: OddsBatchBody, applications: readonly OddsFixtureApplication[]) {
+      if (!input.checkpoint || applications.length !== input.fixtures.filter(({ outcome }) => outcome === "apply").length ||
+        new Set(applications.map(({ row }) => row.fixtureId)).size !== applications.length ||
+        applications.some(({ batchId }) => batchId !== input.id)) return oddsFail("invalid-request");
+      const result = await write(async (tx) => {
+        const batch = await writeBatch(tx, input), receipt = indexBatch(batch);
+        const outcomes: OddsApplyResult[] = [];
+        for (const application of applications) outcomes.push(await applyFixtureTransaction(tx, application, receipt));
+        return { batch, outcomes };
+      });
+      remember(result.batch);
+      return result;
+    },
+    pricePageBatches(requestId: string, policyHash: string): Promise<readonly OddsBatchBody[]> {
+      return read(async (tx) => {
+        const rows = await tx.$queryRaw<SealedRow[]>`SELECT id, body, integrity = SHA2(CAST(body AS CHAR), 256) AS validIntegrity
+          FROM OddsImportBatch WHERE kind = 'prices' AND scopeKey = ${oddsPricePageScopeKey(requestId)} AND policyHash = ${policyHash}
+          ORDER BY receivedAt, id LIMIT 1001`;
+        if (rows.length > 1000) return oddsFail("invalid-state");
+        return rows.map(parsedBatch);
+      });
+    },
     /** Every observed /odds/bets name is kept once; later renames add rows, never overwrite. */
     saveBetObservations(batchId: string, entries: readonly Readonly<{ id: number; name: string }>[]): Promise<number> {
       return write(async (tx) => {
@@ -474,7 +606,8 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
             && snapshot.valuesHash === oddsValuesHash(snapshot.values)
             && manifest.bets.some((bet) => bet.betId === snapshot.betId && bet.betName === snapshot.betName && bet.valuesHash === snapshot.valuesHash));
           if (!offers.length || !provenTrue(input.verify)) return 0;
-          const changes = await projectPrices(tx, candidate.id, policy.bookmakerId, catalog, offers);
+          const changes = await projectPrices(tx, candidate.id, policy.bookmakerId, catalog, offers, at - policy.freshnessMs,
+            state.lastProviderUpdatedAt?.getTime() ?? null);
           if (changes > 0) await bumpState(tx, candidate.id, {}, true);
           return changes > 0 ? 1 : 0;
         });
@@ -486,98 +619,15 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
      * named by `batchId` must have recorded exactly this observation: its fixture entry (outcome `apply`) carries the
      * row's observation hash and one of its pages carries the row's retrieval time, so every snapshot's `batchId`
      * points at a receipt that observed those values. */
-    async applyFixture(input: Readonly<{ batchId: string; policy: OddsPolicy; policyHash: string; fixtureId: string; row: NormalizedFixtureOdds;
-      publicDisplay: boolean; catalog: ReadonlyMap<number, string> | null }>): Promise<OddsApplyResult> {
-      const { row, policy } = input, retrievedAt = row.source.retrievedAt, providerUpdatedAt = row.source.providerUpdatedAt;
-      const bookmaker = row.bookmakers.find((entry) => entry.id === policy.bookmakerId);
-      if (row.kickoff === null || policy.bookmakerScope !== "all" && row.bookmakers.some((entry) => entry.id !== policy.bookmakerId)) return oddsFail("invalid-request");
-      const observationHash = evidenceFingerprint(row);
-      return write(async (tx) => {
-        // A receipt visible here is committed (this transaction never inserts receipts), so it may be remembered.
-        const receipt = verifiedBatches.get(input.batchId) ?? remember(await sealedBatch(tx, input.batchId));
-        const entry = receipt?.fixtures.get(row.fixtureId);
-        if (!receipt || receipt.batch.kind !== "prices" || receipt.batch.policyHash !== input.policyHash || entry?.outcome !== "apply" ||
-          entry.observationHash !== observationHash || !receipt.pages.has(retrievedAt)) return oddsFail("invalid-request");
-        if (entry.quoteManifest || policy.bookmakerScope === "all") {
-          const { quoteManifest, additionalQuoteManifests } = fixtureQuoteManifests(row, policy.bookmakerId);
-          if (!entry.quoteManifest || evidenceFingerprint(entry.quoteManifest) !== evidenceFingerprint(quoteManifest) ||
-            evidenceFingerprint(entry.additionalQuoteManifests ?? []) !== evidenceFingerprint(additionalQuoteManifests ?? [])) return oddsFail("invalid-request");
-        }
-        const at = await now(tx);
-        const fixture = (await tx.$queryRaw<{ kickoff: Date | null; status: string }[]>`SELECT kickoff, status FROM FootballFixture
-          WHERE id = ${input.fixtureId} AND provider = 'api-football' AND externalId = ${BigInt(row.fixtureId)}`)[0];
-        // Pre-match only: after kickoff the last valid price is frozen as the closing price.
-        if (!fixture || fixture.kickoff === null || fixture.kickoff.getTime() !== row.kickoff || fixture.status !== "scheduled" ||
-          fixture.kickoff.getTime() <= Math.max(retrievedAt, at)) return "skipped";
-        await tx.$executeRaw`INSERT INTO FixtureOddsState (fixtureId, latestBatchId, policyHash, lastRetrievedAt, lastProviderUpdatedAt, withdrawnAt, publicVersion)
-          VALUES (${input.fixtureId}, ${input.batchId}, ${input.policyHash}, ${new Date(retrievedAt)},
-            ${providerUpdatedAt === null ? null : new Date(providerUpdatedAt)}, NULL, 0)
-          ON DUPLICATE KEY UPDATE publicVersion = publicVersion`;
-        const state = await lockState(tx, input.fixtureId);
-        if (!state) return oddsFail("invalid-state");
-        // Out-of-order observations never move a fixture backwards.
-        if (state.lastRetrievedAt.getTime() > retrievedAt) return "skipped";
-        const heads = new Map((row.bookmakers.length === 0 ? [] : await tx.$queryRaw<{ id: string; betExternalId: unknown; bookmakerExternalId: unknown; valuesHash: string; bookmakerName: string | null;
-          betName: string | null; retrievedAt: Date; providerUpdatedAt: Date | null }[]>`
-          SELECT s.id, s.bookmakerExternalId, s.betExternalId, s.valuesHash, s.bookmakerName, s.betName, s.retrievedAt, s.providerUpdatedAt FROM ProviderOddsSnapshot s
-          LEFT JOIN ProviderOddsSnapshot n ON n.previousId = s.id
-          WHERE s.fixtureId = ${input.fixtureId} AND s.bookmakerExternalId IN (${Prisma.join(row.bookmakers.map(({ id }) => id))}) AND n.id IS NULL`)
-          .map((head) => [quoteKey(asNumber(head.bookmakerExternalId), asNumber(head.betExternalId)), head]));
-        const current = new Map<string, Readonly<{ id: string; retrievedAt: number; providerUpdatedAt: number | null }>>();
-        const pending: StoredOddsSnapshot[] = [];
-        for (const { id: bookmakerId, name: bookmakerName, bets } of row.bookmakers) for (const bet of bets) {
-          const key = quoteKey(bookmakerId, bet.id);
-          const values = canonicalOddsValues(bet.values), valuesHash = oddsValuesHash(values), head = heads.get(key);
-          // Unchanged content (canonical values and the recorded names) adds no row; a renamed bet or bookmaker is recorded.
-          if (head && head.valuesHash === valuesHash && head.betName === bet.name && head.bookmakerName === bookmakerName) {
-            current.set(key, { id: head.id, retrievedAt: head.retrievedAt.getTime(), providerUpdatedAt: head.providerUpdatedAt?.getTime() ?? null });
-            continue;
-          }
-          const previousId = head?.id ?? null, retainUntil = row.kickoff + policy.retainAfterKickoffMs;
-          const id = evidenceFingerprint({ fixtureId: input.fixtureId, bookmakerId, bookmakerName, betId: bet.id,
-            betName: bet.name, valuesHash, previousId });
-          pending.push({ id, fixtureId: input.fixtureId, previousId, bookmakerId, bookmakerName,
-            betId: bet.id, betName: bet.name, valuesHash, retrievedAt, providerUpdatedAt, retainUntil, values });
-        }
-        // Changed bets are written together: multi-row INSERT IGNORE statements, then one sealed re-read that must
-        // reproduce every body exactly (a concurrent replica may have written the same content-addressed rows).
-        for (const part of chunks(pending, SNAPSHOT_CHUNK)) {
-          await tx.$executeRaw(Prisma.sql`INSERT IGNORE INTO ProviderOddsSnapshot (id, fixtureId, batchId, previousId, bookmakerExternalId, bookmakerName,
-            betExternalId, betName, valuesHash, selectionCount, retrievedAt, providerUpdatedAt, retainUntil, integrity, body)
-            VALUES ${Prisma.join(part.map((body) => {
-              const json = evidenceSerialize(body);
-              return Prisma.sql`(${body.id}, ${body.fixtureId}, ${input.batchId}, ${body.previousId}, ${body.bookmakerId}, ${body.bookmakerName}, ${body.betId},
-                ${body.betName}, ${body.valuesHash}, ${body.values.length}, ${new Date(retrievedAt)},
-                ${providerUpdatedAt === null ? null : new Date(providerUpdatedAt)}, ${new Date(body.retainUntil)},
-                SHA2(CAST(JSON_EXTRACT(${json}, '$') AS CHAR), 256), JSON_EXTRACT(${json}, '$'))`;
-            }))}`);
-        }
-        const sealed = pending.length === 0 ? new Map<string, StoredOddsSnapshot>() : await sealedSnapshots(tx, pending.map((body) => body.id));
-        for (const body of pending) {
-          const stored = sealed.get(body.id);
-          if (!stored || evidenceFingerprint(stored) !== evidenceFingerprint(body)) return oddsFail("invalid-state");
-          current.set(quoteKey(body.bookmakerId, body.betId), { id: body.id, retrievedAt, providerUpdatedAt });
-        }
-        const snapshots = pending.length;
-        const offers = (bookmaker?.bets ?? []).flatMap((bet) => {
-          const snapshot = current.get(quoteKey(policy.bookmakerId, bet.id));
-          return snapshot ? [{ ...snapshot, betId: bet.id, betName: bet.name, values: bet.values }] : [];
-        });
-        const publicChanges = input.publicDisplay ? await projectPrices(tx, input.fixtureId, policy.bookmakerId, input.catalog, offers)
-          : await staleAll(tx, input.fixtureId);
-        const version = asNumber(state.publicVersion) + (publicChanges > 0 ? 1 : 0);
-        await tx.$executeRaw`UPDATE FixtureOddsState SET latestBatchId = ${input.batchId}, policyHash = ${input.policyHash},
-          lastRetrievedAt = ${new Date(retrievedAt)}, lastProviderUpdatedAt = ${providerUpdatedAt === null ? null : new Date(providerUpdatedAt)},
-          withdrawnAt = NULL, publicVersion = ${version} WHERE fixtureId = ${input.fixtureId}`;
-        return snapshots > 0 || publicChanges > 0 ? "changed" : "unchanged";
-      });
+    applyFixture(input: OddsFixtureApplication) {
+      return write((tx) => applyFixtureTransaction(tx, input));
     },
     /** Only after a COMPLETE sweep of one EAT date: pre-match fixtures absent from it are withdrawn and their prices go stale. */
     async markWithdrawn(input: Readonly<{ batchId: string; date: string; seenFixtureIds: readonly string[] }>): Promise<number> {
       // Candidate reads use the same transactional clock as the per-fixture re-check below.
       const { batch, candidates } = await write(async (tx) => {
         const batch = await sealedBatch(tx, input.batchId);
-        if (!batch || batch.kind !== "prices" || batch.status !== "complete" || batch.date !== input.date) return oddsFail("invalid-request");
+        if (!batch || batch.checkpoint || batch.kind !== "prices" || batch.status !== "complete" || batch.date !== input.date) return oddsFail("invalid-request");
         return { batch, candidates: await tx.$queryRaw<{ fixtureId: string }[]>`SELECT s.fixtureId FROM FixtureOddsState s
           JOIN FootballFixture f ON f.id = s.fixtureId
           WHERE f.eatDate = ${input.date} AND s.withdrawnAt IS NULL AND f.kickoff > UTC_TIMESTAMP(3) ORDER BY s.fixtureId` };
@@ -605,13 +655,15 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
       // Candidate reads use the same transactional clock as the per-fixture re-check below.
       const candidates = await write((tx) => tx.$queryRaw<{ fixtureId: string }[]>`SELECT DISTINCT p.fixtureId FROM FixtureOddsPrice p
         JOIN FixtureOddsState s ON s.fixtureId = p.fixtureId JOIN FootballFixture f ON f.id = p.fixtureId
-        WHERE p.stale = FALSE AND s.lastRetrievedAt < DATE_SUB(LEAST(UTC_TIMESTAMP(3), COALESCE(f.kickoff, UTC_TIMESTAMP(3))), INTERVAL ${window} MICROSECOND)
+        WHERE p.stale = FALSE AND LEAST(s.lastRetrievedAt, COALESCE(s.lastProviderUpdatedAt, s.lastRetrievedAt)) <
+          DATE_SUB(LEAST(UTC_TIMESTAMP(3), COALESCE(f.kickoff, UTC_TIMESTAMP(3))), INTERVAL ${window} MICROSECOND)
         ORDER BY p.fixtureId LIMIT ${limit}`);
       let expired = 0;
       for (const { fixtureId } of candidates) {
         expired += await write(async (tx) => {
           const state = await lockState(tx, fixtureId);
-          const due = (await tx.$queryRaw<{ due: unknown }[]>`SELECT s.lastRetrievedAt < DATE_SUB(LEAST(UTC_TIMESTAMP(3), COALESCE(f.kickoff, UTC_TIMESTAMP(3))),
+          const due = (await tx.$queryRaw<{ due: unknown }[]>`SELECT LEAST(s.lastRetrievedAt, COALESCE(s.lastProviderUpdatedAt, s.lastRetrievedAt)) <
+            DATE_SUB(LEAST(UTC_TIMESTAMP(3), COALESCE(f.kickoff, UTC_TIMESTAMP(3))),
             INTERVAL ${window} MICROSECOND) AS due FROM FixtureOddsState s JOIN FootballFixture f ON f.id = s.fixtureId WHERE s.fixtureId = ${fixtureId}`)[0];
           if (!state || !asBoolean(due?.due)) return 0;
           const changed = await staleAll(tx, fixtureId);

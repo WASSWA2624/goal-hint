@@ -11,6 +11,7 @@ import { defineJob, type JobHandlerContext, type JobOutcome } from "../jobs/job-
 import type { JobUsage } from "../jobs/job-contract.ts";
 import { ModelRegistryError, type ModelRegistry } from "../predictor/predictor-registry.ts";
 import type { createPredictorService, PredictorResult } from "../predictor/predictor-service.ts";
+import { predictorRetryRequest } from "../predictor/predictor-resilience.ts";
 import type { createScheduleLifecycleService } from "../predictions/lifecycle-service.ts";
 import type { createRevisionPublicationService } from "../predictions/publication-service.ts";
 import type { PublicationResult } from "../predictions/publication-contract.ts";
@@ -26,6 +27,7 @@ import type { EvidenceContext } from "../evidence/evidence-contract.ts";
 import { assessBaselineEvidence } from "../evidence/baseline-evidence.ts";
 import type { RecommendationQuote } from "../../domain/recommendation.ts";
 import { selectRecommendation } from "./recommendation-selection.ts";
+import type { ForecastLifecyclePolicy } from "./forecast-orchestration.ts";
 
 class PhaseTimeout extends Error {}
 type CostReader = Pick<ReturnType<typeof createCostService>, "jobSummary">;
@@ -38,6 +40,7 @@ function checked(value: unknown, expected: unknown) {
 export function createPredictionRefreshService(options: Readonly<{
   type: string; handlerVersion: number; store: RefreshStore; selection: Pick<DailySelectionStore, "progress" | "inspect">;
   authority: RefreshAuthority; configure(member: RefreshMember): RefreshPlan | Promise<RefreshPlan>;
+  forecastLifecycle?: ForecastLifecyclePolicy;
   /** Optional bounded input imports before the immutable analysis cutoff is captured. */
   prepare?(member: RefreshMember, context: JobHandlerContext): Promise<void | Readonly<{ sources: readonly import("../evidence/evidence-contract.ts").EvidenceSource[]; research?: Readonly<{ status: "completed" | "denied"; reason: string | null }> }>>;
   models: Pick<ModelRegistry, "resolve">; evidence: Pick<ReturnType<typeof createEvidenceService>, "collect">;
@@ -69,7 +72,7 @@ export function createPredictionRefreshService(options: Readonly<{
     const progress = await options.selection.progress(runId);
     return freezeEvidence({ ...progress, finished: progress.terminal === progress.total });
   }
-  async function handle(context: JobHandlerContext): Promise<JobOutcome> {
+  async function handle(context: JobHandlerContext, planned?: ForecastLifecyclePolicy): Promise<JobOutcome> {
     const lease = context.lease;
     if (!lease.job.envelope.refresh) return { status: "failed", reason: "invalid-payload", retryable: false };
     const identity = lease.job.envelope.refresh;
@@ -77,7 +80,9 @@ export function createPredictionRefreshService(options: Readonly<{
     async function finish(outcome: RefreshOutcome["outcome"], reason: string, published?: PublicationResult): Promise<JobOutcome> {
       await context.checkpoint();
       await options.store.finish(lease, { ...identity, jobId: lease.jobId, at: now(), outcome, reason,
-        revisionId: published?.refresh.revisionId ?? null, publicationId: published?.refresh.id ?? null, costs: await costs(lease.jobId), phases });
+        revisionId: published?.refresh.revisionId ?? null, publicationId: published?.refresh.id ?? null,
+        ...(published?.refresh.forecastDecision === undefined ? {} : { forecastDecisionHash: published.refresh.forecastDecision.hash }),
+        costs: await costs(lease.jobId), phases });
       return outcome === "failed" ? { status: "failed", reason: "non-retryable", retryable: false } : { status: "succeeded" };
     }
     // Recover an ambiguous publication commit before checking current eligibility or live configuration.
@@ -93,6 +98,9 @@ export function createPredictionRefreshService(options: Readonly<{
     }
     let intent = await options.store.intent(lease.jobId);
     if (!intent) {
+      if (planned && (!options.forecastLifecycle || evidenceFingerprint(options.forecastLifecycle) !== evidenceFingerprint(planned))) {
+        return finish("skipped", "forecast-configuration-changed");
+      }
       if (options.prepare) {
         const prepared = await options.store.stage(lease.jobId, "preparation", "completed");
         if (prepared) phases.preparation = "reused";
@@ -160,6 +168,20 @@ export function createPredictionRefreshService(options: Readonly<{
             item("research", researchReference, 0, primary && plan.evidence.researchPlan !== null, researchCost)] :
             [item("football", name, result.usage.football.requests, result.usage.football.uncertain, null),
               item("research", researchReference, result.usage.research.requests, result.usage.research.uncertain, researchCost)];
+        }
+        if (name === "ai" && plan.ai) {
+          const { request } = plan.ai;
+          const result = value as PredictorResult;
+          if (result.attempts !== undefined) {
+            const attemptIds = [request.attemptId, predictorRetryRequest(request).attemptId];
+            if (!Array.isArray(result.attempts) || result.attempts.length === 0 || result.attempts.length > attemptIds.length ||
+              result.attempts.some((attempt, index) => attempt.attemptId !== attemptIds[index] ||
+                ![0, 1].includes(attempt.dispatched) || typeof attempt.requestCountUnknown !== "boolean") ||
+              result.attempts.reduce((total, attempt) => total + attempt.dispatched, 0) !== result.requestsDispatched ||
+              result.attempts.some(({ requestCountUnknown }) => requestCountUnknown) !== result.requestCountUnknown) return refreshFail("invalid-request");
+            return result.attempts.map((attempt, index) => item("ai", index === 0 ? "ai" : "ai-retry",
+              attempt.dispatched, attempt.requestCountUnknown, attempt.attemptId));
+          }
         }
         const result = value as PredictorResult | FallbackRefreshResult | Observation | null;
         return [item(name === "ai" ? "ai" : "football", name, result?.requestsDispatched ?? 0,
@@ -315,7 +337,7 @@ export function createPredictionRefreshService(options: Readonly<{
   const definition = defineJob({ type: options.type, handlerVersion: options.handlerVersion, payload: refreshPayload,
     handle: async (payload, context) => {
       if (evidenceFingerprint(payload) !== evidenceFingerprint(context.lease.job.envelope.payload)) return refreshFail("invalid-request");
-      try { return await handle(context); }
+      try { return await handle(context, payload.forecastLifecycle); }
       catch (error) {
         const identity = context.lease.job.envelope.refresh;
         if (!identity || context.signal.aborted || error instanceof PredictionRefreshError && error.reason === "unavailable" ||

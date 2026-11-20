@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { nonGoalResultEvidenceSchema } from "../../domain/non-goal-market-settlement.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
@@ -16,15 +17,18 @@ export const impliedResultEvidenceInputSchema = z.strictObject({
   homeTeamId: historyId, awayTeamId: historyId,
   contractVersion: z.literal("verified-non-goal-result-v1"),
   sources: z.array(z.strictObject({
-    endpoint: z.enum(["fixtures/statistics", "fixtures/events", "fixtures/ids"]),
+    endpoint: z.enum(["fixtures/statistics", "fixtures/events", "fixtures/ids", "fixtures/lineups", "fixtures/players"]),
     sourceRef: historyHash, retrievedAt: historyInstant, providerUpdatedAt: historyInstant.nullable(),
   })).min(1).max(16),
   evidence: nonGoalResultEvidenceSchema,
 }).superRefine(({ sources, evidence }, context) => {
+  const participation = evidence.participation?.length ?? 0;
   if (new Set(sources.map(({ sourceRef }) => sourceRef)).size !== sources.length ||
-      !evidence.counts.length && !evidence.events.length ||
-      evidence.counts.length && !sources.some(({ endpoint }) => endpoint !== "fixtures/events") ||
-      evidence.events.length && !sources.some(({ endpoint }) => endpoint !== "fixtures/statistics")) {
+      !evidence.counts.length && !evidence.events.length && !participation ||
+      evidence.counts.length && !sources.some(({ endpoint }) => endpoint === "fixtures/statistics" || endpoint === "fixtures/ids") ||
+      evidence.events.length && !sources.some(({ endpoint }) => endpoint === "fixtures/events" || endpoint === "fixtures/ids") ||
+      participation && !sources.some(({ endpoint }) => endpoint === "fixtures/players" || endpoint === "fixtures/ids" ||
+        endpoint === "fixtures/lineups")) {
     context.addIssue({ code: "custom", message: "Each fact requires a reviewed result source with an unambiguous identity." });
   }
 });
@@ -61,6 +65,31 @@ export async function readImpliedResultEvidence(tx: Tx, fixtureId: string, resul
   return row ? impliedResultEvidenceFromRow(row) : null;
 }
 
+function sourceClocksAdvance(previous: ImpliedResultEvidenceInput["sources"], supplied: ImpliedResultEvidenceInput["sources"]): boolean {
+  if (Math.max(...supplied.map((source) => source.retrievedAt)) <= Math.max(...previous.map((source) => source.retrievedAt))) return false;
+  const newest = new Map<ImpliedResultEvidenceInput["sources"][number]["endpoint"], ImpliedResultEvidenceInput["sources"][number]>();
+  for (const source of supplied) {
+    if (source.retrievedAt > (newest.get(source.endpoint)?.retrievedAt ?? -1)) newest.set(source.endpoint, source);
+  }
+  return previous.every((source) => {
+    const next = newest.get(source.endpoint);
+    return !next || (next.retrievedAt >= source.retrievedAt && (next.providerUpdatedAt === null || source.providerUpdatedAt === null ||
+      next.providerUpdatedAt >= source.providerUpdatedAt));
+  });
+}
+
+function retainsCoverage(previous: ImpliedResultEvidenceInput["evidence"], supplied: ImpliedResultEvidenceInput["evidence"]): boolean {
+  const metricKey = ({ period, metric, countingRule }: { period: string; metric: string; countingRule: string }) =>
+    `${period}:${metric}:${countingRule}`;
+  const playerKey = ({ period, playerId }: { period: string; playerId: number }) => `${period}:${playerId}`;
+  const contains = <Row extends { verified: boolean }>(old: readonly Row[], next: readonly Row[], key: (value: Row) => string) => {
+    const nextKeys = new Set(next.map(key));
+    return old.every((entry) => !entry.verified || nextKeys.has(key(entry)));
+  };
+  return contains(previous.counts, supplied.counts, metricKey) && contains(previous.events, supplied.events, metricKey) &&
+    contains(previous.participation ?? [], supplied.participation ?? [], playerKey);
+}
+
 /** Caller owns the fixture lock. Evidence is append-only and cannot rewrite a final result or an accepted pick.
  * The opt-in settlement reconciler discovers new sequences, including statistic-only corrections. */
 export async function appendImpliedResultEvidence(tx: Tx, input: unknown, recordedAt: number,
@@ -72,13 +101,21 @@ export async function appendImpliedResultEvidence(tx: Tx, input: unknown, record
   const result = state?.resultId === value.resultId ? await storedFixtureResult(tx, value.fixtureId, value.resultId) : null;
   if (fixture.provider !== value.provider || fixture.externalId.toString() !== value.externalFixtureId ||
       fixture.homeTeamId !== value.homeTeamId || fixture.awayTeamId !== value.awayTeamId || !fixture.kickoff ||
-      !fixtureResultMatchesCanonical(fixture, result, issue) || result!.observedAt > recordedAt ||
+      !result?.regulation.verified || !isPlayedFinalStatus(result.status) ||
+      !fixtureResultMatchesCanonical(fixture, result, issue) || result.observedAt > recordedAt ||
       value.sources.some((source) => source.retrievedAt < fixture.kickoff!.getTime() || source.retrievedAt > recordedAt ||
         source.providerUpdatedAt !== null && source.providerUpdatedAt > source.retrievedAt) || !await authority.verify(tx, value))
     return historyFail("invalid-request");
-  const current = await readImpliedResultEvidence(tx, value.fixtureId, value.resultId), contentHash = evidenceFingerprint(value);
-  if (current?.contentHash === contentHash) return current;
-  if (current && recordedAt < current.recordedAt) return historyFail("invalid-request");
+  const contentHash = evidenceFingerprint(value);
+  // A delayed delivery of a previously accepted observation must not become
+  // the current snapshot again after a newer result-time correction.
+  const [replayed] = await tx.$queryRaw<HistoryRow[]>`SELECT *, integrity = SHA2(CAST(body AS CHAR), 256) AS validIntegrity
+    FROM ImpliedMarketResultEvidence WHERE fixtureId = ${value.fixtureId} AND resultId = ${value.resultId}
+      AND contentHash = ${contentHash} ORDER BY sequence ASC LIMIT 1`;
+  if (replayed) return impliedResultEvidenceFromRow(replayed);
+  const current = await readImpliedResultEvidence(tx, value.fixtureId, value.resultId);
+  if (current && (recordedAt < current.recordedAt || !sourceClocksAdvance(current.sources, value.sources) ||
+    !retainsCoverage(current.evidence, value.evidence))) return historyFail("invalid-request");
   const id = evidenceFingerprint({ input: value, recordedAt }), body = evidenceSerialize({ ...value, id, recordedAt, contentHash });
   await tx.$executeRaw`INSERT INTO ImpliedMarketResultEvidence (id, fixtureId, resultId, recordedAt, contentHash, integrity, body)
     VALUES (${id}, ${value.fixtureId}, ${value.resultId}, ${new Date(recordedAt)}, ${contentHash},

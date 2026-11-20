@@ -34,6 +34,23 @@ function response(body, headers = {}, status = 200) {
 const sanitized = (error) => error instanceof OpenAiTransportError &&
   !String(error).includes("synthetic-ai-only-key") && !String(error).includes("private-provider-content");
 
+test("classifies retryable HTTP and network failures while retaining an explicit one-minute call ceiling", async () => {
+  let status = 503, requests = 0;
+  const h = await fixture(async () => {
+    requests++;
+    if (status === null) throw new Error("private-provider-content");
+    return response("private-provider-content", {}, status);
+  });
+  for (const [value, expected] of [[503, "transient"], [408, "transient"], [429, "provider-failure"], [401, "provider-failure"],
+    [null, "transient"]]) {
+    status = value;
+    await assert.rejects(() => h.generate(), (error) => sanitized(error) && error.kind === expected);
+  }
+  await assert.rejects(() => h.transport.binding.generate({ ...h.input,
+    transport: { ...h.input.transport, timeoutMs: 60_001 } }), (error) => sanitized(error) && error.kind === "invalid-request");
+  assert.equal(requests, 5);
+});
+
 test("one bounded Responses POST uses the pinned strict schema without tools, storage or retries", async () => {
   const calls = []; let h;
   h = await fixture(async (url, request) => { calls.push({ url, request }); return response(rawResponse(h)); });

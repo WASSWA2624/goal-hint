@@ -20,6 +20,7 @@ import { parseModelPin } from "../predictor/predictor-input.ts";
 import { createMysqlModelVersionStore } from "../predictor/predictor-mysql-store.ts";
 import { createModelRegistry, ModelRegistryError } from "../predictor/predictor-registry.ts";
 import { createPredictorService, type PredictorResult } from "../predictor/predictor-service.ts";
+import { permitsPredictorRetry, predictorRetryRequest } from "../predictor/predictor-resilience.ts";
 import type { PredictorExplanation } from "../predictor/predictor-output.ts";
 import type { RefreshIntent, RefreshMember, RefreshPlan } from "../refresh/refresh-contract.ts";
 import type { RefreshStore } from "../refresh/refresh-mysql-store.ts";
@@ -60,7 +61,7 @@ export function groundLiveAiExplanations(output: unknown, snapshot: EvidenceSnap
   return value;
 }
 
-/** Compose immutable model ownership, durable accounting and a single reviewed OpenAI attempt. */
+/** Compose immutable model ownership, durable accounting and bounded OpenAI attempts. */
 export async function createLiveAiRuntime(options: {
   policy: RuntimePolicy; verify: EvidenceVerifier; refs: LiveReferences; model: ModelVersion;
   database: DatabaseRuntime; store: RefreshStore; evidenceAuthority: EvidenceAuthority; pacing: RefreshPacing;
@@ -91,11 +92,16 @@ export async function createLiveAiRuntime(options: {
       evidenceRef: policy.choices.budgets.approvalRef!, billingMode };
     return value;
   }
+  function matchesRequest(request: import("../cost-control/cost-contract.ts").CostRequest): boolean {
+    const plan = work.get(request.jobId)?.plan.ai;
+    return plan !== undefined && plan !== null && (same(plan.request, request) ||
+      permitsPredictorRetry(plan.job, plan.request) && same(predictorRetryRequest(plan.request), request));
+  }
   const costAuthority: CostAuthority = {
     authorize() { authorize(); }, verifyPeriod: (value) => same(value, period(value.startsAt)),
     verifyJob: (job) => same(work.get(job.jobId)?.plan.ai?.job, job),
     verifyRate: (rate) => same(rate, parseCostRate(liveAiRate(model, rate.startsAt))),
-    verifyRequest: (request, job) => same(work.get(job.jobId)?.plan.ai?.request, request),
+    verifyRequest: matchesRequest,
     verifyUsage: transport.verifyUsage,
   };
   const costs = createPolicyCostService({ accountId, category: "ai", store: createMysqlCostStore(options.database),
@@ -130,7 +136,7 @@ export async function createLiveAiRuntime(options: {
   const adapter = createPrimaryAiAdapter({ runtimePolicy: policy, verifyEvidence: verify, modelAuthority, clock,
     gateway: createCostGateway({ service: costs, authorize, clock }), binding,
     verifyBinding: (value, invocation) => value.generate === binding.generate && same(invocation.model, model) &&
-      same(work.get(invocation.pin.jobId)?.plan.ai?.request, invocation.request) });
+      matchesRequest(invocation.request) });
   const predictor = createPredictorService({ registry: models, adapter, modelAuthority, evidenceAuthority: options.evidenceAuthority,
     clock, maxInflight: 12,
     verifyInvocation: (pin, context, job, request) => {

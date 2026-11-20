@@ -195,7 +195,7 @@ function matchesDetail(row: Target, detail: NormalizedFixtureMatchDetails | unde
     Buffer.byteLength(JSON.stringify(detail.facts)) <= FIXTURE_FACTS_MAX_BYTES ? detail : undefined;
 }
 
-/** Private archive work shares the adapter's provider account and yields to live work at enrichment priority. */
+/** Private archive work shares the adapter's provider account and yields to current fixtures. */
 export function createFootballHistoryDetails(options: Readonly<{
   database: DatabaseRuntime;
   adapter: Pick<ReturnType<typeof createApiFootballAdapter>["evidence"], "matchDetails">;
@@ -203,6 +203,7 @@ export function createFootballHistoryDetails(options: Readonly<{
   batchSize?: number;
   now(): UtcInstant;
   providerDayEndsAt(): number | null;
+  onFinalDetails?(input: Readonly<{ fixtureId: string; detail: NormalizedFixtureMatchDetails; checkedAt: number }>): Promise<unknown>;
 }>) {
   const { database, adapter, now, providerDayEndsAt } = options;
   const approved = new Set(options.competitionIds), batchSize = options.batchSize ?? 1;
@@ -258,9 +259,16 @@ export function createFootballHistoryDetails(options: Readonly<{
         const nextCheckAt = done || observations >= 3 ? null : new Date(checkedAt + (accepted === null ? 15 * MINUTE : observations * DAY));
         await tx.footballHistoryDetailState.update({ where: { fixtureId: row.fixtureId }, data: { checkedAt: new Date(checkedAt), nextCheckAt,
           state: { version: 1, attempts: item.previous.attempts + requests, observations, reservation: null, sections } } });
-        return { received: Boolean(detail), saved, done };
+        return { detail, saved, done };
       }, { isolationLevel: "ReadCommitted", timeout: 15_000 });
-      if (result) { received += Number(result.received); written += Number(result.saved); completed += Number(result.done); }
+      if (result) {
+        received += Number(Boolean(result.detail)); written += Number(result.saved); completed += Number(result.done);
+        // Optional settlement evidence has its own fixture transaction. A
+        // projection failure cannot roll back the authoritative detail import.
+        if (options.onFinalDetails && result.detail) {
+          try { await options.onFinalDetails({ fixtureId: item.target.fixtureId, detail: result.detail, checkedAt }); } catch { /* evidence remains unavailable */ }
+        }
+      }
     }
     return { requested: claimed.length, received, written, completed, deferred: claimed.length - completed, requests };
   }
@@ -289,7 +297,7 @@ export function createFootballHistoryDetails(options: Readonly<{
       let response: ApiFootballResult<NormalizedFixtureMatchDetails> | null = null;
       try {
         check();
-        response = await adapter.matchDetails(ids, { priority: "enrichment", deadlineAt, timeoutMs: 30_000, maxRequests: 1,
+        response = await adapter.matchDetails(ids, { priority: "historical-backfill", deadlineAt, timeoutMs: 30_000, maxRequests: 1,
           maxPages: 1, maxRows: batchSize, maxResponseBytes: 8_000_000, retry: { maxAttempts: 1, baseDelayMs: 0, maxDelayMs: 0 },
           cacheMaxAgeMs: 0 }, { signal: requestSignal, deadlineAt, check, beforeReserve: check, beforeDispatch: check });
       } catch { /* Unconfirmed work is deferred rather than recording it as an empty fixture. */ }

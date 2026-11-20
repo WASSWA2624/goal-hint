@@ -3,7 +3,7 @@ import test from 'node:test';
 import { createAccountStatusReader, createQuotaRouter, LiveAccountError, parseAccountStatus, planMinuteLimit,
   PROVIDER_DAY_SETTLE_MS } from '../src/server/live/live-account.ts';
 import { missingOwnerApprovals, OwnerApprovalError, ownerEvidenceVerifier, parseOwnerApprovals } from '../src/server/live/live-approvals.ts';
-import { liveWorkload, REFRESH_REQUESTS_PER_JOB, resultSyncPolicy, selectionPolicy, liveReferences, publicationPolicy,
+import { assessLiveCapacity, liveWorkload, REFRESH_REQUESTS_PER_JOB, resultSyncPolicy, selectionPolicy, liveReferences, publicationPolicy,
   providerFallbackPolicy, cutoffPolicy, lifecyclePolicy, fallbackRefreshPlan, refreshEnvelopeFor, oddsPolicy, oddsImportBounds, oddsCatalogBounds,
   oddsMaxRequests, ODDS_MINIMUM_SPARE } from '../src/server/live/live-plan.ts';
 import { parseOddsPolicy } from '../src/server/odds/odds-input.ts';
@@ -63,7 +63,9 @@ function memoryQuotaStore(clock) {
       period: async (id) => structuredClone(periods.get(id) ?? null), savePeriod: async (state) => { periods.set(state.id, structuredClone(state)); },
       attempt: async (id) => structuredClone(attempts.get(id) ?? null), inFlight: async () => null,
       saveAttempt: async (attempt) => { attempts.set(attempt.id, structuredClone(attempt)); },
-      rollingAttempts: async () => [], periodAttempts: async () => [], unresolvedBefore: async () => 0, queueHead: async () => null,
+      rollingAttempts: async (since) => structuredClone([...attempts.values()].filter((attempt) => attempt.dispatchedAt > since)),
+      periodAttempts: async (periodId, after) => structuredClone([...attempts.values()].filter((attempt) =>
+        attempt.periodId === periodId && attempt.sequence > after)), unresolvedBefore: async () => 0, queueHead: async () => null,
     });
   } };
 }
@@ -75,12 +77,73 @@ test('account status parsing keeps a stable credential-free identity and documen
   const upper = parseAccountStatus(status({ account: { email: 'owner@example.test' } }), NOW);
   assert.equal(upper.accountKey, free.accountKey, 'email case does not split the account');
   const mega = parseAccountStatus(status({ subscription: { plan: 'Mega', end: null, active: true }, requests: { current: 0, limit_day: 150000 } }), NOW);
-  assert.equal(mega.minuteLimit, 900); assert.equal(mega.secondLimit, 12); assert.equal(mega.expiresAt, null);
-  assert.equal(planMinuteLimit('Unknown Custom'), 10);
+  assert.equal(mega.minuteLimit, 900); assert.equal(mega.secondLimit, 15); assert.equal(mega.expiresAt, null);
+  assert.equal(planMinuteLimit('Unknown Custom'), 5);
+  const unknown = status({ subscription: { plan: 'Unknown Custom', end: null, active: true } });
+  assert.equal(parseAccountStatus(unknown, NOW).shortWindowKnown, false);
+  assert.equal(parseAccountStatus(unknown, NOW, 30).minuteLimit, 30, 'a provider header can establish the missing limit');
+  assert.equal(parseAccountStatus(status(), NOW, 9).minuteLimit, 9, 'a header can tighten documented terms');
   assert.equal(parseAccountStatus(status({ requests: { current: 500, limit_day: 100 } }), NOW).usedToday, 100);
   assert.throws(() => parseAccountStatus({ errors: { token: 'synthetic rejection' }, response: [] }, NOW),
     (error) => error instanceof LiveAccountError && error.reason === 'credential-failure');
   assert.throws(() => parseAccountStatus({ errors: [], response: [] }, NOW), (error) => error.reason === 'unavailable');
+});
+
+test('unknown provider windows allow only five requests per minute and one counted dispatch at a time', async () => {
+  const clock = { now: NOW }, store = memoryQuotaStore(clock);
+  const router = createQuotaRouter({ store, clock: { now: () => clock.now }, readStatus: async () => parseAccountStatus(status({
+    subscription: { plan: 'Unknown Custom', active: true } }), clock.now) });
+  await router.refresh();
+  const request = (suffix, priority = 'daily-inputs') => ({ requestId: suffix.repeat(64), workKey: suffix.repeat(64), priority,
+    deadlineAt: NOW + 120_000, timeoutMs: 20_000 });
+  const first = await router.limiter.reserve(request('a'));
+  assert.equal(first.status, 'reserved');
+  assert.equal((await router.limiter.claimLaunch(first.permit)).status, 'claimed');
+  clock.now += 12_000;
+  assert.deepEqual(await router.limiter.reserve(request('b')), { status: 'denied', reason: 'pacing', retryAt: NOW + 20_000 });
+  await router.limiter.complete(first.permit, { kind: 'success' });
+  assert.equal((await router.limiter.reserve(request('b'))).status, 'reserved');
+  const counters = await router.counters();
+  assert.equal(counters.minuteLimit, 5);
+  assert.equal(counters.singleConcurrent, true);
+});
+
+test('known limits, historical rolling caps, and verified daily exhaustion share one limiter', async () => {
+  const clock = { now: NOW }, store = memoryQuotaStore(clock);
+  const router = createQuotaRouter({ store, clock: { now: () => clock.now }, readStatus: async () => parseAccountStatus(status(), clock.now) });
+  const day = await router.refresh();
+  assert.equal((await router.counters()).minuteLimit, 8);
+  const request = (suffix, priority) => ({ requestId: suffix.repeat(64), workKey: suffix.repeat(64), priority,
+    deadlineAt: NOW + 120_000, timeoutMs: 1_000 });
+  const archive = await router.limiter.reserve(request('a', 'historical-backfill'));
+  assert.equal(archive.status, 'reserved');
+  assert.equal((await router.limiter.claimLaunch(archive.permit)).status, 'claimed');
+  await router.limiter.complete(archive.permit, { kind: 'success' });
+  clock.now += 7_500;
+  assert.deepEqual(await router.limiter.reserve(request('b', 'historical-backfill')),
+    { status: 'denied', reason: 'minute-limit', retryAt: NOW + 60_000 });
+  const live = await router.limiter.reserve(request('c', 'results-cutoff'));
+  assert.equal(live.status, 'reserved', 'the historical cap leaves unrelated slots available for live results');
+  assert.equal((await router.limiter.claimLaunch(live.permit)).status, 'claimed');
+  await router.limiter.complete(live.permit, { kind: 'rate-limited', dailyRemaining: 0, retryAfterMs: 1_000 });
+  assert.deepEqual(await router.limiter.reserve(request('d', 'results-cutoff')),
+    { status: 'denied', reason: 'daily-limit', retryAt: day.endsAt + 15_000 });
+  clock.now = day.endsAt + 15_000;
+  await assert.rejects(router.refresh(), (error) => error.reason === 'settling');
+});
+
+test('quota pressure gates archive before slower live cadence and preserves the last safe tier', () => {
+  const workload = liveWorkload(150_000, 15, 'Mega', 900);
+  const at = (remaining) => assessLiveCapacity(workload, 60 * 60_000, 150_000, remaining, 720);
+  assert.equal(at(8_000).reserve, 7_952);
+  assert.equal(at(8_000).archiveAllowed, true);
+  assert.equal(at(7_900).archiveAllowed, false);
+  assert.equal(at(7_900).enrichmentMultiplier, 2);
+  assert.equal(at(7_900).cadence.liveMs, 15_000, 'optional work yields before the live poll');
+  assert.equal(at(200).cadence.liveMs, 60_000);
+  assert.equal(at(115).cadence.liveMs, 120_000);
+  assert.equal(at(55).cadence.liveMs, 300_000);
+  assert.equal(at(51).criticalShortfall, true);
 });
 
 test('the status reader enforces the football gate before sending the server-only key', async () => {

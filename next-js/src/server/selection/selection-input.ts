@@ -6,6 +6,7 @@ import { maximumCompetitionScope } from "../../domain/feed-query.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
 import { parseCatalogImportRequest } from "../football/catalog-input.ts";
 import { jobHash, jobInstant, jobVersion, parseJobEnvelope } from "../jobs/job-input.ts";
+import { forecastLifecyclePolicy } from "../refresh/forecast-orchestration.ts";
 import { selectionFail, type CycleSelectionEligibility, type DegradedSelectionAction, type SelectionPolicy } from "./selection-contract.ts";
 
 const ref = z.string().min(1).max(512).regex(/^[^\p{Cc}]+$/u);
@@ -50,6 +51,7 @@ const policy = z.strictObject({ version: z.literal(1), evidenceRef: ref,
   importDays: z.number().int().min(1).max(8).optional(),
   // Optional minimum time before the publication cutoff; omitted keeps the cutoff itself as the limit.
   refreshLeadMs: z.number().int().min(0).max(24 * 60 * 60 * 1000).optional(),
+  forecastLifecycle: forecastLifecyclePolicy.optional(),
   importBounds: z.strictObject({ priority: z.literal("daily-inputs"), deadlineMs: z.number().int().min(100).max(3_600_000),
     timeoutMs: z.number().int().positive(), maxRequests: z.number().int().positive(), maxPages: z.number().int().positive(),
     maxRows: z.number().int().positive(), maxResponseBytes: z.number().int().positive(),

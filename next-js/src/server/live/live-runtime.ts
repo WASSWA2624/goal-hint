@@ -1,7 +1,10 @@
 import "server-only";
 import { createRecommendationQuoteLoader } from "../odds/recommendation-quotes.ts";
+import { evidenceFirstRecommendationPolicy } from "../../domain/recommendation.ts";
+import { QUALIFIED_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
 
 import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { MARKET_REGISTRY_VERSION } from "../../domain/market-registry.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { maximumCompetitionScope } from "../../domain/feed-query.ts";
 import { assertOperationAllowed, type RuntimePolicy, type EvidenceVerifier } from "../config/runtime-policy.ts";
@@ -13,25 +16,31 @@ import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { createProviderFallbackAdapter } from "../fallback/fallback-adapter.ts";
 import { createFallbackService } from "../fallback/fallback-service.ts";
 import { createApiFootballAdapter, type ApiFootballAdapterOptions } from "../football/api-football-adapter.ts";
-import { apiFootballFixtureRoundParameters, parseApiFootballFixtureRound, type FixtureRoundQuery } from "../football/api-football-contract.ts";
+import { API_FOOTBALL_CONTRACT_VERSION, apiFootballFixtureRoundParameters, parseApiFootballFixtureRound,
+  type ApiFootballResult, type FixtureRoundQuery } from "../football/api-football-contract.ts";
 import { createFootballCatalogStore, historyReplayKind } from "../football/catalog-mysql-store.ts";
-import { parseCatalogImportRequest } from "../football/catalog-input.ts";
+import { catalogScopeKey, parseCatalogImportRequest } from "../football/catalog-input.ts";
 import { createFootballCatalogImporter } from "../football/catalog-service.ts";
+import { createCurrentDayContextJob, currentPlayerRequestLimit, currentReferenceFreshness } from "../football/current-day-refresh.ts";
 import { createFootballHistoryBackfill, historyBackfillLimits, normalizeHistoryCompetition } from "../football/history-backfill.ts";
 import { createFootballHistoryDetails } from "../football/history-details.ts";
 import { createFootballHistoryFixtureReplay } from "../football/history-fixture-replay.ts";
+import { createFixtureBackfillManifestStore } from "../football/history-fixture-manifest.ts";
 import { createHistoryImportJob } from "../football/history-import-jobs.ts";
 import { footballHistoryCatalogMaxAgeMs, readUpcomingFootballHistorySeasons } from "../football/history-fixture-scope.ts";
 import { createFootballHistoryOddsMapping } from "../football/history-odds-mapping.ts";
 import { createFootballHistoryPlayerProfiles, createFootballHistoryPlayerStatistics } from "../football/history-player-statistics.ts";
 import { createFootballHistoryReference, verifyFootballHistoryReferencePass } from "../football/history-reference.ts";
+import { createHistoricalReferenceCheckpoint } from "../football/history-reference-checkpoint.ts";
 import { readHistoryPlayerStatisticsTargets, readHistoryReferenceTargets, type HistoryReferenceDataset } from "../football/history-reference-targets.ts";
 import { createFootballHistorySource, type FootballHistoryReferencePhase } from "../football/history-source.ts";
+import { createMysqlProviderCoverageStore } from "../football/provider-coverage-store.ts";
 import { readPendingHistorySubjectIds, type FootballHistoryPlayerSubjectDataset } from "../football/history-subjects.ts";
 import { quotaPriorities } from "../football/quota-contract.ts";
 import { createPolicyQuotaGateway } from "../football/quota-gateway.ts";
 import { createMysqlQuotaStore } from "../football/quota-mysql-store.ts";
 import { createLiveLocalEngine } from "../intelligence/live-local-engine.ts";
+import { LOCAL_GOALS_VERSION } from "../intelligence/local-goals-model.ts";
 import { createMysqlJobQueue } from "../jobs/job-mysql-store.ts";
 import { createJobRegistry, defineJob, type JobDefinition } from "../jobs/job-registry.ts";
 import { ModelRegistryError } from "../predictor/predictor-registry.ts";
@@ -41,10 +50,13 @@ import { createRevisionPublicationService } from "../predictions/publication-ser
 import { createMysqlRefreshStore } from "../refresh/refresh-mysql-store.ts";
 import { createRefreshObservationCollector } from "../refresh/refresh-observation.ts";
 import { createPredictionRefreshService } from "../refresh/refresh-service.ts";
+import { createForecastRecovery } from "../refresh/forecast-recovery.ts";
 import type { ResultSyncPolicy } from "../results/result-sync-contract.ts";
+import { coordinatedResultDefaults } from "../results/result-sync-policy.ts";
 import { createMysqlResultSyncStore } from "../results/result-sync-mysql-store.ts";
 import { createResultSyncService } from "../results/result-sync-service.ts";
 import { createMarketSettlementService } from "../settlement/settlement-service.ts";
+import { createFinalImpliedCountCapture } from "../settlement/final-implied-counts.ts";
 import { DailySelectionError } from "../selection/selection-contract.ts";
 import { hourlySelectionWindow, scheduledHourlySelection, scheduledSelection, selectionWindow } from "../selection/selection-input.ts";
 import { createMysqlDailySelectionStore } from "../selection/selection-mysql-store.ts";
@@ -67,6 +79,7 @@ import { fallbackRefreshPlan, LIVE_REFRESH_TYPE, liveCascadePlan, liveReferences
 import { oddsFail } from "../odds/odds-contract.ts";
 import { createOddsJobDefinitions, oddsQuotaAllows, ODDS_PROVIDER_WINDOW_MS, ODDS_SWEEP_MS, type OddsQuotaUsage } from "../odds/odds-jobs.ts";
 import { createMysqlOddsStore } from "../odds/odds-mysql-store.ts";
+import { storedPreMatchCatalogCoverage } from "../odds/bookmaker-odds-read.ts";
 import { oddsPolicyHash } from "../odds/odds-input.ts";
 import { createOddsImportService } from "../odds/odds-service.ts";
 import { createInPlayOddsPoller } from "../odds/in-play-odds-service.ts";
@@ -74,13 +87,17 @@ import { createTeamCodeJobDefinitions } from "../teams/team-code-jobs.ts";
 import { createMysqlTeamCodeStore } from "../teams/team-code-mysql-store.ts";
 import { createTeamCodeService } from "../teams/team-code-service.ts";
 import { Prisma } from "../generated/prisma/client.ts";
-import type { LiveMatchPolicy } from "../live-match/live-match-contract.ts";
+import { coordinatedLiveDetailDefaults, type LiveMatchPolicy } from "../live-match/live-match-contract.ts";
 import { createLiveMatchService } from "../live-match/live-match-service.ts";
 import { createMysqlLiveMatchStore } from "../live-match/live-match-mysql-store.ts";
 import { createLiveQuotaAdmission } from "./live-detail-quota.ts";
 import { liveMatchPolicy, type LiveWorkload } from "./live-plan.ts";
+import { bindLiveProviderArchive } from "./live-provider-archive.ts";
+import { createLiveDiscoveryImport } from "./live-discovery-import.ts";
+import type { NormalizedFixtureMatchDetails } from "../football/fixture-match-details.ts";
 
 const DAY_MS = 86_400_000;
+const REFERENCE_RECEIPT_REPLAY_MS = 5 * 60_000;
 export class LiveConfigurationError extends Error {
   readonly issues: readonly string[];
   constructor(issues: readonly string[]) {
@@ -131,6 +148,7 @@ export type LiveRuntimeOverrides = Readonly<{
   historyBackfill?: boolean;
   onPollerState?: (kind: "results" | "match-details", state: string) => void;
   onHourlyLookupFailure?: (reason: string, fixtureCount: number) => void;
+  onCurrentDayCoverage?: Parameters<typeof createCurrentDayContextJob>[0]["onCoverage"];
 }>;
 /** Composes the prediction cascade on shared durable stores. */
 export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: LiveRuntimeOverrides = {}) {
@@ -143,8 +161,11 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
   const syntheticArchive = overrides.syntheticArchive === true && overrides.fetcher !== undefined && overrides.approvals !== undefined && loopback &&
     (policy.mode === "development" && databaseTarget.pathname === "/goal_hint_test" ||
       policy.mode === "production" && smokeName.test(databaseTarget.pathname.slice(1)) && smokeName.test(decodeURIComponent(databaseTarget.username)));
-  const productionHistory = !localFootball && archiveEnabled && verify(refs.retention, "football-private-use") &&
-    (syntheticArchive || policy.mode === "production" && process.env.GOAL_HINT_DEPLOYMENT_ENVIRONMENT === "production");
+  const productionTarget = policy.mode === "production" && process.env.GOAL_HINT_DEPLOYMENT_ENVIRONMENT === "production";
+  const privateRetention = verify(refs.retention, "football-private-use");
+  const productionHistory = !localFootball && archiveEnabled && privateRetention && (syntheticArchive || productionTarget);
+  const coordinated = policy.choices.coordinatedFootball.enabled && (productionTarget || syntheticArchive || localFootball);
+  const forecastConcurrency = coordinated ? policy.choices.coordinatedFootball.forecastConcurrency : 0;
   if (localFootball) {
     if (policy.mode !== "development" || databaseTarget.hostname !== "127.0.0.1" || !/^\/goal_hint_football_\d{6}$/u.test(databaseTarget.pathname))
       throw new LiveConfigurationError(["Local football requires the owned loopback snapshot database."]);
@@ -153,36 +174,53 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
   const database = createDatabase(policy, verify);
   try {
     if (await database.readiness() !== "ready") throw new LiveConfigurationError(["The application database is unavailable."]);
-    const queue = createMysqlJobQueue(database);
+    const queue = createMysqlJobQueue(database, coordinated ? { forecast: { type: LIVE_REFRESH_TYPE, concurrency: forecastConcurrency } } : undefined);
+    const providerCoverage = policy.choices.footballResponseArchive.enabled && privateRetention && (productionTarget || syntheticArchive || localFootball)
+      ? createMysqlProviderCoverageStore(database) : null;
+    const providerArchive = providerCoverage ? bindLiveProviderArchive(providerCoverage.archive) : null;
     let activeWorkload: LiveWorkload | null = null;
     let stableAccountKey: string | null = null;
-    const quota = createQuotaRouter({ store: createMysqlQuotaStore(database), readStatus: createAccountStatusReader({ policy, verifyEvidence: verify, ...fetcher }),
-      admit: createLiveQuotaAdmission(() => activeWorkload, () => stableAccountKey, productionHistory) });
+    const quota = createQuotaRouter({ store: createMysqlQuotaStore(database), readStatus: createAccountStatusReader({ policy, verifyEvidence: verify, ...fetcher,
+      ...(providerArchive ? { observeStatus: providerArchive.observeStatus } : {}) }),
+      admit: createLiveQuotaAdmission(() => activeWorkload, () => stableAccountKey, productionHistory || coordinated) });
     const day: QuotaDay = await quota.refresh();
     stableAccountKey = day.status.accountKey;
-    const workload = liveWorkload(day.status.dailyLimit, day.status.secondLimit, day.status.plan, day.status.minuteLimit, policy.capabilities.ai, policy.choices.liveDetails.enabled);
+    const baselineWorkload = liveWorkload(day.status.dailyLimit, day.status.secondLimit, day.status.plan, day.status.minuteLimit,
+      policy.capabilities.ai, policy.choices.liveDetails.enabled);
+    const workload = coordinated ? { ...baselineWorkload,
+      cadence: { liveMs: coordinatedResultDefaults.liveMs, dateMs: coordinatedResultDefaults.dateMs,
+        activeMs: Math.max(coordinatedResultDefaults.activeMs, baselineWorkload.cadence.activeMs) },
+      liveDetails: { ...baselineWorkload.liveDetails, intervalMs: coordinatedLiveDetailDefaults.liveMs },
+    } : baselineWorkload;
     activeWorkload = workload;
-    const selection = selectionPolicy(policy, refs, workload), statusEvidenceRef = `${refs.freshness}#status`;
+    const statusEvidenceRef = `${refs.freshness}#status`;
     let results: ResultSyncPolicy | null = null;
     let liveDetailsPolicy: LiveMatchPolicy | null = null;
     // Odds use the same workload inputs as their authority, so a policy can never verify against a different plan.
-    const odds = oddsPolicy(policy, refs, workload, localFootball);
+    const odds = oddsPolicy(policy, refs, workload, localFootball || coordinated);
     let aiModel: ReturnType<typeof liveAiModel> | null = null;
     if (policy.capabilities.ai) try { aiModel = liveAiModel(policy); } catch { /* An unsupported optional model leaves the baseline active. */ }
-    // Owned development follows the current cascade; hosted runs retain the explicit rollback setting.
-    const sourceOrder = localFootball ? "ai-first" : liveSourceOrder(policy);
+    // The coordinated cascade can only dispatch models with reviewed numerical eligibility.
+    if (coordinated && aiModel?.evaluation.status !== "evaluated") aiModel = null;
+    const sourceOrder = coordinated || localFootball ? "ai-first" : liveSourceOrder(policy);
+    const selection = Object.freeze({ ...selectionPolicy(policy, refs, workload), ...(coordinated ? { forecastLifecycle: {
+      engineVersion: evidenceFingerprint([QUALIFIED_FORECAST_CASCADE, evidenceFirstRecommendationPolicy.version,
+        aiModel, LOCAL_GOALS_VERSION, API_FOOTBALL_CONTRACT_VERSION]),
+      marketRegistryVersion: MARKET_REGISTRY_VERSION,
+    } } : {}) });
     let ai: LiveAiRuntime | null = null;
     const authorities = createLiveAuthorities({ policy, verify, refs, selection, statusEvidenceRef, resultPolicy: () => results, localFootball,
-      refreshPacing: workload.pacing, oddsPolicy: odds, liveMatchPolicy: () => liveDetailsPolicy, sourceOrder,
+      refreshPacing: workload.pacing, oddsPolicy: odds, liveMatchPolicy: () => liveDetailsPolicy, sourceOrder, coordinatedForecasts: coordinated,
       ...(aiModel === null ? {} : { aiModel, verifyPrimary: (...args) => ai?.verifyAi(...args) === true,
         verifyPrimaryCandidate: (candidate) => ai?.verifyPublishedCandidate(candidate) === true,
         verifyPrimaryGoals: (candidate, distribution) => ai?.verifyPublishedGoalDistribution(candidate, distribution) === true }) });
     const gateway = createPolicyQuotaGateway({ limiter: quota.limiter, policy, verifyEvidence: verify });
-    const historySource = productionHistory || localFootball && overrides.historyBackfill && verify(refs.retention, "football-private-use")
+    const historySource = productionHistory || (coordinated || localFootball && overrides.historyBackfill) && privateRetention
       ? createFootballHistorySource(database) : null;
     // The adapter identity is the stable provider account; daily limiter accounts sit behind the router.
     const adapterOptions: ApiFootballAdapterOptions = { accountId: day.status.accountKey, credential: { read: () => policy.secrets.footballKey?.read() ?? "" },
       gateway, authorize: () => assertOperationAllowed(policy, "football", verify), ...fetcher,
+      ...(providerArchive ? { responseArchive: providerArchive.responseArchive } : {}),
       verifyLogo: authorities.catalog.verifyLogo, verifyRegulationScore: authorities.catalog.verifyRegulationScore,
       // API-Football documents up to 20 IDs per /fixtures?ids request.
       batchEvidence: { maximumIds: 20, evidenceRef: "api-football-documentation-v3:fixtures-ids-maximum-20" },
@@ -196,10 +234,14 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         await historySource.savePage({ endpoint: "competitions", rows, parameters: source.requestParameters, retrievedAt: source.retrievedAt });
       } }) : null;
     const cutoff = createCutoffLockingService({ database, queue, policy: cutoffPolicy(refs), authority: authorities.cutoff });
+    const forecastRecovery = coordinated ? createForecastRecovery({ database, queue, jobType: LIVE_REFRESH_TYPE,
+      scheduleCutoff: (target, tx) => cutoff.scheduleCycle(target, undefined, tx) }) : null;
     const lifecycle = createScheduleLifecycleService({ database, cutoff, policy: lifecyclePolicy(refs), authority: authorities.lifecycle });
     const catalog = createFootballCatalogStore(database, { coordinateFixtureMutation: lifecycle.coordinateFixtureMutation,
       transactionTimeoutMs: 120_000, ...(sourceOrder === "ai-first" ? { sealTeamHistory: true } : {}) });
     const importer = createFootballCatalogImporter({ adapter, store: catalog, authority: authorities.catalog });
+    const discoverFixtures = coordinated ? createLiveDiscoveryImport({ importer, competitionIds: policy.choices.competitionIds ?? [],
+      retentionEvidenceRef: refs.retention }) : null;
     const historyBackfill = historySource && historyAdapter ? (() => {
       const store = createFootballCatalogStore(database, { historicalResults: true, transactionTimeoutMs: 120_000 });
       const roundSelection = (scope: FixtureRoundQuery) => ({ endpoint: "fixtureRounds", parameters: apiFootballFixtureRoundParameters(scope) } as const);
@@ -229,6 +271,14 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       }, store,
         importer: createFootballCatalogImporter({ adapter: historyAdapter, store, authority: authorities.catalog, deferFixtureWritesAbove: 1_000 }),
         competitionIds: policy.choices.competitionIds ?? [], retentionEvidenceRef: refs.retention,
+        ...(coordinated ? { manifest: createFixtureBackfillManifestStore(historySource), async initializeDate(date) {
+          const receipt = await database.query(tx => tx.footballImport.findFirst({
+            where: { provider: "api-football", kind: "fixtures", status: "complete", retentionEvidenceRef: refs.retention,
+              scopeKey: catalogScopeKey({ kind: "fixtures", query: { date } }) }, select: { id: true },
+          }));
+          return receipt ? { status: "scanned", reason: null, requests: 0 } :
+            { status: "deferred", reason: "current-date-awaiting-discovery", requests: 0 };
+        } } : {}),
         upcomingSeasons: () => readUpcomingFootballHistorySeasons(database, utcInstantFromEpochMilliseconds(Date.now())),
         hasFixtureSource: (parameters, observation) => {
           const selection = { endpoint: "fixtures", parameters } as const;
@@ -254,18 +304,24 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     })() : null;
     const historyDetails = historySource ? createFootballHistoryDetails({ database, adapter: adapter.evidence,
       competitionIds: policy.choices.competitionIds ?? [], batchSize: 20,
+      ...(sourceOrder === "ai-first" && privateRetention ? {
+        onFinalDetails: createFinalImpliedCountCapture(database, () => verify(refs.retention, "football-private-use")),
+      } : {}),
       now: () => utcInstantFromEpochMilliseconds(Date.now()), providerDayEndsAt: () => quota.current()?.endsAt ?? null }) : null;
     const historyReference = historySource ? (() => {
       const now = () => utcInstantFromEpochMilliseconds(Date.now()), providerDayEndsAt = () => quota.current()?.endsAt ?? null;
+      const replay = providerArchive ? { replayMaxAgeMs: REFERENCE_RECEIPT_REPLAY_MS } : {};
       const reference = createFootballHistoryReference({ reference: adapter.reference, hasPage: historySource.hasPage,
-        savePage: historySource.savePage, now, providerDayEndsAt });
+        savePage: historySource.savePage, now, providerDayEndsAt, ...replay,
+        ...(providerCoverage ? { checkpoint: createHistoricalReferenceCheckpoint({ store: providerCoverage,
+          accountKey: day.status.accountKey, save: historySource.savePage, now }) } : {}) });
       const playerStatistics = createFootballHistoryPlayerStatistics({ playerStatisticsPage: adapter.reference.playerStatisticsPage,
         readPages: historySource.readPlayerStatisticsPages, savePage: historySource.savePlayerStatisticsPage,
-        recordConflict: historySource.recordPlayerStatisticsConflict, now, providerDayEndsAt,
+        recordConflict: historySource.recordPlayerStatisticsConflict, now, providerDayEndsAt, ...replay,
         ...(day.status.plan.trim().toLowerCase() === "free" ? { maximumPage: 3 } : {}) });
       const playerProfiles = createFootballHistoryPlayerProfiles({ playerProfilePage: adapter.reference.playerProfilePage,
         readPages: historySource.readPlayerProfilePages, savePage: historySource.savePlayerProfilePage,
-        recordConflict: historySource.recordPlayerProfileConflict, now, providerDayEndsAt });
+        recordConflict: historySource.recordPlayerProfileConflict, now, providerDayEndsAt, ...replay });
       const mappingAuthorized = () => oddsEnabled && odds !== null && authorities.odds.verifyPolicy(odds) &&
         verify(refs.retention, "football-private-use") && authorities.odds.verifyRetention({
           evidenceRef: refs.retention, purpose: "structured-odds-history", rawPayloadsStored: false,
@@ -377,10 +433,11 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         scheduleCutoff: ({ fixtureId, cycleId }, tx) => cutoff.scheduleCycle({ fixtureId, cycleId }, undefined, tx) } } : {});
     const dailySelection = createDailySelectionService({ policy: selection, authority: authorities.selection, store: selectionStore, importer, cutoff,
       ...(hourlySelectionEnabled ? { hourlyImporter,
-        reconcileHourly: createHourlyFixtureReconciler({ database, importer: hourlyImporter, policy: selection,
+        reconcileHourly: createHourlyFixtureReconciler({ database, importer: hourlyImporter, policy: selection, includeOverdue: coordinated,
           ...(overrides.onHourlyLookupFailure ? { onLookupFailure: overrides.onHourlyLookupFailure } : {}) }).reconcile } : {}) });
     // Long-lived performance quotes also require the development-only capture policy.
     const publisher = createRevisionPublicationService({ database, queue, policy: publicationPolicy(refs), authority: authorities.publication,
+      recordForecastDecision: coordinated,
       quotes: { verify: () => publicPolicy.features.providerOdds && authorities.odds.verifyPublicDisplay() === true,
         freshnessMs: odds?.freshnessMs ?? ODDS_FRESHNESS_MS } });
     const evidence = createEvidenceService({ authority: authorities.evidence, store: createMysqlEvidenceStore(database), research: null,
@@ -389,7 +446,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     const providerFallback = createProviderFallbackAdapter({ adapter, catalog, policy: providerFallbackPolicy(refs),
       authority: authorities.providerFallback, maxJobs: 1000 });
     const fallback = createFallbackService({ fallback: providerFallback, authority: authorities.fallback, maxInflight: 100,
-      localEngine: createLiveLocalEngine(database),
+      localEngine: createLiveLocalEngine(database, coordinated && providerArchive
+        ? { verifyPrivateUse: () => verify(refs.retention, "football-private-use") } : undefined),
       selectionPolicy: sourceOrder === "provider-first" ? "provider-baseline" : "optional-ai-primary", verifyRequest: authorities.verifyFallbackRequest });
     const refreshStore = createMysqlRefreshStore(database, queue);
     if (aiModel !== null) try { ai = await createLiveAiRuntime({ policy, verify, refs, model: aiModel, database, store: refreshStore,
@@ -405,6 +463,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         ...(ai !== null || localFootball ? { adapter: adapter.evidence, database } : {}) }) : null;
     const refresh = createPredictionRefreshService({ type: LIVE_REFRESH_TYPE, handlerVersion: 1, store: refreshStore,
       selection: selectionStore, authority: authorities.refresh,
+      ...(selection.forecastLifecycle ? { forecastLifecycle: selection.forecastLifecycle } : {}),
       prepare: async (member, context) => {
         const football = await footballPreparation?.(member, context);
         let news: readonly import("../evidence/evidence-contract.ts").EvidenceSource[] = [];
@@ -421,13 +480,15 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         const base = fallbackRefreshPlan(member, refs, workload.pacing);
         const reviewed = ai?.configure(member, sources) ??
           { ...base, evidence: { ...base.evidence, policy: liveAiEvidencePolicy(refs), cachedSources: sources } };
+        if (coordinated) return liveCascadePlan({ ...reviewed, recommendationPolicy: evidenceFirstRecommendationPolicy }, false, QUALIFIED_FORECAST_CASCADE);
         return sourceOrder === "ai-first" ? liveCascadePlan(reviewed) : reviewed;
       },
       models: ai?.models ?? { async resolve() { throw new ModelRegistryError("unavailable"); } },
       predictor: ai?.predictor ?? { async predict() { return { status: "denied", reason: "unconfigured", requestsDispatched: 0, requestCountUnknown: false }; } },
       evidence, fallback, lifecycle, publisher, costs: { ai: ai?.costs ?? null, research: research?.costs ?? null },
       recommendations: { quotes: odds === null ? async () => [] : createRecommendationQuoteLoader(database, {
-        bookmakerId: odds.bookmakerId, freshnessMs: odds.freshnessMs, expectedPolicyHash: evidenceFingerprint(odds),
+        bookmakerId: odds.bookmakerId, fallbackBookmakerIds: policy.choices.odds.fallbackBookmakerIds,
+        freshnessMs: odds.freshnessMs, expectedPolicyHash: evidenceFingerprint(odds),
         verifyInternalUse: () => policy.capabilities.football && verify(refs.retention, "football-private-use") &&
           authorities.odds.verifyPolicy(odds) === true && authorities.odds.verifyRetention({ evidenceRef: refs.retention,
             purpose: "structured-odds-history", rawPayloadsStored: false }) === true }) },
@@ -485,6 +546,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     const oddsEnabled = policy.choices.odds.enabled && workload.odds.eligible && odds !== null;
     const oddsStore = createMysqlOddsStore(database);
     const oddsService = createOddsImportService({ adapter: adapter.odds, store: oddsStore, authority: authorities.odds,
+      resumePricePages: coordinated,
       accountId: () => quota.current()?.accountId ?? oddsFail("unavailable"),
       bounds: (request) => {
         const end = request.kind === "prices" ? request.slot + ODDS_SWEEP_MS : request.slot + DAY_MS;
@@ -499,7 +561,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       if (counters === null) return null;
       const { accountId, periodId } = counters.day;
       const [row] = await database.query((tx) => tx.$queryRaw<{ spent: bigint | number }[]>`SELECT COUNT(*) AS spent FROM ApiQuotaAttempt
-        WHERE accountId = ${accountId} AND periodId = ${periodId} AND priority = ${quotaPriorities.enrichment.rank}
+        WHERE accountId = ${accountId} AND periodId = ${periodId}
+          AND priority IN (${quotaPriorities.enrichment.rank}, ${quotaPriorities["historical-backfill"].rank})
           AND JSON_UNQUOTE(JSON_EXTRACT(payloadJson, '$.priority')) = 'enrichment' AND dispatchedAt IS NOT NULL`);
       return Object.freeze({ remaining: counters.remaining, used: counters.used, oddsUsed: Number(row?.spent ?? 0) });
     }
@@ -531,7 +594,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       return { requests, status: "complete", ...await oddsStore.projectRetainedPrices({ policy: odds,
         policyHash: oddsPolicyHash(odds), catalog, limit: 500, verify: verifyProjection }) };
     }
-    const oddsDefinitions = createOddsJobDefinitions({ service: oddsService, policy: () => odds ?? oddsFail("unverified-policy"),
+    const oddsDefinitions = createOddsJobDefinitions({ service: oddsService, policy: () => odds ?? oddsFail("unverified-policy"), resumePricePages: coordinated,
       enabled: () => oddsEnabled, usage: oddsUsage, allowance: enrichmentAllowance,
       maxRequests: (kind) => oddsMaxRequests(kind, workload.odds.maxPages) });
     const oddsRegistry = createJobRegistry(oddsDefinitions);
@@ -545,6 +608,23 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         bounds: teamCodeBounds }) });
     const teamCodesRegistry = createJobRegistry(teamCodeDefinitions);
     const replayHistory = productionHistory && historySource ? createFootballHistoryFixtureReplay(database, authorities.catalog, refs.retention) : null;
+    const currentDayContext = coordinated && hourlySelectionEnabled && historySource ? createCurrentDayContextJob({ database,
+      competitionIds: policy.choices.competitionIds ?? [], retentionEvidenceRef: refs.retention,
+      reference: createFootballHistoryReference({ reference: adapter.reference, priority: "enrichment", now: () => utcInstantFromEpochMilliseconds(Date.now()),
+        providerDayEndsAt: () => quota.current()?.endsAt ?? null, savePage: historySource.savePage,
+        hasPage: (selector) => {
+          const freshness = currentReferenceFreshness(selector.endpoint);
+          return historySource.hasPage(selector, freshness === undefined ? undefined : Date.now() - freshness);
+        }, ...(providerArchive ? { replayMaxAgeMs: REFERENCE_RECEIPT_REPLAY_MS } : {}) }),
+      refreshPlayers(date, targets, signal) {
+        const pager = createFootballHistoryPlayerStatistics({ ...historySource.playerStatisticsSnapshot(date), priority: "enrichment",
+          maxRequestsPerTarget: Math.max(1, Math.ceil(currentPlayerRequestLimit / targets.length)),
+          playerStatisticsPage: adapter.reference.playerStatisticsPage,
+          now: () => utcInstantFromEpochMilliseconds(Date.now()), providerDayEndsAt: () => quota.current()?.endsAt ?? null });
+        return pager.run({ targets, maxRequests: currentPlayerRequestLimit, signal });
+      },
+      ...(overrides.onCurrentDayCoverage ? { onCoverage: overrides.onCurrentDayCoverage } : {}),
+    }) : null;
     const archiveBatch = { maxRequests: 6 };
     function referenceStep(dataset: HistoryReferenceDataset, endpoint: string) {
       return async (signal: AbortSignal) => {
@@ -562,8 +642,12 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
           if (result.status === "catalog-unavailable") return { complete: false, stopped: result.reason ?? "catalog-unavailable",
             coverage: { imported: null, remaining: null, unavailable: null } };
           return { complete: result.status === "complete", stopped: result.stopped, coverage: {
-            imported: result.completed - result.verifiedEmpty, remaining: result.planned - result.completed,
-            unavailable: result.verifiedEmpty } };
+            imported: result.completed - result.verifiedEmpty,
+            remaining: coordinated && result.unlistedCompetitions.length > 0 ? null : result.planned - result.completed,
+            unavailable: result.verifiedEmpty, ...(coordinated && result.anchorDate ? { scan: {
+              date: result.anchorDate, dateScanned: result.dateScanned, dateComplete: null,
+              scannedSeasons: result.scannedSeasons, partialSeasons: result.partialSeasons, nextScope: result.nextScope,
+            } } : {}) } };
         },
         async replay(signal) {
           const result = await replayHistory(signal);
@@ -581,6 +665,12 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         "half-statistics": referenceStep("half-statistics", "fixtureHalfStatistics"),
         "team-statistics": referenceStep("team-statistics", "teamStatistics"),
         "player-statistics": referenceStep("player-statistics", "playerStatistics"),
+        ...(coordinated ? { async reference(signal: AbortSignal) {
+          const result = await historyReference(archiveBatch, signal);
+          const complete = result.status === "complete";
+          return { complete, stopped: result.stopped,
+            coverage: { imported: null, remaining: complete ? 0 : null, unavailable: null } };
+        } } : {}),
         ...(oddsEnabled ? { async "odds-mapping"(signal) {
           const result = await historyReference({ ...archiveBatch, dataset: "odds-mapping" }, signal);
           if (!("totalPages" in result)) throw new Error("Odds mapping coverage is unavailable.");
@@ -591,59 +681,82 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       } : {},
     });
     // The same worker serializes these gates. Odds and team codes claim before the archive.
-    const enrichmentRegistry = createJobRegistry([...oddsDefinitions, ...teamCodeDefinitions, historyJob]);
-    const inPlayOdds = localFootball ? createInPlayOddsPoller({
+    const enrichmentRegistry = createJobRegistry([...oddsDefinitions, ...teamCodeDefinitions, historyJob, ...(currentDayContext ? [currentDayContext] : [])]);
+    const inPlayOdds = localFootball || coordinated ? createInPlayOddsPoller({
       database, adapter: adapter.odds, now: Date.now, enabled: () => oddsEnabled && quota.current() !== null,
       displayAllowed: authorities.odds.verifyPublicDisplay,
+      ...(coordinated ? { competitionIds: policy.choices.competitionIds ?? [],
+        retentionAllowed: () => privateRetention && odds !== null && authorities.odds.verifyPolicy(odds) &&
+        authorities.odds.verifyRetention({ evidenceRef: refs.retention, purpose: "structured-odds-history", rawPayloadsStored: false }) } : {}),
     }) : null;
 
     /** Follow configured stored fixtures even when a fixture received no prediction. */
     async function resultCoverage(): Promise<ResultSyncPolicy["coverage"]> {
       const now = Date.now();
-      const rows = await database.query((tx) => tx.$queryRaw<{ competitionId: bigint; season: number }[]>`
+      const ids = Prisma.join(policy.choices.competitionIds!);
+      const rows = await database.query((tx) => tx.$queryRaw<{ competitionId: bigint; season: number }[]>(Prisma.sql`
         SELECT DISTINCT cp.externalId AS competitionId, s.year AS season FROM FootballFixture f
         JOIN FootballSeason s ON s.id = f.seasonId
         JOIN FootballCompetitionProvider cp ON cp.competitionId = s.competitionId AND cp.provider = 'api-football'
-        WHERE cp.externalId IN (${Prisma.join(policy.choices.competitionIds!)}) AND (f.status = 'live' OR
+        WHERE cp.externalId IN (${ids}) AND (f.status = 'live' OR
+          (${coordinated} AND f.status = 'scheduled' AND EXISTS (SELECT 1 FROM FixtureResultState r WHERE r.fixtureId = f.id)) OR
           (f.kickoff >= ${new Date(now - 3 * DAY_MS)} AND f.kickoff < ${new Date(now + 8 * DAY_MS)}))
-        ORDER BY competitionId, season LIMIT ${maximumCompetitionScope}`);
+        ${coordinated ? Prisma.sql`UNION DISTINCT
+          SELECT cp.externalId AS competitionId, s.year AS season FROM FootballSeason s
+          JOIN FootballCompetitionProvider cp ON cp.competitionId = s.competitionId AND cp.provider = 'api-football'
+          WHERE cp.externalId IN (${ids}) AND s.current = TRUE` : Prisma.empty}
+        ORDER BY competitionId, season LIMIT ${maximumCompetitionScope}`));
       return rows.map((row) => ({ competitionId: Number(row.competitionId), season: row.season }));
     }
+    let latestDetails: ApiFootballResult<NormalizedFixtureMatchDetails> | null = null;
+    let detailPoller: Readonly<{ policy: LiveMatchPolicy; service: ReturnType<typeof createLiveMatchService> }> | null = null;
     let poller: Readonly<{ policy: ResultSyncPolicy; accountId: string; service: ReturnType<typeof createResultSyncService> }> | null = null;
     /** Rebuilds the leased poller when its coverage or provider-day quota account changes. */
-    async function resultPoller() {
+    async function resultPoller(cadence?: LiveWorkload["cadence"]) {
       const current = quota.current(), coverage = await resultCoverage();
       if (current === null) return poller;
       if (coverage.length === 0) { results = null; poller = null; return null; }
-      const next = resultSyncPolicy(refs, workload, coverage, localFootball);
+      const next = resultSyncPolicy(refs, cadence ? { ...workload, cadence } : workload, coverage, localFootball, coordinated);
       if (poller && poller.accountId === current.accountId && evidenceFingerprint(poller.policy) === evidenceFingerprint(next)) return poller;
       results = next;
       // The poller lease belongs to the shared quota account row, so it follows the active provider day.
       poller = Object.freeze({ policy: next, accountId: current.accountId, service: createResultSyncService({ accountId: current.accountId,
-        policy: next, authority: authorities.results, adapter: adapter.evidence,
+        policy: next, authority: authorities.results, adapter: coordinated ? { ...adapter.evidence, async liveFixtures(bounds, workflow) {
+          latestDetails = await adapter.evidence.liveFixtureDetails(bounds, workflow);
+          detailPoller?.service.observeLiveFixtureDetails(latestDetails);
+          return latestDetails;
+        } } : adapter.evidence,
+        ...(discoverFixtures ? { onDiscoveredFixtures: discoverFixtures } : {}),
         ...(overrides.onPollerState ? { onState: (state) => overrides.onPollerState?.("results", state) } : {}),
         store: createMysqlResultSyncStore({ database, accountId: current.accountId, lifecycle }) }) });
       return poller;
     }
-    let detailPoller: Readonly<{ policy: LiveMatchPolicy; service: ReturnType<typeof createLiveMatchService> }> | null = null;
     /** Detail collection covers configured stored fixtures, including those without predictions. */
-    async function liveMatchPoller() {
+    async function liveMatchPoller(intervalMultiplier = 1) {
       if (!workload.liveDetails.eligible || quota.current() === null) return null;
       const coverage = await resultCoverage();
       if (coverage.length === 0) { liveDetailsPolicy = null; detailPoller = null; return null; }
-      const next = liveMatchPolicy(refs, workload, coverage, localFootball);
+      const paced = intervalMultiplier > 1 ? { ...workload, liveDetails: { ...workload.liveDetails,
+        intervalMs: workload.liveDetails.intervalMs * intervalMultiplier } } : workload;
+      const next = liveMatchPolicy(refs, paced, coverage, localFootball || coordinated, coordinated);
       if (detailPoller && evidenceFingerprint(detailPoller.policy) === evidenceFingerprint(next)) return detailPoller;
       liveDetailsPolicy = next;
       detailPoller = Object.freeze({ policy: next, service: createLiveMatchService({ accountKey: day.status.accountKey,
         policy: next, authority: authorities.liveMatch, adapter: adapter.evidence,
-        ...(localFootball ? { batchDetails: adapter.evidence.matchDetails } : {}),
+        ...(localFootball || coordinated ? { batchDetails: adapter.evidence.matchDetails } : {}),
+        ...(coordinated ? { supplements: { lineups: adapter.evidence.availability, players: adapter.evidence.fixturePlayers,
+          halfStatistics: adapter.reference.page } } : {}),
         ...(overrides.onPollerState ? { onState: (state) => overrides.onPollerState?.("match-details", state) } : {}),
         store: createMysqlLiveMatchStore({ database, accountKey: day.status.accountKey }) }) });
+      if (latestDetails) detailPoller.service.observeLiveFixtureDetails(latestDetails);
       return detailPoller;
     }
-    return Object.freeze({ policy, database, queue, quota, workload, registry, hourlySelectionEnabled, settlement, cache, catalog: importer, historyBackfill, historyDetails, historyReference, resultPoller, liveMatchPoller, inPlayOdds, day,
+    return Object.freeze({ policy, database, queue, quota, workload, registry, hourlySelectionEnabled, settlement, cache, catalog: importer,
+      historyBackfill, historyDetails, historyReference, resultPoller, liveMatchPoller, inPlayOdds, day,
+      coordinated, forecastConcurrency, forecastRecovery, currentDayContextEnabled: currentDayContext !== null,
       odds: Object.freeze({ enabled: oddsEnabled, registry: oddsRegistry, horizonDays: workload.odds.dates, bookmakerScope: odds?.bookmakerScope,
         requalifyLocal: requalifyLocalOdds,
+        catalogCoverage: (asOf: number) => database.query((tx) => storedPreMatchCatalogCoverage(tx, asOf)),
         // Write-time staleness needs no provider call, so it runs even while imports are off.
         expire: (limit: number) => oddsService.expire(odds?.freshnessMs ?? ODDS_FRESHNESS_MS, limit) }),
       teamCodes: Object.freeze({ enabled: teamCodesEnabled, registry: teamCodesRegistry }),

@@ -33,6 +33,20 @@ function archiveTeamFacts(previous: unknown, incoming: readonly unknown[] | null
   return combined.length !== previous.length || combined.some((row, index) => row !== previous[index]) ? combined : null;
 }
 
+/** A scoped team response can correct supplied fields without replacing the other team's observations. */
+function liveTeamFacts(previous: unknown, incoming: readonly unknown[] | null): readonly unknown[] | null {
+  if (!incoming?.length) return null;
+  if (!Array.isArray(previous) || previous.some(row => teamId(row) === null)) return incoming;
+  const updates = new Map(incoming.map(row => [teamId(row), row as Record<string, unknown>]));
+  const rows: unknown[] = previous.map((row: Record<string, unknown>) => {
+    const id = teamId(row), update = updates.get(id);
+    if (!update) return row;
+    updates.delete(id);
+    return { ...row, ...Object.fromEntries(Object.entries(update).filter(([, value]) => value !== null)) };
+  });
+  return [...rows, ...updates.values()];
+}
+
 /** The caller locks and verifies the canonical fixture before writing its observations. */
 export async function saveFixtureFacts(tx: Prisma.TransactionClient, target: Readonly<{ fixtureId: string; externalId: number }>,
   observation: FixtureFactObservation, now: Date, replaceExisting = true): Promise<boolean> {
@@ -40,15 +54,15 @@ export async function saveFixtureFacts(tx: Prisma.TransactionClient, target: Rea
   if ((!info && ![events, statistics, lineups, players].some((rows) => rows?.length)) ||
     observation.retrievedAt > now.getTime() || Buffer.byteLength(JSON.stringify(observation.values)) > FIXTURE_FACTS_MAX_BYTES) return false;
   const previous = await tx.fixtureFacts.findUnique({ where: { fixtureId: target.fixtureId }, select: {
-    events: !replaceExisting, eventsHash: true, statistics: !replaceExisting, statisticsHash: true, lineups: true, playerStatistics: true,
+    events: !replaceExisting, eventsHash: true, statistics: true, statisticsHash: true, lineups: true, playerStatistics: true,
     eventsRetrievedAt: true, statisticsRetrievedAt: true, detailsRetrievedAt: true, infoRetrievedAt: true,
     venueExternalId: true, venueName: true, venueCity: true, referee: true,
   } });
   const at = new Date(observation.retrievedAt);
   const eventsHash = events?.length ? evidenceFingerprint(events) : null;
-  const teamStatistics = replaceExisting ? statistics : archiveTeamFacts(previous?.statistics, statistics, ["statistics"]);
-  const teamLineups = replaceExisting ? lineups : archiveTeamFacts(previous?.lineups, lineups, ["startXI", "substitutes"]);
-  const teamPlayers = replaceExisting ? players : archiveTeamFacts(previous?.playerStatistics, players, ["players"]);
+  const teamStatistics = replaceExisting ? liveTeamFacts(previous?.statistics, statistics) : archiveTeamFacts(previous?.statistics, statistics, ["statistics"]);
+  const teamLineups = replaceExisting ? liveTeamFacts(previous?.lineups, lineups) : archiveTeamFacts(previous?.lineups, lineups, ["startXI", "substitutes"]);
+  const teamPlayers = replaceExisting ? liveTeamFacts(previous?.playerStatistics, players) : archiveTeamFacts(previous?.playerStatistics, players, ["players"]);
   const statisticsHash = teamStatistics?.length ? evidenceFingerprint(teamStatistics) : null;
   const canWrite = (old: Date | null | undefined) => old == null || at >= old;
   const venueId = info?.venueId == null ? null : BigInt(info.venueId);

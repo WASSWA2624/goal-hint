@@ -3,7 +3,7 @@ import "server-only";
 import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { liveClockFromProvider } from "../../domain/match-card.ts";
 import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
-import { utcInstantFromEpochMilliseconds, type InstantWindow } from "../../domain/calendar.ts";
+import { utcInstantFromEpochMilliseconds, type InstantWindow, type UtcInstant } from "../../domain/calendar.ts";
 import type { StoredMatchFeedRecord } from "../../domain/match-feed.ts";
 import { createMessages } from "../../i18n/messages.ts";
 import { isSafeRemoteImageUrl } from "../../domain/remote-image.ts";
@@ -11,10 +11,10 @@ import { validTeamCode } from "../../domain/team-name.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { cycleFromRows, historyTime, revisionFromRows, storedCycleDisplay, type HistoryRow } from "../predictions/history-read.ts";
 import { historyFail, type CycleDisplay } from "../predictions/history-contract.ts";
-import { refreshResultFromRow, storedRefreshResult } from "../predictions/publication-read.ts";
 import { projectSettlementCycle, settlementRevisionFromRow, storedSettlementProjection, type SettlementProjectionReader } from "../settlement/settlement-read.ts";
 import type { SettlementRevision } from "../settlement/settlement-contract.ts";
 import { fixtureResultFromRow, fixtureResultMatchesCanonical, resultStatus, storedFixtureResult, type StoredFixtureResult } from "../results/result-read.ts";
+import { projectFixtureStatusFreshness } from "../results/result-status-freshness.ts";
 import { fixturePricesFromRows, minimumFixturePrice, storedFixturePrices, type FixturePriceRow } from "../odds/odds-read.ts";
 import { publicRecommendation, recommendationMarket } from "../../domain/recommendation-view.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
@@ -22,17 +22,17 @@ import { publicPolicy } from "../../domain/public-policy.ts";
 const families = Object.keys(marketSelections) as MarketFamily[];
 const feedTeam = { select: { id: true, name: true, code: true, logoUrl: true } } as const;
 const fixtureSelect = {
-  id: true, dataVersion: true, kickoff: true, retrievedAt: true, status: true, activeCycleId: true,
+  id: true, dataVersion: true, kickoff: true, retrievedAt: true, status: true, providerStatus: true, activeCycleId: true,
   regulationHome: true, regulationAway: true, regulationVerifiedAt: true, regulationEvidenceRef: true,
   homeTeam: feedTeam, awayTeam: feedTeam,
   season: { select: { competition: { select: { id: true, name: true, country: true, logoUrl: true, countryFlagUrl: true } } } },
-  resultState: { select: { resultId: true, lastSyncAt: true, lastVerifiedAt: true, delayReason: true } }, lifecycleState: { select: { issue: true } },
+  resultState: { select: { resultId: true, lastVerifiedAt: true, nextCheckAt: true, delayReason: true } }, lifecycleState: { select: { issue: true } },
 } satisfies Prisma.FootballFixtureSelect;
 type FeedFixture = Prisma.FootballFixtureGetPayload<{ select: typeof fixtureSelect }>;
-type FeedPriceOptions = Readonly<{ prices?: boolean; preferRecommendation?: boolean }>;
+type FeedPriceOptions = Readonly<{ prices?: boolean; preferRecommendation?: boolean; asOf?: UtcInstant }>;
 type FeedFixtureSource = Readonly<{ fixture: FeedFixture; display: CycleDisplay | null; result: StoredFixtureResult | null;
   settlement: Pick<Awaited<ReturnType<typeof storedSettlementProjection>>, "result" | "cycles"> | null;
-  refresh: Awaited<ReturnType<typeof storedRefreshResult>>; jobState: string | null; priceRows: readonly FixturePriceRow[] }>;
+  refreshOutcome: string | null; jobState: string | null; priceRows: readonly FixturePriceRow[] }>;
 const text = (value: string | null) => value?.normalize("NFC").replace(/\p{Cc}/gu, " ").trim() || null;
 const voidKeys = { "formal-postponement": "outcome.postponement", "fixture-canceled": "outcome.cancellation",
   "fixture-abandoned": "outcome.abandonment", "fixture-awarded": "outcome.award", "locked-cutoff-invalidated": "outcome.invalidCutoff",
@@ -57,13 +57,15 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
     ? await (options.readSettlement ?? ((fixtureId, cycleId) => storedSettlementProjection(tx, fixtureId, cycleId)))(id, cycle.id) : null;
   const result = options.source ? options.source.result
     : settlement?.result ?? (fixture.resultState?.resultId ? await storedFixtureResult(tx, id, fixture.resultState.resultId) : null);
-  const latest = !options.source && cycle ? await tx.predictionRefreshResult.findFirst({ where: { fixtureId: id, cycleId: cycle.id }, orderBy: [{ selection: { run: { eatDate: "desc" } } }, { selection: { run: { slotHour: "desc" } } }, { fixtureVersion: "desc" }], select: { id: true } }) : null;
-  const refresh = options.source ? options.source.refresh : latest ? await storedRefreshResult(tx, latest.id) : null;
+  const latest = !options.source && cycle ? await tx.predictionRefreshResult.findFirst({ where: { fixtureId: id, cycleId: cycle.id },
+    orderBy: [{ selection: { run: { eatDate: "desc" } } }, { selection: { run: { slotHour: "desc" } } }, { fixtureVersion: "desc" }],
+    select: { outcome: true } }) : null;
+  const refreshOutcome = options.source ? options.source.refreshOutcome : latest?.outcome ?? null;
   const work = options.source ? { job: options.source.jobState ? { state: options.source.jobState } : null }
     : cycle ? await tx.runFixture.findFirst({ where: { fixtureId: id, cycleId: cycle.id }, orderBy: [{ run: { eatDate: "desc" } }, { run: { slotHour: "desc" } }], select: { job: { select: { state: true } } } }) : null;
   const outside = fixture.kickoff !== null && fixture.kickoff.getTime() >= window.endExclusive;
   const updating = cycle?.state === "open" && work?.job && ["pending", "running"].includes(work.job.state);
-  const delayed = refresh?.outcome === "retained-previous" || work?.job && ["failed", "expired"].includes(work.job.state);
+  const delayed = refreshOutcome === "retained-previous" || work?.job && ["failed", "expired"].includes(work.job.state);
   const prediction = cycle && cycle.state !== "open" ? "locked" : updating ? "updating" : outside ? "outside-window" : delayed ? "delayed" : revision ? "current" : "unavailable";
   const voidReason = cycle?.state === "void" ? publicVoidReason(cycle.voidReason, locale) : null;
   const available = revision ? Object.values(revision.candidate.markets).filter((item) => item.available) : [];
@@ -102,6 +104,12 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
   const regulationScore = sealedRegulation ? { home: result!.regulation.home!, away: result!.regulation.away! }
     : catalogRegulation ? { home: fixture.regulationHome!, away: fixture.regulationAway! } : null;
   const live = coherentResult && fixture.status === "live" && result!.reportedGoals.home !== null && result!.reportedGoals.away !== null;
+  const kickoffAt = fixture.kickoff ? historyTime(fixture.kickoff) : null;
+  const freshness = projectFixtureStatusFreshness({ status, providerStatus: fixture.providerStatus ?? null, kickoffAt,
+    asOf: options.asOf ?? utcInstantFromEpochMilliseconds(Date.now()), canonicalRetrievedAt: fixture.retrievedAt.getTime(),
+    lastVerifiedAt: fixture.resultState?.lastVerifiedAt?.getTime() ?? (coherentResult ? result!.observedAt : null),
+    nextCheckAt: fixture.resultState?.nextCheckAt?.getTime() ?? null, hasVerifiedRegulation: regulation,
+    delayed: issue !== null || !!fixture.resultState?.delayReason });
   // A stored code is published only in its validated form (2–5 letters or digits, uppercase); anything else reads as none.
   // Team fields change only with the fixture's dataVersion: a catalog change to a shared team bumps every fixture that renders it.
   const team = (value: typeof fixture.homeTeam) => ({ id: value.id, name: text(value.name), code: validTeamCode(value.code),
@@ -112,8 +120,9 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
     competition: { id: competition.id, name: text(competition.name), country: text(competition.country),
       logoUrl: isSafeRemoteImageUrl(competition.logoUrl) ? competition.logoUrl : null,
       countryFlagUrl: isSafeRemoteImageUrl(competition.countryFlagUrl) ? competition.countryFlagUrl : null },
-    kickoffAt: fixture.kickoff ? historyTime(fixture.kickoff) : null, syncedAt: historyTime(fixture.resultState?.lastSyncAt ?? fixture.retrievedAt),
-    resultVerifiedAt: coherentResult ? utcInstantFromEpochMilliseconds(Math.max(result!.observedAt, fixture.resultState?.lastVerifiedAt?.getTime() ?? 0)) : null,
+    kickoffAt, syncedAt: freshness.lastVerifiedAt ?? historyTime(fixture.retrievedAt),
+    resultVerifiedAt: coherentResult ? utcInstantFromEpochMilliseconds(Math.max(result!.observedAt,
+      fixture.resultState?.lastVerifiedAt?.getTime() ?? 0)) : null,
     status, score: isPlayedFinalStatus(status) && regulationScore
       ? regulationScore : live ? { home: result!.reportedGoals.home!, away: result!.reportedGoals.away! } : null,
     scorePeriod: isPlayedFinalStatus(status) && regulation ? "regulation" : live ? "live" : null,
@@ -124,7 +133,8 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
     forecast: revision ? { runId: revision.runId, runSequence: String(revision.runSequence), revisionId: revision.id, publishedAt: revision.publishedAt, markets,
       ...(recommendation === undefined ? {} : { recommendation }),
       updateDelayed: delayed === true, provisional: available.some((item) => item.provenance.kind !== "ai" || item.provenance.provisional) } : null,
-    unavailableMarkets, update: { prediction, result: fixture.resultState?.delayReason ? "delayed" : fixture.resultState ? "current" : "untracked" },
+    unavailableMarkets, update: { prediction, result: freshness.state === "awaiting-update" ? "delayed" : fixture.resultState ? "current" : "untracked",
+      statusFreshness: freshness },
     availabilityMessage: outside && !revision ? messages.text("feed.sevenDayAvailability") : null, prices };
 }
 
@@ -189,15 +199,15 @@ export async function storedFeedFixtures(tx: Prisma.TransactionClient, ids: read
     if (members.has(revision.family)) return historyFail("invalid-state");
     members.set(revision.family, revision); settlements.set(revision.cycleId, members);
   }
-  const refreshRows = cycleIds.length ? await tx.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT r.*,
-    r.integrity=SHA2(CAST(r.resultJson AS CHAR),256) AS validIntegrity FROM PredictionCycle c
+  // Public freshness needs only the refresh outcome. The private decision receipt can describe hundreds of market keys.
+  const refreshRows = cycleIds.length ? await tx.$queryRaw<{ fixtureId: string; cycleId: string; outcome: string }[]>(Prisma.sql`
+    SELECT r.fixtureId,r.cycleId,r.outcome FROM PredictionCycle c
     JOIN PredictionRefreshResult r ON r.id=(SELECT p.id FROM PredictionRefreshResult p JOIN DailyRun d ON d.id=p.runId
       WHERE p.fixtureId=c.fixtureId AND p.cycleId=c.id ORDER BY d.eatDate DESC,d.slotHour DESC,p.fixtureVersion DESC LIMIT 1)
     WHERE c.id IN (${Prisma.join(cycleIds)})`) : [];
   const refreshes = new Map(refreshRows.map((row) => {
-    const refresh = refreshResultFromRow(row);
-    if (cycleMap.get(refresh.cycleId)?.fixtureId !== refresh.fixtureId) return historyFail("invalid-state");
-    return [refresh.cycleId, refresh] as const;
+    if (cycleMap.get(row.cycleId)?.fixtureId !== row.fixtureId) return historyFail("invalid-state");
+    return [row.cycleId, row.outcome] as const;
   }));
   const workRows = cycleIds.length ? await tx.$queryRaw<{ cycleId: string; jobState: string | null }[]>(Prisma.sql`
     SELECT c.id AS cycleId,j.state AS jobState FROM PredictionCycle c
@@ -221,7 +231,7 @@ export async function storedFeedFixtures(tx: Prisma.TransactionClient, ids: read
     const settlement = display?.cycle.lockedSetId ? { result, cycles: [projectSettlementCycle(fixture, result,
       fixture.lifecycleState?.issue ?? null, display.cycle, display.revision, settlements.get(display.cycle.id) ?? new Map())] } : null;
     return storedFeedFixture(tx, id, partialCoverage, window, locale, { ...options, source: { fixture, display, result, settlement,
-      refresh: fixture.activeCycleId ? refreshes.get(fixture.activeCycleId) ?? null : null,
+      refreshOutcome: fixture.activeCycleId ? refreshes.get(fixture.activeCycleId) ?? null : null,
       jobState: fixture.activeCycleId ? work.get(fixture.activeCycleId) ?? null : null, priceRows: prices.get(id) ?? [] } });
   }));
 }

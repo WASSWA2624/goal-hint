@@ -15,23 +15,24 @@ import { assertPreparedPredictorPrompt, buildPredictorPrompt, PredictorPromptErr
 import { isPredictorOutputCurrent, validatePredictorOutput, type PredictorOutputAuthority, type PredictorOutputRejection } from "./predictor-output.ts";
 import { applyPredictorCalibration, type PredictorCalibrationOptions, type PredictorCalibratedOutput } from "./predictor-calibration.ts";
 import type { createPrimaryAiAdapter, PrimaryAiAdapterResult } from "./predictor-adapter.ts";
+import { createPredictorCircuitBreaker, permitsPredictorRetry, predictorRetryRequest, type PredictorAttempt } from "./predictor-resilience.ts";
 
 export type PredictorRequest = Readonly<{
   pin: ModelPin; snapshot: EvidenceSnapshot; job: CostJobPolicy; request: CostRequest; maxElapsedMs: number;
 }>;
 type AdapterDenial = Extract<PrimaryAiAdapterResult, { status: "denied" }>["reason"];
 export type PredictorReason = AdapterDenial | PredictorOutputRejection | "conflicting-pin" | "conflicting-invocation" |
-  "capacity-exhausted" | "invalid-candidate" | "unverified-calibration" | "unverified-evaluation";
+  "capacity-exhausted" | "invalid-candidate" | "unverified-calibration" | "unverified-evaluation" | "provider-circuit-open";
+type PredictorUsage = Readonly<{ requestsDispatched: 0 | 1 | 2; requestCountUnknown: boolean; attempts?: readonly PredictorAttempt[] }>;
 export type PredictorResult = Readonly<{
-  status: "candidate"; pin: ModelPin; output: PredictorCalibratedOutput; requestsDispatched: 1; requestCountUnknown: false;
-}> | Readonly<{
-  status: "denied"; reason: PredictorReason; requestsDispatched: 0 | 1; requestCountUnknown: boolean; markets?: MarketSnapshot;
-}>;
+  status: "candidate"; pin: ModelPin; output: PredictorCalibratedOutput; requestsDispatched: 1 | 2;
+}> & PredictorUsage | Readonly<{ status: "denied"; reason: PredictorReason; markets?: MarketSnapshot }> & PredictorUsage;
 const adapterReasons = new Set<AdapterDenial>(["not-authorized", "invalid-response", "unavailable", "invalid-request",
   "operation-not-authorized", "unverified-policy", "unconfigured", "unpriced", "service-unavailable", "unknown-account", "unknown-job", "unknown-attempt",
   "conflicting-policy", "clock-regression", "period-inactive", "budget-exhausted", "job-budget-exhausted", "request-limit", "token-limit",
   "billed-unit-limit", "time-limit", "fallback-time-reserved", "priority-wait", "already-attempted", "dispatch-expired", "invalid-permit",
-  "timeout", "uncertain-usage", "unverified-usage", "conflicting-reconciliation"]);
+  "timeout", "uncertain-usage", "unverified-usage", "conflicting-reconciliation", "provider-failure", "transient-provider-failure"]);
+const providerFailures = new Set(["provider-failure", "transient-provider-failure", "timeout"]);
 class PredictorFailure extends Error {
   readonly reason: PredictorReason;
   constructor(reason: PredictorReason) { super("Primary prediction could not complete. Private diagnostics are withheld."); this.reason = reason; }
@@ -51,7 +52,7 @@ export function parsePredictorRequest(input: unknown): PredictorRequest {
   } catch { throw new PredictorFailure("invalid-request"); }
 }
 
-/** One pinned candidate invocation. Evidence collection, retries, fallback,
+/** One pinned candidate invocation. Evidence collection, market fallback,
  * revisions and public publication belong to their respective workflows. */
 export function createPredictorService(options: Readonly<{
   registry: Pick<ModelRegistry, "resolve">; adapter: Pick<ReturnType<typeof createPrimaryAiAdapter>, "execute">;
@@ -67,13 +68,19 @@ export function createPredictorService(options: Readonly<{
   if (!Number.isSafeInteger(options.maxInflight) || options.maxInflight < 1 || options.maxInflight > 100_000)
     throw new PredictorFailure("invalid-request");
   const now = () => utcInstantFromEpochMilliseconds(options.clock?.now() ?? Date.now());
+  const circuits = new Map<string, ReturnType<typeof createPredictorCircuitBreaker>>();
   const inflight = new Map<string, Readonly<{ fingerprint: string; promise: Promise<PredictorResult> }>>();
-  const denial = (reason: PredictorReason, dispatched: 0 | 1 = 0, unknown = false, markets?: MarketSnapshot): PredictorResult =>
-    freezeEvidence({ status: "denied", reason, requestsDispatched: dispatched, requestCountUnknown: unknown,
-      ...(markets === undefined ? {} : { markets }) });
+  const denial = (reason: PredictorReason, usage: PredictorUsage = { requestsDispatched: 0, requestCountUnknown: false },
+    markets?: MarketSnapshot): PredictorResult =>
+    freezeEvidence({ status: "denied", reason, ...usage, ...(markets === undefined ? {} : { markets }) });
   async function execute(input: PredictorRequest, startedAt: number, enteredNow: number, parent?: CostDispatchWorkflow): Promise<PredictorResult> {
     let lastNow = enteredNow, model: ModelVersion | undefined, prompt: BuiltPredictorPrompt | undefined;
-    let dispatched: 0 | 1 = 0, countUnknown = false, adapterPending = false;
+    const attempts: PredictorAttempt[] = [];
+    function usage(): PredictorUsage {
+      return { requestsDispatched: attempts.reduce<number>((total, attempt) => total + attempt.dispatched, 0) as 0 | 1 | 2,
+        requestCountUnknown: attempts.some((attempt) => attempt.requestCountUnknown),
+        ...(attempts.length < 2 ? {} : { attempts: [...attempts] }) };
+    }
     const controller = new AbortController();
     const paidDeadline = Math.min(input.job.deadlineAt, input.job.startsAt + input.job.timeLimitMs) - input.job.fallbackReserveMs;
     if (paidDeadline <= enteredNow) return denial("fallback-time-reserved");
@@ -134,20 +141,35 @@ export function createPredictorService(options: Readonly<{
         throw new PredictorFailure("conflicting-pin");
       model = resolved.model; check();
       prompt = buildPredictorPrompt({ snapshot: input.snapshot, model, authority: promptAuthority }); check();
-      const result = await wait(() => {
-        adapterPending = true;
-        return options.adapter.execute({ pin: input.pin, snapshot: input.snapshot, job: input.job, request: input.request,
-          model: model!, prompt: prompt! }, workflow).then((value) => {
-          adapterPending = false;
-          if (value.requestsDispatched === 1) dispatched = 1;
-          countUnknown = value.requestCountUnknown;
-          return value;
-        });
+      const provider = model.provider;
+      const circuit = circuits.get(provider) ?? createPredictorCircuitBreaker(now);
+      circuits.set(provider, circuit);
+      const run = (request: CostRequest, primaryRequest?: CostRequest) => wait(async () => {
+        const entry = circuit.begin(), index = attempts.length;
+        if (!entry) {
+          attempts.push({ attemptId: request.attemptId, dispatched: 0, requestCountUnknown: false, reason: "provider-circuit-open" });
+          throw new PredictorFailure("provider-circuit-open");
+        }
+        attempts.push({ attemptId: request.attemptId, dispatched: 0, requestCountUnknown: true, reason: "uncertain-usage" });
+        try {
+          const result = await options.adapter.execute({ pin: input.pin, snapshot: input.snapshot, job: input.job, request,
+            model: model!, prompt: prompt!, ...(primaryRequest === undefined ? {} : { primaryRequest }) }, workflow);
+          if (![0, 1].includes(result.requestsDispatched) || typeof result.requestCountUnknown !== "boolean" ||
+            result.status === "denied" && !adapterReasons.has(result.reason)) throw new PredictorFailure("unavailable");
+          attempts[index] = { attemptId: request.attemptId, dispatched: result.requestsDispatched, requestCountUnknown: result.requestCountUnknown,
+            reason: result.status === "denied" ? result.reason : null };
+          if (result.status === "completed" && result.requestsDispatched === 1 && result.requestCountUnknown === false) entry.finish("success");
+          else if (result.status === "denied" && result.requestsDispatched === 1 && providerFailures.has(result.reason)) entry.finish("failure");
+          return result;
+        } finally { entry.finish("neutral"); }
       });
+      let result = await run(input.request);
+      if (result.status === "denied" && result.requestsDispatched === 1 &&
+        (result.reason === "timeout" || result.reason === "transient-provider-failure") &&
+        permitsPredictorRetry(input.job, input.request) && lastNow + input.request.timeoutMs < deadlineAt)
+        result = await run(predictorRetryRequest(input.request), input.request);
       if (result.status === "denied") {
-        if (!adapterReasons.has(result.reason) || ![0, 1].includes(result.requestsDispatched) || typeof result.requestCountUnknown !== "boolean")
-          throw new PredictorFailure("unavailable");
-        return denial(result.reason, dispatched, countUnknown);
+        return denial(result.reason, usage());
       }
       if (result.status !== "completed" || result.requestsDispatched !== 1 || result.requestCountUnknown !== false)
         throw new PredictorFailure("unavailable");
@@ -155,25 +177,28 @@ export function createPredictorService(options: Readonly<{
         authority: { modelAuthority: options.modelAuthority, evidenceAuthority,
           verifyTransport: options.verifyTransport, verifyExplanation: options.verifyExplanation }, now: now() });
       check();
-      if (!validation.valid) return denial(validation.reason, dispatched, countUnknown);
+      if (!validation.valid) return denial(validation.reason, usage());
       const calibrated = applyPredictorCalibration(validation.output, { model, authority: options.modelAuthority,
         ...(options.transform === undefined ? {} : { transform: options.transform }),
         ...(options.verifyTransform === undefined ? {} : { verifyTransform: options.verifyTransform }) });
       check(); assertPreparedPredictorPrompt(prompt, input.snapshot, model, promptAuthority); check();
-      if (!calibrated.valid) return denial(calibrated.reason, dispatched, countUnknown);
+      if (!calibrated.valid) return denial(calibrated.reason, usage());
       if (!["match-result", "total-goals", "both-teams-to-score"].some((family) =>
         calibrated.output.markets.markets[family as "match-result" | "total-goals" | "both-teams-to-score"].available))
-        return denial("invalid-output", dispatched, countUnknown, calibrated.output.markets);
+        return denial("invalid-output", usage(), calibrated.output.markets);
       timeCheck();
-      if (!isPredictorOutputCurrent(calibrated.output, model, now())) return denial("invalid-timing", dispatched, countUnknown);
-      return freezeEvidence({ status: "candidate", pin: input.pin, output: calibrated.output, requestsDispatched: 1, requestCountUnknown: false });
+      if (!isPredictorOutputCurrent(calibrated.output, model, now())) return denial("invalid-timing", usage());
+      const measured = usage();
+      if (measured.requestsDispatched === 0) return denial("invalid-output", measured);
+      return freezeEvidence({ ...measured, status: "candidate", pin: input.pin, output: calibrated.output,
+        requestsDispatched: measured.requestsDispatched });
     } catch (error) {
-      if (error instanceof PredictorFailure) return denial(error.reason, dispatched, countUnknown || adapterPending);
-      try { timeCheck(); } catch (failure) { if (failure instanceof PredictorFailure) return denial(failure.reason, dispatched, countUnknown || adapterPending); }
+      if (error instanceof PredictorFailure) return denial(error.reason, usage());
+      try { timeCheck(); } catch (failure) { if (failure instanceof PredictorFailure) return denial(failure.reason, usage()); }
       if (error instanceof PredictorPromptError) return denial(error.reason === "input-limit" || error.reason === "unsupported-version" ||
-        error.reason === "invalid-model" ? "invalid-request" : error.reason, dispatched, countUnknown);
-      if (error instanceof ModelRegistryError) return denial(error.reason, dispatched, countUnknown);
-      return denial("unavailable", dispatched, countUnknown || adapterPending);
+        error.reason === "invalid-model" ? "invalid-request" : error.reason, usage());
+      if (error instanceof ModelRegistryError) return denial(error.reason, usage());
+      return denial("unavailable", usage());
     } finally { controller.abort(); if (timer !== undefined) clearTimeout(timer); }
   }
   return Object.freeze({ predict(value: unknown, workflow?: CostDispatchWorkflow): Promise<PredictorResult> {

@@ -4,7 +4,8 @@ import { randomBytes } from "node:crypto";
 import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
 import { operatingRules } from "../config/runtime-policy.ts";
 import {
-  essentialReserveFor, quotaEndpointPattern, quotaPriorities,
+  essentialReserveFor, historicalBackfillMinuteShare, providerResetGraceMs, providerShortWindowShare,
+  quotaEndpointPattern, quotaPriorities, unknownProviderRequestsPerMinute,
   type QuotaAccountState, type QuotaAttempt, type QuotaDecision, type QuotaDenialReason,
   type QuotaEvidenceVerifier, type QuotaFeedback, type QuotaPeriodEvidence,
   type QuotaPeriodState, type QuotaPermit, type QuotaRequest, type QuotaStore, type QuotaTransaction, type QuotaAdmission,
@@ -30,6 +31,21 @@ const validInstant = (value: unknown): value is UtcInstant =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= -30_610_224_000_000 && value <= 253_402_300_799_999;
 const spacing = (period: QuotaPeriodState): number =>
   Math.ceil(Math.max(1_000 / period.secondLimit, 60_000 / period.minuteLimit));
+const providerWindowAllowance = (limit: number): number => Math.floor(limit * providerShortWindowShare);
+function shortWindowLimits(evidence: QuotaPeriodEvidence) {
+  const unknown = evidence.shortWindowKnown === false;
+  // Integer rolling-second counts still allow one request when the budget is fractional.
+  // The corresponding rolling-minute ceiling preserves that smaller average rate.
+  const secondLimit = unknown ? 1 : Math.max(1, providerWindowAllowance(evidence.secondLimit));
+  const minuteLimit = unknown ? Math.min(unknownProviderRequestsPerMinute, evidence.minuteLimit) :
+    Math.max(1, Math.min(providerWindowAllowance(evidence.minuteLimit), providerWindowAllowance(evidence.secondLimit * 60)));
+  return {
+    secondLimit: Math.min(limits.requestsPerRollingSecond, secondLimit),
+    minuteLimit: Math.min(limits.requestsPerRollingMinute, minuteLimit),
+    ...(unknown && { singleConcurrent: true }),
+  };
+}
+const retryAfterReset = (period: QuotaPeriodState) => instant(period.endsAt + providerResetGraceMs);
 
 function validRequest(request: QuotaRequest): boolean {
   return !!request && identifier.test(request.requestId) && identifier.test(request.workKey) &&
@@ -45,6 +61,7 @@ function validEvidence(evidence: QuotaPeriodEvidence, accountId: string): boolea
     integer(evidence.providerDailyLimit, 1) && integer(evidence.dailyRemaining) &&
     evidence.dailyRemaining <= evidence.providerDailyLimit && integer(evidence.secondLimit, 1) &&
     integer(evidence.minuteLimit, 1) && typeof evidence.evidenceRef === "string" &&
+    (evidence.shortWindowKnown === undefined || typeof evidence.shortWindowKnown === "boolean") &&
     evidence.evidenceRef.length > 0 && evidence.evidenceRef.length <= 512 &&
     (evidence.observedAt === undefined || validInstant(evidence.observedAt) && evidence.observedAt >= evidence.startsAt &&
       evidence.observedAt < evidence.endsAt);
@@ -60,8 +77,7 @@ function newPeriod(evidence: QuotaPeriodEvidence, kind: QuotaPeriodState["kind"]
   const period: QuotaPeriodState = {
     id: evidence.periodId, kind, startsAt: evidence.startsAt, endsAt: evidence.endsAt,
     subscriptionExpiresAt: evidence.subscriptionExpiresAt, providerDailyLimit: evidence.providerDailyLimit,
-    secondLimit: Math.min(limits.requestsPerRollingSecond, evidence.secondLimit),
-    minuteLimit: Math.min(limits.requestsPerRollingMinute, evidence.minuteLimit),
+    ...shortWindowLimits(evidence),
     dayLimit, used, ordinaryUsed: used, dayRemaining: Math.max(0, Math.min(evidence.dailyRemaining, dayLimit - used)),
     minuteRemaining: null, minuteFloorUntil: null, probeRequestId: null,
     evidenceRef: evidence.evidenceRef, observationRevision: 0, priorityUsed: {},
@@ -168,7 +184,8 @@ export function createQuotaLimiter(options: {
     await tx.saveAttempt(attempt);
     return attempt;
   }
-  async function rateDecision(tx: QuotaTransaction, account: QuotaAccountState, period: QuotaPeriodState, now: UtcInstant): Promise<Denial | null> {
+  async function rateDecision(tx: QuotaTransaction, account: QuotaAccountState, period: QuotaPeriodState,
+    now: UtcInstant, attempt: QuotaAttempt): Promise<Denial | null> {
     if (now < account.cooldownUntil) return denied("retry-delay", account.cooldownUntil);
     if (period.secondLimit === 0) return denied("second-limit");
     if (period.minuteLimit === 0) return denied("minute-limit");
@@ -182,13 +199,24 @@ export function createQuotaLimiter(options: {
     if (seconds.length >= period.secondLimit) return denied("second-limit", instant(seconds[0]!.dispatchedAt! + 1_000));
     if (attempts.length >= period.minuteLimit) return denied("minute-limit", instant(attempts[0]!.dispatchedAt! + 60_000));
     if (now < account.nextDispatchAt) return denied("pacing", account.nextDispatchAt);
+    if (attempt.priority === "historical-backfill") {
+      const maximum = Math.floor(period.minuteLimit * historicalBackfillMinuteShare);
+      if (maximum === 0) return denied("workload-budget", retryAfterReset(period));
+      const archive = attempts.filter((entry) => entry.priority === "historical-backfill");
+      if (archive.length >= maximum) return denied("minute-limit", instant(archive[0]!.dispatchedAt! + 60_000));
+    }
+    if (period.singleConcurrent) {
+      const activeUntil = tx.activeDispatchUntil ? await tx.activeDispatchUntil(now) :
+        (await tx.periodAttempts(period.id, 0)).find((entry) => entry.state === "attempted" && (entry.leaseUntil ?? 0) > now)?.leaseUntil;
+      if (activeUntil != null) return denied("pacing", activeUntil);
+    }
     return null;
   }
   async function dispatch(tx: QuotaTransaction, ctx: Context, period: QuotaPeriodState, attempt: QuotaAttempt, probe = false): Promise<QuotaDecision> {
     if (!probe) {
       if (period.used >= period.dayLimit || period.dayRemaining === 0) {
         await expire(tx, attempt);
-        return denied("daily-limit", period.endsAt);
+        return denied("daily-limit", retryAfterReset(period));
       }
       if (!attempt.essential && period.used >= period.dayLimit - essentialReserveFor(period.dayLimit)) {
         await expire(tx, attempt);
@@ -199,9 +227,12 @@ export function createQuotaLimiter(options: {
       if (head && head.id !== attempt.id && !(attempt.essential && !head.essential &&
           period.used >= period.dayLimit - essentialReserveFor(period.dayLimit))) return denied("priority-wait");
     }
-    const rate = await rateDecision(tx, ctx.account, period, ctx.now);
-    if (rate) return rate;
-    if (!probe && options.admit && !await options.admit(tx, period, attempt)) {
+    const rate = await rateDecision(tx, ctx.account, period, ctx.now, attempt);
+    if (rate) {
+      if (rate.reason === "workload-budget") await expire(tx, attempt);
+      return rate;
+    }
+    if (!probe && options.admit && !await options.admit(tx, period, attempt, ctx.now)) {
       await expire(tx, attempt);
       return denied("workload-budget", period.endsAt);
     }
@@ -212,7 +243,7 @@ export function createQuotaLimiter(options: {
     if (period.minuteRemaining !== null) period.minuteRemaining = Math.max(0, period.minuteRemaining - 1);
     attempt.state = "attempted";
     attempt.dispatchedAt = ctx.now;
-    attempt.leaseUntil = instant(Math.min(attempt.deadlineAt, ctx.now + attempt.timeoutMs));
+    attempt.leaseUntil = instant(Math.min(attempt.deadlineAt, period.endsAt, ctx.now + attempt.timeoutMs));
     attempt.periodId = period.id;
     attempt.sequence = period.used;
     attempt.ownerToken = randomBytes(32).toString("hex");
@@ -239,8 +270,10 @@ export function createQuotaLimiter(options: {
               period.endsAt !== evidence.endsAt || now >= period.endsAt) return denied("invalid-reset-evidence");
           period.providerDailyLimit = Math.min(period.providerDailyLimit, evidence.providerDailyLimit);
           period.dayLimit = Math.min(period.dayLimit, period.providerDailyLimit);
-          period.secondLimit = Math.min(period.secondLimit, evidence.secondLimit);
-          period.minuteLimit = Math.min(period.minuteLimit, evidence.minuteLimit);
+          const window = shortWindowLimits(evidence);
+          period.secondLimit = Math.min(period.secondLimit, window.secondLimit);
+          period.minuteLimit = Math.min(period.minuteLimit, window.minuteLimit);
+          if (window.singleConcurrent) period.singleConcurrent = true;
           period.subscriptionExpiresAt = instant(Math.min(period.subscriptionExpiresAt, evidence.subscriptionExpiresAt));
           const unresolved = await tx.unresolvedBefore(period.id, 2_147_483_647);
           const spent = Math.max(0, period.providerDailyLimit - evidence.dailyRemaining) + unresolved;
@@ -319,7 +352,13 @@ export function createQuotaLimiter(options: {
         // A delayed launch cannot bunch with another replica's newer reservation.
         const rolling = (await tx.rollingAttempts(instant(ctx.now - 61_000))).filter((other) => other.id !== attempt.id);
         if (rolling.filter((other) => (other.launchedAt ?? other.dispatchedAt!) > ctx.now - 1_000).length >= period.secondLimit) return denied("second-limit");
-        if (rolling.filter((other) => (other.launchedAt ?? other.dispatchedAt!) > ctx.now - 60_000).length >= period.minuteLimit) return denied("minute-limit");
+        const minute = rolling.filter((other) => (other.launchedAt ?? other.dispatchedAt!) > ctx.now - 60_000);
+        if (minute.length >= period.minuteLimit) return denied("minute-limit");
+        if (attempt.priority === "historical-backfill" && minute.filter((other) => other.priority === "historical-backfill").length >=
+            Math.floor(period.minuteLimit * historicalBackfillMinuteShare)) {
+          await expire(tx, attempt);
+          return denied("minute-limit");
+        }
         attempt.launchedAt = ctx.now;
         ctx.account.lastLaunchedAt = ctx.now;
         ctx.account.nextDispatchAt = instant(Math.max(ctx.account.nextDispatchAt, ctx.now + spacing(period)));
@@ -354,7 +393,7 @@ export function createQuotaLimiter(options: {
           period.providerDailyLimit = Math.min(period.providerDailyLimit, feedback.dailyLimit);
           period.dayLimit = Math.min(period.dayLimit, period.providerDailyLimit);
         }
-        if (feedback.minuteLimit !== undefined) period.minuteLimit = Math.min(period.minuteLimit, feedback.minuteLimit);
+        if (feedback.minuteLimit !== undefined) period.minuteLimit = Math.min(period.minuteLimit, providerWindowAllowance(feedback.minuteLimit));
         if (feedback.dailyRemaining !== undefined) {
           const later = (await tx.periodAttempts(period.id, attempt.sequence!)).length;
           const unresolved = await tx.unresolvedBefore(period.id, attempt.sequence!);
@@ -386,7 +425,7 @@ export function createQuotaLimiter(options: {
               target.dayLimit = Math.min(target.dayLimit, target.providerDailyLimit);
               target.dayRemaining = Math.max(0, Math.min(target.dayRemaining, target.dayLimit - target.used));
             }
-            if (feedback.minuteLimit !== undefined) target.minuteLimit = Math.min(target.minuteLimit, feedback.minuteLimit);
+            if (feedback.minuteLimit !== undefined) target.minuteLimit = Math.min(target.minuteLimit, providerWindowAllowance(feedback.minuteLimit));
             if (feedback.minuteRemaining !== undefined) {
               const floor = Math.max(0, Math.min(target.minuteLimit, feedback.minuteRemaining) - unreflectedInMinute);
               target.minuteRemaining = target.minuteFloorUntil !== null && now < target.minuteFloorUntil
@@ -405,7 +444,11 @@ export function createQuotaLimiter(options: {
         attempt.leaseUntil = null;
         account.lastNow = now;
         if (feedback.kind === "credential-failure" || feedback.kind === "subscription-expired") account.status = feedback.kind;
-        if (feedback.kind === "rate-limited") account.cooldownUntil = instant(Math.max(account.cooldownUntil, now + Math.max(1, feedback.retryAfterMs ?? 60_000)));
+        if (feedback.kind === "rate-limited") {
+          const retryAt = now + Math.max(1, feedback.retryAfterMs ?? 60_000);
+          account.cooldownUntil = instant(Math.max(account.cooldownUntil, retryAt,
+            feedback.dailyRemaining === 0 ? retryAfterReset(period) : 0));
+        }
         if (period.secondLimit > 0 && period.minuteLimit > 0) account.nextDispatchAt = instant(Math.max(account.nextDispatchAt, account.lastLaunchedAt + spacing(period)));
         await tx.saveAttempt(attempt);
         await tx.savePeriod(period);

@@ -1,8 +1,9 @@
-import type { MarketFamily, MarketSelection } from "./markets.ts";
+import { marketRules, type MarketFamily, type MarketSelection } from "./markets.ts";
 import { deMargin, DE_MARGIN_METHOD, oddsDisplayHundredths, parseDecimalOdds, type DecimalOdds } from "./odds.ts";
 
 /** Versioned mapping from provider bets to the four launch families. Pure and browser-safe. */
 export const ODDS_MAPPING_VERSION = "launch-odds-v1";
+export const LIVE_ODDS_MAPPING_VERSION = "launch-live-odds-v1";
 
 export type LaunchOddsMapping = Readonly<{
   family: MarketFamily;
@@ -30,6 +31,21 @@ export const launchOddsMapping: readonly LaunchOddsMapping[] = Object.freeze([
   Object.freeze({ family: "both-teams-to-score", betId: 8, betName: "Both Teams Score", coverage: 1, line: null,
     selections: Object.freeze({ yes: "Yes", no: "No" }) }),
 ]);
+
+/** Independent API-Football in-play IDs. Labels must agree with the live catalog and price response. */
+export const launchLiveOddsMapping = Object.freeze({
+  "match-result": Object.freeze({ id: 59, name: "Fulltime Result", line: null, labels: Object.freeze(["Home", "Draw", "Away"] as const) }),
+  "double-chance": Object.freeze({ id: 72, name: "Double Chance", line: null, labels: Object.freeze(["Home or Draw", "Away or Draw", "Home or Away"] as const) }),
+  "total-goals": Object.freeze({ id: 36, name: "Over/Under Line", line: String(marketRules.totalGoalsLine),
+    labels: Object.freeze(["Over", "Under"] as const) }),
+  "both-teams-to-score": Object.freeze({ id: 69, name: "Both Teams to Score", line: null, labels: Object.freeze(["Yes", "No"] as const) }),
+} satisfies Record<MarketFamily, { id: number; name: string; line: string | null; labels: readonly string[] }>);
+
+/** Existing exact-name mapping for binary match totals. No team, second-half or payout semantics are inferred. */
+export const binaryGoalTotalOddsMapping = Object.freeze({
+  "full-time": launchOddsMapping.find(({ family }) => family === "total-goals")!,
+  "half-time": Object.freeze({ betId: 6, betName: "Goals Over/Under First Half" }),
+});
 
 export type OddsBetObservation = Readonly<{
   betId: number;

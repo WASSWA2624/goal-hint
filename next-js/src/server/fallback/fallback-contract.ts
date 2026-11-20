@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { UtcInstant } from "../../domain/calendar.ts";
-import type { AcceptedMarket, MarketFamily, MarketIssue, MarketRejectionReason, MarketSnapshot, SourceGroup } from "../../domain/markets.ts";
+import type { AcceptedMarket, MarketFamily, MarketIssue, MarketRejectionReason, MarketSnapshot, MarketSource, SourceGroup } from "../../domain/markets.ts";
 import type { EvidenceContext } from "../evidence/evidence-contract.ts";
 import type { ModelPin } from "../predictor/predictor-contract.ts";
 import type { PredictorCalibrationStatus, PredictorCalibratedOutput } from "../predictor/predictor-calibration.ts";
@@ -38,6 +38,14 @@ export type FallbackTrigger = "ai-failure" | "ai-timeout" | "ai-insufficient-evi
 /** Frozen per AI refresh intent. Absent means the original AI-first resolution without contemporaneous capture. */
 export type ForecastSourceOrder = "provider-first" | "ai-first";
 export const LIVE_FORECAST_CASCADE = "ai-local-provider";
+export const QUALIFIED_FORECAST_CASCADE = "qualified-ai-local-provider-v1";
+export const forecastCascades = [LIVE_FORECAST_CASCADE, QUALIFIED_FORECAST_CASCADE] as const;
+export type ForecastCascade = typeof forecastCascades[number];
+export type ForecastQualification = Readonly<{
+  verifyAiNumericalBasis?(candidate: Extract<PredictorResult, { status: "candidate" }>, context: FallbackContext, family: SourceGroup): boolean;
+  verifyLocalNumericalBasis?(candidate: ResolvedForecastCandidate, context: FallbackContext, family: SourceGroup): boolean;
+}>;
+export type ForecastEngineTransition = Readonly<{ selected: MarketSource | null; ai: string; local: string; provider: string }>;
 /** Versioned runtime source policy; legacy baseline remains readable for historical jobs. */
 export type ForecastSelectionPolicy = "legacy-ai-primary" | "provider-baseline" | "optional-ai-primary";
 export type FallbackReason = Readonly<{ reason: FallbackTrigger; detail: string }>;
@@ -46,12 +54,14 @@ export type ForecastProvenance = Readonly<{
   calibration: PredictorCalibrationStatus; evaluation: PredictorCalibratedOutput["evaluation"];
   provisional: boolean; sources: PredictorCalibratedOutput["sources"];
   evidence: PredictorCalibratedOutput["evidence"]; outputTiming: PredictorCalibratedOutput["outputTiming"];
+    numericalBasis?: "qualified-joint-score-distribution";
 }> | Readonly<{
   kind: "api-football"; source: ProviderFallbackProvenance; policyVersion: string; policyEvidenceRef: string;
 }> | Readonly<{
   kind: "local-engine"; modelVersion: string; historyHash: string; evidenceHash: string;
   rates: LocalPoissonRates;
   sample: Readonly<{ matches: number; homeEffectiveMatches: number; awayEffectiveMatches: number }>;
+    numericalBasis?: "qualified-local-model";
 }>;
 export type ResolvedForecastMarket = Readonly<{
   available: true; market: AcceptedMarket; fallback: FallbackReason | null;
@@ -65,7 +75,8 @@ export type ResolvedForecastCandidate = Readonly<{
     providerStatus: ProviderFallbackResult["status"] | "not-requested"; providerReason: ProviderFallbackReason | null;
     /** Present only when the refresh plan froze a source order. */
     sourceOrder?: ForecastSourceOrder;
-    sourceCascade?: typeof LIVE_FORECAST_CASCADE;
+    sourceCascade?: ForecastCascade;
+    transitions?: Readonly<Record<MarketFamily, ForecastEngineTransition>>;
     localStatus?: "candidate" | "unavailable" | "not-requested";
     /** Sealed rates for goal markets when the AI supplied some or all of the legacy groups. */
     localGoalRates?: LocalPoissonRates;

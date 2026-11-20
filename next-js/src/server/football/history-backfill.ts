@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { getReportingDate, utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
+import { getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate, type UtcInstant } from "../../domain/calendar.ts";
 import type { createApiFootballAdapter } from "./api-football-adapter.ts";
 import { API_FOOTBALL_CONTRACT_VERSION, apiFootballFixtureRoundParameters, type ApiFootballBounds, type ApiFootballFallbackWorkflow,
   type ApiFootballFixtureRound, type ApiFootballResult, type FixtureRoundQuery } from "./api-football-contract.ts";
@@ -9,8 +9,9 @@ import { normalizeCompetition, type NormalizationContext, type NormalizedCompeti
 import { catalogPersistenceUnavailable, type FootballCatalogStore } from "./catalog-mysql-store.ts";
 import { CatalogPersistenceDeferredError, type createFootballCatalogImporter } from "./catalog-service.ts";
 import { reviewedHistoryFixtureRepair } from "./history-fixture-correction.ts";
-import { footballHistoryFixtureScopeFingerprint } from "./history-fixture-scope.ts";
+import { footballHistoryCatalogMaxAgeMs, footballHistoryFixtureScopeFingerprint } from "./history-fixture-scope.ts";
 import { footballHistorySourceMaxRows } from "./history-source.ts";
+import type { FixtureBackfillManifest, FixtureBackfillManifestStore } from "./history-fixture-manifest.ts";
 
 export const historyBackfillLimits = Object.freeze({ defaultRequests: 6, maximumRequests: 100 });
 const retryDelayMs = 15 * 60_000;
@@ -30,6 +31,7 @@ type CompetitionsReader = ReturnType<typeof createApiFootballAdapter>["evidence"
 type ArchiveCompetition = Pick<NormalizedCompetition, "id"> & Readonly<{ seasons: readonly Readonly<{ year: number; coverage: SeasonCoverage }>[] }>;
 type CompetitionCatalog = Omit<Pick<Awaited<ReturnType<CompetitionsReader>>, "data" | "status" | "error" | "requestsDispatched">, "data"> &
   Readonly<{ data: readonly ArchiveCompetition[] }>;
+export type HistoricalDateDiscovery = Readonly<{ status: "scanned" | "deferred"; reason: string | null; requests: number }>;
 
 /** Some leagues list the same selector year more than once. Archive that year once, retaining the broadest reported coverage. */
 export function normalizeHistoryCompetition(row: unknown, context: NormalizationContext): ArchiveCompetition | null {
@@ -91,7 +93,7 @@ function verifiedRoundObservation(response: ApiFootballResult<ApiFootballFixture
 }
 
 function bounds(now: UtcInstant, providerDayEndsAt: number): ApiFootballBounds {
-  return { priority: "enrichment", deadlineAt: utcInstantFromEpochMilliseconds(Math.min(providerDayEndsAt, now + 45_000)),
+  return { priority: "historical-backfill", deadlineAt: utcInstantFromEpochMilliseconds(Math.min(providerDayEndsAt, now + 45_000)),
     timeoutMs: 30_000, maxRequests: 1, maxPages: 1, maxRows: footballHistorySourceMaxRows, maxResponseBytes: 24_000_000,
     retry: { maxAttempts: 4, baseDelayMs: 500, maxDelayMs: 2500 }, cacheMaxAgeMs: 0 };
 }
@@ -102,6 +104,8 @@ export function createFootballHistoryBackfill(options: Readonly<{
   store: Pick<FootballCatalogStore, "findImport"> & Partial<Pick<FootballCatalogStore, "hasReplayedImport">>;
   importer: Pick<ReturnType<typeof createFootballCatalogImporter>, "import">;
   competitionIds: readonly number[];
+  manifest?: FixtureBackfillManifestStore;
+  initializeDate?(date: ReportingDate, requestBounds: ApiFootballBounds, signal?: AbortSignal): Promise<HistoricalDateDiscovery>;
   upcomingSeasons?(): Promise<readonly (LeagueSeason & Readonly<{ fixtures: number }>)[]>;
   hasFixtureSource?(parameters: FixtureSelector, observation?: FixtureSourceObservation): Promise<boolean>;
   hasExactFixtureScope?(parameters: FixtureSelector, observation: FixtureSourceObservation): Promise<boolean>;
@@ -174,9 +178,10 @@ export function createFootballHistoryBackfill(options: Readonly<{
     }
   }
 
-  return async function run(input: Readonly<{ maxRequests: number; competitionId?: number; oldestSeason?: number }>,
+  return async function run(input: Readonly<{ maxRequests: number; competitionId?: number; oldestSeason?: number; rediscover?: boolean }>,
     onImport?: (result: HistoricalImport) => void, signal?: AbortSignal) {
-    const currentYear = Number(getReportingDate(options.now()).slice(0, 4));
+    const today = getReportingDate(options.now());
+    const currentYear = Number(today.slice(0, 4));
     const minSeason = input.oldestSeason ?? 1000;
     if (!Number.isSafeInteger(input.maxRequests) || input.maxRequests < 2 || input.maxRequests > historyBackfillLimits.maximumRequests ||
         !Number.isSafeInteger(minSeason) || minSeason < 1000 || minSeason > currentYear ||
@@ -184,37 +189,68 @@ export function createFootballHistoryBackfill(options: Readonly<{
       throw new RangeError("Choose an approved competition, a valid oldest season, and a request limit between 2 and 100.");
     }
     const scoped = input.competitionId === undefined ? approved : new Set([input.competitionId]);
+    const competitionIds = [...scoped];
     const dayEnd = options.providerDayEndsAt();
     if (dayEnd === null || options.now() >= dayEnd || signal?.aborted) throw new Error("The historical import needs a verified provider day.");
-    const metadata = await options.competitions(input.competitionId === undefined ? {} : { competitionId: input.competitionId },
-      bounds(options.now(), dayEnd));
-    let requests = metadata.requestsDispatched;
-    if (metadata.status === "failed") return { status: "catalog-unavailable" as const, reason: metadata.error?.reason ?? null, requests };
-
-    const upcoming = await options.upcomingSeasons?.() ?? [];
-    const activeSeasons = new Set(upcoming.map(({ competitionId, season }) => `${competitionId}:${season}`));
-    const weights = new Map<number, number>();
-    for (const { competitionId, fixtures } of upcoming) weights.set(competitionId, (weights.get(competitionId) ?? 0) + fixtures);
-    const weight = (competitionId: number) => weights.get(competitionId) ?? 0;
-    const known = new Set<number>(), seasons = new Map<string, Readonly<{ scope: LeagueSeason; coverage: SeasonCoverage }>>();
-    for (const league of metadata.data) {
-      if (!scoped.has(league.id) || !league.seasons.length) continue;
-      known.add(league.id);
-      for (const season of league.seasons) {
-        const key = `${league.id}:${season.year}`;
-        if (season.year >= minSeason && (season.year <= currentYear || activeSeasons.has(key))) {
-          seasons.set(key, { scope: { competitionId: league.id, season: season.year }, coverage: season.coverage ?? {} });
+    const existing = await options.manifest?.read(competitionIds, minSeason) ?? null;
+    const newYear = existing !== null && currentYear > Number(existing.anchorDate.slice(0, 4));
+    const anchorDate = newYear ? today : existing?.anchorDate ?? today;
+    const anchor: HistoricalDateDiscovery | null = existing?.dateScanned && !newYear ? { status: "scanned", reason: null, requests: 0 } :
+      options.initializeDate ? await options.initializeDate(anchorDate, bounds(options.now(), dayEnd), signal) : null;
+    const dateScanned = anchor?.status === "scanned";
+    let requests = anchor?.requests ?? 0;
+    const anchorStop = anchor?.reason && stopReasons.has(anchor.reason) ? anchor.reason : null;
+    const catalogReviewDue = existing !== null && (existing.cursor?.next ?? 0) === existing.seasons.length &&
+      options.now() - existing.catalogAt >= footballHistoryCatalogMaxAgeMs;
+    let manifest = existing;
+    if (!manifest || input.rediscover || newYear || catalogReviewDue) {
+      const reason = signal?.aborted ? "interrupted" : options.providerDayEndsAt() !== dayEnd || options.now() >= dayEnd ? "provider-day-ended" : anchorStop;
+      if (reason) return { status: "catalog-unavailable" as const, reason, requests };
+      // Discovery may expand compatible scopes but a restart cannot reorder already-manifested work.
+      const metadata = await options.competitions(input.competitionId === undefined ? {} : { competitionId: input.competitionId },
+        bounds(options.now(), dayEnd));
+      requests += metadata.requestsDispatched;
+      if (metadata.status === "failed") return { status: "catalog-unavailable" as const, reason: metadata.error?.reason ?? null, requests };
+      const upcoming = await options.upcomingSeasons?.() ?? [];
+      const activeSeasons = new Set(upcoming.map(({ competitionId, season }) => `${competitionId}:${season}`));
+      const weights = new Map<number, number>();
+      for (const { competitionId, fixtures } of upcoming) weights.set(competitionId, (weights.get(competitionId) ?? 0) + fixtures);
+      const weight = (competitionId: number) => weights.get(competitionId) ?? 0;
+      const known = new Set<number>(), seasons = new Map<string, FixtureBackfillManifest["seasons"][number]>();
+      const key = (scope: LeagueSeason) => `${scope.competitionId}:${scope.season}`;
+      for (const league of metadata.data) {
+        if (!scoped.has(league.id) || !league.seasons.length) continue;
+        known.add(league.id);
+        for (const season of league.seasons) {
+          const scope = { competitionId: league.id, season: season.year }, id = key(scope);
+          if (season.year >= minSeason && (season.year <= currentYear || activeSeasons.has(id))) {
+            seasons.set(id, { scope, coverage: season.coverage ?? {} });
+          }
         }
       }
+      const planned = [...seasons.values()].sort((left, right) => right.scope.season - left.scope.season ||
+        weight(right.scope.competitionId) - weight(left.scope.competitionId) || left.scope.competitionId - right.scope.competitionId);
+      const included = new Set(existing?.seasons.map(({ scope }) => key(scope)));
+      const next: FixtureBackfillManifest = { version: 1, anchorDate, catalogAt: options.now(),
+        ...(dateScanned && { dateScanned: true }),
+        seasons: [...(existing?.seasons ?? []).map((item) => seasons.get(key(item.scope)) ?? item),
+          ...planned.filter(({ scope }) => !included.has(key(scope)))],
+        unlistedCompetitions: competitionIds.filter((id) => !known.has(id)),
+        ...(existing?.cursor && !input.rediscover && { cursor: existing.cursor }) };
+      await options.manifest?.save(competitionIds, minSeason, next, options.now());
+      manifest = next;
     }
-    const plan = [...seasons.values()].sort((left, right) => right.scope.season - left.scope.season ||
-      weight(right.scope.competitionId) - weight(left.scope.competitionId) || left.scope.competitionId - right.scope.competitionId);
+    const plan = manifest.seasons;
+    const cursor = manifest.cursor;
+    let nextSeasonIndex = cursor?.next ?? 0;
+    const pendingSeasons = new Set(cursor?.deferred);
     const verifiedDayEnd = dayEnd;
-    let completed = 0, imported = 0, deferred = 0, processed = 0, partitioned = 0, roundsPlanned = 0, roundsCompleted = 0;
+    let completed = cursor?.completed ?? 0, imported = 0, deferred = 0, processed = 0, partitioned = 0, roundsPlanned = 0, roundsCompleted = 0;
     let archivedOnly = 0, roundsArchivedOnly = 0;
     let persistenceDeferred = 0, roundsPersistenceDeferred = 0;
     let consecutiveTransportErrors = 0;
-    let stopped: string | null = null, verifiedEmpty = 0;
+    let stopped: string | null = anchorStop, verifiedEmpty = cursor?.empty ?? 0;
+    let nextScope: FixtureScope | null = null;
     function canContinue() {
       if (signal?.aborted) stopped = "interrupted";
       else if (options.providerDayEndsAt() !== verifiedDayEnd || options.now() >= verifiedDayEnd) stopped = "provider-day-ended";
@@ -233,9 +269,16 @@ export function createFootballHistoryBackfill(options: Readonly<{
       } else if (retrieved) consecutiveTransportErrors = 0;
     }
     async function importScope(scope: FixtureScope, id: string) {
+      const requestBounds = bounds(options.now(), verifiedDayEnd);
+      const check = () => {
+        if (signal?.aborted || options.providerDayEndsAt() !== verifiedDayEnd || options.now() >= requestBounds.deadlineAt) {
+          throw new Error("The historical fixture request expired.");
+        }
+      };
       const result = await options.importer.import({ id, selection: { kind: "fixtures", query: scope },
-        bounds: bounds(options.now(), verifiedDayEnd), retentionEvidenceRef: options.retentionEvidenceRef },
-      (observation) => verifiedArchive(scope, observation)).catch((error: unknown) => {
+        bounds: requestBounds, retentionEvidenceRef: options.retentionEvidenceRef },
+      (observation) => verifiedArchive(scope, observation), { signal: signal ?? new AbortController().signal,
+        deadlineAt: requestBounds.deadlineAt, check, beforeReserve: check, beforeDispatch: check }).catch((error: unknown) => {
         if (!(error instanceof CatalogPersistenceDeferredError)) throw error;
         return { status: "deferred" as const, observedAt: error.observedAt, receivedCount: error.receivedCount,
           requestsDispatched: error.requestsDispatched, importedCount: 0, reasons: error.reasons, rawArchived: error.rawArchived };
@@ -256,83 +299,104 @@ export function createFootballHistoryBackfill(options: Readonly<{
       return result;
     }
 
-    for (const { scope: item, coverage } of plan) {
+    const candidates = [...plan.keys()].slice(nextSeasonIndex).concat([...pendingSeasons].sort((left, right) => left - right));
+    for (const index of candidates) {
+      const { scope: item, coverage } = plan[index]!;
+      nextScope = item;
       if (!canContinue()) break;
-      const whole = await progress(item);
-      if (whole.complete) { completed++; verifiedEmpty += Number(whole.empty === true); continue; }
-      if (whole.archivedOnly) {
-        archivedOnly++; deferred++;
-        if (whole.archivedOnly === "persistence") persistenceDeferred++;
-        continue;
-      }
-      if (whole.coolingDown) { deferred++; continue; }
-      let oversized = whole.oversized;
-      if (!oversized) {
-        if (!canDispatch()) break;
-        const result = await importScope(item, whole.id);
-        if (!result.reasons.includes(catalogPersistenceUnavailable) && Object.values(coverage).some((value) => typeof value === "boolean")) {
-          await options.recordCoverage?.(item, coverage);
-        }
-        if (result.status === "complete" && await hasSource(item, result)) { completed++; verifiedEmpty += Number(result.receivedCount === 0); continue; }
-        if (await archivedWithoutCanonicalResults(item, result)) { archivedOnly++; deferred++; continue; }
-        oversized = requiresPartition(result.reasons);
-      }
-      deferred++;
-      if (stopped) break;
-      if (!oversized || !options.rounds || !options.hasFixtureSource) continue;
-      let roundRows = await options.rounds.read(item);
-      if (roundRows === null) {
-        if (!canDispatch()) break;
-        const started = options.now(), requestBounds = bounds(started, verifiedDayEnd);
-        const check = () => {
-          if (signal?.aborted || options.providerDayEndsAt() !== verifiedDayEnd || options.now() >= requestBounds.deadlineAt) {
-            throw new Error("The historical round request expired.");
-          }
-        };
-        const response = await options.rounds.fetch(item, requestBounds, { signal: signal ?? new AbortController().signal,
-          deadlineAt: requestBounds.deadlineAt, check, beforeReserve: check, beforeDispatch: check });
-        requests += response.requestsDispatched;
-        if (!canContinue()) break;
-        if (response.error && stopReasons.has(response.error.reason)) { stopped = response.error.reason; break; }
-        const observation = verifiedRoundObservation(response, item, started, options.now());
-        recordTransport(response.requestsDispatched, response.error !== null && transportFailures.has(response.error.reason), observation !== null);
-        if (stopped) break;
-        if (!observation) continue;
-        roundRows = response.data;
-        await options.rounds.save(item, roundRows, observation.retrievedAt);
-      }
-      const rounds = orderedRounds(roundRows);
-      roundsPlanned += rounds.length;
-      let verified = 0;
-      for (const round of rounds) {
-        if (!canContinue()) break;
-        const scope = { ...item, round };
-        const previous = await progress(scope);
-        if (previous.complete) { verified++; continue; }
-        if (previous.archivedOnly) {
-          roundsArchivedOnly++;
-          if (previous.archivedOnly === "persistence") roundsPersistenceDeferred++;
+      const completedBefore = completed;
+      try {
+        const whole = await progress(item);
+        if (whole.complete) { completed++; verifiedEmpty += Number(whole.empty === true); continue; }
+        if (whole.archivedOnly) {
+          archivedOnly++; deferred++;
+          if (whole.archivedOnly === "persistence") persistenceDeferred++;
           continue;
         }
-        if (previous.coolingDown || previous.oversized) continue;
-        if (!canDispatch()) break;
-        const result = await importScope(scope, previous.id);
-        if (result.status === "complete" && await hasSource(scope, result)) verified++;
-        else if (await archivedWithoutCanonicalResults(scope, result)) roundsArchivedOnly++;
+        if (whole.coolingDown) { deferred++; continue; }
+        let oversized = whole.oversized;
+        if (!oversized) {
+          if (!canDispatch()) break;
+          const result = await importScope(item, whole.id);
+          if (!result.reasons.includes(catalogPersistenceUnavailable) && Object.values(coverage).some((value) => typeof value === "boolean")) {
+            await options.recordCoverage?.(item, coverage);
+          }
+          if (result.status === "complete" && await hasSource(item, result)) { completed++; verifiedEmpty += Number(result.receivedCount === 0); continue; }
+          if (await archivedWithoutCanonicalResults(item, result)) { archivedOnly++; deferred++; continue; }
+          oversized = requiresPartition(result.reasons);
+        }
+        deferred++;
         if (stopped) break;
+        if (!oversized || !options.rounds || !options.hasFixtureSource) continue;
+        let roundRows = await options.rounds.read(item);
+        if (roundRows === null) {
+          if (!canDispatch()) break;
+          const started = options.now(), requestBounds = bounds(started, verifiedDayEnd);
+          const check = () => {
+            if (signal?.aborted || options.providerDayEndsAt() !== verifiedDayEnd || options.now() >= requestBounds.deadlineAt) {
+              throw new Error("The historical round request expired.");
+            }
+          };
+          const response = await options.rounds.fetch(item, requestBounds, { signal: signal ?? new AbortController().signal,
+            deadlineAt: requestBounds.deadlineAt, check, beforeReserve: check, beforeDispatch: check });
+          requests += response.requestsDispatched;
+          if (!canContinue()) break;
+          if (response.error && stopReasons.has(response.error.reason)) { stopped = response.error.reason; break; }
+          const observation = verifiedRoundObservation(response, item, started, options.now());
+          recordTransport(response.requestsDispatched, response.error !== null && transportFailures.has(response.error.reason), observation !== null);
+          if (stopped) break;
+          if (!observation) continue;
+          roundRows = response.data;
+          await options.rounds.save(item, roundRows, observation.retrievedAt);
+        }
+        const rounds = orderedRounds(roundRows);
+        roundsPlanned += rounds.length;
+        let verified = 0;
+        for (const round of rounds) {
+          nextScope = { ...item, round };
+          if (!canContinue()) break;
+          const scope = nextScope;
+          const previous = await progress(scope);
+          if (previous.complete) { verified++; continue; }
+          if (previous.archivedOnly) {
+            roundsArchivedOnly++;
+            if (previous.archivedOnly === "persistence") roundsPersistenceDeferred++;
+            continue;
+          }
+          if (previous.coolingDown || previous.oversized) continue;
+          if (!canDispatch()) break;
+          const result = await importScope(scope, previous.id);
+          if (result.status === "complete" && await hasSource(scope, result)) verified++;
+          else if (await archivedWithoutCanonicalResults(scope, result)) roundsArchivedOnly++;
+          if (stopped) break;
+        }
+        roundsCompleted += verified;
+        // A round catalog cannot establish a season-wide total or rule out unlabelled fixtures.
+        if (rounds.length > 0 && verified === rounds.length) partitioned++;
+        if (stopped) break;
+      } finally {
+        if (!stopped) {
+          if (index === nextSeasonIndex) nextSeasonIndex++;
+          if (completed > completedBefore) pendingSeasons.delete(index);
+          else pendingSeasons.add(index);
+        }
       }
-      roundsCompleted += verified;
-      // A round catalog cannot establish a season-wide total or rule out unlabelled fixtures.
-      if (rounds.length > 0 && verified === rounds.length) partitioned++;
-      if (stopped) break;
     }
 
-    const unlistedCompetitions = [...scoped].filter((competitionId) => !known.has(competitionId)).sort((left, right) => left - right);
-    const complete = !stopped && deferred === 0 && unlistedCompetitions.length === 0;
+    const unlistedCompetitions = [...manifest.unlistedCompetitions].sort((left, right) => left - right);
+    if (options.manifest && (nextSeasonIndex !== (cursor?.next ?? 0) || completed !== (cursor?.completed ?? 0) || dateScanned && !manifest.dateScanned)) {
+      await options.manifest.save(competitionIds, minSeason, { ...manifest, ...(dateScanned && { dateScanned: true }),
+        cursor: { next: nextSeasonIndex, completed, empty: verifiedEmpty, deferred: [...pendingSeasons] } }, options.now());
+    }
+    const complete = plan.length > 0 && !stopped && pendingSeasons.size === 0 && unlistedCompetitions.length === 0;
+    const nextDeferred = [...pendingSeasons].sort((left, right) => left - right).at(0);
     return { status: complete ? "complete" as const : "partial" as const,
-      requests, planned: plan.length, completed, verifiedEmpty, archivedOnly, deferred, processed, imported, partitioned, roundsPlanned, roundsCompleted,
+      requests, planned: plan.length, completed, verifiedEmpty, archivedOnly, deferred: options.manifest ? pendingSeasons.size : deferred,
+      processed, imported, partitioned, roundsPlanned, roundsCompleted,
       ...(complete && { fixtureScopeFingerprint: footballHistoryFixtureScopeFingerprint(plan.map(({ scope }) => scope)) }),
-      providerDayEndsAt: verifiedDayEnd,
+      providerDayEndsAt: verifiedDayEnd, anchorDate: manifest.anchorDate, dateScanned,
+      dateDiscovery: anchor, scannedSeasons: nextSeasonIndex, partialSeasons: pendingSeasons.size,
+      nextScope: stopped ? nextScope : nextDeferred === undefined ? null : plan[nextDeferred]!.scope,
       roundsArchivedOnly, persistenceDeferred, roundsPersistenceDeferred, consecutiveTransportErrors, unlistedCompetitions, stopped };
   };
 }

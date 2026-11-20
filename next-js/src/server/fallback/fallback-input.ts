@@ -12,7 +12,8 @@ import { evidenceFingerprint, evidenceSerialize, freezeEvidence, isSafeEvidenceL
 import { parseModelPin } from "../predictor/predictor-input.ts";
 import { fourDigitYearInstant as instant } from "../shared/utc-instant.ts";
 import type { PredictorResult } from "../predictor/predictor-service.ts";
-import { LIVE_FORECAST_CASCADE, type FallbackContext, type ForecastTimestamps, type ProviderFallbackCandidate,
+import { predictorRetryAttemptId } from "../predictor/predictor-resilience.ts";
+import { forecastCascades, QUALIFIED_FORECAST_CASCADE, type FallbackContext, type ForecastTimestamps, type ProviderFallbackCandidate,
   type ProviderFallbackResult, type ResolvedForecastCandidate } from "./fallback-contract.ts";
 
 export class FallbackInputError extends Error {
@@ -28,7 +29,8 @@ export const fallbackAiReasons = ["not-authorized", "invalid-response", "unavail
   "billed-unit-limit", "time-limit", "fallback-time-reserved", "priority-wait", "already-attempted", "dispatch-expired", "invalid-permit",
   "timeout", "uncertain-usage", "unverified-usage", "conflicting-reconciliation", "invalid-output", "wrong-identity", "invalid-evidence",
   "insufficient-evidence", "invalid-timing", "invalid-citation", "unverified-explanation", "conflicting-pin", "conflicting-invocation",
-  "capacity-exhausted", "invalid-candidate", "unverified-calibration", "unverified-evaluation"] as const;
+  "capacity-exhausted", "invalid-candidate", "unverified-calibration", "unverified-evaluation", "unqualified-numerical-output",
+  "provider-circuit-open", "provider-failure", "transient-provider-failure"] as const;
 export const forecastSourceOrders = ["provider-first", "ai-first"] as const;
 const marketReasons = ["missing-group", "unsupported-family", "derived-only", "invalid-candidate", "invalid-source", "unsupported-period",
   "unsupported-line", "incomplete-group", "invalid-probability", "invalid-sum", "invalid-derived-probability", "cross-market-conflict"] as const;
@@ -120,12 +122,25 @@ export function parseFallbackContext(value: unknown): FallbackContext {
   } catch { throw new FallbackInputError(); }
 }
 export function parseFallbackAiResult(value: unknown): PredictorResult {
-  const denied = z.object({ status: z.literal("denied"), reason: z.enum(fallbackAiReasons), requestsDispatched: z.union([z.literal(0), z.literal(1)]),
-    requestCountUnknown: z.boolean(), markets: z.unknown().optional() }).strict();
+  const dispatchCount = z.union([z.literal(0), z.literal(1), z.literal(2)]);
+  const attempt = z.strictObject({ attemptId: identity, dispatched: z.union([z.literal(0), z.literal(1)]),
+    requestCountUnknown: z.boolean(), reason: z.enum(fallbackAiReasons).nullable() });
+  const attempts = z.tuple([attempt, attempt]);
+  const denied = z.object({ status: z.literal("denied"), reason: z.enum(fallbackAiReasons), requestsDispatched: dispatchCount,
+    requestCountUnknown: z.boolean(), markets: z.unknown().optional(), attempts: attempts.optional() }).strict();
   const candidate = z.object({ status: z.literal("candidate"), pin: z.unknown(), output: aiOutput,
-    requestsDispatched: z.literal(1), requestCountUnknown: z.literal(false) }).strict();
+    requestsDispatched: z.union([z.literal(1), z.literal(2)]), requestCountUnknown: z.boolean(), attempts: attempts.optional() }).strict();
   const result = parse(z.discriminatedUnion("status", [denied, candidate]), value);
   try {
+    const checks = result.attempts;
+    if (checks !== undefined) {
+      if (checks[0].dispatched !== 1 || !["timeout", "transient-provider-failure"].includes(checks[0].reason ?? "") ||
+        checks[1].attemptId !== predictorRetryAttemptId(checks[0].attemptId) ||
+        checks.reduce((sum, item) => sum + item.dispatched, 0) !== result.requestsDispatched ||
+        checks.some((item) => item.requestCountUnknown) !== result.requestCountUnknown ||
+        (result.status === "candidate" && (checks[1].dispatched !== 1 || checks[1].reason !== null ||
+          checks[0].attemptId !== parseModelPin(result.pin).invocationId))) throw new Error();
+    } else if (result.requestsDispatched > 1 || (result.status === "candidate" && result.requestCountUnknown)) throw new Error();
     if (result.status === "denied") { if (result.markets !== undefined) parseFallbackMarketSnapshot(result.markets, "ai"); }
     else { parseModelPin(result.pin); parseEvidenceContext(result.output.context); parseFallbackMarketSnapshot(result.output.markets, "ai");
       checkFlags(result.output.timestamps, result.output.flags);
@@ -154,11 +169,12 @@ const resolvedProvenance = z.discriminatedUnion("kind", [
   z.strictObject({ modelVersionId: aiOutput.shape.modelVersionId, evidenceHash: aiOutput.shape.evidenceHash,
     calibration, evaluation, provisional: z.boolean(), sources: aiOutput.shape.sources,
     evidence: aiOutput.shape.evidence, outputTiming: aiOutput.shape.outputTiming,
-    kind: z.literal("ai"), pin: z.unknown(), transportEvidenceRef: text }),
+    kind: z.literal("ai"), pin: z.unknown(), transportEvidenceRef: text,
+    numericalBasis: z.literal("qualified-joint-score-distribution").optional() }),
   z.object({ kind: z.literal("api-football"), source: providerCandidate.shape.provenance,
     policyVersion: text, policyEvidenceRef: text }).strict(),
   z.strictObject({ kind: z.literal("local-engine"), modelVersion: text, historyHash: identity, evidenceHash: identity,
-    rates: localPoissonRatesSchema,
+    rates: localPoissonRatesSchema, numericalBasis: z.literal("qualified-local-model").optional(),
     sample: z.strictObject({ matches: z.number().int().positive().max(1500),
       homeEffectiveMatches: z.number().positive().max(1500), awayEffectiveMatches: z.number().positive().max(1500) })
       .refine(({ matches, homeEffectiveMatches, awayEffectiveMatches }) => homeEffectiveMatches <= matches && awayEffectiveMatches <= matches) }),
@@ -170,13 +186,16 @@ const resolvedMarket = z.discriminatedUnion("available", [
   z.object({ available: z.literal(false), reason: z.enum([...marketReasons, ...fallbackProviderReasons, "invalid-timing"]) }).strict(),
 ]);
 const publicExplanation = z.object({ text: plain, sourceUrls: z.array(link).max(10_000) }).strict();
+const transition = z.strictObject({ selected: z.enum(["ai", "local-engine", "api-football"]).nullable(), ai: text, local: text, provider: text });
 const resolvedCandidate = z.object({ context: z.unknown(), markets: z.object({
   "match-result": resolvedMarket, "double-chance": resolvedMarket, "total-goals": resolvedMarket,
   "both-teams-to-score": resolvedMarket }).strict(), issues: marketSnapshot.shape.issues,
   reasons: z.array(publicExplanation).min(2).max(4), uncertainty: publicExplanation,
   audit: z.object({ aiStatus: z.enum(["candidate", "denied"]), aiReason: text.nullable(),
     providerStatus: z.enum(["candidate", "denied", "not-requested"]), providerReason: z.enum(fallbackProviderReasons).nullable(),
-    sourceOrder: z.enum(forecastSourceOrders).optional(), sourceCascade: z.literal(LIVE_FORECAST_CASCADE).optional(),
+    sourceOrder: z.enum(forecastSourceOrders).optional(), sourceCascade: z.enum(forecastCascades).optional(),
+    transitions: z.strictObject({ "match-result": transition, "double-chance": transition, "total-goals": transition,
+      "both-teams-to-score": transition }).optional(),
     localStatus: z.enum(["candidate", "unavailable", "not-requested"]).optional(),
     localGoalRates: localPoissonRatesSchema.optional(),
     recommendation: z.unknown().optional() }).strict(),
@@ -195,8 +214,12 @@ export function parseResolvedForecastCandidate(value: unknown): ResolvedForecast
         ...(family === "total-goals" ? { line: market.line } : {}) };
     }
     const checked = validateMarketSnapshot(inputs);
+    const qualified = parsed.audit.sourceCascade === QUALIFIED_FORECAST_CASCADE;
+    if (qualified !== (parsed.audit.transitions !== undefined) || (qualified && parsed.audit.localGoalRates !== undefined)) throw new Error();
     for (const family of Object.keys(parsed.markets) as (keyof typeof parsed.markets)[]) {
       const item = parsed.markets[family], expected = checked.markets[family];
+      if (parsed.audit.transitions !== undefined &&
+        parsed.audit.transitions[family].selected !== (expected.available ? expected.market.source : null)) throw new Error();
       if (item.available !== expected.available) throw new Error();
       if (!item.available || !expected.available) continue;
       if (evidenceFingerprint(item.market) !== evidenceFingerprint(expected.market)) throw new Error();
@@ -207,9 +230,11 @@ export function parseResolvedForecastCandidate(value: unknown): ResolvedForecast
         const pin = parseModelPin(provenance.pin);
         if (context.pin === null || pin.id !== context.pin.id || provenance.modelVersionId !== pin.modelVersionId ||
           provenance.evidenceHash !== context.evidenceHash || item.fallback !== null ||
-          provenance.provisional !== (provenance.evaluation.status !== "evaluated")) throw new Error();
+          provenance.provisional !== (provenance.evaluation.status !== "evaluated") ||
+          qualified !== (provenance.numericalBasis === "qualified-joint-score-distribution") || (qualified && provenance.provisional)) throw new Error();
       } else if (provenance.kind === "local-engine") {
-        if (parsed.audit.sourceCascade !== LIVE_FORECAST_CASCADE || parsed.audit.localStatus !== "candidate" ||
+        if (parsed.audit.sourceCascade === undefined || parsed.audit.localStatus !== "candidate" ||
+          qualified !== (provenance.numericalBasis === "qualified-local-model") ||
           provenance.evidenceHash !== context.evidenceHash || item.fallback !== null || item.timestamps.generatedAt !== item.timestamps.retrievedAt ||
           item.timestamps.providerUpdatedAt !== null) throw new Error();
       } else {
@@ -222,7 +247,7 @@ export function parseResolvedForecastCandidate(value: unknown): ResolvedForecast
     }
     const result = parsed.markets["match-result"], chance = parsed.markets["double-chance"];
     const available = Object.values(parsed.markets).filter((item) => item.available);
-    if (parsed.audit.sourceCascade === LIVE_FORECAST_CASCADE && parsed.audit.sourceOrder === "provider-first") throw new Error();
+    if (parsed.audit.sourceCascade !== undefined && parsed.audit.sourceOrder === "provider-first") throw new Error();
     const local = available.filter((item) => item.provenance.kind === "local-engine");
     if ((parsed.audit.sourceCascade !== undefined) !== (parsed.audit.localStatus !== undefined) ||
       (parsed.audit.localStatus === "candidate") !== (local.length > 0 || parsed.audit.localGoalRates !== undefined)) throw new Error();
@@ -230,6 +255,8 @@ export function parseResolvedForecastCandidate(value: unknown): ResolvedForecast
       evidenceFingerprint(item.timestamps) !== evidenceFingerprint(local[0]!.timestamps) ||
       parsed.audit.localGoalRates !== undefined && item.provenance.kind === "local-engine" &&
       evidenceFingerprint(item.provenance.rates) !== evidenceFingerprint(parsed.audit.localGoalRates))) throw new Error();
+    if (parsed.audit.transitions !== undefined && evidenceFingerprint(parsed.audit.transitions["match-result"]) !==
+      evidenceFingerprint(parsed.audit.transitions["double-chance"])) throw new Error();
     if (result.available && chance.available) {
       for (const key of ["provenance", "timestamps", "flags", "fallback"] as const)
         if (evidenceFingerprint(result[key]) !== evidenceFingerprint(chance[key])) throw new Error();

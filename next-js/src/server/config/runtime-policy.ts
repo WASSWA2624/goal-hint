@@ -186,11 +186,19 @@ const environmentSchema = z.object({
   GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF: text.describe("Record verified rights to display bookmaker odds publicly; without it odds stay private (052)."),
   GOAL_HINT_ODDS_IMPORT_ENABLED: enabled.describe("Use true or false; the live runner imports odds only when its plan has spare quota (052)."),
   GOAL_HINT_ODDS_BOOKMAKER_ID: count.describe("Use the positive API-Football id of the verified primary bookmaker; required when odds imports are enabled (052)."),
+  GOAL_HINT_ODDS_BOOKMAKER_FALLBACK_IDS: optional(z.string().regex(/^[1-9]\d*(,[1-9]\d*)*$/u)
+    .transform(value => value.split(",").map(Number)).pipe(z.array(z.int().positive().max(4_294_967_295)).max(64))
+    .refine(values => new Set(values).size === values.length))
+    .describe("Optional ordered fallback API-Football bookmaker IDs, separated by commas."),
   GOAL_HINT_ODDS_BOOKMAKER_SCOPE: z.enum(["primary", "all"]).default("primary")
     .describe("Use primary (default) or all for pre-match odds imports. The primary bookmaker still supplies the reviewed projection."),
   GOAL_HINT_TEAM_CODES_IMPORT_ENABLED: enabledByDefault.describe("Use true or false (default true); the live runner imports team codes only from spare quota, so they stay off on Free and slow plans."),
   GOAL_HINT_LIVE_DETAILS_ENABLED: enabled.describe("Use true or false (default false); centrally collect fixture statistics/events within the verified plan's bounded live-detail allowance."),
   GOAL_HINT_HISTORY_IMPORT_ENABLED: enabled.describe("Use true on the production football worker to resume historical imports under its verified spare quota."),
+  GOAL_HINT_FOOTBALL_RESPONSE_ARCHIVE_ENABLED: enabled.describe("Use true on a qualified private football worker to retain replayable provider response envelopes."),
+  GOAL_HINT_COORDINATED_FOOTBALL_ENABLED: enabled.describe("Enable qualified coordinated football work on the dedicated worker."),
+  GOAL_HINT_FOOTBALL_FORECAST_CONCURRENCY: optional(integer.pipe(z.int().min(1).max(6))).transform(value => value ?? 1)
+    .describe("Number of concurrently leased forecasts on a qualified coordinated worker (default one)."),
   GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS: money.describe("Use an explicitly approved separate AI cap in integer US cents (010)."),
   GOAL_HINT_AI_BILLING_MODE: optional(z.enum(["capped", "usage-based"])).transform((value) => value ?? "capped")
     .describe("Capped requires the monthly AI allowance; explicitly approved usage-based billing has no monthly spending ceiling."),
@@ -306,12 +314,16 @@ function assemble(settings: z.output<typeof environmentSchema>) {
       odds: {
         enabled: settings.GOAL_HINT_ODDS_IMPORT_ENABLED,
         bookmakerId: settings.GOAL_HINT_ODDS_BOOKMAKER_ID,
+        fallbackBookmakerIds: settings.GOAL_HINT_ODDS_BOOKMAKER_FALLBACK_IDS ?? [],
         bookmakerScope: settings.GOAL_HINT_ODDS_BOOKMAKER_SCOPE,
         rightsRef: settings.GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF,
       },
       teamCodes: { enabled: settings.GOAL_HINT_TEAM_CODES_IMPORT_ENABLED },
       liveDetails: { enabled: settings.GOAL_HINT_LIVE_DETAILS_ENABLED },
       historyImport: { enabled: settings.GOAL_HINT_HISTORY_IMPORT_ENABLED },
+      footballResponseArchive: { enabled: settings.GOAL_HINT_FOOTBALL_RESPONSE_ARCHIVE_ENABLED },
+      coordinatedFootball: { enabled: settings.GOAL_HINT_COORDINATED_FOOTBALL_ENABLED,
+        forecastConcurrency: settings.GOAL_HINT_FOOTBALL_FORECAST_CONCURRENCY },
       budgets: {
         aiBillingMode: settings.GOAL_HINT_AI_BILLING_MODE,
         aiMonthlyUsdCents: settings.GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS,
@@ -509,6 +521,9 @@ function consistencyIssues(policy: RuntimePolicy): PolicyIssue[] {
   }
   if (policy.choices.odds.enabled && policy.choices.odds.bookmakerId === null) {
     issues.push({ field: "GOAL_HINT_ODDS_BOOKMAKER_ID", reason: "Odds imports need a documented primary bookmaker id." });
+  }
+  if (policy.choices.odds.bookmakerId !== null && policy.choices.odds.fallbackBookmakerIds.includes(policy.choices.odds.bookmakerId)) {
+    issues.push({ field: "GOAL_HINT_ODDS_BOOKMAKER_FALLBACK_IDS", reason: "The preferred bookmaker ID cannot appear in the fallback order." });
   }
   if (policy.choices.football.trialRequestLimit !== null
     && policy.choices.football.trialRequestLimit > operatingRules.football.requestsPerProviderDay - operatingRules.football.essentialReserveRequests) {

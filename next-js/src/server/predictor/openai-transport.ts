@@ -10,6 +10,7 @@ import { parseModelVersion } from "./predictor-input.ts";
 import type { PrimaryAiProviderBinding } from "./predictor-adapter.ts";
 import { assertPreparedPredictorPrompt } from "./predictor-prompt.ts";
 import type { PredictorTransportMetadata } from "./predictor-output.ts";
+import { predictorResilience, predictorRetryAttemptId } from "./predictor-resilience.ts";
 
 export const openAiTransportRules = Object.freeze({ endpoint: "https://api.openai.com/v1/responses",
   model: "gpt-6.1-sol", contract: "openai-responses-v1", inputFramingTokens: 1024,
@@ -17,7 +18,12 @@ export const openAiTransportRules = Object.freeze({ endpoint: "https://api.opena
 
 /** Provider bodies, prompts and credentials never enter an error or diagnostic. */
 export class OpenAiTransportError extends Error {
-  constructor() { super("AI provider response is unavailable or invalid."); this.name = "OpenAiTransportError"; }
+  readonly kind: "invalid-request" | "provider-failure" | "transient";
+  constructor(kind: OpenAiTransportError["kind"] = "invalid-request") {
+    super("AI provider response is unavailable or invalid.");
+    this.name = "OpenAiTransportError";
+    this.kind = kind;
+  }
 }
 const invalid = (): never => { throw new OpenAiTransportError(); };
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -65,15 +71,17 @@ export function createOpenAiBinding(options: Readonly<{ model: ModelVersion; fet
     providerModelVersion: model.providerModelVersion, contractVersion: model.contractVersion,
     async generate(input) {
       let timeout: ReturnType<typeof setTimeout> | undefined;
+      let requestSent = false, timedOut = false;
       try {
         const pinned = parseModelVersion(input.model), permit = parseCostPermit(input.transport.permit);
         const maximum = parseCostQuantities(input.transport.maximum);
-        if (pinned.id !== model.id || input.pin.modelVersionId !== model.id || input.pin.invocationId !== permit.attemptId ||
+        if (pinned.id !== model.id || input.pin.modelVersionId !== model.id ||
+          ![input.pin.invocationId, predictorRetryAttemptId(input.pin.invocationId)].includes(permit.attemptId) ||
           input.pin.jobId !== permit.jobId || !/^[\x21-\x7e]{1,512}$/u.test(input.credential) || maximum.requests !== 1 ||
           maximum.outputTokens < 1 || maximum.outputTokens > openAiTransportRules.maximumOutputTokens ||
           maximum.inputTokens < 1 || maximum.inputTokens >= openAiTransportRules.shortContextTokens ||
           maximum.billedUnits < maximum.inputTokens || !Number.isSafeInteger(input.transport.timeoutMs) ||
-          input.transport.timeoutMs < 1 || input.transport.timeoutMs > 2_147_483_647) return invalid();
+          input.transport.timeoutMs < 1 || input.transport.timeoutMs > predictorResilience.callTimeoutMs) return invalid();
         assertPreparedPredictorPrompt(input.prompt, input.snapshot, model);
         const body = JSON.stringify({ model: model.model, instructions: input.prompt.instructions, input: input.prompt.inputJson,
           store: false, stream: false, background: false, service_tier: "default", tools: [], tool_choice: "none",
@@ -85,14 +93,19 @@ export function createOpenAiBinding(options: Readonly<{ model: ModelVersion; fet
         const startedAt = utcInstantFromEpochMilliseconds(clock.now()), start = performance.now();
         const controller = new AbortController();
         const signal = AbortSignal.any([input.transport.signal, controller.signal]);
-        timeout = setTimeout(() => controller.abort(), input.transport.timeoutMs);
+        timeout = setTimeout(() => { timedOut = true; controller.abort(); }, input.transport.timeoutMs);
         signal.throwIfAborted();
+        requestSent = true;
         const response = await fetcher(openAiTransportRules.endpoint, { method: "POST",
           headers: { authorization: `Bearer ${input.credential}`, "content-type": "application/json", accept: "application/json" },
-          body, signal, redirect: "error", credentials: "omit", cache: "no-store" });
+          body, signal, redirect: "error", credentials: "omit", cache: "no-store" })
+          .catch(() => { throw new OpenAiTransportError(input.transport.signal.aborted ? "provider-failure" : "transient"); });
         if (!response.ok || response.redirected || response.status !== 200 ||
           response.url && response.url !== openAiTransportRules.endpoint) {
-          void response.body?.cancel().catch(() => {}); return invalid();
+          void response.body?.cancel().catch(() => {});
+          if (!response.redirected && (!response.url || response.url === openAiTransportRules.endpoint) &&
+            [408, 500, 502, 503, 504].includes(response.status)) throw new OpenAiTransportError("transient");
+          return invalid();
         }
         const requestId = response.headers.get("x-request-id");
         if (requestId === null || !/^[A-Za-z0-9_-]{1,128}$/u.test(requestId)) {
@@ -154,7 +167,11 @@ export function createOpenAiBinding(options: Readonly<{ model: ModelVersion; fet
           job: permit.jobId, period: permit.periodId, owner: permit.ownerToken });
         if (proofs.size > openAiTransportRules.maximumReceipts) proofs.delete(proofs.keys().next().value!);
         return freezeEvidence({ value: { output, metadata }, usage: receipt });
-      } catch { return invalid(); }
+      } catch (error) {
+        if (error instanceof OpenAiTransportError && error.kind !== "invalid-request") throw error;
+        if (requestSent && timedOut) throw new OpenAiTransportError("transient");
+        throw new OpenAiTransportError(requestSent ? "provider-failure" : "invalid-request");
+      }
       finally { if (timeout !== undefined) clearTimeout(timeout); }
     } });
   return Object.freeze({ binding,

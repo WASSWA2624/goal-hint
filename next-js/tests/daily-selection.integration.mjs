@@ -12,6 +12,8 @@ import { createFootballCatalogStore } from '../src/server/football/catalog-mysql
 import { createFootballCatalogImporter } from '../src/server/football/catalog-service.ts';
 import { createMysqlJobQueue } from '../src/server/jobs/job-mysql-store.ts';
 import { createMysqlPredictionHistoryStore } from '../src/server/predictions/history-mysql-store.ts';
+import { FORECAST_JOB_COALESCE_MS } from '../src/server/refresh/forecast-orchestration.ts';
+import { createForecastRecovery } from '../src/server/refresh/forecast-recovery.ts';
 import { DailySelectionError } from '../src/server/selection/selection-contract.ts';
 import { parseSelectionPolicy, selectionWindow } from '../src/server/selection/selection-input.ts';
 import { createMysqlDailySelectionStore } from '../src/server/selection/selection-mysql-store.ts';
@@ -64,6 +66,7 @@ test('daily and hourly selection manifests and recovery on isolated genuine MySQ
     await instance.executeAdmin(catalogTables.map((name) => `GRANT ${catalogAppendOnly.includes(name) ? 'SELECT, INSERT' : 'SELECT, INSERT, UPDATE'} ON goal_hint_test.${name} TO 'selection_app'@'127.0.0.1';`).join('\n') + `
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.PredictionCycle TO 'selection_app'@'127.0.0.1';
       GRANT SELECT ON goal_hint_test.FixtureLifecycleState TO 'selection_app'@'127.0.0.1';
+      GRANT SELECT ON goal_hint_test.FixtureFacts TO 'selection_app'@'127.0.0.1';
       GRANT SELECT, INSERT ON goal_hint_test.PredictionSchedule TO 'selection_app'@'127.0.0.1';
       GRANT SELECT, INSERT ON goal_hint_test.PredictionAudit TO 'selection_app'@'127.0.0.1';
       GRANT SELECT, INSERT ON goal_hint_test.DailyRun TO 'selection_app'@'127.0.0.1';
@@ -82,6 +85,10 @@ test('daily and hourly selection manifests and recovery on isolated genuine MySQ
       GRANT UPDATE (outcome, reason, finishedAt) ON goal_hint_test.DurableJobAttempt TO 'selection_app'@'127.0.0.1';
       GRANT SELECT, INSERT ON goal_hint_test.DurableJobEvent TO 'selection_app'@'127.0.0.1';
       GRANT SELECT, INSERT ON goal_hint_test.DurableJobUsage TO 'selection_app'@'127.0.0.1';`);
+    await instance.executeAdmin(`
+      GRANT SELECT ON goal_hint_test.PredictionRefreshOutcome TO 'selection_app'@'127.0.0.1';
+      GRANT SELECT ON goal_hint_test.PredictionRefreshResult TO 'selection_app'@'127.0.0.1';
+    `);
     const database = replica(), queue = createMysqlJobQueue(database), store = createMysqlDailySelectionStore(database, queue);
     const catalog = createFootballCatalogStore(database), history = createMysqlPredictionHistoryStore(database);
     function setup({ rows = [], respond, policy = policyFor(rows), selectionStore = store, db = database, authority = selectionAuthority() } = {}) {
@@ -416,6 +423,88 @@ test('daily and hourly selection manifests and recovery on isolated genuine MySQ
       assert.deepEqual(manifest.exclusions.find((entry) => entry.fixtureId === locked.id), { fixtureId: locked.id, reason: 'cutoff-passed' });
       assert.ok(!manifest.coverage.some((date) => date.fixtureIds.includes(confirmed.id)), 'identity confirmation stays separate from date coverage');
       assert.equal(await database.query((tx) => tx.predictionCycle.count({ where: { fixtureId: unconfirmed.id } })), 0);
+    });
+    await t.test('coordinated forecasts keep the full cohort, suppress duplicate inputs, and fence active workers', async () => {
+      const hour = 3_600_000, scheduledFor = occurrence(42) + hour;
+      const rows = [catalogFixture(4201, { kickoff: kickoff(42) }), catalogFixture(4202, { kickoff: kickoff(42, 13) })];
+      const policy = { ...policyFor(rows), importDays: 1, refreshCapacity: 1,
+        forecastLifecycle: { engineVersion: selectionHash('coordinated-engine'), marketRegistryVersion: 'football-market-registry-v1' } };
+      const type = 'test.coordinated-forecast', types = [{ type, handlerVersion: 1 }];
+      policy.refresh = { ...policy.refresh, type };
+      const forecastStore = createMysqlDailySelectionStore(database, queue, { hourly: { localEvidence: false } });
+      const before = Date.now();
+      const first = await setup({ rows, policy, selectionStore: forecastStore }).service.runHourly(scheduledFor);
+      const manifest = (await forecastStore.inspect(first.runId)).manifest;
+      assert.equal(manifest.partial, true);
+      assert.equal(manifest.coverage[0].status, 'complete');
+      assert.equal(manifest.coverage[1].status, 'failed');
+      assert.equal(first.total, 2);
+      assert.ok(manifest.entries.every(({ envelope }) => envelope.notBefore >= before + FORECAST_JOB_COALESCE_MS - 1000));
+      const guarded = createMysqlJobQueue(database, { forecast: { type, concurrency: 1 } });
+      const other = createMysqlJobQueue(replica(), { forecast: { type, concurrency: 1 } });
+      assert.equal(await guarded.claim(selectionHash('forecast-early'), types), null);
+      await database.query((tx) => tx.durableJob.updateMany({ where: { refreshRunId: first.runId }, data: { availableAt: new Date(before) } }));
+      const active = await guarded.claim(selectionHash('forecast-first'), types);
+      assert.ok(active);
+      assert.equal(active.job.envelope.refresh.fixtureId, manifest.entries[0].fixtureId, 'same readiness uses nearest cutoff first');
+      assert.equal(await other.claim(selectionHash('forecast-other'), types), null);
+      const recovery = createForecastRecovery({ database, queue, jobType: type });
+      const health = await recovery.run();
+      assert.equal(health.active, 1);
+      assert.equal(health.pending, 1);
+      assert.equal(health.restored + health.retried + health.failed, 0);
+      assert.equal(health.hasMore, false);
+      assert.equal((await guarded.inspect(active.jobId)).fence, active.fence);
+      await guarded.acknowledge(active);
+      const next = await other.claim(selectionHash('forecast-next'), types);
+      assert.ok(next);
+      await other.acknowledge(next);
+
+      const unchanged = await setup({ rows, policy, selectionStore: forecastStore }).service.runHourly(scheduledFor + hour);
+      assert.equal(unchanged.total, 0);
+      assert.ok((await forecastStore.inspect(unchanged.runId)).manifest.exclusions.every(({ reason }) => reason === 'inputs-unchanged'));
+      const bumped = { ...policy, forecastLifecycle: { ...policy.forecastLifecycle, engineVersion: selectionHash('new-coordinated-engine') } };
+      const changed = await setup({ rows, policy: bumped, selectionStore: forecastStore }).service.runHourly(scheduledFor + 2 * hour);
+      const changedManifest = (await forecastStore.inspect(changed.runId)).manifest;
+      assert.equal(changed.total, 2);
+      assert.notEqual(changedManifest.entries[0].envelope.idempotencyKey, manifest.entries[0].envelope.idempotencyKey);
+      const deferred = await setup({ rows, policy, selectionStore: forecastStore }).service.runHourly(scheduledFor + 3 * hour);
+      assert.equal(deferred.total, 0);
+      assert.ok((await forecastStore.inspect(deferred.runId)).manifest.exclusions.every(({ reason }) => reason === 'refresh-pending'));
+
+      await database.query((tx) => tx.durableJob.updateMany({ where: { refreshRunId: changed.runId }, data: { availableAt: new Date(before) } }));
+      const wider = createMysqlJobQueue(database, { forecast: { type, concurrency: 2 } });
+      const firstOfTwo = await wider.claim(selectionHash('forecast-wide-one'), types);
+      const extraRun = await history.createRun(getReportingDate(scheduledFor), scheduledFor + 5 * hour, 6);
+      const overlap = await wider.enqueue({ ...firstOfTwo.job.envelope, idempotencyKey: selectionHash('forecast-same-fixture-overlap'),
+        refresh: { ...firstOfTwo.job.envelope.refresh, runId: extraRun.id }, notBefore: before - 1000 });
+      const secondOfTwo = await wider.claim(selectionHash('forecast-wide-two'), types);
+      assert.ok(secondOfTwo);
+      assert.notEqual(secondOfTwo.job.envelope.refresh.fixtureId, firstOfTwo.job.envelope.refresh.fixtureId);
+      assert.notEqual(secondOfTwo.jobId, overlap.id);
+      assert.equal(await wider.claim(selectionHash('forecast-wide-three'), types), null);
+      await wider.acknowledge(firstOfTwo);
+      assert.equal((await wider.claim(selectionHash('forecast-wide-four'), types)).jobId, overlap.id);
+    });
+    await t.test('forecast recovery links an undispatched sealed manifest to its original job identity', async () => {
+      const row = catalogFixture(4501, { kickoff: kickoff(45, 12) }), type = 'test.coordinated-recovery';
+      const policy = { ...policyFor([row]), forecastLifecycle: {
+        engineVersion: selectionHash('recovery-engine'), marketRegistryVersion: 'football-market-registry-v1' } };
+      policy.refresh = { ...policy.refresh, type };
+      const { lease, parsed } = await stage(45, [row], policy);
+      const manifest = await store.commit(lease, parsed, null);
+      assert.equal(manifest.entries.length, 1);
+      await store.release(lease);
+      const target = manifest.entries[0], identity = target.envelope.refresh;
+      assert.equal((await database.query((tx) => tx.runFixture.findUnique({ where: { runId_fixtureId_cycleId: identity } }))).jobId, null);
+      const recovery = createForecastRecovery({ database, queue, jobType: type });
+      const report = await recovery.run();
+      assert.equal(report.restored, 1);
+      assert.equal(report.failed, 0);
+      const linked = await database.query((tx) => tx.runFixture.findUnique({ where: { runId_fixtureId_cycleId: identity } }));
+      const job = await queue.inspect(linked.jobId);
+      assert.deepEqual(job.envelope, target.envelope);
+      assert.equal((await recovery.run()).restored, 0);
     });
     await t.test('a large stored cohort commits one sealed selection without reimporting its fixtures', async (t) => {
       const fixture = catalogFixture(2501, { kickoff: kickoff(27) });

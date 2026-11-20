@@ -56,7 +56,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
           // The card projection and full current detail share this transaction's
           // verified cycle/revision instead of reading the same archive twice.
           const currentDisplay = known.activeCycleId ? await storedCycleDisplay(tx, known.activeCycleId) : null;
-          const fixture = await storedFeedFixture(tx, id, !coverage[0]?.authoritative, window, "en", { prices: providerOdds, display: currentDisplay, readSettlement });
+          const fixture = await storedFeedFixture(tx, id, !coverage[0]?.authoritative, window, "en", { prices: providerOdds, display: currentDisplay, readSettlement, asOf });
           const currentRevisionId = fixture.forecast?.revisionId ?? null;
           // History selections replace the detail snapshot; the card keeps the active cycle.
           let display = !query.cycle && !query.revision ? currentDisplay : null;

@@ -40,7 +40,12 @@ async function load(transaction: JobTransaction, id: string, lock = false): Prom
   } catch { return jobFail("unavailable"); }
 }
 
-export function createMysqlJobQueue(database: DatabaseRuntime): JobQueue {
+export function createMysqlJobQueue(database: DatabaseRuntime,
+  { forecast }: Readonly<{ forecast?: Readonly<{ type: string; concurrency: number }> }> = {}): JobQueue {
+  if (forecast) {
+    parseJob(jobType, forecast.type);
+    if (!Number.isInteger(forecast.concurrency) || forecast.concurrency < 1 || forecast.concurrency > 16) return jobFail("invalid-request");
+  }
   async function transact<Result>(operation: (transaction: JobTransaction) => Promise<Result>, readOnly = false): Promise<Result> {
     let domainError: JobQueueError | undefined;
     try {
@@ -160,7 +165,7 @@ export function createMysqlJobQueue(database: DatabaseRuntime): JobQueue {
         job.state === "running" && job.leaseExpiresAt !== null && job.leaseExpiresAt > at &&
         job.attemptDeadlineAt !== null && job.attemptDeadlineAt > at) return job;
       const mode = await eligibility(transaction, job);
-      if (job.state === "pending" && mode === "retry" || job.state === "failed" && mode !== "retry") return job;
+      if (job.state === "pending" && mode === "retry" || job.state === "failed" && mode !== "retry" && mode !== "succeeded") return job;
       const attempt = job.state === "running" ? await transaction.durableJobAttempt.findUniqueOrThrow({
         where: { jobId_number: { jobId: job.id, number: job.attemptCount } } }) : null;
       return finish(transaction, job, attempt?.id ?? null, at,
@@ -173,12 +178,33 @@ export function createMysqlJobQueue(database: DatabaseRuntime): JobQueue {
       if (types.length < 1 || types.length > 64) return jobFail("invalid-request");
       for (const type of types) { parseJob(jobType, type.type); parseJob(jobVersion, type.handlerVersion); }
       return transact(async (transaction) => {
-        const accepted = Prisma.join(types.map((type) => Prisma.sql`(type = ${type.type} AND handlerVersion = ${type.handlerVersion})`), " OR ");
+        let acceptedTypes = types, guardedForecast = false;
+        if (forecast && types.some(({ type }) => type === forecast.type)) {
+          // Reuse an existing durable lock row. Workers release it when the claim
+          // commits, and the claimed job's lease owns the active forecast slot.
+          const lock = await transaction.$queryRaw<{ id: number }[]>`SELECT id FROM DurableJobEnqueueLock WHERE id = 0 FOR UPDATE`;
+          if (lock.length !== 1) return jobFail("unavailable");
+          const active = await transaction.$queryRaw<{ id: string }[]>`SELECT id FROM DurableJob
+            WHERE type = ${forecast.type} AND state = 'running' AND leaseExpiresAt > UTC_TIMESTAMP(3) AND attemptDeadlineAt > UTC_TIMESTAMP(3)
+            LIMIT ${forecast.concurrency}`;
+          guardedForecast = active.length < forecast.concurrency;
+          if (!guardedForecast) acceptedTypes = types.filter(({ type }) => type !== forecast.type);
+        }
+        if (acceptedTypes.length === 0) return null;
+        const accepted = Prisma.join(acceptedTypes.map((type) => Prisma.sql`(candidate.type = ${type.type} AND candidate.handlerVersion = ${type.handlerVersion})`), " OR ");
+        const order = guardedForecast
+          ? Prisma.sql`candidate.availableAt ASC, candidate.expiresAt ASC, candidate.id ASC`
+          : Prisma.sql`candidate.priority DESC, candidate.availableAt ASC, candidate.id ASC`;
+        const fixtureGuard = guardedForecast && forecast ? Prisma.sql`AND (candidate.type <> ${forecast.type}
+          OR candidate.refreshFixtureId IS NULL OR NOT EXISTS (
+            SELECT 1 FROM DurableJob active WHERE active.refreshFixtureId = candidate.refreshFixtureId
+              AND active.id <> candidate.id AND active.state = 'running'
+              AND active.leaseExpiresAt > UTC_TIMESTAMP(3) AND active.attemptDeadlineAt > UTC_TIMESTAMP(3)))` : Prisma.empty;
         for (let scan = 0; scan < 32; scan++) {
-          const rows = await transaction.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT id FROM DurableJob
-            WHERE (${accepted}) AND ((state = 'pending' AND availableAt <= UTC_TIMESTAMP(3)) OR
-              (state = 'running' AND leaseExpiresAt <= UTC_TIMESTAMP(3)))
-            ORDER BY priority DESC, availableAt ASC, id ASC LIMIT 1 FOR UPDATE SKIP LOCKED`);
+          const rows = await transaction.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT candidate.id FROM DurableJob candidate
+            WHERE (${accepted}) AND ((candidate.state = 'pending' AND candidate.availableAt <= UTC_TIMESTAMP(3)) OR
+              (candidate.state = 'running' AND candidate.leaseExpiresAt <= UTC_TIMESTAMP(3))) ${fixtureGuard}
+            ORDER BY ${order} LIMIT 1 FOR UPDATE SKIP LOCKED`);
           if (!rows[0]) return null;
           const job = (await load(transaction, rows[0].id))!, at = await serverNow(transaction);
           if (job.state === "running") {

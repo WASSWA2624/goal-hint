@@ -78,6 +78,10 @@ export const liveClockSchema = z.strictObject({
 export const fixtureUpdateSchema = z.strictObject({
   prediction: z.enum(["updating", "delayed", "current", "unavailable", "outside-window", "locked"]),
   result: z.enum(["current", "delayed", "untracked"]),
+  statusFreshness: z.strictObject({ state: z.enum(["current", "awaiting-update", "unverified"]),
+    providerStatus: z.string().regex(/^[A-Z0-9_-]{1,32}$/u).nullable(),
+    lastVerifiedAt: instant.nullable(), nextCheckAt: instant.nullable() })
+    .refine(({ state, lastVerifiedAt }) => state !== "current" || lastVerifiedAt !== null).optional(),
 });
 
 function acceptedMarket(value: unknown): value is AcceptedMarket {

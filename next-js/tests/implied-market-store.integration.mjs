@@ -3,6 +3,7 @@ import test from 'node:test';
 import { getReportingDate } from '../src/domain/calendar.ts';
 import { nonGoalTotalsMarket } from '../src/domain/non-goal-market-definitions.ts';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
+import { normalizeFixtureMatchDetails } from '../src/server/football/fixture-match-details.ts';
 import { createMysqlOddsStore } from '../src/server/odds/odds-mysql-store.ts';
 import { createOddsImportService } from '../src/server/odds/odds-service.ts';
 import { createExtendedMarketPerformanceService } from '../src/server/performance/extended-market-performance.ts';
@@ -14,9 +15,11 @@ import { createScheduleLifecycleService } from '../src/server/predictions/lifecy
 import { parseLifecycleInput } from '../src/server/predictions/lifecycle-input.ts';
 import { createMysqlResultSyncStore } from '../src/server/results/result-sync-mysql-store.ts';
 import { appendImpliedResultEvidence, readImpliedResultEvidence } from '../src/server/settlement/implied-market-evidence.ts';
+import { createFinalImpliedCountCapture } from '../src/server/settlement/final-implied-counts.ts';
 import { createMarketSettlementService } from '../src/server/settlement/settlement-service.ts';
 import { planImpliedMarketSettlements, persistImpliedMarketSettlements } from '../src/server/settlement/implied-market-settlement.ts';
 import { lifecycleAuthority, lifecycleInput, lifecyclePolicy } from './helpers/lifecycle-fixtures.mjs';
+import { catalogFixture } from './helpers/catalog-fixtures.mjs';
 import { createSyntheticOddsAdapter, oddsAuthority, oddsBounds, oddsHash, oddsPolicy, oddsRequest, rawOddsRow, offsetTime } from './helpers/odds-fixtures.mjs';
 import { publicationAuthority, publicationPolicy } from './helpers/publication-fixtures.mjs';
 import { resultHash } from './helpers/result-sync-fixtures.mjs';
@@ -103,6 +106,13 @@ test('market-implied publication, missing evidence and statistic-only correction
     const resultId = (await p.a.query((tx) => tx.fixtureResultState.findUniqueOrThrow({ where: { fixtureId: state.fixture.id } }))).resultId;
     const sourceBindings = new Set();
     const evidenceAuthority = { verify: async (_tx, value) => sourceBindings.has(evidenceFingerprint(value)) };
+    const append = (evidenceInput) => p.history.withFixtureTransaction(state.fixture.id, (_writer, tx) =>
+      appendImpliedResultEvidence(tx, evidenceInput, p.now(), evidenceAuthority));
+    function evidenceInput(value) {
+      const input = { ...value };
+      for (const key of ['id', 'recordedAt', 'contentHash', 'sequence']) delete input[key];
+      return input;
+    }
     async function recordCorners(home, away) {
       p.setTime(p.now() + 1000);
       const evidenceInput = { fixtureId: state.fixture.id, resultId, provider: 'api-football', externalFixtureId: String(state.fixture.externalId),
@@ -111,7 +121,7 @@ test('market-implied publication, missing evidence and statistic-only correction
         evidence: { counts: [{ metric: 'corners', period: 'full-time', scope: 'regulation-including-stoppage-time', countingRule: definitions[0].countingRule,
           verified: true, home, away }], events: [] } };
       sourceBindings.add(evidenceFingerprint(evidenceInput));
-      return p.history.withFixtureTransaction(state.fixture.id, (_writer, tx) => appendImpliedResultEvidence(tx, evidenceInput, p.now(), evidenceAuthority));
+      return append(evidenceInput);
     }
     let firstEvidence;
     await t.test('verified current result statistics settle only exact market definitions; missing cards remain pending', async () => {
@@ -141,6 +151,47 @@ test('market-implied publication, missing evidence and statistic-only correction
       assert.equal((await settlement.settleFixture(state.fixture.id)).changed, 0);
       assert.equal((await p.a.query((tx) => readImpliedResultEvidence(tx, state.fixture.id, resultId))).id, evidence.id);
       assert.equal(evidenceFingerprint((await p.history.findRevision(revision.id)).candidate), originalCandidateHash);
+    });
+    await t.test('late repeated and unseen stale snapshots cannot displace the corrected result-time evidence', async () => {
+      const initial = evidenceInput(firstEvidence);
+      const before = await p.a.query((tx) => readImpliedResultEvidence(tx, state.fixture.id, resultId));
+      assert.equal((await append(initial)).id, firstEvidence.id);
+      const older = { ...initial, sources: initial.sources.map((source) => ({ ...source, sourceRef: resultHash('never-stored-old-observation') })) };
+      sourceBindings.add(evidenceFingerprint(older));
+      await assert.rejects(append(older), (error) => error instanceof PredictionHistoryError && error.reason === 'invalid-request');
+      const after = await p.a.query((tx) => readImpliedResultEvidence(tx, state.fixture.id, resultId));
+      assert.equal(after.id, before.id);
+      assert.equal((await settlement.settleFixture(state.fixture.id)).changed, 0);
+    });
+    await t.test('an already fetched, identity-checked final detail supplies only exact regulated counts through the durable bridge', async () => {
+      p.setTime(p.now() + 1000);
+      const homeId = Number(state.fixture.homeExternalIds[0]), awayId = Number(state.fixture.awayExternalIds[0]);
+      const statistics = [homeId, awayId].map((id, index) => ({ team: { id },
+        statistics: [{ type: 'Corner Kicks', value: 7 - index }, { type: 'Yellow Cards', value: 2 }] }));
+      const raw = catalogFixture(Number(state.fixture.externalId), {
+        status: 'FT', kickoff: new Date(state.cycle.kickoffAt).toISOString(), homeId, awayId,
+        goals: { home: 1, away: 0 }, score: { fulltime: { home: 1, away: 0 } }, statistics,
+      });
+      const normalized = normalizeFixtureMatchDetails(raw, { retrievedAt: p.now(), endpoint: '/fixtures', verifyRegulationScore: () => true });
+      assert.equal(normalized.valid, true);
+      let allowed = false;
+      const capture = createFinalImpliedCountCapture(p.a, () => allowed);
+      const input = { fixtureId: state.fixture.id, detail: normalized.data, checkedAt: p.now() };
+      assert.equal(await capture(input), false);
+      allowed = true;
+      assert.equal(await capture({ ...input, detail: { ...input.detail, providerStatus: 'AET', status: 'finished-extra-time' } }), false);
+      assert.equal(await capture(input), true);
+      const latest = await p.a.query((tx) => readImpliedResultEvidence(tx, state.fixture.id, resultId));
+      assert.equal(latest.sources[0].endpoint, 'fixtures/ids');
+      assert.deepEqual(latest.evidence.counts.map(({ metric, home, away }) => ({ metric, home, away })),
+        [{ metric: 'corners', home: 7, away: 6 }, { metric: 'yellow-cards', home: 2, away: 2 }]);
+      assert.equal(await capture(input), true);
+      assert.equal((await p.a.query((tx) => readImpliedResultEvidence(tx, state.fixture.id, resultId))).id, latest.id);
+      assert.ok((await settlement.pending()).includes(state.fixture.id));
+      await settlement.reconcile();
+      const byKey = new Map((await settlement.extendedForFixture(state.fixture.id)).markets.map(({ marketKey, settlement: row }) => [marketKey, row]));
+      assert.equal(byKey.get(definitions[0].key).status, 'correct');
+      assert.equal(byKey.get(definitions[2].key).status, 'correct');
     });
     await t.test('forged settlement plans and unverified result evidence cannot write audit history', async () => {
       const plans = await p.history.withFixtureTransaction(state.fixture.id, (_writer, tx) => planImpliedMarketSettlements(tx, state.fixture.id));
