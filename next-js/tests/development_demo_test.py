@@ -122,18 +122,37 @@ class DemoEnvironmentTests(unittest.TestCase):
             (root / ".env").write_text('GOAL_HINT_ADMIN_PASSWORD=base-sentinel-password\n', encoding="utf-8")
             (root / ".env.local").write_text('GOAL_HINT_ADMIN_PASSWORD_HASH=local-hash-sentinel\n', encoding="utf-8")
             (root / ".env.development.local").write_text('GOAL_HINT_ADMIN_PASSWORD=legacy-development-sentinel\n', encoding="utf-8")
-            (root / ".env.production").write_text('GOAL_HINT_ADMIN_PASSWORD=production-sentinel\nYOOLA_SMS_API_KEY=production-key\n', encoding="utf-8")
-            (root / ".env.operations").write_text('GOAL_HINT_ADMIN_PASSWORD=worker-sentinel\nYOOLA_SMS_API_KEY=worker-key\n', encoding="utf-8")
+            (root / ".env.production").write_text('GOAL_HINT_ADMIN_PASSWORD=production-sentinel\nYOOLA_SMS_API_KEY=production-key\n'
+                'GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF=production-rights\n', encoding="utf-8")
+            (root / ".env.operations").write_text('GOAL_HINT_ADMIN_PASSWORD=worker-sentinel\nYOOLA_SMS_API_KEY=worker-key\n'
+                'GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF=worker-rights\n', encoding="utf-8")
             (root / ".env.development").write_text('GOAL_HINT_ADMIN_PASSWORD="development-sentinel-password"\n'
-                'GOAL_HINT_ADMIN_PHONES=["256700009991"]\nYOOLA_SMS_API_KEY=development-key\nAPI_FOOTBALL_KEY=never-return-this\n', encoding="utf-8")
-            source = {key: value for key, value in MODULE.os.environ.items() if key not in (*MODULE.ADMINISTRATOR_KEYS, *MODULE.MESSAGING_KEYS)}
+                'GOAL_HINT_ADMIN_PHONES=["256700009991"]\nYOOLA_SMS_API_KEY=development-key\nAPI_FOOTBALL_KEY=never-return-this\n'
+                'GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF=development-rights\n', encoding="utf-8")
+            source = {key: value for key, value in MODULE.os.environ.items() if key not in MODULE.SNAPSHOT_WEB_KEYS}
             resolved = MODULE.development_web_credentials(source, root)
             self.assertEqual(resolved, {"GOAL_HINT_ADMIN_PHONES": '["256700009991"]',
                 "GOAL_HINT_ADMIN_PASSWORD": "development-sentinel-password"})
-            overridden = MODULE.development_web_credentials(dict(source, GOAL_HINT_ADMIN_PASSWORD="process-sentinel-password", GOAL_HINT_ADMIN_PASSWORD_HASH=""), root, messaging=True)
+            overridden = MODULE.development_web_credentials(dict(source, GOAL_HINT_ADMIN_PASSWORD="process-sentinel-password",
+                GOAL_HINT_ADMIN_PASSWORD_HASH=""), root, real_snapshot=True)
             self.assertEqual(overridden["GOAL_HINT_ADMIN_PASSWORD"], "process-sentinel-password")
             self.assertNotIn("GOAL_HINT_ADMIN_PASSWORD_HASH", overridden)
             self.assertEqual(overridden["YOOLA_SMS_API_KEY"], "development-key")
+            self.assertEqual(overridden["GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF"], "development-rights")
+            self.assertNotIn("API_FOOTBALL_KEY", overridden)
+
+    def test_odds_display_reference_is_retained_only_for_the_owned_real_snapshot(self):
+        source = {"API_FOOTBALL_KEY": "private-football-key", "GOAL_HINT_FOOTBALL_ENABLED": "true",
+                  "GOAL_HINT_ODDS_IMPORT_ENABLED": "true", "GOAL_HINT_FOOTBALL_PRIVATE_USE_REF": "private-data-rights",
+                  "GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF": "process-odds-rights"}
+        for demo, expected in [(True, ""), (False, "process-odds-rights")]:
+            with self.subTest(demo=demo):
+                env = MODULE.demo_environment("mysql://root@127.0.0.1:43210/owned_snapshot", source, demo=demo)
+                self.assertEqual(env["GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF"], expected)
+                self.assertEqual(env["GOAL_HINT_FOOTBALL_PRIVATE_USE_REF"], "")
+                self.assertEqual(env["API_FOOTBALL_KEY"], "")
+                self.assertEqual(env["GOAL_HINT_FOOTBALL_ENABLED"], "false")
+                self.assertEqual(env["GOAL_HINT_ODDS_IMPORT_ENABLED"], "false")
 
     def test_yoola_settings_stay_available_for_the_owned_real_snapshot_only(self):
         for demo, expected in [(True, ""), (False, "development-key")]:

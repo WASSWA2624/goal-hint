@@ -42,12 +42,14 @@ def check_development_dependencies(*, live=False):
 
 ADMINISTRATOR_KEYS = ("GOAL_HINT_ADMIN_PHONES", "GOAL_HINT_ADMIN_PASSWORD")
 MESSAGING_KEYS = ("YOOLA_SMS_API_KEY", "YOOLA_SMS_SENDER")
+ODDS_DISPLAY_RIGHTS_KEY = "GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF"
+SNAPSHOT_WEB_KEYS = (*ADMINISTRATOR_KEYS, *MESSAGING_KEYS, ODDS_DISPLAY_RIGHTS_KEY)
 
 
-def development_web_credentials(source=None, directory=ROOT, *, messaging=False):
+def development_web_credentials(source=None, directory=ROOT, *, real_snapshot=False):
     """Resolve only the private settings retained by the isolated development web app."""
     source = dict(os.environ if source is None else source)
-    keys = (*ADMINISTRATOR_KEYS, *MESSAGING_KEYS) if messaging else ADMINISTRATOR_KEYS
+    keys = SNAPSHOT_WEB_KEYS if real_snapshot else ADMINISTRATOR_KEYS
     script = ("import { readLocalEnvFile } from './scripts/lib/local-web-environment.mjs'; "
               "const settings={...readLocalEnvFile(process.argv[1],'.env.development'),...process.env}; "
               "const keys=process.argv.slice(2); "
@@ -67,11 +69,12 @@ def development_web_credentials(source=None, directory=ROOT, *, messaging=False)
 
 def demo_environment(url: str, source=None, *, demo=True):
     env = dict(os.environ if source is None else source)
-    retained = (*ADMINISTRATOR_KEYS, *MESSAGING_KEYS) if not demo else ADMINISTRATOR_KEYS
-    configured = development_web_credentials(messaging=not demo) if source is None else {key: source[key] for key in retained if key in source}
-    credentials = {"DATABASE_URL", "TEST_DATABASE_URL", "MIGRATION_DATABASE_URL", "API_FOOTBALL_KEY", "AI_API_KEY", "RESEARCH_API_KEY", *MESSAGING_KEYS}
-    for key in env.keys() | credentials:
-        if key.startswith(("GOAL_HINT_", "NEXT_PUBLIC_")) or key in credentials:
+    retained = ADMINISTRATOR_KEYS if demo else SNAPSHOT_WEB_KEYS
+    configured = development_web_credentials(real_snapshot=not demo) if source is None else {key: source[key] for key in retained if key in source}
+    private_settings = {"DATABASE_URL", "TEST_DATABASE_URL", "MIGRATION_DATABASE_URL", "API_FOOTBALL_KEY", "AI_API_KEY",
+                        "RESEARCH_API_KEY", *MESSAGING_KEYS, ODDS_DISPLAY_RIGHTS_KEY}
+    for key in env.keys() | private_settings:
+        if key.startswith(("GOAL_HINT_", "NEXT_PUBLIC_")) or key in private_settings:
             env[key] = ""
     demo_value = "true" if demo else "false"
     env.update(NODE_ENV="development", DEBUG="", NODE_DEBUG="", NODE_DEBUG_NATIVE="", __GOAL_HINT_OWNED_LOCAL_WEB="1",
