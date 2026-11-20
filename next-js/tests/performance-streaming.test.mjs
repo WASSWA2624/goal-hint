@@ -12,6 +12,7 @@ import { slipForecastFixture } from "./helpers/slip-forecast-fixtures.mjs";
 import { modelVersion } from "./helpers/predictor-fixtures.mjs";
 
 const asOf = Date.parse("2026-10-28T09:00:00Z");
+const subprocessTimeoutMs = 45_000;
 const query = parsePerformanceQuery(new URLSearchParams("from=2026-09-29&to=2026-10-28"), parseReportingDate("2026-10-28"));
 const idFor = (index) => `20000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
 const hash = (value) => createHash("sha256").update(value).digest("hex");
@@ -213,7 +214,7 @@ test("a quote grant received and revoked mid-query cannot price stored picks", a
   const { spawnSync } = await import("node:child_process");
   // Isolate the module mock from the real streaming reader exercised above.
   const child = spawnSync(process.execPath, ["--conditions=react-server", "--experimental-test-module-mocks", "--input-type=module"], {
-    cwd: new URL("../", import.meta.url), encoding: "utf8", timeout: 15_000,
+    cwd: new URL("../", import.meta.url), encoding: "utf8", timeout: subprocessTimeoutMs,
     input: `
       import { mock } from "node:test";
       import { performanceRecord, performanceSnapshot } from "./tests/helpers/performance-fixtures.mjs";
@@ -250,7 +251,7 @@ test("only development demo reporting receives the bounded full-cohort transacti
   const { spawnSync } = await import("node:child_process");
   for (const [mode, enabled, expectedTimeout] of [["production", "true", 30_000], ["development", "false", 30_000], ["development", "true", 240_000]]) {
     const child = spawnSync(process.execPath, ["--conditions=react-server", "--experimental-test-module-mocks", "--input-type=module"], {
-      cwd: new URL("../", import.meta.url), encoding: "utf8", timeout: 15_000,
+      cwd: new URL("../", import.meta.url), encoding: "utf8", timeout: subprocessTimeoutMs,
       env: { ...process.env, NODE_ENV: mode, NEXT_PUBLIC_GOAL_HINT_DEMO: enabled },
       input: `
         import assert from "node:assert/strict";

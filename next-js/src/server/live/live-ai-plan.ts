@@ -26,7 +26,8 @@ export function liveAiEvidencePolicy(refs: LiveReferences): EvidencePolicy {
       maxPublisherCharacters: 100, maxValueCharacters: 500, maxSourceBytes: 20_000, maxSnapshotBytes: 64_000 } });
 }
 
-export function liveAiAllocation(policy: RuntimePolicy, model: ModelVersion, at: number, fallbackReserveMs: number): CostJobAllocation {
+export function liveAiAllocation(policy: RuntimePolicy, model: ModelVersion, at: number, fallbackReserveMs: number,
+  coordinated = false): CostJobAllocation {
   const { tokenLimit, timeoutSeconds, requestLimit } = policy.choices.job;
   if (tokenLimit === null || tokenLimit < 4096 || timeoutSeconds === null || requestLimit === null || requestLimit < 1)
     throw new Error("AI needs explicit request, token and time limits.");
@@ -39,7 +40,7 @@ export function liveAiAllocation(policy: RuntimePolicy, model: ModelVersion, at:
   // shrink the primary request below the reviewed transport's input budget.
   const maximumRequests = 1 + predictorResilience.transientRetries;
   const fullInputBudget = model.bounds.maxInputBytes + 4096 + openAiTransportRules.inputFramingTokens;
-  const attempts = requestLimit - (research?.requestLimit ?? 0) >= maximumRequests &&
+  const attempts = coordinated && requestLimit - (research?.requestLimit ?? 0) >= maximumRequests &&
     Math.floor(tokenLimit * 0.85 / maximumRequests) >= fullInputBudget ? maximumRequests : 1;
   const inputPerAttempt = Math.min(70_000, Math.floor(tokenLimit * 0.85 / attempts));
   const outputPerAttempt = Math.min(8192, Math.floor((tokenLimit - attempts * inputPerAttempt) / attempts));
@@ -55,9 +56,10 @@ export function liveAiAllocation(policy: RuntimePolicy, model: ModelVersion, at:
 /** Frozen plan uses stored sources already available by the member's captured analysis cutoff. The source order is
  * frozen with the AI allocation; a plan without usable AI time stays the fallback-only plan, without an order. */
 export function liveAiRefreshPlan(member: RefreshMember, refs: LiveReferences, policy: RuntimePolicy, model: ModelVersion,
-  sources: readonly EvidenceSource[], pacing: RefreshPacing = "standard", sourceOrder: ForecastSourceOrder = "ai-first"): RefreshPlan {
+  sources: readonly EvidenceSource[], pacing: RefreshPacing = "standard", sourceOrder: ForecastSourceOrder = "ai-first",
+  coordinated = false): RefreshPlan {
   const base = fallbackRefreshPlan(member, refs, pacing), reserve = member.entry.envelope.fallbackReserveMs;
-  const allocation = liveAiAllocation(policy, model, member.now, reserve).ai!;
+  const allocation = liveAiAllocation(policy, model, member.now, reserve, coordinated).ai!;
   const timeLimitMs = Math.min(member.entry.envelope.timeoutMs, allocation.primaryTimeLimitMs + reserve);
   const evidenceMs = 10_000;
   const maximumMs = Math.min(timeLimitMs, base.observation.bounds.deadlineAt - member.now) - reserve - evidenceMs;
@@ -72,7 +74,7 @@ export function liveAiRefreshPlan(member: RefreshMember, refs: LiveReferences, p
     rateVersion: rate.version, provider: model.provider, model: model.model,
     maximum: { requests: 1, inputTokens: allocation.inputTokenLimit / allocation.requestLimit,
       outputTokens: allocation.outputTokenLimit / allocation.requestLimit, billedUnits: allocation.billedUnitLimit / allocation.requestLimit },
-    timeoutMs: Math.min(predictorResilience.callTimeoutMs, Math.max(1, Math.floor((maximumMs - 1000) / allocation.requestLimit))),
+    timeoutMs: coordinated ? Math.min(predictorResilience.callTimeoutMs, Math.max(1, Math.floor((maximumMs - 1000) / allocation.requestLimit))) : maximumMs,
     priority: { kind: "fixture", kickoffAt: member.context.kickoffAt }, evidenceRef: refs.refresh };
   return freezeEvidence({ ...base, modelVersionId: model.id,
     evidence: { ...base.evidence, policy: liveAiEvidencePolicy(refs), cachedSources: sources, maxElapsedMs: evidenceMs },

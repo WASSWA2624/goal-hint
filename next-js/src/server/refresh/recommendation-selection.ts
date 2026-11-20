@@ -51,9 +51,10 @@ export function selectRecommendation(input: Readonly<{
         if (probability < policy.minimumProbability) reasons.push("below-minimum-probability");
         const evidence = assess(input.snapshot, { family, selection });
         if (!evidence.eligible) reasons.push(...evidence.reasons);
-        const confidence: ForecastConfidence = evidence.confidence ?? (item.provenance.kind === "ai" && item.provenance.calibration.kind === "evaluated" &&
-          item.provenance.evaluation.status === "evaluated" && !item.provenance.provisional ? "calibrated" :
-          item.provenance.kind === "local-engine" ? "supported" : "limited");
+        const provenance = item.provenance;
+        const confidence: ForecastConfidence = evidence.confidence ?? (provenance?.kind === "ai" && provenance.calibration.kind === "evaluated" &&
+          provenance.evaluation.status === "evaluated" && !provenance.provisional ? "calibrated" :
+          provenance?.kind === "local-engine" ? "supported" : "limited");
         const quotes = input.quotes.filter((quote) => quote.fixtureId === context.fixtureId && quote.fixtureVersion === String(context.fixtureVersion) &&
           quote.homeTeamId === context.home.teamId && quote.awayTeamId === context.away.teamId && quote.family === family &&
           quote.selection === selection && quote.period === policy.period && quote.line === line && quote.permitted === true &&
