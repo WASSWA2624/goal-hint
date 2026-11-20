@@ -37,7 +37,8 @@ test('default Today pages keep stable Matches links while API pagination pins th
   assert.equal(feedPageApiHref(q, today, 2), '/api/matches?date=2026-10-09&sort=live-first&page=2');
   assert.equal(feedPageHref(q, today, 2), '/en/matches?page=2');
   assert.throws(() => feedPageHref(q, today, 0));
-  assert.equal(feedPageHref(query('date=2026-10-09'), today, 2), '/en/predictions/2026-10-09?page=2');
+  assert.equal(feedPageHref(query('date=2026-10-09&sort=live-first'), today, 2), '/en/predictions/2026-10-09?page=2');
+  assert.equal(feedPageHref(query('date=2026-10-09&sort=kickoff'), today, 2), '/en/predictions/2026-10-09?page=2&picks=all&sort=kickoff');
   assert.match(feedPageHref(query('when=today&sort=live-first&prob=above-75'), today, 2), /prob=above-75/);
   assert.notEqual(feedQueryKey(q, today), feedQueryKey(query('when=today&sort=kickoff'), today));
 });

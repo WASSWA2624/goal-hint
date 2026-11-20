@@ -14,7 +14,7 @@ import { getDateInTimeZone } from "@/domain/device-calendar";
 import { resetFeedFilters, selectFeedStatus } from "@/domain/feed-controls";
 import { compileFeedFilterDraft, feedFilterDraft, feedFilterDraftIssues, type FeedFilterDraft } from "@/domain/feed-filter-draft";
 import { countryOptions, leagueOptions } from "@/domain/feed-presentation";
-import { defaultPageSort, feedQueryRules, feedSortLabelKey, matchFeedPageDefaults, panelFilterCount, serializeFeedQuery, type FeedQuery } from "@/domain/feed-query";
+import { feedQueryRules, feedSortLabelKey, matchFeedPageDefaults, panelFilterCount, serializeFeedQuery, type FeedQuery } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { matchesHref } from "@/domain/navigation";
 import { formatOddsHundredths, oddsRules } from "@/domain/odds";
@@ -55,7 +55,7 @@ export function FeedFilters({ query, today, leagues, onApply, searchText, onSear
   if (draft.zone !== deviceZone) setDraft({ ...feedFilterDraft(complete ?? draft.query, today, deviceZone), probability: draft.probability, odds: draft.odds });
   const leagueList = useMemo(() => leagueOptions(leagues, createMessages(query.locale).text("match.competitionUnknown")), [leagues, query.locale]);
   const countryList = useMemo(() => countryOptions(leagues), [leagues]);
-  const defaultSort = defaultPageSort(query.dates);
+  const defaultSort = matchFeedPageDefaults.sort;
   const count = panelFilterCount(query) + Number(query.status !== "all") + Number(!!query.result)
     + Number(query.dates.kind !== matchFeedPageDefaults.dates.kind)
     + Number(query.picks !== matchFeedPageDefaults.picks)

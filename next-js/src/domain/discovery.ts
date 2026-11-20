@@ -1,4 +1,4 @@
-import { activeFeedFilterCount, defaultFeedDatePreset, defaultPageSort, resolveFeedDates, feedQueryHref, feedQueryRules, type FeedQuery } from "./feed-query.ts";
+import { activeFeedFilterCount, defaultFeedDatePreset, matchFeedPageDefaults, resolveFeedDates, feedQueryHref, feedQueryRules, type FeedQuery } from "./feed-query.ts";
 import type { ReportingDate } from "./calendar.ts";
 import { publicPolicy } from "./public-policy.ts";
 import { homeHref, localePath } from "./navigation-paths.ts";
@@ -19,7 +19,7 @@ export function canonicalUrl(path: string): string {
 
 export function feedDiscovery(query: FeedQuery, today: ReportingDate) {
   const range = resolveFeedDates(query, today);
-  const order = defaultPageSort(query.dates);
+  const order = matchFeedPageDefaults.sort;
   const defaultOrder = query.sort.direction === order.direction && query.sort.by === order.by;
   const matchesToday = query.dates.kind === "today";
   const filtered = Boolean(query.zone) || activeFeedFilterCount(query) > 0 || !defaultOrder ||

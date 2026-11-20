@@ -55,6 +55,25 @@ function publishedOutcomeFilter(picks: readonly FeedMarketPick[]): Prisma.Sql {
   return clauses.length ? Prisma.sql`(${Prisma.join(clauses, " OR ")})` : Prisma.sql`FALSE`;
 }
 
+/** Use observed football progress before kickoff or ID tie-breaks, never the wall clock. */
+function liveProgressOrder(): Prisma.Sql {
+  const elapsed = Prisma.sql`CASE WHEN f.elapsedMinutes BETWEEN 0 AND 200 THEN f.elapsedMinutes END`;
+  const phase = Prisma.sql`CASE f.providerStatus
+    WHEN 'P' THEN 7 WHEN 'ET' THEN 6 WHEN 'BT' THEN 5 WHEN '2H' THEN 4
+    WHEN 'HT' THEN 3 WHEN '1H' THEN 2 WHEN 'INT' THEN 0 WHEN 'SUSP' THEN 0
+    ELSE CASE WHEN ${elapsed}>45 THEN 4 WHEN ${elapsed}>=0 THEN 2 ELSE 1 END END`;
+  const running = Prisma.sql`f.status='live' AND COALESCE(f.providerStatus,'LIVE') NOT IN ('P','BT','HT','INT','SUSP')`;
+  // Stoppage is stored in the current result body. Ignore an older result if
+  // the catalog has already advanced to a different minute or provider phase.
+  const stoppage = Prisma.sql`(SELECT CAST(JSON_UNQUOTE(JSON_EXTRACT(r.body,'$.stoppageMinutes')) AS SIGNED)
+    FROM FixtureResultState rs JOIN FixtureResult r ON r.id=rs.resultId AND r.fixtureId=rs.fixtureId
+    WHERE rs.fixtureId=f.id AND r.status='live' AND JSON_EXTRACT(r.body,'$.elapsedMinutes')=f.elapsedMinutes
+      AND COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(r.body,'$.providerStatus')),'null'),'LIVE')=COALESCE(f.providerStatus,'LIVE'))`;
+  return Prisma.sql`CASE WHEN f.status='live' THEN ${phase} END DESC,
+    CASE WHEN ${running} THEN ${elapsed} END DESC,
+    CASE WHEN ${running} AND ${elapsed} IS NOT NULL THEN COALESCE(${stoppage},0) END DESC`;
+}
+
 /** The effective display permission keeps the SQL join and filter in sync with the record prices. */
 export function feedSql(query: FeedQuery, range: ReportingDateRange, competitionIds: readonly number[],
   providerOdds: boolean = publicPolicy.features.providerOdds, search: FeedSearch | null = null, completedOnly = false, publishedOnly = false,
@@ -157,12 +176,14 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
   }
   const descending = query.sort.direction === "desc";
   const kickoffOrder = descending ? Prisma.sql`f.kickoff DESC, f.id DESC` : Prisma.sql`f.kickoff ASC, f.id ASC`;
-  const liveFirst = query.sort.by === "live-first" && query.status === "all";
+  const liveFirst = query.sort.by === "live-first";
   const order = query.sort.by === "probability"
     ? Prisma.sql`${pickProbability} IS NULL ASC, ${pickProbability} ${descending ? Prisma.sql`DESC` : Prisma.sql`ASC`}, f.kickoff ASC, f.id ASC`
-    : liveFirst ? Prisma.sql`CASE f.status WHEN 'live' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END,
+    : liveFirst && query.status === "all" ? Prisma.sql`CASE f.status WHEN 'live' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END,
+      ${liveProgressOrder()}, CASE WHEN f.status='scheduled' THEN f.kickoff IS NULL END ASC,
       CASE WHEN f.status='scheduled' THEN f.kickoff END ASC, ${kickoffOrder}`
-    : query.sort.by === "live-first" && query.status === "scheduled" ? Prisma.sql`f.kickoff ASC, f.id ASC` : kickoffOrder;
+    : liveFirst && query.status === "live" ? Prisma.sql`${liveProgressOrder()}, ${kickoffOrder}`
+    : liveFirst && query.status === "scheduled" ? Prisma.sql`f.kickoff IS NULL ASC, f.kickoff ASC, f.id ASC` : kickoffOrder;
   // `searchJoin` belongs to the filtered reads only: known counts and league options keep the whole date cohort.
   // Availability counts and kickoff/live-first pagination need only the existence of an
   // eligible pick. They do not need probability/price ranking across the cohort.

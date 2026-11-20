@@ -19,7 +19,7 @@ export const helpMessages = {
   "help.filters.reset.body": "Reset Filters restores Today, Live first, all match statuses and all four market families. It clears the search and resets Published outcomes, Leagues, Countries, Probability and Odds. The date and time window covers the full day. Predictions only returns to the default for your access. Choose Apply Filters to update the list.",
   "help.browsing.title": "Sort and navigate",
   "help.browsing.sort.title": "One sort menu",
-  "help.browsing.sort.body": "Matches opens with Live first selected. Highest chance and Lowest chance sort by each match’s shown prediction. Earliest first and Latest first sort by kickoff. Choose Apply Filters to apply sorting with your other edits.",
+  "help.browsing.sort.body": "Live first is the default. It shows live matches furthest along first, then upcoming matches by soonest kickoff, then completed and other matches. Highest chance and Lowest chance sort by each match’s shown prediction. Earliest first and Latest first sort by kickoff. Choose Apply Filters to apply sorting with your other edits.",
   "help.browsing.tabs.title": "One Matches page",
   "help.browsing.tabs.body": "Matches includes All, Upcoming, Live and Completed status filters. Live automatically selects Today with all kickoff times. Change status to select another period, including past dates, the next 3, 7 or 30 days, or a custom range. Compatible filters stay selected when you switch status. Predicted counts matches with forecasts; desktop outcome percentages use that total.",
   "help.browsing.more.title": "Keep browsing",

@@ -544,5 +544,33 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       }
       assert.equal((await card(3050)).competition.countryFlagUrl, flag);
     });
+    await t.test('Live first uses stored match progress and earliest upcoming kickoffs before pagination', async () => {
+      const phases = [[3020, 'ET', 107], [3021, '2H', 81], [3022, '2H', 52], [3023, 'HT', 45], [3024, '1H', 28], [3025, '1H', 3]];
+      async function observe([number, short, elapsed]) {
+        const original = rows[number - 3000];
+        const sample = { ...original, fixture: { ...original.fixture, status: { short, elapsed } } };
+        assert.notEqual((await importRows([sample], { kind: 'fixtures', query: { fixtureId: number } })).status, 'failed');
+      }
+      for (const phase of phases) await observe(phase);
+      const expected = await Promise.all(phases.map(async ([number]) => (await fixture(number)).id));
+      const selected = (result) => result.records.map((record) => record.fixtureId).filter((id) => expected.includes(id));
+      const all = await query({ sort: 'live-first', pageSize: '100' });
+      assert.deepEqual(selected(all), expected);
+      const buckets = all.records.map(({ status }) => status === 'live' ? 0 : status === 'scheduled' ? 1 : 2);
+      assert.deepEqual(buckets, [...buckets].sort((left, right) => left - right));
+      const upcoming = all.records.filter(({ status }) => status === 'scheduled').map(({ kickoffAt }) => kickoffAt);
+      assert.deepEqual(upcoming, [...upcoming].sort((left, right) => left - right));
+      const live = await query({ sort: 'live-first', status: 'live', pageSize: '100' });
+      assert.deepEqual(selected(live), expected);
+      const page = await query({ sort: 'live-first', status: 'live', pageSize: '3' });
+      assert.deepEqual(page.records, live.records.slice(0, 3));
+      const next = await service.query(new URL(page.links.next, 'http://localhost').searchParams);
+      assert.equal(next.paginationVersion, page.paginationVersion);
+      assert.deepEqual(next.records, live.records.slice(3, 6));
+      await observe([3022, '2H', 87]);
+      const advanced = await query({ sort: 'live-first', status: 'live', pageSize: '100' });
+      assert.deepEqual(selected(advanced), [expected[0], expected[2], expected[1], ...expected.slice(3)]);
+      assert.notEqual(advanced.paginationVersion, live.paginationVersion);
+    });
   }, { migrationTimeoutMs: 180_000 });
 });

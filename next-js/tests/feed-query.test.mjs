@@ -23,7 +23,7 @@ test("URL queries round trip with one canonical order and explicit EAT context",
   assert.equal(serializeFeedQuery(query("when=today"), today).toString(), "when=today");
   assert.equal(serializeFeedQuery(query("q=+Cafe%CC%81+++FC+"), today).toString(), "q=Caf%C3%A9+FC");
   assert.equal(feedQueryHref(query("from=2020-02-29&to=2020-03-06&status=finished"), today),
-    "/en/predictions/2020-02-29?to=2020-03-06&status=finished&picks=all");
+    "/en/predictions/2020-02-29?to=2020-03-06&status=finished&picks=all&sort=kickoff");
 });
 
 test("default markets are Any; page links retain an explicit all-fixture choice", () => {
@@ -73,8 +73,8 @@ test("home resolves the rolling last 30 calendar days inclusively across month, 
   const explicit = query("from=2026-09-10&to=2026-10-09");
   assert.equal(resolveFeedDates(explicit, tomorrow).startDate, "2026-09-10");
   assert.equal(resolveFeedDates(explicit, tomorrow).endDate, today);
-  assert.equal(feedQueryHref(explicit, today), "/en/predictions/2026-09-10?to=2026-10-09&picks=all");
-  assert.equal(feedQueryHref(query("when=today"), today), "/en/matches?when=today&picks=all&prob=0-100&sort=kickoff");
+  assert.equal(feedQueryHref(explicit, today), "/en/predictions/2026-09-10?to=2026-10-09&picks=all&sort=kickoff");
+  assert.equal(feedQueryHref(query("when=today"), today), "/en/matches?when=today&picks=all&sort=kickoff");
   assert.equal(resolveFeedDates(query("when=today"), today).dayCount, 1);
 });
 
