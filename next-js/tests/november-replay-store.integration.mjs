@@ -143,8 +143,9 @@ test("reviewed replay persists verified evidence and only its owner can reverse 
     assert.equal(await generation(), originalGeneration);
     await assert.rejects(store.activate({ operationId: "denied-reconstruction", revisionId: tampered.id }), denied("evidence-changed"));
     const input = { operationId: "original-reviewed-activation", revisionId: staged.id };
-    const [activated, retried] = await Promise.all([store.activate(input), store.activate(input)]);
-    assert.deepEqual(retried, activated);
+    const replicas = [store, createMysqlNovemberReplayStore(p.b), createMysqlNovemberReplayStore(p.replica())];
+    const [activated, ...retries] = await Promise.all(replicas.map((replica) => replica.activate(input)));
+    assert.deepEqual(retries, [activated, activated]);
     assert.deepEqual((await readProjection()).get(fixtureId)?.selected, model.selected);
     assert.equal(await generation(), originalGeneration + 1n);
     assert.deepEqual(await p.history.findRevision(sourceRevisionId), published.revision);
@@ -152,8 +153,9 @@ test("reviewed replay persists verified evidence and only its owner can reverse 
     assert.equal((await store.activationDiff([archived.id]))[0].reason, "registry-superseded");
     await assert.rejects(store.activate({ ...input, operationId: "different-operation" }), denied("projection-owned"));
     const rollback = { fixtureId, operationId: "reviewed-rollback", activationOperationId: input.operationId };
-    assert.equal((await store.rollback(rollback)).kind, "rollback");
-    await store.rollback(rollback);
+    const [rolledBack, ...rollbacks] = await Promise.all(replicas.map((replica) => replica.rollback(rollback)));
+    assert.equal(rolledBack.kind, "rollback");
+    assert.deepEqual(rollbacks, [rolledBack, rolledBack]);
     assert.equal((await readProjection()).size, 0);
     assert.equal(await generation(), originalGeneration + 2n);
     assert.deepEqual(await store.activate(input), activated, "a receipt retry cannot reactivate a rolled back pointer");

@@ -295,26 +295,35 @@ async function lockFixture(tx: Tx, fixtureId: string) {
   if (rows.length !== 1) return deny("unavailable");
 }
 
+class ReplayPointerInitializationRace extends Error {}
+
 async function lockPointer(tx: Tx, fixtureId: string, at: number) {
-  // Take the exclusive duplicate-key lock in one statement. Concurrent
-  // owners cannot both acquire a shared duplicate lock and try to upgrade.
-  await tx.$executeRaw`INSERT INTO NovemberReplayProjection (fixtureId,changedAt) VALUES (${fixtureId},${new Date(at)})
-    ON DUPLICATE KEY UPDATE changedAt=NovemberReplayProjection.changedAt`;
   const [pointer] = await tx.$queryRaw<{ revisionId: string | null; activationOperationId: string | null }[]>`
     SELECT revisionId,activationOperationId FROM NovemberReplayProjection WHERE fixtureId=${fixtureId} FOR UPDATE`;
-  return pointer ?? deny("unavailable");
+  if (pointer) return pointer;
+  const inserted = await tx.$executeRaw`INSERT IGNORE INTO NovemberReplayProjection (fixtureId,changedAt)
+    VALUES (${fixtureId},${new Date(at)})`;
+  // Dropping the transaction releases a concurrent duplicate's shared lock
+  // before the retry acquires the existing pointer exclusively.
+  if (inserted !== 1) throw new ReplayPointerInitializationRace();
+  return { revisionId: null, activationOperationId: null };
 }
 
 // Runtime errors from the database are sanitized. Preserve classified replay
 // refusals without exposing details from an inner SQL or archive failure.
 async function runReplay<T>(database: Pick<DatabaseRuntime, "transaction">, visit: (tx: Tx) => Promise<T>): Promise<T> {
-  let rejection: NovemberReplayStoreError | undefined;
-  try {
-    return await database.transaction(async (tx) => {
-      try { return await visit(tx); }
-      catch (error) { if (error instanceof NovemberReplayStoreError) rejection = error; throw error; }
-    }, { isolationLevel: "ReadCommitted", timeout: 45_000 });
-  } catch { throw rejection ?? new NovemberReplayStoreError("unavailable"); }
+  for (let retry = true; ; retry = false) {
+    let failure: unknown;
+    try {
+      return await database.transaction(async (tx) => {
+        try { return await visit(tx); }
+        catch (error) { failure = error; throw error; }
+      }, { isolationLevel: "ReadCommitted", timeout: 45_000 });
+    } catch {
+      if (failure instanceof NovemberReplayStoreError) throw failure;
+      if (!(retry && failure instanceof ReplayPointerInitializationRace)) return deny("unavailable");
+    }
+  }
 }
 
 export function createMysqlNovemberReplayStore(database: Pick<DatabaseRuntime, "query" | "transaction">) {
