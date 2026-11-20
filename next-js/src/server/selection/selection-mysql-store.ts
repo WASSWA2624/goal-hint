@@ -316,15 +316,32 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
             lineupHash: lineups.get(fixtureId) ?? null, ...lifecycle });
         };
         const cycles = fixtures.flatMap((fixture) => fixture.activeCycle?.state === "open" ? [fixture.activeCycle.id] : []);
-        type PreviousJob = { cycleId: string; kickoffAt: Date; sequence: bigint; jobState: string | null; identity: string | null };
+        type PreviousJob = { cycleId: string; runId: string; kickoffAt: Date; sequence: bigint; jobId: string | null;
+          jobState: string | null; identity: string | null };
         const latest = new Map<string, PreviousJob>();
         if (hourly || lifecycle) for (let offset = 0; offset < cycles.length; offset += 500) {
           const rows = await tx.$queryRaw<PreviousJob[]>(Prisma.sql`
-            SELECT r.cycleId, r.kickoffAt, d.sequence, j.state AS jobState, j.idempotencyKey AS identity FROM RunFixture r
+            SELECT r.cycleId, r.runId, r.kickoffAt, d.sequence, j.id AS jobId, j.state AS jobState, j.idempotencyKey AS identity FROM RunFixture r
             JOIN DailyRun d ON d.id = r.runId LEFT JOIN DurableJob j ON j.id = r.jobId
             WHERE r.cycleId IN (${Prisma.join(cycles.slice(offset, offset + 500))})
             ORDER BY d.eatDate DESC, d.slotHour DESC`);
           for (const entry of rows) if (!latest.has(entry.cycleId)) latest.set(entry.cycleId, entry);
+        }
+        const staleObservationJobs = new Set<string>(), observationRetryKeys = new Map<string, string>();
+        const unpublishedJobs = hourly ? fixtures.flatMap(({ activeCycle }) => {
+          if (activeCycle?.state !== "open" || activeCycle.currentSetId !== null) return [];
+          const job = latest.get(activeCycle.id);
+          return job?.jobState === "succeeded" && job.jobId !== null ? [job.jobId] : [];
+        }) : [];
+        for (let offset = 0; offset < unpublishedJobs.length; offset += 500) {
+          const rows = await tx.$queryRaw<{ jobId: string }[]>(Prisma.sql`
+            SELECT o.jobId FROM PredictionRefreshOutcome o JOIN DurableJob j ON j.id = o.jobId
+            WHERE o.jobId IN (${Prisma.join(unpublishedJobs.slice(offset, offset + 500))})
+              AND JSON_VALUE(o.body, '$.outcome') = 'skipped' AND JSON_VALUE(o.body, '$.reason') = 'stale-observation'
+              AND JSON_VALUE(o.body, '$.jobId') = j.id AND JSON_VALUE(o.body, '$.runId') = j.refreshRunId
+              AND JSON_VALUE(o.body, '$.fixtureId') = j.refreshFixtureId AND JSON_VALUE(o.body, '$.cycleId') = j.refreshCycleId
+              AND o.integrity = SHA2(CAST(o.body AS CHAR), 256)`);
+          for (const { jobId } of rows) staleObservationJobs.add(jobId);
         }
         const previousInputs = (options.hourly || lifecycle) && ids.length
           ? await tx.selectionFixtureInput.findMany({ where: { fixtureId: { in: ids } } }) : [];
@@ -358,9 +375,14 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
               const lastRun = latest.get(cycle.id);
               if (lastRun && predictionRunOrder(lastRun.sequence) >= predictionRunOrder(row.sequence)) { exclude("newer-run"); continue; }
               const pending = lastRun !== undefined && (lastRun.jobState === null || ["pending", "running"].includes(lastRun.jobState));
+              const mayRetryObservation = lastRun?.jobId != null && staleObservationJobs.has(lastRun.jobId);
               if (lifecycle) {
                 if (pending) { exclude("refresh-pending"); continue; }
-                if (lastRun?.identity === forecastKey(fixtureId, cycle.id)) { exclude("inputs-unchanged"); continue; }
+                const identity = forecastKey(fixtureId, cycle.id);
+                if (lastRun?.identity === identity) {
+                  if (!mayRetryObservation) { exclude("inputs-unchanged"); continue; }
+                  observationRetryKeys.set(fixtureId, evidenceFingerprint(["stale-observation-retry-v1", identity]));
+                }
               } else {
                 const known = previous?.cycleId === cycle.id;
                 const scheduleChanged = known ? previous.scheduleHash !== scheduleHash
@@ -369,8 +391,13 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
                 const nowReady = evidenceReady && (known ? !previous.evidenceReady : cycle.currentSetId === null);
                 const evidenceChanged = evidenceReady && known && previous.evidenceHash !== evidenceHash;
                 const becameInsufficient = known && previous.evidenceReady && !evidenceReady && evidence !== undefined;
-                if ((!scheduleChanged && (!newCandidate && !nowReady && !evidenceChanged)) ||
-                    (pending && lastRun.kickoffAt.getTime() === kickoffAt)) {
+                const unchanged = !scheduleChanged && !newCandidate && !nowReady && !evidenceChanged;
+                const retryObservation = unchanged && mayRetryObservation && known && previous.runId === lastRun.runId;
+                if (retryObservation) {
+                  const retryKey = evidenceFingerprint(["stale-observation-retry-v1", { fixtureId, cycleId: cycle.id, scheduleHash, evidenceHash }]);
+                  if (lastRun.identity === retryKey) { exclude("inputs-unchanged"); continue; }
+                  observationRetryKeys.set(fixtureId, retryKey);
+                } else if (unchanged || (pending && lastRun.kickoffAt.getTime() === kickoffAt)) {
                   if ((!known || becameInsufficient) && !pending) {
                     await recordInput(tx, fixtureId, { cycleId: cycle.id, runId: row.id, scheduleHash, evidenceHash, evidenceReady });
                   }
@@ -404,10 +431,11 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
         for (const cycle of await history.createInitialCyclesInTransaction(tx, initial, selectedAt))
           entries.push({ fixtureId: cycle.fixtureId, cycleId: cycle.id, kickoffAt: cycle.kickoffAt });
         entries.sort((a, b) => a.kickoffAt - b.kickoffAt || a.fixtureId.localeCompare(b.fixtureId));
-        const candidates = entries.map((entry) => ({ entry, identity: forecastKey(entry.fixtureId, entry.cycleId) }));
+        const candidates = entries.map((entry) => ({ entry, identity: observationRetryKeys.get(entry.fixtureId) ?? forecastKey(entry.fixtureId, entry.cycleId) }));
         const knownJobKeys = new Set<string>();
-        if (lifecycle) for (let offset = 0; offset < candidates.length; offset += 500) {
-          const keys = candidates.slice(offset, offset + 500).map(({ identity }) => identity!);
+        const candidateKeys = candidates.flatMap(({ identity }) => identity === null ? [] : [identity]);
+        for (let offset = 0; offset < candidateKeys.length; offset += 500) {
+          const keys = candidateKeys.slice(offset, offset + 500);
           const rows = await tx.durableJob.findMany({ where: { type: policy.refresh.type, handlerVersion: policy.refresh.handlerVersion,
             idempotencyKey: { in: keys } }, select: { idempotencyKey: true } });
           for (const row of rows) knownJobKeys.add(row.idempotencyKey);

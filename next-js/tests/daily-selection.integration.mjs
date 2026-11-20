@@ -14,6 +14,7 @@ import { createMysqlJobQueue } from '../src/server/jobs/job-mysql-store.ts';
 import { createMysqlPredictionHistoryStore } from '../src/server/predictions/history-mysql-store.ts';
 import { FORECAST_JOB_COALESCE_MS } from '../src/server/refresh/forecast-orchestration.ts';
 import { createForecastRecovery } from '../src/server/refresh/forecast-recovery.ts';
+import { createMysqlRefreshStore } from '../src/server/refresh/refresh-mysql-store.ts';
 import { DailySelectionError } from '../src/server/selection/selection-contract.ts';
 import { parseSelectionPolicy, selectionWindow } from '../src/server/selection/selection-input.ts';
 import { createMysqlDailySelectionStore } from '../src/server/selection/selection-mysql-store.ts';
@@ -86,7 +87,7 @@ test('daily and hourly selection manifests and recovery on isolated genuine MySQ
       GRANT SELECT, INSERT ON goal_hint_test.DurableJobEvent TO 'selection_app'@'127.0.0.1';
       GRANT SELECT, INSERT ON goal_hint_test.DurableJobUsage TO 'selection_app'@'127.0.0.1';`);
     await instance.executeAdmin(`
-      GRANT SELECT ON goal_hint_test.PredictionRefreshOutcome TO 'selection_app'@'127.0.0.1';
+      GRANT SELECT, INSERT ON goal_hint_test.PredictionRefreshOutcome TO 'selection_app'@'127.0.0.1';
       GRANT SELECT ON goal_hint_test.PredictionRefreshResult TO 'selection_app'@'127.0.0.1';
     `);
     const database = replica(), queue = createMysqlJobQueue(database), store = createMysqlDailySelectionStore(database, queue);
@@ -423,6 +424,41 @@ test('daily and hourly selection manifests and recovery on isolated genuine MySQ
       assert.deepEqual(manifest.exclusions.find((entry) => entry.fixtureId === locked.id), { fixtureId: locked.id, reason: 'cutoff-passed' });
       assert.ok(!manifest.coverage.some((date) => date.fixtureIds.includes(confirmed.id)), 'identity confirmation stays separate from date coverage');
       assert.equal(await database.query((tx) => tx.predictionCycle.count({ where: { fixtureId: unconfirmed.id } })), 0);
+    });
+    await t.test('an hourly selection retries one stale observation per unchanged unpublished fixture', async () => {
+      const hour = 3_600_000, scheduledFor = occurrence(37) + hour;
+      const rows = [catalogFixture(3701, { kickoff: kickoff(38) }), catalogFixture(3702, { kickoff: kickoff(38, 13) })];
+      const policy = policyFor(rows); policy.refresh.type = 'test.selection-stale-observation';
+      const types = [{ type: policy.refresh.type, handlerVersion: 1 }];
+      const hourlyStore = createMysqlDailySelectionStore(database, queue, { hourly: { localEvidence: false } });
+      const state = setup({ rows, policy, selectionStore: hourlyStore });
+      const refreshStore = createMysqlRefreshStore(database, queue);
+      const first = await state.service.runHourly(scheduledFor);
+      const original = (await hourlyStore.inspect(first.runId)).manifest;
+      assert.equal(original.entries.length, 2);
+      const staleFixtureId = original.entries[0].fixtureId;
+      async function finish(reasonForFixture) {
+        const lease = await queue.claim(selectionHash('stale-observation-worker'), types);
+        assert.ok(lease);
+        const identity = lease.job.envelope.refresh;
+        await refreshStore.finish(lease, { ...identity, jobId: lease.jobId, at: Date.now(), outcome: 'skipped',
+          reason: reasonForFixture(identity.fixtureId), revisionId: null, publicationId: null, costs: { ai: null, research: null }, phases: {} });
+        await queue.acknowledge(lease);
+        return lease.jobId;
+      }
+      const reason = (fixtureId) => fixtureId === staleFixtureId ? 'stale-observation' : 'observation-unavailable';
+      const originalJobs = [await finish(reason), await finish(reason)];
+      const retry = await state.service.runHourly(scheduledFor + hour);
+      assert.equal(retry.total, 1);
+      const [entry] = (await hourlyStore.inspect(retry.runId)).manifest.entries;
+      assert.equal(entry.fixtureId, staleFixtureId);
+      assert.equal(entry.cycleId, original.entries[0].cycleId);
+      assert.notEqual(entry.envelope.idempotencyKey, original.entries[0].envelope.idempotencyKey);
+      const retriedJob = await finish(reason);
+      assert.ok(!originalJobs.includes(retriedJob));
+      assert.equal((await state.service.runHourly(scheduledFor + 2 * hour)).total, 0, 'an unchanged fixture receives only one new retry');
+      assert.deepEqual((await hourlyStore.inspect(first.runId)).manifest, original);
+      assert.equal(await database.query((tx) => tx.durableJob.count({ where: { id: { in: originalJobs }, state: 'succeeded' } })), 2);
     });
     await t.test('authorized hourly recovery queues retained fixtures only on incomplete dates without provider calls', async () => {
       const hour = 3_600_000, scheduledFor = occurrence(38) + hour;
