@@ -71,6 +71,19 @@ test("live cascade publishes a coherent local forecast using stored verified res
   assert.equal(setup.collected.length, 0);
 });
 
+test("authorized archive context is optional when its database read fails", async () => {
+  const setup = fallbackServiceSetup({ reason: "unconfigured" });
+  const rows = storedLocalResults(setup.expected.context);
+  let archiveReads = 0;
+  const db = { query: async (operation) => operation({ $queryRaw: async () => rows,
+    footballFixture: { async findUnique() { archiveReads++; throw new Error("synthetic archive failure"); } } }) };
+  const localEngine = createLiveLocalEngine(db, { verifyPrivateUse: () => true });
+  const value = await setup.makeService({ localEngine }).resolve(cascade(setup));
+  assert.equal(selected(value, "match-result").market.source, "local-engine");
+  assert.equal(archiveReads, 1);
+  assert.equal(setup.collected.length, 0);
+});
+
 test("live cascade requests API-Football only after stored history falls short", async () => {
   const setup = fallbackServiceSetup({ reason: "unconfigured" });
   const localEngine = createLiveLocalEngine({ query: async () => [] });

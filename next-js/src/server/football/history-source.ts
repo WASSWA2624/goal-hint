@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "../../domain/calendar.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
-import { API_FOOTBALL_CONTRACT_VERSION } from "./api-football-contract.ts";
+import { API_FOOTBALL_CONTRACT_VERSION, apiFootballReferenceParameters, type FootballHistoryReferenceTarget } from "./api-football-contract.ts";
 import { archivedFixtureCoachIds } from "./history-lineup-coaches.ts";
 import { parseFootballHistoryOddsMappingPage, type FootballHistoryOddsMappingPage } from "./history-odds-mapping.ts";
 import { footballHistoryPersonOmissionEndpoint, isFootballHistoryPersonRecord, isFootballHistoryPersonRecordEndpoint,
@@ -60,6 +60,8 @@ const selectors = {
 } as const;
 type Endpoint = keyof typeof selectors;
 type Selection = Readonly<{ endpoint: Endpoint; parameters: unknown }>;
+type ModelReferenceEndpoint = "standings" | "teamStatistics" | "coaches" | "squads" | "transfers";
+export type FootballModelReferenceTarget = FootballHistoryReferenceTarget & { endpoint: ModelReferenceEndpoint };
 type PlayerArchiveMarker = "playerArchiveGeneration" | "playerArchiveConflict";
 const isPlayerArchiveMarker = (endpoint: string): endpoint is PlayerArchiveMarker =>
   endpoint === "playerArchiveGeneration" || endpoint === "playerArchiveConflict";
@@ -323,6 +325,33 @@ export function createFootballHistorySource(database: DatabaseRuntime) {
 
   return {
     indexSubjects: () => indexHistorySubjects(database, archivedSubjectIds),
+    /** Point-in-time reuse of an exact reference selector. Later captures cannot overwrite its earlier evidence. */
+    async readModelReference(target: FootballModelReferenceTarget, cutoffAt: number, maximumAgeMs: number) {
+      const endpoint = target.endpoint;
+      const selection = apiFootballReferenceParameters(target);
+      if (!selection || !Number.isSafeInteger(cutoffAt) || cutoffAt < 0 || !Number.isSafeInteger(maximumAgeMs) || maximumAgeMs < 0) return null;
+      const parameters = archiveSelector({ endpoint, parameters: selection });
+      const serialized = JSON.stringify(parameters), selectorHash = hash(serialized);
+      const pages = await database.query((client) => client.footballHistorySourcePage.findMany({
+        where: { endpoint, selectorHash, contract: API_FOOTBALL_CONTRACT_VERSION,
+          retrievedAt: { lte: new Date(cutoffAt), gte: new Date(Math.max(0, cutoffAt - maximumAgeMs)) } },
+        orderBy: [{ retrievedAt: "desc" }, { id: "asc" }], take: 2,
+      }));
+      const [page, other] = pages;
+      if (!page) return null;
+      const retrievedAt = page.retrievedAt.getTime();
+      try {
+        if (retrievedAt > cutoffAt || retrievedAt < cutoffAt - maximumAgeMs || page.rowCount > 3_000 ||
+          page.endpoint !== endpoint || page.contract !== API_FOOTBALL_CONTRACT_VERSION || page.selectorHash !== selectorHash ||
+          page.id !== hash(JSON.stringify([endpoint, selectorHash, retrievedAt, page.contentHash])) ||
+          JSON.stringify(archiveSelector({ endpoint, parameters: page.parameters })) !== serialized ||
+          other?.retrievedAt.getTime() === retrievedAt && other.contentHash !== page.contentHash) return null;
+        const body = await readFootballSourcePagePayload(page, 3 * 1024 * 1024);
+        const rows: unknown = JSON.parse(body.toString("utf8"));
+        if (!Array.isArray(rows) || rows.length !== page.rowCount) return null;
+        return { sourceId: page.id, retrievedAt, rows: rows as readonly unknown[] };
+      } catch { return null; }
+    },
     async referencePhaseOrder(globalScope: boolean): Promise<FootballHistoryReferencePhase[]> {
       const inScope = (endpoint: string) => globalScope || !globalReferenceSources.has(endpoint);
       const endpoints = Object.keys(selectors).filter((endpoint) => endpoint !== "fixtures" && endpoint !== "competitions" &&

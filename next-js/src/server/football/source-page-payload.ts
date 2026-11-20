@@ -24,8 +24,9 @@ export async function encodeFootballSourcePage(input: Readonly<{
   return { id, endpoint, selectorHash, parameters, contract, retrievedAt, rowCount, contentHash, compressedRows };
 }
 
-export async function readFootballSourcePagePayload(page: Readonly<{ compressedRows: Uint8Array; contentHash: string }>) {
-  const body = await decompress(page.compressedRows, { maxOutputLength: maximumFootballSourcePageBytes });
+export async function readFootballSourcePagePayload(page: Readonly<{ compressedRows: Uint8Array; contentHash: string }>,
+  maximumBytes = maximumFootballSourcePageBytes) {
+  const body = await decompress(page.compressedRows, { maxOutputLength: Math.min(maximumBytes, maximumFootballSourcePageBytes) });
   if (footballSourceHash(body) !== page.contentHash) throw new Error("Historical archive page failed verification.");
   return body;
 }

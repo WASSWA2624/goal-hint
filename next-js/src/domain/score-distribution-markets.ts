@@ -4,6 +4,7 @@ import { asianPayoutGrade, type ExtendedMarketGrade } from "./market-payout.ts";
 import { parseScoreDistribution, type ScoreDistribution, type ScoreState } from "./score-distribution.ts";
 
 export const GOAL_MARKET_RULE_VERSION = "score-derived-goal-markets-v1";
+export const GOAL_DERIVATION_TAIL_BOUND = 1e-6;
 export const goalMarketPeriods = ["full-time", "half-time", "second-half"] as const;
 export type GoalMarketPeriod = typeof goalMarketPeriods[number];
 const team = z.enum(["home", "away"]), result = z.enum(["home", "draw", "away"]);
@@ -65,6 +66,12 @@ export type DerivedGoalMarket = Readonly<{
 export type GoalDerivationResult = Readonly<{ available: true; market: DerivedGoalMarket }> |
   Readonly<{ available: false; reason: "invalid-definition" | "invalid-distribution" | "unrepresented-score-mass" |
     "missing-half-time-distribution" | "incomplete-partition" }>;
+type GoalDerivationFailure = Extract<GoalDerivationResult, { available: false }>;
+type GoalSelectionMass = Omit<GoalSelectionProbabilities, "winProbability">;
+export type BoundedGoalDerivationResult = Readonly<{
+  available: true; ruleVersion: typeof GOAL_MARKET_RULE_VERSION; definition: GoalMarketDefinition;
+  selections: readonly GoalSelectionMass[]; unrepresentedProbability: number;
+}> | GoalDerivationFailure;
 
 /** The sum of the local model's independent regulation goal counts is Poisson.
  * Compute P(0)+P(1) exactly for this reviewed market, including the full tail. */
@@ -174,14 +181,16 @@ function grade(state: ScoreState, period: GoalMarketPeriod, rule: GoalRule): Goa
   return won === null ? null : won ? "win" : "loss";
 }
 
-/** Derives only from supplied joint mass. Missing tail/half-time data never becomes zero or an independent approximation. */
-export function deriveGoalMarket(distributionInput: unknown, definitionInput: unknown): GoalDerivationResult {
+function deriveGoalSelectionMass(
+  distributionInput: unknown, definitionInput: unknown, allowBoundedTail: boolean,
+): BoundedGoalDerivationResult {
   const parsed = goalMarketDefinitionSchema.safeParse(definitionInput);
   if (!parsed.success) return { available: false, reason: "invalid-definition" };
   let distribution: ScoreDistribution;
   try { distribution = parseScoreDistribution(distributionInput); } catch { return { available: false, reason: "invalid-distribution" }; }
-  if (distribution.unrepresentedProbability !== 0) return { available: false, reason: "unrepresented-score-mass" };
-  const definition = freezeDefinition(parsed.data), selections: GoalSelectionProbabilities[] = [];
+  if (distribution.unrepresentedProbability >= GOAL_DERIVATION_TAIL_BOUND ||
+    (!allowBoundedTail && distribution.unrepresentedProbability !== 0)) return { available: false, reason: "unrepresented-score-mass" };
+  const definition = freezeDefinition(parsed.data), selections: GoalSelectionMass[] = [];
   for (const selection of definition.selections) {
     const outcomes = Object.fromEntries(grades.map((item) => [item, 0])) as Record<GoalGrade, number>;
     for (const state of distribution.states) {
@@ -192,16 +201,31 @@ export function deriveGoalMarket(distributionInput: unknown, definitionInput: un
     // The validated total has a floating-point tolerance. Bound only representational overflow;
     // never redistribute or discard the explicit unknown mass.
     const bounded = Object.fromEntries(grades.map((item) => [item, Math.min(1, outcomes[item])])) as Record<GoalGrade, number>;
-    selections.push(Object.freeze({ ...selection, outcomes: Object.freeze(bounded), winProbability: Math.min(1, outcomes.win + outcomes["half-win"]) }));
+    selections.push(Object.freeze({ ...selection, outcomes: Object.freeze(bounded) }));
   }
   // Check partition membership per state, not just aggregate mass: overlaps can otherwise cancel gaps.
   if (definition.group === "partition" && distribution.states.some((state) =>
       definition.selections.filter(({ rule }) => grade(state, definition.period, rule) === "win").length !== 1)) {
     return { available: false, reason: "incomplete-partition" };
   }
+  return Object.freeze({ available: true, ruleVersion: GOAL_MARKET_RULE_VERSION, definition,
+    selections: Object.freeze(selections), unrepresentedProbability: distribution.unrepresentedProbability });
+}
+
+/** Derives complete probabilities for callers that require all joint mass. */
+export function deriveGoalMarket(distributionInput: unknown, definitionInput: unknown): GoalDerivationResult {
+  const derived = deriveGoalSelectionMass(distributionInput, definitionInput, false);
+  if (!derived.available) return derived;
+  const selections = derived.selections.map((selection) => Object.freeze({ ...selection,
+    winProbability: Math.min(1, selection.outcomes.win + selection.outcomes["half-win"]) }));
   const selected = selections.reduce((best, item) => item.winProbability > best.winProbability ? item : best);
   return { available: true, market: Object.freeze({ ruleVersion: GOAL_MARKET_RULE_VERSION, source: "ai-score-distribution",
-    definition, selections: Object.freeze(selections), selection: selected.key, selectedProbability: selected.winProbability }) };
+    definition: derived.definition, selections: Object.freeze(selections), selection: selected.key, selectedProbability: selected.winProbability }) };
+}
+
+/** Each grade is a lower probability bound; the reported tail may belong to any grade. */
+export function deriveBoundedGoalMarket(distributionInput: unknown, definitionInput: unknown): BoundedGoalDerivationResult {
+  return deriveGoalSelectionMass(distributionInput, definitionInput, true);
 }
 
 /** Zod has already copied the input; freeze every rule/selection so a forecast cannot drift after derivation. */

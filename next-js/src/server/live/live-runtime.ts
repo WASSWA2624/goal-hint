@@ -437,7 +437,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     const providerFallback = createProviderFallbackAdapter({ adapter, catalog, policy: providerFallbackPolicy(refs),
       authority: authorities.providerFallback, maxJobs: 1000 });
     const fallback = createFallbackService({ fallback: providerFallback, authority: authorities.fallback, maxInflight: 100,
-      localEngine: createLiveLocalEngine(database),
+      localEngine: createLiveLocalEngine(database, coordinated && providerArchive
+        ? { verifyPrivateUse: () => verify(refs.retention, "football-private-use") } : undefined),
       selectionPolicy: sourceOrder === "provider-first" ? "provider-baseline" : "optional-ai-primary", verifyRequest: authorities.verifyFallbackRequest });
     const refreshStore = createMysqlRefreshStore(database, queue);
     if (aiModel !== null) try { ai = await createLiveAiRuntime({ policy, verify, refs, model: aiModel, database, store: refreshStore,

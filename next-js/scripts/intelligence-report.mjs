@@ -63,15 +63,21 @@ export async function runIntelligenceReport(argv) {
     if (!authority || typeof authority.authorizeDataset !== 'function' || typeof authority.verifyHistory !== 'function') throw new Error('authority-unavailable');
   }
   if (!dataset || typeof dataset !== 'object' || Array.isArray(dataset) ||
-    Object.keys(dataset).some((key) => !['mode', 'history', 'fixtures', 'configuration', 'minimumEnsembleSamples', 'slips'].includes(key)) ||
+    Object.keys(dataset).some((key) => !['mode', 'history', 'fixtures', 'configuration', 'minimumEnsembleSamples', 'slips', 'goalHoldouts'].includes(key)) ||
     !['synthetic', 'historical', 'prospective'].includes(dataset.mode) || !Array.isArray(dataset.history) || !Array.isArray(dataset.fixtures))
     throw new Error('invalid-dataset');
   if (synchronous(authority.authorizeDataset(dataset)) !== undefined) throw new Error('authority-unavailable');
-  const report = evaluateIntelligenceWalkForward({ ...dataset,
-    verifyHistory: (row) => provenTrue(() => authority.verifyHistory(row)),
-    ...(typeof authority.verifyProvider === 'function' ? { verifyProvider: (row) => provenTrue(() => authority.verifyProvider(row)) } : {}),
-    ...(typeof authority.verifyContext === 'function' ? { verifyContext: (row) => provenTrue(() => authority.verifyContext(row)) } : {}),
-  });
+  const verifyHistory = (row) => provenTrue(() => authority.verifyHistory(row));
+  let report;
+  if (Object.hasOwn(dataset, 'goalHoldouts')) {
+    const { evaluateFittedGoalHoldouts } = await import('../src/server/intelligence/fitted-goals-evaluation.ts');
+    report = evaluateFittedGoalHoldouts({ mode: dataset.mode, history: dataset.history, fixtures: dataset.fixtures, holdouts: dataset.goalHoldouts, verifyHistory });
+  } else {
+    report = evaluateIntelligenceWalkForward({ ...dataset, verifyHistory,
+      ...(typeof authority.verifyProvider === 'function' ? { verifyProvider: (row) => provenTrue(() => authority.verifyProvider(row)) } : {}),
+      ...(typeof authority.verifyContext === 'function' ? { verifyContext: (row) => provenTrue(() => authority.verifyContext(row)) } : {}),
+    });
+  }
   let wholeSlips = { status: 'unavailable', reason: 'No independently verified original slip captures supplied.' };
   if (dataset.slips) {
     const { captures, results } = dataset.slips;
