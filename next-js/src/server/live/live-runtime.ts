@@ -79,7 +79,8 @@ import { fallbackRefreshPlan, LIVE_REFRESH_TYPE, liveCascadePlan, liveReferences
   oddsPolicy, oddsImportBounds, oddsCatalogBounds, oddsMaxRequests, ODDS_FRESHNESS_MS, teamCodeBounds, teamCodeImportsEnabled,
   refreshEnvelopeFor } from "./live-plan.ts";
 import { oddsFail } from "../odds/odds-contract.ts";
-import { createOddsJobDefinitions, oddsQuotaAllows, ODDS_PROVIDER_WINDOW_MS, ODDS_SWEEP_MS, type OddsQuotaUsage } from "../odds/odds-jobs.ts";
+import { createOddsJobDefinitions, oddsHistoryDeadline, oddsHistoryScopeId, oddsQuotaAllows, ODDS_PROVIDER_WINDOW_MS, ODDS_SWEEP_MS,
+  type OddsQuotaUsage, type OddsJobDependencies } from "../odds/odds-jobs.ts";
 import { createMysqlOddsStore } from "../odds/odds-mysql-store.ts";
 import { storedPreMatchCatalogCoverage } from "../odds/bookmaker-odds-read.ts";
 import { oddsPolicyHash } from "../odds/odds-input.ts";
@@ -151,6 +152,7 @@ export type LiveRuntimeOverrides = Readonly<{
   onPollerState?: (kind: "results" | "match-details", state: string) => void;
   onHourlyLookupFailure?: (reason: string, fixtureCount: number) => void;
   onForwardFixtureSweep?: (report: ForwardFixtureSweep) => void;
+  onHistoricalOdds?: NonNullable<OddsJobDependencies["historical"]>["report"];
   onHistoryDetailBatch?: Parameters<ReturnType<typeof createFootballHistoryDetails>>[1];
   onDateImportFailure?: Parameters<typeof createDailySelectionService>[0]["onDateImportFailure"];
   onCurrentDayCoverage?: Parameters<typeof createCurrentDayContextJob>[0]["onCoverage"];
@@ -202,7 +204,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     let results: ResultSyncPolicy | null = null;
     let liveDetailsPolicy: LiveMatchPolicy | null = null;
     // Odds use the same workload inputs as their authority, so a policy can never verify against a different plan.
-    const odds = oddsPolicy(policy, refs, workload, localFootball || coordinated);
+    const odds = oddsPolicy(policy, refs, workload, localFootball || coordinated || productionTarget && privateRetention);
     let aiModel: ReturnType<typeof liveAiModel> | null = null;
     if (policy.capabilities.ai) try { aiModel = liveAiModel(policy); } catch { /* An unsupported optional model leaves the baseline active. */ }
     // The coordinated cascade can only dispatch models with reviewed numerical eligibility.
@@ -572,12 +574,15 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     const oddsEnabled = policy.choices.odds.enabled && workload.odds.eligible && odds !== null;
     const hostedOddsArchive = oddsEnabled && privateRetention && (productionTarget || syntheticArchive);
     const resumePricePages = coordinated || hostedOddsArchive;
+    const oddsRecoveryCapable = privateRetention && (productionTarget || syntheticArchive || coordinated);
+    const oddsRecoveryEnabled = oddsEnabled && oddsRecoveryCapable;
     const oddsStore = createMysqlOddsStore(database);
     const oddsService = createOddsImportService({ adapter: adapter.odds, store: oddsStore, authority: authorities.odds,
-      resumePricePages,
+      resumePricePages, recoverFromCurrentPages: oddsRecoveryEnabled,
       accountId: () => quota.current()?.accountId ?? oddsFail("unavailable"),
       bounds: (request) => {
-        const end = request.kind === "prices" ? request.slot + ODDS_SWEEP_MS : request.slot + DAY_MS;
+        const end = request.recovery ? oddsHistoryDeadline(request.slot, quota.current()?.startsAt ?? oddsFail("unavailable")) :
+          request.kind === "prices" ? request.slot + ODDS_SWEEP_MS : request.slot + DAY_MS;
         // The provider walk ends early enough that the receipt and per-fixture writes keep their own part of the job timeout.
         const deadline = utcInstantFromEpochMilliseconds(Math.min(Date.now() + ODDS_PROVIDER_WINDOW_MS, end));
         return request.kind === "prices" ? oddsImportBounds(deadline, workload.odds.maxPages) : oddsCatalogBounds(deadline);
@@ -633,6 +638,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     }
     const oddsDefinitions = createOddsJobDefinitions({ service: oddsService, policy: () => odds ?? oddsFail("unverified-policy"), resumePricePages,
       enabled: () => oddsEnabled, usage: oddsUsage, allowance: enrichmentAllowance,
+      ...(oddsRecoveryCapable ? { historical: { scopeId: (date: string) => oddsHistoryScopeId(day.status.accountKey, date),
+        ...(overrides.onHistoricalOdds ? { report: overrides.onHistoricalOdds } : {}) } } : {}),
       maxRequests: (kind) => oddsMaxRequests(kind, workload.odds.maxPages) });
     const oddsRegistry = createJobRegistry(oddsDefinitions);
 
@@ -793,7 +800,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     return Object.freeze({ policy, database, queue, quota, workload, registry, hourlySelectionEnabled, settlement, cache, catalog: importer,
       historyBackfill, historyDetails, historyReference, resultPoller, liveMatchPoller, inPlayOdds, day,
       coordinated, forecastConcurrency, forecastRecovery, currentDayContextEnabled: currentDayContext !== null,
-      odds: Object.freeze({ enabled: oddsEnabled, registry: oddsRegistry, horizonDays: workload.odds.dates, bookmakerScope: odds?.bookmakerScope,
+      odds: Object.freeze({ enabled: oddsEnabled, recoveryEnabled: oddsRecoveryEnabled, registry: oddsRegistry, horizonDays: workload.odds.dates,
+        bookmakerScope: odds?.bookmakerScope,
         requalifyLocal: requalifyLocalOdds, projectAuthorizedStored: projectAuthorizedStoredOdds,
         catalogCoverage: (asOf: number) => database.query((tx) => storedPreMatchCatalogCoverage(tx, asOf)),
         // Write-time staleness needs no provider call, so it runs even while imports are off.

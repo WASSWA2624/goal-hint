@@ -14,7 +14,7 @@ import { readExtendedMarketSnapshot } from "../predictions/extended-market-read.
 import { storedFeedFixture } from "./fixture-read.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { storedFixtureOddsGroups, storedUpcomingOddsForFixtures } from "../odds/odds-read.ts";
-import { storedClosingBookmakerQuotes, storedCurrentBookmakerQuotes, total15OddsForBookmaker } from "../odds/odds-mysql-store.ts";
+import { storedClosingBookmakerQuotes, storedCurrentBookmakerQuotes, storedRecoveredBookmakerQuotes, total15OddsForBookmaker } from "../odds/odds-mysql-store.ts";
 import { projectBookmakerOdds } from "../odds/bookmaker-odds-read.ts";
 import { storedInPlayOdds } from "../odds/in-play-odds-read.ts";
 import { isLocalFootballDevelopment } from "../../domain/development-demo.ts";
@@ -147,7 +147,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
       if (!allowLiveMatch && !allowInPlayOdds && !providerOdds) return response;
       // The live envelope bypasses the revision/detail cache; repeated visitor reads only read this bounded stored row.
       if (!historical && response.fixture.status !== "live" && !isPlayedFinalStatus(response.fixture.status) && response.fixture.status !== "abandoned") return response;
-      const [liveMatch, inPlayOdds, closingQuotes] = await Promise.all([
+      const [liveMatch, inPlayOdds, closingQuotes, recoveredQuotes] = await Promise.all([
         allowLiveMatch ? options.database.query((tx) => storedLiveMatchSnapshot(tx, { fixtureId: id, asOf, historical,
           cycleId: historical ? response.selectedCycle?.id ?? null : response.fixture.cycleId,
           kickoffAt: historical ? response.selectedCycle?.kickoffAt ?? null : kickoffAt })).catch(() => null) : undefined,
@@ -156,6 +156,9 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
         providerOdds && !historical && kickoffAt !== null
           ? options.database.transaction((tx) => storedClosingBookmakerQuotes(tx, { fixtureId: id, kickoffAt }, asOf),
             { isolationLevel: "RepeatableRead", maxWait: 2_000, timeout: 5_000 }).catch(() => null) : null,
+        providerOdds && !historical && kickoffAt !== null && (response.fixture.status === "live" || isPlayedFinalStatus(response.fixture.status))
+          ? options.database.transaction((tx) => storedRecoveredBookmakerQuotes(tx, [{ fixtureId: id, kickoffAt }], asOf),
+            { isolationLevel: "RepeatableRead", maxWait: 2_000, timeout: 5_000 }).then((quotes) => quotes.get(id)).catch(() => undefined) : undefined,
       ]);
       const extendedOdds: Total15Odds | null = total15Available && inPlayOdds?.prices.total15Prices
         ? { marketKey: total15MarketKey, kind: "in-play", checkedAt: inPlayOdds.checkedAt, selections: inPlayOdds.prices.total15Prices } : null;
@@ -163,9 +166,12 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
         ...(allowLiveMatch ? { liveMatch } : {}),
         ...(allowInPlayOdds ? { inPlayOdds: inPlayOdds ?? null } : {}),
         ...(extendedOdds ? { extendedOdds } : {}) };
-      const bookmakerOdds = providerOdds && !historical ? projectBookmakerOdds(closingQuotes, "closing",
-        matchFeedRules.maximumResponseBytes - Buffer.byteLength(JSON.stringify(compact), "utf8")) : undefined;
-      const projected = storedMatchDetailResponseSchema.parse({ ...compact, ...(bookmakerOdds !== undefined ? { bookmakerOdds } : {}) });
+      const oddsBudget = matchFeedRules.maximumResponseBytes - Buffer.byteLength(JSON.stringify(compact), "utf8");
+      const bookmakerOdds = providerOdds && !historical ? projectBookmakerOdds(closingQuotes, "closing", oddsBudget) : undefined;
+      const recoveredBookmakerOdds = projectBookmakerOdds(recoveredQuotes, "historical-pre-match",
+        oddsBudget - (bookmakerOdds ? Buffer.byteLength(JSON.stringify(bookmakerOdds), "utf8") + 32 : 0));
+      const projected = storedMatchDetailResponseSchema.parse({ ...compact, ...(bookmakerOdds !== undefined ? { bookmakerOdds } : {}),
+        ...(recoveredBookmakerOdds ? { recoveredBookmakerOdds } : {}) });
       // A large optional observation cannot make an otherwise valid forecast response exceed its wire bound.
       return freezeEvidence(Buffer.byteLength(JSON.stringify(projected), "utf8") <= matchFeedRules.maximumResponseBytes
         ? projected : { ...response, asOf, ...(allowLiveMatch ? { liveMatch: null } : {}), ...(allowInPlayOdds ? { inPlayOdds: null } : {}) });

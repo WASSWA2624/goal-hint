@@ -8,6 +8,10 @@ import type { NormalizedFixtureOdds, NormalizedOddsCatalogEntry } from "../footb
 
 /** OP-07 default for ordinary pre-match quotes in the live worker. */
 export { preMatchReferenceOddsFreshMs as preMatchOddsFreshMs } from "../../domain/reference-odds.ts";
+export const recoveredPreMatchFixtureStatuses: ReadonlySet<string> = new Set([
+  "live", "finished-regulation", "finished-extra-time", "finished-penalties", "abandoned",
+]);
+export const mayRetainRecoveredPreMatchFixtureStatus = (status: string) => status === "scheduled" || recoveredPreMatchFixtureStatuses.has(status);
 
 /** Owner-approved odds import policy (prompt 052). Fingerprinted into every receipt and fixture state. */
 export type OddsPolicy = Readonly<{
@@ -30,7 +34,7 @@ export type OddsPolicy = Readonly<{
   freshnessMs: number;
   /** Snapshot retention: kickoff plus this many milliseconds. No purge job exists. */
   retainAfterKickoffMs: number;
-  /** EAT dates swept per slot, starting today. */
+  /** EAT dates in the regular near-date priority window, starting today. */
   horizonDays: number;
   /** Slot length; one import per date per slot. */
   sweepMs: number;
@@ -44,6 +48,8 @@ export type OddsImportRequest = Readonly<{
   /** EAT reporting date for price sweeps; null for catalogs. */
   date: string | null;
   policy: OddsPolicy;
+  /** Backfill of provider pre-match quotes retrieved after the fixture began. */
+  recovery?: true;
 }>;
 export type OddsRetentionPermission = Readonly<{
   evidenceRef: string;
@@ -89,7 +95,8 @@ export type ValidatedOddsObservation = Readonly<{
   missingCoverage: readonly string[];
 }>;
 /** Per-fixture receipt outcome decided before any price is applied. */
-export type OddsFixtureOutcome = "apply" | "unknown-fixture" | "after-kickoff" | "kickoff-mismatch" | "not-scheduled";
+export type OddsFixtureOutcome = "apply" | "recover" | "unknown-fixture" | "after-kickoff" | "kickoff-mismatch" |
+  "not-scheduled" | "awaiting-start";
 export type OddsBookmakerManifest = Readonly<{ bookmakerId: number; kickoffAt: UtcInstant | null;
   bets: readonly Readonly<{ betId: number; betName: string | null; valuesHash: string }>[];
 }>;
@@ -105,6 +112,7 @@ export type OddsBatchBody = Readonly<{
   requestId: string;
   slot: UtcInstant;
   date: string | null;
+  recovery?: true;
   contractVersion: typeof ODDS_CONTRACT_VERSION;
   reasons: readonly string[];
   missingCoverage: readonly string[];

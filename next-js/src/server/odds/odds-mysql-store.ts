@@ -11,7 +11,8 @@ import type { NormalizedFixtureOdds } from "../football/api-football-normalize.t
 import { Prisma } from "../generated/prisma/client.ts";
 import { assertHistorySeal, historyJson } from "../predictions/history-read.ts";
 import { provenTrue } from "../shared/authority-proof.ts";
-import { OddsError, oddsFail, preMatchOddsFreshMs, type OddsApplyResult, type OddsBatchBody, type OddsPolicy } from "./odds-contract.ts";
+import { mayRetainRecoveredPreMatchFixtureStatus, OddsError, oddsFail, preMatchOddsFreshMs, recoveredPreMatchFixtureStatuses,
+  type OddsApplyResult, type OddsBatchBody, type OddsPolicy } from "./odds-contract.ts";
 import { oddsPricePageScopeKey } from "./odds-input.ts";
 
 type Tx = Prisma.TransactionClient;
@@ -20,7 +21,7 @@ const instant = z.number().int().min(0).max(253_402_300_799_999);
 const provenanceSchema = z.strictObject({ provider: z.literal("api-football"), endpoint: z.enum(["odds", "oddsBets", "oddsBookmakers"]),
   requestParameters: z.record(z.string(), z.string().max(512)), contractVersion: z.string().max(64), retrievedAt: instant,
   providerUpdatedAt: instant.nullable(), fromCache: z.boolean(), currentPage: z.number().int().positive().nullable(),
-  totalPages: z.number().int().positive().nullable() });
+  totalPages: z.number().int().nonnegative().nullable() });
 const quoteManifestSchema = z.strictObject({ bookmakerId: z.number().int().positive(), kickoffAt: instant.nullable(),
   bets: z.array(z.strictObject({ betId: z.number().int().positive(), betName: z.string().max(256).nullable(), valuesHash: hash })).max(1_000) });
 const batchSchema = z.strictObject({
@@ -29,16 +30,20 @@ const batchSchema = z.strictObject({
   receivedAt: instant, requestId: hash, slot: instant, date: z.iso.date().nullable(), contractVersion: z.string().min(1).max(64),
   reasons: z.array(z.string().regex(/^[a-z-]{1,64}$/u)).max(64), missingCoverage: z.array(z.string().max(128)).max(5_000),
   pages: z.array(provenanceSchema).max(1_000),
+  recovery: z.literal(true).optional(),
   checkpoint: z.strictObject({ page: z.number().int().positive().max(1000), totalPages: z.number().int().positive() }).optional(),
   fixtures: z.array(z.strictObject({ externalId: z.number().int().positive(), observationHash: hash,
     quoteManifest: quoteManifestSchema.optional(), additionalQuoteManifests: z.array(quoteManifestSchema).max(200).optional(),
-    outcome: z.enum(["apply", "unknown-fixture", "after-kickoff", "kickoff-mismatch", "not-scheduled"]) }).refine(({ quoteManifest, additionalQuoteManifests }) =>
+    outcome: z.enum(["apply", "recover", "unknown-fixture", "after-kickoff", "awaiting-start", "kickoff-mismatch", "not-scheduled"]) }).refine(({ quoteManifest, additionalQuoteManifests }) =>
     !additionalQuoteManifests || !!quoteManifest && new Set([quoteManifest.bookmakerId, ...additionalQuoteManifests.map(({ bookmakerId }) => bookmakerId)]).size
       === additionalQuoteManifests.length + 1 && additionalQuoteManifests.every(({ kickoffAt }) => kickoffAt === quoteManifest.kickoffAt))).max(10_000),
   catalog: z.array(z.strictObject({ id: z.number().int().positive(), name: z.string().min(1).max(256) })).max(5_000),
 }).refine(({ checkpoint, kind, requestId, scopeKey, pages }) => !checkpoint || kind === "prices" &&
   scopeKey === oddsPricePageScopeKey(requestId) && pages.length === 1 && checkpoint.page <= checkpoint.totalPages &&
-  pages[0]?.currentPage === checkpoint.page && pages[0].totalPages === checkpoint.totalPages);
+  pages[0]?.currentPage === checkpoint.page && pages[0].totalPages === checkpoint.totalPages)
+  .refine(({ kind, recovery, fixtures, checkpoint, pages }) => (!recovery || kind === "prices" && fixtures.every(({ outcome }) => outcome !== "apply")) &&
+    fixtures.every(({ outcome, quoteManifest }) => outcome !== "recover" || kind === "prices" && (!checkpoint || quoteManifest !== undefined)) &&
+    pages.every((page) => page.totalPages !== 0 || recovery && !checkpoint && !fixtures.length && page.currentPage === 1));
 export const storedOddsBatchSchema = batchSchema;
 const snapshotValues = z.array(z.strictObject({ label: z.string().min(1).max(64), odd: z.string().min(1).max(12) })).min(1).max(1_000);
 export const storedOddsSnapshotSchema = z.strictObject({ id: hash, fixtureId: z.uuid(), previousId: hash.nullable(), bookmakerId: z.number().int().positive(),
@@ -46,6 +51,8 @@ export const storedOddsSnapshotSchema = z.strictObject({ id: hash, fixtureId: z.
   retrievedAt: instant, providerUpdatedAt: instant.nullable(), retainUntil: instant, values: snapshotValues });
 const snapshotSchema = storedOddsSnapshotSchema;
 export type StoredOddsSnapshot = z.infer<typeof snapshotSchema>;
+
+const recoveredSnapshotSchema = snapshotSchema.omit({ previousId: true }).extend({ batchId: hash, kickoffAt: instant });
 
 export type OddsFixtureTarget = Readonly<{ fixtureId: string; externalId: number; kickoff: UtcInstant | null; status: string }>;
 type OddsFixtureApplication = Readonly<{ batchId: string; policy: OddsPolicy; policyHash: string; fixtureId: string; row: NormalizedFixtureOdds;
@@ -106,14 +113,25 @@ function parsedSnapshot(row: SealedRow) {
   return parsed.success && parsed.data.id === row.id ? freezeEvidence(parsed.data) : oddsFail("invalid-state");
 }
 
+function parsedRecoveredSnapshot(row: SealedRow) {
+  const parsed = recoveredSnapshotSchema.safeParse(sealedBody(row));
+  return parsed.success && parsed.data.id === row.id && parsed.data.valuesHash === oddsValuesHash(parsed.data.values)
+    ? freezeEvidence(parsed.data) : oddsFail("invalid-state");
+}
+
+type HistoricalObservation = Readonly<{ snapshotId: string; receiptId: string; observedAt: UtcInstant; checkedAt: UtcInstant;
+  providerUpdatedAt: UtcInstant | null }>;
+type StoredBookmakerValue = StoredOddsSnapshot["values"][number] & Readonly<{ observation?: HistoricalObservation }>;
+
 type StoredBookmaker = Readonly<{
   bookmakerId: number; bookmakerName: string | null;
-  offers: readonly Readonly<{ betId: number; betName: string; values: StoredOddsSnapshot["values"]; providerUpdatedAt: UtcInstant | null;
+  offers: readonly Readonly<{ betId: number; betName: string; values: readonly StoredBookmakerValue[]; providerUpdatedAt: UtcInstant | null;
     snapshotId?: string; observedAt?: UtcInstant; checkedAt?: UtcInstant; receiptId?: string }>[];
 }>;
 export type StoredCurrentBookmakerQuotes = Readonly<{
   fixtureId: string; kickoffAt: number; checkedAt: UtcInstant; primaryBookmakerId: number; bookmakers: readonly StoredBookmaker[];
   policyHash?: string;
+  provenance?: "historical-pre-match";
 }>;
 type BookmakerFixture = Readonly<{ fixtureId: string; kickoffAt: number | null }>;
 
@@ -227,7 +245,103 @@ export async function storedClosingBookmakerQuotes(tx: Tx, fixture: BookmakerFix
   return (await storedBookmakerQuotes(tx, [fixture], asOf, true)).get(fixture.fixtureId) ?? null;
 }
 
-export function exactTotal15Odds(values: StoredOddsSnapshot["values"], checkedAt: number): Total15Odds | null {
+/** Historical display reads kept outside the current/closing and forecast-publication paths. */
+export async function storedRecoveredBookmakerQuotes(tx: Tx, fixtures: readonly BookmakerFixture[], asOf: number,
+  betIds?: readonly number[]): Promise<ReadonlyMap<string, StoredCurrentBookmakerQuotes>> {
+  const expectedKickoff = new Map(fixtures.flatMap(({ fixtureId, kickoffAt }) =>
+    kickoffAt !== null && kickoffAt <= asOf ? [[fixtureId, kickoffAt]] : []));
+  const found = new Map<string, StoredCurrentBookmakerQuotes>();
+  if (!expectedKickoff.size || betIds?.length === 0) return found;
+  const at = new Date(asOf);
+  const [catalogRow] = await tx.$queryRaw<SealedRow[]>`SELECT id,body,integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity
+    FROM OddsImportBatch WHERE scopeKey='bets' AND kind='bets' AND status='complete' AND receivedAt<=${at}
+    ORDER BY receivedAt DESC,id DESC LIMIT 1`;
+  if (!catalogRow) return found;
+  const catalog = new Map(parsedBatch(catalogRow).catalog.map(({ id, name }) => [id, name]));
+  type SnapshotRow = SealedRow & { externalId: bigint; kickoff: Date; batchId: string; recovered: unknown };
+  const fixtureIds = Prisma.join([...expectedKickoff.keys()]);
+  const eligible = Prisma.sql`f.id IN (${fixtureIds}) AND f.provider='api-football' AND f.kickoff<=${at}
+    AND f.status IN (${Prisma.join([...recoveredPreMatchFixtureStatuses])}) AND s.retrievedAt<=${at} AND s.retainUntil>=${at}
+    ${betIds ? Prisma.sql`AND s.betExternalId IN (${Prisma.join([...new Set(betIds)])})` : Prisma.empty}`;
+  const rows = await tx.$queryRaw<SnapshotRow[]>(Prisma.sql`
+    SELECT s.id,s.batchId,f.externalId,f.kickoff,s.body,s.integrity=SHA2(CAST(s.body AS CHAR),256) AS validIntegrity,TRUE AS recovered
+    FROM FootballFixture f JOIN RecoveredPreMatchOddsSnapshot s ON s.fixtureId=f.id AND s.kickoffAt=f.kickoff WHERE ${eligible}
+    UNION ALL
+    SELECT s.id,s.batchId,f.externalId,f.kickoff,s.body,s.integrity=SHA2(CAST(s.body AS CHAR),256) AS validIntegrity,FALSE AS recovered
+    FROM FootballFixture f JOIN ProviderOddsSnapshot s ON s.fixtureId=f.id AND s.retrievedAt<f.kickoff WHERE ${eligible}`);
+  const receipts = new Map<string, Readonly<{ batch: OddsBatchBody; fixtures: ReadonlyMap<number, OddsBatchBody["fixtures"][number]>;
+    checked: ReadonlySet<number> }>>();
+  for (const ids of chunks([...new Set(rows.map(({ batchId }) => batchId))], 250)) {
+    const pages = await tx.$queryRaw<SealedRow[]>(Prisma.sql`SELECT id,body,integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity
+      FROM OddsImportBatch WHERE id IN (${Prisma.join(ids)})`);
+    for (const page of pages) {
+      const batch = parsedBatch(page);
+      receipts.set(page.id, { batch, fixtures: new Map(batch.fixtures.map((entry) => [entry.externalId, entry])),
+        checked: new Set(batch.pages.filter((item) => item.endpoint === "odds" && !item.fromCache).map(({ retrievedAt }) => retrievedAt)) });
+    }
+  }
+  type Quote = { value: StoredBookmakerValue & { observation: HistoricalObservation }; ambiguous: boolean };
+  type Market = { betId: number; betName: string; values: Map<string, { dated?: Quote; undated?: Quote }> };
+  type Book = { name: string | null; checkedAt: number; markets: Map<number, Market> };
+  type Fixture = { kickoffAt: number; checkedAt: HistoricalObservation["checkedAt"]; primaryBookmakerId: number; books: Map<number, Book> };
+  const projected = new Map<string, Fixture>();
+  const compareTime = (next: HistoricalObservation, current: HistoricalObservation) =>
+    (next.providerUpdatedAt ?? 0) - (current.providerUpdatedAt ?? 0) || next.observedAt - current.observedAt;
+  for (const row of rows) {
+    const recovery = asBoolean(row.recovered), snapshot = recovery ? parsedRecoveredSnapshot(row) : parsedSnapshot(row);
+    const kickoffAt = row.kickoff.getTime(), receipt = receipts.get(row.batchId), entry = receipt?.fixtures.get(Number(row.externalId));
+    if (expectedKickoff.get(snapshot.fixtureId) !== kickoffAt || !receipt || receipt.batch.kind !== "prices" || receipt.batch.status === "failed" ||
+      entry?.outcome !== (recovery ? "recover" : "apply") || !entry.quoteManifest || !receipt.checked.has(snapshot.retrievedAt) ||
+      snapshot.valuesHash !== oddsValuesHash(snapshot.values) || (snapshot.providerUpdatedAt !== null && snapshot.providerUpdatedAt > snapshot.retrievedAt) ||
+      ("kickoffAt" in snapshot && (snapshot.kickoffAt !== kickoffAt || snapshot.batchId !== row.batchId))) continue;
+    const manifest = [entry.quoteManifest, ...(entry.additionalQuoteManifests ?? [])].find((book) => book.bookmakerId === snapshot.bookmakerId);
+    const { betId, fixtureId, bookmakerId, bookmakerName } = snapshot, betName = catalog.get(betId);
+    if (!manifest || manifest.kickoffAt !== kickoffAt || !betName || snapshot.betName !== null && snapshot.betName !== betName ||
+      !manifest.bets.some((bet) => bet.betId === betId && bet.betName === snapshot.betName && bet.valuesHash === snapshot.valuesHash)) continue;
+    const observedAt = utcInstantFromEpochMilliseconds(snapshot.retrievedAt);
+    const observation: HistoricalObservation = { snapshotId: snapshot.id, receiptId: row.batchId, observedAt, checkedAt: observedAt,
+      providerUpdatedAt: snapshot.providerUpdatedAt === null ? null : utcInstantFromEpochMilliseconds(snapshot.providerUpdatedAt) };
+    const fixture = projected.get(fixtureId) ?? { kickoffAt, checkedAt: observedAt,
+      primaryBookmakerId: entry.quoteManifest.bookmakerId, books: new Map<number, Book>() };
+    if (observedAt > fixture.checkedAt || observedAt === fixture.checkedAt && entry.quoteManifest.bookmakerId < fixture.primaryBookmakerId) {
+      fixture.checkedAt = observedAt;
+      fixture.primaryBookmakerId = entry.quoteManifest.bookmakerId;
+    }
+    const book = fixture.books.get(bookmakerId) ?? { name: bookmakerName, checkedAt: observedAt, markets: new Map<number, Market>() };
+    if (bookmakerName !== null && (book.name === null || observedAt > book.checkedAt)) { book.name = bookmakerName; book.checkedAt = observedAt; }
+    const market: Market = book.markets.get(betId) ?? { betId, betName, values: new Map() };
+    for (const value of snapshot.values) {
+      const clocks = market.values.get(value.label) ?? {};
+      const stream = observation.providerUpdatedAt === null ? "undated" : "dated";
+      const known = clocks[stream], order = known ? compareTime(observation, known.value.observation) : 1;
+      if (order > 0) clocks[stream] = { value: { ...value, observation }, ambiguous: false };
+      else if (order === 0 && known) {
+        if (known.value.odd !== value.odd) known.ambiguous = true;
+        else if (snapshot.id < known.value.observation.snapshotId) known.value = { ...value, observation };
+      }
+      market.values.set(value.label, clocks);
+    }
+    book.markets.set(betId, market);
+    fixture.books.set(bookmakerId, book);
+    projected.set(fixtureId, fixture);
+  }
+  for (const [fixtureId, { books, ...fixture }] of projected) {
+    const bookmakers = [...books].sort(([left], [right]) => left - right).flatMap(([bookmakerId, book]) => {
+      const offers = [...book.markets.values()].sort((left, right) => left.betId - right.betId).flatMap(({ values, ...market }) => {
+        const exact = [...values].sort(([left], [right]) => byCodePoint(left, right)).flatMap(([, { dated, undated }]) => {
+          const latest = dated && (!undated || dated.value.observation.observedAt >= undated.value.observation.observedAt) ? dated : undated;
+          return latest && !latest.ambiguous ? [latest.value] : [];
+        });
+        return exact.length ? [{ ...market, values: exact, providerUpdatedAt: null }] : [];
+      });
+      return offers.length ? [{ bookmakerId, bookmakerName: book.name, offers }] : [];
+    });
+    if (bookmakers.length) found.set(fixtureId, { fixtureId, ...fixture, provenance: "historical-pre-match", bookmakers });
+  }
+  return found;
+}
+
+export function exactTotal15Odds(values: readonly StoredBookmakerValue[], checkedAt: number): Total15Odds | null {
   const selections = total15Selections.map((selection, index) => {
     const label = index === 0 ? "Over 1.5" : "Under 1.5";
     const matched = values.filter((value) => value.label === label);
@@ -405,15 +519,62 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
       withdrawnAt = ${fields.withdrawnAt ?? state.withdrawnAt}, publicVersion = ${version} WHERE fixtureId = ${fixtureId}`;
   }
 
+  async function applyRecoveredSnapshots(tx: Tx, input: OddsFixtureApplication, kickoffAt: UtcInstant, at: number): Promise<OddsApplyResult> {
+    const { row, fixtureId, batchId, policy } = input;
+    const { retrievedAt, providerUpdatedAt } = row.source;
+    const retainUntil = kickoffAt + policy.retainAfterKickoffMs;
+    if (!row.bookmakers.length || retrievedAt < kickoffAt || retrievedAt > at || retainUntil <= at) return "skipped";
+    const heads = await tx.$queryRaw<SealedRow[]>(Prisma.sql`
+      SELECT id, body, integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity FROM (
+        SELECT id,body,integrity,ROW_NUMBER() OVER (PARTITION BY bookmakerExternalId,betExternalId ORDER BY retrievedAt DESC,id DESC) AS rankNo
+        FROM RecoveredPreMatchOddsSnapshot WHERE fixtureId=${fixtureId} AND kickoffAt=${new Date(kickoffAt)}
+          AND bookmakerExternalId IN (${Prisma.join(row.bookmakers.map(({ id }) => id))})
+      ) newest WHERE rankNo=1`);
+    const previous = new Map(heads.map(parsedRecoveredSnapshot).map((snapshot) => [quoteKey(snapshot.bookmakerId, snapshot.betId), snapshot]));
+    const pending = row.bookmakers.flatMap(({ id: bookmakerId, name: bookmakerName, bets }) => bets.flatMap((bet) => {
+      const known = previous.get(quoteKey(bookmakerId, bet.id));
+      const values = canonicalOddsValues(bet.values), valuesHash = oddsValuesHash(values);
+      if (!values.length || known && known.retainUntil >= at && known.retrievedAt <= retrievedAt && known.providerUpdatedAt === providerUpdatedAt &&
+        known.valuesHash === valuesHash && known.bookmakerName === bookmakerName && known.betName === bet.name) return [];
+      const identity = { fixtureId, kickoffAt, bookmakerId, bookmakerName, betId: bet.id, betName: bet.name,
+        valuesHash, retrievedAt, providerUpdatedAt };
+      return [{ ...identity, id: evidenceFingerprint(identity), batchId, retainUntil, values }];
+    }));
+    let inserted = 0;
+    for (const part of chunks(pending, SNAPSHOT_CHUNK)) {
+      inserted += await tx.$executeRaw(Prisma.sql`INSERT IGNORE INTO RecoveredPreMatchOddsSnapshot
+        (id, fixtureId, batchId, kickoffAt, bookmakerExternalId, betExternalId, retrievedAt, providerUpdatedAt, retainUntil, integrity, body)
+        VALUES ${Prisma.join(part.map((body) => {
+          const json = evidenceSerialize(body);
+          return Prisma.sql`(${body.id}, ${fixtureId}, ${batchId}, ${new Date(kickoffAt)}, ${body.bookmakerId}, ${body.betId},
+            ${new Date(retrievedAt)}, ${providerUpdatedAt === null ? null : new Date(providerUpdatedAt)}, ${new Date(retainUntil)},
+            SHA2(CAST(JSON_EXTRACT(${json}, '$') AS CHAR), 256), JSON_EXTRACT(${json}, '$'))`;
+        }))}`);
+      const sealed = await tx.$queryRaw<SealedRow[]>(Prisma.sql`SELECT id,body,integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity
+        FROM RecoveredPreMatchOddsSnapshot WHERE id IN (${Prisma.join(part.map(({ id }) => id))})`);
+      const byId = new Map(sealed.map(parsedRecoveredSnapshot).map((value) => [value.id, value]));
+      for (const expected of part) {
+        const stored = byId.get(expected.id);
+        // An already counted page can also be shared with another dated sweep. Its first sealed receipt and retention limit win.
+        if (!stored || evidenceFingerprint({ ...stored, batchId, retainUntil }) !== evidenceFingerprint(expected)) return oddsFail("invalid-state");
+      }
+    }
+    return inserted > 0 ? "changed" : "unchanged";
+  }
+
   async function applyFixtureTransaction(tx: Tx, input: OddsFixtureApplication, pageReceipt?: VerifiedBatch): Promise<OddsApplyResult> {
     const { row, policy } = input, retrievedAt = row.source.retrievedAt, providerUpdatedAt = row.source.providerUpdatedAt;
     const bookmaker = row.bookmakers.find((entry) => entry.id === policy.bookmakerId);
-    if (row.kickoff === null || policy.bookmakerScope !== "all" && row.bookmakers.some((entry) => entry.id !== policy.bookmakerId)) return oddsFail("invalid-request");
+    if (row.kickoff === null) return oddsFail("invalid-request");
     const observationHash = evidenceFingerprint(row);
     // A page receipt may be inserted in this transaction. Only already committed receipts enter the cache here.
     const receipt = pageReceipt ?? verifiedBatches.get(input.batchId) ?? remember(await sealedBatch(tx, input.batchId));
     const entry = receipt?.fixtures.get(row.fixtureId);
-    if (!receipt || receipt.batch.kind !== "prices" || receipt.batch.policyHash !== input.policyHash || entry?.outcome !== "apply" ||
+    const recovery = entry?.outcome === "recover";
+    if (!receipt || !entry || receipt.batch.kind !== "prices" || receipt.batch.policyHash !== input.policyHash ||
+      (recovery ? !pageReceipt?.batch.checkpoint || !receipt.batch.pages.some((page) => page.endpoint === "odds" &&
+        !page.fromCache && page.retrievedAt === retrievedAt) : entry.outcome !== "apply" || receipt.batch.recovery ||
+        policy.bookmakerScope !== "all" && row.bookmakers.some((book) => book.id !== policy.bookmakerId)) ||
       entry.observationHash !== observationHash || !receipt.pages.has(retrievedAt)) return oddsFail("invalid-request");
     if (entry.quoteManifest || policy.bookmakerScope === "all") {
       const { quoteManifest, additionalQuoteManifests } = fixtureQuoteManifests(row, policy.bookmakerId);
@@ -423,6 +584,10 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
     const at = await now(tx);
     const fixture = (await tx.$queryRaw<{ kickoff: Date | null; status: string }[]>`SELECT kickoff, status FROM FootballFixture
       WHERE id = ${input.fixtureId} AND provider = 'api-football' AND externalId = ${BigInt(row.fixtureId)}`)[0];
+    if (recovery) {
+      if (fixture?.kickoff?.getTime() !== row.kickoff || !mayRetainRecoveredPreMatchFixtureStatus(fixture.status)) return "skipped";
+      return applyRecoveredSnapshots(tx, input, row.kickoff, at);
+    }
     // Pre-match only: after kickoff the last valid price is frozen as the closing price.
     if (!fixture || fixture.kickoff === null || fixture.kickoff.getTime() !== row.kickoff || fixture.status !== "scheduled" ||
       fixture.kickoff.getTime() <= Math.max(retrievedAt, at)) return "skipped";
@@ -514,7 +679,7 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
     batch(id: string) { return read((tx) => sealedBatch(tx, id)); },
     /** Commit exactly one verified provider page together with the offers it describes. */
     async saveAndApplyPricePage(input: OddsBatchBody, applications: readonly OddsFixtureApplication[]) {
-      if (!input.checkpoint || applications.length !== input.fixtures.filter(({ outcome }) => outcome === "apply").length ||
+      if (!input.checkpoint || applications.length !== input.fixtures.filter(({ outcome }) => outcome === "apply" || outcome === "recover").length ||
         new Set(applications.map(({ row }) => row.fixtureId)).size !== applications.length ||
         applications.some(({ batchId }) => batchId !== input.id)) return oddsFail("invalid-request");
       const result = await write(async (tx) => {
@@ -533,6 +698,16 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
           ORDER BY receivedAt, id LIMIT 1001`;
         if (rows.length > 1000) return oddsFail("invalid-state");
         return rows.map(parsedBatch);
+      });
+    },
+    completedRecoveryBatch(input: Readonly<{ requestId: string; scopeKey: string; policyHash: string }>): Promise<OddsBatchBody | null> {
+      return read(async (tx) => {
+        const [row] = await tx.$queryRaw<SealedRow[]>`SELECT id,body,integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity
+          FROM OddsImportBatch WHERE kind='prices' AND status='complete' AND scopeKey=${input.scopeKey} AND policyHash=${input.policyHash}
+            AND JSON_UNQUOTE(JSON_EXTRACT(body, '$.requestId'))=${input.requestId} ORDER BY receivedAt DESC,id DESC LIMIT 1`;
+        if (!row) return null;
+        const batch = parsedBatch(row);
+        return batch.recovery && !batch.checkpoint && batch.requestId === input.requestId ? batch : null;
       });
     },
     /** Every observed /odds/bets name is kept once; later renames add rows, never overwrite. */
@@ -637,7 +812,7 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
       // Candidate reads use the same transactional clock as the per-fixture re-check below.
       const { batch, candidates } = await write(async (tx) => {
         const batch = await sealedBatch(tx, input.batchId);
-        if (!batch || batch.checkpoint || batch.kind !== "prices" || batch.status !== "complete" || batch.date !== input.date) return oddsFail("invalid-request");
+        if (!batch || batch.recovery || batch.checkpoint || batch.kind !== "prices" || batch.status !== "complete" || batch.date !== input.date) return oddsFail("invalid-request");
         return { batch, candidates: await tx.$queryRaw<{ fixtureId: string }[]>`SELECT s.fixtureId FROM FixtureOddsState s
           JOIN FootballFixture f ON f.id = s.fixtureId
           WHERE f.eatDate = ${input.date} AND s.withdrawnAt IS NULL AND f.kickoff > UTC_TIMESTAMP(3) ORDER BY s.fixtureId` };

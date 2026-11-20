@@ -586,14 +586,15 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const livePrice = selection && observation?.kind === "in-play" ? marketOddsPrice(observation, shownFamily, selection) : null;
   const preMatchPrice = featured?.odds ?? (selection && fixture.status === "scheduled" && observation?.kind === "pre-match"
     ? marketOddsPrice(observation, shownFamily, selection) : null);
+  const storedPrice = selectedCardPrice(fixture, shownFamily, !publishedMarket);
+  const confirmedPrice = fixture.status === "live" ? livePrice : preMatchPrice;
   const price = !selection ? null : snapshotPick ? { price: snapshotPick.odds }
-    : featured ? featured.odds ? { price: featured.odds } : null
-    : fixture.status === "live" ? (livePrice ? { price: livePrice } : null)
-      : preMatchPrice ? { price: preMatchPrice } : selectedCardPrice(fixture, shownFamily, !publishedMarket);
+    : confirmedPrice ? { price: confirmedPrice } : featured || fixture.status === "live" ? null : storedPrice;
+  const oddsKind = (price && price === storedPrice ? storedPrice.recovery?.kind : undefined) ?? observation?.kind;
   const oddsCaption = messages.text("details.odds");
   const stackOddsCaption = `${oddsCaption}:`;
   const stackProbabilityCaption = `${messages.text("match.columns.probabilityCompact")}:`;
-  const oddsLabel = observation?.kind === "pre-match" ? messages.text("touchline.preMatchOdds") : oddsCaption;
+  const oddsLabel = oddsKind === "pre-match" || oddsKind === "historical-pre-match" ? messages.text("touchline.preMatchOdds") : oddsCaption;
   const oddsDescription = `${oddsLabel}: ${price?.price ?? messages.text("outcome.unavailable")}`;
   const market = prediction?.item.market;
   const expectedReturn = market?.source ? forecastExpectedReturn(market.selectedProbability, preMatchPrice) : null;
@@ -660,7 +661,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
           <span data-pick-selection>{predictionLabel(messages, selection, selectionContext)}</span>{sourceLabel}
         </PickLine> : <strong data-pick-label data-no-pick={missing ?? undefined}>{noPickLabel}</strong>}
       </>}
-      odds={<span data-card-odds data-pick-price={prediction ? "" : undefined} data-odds-kind={observation?.kind}
+      odds={<span data-card-odds data-pick-price={prediction ? "" : undefined} data-odds-kind={oddsKind}
         title={oddsDescription}>{price?.price ?? "—"}{expectedReturn !== null && expectedReturn > 0 && <> {valueLabel}</>}</span>}
       probability={gated ? <span data-public-probability>{publicChanceLabel}</span> : <span data-pick-value>{prediction ? percent : "—"}</span>}
       details={offline ? <VisuallyHidden>Predictions are unavailable in the saved view.</VisuallyHidden>
@@ -712,7 +713,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
           </>}
         </PickShort>
         <span data-match-metrics><Odds data-ledger-field="odds" data-stack-label={stackOddsCaption} aria-hidden={expectedReturn === null || expectedReturn <= 0}
-          data-card-odds data-odds-kind={observation?.kind} data-pick-price={prediction ? "" : undefined} title={oddsDescription}>{price?.price ?? "—"}{expectedReturn !== null && expectedReturn > 0 && <> {valueLabel}</>}</Odds>
+          data-card-odds data-odds-kind={oddsKind} data-pick-price={prediction ? "" : undefined} title={oddsDescription}>{price?.price ?? "—"}{expectedReturn !== null && expectedReturn > 0 && <> {valueLabel}</>}</Odds>
         <Probability data-ledger-field="probability" data-stack-label={stackProbabilityCaption} aria-hidden="true">
           {prediction && <ProbabilityBar $family={shownFamily} data-probability-meter=""><span style={{ inlineSize: `${Math.max(2, prediction.probability.roundedPercent)}%` }} /></ProbabilityBar>}
           <Percent data-pick-value="">{prediction ? percent : "—"}</Percent>

@@ -9,6 +9,7 @@ import { createMatchDetailService } from "./detail-service.ts";
 /** API and Server Components share stored reads, permission checks and cache. */
 export function readPublicMatchDetail(id: string, parameters = new URLSearchParams(), clock?: Clock) {
   const database = getDatabase();
-  return createMatchDetailService({ database, cache: createMysqlPublicResponseCache(database), providerOdds: publicOddsEnabled(),
+  const providerOdds = publicOddsEnabled();
+  return createMatchDetailService({ database, cache: createMysqlPublicResponseCache(database), providerOdds, allowInPlayOdds: providerOdds,
     ...(clock ? { clock } : {}) }).query(id, parameters);
 }

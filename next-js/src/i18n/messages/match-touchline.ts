@@ -22,6 +22,7 @@ export const matchTouchlineMessages = {
   "touchline.tab.markets": "Markets & Odds",
   "touchline.preMatchOdds": "Pre-match odds",
   "touchline.closingOdds": "Closing pre-match odds",
+  "touchline.recoveredOdds": "Historical pre-match odds",
   "touchline.bookmaker": "Bookmaker",
   "touchline.bookmakerNumber": "Bookmaker {id}",
   "touchline.showPrices": "Show prices",

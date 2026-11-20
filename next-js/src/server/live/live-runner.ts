@@ -13,7 +13,7 @@ import { createJobRegistry } from "../jobs/job-registry.ts";
 import { createJobWorker } from "../jobs/job-worker.ts";
 import { resultCadence } from "../results/result-sync-policy.ts";
 import { DAILY_SELECTION_TYPE, dailySelectionEnvelope, HOURLY_SELECTION_TYPE, hourlySelectionEnvelope, latestHourlySelectionOccurrence } from "../selection/selection-trigger.ts";
-import { latestOddsSlot, oddsScheduleEnvelopes, ODDS_SWEEP_MS } from "../odds/odds-jobs.ts";
+import { latestOddsSlot, oddsHistoryScheduleEnvelopes, oddsScheduleEnvelopes, ODDS_SWEEP_MS } from "../odds/odds-jobs.ts";
 import { latestTeamCodesSlot, teamCodesEnvelope, TEAM_CODES_SLOT_MS } from "../teams/team-code-jobs.ts";
 import { LiveAccountError } from "./live-account.ts";
 import { FORECAST_RECOVERY_INTERVAL_MS } from "../refresh/forecast-orchestration.ts";
@@ -42,6 +42,7 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
   let quotaObservation: Readonly<{ periodId: string; at: number; remaining: number; used: number }> | null = null;
   let hourlyScheduled: number | null = null, historyScheduled = 0;
   let currentDayScheduled = -1, recoveredForecastSlot = -1;
+  let historicalOddsScheduled = -1;
   let capacity: ReturnType<typeof assessLiveCapacity> | null = null, capacityWarning: string | null = null;
   type Poller = Readonly<{ controller: AbortController; done: Promise<void>; policy: unknown }>;
   const owned: { poller: Poller | null; details: Poller | null } = { poller: null, details: null };
@@ -130,7 +131,8 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
         const slot = latestOddsSlot(now);
         if (slot !== oddsScheduled && slot % (ODDS_SWEEP_MS * enrichmentMultiplier) === 0) {
           try {
-            const envelopes = oddsScheduleEnvelopes(now, runtime.odds.horizonDays, runtime.odds.bookmakerScope);
+            const envelopes = oddsScheduleEnvelopes(now, runtime.odds.horizonDays, runtime.odds.bookmakerScope,
+              runtime.odds.recoveryEnabled ? { providerLookahead: true } : undefined);
             for (const envelope of envelopes) await runtime.queue.enqueue(envelope);
             oddsScheduled = slot; log({ event: "odds-scheduled", slot: new Date(slot).toISOString(), dates: envelopes.length - 1 });
           } catch (error) { log({ event: "odds-schedule-failed", reason: reason(error) }); }
@@ -142,6 +144,12 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
               log({ event: "pre-match-catalog-coverage", observedAt: new Date(coverage.observedAt).toISOString(), ...counts });
             }
           } catch (error) { log({ event: "pre-match-catalog-coverage-unavailable", reason: reason(error) }); }
+        }
+        if (runtime.odds.recoveryEnabled && slot !== historicalOddsScheduled && oddsScheduled === slot) {
+          try {
+            for (const envelope of oddsHistoryScheduleEnvelopes(now)) await runtime.queue.enqueue(envelope);
+            historicalOddsScheduled = slot;
+          } catch (error) { log({ event: "historical-odds-schedule-failed", reason: reason(error) }); }
         }
       }
       // Team codes: one sweep per hourly slot, below every odds job on the shared enrichment worker. The durable
@@ -248,6 +256,16 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
       onHistoryDetailBatch: (report) => log({ event: "history-detail-batch", ...report }),
       onHourlyLookupFailure: (reason, fixtureCount) => log({ event: "hourly-fixture-reconcile-failed", reason, fixtureCount }),
       onForwardFixtureSweep: (report) => log({ event: "hourly-fixture-forward-sweep", ...report }),
+      onHistoricalOdds: (date, summary, state) => {
+        if (state === "stored") return;
+        const unavailable = summary ? summary.outcomes["unknown-fixture"] + summary.outcomes["awaiting-start"] +
+          summary.outcomes["kickoff-mismatch"] + summary.outcomes.skipped : 0;
+        log({ event: "historical-pre-match-odds", date, state, status: summary?.status ?? null,
+          requests: summary?.requestsDispatched ?? 0, recovered: summary?.outcomes.recover ?? 0,
+          changed: summary?.outcomes.changed ?? 0, unavailable,
+          reason: summary?.error?.reason ?? (summary?.status === "complete" && summary.outcomes.recover === 0 && unavailable === 0
+            ? "no-provider-odds" : state === "deferred" ? "shared-quota" : null) });
+      },
       onDateImportFailure: (date, hourly, reason) => log({ event: "selection-date-import-failed", date, hourly, reason }),
       onCurrentDayCoverage: (report) => log({ event: "current-context", requested: report.requested,
         archived: report.archived, skipped: report.skipped, deferred: report.deferred, stopped: report.stopped }),

@@ -64,11 +64,12 @@ export function selectedDetailPrice(data: MatchDetailResponse, family: MarketFam
   if (!item) return null;
   if (fixture.status === "live") return marketOddsPrice(data.inPlayOdds, family, item.market.selection);
   const bookmaker = bookmakerMarketPrice(data.bookmakerOdds, family, item.market.selection);
-  return marketOddsPrice(fixture.marketOdds?.kind === "pre-match" ? fixture.marketOdds : null, family, item.market.selection) ??
-    (bookmaker ? displayMarketOddsPrice(bookmaker) : null) ??
-    selectedCardPrice(fixture, family, false)?.price ??
-    data.odds?.find((group) => group.family === family)
-    ?.selections.find((price) => price.selection === item.market.selection)?.price ?? null;
+  const saved = marketOddsPrice(fixture.marketOdds?.kind === "pre-match" ? fixture.marketOdds : null, family, item.market.selection) ??
+    (bookmaker ? displayMarketOddsPrice(bookmaker) : null) ?? selectedCardPrice(fixture, family, false)?.price ??
+    data.odds?.find((group) => group.family === family)?.selections.find((price) => price.selection === item.market.selection)?.price;
+  if (saved) return saved;
+  const recovered = bookmakerMarketPrice(data.recoveredBookmakerOdds, family, item.market.selection);
+  return recovered ? displayMarketOddsPrice(recovered) : null;
 }
 
 /** Use the displayed revision's frozen recommendation or rank its published picks. */

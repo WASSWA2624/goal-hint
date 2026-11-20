@@ -113,7 +113,8 @@ function samePrices(previous: FixtureSnapshot["prices"], next: FixtureSnapshot["
   return left.length === right.length && left.every((item, index) => {
     const other = right[index]!;
     return item.family === other.family && item.selection === other.selection && item.price === other.price &&
-      item.basis === other.basis && item.retrievedAt === other.retrievedAt && item.providerUpdatedAt === other.providerUpdatedAt;
+      item.basis === other.basis && item.retrievedAt === other.retrievedAt && item.providerUpdatedAt === other.providerUpdatedAt &&
+      item.recovery?.bookmakerId === other.recovery?.bookmakerId && item.recovery?.kickoffAt === other.recovery?.kickoffAt;
   });
 }
 

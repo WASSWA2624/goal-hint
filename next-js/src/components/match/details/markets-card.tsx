@@ -333,7 +333,7 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
               </li>;
             })}
             {shownGoals.map((market) => <GoalMarketRow key={market.key} market={market} />)}
-          </RowList> : embedded && query && (data.bookmakerOdds || data.inPlayOdds?.prices.providerMarkets) ? null
+          </RowList> : embedded && query && (data.bookmakerOdds || data.recoveredBookmakerOdds || data.inPlayOdds?.prices.providerMarkets) ? null
             : <Note>{query ? messages.text("details.noMarketMatch", { query })
               : messages.text("details.noCategoryMarkets", { category: categoryLabel(view.marketCategory) })}</Note>}
         </div>

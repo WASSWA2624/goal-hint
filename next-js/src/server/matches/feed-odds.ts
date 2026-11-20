@@ -1,16 +1,19 @@
 import "server-only";
 
-import type { MarketOddsObservation } from "../../domain/in-play-odds.ts";
-import { matchFeedRules, type StoredMatchFeedResponse } from "../../domain/match-feed.ts";
+import { displayMarketOddsPrice, type MarketOddsObservation } from "../../domain/in-play-odds.ts";
+import { matchFeedRules, type StoredMatchFeedRecord, type StoredMatchFeedResponse } from "../../domain/match-feed.ts";
+import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
+import { recommendationMarket } from "../../domain/recommendation-view.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
 import { storedInPlayOddsForFixtures } from "../odds/in-play-odds-read.ts";
 import { storedUpcomingOddsForFixtures } from "../odds/odds-read.ts";
-import { storedCurrentBookmakerQuotes } from "../odds/odds-mysql-store.ts";
+import { storedCurrentBookmakerQuotes, storedRecoveredBookmakerQuotes, type StoredCurrentBookmakerQuotes } from "../odds/odds-mysql-store.ts";
 import { projectBookmakerOdds } from "../odds/bookmaker-odds-read.ts";
 import { readFeaturedGoalMarkets } from "../predictions/extended-market-read.ts";
 import { rankFixtureOutcomes } from "../../domain/market-ranking.ts";
-import { featuredBookmakerBetIds } from "../../domain/bookmaker-odds.ts";
+import { bookmakerMarketQuote, featuredBookmakerBetIds } from "../../domain/bookmaker-odds.ts";
 
 /** Feature a current outcome across the complete stored goal and launch forecasts. */
 export async function withUpcomingFeaturedOutcomes(database: DatabaseRuntime, response: StoredMatchFeedResponse, asOf: number, providerOdds: boolean) {
@@ -30,27 +33,55 @@ export async function withUpcomingFeaturedOutcomes(database: DatabaseRuntime, re
   return Buffer.byteLength(JSON.stringify(projected), "utf8") <= matchFeedRules.maximumResponseBytes ? freezeEvidence(projected) : response;
 }
 
-/** Current odds are observed independently of cached fixture and forecast content. */
-export async function withCurrentFeedOdds(database: DatabaseRuntime, response: StoredMatchFeedResponse, asOf: number, allowInPlay: boolean)
+function recoveredPrices(record: StoredMatchFeedRecord, quotes: StoredCurrentBookmakerQuotes | undefined, preferRecommendation: boolean) {
+  const { forecast } = record;
+  if (!quotes || quotes.kickoffAt !== record.kickoffAt || !forecast) return record.prices;
+  const odds = projectBookmakerOdds(quotes, "historical-pre-match");
+  if (!odds) return record.prices;
+  const kickoffAt = utcInstantFromEpochMilliseconds(odds.kickoffAt);
+  const existing = new Set(record.prices.map(({ family }) => family));
+  const recovered = forecast.markets.flatMap(({ market }) => {
+    const { family, selection } = recommendationMarket(market, preferRecommendation ? forecast.recommendation : undefined);
+    if (existing.has(family)) return [];
+    const quote = bookmakerMarketQuote(odds, family, selection);
+    if (quote?.state !== "available" || quote.offer.price === null || quote.actualBookmakerId === null) return [];
+    const { observedAt, providerUpdatedAt } = quote.offer;
+    return [{ family, selection, price: displayMarketOddsPrice(quote.offer.price), basis: "bookmaker" as const,
+      retrievedAt: utcInstantFromEpochMilliseconds(observedAt),
+      providerUpdatedAt: providerUpdatedAt === null ? null : utcInstantFromEpochMilliseconds(providerUpdatedAt),
+      recovery: { kind: "historical-pre-match" as const, bookmakerId: quote.actualBookmakerId, kickoffAt } }];
+  });
+  return recovered.length ? [...record.prices, ...recovered] : record.prices;
+}
+
+/** Live, upcoming and recovered prices have independent stored observation clocks. */
+export async function withFeedOdds(database: DatabaseRuntime, response: StoredMatchFeedResponse, asOf: number, allowInPlay: boolean,
+  preferRecommendation = true)
   : Promise<StoredMatchFeedResponse> {
   const scheduled: string[] = [], playing: string[] = [];
   for (const { fixtureId, kickoffAt, status } of response.records) {
     if (status === "scheduled" && kickoffAt !== null && kickoffAt > asOf) scheduled.push(fixtureId);
     else if (allowInPlay && status === "live") playing.push(fixtureId);
   }
-  const [upcoming, live] = await Promise.all([
+  const started = response.records.filter(({ status, kickoffAt, forecast, prices }) => kickoffAt !== null && kickoffAt <= asOf &&
+    (status === "live" || isPlayedFinalStatus(status)) && forecast !== null && prices.length < forecast.markets.length);
+  const [upcoming, live, recovered] = await Promise.all([
     scheduled.length ? database.query((tx) => storedUpcomingOddsForFixtures(tx, scheduled, asOf)).catch(() => []) : [],
     playing.length ? database.query((tx) => storedInPlayOddsForFixtures(tx, playing, asOf)).catch(() => []) : [],
+    started.length ? database.transaction((tx) => storedRecoveredBookmakerQuotes(tx, started, asOf, featuredBookmakerBetIds),
+      { isolationLevel: "RepeatableRead", maxWait: 2_000, timeout: 5_000 }).catch(() => null) : null,
   ]);
   const observations = new Map<string, { kickoffAt: number; observation: MarketOddsObservation }>(
     upcoming.map(({ fixtureId, kickoffAt, observation }) => [fixtureId, { kickoffAt, observation }]),
   );
   for (const { fixtureId, kickoffAt, checkedAt, prices } of live)
     observations.set(fixtureId, { kickoffAt, observation: { kind: "in-play", checkedAt, prices } });
-  if (!observations.size) return response;
+  if (!observations.size && !recovered?.size) return response;
   const records = response.records.map((record) => {
     const entry = observations.get(record.fixtureId);
-    return entry && entry.kickoffAt === record.kickoffAt ? { ...record, marketOdds: entry.observation } : record;
+    const prices = recoveredPrices(record, recovered?.get(record.fixtureId), preferRecommendation);
+    const marketOdds = entry && entry.kickoffAt === record.kickoffAt ? entry.observation : record.marketOdds;
+    return prices === record.prices && marketOdds === record.marketOdds ? record : { ...record, prices, marketOdds };
   });
   const projected = { ...response, records };
   return Buffer.byteLength(JSON.stringify(projected), "utf8") <= matchFeedRules.maximumResponseBytes ? freezeEvidence(projected) : response;

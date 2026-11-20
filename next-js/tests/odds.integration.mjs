@@ -5,11 +5,16 @@ import test from 'node:test';
 import { deMargin, parseDecimalOdds } from '../src/domain/odds.ts';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
 import { createFootballCatalogImporter } from '../src/server/football/catalog-service.ts';
+import { API_FOOTBALL_CONTRACT_VERSION } from '../src/server/football/api-football-contract.ts';
+import { normalizeOdds } from '../src/server/football/api-football-normalize.ts';
 import { OddsError } from '../src/server/odds/odds-contract.ts';
-import { oddsPolicyHash } from '../src/server/odds/odds-input.ts';
-import { createMysqlOddsStore, oddsValuesHash, storedCurrentBookmakerQuotes } from '../src/server/odds/odds-mysql-store.ts';
+import { oddsPolicyHash, oddsPricePageScopeKey, oddsScopeKey } from '../src/server/odds/odds-input.ts';
+import { createMysqlOddsStore, fixtureQuoteManifests, oddsValuesHash, storedClosingBookmakerQuotes,
+  storedCurrentBookmakerQuotes, storedRecoveredBookmakerQuotes } from '../src/server/odds/odds-mysql-store.ts';
 import { storedFixtureOddsGroups, storedFixturePrices } from '../src/server/odds/odds-read.ts';
 import { createOddsImportService } from '../src/server/odds/odds-service.ts';
+import { createMatchDetailService } from '../src/server/matches/detail-service.ts';
+import { gateDetailResponse } from '../src/domain/paywall.ts';
 import { catalogFixture, catalogRequest, createSyntheticCatalogAdapter } from './helpers/catalog-fixtures.mjs';
 import { catalogSelectionAuthority } from './helpers/selection-fixtures.mjs';
 import { createSyntheticOddsAdapter, launchBetCatalog, launchBets, ODDS_BOOKMAKER, oddsAuthority, oddsBounds, oddsHash, oddsPolicy,
@@ -119,7 +124,7 @@ test('odds import persistence on isolated genuine MySQL', { timeout: 300_000 }, 
           'FixtureOddsState_shape_check', 'OddsBetObservation_shape_check', 'OddsImportBatch_shape_check', 'ProviderOddsSnapshot_body_check',
           'ProviderOddsSnapshot_identity_check', 'ProviderOddsSnapshot_integrity_check', 'ProviderOddsSnapshot_time_check']);
         // Receipts, bet names and snapshots are append-only; state and prices take column-scoped updates and are never deleted.
-        for (const table of ['OddsImportBatch', 'OddsBetObservation', 'ProviderOddsSnapshot']) {
+        for (const table of ['OddsImportBatch', 'OddsBetObservation', 'ProviderOddsSnapshot', 'RecoveredPreMatchOddsSnapshot']) {
           await assert.rejects(a.query((tx) => tx.$executeRawUnsafe(`UPDATE ${table} SET id = id`)));
           await assert.rejects(a.query((tx) => tx.$executeRawUnsafe(`DELETE FROM ${table}`)));
         }
@@ -162,7 +167,7 @@ test('odds import persistence on isolated genuine MySQL', { timeout: 300_000 }, 
         sweep(nextKeys());
         const summary = await importDate(NEXT);
         assert.equal(summary.status, 'complete'); assert.equal(summary.requestsDispatched, 1); assert.equal(summary.error, null);
-        assert.deepEqual(summary.outcomes, { apply: 3, 'unknown-fixture': 1, 'after-kickoff': 0, 'kickoff-mismatch': 1, 'not-scheduled': 1,
+        assert.deepEqual(summary.outcomes, { apply: 3, recover: 0, 'unknown-fixture': 1, 'after-kickoff': 0, 'awaiting-start': 0, 'kickoff-mismatch': 1, 'not-scheduled': 1,
           changed: 3, unchanged: 0, skipped: 0, withdrawn: 0 });
         privateBatch = summary.batchId; firstRetrieval = p.now();
         assert.equal(await catalog.fixtureByProviderId(UNKNOWN), null, 'unknown fixtures are counted, never created');
@@ -546,6 +551,127 @@ test('odds import persistence on isolated genuine MySQL', { timeout: 300_000 }, 
         assert.deepEqual(odds.network.slice(calls).map((url) => url.searchParams.get('page')), ['1', '1', '2']);
         assert.equal((await store.batch(rest.batchId)).requestsDispatched, 0, 'terminal receipts do not recount the page transports');
         assert.deepEqual(await untouched(), before);
+      });
+
+      await t.test('historical pre-match pages preserve exact bookmaker, line and recovery clocks without rewriting closing prices', async () => {
+        p.setTime(kickoffs.G + HOUR);
+        await a.query((tx) => tx.footballFixture.update({ where: { id: F.G.id }, data: { status: 'finished-regulation', providerStatus: 'FT' } }));
+        const target = { fixtureId: F.G.id, kickoffAt: kickoffs.G };
+        const closing = () => a.query((tx) => storedClosingBookmakerQuotes(tx, target, p.now()));
+        const originalClosing = await closing(), originalState = await state('G'), originalPrices = await prices('G');
+        assert.ok(originalClosing, 'the pre-kickoff closing projection is present before historical writes');
+        const recovered = () => a.query((tx) => storedRecoveredBookmakerQuotes(tx, [target], p.now(), [5]));
+        const multiPolicy = oddsPolicy({ bookmakerScope: 'all' }), policyHash = oddsPolicyHash(multiPolicy);
+        const date = '2026-10-16';
+        const requestId = oddsHash('historical-pre-match-pages');
+        const make = (raw, page, status = 'complete', key = requestId) => {
+          const retrievedAt = p.now();
+          const normalized = normalizeOdds(raw, { endpoint: '/odds', retrievedAt });
+          assert.equal(normalized.valid, true);
+          const row = normalized.data;
+          const provenance = { provider: 'api-football', endpoint: 'odds', requestParameters: { date, timezone: 'Africa/Kampala', page: String(page) },
+            contractVersion: API_FOOTBALL_CONTRACT_VERSION, retrievedAt, providerUpdatedAt: null, fromCache: false, currentPage: page, totalPages: 2 };
+          const body = { accountId, kind: 'prices', recovery: true, scopeKey: oddsPricePageScopeKey(key), policyHash,
+            status, receivedAt: retrievedAt, requestId: key, slot: slot(), date, contractVersion: multiPolicy.contractVersion,
+            reasons: [], requestsDispatched: 0, missingCoverage: [], pages: [provenance], checkpoint: { page, totalPages: 2 }, catalog: [],
+            fixtures: [{ externalId: row.fixtureId, outcome: 'recover', observationHash: evidenceFingerprint(row), ...fixtureQuoteManifests(row, ODDS_BOOKMAKER) }] };
+          const batch = { ...body, id: evidenceFingerprint(body) };
+          return { batch, application: { batchId: batch.id, policy: multiPolicy, policyHash, fixtureId: F.G.id, row, publicDisplay: true, catalog: null } };
+        };
+        const total = (over25, over35) => [{ id: 5, name: 'Goals Over/Under', values: [
+          { value: 'Over 2.5', odd: over25 }, { value: 'Under 2.5', odd: '1.75' }, { value: 'Over 3.5', odd: over35 },
+        ] }];
+        const first = row('G', { update: null, bets: total('2.1234', '3.01') });
+        first.bookmakers.push(row('G', { bookmakerId: 6, bookmakerName: 'Synthetic second bookmaker', update: null,
+          bets: total('2.09', '3.25') }).bookmakers[0]);
+        const initial = make(first, 1), firstObservedAt = p.now();
+        await a.query((tx) => tx.footballFixture.update({ where: { id: F.G.id }, data: { status: 'scheduled', providerStatus: 'NS' } }));
+        await assert.rejects(store.saveAndApplyPricePage(initial.batch, [{ ...initial.application,
+          row: { ...initial.application.row, source: { ...initial.application.row.source, providerUpdatedAt: firstObservedAt } } }]), denied('invalid-request'));
+        assert.deepEqual(await store.pricePageBatches(requestId, policyHash), []);
+        assert.deepEqual((await store.saveAndApplyPricePage(initial.batch, [initial.application])).outcomes, ['changed']);
+        assert.deepEqual((await otherStore.saveAndApplyPricePage(initial.batch, [initial.application])).outcomes, ['unchanged']);
+        assert.equal(await count('RecoveredPreMatchOddsSnapshot'), 2);
+        assert.equal((await recovered()).size, 0, 'a stored post-kickoff quote stays private while the source still shows Not Started');
+        await a.query((tx) => tx.footballFixture.update({ where: { id: F.G.id }, data: { status: 'finished-regulation', providerStatus: 'FT' } }));
+        assert.equal((await recovered()).get(F.G.id).bookmakers.length, 2, 'status repair can display the staged quotes without another import');
+
+        advance(HOUR);
+        const providerUpdatedAt = kickoffs.G + 15 * MINUTE;
+        const corrected = make(row('G', { update: offsetTime(providerUpdatedAt), bets: [
+          { id: 5, name: 'Goals Over/Under', values: [{ value: 'Over 3.5', odd: '3.2012' }] },
+        ] }), 2, 'partial');
+        const correctedAt = p.now();
+        assert.deepEqual((await otherStore.saveAndApplyPricePage(corrected.batch, [corrected.application])).outcomes, ['changed']);
+        assert.equal(await count('RecoveredPreMatchOddsSnapshot'), 3);
+        advance(MINUTE);
+        const stale = make(row('G', { update: offsetTime(kickoffs.G + MINUTE), bets: [
+          { id: 5, name: 'Goals Over/Under', values: [{ value: 'Over 3.5', odd: '5.20' }] },
+        ] }), 1, 'complete', oddsHash('historical-late-stale-provider-clock'));
+        assert.deepEqual((await store.saveAndApplyPricePage(stale.batch, [stale.application])).outcomes, ['changed']);
+        const quotes = (await recovered()).get(F.G.id);
+        assert.equal(quotes.provenance, 'historical-pre-match');
+        const exact = (bookmakerId, label) => quotes.bookmakers.find((book) => book.bookmakerId === bookmakerId)
+          .offers[0].values.find((value) => value.label === label);
+        assert.equal(exact(ODDS_BOOKMAKER, 'Over 2.5').odd, '2.1234');
+        assert.equal(exact(ODDS_BOOKMAKER, 'Over 2.5').observation.observedAt, firstObservedAt);
+        assert.equal(exact(ODDS_BOOKMAKER, 'Over 2.5').observation.providerUpdatedAt, null);
+        assert.equal(exact(ODDS_BOOKMAKER, 'Over 3.5').odd, '3.2012');
+        assert.equal(exact(ODDS_BOOKMAKER, 'Over 3.5').observation.providerUpdatedAt, providerUpdatedAt);
+        assert.equal(exact(ODDS_BOOKMAKER, 'Over 3.5').observation.observedAt, correctedAt);
+        assert.equal(exact(6, 'Over 3.5').odd, '3.25');
+        assert.deepEqual(await closing(), originalClosing);
+        assert.deepEqual(await state('G'), originalState);
+        assert.deepEqual(await prices('G'), originalPrices);
+        assert.equal((await a.query((tx) => storedCurrentBookmakerQuotes(tx, [target], p.now()))).size, 0);
+
+        const { id: _id, checkpoint: _checkpoint, ...data } = corrected.batch;
+        void _id; void _checkpoint;
+        const scopeKey = oddsScopeKey({ kind: 'prices', date, policy: multiPolicy, recovery: true });
+        const report = { ...data, scopeKey, status: 'complete' };
+        await store.saveBatch({ ...report, id: evidenceFingerprint(report) });
+        assert.equal((await store.completedRecoveryBatch({ requestId, scopeKey, policyHash })).id, evidenceFingerprint(report));
+        await assert.rejects(store.markWithdrawn({ batchId: evidenceFingerprint(report), date, seenFixtureIds: [] }), denied('invalid-request'));
+        await assert.rejects(p.instance.executeAdmin('UPDATE RecoveredPreMatchOddsSnapshot SET retrievedAt = DATE_SUB(kickoffAt, INTERVAL 1 SECOND)'),
+          violates(/recovered_pre_match_odds_check/u));
+
+        const moved = kickoffs.G + 10 * MINUTE;
+        await a.query((tx) => tx.footballFixture.update({ where: { id: F.G.id }, data: { kickoff: new Date(moved) } }));
+        assert.equal((await recovered()).size, 0);
+        assert.equal((await a.query((tx) => storedRecoveredBookmakerQuotes(tx, [{ fixtureId: F.G.id, kickoffAt: moved }], p.now()))).size, 0);
+        await a.query((tx) => tx.footballFixture.update({ where: { id: F.G.id }, data: { kickoff: new Date(kickoffs.G) } }));
+
+        const lateMapping = make(row('G', { bets: [{ id: 61, name: null, values: [{ value: 'Home', odd: '7.21' }] }] }),
+          1, 'complete', oddsHash('historical-late-catalog-mapping'));
+        await store.saveAndApplyPricePage(lateMapping.batch, [lateMapping.application]);
+        const newlyMapped = () => a.query((tx) => storedRecoveredBookmakerQuotes(tx, [target], p.now(), [61]));
+        assert.equal((await newlyMapped()).size, 0);
+        advance(MINUTE);
+        odds.state.bets = [...launchBetCatalog(), { id: 61, name: 'Synthetic historical market' }];
+        await importCatalog('bets');
+        const mapped = (await newlyMapped()).get(F.G.id).bookmakers[0].offers[0];
+        assert.equal(mapped.betName, 'Synthetic historical market');
+        assert.equal(mapped.values[0].odd, '7.21');
+        assert.equal(mapped.values[0].observation.receiptId, lateMapping.batch.id);
+      });
+
+      await t.test('authorized match details present stored closing and historical pre-match quotes independently', async () => {
+        const clock = { now: () => p.now() };
+        const reader = createMatchDetailService({ database: a, clock, providerOdds: true, allowInPlayOdds: true, allowLiveMatch: false });
+        const detail = await reader.query(F.G.id);
+        assert.equal(detail.bookmakerOdds.kind, 'closing');
+        assert.ok(detail.bookmakerOdds.checkedAt < kickoffs.G);
+        const historical = detail.recoveredBookmakerOdds;
+        assert.equal(historical.kind, 'historical-pre-match');
+        const quote = historical.books.find((book) => book.bookmakerId === ODDS_BOOKMAKER).markets.find((market) => market.betId === 5)
+          .selections.find(({ label }) => label === 'Over 2.5');
+        assert.equal(quote.price, '2.1234');
+        assert.ok(quote.observation.observedAt > kickoffs.G);
+        assert.equal(quote.observation.providerUpdatedAt, null);
+        assert.deepEqual(gateDetailResponse(detail, { tier: 'free', signedIn: false }).recoveredBookmakerOdds, historical);
+        const withheld = await createMatchDetailService({ database: a, clock, providerOdds: false, allowLiveMatch: false }).query(F.G.id);
+        assert.equal(withheld.recoveredBookmakerOdds, undefined);
+        assert.equal(withheld.bookmakerOdds, undefined);
       });
 
       await t.test('odds never touch catalog versions, fixture imports, forecast jobs, published revisions or the network', async () => {

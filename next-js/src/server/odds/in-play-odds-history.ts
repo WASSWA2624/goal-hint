@@ -1,5 +1,6 @@
 import "server-only";
 
+import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { reconcileOddsCatalog } from "../../domain/market-registry.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import type { NormalizedInPlayOdds } from "../football/api-football-normalize.ts";
@@ -12,7 +13,7 @@ const textOrder = (left: string, right: string) => left < right ? -1 : left > ri
 export type InPlayFixtureOccurrence = Readonly<{
   id: string; providerId: bigint; kickoffAt: Date; homeTeamId: string; awayTeamId: string;
 }>;
-type MatchedOdds = Readonly<{ fixture: InPlayFixtureOccurrence; row: NormalizedInPlayOdds }>;
+export type InPlayFixtureOdds = Readonly<{ fixture: InPlayFixtureOccurrence; row: NormalizedInPlayOdds }>;
 type CatalogReview = ReturnType<typeof reconcileOddsCatalog>[number];
 
 function reviewNames(catalog: Readonly<Record<string, string>>) {
@@ -49,9 +50,12 @@ function occurrenceHash(fixture: InPlayFixtureOccurrence) {
 }
 
 type Head = InPlayFixtureOccurrence & { revisionId: string; occurrenceHash: string; semanticHash: string; outOfOrder: boolean | number | bigint;
-  lastObservedAt: Date; lastProviderUpdatedAt: Date | null; bodyJson: unknown };
+  lastObservedAt: Date; providerUpdatedAt: Date | null; lastProviderUpdatedAt: Date | null; bodyJson: unknown };
 
-type ObservedBody = ReturnType<typeof structuredInPlayOdds>;
+type ObservedBody = Omit<ReturnType<typeof structuredInPlayOdds>, "version"> & Readonly<{
+  version: 1 | 2; occurrence?: Readonly<{ kickoffAt: number; homeTeamId: string; awayTeamId: string }>;
+  providerClockKnown?: boolean;
+}>;
 type HistoryBody = ObservedBody | (Omit<ObservedBody, "availability" | "flags" | "markets"> &
   { availability: "not-returned"; flags: null; markets: readonly [] });
 
@@ -65,8 +69,10 @@ function sourceRecord(row: Head): HistoryBody | null {
 }
 
 /** The caller holds the poll-state fence so history and current quotes cannot publish out of order. */
-export async function retainInPlayOddsHistory(tx: Prisma.TransactionClient, matched: readonly MatchedOdds[], returned: ReadonlySet<number>,
-  catalog: Readonly<Record<string, string>>, retrievedAt: number, previousWindowMs: number, competitionIds?: readonly number[]): Promise<void> {
+export async function retainInPlayOddsHistory(tx: Prisma.TransactionClient, matched: readonly InPlayFixtureOdds[], returned: ReadonlySet<number>,
+  catalog: Readonly<Record<string, string>>, retrievedAt: number, previousWindowMs: number, complete: boolean,
+  competitionIds?: readonly number[]): Promise<void> {
+  if (!complete && matched.length === 0) return;
   const received = new Date(retrievedAt), cutoff = new Date(retrievedAt - previousWindowMs);
   const matchedIds = matched.map(({ fixture }) => fixture.id);
   const includeSupplied = matchedIds.length ? Prisma.sql`OR h.fixtureId IN (${Prisma.join(matchedIds)})` : Prisma.empty;
@@ -75,9 +81,9 @@ export async function retainInPlayOddsHistory(tx: Prisma.TransactionClient, matc
       SELECT h.id,
         ROW_NUMBER() OVER (PARTITION BY h.fixtureId, h.occurrenceHash, h.outOfOrder ORDER BY h.firstObservedAt DESC,h.id DESC) AS rowRank
       FROM FixtureInPlayOddsHistory h
-      WHERE h.lastObservedAt >= ${cutoff} ${includeSupplied}
+      WHERE (${complete} AND h.lastObservedAt >= ${cutoff} ${includeSupplied})
     ) SELECT h.id AS revisionId, f.id, f.externalId AS providerId, f.kickoff AS kickoffAt, f.homeTeamId, f.awayTeamId,
-      h.occurrenceHash, h.semanticHash, h.outOfOrder, h.lastObservedAt, h.lastProviderUpdatedAt, h.bodyJson
+      h.occurrenceHash, h.semanticHash, h.outOfOrder, h.lastObservedAt, h.providerUpdatedAt, h.lastProviderUpdatedAt, h.bodyJson
     FROM ranked r JOIN FixtureInPlayOddsHistory h ON h.id=r.id
     JOIN FootballFixture f ON f.id=h.fixtureId AND f.kickoff IS NOT NULL WHERE r.rowRank = 1`;
   const headKey = (occurrence: string, outOfOrder: boolean) => `${occurrence}:${Number(outOfOrder)}`;
@@ -90,7 +96,10 @@ export async function retainInPlayOddsHistory(tx: Prisma.TransactionClient, matc
     if (distinct.has(occurrence)) continue;
     distinct.add(occurrence);
     const current = previous.get(headKey(occurrence, false)), sourceTime = row.source.providerUpdatedAt;
-    const value = structuredInPlayOdds(row, catalog, review), hash = evidenceFingerprint(value);
+    const value: ObservedBody = { ...structuredInPlayOdds(row, catalog, review), version: 2,
+      occurrence: { kickoffAt: fixture.kickoffAt.getTime(), homeTeamId: fixture.homeTeamId, awayTeamId: fixture.awayTeamId },
+      providerClockKnown: sourceTime !== null };
+    const hash = evidenceFingerprint(value);
     const previousSource = current?.lastProviderUpdatedAt?.getTime();
     const stale = current !== undefined && (current.lastObservedAt.getTime() > retrievedAt ||
       current.lastObservedAt.getTime() === retrievedAt && current.semanticHash !== hash ||
@@ -98,11 +107,11 @@ export async function retainInPlayOddsHistory(tx: Prisma.TransactionClient, matc
     observe(fixture.id, occurrence, value, hash, sourceTime, stale);
   }
   for (const prior of heads) {
-    if (prior.outOfOrder || prior.lastObservedAt < cutoff || prior.lastObservedAt >= received || returned.has(Number(prior.providerId)) ||
+    if (!complete || prior.outOfOrder || prior.lastObservedAt < cutoff || prior.lastObservedAt >= received || returned.has(Number(prior.providerId)) ||
         occurrenceHash(prior) !== prior.occurrenceHash) continue;
     const old = sourceRecord(prior);
     if (!old || old.availability === "not-returned" || competitionIds && !competitionIds.includes(old.competitionId)) continue;
-    const absent = { ...old, availability: "not-returned", flags: null, markets: [] } as const;
+    const absent = { ...old, availability: "not-returned", flags: null, markets: [], providerClockKnown: false } as const;
     // A missing listing is an observed absence, without a provider update clock or invented quote.
     observe(prior.id, prior.occurrenceHash, absent, evidenceFingerprint(absent), null, false, prior.lastProviderUpdatedAt?.getTime() ?? null);
   }
@@ -133,4 +142,39 @@ export async function retainInPlayOddsHistory(tx: Prisma.TransactionClient, matc
     const latest = latestSourceTime === null ? null : new Date(latestSourceTime);
     inserts.push(Prisma.sql`(${id}, ${fixtureId}, ${occurrence}, ${hash}, ${stale}, ${received}, ${received}, ${updated}, ${latest}, ${JSON.stringify(body)})`);
   }
+}
+
+/** A catalog refresh can interpret fresh retained offers without moving their source or observation clocks. */
+export async function recentInPlayOddsForRemapping(tx: Prisma.TransactionClient, asOf: number, freshnessMs: number,
+  competitionIds: readonly number[] | undefined): Promise<InPlayFixtureOdds[]> {
+  const before = new Date(asOf), cutoff = new Date(asOf - freshnessMs);
+  const heads = await tx.$queryRaw<Head[]>`
+    WITH ranked AS (
+      SELECT h.id, ROW_NUMBER() OVER (PARTITION BY h.fixtureId, h.occurrenceHash ORDER BY h.firstObservedAt DESC, h.id DESC) AS rowRank
+      FROM FixtureInPlayOddsHistory h WHERE h.lastObservedAt BETWEEN ${cutoff} AND ${before} AND h.outOfOrder = FALSE
+    ) SELECT h.id AS revisionId, f.id, f.externalId AS providerId, f.kickoff AS kickoffAt, f.homeTeamId, f.awayTeamId,
+      h.occurrenceHash, h.semanticHash, h.outOfOrder, h.lastObservedAt, h.providerUpdatedAt, h.lastProviderUpdatedAt, h.bodyJson
+    FROM ranked r JOIN FixtureInPlayOddsHistory h ON h.id = r.id
+    JOIN FootballFixture f ON f.id = h.fixtureId AND f.kickoff IS NOT NULL AND f.status = 'live'
+    WHERE r.rowRank = 1`;
+  const scoped = competitionIds === undefined ? null : new Set(competitionIds);
+  return heads.flatMap(fixture => {
+    if (occurrenceHash(fixture) !== fixture.occurrenceHash) return [];
+    const observed = sourceRecord(fixture), retrievedAt = fixture.lastObservedAt.getTime();
+    const kickoffAt = fixture.kickoffAt.getTime();
+    if (!observed || observed.availability !== "offered" || retrievedAt < kickoffAt ||
+      observed.providerFixtureId !== Number(fixture.providerId) || scoped && !scoped.has(observed.competitionId)) return [];
+    if (observed.markets.some(market => !market.complete)) return [];
+    // Legacy spans that began without a clock do not establish a reported update for every observation.
+    const updated = (observed.providerClockKnown === true || observed.version === 1 && fixture.providerUpdatedAt !== null)
+      ? fixture.lastProviderUpdatedAt?.getTime() ?? null : null;
+    if (updated !== null && updated < Math.max(kickoffAt, asOf - freshnessMs)) return [];
+    return [{ fixture, row: { fixtureId: observed.providerFixtureId, competitionId: observed.competitionId, season: observed.season,
+      homeTeamId: observed.homeProviderTeamId, awayTeamId: observed.awayProviderTeamId, ...observed.flags,
+      bets: observed.markets.map(({ marketId, name, values }) => ({ id: marketId, name, values: values.map(value =>
+        ({ label: value.label, handicap: value.line, odd: value.price, main: value.main, suspended: value.suspended })) })),
+      source: { provider: "api-football", endpoint: "/odds/live", retrievedAt: utcInstantFromEpochMilliseconds(retrievedAt),
+        providerUpdatedAt: updated === null ? null : utcInstantFromEpochMilliseconds(updated) },
+    } }];
+  });
 }

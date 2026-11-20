@@ -19,7 +19,7 @@ import { storedFeedSearch } from "./feed-search.ts";
 import { storedFeedFixtures } from "./fixture-read.ts";
 import { feedPerformanceCacheKey, readFeedPerformance } from "./feed-performance.ts";
 import { filterFeedResult } from "./feed-result-filter.ts";
-import { withCurrentFeedOdds, withUpcomingFeaturedOutcomes } from "./feed-odds.ts";
+import { withFeedOdds, withUpcomingFeaturedOutcomes } from "./feed-odds.ts";
 import { performanceFeedQuery } from "../../domain/feed-performance-summary.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
 import { readPublicCacheGenerations } from "../cache/mysql-public-cache.ts";
@@ -146,7 +146,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           publishedOnly, publishedForecasts, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } },
         scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => storedMatchFeedResponseSchema.parse(value) }), read) : await read();
-      const current = providerOdds ? await withCurrentFeedOdds(database, response, asOf, allowInPlayOdds) : response;
+      const current = providerOdds ? await withFeedOdds(database, response, asOf, allowInPlayOdds, !publishedForecasts) : response;
       const useCompleteForecast = publishedForecasts && isDefaultFeaturedScope(query);
       return useCompleteForecast ? withUpcomingFeaturedOutcomes(database, current, asOf, providerOdds) : current;
     } catch (error) {

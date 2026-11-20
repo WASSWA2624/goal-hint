@@ -8,6 +8,8 @@ import { isSafeRemoteImageUrl } from "./remote-image.ts";
 import { teamCodePattern } from "./team-name.ts";
 import { publicRecommendationSchema } from "./recommendation-view.ts";
 import { marketOddsObservationSchema } from "./in-play-odds.ts";
+import { bookmakerOddsId } from "./bookmaker-odds.ts";
+import { parseDecimalOdds } from "./odds.ts";
 
 import { parseFixtureVersion } from "./fixture-version.ts";
 export { maximumFixtureVersion, parseFixtureVersion, compareFixtureVersions } from "./fixture-version.ts";
@@ -59,12 +61,15 @@ export const unavailableMarketSchema = z.strictObject({
 export const fixturePriceSchema = z.strictObject({
   family: marketFamilySchema,
   selection: z.string().min(1).max(64),
-  /** Decimal price, two places, rounded half-up once when stored. */
-  price: z.string().regex(/^[1-9]\d{0,3}\.\d{2}$/u),
+  /** Projection prices retain their existing display precision. Recovered quotes retain the exact decimal. */
+  price: z.string().regex(/^[1-9]\d{0,4}\.\d{2,4}$/u),
   basis: z.enum(["bookmaker", "median"]),
   retrievedAt: instant,
   providerUpdatedAt: instant.nullable(),
-});
+  recovery: z.strictObject({ kind: z.literal("historical-pre-match"), bookmakerId: bookmakerOddsId, kickoffAt: instant }).optional(),
+}).refine(({ price, basis, retrievedAt, providerUpdatedAt, recovery }) => recovery === undefined
+  ? /^[1-9]\d{0,3}\.\d{2}$/u.test(price)
+  : basis === "bookmaker" && parseDecimalOdds(price) !== null && (providerUpdatedAt === null || providerUpdatedAt <= retrievedAt));
 export type FixturePrice = z.infer<typeof fixturePriceSchema>;
 /** In-play phase and provider-reported minute, present only while the fixture is live. */
 export const liveClockPhases = ["first-half", "half-time", "second-half", "extra-time", "break", "penalties", "interrupted", "suspended", "in-play"] as const;
@@ -192,7 +197,8 @@ function refineFixture(value: z.infer<typeof wireFixtureBaseSchema>, context: z.
     if (forecast?.recommendation?.selected) picks.set(forecast.recommendation.selected.family,
       forecast.recommendation.selected.selection as AcceptedMarket["selection"]);
     if (new Set(value.prices.map((item) => item.family)).size !== value.prices.length ||
-      value.prices.some((item) => picks.get(item.family) !== item.selection)) {
+      value.prices.some((item) => picks.get(item.family) !== item.selection || item.recovery &&
+        (item.recovery.kickoffAt !== value.kickoffAt || value.status !== "live" && !isPlayedFinalStatus(value.status)))) {
       context.addIssue({ code: "custom", message: "A price must belong to exactly one published pick of its own family." });
     }
   }

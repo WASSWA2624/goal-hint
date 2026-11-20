@@ -82,6 +82,7 @@ const storedDetailBaseSchema = z.strictObject({ fixture: storedMatchFeedRecordSc
   liveMatch: liveMatchSnapshotSchema.nullable().optional(),
   inPlayOdds: inPlayOddsObservationSchema.nullable().optional(),
   bookmakerOdds: preMatchBookmakerOddsSchema.nullable().optional(),
+  recoveredBookmakerOdds: preMatchBookmakerOddsSchema.nullable().optional(),
   extendedMarkets: publicExtendedMarketSnapshotSchema.nullable().optional(),
   extendedOdds: total15OddsSchema.nullable().optional(),
   route: z.strictObject({ fixtureId: id, slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u).max(160), path: z.string().max(512) }),
@@ -121,11 +122,16 @@ function refineDetail(v: z.infer<typeof wireDetailBaseSchema>, ctx: z.Refinement
     || v.inPlayOdds.checkedAt > v.asOf))
     ctx.addIssue({ code: "custom", message: "In-play prices must belong to the current live fixture." });
   const bookmaker = v.bookmakerOdds;
-  if (bookmaker && (v.selection !== "applicable" || bookmaker.fixtureId !== v.fixture.fixtureId ||
+  if (bookmaker && (bookmaker.kind === "historical-pre-match" || v.selection !== "applicable" || bookmaker.fixtureId !== v.fixture.fixtureId ||
     bookmaker.kickoffAt !== v.fixture.kickoffAt || bookmaker.checkedAt > v.asOf || (bookmaker.kind === "pre-match"
       ? v.fixture.status !== "scheduled" || v.asOf >= bookmaker.kickoffAt
       : v.asOf < bookmaker.kickoffAt || !(v.fixture.status === "live" || v.fixture.status === "abandoned" || isPlayedFinalStatus(v.fixture.status)))))
     ctx.addIssue({ code: "custom", message: "Bookmaker prices must belong to the displayed fixture occurrence." });
+  const recovered = v.recoveredBookmakerOdds;
+  if (recovered && (recovered.kind !== "historical-pre-match" || v.selection !== "applicable" || recovered.fixtureId !== v.fixture.fixtureId ||
+    recovered.kickoffAt !== v.fixture.kickoffAt || recovered.kickoffAt > v.asOf || recovered.checkedAt > v.asOf ||
+    v.fixture.status !== "live" && !isPlayedFinalStatus(v.fixture.status)))
+    ctx.addIssue({ code: "custom", message: "Recovered pre-match prices must belong to the displayed occurrence after kickoff." });
   if (v.extendedMarkets && (!v.snapshot || "gated" in v.snapshot || v.extendedMarkets.fixtureId !== v.fixture.fixtureId ||
     v.extendedMarkets.revisionId !== v.snapshot.revisionId || v.extendedMarkets.cycleId !== v.snapshot.cycleId ||
     v.extendedMarkets.publishedAt !== v.snapshot.publishedAt || v.extendedMarkets.mode !== v.snapshot.applicability))
@@ -142,7 +148,7 @@ export const matchDetailResponseSchema = wireDetailBaseSchema.superRefine(refine
   if (gated ? !("gated" in v.history) || v.odds !== undefined || v.snapshot !== null && !("gated" in v.snapshot)
     || v.fixture.forecast !== null && (!("gated" in v.fixture.forecast) || v.fixture.forecast.probabilities.length !== 0)
     || v.snapshot !== null && "gated" in v.snapshot && v.snapshot.probabilities.length !== 0
-    || v.liveMatch != null || v.inPlayOdds != null || v.bookmakerOdds != null || v.extendedMarkets != null || v.extendedOdds != null
+    || v.liveMatch != null || v.inPlayOdds != null || v.bookmakerOdds != null || v.recoveredBookmakerOdds != null || v.extendedMarkets != null || v.extendedOdds != null
     || v.fixture.marketOdds != null || v.fixture.prices.length !== 0
     : "gated" in v.history || v.snapshot !== null && "gated" in v.snapshot || v.fixture.forecast !== null && "gated" in v.fixture.forecast) {
     ctx.addIssue({ code: "custom", message: "Detail content must match its access tier and fixture status." });

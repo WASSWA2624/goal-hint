@@ -15,7 +15,7 @@ def verify(origin, directory):
     visible = visible_html(html)
     no_match("Score and result updates delayed", visible)
     articles = re.findall(r'(<article\b[^>]*data-fixture-id="([^"]+)"[^>]*>)([\s\S]*?)</article>', visible)
-    assert len(articles) == 14
+    assert len(articles) == 15
     by_id = {fixture_id: article for _, fixture_id, article in articles}
     assert len(by_id) == len(articles), "Responsive rendering must not duplicate fixture identities in server HTML."
     no_match("data-match-table-header", visible, "Matches no longer renders the former desktop-only column labels.")
@@ -108,6 +108,8 @@ def verify(origin, directory):
     assert by_id["card-correct"].count('data-pick-price=""') == 1, "One shared cell shows the original selected price"
     match(r'data-card-odds[^>]*>—</span>', by_id["card-incorrect"])
     match(r'data-pick-price=""[^>]*>—</span>', by_id["card-incorrect"])
+    match(r'data-odds-kind="historical-pre-match"[^>]*>2\.0123</span>', by_id["card-recovered"])
+    match(r'data-ledger-field="probability"[^>]*>[\s\S]*?data-pick-value[^>]*>54%</span>', by_id["card-incorrect"])
     no_match(r'data-caption=|>likely</span>', visible)
     match("Odds: 1.85", by_id["card-correct"])
     no_match(r"Odds 2\.10", by_id["card-correct"])

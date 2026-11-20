@@ -105,6 +105,7 @@ export function TouchlineTabs({ view }: { view: MatchView }) {
             <MarketOddsPanel kind="in-play" observation={data.inPlayOdds} messages={messages} search={view.marketSearch} />
             {data.bookmakerOdds ? <BookmakerOddsPanel observation={data.bookmakerOdds} messages={messages} search={view.marketSearch} />
               : <MarketOddsPanel kind="pre-match" observation={data.fixture.marketOdds} messages={messages} />}
+            {data.recoveredBookmakerOdds && <BookmakerOddsPanel observation={data.recoveredBookmakerOdds} messages={messages} search={view.marketSearch} />}
           </>}
         </>}
         {selected === "events" && <Observations kind="events" />}

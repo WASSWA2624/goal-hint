@@ -1,8 +1,9 @@
 # Provider odds import
 
 The pre-match importer retains every verified bet and price in its
-API-Football date sweep. Owned local development requests all bookmakers in
-the same bounded date batches. Hosted workers can opt into the same scope.
+API-Football date sweep. Production and owned local development request all
+bookmakers in the same bounded date batches when authorized. The production
+recovery sweep also requests every returned book, market and line.
 The configured primary bookmaker supplies the reviewed four-family projection.
 
 This runbook covers storage, import semantics and grants. The adapter contract
@@ -19,19 +20,27 @@ receipt. Older receipts remain readable but cannot establish a newly priced
 recommendation until a permitted observation supplies a manifest. Acquisition,
 internal retention/use and public display retain separate permission checks.
 
-## In-play odds in local development
+## In-play odds
 
-The isolated local worker uses one shared `/odds/live` request per 30-second
-slot while a stored fixture is live or near kickoff. A MySQL fence prevents
+The enabled worker uses one shared `/odds/live` request per 60-second slot
+while a stored fixture is live or near kickoff. The poll fence prevents
 two workers from spending on the same slot. The worker verifies the separate
 `/odds/live/bets` catalog daily and shares the normal enrichment quota.
+It stores the canonical kickoff and participants for each retained occurrence,
+the actual retrieval clock and the provider update clock when supplied. A known
+update preceding a rescheduled kickoff cannot establish an offer for the new
+occurrence. Past in-play odds depend on prior capture. [API-Football odds documentation](https://www.api-football.com/documentation-v3)
 
 The Markets & Odds tab displays current prices for verified live market IDs
 under its existing access rules. A suspended primary price withholds its
-market. A complete response withdraws offers it no longer contains, and prices
-expire after 90 seconds without confirmation. In-play prices live in their own
-current projection, so they cannot alter pre-match recommendations or sealed
-closing quotes.
+market. A complete listing withdraws absent offers within its configured
+competition scope. A partial listing retains its valid observations and does
+not establish absence. An incomplete market preserves any current confirmed
+offer at its original clock. Prices expire after 90 seconds without
+confirmation. A verified catalog change can reproject fresh stored offers
+for the same live occurrence without changing their original retrieval or
+provider clocks. In-play quotes stay separate from pre-match recommendations
+and sealed closing quotes.
 
 Matches reads current offers for the visible published forecasts in batches.
 The match detail Markets tab lists verified bookmaker groups and selections,
@@ -57,8 +66,9 @@ snapshots without repeating a fixture sweep.
   it to `true` with the verified `GOAL_HINT_ODDS_BOOKMAKER_ID` on the worker
   after confirming the provider plan and ordinary-quota spare. The Free plan
   remains ineligible.
-- `GOAL_HINT_ODDS_BOOKMAKER_SCOPE=all` requests every available bookmaker in the
-  same date sweep. The default is `primary`. Both scopes require the verified
+- In other runtimes, `GOAL_HINT_ODDS_BOOKMAKER_SCOPE=all` requests every
+  available bookmaker in the same date sweep. The default setting is `primary`.
+  Both scopes require the verified
   primary ID for Matches and Best Slips. With approved display rights, Match
   Details lists the stored verified offers and Custom Builder can compare their
   exact prices. All-bookmaker sweeps use the same dispatch, page, response-size
@@ -89,6 +99,7 @@ touch `FootballImport`.
 | `OddsImportBatch` | Append-only receipt (INSERT, SELECT) | One row per import attempt: kind (`prices`, `bets`, `bookmakers`), scope key such as `date:2026-10-13:bookmaker:8`, policy hash, status (`complete`, `partial`, `failed`), requests dispatched, page provenance **without** quota feedback, per-fixture outcomes with an observation hash, and the catalog names for catalog imports. The body never holds prices; a `CHECK` refuses top-level `values` or `bookmakers`. |
 | `OddsBetObservation` | Append-only, insert-if-absent (INSERT, SELECT) | Every `/odds/bets` name ever observed, unique per `(provider, betExternalId, name)`. A renamed bet adds a row. This is the mapping input for prompts 053 and 054. |
 | `ProviderOddsSnapshot` | Append-only, content-chained (INSERT, SELECT) | Normalized values (`label`, canonical decimal `odd`) per fixture × bookmaker × bet, with bookmaker and bet names, `retrievedAt`, the row's provider `update` time, `retainUntil` and a sealed body. |
+| `RecoveredPreMatchOddsSnapshot` | Append-only (INSERT, SELECT) | Structured `/odds` snapshots retrieved after kickoff with an exact fixture occurrence, bookmaker, bet, prices, actual retrieval and nullable provider update clocks, and sealed page receipt. |
 | `FixtureOddsState` | Mutable, one row per fixture | Per-fixture mutex plus `latestBatchId`, `policyHash`, `lastRetrievedAt`, `lastProviderUpdatedAt`, `withdrawnAt` and `publicVersion`. |
 | `FixtureOddsPrice` | Mutable public projection | One row per `(fixtureId, marketKey, selection)`, so the feed join is 1:1. Holds `basis` (`bookmaker`; `median` is reserved), bookmaker id, line, `priceDecimal DECIMAL(10,4)`, `displayHundredths`, `impliedProbability DECIMAL(13,12)`, `overround`, method, mapping version, the source `snapshotId` (composite key with the fixture), times and `stale`. |
 
@@ -98,14 +109,16 @@ replaces that check with a `_v2`.
 
 ## Import flow
 
-1. The durable `odds.import` job runs one EAT date per 3-hour UTC slot, nearest
-   date first. `odds.catalog` refreshes `/odds/bets` and `/odds/bookmakers` once
-   per UTC day, ahead of that day's sweeps. Both run on a dedicated worker, at
-   the `enrichment` quota priority, and spend only the plan's spare above its
-   ordinary floor. A job that is off, or that the quota gate refuses, expires for
-   its slot without a provider call. Scheduling, the quota gate, the time budget
-   and failure handling are described in
-   [live-operations.md](live-operations.md#odds-imports-052).
+1. `odds.catalog` refreshes the pre-match references once per UTC day.
+   `odds.import` schedules the nearest dates first in each three-hour slot.
+   The authorized production worker also schedules lower-priority dates out to
+   14 days ahead, the provider's usual pre-match availability window.
+   Separate `odds.history` jobs cover the seven preceding Kampala dates,
+   prioritizing expiry. Each UTC quota day can resume the same date and reuse
+   the completed page receipts keyed to the provider account and date. The
+   worker reuses a complete receipt without another request. All dates still
+   share the `enrichment` allowance and can be deferred when quota or fixture
+   coverage is unavailable. [API-Football odds guide](https://www.api-football.com/news/post/how-to-get-started-with-api-football-the-complete-beginners-guide)
 2. All provider I/O happens **before** any transaction, and the walk ends 180
    seconds into the 300-second job so the writes keep their own budget.
    Validation rechecks authorization, policy, retention, exact selectors, page
@@ -113,17 +126,18 @@ replaces that check with a `_v2`.
 3. The receipt is written first: `INSERT IGNORE`, then a sealed re-read must
    reproduce the exact body. The store keeps the verified body for the
    per-fixture writes of that import, so the receipt is read once per import.
-4. Each fixture is classified before any write. Unknown fixtures are counted,
-   never created. A fixture that has started, is not `scheduled`, or whose odds
-   kickoff differs from the catalog kickoff is never priced.
-5. Each applicable fixture is applied in its own short `READ COMMITTED`
-   transaction that locks only its `FixtureOddsState` row. It never takes the
-   global catalog lock. A genuine deadlock or write conflict is retried twice;
-   the callback holds no provider I/O. The apply is refused (`invalid-request`)
-   unless the receipt recorded exactly this observation: its fixture entry has
-   outcome `apply` and the row's observation hash, and one of its pages has the
-   row's retrieval time. Every snapshot's `batchId` therefore names a receipt
-   that observed those values.
+4. Each fixture is classified before any write. A current price requires the
+   exact scheduled kickoff. A dated `/odds` response may also carry old
+   pre-match offers for live or completed fixtures, which are retained with
+   their actual post-kickoff retrieval clock. A known occurrence with a passed
+   kickoff can retain offers privately while the public read awaits verified
+   live or final status. Unknown identities and kickoff mismatches are counted
+   and skipped. A historical date never withdraws an offer.
+5. The authorized worker commits each page checkpoint and the applicable
+   snapshots atomically. Both current and recovered snapshots bind their
+   fixture observation hash to the page's original retrieval time. The legacy
+   current importer retains its per-fixture write path. Either path keeps
+   provider I/O outside the transaction and leaves the catalog lock free.
 
 ### Append-only chain
 
@@ -278,14 +292,26 @@ reference covers odds. Each snapshot carries `retainUntil` = kickoff + 30 days.
 No purge job exists: any purge needs a reviewed privileged role and an owner
 decision.
 
+The historical display assembles each exact selection from sealed observations
+which match the verified fixture kickoff. It includes eligible saved pre-kickoff
+captures and post-kickoff recoveries with their respective retrieval times. Within
+observations carrying a provider update clock, the newest update takes precedence.
+When there is also an observation with an unknown update time, the actual
+retrieval clocks determine which candidate is displayed. Quotes for an exact
+kickoff-matched fixture still marked Not Started after kickoff can be staged
+privately. They become eligible for display after verified play or a finish for
+that occurrence. Current and closing projections, original publication prices
+and historical display each retain their source evidence.
+
 ## Identity widths
 
 Bookmaker and bet ids are stored as unsigned 32-bit integers. The normalizer
 quarantines a bet whose id does not fit, listing it in `rejectedBets` and
 `odds-bet-rejected:<bookmaker>:<bet>`. Provider fixture and league ids may use
 any safe integer. Bookmaker names longer than 128 characters and bet names longer
-than 256 characters are stored as `null` with missing coverage. A null name
-never matches a mapping, so it never yields a price.
+than 256 characters are stored as `null` with missing coverage. A historical
+quote with an unnamed bet can become displayable when a later complete catalog
+verifies that exact bet ID and its name.
 
 ## Application grants
 
@@ -308,6 +334,7 @@ to `available: 0` with every other metric null, which looks like an outage. On
 GRANT SELECT, INSERT ON goal_hint_db.OddsImportBatch TO 'goal_hint_app'@'<existing host>';
 GRANT SELECT, INSERT ON goal_hint_db.OddsBetObservation TO 'goal_hint_app'@'<existing host>';
 GRANT SELECT, INSERT ON goal_hint_db.ProviderOddsSnapshot TO 'goal_hint_app'@'<existing host>';
+GRANT SELECT, INSERT ON goal_hint_db.RecoveredPreMatchOddsSnapshot TO 'goal_hint_app'@'<existing host>';
 GRANT SELECT, INSERT, UPDATE (latestBatchId, policyHash, lastRetrievedAt, lastProviderUpdatedAt, withdrawnAt, publicVersion)
   ON goal_hint_db.FixtureOddsState TO 'goal_hint_app'@'<existing host>';
 GRANT SELECT, INSERT, UPDATE (basis, bookmakerExternalId, line, priceDecimal, displayHundredths, impliedProbability, overround,

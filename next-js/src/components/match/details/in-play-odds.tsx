@@ -47,7 +47,8 @@ const BookmakerMarketRows = memo(function BookmakerMarketRows({ markets, message
 export function BookmakerOddsPanel({ observation, messages, search }: { observation: PreMatchBookmakerOdds; messages: Messages; search: string }) {
   const heading = useId(), [bookmaker, setBookmaker] = useState<number | null>(null);
   const book = observation.books.find(({ bookmakerId }) => bookmakerId === bookmaker) ?? observation.books[0]!;
-  const title = messages.text(observation.kind === "closing" ? "touchline.closingOdds" : "touchline.preMatchOdds");
+  const title = messages.text(observation.kind === "closing" ? "touchline.closingOdds"
+    : observation.kind === "historical-pre-match" ? "touchline.recoveredOdds" : "touchline.preMatchOdds");
   const bookName = ({ bookmakerId, name }: PreMatchBookmakerOdds["books"][number]) =>
     name ?? messages.text("touchline.bookmakerNumber", { id: messages.number(bookmakerId, { useGrouping: false }) });
   return <Panel as="section" aria-labelledby={heading} data-market-odds={observation.kind}>

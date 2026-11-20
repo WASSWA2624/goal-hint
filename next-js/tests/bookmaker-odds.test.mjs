@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bookmakerMarketPrice, bookmakerReferencePrice } from "../src/domain/bookmaker-odds.ts";
+import { bookmakerMarketPrice, bookmakerMarketQuote, bookmakerReferencePrice } from "../src/domain/bookmaker-odds.ts";
 import { mergeLiveDetail } from "../src/domain/live-refresh.ts";
 import { matchDetailResponseSchema } from "../src/domain/match-detail.ts";
 import { gateDetailResponse } from "../src/domain/paywall.ts";
@@ -100,4 +100,30 @@ test("the broad in-play projection displays exact verified handicap lines and wi
   ]);
   assert.deepEqual(mapInPlayOdds({ ...fixture, blocked: true }, catalogue, true), { state: "suspended", markets: [] });
   assert.equal(mapInPlayOdds(fixture, {}, true).providerMarkets, undefined);
+});
+
+test("recovered pre-match prices preserve exact lines and their distinct post-kickoff clocks", () => {
+  const startedAt = now - 3_600_000, recoveredAt = now - 60_000;
+  const observation = { observedAt: recoveredAt, checkedAt: recoveredAt, providerUpdatedAt: null };
+  const stored = { fixtureId, kickoffAt: startedAt, checkedAt: recoveredAt, primaryBookmakerId: 8, bookmakers: [
+    { bookmakerId: 8, bookmakerName: "Primary", offers: [{ betId: 5, betName: "Goals Over/Under", providerUpdatedAt: null,
+      values: [{ label: "Over 1.5", odd: "1.35", observation }] }] },
+    { bookmakerId: 3, bookmakerName: "Secondary", offers: [{ betId: 5, betName: "Goals Over/Under", providerUpdatedAt: null,
+      values: [{ label: "Over 2.5", odd: "2.0123", observation }] }] },
+  ] };
+  const recoveredBookmakerOdds = projectBookmakerOdds(stored, "historical-pre-match");
+  const quote = bookmakerMarketQuote(recoveredBookmakerOdds, "total-goals", "over-2.5");
+  assert.equal(quote.actualBookmakerId, 3);
+  assert.equal(quote.offer.price, "2.0123");
+  assert.equal(quote.offer.observedAt, recoveredAt);
+  assert.equal(quote.offer.providerUpdatedAt, null);
+  assert.equal(bookmakerMarketPrice(recoveredBookmakerOdds, "total-goals", "under-2.5"), null);
+  assert.equal(projectBookmakerOdds(stored, "closing"), null);
+  const initial = matchDetailResponseSchema.parse({ ...detail, recoveredBookmakerOdds, fixture: { ...detail.fixture,
+    status: "live", kickoffAt: startedAt, forecast: null, unavailableMarkets: ["match-result", "double-chance", "total-goals", "both-teams-to-score"]
+      .map((family) => ({ family, reason: "not-published" })) }, snapshot: null, currentRevisionId: null, selectedCycle: null });
+  assert.equal(gateDetailResponse(initial, { tier: "free", signedIn: false }).recoveredBookmakerOdds, undefined);
+  assert.deepEqual(gateDetailResponse(initial, { tier: "full", signedIn: true }).recoveredBookmakerOdds, recoveredBookmakerOdds);
+  assert.equal(matchDetailResponseSchema.safeParse({ ...initial, fixture: { ...initial.fixture, kickoffAt: startedAt + 1000 } }).success, false);
+  assert.equal(matchDetailResponseSchema.safeParse({ ...initial, bookmakerOdds: recoveredBookmakerOdds }).success, false);
 });

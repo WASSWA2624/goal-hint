@@ -35,6 +35,7 @@ const shown = (detail: MatchDetailResponse) => JSON.stringify({ ...detail, asOf:
     kind: detail.fixture.marketOdds.kind, prices: detail.fixture.marketOdds.prices,
   } },
   bookmakerOdds: detail.bookmakerOdds && { kind: detail.bookmakerOdds.kind, version: detail.bookmakerOdds.version },
+  recoveredBookmakerOdds: detail.recoveredBookmakerOdds?.version,
   inPlayOdds: detail.inPlayOdds && (detail.inPlayOdds.version ?? detail.inPlayOdds.prices),
   extendedOdds: detail.extendedOdds && { kind: detail.extendedOdds.kind, selections: detail.extendedOdds.selections },
 });

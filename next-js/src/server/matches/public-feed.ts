@@ -37,6 +37,7 @@ export function readPublicMatchFeedSummary(parameters: FeedParameters, context: 
 function readStoredFeed(parameters: FeedParameters, context: MatchFeedReadContext, clock: Clock | undefined, includePerformance: boolean,
   providerOdds = publicOddsEnabled()) {
   const database = getDatabase();
-  return createMatchFeedService({ database, cache: createMysqlPublicResponseCache(database), includePerformance, providerOdds, ...(clock ? { clock } : {}),
+  return createMatchFeedService({ database, cache: createMysqlPublicResponseCache(database), includePerformance, providerOdds,
+    allowInPlayOdds: providerOdds, ...(clock ? { clock } : {}),
     competitionIds: getRuntimePolicy().choices.competitionIds ?? [] }).query(parameters, context);
 }

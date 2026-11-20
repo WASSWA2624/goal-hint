@@ -237,6 +237,7 @@ model FootballFixture {
   lifecycleState        FixtureLifecycleState?
   lifecycleObservations FixtureLifecycleObservation[]
   oddsSnapshots         ProviderOddsSnapshot[]
+  recoveredOddsSnapshots RecoveredPreMatchOddsSnapshot[]
   oddsState             FixtureOddsState?
   oddsPrices            FixtureOddsPrice[]
   inPlayOdds            FixtureInPlayOdds?
@@ -1513,6 +1514,7 @@ model OddsImportBatch {
   account            ApiQuotaAccount        @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   betObservations    OddsBetObservation[]
   snapshots          ProviderOddsSnapshot[]
+  recoveredSnapshots RecoveredPreMatchOddsSnapshot[]
   fixtureStates      FixtureOddsState[]
 
   @@index([accountId, receivedAt])
@@ -1561,6 +1563,27 @@ model ProviderOddsSnapshot {
   @@index([fixtureId, bookmakerExternalId, betExternalId, retrievedAt])
   @@index([batchId])
   @@index([retainUntil])
+}
+
+// Post-kickoff observations from /odds only. Never part of the closing or publication chain.
+model RecoveredPreMatchOddsSnapshot {
+  id                  String          @id @db.Char(64)
+  fixtureId           String          @db.Char(36)
+  batchId             String          @db.Char(64)
+  kickoffAt           DateTime        @db.DateTime(3)
+  bookmakerExternalId Int             @db.UnsignedInt
+  betExternalId       Int             @db.UnsignedInt
+  retrievedAt         DateTime        @db.DateTime(3)
+  providerUpdatedAt   DateTime?       @db.DateTime(3)
+  retainUntil         DateTime        @db.DateTime(3)
+  integrity           String          @db.Char(64)
+  body                Json
+  fixture             FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  batch               OddsImportBatch @relation(fields: [batchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([fixtureId, kickoffAt, bookmakerExternalId, betExternalId, retrievedAt], map: "recovered_pre_match_odds_lookup_idx")
+  @@index([batchId], map: "recovered_pre_match_odds_batch_idx")
+  @@index([retainUntil], map: "recovered_pre_match_odds_retention_idx")
 }
 
 // Mutable per-fixture odds state and mutex: INSERT/SELECT plus

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import { addReportingDays, getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
+import { addReportingDays, getReportingDate, getReportingDayBounds, parseReportingDate, utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import type { JobEnvelope } from "../jobs/job-contract.ts";
 import { jobInstant, parseJobEnvelope } from "../jobs/job-input.ts";
@@ -12,11 +12,16 @@ import type { OddsImportService } from "./odds-service.ts";
 const HOUR = 3_600_000, DAY = 24 * HOUR;
 export const ODDS_IMPORT_TYPE = "odds.import";
 export const ODDS_CATALOG_TYPE = "odds.catalog";
+export const ODDS_HISTORY_TYPE = "odds.history";
 export const ODDS_HANDLER_VERSION = 1;
 /** Fixed sweep slot (3 hours, UTC-aligned). The date and bookmaker scope pin the work across restarts. */
 export const ODDS_SWEEP_MS = 3 * HOUR;
 export const oddsImportPayload = z.strictObject({ slot: jobInstant, date: z.iso.date(), bookmakerScope: z.literal("all").optional() });
 export const oddsCatalogPayload = z.strictObject({ utcDay: z.iso.date() });
+const oddsHistoryPayload = z.strictObject({ date: z.iso.date(), providerDay: jobInstant }).refine(({ providerDay }) => providerDay % DAY === 0);
+export const PRE_MATCH_HISTORY_DAYS = 7;
+export const PRE_MATCH_PROVIDER_LOOKAHEAD_DAYS = 14;
+export const oddsHistoryDeadline = (dateEnd: number, providerDay: number) => Math.min(dateEnd + PRE_MATCH_HISTORY_DAYS * DAY, providerDay + DAY);
 /** One odds job attempt runs at most this long. */
 export const ODDS_JOB_TIMEOUT_MS = 300_000;
 /** The provider walk of one attempt ends this long after it starts (or at its slot's end), so the receipt and the
@@ -35,10 +40,13 @@ export function oddsSlotDates(slot: number, horizonDays: number): string[] {
 /** One odds import per (slot, EAT date). Nearest dates run first; the job expires when its slot ends. */
 export function oddsImportEnvelope(slot: number, date: string, offset: number, bookmakerScope?: OddsPolicy["bookmakerScope"]): JobEnvelope {
   if (!Number.isSafeInteger(slot) || slot % ODDS_SWEEP_MS !== 0 || !Number.isSafeInteger(offset) || offset < 0 || offset > 6) throw new RangeError("Invalid odds slot.");
+  return priceEnvelope(slot, date, 7 - offset, bookmakerScope);
+}
+function priceEnvelope(slot: number, date: string, priority: number, bookmakerScope?: OddsPolicy["bookmakerScope"]): JobEnvelope {
   const payload = oddsImportPayload.parse({ slot, date: parseReportingDate(date), ...(bookmakerScope === undefined ? {} : { bookmakerScope }) });
   return parseJobEnvelope({ ...envelopeBounds, version: 1, type: ODDS_IMPORT_TYPE, handlerVersion: ODDS_HANDLER_VERSION,
     idempotencyKey: evidenceFingerprint({ type: ODDS_IMPORT_TYPE, ...payload }), payload, refresh: null,
-    notBefore: slot, expiresAt: slot + ODDS_SWEEP_MS, priority: 7 - offset });
+    notBefore: slot, expiresAt: slot + ODDS_SWEEP_MS, priority });
 }
 /** Every import of one slot, nearest EAT date first. */
 export function oddsSlotEnvelopes(slot: number, horizonDays: number, bookmakerScope?: OddsPolicy["bookmakerScope"]): readonly JobEnvelope[] {
@@ -46,8 +54,29 @@ export function oddsSlotEnvelopes(slot: number, horizonDays: number, bookmakerSc
 }
 /** What the live runner enqueues at each new slot: the UTC day's catalog (one row per day, however often it is
  * re-enqueued), then the slot's imports. The catalog goes first so the worker cannot claim a sweep before it exists. */
-export function oddsScheduleEnvelopes(now: number, horizonDays: number, bookmakerScope?: OddsPolicy["bookmakerScope"]): readonly JobEnvelope[] {
-  return Object.freeze([oddsCatalogEnvelope(now), ...oddsSlotEnvelopes(latestOddsSlot(now), horizonDays, bookmakerScope)]);
+export function oddsScheduleEnvelopes(now: number, horizonDays: number, bookmakerScope?: OddsPolicy["bookmakerScope"], options?: { providerLookahead: true }): readonly JobEnvelope[] {
+  const slot = latestOddsSlot(now), near = oddsSlotEnvelopes(slot, horizonDays, bookmakerScope);
+  const today = getReportingDate(utcInstantFromEpochMilliseconds(slot));
+  const distant = options?.providerLookahead ? Array.from({ length: PRE_MATCH_PROVIDER_LOOKAHEAD_DAYS + 1 - near.length }, (_, index) =>
+    priceEnvelope(slot, addReportingDays(today, near.length + index), 0, bookmakerScope)) : [];
+  return Object.freeze([oddsCatalogEnvelope(now), ...near, ...distant]);
+}
+/** Each provider day can resume an eligible historical date after the shared quota resets. */
+export function oddsHistoryScheduleEnvelopes(now: number): readonly JobEnvelope[] {
+  const providerDay = Math.floor(now / DAY) * DAY, today = getReportingDate(utcInstantFromEpochMilliseconds(now));
+  return Object.freeze(Array.from({ length: PRE_MATCH_HISTORY_DAYS }, (_, index) => {
+    const date = addReportingDays(today, index - PRE_MATCH_HISTORY_DAYS);
+    const { endExclusive } = getReportingDayBounds(date);
+    const deadline = endExclusive + PRE_MATCH_HISTORY_DAYS * DAY;
+    const payload = oddsHistoryPayload.parse({ date, providerDay });
+    return parseJobEnvelope({ ...envelopeBounds, version: 1, type: ODDS_HISTORY_TYPE, handlerVersion: ODDS_HANDLER_VERSION,
+      idempotencyKey: evidenceFingerprint({ type: ODDS_HISTORY_TYPE, ...payload }), payload, refresh: null,
+      notBefore: Math.max(endExclusive, providerDay), expiresAt: oddsHistoryDeadline(endExclusive, providerDay),
+      priority: Math.max(1, 7 - Math.floor((deadline - providerDay - 1) / DAY)) });
+  }));
+}
+export function oddsHistoryScopeId(accountKey: string, date: string): string {
+  return evidenceFingerprint({ type: ODDS_HISTORY_TYPE, accountKey, date });
 }
 /** One bet and bookmaker catalog refresh per UTC day. Its priority (8) is above every price sweep (7 to 1), so the
  * day's catalog is stored before that day's sweeps on the shared enrichment worker; projections map against it. */
@@ -87,6 +116,8 @@ export type OddsJobDependencies = Readonly<{
   maxRequests: (kind: OddsImportRequest["kind"]) => number;
   /** Each resumed price page spends the shared atomic quota independently. */
   resumePricePages?: boolean;
+  historical?: Readonly<{ scopeId(date: string): string;
+    report?(date: string, summary: OddsImportSummary | null, state: "stored" | "scanned" | "deferred"): void }>;
   now?: () => number;
 }>;
 /** Expired, not failed: the next slot sweeps again, and the failed-jobs alert stays for real faults. */
@@ -117,20 +148,35 @@ async function run(context: JobHandlerContext, dependencies: OddsJobDependencies
   // Disabled definitions stay registered (their eligible() hook is false), so queued jobs expire instead of stalling.
   if (!dependencies.enabled() || now() >= slotEnd) return EXPIRED;
   const policy = dependencies.policy();
-  if (request.kind === "prices" && policy.bookmakerScope !== bookmakerScope) return EXPIRED;
+  if (request.kind === "prices" && !request.recovery && policy.bookmakerScope !== bookmakerScope) return EXPIRED;
+  const fullRequest = { ...request, id: request.recovery ? dependencies.historical!.scopeId(request.date!) : context.lease.jobId, policy };
+  if (request.recovery) {
+    try {
+      if (await dependencies.service.historicalComplete(fullRequest)) {
+        dependencies.historical?.report?.(request.date!, null, "stored");
+        return { status: "succeeded" };
+      }
+    } catch (error) {
+      return { status: "failed", reason: "handler-failed", retryable: error instanceof OddsError && error.reason === "unavailable" };
+    }
+  }
   // Quota gate. Before the new provider day opens, wait briefly and retry within the slot.
   const usage = await dependencies.usage();
   if (usage === null) return { status: "failed", reason: "rate-limited", retryable: true };
   // The gate's slack never grows within a provider day (odds spend only rises; an ordinary request lowers the remaining
   // allowance and the ordinary need left by one each), and UTC-aligned slots never span two days, so a refused slot
   // cannot recover: it expires without a provider call and the next slot checks again.
-  const resume = request.kind === "prices" && dependencies.resumePricePages;
-  if (!oddsQuotaAllows(usage, dependencies.allowance, resume ? 1 : dependencies.maxRequests(request.kind))) return EXPIRED;
-  const reference = evidenceFingerprint({ jobId: context.lease.jobId, attemptId: context.lease.attemptId, phase: `odds-${request.kind}`, version: 1 });
+  const resume = request.recovery || request.kind === "prices" && dependencies.resumePricePages;
+  if (!oddsQuotaAllows(usage, dependencies.allowance, resume ? 1 : dependencies.maxRequests(request.kind))) {
+    if (request.recovery) dependencies.historical?.report?.(request.date!, null, "deferred");
+    return EXPIRED;
+  }
+  const reference = evidenceFingerprint({ jobId: context.lease.jobId, attemptId: context.lease.attemptId,
+    phase: request.recovery ? "odds-history" : `odds-${request.kind}`, version: 1 });
   const started = now();
   let summary: OddsImportSummary;
   try {
-    summary = await operation({ ...request, id: context.lease.jobId, policy });
+    summary = await operation(fullRequest);
   } catch (error) {
     // The dispatch count is unknown after a storage failure; record the attempt as uncertain.
     await context.recordUsage({ provider: "football", requestReference: reference, costReference: null, phase: "uncertain", requests: 0,
@@ -140,6 +186,7 @@ async function run(context: JobHandlerContext, dependencies: OddsJobDependencies
   await context.recordUsage({ provider: "football", requestReference: reference, costReference: null, phase: "completed",
     requests: summary.requestsDispatched, durationMs: Math.min(3_600_000, Math.max(0, now() - started)) });
   await context.checkpoint();
+  if (request.recovery) dependencies.historical?.report?.(request.date!, summary, "scanned");
   return oddsJobOutcome(summary);
 }
 
@@ -160,5 +207,15 @@ export function createOddsJobDefinitions(dependencies: OddsJobDependencies): rea
       }
       return { status: "succeeded" };
     } });
-  return Object.freeze([importDefinition, catalogDefinition]);
+  const historyDefinition = defineJob({ type: ODDS_HISTORY_TYPE, handlerVersion: ODDS_HANDLER_VERSION, payload: oddsHistoryPayload,
+    eligible: () => eligible() && dependencies.historical !== undefined,
+    handle: ({ date, providerDay }, context) => {
+      const { endExclusive } = getReportingDayBounds(parseReportingDate(date));
+      if (!dependencies.historical || endExclusive >= providerDay + DAY || endExclusive + PRE_MATCH_HISTORY_DAYS * DAY <= providerDay ||
+        (dependencies.now ?? Date.now)() < endExclusive) return Promise.resolve(EXPIRED);
+      const periodEnd = oddsHistoryDeadline(endExclusive, providerDay);
+      return run(context, dependencies, { kind: "prices", slot: endExclusive, date, recovery: true },
+        (request) => dependencies.service.importHistoricalDate(request, context.signal, () => context.checkpoint()), periodEnd);
+    } });
+  return Object.freeze([importDefinition, catalogDefinition, ...(dependencies.historical ? [historyDefinition] : [])]);
 }

@@ -36,7 +36,8 @@ export const NEVER_COMPACTED = Object.freeze([
   { table: "PredictionChangeEvent", reason: "replay-cursor" }, { table: "FixtureResult", reason: "result-chain" },
   ...["DailySlipPublication", "PublishedSlip", "PublishedSlipLeg"].map((table) => ({ table, reason: "publication" })),
   ...["DurableJob", "DurableJobAttempt", "DurableJobEvent", "DurableJobUsage"].map((table) => ({ table, reason: "job-record" })),
-  ...["OddsImportBatch", "OddsBetObservation", "ProviderOddsSnapshot"].map((table) => ({ table, reason: "provider-odds-retain-until" })),
+  ...["OddsImportBatch", "OddsBetObservation", "ProviderOddsSnapshot", "RecoveredPreMatchOddsSnapshot"]
+    .map((table) => ({ table, reason: "provider-odds-retain-until" })),
   { table: "PublicCacheInvalidation", reason: "cache-journal" },
 ].map((entry) => Object.freeze(entry)));
 

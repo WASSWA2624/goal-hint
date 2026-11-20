@@ -123,6 +123,14 @@ For each schema change:
    data and CSV export over HTTPS. The deploy script's root-page check alone is
    insufficient.
 
+For `20261120150000_recovered_pre_match_odds`, apply the canonical InnoDB
+migration before switching the app or worker. In each target database give
+the web role `SELECT` on `RecoveredPreMatchOddsSnapshot`. Give the worker role
+`SELECT, INSERT` on the same table. When one role runs both, apply the worker
+grant once. Verify the table checks and role grants before activating the
+release. The released web reads historical quotes even when provider import
+jobs are disabled in staging. [Odds grants](../provider-odds.md#application-grants)
+
 On 14 October 2026, a private backup was taken before the corrective migration
 `20261014161000_transactional_storage` converted the seven analytics tables and
 `OperationsMonitorState` from MyISAM to InnoDB. Prisma's history table was converted

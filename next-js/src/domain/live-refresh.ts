@@ -7,6 +7,7 @@ import type { MatchDetailResponse } from "./match-detail.ts";
 import { fullDetailSnapshot } from "./detail-snapshot.ts";
 import type { MatchFeedResponse } from "./match-feed.ts";
 import type { LiveMatchSnapshot } from "./live-match.ts";
+import type { PreMatchBookmakerOdds } from "./bookmaker-odds.ts";
 
 export const liveRefreshRules = Object.freeze({ activeMs: 20_000, quietMs: 60_000, timeoutMs: 30_000, kickoffLeadMs: 30 * 60_000 });
 
@@ -51,9 +52,6 @@ export function mergeLiveDetail(previous: MatchDetailResponse, next: MatchDetail
         ? { ...oldSnapshot, analysis: newSnapshot.analysis } : oldSnapshot
       : next.snapshot;
     const extendedMarkets = next.extendedMarkets?.revisionId === snapshot?.revisionId ? next.extendedMarkets ?? null : null;
-    const oldBookmaker = previous.bookmakerOdds, newBookmaker = next.bookmakerOdds;
-    const bookmakerOdds = oldBookmaker && newBookmaker && oldBookmaker.version === newBookmaker.version
-      && oldBookmaker.kind === newBookmaker.kind && oldBookmaker.kickoffAt === newBookmaker.kickoffAt ? oldBookmaker : newBookmaker ?? null;
     const oldLiveOdds = previous.inPlayOdds, newLiveOdds = next.inPlayOdds;
     const inPlayOdds = oldLiveOdds?.version && oldLiveOdds.version === newLiveOdds?.version
       && oldLiveOdds.kickoffAt === newLiveOdds.kickoffAt ? oldLiveOdds : newLiveOdds ?? null;
@@ -61,12 +59,19 @@ export function mergeLiveDetail(previous: MatchDetailResponse, next: MatchDetail
     return { ...previous, fixture: mergeFixtureObservation(previous.fixture, next.fixture), snapshot, asOf: next.asOf, run: next.run,
       ...(next.odds === undefined ? {} : { odds: next.odds }),
       ...("inPlayOdds" in previous || "inPlayOdds" in next ? { inPlayOdds } : {}),
-      ...("bookmakerOdds" in previous || "bookmakerOdds" in next ? { bookmakerOdds } : {}),
+      ...("bookmakerOdds" in previous || "bookmakerOdds" in next ? { bookmakerOdds: mergeBookmakerOdds(previous.bookmakerOdds, next.bookmakerOdds) } : {}),
+      ...("recoveredBookmakerOdds" in previous || "recoveredBookmakerOdds" in next
+        ? { recoveredBookmakerOdds: mergeBookmakerOdds(previous.recoveredBookmakerOdds, next.recoveredBookmakerOdds) } : {}),
       ...("extendedMarkets" in previous || "extendedMarkets" in next ? { extendedMarkets } : {}),
       ...("extendedOdds" in previous || "extendedOdds" in next ? { extendedOdds: extendedMarkets ? next.extendedOdds ?? null : null } : {}),
       ...liveEnvelope };
   }
   return liveMatch === next.liveMatch ? next : { ...next, liveMatch };
+}
+
+function mergeBookmakerOdds(previous: PreMatchBookmakerOdds | null | undefined, next: PreMatchBookmakerOdds | null | undefined) {
+  return previous && next && previous.version === next.version && previous.kind === next.kind && previous.kickoffAt === next.kickoffAt
+    ? previous : next ?? null;
 }
 
 /** A late detail response cannot replace a newer stored observation of the same occurrence. */

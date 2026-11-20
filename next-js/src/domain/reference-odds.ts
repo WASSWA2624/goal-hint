@@ -5,7 +5,7 @@ export const preMatchReferenceOddsFreshMs = 12 * 60 * 60_000;
 
 export type ReferenceOddsSelection = Readonly<{
   fixtureId: string;
-  phase: "pre-match" | "closing" | "in-play";
+  phase: "pre-match" | "closing" | "historical-pre-match" | "in-play";
   period: GoalMarketPeriod;
   marketId: number;
   marketName: string;

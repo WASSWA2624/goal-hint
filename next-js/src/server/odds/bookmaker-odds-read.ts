@@ -50,9 +50,12 @@ export function projectBookmakerOdds(quotes: StoredCurrentBookmakerQuotes | null
     const headerBytes = Buffer.byteLength(JSON.stringify({ bookmakerId, name, markets: [] }), "utf8") + 1;
     remaining -= headerBytes;
     const markets = offers.flatMap(({ betId, betName, values, observedAt, checkedAt, providerUpdatedAt }) => {
-      const selections = values.flatMap(({ label, odd }) => {
+      const selections = values.flatMap(({ label, odd, observation }) => {
         const price = parseDecimalOdds(odd);
-        return price && safeSelection.safeParse(label).success ? [{ label, line: null, price: price.text }] : [];
+        if (!price || !safeSelection.safeParse(label).success || kind === "historical-pre-match" && !observation) return [];
+        return [{ label, line: null, price: price.text, ...(observation ? { observation: {
+          observedAt: observation.observedAt, checkedAt: observation.checkedAt, providerUpdatedAt: observation.providerUpdatedAt,
+        } } : {}) }];
       });
       const market = bookmakerMarketSchema.safeParse({ betId, name: betName, selections });
       if (!market.success) return [];
@@ -71,8 +74,9 @@ export function projectBookmakerOdds(quotes: StoredCurrentBookmakerQuotes | null
     if (!markets.length) remaining += headerBytes;
     return markets.length ? [{ bookmakerId, name, markets }] : [];
   });
-  const visible = books.map((book) => ({ ...book, markets: book.markets.map(({ observation: _observation, ...market }) => {
-    void _observation; return market;
+  const visible = books.map((book) => ({ ...book, markets: book.markets.map(({ observation: _observation, selections, ...market }) => {
+    void _observation;
+    return { ...market, selections: selections.map(({ label, line, price }) => ({ label, line, price })) };
   }) }));
   const parsed = preMatchBookmakerOddsSchema.safeParse({ kind, fixtureId: quotes.fixtureId, kickoffAt: quotes.kickoffAt,
     checkedAt: quotes.checkedAt, books, version: evidenceFingerprint({ books: visible, limited, ...policy }), ...policy,

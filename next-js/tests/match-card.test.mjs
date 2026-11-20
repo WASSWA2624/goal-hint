@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { fixtureSnapshotSchema, parseFixtureSnapshot } from "../src/domain/fixture-snapshot.ts";
-import { cardResultStatus, hasFinalScoreStatus, liveClockFromProvider, probabilityEntry, sameCardFixture, selectedCardPrediction, teamInitials } from "../src/domain/match-card.ts";
+import { cardResultStatus, hasFinalScoreStatus, liveClockFromProvider, probabilityEntry, sameCardFixture, selectedCardPrediction, selectedCardPrice, teamInitials } from "../src/domain/match-card.ts";
 import { mergeFixtureObservation } from "../src/domain/fixture-reconciliation.ts";
 import { compactLeagueName, compactMarketName, compactTeamName } from "../src/domain/compact-fixture-label.ts";
 import { marketRules, marketSelections, validateMarketGroup } from "../src/domain/markets.ts";
@@ -38,6 +38,14 @@ test("display never settles live or final scores or invents missing forecasts", 
   assert.throws(() => parseFixtureSnapshot(premature));
   assert.equal(hasFinalScoreStatus("finished-extra-time"), true);
   for (const status of ["scheduled", "live", "postponed", "awarded", "unknown"]) assert.equal(hasFinalScoreStatus(status), false);
+});
+
+test("a supported Local Engine pick keeps its probability when no price was captured", () => {
+  const record = cardFixture({ prices: [] }, "local-engine");
+  assert.equal(selectedCardPrice(record, "match-result"), null);
+  const prediction = selectedCardPrediction(record);
+  assert.equal(prediction.item.market.source, "local-engine");
+  assert.equal(prediction.probability.roundedPercent, 54);
 });
 
 test("cards show fixture progress until completion without altering market settlement", () => {

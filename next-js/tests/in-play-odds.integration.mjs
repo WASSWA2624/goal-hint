@@ -6,7 +6,7 @@ import { normalizeInPlayOdds } from "../src/server/football/api-football-normali
 import { API_FOOTBALL_CONTRACT_VERSION } from "../src/server/football/api-football-contract.ts";
 import { createInPlayOddsPoller } from "../src/server/odds/in-play-odds-service.ts";
 import { storedInPlayOdds } from "../src/server/odds/in-play-odds-read.ts";
-import { withCurrentFeedOdds } from "../src/server/matches/feed-odds.ts";
+import { withFeedOdds } from "../src/server/matches/feed-odds.ts";
 import { gateFeedResponse } from "../src/domain/paywall.ts";
 import { catalogFixture, catalogRequest, createSyntheticCatalogAdapter } from "./helpers/catalog-fixtures.mjs";
 import { catalogSelectionAuthority } from "./helpers/selection-fixtures.mjs";
@@ -15,8 +15,10 @@ import { withPredictionPipeline } from "./prediction-pipeline.mjs";
 test("one shared live odds slot updates only changed prices and withdraws missing matches", { timeout: 300_000 }, async (t) => {
   await withPredictionPipeline(t, async (pipeline) => {
     const { a, b, catalog, instance } = pipeline;
-    await instance.executeAdmin(`GRANT SELECT, INSERT, UPDATE ON goal_hint_test.FixtureInPlayOdds TO 'cutoff_app'@'127.0.0.1';
-      GRANT SELECT, INSERT, UPDATE ON goal_hint_test.InPlayOddsPollState TO 'cutoff_app'@'127.0.0.1';
+    await instance.executeAdmin(`GRANT SELECT, INSERT,
+      UPDATE (kickoffAt,homeTeamId,awayTeamId,checkedAt,changedAt,providerUpdatedAt,withdrawnAt,semanticHash,bodyJson)
+      ON goal_hint_test.FixtureInPlayOdds TO 'cutoff_app'@'127.0.0.1';
+      GRANT SELECT, INSERT, UPDATE (nextPollAt,catalogDueAt,catalogJson) ON goal_hint_test.InPlayOddsPollState TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE (lastObservedAt,lastProviderUpdatedAt) ON goal_hint_test.FixtureInPlayOddsHistory TO 'cutoff_app'@'127.0.0.1';`);
     const start = Date.parse("2026-11-11T15:00:00Z"), kickoffAt = start - 10 * 60_000;
     const source = catalogFixture(2871, { kickoff: new Date(kickoffAt).toISOString(), homeId: 1, awayId: 2, status: "1H" });
@@ -64,8 +66,8 @@ test("one shared live odds slot updates only changed prices and withdraws missin
     assert.equal(catalogCalls, 1); assert.equal(liveCalls, 1);
     const observation = () => a.query((tx) => storedInPlayOdds(tx, { fixtureId: fixture.id, kickoffAt, asOf: pipeline.now() }));
     assert.equal((await observation()).prices.markets[0].selections[0].price, "1.89");
-    const base = { records: [{ fixtureId: fixture.id, kickoffAt, status: "live", forecast: null }] };
-    const feedOdds = () => withCurrentFeedOdds(a, base, pipeline.now(), true);
+    const base = { records: [{ fixtureId: fixture.id, kickoffAt, status: "live", forecast: null, prices: [] }] };
+    const feedOdds = () => withFeedOdds(a, base, pipeline.now(), true);
     const feed = await feedOdds();
     assert.equal(feed.records[0].marketOdds.kind, "in-play");
     assert.equal(feed.records[0].marketOdds.prices.markets[0].selections[0].price, "1.89");
@@ -133,5 +135,103 @@ test("one shared live odds slot updates only changed prices and withdraws missin
     assert.equal(await forecastEvents(), eventsBefore, "odds changes never enqueue forecast evidence changes");
     assert.equal(await a.query((tx) => tx.fixtureOddsPrice.count()), 0);
     assert.equal(catalogCalls, 1); assert.equal(liveCalls, 6);
+
+    await t.test("partial live responses preserve confirmed offers and safe remapping retains the actual occurrence and clocks", async () => {
+      const at = start + 8 * 60_000, oldKickoff = at - 12 * 60_000;
+      const ids = [2872, 2873];
+      async function saveFixtures(rows, at) {
+        const source = createSyntheticCatalogAdapter({ rows });
+        source.clock.value = at;
+        pipeline.setTime(at);
+        return createFootballCatalogImporter({ adapter: source.adapter, store: catalog, authority: catalogSelectionAuthority, clock: source.clock })
+          .import(catalogRequest({ kind: "fixtures", query: { date: "2026-11-11" } }, at));
+      }
+      const row = (id, kickoff, status) => catalogFixture(id, { kickoff: new Date(kickoff).toISOString(), status,
+        competitionId: id === ids[0] ? 39 : 40, homeId: 1, awayId: 2 });
+      await saveFixtures(ids.map(id => row(id, oldKickoff, "1H")), at - 1000);
+      const [target, other] = await Promise.all(ids.map(id => catalog.fixtureByProviderId(id)));
+      const historyRows = (fixtureId) => a.query(tx => tx.$queryRaw`SELECT occurrenceHash, firstObservedAt, lastObservedAt,
+        providerUpdatedAt, lastProviderUpdatedAt, bodyJson FROM FixtureInPlayOddsHistory WHERE fixtureId = ${fixtureId} ORDER BY firstObservedAt`);
+      const displayed = (fixtureId, kickoff = oldKickoff) => a.query(tx => storedInPlayOdds(tx, { fixtureId, kickoffAt: kickoff, asOf: pipeline.now() }));
+      const offer = (id, price = "2.21", malformed = false, updatedAt = null) => {
+        const isTarget = id === ids[0];
+        const values = isTarget ? [["Home", price], ["Draw", malformed ? "invalid" : "4"], ["Away", "5"]]
+          : [["Over", "1.9"], ["Under", "2.07"]];
+        const observation = normalizeInPlayOdds({ fixture: { id }, league: { id: isTarget ? 39 : 40, season: 2026 },
+          teams: { home: { id: 1 }, away: { id: 2 } }, status: { stopped: false, blocked: false, finished: false },
+          update: updatedAt === null ? null : new Date(updatedAt).toISOString(),
+          odds: [{ id: isTarget ? 59 : 36, name: isTarget ? "Fulltime Result" : "Over/Under Line",
+            values: values.map(([value, odd]) => ({ value, odd, handicap: isTarget ? null : "2.5", suspended: false })) }],
+        }, { endpoint: "/odds/live", retrievedAt: pipeline.now() });
+        assert.ok(observation.valid);
+        return observation.data;
+      };
+      let catalogKnowsTarget = false, quotePage = () => response("inPlayOdds", ids.map(id => offer(id)));
+      const changingSource = {
+        async inPlayBets() { return response("inPlayOddsBets", [{ id: 36, name: "Over/Under Line" },
+          ...(catalogKnowsTarget ? [{ id: 59, name: "Fulltime Result" }] : [])]); },
+        async inPlay() { return quotePage(); },
+      };
+      const collector = competitionIds => createInPlayOddsPoller({ database: a, adapter: changingSource,
+        now: pipeline.now, enabled: () => true, displayAllowed: () => true, competitionIds });
+      const all = collector([39, 40]), scoped = collector([39]);
+      const catalogDue = () => a.query(tx => tx.$executeRaw`UPDATE InPlayOddsPollState SET catalogDueAt = ${new Date(pipeline.now())} WHERE provider = 'api-football'`);
+      const partial = data => {
+        const verified = response("inPlayOdds", data);
+        return { ...verified, status: "partial", completeness: { ...verified.completeness, complete: false, invalidRows: 1,
+          reasons: ["invalid-rows"] }, provenance: verified.provenance.map(page => ({ ...page, totalPages: 1 })) };
+      };
+      pipeline.setTime(at); await catalogDue();
+      assert.deepEqual(await all.poll(), { outcome: "complete", requests: 2, changed: 1 });
+      assert.equal(await displayed(target.id), null);
+      assert.equal((await displayed(other.id)).prices.markets[0].selections[1].price, "2.07");
+      const [unmapped] = await historyRows(target.id), capture = readJson(unmapped.bodyJson);
+      assert.deepEqual(capture.occurrence, { kickoffAt: oldKickoff, homeTeamId: target.homeTeamId, awayTeamId: target.awayTeamId });
+      assert.equal(capture.providerClockKnown, false);
+      assert.equal(capture.markets[0].period, null);
+
+      pipeline.setTime(at + 60_000); await catalogDue();
+      catalogKnowsTarget = true; quotePage = () => partial([]);
+      assert.deepEqual(await scoped.poll(), { outcome: "partial", requests: 2, changed: 1 });
+      const replayed = await displayed(target.id);
+      assert.equal(replayed.checkedAt, at);
+      assert.equal(replayed.providerUpdatedAt, null);
+      assert.equal(replayed.prices.markets[0].selections[0].price, "2.21");
+      assert.equal((await historyRows(target.id)).length, 1, "reinterpreting a quote does not create a source observation");
+      assert.ok(await displayed(other.id), "a partial listing does not withdraw absent offers");
+
+      pipeline.setTime(at + 120_000);
+      quotePage = () => partial([offer(ids[0], "2.32"), offer(ids[1])]);
+      assert.deepEqual(await all.poll(), { outcome: "partial", requests: 1, changed: 1 });
+      assert.equal((await displayed(target.id)).prices.markets[0].selections[0].price, "2.32");
+
+      pipeline.setTime(at + 180_000);
+      quotePage = () => response("inPlayOdds", [offer(ids[0], "3.11", true)]);
+      assert.deepEqual(await scoped.poll(), { outcome: "partial", requests: 1, changed: 0 });
+      assert.equal((await displayed(target.id)).prices.markets[0].selections[0].price, "2.32", "a malformed group does not withdraw a complete group");
+      assert.equal((await displayed(target.id)).checkedAt, at + 120_000, "the malformed group does not extend an older price");
+      assert.ok(await displayed(other.id), "a complete narrower catalog scan cannot withdraw another competition");
+      assert.equal(readJson((await historyRows(target.id)).at(-1).bodyJson).availability, "partial-offers");
+
+      const newKickoff = at + 300_000;
+      await saveFixtures([row(ids[0], newKickoff, "NS")], at + 240_000);
+      const existing = (await historyRows(target.id)).length;
+      quotePage = () => response("inPlayOdds", [offer(ids[0])]);
+      assert.equal((await scoped.poll()).changed, 0);
+      assert.equal((await historyRows(target.id)).length, existing);
+      assert.equal(await displayed(target.id), null, "a previous occurrence may not appear against a rescheduled fixture");
+      await saveFixtures([row(ids[0], newKickoff, "1H")], at + 330_000);
+      quotePage = () => response("inPlayOdds", [offer(ids[0], "2.8", false, oldKickoff + 1000)]);
+      assert.equal((await scoped.poll()).changed, 0, "a reported update preceding the new occurrence is held");
+      pipeline.setTime(at + 390_000);
+      quotePage = () => response("inPlayOdds", [offer(ids[0], "2.81")]);
+      assert.equal((await scoped.poll()).changed, 1);
+      assert.equal((await displayed(target.id, newKickoff)).prices.markets[0].selections[0].price, "2.81");
+      const [newOccurrence] = (await historyRows(target.id)).slice(-1);
+      assert.notEqual(newOccurrence.occurrenceHash, unmapped.occurrenceHash);
+      assert.equal(readJson(newOccurrence.bodyJson).occurrence.kickoffAt, newKickoff);
+      assert.equal(newOccurrence.providerUpdatedAt, null);
+      assert.equal(await a.query(tx => tx.fixtureOddsPrice.count()), 0, "replay keeps in-play quotes out of the pre-match store");
+    });
   }, { migrationTimeoutMs: 180_000 });
 });
