@@ -24,6 +24,7 @@ export function isGoalHintTheme(value: unknown): value is GoalHintTheme {
  * does not re-flatten it per render the way a `${({ theme }) => …}` breakpoint lookup does.
  */
 export const media = {
+  phone: `@media (width < ${lightTheme.breakpoint.md})`,
   /** Phones and tablets: the compact tile layouts below the desktop table. */
   belowDesktop: `@media (max-width: ${lightTheme.viewport[63.99]})`,
   tablet: `@media (min-width: ${lightTheme.breakpoint.md})`,

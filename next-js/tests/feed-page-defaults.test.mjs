@@ -66,8 +66,9 @@ test("explicit dates and sorting survive Matches navigation, including API defau
     }
   }
   assert.deepEqual(page("dir=asc").sort, { by: "kickoff", direction: "asc" });
-  assert.deepEqual(page("when=yesterday").sort, { by: "kickoff", direction: "desc" });
-  assert.deepEqual(page("when=today").sort, { by: "live-first", direction: "desc" });
+  for (const parameters of ["when=yesterday", "when=today", "when=last-30-days", "when=next-7-days", "from=2026-10-27&to=2026-11-01"]) {
+    assert.deepEqual(page(parameters).sort, { by: "live-first", direction: "desc" });
+  }
   assert.throws(() => parse("sort=live-first&dir=asc"));
   for (const parameters of ["date=2026-10-26", "from=2026-10-20&to=2026-10-26"]) {
     assert.deepEqual(page(parameters).dates, parse(parameters).dates);
@@ -75,8 +76,13 @@ test("explicit dates and sorting survive Matches navigation, including API defau
   const archived = parseFeedQuery({}, { today, routeDate: "2026-10-20" });
   const result = applyFeedPageDefaults(archived, {}, { dated: true });
   assert.deepEqual(result.dates, archived.dates);
-  assert.deepEqual(result.sort, archived.sort);
+  assert.deepEqual(result.sort, { by: "live-first", direction: "desc" });
   assert.equal(result.picks, "all");
+  const earliest = { ...result, sort: { by: "kickoff", direction: "asc" } };
+  const archivedInput = new URL(feedQueryHref(earliest, today), "https://example.test").searchParams;
+  assert.equal(archivedInput.get("sort"), "kickoff");
+  assert.equal(archivedInput.get("dir"), "asc");
+  assert.deepEqual(applyFeedPageDefaults(parseFeedQuery(archivedInput, { today, routeDate: archived.dates.date }), archivedInput, { dated: true }), earliest);
 });
 
 test("Today uses the browsing time zone without adding a kickoff constraint", () => {

@@ -75,11 +75,14 @@ test("compact kickoff labels use day-month and explicit 12-hour frames without c
   const messages = createMessages("en"), at = parseUtcInstant("2026-10-28T18:00:00Z");
   assert.equal(messages.shortKickoffDate(at), "28-Oct");
   assert.equal(messages.shortKickoffTime(at), "9:00 PM");
+  assert.equal(messages.shortKickoffTime(at, "2-digit"), "09:00 PM");
+  assert.equal(messages.shortKickoffTime(parseUtcInstant("2026-10-28T05:00:00Z"), "2-digit"), "08:00 AM");
   assert.equal(messages.reportingTime(at), "21:00");
   for (const [value, expected] of [["2026-10-27T21:00:00Z", "12:00 AM"], ["2026-10-28T09:00:00Z", "12:00 PM"]]) {
     const instant = parseUtcInstant(value);
     assert.equal(messages.shortKickoffDate(instant), "28-Oct");
     assert.equal(messages.shortKickoffTime(instant), expected);
+    assert.equal(messages.shortKickoffTime(instant, "2-digit"), expected);
   }
 });
 

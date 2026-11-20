@@ -30,7 +30,7 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { ChevronIcon } from "./match-icons";
 import { CompetitionCountryFlag, CompetitionLogo } from "./competition-media";
 import { ForecastSourceLabel, ForecastValueLabel } from "./forecast-labels";
-import { teamStackStyles } from "./team-stack-styles";
+import { phoneFeedRowStyles, teamStackStyles } from "./team-stack-styles";
 import { matchTableColumns, matchTableGap } from "./match-columns";
 import { TeamLogo } from "./team-logo";
 import { ProbabilityBar } from "./prediction-presentation";
@@ -62,6 +62,8 @@ export type MatchCardProps = {
   headingLevel?: 2 | 3 | 4;
   eagerLogos?: boolean;
   position?: number;
+  /** The Matches feed uses its own kickoff and score layout on phones. */
+  phoneFeed?: boolean;
   /** Appended to the card's accessible title, such as "similar result" for an approximate search match. */
   titleNote?: string | undefined;
   /** Anonymous saved fixtures: no live claim, predictions, media requests, or detail action. */
@@ -93,7 +95,7 @@ const Card = styled.article`
     outline-offset: calc(-1 * ${({ theme }) => theme.border.focusWidth});
   }
   @media (prefers-reduced-motion: reduce) { transition: none; }
-  [data-mobile-only] { display: none; }
+  [data-mobile-only], [data-phone-kickoff] { display: none; }
   /* The selected phone layout is also used by the slip's original selections. */
   ${tile} {
     ${teamStackStyles}
@@ -109,6 +111,7 @@ const Card = styled.article`
     [data-mobile-only] { display: inline; }
     [data-desktop-only] { display: none; }
   }
+  ${media.phone} { &[data-phone-feed-card] { ${phoneFeedRowStyles} } }
   ${table} {
     grid-template-columns: ${matchTableColumns.compact};
     grid-template-rows: auto auto;
@@ -408,7 +411,7 @@ const Percent = styled.span`
   font-size: var(--gh-font-body); font-weight: ${({ theme }) => theme.typography.weight.bold};
   font-variant-numeric: tabular-nums; white-space: nowrap;
 `;
-/** The shared phone layout places progress/outcome below the teams. */
+/** The shared phone layout places progress/outcome in the top-right slot. */
 const Result = styled.span`
   display: inline-flex; align-items: center;
   /* Before hydration, keep the original desktop score and status grid slots. */
@@ -505,7 +508,7 @@ function CardTeam({ team, side, name, eager, result, standing }: {
 
 
 /** Only timestamps subscribe to the device clock; the rest of a card stays unchanged. */
-function CardKickoff({ kickoff, locale }: { kickoff: FixtureSnapshot["kickoffAt"]; locale: string }) {
+function CardKickoff({ kickoff, locale, phoneFeed }: { kickoff: FixtureSnapshot["kickoffAt"]; locale: string; phoneFeed: boolean }) {
   const messages = useMessages(locale);
   return kickoff === null ? <When as="p" data-ledger-kickoff data-kickoff data-kickoff-unknown><KickoffDetails>
     <KickoffDate data-kickoff-date>{messages.text("match.kickoffUnknown")}</KickoffDate>
@@ -513,8 +516,16 @@ function CardKickoff({ kickoff, locale }: { kickoff: FixtureSnapshot["kickoffAt"
     : <When dateTime={toUtcIsoString(kickoff)} title={messages.reportingInstant(kickoff)} data-ledger-kickoff data-kickoff>
       <KickoffDetails>
         <VisuallyHidden>{messages.text("match.kickoff")}: </VisuallyHidden>
-        <KickoffDate data-kickoff-date><span data-mobile-only>{messages.shortKickoffDate(kickoff)}</span><span data-desktop-only>{messages.reportingDay(kickoff)}</span></KickoffDate><Dot aria-hidden="true">·</Dot>
-        <KickoffTime data-kickoff-time><span data-mobile-only>{messages.shortKickoffTime(kickoff)}</span><span data-desktop-only>{messages.reportingTime(kickoff)}<KickoffZone data-kickoff-zone> {messages.timeZone(kickoff)}</KickoffZone></span></KickoffTime>
+        <KickoffDate data-kickoff-date>
+          <span data-mobile-only>{messages.shortKickoffDate(kickoff)}</span>
+          {phoneFeed && <span data-phone-kickoff>{messages.shortKickoffDate(kickoff, true, "numeric")}</span>}
+          <span data-desktop-only>{messages.reportingDay(kickoff)}</span>
+        </KickoffDate><Dot aria-hidden="true">·</Dot>
+        <KickoffTime data-kickoff-time>
+          <span data-mobile-only>{messages.shortKickoffTime(kickoff)}</span>
+          {phoneFeed && <span data-phone-kickoff>{messages.shortKickoffTime(kickoff, "2-digit")}</span>}
+          <span data-desktop-only>{messages.reportingTime(kickoff)}<KickoffZone data-kickoff-zone> {messages.timeZone(kickoff)}</KickoffZone></span>
+        </KickoffTime>
       </KickoffDetails>
     </When>;
 }
@@ -540,7 +551,8 @@ function DesktopCard(props: ComponentProps<typeof DesktopMatchRow>) {
 }
 
 function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, markets, publishedMarket = false, selectedFamily, locale: requestedLocale,
-  headingLevel = 2, eagerLogos = false, position, titleNote, offline = false, snapshotPick, lockedPrediction = false, signedIn = false, interactive = true, accessReturnTo }: MatchCardProps) {
+  headingLevel = 2, eagerLogos = false, position, phoneFeed = false, titleNote, offline = false, snapshotPick, lockedPrediction = false,
+  signedIn = false, interactive = true, accessReturnTo }: MatchCardProps) {
   const locale = resolveLocale(requestedLocale);
   const messages = createMessages(locale);
   const titleId = `gh-match-${useId()}`;
@@ -655,11 +667,12 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     />;
   }
   return <Card tabIndex={-1} aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={gated ? undefined : shownFamily}
-    data-status={fixture.status} data-mobile-locked={gated && !offline ? "" : undefined} data-mobile-design="team-stack" data-numbered={position !== undefined ? "" : undefined}>
+    data-status={fixture.status} data-mobile-locked={gated && !offline ? "" : undefined} data-mobile-design="team-stack"
+    data-numbered={position !== undefined ? "" : undefined} data-phone-feed-card={phoneFeed || undefined}>
     <VisuallyHidden as={`h${headingLevel}`} id={titleId}>{titleNote ? `${title}, ${titleNote}` : title}</VisuallyHidden>
     <Meta data-ledger-meta>
       {position !== undefined && <Index position={position} $wrap={position > 9_999} aria-hidden="true" data-row-number>{messages.number(position)}</Index>}
-      <CardKickoff kickoff={fixture.kickoffAt} locale={locale} />
+      <CardKickoff kickoff={fixture.kickoffAt} locale={locale} phoneFeed={phoneFeed} />
       <League title={country ?? undefined} data-ledger-competition>
         <CountryDetails data-country data-ledger-country aria-hidden="true">
           <CompetitionCountryFlag url={flagUrl} country={country} offline={offline} />

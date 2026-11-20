@@ -4,6 +4,7 @@ import { Fragment, memo, Suspense, useCallback, useLayoutEffect, useState, useTr
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
 import { FeedAppliedSummary, FeedNote } from "@/components/match/feed-controls";
+import { DayStrip } from "@/components/match/feed-dates";
 import { FeedFilters } from "@/components/match/feed-filters";
 import { FeedHeader, ResultsToolbar } from "@/components/match/feed-header";
 import { plainClick } from "@/components/match/filter-parts";
@@ -51,7 +52,14 @@ const MatchResults = styled.div`
   display: grid;
   gap: 0;
   min-inline-size: 0;
-  > [data-results-header]:has(+ [data-match-section]) { border-block-end: 0; }
+  ${media.phone} {
+    margin-inline: calc(-1 * var(--public-frame-band, 0px));
+    &:has(> [data-match-section]) {
+      row-gap: var(--gh-spacing-1);
+      background: ${({ theme }) => theme.header.gradient};
+    }
+  }
+  ${media.tablet} { > [data-results-header]:has(+ [data-match-section]) { border-block-end: 0; } }
 `;
 /** Pending navigations dim the list in place instead of inserting a line that shifts it. */
 const Results = styled(FeedStack)`
@@ -108,7 +116,7 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
             note={data.search?.exact === 0 ? messages.text("feed.search.noExact", { query: query.search }) : null} />}
           <li>
             <MatchCard fixture={fixture} gated={data.access.tier === "free"} signedIn={data.access.signedIn} analysisSlug={canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name)}
-              markets={query.markets} publishedMarket locale={query.locale} position={first + index}
+              markets={query.markets} publishedMarket phoneFeed locale={query.locale} position={first + index}
               titleNote={similarFrom !== null && first + index >= similarFrom ? messages.text("feed.search.similarItem") : undefined} />
           </li>
         </Fragment>)}
@@ -182,10 +190,11 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
     <StableFeedHeader query={query} today={today} showAccount={showAccount} />
     <LoadingTheme><FeedFilters key={`${href}:${today}`} subscriberOnly={subscriberOnly} providerOdds={providerOdds} query={query} today={today} leagues={leagues} onApply={apply} pending={pending}
       searchText={text} onSearchChange={onSearchChange} onSearchSubmit={onSearchSubmit} /></LoadingTheme>
+    <DayStrip query={displayed?.query ?? query} today={displayed?.today ?? today} onApply={apply} />
     {controls}
     <VisuallyHidden role="status" aria-live="polite" aria-atomic="true">{announcement}</VisuallyHidden>
     <Results $gap="md" aria-busy={pending} data-feed-results>
-      {!visible && <ResultsToolbar query={query} today={today} total={null} first={0} last={0} />}
+      {!visible && <MatchResults><ResultsToolbar query={query} today={today} total={null} first={0} last={0} /></MatchResults>}
       {result.error && <EmptyState title={messages.text(result.error === "rate-limited" ? "feed.rateLimitedTitle" : "feed.unavailableTitle")}
         description={messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")}
         action={<ButtonLink href={href} prefetch={false} variant="secondary"

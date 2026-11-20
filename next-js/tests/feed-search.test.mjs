@@ -99,10 +99,16 @@ test('SQL filters matching fixtures before pagination and ranks exact, then wide
   const ordinary = feedSql(parseFeedQuery({ date: '2026-10-09' }, { today: '2026-10-09' }), range, [39]);
   assert.equal(ordinary.order.sql, 'f.kickoff DESC, f.id DESC');
   const liveFirst = feedSql(parseFeedQuery({ date: '2026-10-09', sort: 'live-first' }, { today: '2026-10-09' }), range, [39]);
-  assert.equal(liveFirst.order.sql, "(f.status='live') DESC, f.kickoff DESC, f.id DESC");
+  assert.match(liveFirst.order.sql, /^CASE f.status WHEN 'live' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END,/u);
+  assert.match(liveFirst.order.sql, /WHEN 'ET' THEN 6.*WHEN '2H' THEN 4\s+WHEN 'HT' THEN 3 WHEN '1H' THEN 2/u);
+  assert.match(liveFirst.order.sql, /CASE WHEN f.status='scheduled' THEN f.kickoff END ASC, f.kickoff DESC, f.id DESC$/u);
   assert.equal(liveFirst.pageJoins, liveFirst.cohortJoins);
+  const live = feedSql(parseFeedQuery({ date: '2026-10-09', sort: 'live-first', status: 'live' }, { today: '2026-10-09' }), range, [39]);
+  assert.match(live.order.sql, /^CASE WHEN f.status='live' THEN CASE f.providerStatus/u);
+  assert.match(live.order.sql, /JSON_EXTRACT\(r.body,'\$\.stoppageMinutes'\)/u);
+  assert.doesNotMatch(live.order.sql, /'scheduled'/u);
   const scheduled = feedSql(parseFeedQuery({ date: '2026-10-09', sort: 'live-first', status: 'scheduled' }, { today: '2026-10-09' }), range, [39]);
-  assert.equal(scheduled.order.sql, ordinary.order.sql);
+  assert.equal(scheduled.order.sql, 'f.kickoff IS NULL ASC, f.kickoff ASC, f.id ASC');
   const earliest = feedSql({ ...query, search: '', sort: { by: 'kickoff', direction: 'asc' } }, range, [39]);
   assert.equal(earliest.order.sql, 'f.kickoff ASC, f.id ASC');
 });

@@ -12,6 +12,8 @@ import { focusRing } from "./filter-parts";
 import { keepFocusInSheet, SheetClose, SheetHeader, SheetScrim, sheetFrame, usePhoneSheet } from "./sheet-parts";
 
 const dayMilliseconds = 86_400_000;
+const firstMonth = "1000-01-01";
+const lastMonth = "9999-12-01";
 const time = (date: ReportingDate) => Date.parse(`${date}T00:00:00Z`);
 const monthOf = (date: ReportingDate) => parseReportingDate(`${date.slice(0, 7)}-01`);
 /** Inclusive number of days from `from` to `to`. */
@@ -23,8 +25,9 @@ function shiftMonth(month: ReportingDate, offset: number): ReportingDate {
 }
 /** Monday-first weeks; blanks pad the days before the first of the month. */
 function monthCells(month: ReportingDate): { lead: ReportingDate; cells: (ReportingDate | null)[] } {
-  const offset = (new Date(time(month)).getUTCDay() + 6) % 7, cells: (ReportingDate | null)[] = Array.from({ length: offset }, () => null);
-  for (let date = month; date.slice(0, 7) === month.slice(0, 7); date = addReportingDays(date, 1)) cells.push(date);
+  const monthEnd = new Date(time(month)), offset = (monthEnd.getUTCDay() + 6) % 7;
+  monthEnd.setUTCMonth(monthEnd.getUTCMonth() + 1, 0);
+  const cells = Array.from({ length: offset + monthEnd.getUTCDate() }, (_, index) => index < offset ? null : addReportingDays(month, index - offset));
   return { lead: addReportingDays(month, -offset), cells };
 }
 
@@ -64,7 +67,8 @@ const BarButton = styled.button`
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   cursor: pointer;
   > svg { font-size: var(--gh-font-title); }
-  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.brandSoft}; } }
+  &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: default; }
+  ${media.hover} { &:hover:not(:disabled) { background: ${({ theme }) => theme.color.fieldHover}; } }
   ${focusRing}
 `;
 const Weekdays = styled.div`
@@ -178,9 +182,9 @@ export function DateCalendar({ locale, today, from, to, onApply, onClose }: {
             {messages.text("feed.calendar.thisMonth")}
           </BarButton>
           <BarButton type="button" aria-label={messages.text("feed.calendar.previousMonth")} title={messages.text("feed.calendar.previousMonth")}
-            onClick={() => setMonth(shiftMonth(month, -1))}><ChevronLeftIcon /></BarButton>
+            disabled={month <= firstMonth} onClick={() => setMonth(shiftMonth(month, -1))}><ChevronLeftIcon /></BarButton>
           <BarButton type="button" aria-label={messages.text("feed.calendar.nextMonth")} title={messages.text("feed.calendar.nextMonth")}
-            onClick={() => setMonth(shiftMonth(month, 1))}><ChevronRightIcon /></BarButton>
+            disabled={month >= lastMonth} onClick={() => setMonth(shiftMonth(month, 1))}><ChevronRightIcon /></BarButton>
         </MonthBar>
         <Weekdays aria-hidden="true">
           {Array.from({ length: 7 }, (_, index) => <span key={index}>{messages.reportingDayParts(addReportingDays(lead, index)).weekday}</span>)}

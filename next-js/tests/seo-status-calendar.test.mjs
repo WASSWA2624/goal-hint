@@ -105,7 +105,7 @@ function feed({ dated = false, read = unavailable, policy = indexing, document =
 
 test('Matches page defaults reach the stored read while retaining viewer eligibility and explicit choices', async () => {
   for (const tier of ['free', 'full']) {
-    for (const parameters of [{}, { status: 'finished' }, { when: 'last-30-days', sort: 'kickoff', picks: 'all' }]) {
+    for (const parameters of [{}, { status: 'finished' }, { when: 'next-7-days' }, { when: 'last-30-days', sort: 'kickoff', picks: 'all' }]) {
       let storedQuery;
       const page = createFeedRoute({ instant: async () => at, policy: closed, document: fullDocument,
         resolveAccess: async () => ({ tier, signedIn: false, mode: tier === 'full' ? 'off' : 'free' }),
@@ -210,7 +210,7 @@ test('Matches and dated archives publish stable, distinct canonicals for each ac
       assert.equal(dated.alternates.canonical, `https://goalhint.com/en/predictions/${today}${suffix}`);
       assert.equal(dated.robots.index, true);
     }
-    const nonDefault = await matches.generateMetadata(props({}, tier === 'full' ? { prob: '0-100' } : { sort: 'kickoff' }));
+    const nonDefault = await matches.generateMetadata(props({}, tier === 'full' ? { prob: '50-80' } : { sort: 'kickoff' }));
     assert.equal(nonDefault.robots.index, false);
     assert.match(nonDefault.alternates.canonical, /\b(?:prob|sort)=/u);
   }
