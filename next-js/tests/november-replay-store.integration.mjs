@@ -158,7 +158,9 @@ test("reviewed replay persists verified evidence and only its owner can reverse 
     assert.deepEqual(rollbacks, [rolledBack, rolledBack]);
     assert.equal((await readProjection()).size, 0);
     assert.equal(await generation(), originalGeneration + 2n);
-    assert.deepEqual(await store.activate(input), activated, "a receipt retry cannot reactivate a rolled back pointer");
+    const restarted = createMysqlNovemberReplayStore({ transaction: p.a.transaction,
+      query: () => assert.fail("a sealed activation receipt must not require another membership scan") });
+    assert.deepEqual(await restarted.activate(input), activated, "a receipt retry cannot reactivate a rolled back pointer");
     assert.equal((await readProjection()).size, 0);
     const later = await store.activate({ ...input, operationId: "later-reviewed-activation" });
     await assert.rejects(store.rollback({ ...rollback, operationId: "stale-rollback" }), denied("projection-owned"));

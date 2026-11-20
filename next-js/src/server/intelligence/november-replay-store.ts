@@ -19,7 +19,7 @@ import { historyHash, historyId, historyInstant, historyVersion } from "../predi
 import { assertHistorySeal, historyTime, storedCycle, storedRevision, type HistoryRow } from "../predictions/history-read.ts";
 import { storedRefreshResult } from "../predictions/publication-read.ts";
 import { localGoalModelVersion } from "./local-goals-model.ts";
-import { loadNovemberReplayEvidenceInTransaction } from "./november-replay-evidence.ts";
+import { loadNovemberReplayEvidenceInTransaction, readNovemberReplayTrainingMembership, type NovemberReplayTrainingMembership } from "./november-replay-evidence.ts";
 import { buildNovemberReplayMarkets } from "./november-replay-model.ts";
 import { decodeShadowArchive, encodeShadowArchive } from "./shadow-store.ts";
 
@@ -234,7 +234,8 @@ async function verifiedSource(tx: Tx, record: NovemberReplayRecord, cycle: Store
   return local === null && implied === null;
 }
 
-async function activationRejection(tx: Tx, record: NovemberReplayRecord, at: number): Promise<Rejection | null> {
+async function activationRejection(tx: Tx, record: NovemberReplayRecord, at: number,
+  training: NovemberReplayTrainingMembership): Promise<Rejection | null> {
   if (record.registryVersion !== LOCAL_FIRST_MARKET_REGISTRY_VERSION) return "registry-superseded";
   if (record.status !== "estimated") return "abstained";
   const { fixtureId, cycleId, scheduleVersion, sourceRevisionId, evidenceCutoffAt, kickoffAt } = record;
@@ -257,7 +258,7 @@ async function activationRejection(tx: Tx, record: NovemberReplayRecord, at: num
   const evidence = await loadNovemberReplayEvidenceInTransaction(tx, { fixtureId, externalId: fixture.externalId,
     kickoffAt, fixtureVersion: fixture.dataVersion, competitionId: fixture.season.competitionId, competitionName: fixture.season.competition.name,
     homeTeamId: fixture.homeTeamId, homeTeamName: fixture.homeTeam.name, awayTeamId: fixture.awayTeamId, awayTeamName: fixture.awayTeam.name,
-    status: fixture.status, applicable: true, cycleId, originalRevisionId: sourceRevisionId }, at);
+    status: fixture.status, applicable: true, cycleId, originalRevisionId: sourceRevisionId }, at, training);
   if (evidence.status !== "qualified" || !evidence.forecast || evidence.forecast.hash !== record.artifactHash ||
     evidence.evidenceHash !== record.evidenceHash || evidence.cutoffAt !== evidenceCutoffAt || evidence.scheduleVersion !== scheduleVersion ||
     evidenceFingerprint(evidence.evidenceReceiptIds) !== evidenceFingerprint(record.evidenceReceiptIds)) return "evidence-changed";
@@ -327,6 +328,13 @@ async function runReplay<T>(database: Pick<DatabaseRuntime, "transaction">, visi
 }
 
 export function createMysqlNovemberReplayStore(database: Pick<DatabaseRuntime, "query" | "transaction">) {
+  // An operator batch reuses only the identity superset. Source and labels are
+  // checked again in each transaction against the exact original cutoff.
+  let training: Promise<NovemberReplayTrainingMembership> | undefined;
+  const trainingMembership = () => training ??= readNovemberReplayTrainingMembership(database).catch(() => {
+    training = undefined;
+    return deny("unavailable");
+  });
   return Object.freeze({
     async stage(value: NovemberReplayStageInput): Promise<NovemberReplayRecord> {
       const input = checkedStage(value), id = replayId(input);
@@ -355,6 +363,8 @@ export function createMysqlNovemberReplayStore(database: Pick<DatabaseRuntime, "
     async activationDiff(ids: readonly string[]): Promise<readonly ReplayDiff[]> {
       if (ids.some((id) => !historyHash.safeParse(id).success)) return deny("invalid-input");
       const result: ReplayDiff[] = [];
+      if (ids.length === 0) return freezeEvidence(result);
+      const membership = await trainingMembership();
       for (const revisionId of [...new Set(ids)]) {
         result.push(await runReplay(database, async (tx): Promise<ReplayDiff> => {
           const record = await readRecord(tx, revisionId);
@@ -363,7 +373,7 @@ export function createMysqlNovemberReplayStore(database: Pick<DatabaseRuntime, "
           const { fixtureId, sourceRevisionId, kickoffAt, selected } = record;
           const pointer = record.registryVersion === LOCAL_FIRST_MARKET_REGISTRY_VERSION
             ? await tx.novemberReplayProjection.findUnique({ where: { fixtureId }, select: { revisionId: true } }) : null;
-          const reason = pointer?.revisionId ? "projection-owned" : await activationRejection(tx, record, await serverNow(tx));
+          const reason = pointer?.revisionId ? "projection-owned" : await activationRejection(tx, record, await serverNow(tx), membership);
           return { revisionId, fixtureId, sourceRevisionId, kickoffAt, selected, eligible: reason === null, reason: reason ?? "eligible" };
         }));
       }
@@ -371,6 +381,18 @@ export function createMysqlNovemberReplayStore(database: Pick<DatabaseRuntime, "
     },
     async activate({ operationId, revisionId }: ActivationInput): Promise<NovemberReplayAction> {
       if (!token.safeParse(operationId).success || !historyHash.safeParse(revisionId).success) return deny("invalid-input");
+      const activationReceipt = (prior: NovemberReplayAction) => prior.kind === "activate" && prior.revisionId === revisionId
+        ? prior : deny("conflicting-operation");
+      if (!training) {
+        const prior = await runReplay(database, async (tx) => {
+          const record = await readRecord(tx, revisionId);
+          if (!record) return deny("invalid-input");
+          await lockFixture(tx, record.fixtureId);
+          return readAction(tx, record.fixtureId, operationId);
+        });
+        if (prior) return activationReceipt(prior);
+      }
+      const membership = await trainingMembership();
       return runReplay(database, async (tx) => {
         const record = await readRecord(tx, revisionId);
         if (!record) return deny("invalid-input");
@@ -378,10 +400,10 @@ export function createMysqlNovemberReplayStore(database: Pick<DatabaseRuntime, "
         await lockFixture(tx, fixtureId);
         const pointer = await lockPointer(tx, fixtureId, await serverNow(tx));
         const prior = await readAction(tx, fixtureId, operationId);
-        if (prior) return prior.kind === "activate" && prior.revisionId === revisionId ? prior : deny("conflicting-operation");
+        if (prior) return activationReceipt(prior);
         if (record.registryVersion !== LOCAL_FIRST_MARKET_REGISTRY_VERSION) return deny("registry-superseded");
         if (pointer.revisionId !== null) return deny("projection-owned");
-        const reason = await activationRejection(tx, record, await serverNow(tx));
+        const reason = await activationRejection(tx, record, await serverNow(tx), membership);
         if (reason) return deny(reason);
         const at = await serverNow(tx);
         const projection = projectionSchema.parse({ fixtureId, revisionId, sourceRevisionId: record.sourceRevisionId, cycleId: record.cycleId,

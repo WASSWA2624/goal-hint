@@ -37,6 +37,9 @@ export type NovemberReplayEvidence = Readonly<{
   historyMatches: number; evidenceReceiptIds: readonly string[]; forecast: LocalGoalForecast | null;
 }>;
 type ReplayDatabase = Pick<DatabaseRuntime, "query">;
+export type NovemberReplayTrainingMembership = Readonly<{
+  observedBefore: number; byCompetition: ReadonlyMap<string, readonly string[]>;
+}>;
 type OccurrenceRow = Omit<NovemberReplayOccurrence, "kickoffAt" | "applicable"> & { kickoff: Date; applicable: number | boolean | bigint };
 
 /** The canonical Matches instant range plus displaced catalog, schedule and lifecycle occurrences for the audit. */
@@ -280,12 +283,13 @@ const displacedTrainingFixtures = Prisma.sql`
   STRAIGHT_JOIN FootballSeason s ON s.id=JSON_UNQUOTE(JSON_EXTRACT(a.changes,'$.seasonId.before'))
   WHERE a.dataVersion>1`;
 
-/** Freeze candidate identities once per dry run. Every label is independently verified at its own lock below. */
-export async function readNovemberReplayTrainingMembership(database: ReplayDatabase, auditedAt: number): Promise<ReadonlyMap<string, readonly string[]>> {
-  const at = new Date(utcInstantFromEpochMilliseconds(auditedAt));
+/** An identity superset from the source database. The individual label still has to predate its fixture's lock. */
+export async function readNovemberReplayTrainingMembership(database: ReplayDatabase, auditedAt?: number): Promise<NovemberReplayTrainingMembership> {
+  const observedBefore = utcInstantFromEpochMilliseconds(auditedAt ?? await database.query(async (tx) =>
+    historyTime((await tx.$queryRaw<[{ at: Date }]>`SELECT UTC_TIMESTAMP(3) AS at`)[0].at)));
   const rows = await database.query((tx) => tx.$queryRaw<{ competitionId: string; fixtureId: string }[]>(Prisma.sql`
     SELECT s.competitionId,f.id AS fixtureId FROM (
-      SELECT DISTINCT fixtureId FROM FixtureResult WHERE observedAt<${at}
+      SELECT DISTINCT fixtureId FROM FixtureResult WHERE observedAt<${new Date(observedBefore)}
     ) labeled JOIN FootballFixture f ON f.id=labeled.fixtureId AND f.provider='api-football'
     JOIN FootballSeason s ON s.id=f.seasonId
     UNION ${displacedTrainingFixtures}`));
@@ -295,22 +299,13 @@ export async function readNovemberReplayTrainingMembership(database: ReplayDatab
     if (!members) { members = []; competitions.set(row.competitionId, members); }
     members.push(row.fixtureId);
   }
-  return competitions;
+  return { observedBefore, byCompetition: competitions };
 }
 
-/** Reconstruct each training label from append-only records visible before this lock. */
-export async function readNovemberReplayHistory(tx: Pick<Prisma.TransactionClient, "$queryRaw">, occurrence: NovemberReplayOccurrence,
-  cutoffAt: number, fixtureIds?: readonly string[]): Promise<FixtureModelHistoryRow[]> {
-  if (fixtureIds?.length === 0) return [];
+async function readHistoryCandidates(tx: Pick<Prisma.TransactionClient, "$queryRaw">, occurrence: NovemberReplayOccurrence,
+  cutoffAt: number, membership: Prisma.Sql): Promise<HistoryRow[]> {
   const lock = new Date(cutoffAt), lower = new Date(cutoffAt - 1 - localGoalDefaults.lookbackMs);
-  // Keep one bounded SQL statement per fit, even if a competition has many historical seasons.
-  const membership = fixtureIds && fixtureIds.length <= 8_000 ? Prisma.sql`
-    SELECT id AS fixtureId FROM FootballFixture WHERE id IN (${Prisma.join(fixtureIds)})` : Prisma.sql`
-    SELECT f.id AS fixtureId FROM FootballSeason s JOIN FootballFixture f ON f.seasonId=s.id
-    WHERE s.competitionId=${occurrence.competitionId} AND f.provider='api-football'
-    UNION
-    SELECT prior.fixtureId FROM (${displacedTrainingFixtures}) prior WHERE prior.competitionId=${occurrence.competitionId}`;
-  const rows = await tx.$queryRaw<HistoryRow[]>(Prisma.sql`
+  return tx.$queryRaw<HistoryRow[]>(Prisma.sql`
     WITH candidates AS (
       ${membership}
     ), versions AS (
@@ -371,6 +366,33 @@ export async function readNovemberReplayHistory(tx: Pick<Prisma.TransactionClien
       r.integrity=SHA2(CAST(r.body AS CHAR),256) AS validIntegrity
     FROM frozen p JOIN FixtureResult r ON r.id=p.id AND r.fixtureId=p.fixtureId
     WHERE p.historyOrder<=${fixtureModelEvidenceBounds.history} ORDER BY p.historyOrder`);
+}
+
+const maximumMembershipBatch = 8_000;
+const descendingText = (left: string, right: string) => left === right ? 0 : left > right ? -1 : 1;
+
+/** Reconstruct each training label from append-only records visible before this lock. */
+export async function readNovemberReplayHistory(tx: Pick<Prisma.TransactionClient, "$queryRaw">, occurrence: NovemberReplayOccurrence,
+  cutoffAt: number, fixtureIds?: readonly string[]): Promise<FixtureModelHistoryRow[]> {
+  let rows: HistoryRow[] = [];
+  if (fixtureIds === undefined) {
+    rows = await readHistoryCandidates(tx, occurrence, cutoffAt, Prisma.sql`
+      SELECT f.id AS fixtureId FROM FootballSeason s JOIN FootballFixture f ON f.seasonId=s.id
+      WHERE s.competitionId=${occurrence.competitionId} AND f.provider='api-football'
+      UNION
+      SELECT prior.fixtureId FROM (${displacedTrainingFixtures}) prior WHERE prior.competitionId=${occurrence.competitionId}`);
+  } else {
+    const ids = [...new Set(fixtureIds)];
+    for (let offset = 0; offset < ids.length; offset += maximumMembershipBatch) {
+      const batch = ids.slice(offset, offset + maximumMembershipBatch);
+      const candidates = await readHistoryCandidates(tx, occurrence, cutoffAt, Prisma.sql`
+        SELECT id AS fixtureId FROM FootballFixture WHERE id IN (${Prisma.join(batch)})`);
+      // Every global top-N row is also in its own batch's top N. Apply the
+      // global cutoff before decoding or filtering any sealed result.
+      rows = [...rows, ...candidates].sort((a, b) => descendingText(String(a.kickoff), String(b.kickoff)) ||
+        descendingText(String(a.fixtureId), String(b.fixtureId))).slice(0, fixtureModelEvidenceBounds.history);
+    }
+  }
   return rows.flatMap((row) => {
     const result = fixtureResultFromRow(row);
     const kickoffAt = utcInstantFromEpochMilliseconds(Date.parse(String(row.kickoff))), availableAt = historyTime(row.availableAt);
@@ -387,17 +409,17 @@ export async function readNovemberReplayHistory(tx: Pick<Prisma.TransactionClien
 
 /** Uses one millisecond before effective lock as the final instant a pre-match prediction could have used. */
 export async function loadNovemberReplayEvidence(database: ReplayDatabase, occurrence: NovemberReplayOccurrence,
-  auditedAt: number, trainingFixtureIds?: readonly string[]): Promise<NovemberReplayEvidence> {
-  return database.query((tx) => loadReplayEvidence(tx, occurrence, auditedAt, trainingFixtureIds));
+  auditedAt: number, training?: NovemberReplayTrainingMembership): Promise<NovemberReplayEvidence> {
+  return database.query((tx) => loadReplayEvidence(tx, occurrence, auditedAt, training));
 }
 
 export async function loadNovemberReplayEvidenceInTransaction(tx: Prisma.TransactionClient, occurrence: NovemberReplayOccurrence,
-  auditedAt: number): Promise<NovemberReplayEvidence> {
-  return loadReplayEvidence(tx, occurrence, auditedAt);
+  auditedAt: number, training?: NovemberReplayTrainingMembership): Promise<NovemberReplayEvidence> {
+  return loadReplayEvidence(tx, occurrence, auditedAt, training);
 }
 
 async function loadReplayEvidence(tx: Prisma.TransactionClient, occurrence: NovemberReplayOccurrence, auditedAt: number,
-  trainingFixtureIds?: readonly string[]): Promise<NovemberReplayEvidence> {
+  training?: NovemberReplayTrainingMembership): Promise<NovemberReplayEvidence> {
   utcInstantFromEpochMilliseconds(auditedAt);
   const identity = { fixtureId: occurrence.fixtureId, competitionId: occurrence.competitionId,
     homeTeamId: occurrence.homeTeamId, awayTeamId: occurrence.awayTeamId, kickoffAt: occurrence.kickoffAt };
@@ -413,7 +435,9 @@ async function loadReplayEvidence(tx: Prisma.TransactionClient, occurrence: Nove
   const { prospective, reason, schedule } = await readReplaySchedule(tx, occurrence, auditedAt);
   if (prospective) return finish("prospective", null, null);
   if (!schedule) return finish("abstained", reason, null);
-  const history = await readNovemberReplayHistory(tx, occurrence, schedule.cutoffAt, trainingFixtureIds);
+  if (training && training.observedBefore < schedule.cutoffAt) return finish("abstained", "training-membership-precedes-cutoff", schedule);
+  const fixtureIds = training ? training.byCompetition.get(occurrence.competitionId) ?? [] : undefined;
+  const history = await readNovemberReplayHistory(tx, occurrence, schedule.cutoffAt, fixtureIds);
   const inputs = buildFixtureModelEvidence({ fixture: { ...identity, forecastAt: schedule.cutoffAt - 1 }, history });
   const forecast = estimateLocalGoals({ fixture: inputs.fixture, history: inputs.history.map(({ halfTime, ...result }) => {
     void halfTime;

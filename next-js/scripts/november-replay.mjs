@@ -52,13 +52,13 @@ async function loadPages(workspace, audit) {
   return pages;
 }
 
-async function inspectOccurrence(database, audit, occurrence, original, trainingIds) {
+async function inspectOccurrence(database, audit, occurrence, original, training) {
   if (original?.status === "scheduled" && original.effectiveCutoffAt > audit.auditedAt) {
     return { fixtureId: occurrence.fixtureId, kickoffAt: occurrence.kickoffAt, status: "prospective",
       reason: "normal-prospective-processing", cutoffAt: original.effectiveCutoffAt,
       evidenceHash: evidenceFingerprint({ auditedAt: audit.auditedAt, original }) };
   }
-  const evidence = await loadNovemberReplayEvidence(database, occurrence, audit.auditedAt, trainingIds);
+  const evidence = await loadNovemberReplayEvidence(database, occurrence, audit.auditedAt, training);
   const result = evidence.forecast && evidence.status === "qualified" ? buildNovemberReplayMarkets(evidence.forecast) : null;
   const { fixtureId, kickoffAt } = occurrence;
   const input = result ? { fixtureId, kickoffAt, cycleId: evidence.scheduleVersion === null ? null : occurrence.cycleId,
@@ -79,7 +79,7 @@ async function dryRun(database, workspace, audit, maxPages) {
   for (const phase of phases) {
     const last = pages.findLast((page) => page.phase === phase);
     if (last?.finished) continue;
-    const membership = phase === "canonical" && remaining > 0 ? await readNovemberReplayTrainingMembership(database, audit.auditedAt) : new Map();
+    const membership = phase === "canonical" && remaining > 0 ? await readNovemberReplayTrainingMembership(database, audit.auditedAt) : undefined;
     let cursor = last?.cursor;
     while (remaining > 0 && !abort.signal.aborted) {
       const occurrences = await readNovemberReplayPage(database, { after: cursor, limit: pageSize, auditedAt: audit.auditedAt, scope: phase });
@@ -97,7 +97,7 @@ async function dryRun(database, workspace, audit, maxPages) {
             return { fixtureId, kickoffAt, status: "abstained", reason: "occurrence-changed-since-audit",
               evidenceHash: evidenceFingerprint({ original, occurrence }) };
           }
-          return inspectOccurrence(database, audit, occurrence, original, membership.get(occurrence.competitionId) ?? []);
+          return inspectOccurrence(database, audit, occurrence, original, membership);
         }));
         for (const record of records) if (record) { rows.push(record); processed.add(occurrenceKey(record)); }
         const { fixtureId, kickoffAt } = batch.at(-1);

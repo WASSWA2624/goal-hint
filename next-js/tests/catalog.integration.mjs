@@ -15,7 +15,7 @@ import { validateCatalogBatch } from "../src/server/football/catalog-input.ts";
 import { createFootballHistoryFixtureReplay } from "../src/server/football/history-fixture-replay.ts";
 import { createFootballHistorySource } from "../src/server/football/history-source.ts";
 import { createLiveLocalEngine } from "../src/server/intelligence/live-local-engine.ts";
-import { NOVEMBER_REPLAY_WINDOW, loadNovemberReplayEvidence, readNovemberReplayPage,
+import { NOVEMBER_REPLAY_WINDOW, loadNovemberReplayEvidence, loadNovemberReplayEvidenceInTransaction, readNovemberReplayPage,
   readNovemberReplayTrainingMembership } from "../src/server/intelligence/november-replay-evidence.ts";
 import { storedFixtureResult } from "../src/server/results/result-read.ts";
 import { fixtureResultValue, insertFixtureResult } from "../src/server/results/result-write.ts";
@@ -386,6 +386,7 @@ test("canonical football catalog invariants on isolated genuine MySQL", { timeou
       assert.equal(before.cutoffAt, cutoffAt);
       assert.equal(before.forecast.forecastAt, cutoffAt - 1);
       assert.equal(before.historyMatches, 50);
+      const earlierMembership = await readNovemberReplayTrainingMembership(firstDatabase, auditedAt);
 
       // This correction has a pre-lock provider observation, but its result revision was only committed after lock.
       const row = await fixture(9450);
@@ -405,7 +406,18 @@ test("canonical football catalog invariants on isolated genuine MySQL", { timeou
       const after = await loadNovemberReplayEvidence(firstDatabase, occurrence, auditedAt);
       assert.deepEqual(after, before);
       const membership = await readNovemberReplayTrainingMembership(firstDatabase, auditedAt);
-      assert.deepEqual(await loadNovemberReplayEvidence(firstDatabase, occurrence, auditedAt, membership.get(occurrence.competitionId) ?? []), before);
+      const ids = membership.byCompetition.get(occurrence.competitionId);
+      assert.ok(ids.includes(row.id), "membership retains a label after the fixture moves competitions");
+      const evidenceUnderLock = (training) => firstDatabase.transaction((tx) =>
+        loadNovemberReplayEvidenceInTransaction(tx, occurrence, auditedAt, training));
+      const verified = await evidenceUnderLock();
+      assert.deepEqual(verified, before);
+      assert.deepEqual(await evidenceUnderLock(earlierMembership), verified, "a later catalog correction cannot remove a known candidate");
+      assert.deepEqual(await evidenceUnderLock(membership), verified, "the same receipts, artifact and evidence hashes survive bounded membership");
+      const absentIds = Array.from({ length: 8_001 }, (_, index) => `edfe0d10-0000-4000-8000-${String(index).padStart(12, "0")}`);
+      const splitMembership = { ...membership, byCompetition: new Map([[occurrence.competitionId,
+        [...ids.slice(0, 25), ...absentIds, ...ids.slice(25)]]]) };
+      assert.deepEqual(await evidenceUnderLock(splitMembership), verified, "over 8,000 candidates retain the global label order and exact proof");
     });
 
     await t.test("historical partial receipts bypass the catalog lock and preserve duplicate and conflicting IDs", async () => {
