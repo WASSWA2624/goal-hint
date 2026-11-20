@@ -107,10 +107,9 @@ export async function retainInPlayOddsHistory(tx: Prisma.TransactionClient, matc
     observe(prior.id, prior.occurrenceHash, absent, evidenceFingerprint(absent), null, false, prior.lastProviderUpdatedAt?.getTime() ?? null);
   }
   for (let offset = 0; offset < inserts.length; offset += writeBatchSize) {
-    await tx.$executeRaw`INSERT INTO FixtureInPlayOddsHistory (id, fixtureId, occurrenceHash, semanticHash, outOfOrder,
+    await tx.$executeRaw`INSERT IGNORE INTO FixtureInPlayOddsHistory (id, fixtureId, occurrenceHash, semanticHash, outOfOrder,
       firstObservedAt, lastObservedAt, providerUpdatedAt, lastProviderUpdatedAt, bodyJson)
-      VALUES ${Prisma.join(inserts.slice(offset, offset + writeBatchSize))}
-      ON DUPLICATE KEY UPDATE lastObservedAt=FixtureInPlayOddsHistory.lastObservedAt`;
+      VALUES ${Prisma.join(inserts.slice(offset, offset + writeBatchSize))}`;
   }
   for (let offset = 0; offset < updates.length; offset += writeBatchSize) {
     const ranges = updates.slice(offset, offset + writeBatchSize).map(({ id, updated }) =>
