@@ -15,6 +15,7 @@ import { createFootballCatalogImporter } from '../src/server/football/catalog-se
 import { createMysqlJobQueue } from '../src/server/jobs/job-mysql-store.ts';
 import { createMysqlModelVersionStore } from '../src/server/predictor/predictor-mysql-store.ts';
 import { createModelPin } from '../src/server/predictor/predictor-input.ts';
+import { preparePublishedExtendedPicks, publishedExtendedPickFromRow } from '../src/server/predictions/extended-market-picks.ts';
 import { createMysqlPredictionHistoryStore } from '../src/server/predictions/history-mysql-store.ts';
 import { storedCycle } from '../src/server/predictions/history-read.ts';
 import { readGoalMarketExtension } from '../src/server/predictions/goal-market-store.ts';
@@ -223,7 +224,7 @@ test('atomic revision publication on isolated genuine MySQL', { timeout: 600_000
     });
     await t.test('local forecasts publish a sealed goal extension without a primary score distribution', async () => {
       const target = await setup(), { lease } = target;
-      const rates = { home: 1.6, away: 1.0, firstHalfShare: 0.45 };
+      const rates = { home: 1.6, away: 1.0, firstHalfShare: { home: 0.45, away: 0.45 } };
       const base = target.input.candidate, observedAt = target.snapshot.context.analysisAt + 1000;
       const provenance = { kind: 'local-engine', modelVersion: 'synthetic-local-score-model', historyHash: evidenceHash('synthetic-local-history'),
         evidenceHash: target.snapshot.hash, rates, sample: { matches: 200, homeEffectiveMatches: 20, awayEffectiveMatches: 24 } };
@@ -248,17 +249,38 @@ test('atomic revision publication on isolated genuine MySQL', { timeout: 600_000
       const extension = await b.query((tx) => readGoalMarketExtension(tx, revisionId));
       assert.deepEqual(extension.localPoisson, rates);
       assert.equal(Object.hasOwn(extension, 'scoreDistribution'), false);
-      assert.ok(await b.query((tx) => tx.extendedMarketPublishedPick.count({ where: { revisionId, source: 'local-poisson' } })) > 0);
+      const picks = await b.query(async (tx) => {
+        const rows = await tx.$queryRaw`SELECT *, integrity = SHA2(CAST(body AS CHAR), 256) AS validIntegrity
+          FROM ExtendedMarketPublishedPick WHERE revisionId = ${revisionId} ORDER BY sortOrder, marketKey`;
+        return rows.map(publishedExtendedPickFromRow);
+      });
+      assert.ok(picks.length > 0 && picks.every(({ source }) => source === 'local-poisson'));
+      assert.deepEqual(picks, preparePublishedExtendedPicks(extension, null));
       assert.deepEqual(await service.publish(input, lease), result);
       // An otherwise sealed body must still contain a model object and cannot disguise a malformed optional model.
-      for (const patch of [
-        "JSON_REMOVE(body, '$.localPoisson')",
-        "JSON_SET(body, '$.localPoisson', 0)",
-        "JSON_SET(body, '$.scoreDistribution', 0)",
+      const unrelated = await setup();
+      const other = (await first.publish(unrelated.input, unrelated.lease)).revision;
+      const { ruleVersion, contentHash } = extension;
+      for (const model of [
+        {},
+        { localPoisson: 0 },
+        { localPoisson: { home: 1, away: 1 }, scoreDistribution: 0 },
       ]) {
-        await assert.rejects(instance.executeAdmin(`UPDATE GoalMarketExtension
-          SET integrity = SHA2(CAST(${patch} AS CHAR), 256), body = ${patch} WHERE revisionId = '${revisionId}'`),
-        (error) => String(error.stderr).includes('GoalMarketExtension_shape_v2'));
+        const body = JSON.stringify({ version: 1, revisionId: other.id, cycleId: other.cycleId, fixtureId: other.fixtureId,
+          recordedAt: at, ruleVersion, contentHash, markets: [], ...model });
+        const violation = await a.query(async (tx) => {
+          try {
+            await tx.$executeRaw`INSERT INTO GoalMarketExtension
+              (revisionId, cycleId, fixtureId, ruleVersion, contentHash, integrity, recordedAt, body)
+              VALUES (${other.id}, ${other.cycleId}, ${other.fixtureId}, ${ruleVersion}, ${contentHash},
+                SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), ${new Date(at)}, JSON_EXTRACT(${body}, '$'))`;
+            return null;
+          } catch (error) {
+            return error;
+          }
+        });
+        assert.equal(violation?.code, 'P2010');
+        assert.match(violation.message, /GoalMarketExtension_shape_v2/u);
       }
     });
     await t.test('forecast recovery skips exhausted jobs and repairs sealed abstention without a new attempt', async () => {

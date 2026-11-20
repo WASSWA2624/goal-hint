@@ -64,6 +64,32 @@ export function prepareGoalMarketExtension(input: unknown): PreparedGoalMarketEx
 }
 const identitySchema = z.strictObject({ revisionId: historyId, cycleId: historyId, fixtureId: historyId, recordedAt: historyInstant });
 
+const derivedProbabilityPath = /^markets\.\d+\.(?:derivation|localDerivation)\.market\.(?:selectedProbability|selections\.\d+\.(?:winProbability|outcomes\.(?:win|half-win|push|half-loss|loss)))$/u;
+
+/** MySQL's native JSON text round trip can shift a redundant derived number
+ * by one Float64 step. The model, definitions, content hash and row seal are exact. */
+function matchesStoredGoalProjection(stored: unknown, expected: unknown): boolean {
+  const bits = new DataView(new ArrayBuffer(8));
+  function matches(left: unknown, right: unknown, path: string): boolean {
+    if (left === right) return true;
+    if (typeof left === "number" && typeof right === "number" && left >= 0 && left <= 1 && right >= 0 && right <= 1 &&
+      derivedProbabilityPath.test(path)) {
+      bits.setFloat64(0, left);
+      const leftBits = bits.getBigUint64(0);
+      bits.setFloat64(0, right);
+      const rightBits = bits.getBigUint64(0);
+      return leftBits === rightBits + 1n || rightBits === leftBits + 1n;
+    }
+    if (Array.isArray(left) || Array.isArray(right)) return Array.isArray(left) && Array.isArray(right) &&
+      left.length === right.length && left.every((item, index) => matches(item, right[index], `${path}.${index}`));
+    if (left === null || right === null || typeof left !== "object" || typeof right !== "object") return false;
+    const a = left as Record<string, unknown>, b = right as Record<string, unknown>, keys = Object.keys(b);
+    return Object.keys(a).length === keys.length &&
+      keys.every((key) => Object.hasOwn(a, key) && matches(a[key], b[key], path ? `${path}.${key}` : key));
+  }
+  return matches(stored, expected, "");
+}
+
 export function goalMarketExtensionFromRow(row: HistoryRow): StoredGoalMarketExtension {
   assertHistorySeal(row.validIntegrity);
   const body = historyJson(row.body) as Record<string, unknown>;
@@ -79,7 +105,7 @@ export function goalMarketExtensionFromRow(row: HistoryRow): StoredGoalMarketExt
   const contentHash = evidenceFingerprint(prepared), expected = { ...prepared, ...identity.data, contentHash };
   if (body.contentHash !== contentHash || row.contentHash !== contentHash || row.ruleVersion !== prepared.ruleVersion ||
       row.revisionId !== expected.revisionId || row.cycleId !== expected.cycleId || row.fixtureId !== expected.fixtureId ||
-      historyTime(row.recordedAt) !== expected.recordedAt || evidenceFingerprint(body) !== evidenceFingerprint(expected)) return historyFail("invalid-state");
+      historyTime(row.recordedAt) !== expected.recordedAt || !matchesStoredGoalProjection(body, expected)) return historyFail("invalid-state");
   return freezeEvidence(expected);
 }
 export async function readGoalMarketExtension(tx: Tx, revisionId: string): Promise<StoredGoalMarketExtension | null> {

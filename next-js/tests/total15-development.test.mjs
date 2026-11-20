@@ -59,6 +59,40 @@ test("the local regulation total is analytically complete and preserves sealed p
   assert.equal(settle(verified(1, 1)).source, "local-poisson");
 });
 
+test("goal extension reads tolerate one floating-point step in derived probabilities and recompute the sealed projection", () => {
+  const prepared = prepareGoalMarketExtension({ localPoisson: { home: 1.6, away: 1, firstHalfShare: { home: 0.45, away: 0.45 } },
+    definitions: liveGoalMarketDefinitions });
+  const body = { ...prepared, contentHash: evidenceFingerprint(prepared), revisionId: randomUUID(), fixtureId: randomUUID(),
+    cycleId: randomUUID(), recordedAt: at };
+  const row = { ...body, body, validIntegrity: 1, recordedAt: new Date(at) };
+  const roundedBody = structuredClone(body);
+  const market = roundedBody.markets[0].derivation.market;
+  const bits = new DataView(new ArrayBuffer(8));
+  const step = (value, count) => {
+    bits.setFloat64(0, value);
+    bits.setBigUint64(0, bits.getBigUint64(0) + count);
+    return bits.getFloat64(0);
+  };
+  const probability = market.selectedProbability;
+  market.selectedProbability = step(probability, -1n);
+  market.selections[0].winProbability = step(market.selections[0].winProbability, 1n);
+  market.selections[0].outcomes.win = step(market.selections[0].outcomes.win, -1n);
+  assert.deepEqual(goalMarketExtensionFromRow({ ...row, body: roundedBody }), body);
+
+  const invalid = { name: "PredictionHistoryError", reason: "invalid-state" };
+  assert.throws(() => goalMarketExtensionFromRow({ ...row, body: roundedBody, validIntegrity: 0 }), invalid);
+  assert.throws(() => goalMarketExtensionFromRow({ ...row, body: roundedBody, cycleId: randomUUID() }), invalid);
+  assert.throws(() => goalMarketExtensionFromRow({ ...row, body: roundedBody, contentHash: "a".repeat(64) }), invalid);
+  market.selectedProbability = step(probability, 2n);
+  assert.throws(() => goalMarketExtensionFromRow({ ...row, body: roundedBody }), invalid);
+  market.selectedProbability = probability;
+  const changedModel = structuredClone(roundedBody);
+  changedModel.localPoisson.home = step(changedModel.localPoisson.home, 1n);
+  assert.throws(() => goalMarketExtensionFromRow({ ...row, body: changedModel }), invalid);
+  delete market.selections[0].outcomes.push;
+  assert.throws(() => goalMarketExtensionFromRow({ ...row, body: roundedBody }), invalid);
+});
+
 test("complete AI score distributions support Over 1.5 and unknown mass remains unavailable", () => {
   const states = [
     { home: 0, away: 0, halfHome: null, halfAway: null, probability: 0.2 },
