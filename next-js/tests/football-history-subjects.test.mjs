@@ -100,7 +100,7 @@ test("verified player and coach source pages advance durably without indexing co
         .map((page) => ({ ...page, rowCount: readableCounts ? BigInt(page.rowCount) : String(page.rowCount) }));
     },
     async $executeRaw(query) {
-      if (query.sql.includes("INSERT INTO FootballHistorySubject")) {
+      if (query.sql.includes("INSERT IGNORE INTO FootballHistorySubject")) {
         for (let index = 0; index < query.values.length; index += 2) subjects.add(`${query.values[index]}:${query.values[index + 1]}`);
       } else {
         const status = query.sql.includes("'indexed'") ? "indexed" : "invalid";
@@ -147,7 +147,7 @@ test("fixture detail pages index historical coaches against the exact fixture an
       return pages.filter((page) => page.endpoint === endpoint && page.subjectIndexStatus === null);
     },
     async $executeRaw(query) {
-      if (query.sql.includes("INSERT INTO FootballHistorySubject")) {
+      if (query.sql.includes("INSERT IGNORE INTO FootballHistorySubject")) {
         for (let index = 0; index < query.values.length; index += 2) subjects.add(`${query.values[index]}:${query.values[index + 1]}`);
       } else {
         const status = query.sql.includes("'indexed'") ? "indexed" : "invalid";

@@ -51,11 +51,11 @@ function harness(previousFacts = null, { eligible = true, onFinalDetails } = {})
       if (statement.sql.includes("WHERE facts.fixtureId=")) return [flags()];
       assert.match(statement.sql, /regulationVerifiedAt IS NOT NULL/u);
       assert.match(statement.sql, /NOT EXISTS \(SELECT 1 FROM FootballTeamProvider/u);
-      if (statement.sql.includes("COUNT(*) AS eligible")) {
-        const bucket = eligible ? classify() : null;
-        const counts = Object.fromEntries(["storedComplete", "unsupported", "exhausted", "due"].map((name) => [name, BigInt(name === bucket)]));
-        return [{ eligible: BigInt(eligible), ...counts, delayedCount: BigInt(bucket === "delayed"),
-          nextCheckAt: bucket === "delayed" ? archive.nextCheckAt : null }];
+      if (statement.sql.includes("GROUP BY detailCoverage")) {
+        if (!eligible) return [];
+        const bucket = classify();
+        return [{ detailCoverage: bucket === "storedComplete" ? "stored-complete" : bucket, fixtureCount: 1n,
+          nextCheckAt: archive?.nextCheckAt ?? null }];
       }
       if (!eligible || statement.sql.includes("detail.nextCheckAt<=") && classify() !== "due") return [];
       return [{ ...target, ...flags(), archiveState: archive?.state ?? null, nextCheckAt: archive?.nextCheckAt ?? null }];

@@ -148,6 +148,8 @@ export type LiveRuntimeOverrides = Readonly<{
   historyBackfill?: boolean;
   onPollerState?: (kind: "results" | "match-details", state: string) => void;
   onHourlyLookupFailure?: (reason: string, fixtureCount: number) => void;
+  onHistoryDetailBatch?: Parameters<ReturnType<typeof createFootballHistoryDetails>>[1];
+  onDateImportFailure?: Parameters<typeof createDailySelectionService>[0]["onDateImportFailure"];
   onCurrentDayCoverage?: Parameters<typeof createCurrentDayContextJob>[0]["onCoverage"];
 }>;
 /** Composes the prediction cascade on shared durable stores. */
@@ -271,7 +273,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       }, store,
         importer: createFootballCatalogImporter({ adapter: historyAdapter, store, authority: authorities.catalog, deferFixtureWritesAbove: 1_000 }),
         competitionIds: policy.choices.competitionIds ?? [], retentionEvidenceRef: refs.retention,
-        ...(coordinated ? { manifest: createFixtureBackfillManifestStore(historySource), async initializeDate(date) {
+        manifest: createFixtureBackfillManifestStore(historySource),
+        ...(coordinated ? { async initializeDate(date) {
           const receipt = await database.query(tx => tx.footballImport.findFirst({
             where: { provider: "api-football", kind: "fixtures", status: "complete", retentionEvidenceRef: refs.retention,
               scopeKey: catalogScopeKey({ kind: "fixtures", query: { date } }) }, select: { id: true },
@@ -432,6 +435,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       ? { hourly: { localEvidence: sourceOrder === "ai-first",
         scheduleCutoff: ({ fixtureId, cycleId }, tx) => cutoff.scheduleCycle({ fixtureId, cycleId }, undefined, tx) } } : {});
     const dailySelection = createDailySelectionService({ policy: selection, authority: authorities.selection, store: selectionStore, importer, cutoff,
+      ...(overrides.onDateImportFailure ? { onDateImportFailure: overrides.onDateImportFailure } : {}),
       ...(hourlySelectionEnabled ? { hourlyImporter,
         reconcileHourly: createHourlyFixtureReconciler({ database, importer: hourlyImporter, policy: selection, includeOverdue: coordinated,
           ...(overrides.onHourlyLookupFailure ? { onLookupFailure: overrides.onHourlyLookupFailure } : {}) }).reconcile } : {}) });
@@ -569,13 +573,22 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       return Object.freeze({ remaining: counters.remaining, used: counters.used, oddsUsed: Number(row?.spent ?? 0) });
     }
     const enrichmentAllowance = Object.freeze({ floor: workload.odds.floor, spare: workload.odds.spare, reserve: workload.odds.reserve });
+    const verifyOddsProjection = () => odds !== null && authorities.odds.verifyPublicDisplay() &&
+      authorities.odds.verifyPolicy(odds) && authorities.odds.verifyRetention({
+        evidenceRef: refs.retention, purpose: "structured-odds-history", rawPayloadsStored: false,
+      });
+    async function projectAuthorizedStoredOdds() {
+      if (localFootball || !oddsEnabled || odds === null || !verifyOddsProjection()) return null;
+      const catalog = await oddsStore.latestBetCatalog();
+      if (!catalog) return null;
+      return oddsStore.projectRetainedPrices({ policy: odds, policyHash: oddsPolicyHash(odds), catalog,
+        limit: 500, verify: verifyOddsProjection });
+    }
     async function requalifyLocalOdds() {
       if (!localFootball || !odds || !oddsEnabled) return oddsFail("unverified-policy");
       const current = quota.current();
       if (!current) return oddsFail("unavailable");
-      const verifyProjection = () => authorities.odds.verifyPublicDisplay() && authorities.odds.verifyPolicy(odds) &&
-        authorities.odds.verifyRetention({ evidenceRef: refs.retention, purpose: "structured-odds-history", rawPayloadsStored: false });
-      if (!verifyProjection()) return oddsFail("unverified-policy");
+      if (!verifyOddsProjection()) return oddsFail("unverified-policy");
       const catalogService = createOddsImportService({ adapter: adapter.odds, store: oddsStore, authority: authorities.odds,
         accountId: () => current.accountId,
         bounds: () => ({ ...oddsCatalogBounds(utcInstantFromEpochMilliseconds(Math.min(Date.now() + 20_000, current.endsAt))),
@@ -594,7 +607,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       const catalog = await oddsStore.latestBetCatalog();
       if (!catalog) return oddsFail("unavailable");
       return { requests, status: "complete", ...await oddsStore.projectRetainedPrices({ policy: odds,
-        policyHash: oddsPolicyHash(odds), catalog, limit: 500, verify: verifyProjection }) };
+        policyHash: oddsPolicyHash(odds), catalog, limit: 500, verify: verifyOddsProjection }) };
     }
     const oddsDefinitions = createOddsJobDefinitions({ service: oddsService, policy: () => odds ?? oddsFail("unverified-policy"), resumePricePages,
       enabled: () => oddsEnabled, usage: oddsUsage, allowance: enrichmentAllowance,
@@ -659,7 +672,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
             coverage: { imported, remaining: result.pending, unavailable: null } };
         },
         async details(signal) {
-          const result = await historyDetails(archiveBatch, undefined, signal);
+          const result = await historyDetails(archiveBatch, overrides.onHistoryDetailBatch, signal);
           const { eligible, storedComplete, unsupported, exhausted, delayed, due } = result.coverage;
           return { complete: result.passComplete && due + delayed + exhausted === 0, stopped: result.stopped,
             coverage: { imported: storedComplete, remaining: eligible - storedComplete - unsupported, unavailable: unsupported } };
@@ -667,12 +680,12 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         "half-statistics": referenceStep("half-statistics", "fixtureHalfStatistics"),
         "team-statistics": referenceStep("team-statistics", "teamStatistics"),
         "player-statistics": referenceStep("player-statistics", "playerStatistics"),
-        ...(coordinated ? { async reference(signal: AbortSignal) {
+        async reference(signal) {
           const result = await historyReference(archiveBatch, signal);
           const complete = result.status === "complete";
           return { complete, stopped: result.stopped,
             coverage: { imported: null, remaining: complete ? 0 : null, unavailable: null } };
-        } } : {}),
+        },
         ...(oddsEnabled ? { async "odds-mapping"(signal) {
           const result = await historyReference({ ...archiveBatch, dataset: "odds-mapping" }, signal);
           if (!("totalPages" in result)) throw new Error("Odds mapping coverage is unavailable.");
@@ -758,7 +771,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       historyBackfill, historyDetails, historyReference, resultPoller, liveMatchPoller, inPlayOdds, day,
       coordinated, forecastConcurrency, forecastRecovery, currentDayContextEnabled: currentDayContext !== null,
       odds: Object.freeze({ enabled: oddsEnabled, registry: oddsRegistry, horizonDays: workload.odds.dates, bookmakerScope: odds?.bookmakerScope,
-        requalifyLocal: requalifyLocalOdds,
+        requalifyLocal: requalifyLocalOdds, projectAuthorizedStored: projectAuthorizedStoredOdds,
         catalogCoverage: (asOf: number) => database.query((tx) => storedPreMatchCatalogCoverage(tx, asOf)),
         // Write-time staleness needs no provider call, so it runs even while imports are off.
         expire: (limit: number) => oddsService.expire(odds?.freshnessMs ?? ODDS_FRESHNESS_MS, limit) }),

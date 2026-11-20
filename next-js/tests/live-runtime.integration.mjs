@@ -354,12 +354,18 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
           where: { endpoint: { startsWith: 'raw:' } }, select: { endpoint: true }, distinct: ['endpoint'], orderBy: { endpoint: 'asc' },
         }));
         assert.deepEqual(envelopeNames.map(({ endpoint }) => endpoint), ['raw:accountStatus', 'raw:competitions', 'raw:fixtures']);
+        const checkpoints = await archive.database.query((tx) => tx.footballHistorySourcePage.count({
+          where: { endpoint: 'fixtureBackfillManifest' },
+        }));
+        assert.ok(checkpoints >= 2, 'ordinary archive jobs persist the initial plan and completed cursor with coordination off');
         const result = await archive.database.query((tx) => tx.footballFixture.findUnique({ where: { provider_externalId: {
           provider: 'api-football', externalId: 9040n } } }));
         assert.equal(result.regulationHome, 1);
         assert.ok(result.regulationVerifiedAt);
         const report = await readFootballCoverage(archive.database, Date.now(), [39]);
-        assert.deepEqual(report.archive.find(({ phase }) => phase === 'fixtures'), {
+        const { checkpointAt, ...fixtureCoverage } = report.archive.find(({ phase }) => phase === 'fixtures');
+        assert.ok(Number.isSafeInteger(checkpointAt));
+        assert.deepEqual(fixtureCoverage, {
           phase: 'fixtures', status: 'caught-up', coverage: { imported: 1, remaining: 0, unavailable: 0 },
         });
         const beforeResume = network.length;

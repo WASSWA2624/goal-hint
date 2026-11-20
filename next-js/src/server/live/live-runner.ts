@@ -159,7 +159,7 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
         const slot = latestHistoryImportSlot(now);
         if (slot !== historyScheduled) {
           try {
-            for (const envelope of historyImportEnvelopes(slot, { includeReference: runtime.coordinated })) await runtime.queue.enqueue(envelope);
+            for (const envelope of historyImportEnvelopes(slot, { includeReference: true })) await runtime.queue.enqueue(envelope);
             historyScheduled = slot;
           } catch (error) { log({ event: "football-history-schedule-failed", reason: reason(error) }); }
         }
@@ -245,7 +245,9 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
     let runtime: LiveRuntime;
     const pollerStates = new Map<string, string>();
     try { runtime = await createLiveRuntime(policy, { localFootball,
+      onHistoryDetailBatch: (report) => log({ event: "history-detail-batch", ...report }),
       onHourlyLookupFailure: (reason, fixtureCount) => log({ event: "hourly-fixture-reconcile-failed", reason, fixtureCount }),
+      onDateImportFailure: (date, hourly, reason) => log({ event: "selection-date-import-failed", date, hourly, reason }),
       onCurrentDayCoverage: (report) => log({ event: "current-context", requested: report.requested,
         archived: report.archived, skipped: report.skipped, deferred: report.deferred, stopped: report.stopped }),
       ...(localFootball || policy.choices.coordinatedFootball.enabled ? { onPollerState: (kind, state) => {
@@ -301,8 +303,12 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
       pollMs: 10_000, onEvent: (event) => {
         if (event.kind !== "claimed") log({ event: `enrichment-job-${event.kind}`, jobId: event.jobId?.slice(0, 12) ?? null, reason: event.reason });
       } }).run(stop);
+    const storedOdds = runtime.odds.projectAuthorizedStored().then((result) => {
+      if (result) log({ event: "odds-retained-projected", ...result });
+    }, (error) => log({ event: "odds-retained-projection-failed", reason: reason(error) }));
     try {
-      await Promise.all([...workers, enrichmentWorker, maintain(runtime, stop, () => epoch.abort(), log, localFootball).finally(() => epoch.abort())]);
+      await Promise.all([...workers, enrichmentWorker, storedOdds,
+        maintain(runtime, stop, () => epoch.abort(), log, localFootball).finally(() => epoch.abort())]);
     } finally { await runtime.close().catch(() => {}); }
   }
 }

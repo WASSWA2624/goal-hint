@@ -50,7 +50,7 @@ function syntheticAuthority(overrides = {}) {
 
 function fixtureSelection(id) { return { kind: "fixtures", query: { fixtureId: id } }; }
 
-test("canonical football catalog invariants on isolated genuine MySQL", { timeout: 300000 }, async (t) => {
+test("canonical football catalog invariants on isolated genuine MySQL", { timeout: 600000 }, async (t) => {
   let instance;
   try { instance = await startIsolatedMysql(); }
   catch (error) {
@@ -79,7 +79,7 @@ test("canonical football catalog invariants on isolated genuine MySQL", { timeou
         ON goal_hint_test.* TO 'catalog_migration'@'127.0.0.1';
     `);
     await execFileAsync(process.execPath, ["--conditions=react-server", databaseScript, "deploy"],
-      { cwd: workspace, env, windowsHide: true, timeout: 60000, maxBuffer: 1024 * 1024 });
+      { cwd: workspace, env, windowsHide: true, timeout: 240000, maxBuffer: 1024 * 1024 });
     await instance.executeAdmin(catalogTables.map((table) =>
       `GRANT ${catalogAppendOnly.includes(table) ? 'SELECT, INSERT' : 'SELECT, INSERT, UPDATE, DELETE'} ON goal_hint_test.${table} TO 'catalog_application'@'127.0.0.1';`).join("\n"));
     await instance.executeAdmin(`
@@ -146,6 +146,55 @@ test("canonical football catalog invariants on isolated genuine MySQL", { timeou
       assert.equal((await fixture(2000)).dataVersion, rows[0].dataVersion);
       const aliases = await firstDatabase.query((client) => client.footballTeamAlias.count({ where: { teamId: rows[0].homeTeamId } }));
       assert.equal(aliases, 1);
+    });
+
+    await t.test("interrupted date imports resume the same observation and only seal verified coverage once", async () => {
+      const selection = { kind: "fixtures", query: { date: "2026-10-10" } };
+      const rows = Array.from({ length: 42 }, (_, index) => catalogFixture(3000 + index, {
+        competitionId: 300, homeId: 3010, awayId: 3011,
+      }));
+      const { adapter, network, authority, clock: providerClock } = operation(rows);
+      const request = catalogRequest(selection);
+      const observed = await adapter.evidence.fixtures(selection.query, request.bounds);
+      const batch = validateCatalogBatch(request, observed, authority, providerClock);
+      assert.equal(batch.status, "complete");
+      let checks = 0;
+      const interrupted = new Error("interrupted after first committed slice");
+      await assert.rejects(firstStore.importBatch(batch, authority, () => { if (++checks === 2) throw interrupted; }),
+        (error) => error === interrupted);
+      assert.equal(await firstStore.findImport(request.id), null);
+      assert.equal((await firstStore.dateCoverage(selection)).state, "unknown");
+      assert.ok(await fixture(3039));
+      assert.equal(await fixture(3040), null);
+
+      const completed = await secondStore.importBatch(batch, authority);
+      assert.equal(completed.id, request.id);
+      assert.equal(completed.status, "complete");
+      assert.equal(completed.requestsDispatched, 1);
+      assert.equal(completed.receivedCount, 42);
+      assert.equal(completed.importedCount, 42);
+      assert.equal(new Set(completed.fixtureIds).size, 42);
+      const scope = { kind: "fixture-date-checkpoint", observedAt: new Date(batch.observedAt) };
+      const counts = await firstDatabase.query(async (client) => ({
+        checkpoints: await client.footballImport.findMany({ where: scope, select: { receivedCount: true, requestsDispatched: true, status: true },
+          orderBy: { sequence: "asc" } }),
+        audits: await client.footballFixtureAudit.count({ where: { fixtureId: { in: [...completed.fixtureIds] } } }),
+      }));
+      assert.deepEqual(counts.checkpoints, [{ receivedCount: 40, requestsDispatched: 0, status: "partial" },
+        { receivedCount: 2, requestsDispatched: 0, status: "partial" }]);
+      assert.equal(counts.audits, 42);
+      assert.deepEqual(await firstStore.importBatch(batch, authority), completed);
+      assert.equal(network.length, 1);
+      assert.equal((await firstStore.dateCoverage(selection)).lastCompleteImportId, request.id);
+
+      const incompleteRequest = catalogRequest(selection);
+      const incomplete = validateCatalogBatch(incompleteRequest, { ...observed, data: [...observed.data, observed.data[0]] }, authority, providerClock);
+      assert.equal(incomplete.status, "partial");
+      const partialReceipt = await firstStore.importBatch(incomplete, authority);
+      assert.equal(partialReceipt.status, "partial");
+      assert.equal(partialReceipt.importedCount, 42);
+      assert.equal(partialReceipt.rejectedCount, 1);
+      assert.equal((await firstStore.dateCoverage(selection)).lastCompleteImportId, request.id);
     });
 
     await t.test("historical imports seal verified results without changing canonical history or polling old finals", async () => {

@@ -2,10 +2,20 @@ import "server-only";
 
 import { randomBytes } from "node:crypto";
 import { addReportingDays } from "../../domain/calendar.ts";
+import { DatabaseOperationError } from "../database/client.ts";
+import { CatalogInputError } from "../football/catalog-input.ts";
+import { CatalogStoreError } from "../football/catalog-mysql-store.ts";
 import type { createFootballCatalogImporter } from "../football/catalog-service.ts";
 import { selectionFail, type DegradedSelectionAction, type SelectionAuthority, type SelectionLease } from "./selection-contract.ts";
 import { hourlySelectionWindow, parseDegradedAction, parseSelectionPolicy, SELECTION_HOUR_MS, selectionWindow } from "./selection-input.ts";
 import type { DailySelectionStore } from "./selection-mysql-store.ts";
+
+function importFailure(error: unknown) {
+  if (error instanceof CatalogStoreError) return error.storageCode ? `storage-${error.storageCode}` : error.reason;
+  if (error instanceof CatalogInputError) return error.reason;
+  if (error instanceof DatabaseOperationError) return `storage-${error.code}`;
+  return "unavailable";
+}
 
 /** Private schedule orchestration. Provider pagination/retries stay inside the
  * canonical importer/adapter/limiter; AI and result polling never run here. */
@@ -15,6 +25,7 @@ export function createDailySelectionService(options: Readonly<{
   hourlyImporter?: Pick<ReturnType<typeof createFootballCatalogImporter>, "import">;
   cutoff: Readonly<{ scheduleRun(runId: string): Promise<unknown> }>;
   reconcileHourly?(lease: SelectionLease, scheduledFor: number, signal?: AbortSignal): Promise<readonly string[]>;
+  onDateImportFailure?(date: string, hourly: boolean, reason: string): void;
 }>) {
   const policy = parseSelectionPolicy(options.policy);
   function authorize() {
@@ -65,7 +76,11 @@ export function createDailySelectionService(options: Readonly<{
             const workflow = hourly && signal ? { signal, deadlineAt, check: () => {
               if (signal.aborted || Date.now() >= deadlineAt) return selectionFail("lost-lease");
             } } : undefined;
-            try { await importer.import(pending.request, undefined, workflow); } catch { failed = true; }
+            try { await importer.import(pending.request, undefined, workflow); }
+            catch (error) {
+              failed = true;
+              options.onDateImportFailure?.(date, hourly, importFailure(error));
+            }
             await checkpoint();
             await options.store.finishImport(lease, pending.id, failed);
           }

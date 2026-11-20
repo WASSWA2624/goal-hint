@@ -400,3 +400,36 @@ private input and verifier diagnostics. `--split` also accepts `validation` or
 An argument/input/storage failure exits with code 1. Successful artifact
 generation exits normally even when gates remain pending or fail; inspect the
 report status before any independent approval.
+
+## Prospective local forecast capture
+
+The owned development snapshot launcher runs private local forecasts while its
+database is open. For one bounded sweep from `next-js/`, run:
+
+```sh
+npm run local:forecast:shadow -- --environment development --limit 50
+```
+
+Hosted worker timers run the same command with `--environment staging` or
+`--environment production` and the matching private database profile. Use a
+specific database account with SELECT on canonical fixtures, seasons,
+lifecycle and result tables. The same account needs SELECT, INSERT and UPDATE
+on the mutable state columns of `IntelligenceShadowState`, and SELECT and INSERT on
+`IntelligenceShadowCheck` and `IntelligenceShadowRevision`. The worker does
+not need a provider or AI credential.
+
+Each sweep begins with due scheduled fixtures in the next seven days. It
+prioritizes fixtures never checked, then the earliest kickoff. It attempts no
+more than 100 fixtures and stops starting new work after 90 seconds. Checks
+renew at six-hour intervals. Checks with unchanged evidence retain the
+previous model revision. Each competition’s point-in-time input uses
+only stored verified regulation results available when the sweep began.
+The fixture version, scheduled status and five-minute cutoff are checked
+again inside the shadow write transaction. Each stored result remains
+private. It leaves published forecasts, market prices and slips unchanged.
+
+The command reports stored estimates, insufficient-evidence abstentions and
+failed or skipped attempts separately. If a snapshot's schedule was last
+observed more than two hours ago, the record keeps the original source clock
+and any local model output as diagnostic evidence while withholding its
+shadow eligibility. Even a shadow-eligible estimate remains provisional.
