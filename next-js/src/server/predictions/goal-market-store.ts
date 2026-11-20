@@ -11,6 +11,7 @@ import { deriveGoalMarket, deriveLocalGoalMarket, goalMarketDefinitionSchema, GO
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { fixtureResultMatchesCanonical, resultStatus, storedFixtureResult } from "../results/result-read.ts";
+import { advanceExtendedSettlementPointer } from "../settlement/extended-settlement-pointer.ts";
 import { cycleEligibilityFor } from "../settlement/settlement-read.ts";
 import { historyFail, type StoredCycle } from "./history-contract.ts";
 import { historyHash, historyId, historyInstant } from "./history-input.ts";
@@ -284,9 +285,8 @@ export async function persistGoalMarketSettlements(tx: Tx, plans: readonly GoalM
       (id, fixtureId, cycleId, marketKey, predictionRevisionId, source, batchId, previousId, resultId, inputHash, at, integrity, body)
       VALUES (${id}, ${base.fixtureId}, ${base.cycleId}, ${base.marketKey}, ${base.predictionRevisionId}, ${base.source}, ${batchId}, ${value.previousId},
         ${value.resultId}, ${inputHash}, ${new Date(at)}, SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`;
-    await tx.$executeRaw`INSERT INTO ExtendedMarketSettlement (fixtureId, cycleId, marketKey, revisionId)
-      VALUES (${base.fixtureId}, ${base.cycleId}, ${base.marketKey}, ${id})
-      ON DUPLICATE KEY UPDATE revisionId = ${id}`;
+    await advanceExtendedSettlementPointer(tx, { fixtureId: base.fixtureId, cycleId: base.cycleId, marketKey: base.marketKey,
+      revisionId: id, previousId: value.previousId });
     changed++;
   }
   return changed;

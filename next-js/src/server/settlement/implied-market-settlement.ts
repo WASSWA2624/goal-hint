@@ -12,6 +12,7 @@ import { assertHistorySeal, historyJson, historyTime, storedCycle, type HistoryR
 import type { StoredImpliedMarketExtension } from "../predictions/implied-market-contract.ts";
 import { readImpliedMarketExtension } from "../predictions/implied-market-store.ts";
 import { fixtureResultMatchesCanonical, resultStatus, storedFixtureResult } from "../results/result-read.ts";
+import { advanceExtendedSettlementPointer } from "./extended-settlement-pointer.ts";
 import { readImpliedResultEvidence, type StoredImpliedResultEvidence } from "./implied-market-evidence.ts";
 import { cycleEligibilityFor } from "./settlement-read.ts";
 
@@ -137,8 +138,8 @@ export async function persistImpliedMarketSettlements(tx: Tx, plans: readonly Im
       (id, fixtureId, cycleId, marketKey, predictionRevisionId, source, batchId, previousId, resultId, inputHash, at, integrity, body)
       VALUES (${id}, ${base.fixtureId}, ${base.cycleId}, ${base.marketKey}, ${base.predictionRevisionId}, ${base.source}, ${batchId}, ${value.previousId},
         ${value.resultId}, ${inputHash}, ${new Date(at)}, SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`;
-    await tx.$executeRaw`INSERT INTO ExtendedMarketSettlement (fixtureId, cycleId, marketKey, revisionId)
-      VALUES (${base.fixtureId}, ${base.cycleId}, ${base.marketKey}, ${id}) ON DUPLICATE KEY UPDATE revisionId = ${id}`;
+    await advanceExtendedSettlementPointer(tx, { fixtureId: base.fixtureId, cycleId: base.cycleId, marketKey: base.marketKey,
+      revisionId: id, previousId: value.previousId });
     changed++;
   }
   return changed;
