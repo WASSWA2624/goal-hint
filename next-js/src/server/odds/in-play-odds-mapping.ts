@@ -1,18 +1,11 @@
 import "server-only";
-import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
+import { marketSelections } from "../../domain/markets.ts";
+import { launchLiveOddsMapping } from "../../domain/odds-markets.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import type { InPlayOddsBody } from "../../domain/in-play-odds.ts";
 import { total15PricesSchema, total15Selections } from "../../domain/extended-markets.ts";
 import { bookmakerMarketSchema, bookmakerOddsId, oddsDisplayText } from "../../domain/bookmaker-odds.ts";
 import type { NormalizedInPlayOdds, NormalizedInPlayOddsValue } from "../football/api-football-normalize.ts";
-
-/** Independent API-Football in-play IDs. Labels must agree with the live catalog and price response. */
-const liveMarkets = {
-  "match-result": { id: 59, name: "Fulltime Result", line: null, labels: ["Home", "Draw", "Away"] },
-  "double-chance": { id: 72, name: "Double Chance", line: null, labels: ["Home or Draw", "Away or Draw", "Home or Away"] },
-  "total-goals": { id: 36, name: "Over/Under Line", line: String(publicPolicy.totalGoalsLine), labels: ["Over", "Under"] },
-  "both-teams-to-score": { id: 69, name: "Both Teams to Score", line: null, labels: ["Yes", "No"] },
-} as const satisfies Record<MarketFamily, { id: number; name: string; line: string | null; labels: readonly string[] }>;
 
 export function reviewedInPlayCatalog(rows: readonly Readonly<{ id: number; name: string }>[]): Record<string, string> {
   const names = new Map<number, string | null>();
@@ -29,7 +22,7 @@ function uniquePrice(prices: readonly NormalizedInPlayOddsValue[]): string | nul
 }
 
 function inPlayTotal15(row: NormalizedInPlayOdds, catalog: Readonly<Record<string, string>>) {
-  const mapping = liveMarkets["total-goals"];
+  const mapping = launchLiveOddsMapping["total-goals"];
   if (catalog[mapping.id] !== mapping.name) return undefined;
   const bet = row.bets.find(({ id, name }) => id === mapping.id && name === mapping.name);
   if (!bet) return undefined;
@@ -64,7 +57,7 @@ export function mapInPlayOdds(row: NormalizedInPlayOdds, catalog: Readonly<Recor
   if (row.finished) return { state: "unavailable", markets: [] };
   if (row.blocked || row.stopped) return { state: "suspended", markets: [] };
   const markets = publicPolicy.markets.flatMap((family) => {
-    const mapping = liveMarkets[family];
+    const mapping = launchLiveOddsMapping[family];
     if (catalog[mapping.id] !== mapping.name) return [];
     const bet = row.bets.find(({ id, name }) => id === mapping.id && name === mapping.name);
     if (!bet) return [];

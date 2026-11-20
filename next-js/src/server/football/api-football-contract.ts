@@ -22,6 +22,7 @@ export const isFootballHistoryReferenceDictionary = (endpoint: string): endpoint
 
 export const apiFootballEndpoints = Object.freeze({
   fixtures: Object.freeze({ path: "/fixtures", paginated: false }),
+  fixtureHeadToHead: Object.freeze({ path: "/fixtures/headtohead", paginated: false }),
   fixtureRounds: Object.freeze({ path: "/fixtures/rounds", paginated: false }),
   countries: Object.freeze({ path: "/countries", paginated: false }),
   timezones: Object.freeze({ path: "/timezone", paginated: false }),
@@ -45,6 +46,7 @@ export const apiFootballEndpoints = Object.freeze({
   fixtureHalfStatistics: Object.freeze({ path: "/fixtures/statistics", paginated: false }),
   events: Object.freeze({ path: "/fixtures/events", paginated: false }),
   lineups: Object.freeze({ path: "/fixtures/lineups", paginated: false }),
+  fixturePlayerStatistics: Object.freeze({ path: "/fixtures/players", paginated: false }),
   injuries: Object.freeze({ path: "/injuries", paginated: false }),
   ...apiFootballLeaderboards,
   playerStatistics: Object.freeze({ path: "/players", paginated: true, pageSize: 20 }),

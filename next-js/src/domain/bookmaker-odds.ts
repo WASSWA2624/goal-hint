@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parseDecimalOdds } from "./odds.ts";
 import type { MarketFamily } from "./markets.ts";
-import { launchOddsMapping } from "./odds-markets.ts";
+import { binaryGoalTotalOddsMapping, launchOddsMapping } from "./odds-markets.ts";
 
 const at = z.number().int().nonnegative().max(253_402_300_799_999);
 export const oddsVersionSchema = z.string().regex(/^[a-f0-9]{64}$/u);
@@ -45,11 +45,7 @@ function exactBookmakerPrice(odds: PreMatchBookmakerOdds | null | undefined, map
   return null;
 }
 
-const goalTotalsOffers = {
-  "full-time": launchOddsMapping.find(({ family }) => family === "total-goals")!,
-  "half-time": { betId: 6, betName: "Goals Over/Under First Half" },
-} as const;
-export const featuredBookmakerBetIds = Object.freeze([...launchOddsMapping.map(({ betId }) => betId), goalTotalsOffers["half-time"].betId]);
+export const featuredBookmakerBetIds = Object.freeze([...launchOddsMapping.map(({ betId }) => betId), binaryGoalTotalOddsMapping["half-time"].betId]);
 
 /** Provider prices are matched by verified bet identity and exact outcome/line. */
 export function bookmakerGoalPrice(odds: PreMatchBookmakerOdds | null | undefined, marketKey: string, selection: string): string | null {
@@ -59,5 +55,6 @@ export function bookmakerGoalPrice(odds: PreMatchBookmakerOdds | null | undefine
   const [, period, line, payout] = identity;
   // The stored totals mapping has verified binary half-line semantics. Asian and team/second-half bets need their own verified mappings.
   if (payout !== "binary" || !line?.endsWith(".5")) return null;
-  return exactBookmakerPrice(odds, goalTotalsOffers[period as keyof typeof goalTotalsOffers], `${selection === "over" ? "Over" : "Under"} ${line}`);
+  return exactBookmakerPrice(odds, binaryGoalTotalOddsMapping[period as keyof typeof binaryGoalTotalOddsMapping],
+    `${selection === "over" ? "Over" : "Under"} ${line}`);
 }

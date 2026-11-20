@@ -19,6 +19,24 @@ NAME = re.compile(r"\d{14}_[a-z][a-z0-9_]*\Z")
 DIGEST = re.compile(r"[a-f0-9]{64}\Z")
 TARGETS = {"staging": re.compile(r"ghstage_[a-z0-9_]{1,48}\Z"), "production": re.compile(r"ghprod_prod\Z")}
 FOLLOWUP = "20261009123830_durable_jobs"
+FLUTTERWAVE_CHECKOUT = (
+    "20261113150000_flutterwave_checkout",
+    "4e9cefb1abbadd091e39f11385cd42c9367ebc0dff8753b5c92c0593b16ccf15",
+)
+HOURLY_FIXTURE_RECHECK = (
+    "20261113150000_hourly_fixture_recheck",
+    "9f21108d0af303c88c529cd30076e47dd52fc852f9f37a8c6037990b0a4153b4",
+)
+VERIFIED_RESULT_FRESHNESS = (
+    "20261113160000_verified_result_freshness",
+    "930444c38bdfeb277de9f96344bf2f3bffaf1e2009db0b8b564c770b8cab5526",
+)
+# The hosted branches applied these independent migrations in different orders.
+# Each pair is (pending migration, applied migration) with original checksums.
+HOSTED_BRANCH_GAPS = frozenset({
+    (FLUTTERWAVE_CHECKOUT, HOURLY_FIXTURE_RECHECK),
+    (HOURLY_FIXTURE_RECHECK, VERIFIED_RESULT_FRESHNESS),
+})
 LEDGER = """SELECT migration_name, checksum, finished_at IS NOT NULL, rolled_back_at IS NOT NULL
 FROM _prisma_migrations ORDER BY migration_name"""
 
@@ -90,7 +108,12 @@ def pending_migrations(rows, migrations, adopted):
             raise MigrationError(f"Migration ledger has an interrupted or duplicate entry for {name}.")
         completed.add(name)
     pending = [migration for migration in migrations if migration.name not in completed]
-    if pending and any(migration.name > pending[0].name and migration.name in completed for migration in migrations):
+    applied = [migration for migration in migrations if migration.name in completed]
+    if any(
+        done.name > missing.name and ((missing.name, missing.checksum), (done.name, done.checksum)) not in HOSTED_BRANCH_GAPS
+        for missing in pending
+        for done in applied
+    ):
         raise MigrationError("Migration ledger has a gap before an applied release migration.")
     return pending
 

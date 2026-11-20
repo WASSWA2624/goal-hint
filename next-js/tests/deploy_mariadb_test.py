@@ -1,6 +1,7 @@
 """Hosted migration inventory, safety, and pre-activation exit behavior."""
 
 from contextlib import redirect_stdout
+from dataclasses import replace
 import io
 from pathlib import Path
 import runpy
@@ -56,6 +57,47 @@ class DeployMariaDbTests(unittest.TestCase):
         for entries in cases:
             with self.subTest(entries=entries), self.assertRaises(MigrationError):
                 HOSTED["pending_migrations"](entries, self.migrations, self.adopted)
+
+    def test_hosted_histories_apply_only_checksum_pinned_missing_migrations(self):
+        checkout = HOSTED["FLUTTERWAVE_CHECKOUT"][0]
+        hourly = HOSTED["HOURLY_FIXTURE_RECHECK"][0]
+        freshness = HOSTED["VERIFIED_RESULT_FRESHNESS"][0]
+        inventory = [migration for migration in self.migrations if migration.name <= freshness]
+        baseline = [migration for migration in inventory if migration.name < checkout]
+        by_name = {migration.name: migration for migration in inventory}
+        histories = [
+            ("staging", [checkout, freshness], [hourly]),
+            ("production", [checkout, hourly, freshness], []),
+            ("prior production", [hourly], [checkout, freshness]),
+        ]
+        for environment, completed, expected in histories:
+            with self.subTest(environment=environment), redirect_stdout(io.StringIO()):
+                existing = [ledger_entry(migration) for migration in baseline]
+                existing.extend(ledger_entry(by_name[name]) for name in completed)
+                database = MigrationDatabase(existing)
+                self.assertEqual(HOSTED["migrate"](database, inventory, self.adopted, False), 0)
+                self.assertEqual(database.applied, expected)
+                self.assertEqual(database.ledger(), existing + [ledger_entry(by_name[name]) for name in expected])
+
+    def test_hosted_gap_still_rejects_edited_inventory_and_other_gaps(self):
+        checkout = HOSTED["FLUTTERWAVE_CHECKOUT"][0]
+        hourly = HOSTED["HOURLY_FIXTURE_RECHECK"][0]
+        freshness = HOSTED["VERIFIED_RESULT_FRESHNESS"][0]
+        baseline = [migration for migration in self.migrations if migration.name < checkout]
+        historical = {migration.name: migration for migration in self.migrations if checkout <= migration.name <= freshness}
+        original = [*baseline, historical[checkout], historical[hourly], historical[freshness]]
+        edited_checkout = replace(historical[checkout], checksum="0" * 64, compatible_checksums=frozenset({"0" * 64}))
+        edited = [*baseline, edited_checkout, historical[hourly], historical[freshness]]
+        completed = [ledger_entry(migration) for migration in baseline]
+        hourly_entry, freshness_entry = ledger_entry(historical[hourly]), ledger_entry(historical[freshness])
+        cases = [
+            (completed[1:] + [hourly_entry], original),
+            (completed + [hourly_entry, freshness_entry], original),
+            (completed + [hourly_entry], edited),
+        ]
+        for ledger, migrations in cases:
+            with self.subTest(ledger=ledger[-2:]), self.assertRaisesRegex(MigrationError, "gap before"):
+                HOSTED["pending_migrations"](ledger, migrations, self.adopted)
 
     def test_recognized_adopted_history_does_not_replace_canonical_adoption(self):
         name, (digest, adoption) = next(iter(self.adopted.items()))

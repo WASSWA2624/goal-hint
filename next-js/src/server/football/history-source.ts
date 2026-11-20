@@ -1,8 +1,5 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
-import { promisify } from "node:util";
-import { gunzip, gzip } from "node:zlib";
 import { z } from "zod";
 import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
@@ -16,12 +13,9 @@ import { archivedCoachRowId, archivedPlayerProfileRowId, archivedPlayerStatistic
 import type { FootballHistoryPlayerPaginationConflict, FootballHistoryPlayerProfilePage, FootballHistoryPlayerStatisticsPage, FootballHistoryPlayerStatisticsReceipt,
   FootballHistoryPlayerStatisticsTarget } from "./history-player-statistics.ts";
 import { footballHistoryPlayerSubjectDatasets, indexHistorySubjects, type FootballHistorySubjectPage } from "./history-subjects.ts";
+import { encodeFootballSourcePage, footballSourceHash as hash, readFootballSourcePagePayload } from "./source-page-payload.ts";
 
-const compress = promisify(gzip);
-const decompress = promisify(gunzip);
-const maximumBytes = 48 * 1024 * 1024;
 export const footballHistorySourceMaxRows = 10_000;
-const hash = (data: string | Uint8Array) => createHash("sha256").update(data).digest("hex");
 const selectors = {
   fixtures: new Set(["id", "ids", "date", "league", "season", "team", "from", "to", "round", "timezone"]),
   fixtureRounds: new Set(["league", "season", "dates", "timezone"]),
@@ -97,8 +91,7 @@ function archiveSelector({ endpoint, parameters: input }: Selection) {
 }
 
 async function verifiedBody(page: { compressedRows: Uint8Array; contentHash: string }): Promise<unknown> {
-  const body = await decompress(page.compressedRows, { maxOutputLength: maximumBytes });
-  if (hash(body) !== page.contentHash) throw new Error("Historical archive page failed verification.");
+  const body = await readFootballSourcePagePayload(page);
   return JSON.parse(body.toString("utf8"));
 }
 
@@ -217,14 +210,8 @@ function sameFixtureScope(rows: readonly unknown[], parameters: Readonly<Record<
 /** Private replay storage. Only validated response rows and their request identity are retained. */
 export function createFootballHistorySource(database: DatabaseRuntime) {
   async function preparePage(endpoint: Endpoint, parameters: Record<string, string>, value: unknown, observedAt: number, rowCount: number) {
-    const retrievedAt = new Date(observedAt);
-    if (!Number.isFinite(retrievedAt.getTime()) || observedAt > Date.now()) throw new Error("Invalid historical archive page.");
-    const body = Buffer.from(JSON.stringify(value));
-    if (body.length > maximumBytes) throw new Error("Historical archive page exceeds the archive limit.");
-    const selectorHash = hash(JSON.stringify(parameters)), contentHash = hash(body);
-    const id = hash(JSON.stringify([endpoint, selectorHash, observedAt, contentHash]));
-    const compressedRows = new Uint8Array(await compress(body));
-    return { id, endpoint, selectorHash, parameters, contract: API_FOOTBALL_CONTRACT_VERSION, retrievedAt, rowCount, contentHash, compressedRows };
+    return encodeFootballSourcePage({ endpoint, parameters, contract: API_FOOTBALL_CONTRACT_VERSION,
+      observedAt, rowCount, body: Buffer.from(JSON.stringify(value)) });
   }
 
   async function writePage(endpoint: Endpoint, parameters: Record<string, string>, value: unknown, observedAt: number, rowCount: number) {
