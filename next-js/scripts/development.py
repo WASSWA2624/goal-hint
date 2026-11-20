@@ -257,6 +257,17 @@ def football_worker(directory, env):
     return worker
 
 
+def forecast_shadow_worker(directory, env):
+    command = [development_node_binary(), "--conditions=react-server",
+               "scripts/local-forecast-shadow.mjs", "--environment", "development", "--watch"]
+    log = directory / "forecast-shadow.log"
+    with log.open("ab") as output:
+        worker = subprocess.Popen(command, cwd=ROOT, env=env, stdin=subprocess.PIPE,
+                                  stdout=output, stderr=subprocess.STDOUT, creationflags=hidden_process())
+    print(f"Started private local forecast capture. Status log: {log}", flush=True)
+    return worker
+
+
 def snapshot_web_arguments(args, *, lan=False):
     """Keep live snapshots on loopback unless LAN access is requested explicitly."""
     hostname = "0.0.0.0" if lan else "127.0.0.1"
@@ -292,7 +303,7 @@ def run_local_football(args, *, prepare):
 
         target = instance.directory / "target.env"
         pending = instance.directory / f"target-{os.getpid()}.tmp"
-        worker = None
+        worker = shadow = None
         try:
             pending.write_text(f'GOAL_HINT_LOCAL_FOOTBALL_DATABASE_URL={instance.url}\n'
                                f'GOAL_HINT_LOCAL_FOOTBALL_DATADIR="{instance.datadir.as_posix()}"\n', encoding="utf-8")
@@ -315,17 +326,28 @@ def run_local_football(args, *, prepare):
                 raise CommandError("Import and verify the real football fixtures before starting the local snapshot.")
             env["GOAL_HINT_COMPETITION_IDS"] = ",".join(ids)
             prepare_app_downloads("development")
+            shadow = forecast_shadow_worker(instance.directory, env)
             if live_snapshot:
                 worker = football_worker(instance.directory, env)
             release_development_web(port)
             print(f"Serving stored API-Football fixtures from the local snapshot ({len(ids)} competitions).", flush=True)
             return run_web(args, env, port, warm_matches=worker is not None)
         finally:
-            if worker is not None and worker.poll() is None:
-                worker.terminate()
-                worker.wait(timeout=15)
-            pending.unlink(missing_ok=True)
-            target.unlink(missing_ok=True)
+            try:
+                if shadow is not None:
+                    assert shadow.stdin is not None
+                    shadow.stdin.close()
+                    try:
+                        shadow.wait(timeout=15)
+                    except subprocess.TimeoutExpired:
+                        shadow.terminate()
+                        shadow.wait(timeout=15)
+            finally:
+                if worker is not None and worker.poll() is None:
+                    worker.terminate()
+                    worker.wait(timeout=15)
+                pending.unlink(missing_ok=True)
+                target.unlink(missing_ok=True)
 
 
 def main():

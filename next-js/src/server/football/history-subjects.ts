@@ -52,8 +52,7 @@ export async function indexHistorySubjects(database: DatabaseRuntime,
       for (let offset = 0; offset < orderedIds.length; offset += identitiesPerInsert) {
         const rows = orderedIds.slice(offset, offset + identitiesPerInsert).map((id) => Prisma.sql`(${subjectSources[endpoint]}, ${id})`);
         await client.$executeRaw(Prisma.sql`
-          INSERT INTO FootballHistorySubject (kind, externalId) VALUES ${Prisma.join(rows)}
-          ON DUPLICATE KEY UPDATE externalId = FootballHistorySubject.externalId`);
+          INSERT IGNORE INTO FootballHistorySubject (kind, externalId) VALUES ${Prisma.join(rows)}`);
       }
       if (indexed.length) await client.$executeRaw(Prisma.sql`UPDATE FootballHistorySourcePage
         SET subjectIndexStatus = 'indexed' WHERE subjectIndexStatus IS NULL AND id IN (${Prisma.join(indexed)})`);

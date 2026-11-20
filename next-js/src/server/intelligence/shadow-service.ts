@@ -9,6 +9,7 @@ export type ShadowObservationInput = Readonly<{
   checkId: string; fixtureId: string; checkedAt: number; observation: MonitoringObservation | null;
   modelVersion: string; dependencyHash: string; evaluate(): Promise<ValidatedIntelligenceForecast>;
   executionDeadlineAt?: number; beforeRecord?(): Promise<void>;
+  target?: Readonly<{ fixtureVersion: bigint; kickoffAt: number }>;
 }>;
 /** Offline/archive integration boundary. The callback must be local computation;
  * this module does not initialize credentials, dispatch providers or publish. */
@@ -21,7 +22,8 @@ export function createShadowIntelligenceService(options: Readonly<{
     if (!/^[a-f0-9]{64}$/u.test(input.dependencyHash)) throw new ShadowStoreError("invalid-input");
     const requestHash = evidenceFingerprint({ checkId: input.checkId, fixtureId: input.fixtureId, checkedAt: input.checkedAt,
       observation: input.observation, modelVersion: input.modelVersion, dependencyHash: input.dependencyHash,
-      executionDeadlineAt: input.executionDeadlineAt ?? null, policy });
+      executionDeadlineAt: input.executionDeadlineAt ?? null, policy,
+      ...(input.target === undefined ? {} : { target: { ...input.target, fixtureVersion: String(input.target.fixtureVersion) } }) });
     const replay = await options.store.check(input.checkId);
     if (replay) {
       if (replay.requestHash !== requestHash || replay.fixtureId !== input.fixtureId) throw new ShadowStoreError("conflicting-check");
@@ -60,6 +62,7 @@ export function createShadowIntelligenceService(options: Readonly<{
       expectedObservationHash: previous?.observationHash ?? null, expectedLatestRevisionId: previous?.latest?.id ?? null,
       observation, observationHash: change.hash, availability, revision,
       ...(input.executionDeadlineAt === undefined ? {} : { executionDeadlineAt: input.executionDeadlineAt }),
+      ...(input.target === undefined ? {} : { target: input.target }),
     });
     return { status: "recorded", receipt } as const;
   } });

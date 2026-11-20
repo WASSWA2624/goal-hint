@@ -27,6 +27,7 @@ export type ShadowRecord = Readonly<{
   expectedLatestRevisionId: string | null; observation: MonitoringObservation | null;
   observationHash: string | null; availability: string;
   executionDeadlineAt?: number;
+  target?: Readonly<{ fixtureVersion: bigint; kickoffAt: number }>;
   revision: Readonly<{ semanticHash: string; modelVersion: string; body: ShadowRevisionBody }> | null;
 }>;
 export interface ShadowStore {
@@ -37,7 +38,7 @@ export interface ShadowStore {
 const hashPattern = /^[a-f0-9]{64}$/u, fixturePattern = /^[a-f0-9-]{36}$/iu;
 const instant = (n: number) => Number.isSafeInteger(n) && n >= 0;
 export class ShadowStoreError extends Error {
-  readonly reason: "invalid-input" | "conflicting-check" | "concurrent-change" | "out-of-order" | "corrupt-record" | "cutoff-passed";
+  readonly reason: "invalid-input" | "conflicting-check" | "concurrent-change" | "out-of-order" | "corrupt-record" | "cutoff-passed" | "fixture-changed";
   constructor(reason: ShadowStoreError["reason"]) { super(`Shadow persistence refused: ${reason}.`); this.reason = reason; }
 }
 type Row = Record<string, unknown>;
@@ -70,6 +71,9 @@ function revision(row: Row): ShadowRevision {
 export function validateShadowRecord(input: ShadowRecord) {
   const check = input.check;
   if (input.executionDeadlineAt !== undefined && !instant(input.executionDeadlineAt)) throw new ShadowStoreError("invalid-input");
+  if (input.target && (input.target.fixtureVersion < 1n || !instant(input.target.kickoffAt) ||
+    input.executionDeadlineAt === undefined || input.executionDeadlineAt > input.target.kickoffAt - 5 * 60_000 ||
+    input.observation?.kickoffAt !== input.target.kickoffAt)) throw new ShadowStoreError("invalid-input");
   if (!hashPattern.test(check.id) || !hashPattern.test(check.requestHash) || !fixturePattern.test(check.fixtureId) || !instant(check.checkedAt) ||
     !["unchanged", "minor", "significant", "critical", "initial", "unavailable", "cutoff-locked", "model-changed"].includes(check.outcome) ||
     !["available", "suspended", "unavailable", "cutoff-locked"].includes(input.availability) ||
@@ -114,10 +118,23 @@ export function createMysqlShadowStore(database: Pick<DatabaseRuntime, "query" |
       validateShadowRecord(input);
       return database.transaction(async (tx) => {
         const check = input.check;
-        await tx.$executeRaw`INSERT INTO IntelligenceShadowState (fixtureId, lastCheckedAt, availability)
-          VALUES (${check.fixtureId}, ${new Date(check.checkedAt)}, 'unavailable') ON DUPLICATE KEY UPDATE fixtureId = fixtureId`;
-        const states = await tx.$queryRaw<Row[]>`SELECT * FROM IntelligenceShadowState WHERE fixtureId = ${check.fixtureId} FOR UPDATE`;
-        const state = states[0]!;
+        if (input.target) {
+          // Lock the latest canonical schedule for the duration of the shadow commit.
+          // This read needs no write authority over the fixture.
+          const target = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM FootballFixture
+            WHERE id = ${check.fixtureId} AND provider = 'api-football' AND status = 'scheduled'
+              AND dataVersion = ${input.target.fixtureVersion} AND kickoff = ${new Date(input.target.kickoffAt)}
+            LOCK IN SHARE MODE`;
+          if (target.length !== 1) throw new ShadowStoreError("fixture-changed");
+        }
+        const lockState = () => tx.$queryRaw<Row[]>`SELECT * FROM IntelligenceShadowState WHERE fixtureId = ${check.fixtureId} FOR UPDATE`;
+        let [state] = await lockState();
+        if (!state) {
+          await tx.$executeRaw`INSERT IGNORE INTO IntelligenceShadowState (fixtureId, lastCheckedAt, availability)
+            VALUES (${check.fixtureId}, ${new Date(check.checkedAt)}, 'unavailable')`;
+          [state] = await lockState();
+          if (!state) throw new ShadowStoreError("fixture-changed");
+        }
         const prior = await tx.$queryRaw<Row[]>`SELECT * FROM IntelligenceShadowCheck WHERE id = ${check.id}`;
         if (prior[0]) {
           const known = receipt(prior[0]);
@@ -156,7 +173,7 @@ export function createMysqlShadowStore(database: Pick<DatabaseRuntime, "query" |
         await tx.$executeRaw`INSERT INTO IntelligenceShadowCheck (id, fixtureId, checkedAt, requestHash, outcome, revisionId)
           VALUES (${check.id}, ${check.fixtureId}, ${new Date(check.checkedAt)}, ${check.requestHash}, ${check.outcome}, ${revisionId})`;
         return { ...check, revisionId };
-      });
+      }, { isolationLevel: "ReadCommitted" });
     },
   });
 }

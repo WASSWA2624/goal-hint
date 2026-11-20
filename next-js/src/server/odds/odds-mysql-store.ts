@@ -341,17 +341,25 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
       mappingVersion: String(row.mappingVersion), snapshotId: row.snapshotId === null ? null : String(row.snapshotId), retrievedAt: time(row.retrievedAt),
       providerUpdatedAt: row.providerUpdatedAt === null ? null : time(row.providerUpdatedAt), stale: asBoolean(row.stale) })]));
   }
-  async function upsertPrice(tx: Tx, fixtureId: string, row: PriceRow) {
+  async function writePrice(tx: Tx, fixtureId: string, row: PriceRow, exists: boolean) {
+    const retrievedAt = new Date(row.retrievedAt), providerUpdatedAt = row.providerUpdatedAt === null ? null : new Date(row.providerUpdatedAt);
+    // The fixture state and existing price rows are already locked. MariaDB's
+    // duplicate-key update would require UPDATE permissions on immutable keys.
+    if (exists) {
+      await tx.$executeRaw`UPDATE FixtureOddsPrice SET basis = ${row.basis}, bookmakerExternalId = ${row.bookmakerExternalId},
+        line = ${row.line}, priceDecimal = CAST(${row.priceDecimal} AS DECIMAL(10,4)), displayHundredths = ${row.displayHundredths},
+        impliedProbability = CAST(${row.impliedProbability} AS DECIMAL(13,12)), overround = CAST(${row.overround} AS DECIMAL(13,12)),
+        method = ${row.method}, mappingVersion = ${row.mappingVersion}, snapshotId = ${row.snapshotId},
+        basisJson = NULL, retrievedAt = ${retrievedAt}, providerUpdatedAt = ${providerUpdatedAt}, stale = ${row.stale}
+        WHERE fixtureId = ${fixtureId} AND marketKey = ${row.marketKey} AND selection = ${row.selection}`;
+      return;
+    }
     await tx.$executeRaw`INSERT INTO FixtureOddsPrice (fixtureId, marketKey, selection, basis, bookmakerExternalId, line, priceDecimal,
       displayHundredths, impliedProbability, overround, method, mappingVersion, snapshotId, basisJson, retrievedAt, providerUpdatedAt, stale)
-      VALUES (${fixtureId}, ${row.marketKey}, ${row.selection}, ${row.basis}, ${row.bookmakerExternalId},
-        ${row.line === null ? null : row.line}, CAST(${row.priceDecimal} AS DECIMAL(10,4)), ${row.displayHundredths},
+      VALUES (${fixtureId}, ${row.marketKey}, ${row.selection}, ${row.basis}, ${row.bookmakerExternalId}, ${row.line},
+        CAST(${row.priceDecimal} AS DECIMAL(10,4)), ${row.displayHundredths},
         CAST(${row.impliedProbability} AS DECIMAL(13,12)), CAST(${row.overround} AS DECIMAL(13,12)), ${row.method}, ${row.mappingVersion},
-        ${row.snapshotId}, NULL, ${new Date(row.retrievedAt)}, ${row.providerUpdatedAt === null ? null : new Date(row.providerUpdatedAt)}, ${row.stale})
-      ON DUPLICATE KEY UPDATE basis = VALUES(basis), bookmakerExternalId = VALUES(bookmakerExternalId), line = VALUES(line),
-        priceDecimal = VALUES(priceDecimal), displayHundredths = VALUES(displayHundredths), impliedProbability = VALUES(impliedProbability),
-        overround = VALUES(overround), method = VALUES(method), mappingVersion = VALUES(mappingVersion), snapshotId = VALUES(snapshotId),
-        basisJson = VALUES(basisJson), retrievedAt = VALUES(retrievedAt), providerUpdatedAt = VALUES(providerUpdatedAt), stale = VALUES(stale)`;
+        ${row.snapshotId}, NULL, ${retrievedAt}, ${providerUpdatedAt}, ${row.stale})`;
   }
   /** Marks every public price of one fixture stale; returns how many rows changed. */
   async function staleAll(tx: Tx, fixtureId: string): Promise<number> {
@@ -379,12 +387,13 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
     for (const [key, next] of desired) {
       const previous = existing.get(key);
       if (previous && sameRow(previous, next)) continue;
-      await upsertPrice(tx, fixtureId, next); changed++;
+      await writePrice(tx, fixtureId, next, previous !== undefined); changed++;
     }
     // A family missing or incomplete in this observation keeps no fresh price; nothing is borrowed.
     for (const [key, previous] of existing) {
       if (desired.has(key) || previous.stale) continue;
-      await upsertPrice(tx, fixtureId, { ...previous, stale: true }); changed++;
+      changed += await tx.$executeRaw`UPDATE FixtureOddsPrice SET stale = TRUE
+        WHERE fixtureId = ${fixtureId} AND marketKey = ${previous.marketKey} AND selection = ${previous.selection} AND stale = FALSE`;
     }
     return changed;
   }

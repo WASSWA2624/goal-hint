@@ -113,18 +113,24 @@ async function storePrices(database: DatabaseRuntime, rows: readonly NormalizedI
       const material = !sameOccurrence || prior.semanticHash !== hash;
       const changedOffer = material || prior.withdrawnAt !== null;
       if (changedOffer) changed++;
-      updates.push(Prisma.sql`(${fixture.id}, ${fixture.kickoffAt}, ${fixture.homeTeamId}, ${fixture.awayTeamId}, ${received},
-        ${changedOffer ? received : prior.changedAt}, ${update === null ? null : new Date(update)}, NULL, ${hash}, ${JSON.stringify(body)})`);
+      updates.push(Prisma.sql`SELECT ${fixture.id} AS fixtureId, ${fixture.kickoffAt} AS kickoffAt, ${fixture.homeTeamId} AS homeTeamId,
+        ${fixture.awayTeamId} AS awayTeamId, ${received} AS checkedAt, ${changedOffer ? received : prior.changedAt} AS changedAt,
+        ${update === null ? null : new Date(update)} AS providerUpdatedAt, NULL AS withdrawnAt, ${hash} AS semanticHash,
+        ${JSON.stringify(body)} AS bodyJson`);
     }
     for (let offset = 0; offset < updates.length; offset += 100) {
       if (displayAllowed() !== true) break;
-      await tx.$executeRaw`INSERT INTO FixtureInPlayOdds (fixtureId, kickoffAt, homeTeamId, awayTeamId, checkedAt, changedAt,
-        providerUpdatedAt, withdrawnAt, semanticHash, bodyJson) VALUES ${Prisma.join(updates.slice(offset, offset + 100))}
-        ON DUPLICATE KEY UPDATE
-          bodyJson = IF(FixtureInPlayOdds.semanticHash <> VALUES(semanticHash), VALUES(bodyJson), FixtureInPlayOdds.bodyJson),
-          kickoffAt = VALUES(kickoffAt), homeTeamId = VALUES(homeTeamId), awayTeamId = VALUES(awayTeamId),
-          checkedAt = VALUES(checkedAt), changedAt = VALUES(changedAt), providerUpdatedAt = VALUES(providerUpdatedAt),
-          withdrawnAt = NULL, semanticHash = VALUES(semanticHash)`;
+      const offered = Prisma.join(updates.slice(offset, offset + 100), " UNION ALL ");
+      // The poll fence owns both writes. Keep the fixture key immutable under
+      // MariaDB's column-scoped grants, including on ordinary refreshes.
+      await tx.$executeRaw`INSERT IGNORE INTO FixtureInPlayOdds (fixtureId, kickoffAt, homeTeamId, awayTeamId, checkedAt, changedAt,
+        providerUpdatedAt, withdrawnAt, semanticHash, bodyJson) ${offered}`;
+      await tx.$executeRaw`UPDATE FixtureInPlayOdds p JOIN (${offered}) incoming ON incoming.fixtureId = p.fixtureId
+        SET p.bodyJson = IF(p.semanticHash <> incoming.semanticHash, incoming.bodyJson, p.bodyJson),
+          p.kickoffAt = incoming.kickoffAt, p.homeTeamId = incoming.homeTeamId, p.awayTeamId = incoming.awayTeamId,
+          p.checkedAt = incoming.checkedAt, p.changedAt = incoming.changedAt, p.providerUpdatedAt = incoming.providerUpdatedAt,
+          p.withdrawnAt = NULL, p.semanticHash = incoming.semanticHash
+        WHERE p.checkedAt < incoming.checkedAt`;
     }
     if (!allowed()) throw new Error("In-play odds retention authority changed.");
     const publicOffers = publish && displayAllowed() === true;

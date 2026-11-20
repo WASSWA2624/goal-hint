@@ -96,7 +96,10 @@ export function createFootballCatalogImporter(options: Readonly<{
     }
     if (selection.kind === "fixtures" && batch.status === "complete" && options.deferFixtureWritesAbove !== undefined &&
       batch.rows.fixtures.length > options.deferFixtureWritesAbove && await hasSavedFixtures()) return defer(true);
-    try { return await options.store.importBatch(batch, options.authority); }
+    try { return await options.store.importBatch(batch, options.authority, workflow ? () => {
+      if (workflow.signal?.aborted) throw new CatalogStoreError("unavailable");
+      workflow.check?.();
+    } : undefined); }
     catch (error) {
       if (!verifySavedFixtureScope || selection.kind !== "fixtures" || !unavailable(error)) throw error;
       return defer();

@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
-import type { DatabaseRuntime } from "../database/client.ts";
+import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
 import type { Prisma, FootballFixture, FootballImport, FootballTeam, FootballCompetition } from "../generated/prisma/client.ts";
 import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type Clock, type UtcInstant } from "../../domain/calendar.ts";
 import { isPlayedFinalStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
@@ -21,6 +21,8 @@ export const catalogPersistenceUnavailable = "catalog-persistence-unavailable";
 export const historyReplayKind = "history-fixture-replay";
 export const historyReplayScopePrefix = "goal-hint:history-fixture-replay:v1:";
 const historyReplayChunkSize = 40;
+const fixtureDateChunkSize = 40;
+const fixtureDateCheckpointKind = "fixture-date-checkpoint";
 const replayed = "archive-replay-complete", replaySegment = "archive-replay-segment";
 const fixtureRelations = { homeTeam: { include: { providers: true } }, awayTeam: { include: { providers: true } },
   season: { include: { competition: true } } } as const;
@@ -28,14 +30,15 @@ type StoredFixture = Prisma.FootballFixtureGetPayload<{ include: typeof fixtureR
 type SharedHistory<Entity> = Map<string, { before: Entity; aliasesAdded: { name: string; normalizedSearch: string; observedAt: UtcInstant }[] }>;
 type FixtureFields = Pick<FootballFixture, "homeTeamId" | "awayTeamId" | "seasonId" | "round" | "kickoff" | "eatDate" | "status" |
   "providerStatus" | "elapsedMinutes" | "regulationHome" | "regulationAway" | "regulationEvidenceRef" | "regulationVerifiedAt">;
-type ReplaySegment = Readonly<{ id: string; scopeKey: string; reference: string; fingerprint: string; start: number; end: number;
+type ImportSegment = Readonly<{ id: string; scopeKey: string; reference: string; fingerprint: string; start: number; end: number }>;
+type ReplaySegment = ImportSegment & Readonly<{
   existingReviewedEvidence: ReadonlyMap<number, string> }>;
 
 function replayScopeKey(parentId: string): string {
   return createHash("sha256").update(historyReplayScopePrefix + parentId).digest("hex");
 }
 
-function replayImportId(scope: string, segment: number | "complete"): string {
+function segmentImportId(scope: string, segment: number | "complete"): string {
   const bytes = createHash("sha256").update(`${scope}:${segment}`).digest().subarray(0, 16);
   bytes[6] = (bytes[6]! & 15) | 128;
   bytes[8] = (bytes[8]! & 63) | 128;
@@ -45,9 +48,11 @@ function replayImportId(scope: string, segment: number | "complete"): string {
 
 export class CatalogStoreError extends Error {
   readonly reason: "not-authorized" | "conflicting-import" | "invalid-state" | "coordination-failed" | "unavailable";
-  constructor(reason: CatalogStoreError["reason"]) {
+  readonly storageCode?: DatabaseOperationError["code"];
+  constructor(reason: CatalogStoreError["reason"], storageCode?: DatabaseOperationError["code"]) {
     super(`Football catalog ${reason}; private storage diagnostics are withheld.`);
     this.name = "CatalogStoreError"; this.reason = reason;
+    if (storageCode !== undefined) this.storageCode = storageCode;
   }
 }
 function fail(reason: CatalogStoreError["reason"]): never { throw new CatalogStoreError(reason); }
@@ -191,10 +196,11 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
   const historical = options.historicalResults === true;
   if (!Number.isSafeInteger(transactionTimeout) || transactionTimeout < 1 || transactionTimeout > 120_000) fail("invalid-state");
   async function write<Result>(operation: (transaction: Prisma.TransactionClient) => Promise<Result>,
-    mode: "catalog" | "fixture-transaction" | "historical" | "receipt-only" = "catalog"): Promise<Result> {
+    mode: "catalog" | "fixture-transaction" | "historical" | "receipt-only" | "fixture-date-checkpoint" = "catalog"): Promise<Result> {
     const receiptOnly = mode === "receipt-only";
     const historicalWrite = mode === "historical" || receiptOnly;
-    const retryConflicts = mode !== "fixture-transaction" && options.coordinateFixtureMutation === undefined;
+    const checkpointWrite = mode === "fixture-date-checkpoint";
+    const retryConflicts = checkpointWrite || (mode !== "fixture-transaction" && options.coordinateFixtureMutation === undefined);
     try {
       // Reuse the prepared batch on a retry. Provider I/O has already finished.
       for (let attempt = 0; ; attempt++) {
@@ -209,13 +215,16 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
         catch (error) {
           if (domainError) throw domainError;
           const code = error !== null && typeof error === "object" && "code" in error ? error.code : null;
-          const transient = retryConflicts && (code === "conflict" || historicalWrite && code === "lock-timeout");
+          const transient = retryConflicts && (code === "conflict" || (historicalWrite || checkpointWrite) && code === "lock-timeout");
           // The primary key arbitrates receipt-only races; the next read checks both fingerprints.
           if (attempt >= 2 || !(transient || receiptOnly && code === "constraint")) throw error;
-          if (historicalWrite && transient) await delay(100 * (attempt + 1));
+          if ((historicalWrite || checkpointWrite) && transient) await delay(100 * (attempt + 1));
         }
       }
-    } catch (error) { if (error instanceof CatalogStoreError) throw error; return fail("unavailable"); }
+    } catch (error) {
+      if (error instanceof CatalogStoreError) throw error;
+      throw new CatalogStoreError("unavailable", error instanceof DatabaseOperationError ? error.code : undefined);
+    }
   }
   async function applyMutation(transaction: Prisma.TransactionClient, before: StoredFixture | null, proposed: FixtureFields,
     operation: () => Promise<StoredFixture>, observation?: NormalizedFixture, evidenceRef?: string): Promise<{ row: StoredFixture; applied: boolean }> {
@@ -350,8 +359,28 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
     return transaction.footballSeason.update({ where: { id: current.id }, data: { current: metadata?.current ?? current.current,
       ...(metadata ? { coverage: json(coverage) } : {}), retrievedAt: new Date(source.retrievedAt), providerUpdatedAt: timestamp(source.providerUpdatedAt) ?? current.providerUpdatedAt } });
   }
+  async function appendImportReceipt(transaction: Prisma.TransactionClient, batch: CatalogPreparedBatch, authority: CatalogAuthority,
+    counts: { received: number; imported: number; rejected: number }, fixtureIds: readonly string[], changedFixtureIds: readonly string[],
+    options: Readonly<{ deferred?: boolean; replay?: ReplaySegment; checkpoint?: ImportSegment }> = {}) {
+    const { deferred, replay, checkpoint } = options, segment = replay ?? checkpoint;
+    authorize(batch, authority);
+    return transaction.footballImport.create({ data: {
+      id: segment?.id ?? batch.request.id, fingerprint: segment?.fingerprint ?? batch.fingerprint,
+      requestFingerprint: batch.requestFingerprint, selection: json(batch.selection), scopeKey: segment?.scopeKey ?? batch.scopeKey, provider: PROVIDER,
+      kind: replay ? historyReplayKind : checkpoint ? fixtureDateCheckpointKind : batch.selection.kind,
+      status: deferred || segment ? "partial" : batch.status,
+      observedAt: new Date(batch.observedAt), recordedAt: new Date(clock.now()), receivedCount: counts.received,
+      importedCount: counts.imported, rejectedCount: counts.rejected, requestsDispatched: checkpoint ? 0 : batch.requestsDispatched,
+      reasons: json(replay ? [replaySegment] : checkpoint ? [fixtureDateCheckpointKind] :
+        deferred ? [...batch.reasons, catalogPersistenceUnavailable].sort() : batch.reasons),
+      missingIds: json(batch.missingIds), missingCoverage: json(batch.missingCoverage),
+      provenance: json(batch.provenance), retentionEvidenceRef: batch.request.retentionEvidenceRef,
+      subsetEvidenceRef: segment?.reference ?? batch.request.knownSubset?.evidenceRef ?? null, fixtureIds: json(fixtureIds),
+      changedFixtureIds: json(changedFixtureIds),
+    } });
+  }
   async function writeImport(batch: CatalogPreparedBatch, authority: CatalogAuthority, persistenceDeferred = false,
-    replay?: ReplaySegment): Promise<CatalogImportSummary> {
+    replay?: ReplaySegment, checkpoint?: ImportSegment): Promise<CatalogImportSummary> {
     assertCatalogPreparedBatch(batch, authority);
     authorize(batch, authority);
     if (persistenceDeferred && !historical) fail("invalid-state");
@@ -360,8 +389,9 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
     const receiptOnly = historical && (persistenceDeferred || batch.status !== "complete" || batch.rows.fixtures.length === 0);
     const sealTeamHistory = !historical && options.sealTeamHistory === true && batch.status === "complete" &&
       batch.selection.kind === "fixtures" && batch.selection.query.teamId !== undefined && batch.selection.query.from !== undefined;
-    const importId = replay?.id ?? batch.request.id, fingerprint = replay?.fingerprint ?? batch.fingerprint;
-    const fixtures = replay ? batch.rows.fixtures.slice(replay.start, replay.end) : batch.rows.fixtures;
+    const segment = replay ?? checkpoint;
+    const importId = segment?.id ?? batch.request.id, fingerprint = segment?.fingerprint ?? batch.fingerprint;
+    const fixtures = segment ? batch.rows.fixtures.slice(segment.start, segment.end) : batch.rows.fixtures;
     return write(async (transaction) => {
       authorize(batch, authority);
       const existing = await transaction.footballImport.findUnique({ where: { id: importId } });
@@ -369,20 +399,13 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
         if (existing.fingerprint !== fingerprint || existing.requestFingerprint !== batch.requestFingerprint) fail("conflicting-import");
         return catalogImportSummary(existing);
       }
-      const receivedCount = fixtures.length + batch.rows.teams.length + batch.rows.competitions.length + batch.invalidRows;
+      const rejectedCount = checkpoint ? 0 : batch.invalidRows;
+      const receivedCount = fixtures.length + batch.rows.teams.length + batch.rows.competitions.length + rejectedCount;
       const recordedAt = new Date(clock.now());
       async function appendReceipt(fixtureIds: readonly string[], changedFixtureIds: readonly string[]) {
-        authorize(batch, authority);
-        return transaction.footballImport.create({ data: { id: importId, fingerprint,
-          requestFingerprint: batch.requestFingerprint, selection: json(batch.selection), scopeKey: replay?.scopeKey ?? batch.scopeKey, provider: PROVIDER,
-          kind: replay ? historyReplayKind : batch.selection.kind, status: persistenceDeferred || replay ? "partial" : batch.status,
-          observedAt: new Date(batch.observedAt), recordedAt, receivedCount,
-          importedCount: historical ? fixtureIds.length : receivedCount - batch.invalidRows, rejectedCount: batch.invalidRows,
-          requestsDispatched: batch.requestsDispatched,
-          reasons: json(replay ? [replaySegment] : persistenceDeferred ? [...batch.reasons, catalogPersistenceUnavailable].sort() : batch.reasons),
-          missingIds: json(batch.missingIds), missingCoverage: json(batch.missingCoverage),
-          provenance: json(batch.provenance), retentionEvidenceRef: batch.request.retentionEvidenceRef,
-          subsetEvidenceRef: replay?.reference ?? batch.request.knownSubset?.evidenceRef ?? null, fixtureIds: json(fixtureIds), changedFixtureIds: json(changedFixtureIds) } });
+        return appendImportReceipt(transaction, batch, authority,
+          { received: receivedCount, imported: historical ? fixtureIds.length : receivedCount - rejectedCount, rejected: rejectedCount },
+          fixtureIds, changedFixtureIds, { deferred: persistenceDeferred, ...(replay ? { replay } : {}), ...(checkpoint ? { checkpoint } : {}) });
       }
       // Historical observations can record coverage without touching identities or results.
       if (receiptOnly) return catalogImportSummary(await appendReceipt([], []));
@@ -511,7 +534,66 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
       for (const entry of audits) await transaction.footballFixtureAudit.create({ data: { id: entry.id, fixtureId: entry.fixtureId,
         importId, dataVersion: entry.dataVersion, observedAt: new Date(entry.observedAt), changes: json(entry.changes) } });
       return catalogImportSummary(receipt);
-    }, receiptOnly ? "receipt-only" : historical ? "historical" : "catalog");
+    }, receiptOnly ? "receipt-only" : historical ? "historical" : checkpoint ? "fixture-date-checkpoint" : "catalog");
+  }
+
+  /** A date sweep becomes externally complete only after every slice of the same validated observation is committed. */
+  async function writeFixtureDate(batch: CatalogPreparedBatch, authority: CatalogAuthority, check?: () => void) {
+    assertCatalogPreparedBatch(batch, authority);
+    const selection = batch.selection;
+    if (historical || selection.kind !== "fixtures" || selection.query.date === undefined || batch.rows.fixtures.length <= fixtureDateChunkSize)
+      return writeImport(batch, authority);
+    authorize(batch, authority);
+    const { id: parentId } = batch.request;
+    const scopeKey = evidenceFingerprint([fixtureDateCheckpointKind, parentId, batch.fingerprint]);
+    const existing = await database.query((tx) => tx.footballImport.findUnique({ where: { id: parentId } }));
+    const previousReceipt = (previous: FootballImport) => {
+      if (previous.fingerprint !== batch.fingerprint || previous.requestFingerprint !== batch.requestFingerprint) fail("conflicting-import");
+      return catalogImportSummary(previous);
+    };
+    if (existing) return previousReceipt(existing);
+
+    function verifySegment(segment: ImportSegment, row: FootballImport) {
+      if (row.id !== segment.id || row.scopeKey !== scopeKey || row.fingerprint !== segment.fingerprint ||
+        row.requestFingerprint !== batch.requestFingerprint || row.subsetEvidenceRef !== segment.reference ||
+        row.kind !== fixtureDateCheckpointKind || row.status !== "partial" || row.requestsDispatched !== 0 ||
+        row.receivedCount !== segment.end - segment.start || row.rejectedCount !== 0 || row.importedCount !== row.receivedCount)
+        fail("conflicting-import");
+    }
+    const chunks = Array.from({ length: Math.ceil(batch.rows.fixtures.length / fixtureDateChunkSize) }, (_, index): ImportSegment => {
+      const start = index * fixtureDateChunkSize;
+      const end = Math.min(start + fixtureDateChunkSize, batch.rows.fixtures.length);
+      return { id: segmentImportId(scopeKey, start), scopeKey, reference: `fixture-date:${parentId}:${start}-${end}`, start, end,
+        fingerprint: evidenceFingerprint([batch.fingerprint, start, end]) };
+    });
+    const readSegments = async (tx: Prisma.TransactionClient) => new Map(
+      (await tx.footballImport.findMany({ where: { id: { in: chunks.map(({ id }) => id) } } })).map((row) => [row.id, row]));
+    const saved = await database.query(readSegments);
+    for (const segment of chunks) {
+      check?.();
+      const receipt = saved.get(segment.id);
+      if (receipt) verifySegment(segment, receipt);
+      else await writeImport(batch, authority, false, undefined, segment);
+    }
+    return write(async (transaction) => {
+      check?.();
+      authorize(batch, authority);
+      const previous = await transaction.footballImport.findUnique({ where: { id: parentId } });
+      if (previous) return previousReceipt(previous);
+      const rows = await readSegments(transaction);
+      const fixtureIds = new Set<string>(), changedFixtureIds = new Set<string>();
+      for (const segment of chunks) {
+        const row = rows.get(segment.id);
+        if (!row) return fail("invalid-state");
+        verifySegment(segment, row);
+        for (const id of stringArray(row.fixtureIds)) fixtureIds.add(id);
+        for (const id of stringArray(row.changedFixtureIds)) changedFixtureIds.add(id);
+      }
+      const imported = batch.rows.fixtures.length, rejected = batch.invalidRows;
+      if (fixtureIds.size !== imported) return fail("invalid-state");
+      return catalogImportSummary(await appendImportReceipt(transaction, batch, authority,
+        { received: imported + rejected, imported, rejected }, [...fixtureIds], [...changedFixtureIds]));
+    }, "receipt-only");
   }
   /** Apply one checksummed observation without monopolizing the live catalog lock. */
   async function replayHistory(batch: CatalogPreparedBatch, authority: CatalogAuthority, pageId: string, maxChunks: number, signal?: AbortSignal) {
@@ -522,7 +604,7 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
       batch.selection.query.season === undefined || !batch.rows.fixtures.length || batch.requestsDispatched !== 0 ||
       batch.provenance.length !== 1 || batch.provenance[0]?.fromCache !== true) fail("invalid-state");
 
-    const parentId = batch.request.id, scopeKey = replayScopeKey(parentId), completionId = replayImportId(scopeKey, "complete");
+    const parentId = batch.request.id, scopeKey = replayScopeKey(parentId), completionId = segmentImportId(scopeKey, "complete");
     const reviewed = reviewedHistoryFixtureRepair(parentId);
     const reviewedEntries = reviewed ? [...reviewed.corrections, ...reviewed.duplicates.map(reviewedDuplicateReplacement)] : [];
     if (reviewed) {
@@ -551,7 +633,7 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
     const chunkCount = Math.ceil(batch.rows.fixtures.length / historyReplayChunkSize);
     const plan = Array.from({ length: chunkCount }, (_, index): ReplaySegment => {
       const start = index * historyReplayChunkSize, end = Math.min(start + historyReplayChunkSize, batch.rows.fixtures.length);
-      return { id: replayImportId(scopeKey, index), scopeKey, reference: `${reference}:${start}-${end}`, start, end, existingReviewedEvidence,
+      return { id: segmentImportId(scopeKey, index), scopeKey, reference: `${reference}:${start}-${end}`, start, end, existingReviewedEvidence,
         fingerprint: evidenceFingerprint([batch.fingerprint, reference, start, end]) };
     });
     const findChunks = (client: Prisma.TransactionClient) => client.footballImport.findMany({ where: { id: { in: plan.map(({ id }) => id) } } });
@@ -679,11 +761,11 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
     }, { isolationLevel: "RepeatableRead", timeout: transactionTimeout });
   }
   return Object.freeze({
-    importBatch: (batch: CatalogPreparedBatch, authority: CatalogAuthority) => writeImport(batch, authority),
+    importBatch: writeFixtureDate,
     deferImport: (batch: CatalogPreparedBatch, authority: CatalogAuthority) => writeImport(batch, authority, true),
     replayHistory,
     async hasReplayedImport(parentId: string) {
-      const scopeKey = replayScopeKey(parentId), id = replayImportId(scopeKey, "complete");
+      const scopeKey = replayScopeKey(parentId), id = segmentImportId(scopeKey, "complete");
       const row = await database.query((client) => client.footballImport.findUnique({ where: { id } }));
       const reviewed = reviewedHistoryFixtureRepair(parentId);
       return row?.scopeKey === scopeKey && row.kind === historyReplayKind && row.status === "complete" && row.requestsDispatched === 0 &&
