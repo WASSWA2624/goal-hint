@@ -123,7 +123,7 @@ export async function startIsolatedMysql({ databaseName = "goal_hint_test", bina
 
   async function removeOwnedDirectory() {
     const actual = await ownedDirectory();
-    await rm(actual, { recursive: true, force: false });
+    await rm(actual, { recursive: true, force: false, maxRetries: 6, retryDelay: 200 });
   }
 
   async function assertOwnership() {

@@ -158,10 +158,15 @@ test("1,001 sealed fixture jobs preserve durable progress across a worker restar
       } }),
       jobs: await tx.durableJob.count({ where: { refreshRunId: selected.runId, type } }),
       outcomes: await tx.predictionRefreshOutcome.count(),
+      stages: Object.fromEntries((await tx.predictionRefreshStage.groupBy({ by: ["phase", "kind"], _count: { _all: true } }))
+        .map(({ phase, kind, _count }) => [`${phase}:${kind}`, _count._all])),
       revisions: await tx.predictionSet.count(),
       publishedCohortRevisions: await tx.predictionSet.count({ where: { runId: selected.runId } }),
     }));
-    assert.deepEqual(counts, { fixtures: total, jobs: total, outcomes: total, revisions: 1, publishedCohortRevisions: 0 });
-    t.diagnostic(`Drained ${total} terminal fixture jobs in ${Math.round(performance.now() - workAt)} ms. One real forecast replay was verified separately.`);
+    const workMs = Math.round(performance.now() - workAt);
+    t.diagnostic(JSON.stringify({ ...counts, terminal: final.terminal, succeeded: final.completed,
+      failed: final.terminal - final.completed, workMs }));
+    assert.deepEqual(counts, { fixtures: total, jobs: total, outcomes: total,
+      stages: { "fallback:completed": total - 1, "fallback:started": total - 1 }, revisions: 1, publishedCohortRevisions: 0 });
   }, { migrationTimeoutMs: 240_000 });
 });
