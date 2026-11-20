@@ -159,11 +159,12 @@ export function liveReferences(policy: RuntimePolicy): LiveReferences {
     odds: `${freshness}#odds`, oddsRights: choices.odds.rightsRef });
 }
 /** The exact odds policy for this plan, or null when no documented bookmaker is configured. */
-export function oddsPolicy(policy: RuntimePolicy, refs: LiveReferences, workload: LiveWorkload, localFootball = false): OddsPolicy | null {
-  const bookmakerId = policy.choices.odds.bookmakerId;
+export function oddsPolicy(policy: RuntimePolicy, refs: LiveReferences, workload: LiveWorkload, allBookmakers = false): OddsPolicy | null {
+  const { bookmakerId, fallbackBookmakerIds } = policy.choices.odds;
   if (bookmakerId === null) return null;
   return Object.freeze({ version: 1, evidenceRef: refs.odds, retentionEvidenceRef: refs.retention, basis: "bookmaker", bookmakerId,
-    ...(localFootball || policy.choices.odds.bookmakerScope === "all" ? { bookmakerScope: "all" as const } : {}),
+    ...(allBookmakers || fallbackBookmakerIds.length || policy.choices.odds.bookmakerScope === "all" ? { bookmakerScope: "all" as const } : {}),
+    ...(fallbackBookmakerIds.length ? { fallbackBookmakerIds } : {}),
     method: DE_MARGIN_METHOD, mappingVersion: ODDS_MAPPING_VERSION, contractVersion: ODDS_CONTRACT_VERSION, freshnessMs: ODDS_FRESHNESS_MS,
     retainAfterKickoffMs: ODDS_RETAIN_AFTER_KICKOFF_MS, horizonDays: workload.odds.dates, sweepMs: workload.odds.sweepMs });
 }

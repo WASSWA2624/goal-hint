@@ -22,10 +22,12 @@ const reference = z.string().trim().min(1).max(512).regex(/^[^\p{Cc}]+$/u);
 const policySchema = z.strictObject({
   version: z.literal(1), evidenceRef: reference, retentionEvidenceRef: reference, basis: z.literal("bookmaker"),
   bookmakerId: identity, bookmakerScope: z.literal("all").optional(), method: z.literal(DE_MARGIN_METHOD), mappingVersion: z.literal(ODDS_MAPPING_VERSION),
+  fallbackBookmakerIds: z.array(identity).min(1).max(100).optional(),
   contractVersion: z.literal(ODDS_CONTRACT_VERSION),
   freshnessMs: z.number().int().min(60_000).max(7 * DAY), retainAfterKickoffMs: z.number().int().min(DAY).max(400 * DAY),
   horizonDays: z.number().int().min(1).max(7), sweepMs: z.number().int().min(15 * 60_000).max(DAY),
-});
+}).refine(({ bookmakerId, fallbackBookmakerIds }) => !fallbackBookmakerIds ||
+  !fallbackBookmakerIds.includes(bookmakerId) && new Set(fallbackBookmakerIds).size === fallbackBookmakerIds.length);
 const requestSchema = z.strictObject({
   id: hash, kind: z.enum(["prices", "bets", "bookmakers"]), slot: instant, date: z.iso.date().nullable(), policy: policySchema,
 }).refine((value) => (value.kind === "prices") === (value.date !== null));
@@ -66,16 +68,21 @@ const endpointOf = { prices: "odds", bets: "oddsBets", bookmakers: "oddsBookmake
 export function parseOddsPolicy(value: unknown): OddsPolicy {
   const parsed = policySchema.safeParse(value);
   if (!parsed.success) return oddsFail("invalid-request");
-  const { bookmakerScope, ...policy } = parsed.data;
-  return freezeEvidence({ ...policy, ...(bookmakerScope === undefined ? {} : { bookmakerScope }) });
+  const { bookmakerScope, fallbackBookmakerIds, ...policy } = parsed.data;
+  return freezeEvidence({ ...policy, ...(bookmakerScope === undefined ? {} : { bookmakerScope }),
+    ...(fallbackBookmakerIds === undefined ? {} : { fallbackBookmakerIds }) });
 }
 export function parseOddsRequest(value: unknown): OddsImportRequest {
   const parsed = requestSchema.safeParse(value);
   if (!parsed.success) return oddsFail("invalid-request");
-  if (parsed.data.date !== null) { try { parseReportingDate(parsed.data.date); } catch { return oddsFail("invalid-request"); } }
-  return freezeEvidence(parsed.data as OddsImportRequest);
+  const { date, policy, slot, ...request } = parsed.data;
+  try {
+    return freezeEvidence({ ...request, date: date === null ? null : parseReportingDate(date),
+      policy: parseOddsPolicy(policy), slot: utcInstantFromEpochMilliseconds(slot) });
+  } catch { return oddsFail("invalid-request"); }
 }
 export const oddsPolicyHash = (policy: OddsPolicy) => evidenceFingerprint(parseOddsPolicy(policy));
+export const oddsPricePageScopeKey = (requestId: string) => `price-pages:${requestId}`;
 export function oddsScopeKey(request: Pick<OddsImportRequest, "kind" | "date" | "policy">): string {
   if (request.kind !== "prices") return request.kind;
   return request.policy.bookmakerScope === "all" ? `date:${request.date}:bookmakers:all` : `date:${request.date}:bookmaker:${request.policy.bookmakerId}`;
@@ -100,8 +107,9 @@ export function authorizeOddsRequest(input: OddsImportRequest, authority: OddsAu
 /** Structured observations only; this never fetches or stores provider payloads. Page provenance must match the
  * exact selectors; each row's retrieval time must equal its page's, and its own provider update time may not follow it. */
 export function validateOddsObservation(input: OddsImportRequest, result: ApiFootballResult<unknown>, bounds: ApiFootballBounds,
-  authority: OddsAuthority, clock: Clock): ValidatedOddsObservation {
+  authority: OddsAuthority, clock: Clock, requestedPage?: number): ValidatedOddsObservation {
   const request = authorizeOddsRequest(input, authority);
+  if (requestedPage !== undefined && (request.kind !== "prices" || !Number.isSafeInteger(requestedPage) || requestedPage < 1)) return oddsFail("invalid-request");
   const now = clock.now();
   if (!Number.isSafeInteger(now)) return oddsFail("invalid-result");
   const parsed = resultSchema.safeParse(result);
@@ -117,15 +125,16 @@ export function validateOddsObservation(input: OddsImportRequest, result: ApiFoo
     const { page: pageNumber, ...selectors } = page.success ? page.data.requestParameters : {};
     if (!page.success || page.data.endpoint !== endpoint || page.data.retrievedAt > now || page.data.providerUpdatedAt !== null ||
       page.data.fromCache || evidenceFingerprint(selectors) !== evidenceFingerprint(expected) ||
-      (request.kind === "prices" ? pageNumber !== String(page.data.currentPage) : pageNumber !== undefined)) {
+      (request.kind === "prices" ? pageNumber !== String(page.data.currentPage) || requestedPage !== undefined &&
+        (page.data.currentPage !== requestedPage || page.data.totalPages === null || requestedPage > page.data.totalPages) : pageNumber !== undefined)) {
       reasons.add("invalid-source-provenance"); continue;
     }
     const { quota: _quota, ...retained } = page.data;
     void _quota; pages.push(retained as unknown as OddsProvenance);
   }
   if (pages.length === 0) reasons.add("missing-source-provenance");
-  if (pages.some((page, index) => page.currentPage !== index + 1 || page.totalPages !== pages[0]!.totalPages) ||
-    pages.length > 0 && pages[0]!.totalPages !== pages.length) reasons.add("retrieval-incomplete");
+  if (requestedPage === undefined ? pages.some((page, index) => page.currentPage !== index + 1 || page.totalPages !== pages[0]!.totalPages) ||
+    pages.length > 0 && pages[0]!.totalPages !== pages.length : pages.length !== 1) reasons.add("retrieval-incomplete");
   const retrievals = new Set<number>(pages.map((page) => page.retrievedAt));
   const sourceValid = (source: z.infer<typeof providerTimes>, path: string) => source.endpoint === path && retrievals.has(source.retrievedAt) &&
     source.retrievedAt <= now && (source.providerUpdatedAt === null || source.providerUpdatedAt <= source.retrievedAt);

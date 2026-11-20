@@ -3,6 +3,7 @@ import test from "node:test";
 import { utcInstantFromEpochMilliseconds } from "../src/domain/calendar.ts";
 import { createFootballCatalogImporter } from "../src/server/football/catalog-service.ts";
 import { normalizeInPlayOdds } from "../src/server/football/api-football-normalize.ts";
+import { API_FOOTBALL_CONTRACT_VERSION } from "../src/server/football/api-football-contract.ts";
 import { createInPlayOddsPoller } from "../src/server/odds/in-play-odds-service.ts";
 import { storedInPlayOdds } from "../src/server/odds/in-play-odds-read.ts";
 import { withCurrentFeedOdds } from "../src/server/matches/feed-odds.ts";
@@ -15,7 +16,8 @@ test("one shared live odds slot updates only changed prices and withdraws missin
   await withPredictionPipeline(t, async (pipeline) => {
     const { a, b, catalog, instance } = pipeline;
     await instance.executeAdmin(`GRANT SELECT, INSERT, UPDATE ON goal_hint_test.FixtureInPlayOdds TO 'cutoff_app'@'127.0.0.1';
-      GRANT SELECT, INSERT, UPDATE ON goal_hint_test.InPlayOddsPollState TO 'cutoff_app'@'127.0.0.1';`);
+      GRANT SELECT, INSERT, UPDATE ON goal_hint_test.InPlayOddsPollState TO 'cutoff_app'@'127.0.0.1';
+      GRANT SELECT, INSERT, UPDATE (lastObservedAt,lastProviderUpdatedAt) ON goal_hint_test.FixtureInPlayOddsHistory TO 'cutoff_app'@'127.0.0.1';`);
     const start = Date.parse("2026-11-11T15:00:00Z"), kickoffAt = start - 10 * 60_000;
     const source = catalogFixture(2871, { kickoff: new Date(kickoffAt).toISOString(), homeId: 1, awayId: 2, status: "1H" });
     const provider = createSyntheticCatalogAdapter({ rows: [source] });
@@ -26,26 +28,36 @@ test("one shared live odds slot updates only changed prices and withdraws missin
     const fixture = await catalog.fixtureByProviderId(2871);
     assert.equal(fixture.status, "live");
     pipeline.setTime(start);
-    let catalogCalls = 0, liveCalls = 0, present = true, home = "1.89";
+    let catalogCalls = 0, liveCalls = 0, present = true, home = "1.89", display = true, retain = true;
+    let providerClock = null;
+    const response = (endpoint, data) => ({ status: "complete", requestsDispatched: 1, data, error: null,
+      completeness: { complete: true, invalidRows: 0, reasons: [], missingCoverage: [], missingIds: [] },
+      provenance: [{ provider: "api-football", endpoint, contractVersion: API_FOOTBALL_CONTRACT_VERSION, requestParameters: {},
+        currentPage: 1, totalPages: data.length ? 1 : 0, retrievedAt: utcInstantFromEpochMilliseconds(pipeline.now()), fromCache: false,
+        providerUpdatedAt: null, quota: { kind: "success" } }],
+    });
     const adapter = {
       async inPlayBets(bounds) {
         assert.equal(bounds.priority, "enrichment"); catalogCalls++;
-        return { status: "complete", requestsDispatched: 1, data: [{ id: 59, name: "Fulltime Result" }] };
+        const result = response("inPlayOddsBets", [{ id: 59, name: "Fulltime Result" }, { id: 814, name: "Synthetic unknown definition" }]);
+        return { ...result, completeness: { ...result.completeness, missingCoverage: ["odds-catalog-name:815"] } };
       },
       async inPlay(bounds) {
         assert.equal(bounds.maxRequests, 1); liveCalls++;
         const retrievedAt = utcInstantFromEpochMilliseconds(pipeline.now());
         const observation = normalizeInPlayOdds({
           fixture: { id: 2871 }, league: { id: 39, season: 2026 }, teams: { home: { id: 1 }, away: { id: 2 } },
-          status: { stopped: false, blocked: false, finished: false }, update: new Date(retrievedAt - 1000).toISOString(),
+          status: { stopped: false, blocked: false, finished: false }, update: new Date(providerClock ?? retrievedAt - 1000).toISOString(),
           odds: [{ id: 59, name: "Fulltime Result", values: [["Home", home], ["Draw", "4"], ["Away", "5"]]
-            .map(([value, odd]) => ({ value, odd, suspended: false })) }],
+            .map(([value, odd]) => ({ value, odd, suspended: false })) },
+          { id: 814, name: "Synthetic unknown definition", values: [{ value: "Exact unknown", handicap: "+2.5", odd: "0", suspended: true }] }],
         }, { endpoint: "/odds/live", retrievedAt });
         assert.equal(observation.valid, true);
-        return { status: "complete", requestsDispatched: 1, data: present ? [observation.data] : [], provenance: [{ retrievedAt }] };
+        return response("inPlayOdds", present ? [observation.data] : []);
       },
     };
-    const make = (database) => createInPlayOddsPoller({ database, adapter, now: pipeline.now, enabled: () => true, displayAllowed: () => true });
+    const make = (database) => createInPlayOddsPoller({ database, adapter, now: pipeline.now, enabled: () => true,
+      retentionAllowed: () => retain, displayAllowed: () => display, competitionIds: [39] });
     const first = make(a), second = make(b);
     const results = await Promise.all([first.poll(), second.poll()]);
     assert.equal(results.find((entry) => entry.outcome === "complete")?.changed, 1);
@@ -60,22 +72,66 @@ test("one shared live odds slot updates only changed prices and withdraws missin
     assert.equal(feed.records[0].forecast, null);
     assert.equal(gateFeedResponse(feed, { tier: "free", signedIn: false }).records[0].marketOdds, null);
     const stored = () => a.query((tx) => tx.$queryRaw`SELECT changedAt, checkedAt FROM FixtureInPlayOdds WHERE fixtureId = ${fixture.id}`);
+    const readJson = (value) => typeof value === "string" ? JSON.parse(value) : value;
+    const history = () => a.query((tx) => tx.$queryRaw`SELECT firstObservedAt, lastObservedAt, providerUpdatedAt, lastProviderUpdatedAt,
+      outOfOrder, bodyJson FROM FixtureInPlayOddsHistory WHERE fixtureId=${fixture.id} ORDER BY firstObservedAt`);
+    const catalogRows = await a.query((tx) => tx.$queryRaw`SELECT catalogJson FROM InPlayOddsPollState WHERE provider='api-football'`);
+    const references = readJson(catalogRows[0].catalogJson);
+    assert.equal(references.namespace, "in-play");
+    assert.deepEqual(references.entries.map(({ id }) => id), [59, 814, 815]);
+    assert.equal(references.entries[0].status, "mapped");
+    assert.equal(references.entries[1].status, "unmapped");
+    assert.equal(references.entries[2].reason, "provider-name-unavailable");
+    const [initialPrice] = await history();
+    const retained = readJson(initialPrice.bodyJson);
+    assert.deepEqual(retained.source, { provider: "api-football", sourceId: "api-football-live", namespace: "in-play", bookmakerId: null });
+    assert.deepEqual(retained.markets[1].values[0], { label: "Exact unknown", line: "2.5", price: null, main: false, suspended: true });
+    const forecastEvents = () => a.query((tx) => tx.predictionChangeEvent.count({ where: { fixtureId: fixture.id } }));
+    const eventsBefore = await forecastEvents();
     const [before] = await stored();
     pipeline.setTime(start + 30_000);
+    assert.equal((await first.poll()).outcome, "waiting");
+    pipeline.setTime(start + 60_000);
     assert.deepEqual(await first.poll(), { outcome: "complete", requests: 1, changed: 0 });
     const [after] = await stored();
     assert.equal(after.changedAt.getTime(), before.changedAt.getTime());
-    assert.equal(after.checkedAt.getTime(), start + 30_000);
+    assert.equal(after.checkedAt.getTime(), start + 60_000);
+    const samePrice = await history();
+    assert.equal(samePrice.length, 1);
+    assert.equal(samePrice[0].firstObservedAt.getTime(), start);
+    assert.equal(samePrice[0].lastObservedAt.getTime(), start + 60_000);
+    assert.equal(samePrice[0].providerUpdatedAt.getTime(), start - 1000);
+    assert.equal(samePrice[0].lastProviderUpdatedAt.getTime(), start + 59_000);
     home = "2.1";
-    pipeline.setTime(start + 60_000);
+    providerClock = start + 59_000;
+    pipeline.setTime(start + 120_000);
     assert.equal((await second.poll()).changed, 1);
     assert.equal((await observation()).prices.markets[0].selections[0].price, "2.1");
     present = false;
-    pipeline.setTime(start + 90_000);
+    pipeline.setTime(start + 180_000);
     assert.equal((await first.poll()).changed, 1);
     assert.equal(await observation(), null);
     assert.equal((await feedOdds()).records[0].marketOdds, undefined);
+    const withdrawn = await history();
+    assert.equal(withdrawn.length, 3);
+    assert.equal(readJson(withdrawn[2].bodyJson).availability, "not-returned");
+    assert.equal(withdrawn[2].providerUpdatedAt, null);
+    display = false; present = true; home = "1.92"; providerClock = null;
+    pipeline.setTime(start + 240_000);
+    assert.deepEqual(await first.poll(), { outcome: "complete", requests: 1, changed: 0 });
+    assert.equal(await observation(), null, "private retention does not publish prices");
+    providerClock = start + 30_000; home = "4.5";
+    pipeline.setTime(start + 300_000);
+    assert.equal((await first.poll()).outcome, "complete");
+    const stale = await history();
+    assert.equal(stale.length, 5);
+    assert.equal(Number(stale[4].outOfOrder), 1, "older provider clocks are archived without advancing current offers");
+    assert.equal(await observation(), null);
+    retain = false;
+    pipeline.setTime(start + 360_000);
+    assert.equal((await first.poll()).outcome, "disabled");
+    assert.equal(await forecastEvents(), eventsBefore, "odds changes never enqueue forecast evidence changes");
     assert.equal(await a.query((tx) => tx.fixtureOddsPrice.count()), 0);
-    assert.equal(catalogCalls, 1); assert.equal(liveCalls, 4);
+    assert.equal(catalogCalls, 1); assert.equal(liveCalls, 6);
   }, { migrationTimeoutMs: 180_000 });
 });

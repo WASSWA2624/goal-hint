@@ -131,6 +131,14 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
             for (const envelope of envelopes) await runtime.queue.enqueue(envelope);
             oddsScheduled = slot; log({ event: "odds-scheduled", slot: new Date(slot).toISOString(), dates: envelopes.length - 1 });
           } catch (error) { log({ event: "odds-schedule-failed", reason: reason(error) }); }
+          if (runtime.coordinated && oddsScheduled === slot) try {
+            const coverage = await runtime.odds.catalogCoverage(now);
+            if (coverage) {
+              const counts = { mapped: 0, unmapped: 0, unsupported: 0 };
+              for (const { status } of coverage.entries) counts[status]++;
+              log({ event: "pre-match-catalog-coverage", observedAt: new Date(coverage.observedAt).toISOString(), ...counts });
+            }
+          } catch (error) { log({ event: "pre-match-catalog-coverage-unavailable", reason: reason(error) }); }
         }
       }
       // Team codes: one sweep per hourly slot, below every odds job on the shared enrichment worker. The durable

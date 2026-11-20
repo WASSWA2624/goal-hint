@@ -183,6 +183,10 @@ const environmentSchema = z.object({
   GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF: text.describe("Record verified rights to display bookmaker odds publicly; without it odds stay private (052)."),
   GOAL_HINT_ODDS_IMPORT_ENABLED: enabled.describe("Use true or false; the live runner imports odds only when its plan has spare quota (052)."),
   GOAL_HINT_ODDS_BOOKMAKER_ID: count.describe("Use the positive API-Football id of the verified primary bookmaker; required when odds imports are enabled (052)."),
+  GOAL_HINT_ODDS_BOOKMAKER_FALLBACK_IDS: optional(z.string().regex(/^[1-9]\d*(,[1-9]\d*)*$/u)
+    .transform(value => value.split(",").map(Number)).pipe(z.array(z.int().positive().max(4_294_967_295)).max(64))
+    .refine(values => new Set(values).size === values.length))
+    .describe("Optional ordered fallback API-Football bookmaker IDs, separated by commas."),
   GOAL_HINT_ODDS_BOOKMAKER_SCOPE: z.enum(["primary", "all"]).default("primary")
     .describe("Use primary (default) or all for pre-match odds imports. The primary bookmaker still supplies the reviewed projection."),
   GOAL_HINT_TEAM_CODES_IMPORT_ENABLED: enabledByDefault.describe("Use true or false (default true); the live runner imports team codes only from spare quota, so they stay off on Free and slow plans."),
@@ -303,6 +307,7 @@ function assemble(settings: z.output<typeof environmentSchema>) {
       odds: {
         enabled: settings.GOAL_HINT_ODDS_IMPORT_ENABLED,
         bookmakerId: settings.GOAL_HINT_ODDS_BOOKMAKER_ID,
+        fallbackBookmakerIds: settings.GOAL_HINT_ODDS_BOOKMAKER_FALLBACK_IDS ?? [],
         bookmakerScope: settings.GOAL_HINT_ODDS_BOOKMAKER_SCOPE,
         rightsRef: settings.GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF,
       },
@@ -515,6 +520,9 @@ function consistencyIssues(policy: RuntimePolicy): PolicyIssue[] {
   }
   if (policy.choices.odds.enabled && policy.choices.odds.bookmakerId === null) {
     issues.push({ field: "GOAL_HINT_ODDS_BOOKMAKER_ID", reason: "Odds imports need a documented primary bookmaker id." });
+  }
+  if (policy.choices.odds.bookmakerId !== null && policy.choices.odds.fallbackBookmakerIds.includes(policy.choices.odds.bookmakerId)) {
+    issues.push({ field: "GOAL_HINT_ODDS_BOOKMAKER_FALLBACK_IDS", reason: "The preferred bookmaker ID cannot appear in the fallback order." });
   }
   if (policy.choices.football.trialRequestLimit !== null
     && policy.choices.football.trialRequestLimit > operatingRules.football.requestsPerProviderDay - operatingRules.football.essentialReserveRequests) {

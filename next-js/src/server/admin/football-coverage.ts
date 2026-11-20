@@ -5,6 +5,7 @@ import { historyImportCoverage, historyImportPhases, historyImportStatus, type F
 import type { DatabaseRuntime } from "../database/client.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { displayedSet, publicFixtureScope } from "../matches/feed-read.ts";
+import { oddsPricePageScopeKey } from "../odds/odds-input.ts";
 import { historyJson } from "../predictions/history-read.ts";
 
 const since = (at: number, hours: number) => new Date(at - hours * 3_600_000);
@@ -24,7 +25,7 @@ export async function readFootballCoverage(database: DatabaseRuntime, now: UtcIn
     database.query((client) => client.dailyRunImport.findFirst({ where: { eatDate: day },
       orderBy: [{ run: { eatDate: "desc" } }, { attempt: "desc" }], select: { id: true, failure: true } })).catch(() => null),
     database.query((client) => client.oddsImportBatch.groupBy({ by: ["kind", "status"], _count: { _all: true },
-      where: { receivedAt: { gte: since(now, 24) } } })).catch(() => null),
+      where: { receivedAt: { gte: since(now, 24) }, NOT: { scopeKey: { startsWith: oddsPricePageScopeKey("") } } } })).catch(() => null),
   ]);
   const receipt = attempt ? await database.query((client) => client.footballImport.findUnique({ where: { id: attempt.id },
     select: { status: true, receivedCount: true, importedCount: true, rejectedCount: true } })).catch(() => null) : null;

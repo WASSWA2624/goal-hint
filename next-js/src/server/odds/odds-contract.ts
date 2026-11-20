@@ -7,7 +7,7 @@ import type { ApiFootballPageProvenance, ApiFootballResult, ODDS_CONTRACT_VERSIO
 import type { NormalizedFixtureOdds, NormalizedOddsCatalogEntry } from "../football/api-football-normalize.ts";
 
 /** OP-07 default for ordinary pre-match quotes in the live worker. */
-export const preMatchOddsFreshMs = 12 * 60 * 60_000;
+export { preMatchReferenceOddsFreshMs as preMatchOddsFreshMs } from "../../domain/reference-odds.ts";
 
 /** Owner-approved odds import policy (prompt 052). Fingerprinted into every receipt and fixture state. */
 export type OddsPolicy = Readonly<{
@@ -19,6 +19,8 @@ export type OddsPolicy = Readonly<{
   basis: "bookmaker";
   /** Keep this bookmaker for the reviewed recommendation and feed price projections. */
   bookmakerId: number;
+  /** Trusted exact-match fallback order after the preferred bookmaker. */
+  fallbackBookmakerIds?: readonly number[];
   /** Optional date-sweep scope for retaining other observed bookmaker prices. */
   bookmakerScope?: "all";
   method: typeof DE_MARGIN_METHOD;
@@ -107,6 +109,8 @@ export type OddsBatchBody = Readonly<{
   reasons: readonly string[];
   missingCoverage: readonly string[];
   pages: readonly OddsProvenance[];
+  /** A page checkpoint commits with its normalized snapshots. It never authorizes a date withdrawal. */
+  checkpoint?: Readonly<{ page: number; totalPages: number }>;
   /** Outcomes and a content hash per provider fixture; prices are never retained here. */
   fixtures: readonly Readonly<{ externalId: number; outcome: OddsFixtureOutcome; observationHash: string;
     /** Availability/content manifest only; exact prices remain in the private immutable snapshots. */
@@ -124,4 +128,6 @@ export type OddsImportSummary = Readonly<{
   outcomes: Readonly<Record<OddsFixtureOutcome | "changed" | "unchanged" | "skipped" | "withdrawn", number>>;
   /** The adapter's static failure reason, never provider diagnostics. */
   error: Readonly<{ reason: string; retryable: boolean }> | null;
+  /** A bounded continuation should resume this job without re-reading its committed pages. */
+  continuation?: boolean;
 }>;

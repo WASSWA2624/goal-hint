@@ -186,10 +186,13 @@ export type NormalizedOddsCatalogEntry = Readonly<{ id: number; name: string; so
 export type NormalizedInPlayOddsValue = Readonly<{
   label: string; odd: string | null; handicap: string | null; main: boolean; suspended: boolean;
 }>;
+type InPlayOddsBet = Readonly<{ id: number; name: string | null; values: readonly NormalizedInPlayOddsValue[] }>;
 export type NormalizedInPlayOdds = Readonly<{
   fixtureId: number; competitionId: number; season: number; homeTeamId: number; awayTeamId: number;
   stopped: boolean; blocked: boolean; finished: boolean;
-  bets: readonly Readonly<{ id: number; name: string | null; values: readonly NormalizedInPlayOddsValue[] }>[];
+  bets: readonly InPlayOddsBet[];
+  /** Individually valid siblings in malformed groups, retained only in private history. */
+  partialBets?: readonly InPlayOddsBet[];
   source: SourceTimestamps;
 }>;
 /** Internal diagnostics only; account holder names, email and credentials are discarded. */
@@ -752,7 +755,7 @@ export function normalizeInPlayOdds(raw: unknown, context: NormalizationContext)
   if (input.teams.home.id === input.teams.away.id) return invalid();
   const update = input.update == null ? null : parseOffsetInstant(input.update);
   if (update === false || update !== null && update > context.retrievedAt) return invalid();
-  const missing: string[] = [], ids = new Set<number>(), bets: NormalizedInPlayOdds["bets"][number][] = [];
+  const missing: string[] = [], ids = new Set<number>(), bets: InPlayOddsBet[] = [], partialBets: InPlayOddsBet[] = [];
   for (const bet of input.odds) {
     if (ids.has(bet.id)) return invalid();
     ids.add(bet.id);
@@ -768,14 +771,16 @@ export function normalizeInPlayOdds(raw: unknown, context: NormalizationContext)
       values.push({ label, odd: parsedPrice?.text ?? null, handicap: handicap == null ? null : String(Number(handicap)),
         main: main === true, suspended });
     }
-    // An invalid alternative may change which duplicate is authoritative. Withhold the whole bet.
+    const name = oddsName(bet.name, oddsNameLimits.bet);
+    // An invalid alternative may change which duplicate is authoritative. Withhold the whole bet from offers.
     if (!values.length || values.length !== bet.values.length || values.length > 1_000) {
       missing.push(`in-play-bet-rejected:${bet.id}`);
+      partialBets.push({ id: bet.id, name, values: values.slice(0, 1_000) });
       continue;
     }
-    bets.push({ id: bet.id, name: oddsName(bet.name, oddsNameLimits.bet), values });
+    bets.push({ id: bet.id, name, values });
   }
   return valid({ fixtureId: input.fixture.id, competitionId: input.league.id, season: input.league.season,
-    homeTeamId: input.teams.home.id, awayTeamId: input.teams.away.id, ...input.status, bets,
+    homeTeamId: input.teams.home.id, awayTeamId: input.teams.away.id, ...input.status, bets, ...(partialBets.length ? { partialBets } : {}),
     source: sourceWithUpdate(context, update, missing) }, missing);
 }

@@ -195,6 +195,7 @@ model FootballSeason {
 
 model FootballFixture {
   intelligenceShadow    IntelligenceShadowState?
+  inPlayOddsHistory     FixtureInPlayOddsHistory[]
   liveMatchSnapshots    LiveMatchSnapshot[]
   historyDetailState    FootballHistoryDetailState?
   publishedSlipLegs     PublishedSlipLeg[]
@@ -1620,6 +1621,24 @@ model FixtureInPlayOdds {
   fixture          FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([checkedAt])
+}
+
+// Private structured live offers. Unchanged observations extend the same span.
+model FixtureInPlayOddsHistory {
+  id                    String          @id @db.Char(64)
+  fixtureId             String          @db.Char(36)
+  occurrenceHash        String          @db.Char(64)
+  semanticHash          String          @db.Char(64)
+  firstObservedAt       DateTime        @db.DateTime(3)
+  lastObservedAt        DateTime        @db.DateTime(3)
+  providerUpdatedAt     DateTime?       @db.DateTime(3)
+  lastProviderUpdatedAt DateTime?       @db.DateTime(3)
+  outOfOrder            Boolean
+  bodyJson              Json
+  fixture               FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([fixtureId, occurrenceHash, outOfOrder, firstObservedAt, id], map: "fixture_in_play_odds_history_lookup_idx")
+  @@index([lastObservedAt, fixtureId], map: "fixture_in_play_odds_history_recent_idx")
 }
 
 model InPlayOddsPollState {

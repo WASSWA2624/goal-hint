@@ -181,3 +181,47 @@ export const marketProviderMappings = Object.freeze({
     binaryMatchTotals: binaryGoalTotalOddsMapping, reviewedCountOrEvent: IMPLIED_MARKET_MAPPING_VERSION }),
   "live": Object.freeze({ endpoint: "/odds/live/bets", version: LIVE_ODDS_MAPPING_VERSION, launchPeriod: "full-time", launch: launchLiveOddsMapping }),
 });
+
+export type OddsCatalogNamespace = "pre-match" | "in-play";
+export type CatalogMarketMapping = Readonly<{ namespace: OddsCatalogNamespace; id: number; name: string;
+  family: RegisteredMarketFamily; period: GoalMarketPeriod; marketKey?: string }>;
+
+const reviewedCatalogMappings: readonly CatalogMarketMapping[] = Object.freeze([
+  ...launchOddsMapping.map(({ family, betId, betName }) => ({ namespace: "pre-match" as const,
+    id: betId, name: betName, family, period: "full-time" as const })),
+  { namespace: "pre-match", id: binaryGoalTotalOddsMapping["half-time"].betId,
+    name: binaryGoalTotalOddsMapping["half-time"].betName, family: "total-goals", period: "half-time" },
+  ...(Object.entries(launchLiveOddsMapping) as [MarketFamily, typeof launchLiveOddsMapping[MarketFamily]][])
+    .map(([family, { id, name }]) => ({ namespace: "in-play" as const, id, name, family, period: "full-time" as const })),
+]);
+
+/** Catalog presence is separate from fixture applicability, supported models and provider-price entitlement. */
+export function reconcileOddsCatalog(namespace: OddsCatalogNamespace, rows: readonly Readonly<{ id: number; name: string | null }>[],
+  additionalMappings: readonly CatalogMarketMapping[] = []) {
+  const known = new Map<number, CatalogMarketMapping[]>();
+  for (const mapping of [...reviewedCatalogMappings, ...additionalMappings]) {
+    if (mapping.namespace !== namespace || !Object.hasOwn(marketRegistry, mapping.family) ||
+      !marketRegistry[mapping.family].periods.includes(mapping.period)) continue;
+    const matches = known.get(mapping.id) ?? [];
+    matches.push(mapping);
+    known.set(mapping.id, matches);
+  }
+  const counts = new Map<number, number>();
+  for (const { id } of rows) counts.set(id, (counts.get(id) ?? 0) + 1);
+  return rows.map(({ id, name }) => {
+    const base = { namespace, id, name, registryVersion: MARKET_REGISTRY_VERSION };
+    if (!Number.isSafeInteger(id) || id < 1 || id > 4_294_967_295) {
+      return { ...base, status: "unmapped" as const, reason: "invalid-provider-id" as const, mappings: [] };
+    }
+    if (counts.get(id) !== 1) return { ...base, status: "unmapped" as const, reason: "duplicate-provider-id" as const, mappings: [] };
+    if (name === null || name.trim() === "") return { ...base, status: "unmapped" as const, reason: "provider-name-unavailable" as const, mappings: [] };
+    const candidates = known.get(id), mappings = candidates?.filter((entry) => entry.name === name) ?? [];
+    if (!mappings.length) return { ...base, status: "unmapped" as const,
+      reason: candidates ? "provider-name-mismatch" as const : "no-reviewed-provider-mapping" as const, mappings };
+    const supported = mappings.some(({ family }) => marketRegistry[family].settlement.basis !== "unsupported");
+    return { ...base, status: supported ? "mapped" as const : "unsupported" as const,
+      reason: supported ? null : "settlement-rule-unavailable" as const, mappings: mappings.map((mapping) => ({ ...mapping,
+        canonicalName: marketRegistry[mapping.family].name, forecastModel: marketRegistry[mapping.family].models.basis,
+        settlement: marketRegistry[mapping.family].settlement.basis })) };
+  });
+}

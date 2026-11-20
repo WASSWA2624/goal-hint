@@ -558,10 +558,10 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
         ...(options.verifyLogo === undefined ? {} : { verifyLogo: options.verifyLogo }),
         ...(options.verifyRegulationScore === undefined ? {} : { verifyRegulationScore: options.verifyRegulationScore }),
         ...(options.verifyHalfTimeScore === undefined ? {} : { verifyHalfTimeScore: options.verifyHalfTimeScore }) };
-      const preMatchCatalog = endpoint === "oddsBets" || endpoint === "oddsBookmakers";
+      const oddsCatalog = endpoint === "oddsBets" || endpoint === "oddsBookmakers" || endpoint === "inPlayOddsBets";
       const catalogIds = new Set<number>();
       for (const row of rows.slice(0, bounds.maxRows)) {
-        if (preMatchCatalog && record(row) && positive(row.id) && row.id <= 4_294_967_295) {
+        if (oddsCatalog && record(row) && positive(row.id) && row.id <= 4_294_967_295) {
           if (catalogIds.has(row.id)) { invalidRows++; continue; }
           catalogIds.add(row.id);
           // Unnamed provider placeholders establish ID coverage only.
@@ -939,7 +939,14 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
       positive(fixtureId) ? [{ fixture: String(fixtureId) }] : null, bounds, normalizeFallbackPrediction, undefined, workflow) }),
     // Kept outside evidence and fallback so bookmaker prices never reach AI or fallback forecasts.
     odds: Object.freeze({
-      prices: (query: OddsSweepQuery, bounds: ApiFootballBounds) => { const params = oddsParams(query); return run("odds", params ? [params] : null, bounds, normalizeOdds); },
+      prices: (query: OddsSweepQuery, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => {
+        const params = oddsParams(query);
+        return run("odds", params ? [params] : null, bounds, normalizeOdds, undefined, workflow);
+      },
+      pricesPage: (query: OddsSweepQuery, page: number, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => {
+        const params = oddsParams(query);
+        return run("odds", params && positive(page) ? [params] : null, bounds, normalizeOdds, undefined, workflow, undefined, page);
+      },
       mappingPage: (page: number, bounds: ApiFootballBounds, workflow: ApiFootballFallbackWorkflow) =>
         run("oddsMapping", positive(page) ? [{}] : null, { ...bounds, cacheMaxAgeMs: 0 }, (raw, context) => {
           const data = normalizeFootballHistoryOddsMapping(raw, context.retrievedAt);

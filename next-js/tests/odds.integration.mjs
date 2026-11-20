@@ -58,6 +58,7 @@ test('odds import persistence on isolated genuine MySQL', { timeout: 300_000 }, 
       for (const [key, id] of Object.entries(ids)) F[key] = await catalog.fixtureByProviderId(id);
       assert.equal(F.P.status, 'postponed');
       const untouched = () => a.query(async (tx) => ({ imports: await tx.footballImport.count(), events: await tx.predictionChangeEvent.count(),
+        forecastJobs: await tx.durableJob.count({ where: { type: 'prediction.daily-refresh' } }), published: await tx.predictionSet.count(),
         versions: (await tx.footballFixture.findMany({ where: { id: { in: Object.values(F).map((fixture) => fixture.id) } },
           select: { id: true, dataVersion: true }, orderBy: { id: 'asc' } })).map((row) => [row.id, String(row.dataVersion)]) }));
       const baseline = await untouched();
@@ -111,7 +112,8 @@ test('odds import persistence on isolated genuine MySQL', { timeout: 300_000 }, 
           WHERE TRIGGER_SCHEMA = DATABASE() AND LOWER(EVENT_OBJECT_TABLE) = 'fixtureoddsstate' ORDER BY TRIGGER_NAME`)).stdout.trim().split(/\r?\n/u);
         assert.deepEqual(triggers, ['PublicCache_FixtureOddsState_insert', 'PublicCache_FixtureOddsState_update']);
         const checks = (await p.instance.executeAdmin(`SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
-          WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_TYPE = 'CHECK' AND LOWER(TABLE_NAME) LIKE '%odds%'
+          WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_TYPE = 'CHECK'
+          AND LOWER(TABLE_NAME) IN ('oddsimportbatch','oddsbetobservation','provideroddssnapshot','fixtureoddsstate','fixtureoddsprice')
           ORDER BY CONSTRAINT_NAME`)).stdout.trim().split(/\r?\n/u);
         assert.deepEqual(checks, ['FixtureOddsPrice_basis_check', 'FixtureOddsPrice_market_check', 'FixtureOddsPrice_value_check',
           'FixtureOddsState_shape_check', 'OddsBetObservation_shape_check', 'OddsImportBatch_shape_check', 'ProviderOddsSnapshot_body_check',
@@ -416,7 +418,7 @@ test('odds import persistence on isolated genuine MySQL', { timeout: 300_000 }, 
         assert.equal(later.outcomes['after-kickoff'], 1); assert.equal(later.outcomes.apply, 1); assert.equal(later.outcomes.changed, 1);
         assert.equal(await state('S'), null, 'a started fixture never receives a price');
         assert.equal((await prices('E')).length, 10);
-        const imported = p.now(), versionE = (await state('E')).publicVersion;
+        const e = await state('E'), imported = e.lastProviderUpdatedAt.getTime(), versionE = e.publicVersion;
         p.setTime(imported + 12 * HOUR - 1);
         assert.equal(await service.expire(policy.freshnessMs, 500), 0);
         p.setTime(imported + 12 * HOUR + 1);
@@ -512,7 +514,41 @@ test('odds import persistence on isolated genuine MySQL', { timeout: 300_000 }, 
         assert.ok((await prices('G')).every(price => price.stale));
       });
 
-      await t.test('odds never touch catalog versions, imports, change events or the network', async () => {
+      await t.test('coordinated price pages roll back together, restart at the exact page, and never touch forecast state', async () => {
+        p.setTime(Date.parse('2026-10-16T12:00:00Z'));
+        const multiPolicy = oddsPolicy({ bookmakerScope: 'all' });
+        const request = oddsRequest('prices', slot(), { date: '2026-10-16', policy: multiPolicy, id: oddsHash('resumable-all-books') });
+        odds.state.rows = [row('G'), ...Array.from({ length: 10 }, (_, index) => row(62_000 + index, { kickoff: kickoffs.G }))];
+        const before = await untouched(), beforeState = await state('G'), calls = odds.network.length;
+        const options = { adapter: odds.adapter.odds, store, authority: oddsAuthority(display, multiPolicy), resumePricePages: true,
+          accountId: () => accountId, bounds: () => oddsBounds(p.now(), { maxRequests: 1 }), clock };
+        const failingStore = { ...store, async saveAndApplyPricePage(batch, applications) {
+          assert.equal(applications.length, 1);
+          const [item] = applications;
+          return store.saveAndApplyPricePage(batch, [{ ...item, row: { ...item.row, source: { ...item.row.source, providerUpdatedAt: null } } }]);
+        } };
+        await assert.rejects(createOddsImportService({ ...options, store: failingStore }).importDate(request), denied('invalid-request'));
+        directCalls++;
+        const policyHash = oddsPolicyHash(multiPolicy);
+        assert.deepEqual(await store.pricePageBatches(request.id, policyHash), [], 'failed snapshot validation must roll back its page receipt');
+        assert.deepEqual(await state('G'), beforeState);
+
+        const first = await createOddsImportService(options).importDate(request);
+        assert.equal(first.status, 'partial');
+        assert.equal(first.continuation, true);
+        const [page] = await store.pricePageBatches(request.id, policyHash);
+        assert.deepEqual(page.checkpoint, { page: 1, totalPages: 2 });
+        assert.equal((await state('G')).latestBatchId, page.id);
+        await assert.rejects(store.markWithdrawn({ batchId: page.id, date: request.date, seenFixtureIds: [] }), denied('invalid-request'));
+        const rest = await createOddsImportService({ ...options, store: otherStore }).importDate(request);
+        assert.equal(rest.status, 'complete');
+        assert.equal(rest.requestsDispatched, 1);
+        assert.deepEqual(odds.network.slice(calls).map((url) => url.searchParams.get('page')), ['1', '1', '2']);
+        assert.equal((await store.batch(rest.batchId)).requestsDispatched, 0, 'terminal receipts do not recount the page transports');
+        assert.deepEqual(await untouched(), before);
+      });
+
+      await t.test('odds never touch catalog versions, fixture imports, forecast jobs, published revisions or the network', async () => {
         assert.deepEqual(await untouched(), baseline);
         assert.deepEqual(stray, []);
         assert.ok(odds.network.every((url) => url.pathname.startsWith('/odds')));

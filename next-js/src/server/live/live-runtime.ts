@@ -76,6 +76,7 @@ import { fallbackRefreshPlan, LIVE_REFRESH_TYPE, liveCascadePlan, liveReferences
 import { oddsFail } from "../odds/odds-contract.ts";
 import { createOddsJobDefinitions, oddsQuotaAllows, ODDS_PROVIDER_WINDOW_MS, ODDS_SWEEP_MS, type OddsQuotaUsage } from "../odds/odds-jobs.ts";
 import { createMysqlOddsStore } from "../odds/odds-mysql-store.ts";
+import { storedPreMatchCatalogCoverage } from "../odds/bookmaker-odds-read.ts";
 import { oddsPolicyHash } from "../odds/odds-input.ts";
 import { createOddsImportService } from "../odds/odds-service.ts";
 import { createInPlayOddsPoller } from "../odds/in-play-odds-service.ts";
@@ -178,7 +179,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     let stableAccountKey: string | null = null;
     const quota = createQuotaRouter({ store: createMysqlQuotaStore(database), readStatus: createAccountStatusReader({ policy, verifyEvidence: verify, ...fetcher,
       ...(providerArchive ? { observeStatus: providerArchive.observeStatus } : {}) }),
-      admit: createLiveQuotaAdmission(() => activeWorkload, () => stableAccountKey, productionHistory) });
+      admit: createLiveQuotaAdmission(() => activeWorkload, () => stableAccountKey, productionHistory || coordinated) });
     const day: QuotaDay = await quota.refresh();
     stableAccountKey = day.status.accountKey;
     const baselineWorkload = liveWorkload(day.status.dailyLimit, day.status.secondLimit, day.status.plan, day.status.minuteLimit,
@@ -193,7 +194,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     let results: ResultSyncPolicy | null = null;
     let liveDetailsPolicy: LiveMatchPolicy | null = null;
     // Odds use the same workload inputs as their authority, so a policy can never verify against a different plan.
-    const odds = oddsPolicy(policy, refs, workload, localFootball);
+    const odds = oddsPolicy(policy, refs, workload, localFootball || coordinated);
     let aiModel: ReturnType<typeof liveAiModel> | null = null;
     if (policy.capabilities.ai) try { aiModel = liveAiModel(policy); } catch { /* An unsupported optional model leaves the baseline active. */ }
     // Owned development follows the current cascade; hosted runs retain the explicit rollback setting.
@@ -475,7 +476,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       predictor: ai?.predictor ?? { async predict() { return { status: "denied", reason: "unconfigured", requestsDispatched: 0, requestCountUnknown: false }; } },
       evidence, fallback, lifecycle, publisher, costs: { ai: ai?.costs ?? null, research: research?.costs ?? null },
       recommendations: { quotes: odds === null ? async () => [] : createRecommendationQuoteLoader(database, {
-        bookmakerId: odds.bookmakerId, freshnessMs: odds.freshnessMs, expectedPolicyHash: evidenceFingerprint(odds),
+        bookmakerId: odds.bookmakerId, fallbackBookmakerIds: policy.choices.odds.fallbackBookmakerIds,
+        freshnessMs: odds.freshnessMs, expectedPolicyHash: evidenceFingerprint(odds),
         verifyInternalUse: () => policy.capabilities.football && verify(refs.retention, "football-private-use") &&
           authorities.odds.verifyPolicy(odds) === true && authorities.odds.verifyRetention({ evidenceRef: refs.retention,
             purpose: "structured-odds-history", rawPayloadsStored: false }) === true }) },
@@ -533,6 +535,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     const oddsEnabled = policy.choices.odds.enabled && workload.odds.eligible && odds !== null;
     const oddsStore = createMysqlOddsStore(database);
     const oddsService = createOddsImportService({ adapter: adapter.odds, store: oddsStore, authority: authorities.odds,
+      resumePricePages: coordinated,
       accountId: () => quota.current()?.accountId ?? oddsFail("unavailable"),
       bounds: (request) => {
         const end = request.kind === "prices" ? request.slot + ODDS_SWEEP_MS : request.slot + DAY_MS;
@@ -580,7 +583,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       return { requests, status: "complete", ...await oddsStore.projectRetainedPrices({ policy: odds,
         policyHash: oddsPolicyHash(odds), catalog, limit: 500, verify: verifyProjection }) };
     }
-    const oddsDefinitions = createOddsJobDefinitions({ service: oddsService, policy: () => odds ?? oddsFail("unverified-policy"),
+    const oddsDefinitions = createOddsJobDefinitions({ service: oddsService, policy: () => odds ?? oddsFail("unverified-policy"), resumePricePages: coordinated,
       enabled: () => oddsEnabled, usage: oddsUsage, allowance: enrichmentAllowance,
       maxRequests: (kind) => oddsMaxRequests(kind, workload.odds.maxPages) });
     const oddsRegistry = createJobRegistry(oddsDefinitions);
@@ -668,9 +671,12 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     });
     // The same worker serializes these gates. Odds and team codes claim before the archive.
     const enrichmentRegistry = createJobRegistry([...oddsDefinitions, ...teamCodeDefinitions, historyJob, ...(currentDayContext ? [currentDayContext] : [])]);
-    const inPlayOdds = localFootball ? createInPlayOddsPoller({
+    const inPlayOdds = localFootball || coordinated ? createInPlayOddsPoller({
       database, adapter: adapter.odds, now: Date.now, enabled: () => oddsEnabled && quota.current() !== null,
       displayAllowed: authorities.odds.verifyPublicDisplay,
+      ...(coordinated ? { competitionIds: policy.choices.competitionIds ?? [],
+        retentionAllowed: () => privateRetention && odds !== null && authorities.odds.verifyPolicy(odds) &&
+        authorities.odds.verifyRetention({ evidenceRef: refs.retention, purpose: "structured-odds-history", rawPayloadsStored: false }) } : {}),
     }) : null;
 
     /** Follow configured stored fixtures even when a fixture received no prediction. */
@@ -739,6 +745,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       coordinated, forecastConcurrency, forecastRecovery, currentDayContextEnabled: currentDayContext !== null,
       odds: Object.freeze({ enabled: oddsEnabled, registry: oddsRegistry, horizonDays: workload.odds.dates, bookmakerScope: odds?.bookmakerScope,
         requalifyLocal: requalifyLocalOdds,
+        catalogCoverage: (asOf: number) => database.query((tx) => storedPreMatchCatalogCoverage(tx, asOf)),
         // Write-time staleness needs no provider call, so it runs even while imports are off.
         expire: (limit: number) => oddsService.expire(odds?.freshnessMs ?? ODDS_FRESHNESS_MS, limit) }),
       teamCodes: Object.freeze({ enabled: teamCodesEnabled, registry: teamCodesRegistry }),

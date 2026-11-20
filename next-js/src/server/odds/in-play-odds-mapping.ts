@@ -7,7 +7,7 @@ import { total15PricesSchema, total15Selections } from "../../domain/extended-ma
 import { bookmakerMarketSchema, bookmakerOddsId, oddsDisplayText } from "../../domain/bookmaker-odds.ts";
 import type { NormalizedInPlayOdds, NormalizedInPlayOddsValue } from "../football/api-football-normalize.ts";
 
-export function reviewedInPlayCatalog(rows: readonly Readonly<{ id: number; name: string }>[]): Record<string, string> {
+export function reviewedInPlayCatalog(rows: readonly Readonly<{ id: number; name: string | null }>[]): Record<string, string> {
   const names = new Map<number, string | null>();
   const safeName = oddsDisplayText(256);
   for (const { id, name } of rows) {

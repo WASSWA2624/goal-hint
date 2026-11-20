@@ -8,7 +8,7 @@ import { createOddsJobDefinitions, latestOddsSlot, ODDS_CATALOG_TYPE, ODDS_IMPOR
   oddsCatalogEnvelope, oddsImportEnvelope, oddsJobOutcome, oddsQuotaAllows, oddsScheduleEnvelopes, oddsSlotDates,
   oddsSlotEnvelopes } from '../src/server/odds/odds-jobs.ts';
 import { canonicalOddsValues, oddsValuesHash } from '../src/server/odds/odds-mysql-store.ts';
-import { classifyOddsRow } from '../src/server/odds/odds-service.ts';
+import { classifyOddsRow, createOddsImportService } from '../src/server/odds/odds-service.ts';
 import { createSyntheticOddsAdapter, launchBetCatalog, oddsAuthority, oddsBounds, oddsHash, oddsPolicy, oddsRequest, oddsResponse, offsetTime,
   rawOddsRow } from './helpers/odds-fixtures.mjs';
 
@@ -104,6 +104,45 @@ test('failed and truncated sweeps are never complete; failed attempts never esta
   assert.equal(partial.status, 'partial'); assert.equal(partial.rows.length, 10); assert.ok(partial.reasons.includes('retrieval-incomplete'));
 });
 
+test('an unrestricted price sweep resumes sealed pages and withdraws only after exact coverage', async () => {
+  const h = harness(), policy = oddsPolicy({ bookmakerScope: 'all', fallbackBookmakerIds: [6, 7] });
+  const request = oddsRequest('prices', NOW, { date: DATE, policy });
+  const pages = new Map(), receipts = new Map(), withdrawals = [];
+  const store = {
+    async pricePageBatches() { return [...pages.values()]; },
+    async resolveFixtures() { return new Map(); },
+    async saveAndApplyPricePage(batch, applications) {
+      assert.equal(applications.length, 0, 'unknown fixtures never become public offers');
+      assert.ok(batch.checkpoint && !pages.has(batch.checkpoint.page));
+      pages.set(batch.checkpoint.page, batch);
+      return { batch, outcomes: [] };
+    },
+    async saveBatch(batch) { receipts.set(batch.id, batch); return batch; },
+    async markWithdrawn(input) { withdrawals.push(input); return 0; },
+  };
+  h.odds.state.rows = Array.from({ length: 23 }, (_, index) => row(200 + index));
+  const service = (maxRequests) => createOddsImportService({ adapter: h.odds.adapter.odds, store,
+    accountId: () => oddsHash('account'), authority: oddsAuthority({ publicDisplay: false }, policy),
+    bounds: () => oddsBounds(NOW, { maxRequests, maxPages: 4 }), clock: h.clock, resumePricePages: true });
+  const partial = await service(1).importDate(request);
+  assert.equal(partial.status, 'partial');
+  assert.equal(partial.continuation, true);
+  assert.equal(oddsJobOutcome(partial).retryable, true);
+  assert.equal(withdrawals.length, 0);
+  assert.equal(pages.size, 1);
+  const complete = await service(2).importDate(request);
+  assert.equal(complete.status, 'complete');
+  assert.equal(complete.outcomes['unknown-fixture'], 23);
+  assert.equal(complete.requestsDispatched, 2);
+  assert.equal(withdrawals.length, 1);
+  const queries = h.odds.network.map((entry) => new URL(entry.url ?? entry));
+  assert.deepEqual(queries.map((query) => query.searchParams.get('page')), ['1', '2', '3']);
+  assert.ok(queries.every((query) => !query.searchParams.has('bookmaker') && !query.searchParams.has('bet')));
+  assert.equal((await service(2).importDate(request)).batchId, complete.batchId, 'successful retry reuses the exact terminal receipt');
+  assert.equal(h.odds.network.length, 3);
+  assert.equal(receipts.size, 2);
+});
+
 test('bet catalogs validate as sorted unique names without prices', async () => {
   const h = harness(), request = oddsRequest('bets', NOW), bounds = oddsBounds(NOW);
   h.odds.state.bets = [...launchBetCatalog()].reverse();
@@ -178,7 +217,8 @@ function oddsJobHarness(options = {}) {
   const answer = async (request) => { calls.push(request); if (state.failure) throw state.failure; return state.summary; };
   const service = { importDate: answer, importCatalog: answer, expire: async () => 0 };
   const [importJob, catalogJob] = createOddsJobDefinitions({ service, policy: () => state.policy, enabled: () => state.enabled,
-    usage: async () => state.usage, allowance: PRO, maxRequests: (kind) => kind === 'prices' ? 154 : 3, now: () => state.at });
+    usage: async () => state.usage, allowance: PRO, maxRequests: (kind) => kind === 'prices' ? 154 : 3,
+    resumePricePages: state.resumePricePages, now: () => state.at });
   const context = { lease: { jobId: oddsHash('job'), attemptId: oddsHash('attempt') }, signal: new AbortController().signal,
     checkpoint: async () => {}, recordUsage: async (usage) => { usages.push(usage); } };
   return { calls, usages, state, importJob, catalogJob, context };
@@ -284,6 +324,19 @@ test('the catalog job imports bets then bookmakers, gates each and records each 
   assert.equal(h.calls.length, 3, 'a failed bet catalog stops before the bookmaker catalog');
   h.state.at = Date.parse('2026-10-12T00:00:00Z');
   assert.deepEqual(await h.catalogJob.handle(payload, h.context), EXPIRED);
+});
+
+test('coordinated price jobs can resume with one request left in their spare allowance', async () => {
+  const h = oddsJobHarness({ resumePricePages: true, usage: day(1_500, 860),
+    summary: oddsSummary({ status: 'partial', continuation: true, requestsDispatched: 1,
+      error: { reason: 'request-budget-exhausted', retryable: true } }) });
+  const payload = { slot: NOW, date: DATE };
+  assert.deepEqual(await h.importJob.handle(payload, h.context), { status: 'failed', reason: 'handler-failed', retryable: true });
+  assert.equal(h.calls.length, 1);
+  assert.deepEqual(h.usages.map(({ phase, requests }) => [phase, requests]), [['completed', 1]]);
+  h.state.usage = day(1_501, 861);
+  assert.deepEqual(await h.importJob.handle(payload, h.context), EXPIRED);
+  assert.equal(h.calls.length, 1, 'a resumed sweep still needs admission for its next request');
 });
 
 test('receipt outcomes: transient failures retry in the slot, exhausted quota expires, refusals fail, data faults keep the receipt', async () => {
