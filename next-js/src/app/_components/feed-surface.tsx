@@ -54,7 +54,10 @@ const MatchResults = styled.div`
   min-inline-size: 0;
   ${media.phone} {
     margin-inline: calc(-1 * var(--public-frame-band, 0px));
-    &:has(> [data-match-section]) { row-gap: var(--gh-spacing-1); }
+    &:has(> [data-match-section]) {
+      row-gap: var(--gh-spacing-1);
+      background: ${({ theme }) => theme.header.gradient};
+    }
   }
   ${media.tablet} { > [data-results-header]:has(+ [data-match-section]) { border-block-end: 0; } }
 `;

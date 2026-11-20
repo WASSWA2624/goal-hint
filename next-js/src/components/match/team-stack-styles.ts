@@ -206,13 +206,12 @@ export const phoneFeedRowStyles = css`
     --gh-logo-font: var(--gh-size-2);
     padding-inline: var(--gh-spacing-1);
     border-inline: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};
-    &:has([data-score], [data-phone-feed-score-fallback]) {
-      grid-template-columns: minmax(0, 1fr) minmax(var(--gh-size-3), max-content);
-      column-gap: var(--gh-spacing-1);
-    }
     [data-team-logo] { overflow: hidden; white-space: nowrap; }
-    [data-phone-feed-score-fallback] { display: contents; }
     [data-match-state] [data-ledger-versus] { display: none; }
+  }
+  &:not([data-mobile-locked]) [data-ledger-teams] {
+    grid-template-columns: minmax(0, 1fr) minmax(var(--gh-size-3), max-content);
+    column-gap: var(--gh-spacing-1);
   }
   [data-ledger-facts] [data-match-metrics] { grid-template-columns: max-content minmax(min-content, 1fr); }
 

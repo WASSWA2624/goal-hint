@@ -95,7 +95,7 @@ const Card = styled.article`
     outline-offset: calc(-1 * ${({ theme }) => theme.border.focusWidth});
   }
   @media (prefers-reduced-motion: reduce) { transition: none; }
-  [data-mobile-only], [data-phone-kickoff], [data-phone-feed-score-fallback] { display: none; }
+  [data-mobile-only], [data-phone-kickoff] { display: none; }
   /* The selected phone layout is also used by the slip's original selections. */
   ${tile} {
     ${teamStackStyles}
@@ -687,9 +687,6 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       <CardTeam team={fixture.awayTeam} side="away" name={away} eager={eagerLogos} result={lead < 0 ? "win" : lead > 0 ? "loss" : null}
         standing={liveLead < 0 ? "ahead" : liveLead > 0 ? "behind" : null} />
       {showProgress && <MatchState fixture={fixture} home={home} away={away} lead={lead} clock={clock} messages={messages} snapshot={snapshotPick !== undefined} />}
-      {phoneFeed && !gated && !showScore && <Score data-phone-feed-score-fallback aria-hidden="true">
-        <ScoreFigures home="–" away="–" />
-      </Score>}
     </Teams>
     <Pick $family={shownFamily} data-ledger-facts data-pick-state={pickState} data-result={result}>
       <MarketName $family={shownFamily} data-ledger-field="market" aria-hidden={gated ? undefined : true} title={family}>
