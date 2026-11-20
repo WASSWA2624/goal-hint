@@ -61,6 +61,18 @@ const List = styled.ul`
     > li { container-type: inline-size; content-visibility: auto; contain-intrinsic-block-size: auto var(--gh-size-28); }
     > li:has(> article) { box-shadow: ${({ theme }) => theme.phoneCardFrame.shadow}; }
   }
+  ${media.phone} {
+    [data-feed-match-results] & {
+      row-gap: var(--gh-spacing-1);
+      border: 0;
+      > li ~ li { border-block-start: 0; }
+      > li:has(> article) {
+        border: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};
+        border-radius: ${({ theme }) => theme.phoneCardFrame.radius};
+        > article { border-radius: inherit; }
+      }
+    }
+  }
 
   ${media.desktop} {
     grid-template-columns: minmax(0, 1fr);

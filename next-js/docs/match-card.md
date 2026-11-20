@@ -12,7 +12,7 @@ Import directly from the owning module under `@/components/match`:
 
 | Module | Public contract |
 | --- | --- |
-| `match-card` | `MatchCard`, `MatchCardProps`: validated `fixture`, canonical `analysisSlug`, optional eligible `markets`/`selectedFamily`, locale, heading level 2–4, lazy/eager logos, one-based `position`, access state and original `snapshotPick`. It owns the existing authorized pick/gating projection and chooses the list's responsive presentation. |
+| `match-card` | `MatchCard`, `MatchCardProps`: validated `fixture`, canonical `analysisSlug`, optional eligible `markets`/`selectedFamily`, locale, heading level 2–4, lazy/eager logos, one-based `position`, access state and original `snapshotPick`. The `phoneFeed` option selects the Matches layout on phones. The card owns the authorized pick/gating projection and chooses the list's responsive presentation. |
 | `match-card-list` | `MatchCardList`: native list with caller-supplied `li` children, optional locale and row-number maximum. It owns one `useDesktopLayout` subscription and provides the result through `MatchCardLayoutContext` to every card. |
 | `match-card-layout` | The shared layout context defaults to the original card presentation during server rendering and hydration. A standalone `MatchCard` also keeps that fallback. No per-card media subscription is needed. |
 | `desktop-match-row` | `DesktopMatchRow`: the shared desktop renderer for feed fixtures and slip selections. Inputs are supplied teams/competition, kickoff, score, match status/clock and already-authorized market, odds, probability and outcome. It selects no forecast and fabricates no missing facts. |
@@ -120,7 +120,17 @@ status; missing kickoff or score never receives an invented time or value.
 
 ### Phone and tablet: Team stack (below 64rem)
 
-The compact cards remain consistent with slip selections:
+On the Matches feed below 48rem the league and text-only status share the top
+row. Kickoff date and time are stacked beside the teams and aligned with the
+leading league icon or flag. The date shows the year in smaller type and the
+12-hour time uses two-digit hours. Available scores align with their teams, and
+the score column stays blank until scores are available. Odds, probability,
+market and prediction use a compact right-hand column. The results header and
+lightly rounded cards span the shell's outer content rails. The gaps between
+cards use the same background as the app header. Access controls keep the locked
+layout.
+
+Tablet feed cards and slip selections share the following geometry:
 
 1. A faintly tinted, 18px-wide match-number slot matches the team logos; the
    kickoff date aligns with team names. Number, date, AM/PM clock and league stay on
@@ -147,8 +157,8 @@ The compact cards remain consistent with slip selections:
    override stale minutes. Missing observations never invent time. The steady
    live dot and terminal outcome rules remain shared with desktop.
 
-The single-column native list retains 6px card spacing, square themed frames,
-no card shadow and offscreen `content-visibility` optimization. Cards reflow at
+The single-column native feed list uses offscreen `content-visibility`
+optimization. Tablet rows retain thin separators. Cards reflow at
 narrow effective widths or enlarged text without clipping. The phone/tablet
 analysis link remains a full-card target with the contextual accessible team
 names and native keyboard and new-tab behavior.

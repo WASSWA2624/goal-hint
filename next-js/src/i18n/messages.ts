@@ -180,17 +180,20 @@ function buildMessages(language: string, translations: Partial<MessageCatalog>, 
     reportingTime(value: UtcInstant): string {
       return times.format(displayInstant(value));
     },
-    /** Day first with a short month and optional year, in the kickoff clock's display zone. */
-    shortKickoffDate(value: UtcInstant, includeYear = false): string {
-      const parts = (includeYear ? instants : instantDays).formatToParts(displayInstant(value));
+    /** Day first with an optional year, in the kickoff clock's display zone. */
+    shortKickoffDate(value: UtcInstant, includeYear = false, format: "short" | "numeric" = "short"): string {
+      const date = format === "numeric" ? numericDates : includeYear ? instants : instantDays;
+      const parts = date.formatToParts(displayInstant(value));
       const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)!.value;
       return `${part("day")}-${part("month")}${includeYear ? `-${part("year")}` : ""}`;
     },
     /** Compact 12-hour kickoff, with an explicit uppercase AM/PM frame. */
-    shortKickoffTime(value: UtcInstant): string {
+    shortKickoffTime(value: UtcInstant, hourFormat: "numeric" | "2-digit" = "numeric"): string {
       const parts = shortTimes.formatToParts(displayInstant(value));
       const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)!.value;
-      return `${part("hour")}:${part("minute")} ${part("dayPeriod").toUpperCase()}`;
+      const hour = part("hour");
+      const displayedHour = hourFormat === "2-digit" ? hour.padStart(2, numbers.format(0)) : hour;
+      return `${displayedHour}:${part("minute")} ${part("dayPeriod").toUpperCase()}`;
     },
     /** The zone label at this instant, including its daylight-saving offset. */
     timeZone(value: UtcInstant): string {

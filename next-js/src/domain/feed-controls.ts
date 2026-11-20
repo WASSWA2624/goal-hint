@@ -54,7 +54,9 @@ export function selectFeedDateScope(query: FeedQuery, today: ReportingDate): Fee
 }
 
 export function selectFeedDates(query: FeedQuery, dates: DateSelection, today: ReportingDate): FeedQuery {
-  return synchronizeFeedStatusDates(selectFeedDateScope({ ...query, summary: undefined, interval: undefined, dates, page: 1 }, today), today);
+  const chosenStart = dates.kind === "date" ? dates.date : dates.kind === "range" ? dates.from : null;
+  const status = query.status === "finished" && chosenStart && chosenStart > today ? "all" : query.status;
+  return synchronizeFeedStatusDates(selectFeedDateScope({ ...query, status, summary: undefined, interval: undefined, dates, page: 1 }, today), today);
 }
 
 /** Draft text stays editable; normalization happens once, at submission. */
