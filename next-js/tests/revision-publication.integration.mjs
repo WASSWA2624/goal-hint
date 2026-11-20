@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import test from 'node:test';
 import { getReportingDate } from '../src/domain/calendar.ts';
+import { liveGoalMarketDefinitions } from '../src/domain/goal-market-definitions.ts';
 import { parseRuntimePolicy } from '../src/server/config/runtime-policy.ts';
 import { createDatabase } from '../src/server/database/client.ts';
 import { buildEvidenceSnapshot } from '../src/server/evidence/evidence-snapshot.ts';
@@ -16,6 +17,7 @@ import { createMysqlModelVersionStore } from '../src/server/predictor/predictor-
 import { createModelPin } from '../src/server/predictor/predictor-input.ts';
 import { createMysqlPredictionHistoryStore } from '../src/server/predictions/history-mysql-store.ts';
 import { storedCycle } from '../src/server/predictions/history-read.ts';
+import { readGoalMarketExtension } from '../src/server/predictions/goal-market-store.ts';
 import { createRevisionPublicationService } from '../src/server/predictions/publication-service.ts';
 import { RevisionPublicationError } from '../src/server/predictions/publication-contract.ts';
 import { unavailableForecastMarkets } from '../src/server/predictions/forecast-decision.ts';
@@ -42,9 +44,10 @@ const catalogTables = ['FootballCatalogLock','FootballTeam','FootballTeamProvide
   'FootballCompetitionProvider','FootballCompetitionAlias','FootballSeason','FootballFixture','FootballIdentityReview', ...catalogAppendOnly];
 const appendOnly = ['EvidenceSourceVersion','FixtureEvidenceSnapshot','FixtureEvidenceSnapshotSource','ModelVersion',
   'PredictionSet','MarketPrediction','PredictionSchedule','PredictionAudit','DailyRunManifest',
-  'PredictionRefreshResult','PredictionRefreshStage','PredictionRefreshOutcome','PredictionPublicationBarrier','PredictionChangeEvent','PredictionQuote'];
+  'PredictionRefreshResult','PredictionRefreshStage','PredictionRefreshOutcome','PredictionPublicationBarrier','PredictionChangeEvent','PredictionQuote',
+  'GoalMarketExtension','ExtendedMarketPublishedPick'];
 
-test('atomic revision publication on isolated genuine MySQL', { timeout: 300_000 }, async (t) => {
+test('atomic revision publication on isolated genuine MySQL', { timeout: 600_000 }, async (t) => {
   let instance;
   try { instance = await startIsolatedMysql(); }
   catch (error) { if (!(error instanceof MysqlServerUnavailableError)) throw error; t.skip(`${error.message} Publication acceptance remains pending.`); return; }
@@ -66,12 +69,13 @@ test('atomic revision publication on isolated genuine MySQL', { timeout: 300_000
     await instance.executeAdmin(`CREATE USER 'publication_migration'@'127.0.0.1' IDENTIFIED BY '${migrationPassword}';
       CREATE USER 'publication_app'@'127.0.0.1' IDENTIFIED BY '${applicationPassword}';
       GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, TRIGGER ON goal_hint_test.* TO 'publication_migration'@'127.0.0.1';`);
-    try { await execute(process.execPath, ['--conditions=react-server', script, 'deploy'], { cwd: workspace, env, windowsHide: true, timeout: 90_000 }); }
+    try { await execute(process.execPath, ['--conditions=react-server', script, 'deploy'], { cwd: workspace, env, windowsHide: true, timeout: 240_000 }); }
     catch (error) { t.diagnostic((await instance.executeAdmin('SELECT migration_name, LEFT(logs, 1800) FROM _prisma_migrations WHERE finished_at IS NULL')).stdout); throw error; }
     await instance.executeAdmin(catalogTables.map((name) => `GRANT ${catalogAppendOnly.includes(name) ? 'SELECT, INSERT' : 'SELECT, INSERT, UPDATE'} ON goal_hint_test.${name} TO 'publication_app'@'127.0.0.1';`).join('\n') +
       appendOnly.map((name) => `GRANT SELECT, INSERT ON goal_hint_test.${name} TO 'publication_app'@'127.0.0.1';`).join('\n') + `
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.PredictionCycle TO 'publication_app'@'127.0.0.1';
       GRANT SELECT ON goal_hint_test.FixtureLifecycleState TO 'publication_app'@'127.0.0.1';
+      GRANT SELECT ON goal_hint_test.ImpliedMarketExtension TO 'publication_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.DailyRun TO 'publication_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE (finishedAt, failure) ON goal_hint_test.DailyRunImport TO 'publication_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE (jobId, jobState, terminalReason) ON goal_hint_test.RunFixture TO 'publication_app'@'127.0.0.1';
@@ -215,6 +219,46 @@ test('atomic revision publication on isolated genuine MySQL', { timeout: 300_000
         assert.deepEqual(await second.resultForAttempt(result.refresh.id), result);
         assert.deepEqual(await second.publish(input, target.lease), result);
         assert.deepEqual(await counts(target.fixture.id), { sets: available ? 1 : 0, results: 1, events: 1 });
+      }
+    });
+    await t.test('local forecasts publish a sealed goal extension without a primary score distribution', async () => {
+      const target = await setup(), { lease } = target;
+      const rates = { home: 1.6, away: 1.0, firstHalfShare: 0.45 };
+      const base = target.input.candidate, observedAt = target.snapshot.context.analysisAt + 1000;
+      const provenance = { kind: 'local-engine', modelVersion: 'synthetic-local-score-model', historyHash: evidenceHash('synthetic-local-history'),
+        evidenceHash: target.snapshot.hash, rates, sample: { matches: 200, homeEffectiveMatches: 20, awayEffectiveMatches: 24 } };
+      const candidate = { ...base, context: { ...base.context, pin: null },
+        markets: Object.fromEntries(Object.entries(base.markets).map(([family, item]) => [family, item.available ? {
+          ...item, market: { ...item.market, source: 'local-engine' }, provenance, fallback: null,
+          timestamps: { generatedAt: observedAt, retrievedAt: observedAt, providerUpdatedAt: null }, flags: ['unknown-provider-update-time'],
+        } : item])),
+        audit: { aiStatus: 'denied', aiReason: 'unconfigured', providerStatus: 'not-requested', providerReason: null,
+          sourceCascade: LIVE_FORECAST_CASCADE, localStatus: 'candidate' } };
+      const refresh = createMysqlRefreshStore(a, queue);
+      assert.equal(await refresh.start(lease, 'fallback'), true);
+      await refresh.complete(lease, 'fallback', { status: 'candidate', candidate });
+      const basePolicy = publicationPolicy();
+      const service = publisher(a, { authority: publicationAuthority({ verifyGoalExtension: () => true }),
+        policy: publicationPolicy({ sources: { ...basePolicy.sources, 'local-engine': basePolicy.sources.ai } }) });
+      const input = { ...target.input, candidate, generationCompletedAt: at,
+        goalExtension: { localPoisson: rates, definitions: liveGoalMarketDefinitions } };
+      const result = await service.publish(input, lease);
+      assert.equal(result.refresh.outcome, 'published');
+      const revisionId = result.revision.id;
+      const extension = await b.query((tx) => readGoalMarketExtension(tx, revisionId));
+      assert.deepEqual(extension.localPoisson, rates);
+      assert.equal(Object.hasOwn(extension, 'scoreDistribution'), false);
+      assert.ok(await b.query((tx) => tx.extendedMarketPublishedPick.count({ where: { revisionId, source: 'local-poisson' } })) > 0);
+      assert.deepEqual(await service.publish(input, lease), result);
+      // An otherwise sealed body must still contain a model object and cannot disguise a malformed optional model.
+      for (const patch of [
+        "JSON_REMOVE(body, '$.localPoisson')",
+        "JSON_SET(body, '$.localPoisson', 0)",
+        "JSON_SET(body, '$.scoreDistribution', 0)",
+      ]) {
+        await assert.rejects(instance.executeAdmin(`UPDATE GoalMarketExtension
+          SET integrity = SHA2(CAST(${patch} AS CHAR), 256), body = ${patch} WHERE revisionId = '${revisionId}'`),
+        (error) => String(error.stderr).includes('GoalMarketExtension_shape_v2'));
       }
     });
     await t.test('forecast recovery skips exhausted jobs and repairs sealed abstention without a new attempt', async () => {
