@@ -19,6 +19,7 @@ const today = parseReportingDate('2026-10-09');
 const approved = { deployment: 'production', index: true };
 const populated = { data: { records: [{}], state: 'ready' }, error: null };
 const query = values => parseFeedQuery(values, { today });
+const browsingQuery = values => query({ sort: 'live-first', ...values });
 
 test('search and social attribution redirects to a clean landing URL without changing application state', () => {
   const proxy = createDiscoveryProxy(() => approved);
@@ -97,21 +98,21 @@ test('canonical origin is fixed and genuine pagination retains its dated page id
   assert.equal(feedDiscovery(query({ page: '2' }), today).path, '/en/matches?page=2&picks=all&when=last-30-days&sort=kickoff');
   assert.equal(feedDiscovery(query({ when: 'today', sort: 'live-first' }), today).path, '/en/matches');
   assert.equal(feedDiscovery(query({ when: 'today', sort: 'kickoff' }), today).eligible, false);
-  assert.equal(feedDiscovery(query({ when: 'tomorrow', page: '3' }), today).path, '/en/predictions/2026-10-10?page=3');
-  assert.equal(feedDiscovery(query({ date: '2026-10-08' }), today).path, '/en/predictions/2026-10-08');
+  assert.equal(feedDiscovery(browsingQuery({ when: 'tomorrow', page: '3' }), today).path, '/en/predictions/2026-10-10?page=3');
+  assert.equal(feedDiscovery(browsingQuery({ date: '2026-10-08' }), today).path, '/en/predictions/2026-10-08');
   for (const values of [{ q: '<script>' }, { league: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }, { status: 'live' },
     { market: 'total-goals' }, { market: 'match-result', sort: 'probability' }, { dir: 'asc' }, { pageSize: '10' }, { when: 'next-7-days' }]) {
     assert.equal(feedDiscovery(query(values), today).eligible, false);
     assert.equal(feedMetadata(query(values), today, populated, approved).robots.index, false);
   }
   assert.equal(feedDiscovery(query({ dir: 'desc' }), today).path, '/en/matches?picks=all&when=last-30-days&sort=kickoff');
-  assert.equal(feedDiscovery(query({ dir: 'desc' }), today).eligible, true);
+  assert.equal(feedDiscovery(query({ dir: 'desc' }), today).eligible, false);
 });
 
 test('rolling default pagination has distinct indexable canonical destinations', () => {
   const paths = new Set();
   for (const page of [1, 2, 3]) {
-    const source = feedMetadata(query({ page: String(page) }), today, populated, approved);
+    const source = feedMetadata(browsingQuery({ page: String(page) }), today, populated, approved);
     const destination = new URL(source.alternates.canonical);
     const targetQuery = parseFeedQuery(destination.searchParams, { today });
     const target = feedMetadata(targetQuery, today, populated, approved);
@@ -120,31 +121,31 @@ test('rolling default pagination has distinct indexable canonical destinations',
     assert.equal(source.robots.index, true);
     assert.equal(target.robots.index, true, 'An indexable page must not canonicalize to a noindex range variant.');
     assert.equal(target.alternates.canonical, source.alternates.canonical);
-    assert.equal(feedPageHref(query({}), today, page), destination.pathname + destination.search,
+    assert.equal(feedPageHref(browsingQuery({}), today, page), destination.pathname + destination.search,
       'Ordinary pagination links discover the same indexable canonical URL.');
     paths.add(source.alternates.canonical);
   }
   assert.equal(paths.size, 3, 'Pagination never canonicalizes to page one.');
   assert.equal(feedDiscovery(query({ from: '2026-09-10', to: today, page: '2' }), today).eligible, false,
     'Explicit multiday archives retain their noindex policy.');
-  const dated = feedMetadata(query({ date: today, page: '2' }), today, populated, approved);
+  const dated = feedMetadata(browsingQuery({ date: today, page: '2' }), today, populated, approved);
   assert.equal(dated.alternates.canonical, 'https://goalhint.com/en/predictions/2026-10-09?page=2');
   assert.equal(dated.robots.index, true);
 });
 
 test('page metadata has independent social fields, real canonical pagination and honest unavailable indexing', async () => {
-  const home = feedMetadata(query({}), today, populated, approved);
+  const home = feedMetadata(browsingQuery({}), today, populated, approved);
   assert.equal(home.title, 'Goal Hint | Daily Football Predictions');
   assert.equal(home.robots.index, true);
-  const page = feedMetadata(query({ page: '2' }), today, populated, approved);
+  const page = feedMetadata(browsingQuery({ page: '2' }), today, populated, approved);
   assert.equal(page.title, 'Daily Football Predictions · Page 2 | Goal Hint');
   assert.equal(page.description, home.description, 'A rolling collection is not described as only its first day.');
-  assert.equal(page.alternates.canonical, 'https://goalhint.com/en/matches?page=2&picks=all&when=last-30-days&sort=kickoff');
+  assert.equal(page.alternates.canonical, 'https://goalhint.com/en/matches?sort=live-first&page=2&picks=all&when=last-30-days');
   assert.equal(page.openGraph.url, page.alternates.canonical);
   assert.equal(page.openGraph.title, page.title); assert.equal(page.twitter.title, page.title);
   assert.equal(page.openGraph.images[0].url, 'https://goalhint.com/brand/goal-hint-open-graph.png');
   for (const result of [{ data: null, error: 'unavailable' }, { data: { records: [], state: 'page-out-of-range' }, error: null }]) {
-    assert.equal(feedMetadata(query({ page: '2' }), today, result, approved).robots.index, false);
+    assert.equal(feedMetadata(browsingQuery({ page: '2' }), today, result, approved).robots.index, false);
   }
   const fixture = { data: { fixture: { homeTeam: { name: 'Home' }, awayTeam: { name: 'Away' }, forecast: null },
     route: { path: '/en/matches/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/home-vs-away' }, snapshot: null }, error: null };

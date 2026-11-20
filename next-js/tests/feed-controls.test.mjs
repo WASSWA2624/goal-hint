@@ -54,7 +54,7 @@ test('Apply drops full-day time bounds while retaining the browsing zone and exp
   assert.equal(applied.time, undefined); assert.equal(applied.zone, query.zone);
   assert.deepEqual(applied.dates, query.dates); assert.equal(applied.page, 1);
   assert.equal(panelFilterCount(applied), 0);
-  assert.equal(feedQueryHref(applied, today), '/en/predictions/2026-10-07?tz=America%2FNew_York&picks=all');
+  assert.equal(feedQueryHref(applied, today), '/en/predictions/2026-10-07?tz=America%2FNew_York&picks=all&sort=kickoff');
 });
 
 test('each dialog reset changes only its own filters and preserves the original draft', () => {

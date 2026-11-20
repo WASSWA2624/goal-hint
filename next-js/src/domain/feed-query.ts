@@ -82,7 +82,6 @@ export const anyProbability: ProbabilityRange = Object.freeze({ min: 0, max: 100
 export const defaultMatchProbability: ProbabilityRange = Object.freeze({ min: 75, max: 100, minExclusive: true });
 const defaultProbabilityParameter = "above-75";
 export const defaultSortDirection: Readonly<Record<FeedSortField, FeedSortDirection>> = Object.freeze({ "live-first": "desc", kickoff: "desc", probability: "desc" });
-const kickoffSort = Object.freeze({ by: "kickoff", direction: "desc" } as const);
 /** Matches screen and Reset defaults; the public API keeps its existing date and sort defaults. */
 export const matchFeedPageDefaults = Object.freeze({
   dates: Object.freeze({ kind: "today" }),
@@ -91,9 +90,6 @@ export const matchFeedPageDefaults = Object.freeze({
   picks: "all",
   probability: anyProbability,
 } as const satisfies Pick<FeedQuery, "dates" | "sort" | "pageSize" | "picks" | "probability">);
-export function defaultPageSort(dates: DateSelection): FeedSort {
-  return dates.kind === "today" ? matchFeedPageDefaults.sort : kickoffSort;
-}
 export const feedDefaults = Object.freeze({
   today: Object.freeze({ dayOffset: 0, status: "all" }),
   results: Object.freeze({ dayOffset: -1, status: "finished" }),
@@ -318,7 +314,7 @@ export function applyFeedPageDefaults(query: FeedQuery, input: FeedParameters,
   return { ...scope,
     pageSize: matchFeedPageDefaults.pageSize,
     dates,
-    sort: dated || has("sort") || has("dir") ? query.sort : defaultPageSort(dates),
+    sort: has("sort") || has("dir") ? query.sort : matchFeedPageDefaults.sort,
     picks: has("picks") ? query.picks : matchFeedPageDefaults.picks,
   };
 }
@@ -395,6 +391,7 @@ export function feedQueryHref(query: FeedQuery, today: ReportingDate): string {
   const parameters = serializeFeedQuery(query, today);
   // Keep the unrestricted recommendation choice explicit in existing page links.
   if (query.picks === "all") parameters.set("picks", "all");
+  // The API uses kickoff by default, but the Matches filters use Live first.
   const dates = query.dates;
   let path = `/${resolveLocale(query.locale)}`;
   if (!query.interval && (dates.kind === "date" || dates.kind === "range")) {
@@ -402,10 +399,10 @@ export function feedQueryHref(query: FeedQuery, today: ReportingDate): string {
     parameters.delete("date"); parameters.delete("from");
   } else {
     path += "/matches";
-    // These API defaults are explicit choices on Matches, whose entry defaults differ.
+    // Keep the API's rolling date choice explicit on Matches.
     if (dates.kind === defaultFeedDatePreset) parameters.set("when", dates.kind);
-    if (query.sort.by === "kickoff") parameters.set("sort", "kickoff");
   }
+  if (query.sort.by === "kickoff") parameters.set("sort", "kickoff");
   const search = parameters.toString();
   return search ? `${path}?${search}` : path;
 }
