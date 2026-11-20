@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { predictionRunOrder } from "../../domain/prediction-run-order.ts";
-import { addReportingDays, createPredictionWindow, getPublicationDeadline, isInWindow, parseReportingDate, predictionWindowDays,
+import { addReportingDays, createPredictionWindow, getPublicationDeadline, getReportingDate, isInWindow, parseReportingDate, predictionWindowDays,
   utcInstantFromEpochMilliseconds, type PredictionWindowDays } from "../../domain/calendar.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
@@ -99,6 +99,19 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
     }
     return result;
   }
+  async function selectionCandidateIds(tx: Transaction, dates: readonly SelectionCoverage[], confirmed: readonly string[],
+    window: ReturnType<typeof selectionRunWindow>, policy: SelectionPolicy, at: number, recover: boolean) {
+    const incompleteDates = new Set(recover ? dates.filter(({ status }) => status !== "complete").map(({ date }) => date) : []);
+    const retained = incompleteDates.size === 0 ? [] : await tx.footballFixture.findMany({
+      where: { provider: "api-football", eatDate: { in: [...incompleteDates].map((date) => new Date(`${date}T00:00:00Z`)) }, status: "scheduled",
+        kickoff: { gte: new Date(window.startInclusive), gt: new Date(at), lt: new Date(window.endExclusive) },
+        season: { competition: { providers: { some: { provider: "api-football", externalId: { in: policy.competitionIds.map(BigInt) } } } } } },
+      select: { id: true }, orderBy: [{ kickoff: "asc" }, { id: "asc" }], take: policy.maxFixtures + 1,
+    });
+    const verified = new Set([...dates.flatMap(({ fixtureIds }) => fixtureIds), ...confirmed]);
+    const retainedOnly = new Set(retained.map(({ id }) => id).filter((id) => !verified.has(id)));
+    return { ids: [...verified, ...retainedOnly].sort(), retainedOnly, incompleteDates };
+  }
   async function inspect(runId: string) {
     return transact(async (tx) => {
       const row = await tx.dailyRun.findUnique({ where: { id: runId } });
@@ -149,6 +162,19 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
       return transact(async (tx) => {
         const { row } = await assertOwned(tx, lease);
         await tx.dailyRun.update({ where: { id: row.id }, data: { ownerId: null, leaseExpiresAt: null } });
+      });
+    },
+    async hasIncompleteHourlyImport(lease: SelectionLease): Promise<boolean> {
+      return transact(async (tx) => {
+        const { row } = await assertOwned(tx, lease);
+        if (row.slotHour === 0 || row.committedAt !== null) return false;
+        const found = await tx.$queryRaw<{ attempted: number }[]>`SELECT 1 AS attempted FROM DailyRunImport attempt
+          LEFT JOIN FootballImport receipt ON receipt.id = attempt.id AND receipt.status = 'complete'
+          WHERE attempt.runId = ${row.id} AND receipt.id IS NULL
+            AND NOT EXISTS (SELECT 1 FROM DailyRunImport later
+              WHERE later.runId = attempt.runId AND later.eatDate = attempt.eatDate AND later.attempt > attempt.attempt)
+          LIMIT 1`;
+        return found.length !== 0;
       });
     },
     async beginImport(lease: SelectionLease, date: string, policy: SelectionPolicy): Promise<SelectionImport | null> {
@@ -213,7 +239,8 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
         await tx.selectionCycleEligibility.create({ data: { ...value, kickoffAt: new Date(value.kickoffAt), recordedAt: new Date(await serverNow(tx)) } });
       });
     },
-    async commit(lease: SelectionLease, policy: SelectionPolicy, degradedAction: DegradedSelectionAction | null, confirmed: readonly string[] = []): Promise<SelectionManifest> {
+    async commit(lease: SelectionLease, policy: SelectionPolicy, degradedAction: DegradedSelectionAction | null,
+      confirmed: readonly string[] = [], recover = false): Promise<SelectionManifest> {
       const lifecycle = policy.forecastLifecycle;
       const leadMs = lifecycle ? FORECAST_JOB_COALESCE_MS : policy.refreshLeadMs ?? 0;
       const requiredMissing = (dates: readonly SelectionCoverage[], hourly: boolean) =>
@@ -227,9 +254,12 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
           const window = selectionRunWindow(run);
           const dates = await coverage(tx, run.id, window.runDate, policy.windowDays ?? 7, run.slotHour > 0);
           if (degradedAction === null && requiredMissing(dates, run.slotHour > 0)) return null;
-          const ids = [...new Set([...dates.flatMap((date) => date.fixtureIds), ...confirmed])];
+          const { ids, retainedOnly } = await selectionCandidateIds(tx, dates, confirmed, window, policy, at,
+            recover && run.slotHour > 0 && degradedAction !== null);
           if (ids.length > policy.maxFixtures) return null;
-          const candidates = await tx.footballFixture.findMany({ where: { id: { in: ids }, status: "scheduled",
+          // The refresh job checks evidence independently. Recovery should not rebuild
+          // fingerprints for every retained fixture before the bounded queue can commit.
+          const candidates = await tx.footballFixture.findMany({ where: { id: { in: ids.filter((id) => !retainedOnly.has(id)) }, status: "scheduled",
             kickoff: { gt: new Date(at + leadMs) },
             season: { competition: { providers: { some: { provider: "api-football", externalId: { in: policy.competitionIds.map(BigInt) } } } } } },
           select: { id: true, kickoff: true, homeTeamId: true, awayTeamId: true, season: { select: { competitionId: true } } } });
@@ -252,14 +282,15 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
         }
       }
       return transact(async (tx) => {
-        const { row } = await assertOwned(tx, lease), known = await storedSelectionManifest(tx, row);
+        const { row, now } = await assertOwned(tx, lease), known = await storedSelectionManifest(tx, row);
         if (known) return known;
         if (row.selectionHash !== evidenceFingerprint(policy)) return selectionFail("conflicting-request");
         const runDate = row.eatDate.toISOString().slice(0, 10), window = selectionRunWindow(row);
         const hourly = row.slotHour > 0;
         const dates = await coverage(tx, row.id, runDate, policy.windowDays ?? 7, hourly), partial = dates.some((date) => date.status !== "complete");
         if (degradedAction === null && requiredMissing(dates, hourly)) return selectionFail("incomplete-import");
-        const ids = [...new Set([...dates.flatMap((date) => date.fixtureIds), ...confirmed])].sort();
+        const { ids, retainedOnly, incompleteDates } = await selectionCandidateIds(tx, dates, confirmed, window, policy, now,
+          recover && hourly && degradedAction !== null);
         if (ids.length > policy.maxFixtures) return selectionFail("capacity-exceeded");
         const entries: Omit<SelectionEntry, "rank" | "envelope">[] = [], exclusions: { fixtureId: string; reason: string }[] = [];
         const capacity = lifecycle ? undefined : hourly && policy.refreshCapacity !== undefined
@@ -306,6 +337,7 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
           if (!policy.eligibleStatuses.includes(fixture.status as "scheduled")) { exclude("status-ineligible"); continue; }
           if (fixture.kickoff === null || !isInWindow(utcInstantFromEpochMilliseconds(fixture.kickoff.getTime()), window)) { exclude("outside-window"); continue; }
           const kickoffAt = utcInstantFromEpochMilliseconds(fixture.kickoff.getTime()), cutoffAt = getPublicationDeadline(kickoffAt);
+          if (retainedOnly.has(fixtureId) && !incompleteDates.has(getReportingDate(kickoffAt))) { exclude("retained-scope-changed"); continue; }
           if (cutoffAt <= selectedAt) { exclude("cutoff-passed"); continue; }
           if (cutoffAt <= selectedAt + leadMs) { exclude("cutoff-too-close"); continue; }
           const cycle = fixture.activeCycle;

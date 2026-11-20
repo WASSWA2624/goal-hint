@@ -11,6 +11,7 @@ export type WorkerEvent = Readonly<{ kind: "claimed" | "succeeded" | "failed" | 
   jobId: string | null; attemptId: string | null; reason: JobReason | null }>;
 const outcomeSchema = z.discriminatedUnion("status", [z.strictObject({ status: z.literal("succeeded") }),
   z.strictObject({ status: z.literal("failed"), reason: jobReason.exclude(["completed"]), retryable: z.boolean() })]);
+const renewRetryDelayMs = 200;
 class WorkerStop extends Error {
   readonly reason: JobReason;
   constructor(reason: JobReason) { super("Job execution stopped."); this.reason = reason; }
@@ -55,10 +56,28 @@ export function createJobWorker(input: Readonly<{ queue: JobQueue; registry: Job
       const definition = input.registry.find(claimed.job.envelope.type, claimed.job.envelope.handlerVersion);
       if (!definition) throw new WorkerStop("unknown-handler");
       const payload = definition.parse(claimed.job.envelope.payload);
+      let leaseExpiresBy = claimStarted + claimed.leaseExpiresAt - claimed.serverNow;
+      async function renewOwnedLease() {
+        if (controller.signal.aborted) throw new WorkerStop("worker-stopping");
+        const renewalStarted = performance.now();
+        const renewed = await input.queue.renew(lease!);
+        lease = renewed;
+        // The server sampled its clock during the request. Use the request's
+        // start to conservatively map the confirmed lease into monotonic time.
+        leaseExpiresBy = renewalStarted + renewed.leaseExpiresAt - renewed.serverNow;
+      }
       const renew = () => {
         renewChain = renewChain.then(async () => {
-          if (controller.signal.aborted) throw new WorkerStop("worker-stopping");
-          lease = await input.queue.renew(lease!);
+          try { await renewOwnedLease(); }
+          catch (error) {
+            if (!(error instanceof JobQueueError) || error.reason !== "unavailable" ||
+              controller.signal.aborted || performance.now() + renewRetryDelayMs >= leaseExpiresBy) throw error;
+            // Renewing the same fence is safe even if the first write committed
+            // before its connection dropped. The queue still verifies current ownership.
+            await sleep(renewRetryDelayMs, undefined, { signal: controller.signal });
+            if (performance.now() >= leaseExpiresBy) throw error;
+            await renewOwnedLease();
+          }
         });
         return renewChain;
       };

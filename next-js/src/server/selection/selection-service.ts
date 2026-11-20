@@ -24,7 +24,7 @@ export function createDailySelectionService(options: Readonly<{
   importer: Pick<ReturnType<typeof createFootballCatalogImporter>, "import">;
   hourlyImporter?: Pick<ReturnType<typeof createFootballCatalogImporter>, "import">;
   cutoff: Readonly<{ scheduleRun(runId: string): Promise<unknown> }>;
-  reconcileHourly?(lease: SelectionLease, scheduledFor: number, signal?: AbortSignal): Promise<readonly string[]>;
+  reconcileHourly?(lease: SelectionLease, scheduledFor: number, signal?: AbortSignal, replayOnly?: boolean): Promise<readonly string[]>;
   onDateImportFailure?(date: string, hourly: boolean, reason: string): void;
 }>) {
   const policy = parseSelectionPolicy(options.policy);
@@ -63,9 +63,12 @@ export function createDailySelectionService(options: Readonly<{
     try {
       const previous = await options.store.inspect(lease.runId);
       if (!previous?.manifest) {
+        // An authorized recovery uses the failed attempt's existing receipts.
+        const recover = hourly && action !== null && await options.store.hasIncompleteHourlyImport(lease);
         const importer = hourly ? options.hourlyImporter ?? options.importer : options.importer;
         // Dates beyond a plan's horizon are never requested and remain explicit missing coverage.
-        for (let offset = 0; offset < (policy.importDays ?? policy.windowDays ?? 7); offset++) {
+        const importDays = recover ? 0 : policy.importDays ?? days;
+        for (let offset = 0; offset < importDays; offset++) {
           const date = addReportingDays(window.runDate, offset);
           for (let attempt = 0; attempt < (hourly ? 1 : policy.attemptsPerInvocation); attempt++) {
             await checkpoint();
@@ -87,11 +90,11 @@ export function createDailySelectionService(options: Readonly<{
         }
         // Reuse the midnight date sweep when it completes in its own hourly slot.
         const confirmed = hourly || Date.now() < scheduledFor + SELECTION_HOUR_MS
-          ? await options.reconcileHourly?.(lease, scheduledFor, signal) ?? [] : [];
+          ? await options.reconcileHourly?.(lease, scheduledFor, signal, recover) ?? [] : [];
         await checkpoint();
         // Reverify an explicit degraded action immediately before immutable commit.
         if (action && options.authority.verifyDegradedAction(action, window.runDate) !== true) return selectionFail("unauthorized");
-        await options.store.commit(lease, policy, action, confirmed);
+        await options.store.commit(lease, policy, action, confirmed, recover);
       }
       await checkpoint();
       const progress = await options.store.reconcile(lease);

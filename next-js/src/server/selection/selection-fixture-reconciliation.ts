@@ -59,7 +59,7 @@ export function createHourlyFixtureReconciler(options: Readonly<{
   }
 
   return Object.freeze({
-    async reconcile(lease: SelectionLease, scheduledFor: number, signal = new AbortController().signal): Promise<readonly string[]> {
+    async reconcile(lease: SelectionLease, scheduledFor: number, signal = new AbortController().signal, replayOnly = false): Promise<readonly string[]> {
       const nextSlot = utcInstantFromEpochMilliseconds(scheduledFor + hourMs);
       const attemptIds = Array.from({ length: batches }, (_, index) => batchId(lease.runId, index));
       const attempts = await database.query((client) => client.dailyRunImport.findMany({ where: { runId: lease.runId, finishedAt: { not: null } },
@@ -93,6 +93,7 @@ export function createHourlyFixtureReconciler(options: Readonly<{
           for (const fixtureId of fixtureIds(receipt.fixtureIds)) confirmed.add(fixtureId);
         }
       }
+      if (replayOnly) return [...confirmed];
       const completeDates: Date[] = [];
       const seen = new Set<string>();
       for (const [date, id] of latest) {
