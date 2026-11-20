@@ -50,10 +50,11 @@ Matches, supported exact-outcome filters and the ordinary Match Details view
 read that projection. Explicit revision history and original prices,
 settlements and performance remain tied to their original publication IDs.
 The audit workspace contains private source and replay data and belongs outside
-the web root. Use distinct workspaces for each new audit or environment. For
-hosted use after promotion, supply the exact `--environment` with its verified
-private database profile and Matches competition scope. See the deployment
-guide for database grants.
+the web root. Use distinct workspaces for each new audit or environment.
+Run the hosted workflow with the verified database profile and Matches
+competition scope for that target. The deployment guide documents the
+staging rehearsal, restricted grants and rollback procedure.
+[Hosted November replay](deployment/how-to-deploy.md#hosted-november-replay)
 
 ## Owned development audit
 

@@ -5,7 +5,7 @@ import type { SubscriptionOffer } from "@/domain/subscription-offer";
 import { AccountLinks } from "@/components/members/account-link";
 import { HeaderBrand } from "@/components/ui/brand";
 import { compactHeaderBrand, compactHeaderRow, compactHeaderSurface } from "@/components/ui/header-controls";
-import { memo, useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { memo, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { NavigationProgress } from "@/components/navigation/navigation-progress";
 import type { MatchDetailResponse } from "@/domain/match-detail";
@@ -121,8 +121,8 @@ function PhoneHeader() {
   </PhoneBar>;
 }
 
-export const MatchDetails = memo(function MatchDetails({ data, preview, locale = "en", history, historyRequested = false, showAccount = false, offer = null }: {
-  data: MatchDetailResponse; preview: InsightsPreview | null; locale?: string; history?: ReactNode; historyRequested?: boolean; showAccount?: boolean; offer?: SubscriptionOffer | null;
+export const MatchDetails = memo(function MatchDetails({ data, preview, locale = "en", history, showAccount = false, offer = null }: {
+  data: MatchDetailResponse; preview: InsightsPreview | null; locale?: string; history?: ReactNode; showAccount?: boolean; offer?: SubscriptionOffer | null;
 }) {
   const { view, go, update } = useMatchView();
   const byDefault = useOpenByDefault();
@@ -130,13 +130,6 @@ export const MatchDetails = memo(function MatchDetails({ data, preview, locale =
   const fixture = data.fixture;
   const showFeatured = byDefault || data.selection === "applicable" && fixture.retrospective != null;
   const home = fixture.homeTeam.name || messages.text("match.homeUnknown"), away = fixture.awayTeam.name || messages.text("match.awayUnknown");
-  // Revision-history links arrive without a section; open the history section for them once.
-  const opened = useRef(false);
-  useEffect(() => {
-    if (opened.current) return;
-    opened.current = true;
-    if (historyRequested && view.section === null) go({ ...view, section: "history", panel: null }, "replace");
-  }, [go, historyRequested, view]);
   const value = useMemo(() => ({ data, preview, locale, messages, go, update, home, away, fixtureId: fixture.fixtureId, history, showAccount, offer }),
     [away, data, fixture.fixtureId, go, history, home, locale, messages, preview, update, showAccount, offer]);
   return <DetailsProvider value={value}>

@@ -144,8 +144,35 @@ read access to fixture identities, audit, schedule, publication and result
 evidence. The migration account's cache trigger needs to retain access to
 `PublicCacheTag` and `PublicCacheInvalidation`. Verify the three tables and
 trigger definers after migration. Installing the migration leaves the projection
-empty. Replay staging, activation and rollback use the reviewed operator
-workflow independently of release activation.
+empty. The restricted MariaDB pointer lock uses the grants above and the
+existing schema.
+
+### Hosted November replay
+
+1. Start on staging. Use the matching verified database profile and Matches
+   competition scope. Keep a separate root-only workspace for each target,
+   outside the web root. You can run the replay command privately from a
+   prepared worker release with the verified source and dependencies. Scheduled
+   services continue on their active releases. Pass the exact environment flag,
+   `--environment staging` or `--environment production`, and the target's
+   `--workspace` on every command.
+2. Run `audit` and `dry-run` with a SELECT-only connection. Resume a bounded
+   `dry-run --pages <count>` in the same sealed workspace until it reports
+   completion. Both commands work from stored evidence.
+3. With the staging operator connection, run `stage` and review the sealed
+   `activation-diff.json` for the locked API forecast and proposed Local Engine
+   pick. Record the original publication IDs, prices, settlements and
+   performance before `activate`. Use a stable `--operation-id` for staging.
+   Verify the revised display in Matches, the exact-outcome filter and Match
+   Details. Compare the original revision history, prices, settlements and
+   published performance with the recorded values. Run `rollback` with the
+   same staging operation ID and verify the original display returns.
+4. Once staging passes and production replay is authorized, repeat the audit
+   and dry run independently on production. Run `stage` with its operator
+   connection and review its own diff before `activate`. Repeat the public and
+   original publication checks. Use a stable production operation ID and reuse
+   it with the same workspace for any `rollback`.
+   [Replay commands and evidence](../november-forecast-replay.md)
 
 On 14 October 2026, a private backup was taken before the corrective migration
 `20261014161000_transactional_storage` converted the seven analytics tables and

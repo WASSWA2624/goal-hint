@@ -20,7 +20,7 @@ export function MatchDetailPage({ result, today, locale = "en", retryHref, histo
   const messages = createMessages(locale);
   return <PublicShell showAccount={showAccount} locale={locale} today={today} app={result.data !== null} current="today">
     {result.data ? <LiveMatchDetail showAccount={showAccount} offer={offer} initial={result.data} today={today} locale={locale} preview={preview}
-      {...(previewPromise ? { previewPromise } : {})} historyRequested={historyQuery !== ""}>
+      {...(previewPromise ? { previewPromise } : {})}>
       <RevisionHistory current={result.data} result={historyResult} query={historyQuery} locale={locale} open />
     </LiveMatchDetail> : <Stack>
       <PageHeading>{messages.text("detail.unavailableTitle")}</PageHeading>

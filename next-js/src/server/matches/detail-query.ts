@@ -3,14 +3,14 @@ import "server-only";
 import { z } from "zod";
 import { matchDetailRules } from "../../domain/match-detail.ts";
 import { matchFeedRules } from "../../domain/match-feed.ts";
+import { matchHistoryKeys } from "../../domain/match-view.ts";
 import { MatchFeedError } from "./feed-error.ts";
 
-const keys = ["revision", "cycle", "limit", "revisionAnchor", "revisionBefore", "cycleAnchor", "cycleBefore"] as const;
 export function parseMatchDetailQuery(id: string, parameters: URLSearchParams) {
   try {
     z.uuid().parse(id);
     if (!(parameters instanceof URLSearchParams) || Buffer.byteLength(parameters.toString(), "utf8") > matchFeedRules.maximumQueryBytes ||
-      [...parameters.keys()].some((key) => !keys.includes(key as typeof keys[number]) || parameters.getAll(key).length !== 1)) throw new Error();
+      [...parameters.keys()].some((key) => !(matchHistoryKeys as readonly string[]).includes(key) || parameters.getAll(key).length !== 1)) throw new Error();
     const optionalId = (key: "revision" | "cycle") => parameters.has(key) ? z.uuid().parse(parameters.get(key)) : null;
     const integer = (key: string, maximum: number, fallback: number | null = null, allowZero = false) => {
       if (!parameters.has(key)) return fallback;

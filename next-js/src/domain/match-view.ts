@@ -42,6 +42,7 @@ const defaultWindow = (section: MatchSection | null): FormWindow => section === 
 
 /** Keys owned by the view; everything else in the URL belongs to other features. */
 export const matchViewKeys = Object.freeze(["panel", "mk", "mcat", "mq", "market", "section", "tab", "item", "page", "team", "venue", "window", "comp"] as const);
+export const matchHistoryKeys = ["revision", "cycle", "limit", "revisionAnchor", "revisionBefore", "cycleAnchor", "cycleBefore"] as const;
 const sectionKeys = ["tab", "item", "page", "team", "venue", "window", "comp"] as const;
 const identifier = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/u;
 
@@ -81,14 +82,17 @@ export function parseMatchView(input: Parameters): MatchView {
   };
 }
 
-/** Availability now belongs to the team sheet; old links retain their team/player. */
+/** Resolve legacy links and the History default for archive URLs without an explicit tab. */
 export function parseMatchDetailsView(input: Parameters): MatchView {
   const view = parseMatchView(input);
   if (view.section === "injuries") return { ...view, panel: "lineups", section: "lineups", tab: null, page: 1 };
   const legacy: Record<string, MatchDetailTab> = { "stats:form": "form", "lineups:players": "players",
     "analysis:news": "news", "analysis:history": "history", "venue:referee": "referee" };
   const panel = legacy[`${view.panel}:${view.section}`];
-  return panel ? { ...view, panel } : view;
+  if (panel) return { ...view, panel };
+  const get = reader(input);
+  return view.panel === null && view.section === null && view.market === null && matchHistoryKeys.some((key) => get(key) !== undefined)
+    ? { ...view, section: "history" } : view;
 }
 
 /** Serializes only non-default view state, preserving every unrelated key and its order. */

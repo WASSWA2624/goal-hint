@@ -33,6 +33,21 @@ test("Touchline tabs preserve deep links, revision state and their own section c
   assert.equal(parseMatchView({ panel: "invalid" }).panel, null);
 });
 
+test("archive URL opens Pick History without replacing explicit tabs or the ordinary view", () => {
+  const current = new URLSearchParams("panel=history&section=history");
+  const archive = new URLSearchParams("revision=10000000-0000-4000-8000-000000000001&revisionAnchor=1&cycleAnchor=1");
+  const visibleTab = (params) => detailTabForView(parseMatchDetailsView(params));
+  assert.equal(visibleTab(new URLSearchParams()), "stats");
+  assert.equal(visibleTab(current), "history");
+  assert.equal(visibleTab(archive), "history");
+  assert.equal(visibleTab({ cycleBefore: "2", cycleAnchor: "3" }), "history");
+  const stats = serializeMatchView(openDetailTab(parseMatchDetailsView(archive), "stats"), archive);
+  assert.equal(stats.get("revision"), archive.get("revision"));
+  assert.equal(visibleTab(stats), "stats");
+  assert.equal(visibleTab(current), "history", "returning to the previous URL restores its tab");
+  assert.equal(visibleTab({ revision: archive.get("revision"), section: "players" }), "players");
+});
+
 test("the shared tab list has one combined results tab and old H2H links retain their controls", () => {
   assert.deepEqual(matchDetailTabs.slice(0, 5), ["stats", "markets", "lineups", "form", "analysis"]);
   const view = parseMatchView({ panel: "h2h", venue: "away", tab: "h2h-all", page: "2" });
