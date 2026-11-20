@@ -202,4 +202,6 @@ test("result dates include the year in the selected display zone without changin
   assert.equal(kampala.shortKickoffDate(instant), "1-Jan");
   assert.equal(kampala.shortKickoffDate(instant, true), "1-Jan-2027");
   assert.equal(newYork.shortKickoffDate(instant, true), "31-Dec-2026");
+  assert.equal(kampala.shortKickoffDate(instant, true, "numeric"), "01-01-2027");
+  assert.equal(newYork.shortKickoffDate(instant, true, "numeric"), "31-12-2026");
 });

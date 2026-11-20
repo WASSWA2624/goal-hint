@@ -164,3 +164,61 @@ export const teamStackStyles = css`
     [data-ledger-field="probability"]:not([data-stack-label]) > :is([data-pick-value], [data-field-value], [data-public-probability]) { margin-inline-start: auto; }
   }
 `;
+
+/** The phone feed puts kickoff beside the existing team and forecast tracks. */
+export const phoneFeedRowStyles = css`
+  --feed-league-mark-size: var(--gh-size-4);
+  --feed-kickoff-width: var(--gh-size-15);
+  grid-template-columns: var(--feed-kickoff-width) minmax(0, 1fr) minmax(min-content, clamp(var(--gh-size-23), 28cqi, var(--gh-size-26)));
+  grid-template-areas: "league league status" "kickoff teams facts";
+
+  [data-ledger-meta] { display: contents; }
+  [data-ledger-meta] [data-match-number] { display: none; }
+  [data-ledger-competition] {
+    align-self: center;
+    grid-area: league;
+    > [data-competition-logo] { --gh-league-mark-size: var(--feed-league-mark-size); }
+    &:has([data-country-flag] > img) {
+      > [data-competition-logo] { display: none; }
+      > [data-ledger-country] { display: grid; inline-size: var(--feed-league-mark-size); place-items: center start; margin: 0; order: 1; }
+      [data-country-flag] { margin: 0; }
+      [data-country-name] { display: none; }
+    }
+  }
+  [data-ledger-meta] > [data-ledger-kickoff] {
+    grid-area: kickoff;
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    align-self: center;
+    min-inline-size: 0;
+    gap: 0;
+    white-space: normal;
+    :is([data-kickoff-date], [data-kickoff-time]) {
+      white-space: normal;
+      > [data-mobile-only] { display: none; }
+      > [data-phone-kickoff] { display: inline; white-space: nowrap; }
+    }
+    [data-kickoff-date] { font-size: var(--gh-font-micro); font-weight: var(--gh-weight-semibold); }
+  }
+  [data-ledger-teams] {
+    --gh-logo-size: var(--gh-size-4);
+    --gh-logo-font: var(--gh-size-2);
+    padding-inline: var(--gh-spacing-1);
+    border-inline: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};
+    &:has([data-score], [data-phone-feed-score-fallback]) {
+      grid-template-columns: minmax(0, 1fr) minmax(var(--gh-size-3), max-content);
+      column-gap: var(--gh-spacing-1);
+    }
+    [data-team-logo] { overflow: hidden; white-space: nowrap; }
+    [data-phone-feed-score-fallback] { display: contents; }
+    [data-match-state] [data-ledger-versus] { display: none; }
+  }
+  [data-ledger-facts] [data-match-metrics] { grid-template-columns: max-content minmax(min-content, 1fr); }
+
+  @container (max-width: ${({ theme }) => theme.viewport[16]}) {
+    grid-template-columns: var(--feed-kickoff-width) minmax(0, 1fr);
+    grid-template-areas: "league status" "kickoff teams" "facts facts";
+    [data-ledger-teams] { padding-inline-end: 0; border-inline-end: 0; }
+  }
+`;

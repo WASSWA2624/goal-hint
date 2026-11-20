@@ -15,6 +15,20 @@ test('unified status choices retain stable transport codes and historical API ca
   assert.throws(() => query({ status: 'invalid' }));
 });
 
+test('explicit future dates leave Completed without replacing the chosen day or range', () => {
+  const completed = query({ status: 'finished', when: 'last-30-days', q: 'Club', page: '3' });
+  for (const dates of [{ kind: 'date', date: '2026-10-10' }, { kind: 'range', from: '2026-10-10', to: '2026-10-12' }]) {
+    const selected = selectFeedDates(completed, dates, today);
+    assert.deepEqual(selected.dates, dates);
+    assert.equal(selected.status, 'all');
+    assert.equal(selected.search, 'Club');
+    assert.equal(selected.page, 1);
+  }
+  const overlapping = { kind: 'range', from: '2026-10-08', to: '2026-10-10' };
+  assert.deepEqual(selectFeedDates(completed, overlapping, today).dates, overlapping);
+  assert.equal(selectFeedDates(completed, overlapping, today).status, 'finished');
+});
+
 test('selecting Live uses Today, clears stale kickoff times and restarts pagination while preserving compatible filters', () => {
   const original = query({ from: '2026-10-01', to: '2026-10-04', tz: 'America/New_York', timeFrom: '08:00', timeTo: '10:00',
     q: 'Example', league: 'league-a', country: 'Spain', market: 'total-goals', prob: '60-90', picks: 'only', sort: 'probability', page: '4', pageSize: '40' });

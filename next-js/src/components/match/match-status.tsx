@@ -34,6 +34,18 @@ const Label = styled(StatusBadge)`
   &[data-match-status="incorrect"] { --status-ink: ${({ theme }) => theme.color.outcome.incorrect.text}; --status-fill: ${({ theme }) => theme.color.outcome.incorrect.background}; }
   &[data-match-status="pending"] { --status-ink: ${({ theme }) => theme.color.outcome.pending.text}; --status-fill: ${({ theme }) => theme.color.outcome.pending.background}; }
   &[data-match-status="void"] { --status-ink: ${({ theme }) => theme.color.outcome.void.text}; --status-fill: ${({ theme }) => theme.color.outcome.void.background}; }
+  ${media.phone} {
+    [data-feed-match-results] & {
+      justify-content: flex-end;
+      padding-inline: 0;
+      border-radius: ${({ theme }) => theme.radius.none};
+      background: transparent;
+      box-shadow: none;
+      text-align: end;
+      > [data-match-live-dot], [data-half-time-prefix] { display: none; }
+      &[data-match-half-time] { --status-ink: ${({ theme }) => theme.color.accent.orange.text}; }
+    }
+  }
 `;
 
 /** Fixture progress takes precedence until a result can be shown. Saved results remain explicit snapshots. */
@@ -51,14 +63,17 @@ export function MatchStatus({ status, outcome, messages, snapshot = false, offli
   const clock = result === "live" && liveClock && (liveClock.minute !== null || liveClock.phase !== "in-play")
     ? liveClockLabel(liveClock, messages) : null;
   const extraTime = clock !== null && clock.minute !== null && liveClock?.phase === "extra-time";
+  const halfTime = clock !== null && liveClock?.phase === "half-time";
   const finalPhase = !offline && !snapshot && (status === "finished-regulation" || status === "finished-extra-time" || status === "finished-penalties")
     ? messages.text(`match.final.${status}`) : null;
   return <Label data-match-status={result} data-match-label={!isOutcome ? "" : undefined} data-outcome-label={isOutcome ? "" : undefined}
+    data-match-half-time={halfTime || undefined}
     data-live-badge-clock={desktopClock && result === "live" ? "" : undefined}
     aria-label={clock?.spoken} title={clock?.spoken}>
     {result === "live" && <LiveDot data-match-live-dot aria-hidden="true" />}
     <span data-pick-value="">{clock ? desktopClock ? <LiveMatchTime clock={liveClock} messages={messages} badge />
-      : <><span data-mobile-only data-status-clock>{label} {extraTime && <>{messages.text("match.clock.extra-timeShort")} </>}<LiveMatchTime clock={liveClock} messages={messages} /></span><span data-desktop-only>{label}</span></> : label}</span>
+      : <><span data-mobile-only data-status-clock>{halfTime ? <span data-half-time-prefix>{label} </span> : <>{label} </>}
+        {extraTime && <>{messages.text("match.clock.extra-timeShort")} </>}<LiveMatchTime clock={liveClock} messages={messages} /></span><span data-desktop-only>{label}</span></> : label}</span>
     {!desktopClock && liveClock !== undefined && finalPhase && <span data-mobile-only data-status-phase>{finalPhase}</span>}
   </Label>;
 }
