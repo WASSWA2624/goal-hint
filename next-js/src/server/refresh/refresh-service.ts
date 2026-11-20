@@ -1,13 +1,12 @@
 import "server-only";
 
 import { utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
-import { LOCAL_FIRST_GOAL_EVALUATION_PROFILE } from "../../domain/goal-market-definitions.ts";
 import type { EvidenceWorkflow } from "../evidence/evidence-contract.ts";
 import type { createCostService } from "../cost-control/cost-service.ts";
 import type { createEvidenceService, EvidenceServiceResult } from "../evidence/evidence-service.ts";
 import { freezeEvidence, evidenceFingerprint } from "../evidence/evidence-input.ts";
 import type { createFallbackService, FallbackRefreshRequest, FallbackRefreshResult } from "../fallback/fallback-service.ts";
-import { LOCAL_FIRST_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
+import { goalProfileForLocalFirstCascade, isLocalFirstForecastCascade } from "../fallback/fallback-contract.ts";
 import { parseFallbackAiResult, parseResolvedForecastCandidate } from "../fallback/fallback-input.ts";
 import { defineJob, type JobHandlerContext, type JobOutcome } from "../jobs/job-registry.ts";
 import type { JobUsage } from "../jobs/job-contract.ts";
@@ -41,8 +40,9 @@ function checked(value: unknown, expected: unknown) {
  * existing predictor, fallback resolver and atomic publication service. */
 export function createPredictionRefreshService(options: Readonly<{
   type: string; handlerVersion: number; store: RefreshStore; selection: Pick<DailySelectionStore, "progress" | "inspect">;
-  authority: RefreshAuthority; configure(member: RefreshMember): RefreshPlan | Promise<RefreshPlan>;
+  authority: RefreshAuthority; configure(member: RefreshMember, planned?: ForecastLifecyclePolicy): RefreshPlan | Promise<RefreshPlan>;
   forecastLifecycle?: ForecastLifecyclePolicy;
+  compatibleForecastLifecycles?: readonly ForecastLifecyclePolicy[];
   /** Optional bounded input imports before the immutable analysis cutoff is captured. */
   prepare?(member: RefreshMember, context: JobHandlerContext): Promise<void | Readonly<{ sources: readonly import("../evidence/evidence-contract.ts").EvidenceSource[]; research?: Readonly<{ status: "completed" | "denied"; reason: string | null }> }>>;
   models: Pick<ModelRegistry, "resolve">; evidence: Pick<ReturnType<typeof createEvidenceService>, "collect">;
@@ -55,6 +55,8 @@ export function createPredictionRefreshService(options: Readonly<{
   costs: Readonly<{ ai: CostReader | null; research: CostReader | null }>; clock?: Clock;
 }>) {
   const now = () => utcInstantFromEpochMilliseconds(options.clock?.now() ?? Date.now());
+  const forecastPolicies = new Set([options.forecastLifecycle, ...(options.compatibleForecastLifecycles ?? [])]
+    .filter((policy): policy is ForecastLifecyclePolicy => policy !== undefined).map(evidenceFingerprint));
   async function costs(jobId: string): Promise<RefreshOutcome["costs"]> {
     const read = async (service: CostReader | null) => {
       if (!service) return null;
@@ -100,7 +102,7 @@ export function createPredictionRefreshService(options: Readonly<{
     }
     let intent = await options.store.intent(lease.jobId);
     if (!intent) {
-      if (planned && (!options.forecastLifecycle || evidenceFingerprint(options.forecastLifecycle) !== evidenceFingerprint(planned))) {
+      if (planned && !forecastPolicies.has(evidenceFingerprint(planned))) {
         return finish("skipped", "forecast-configuration-changed");
       }
       if (options.prepare) {
@@ -122,7 +124,7 @@ export function createPredictionRefreshService(options: Readonly<{
         member = await options.store.loadMember(lease);
       }
       let configured: RefreshPlan;
-      try { configured = await options.configure(member); }
+      try { configured = await options.configure(member, planned); }
       catch (error) {
         if (error instanceof PredictionRefreshError && error.reason === "ineligible") return finish("skipped", error.detail);
         throw error;
@@ -295,9 +297,9 @@ export function createPredictionRefreshService(options: Readonly<{
         const scoreDistribution = ai.status === "candidate" && ai.output.scoreDistribution?.unrepresentedProbability === 0 &&
           Object.values(candidate.markets).some((market) => market.available && market.market.source === "ai")
           ? ai.output.scoreDistribution : undefined;
-        if (plan.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE) {
+        if (isLocalFirstForecastCascade(plan.sourceCascade)) {
           if (localPoisson) goalExtension = parseGoalMarketExtensionInput({ definitions: plan.goalDefinitions, localPoisson,
-            evaluationProfile: LOCAL_FIRST_GOAL_EVALUATION_PROFILE });
+            evaluationProfile: goalProfileForLocalFirstCascade(plan.sourceCascade) });
         } else if (localPoisson || scoreDistribution) goalExtension = parseGoalMarketExtensionInput({ definitions: plan.goalDefinitions,
           ...(localPoisson ? { localPoisson } : {}), ...(scoreDistribution ? { scoreDistribution } : {}) });
       }

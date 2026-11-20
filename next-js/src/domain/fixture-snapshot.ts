@@ -178,6 +178,10 @@ const fixtureSnapshotBaseSchema = z.strictObject({
   prices: z.array(fixturePriceSchema).max(4).optional(),
   marketOdds: marketOddsObservationSchema.nullable().optional(),
   featuredPrediction: featuredPredictionSchema.nullable().optional(),
+  retrospective: z.strictObject({
+    revisionId: identity, sourceRevisionId: identity, evidenceCutoffAt: instant, generatedAt: instant, activatedAt: instant,
+    pick: featuredPredictionSchema.extend({ source: z.literal("local-engine") }),
+  }).nullable().optional(),
 });
 export const publishedFamiliesSchema = z.array(marketFamilySchema).max(4).refine((families) => families.join() === publicPolicy.markets.filter((family) => families.includes(family)).join(), "Families must be unique and in policy order.");
 /** Public chance only: neither a selection nor the complete group from which it could be reconstructed. */
@@ -191,6 +195,13 @@ function refineFixture(value: z.infer<typeof wireFixtureBaseSchema>, context: z.
   const forecast = value.forecast && !("gated" in value.forecast) ? value.forecast : null;
   if (value.featuredPrediction && (!forecast || value.status !== "scheduled")) {
     context.addIssue({ code: "custom", message: "A featured outcome requires a current scheduled prediction." });
+  }
+  const replay = value.retrospective;
+  if (replay && (!forecast || replay.sourceRevisionId !== forecast.revisionId || replay.revisionId === forecast.revisionId ||
+      value.cycle?.state !== "closed" || value.kickoffAt === null || replay.evidenceCutoffAt >= value.kickoffAt ||
+      replay.generatedAt < value.kickoffAt || replay.activatedAt < replay.generatedAt ||
+      value.status !== "live" && !isPlayedFinalStatus(value.status))) {
+    context.addIssue({ code: "custom", message: "A retrospective forecast must belong to the displayed locked occurrence." });
   }
   if (value.prices) {
     const picks = new Map(forecast?.markets.map((item) => [item.market.family, item.market.selection]) ?? []);

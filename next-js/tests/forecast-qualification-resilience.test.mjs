@@ -3,7 +3,8 @@ import test from "node:test";
 import { marketRules, validateMarketSnapshot } from "../src/domain/markets.ts";
 import { SCORE_DISTRIBUTION_VERSION } from "../src/domain/score-distribution.ts";
 import { legacyMarketsFromScoreDistribution } from "../src/domain/score-distribution-legacy.ts";
-import { LIVE_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE, QUALIFIED_FORECAST_CASCADE } from "../src/server/fallback/fallback-contract.ts";
+import { LEGACY_LOCAL_FIRST_FORECAST_CASCADE, LIVE_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE,
+  QUALIFIED_FORECAST_CASCADE } from "../src/server/fallback/fallback-contract.ts";
 import { parseFallbackAiResult, parseResolvedForecastCandidate } from "../src/server/fallback/fallback-input.ts";
 import { resolveFallbackCandidate } from "../src/server/fallback/fallback-resolution.ts";
 import { verifiesLocalBaselineMarket } from "../src/server/intelligence/live-local-engine.ts";
@@ -62,19 +63,20 @@ function localCandidate({ expected, ai, now, baseline = false, result = false })
     localStatus: "candidate", providerStatus: "not-requested", providerReason: null } };
 }
 
-test("new decisions publish the verified Local Engine groups without dispatching API-Football", async () => {
+for (const cascade of [LEGACY_LOCAL_FIRST_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE]) test(
+  `sealed ${cascade} decisions preserve their Local Engine source marker without dispatching API-Football`, async () => {
   let calls = 0;
   const h = fallbackServiceSetup({ reason: "unconfigured", service: { localFirstQualification: { verifyLocalNumericalBasis: verifiesLocalBaselineMarket },
     async localEngine(expected, ai, current) {
       calls++;
       return localCandidate({ expected, ai: { status: ai.aiStatus, reason: ai.aiReason }, now: current(), baseline: true, result: true });
     } } });
-  const result = await h.service.resolve(h.request({ sourceCascade: LOCAL_FIRST_FORECAST_CASCADE,
+  const result = await h.service.resolve(h.request({ sourceCascade: cascade,
     bounds: { ...h.request().bounds, deadlineAt: h.clock.now() + 5000 }, maxElapsedMs: 5000, includeGoalMarkets: true }));
   assert.equal(result.status, "candidate", result.reason);
   assert.equal(calls, 1);
   assert.equal(h.collected.length, 0);
-  assert.equal(result.candidate.audit.sourceCascade, LOCAL_FIRST_FORECAST_CASCADE);
+  assert.equal(result.candidate.audit.sourceCascade, cascade);
   assert.equal(result.candidate.audit.localStatus, "candidate");
   assert.ok(Object.values(result.candidate.markets).every(market => market.available && market.provenance.kind === "local-engine" &&
     market.provenance.numericalBasis === "qualified-local-model"));

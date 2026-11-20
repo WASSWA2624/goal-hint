@@ -7,7 +7,7 @@ import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.
 import type { PredictorResult } from "../predictor/predictor-service.ts";
 import { isPredictorForecastCurrent } from "../predictor/predictor-output.ts";
 import { synchronous, provenTrue as verified } from "../shared/authority-proof.ts";
-import { LOCAL_FIRST_FORECAST_CASCADE, localForecastAbstentions, QUALIFIED_FORECAST_CASCADE, type FallbackContext, type FallbackReason,
+import { isLocalFirstForecastCascade, localForecastAbstentions, type LocalFirstForecastCascade, QUALIFIED_FORECAST_CASCADE, type FallbackContext, type FallbackReason,
   type LocalForecastAbstention, type FallbackResolutionAuthority, type FallbackResolutionResult, type ForecastExplanation,
   type ForecastProvenance, type ForecastQualification, type ForecastSelectionPolicy, type ForecastSourceOrder, type ProviderFallbackCandidate, type ProviderFallbackResult, type ResolvedForecastCandidate,
   type ResolvedForecastMarket } from "./fallback-contract.ts";
@@ -151,7 +151,7 @@ export function resolveFallbackCandidate(value: Readonly<{
   order?: ForecastSourceOrder;
   local?: ResolvedForecastCandidate;
   qualification?: ForecastQualification;
-  cascade?: typeof LOCAL_FIRST_FORECAST_CASCADE;
+  cascade?: LocalFirstForecastCascade;
   localAbstention?: LocalForecastAbstention;
 }>, authority: FallbackResolutionAuthority, policy: ForecastSelectionPolicy = "legacy-ai-primary"): FallbackResolutionResult {
   const denied = (reason: "invalid-request" | "not-authorized" | "ineligible-refresh"): FallbackResolutionResult => Object.freeze({ status: "denied", reason });
@@ -160,7 +160,8 @@ export function resolveFallbackCandidate(value: Readonly<{
     providerOnly && value?.order === "ai-first") return denied("invalid-request");
   let expected: FallbackContext, ai: PredictorResult, provider: ProviderFallbackResult | null, now: UtcInstant;
   const order = value?.order, qualification = value?.qualification, qualified = qualification !== undefined;
-  const localFirst = value?.cascade === LOCAL_FIRST_FORECAST_CASCADE;
+  const localFirstCascade = value?.cascade;
+  const localFirst = isLocalFirstForecastCascade(localFirstCascade);
   try {
     if (value === null || typeof value !== "object" || Object.keys(value).some((key) =>
       !["expected", "ai", "provider", "now", "order", "local", "qualification", "cascade", "localAbstention"].includes(key)) ||
@@ -279,7 +280,7 @@ export function resolveFallbackCandidate(value: Readonly<{
       audit: { aiStatus: ai.status, aiReason: ai.status === "denied" ? ai.reason : !isFallbackAiCurrent(ai, now) ? "invalid-timing"
         : unqualifiedAi ? "unqualified-numerical-output" : null,
         providerStatus: provider?.status ?? "not-requested", providerReason: provider?.status === "denied" ? provider.reason : null,
-        ...(qualified ? { transitions, sourceCascade: localFirst ? LOCAL_FIRST_FORECAST_CASCADE : QUALIFIED_FORECAST_CASCADE, localStatus:
+        ...(qualified ? { transitions, sourceCascade: localFirst ? localFirstCascade : QUALIFIED_FORECAST_CASCADE, localStatus:
           Object.values(transitions).some((trace) => trace.selected === "local-engine") ? "candidate" as const
             : value.local ? "unavailable" as const : "not-requested" as const } : {}),
         ...(order === undefined ? {} : { sourceOrder: order }) } });

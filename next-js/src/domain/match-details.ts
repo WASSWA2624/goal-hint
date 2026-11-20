@@ -86,6 +86,7 @@ export function featuredFamily(data: MatchDetailResponse): MarketFamily | null {
 }
 
 export function currentFeaturedOutcome(data: MatchDetailResponse) {
+  if (data.selection === "applicable" && data.fixture.retrospective) return data.fixture.retrospective.pick;
   const snapshot = fullDetailSnapshot(data);
   if (snapshot?.applicability !== "current" || data.fixture.status !== "scheduled") return null;
   return rankFixtureOutcomes(snapshot.markets, data.extendedMarkets?.markets ?? [],

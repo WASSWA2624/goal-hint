@@ -3,11 +3,12 @@ import { evidenceFirstRecommendationPolicy, recommendationPolicy } from "../../d
 
 import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
 import { marketRules } from "../../domain/markets.ts";
-import { liveGoalMarketDefinitions, localFirstGoalMarketDefinitions } from "../../domain/goal-market-definitions.ts";
+import { goalDefinitionsForLocalFirstProfile, liveGoalMarketDefinitions } from "../../domain/goal-market-definitions.ts";
 import { operatingRules, type RuntimePolicy } from "../config/runtime-policy.ts";
 import type { EvidencePolicy } from "../evidence/evidence-contract.ts";
 import type { ProviderFallbackPolicy } from "../fallback/fallback-adapter.ts";
-import { LIVE_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE, type ForecastCascade } from "../fallback/fallback-contract.ts";
+import { goalProfileForLocalFirstCascade, LIVE_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE,
+  type ForecastCascade, type LocalFirstForecastCascade } from "../fallback/fallback-contract.ts";
 import { ODDS_CONTRACT_VERSION, type ApiFootballBounds } from "../football/api-football-contract.ts";
 import { criticalWorkReserveRatio, providerDayReserveRatio } from "../football/quota-contract.ts";
 import { DE_MARGIN_METHOD } from "../../domain/odds.ts";
@@ -244,8 +245,9 @@ export function liveCascadePlan(plan: RefreshPlan, includeGoals = true, sourceCa
     ...(includeGoals ? { goalDefinitions: liveGoalMarketDefinitions } : {}) };
 }
 /** New intents pin the numerical workflow and whether a fresh provider fallback is permitted. */
-export function liveLocalFirstPlan(baseline: RefreshPlan, providerAllowed: boolean): RefreshPlan {
-  return { ...baseline, sourceCascade: LOCAL_FIRST_FORECAST_CASCADE, goalDefinitions: localFirstGoalMarketDefinitions,
+export function liveLocalFirstPlan(baseline: RefreshPlan, providerAllowed: boolean,
+  sourceCascade: LocalFirstForecastCascade = LOCAL_FIRST_FORECAST_CASCADE): RefreshPlan {
+  return { ...baseline, sourceCascade, goalDefinitions: goalDefinitionsForLocalFirstProfile(goalProfileForLocalFirstCascade(sourceCascade)),
     recommendationPolicy: evidenceFirstRecommendationPolicy,
     fallback: providerAllowed ? baseline.fallback : { ...baseline.fallback, bounds: null },
     footballRequestLimit: baseline.observation.bounds.maxRequests + (providerAllowed ? baseline.fallback.bounds?.maxRequests ?? 0 : 0) };

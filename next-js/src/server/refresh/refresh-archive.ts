@@ -1,7 +1,7 @@
 import "server-only";
 
 import { evidenceSerialize } from "../evidence/evidence-input.ts";
-import { LOCAL_FIRST_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
+import { isLocalFirstForecastCascade } from "../fallback/fallback-contract.ts";
 import { refreshFail } from "./refresh-contract.ts";
 
 /** Refresh receipts also contain nonnegative DECIMAL(38,0) cost amounts, including zero budget caps.
@@ -21,7 +21,7 @@ export function refreshArchiveJson(value: unknown): unknown {
 
 function localFirstCandidate(value: unknown): boolean {
   const candidate = value as { audit?: { sourceCascade?: unknown } } | null | undefined;
-  return candidate?.audit?.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE;
+  return isLocalFirstForecastCascade(candidate?.audit?.sourceCascade);
 }
 
 /** Keep the canonical candidate as text so native MySQL JSON cannot round its model values. */

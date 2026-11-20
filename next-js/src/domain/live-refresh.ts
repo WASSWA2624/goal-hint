@@ -64,6 +64,7 @@ export function mergeLiveDetail(previous: MatchDetailResponse, next: MatchDetail
         ? { recoveredBookmakerOdds: mergeBookmakerOdds(previous.recoveredBookmakerOdds, next.recoveredBookmakerOdds) } : {}),
       ...("extendedMarkets" in previous || "extendedMarkets" in next ? { extendedMarkets } : {}),
       ...("extendedOdds" in previous || "extendedOdds" in next ? { extendedOdds: extendedMarkets ? next.extendedOdds ?? null : null } : {}),
+      ...("retrospectiveMarkets" in previous || "retrospectiveMarkets" in next ? { retrospectiveMarkets: next.retrospectiveMarkets ?? null } : {}),
       ...liveEnvelope };
   }
   return liveMatch === next.liveMatch ? next : { ...next, liveMatch };

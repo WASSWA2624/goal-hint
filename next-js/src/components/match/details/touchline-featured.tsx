@@ -59,17 +59,23 @@ export const TouchlineFeatured = memo(function TouchlineFeatured() {
   const price = featured ? featured.odds && displayMarketOddsPrice(featured.odds) : selectedDetailPrice(data, family);
   const standing = featured ? null : liveStanding(data, family), outcome = data.snapshot?.applicability === "historical" ? null
     : row?.outcome?.status ?? (data.snapshot?.applicability === "void" ? "void" : null);
-  const notices = detailRecordNotices(data).map(key => messages.text(key));
+  const replay = data.selection === "applicable" ? data.fixture.retrospective : null;
+  const notices = replay ? [] : detailRecordNotices(data).map(key => messages.text(key));
+  const record = replay ? [
+    messages.text("touchline.retrospectiveGenerated", { time: messages.reportingInstant(replay.generatedAt) }),
+    messages.text("touchline.retrospectiveCutoff", { time: messages.reportingInstant(replay.evidenceCutoffAt) }),
+  ] : [data.snapshot ? messages.text("details.publishedAt", { time: messages.reportingInstant(data.snapshot.publishedAt) })
+    : messages.text("touchline.featuredHint")];
   return <Frame as="section" id="match-prediction" aria-labelledby="touchline-prediction-title" data-featured-pick={family} data-verdict={family}>
-    <Lead><ResultIcon aria-hidden="true" /><div><h2 id="touchline-prediction-title">{messages.text("touchline.featured")}</h2>
+    <Lead><ResultIcon aria-hidden="true" /><div><h2 id="touchline-prediction-title">{messages.text(replay ? "touchline.retrospective" : "touchline.featured")}</h2>
       <strong>{featured?.label ?? marketName(messages, family)} · <span>{featured?.selectionLabel
         ?? <PredictionOutcome messages={messages} selection={row!.item!.market.selection} />}</span></strong>
-      <p data-prediction-record>{[data.snapshot ? messages.text("details.publishedAt", { time: messages.reportingInstant(data.snapshot.publishedAt) }) : messages.text("touchline.featuredHint"), ...notices].join(" · ")}</p></div></Lead>
+      <p data-prediction-record>{[...record, ...notices].join(" · ")}</p></div></Lead>
     <Numbers><div><b>{percent(messages, chance)}</b><small>{messages.text("details.estimatedProbability")}</small><i style={{ inlineSize: `${chance * 100}%` }} /></div>
       {price !== null && <div><b>{price}</b><small>{messages.text("details.odds")}</small>
         <ForecastValueLabel expectedReturn={featured ? forecastExpectedReturn(chance, featured.odds) : detailMarketValue(data, family)} messages={messages} /></div>}</Numbers>
     <Actions>{standing ? <Standing standing={standing} /> : outcome && outcome !== "pending" ? <DetailOutcome status={outcome} /> : null}
-      <TouchlineLinkButton type="button" onClick={() => update(current => openDetailTab(current, "analysis"))}>
-        {messages.text("touchline.why")}<ChevronRightIcon aria-hidden="true" /></TouchlineLinkButton></Actions>
+      <TouchlineLinkButton type="button" onClick={() => update(current => openDetailTab(current, replay ? "history" : "analysis"))}>
+        {messages.text(replay ? "touchline.originalPublication" : "touchline.why")}<ChevronRightIcon aria-hidden="true" /></TouchlineLinkButton></Actions>
   </Frame>;
 });

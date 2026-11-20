@@ -7,7 +7,8 @@ import { compareForecastPicks, forecastConfidence, forecastSourceConfidence, typ
 import { goalMarketDefinitionSchema } from "../../domain/score-distribution-markets.ts";
 import type { EvidenceSnapshot } from "../evidence/evidence-contract.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
-import type { ResolvedForecastCandidate, ResolvedForecastMarket } from "../fallback/fallback-contract.ts";
+import { goalProfileForLocalFirstCascade, isLocalFirstForecastCascade,
+  type ResolvedForecastCandidate, type ResolvedForecastMarket } from "../fallback/fallback-contract.ts";
 import { canonicalLegacyForecastSelection, evaluateForecastMarkets, legacyForecastMarketKey, type ForecastMarketEvaluation } from "./forecast-market-evaluator.ts";
 import type { StoredGoalMarketExtension } from "./goal-market-store.ts";
 import { historyHash, historyId, historyInstant, historyVersion } from "./history-input.ts";
@@ -213,7 +214,11 @@ export async function buildLocalFirstForecastDecision(input: ForecastDecisionInp
   loadOdds?: () => Promise<PreMatchBookmakerOdds | null>;
 }>) {
   const { candidate, goalExtension } = input;
-  const evaluated = evaluateForecastMarkets({ candidateMarkets: candidate.markets, localFirst: true,
+  const cascade = candidate.audit.sourceCascade;
+  if (!isLocalFirstForecastCascade(cascade)) throw new Error("A sealed local-first forecast profile is required.");
+  const profile = goalProfileForLocalFirstCascade(cascade);
+  if (goalExtension && goalExtension.evaluationProfile !== profile) throw new Error("The sealed local-first forecast profile changed.");
+  const evaluated = evaluateForecastMarkets({ candidateMarkets: candidate.markets, localFirst: profile,
     ...(goalExtension ? { publishedLocalMarkets: goalExtension.markets } : {}) });
   const { body: identity, evidenceHash, sourceIds } = decisionBody(input, evaluated);
   const local = Object.values(candidate.markets).find((item) => item.available && item.provenance.kind === "local-engine");

@@ -52,11 +52,13 @@ const storedFeedBaseSchema = z.strictObject({
    * slips, abbreviations, one of several named teams). Exact matches always precede similar ones in record order. */
   search: z.strictObject({ exact: count, similar: count }).nullable().default(null),
 });
-function refineFeed(value: Omit<z.infer<typeof storedFeedBaseSchema>, "records"> & { records: readonly { fixtureId: string }[] }, ctx: z.RefinementCtx) {
+function refineFeed(value: Omit<z.infer<typeof storedFeedBaseSchema>, "records"> &
+  { records: readonly Pick<StoredMatchFeedRecord, "fixtureId" | "retrospective">[] }, ctx: z.RefinementCtx) {
   if (value.records.length !== Math.min(value.pageSize, Math.max(0, value.total - (value.page - 1) * value.pageSize)) ||
     new Set(value.leagues.map((league) => league.id)).size !== value.leagues.length ||
     value.totalPages !== Math.ceil(value.total / value.pageSize) ||
     new Set(value.records.map((record) => record.fixtureId)).size !== value.records.length ||
+    value.records.some(({ retrospective }) => retrospective && retrospective.activatedAt > value.asOf) ||
     value.nextPage !== null && value.nextPage !== value.page + 1 || value.previousPage !== null && value.previousPage >= value.page ||
     (value.links.next === null) !== (value.nextPage === null) || (value.links.previous === null) !== (value.previousPage === null) ||
     value.coverage.partial !== value.coverage.dates.some((entry) => !entry.authoritative) ||
@@ -72,7 +74,8 @@ export const storedMatchFeedResponseSchema = storedFeedBaseSchema.superRefine(re
 export const matchFeedResponseSchema = z.strictObject({ ...storedFeedBaseSchema.shape,
   records: z.array(matchFeedRecordSchema).max(feedQueryRules.maximumPageSize), access: contentAccessSchema,
 }).superRefine(refineFeed).refine((value) => value.access.tier === "full" || value.records.every((record) =>
-  isCompletedFixtureStatus(record.status) || (!record.prices?.length && record.marketOdds == null && (record.forecast === null || "gated" in record.forecast))),
+  isCompletedFixtureStatus(record.status) || (!record.prices?.length && record.marketOdds == null && record.retrospective == null &&
+    (record.forecast === null || "gated" in record.forecast))),
 "Unfinished public matches must not contain prices or predictions.");
 export type StoredMatchFeedResponse = z.infer<typeof storedMatchFeedResponseSchema>;
 export type StoredMatchFeedRecord = z.infer<typeof storedMatchFeedRecordSchema>;

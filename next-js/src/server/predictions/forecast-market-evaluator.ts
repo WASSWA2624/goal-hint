@@ -1,8 +1,10 @@
 import "server-only";
 
-import { isEligibleLocalFirstGoalDefinition, localFirstGoalMarketDefinitions, registeredForecastGoalMarkets,
+import { goalDefinitionsForLocalFirstProfile, isEligibleLocalFirstGoalDefinition, LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE,
+  LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localFirstGoalEvaluationProfiles, registeredForecastGoalMarkets, type LocalFirstGoalEvaluationProfile,
   type RegisteredGoalMarketDefinition } from "../../domain/goal-market-definitions.ts";
-import { LOCAL_FIRST_MARKET_REGISTRY_VERSION, MARKET_REGISTRY_VERSION, marketRegistry, type RegisteredMarketFamily } from "../../domain/market-registry.ts";
+import { LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION, LOCAL_FIRST_MARKET_REGISTRY_VERSION, MARKET_REGISTRY_VERSION, marketRegistry,
+  type RegisteredMarketFamily } from "../../domain/market-registry.ts";
 import { marketRules, type MarketFamily, type MarketSource, type SelectionFor } from "../../domain/markets.ts";
 import { deriveBoundedGoalMarket, GOAL_DERIVATION_TAIL_BOUND, type GoalDerivationResult, type GoalGrade,
   type GoalMarketDefinition, type GoalMarketPeriod } from "../../domain/score-distribution-markets.ts";
@@ -13,7 +15,8 @@ import { provenTrue } from "../shared/authority-proof.ts";
 import type { PublishedGoalMarket } from "./goal-market-store.ts";
 
 export const FORECAST_MARKET_EVALUATION_VERSION = "forecast-market-evaluation-v1";
-export const LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION = "forecast-market-evaluation-v2";
+export const LEGACY_LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION = "forecast-market-evaluation-v2";
+export const LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION = "forecast-market-evaluation-v3";
 
 export type QualifiedForecastGoalModel = Readonly<{
   source: Extract<MarketSource, "ai" | "local-engine">;
@@ -35,9 +38,14 @@ export function legacyForecastMarketKey(family: MarketFamily): string { return l
 export function canonicalLegacyForecastSelection(family: MarketFamily, selection: string): string | null {
   return Object.entries(legacy[family].choices).find(([, key]) => key === selection)?.[0] ?? null;
 }
+export function legacyForecastOutcome(marketKey: string, selection: string) {
+  const family = legacyByKey.get(marketKey);
+  const displayed = family ? Object.entries(legacy[family].choices).find(([key]) => key === selection)?.[1] : undefined;
+  return family && displayed ? { family, selection: displayed } : null;
+}
 const goalMarkets = registeredForecastGoalMarkets();
-const localFirstGoalMarkets = registeredForecastGoalMarkets(true);
-const publishedLocalKeys = new Set(localFirstGoalMarketDefinitions.map(({ key }) => key));
+const publishedLocalKeys = new Map(localFirstGoalEvaluationProfiles.map((profile) =>
+  [profile, new Set(goalDefinitionsForLocalFirstProfile(profile).map(({ key }) => key))]));
 const registeredByKey = new Map(goalMarkets.map((row) => [row.definition.key, row]));
 const represented = new Set(goalMarkets.map((row) => row.family));
 const otherFamilies = (Object.keys(marketRegistry) as RegisteredMarketFamily[]).filter((family) => !represented.has(family));
@@ -145,7 +153,7 @@ export type ForecastMarketEvaluatorInput = Readonly<{
   candidateMarkets: CandidateMarkets;
   goalModel?: QualifiedForecastGoalModel;
   verifyGoalModel?(model: QualifiedForecastGoalModel): boolean;
-  localFirst?: true;
+  localFirst?: true | LocalFirstGoalEvaluationProfile;
   /** Immutable derived rows of the existing authorized regulation-count profile. */
   publishedLocalMarkets?: readonly PublishedGoalMarket[];
 }>;
@@ -169,15 +177,18 @@ function evaluatePublishedLocalMarket(identity: RowIdentity, definition: GoalMar
  * and diagnostic period artifacts supply no numerical market authority here. */
 export function evaluateForecastMarkets(input: ForecastMarketEvaluatorInput) {
   const state = qualifiedGoalState(input);
-  const published = new Map(input.localFirst ? input.publishedLocalMarkets?.map((row) => [row.definition.key, row]) ?? [] : []);
-  const markets = (input.localFirst ? localFirstGoalMarkets : goalMarkets).map((row) => {
+  const profile = input.localFirst === true ? LOCAL_FIRST_GOAL_EVALUATION_PROFILE : input.localFirst;
+  const legacy = profile === LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE;
+  const published = new Map(profile ? input.publishedLocalMarkets?.map((row) => [row.definition.key, row]) ?? [] : []);
+  const localKeys = profile ? publishedLocalKeys.get(profile) : undefined;
+  const markets = (profile ? registeredForecastGoalMarkets(profile) : goalMarkets).map((row) => {
     const { definition, family } = row;
     const identity = { family, marketKey: definition.key, period: definition.period };
-    if (input.localFirst && !isEligibleLocalFirstGoalDefinition(definition)) return unavailable(identity, "outside-full-match-totals-range");
-    if (input.localFirst && (definition.key.startsWith("goal:full-time:goal-range:") || family === "clean-sheet" || family === "team-to-score"))
+    if (profile && !isEligibleLocalFirstGoalDefinition(definition, profile)) return unavailable(identity, "outside-full-match-totals-range");
+    if (profile && (definition.key.startsWith("goal:full-time:goal-range:") || family === "clean-sheet" || family === "team-to-score"))
       return unavailable(identity, "unsupported-publication-projection");
     const legacyFamily = legacyByKey.get(definition.key);
-    const local = publishedLocalKeys.has(definition.key) ? published.get(definition.key) : undefined;
+    const local = localKeys?.has(definition.key) ? published.get(definition.key) : undefined;
     if (legacyFamily) {
       const market = input.candidateMarkets[legacyFamily];
       if (market.available || !local && ("reason" in state || !state.qualified.has(definition.key))) {
@@ -192,6 +203,7 @@ export function evaluateForecastMarkets(input: ForecastMarketEvaluatorInput) {
     markets.push(settlement.basis === "unsupported" ? unavailable(identity, "unsupported-settlement", settlement.reason) :
       unavailable(identity, "no-qualified-market-model", models.basis === "unsupported" ? models.reason : undefined));
   }
-  return freezeEvidence({ version: input.localFirst ? LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION : FORECAST_MARKET_EVALUATION_VERSION,
-    registryVersion: input.localFirst ? LOCAL_FIRST_MARKET_REGISTRY_VERSION : MARKET_REGISTRY_VERSION, markets });
+  return freezeEvidence({ version: legacy ? LEGACY_LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION :
+    profile ? LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION : FORECAST_MARKET_EVALUATION_VERSION,
+    registryVersion: legacy ? LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION : profile ? LOCAL_FIRST_MARKET_REGISTRY_VERSION : MARKET_REGISTRY_VERSION, markets });
 }

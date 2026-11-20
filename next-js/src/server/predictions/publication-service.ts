@@ -6,7 +6,7 @@ import type { SettlementStatus } from "../../domain/market-settlement.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
 import { createMysqlEvidenceStore } from "../evidence/evidence-mysql-store.ts";
-import { LOCAL_FIRST_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
+import { isLocalFirstForecastCascade } from "../fallback/fallback-contract.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { JobQueueError, type JobLease, type JobQueue } from "../jobs/job-contract.ts";
 import { durableJobId, parseJobEnvelope } from "../jobs/job-input.ts";
@@ -132,7 +132,7 @@ export function createRevisionPublicationService(options: Readonly<{
           const latest = await tx.predictionSet.findFirst({ where: { fixtureId: fixture.id }, orderBy: { fixtureRevision: "desc" } });
           if (reason === null && latest && predictionRunOrder(latest.runSequence) >= predictionRunOrder(run.sequence)) reason = "older-run";
           let quoteCapture = false, forecastDecision: ForecastDecision | undefined;
-          const localFirstPublication = candidate.audit.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE;
+          const localFirstPublication = isLocalFirstForecastCascade(candidate.audit.sourceCascade);
           const recordDecision = localFirstPublication || options.recordForecastDecision && candidate.audit.sourceCascade !== undefined;
           let storedGoalExtension: StoredGoalMarketExtension | null = null;
           let revision = null, impliedSnapshot: StoredImpliedMarketExtension | null = null,

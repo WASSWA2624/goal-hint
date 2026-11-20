@@ -7,7 +7,7 @@ import { parseCostJob, parseCostRequest } from "../cost-control/cost-input.ts";
 import { parseCatalogImportRequest, parseCatalogEvidenceRef } from "../football/catalog-input.ts";
 import { createModelPin } from "../predictor/predictor-input.ts";
 import { parseProviderFallbackRequest } from "../fallback/fallback-adapter.ts";
-import { forecastCascades, LOCAL_FIRST_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
+import { forecastCascades, isLocalFirstForecastCascade } from "../fallback/fallback-contract.ts";
 import { permitsPredictorRetry } from "../predictor/predictor-resilience.ts";
 import { refreshFail, type RefreshMember, type RefreshPlan } from "./refresh-contract.ts";
 import { goalMarketDefinitionSchema } from "../../domain/score-distribution-markets.ts";
@@ -39,7 +39,7 @@ export function parseRefreshPlan(input: RefreshPlan, member: RefreshMember): Ref
     if ((input.ai === null) !== (input.modelVersionId === null) || input.sourceOrder !== undefined && input.ai === null) throw new Error();
     // AI joint-distribution extension markets are never published beside a provider match result.
     if ((input.goalDefinitions !== undefined || input.sourceCascade !== undefined) && input.sourceOrder === "provider-first") throw new Error();
-    if (input.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE && (input.ai !== null || input.goalDefinitions === undefined)) throw new Error();
+    if (isLocalFirstForecastCascade(input.sourceCascade) && (input.ai !== null || input.goalDefinitions === undefined)) throw new Error();
     if (input.goalDefinitions !== undefined && (input.ai === null && input.sourceCascade === undefined ||
         new Set(input.goalDefinitions.map(({ key }) => key)).size !== input.goalDefinitions.length)) throw new Error();
     const evidence = parseEvidenceCollectionRequest(input.evidence);

@@ -13,7 +13,7 @@ import { parseModelPin } from "../predictor/predictor-input.ts";
 import { fourDigitYearInstant as instant } from "../shared/utc-instant.ts";
 import type { PredictorResult } from "../predictor/predictor-service.ts";
 import { predictorRetryAttemptId } from "../predictor/predictor-resilience.ts";
-import { forecastCascades, LOCAL_FIRST_FORECAST_CASCADE, localForecastAbstentions, QUALIFIED_FORECAST_CASCADE, type FallbackContext, type ForecastTimestamps, type ProviderFallbackCandidate,
+import { forecastCascades, isLocalFirstForecastCascade, localForecastAbstentions, QUALIFIED_FORECAST_CASCADE, type FallbackContext, type ForecastTimestamps, type ProviderFallbackCandidate,
   type ProviderFallbackResult, type ResolvedForecastCandidate } from "./fallback-contract.ts";
 
 export class FallbackInputError extends Error {
@@ -214,7 +214,7 @@ export function parseResolvedForecastCandidate(value: unknown): ResolvedForecast
         ...(family === "total-goals" ? { line: market.line } : {}) };
     }
     const checked = validateMarketSnapshot(inputs);
-    const localFirst = parsed.audit.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE;
+    const localFirst = isLocalFirstForecastCascade(parsed.audit.sourceCascade);
     const qualified = localFirst || parsed.audit.sourceCascade === QUALIFIED_FORECAST_CASCADE;
     if (localFirst && (context.pin !== null || parsed.audit.sourceOrder !== undefined || parsed.audit.aiStatus !== "denied" ||
       parsed.audit.aiReason !== "unconfigured")) throw new Error();

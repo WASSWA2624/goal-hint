@@ -5,7 +5,7 @@ import { dailyRunProgressSchema, matchFeedRecordSchema, storedMatchFeedRecordSch
 import { contentAccessSchema } from "./content-access.ts";
 import { liveMatchSnapshotSchema } from "./live-match.ts";
 import { inPlayOddsObservationSchema } from "./in-play-odds.ts";
-import { publicExtendedMarketSnapshotSchema, total15OddsSchema } from "./extended-markets.ts";
+import { featuredPredictionSchema, publicExtendedMarketSnapshotSchema, total15OddsSchema } from "./extended-markets.ts";
 import { marketSources } from "./markets.ts";
 import { preMatchBookmakerOddsSchema } from "./bookmaker-odds.ts";
 
@@ -85,6 +85,7 @@ const storedDetailBaseSchema = z.strictObject({ fixture: storedMatchFeedRecordSc
   recoveredBookmakerOdds: preMatchBookmakerOddsSchema.nullable().optional(),
   extendedMarkets: publicExtendedMarketSnapshotSchema.nullable().optional(),
   extendedOdds: total15OddsSchema.nullable().optional(),
+  retrospectiveMarkets: z.array(featuredPredictionSchema.extend({ source: z.literal("local-engine") })).min(1).max(256).nullable().optional(),
   route: z.strictObject({ fixtureId: id, slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u).max(160), path: z.string().max(512) }),
   currentRevisionId: id.nullable(), selection: z.enum(["applicable", "revision", "cycle"]), selectedCycle: detailCycleSchema.nullable(), snapshot: storedDetailSnapshotSchema.nullable(),
   history: z.strictObject({ limit: z.number().int().min(1).max(matchDetailRules.maximumLimit),
@@ -111,6 +112,13 @@ function refineDetail(v: z.infer<typeof wireDetailBaseSchema>, ctx: z.Refinement
     v.selection === "applicable" && v.snapshot?.revisionId !== (v.currentRevisionId ?? undefined) ||
     v.snapshot && (v.snapshot.historical !== (v.snapshot.revisionId !== v.currentRevisionId) || v.snapshot.cycleId !== v.selectedCycle?.id)) ctx.addIssue({ code: "custom", message: "Incoherent detail response." });
   if (v.odds && new Set(v.odds.map((group) => group.family)).size !== v.odds.length) ctx.addIssue({ code: "custom", message: "One odds group per family." });
+  const replay = v.fixture.retrospective, replayMarkets = v.retrospectiveMarkets;
+  if (replay ? v.selection !== "applicable" || replay.activatedAt > v.asOf || !replayMarkets ||
+    new Set(replayMarkets.map(({ key }) => key)).size !== replayMarkets.length ||
+    !replayMarkets.some((pick) => pick.key === replay.pick.key && pick.selection === replay.pick.selection &&
+      pick.probability === replay.pick.probability) : replayMarkets != null) {
+    ctx.addIssue({ code: "custom", message: "Retrospective markets require one active retrospective detail forecast." });
+  }
   if (v.liveMatch) {
     const cycleId = v.selection === "applicable" ? v.fixture.cycleId : v.selectedCycle?.id ?? null;
     const kickoffAt = v.selection === "applicable" ? v.fixture.kickoffAt : v.selectedCycle?.kickoffAt ?? null;

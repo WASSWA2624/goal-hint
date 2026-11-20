@@ -61,7 +61,7 @@ the verified account plan changes. OpenAI cannot fill missing fixture schedules.
 ### Forecast source order
 
 New pre-match intents on the authorized production worker and owned local
-football worker pin `qualified-local-provider-v1`. The Local Engine uses the
+football worker pin `qualified-local-provider-v2`. The Local Engine uses the
 established regularized Poisson baseline, cutoff-bound regulation results and
 minimum effective sample sizes. The worker checks each launch market against
 the baseline's coherent probabilities. Only API-Football match-result

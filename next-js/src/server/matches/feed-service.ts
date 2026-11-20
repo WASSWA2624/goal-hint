@@ -25,6 +25,10 @@ import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public
 import { readPublicCacheGenerations } from "../cache/mysql-public-cache.ts";
 import { prepareDemoRange } from "../demo/read-seed.ts";
 import { publicOddsEnabled } from "../odds/public-odds-policy.ts";
+import { isNovemberReplayKickoff } from "../../domain/november-replay.ts";
+import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
+import { readNovemberReplayProjections } from "../intelligence/november-replay-store.ts";
+import { projectRetrospectiveForecast, retrospectiveOutcomeKeys } from "./retrospective-picks.ts";
 
 export function parseMatchFeedQuery(input: FeedParameters, today: ReportingDate,
   context: Readonly<{ locale?: string; routeDate?: string; providerOdds?: boolean; asOf?: number }> = {}) {
@@ -121,9 +125,16 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         if (run?.phase === "updating") run.message = messages.text("feed.updating");
         const records = await storedFeedFixtures(tx, rows.map(({ id }) => id), false, window, query.locale,
           { prices: providerOdds, preferRecommendation: !publishedForecasts, asOf });
+        const replayIds = publishedForecasts ? records.filter(({ kickoffAt, status, forecast, cycle }) =>
+          isNovemberReplayKickoff(kickoffAt) && (status === "live" || isPlayedFinalStatus(status)) && forecast && cycle?.state === "closed")
+          .map(({ fixtureId }) => fixtureId) : [];
+        const replays = await readNovemberReplayProjections(tx, replayIds);
+        const replayPicks = retrospectiveOutcomeKeys(query.marketPicks ?? []);
         for (const record of records) {
           const date = record.kickoffAt === null ? null : getReportingDate(record.kickoffAt);
           record.partialCoverage = dates.find((entry) => entry.date === date)?.authoritative !== true;
+          const replay = projectRetrospectiveForecast(record, replays.get(record.fixtureId), query.locale, replayPicks);
+          if (replay) record.retrospective = replay.card;
         }
         const totalPages = Math.ceil(total / query.pageSize);
         const nextPage = query.page < totalPages && query.page < feedQueryRules.maximumPage ? query.page + 1 : null;
@@ -133,7 +144,8 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         const keys: Partial<Record<typeof state, TextKey>> = { "data-unavailable": "feed.dataUnavailable", "no-fixtures": "feed.noFixtures",
           "no-filter-matches": "feed.noFilterMatches", "page-out-of-range": "feed.pageOutOfRange", "insufficient-data": "feed.insufficientData" };
         const response = storedMatchFeedResponseSchema.parse({ performance, ...versions, leagues, records, page: query.page, nextPage, previousPage, pageSize: query.pageSize, total, totalPages,
-          links: { next: pageLink(query, today, nextPage), previous: pageLink(query, today, previousPage) }, asOf, today,
+          links: { next: pageLink(query, today, nextPage), previous: pageLink(query, today, previousPage) },
+          asOf: Math.max(asOf, ...records.map((record) => record.retrospective?.activatedAt ?? asOf)), today,
           range: { from: range.startDate, to: range.endDate, ...range.window }, state, message: keys[state] ? messages.text(keys[state]!) : null,
           coverage: { partial, knownFixtures, matchingWithMarket, matchingWithPerformancePick, dates }, run,
           search: query.search ? { exact: exactMatches ?? 0, similar: total - (exactMatches ?? 0) } : null });
@@ -142,7 +154,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       const response = options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: 28, providerOdds, completedOnly: context.completedOnly === true,
+        query: { ...query, projection: 29, providerOdds, completedOnly: context.completedOnly === true,
           publishedOnly, publishedForecasts, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } },
         scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => storedMatchFeedResponseSchema.parse(value) }), read) : await read();

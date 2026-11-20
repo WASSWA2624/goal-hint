@@ -5,7 +5,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { getReportingDate } from "../src/domain/calendar.ts";
+import { getPublicationDeadline, getReportingDate } from "../src/domain/calendar.ts";
+import { getDayBoundsInTimeZone } from "../src/domain/device-calendar.ts";
 import { parseRuntimePolicy } from "../src/server/config/runtime-policy.ts";
 import { createDatabase, DatabaseOperationError } from "../src/server/database/client.ts";
 import { createFootballCatalogStore, lockCatalog } from "../src/server/football/catalog-mysql-store.ts";
@@ -14,7 +15,11 @@ import { validateCatalogBatch } from "../src/server/football/catalog-input.ts";
 import { createFootballHistoryFixtureReplay } from "../src/server/football/history-fixture-replay.ts";
 import { createFootballHistorySource } from "../src/server/football/history-source.ts";
 import { createLiveLocalEngine } from "../src/server/intelligence/live-local-engine.ts";
+import { NOVEMBER_REPLAY_WINDOW, loadNovemberReplayEvidence, readNovemberReplayPage,
+  readNovemberReplayTrainingMembership } from "../src/server/intelligence/november-replay-evidence.ts";
 import { storedFixtureResult } from "../src/server/results/result-read.ts";
+import { fixtureResultValue, insertFixtureResult } from "../src/server/results/result-write.ts";
+import { evidenceFingerprint } from "../src/server/evidence/evidence-input.ts";
 import { createMysqlResultSyncStore } from "../src/server/results/result-sync-mysql-store.ts";
 import { MysqlServerUnavailableError, startIsolatedMysql } from "./helpers/mysql-instance.mjs";
 import { CATALOG_NOW, catalogFixture, catalogTeam, catalogCompetition, catalogRequest, catalogHash,
@@ -87,6 +92,10 @@ test("canonical football catalog invariants on isolated genuine MySQL", { timeou
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.FixtureResultState TO 'catalog_application'@'127.0.0.1';
       GRANT SELECT ON goal_hint_test.FixtureLifecycleState TO 'catalog_application'@'127.0.0.1';
       GRANT SELECT ON goal_hint_test.PredictionCycle TO 'catalog_application'@'127.0.0.1';
+      GRANT SELECT ON goal_hint_test.PredictionSchedule TO 'catalog_application'@'127.0.0.1';
+      GRANT SELECT, INSERT ON goal_hint_test.PredictionChangeEvent TO 'catalog_application'@'127.0.0.1';
+      GRANT SELECT ON goal_hint_test.FixtureLifecycleObservation TO 'catalog_application'@'127.0.0.1';
+      GRANT SELECT ON goal_hint_test.IntelligenceShadowRevision TO 'catalog_application'@'127.0.0.1';
       GRANT SELECT, INSERT ON goal_hint_test.FootballHistorySourcePage TO 'catalog_application'@'127.0.0.1';
     `);
     const firstDatabase = replica(), secondDatabase = replica();
@@ -312,6 +321,91 @@ test("canonical football catalog invariants on isolated genuine MySQL", { timeou
       assert.equal(candidate.audit.aiReason, "unconfigured");
       assert.deepEqual(Object.values(candidate.markets).map((entry) => entry.market.source), Array(4).fill("local-engine"));
       assert.equal(candidate.markets["match-result"].provenance.sample.matches, 50);
+    });
+
+    await t.test("November replay pages include displaced occurrences and freeze the eligible result revisions at lock", async () => {
+      const start = NOVEMBER_REPLAY_WINDOW.startInclusive, end = NOVEMBER_REPLAY_WINDOW.endExclusive;
+      assert.equal(new Date(start).toISOString(), "2026-10-31T21:00:00.000Z");
+      assert.equal(new Date(end).toISOString(), "2026-11-30T21:00:00.000Z");
+      assert.equal(start, getDayBoundsInTimeZone("2026-11-01", "Africa/Kampala").startInclusive);
+      assert.equal(end, getDayBoundsInTimeZone("2026-11-30", "Africa/Kampala").endExclusive);
+      const hour = 3_600_000, day = 24 * hour, competitionId = 940, target = 9400, displaced = 9401,
+        stale = 9402, outside = 9403, future = 9404;
+      const playedAt = start + 2 * hour, cutoffAt = getPublicationDeadline(playedAt), auditedAt = Date.parse("2026-11-30T00:00:00Z");
+      const providerFixture = (id, kickoff, status = "NS", changes = {}) => catalogFixture(id,
+        { competitionId, kickoff: new Date(kickoff).toISOString(), status,
+          ...(status === "FT" ? { goals: { home: 2, away: 1 }, score: { fulltime: { home: 2, away: 1 } } } : {}), ...changes });
+      const ingest = async (id, kickoff, observedAt, status = "NS", changes = {}) => {
+        const store = createFootballCatalogStore(firstDatabase, { clock: { now: () => observedAt + 250 } });
+        await operation([providerFixture(id, kickoff, status, changes)], { store, now: observedAt }).run(fixtureSelection(id));
+      };
+      const historyObservation = start - day;
+      const historyStore = createFootballCatalogStore(firstDatabase, { clock: { now: () => historyObservation + 250 }, sealTeamHistory: true });
+      const past = Array.from({ length: 50 }, (_, index) => providerFixture(9450 + index, start - 70 * day + index * 6 * hour, "FT",
+        { homeId: index % 2 ? 10 : 20, awayId: index % 2 ? 20 : 10 }));
+      const history = await operation(past, { store: historyStore, now: historyObservation }).run({ kind: "fixtures",
+        query: { teamId: 10, from: "2026-08-01", to: "2026-10-31" } });
+      assert.equal(history.fixtureIds.length, 50);
+      await ingest(target, playedAt, cutoffAt - hour);
+      await ingest(displaced, start, start - hour);
+      await ingest(displaced, start - day, start + day);
+      await ingest(stale, playedAt, cutoffAt - 3 * hour);
+      await ingest(outside, end, start);
+      await ingest(future, end - hour, start);
+      await ingest(target, playedAt, playedAt + 2 * hour, "FT");
+      await ingest(stale, playedAt, playedAt + 2 * hour, "FT");
+      // The catalog uses database-default creation clocks. Keep the synthetic
+      // cohort at the recorded November audit clock when this suite runs later.
+      await firstDatabase.query((tx) => tx.footballFixture.updateMany({ where: { provider: "api-football",
+        externalId: { in: [target, displaced, stale, outside, future].map((id) => BigInt(id)) } },
+      data: { createdAt: new Date(start - day) } }));
+
+      const byScope = async (scope) => {
+        const observed = [];
+        for (let after; ; ) {
+          const page = await readNovemberReplayPage(firstDatabase, { scope, after, limit: 2, auditedAt });
+          if (page.length === 0) return observed.filter((row) => row.externalId >= 9400n && row.externalId <= 9404n);
+          assert.ok(!after || page[0].kickoffAt > after.kickoffAt ||
+            page[0].kickoffAt === after.kickoffAt && page[0].fixtureId > after.fixtureId,
+          `${scope} advances past its exact kickoff and fixture cursor`);
+          observed.push(...page);
+          after = page.at(-1);
+        }
+      };
+      const [canonical, moved, all] = await Promise.all([byScope("canonical"), byScope("displaced"), byScope("all")]);
+      assert.deepEqual(canonical.map((row) => row.externalId).sort(), [9400n, 9402n, 9404n]);
+      assert.deepEqual(moved.map((row) => [row.externalId, row.kickoffAt, row.applicable]), [[9401n, start, false]]);
+      assert.equal(all.length, canonical.length + moved.length);
+      assert.equal((await loadNovemberReplayEvidence(firstDatabase, moved[0], auditedAt)).reason, "displaced-occurrence");
+      assert.equal((await loadNovemberReplayEvidence(firstDatabase, canonical.find((row) => row.externalId === 9402n), auditedAt)).reason,
+        "schedule-stale-at-cutoff");
+      assert.equal((await loadNovemberReplayEvidence(firstDatabase, canonical.find((row) => row.externalId === 9404n), auditedAt)).status, "prospective");
+      const occurrence = canonical.find((row) => row.externalId === BigInt(target));
+      const before = await loadNovemberReplayEvidence(firstDatabase, occurrence, auditedAt);
+      assert.equal(before.status, "qualified", before.reason);
+      assert.equal(before.cutoffAt, cutoffAt);
+      assert.equal(before.forecast.forecastAt, cutoffAt - 1);
+      assert.equal(before.historyMatches, 50);
+
+      // This correction has a pre-lock provider observation, but its result revision was only committed after lock.
+      const row = await fixture(9450);
+      const original = await firstDatabase.query((tx) => tx.fixtureResultState.findUniqueOrThrow({ where: { fixtureId: row.id } }));
+      assert.ok(before.evidenceReceiptIds.includes(original.resultId));
+      await firstDatabase.transaction(async (tx) => {
+        const version = row.dataVersion + 1n, observedAt = cutoffAt - 1000;
+        await tx.footballFixture.update({ where: { id: row.id }, data: { regulationHome: 4, dataVersion: version } });
+        const value = fixtureResultValue({ ...row, regulationHome: 4 }, { externalFixtureId: Number(row.externalId),
+          reportedGoals: { home: 4, away: 1 }, extraTimeScore: { home: null, away: null }, penaltyScore: { home: null, away: null } });
+        const id = await insertFixtureResult(tx, { fixtureId: row.id, fixtureVersion: version, previousId: original.resultId,
+          observationId: catalogHash("post-cutoff-repair"), observedAt, providerUpdatedAt: null,
+          regulationVerifiedAt: row.regulationVerifiedAt, value, contentHash: evidenceFingerprint(value) });
+        await tx.predictionChangeEvent.create({ data: { fixtureId: row.id, version, fixtureResultId: id, kind: "fixture-result", at: new Date(cutoffAt + 1) } });
+      });
+      await ingest(9450, start + 10 * day, start + 5 * day, "NS", { competitionId: 941, homeId: 20, awayId: 30 });
+      const after = await loadNovemberReplayEvidence(firstDatabase, occurrence, auditedAt);
+      assert.deepEqual(after, before);
+      const membership = await readNovemberReplayTrainingMembership(firstDatabase, auditedAt);
+      assert.deepEqual(await loadNovemberReplayEvidence(firstDatabase, occurrence, auditedAt, membership.get(occurrence.competitionId) ?? []), before);
     });
 
     await t.test("historical partial receipts bypass the catalog lock and preserve duplicate and conflicting IDs", async () => {

@@ -372,17 +372,16 @@ trusted authority module that verifies stage seals).
 
 ### Local regulation-count scope
 
-The local-first forecast decision uses `football-market-registry-v4` and
-`forecast-market-evaluation-v2`. Its `local-regulation-count-v1` extension
-uses the existing regulation score/count model. It admits every registered
-full-match total from 1.5 through 5.5, including the 5 and 5.25 payout lines.
-Team totals, counts, ranges and parity retain their own regulation-count scope.
+New local-first decisions use `football-market-registry-v5` and the
+`local-regulation-count-v2` extension with `forecast-market-evaluation-v2`.
+The existing regulation score model admits every registered full-match
+fixture and team total from 1.5 through 5.5, including the 5 and 5.25 payout
+lines. Counts, ranges and parity retain their regulation-count scope.
 Named regulation ranges publish under the approved count-range identity.
 Separate team-to-score and clean-sheet publications require their own supported
 public pick and settlement identities.
-The exact definitions remain available to read and settle historical forecasts
-under their original versions. Earlier forecasts retain their original ranking
-and source semantics when replayed.
+The v4 registry and `local-regulation-count-v1` remain available for earlier
+forecasts, which retain their definitions, ranking and source semantics.
 
 The stored selection distribution carries outright win, loss, push, half-win
 and half-loss separately. An integer-line push or quarter-line half grade stays

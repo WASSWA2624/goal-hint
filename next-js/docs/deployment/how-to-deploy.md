@@ -131,6 +131,22 @@ grant once. Verify the table checks and role grants before activating the
 release. The released web reads historical quotes even when provider import
 jobs are disabled in staging. [Odds grants](../provider-odds.md#application-grants)
 
+Apply `20261120160000_november_replay` before starting the revised web release
+on either target. The web role needs `SELECT` on `NovemberReplayProjection`
+and its existing fixture, cycle, lifecycle state, and publication barrier
+reads. Use a separate operator connection for replay writes. That role needs
+`SELECT, INSERT` on `NovemberReplayRevision` and `NovemberReplayAction`,
+`SELECT` on `NovemberReplayProjection`, `INSERT (fixtureId, changedAt)` on
+the projection, and `UPDATE (revisionId, sourceRevisionId, cycleId,
+scheduleVersion, kickoffAt, evidenceCutoffAt, activationOperationId, changedAt,
+integrity, body)` on the projection. It also needs the established
+read access to fixture identities, audit, schedule, publication and result
+evidence. The migration account's cache trigger needs to retain access to
+`PublicCacheTag` and `PublicCacheInvalidation`. Verify the three tables and
+trigger definers after migration. Installing the migration leaves the projection
+empty. Replay staging, activation and rollback use the reviewed operator
+workflow independently of release activation.
+
 On 14 October 2026, a private backup was taken before the corrective migration
 `20261014161000_transactional_storage` converted the seven analytics tables and
 `OperationsMonitorState` from MyISAM to InnoDB. Prisma's history table was converted

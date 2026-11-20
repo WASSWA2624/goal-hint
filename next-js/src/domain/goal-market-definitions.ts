@@ -137,13 +137,21 @@ const registeredCountMarkets = [
 /** Preserve the current public goal extension's definitions and their order. */
 export const liveGoalMarketDefinitions: readonly GoalMarketDefinition[] = Object.freeze(registeredCountMarkets.map((row) => row.definition));
 
-export const LOCAL_FIRST_GOAL_EVALUATION_PROFILE = "local-regulation-count-v1";
+export const LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE = "local-regulation-count-v1";
+export const LOCAL_FIRST_GOAL_EVALUATION_PROFILE = "local-regulation-count-v2";
+export const localFirstGoalEvaluationProfiles = [LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE, LOCAL_FIRST_GOAL_EVALUATION_PROFILE] as const;
+export type LocalFirstGoalEvaluationProfile = typeof localFirstGoalEvaluationProfiles[number];
 const additionalFullTimeTotals = [5, 5.25].map((line) => registered("total-goals", goalTotalsMarket(line, "total", "full-time", "asian")));
+const additionalFullTimeTeamTotals = sides.flatMap((team) =>
+  [5, 5.25].map((line) => registered("team-goals", goalTotalsMarket(line, team, "full-time", "asian"))));
 
-/** The new full-match totals range changes forecast admission only. */
-export function isEligibleLocalFirstGoalDefinition({ period, selections }: GoalMarketDefinition) {
+/** The totals range changes forecast admission only, scoped to the sealed profile. */
+export function isEligibleLocalFirstGoalDefinition({ period, selections }: GoalMarketDefinition,
+  profile: LocalFirstGoalEvaluationProfile = LOCAL_FIRST_GOAL_EVALUATION_PROFILE) {
   return period !== "full-time" || selections.every(({ rule }) =>
-    (rule.kind !== "total" && rule.kind !== "asian-total") || rule.metric !== "total" || rule.line >= 1.5 && rule.line <= 5.5);
+    (rule.kind !== "total" && rule.kind !== "asian-total") ||
+    (profile === LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE && rule.metric !== "total") ||
+    rule.line >= 1.5 && rule.line <= 5.5);
 }
 
 function goalTeamToScoreMarket(team: "home" | "away", period: GoalMarketPeriod): GoalMarketDefinition {
@@ -191,18 +199,28 @@ const forecastGoalMarkets = Object.freeze([
     registered("combined-outcomes", goalAndTotalsMarket(goalBothTeamsScoreMarket(), "Both teams to score and total goals 2.5")),
 ]);
 const namedRegulationCountRanges = [2, 3, 4].map((max) => registered("goal-ranges", goalRangeSelectionMarket(max, "full-time", "count-range")));
-const localFirstForecastGoalMarkets = Object.freeze([...forecastGoalMarkets, ...additionalFullTimeTotals, ...namedRegulationCountRanges]);
+const legacyLocalFirstForecastGoalMarkets = Object.freeze([...forecastGoalMarkets, ...additionalFullTimeTotals, ...namedRegulationCountRanges]);
+const localFirstForecastGoalMarkets = Object.freeze([...legacyLocalFirstForecastGoalMarkets, ...additionalFullTimeTeamTotals]);
 
 /** Regulation-count events with a verified public pick and settlement identity. */
 const localCountFamilies = new Set<RegisteredMarketFamily>([
   "total-goals", "team-goals", "goal-ranges", "exact-goals", "odd-even-goals",
 ]);
-export const localFirstGoalMarketDefinitions: readonly GoalMarketDefinition[] = Object.freeze(localFirstForecastGoalMarkets.flatMap(({ family, definition }) =>
-  definition.period === "full-time" && localCountFamilies.has(family) && isEligibleLocalFirstGoalDefinition(definition) &&
-    !definition.key.startsWith("goal:full-time:goal-range:") ? [definition] : []));
+function localFirstDefinitions(profile: LocalFirstGoalEvaluationProfile) {
+  return Object.freeze(registeredForecastGoalMarkets(profile).flatMap(({ family, definition }) =>
+    definition.period === "full-time" && localCountFamilies.has(family) && isEligibleLocalFirstGoalDefinition(definition, profile) &&
+      !definition.key.startsWith("goal:full-time:goal-range:") ? [definition] : []));
+}
+
+export const legacyLocalFirstGoalMarketDefinitions = localFirstDefinitions(LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE);
+export const localFirstGoalMarketDefinitions = localFirstDefinitions(LOCAL_FIRST_GOAL_EVALUATION_PROFILE);
+export function goalDefinitionsForLocalFirstProfile(profile: LocalFirstGoalEvaluationProfile) {
+  return profile === LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE ? legacyLocalFirstGoalMarketDefinitions : localFirstGoalMarketDefinitions;
+}
 
 /** Reviewed modeled instances of the shared registry. Model qualification and
  * observed offers still determine the available output for each fixture. */
-export function registeredForecastGoalMarkets(localFirst = false): readonly RegisteredGoalMarketDefinition[] {
+export function registeredForecastGoalMarkets(localFirst: boolean | LocalFirstGoalEvaluationProfile = false): readonly RegisteredGoalMarketDefinition[] {
+  if (localFirst === LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE) return legacyLocalFirstForecastGoalMarkets;
   return localFirst ? localFirstForecastGoalMarkets : forecastGoalMarkets;
 }

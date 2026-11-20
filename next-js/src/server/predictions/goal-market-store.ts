@@ -2,8 +2,8 @@ import "server-only";
 
 import { z } from "zod";
 import { settledExtendedStatuses as settledStatuses } from "../../domain/extended-markets.ts";
-import { legacyLiveGoalMarketDefinitions, liveGoalMarketDefinitions, LOCAL_FIRST_GOAL_EVALUATION_PROFILE,
-  localFirstGoalMarketDefinitions } from "../../domain/goal-market-definitions.ts";
+import { goalDefinitionsForLocalFirstProfile, legacyLiveGoalMarketDefinitions, liveGoalMarketDefinitions,
+  localFirstGoalEvaluationProfiles, type LocalFirstGoalEvaluationProfile } from "../../domain/goal-market-definitions.ts";
 import { scoreDistributionSchema, type ScoreDistribution } from "../../domain/score-distribution.ts";
 import { deriveGoalMarket, deriveLocalGoalMarket, goalMarketDefinitionSchema, GOAL_MARKET_RULE_VERSION,
   localPoissonRatesSchema, settleGoalSelection,
@@ -20,17 +20,18 @@ type Tx = Prisma.TransactionClient;
 export const goalMarketStorageLimits = Object.freeze({ definitions: 256, bytes: 4 * 1024 * 1024 });
 const definitionsSchema = z.array(goalMarketDefinitionSchema).max(goalMarketStorageLimits.definitions);
 const legacyGoalCatalogHashes = new Set([liveGoalMarketDefinitions, legacyLiveGoalMarketDefinitions].map(evidenceFingerprint));
-const localFirstGoalCatalogHash = evidenceFingerprint(localFirstGoalMarketDefinitions);
+const localFirstGoalCatalogHashes = new Map(localFirstGoalEvaluationProfiles.map((profile) =>
+  [profile, evidenceFingerprint(goalDefinitionsForLocalFirstProfile(profile))]));
 const inputSchema = z.union([
   z.strictObject({ scoreDistribution: scoreDistributionSchema, definitions: definitionsSchema }),
   z.strictObject({ localPoisson: localPoissonRatesSchema, definitions: definitionsSchema }),
   z.strictObject({ scoreDistribution: scoreDistributionSchema, localPoisson: localPoissonRatesSchema, definitions: definitionsSchema }),
-  z.strictObject({ evaluationProfile: z.literal(LOCAL_FIRST_GOAL_EVALUATION_PROFILE), localPoisson: localPoissonRatesSchema,
+  z.strictObject({ evaluationProfile: z.enum(localFirstGoalEvaluationProfiles), localPoisson: localPoissonRatesSchema,
     definitions: definitionsSchema }),
 ]).superRefine((value, context) => {
   const { definitions } = value;
   const hash = "localPoisson" in value ? evidenceFingerprint(definitions) : null;
-  const matchesCatalog = hash === null || ("evaluationProfile" in value ? hash === localFirstGoalCatalogHash : legacyGoalCatalogHashes.has(hash));
+  const matchesCatalog = hash === null || ("evaluationProfile" in value ? hash === localFirstGoalCatalogHashes.get(value.evaluationProfile) : legacyGoalCatalogHashes.has(hash));
   if (new Set(definitions.map(({ key }) => key)).size !== definitions.length ||
       definitions.some(({ key, period }) => !key.startsWith(`goal:${period}:`)) || !matchesCatalog) {
     context.addIssue({ code: "custom", message: "Goal market definitions require unique period-qualified identities." });
@@ -39,7 +40,7 @@ const inputSchema = z.union([
 type LocalPoisson = Readonly<z.infer<typeof localPoissonRatesSchema>>;
 type GoalMarketModel = Readonly<{ scoreDistribution: ScoreDistribution; localPoisson?: LocalPoisson; evaluationProfile?: never }> |
   Readonly<{ localPoisson: LocalPoisson; scoreDistribution?: ScoreDistribution; evaluationProfile?: never }> |
-  Readonly<{ evaluationProfile: typeof LOCAL_FIRST_GOAL_EVALUATION_PROFILE; localPoisson: LocalPoisson; scoreDistribution?: never }>;
+  Readonly<{ evaluationProfile: LocalFirstGoalEvaluationProfile; localPoisson: LocalPoisson; scoreDistribution?: never }>;
 export type GoalMarketExtensionInput = GoalMarketModel & Readonly<{ definitions: readonly GoalMarketDefinition[] }>;
 export type PublishedGoalMarket = Readonly<{ definition: GoalMarketDefinition; derivation: GoalDerivationResult; localDerivation?: GoalDerivationResult }>;
 export type PreparedGoalMarketExtension = Readonly<{
@@ -68,7 +69,7 @@ export function prepareGoalMarketExtension(input: unknown): PreparedGoalMarketEx
     markets: definitions.map((definition) => {
       const primary = model.scoreDistribution && deriveGoalMarket(model.scoreDistribution, definition);
       const local = model.localPoisson && deriveLocalGoalMarket(model.localPoisson, definition,
-        model.evaluationProfile === LOCAL_FIRST_GOAL_EVALUATION_PROFILE ? "outright-win" : "any-win");
+        model.evaluationProfile === undefined ? "any-win" : "outright-win");
       const derivation = primary?.available ? primary : local ?? primary!;
       return { definition, derivation, ...(primary?.available && local?.available ? { localDerivation: local } : {}) };
     }) });

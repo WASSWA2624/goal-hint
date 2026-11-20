@@ -8,6 +8,7 @@ import type { PredictorCalibrationStatus, PredictorCalibratedOutput } from "../p
 import type { PredictorResult } from "../predictor/predictor-service.ts";
 import type { RecommendationDecision } from "../../domain/recommendation.ts";
 import type { LocalPoissonRates } from "../../domain/score-distribution-markets.ts";
+import { LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE, LOCAL_FIRST_GOAL_EVALUATION_PROFILE } from "../../domain/goal-market-definitions.ts";
 
 /** Identity for one eligible refresh; it never supplies an old published snapshot. */
 export type FallbackContext = Readonly<{ context: EvidenceContext; jobId: string; pin: ModelPin | null; evidenceHash: string }>;
@@ -39,9 +40,18 @@ export type FallbackTrigger = "ai-failure" | "ai-timeout" | "ai-insufficient-evi
 export type ForecastSourceOrder = "provider-first" | "ai-first";
 export const LIVE_FORECAST_CASCADE = "ai-local-provider";
 export const QUALIFIED_FORECAST_CASCADE = "qualified-ai-local-provider-v1";
-export const LOCAL_FIRST_FORECAST_CASCADE = "qualified-local-provider-v1";
-export const forecastCascades = [LIVE_FORECAST_CASCADE, QUALIFIED_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE] as const;
+export const LEGACY_LOCAL_FIRST_FORECAST_CASCADE = "qualified-local-provider-v1";
+export const LOCAL_FIRST_FORECAST_CASCADE = "qualified-local-provider-v2";
+const localFirstCascades = [LEGACY_LOCAL_FIRST_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE] as const;
+export type LocalFirstForecastCascade = typeof localFirstCascades[number];
+export const forecastCascades = [LIVE_FORECAST_CASCADE, QUALIFIED_FORECAST_CASCADE, ...localFirstCascades] as const;
 export type ForecastCascade = typeof forecastCascades[number];
+export function isLocalFirstForecastCascade(value: unknown): value is LocalFirstForecastCascade {
+  return localFirstCascades.some((cascade) => cascade === value);
+}
+export function goalProfileForLocalFirstCascade(value: LocalFirstForecastCascade) {
+  return value === LEGACY_LOCAL_FIRST_FORECAST_CASCADE ? LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE : LOCAL_FIRST_GOAL_EVALUATION_PROFILE;
+}
 export type ForecastQualification = Readonly<{
   verifyAiNumericalBasis?(candidate: Extract<PredictorResult, { status: "candidate" }>, context: FallbackContext, family: SourceGroup): boolean;
   verifyLocalNumericalBasis?(candidate: ResolvedForecastCandidate, context: FallbackContext, family: SourceGroup): boolean;

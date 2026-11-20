@@ -12,6 +12,9 @@ import { freezeEvidence } from "../evidence/evidence-input.ts";
 import { runFromRow, storedCycles, storedCycleDisplay, storedRevision, storedRevisions } from "../predictions/history-read.ts";
 import { readExtendedMarketSnapshot } from "../predictions/extended-market-read.ts";
 import { storedFeedFixture } from "./fixture-read.ts";
+import { isNovemberReplayKickoff } from "../../domain/november-replay.ts";
+import { readNovemberReplayProjections } from "../intelligence/november-replay-store.ts";
+import { projectRetrospectiveForecast } from "./retrospective-picks.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { storedFixtureOddsGroups, storedUpcomingOddsForFixtures } from "../odds/odds-read.ts";
 import { storedClosingBookmakerQuotes, storedCurrentBookmakerQuotes, storedRecoveredBookmakerQuotes, total15OddsForBookmaker } from "../odds/odds-mysql-store.ts";
@@ -58,6 +61,10 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
           const currentDisplay = known.activeCycleId ? await storedCycleDisplay(tx, known.activeCycleId) : null;
           const fixture = await storedFeedFixture(tx, id, !coverage[0]?.authoritative, window, "en", { prices: providerOdds, display: currentDisplay, readSettlement, asOf });
           const currentRevisionId = fixture.forecast?.revisionId ?? null;
+          const replay = !query.cycle && !query.revision && currentRevisionId && fixture.cycle?.state === "closed" &&
+            (fixture.status === "live" || isPlayedFinalStatus(fixture.status)) && isNovemberReplayKickoff(fixture.kickoffAt)
+            ? projectRetrospectiveForecast(fixture, (await readNovemberReplayProjections(tx, [id])).get(id), "en") : null;
+          if (replay) fixture.retrospective = replay.card;
           // History selections replace the detail snapshot; the card keeps the active cycle.
           let display = !query.cycle && !query.revision ? currentDisplay : null;
           if (query.cycle) {
@@ -114,9 +121,10 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
             cycle: publicDetailCycle(cycleFor(entry.cycleId)) }));
           const cycleHistory = cycles.slice(0, query.limit).map((row) => publicDetailCycle(cycleFor(row.id)));
           const slug = canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name);
-          const response = storedMatchDetailResponseSchema.parse({ fixture, asOf, run, odds, route: { fixtureId: id, slug, path: matchHref(id, slug, "en") },
+          const response = storedMatchDetailResponseSchema.parse({ fixture, asOf: Math.max(asOf, replay?.card.activatedAt ?? asOf),
+            run, odds, route: { fixtureId: id, slug, path: matchHref(id, slug, "en") },
             currentRevisionId, selection: query.revision ? "revision" : query.cycle ? "cycle" : "applicable", selectedCycle: display ? publicDetailCycle(display.cycle) : null, snapshot,
-            ...(extendedMarketsEnabled ? { extendedMarkets } : {}),
+            ...(extendedMarketsEnabled ? { extendedMarkets } : {}), ...(replay ? { retrospectiveMarkets: replay.markets } : {}),
             history: { limit: query.limit, revisions: { anchor: anchors.revision, entries: revisions,
               next: detailHistoryLink(id, parameters, anchors, "revision", rows.length > query.limit ? revisions.at(-1)!.fixtureRevision : null) },
             cycles: { anchor: anchors.cycle, entries: cycleHistory,
@@ -126,7 +134,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
         } catch (error) { if (error instanceof MatchFeedError) refused = error; throw error; }
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       const descriptor = publicCacheDescriptor({ kind: "detail", locale: "en", now: asOf, fixtureId: id,
-        query: { id, projection: 14, providerOdds, extendedMarketsEnabled, ...query }, parse: (value) => storedMatchDetailResponseSchema.parse(value) });
+        query: { id, projection: 15, providerOdds, extendedMarketsEnabled, ...query }, parse: (value) => storedMatchDetailResponseSchema.parse(value) });
       const response = options.cache ? await options.cache.read({ ...descriptor, validUntil: () => permissionDeadline }, read) : await read();
       const historical = response.selection !== "applicable", kickoffAt = response.fixture.kickoffAt;
       const total15Available = response.extendedMarkets?.markets.some(({ key, source }) => key === total15MarketKey && source !== "market-implied");
@@ -162,7 +170,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
       ]);
       const extendedOdds: Total15Odds | null = total15Available && inPlayOdds?.prices.total15Prices
         ? { marketKey: total15MarketKey, kind: "in-play", checkedAt: inPlayOdds.checkedAt, selections: inPlayOdds.prices.total15Prices } : null;
-      const compact = { ...response, asOf,
+      const compact = { ...response, asOf: response.asOf > asOf ? response.asOf : asOf,
         ...(allowLiveMatch ? { liveMatch } : {}),
         ...(allowInPlayOdds ? { inPlayOdds: inPlayOdds ?? null } : {}),
         ...(extendedOdds ? { extendedOdds } : {}) };

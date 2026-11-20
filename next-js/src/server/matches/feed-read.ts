@@ -3,6 +3,7 @@ import { kickoffTimeWindows } from "../../domain/kickoff-time.ts";
 import { total15MarketKey } from "../../domain/extended-markets.ts";
 import { feedMarketPickOptions, type FeedMarketPick } from "../../domain/feed-market-picks.ts";
 import { completedFixtureStatuses } from "../../domain/market-settlement.ts";
+import { overlapsNovemberReplay } from "../../domain/november-replay.ts";
 
 import { addReportingDays, createPredictionWindow, type PredictionWindow, type ReportingDateRange, type ReportingDate, type UtcInstant } from "../../domain/calendar.ts";
 import { getDayBoundsInTimeZone } from "../../domain/device-calendar.ts";
@@ -11,10 +12,12 @@ import { publicPolicy } from "../../domain/public-policy.ts";
 import type { StoredMatchFeedResponse } from "../../domain/match-feed.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { catalogScopeKey, parseCatalogImportRequest } from "../football/catalog-input.ts";
+import { activeNovemberReplaySql } from "../intelligence/november-replay-store.ts";
 import { minimumFixturePrice } from "../odds/odds-read.ts";
 import { selectionRunWindow, storedSelectionManifest } from "../selection/selection-read.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import type { FeedSearch } from "./feed-search.ts";
+import { retrospectiveOutcomeKeys } from "./retrospective-picks.ts";
 
 type Tx = Prisma.TransactionClient;
 /** Shared indexed fixture cohort; aliases f/l/c denote fixture, competition and applicable cycle. */
@@ -41,7 +44,7 @@ export function historicalFeedCutoff(query: FeedQuery, range: ReportingDateRange
 }
 
 /** The scope uses the same visible revision as the card and requires an actual model-published pick. */
-function publishedOutcomeFilter(picks: readonly FeedMarketPick[]): Prisma.Sql {
+function publishedOutcomeFilter(picks: readonly FeedMarketPick[], replayScope: boolean): Prisma.Sql {
   const options = feedMarketPickOptions.filter(({ id }) => picks.includes(id));
   const legacy = options.filter(option => option.kind === "legacy");
   const extended = options.filter(option => option.kind === "extended");
@@ -52,7 +55,14 @@ function publishedOutcomeFilter(picks: readonly FeedMarketPick[]): Prisma.Sql {
   if (extended.length) clauses.push(Prisma.sql`EXISTS (SELECT 1 FROM ExtendedMarketPublishedPick ep
     WHERE ep.revisionId=${displayedSet} AND ep.marketKey=${total15MarketKey} AND ep.source IN ('ai-score-distribution','local-poisson')
       AND ep.selection IN (${Prisma.join(extended.map(({ selection }) => selection))}))`);
-  return clauses.length ? Prisma.sql`(${Prisma.join(clauses, " OR ")})` : Prisma.sql`FALSE`;
+  const original = clauses.length ? Prisma.sql`(${Prisma.join(clauses, " OR ")})` : Prisma.sql`FALSE`;
+  const replayPicks = replayScope ? retrospectiveOutcomeKeys(picks) : [];
+  if (!replayPicks.length) return original;
+  const matches = replayPicks.map(({ marketKey, selection }) => Prisma.sql`JSON_CONTAINS(
+    JSON_UNQUOTE(JSON_EXTRACT(replay.body,'$.canonicalBody')),
+    JSON_OBJECT('definition',JSON_OBJECT('key',${marketKey}),'selected',JSON_OBJECT('selection',${selection})),'$.markets')`);
+  return Prisma.sql`COALESCE((SELECT (${Prisma.join(matches, " OR ")}) FROM ${activeNovemberReplaySql} replay
+    WHERE replay.fixtureId=f.id), ${original})`;
 }
 
 /** Use observed football progress before kickoff or ID tie-breaks, never the wall clock. */
@@ -117,7 +127,7 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
   if (query.countries.length > 0) filters.push(Prisma.sql`l.country IN (${Prisma.join(query.countries)})`);
   if (query.status !== "all") filters.push(query.status === "finished"
     ? Prisma.sql`f.status IN ('finished-regulation','finished-extra-time','finished-penalties')` : Prisma.sql`f.status=${query.status}`);
-  if (query.marketPicks?.length) filters.push(publishedOutcomeFilter(query.marketPicks));
+  if (query.marketPicks?.length) filters.push(publishedOutcomeFilter(query.marketPicks, publishedForecasts && overlapsNovemberReplay(range.window)));
   const cohortFilters = [...filters];
   // Rank a date-bounded set in one pass instead of running a sorting subquery
   // for every fixture in a large historical range. LIMIT/page never enters it.

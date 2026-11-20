@@ -12,7 +12,7 @@ export const slipPricePageRules = Object.freeze({
 
 /** Supplemental prices for published alternatives. The ordinary feed's selected-pick prices remain unchanged.
  * Freshness and public display permission come from the stored projection, not a browser age heuristic. */
-const slipSelectionPriceSchema = fixturePriceSchema.extend({ price: slipQuoteOddsSchema, bookmaker: slipBookmakerSchema.optional() })
+const slipSelectionPriceSchema = fixturePriceSchema.safeExtend({ price: slipQuoteOddsSchema, bookmaker: slipBookmakerSchema.optional() })
   .refine(({ basis, bookmaker }) => !bookmaker || basis === "bookmaker");
 export const slipSelectionPricesSchema = z.record(z.string(), z.array(slipSelectionPriceSchema)
   .max(slipPricePageRules.maximumPricesPerFixture * slipPricePageRules.maximumBookmakersPerFixture));

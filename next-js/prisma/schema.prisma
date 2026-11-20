@@ -194,6 +194,8 @@ model FootballSeason {
 }
 
 model FootballFixture {
+  novemberReplayRevisions  NovemberReplayRevision[]
+  novemberReplayProjection NovemberReplayProjection?
   intelligenceShadow    IntelligenceShadowState?
   inPlayOddsHistory     FixtureInPlayOddsHistory[]
   liveMatchSnapshots    LiveMatchSnapshot[]
@@ -742,6 +744,7 @@ model SelectionCycleEligibility {
 }
 
 model PredictionCycle {
+  novemberReplayRevisions NovemberReplayRevision[]
   liveMatchSnapshots    LiveMatchSnapshot[]
   id                    String                        @id @default(uuid()) @db.Char(36)
   fixtureId             String                        @db.Char(36)
@@ -841,6 +844,7 @@ model PredictionSchedule {
 
 // A complete accepted snapshot; no application UPDATE/DELETE grants.
 model PredictionSet {
+  novemberReplayRevisions NovemberReplayRevision[]
   publishedSlipLegs     PublishedSlipLeg[]
   id                    String                     @id @default(uuid()) @db.Char(36)
   fixtureId             String                     @db.Char(36)
@@ -920,6 +924,68 @@ model MarketPrediction {
   @@id([setId, family])
   @@index([setId, family, available, selectedProbability, selection], map: "MarketPrediction_feed_choice_idx")
   @@index([family, source])
+}
+
+// November 2026 retrospective audit. Never a prospective publication revision.
+model NovemberReplayRevision {
+  id               String    @id @db.Char(64)
+  fixtureId        String    @db.Char(36)
+  kickoffAt        DateTime? @db.DateTime(3)
+  cycleId          String?   @db.Char(36)
+  scheduleVersion  Int?      @db.UnsignedInt
+  sourceRevisionId String?   @db.Char(36)
+  evidenceCutoffAt DateTime? @db.DateTime(3)
+  evidenceHash     String    @db.Char(64)
+  generatedAt      DateTime  @db.DateTime(3)
+  stagedAt         DateTime  @db.DateTime(3)
+  status           String    @db.VarChar(16)
+  integrity        String    @db.Char(64)
+  body             Json
+  fixture          FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  cycle            PredictionCycle? @relation(fields: [cycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict, map: "NovemberReplayRevision_cycle_fkey")
+  source           PredictionSet? @relation(fields: [sourceRevisionId, cycleId, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict, map: "NovemberReplayRevision_source_fkey")
+  projections      NovemberReplayProjection[]
+  actions          NovemberReplayAction[]
+
+  @@unique([id, fixtureId])
+  @@index([fixtureId, kickoffAt])
+  @@index([cycleId, fixtureId], map: "NovemberReplayRevision_cycle_idx")
+  @@index([sourceRevisionId, cycleId, fixtureId], map: "NovemberReplayRevision_source_idx")
+}
+
+// Public compact display with a retained empty row after rollback.
+model NovemberReplayProjection {
+  fixtureId             String    @id @db.Char(36)
+  revisionId           String?   @db.Char(64)
+  sourceRevisionId     String?   @db.Char(36)
+  cycleId              String?   @db.Char(36)
+  scheduleVersion      Int?      @db.UnsignedInt
+  kickoffAt            DateTime? @db.DateTime(3)
+  evidenceCutoffAt     DateTime? @db.DateTime(3)
+  activationOperationId String?  @db.VarChar(128)
+  changedAt            DateTime  @db.DateTime(3)
+  integrity            String?   @db.Char(64)
+  body                 Json?
+  fixture              FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  revision             NovemberReplayRevision? @relation(fields: [revisionId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict, map: "NovemberReplayProjection_revision_fkey")
+
+  @@index([revisionId, fixtureId], map: "NovemberReplayProjection_revision_idx")
+}
+
+model NovemberReplayAction {
+  id                    String   @id @db.Char(64)
+  fixtureId             String   @db.Char(36)
+  operationId           String   @db.VarChar(128)
+  kind                  String   @db.VarChar(16)
+  activationOperationId String   @db.VarChar(128)
+  revisionId            String   @db.Char(64)
+  at                    DateTime @db.DateTime(3)
+  integrity             String   @db.Char(64)
+  body                  Json
+  revision              NovemberReplayRevision @relation(fields: [revisionId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict, map: "NovemberReplayAction_revision_fkey")
+
+  @@unique([operationId, fixtureId])
+  @@index([revisionId, fixtureId], map: "NovemberReplayAction_revision_idx")
 }
 
 // Additive immutable sibling: legacy candidateJson/four-family rows keep their original bytes.

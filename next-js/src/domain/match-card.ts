@@ -102,7 +102,9 @@ export function sameCardFixture(previous: FixtureSnapshot, next: FixtureSnapshot
     previous.update?.prediction === next.update?.prediction && previous.update?.result === next.update?.result &&
     previous.update?.statusFreshness?.state === next.update?.statusFreshness?.state &&
     previous.forecast?.updateDelayed === next.forecast?.updateDelayed && samePrices(previous.prices, next.prices) &&
-    sameMarketOdds(previous.marketOdds, next.marketOdds) && sameFeatured(previous.featuredPrediction, next.featuredPrediction);
+    sameMarketOdds(previous.marketOdds, next.marketOdds) && sameFeatured(previous.featuredPrediction, next.featuredPrediction) &&
+    previous.retrospective?.revisionId === next.retrospective?.revisionId &&
+    sameFeatured(previous.retrospective?.pick, next.retrospective?.pick);
 }
 function sameFeatured(left: FixtureSnapshot["featuredPrediction"], right: FixtureSnapshot["featuredPrediction"]): boolean {
   return left === right || !!left && !!right && left.key === right.key && left.selection === right.selection &&

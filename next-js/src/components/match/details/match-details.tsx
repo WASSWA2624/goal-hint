@@ -128,6 +128,7 @@ export const MatchDetails = memo(function MatchDetails({ data, preview, locale =
   const byDefault = useOpenByDefault();
   const messages = useMessages(locale);
   const fixture = data.fixture;
+  const showFeatured = byDefault || data.selection === "applicable" && fixture.retrospective != null;
   const home = fixture.homeTeam.name || messages.text("match.homeUnknown"), away = fixture.awayTeam.name || messages.text("match.awayUnknown");
   // Revision-history links arrive without a section; open the history section for them once.
   const opened = useRef(false);
@@ -143,7 +144,7 @@ export const MatchDetails = memo(function MatchDetails({ data, preview, locale =
       <PhoneHeader />
       <DesktopBackLink />
       <MatchBanner touchline={byDefault} />
-      {byDefault ? <TouchlineFeatured /> : <Verdict />}
+      {showFeatured ? <TouchlineFeatured /> : <Verdict />}
       <TouchlineTabs view={view} />
       {!byDefault && <Note>{messages.text("details.disclaimer")}</Note>}
     </Page>

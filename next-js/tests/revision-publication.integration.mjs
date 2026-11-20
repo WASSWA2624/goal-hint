@@ -5,7 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import test from 'node:test';
 import { getReportingDate } from '../src/domain/calendar.ts';
-import { liveGoalMarketDefinitions, LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localFirstGoalMarketDefinitions } from '../src/domain/goal-market-definitions.ts';
+import { LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE, legacyLocalFirstGoalMarketDefinitions, liveGoalMarketDefinitions,
+  LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localFirstGoalMarketDefinitions } from '../src/domain/goal-market-definitions.ts';
+import { LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION, LOCAL_FIRST_MARKET_REGISTRY_VERSION } from '../src/domain/market-registry.ts';
 import { marketRules, validateMarketSnapshot } from '../src/domain/markets.ts';
 import { parseRuntimePolicy } from '../src/server/config/runtime-policy.ts';
 import { createDatabase } from '../src/server/database/client.ts';
@@ -24,7 +26,7 @@ import { readGoalMarketExtension } from '../src/server/predictions/goal-market-s
 import { createRevisionPublicationService } from '../src/server/predictions/publication-service.ts';
 import { RevisionPublicationError } from '../src/server/predictions/publication-contract.ts';
 import { unavailableForecastMarkets } from '../src/server/predictions/forecast-decision.ts';
-import { LIVE_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE } from '../src/server/fallback/fallback-contract.ts';
+import { LEGACY_LOCAL_FIRST_FORECAST_CASCADE, LIVE_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE } from '../src/server/fallback/fallback-contract.ts';
 import { createForecastRecovery } from '../src/server/refresh/forecast-recovery.ts';
 import { createMysqlRefreshStore } from '../src/server/refresh/refresh-mysql-store.ts';
 import { createMysqlDailySelectionStore } from '../src/server/selection/selection-mysql-store.ts';
@@ -286,7 +288,12 @@ test('atomic revision publication on isolated genuine MySQL', { timeout: 600_000
         assert.match(violation.message, /GoalMarketExtension_shape_v2/u);
       }
     });
-    await t.test('local-first decisions seal exact extended probabilities without odds and replay across replicas', async () => {
+    for (const { cascade, evaluationProfile, registryVersion, definitions } of [
+      { cascade: LEGACY_LOCAL_FIRST_FORECAST_CASCADE, evaluationProfile: LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE,
+        registryVersion: LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION, definitions: legacyLocalFirstGoalMarketDefinitions },
+      { cascade: LOCAL_FIRST_FORECAST_CASCADE, evaluationProfile: LOCAL_FIRST_GOAL_EVALUATION_PROFILE,
+        registryVersion: LOCAL_FIRST_MARKET_REGISTRY_VERSION, definitions: localFirstGoalMarketDefinitions },
+    ]) await t.test(`local-first decisions seal exact ${registryVersion} probabilities and replay across replicas`, async () => {
       const target = await setup(), { lease } = target;
       const rates = { home: 1.6, away: 1 }, observedAt = target.snapshot.context.analysisAt + 1000;
       const base = target.input.candidate;
@@ -302,7 +309,7 @@ test('atomic revision publication on isolated genuine MySQL', { timeout: 600_000
         markets: Object.fromEntries(Object.entries(markets).map(([family, item]) => [family, { ...item, provenance, fallback: null,
           timestamps: { generatedAt: observedAt, retrievedAt: observedAt, providerUpdatedAt: null }, flags: ['unknown-provider-update-time'] }])),
         audit: { aiStatus: 'denied', aiReason: 'unconfigured', providerStatus: 'not-requested', providerReason: null,
-          sourceCascade: LOCAL_FIRST_FORECAST_CASCADE, localStatus: 'candidate', transitions: Object.fromEntries(Object.keys(markets)
+          sourceCascade: cascade, localStatus: 'candidate', transitions: Object.fromEntries(Object.keys(markets)
             .map((family) => [family, { ai: 'not-requested', local: 'candidate', provider: 'not-requested', selected: 'local-engine' }])) } };
       const basePolicy = publicationPolicy();
       const options = { recordForecastDecision: true, authority: publicationAuthority({ verifyGoalExtension: () => true }),
@@ -311,17 +318,18 @@ test('atomic revision publication on isolated genuine MySQL', { timeout: 600_000
       assert.equal(await refresh.start(lease, 'fallback'), true);
       await refresh.complete(lease, 'fallback', { status: 'candidate', candidate });
       const input = { ...target.input, candidate, generationCompletedAt: at, goalExtension: {
-        evaluationProfile: LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localPoisson: rates, definitions: localFirstGoalMarketDefinitions,
+        evaluationProfile, localPoisson: rates, definitions,
       } };
       const result = await service.publish(input, lease);
       assert.equal(result.refresh.outcome, 'published');
       const decision = result.refresh.forecastDecision, revisionId = result.revision.id;
       assert.equal(decision.version, 'prematch-forecast-decision-v2');
+      assert.equal(decision.registryVersion, registryVersion);
       assert.equal(decision.status, 'estimated');
       assert.equal(decision.evidenceHash, target.snapshot.hash);
       assert.deepEqual(result.revision.candidate.markets, candidate.markets);
       const extension = await b.query((tx) => readGoalMarketExtension(tx, revisionId));
-      assert.equal(extension.evaluationProfile, LOCAL_FIRST_GOAL_EVALUATION_PROFILE);
+      assert.equal(extension.evaluationProfile, evaluationProfile);
       assert.equal(decision.goalExtensionHash, extension.contentHash);
       const { marketKey, selection, winProbability } = decision.topPick;
       const extendedPick = extension.markets.find(({ definition }) => definition.key === marketKey);
@@ -333,6 +341,10 @@ test('atomic revision publication on isolated genuine MySQL', { timeout: 600_000
       assert.equal(decisionMarket.recommendation.winProbability, winProbability);
       assert.equal(decisionMarket.confidence.sample.homeEffectiveMatches, String(provenance.sample.homeEffectiveMatches));
       assert.ok(decision.markets.some((row) => row.marketKey === 'goal:full-time:totals:total:5.5:binary'));
+      assert.equal(decision.markets.some((row) => row.marketKey === 'goal:full-time:totals:away:6.5:binary'),
+        cascade === LEGACY_LOCAL_FIRST_FORECAST_CASCADE);
+      assert.equal(decision.markets.some((row) => row.marketKey === 'goal:full-time:totals:away:5.25:asian'),
+        cascade === LOCAL_FIRST_FORECAST_CASCADE);
       assert.equal(await b.query((tx) => tx.predictionQuote.count({ where: { revisionId } })), 0);
       const [stored] = await b.query((tx) => tx.$queryRaw`SELECT
         JSON_TYPE(JSON_EXTRACT(resultJson, '$.forecastDecision.topPick.winProbability')) AS probabilityType,

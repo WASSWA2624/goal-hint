@@ -16,8 +16,8 @@ The 160-check routing and resilience suite covered per-family authority, partial
 
 ## Local-first rollout
 
-New prospective worker intents seal `qualified-local-provider-v1` and the
-recorded fallback allowance. Qualified Local Engine estimates supply each
+The initial local-first worker intents sealed `qualified-local-provider-v1`
+and the recorded fallback allowance. Qualified Local Engine estimates supply each
 eligible group first. Trusted API-Football match result and derived double
 chance can fill an unresolved result group. Set
 `GOAL_HINT_API_PREDICTION_FALLBACK_ENABLED=false` on the forecast worker to
@@ -47,3 +47,10 @@ An isolated MySQL 8.4.11 run published and reread the unrounded top pick
 without any odds and verified idempotent replay from a second connection. A
 MariaDB 10.4.32 probe verified numeric-column compatibility and exact decimal
 readback. This update uses the existing publication tables.
+
+The November activation review surfaced team totals at 6.5 as the leading
+picks. Registry v5 and `qualified-local-provider-v2` apply the approved
+1.5–5.5 range to new full-match fixture and team totals. Both versions use
+the same Local Engine first order, and earlier sealed decisions keep their
+original market definitions. Odds collection continues across every available
+bookmaker line.

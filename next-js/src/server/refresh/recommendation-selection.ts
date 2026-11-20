@@ -7,7 +7,7 @@ import { compareForecastPicks, evidenceFirstRecommendationPolicy, recommendation
   type RecommendationPolicy, type RecommendationQuote } from "../../domain/recommendation.ts";
 import type { EvidenceSnapshot } from "../evidence/evidence-contract.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
-import { LOCAL_FIRST_FORECAST_CASCADE, type ResolvedForecastCandidate } from "../fallback/fallback-contract.ts";
+import { isLocalFirstForecastCascade, type ResolvedForecastCandidate } from "../fallback/fallback-contract.ts";
 
 export type RecommendationEvidenceAssessment = Readonly<{
   eligible: boolean; reasons: readonly string[]; confidence?: ForecastConfidence;
@@ -94,7 +94,7 @@ export function selectRecommendation(input: Readonly<{
   const local = evidenceFirst ? null : pool(input.candidate, "local-engine");
   const baseline = evidenceFirst ? null : pool(baselineCandidate, "api-football");
   const selected = evidenceFirst ? pool(input.candidate) : ai ?? local ?? baseline;
-  const localFirst = input.candidate.audit.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE;
+  const localFirst = isLocalFirstForecastCascade(input.candidate.audit.sourceCascade);
   const selectedMarket = selected === null ? null : input.candidate.markets[selected.family];
   const fallbackReason = localFirst ? selectedMarket?.available && selectedMarket.market.source === "api-football"
     ? selectedMarket.fallback?.detail ?? "local-unavailable" : null :

@@ -64,6 +64,9 @@ const MarketRow = styled(RowButton)<{ $family: MarketFamily }>`
   > span[data-pick] > span:first-child > span:first-child { overflow: hidden; text-overflow: ellipsis; }
   > span[data-pick] [data-selected-odds] { flex: none; }
   > span[data-bar] { font-variant-numeric: tabular-nums; text-align: end; }
+  &[data-retrospective-market] { cursor: default; }
+  &[data-retrospective-market] > span[data-name] > span:last-child,
+  &[data-retrospective-market] > span[data-pick] > span:first-child { white-space: normal; overflow-wrap: anywhere; }
   > svg { color: ${({ theme }) => theme.color.mutedText}; }
   &[aria-expanded="true"] > svg { transform: rotate(90deg); }
   ${media.belowDesktop} {
@@ -175,6 +178,7 @@ export function Explanation() {
     return source ? [<a key={url} href={url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"> {source.publisher}<ExternalIcon /></a>] : [];
   });
   return analysis?.state === "available" ? <>
+    {data.fixture.retrospective && <SubHeading>{messages.text("touchline.originalPublication")}</SubHeading>}
     <Note>{messages.text("details.explanationGenerated")}</Note>
     <Reasons>
       {analysis.reasons.map((entry, index) => <li key={index}>{entry.text}{cite(entry.sourceUrls)}</li>)}
@@ -274,11 +278,12 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
   const snapshot = fullDetailSnapshot(data);
   // As on the verdict, only a published forecast is locked.
   if ("gated" in data.history && data.snapshot) return <SubscriberRow><SubscriberNotice kind="markets" signedIn={data.access.signedIn} returnTo={data.route.path} /></SubscriberRow>;
+  const replayMarkets = data.selection === "applicable" ? data.retrospectiveMarkets : null;
   const current = embedded ? currentFeaturedOutcome(data) : null;
   const featured = embedded ? current ? current.key === current.family ? current.family : null : featuredFamily(data) : null;
   const goalMarkets = data.extendedMarkets?.markets.filter(({ key, source }) => source !== "market-implied" &&
     key !== "goal:full-time:totals:total:2.5:binary") ?? [];
-  const published = (snapshot?.markets.filter(entry => entry.market.family !== featured).length ?? 0) + goalMarkets.length;
+  const published = replayMarkets?.length ?? (snapshot?.markets.filter(entry => entry.market.family !== featured).length ?? 0) + goalMarkets.length;
   const label = (family: MarketFamily) => marketName(messages, family);
   const publishedFamilies = new Set(snapshot?.markets.map(({ market }) => market.family));
   const shown = visibleMarkets(view.marketCategory, query, label).filter(family => family !== featured && publishedFamilies.has(family));
@@ -286,6 +291,8 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
   const shownGoals = goalMarkets.filter((market) => needle
     ? [market.label, ...market.selections.map(({ label }) => label)].some((label) => label.toLocaleLowerCase().includes(needle))
     : view.marketCategory === "goals" || view.marketCategory === "popular" && market.key === "goal:full-time:totals:total:1.5:binary");
+  const shownReplay = replayMarkets?.filter(({ family, label, selectionLabel }) => needle
+    ? [label, selectionLabel].some((name) => name.toLocaleLowerCase().includes(needle)) : marketCategoryMembers[view.marketCategory].includes(family));
   const categoryLabel = (category: MarketCategory) => messages.text(`details.category.${category}`);
   return <Card data-section="markets" data-open={view.marketsOpen || undefined} aria-label={embedded ? messages.text("details.allMarkets") : undefined} aria-labelledby={embedded ? undefined : "section-markets-title"}
     style={embedded ? { padding: 0, border: 0 } : undefined}>
@@ -294,7 +301,7 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
       onToggle={() => update((current) => ({ ...current, marketsOpen: !current.marketsOpen, market: current.marketsOpen ? null : current.market }))}
       headingId="section-markets-title" />}
     <div id="section-markets" hidden={!view.marketsOpen} style={{ minInlineSize: 0 }}>
-      {view.marketsOpen && (!embedded && view.market ? <MarketPanel family={view.market} /> : <Body>
+      {view.marketsOpen && (!replayMarkets && !embedded && view.market ? <MarketPanel family={view.market} /> : <Body>
         <Tools>
           <Search label={messages.text("details.searchMarkets")} value={search} maxLength={80} placeholder={messages.text("details.searchMarkets")}
             onChange={(event) => setSearch(event.target.value)} />
@@ -305,7 +312,16 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
         <div>
           <Head aria-hidden="true"><span>{messages.text("details.market")}</span><span>{messages.text("details.prediction")}</span>
             <span>{messages.text("details.probability")}</span><span /></Head>
-          {shown.length > 0 || shownGoals.length > 0 ? <RowList ref={list}>
+          {shownReplay?.length ? <RowList ref={list} aria-label={messages.text("touchline.retrospective")}>
+            {shownReplay.map((pick) => {
+              const Icon = familyIcon[pick.family];
+              return <li key={pick.key}><MarketRow as="div" $family={pick.family} data-retrospective-market>
+                <span data-name><IconBadge $accent={familyAccent[pick.family]}><Icon /></IconBadge><span>{pick.label}</span></span>
+                <span data-pick><span>{pick.selectionLabel}</span></span>
+                <span data-bar><b>{percent(messages, pick.probability)}</b></span>
+              </MarketRow></li>;
+            })}
+          </RowList> : !replayMarkets && (shown.length > 0 || shownGoals.length > 0) ? <RowList ref={list}>
             {shown.map((family) => {
               const { item, outcome } = marketRow(data, family), Icon = familyIcon[family];
               const settled = data.snapshot?.applicability !== "historical" && outcome && outcome.status !== "pending" ? outcome.status : null;

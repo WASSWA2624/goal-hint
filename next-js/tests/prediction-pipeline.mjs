@@ -20,7 +20,7 @@ import { createCutoffLockingService } from '../src/server/predictions/cutoff-ser
 import { createMysqlDailySelectionStore } from '../src/server/selection/selection-mysql-store.ts';
 import { createDailySelectionService } from '../src/server/selection/selection-service.ts';
 import { catalogFixture, catalogResponse, createSyntheticCatalogAdapter, CATALOG_NOW } from './helpers/catalog-fixtures.mjs';
-import { evidenceContext, evidenceHash, evidenceAuthority, evidencePolicy, evidenceSource } from './helpers/evidence-fixtures.mjs';
+import { evidenceContext, evidenceHash, evidenceAuthority, evidencePolicy, evidenceSource, EVIDENCE_NOW } from './helpers/evidence-fixtures.mjs';
 import { modelVersion, modelAuthority } from './helpers/predictor-fixtures.mjs';
 import { historyCandidate } from './helpers/prediction-history-fixtures.mjs';
 import { jobTestEnvironment } from './helpers/job-fixtures.mjs';
@@ -95,6 +95,7 @@ export async function withPredictionPipeline(t, operation, instanceOptions) {
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.DurableJob TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, UPDATE ON goal_hint_test.DurableJobEnqueueLock TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT ON goal_hint_test.PublicCacheTag TO 'cutoff_app'@'127.0.0.1';
+      GRANT SELECT ON goal_hint_test.NovemberReplayProjection TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE, DELETE ON goal_hint_test.PublicResponseCache TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, UPDATE (acknowledgedAt) ON goal_hint_test.PublicCacheInvalidation TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, UPDATE ON goal_hint_test.PublicSearchLimit TO 'cutoff_app'@'127.0.0.1';
@@ -102,7 +103,7 @@ export async function withPredictionPipeline(t, operation, instanceOptions) {
       GRANT SELECT, INSERT ON goal_hint_test.DurableJobEvent TO 'cutoff_app'@'127.0.0.1';`);
     await instance.executeAdmin(`
 `);
-    const a = replica(), b = replica(), catalog = createFootballCatalogStore(a), history = createMysqlPredictionHistoryStore(a);
+    const a = replica(), b = replica(), catalog = createFootballCatalogStore(a, { clock: { now: () => at } }), history = createMysqlPredictionHistoryStore(a);
     const queue = createMysqlJobQueue(a), otherQueue = createMysqlJobQueue(b), model = modelVersion();
     await createMysqlModelVersionStore(a).save(model, modelAuthority());
     const locker = (database = a, overrides = {}) => createCutoffLockingService({ database,
@@ -123,7 +124,8 @@ export async function withPredictionPipeline(t, operation, instanceOptions) {
       at = options.selectionAt ?? CATALOG_NOW;
       provider.clock.value = at;
       let selected;
-      try { selected = await service.run(SELECTION_FOR + (Number(date.slice(-2)) - 9) * 86_400_000); } finally { at = options.afterSelectionAt ?? PUBLICATION_NOW; }
+      const dayOffset = Date.parse(date) - Date.parse('2026-10-09');
+      try { selected = await service.run(SELECTION_FOR + dayOffset); } finally { at = options.afterSelectionAt ?? PUBLICATION_NOW; }
       const manifest = (await store.inspect(selected.runId)).manifest, leases = new Map();
       for (let index = 0; options.claim !== false && index < selected.total; index++) {
         const lease = await queue.claim(evidenceHash(`cutoff-owner:${type}:${index}`), [{ type, handlerVersion: 1 }]);
@@ -131,15 +133,17 @@ export async function withPredictionPipeline(t, operation, instanceOptions) {
       }
       const value = { selected, manifest, leases, service, provider }; cohorts.set(date, value); return value;
     }
-    async function setup(id, date = '2026-10-09') {
+    async function setup(id, date = '2026-10-09', { publicationAt = PUBLICATION_NOW } = {}) {
       const selected = await cohort(date), fixture = await catalog.fixtureByProviderId(id);
       const entry = selected.manifest.entries.find((item) => item.fixtureId === fixture.id), cycle = await history.findCycle(entry.cycleId);
       const lease = selected.leases.get(fixture.id), context = evidenceContext(fixture, { runId: selected.selected.runId, cycleId: cycle.id,
+        analysisAt: EVIDENCE_NOW + publicationAt - PUBLICATION_NOW, cutoffAt: EVIDENCE_NOW + publicationAt - PUBLICATION_NOW,
         home: { teamId: fixture.homeTeamId, externalId: fixture.homeExternalIds[0] },
         away: { teamId: fixture.awayTeamId, externalId: fixture.awayExternalIds[0] } });
       const authority = evidenceAuthority(), snapshot = buildEvidenceSnapshot({ context, policy: evidencePolicy(), sources: [evidenceSource(context)] }, authority);
       const evidenceId = evidenceHash(randomUUID()); await createMysqlEvidenceStore(a).save(evidenceId, evidenceHash(`request:${evidenceId}`), snapshot, authority);
       const input = publicationInput(historyCandidate({ snapshot, model, jobId: lease.jobId }), evidenceId, cycle.scheduleVersion);
+      input.observation.retrievedAt = publicationAt;
       return { fixture, cycle, input, lease, selected, snapshot };
     }
     const totals = (state) => a.query(async (tx) => ({ cycle: await storedCycle(tx, state.cycle.id),

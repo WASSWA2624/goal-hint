@@ -6,7 +6,7 @@ import { getPublicationDeadline, parseReportingDate, type Clock } from "../../do
 import { MARKET_RULE_VERSION, marketSelections, type MarketFamily } from "../../domain/markets.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
-import { LOCAL_FIRST_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
+import { isLocalFirstForecastCascade } from "../fallback/fallback-contract.ts";
 import { createFootballCatalogStore, type FootballCatalogStore } from "../football/catalog-mysql-store.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { PredictionHistoryError, historyFail, type AppendRevisionInput, type ChangeCycleInput, type CreateCycleInput,
@@ -228,7 +228,7 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
             if (predecessor && predictionRunOrder(predecessor.runSequence) >= predictionRunOrder(run.sequence)) return historyFail("out-of-order");
             const latestFixture = await transaction.predictionSet.findFirst({ where: { fixtureId }, orderBy: { fixtureRevision: "desc" } });
             const at = await now(); if (at < request.publishedAt || at < previousCycle.openedAt) return historyFail("invalid-request");
-            const exact = request.candidate.audit.sourceCascade === LOCAL_FIRST_FORECAST_CASCADE;
+            const exact = isLocalFirstForecastCascade(request.candidate.audit.sourceCascade);
             const id = randomUUID(), candidateJson = forecastArchiveDocument(request.candidate, exact);
             await transaction.$executeRaw`INSERT INTO PredictionSet
               (id, fixtureId, fixtureVersion, cycleId, runId, runSequence, jobId, fixtureRevision, cycleRevision,

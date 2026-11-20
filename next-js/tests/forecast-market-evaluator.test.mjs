@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { goalHighestScoringHalfMarket, goalScoringInBothHalvesMarket, liveGoalMarketDefinitions, LOCAL_FIRST_GOAL_EVALUATION_PROFILE,
-  localFirstGoalMarketDefinitions, registeredForecastGoalMarkets } from '../src/domain/goal-market-definitions.ts';
-import { LOCAL_FIRST_MARKET_REGISTRY_VERSION, MARKET_REGISTRY_VERSION, marketRegistry } from '../src/domain/market-registry.ts';
+  legacyLocalFirstGoalMarketDefinitions, LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localFirstGoalMarketDefinitions,
+  registeredForecastGoalMarkets } from '../src/domain/goal-market-definitions.ts';
+import { LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION, LOCAL_FIRST_MARKET_REGISTRY_VERSION, MARKET_REGISTRY_VERSION, marketRegistry } from '../src/domain/market-registry.ts';
 import { marketRules, validateMarketSnapshot } from '../src/domain/markets.ts';
 import { settleGoalSelection } from '../src/domain/score-distribution-markets.ts';
 import { SCORE_DISTRIBUTION_VERSION } from '../src/domain/score-distribution.ts';
 import { evaluateForecastMarkets, FORECAST_MARKET_EVALUATION_VERSION, legacyForecastMarketKey,
-  LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION } from '../src/server/predictions/forecast-market-evaluator.ts';
+  LEGACY_LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION, LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION } from '../src/server/predictions/forecast-market-evaluator.ts';
 import { prepareGoalMarketExtension } from '../src/server/predictions/goal-market-store.ts';
 
 const state = (home, away, halfHome, halfAway, probability) => ({ home, away, halfHome, halfAway, probability });
@@ -39,8 +40,12 @@ test('new decisions seal approved exact lines and retain independent family and 
   assert.equal(quarter.source, 'local-engine');
   assert.ok(quarter.selections.find((selection) => selection.key === 'under').outcomes['half-win'] > 0);
   assert.equal(rows.get(legacyForecastMarketKey('match-result')).source, 'local-engine');
-  for (const line of [0.5, 6.5]) assert.equal(rows.get(`goal:full-time:totals:total:${line}:binary`).reason, 'outside-full-match-totals-range');
-  assert.equal(rows.get('goal:full-time:totals:home:6.5:binary').status, 'estimated');
+  const lines = Array.from({ length: 17 }, (_, index) => 1.5 + index / 4);
+  for (const metric of ['total', 'home', 'away']) {
+    for (const line of [0.5, 6.5]) assert.equal(rows.get(`goal:full-time:totals:${metric}:${line}:binary`).reason, 'outside-full-match-totals-range');
+    assert.deepEqual([...rows.values()].filter((row) => row.status === 'estimated' && row.marketKey.startsWith(`goal:full-time:totals:${metric}:`))
+      .map(({ definition }) => definition.selections[0].rule.line).sort((left, right) => left - right), lines);
+  }
   assert.equal(rows.get('goal:full-time:team-to-score:away').reason, 'unsupported-publication-projection');
   assert.equal(rows.get('goal:full-time:clean-sheet:home').reason, 'unsupported-publication-projection');
   assertNear(wins(rows.get('goal:full-time:count-range:total:1-3'), 'yes'), (3 + 9 / 2 + 27 / 6) * Math.exp(-3));
@@ -53,6 +58,21 @@ test('new decisions seal approved exact lines and retain independent family and 
     goalModel: supportedMatureModel, verifyGoalModel: () => true }));
   assert.equal(independent.get('goal:half-time:totals:total:0.5:binary').status, 'estimated');
   assert.equal(independent.get('goal:full-time:totals:total:0.5:binary').reason, 'outside-full-match-totals-range');
+});
+
+test('v4 local-first decisions retain their original team totals and historical evaluation identity', () => {
+  const localFirst = LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE;
+  const input = { evaluationProfile: localFirst, localPoisson: { home: 1.7, away: 1.3 }, definitions: legacyLocalFirstGoalMarketDefinitions };
+  const published = prepareGoalMarketExtension(input);
+  const evaluated = evaluateForecastMarkets({ candidateMarkets: resolved('local-engine'), localFirst, publishedLocalMarkets: published.markets });
+  assert.equal(evaluated.registryVersion, LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION);
+  assert.equal(evaluated.version, LEGACY_LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION);
+  const rows = rowsByKey(evaluated);
+  assert.equal(rows.get('goal:full-time:totals:home:6.5:binary').status, 'estimated');
+  assert.equal(rows.get('goal:full-time:totals:total:6.5:binary').reason, 'outside-full-match-totals-range');
+  assert.equal(rows.has('goal:full-time:totals:away:5.25:asian'), false);
+  assert.throws(() => prepareGoalMarketExtension({ ...input, definitions: localFirstGoalMarketDefinitions }));
+  assert.throws(() => prepareGoalMarketExtension({ ...input, evaluationProfile: LOCAL_FIRST_GOAL_EVALUATION_PROFILE }));
 });
 
 test('the sealed legacy candidate survives while every registered family gets an explicit result or abstention', () => {

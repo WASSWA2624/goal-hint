@@ -559,7 +559,8 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const desktop = useContext(MatchCardLayoutContext);
   const eligible = markets && markets.length > 0 ? markets : selectedFamily ? [selectedFamily] : defaultMarkets;
   const gatedForecast = fixture.forecast !== null && "gated" in fixture.forecast ? fixture.forecast : null;
-  const featured = publishedMarket && !snapshotPick && fixture.status === "scheduled" ? fixture.featuredPrediction : null;
+  const retrospective = publishedMarket && !snapshotPick ? fixture.retrospective : null;
+  const featured = retrospective?.pick ?? (publishedMarket && !snapshotPick && fixture.status === "scheduled" ? fixture.featuredPrediction : null);
   // Only a published eligible family is locked: forecast null means none was published, and the gated families already
   // name the published markets, so a filter outside them shows the subscriber's no-prediction reason.
   const best = snapshotPick?.family ?? featured?.family ?? bestCardFamily(fixture, eligible, !publishedMarket);
@@ -578,7 +579,8 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const countryName = countryDisplayName(country);
   const flagUrl = countryFlagUrl(fixture);
   const prediction = offline || gated ? null : snapshotPick ? snapshotCardPrediction(snapshotPick)
-    : featured ? featuredCardPrediction(featured, fixture.forecast?.publishedAt ?? null, fixture.forecast?.provisional ?? true)
+    : featured ? featuredCardPrediction(featured, retrospective ? null : fixture.forecast?.publishedAt ?? null,
+      retrospective ? false : fixture.forecast?.provisional ?? true)
       : selectedCardPrediction(fixture, shownFamily, !publishedMarket);
   const observation = !prediction || snapshotPick || featured || fixture.marketOdds?.kind !== (fixture.status === "live" ? "in-play" : "pre-match")
     ? null : fixture.marketOdds;
@@ -600,13 +602,14 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const expectedReturn = market?.source ? forecastExpectedReturn(market.selectedProbability, preMatchPrice) : null;
   const source = prediction?.item.market.source;
   const sourceLabel = source ? <ForecastSourceLabel source={source} messages={messages}
+    label={retrospective ? messages.text("touchline.retrospective") : undefined}
     compactLabel={source === "local-engine" ? messages.text("match.source.localShort") : undefined} /> : null;
   const valueLabel = <ForecastValueLabel expectedReturn={expectedReturn} messages={messages} />;
   const family = featured?.label ?? messages.text(`market.family.${shownFamily}`);
   const shortFamily = featured?.code ?? compactMarketName(shownFamily);
   const selectionContext = featured?.code ? { marketKey: featured.key, label: featured.selectionLabel } : undefined;
-  const locked = fixture.cycle?.state === "closed";
-  const outcome = prediction?.status ?? "unavailable";
+  const locked = !retrospective && fixture.cycle?.state === "closed";
+  const outcome = retrospective ? "unavailable" : prediction?.status ?? "unavailable";
   const awaitingResult = fixture.update?.statusFreshness?.state === "awaiting-update";
   const result = snapshotPick ? outcome : cardResultStatus(fixture.status, outcome, awaitingResult);
   const percent = prediction && (prediction.probability.labelKey === "probability.percent"
@@ -633,7 +636,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     const marketDescription = offline ? "Predictions are unavailable in the saved view."
       : gated ? messages.text("paywall.card")
       : selection ? `${family}: ${predictionDescription(messages, selection, selectionContext)}` : reason ?? undefined;
-    const publication = prediction && [source ? messages.text(`market.source.${source}`) : null,
+    const publication = prediction && [retrospective ? messages.text("touchline.retrospective") : source ? messages.text(`market.source.${source}`) : null,
       prediction.provisional ? messages.text("match.provisional") : null,
       prediction.publishedAt !== null ? `${messages.text("match.published")}: ${messages.reportingInstant(prediction.publishedAt)}` : null].filter(Boolean).join(" · ");
     return <DesktopCard fixtureId={fixture.fixtureId} locale={locale} kickoffAt={fixture.kickoffAt}
