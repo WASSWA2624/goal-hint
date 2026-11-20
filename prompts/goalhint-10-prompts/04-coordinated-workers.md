@@ -1,8 +1,8 @@
 # 04 — Implement the coordinated worker lifecycle
 
-**Step:** 4 of 10  
+**Step:** 04\
 **Key prerequisites:** [02-data-contracts.md](02-data-contracts.md); [03-shared-ingestion.md](03-shared-ingestion.md)  
-**Original source:** Section 4
+**Consolidated source:** Section 4
 
 ## Focused task
 
@@ -10,19 +10,21 @@ Wire all four logical workers to the same ingestion/job infrastructure so data r
 
 ## Objective and boundaries
 
-Improve the **existing GoalHint Next.js application**, not a replacement application. Implement the following phases in order: audit → data contracts → imports and workers → odds → predictions → publication → interface → testing and rollout.
+Improve the backend of the existing GoalHint Next.js application. Implement these phases in order: audit → data contracts → imports and workers → odds → predictions → publication and settlement → testing and rollout.
 
 GoalHint is a **prediction and analysis platform**, not a staking platform. Maximize evidence-supported prediction coverage and prioritize estimated win probability over odds. Do not promise perfect predictions, guaranteed profits, or data the provider does not supply.
 
-Preserve the existing stack, routes, authentication, subscription controls, unrelated features, and established visual design. Inspect the repository before choosing infrastructure or changing schemas. Reuse and repair existing components and workers instead of creating competing implementations. Do not disable paid access as part of this work.
+Preserve the existing stack, routes, authentication, subscription controls, and unrelated features. Inspect the repository before choosing infrastructure or changing schemas. Reuse existing backend services, contracts, and workers. Keep paid-access enforcement in place.
 
-**Implementation defaults:** Operational intervals, retry settings, and layout measurements below are proposed implementation defaults, not claims about existing behavior. Make them named configuration values with these defaults. Provider limits and actual account permissions take precedence. Document any necessary deviation with evidence; do not silently omit requirements.
+**UI boundary:** Treat the current desktop and mobile interfaces as fixed. Preserve their components, layouts, styles, copy, labels, controls, and interactions. Limit screen work to read-only observation and regression checks of existing behavior. Use existing server-side contracts to supply improved data to current consumers.
+
+**Implementation defaults:** Operational intervals and retry settings below are proposed implementation defaults, not claims about existing behavior. Make them named configuration values with these defaults. Provider limits and actual account permissions take precedence. Document any necessary deviation with evidence; do not silently omit requirements.
 
 ## Execution protocol
 
-Execute these files in ascending order, 01 through 10. Work on this file's focused workstream and its related checks; do not add unrelated refactors. Reuse the actual repository's existing abstractions and prior handoffs. Implementation steps require working code/configuration and focused checks, not merely proposals.
+Execute steps 01–09 in order. Work on this file's focused workstream and its related checks; do not add unrelated refactors. Reuse the actual repository's existing abstractions and prior handoffs. Implementation steps require working code/configuration and focused checks, not merely proposals.
 
-This package replaces the earlier 61-prompt package. The original numbered source sections below are preserved for traceability; they are not additional prompt files. Section 2 is in 02, Section 6 is split between 06 and 07, and the early shared market contract is in 02. R-numbered references are included in the files that use them. No support folder or separate original-source file is required.
+This package replaces the earlier 61-prompt package. The numbered requirements below correspond to sections in the consolidated prompt. Section 2 is in 02, Section 6 is split between 06 and 07, and the early shared market contract is in 02. R-numbered references are included in the files that use them. No support folder or separate original-source file is required.
 
 Use mocked/replayed responses before production quota. Keep unfinished new paths gated, preserve existing working behavior, and report missing access/evidence without pretending work was verified. Reference URLs are retained from the supplied prompt, not independently verified by this consolidation; check current documentation and actual account access when implementing.
 
@@ -32,11 +34,11 @@ Implement the four related responsibilities as one coordinated background-proces
 
 Build the live/current-day/backfill flows and the durable prediction orchestration interface now. The source's Section 2 checklist is contained in 02; its detailed Section 6 decision logic is implemented in 06–07. Reuse existing working engine/storage interfaces while developing the prediction worker; only mocks may supply test outputs. Complete odds consumers in 05, final prediction consumers in 07, and publication/settlement consumers in 08.
 
-An unfinished downstream consumer must remain explicitly gated and tracked for its owning step, not silently treated as complete or replaced with fake data. Keep existing working paths available. No global enablement of new paths occurs before 10's validation and approved rollout.
+An unfinished downstream consumer must remain explicitly gated and tracked for its owning step, not silently treated as complete or replaced with fake data. Keep existing working paths available. Require Step 09 validation and rollout approval before enabling new paths globally.
 
-## Original requirements
+## Requirements
 
-The following text retains the supplied requirements and their original section numbers. Implement this file’s assigned scope; references to later consumers are fulfilled by the named later files, not by inventing substitute behavior.
+Section numbers follow the consolidated prompt. Implement the assigned backend scope and use the named workstreams for shared dependencies.
 
 ## 4. Implement four coordinated workers
 
@@ -61,7 +63,7 @@ These are four **logical responsibilities**, not a requirement for four separate
 **Default schedule:** once every hour at minute **00**, with a catch-up run after downtime. A concurrent run must be coalesced rather than overlapped.
 
 1. Discover every accessible fixture in today's `Africa/Kampala` date window. Use broad date discovery, not just fixtures already known to the app. Reconcile returned IDs against storage and public listing.
-2. Ensure all applicable checklist sections have jobs. Fetch missing or stale sections; reuse still-fresh shared entities. Do not require every optional field before making a fixture visible or a supported prediction possible.
+2. Ensure all applicable checklist sections have jobs. Fetch missing or stale sections; reuse still-fresh shared entities. Keep optional fields out of the fixture publication gate and apply only the required evidence gates for each supported prediction.
 3. Batch due enriched fixtures in groups of **20**. Share today's fetch receipts with the live and backfill workers.
 4. Check current team/player/league context, provider predictions, and odds using the freshness policy below. An hourly coordinator does **not** mean refetching static catalogs every hour.
 5. Revisit every unresolved fixture whose scheduled kickoff has passed, including fixtures from earlier dates. Maintain a durable unresolved queue independent of “today.”
@@ -100,7 +102,7 @@ These are application defaults. Check documented provider freshness and coverage
 9. Treat finalized historical records as cached by default, **not literally immutable**. Reopen only for explicit force-refresh, known provider corrections, invalidation, schema migrations, or unresolved sections. Current squads, injuries and standings must not be frozen merely because a historical task requested them.
 10. Store odds while available. Pre-match odds have a limited provider archive, and live odds are not a recoverable long-term history. Mark expired/unavailable history honestly; never claim that all historical odds can be backfilled. [R4]
 11. Do not substitute today's roster, injuries, season totals or knowledge for what was known before a historical match. Retrospective prediction tests require legitimate as-of evidence.
-12. Expose progress, next checkpoint, completed/partial dates, failures, quota wait, and an estimate of remaining work when the total is knowable. Use “not yet measured” instead of a fictional exact remaining count.
+12. Record progress, next checkpoint, completed/partial dates, failures, quota wait, and an estimate of remaining work in operational telemetry. Represent the estimate as unknown until the available evidence supports one.
 
 ### 4.4 Worker 4 — Prediction and forecast lifecycle
 
@@ -125,13 +127,13 @@ Implement the detailed decision logic in Section 6. Finished fixtures are used f
 
 ## Handoff
 
-Return the actual changed files or produced artifacts, commands/checks run and their results, configuration/migration changes, evidence-backed deviations, remaining limitations or blockers, and the inputs needed by the next step. Record them in the project's existing handoff/report location so 10 can compile the final completion report. Do not mark planned, blocked, untested, or unobserved work as verified.
+Return the actual changed files or produced artifacts, commands/checks run and their results, configuration/migration changes, evidence-backed deviations, remaining limitations or blockers, and the inputs needed by the next step. Record them in the project's existing handoff/report location so Step 09 can compile the final completion report. Do not mark planned, blocked, untested, or unobserved work as verified.
 
 **Next:** [05-odds-coverage.md](05-odds-coverage.md).
 
 ## Reference notes for the implementing agent
 
-These references support provider mechanics and modeling methods. The application design, scheduling defaults, validation policy, and acceptance criteria above are implementation requirements—not provider guarantees. Recheck the current documentation and account access during implementation.
+These references support provider mechanics and modeling methods. The scheduling defaults, validation policy, and acceptance criteria above describe the requested implementation. Provider support depends on the available data and account access. Recheck the current documentation and account access during implementation.
 
 - **R1 — API-Football v3 documentation:** endpoint schemas, additional batch parameters, profiles/career endpoints, half statistics and status semantics. `https://www.api-football.com/documentation-v3`
 

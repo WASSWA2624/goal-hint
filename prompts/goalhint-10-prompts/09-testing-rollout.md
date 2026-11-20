@@ -1,46 +1,48 @@
-# 10 — Validate and roll out the completed improvements
+# 09 — Validate and roll out the completed improvements
 
-**Step:** 10 of 10  
-**Key prerequisites:** [01-audit-baseline.md](01-audit-baseline.md); [02-data-contracts.md](02-data-contracts.md); [03-shared-ingestion.md](03-shared-ingestion.md); [04-coordinated-workers.md](04-coordinated-workers.md); [05-odds-coverage.md](05-odds-coverage.md); [06-evidence-models.md](06-evidence-models.md); [07-forecast-pipeline.md](07-forecast-pipeline.md); [08-publication-settlement.md](08-publication-settlement.md); [09-responsive-interface.md](09-responsive-interface.md)  
-**Original source:** Section 9
+**Step:** 09\
+**Key prerequisites:** [01-audit-baseline.md](01-audit-baseline.md); [02-data-contracts.md](02-data-contracts.md); [03-shared-ingestion.md](03-shared-ingestion.md); [04-coordinated-workers.md](04-coordinated-workers.md); [05-odds-coverage.md](05-odds-coverage.md); [06-evidence-models.md](06-evidence-models.md); [07-forecast-pipeline.md](07-forecast-pipeline.md); [08-publication-settlement.md](08-publication-settlement.md)\
+**Consolidated source:** Section 8
 
 ## Focused task
 
-Verify the entire implementation against the original acceptance criteria, measure capacity and forecasting evidence, and complete the reversible rollout and handoff.
+Verify the entire implementation against the backend acceptance criteria and existing behavior, measure capacity and forecasting evidence, and complete the reversible rollout and handoff.
 
 ## Objective and boundaries
 
-Improve the **existing GoalHint Next.js application**, not a replacement application. Implement the following phases in order: audit → data contracts → imports and workers → odds → predictions → publication → interface → testing and rollout.
+Improve the backend of the existing GoalHint Next.js application. Implement these phases in order: audit → data contracts → imports and workers → odds → predictions → publication and settlement → testing and rollout.
 
 GoalHint is a **prediction and analysis platform**, not a staking platform. Maximize evidence-supported prediction coverage and prioritize estimated win probability over odds. Do not promise perfect predictions, guaranteed profits, or data the provider does not supply.
 
-Preserve the existing stack, routes, authentication, subscription controls, unrelated features, and established visual design. Inspect the repository before choosing infrastructure or changing schemas. Reuse and repair existing components and workers instead of creating competing implementations. Do not disable paid access as part of this work.
+Preserve the existing stack, routes, authentication, subscription controls, and unrelated features. Inspect the repository before choosing infrastructure or changing schemas. Reuse existing backend services, contracts, and workers. Keep paid-access enforcement in place.
 
-**Implementation defaults:** Operational intervals, retry settings, and layout measurements below are proposed implementation defaults, not claims about existing behavior. Make them named configuration values with these defaults. Provider limits and actual account permissions take precedence. Document any necessary deviation with evidence; do not silently omit requirements.
+**UI boundary:** Treat the current desktop and mobile interfaces as fixed. Preserve their components, layouts, styles, copy, labels, controls, and interactions. Limit screen work to read-only observation and regression checks of existing behavior. Use existing server-side contracts to supply improved data to current consumers.
+
+**Implementation defaults:** Operational intervals and retry settings below are proposed implementation defaults, not claims about existing behavior. Make them named configuration values with these defaults. Provider limits and actual account permissions take precedence. Document any necessary deviation with evidence; do not silently omit requirements.
 
 ## Execution protocol
 
-Execute these files in ascending order, 01 through 10. Work on this file's focused workstream and its related checks; do not add unrelated refactors. Reuse the actual repository's existing abstractions and prior handoffs. Implementation steps require working code/configuration and focused checks, not merely proposals.
+Execute steps 01–09 in order. Work on this file's focused workstream and its related checks; do not add unrelated refactors. Reuse the actual repository's existing abstractions and prior handoffs. Implementation steps require working code/configuration and focused checks, not merely proposals.
 
-This package replaces the earlier 61-prompt package. The original numbered source sections below are preserved for traceability; they are not additional prompt files. Section 2 is in 02, Section 6 is split between 06 and 07, and the early shared market contract is in 02. R-numbered references are included in the files that use them. No support folder or separate original-source file is required.
+This package replaces the earlier 61-prompt package. The numbered requirements below correspond to sections in the consolidated prompt. Section 2 is in 02, Section 6 is split between 06 and 07, and the early shared market contract is in 02. R-numbered references are included in the files that use them. No support folder or separate original-source file is required.
 
 Use mocked/replayed responses before production quota. Keep unfinished new paths gated, preserve existing working behavior, and report missing access/evidence without pretending work was verified. Reference URLs are retained from the supplied prompt, not independently verified by this consolidation; check current documentation and actual account access when implementing.
 
 ## Task instructions and scope
 
-Consolidate and extend the focused checks already performed in 01–09. Implement and run all twenty original acceptance cases below, using mocked/replayed provider responses before consuming production quota. Verify that every applicable endpoint, source requirement, worker responsibility, market mapping, and deferred integration has a documented completed state or an explicit evidence-backed limitation.
+Consolidate and extend the focused checks already performed in 01–08. Run the backend acceptance cases and existing behavior regression checks below, using mocked or replayed provider responses before consuming production quota. Verify that every applicable endpoint, source requirement, worker responsibility, market mapping, and deferred integration has a documented completed state or an explicit evidence-backed limitation.
 
 Measure daily/minute demand from actual fixture volume and account limits. Distinguish passing code tests from measured forecasting quality, successful deployment, and observed live behavior. An unsupported claim of better accuracy is not an acceptance result.
 
 Prepare and, when authorized and accessible, execute the staged rollout with backups, reversible migrations, flags, representative fixtures, and the first hourly/backfill-resume observations. When production access, permissions, or required evidence is unavailable, provide the exact remaining commands/checks and mark them unperformed; never claim rollout or live-site verification has occurred. Finish with the source's complete evidence-backed completion report.
 
-## Original requirements
+## Requirements
 
-The following text retains the supplied requirements and their original section numbers. Implement this file’s assigned scope; references to later consumers are fulfilled by the named later files, not by inventing substitute behavior.
+Section numbers follow the consolidated prompt. Implement the assigned backend scope and use the named workstreams for shared dependencies.
 
-## 9. Tests, acceptance criteria, and rollout
+## 8. Tests, acceptance criteria, and rollout
 
-Implement automated tests plus manual responsive checks covering at least:
+Use automated backend tests and regression checks of existing behavior to cover at least:
 
 1. Replaying the same response/job does not create duplicate fixtures, events, odds, jobs or predictions.
 2. An authoritative correction updates records and settlement; an older in-flight response cannot overwrite newer state.
@@ -54,14 +56,13 @@ Implement automated tests plus manual responsive checks covering at least:
 10. Public fixture coverage reconciles independently of missing predictions or odds; no arbitrary fixture-count cap remains.
 11. Missing head-to-head data can use valid indirect evidence; a wholly unsupported market abstains with a reason.
 12. A common-opponent chain and a player transfer affect estimates without becoming guaranteed conclusions or double-counted evidence.
-13. AI failure/invalid output falls back to local, then API only for supported outputs; partial success is retained and source labels remain accurate.
+13. AI failure/invalid output falls back to local, then API only for supported outputs; partial success is retained and source metadata remains accurate.
 14. Outcome-sum, double-chance, threshold, BTTS, joint-event, score-tail and push-settlement invariants hold.
-15. A reliable prediction without odds is visible; another bookmaker's price never receives the preferred bookmaker's label.
+15. A supported prediction remains available in the read service without odds, and a fallback price retains its actual bookmaker ID.
 16. New meaningful evidence triggers one fresh forecast; unchanged data and ordinary odds-only updates do not trigger unnecessary AI runs.
 17. A queue of at least **1,000 fixtures** saves progress fixture by fixture, survives interruption, and does not stop after a subset or one bad fixture.
 18. Pre-match results are evaluated against forecasts actually issued beforehand; historical reconstruction and live forecasts are not counted as pre-match wins.
-19. Desktop row height does not increase; mobile numbering disappears; date/time stacking, league width, font weight and plain live status work in light/dark modes and at **360, 390, 412, 768, 1280 and 1440px** widths.
-20. Existing authentication, subscriptions, filters, pagination, match details, slips and unrelated routes keep working.
+19. Existing authentication, subscriptions, filters, pagination, match details, slips and unrelated routes keep working.
 
 Run tests with mocked/replayed provider responses before spending production quota. Measure proposed daily/minute request demand using actual fixture volumes and the configured plan. Report infeasible freshness targets instead of silently exhausting quota.
 
@@ -73,22 +74,22 @@ Deploy with reversible migrations, backups, feature flags and a staged rollout. 
 
 ## Acceptance checks
 
-- [ ] Record results for all twenty original automated/manual acceptance cases, including crash recovery, corrections, batching/pages, quota failure paths, and the interrupted queue of at least 1,000 fixtures.
-- [ ] Verify evidence/fallback/probability/history integrity, independent publication/odds behavior, truthful bookmaker labels, and no future-data leakage or post-result pre-match wins.
-- [ ] Complete the specified responsive widths/themes and regress authentication, subscriptions, filters, pagination, details, slips, and unrelated routes.
+- [ ] Record results for the listed backend and regression checks, including crash recovery, corrections, batching/pages, quota failure paths, and the interrupted queue of at least 1,000 fixtures.
+- [ ] Verify evidence/fallback/probability/history integrity, independent publication/odds behavior, accurate bookmaker source IDs, and no future-data leakage or post-result pre-match wins.
+- [ ] Check that existing authentication, subscriptions, filters, pagination, match details, slips, and unrelated routes still work.
 - [ ] Produce actual capacity estimates, forecasting validation results, limitations, and any verified deviations from named defaults.
 - [ ] Verify backups/rollback, reversible migrations, flags, representative staged fixtures, and first hourly/backfill cycles where authorized; clearly distinguish unperformed operations.
 - [ ] Deliver changed files, migrations/configuration, actual schedules, batching matrix, coverage/mapping manifest, publication exclusions, before/after quota estimates, test results, model validation, provider limitations, and exact run/rollback commands.
 
 ## Handoff
 
-Return the actual changed files or produced artifacts, commands/checks run and their results, configuration/migration changes, evidence-backed deviations, remaining limitations or blockers, and the inputs needed by the next step. Record them in the project's existing handoff/report location so 10 can compile the final completion report. Do not mark planned, blocked, untested, or unobserved work as verified.
+Record the final completion report in the project's existing handoff/report location. Include the actual changed files or artifacts, commands and check results, configuration and migration changes, evidence-backed deviations, and remaining limitations or blockers. Report verification status for work that remains planned, blocked, untested, or unobserved.
 
-**End of sequence:** all ten workstreams must be reconciled in the final report. Keep unverified production operations and provider/data limitations explicitly open rather than asserting complete live-site success.
+**End of sequence:** all nine workstreams must be reconciled in the final report. Keep unverified production operations and provider/data limitations explicitly open rather than asserting complete live-site success.
 
 ## Reference notes for the implementing agent
 
-These references support provider mechanics and modeling methods. The application design, scheduling defaults, validation policy, and acceptance criteria above are implementation requirements—not provider guarantees. Recheck the current documentation and account access during implementation.
+These references support provider mechanics and modeling methods. The scheduling defaults, validation policy, and acceptance criteria above describe the requested implementation. Provider support depends on the available data and account access. Recheck the current documentation and account access during implementation.
 
 - **R1 — API-Football v3 documentation:** endpoint schemas, additional batch parameters, profiles/career endpoints, half statistics and status semantics. `https://www.api-football.com/documentation-v3`
 

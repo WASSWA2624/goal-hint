@@ -1,8 +1,8 @@
 # 07 — Complete the forecast decision pipeline
 
-**Step:** 7 of 10  
+**Step:** 07\
 **Key prerequisites:** [02-data-contracts.md](02-data-contracts.md); [04-coordinated-workers.md](04-coordinated-workers.md); [05-odds-coverage.md](05-odds-coverage.md); [06-evidence-models.md](06-evidence-models.md)  
-**Original source:** Sections 6.4, 6.6 and 6.7; completion of the 04 prediction-worker interfaces
+**Consolidated source:** Sections 6.4, 6.6 and 6.7; completion of the 04 prediction-worker interfaces
 
 ## Focused task
 
@@ -10,19 +10,21 @@ Connect the existing engines to validated market evaluation, versioned forecast 
 
 ## Objective and boundaries
 
-Improve the **existing GoalHint Next.js application**, not a replacement application. Implement the following phases in order: audit → data contracts → imports and workers → odds → predictions → publication → interface → testing and rollout.
+Improve the backend of the existing GoalHint Next.js application. Implement these phases in order: audit → data contracts → imports and workers → odds → predictions → publication and settlement → testing and rollout.
 
 GoalHint is a **prediction and analysis platform**, not a staking platform. Maximize evidence-supported prediction coverage and prioritize estimated win probability over odds. Do not promise perfect predictions, guaranteed profits, or data the provider does not supply.
 
-Preserve the existing stack, routes, authentication, subscription controls, unrelated features, and established visual design. Inspect the repository before choosing infrastructure or changing schemas. Reuse and repair existing components and workers instead of creating competing implementations. Do not disable paid access as part of this work.
+Preserve the existing stack, routes, authentication, subscription controls, and unrelated features. Inspect the repository before choosing infrastructure or changing schemas. Reuse existing backend services, contracts, and workers. Keep paid-access enforcement in place.
 
-**Implementation defaults:** Operational intervals, retry settings, and layout measurements below are proposed implementation defaults, not claims about existing behavior. Make them named configuration values with these defaults. Provider limits and actual account permissions take precedence. Document any necessary deviation with evidence; do not silently omit requirements.
+**UI boundary:** Treat the current desktop and mobile interfaces as fixed. Preserve their components, layouts, styles, copy, labels, controls, and interactions. Limit screen work to read-only observation and regression checks of existing behavior. Use existing server-side contracts to supply improved data to current consumers.
+
+**Implementation defaults:** Operational intervals and retry settings below are proposed implementation defaults, not claims about existing behavior. Make them named configuration values with these defaults. Provider limits and actual account permissions take precedence. Document any necessary deviation with evidence; do not silently omit requirements.
 
 ## Execution protocol
 
-Execute these files in ascending order, 01 through 10. Work on this file's focused workstream and its related checks; do not add unrelated refactors. Reuse the actual repository's existing abstractions and prior handoffs. Implementation steps require working code/configuration and focused checks, not merely proposals.
+Execute steps 01–09 in order. Work on this file's focused workstream and its related checks; do not add unrelated refactors. Reuse the actual repository's existing abstractions and prior handoffs. Implementation steps require working code/configuration and focused checks, not merely proposals.
 
-This package replaces the earlier 61-prompt package. The original numbered source sections below are preserved for traceability; they are not additional prompt files. Section 2 is in 02, Section 6 is split between 06 and 07, and the early shared market contract is in 02. R-numbered references are included in the files that use them. No support folder or separate original-source file is required.
+This package replaces the earlier 61-prompt package. The numbered requirements below correspond to sections in the consolidated prompt. Section 2 is in 02, Section 6 is split between 06 and 07, and the early shared market contract is in 02. R-numbered references are included in the files that use them. No support folder or separate original-source file is required.
 
 Use mocked/replayed responses before production quota. Keep unfinished new paths gated, preserve existing working behavior, and report missing access/evidence without pretending work was verified. Reference URLs are retained from the supplied prompt, not independently verified by this consolidation; check current documentation and actual account access when implementing.
 
@@ -32,11 +34,11 @@ Reuse the existing three engines, shared registry, evidence/model interfaces, an
 
 Reuse the registry contract already defined in 02 and mappings populated in 05; do not create a new competing registry or rerun ingestion independently. The market-registry wording below also specifies how the evaluator must consume that contract. Preserve successful independent market families while enforcing coherence for coupled outcomes.
 
-Complete and test all deferred prediction-consumer interfaces from 04, including one-active-fixture orchestration, full versioned idempotency, meaningful-change triggers, hourly recovery, fairness, and resumable per-fixture saves. Wire durable outputs for 08's publication/settlement and 09's detail presentation. Maintain new-path gates until validated; do not create post-result pre-match predictions.
+Complete and test all deferred prediction-consumer interfaces from 04, including one-active-fixture orchestration, full versioned idempotency, meaningful-change triggers, hourly recovery, fairness, and resumable per-fixture saves. Wire durable outputs into the existing read services and the publication and settlement paths in 08. Maintain new-path gates until validated; do not create post-result pre-match predictions.
 
-## Original requirements
+## Requirements
 
-The following text retains the supplied requirements and their original section numbers. Implement this file’s assigned scope; references to later consumers are fulfilled by the named later files, not by inventing substitute behavior.
+Section numbers follow the consolidated prompt. Implement the assigned backend scope and use the named workstreams for shared dependencies.
 
 ### 6.4 Preserve the requested engine priority
 
@@ -50,15 +52,15 @@ Use **AI → local engine → API-Football predictions**.
 
 Fallback should preserve successful independent market families rather than discard an entire fixture. However, coupled probabilities must come from one coherent distribution or pass reconciliation checks; do not combine contradictory AI/local/API outputs.
 
-For the API adapter, preserve the documented meaning of every field: `win_or_draw` is a flag, not a probability; home/draw/away percentages refer to those outcomes; signed goal/under-over strings may describe thresholds, not expected-goal means. Derive double-chance probability only from compatible outcome probabilities. Advice without a defensible numeric probability can be shown as provider advice, but must not receive a fabricated percentage or enter probability-based ranking.
+For the API adapter, preserve the documented meaning of every field: `win_or_draw` is a flag, not a probability; home/draw/away percentages refer to those outcomes; signed goal/under-over strings may describe thresholds, not expected-goal means. Derive double-chance probability only from compatible outcome probabilities. Retain advice without a defensible numeric probability as provider advice and exclude it from probability-based ranking.
 
-An AI language model's unsupported percentage is not a validated probability. AI may structure evidence, produce bounded sourced adjustments, explain results, or invoke a validated numerical model. Without a supported numerical basis, it must defer. Label the actual source honestly; local calculations explained by AI remain locally calculated.
+An AI language model's unsupported percentage is not a validated probability. AI may structure evidence, produce bounded sourced adjustments, explain results, or invoke a validated numerical model. Without a supported numerical basis, it must defer. Record the numerical source in forecast metadata. Attribute local calculations explained by AI to the local engine.
 
 Use a **60-second AI-call timeout**, one transient retry, then local fallback. After **five consecutive provider-level AI failures**, open a **10-minute circuit breaker** and use local/API during that period. Log engine transitions and per-market reasons.
 
 ### 6.6 Shared market registry and per-market evaluation
 
-Use one **versioned market-definition registry across fixtures**. Each entry defines period, selection set, line/player/team parameters, settlement rules, evidence needs, model capability, source mappings, and display name. The registry is shared; applicable players, lines, available odds and supported predictions vary by fixture.
+Use one **versioned market-definition registry across fixtures**. Each entry defines period, selection set, line/player/team parameters, settlement rules, evidence needs, model capability, source mappings, and canonical English market name in the domain contract. The registry is shared; applicable players, lines, available odds and supported predictions vary by fixture.
 
 Reconcile the existing registry with API catalogs. Enumerate every catalog entry and map it explicitly, marking unsupported/unmapped entries with reasons rather than silently dropping them. Do not guess the contents of an unprovided market file.
 
@@ -97,33 +99,33 @@ Never fabricate unrealistic new goal lines solely to obtain near-100% recommenda
 
 For each supported market save: fixture ID, market key/parameters, recommended selection, outcome probabilities, confidence/support diagnostics, optional uncertainty interval, explanation/evidence references, engine/model version, evidence hash/cutoff, generation time, forecast type, and status. Join odds separately with source and timestamp. Save unavailable-market reasons as well.
 
-Choose the match-card recommendation from eligible supported predictions by **estimated win probability descending**, then **confidence**, then available comparable odds only as a final tie-break, followed by a stable market/selection key. Do not force double chance, artificial diversity, minimum odds, or fixed 90% probabilities. Diversity should follow the evidence, not a quota for different market labels.
+Choose the fixture’s top recommendation from eligible supported predictions by **estimated win probability descending**, then **confidence**, then available comparable odds only as a final tie-break, followed by a stable market/selection key. Do not force double chance, artificial diversity, minimum odds, or fixed 90% probabilities. Diversity should follow the evidence, not a quota for different market labels.
 
-Match details must expose every supported market's pick, probability, confidence and available bookmaker prices. Unsupported markets may show an explanation but no invented percentage.
+Keep each supported market’s pick, probability, confidence, and available exact-match bookmaker prices available to existing read services. Record unsupported-market reasons and leave their probabilities unset.
 
-Freeze and retain each published pre-match forecast version. If live forecasting exists or is added within the approved scope, store and label it separately, conditioned on current time/score. Never overwrite a pre-match forecast with hindsight, silently change its outcome after kickoff, or count post-event forecasts as successful pre-match predictions.
+Freeze and retain each published pre-match forecast version. If live forecasting exists or is added within the approved scope, store it separately with a distinct forecast type, conditioned on current time/score. Never overwrite a pre-match forecast with hindsight, silently change its outcome after kickoff, or count post-event forecasts as successful pre-match predictions.
 
 For slips, retain existing functionality but do not claim that many low-odds selections are collectively safe. Multiplying probabilities assumes independence; correlated selections require dependence-aware handling. Do not promise that a target combined odd can also achieve a guaranteed hit rate.
 
 ## Acceptance checks
 
-- [ ] Enforce AI → local → API-Football routing per supported market family, with validated numerical grounding, accurate source labels, explicit abstention, and retained partial successes.
+- [ ] Enforce AI → local → API-Football routing per supported market family, with validated numerical grounding, accurate source metadata, explicit abstention, and retained partial successes.
 - [ ] Verify the 60-second AI timeout, one transient retry, five-failure trigger, and 10-minute circuit breaker; test invalid/unreliable output as well as transport failures.
 - [ ] Interpret provider flags, percentages, and threshold strings correctly; unsupported advice does not receive fabricated probabilities or enter probability ranking.
 - [ ] Evaluate every supported parameterized market and preserve an explicit reason for every unsupported/unmapped family; all listed probability and settlement-state invariants hold.
 - [ ] Save every specified diagnostic/version/evidence field and unavailable reason, join odds separately, and freeze published pre-match history without hindsight overwrites.
 - [ ] Rank by estimated win probability, confidence, comparable odds only as the last numerical tie-break, then stable key; retain slips without false independence or guaranteed hit-rate claims.
-- [ ] Process and resume the full eligible queue without restarting long runs at hourly sweeps or stopping after one fixture fails; expose every supported market for later details.
+- [ ] Process and resume the full eligible queue without restarting long runs at hourly sweeps or stopping after one fixture fails; persist each supported market result and its evidence for the existing read services.
 
 ## Handoff
 
-Return the actual changed files or produced artifacts, commands/checks run and their results, configuration/migration changes, evidence-backed deviations, remaining limitations or blockers, and the inputs needed by the next step. Record them in the project's existing handoff/report location so 10 can compile the final completion report. Do not mark planned, blocked, untested, or unobserved work as verified.
+Return the actual changed files or produced artifacts, commands/checks run and their results, configuration/migration changes, evidence-backed deviations, remaining limitations or blockers, and the inputs needed by the next step. Record them in the project's existing handoff/report location so Step 09 can compile the final completion report. Do not mark planned, blocked, untested, or unobserved work as verified.
 
 **Next:** [08-publication-settlement.md](08-publication-settlement.md).
 
 ## Reference notes for the implementing agent
 
-These references support provider mechanics and modeling methods. The application design, scheduling defaults, validation policy, and acceptance criteria above are implementation requirements—not provider guarantees. Recheck the current documentation and account access during implementation.
+These references support provider mechanics and modeling methods. The scheduling defaults, validation policy, and acceptance criteria above describe the requested implementation. Provider support depends on the available data and account access. Recheck the current documentation and account access during implementation.
 
 - **R1 — API-Football v3 documentation:** endpoint schemas, additional batch parameters, profiles/career endpoints, half statistics and status semantics. `https://www.api-football.com/documentation-v3`
 

@@ -1,8 +1,8 @@
 # 02 — Establish the shared data contracts
 
-**Step:** 2 of 10  
+**Step:** 02\
 **Key prerequisites:** [01-audit-baseline.md](01-audit-baseline.md)  
-**Original source:** Section 2; the registry contract in Section 6.6
+**Consolidated source:** Section 2; the registry contract in Section 6.6
 
 ## Focused task
 
@@ -10,19 +10,21 @@ Create or repair the versioned provider inventory, lossless record contracts, co
 
 ## Objective and boundaries
 
-Improve the **existing GoalHint Next.js application**, not a replacement application. Implement the following phases in order: audit → data contracts → imports and workers → odds → predictions → publication → interface → testing and rollout.
+Improve the backend of the existing GoalHint Next.js application. Implement these phases in order: audit → data contracts → imports and workers → odds → predictions → publication and settlement → testing and rollout.
 
 GoalHint is a **prediction and analysis platform**, not a staking platform. Maximize evidence-supported prediction coverage and prioritize estimated win probability over odds. Do not promise perfect predictions, guaranteed profits, or data the provider does not supply.
 
-Preserve the existing stack, routes, authentication, subscription controls, unrelated features, and established visual design. Inspect the repository before choosing infrastructure or changing schemas. Reuse and repair existing components and workers instead of creating competing implementations. Do not disable paid access as part of this work.
+Preserve the existing stack, routes, authentication, subscription controls, and unrelated features. Inspect the repository before choosing infrastructure or changing schemas. Reuse existing backend services, contracts, and workers. Keep paid-access enforcement in place.
 
-**Implementation defaults:** Operational intervals, retry settings, and layout measurements below are proposed implementation defaults, not claims about existing behavior. Make them named configuration values with these defaults. Provider limits and actual account permissions take precedence. Document any necessary deviation with evidence; do not silently omit requirements.
+**UI boundary:** Treat the current desktop and mobile interfaces as fixed. Preserve their components, layouts, styles, copy, labels, controls, and interactions. Limit screen work to read-only observation and regression checks of existing behavior. Use existing server-side contracts to supply improved data to current consumers.
+
+**Implementation defaults:** Operational intervals and retry settings below are proposed implementation defaults, not claims about existing behavior. Make them named configuration values with these defaults. Provider limits and actual account permissions take precedence. Document any necessary deviation with evidence; do not silently omit requirements.
 
 ## Execution protocol
 
-Execute these files in ascending order, 01 through 10. Work on this file's focused workstream and its related checks; do not add unrelated refactors. Reuse the actual repository's existing abstractions and prior handoffs. Implementation steps require working code/configuration and focused checks, not merely proposals.
+Execute steps 01–09 in order. Work on this file's focused workstream and its related checks; do not add unrelated refactors. Reuse the actual repository's existing abstractions and prior handoffs. Implementation steps require working code/configuration and focused checks, not merely proposals.
 
-This package replaces the earlier 61-prompt package. The original numbered source sections below are preserved for traceability; they are not additional prompt files. Section 2 is in 02, Section 6 is split between 06 and 07, and the early shared market contract is in 02. R-numbered references are included in the files that use them. No support folder or separate original-source file is required.
+This package replaces the earlier 61-prompt package. The numbered requirements below correspond to sections in the consolidated prompt. Section 2 is in 02, Section 6 is split between 06 and 07, and the early shared market contract is in 02. R-numbered references are included in the files that use them. No support folder or separate original-source file is required.
 
 Use mocked/replayed responses before production quota. Keep unfinished new paths gated, preserve existing working behavior, and report missing access/evidence without pretending work was verified. Reference URLs are retained from the supplied prompt, not independently verified by this consolidation; check current documentation and actual account access when implementing.
 
@@ -34,9 +36,9 @@ Establish the shared versioned market registry now, before its consumers. Consul
 
 This step owns contracts and inventory, not the provider execution pipeline. In 03, implement the endpoint handlers and durable fetching machinery against these contracts; in 05, populate and reconcile odds mappings; in 06–07, implement model capability and market evaluation. The source's requirement to implement or verify every applicable endpoint remains mandatory across those named steps.
 
-## Original requirements
+## Requirements
 
-The following text retains the supplied requirements and their original section numbers. Implement this file’s assigned scope; references to later consumers are fulfilled by the named later files, not by inventing substitute behavior.
+Section numbers follow the consolidated prompt. Implement the assigned backend scope and use the named workstreams for shared dependencies.
 
 ## 2. Establish a complete provider-data inventory
 
@@ -100,7 +102,7 @@ For each applicable record, retain all returned properties, including these fami
 - **Career/availability:** transfer dates/types and both teams; coach career dates; injury/suspension type, reason and dates; trophies and placement; squad/career associations with their actual temporal scope.
 - **Forecasts/prices:** provider advice and numeric forecasts where supplied, comparison components and source history; bookmaker identity when present, market/outcome IDs, raw labels, handicaps/lines, decimal prices, provider update time, observation time, and suspension/main-selection flags.
 
-Do not claim that API-Football supplies news, weather, tactical assessments, manager ratings, or psychological states as standard fields. Use existing authorized external sources only when genuinely available, attributable, and timestamped. Derived metrics must be labeled derived. Never invent a player's mental state.
+Do not claim that API-Football supplies news, weather, tactical assessments, manager ratings, or psychological states as standard fields. Use existing authorized external sources only when genuinely available, attributable, and timestamped. Record derived provenance in the data contract for calculated metrics. Never invent a player's mental state.
 
 ### 2.4 Coverage and completeness
 
@@ -112,25 +114,25 @@ Record reasons, attempts, timestamps, last successful response, next retry, and 
 
 ### 6.6 Shared market registry and per-market evaluation
 
-Use one **versioned market-definition registry across fixtures**. Each entry defines period, selection set, line/player/team parameters, settlement rules, evidence needs, model capability, source mappings, and display name. The registry is shared; applicable players, lines, available odds and supported predictions vary by fixture.
+Use one **versioned market-definition registry across fixtures**. Each entry defines period, selection set, line/player/team parameters, settlement rules, evidence needs, model capability, source mappings, and canonical English market name in the domain contract. The registry is shared; applicable players, lines, available odds and supported predictions vary by fixture.
 
 ## Acceptance checks
 
 - [ ] Account for every listed endpoint and field family, plus any additional permitted documented fields, as normalized, retained raw, unavailable, or not applicable with a reason.
 - [ ] Represent provider IDs, entity relationships, historical versus current context, unknown nested properties, and null/missing values without information loss.
 - [ ] Implement all named completeness states with endpoint/scope/page/section granularity, attempts, reasons, timestamps, retries, and remaining work.
-- [ ] Define one versioned market contract for period, selections, line/player/team parameters, settlement, evidence/capability, mappings, and display labels; keep fixture-specific applicability separate.
+- [ ] Define one versioned market contract for period, selections, line/player/team parameters, settlement, evidence/capability, mappings, and canonical domain names; keep fixture-specific applicability separate.
 - [ ] Supply the manifest, actual schema/type changes, migration/rollback instructions where applicable, and adapter contracts needed by 03.
 
 ## Handoff
 
-Return the actual changed files or produced artifacts, commands/checks run and their results, configuration/migration changes, evidence-backed deviations, remaining limitations or blockers, and the inputs needed by the next step. Record them in the project's existing handoff/report location so 10 can compile the final completion report. Do not mark planned, blocked, untested, or unobserved work as verified.
+Return the actual changed files or produced artifacts, commands/checks run and their results, configuration/migration changes, evidence-backed deviations, remaining limitations or blockers, and the inputs needed by the next step. Record them in the project's existing handoff/report location so Step 09 can compile the final completion report. Do not mark planned, blocked, untested, or unobserved work as verified.
 
 **Next:** [03-shared-ingestion.md](03-shared-ingestion.md).
 
 ## Reference notes for the implementing agent
 
-These references support provider mechanics and modeling methods. The application design, scheduling defaults, validation policy, and acceptance criteria above are implementation requirements—not provider guarantees. Recheck the current documentation and account access during implementation.
+These references support provider mechanics and modeling methods. The scheduling defaults, validation policy, and acceptance criteria above describe the requested implementation. Provider support depends on the available data and account access. Recheck the current documentation and account access during implementation.
 
 - **R1 — API-Football v3 documentation:** endpoint schemas, additional batch parameters, profiles/career endpoints, half statistics and status semantics. `https://www.api-football.com/documentation-v3`
 

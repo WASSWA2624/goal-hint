@@ -2,19 +2,21 @@
 
 ## Objective and boundaries
 
-Improve the **existing GoalHint Next.js application**, not a replacement application. Implement the following phases in order: audit → data contracts → imports and workers → odds → predictions → publication → interface → testing and rollout.
+Improve the backend of the existing GoalHint Next.js application. Implement these phases in order: audit → data contracts → imports and workers → odds → predictions → publication and settlement → testing and rollout.
 
 GoalHint is a **prediction and analysis platform**, not a staking platform. Maximize evidence-supported prediction coverage and prioritize estimated win probability over odds. Do not promise perfect predictions, guaranteed profits, or data the provider does not supply.
 
-Preserve the existing stack, routes, authentication, subscription controls, unrelated features, and established visual design. Inspect the repository before choosing infrastructure or changing schemas. Reuse and repair existing components and workers instead of creating competing implementations. Do not disable paid access as part of this work.
+Preserve the existing stack, routes, authentication, subscription controls, and unrelated features. Inspect the repository before choosing infrastructure or changing schemas. Reuse existing backend services, contracts, and workers. Keep paid-access enforcement in place.
 
-**Implementation defaults:** Operational intervals, retry settings, and layout measurements below are proposed implementation defaults, not claims about existing behavior. Make them named configuration values with these defaults. Provider limits and actual account permissions take precedence. Document any necessary deviation with evidence; do not silently omit requirements.
+**UI boundary:** Treat the current desktop and mobile interfaces as fixed. Preserve their components, layouts, styles, copy, labels, controls, and interactions. Limit screen work to read-only observation and regression checks of existing behavior. Use existing server-side contracts to supply improved data to current consumers.
+
+**Implementation defaults:** Operational intervals and retry settings below are proposed implementation defaults, not claims about existing behavior. Make them named configuration values with these defaults. Provider limits and actual account permissions take precedence. Document any necessary deviation with evidence; do not silently omit requirements.
 
 ---
 
 ## 1. Audit the existing application and establish the baseline
 
-1. Trace the complete path: provider request → raw response → normalized records → prediction engines → publication query → API response → rendered match.
+1. Trace the complete path: provider request → raw response → normalized records → prediction engines → publication query → API response → existing match screen. Observe the screen to verify what it already consumes.
 2. Locate existing workers, schedules, queues, locks, API clients, caching, pagination, market registries, bookmaker mappings, prediction adapters, settlement rules, and admin counters.
 3. Investigate the screenshot showing **1,008 stored fixtures, 1,008 in public scope, but 674 published**: reconcile the **334-fixture difference** by fixture ID and explicit exclusion reason. Do not assume that a missing prediction should exclude a fixture.
 4. Investigate the visible **“Import failed,” “No recent imports,” “Waiting on quota,”** and unavailable odds-mapping states. Inspect actual logs, response errors, credentials configuration, endpoint parameters, pagination, and quota allocation. Screenshots identify symptoms, not root causes.
@@ -86,7 +88,7 @@ For each applicable record, retain all returned properties, including these fami
 - **Career/availability:** transfer dates/types and both teams; coach career dates; injury/suspension type, reason and dates; trophies and placement; squad/career associations with their actual temporal scope.
 - **Forecasts/prices:** provider advice and numeric forecasts where supplied, comparison components and source history; bookmaker identity when present, market/outcome IDs, raw labels, handicaps/lines, decimal prices, provider update time, observation time, and suspension/main-selection flags.
 
-Do not claim that API-Football supplies news, weather, tactical assessments, manager ratings, or psychological states as standard fields. Use existing authorized external sources only when genuinely available, attributable, and timestamped. Derived metrics must be labeled derived. Never invent a player's mental state.
+Do not claim that API-Football supplies news, weather, tactical assessments, manager ratings, or psychological states as standard fields. Use existing authorized external sources only when genuinely available, attributable, and timestamped. Record derived provenance in the data contract for calculated metrics. Never invent a player's mental state.
 
 ### 2.4 Coverage and completeness
 
@@ -105,10 +107,10 @@ All four logical workers must share the same provider client, request scheduler,
 3. **Preserve corrections:** idempotency must not prevent legitimate score, event, lineup, or schedule corrections. Merge partial responses without erasing known data merely because a field was omitted. Treat explicit authoritative corrections separately.
 4. **Persist before advancing:** durably save each validated response/receipt, then transactionally update normalized data and the checkpoint. A restart should replay a stored response rather than repeat its API call when possible.
 5. **Prevent overlapping jobs:** durable leases, heartbeats, ownership/fencing checks, and unique active job keys. Expired workers must not overwrite newer committed work.
-6. **Maintain temporal integrity:** store event time, provider update time where available, observation time, and the evidence version. Keep UTC in storage; use `Africa/Kampala` for the default local-day scope and display.
+6. **Maintain temporal integrity:** store event time, provider update time where available, observation time, and the evidence version. Keep UTC in storage; use `Africa/Kampala` to calculate the default local-day scope on the server.
 7. **Separate freshness from change:** an unchanged response updates the last-checked timestamp but does not trigger a new forecast. Exclude request timestamps and cosmetic metadata from prediction evidence hashes.
 8. **Do not equate missing with zero:** preserve nullability. An unknown score/statistic is not 0; missing odds are not 0.00.
-9. **No frontend provider calls:** browsers read GoalHint's database/cache. API keys stay server-side and out of logs and AI prompts.
+9. **Keep provider requests server-side:** serve browser reads through GoalHint’s existing API and stored or cached data. Keep API keys server-side and out of logs and AI prompts.
 10. **Be honest about network limits:** idempotency prevents duplicate effects; it does not let us know that remote data changed without checking. A crash before a response is durably recorded may require repeating a GET. Design for safe recovery, not an impossible exactly-once HTTP guarantee.
 
 ### 3.1 Explicit batching and pagination rules
@@ -139,7 +141,7 @@ Use the following proposed policy:
 - Central rate limit: at most **80% of documented per-minute/per-second limits**, with all processes sharing the same accounting. Until limits are known/configured, use **5 requests/minute, one concurrent request**, and report degraded operation.
 - Priority: **live status/final confirmation → current-day discovery and missing data → current-match enrichment/odds → historical backfill**. Use fair scheduling within a priority so one fixture cannot starve the rest.
 - Recompute the request budget hourly and when live load or limits change. Reserve **120% of forecast remaining critical requests until reset**, plus **5% of the daily limit**. Backfill may consume only the positive remainder and at most **20% of the per-minute allowance**.
-- If the plan cannot sustain the workload, pause backfill first, then reduce enrichment frequency. Degrade live polling from **60 → 120 → 300 seconds** only as needed; show actual freshness and raise an admin capacity warning. Do not claim unchanged accuracy/freshness under insufficient quota.
+- If the plan cannot sustain the workload, pause backfill first, then reduce enrichment frequency. Degrade live polling from **60 → 120 → 300 seconds** only as needed; record actual freshness and emit a capacity warning through existing operational telemetry. Do not claim unchanged accuracy/freshness under insufficient quota.
 - Network/temporary server failures: retry after **5, 30, then 120 seconds**, with up to 10% positive jitter. Then persist the failure and retry after **one hour**. Respect a longer provider `Retry-After`.
 - For rate limits, distinguish short-window throttling from daily exhaustion. Daily exhaustion pauses eligible jobs until the verified reset plus **15 seconds**; do not repeatedly probe an exhausted quota.
 - Authentication, access, and invalid-parameter errors require configuration correction, not endless retries. Check the JSON `errors` field even on HTTP 200.
@@ -168,7 +170,7 @@ These are four **logical responsibilities**, not a requirement for four separate
 **Default schedule:** once every hour at minute **00**, with a catch-up run after downtime. A concurrent run must be coalesced rather than overlapped.
 
 1. Discover every accessible fixture in today's `Africa/Kampala` date window. Use broad date discovery, not just fixtures already known to the app. Reconcile returned IDs against storage and public listing.
-2. Ensure all applicable checklist sections have jobs. Fetch missing or stale sections; reuse still-fresh shared entities. Do not require every optional field before making a fixture visible or a supported prediction possible.
+2. Ensure all applicable checklist sections have jobs. Fetch missing or stale sections; reuse still-fresh shared entities. Keep optional fields out of the fixture publication gate and apply only the required evidence gates for each supported prediction.
 3. Batch due enriched fixtures in groups of **20**. Share today's fetch receipts with the live and backfill workers.
 4. Check current team/player/league context, provider predictions, and odds using the freshness policy below. An hourly coordinator does **not** mean refetching static catalogs every hour.
 5. Revisit every unresolved fixture whose scheduled kickoff has passed, including fixtures from earlier dates. Maintain a durable unresolved queue independent of “today.”
@@ -207,7 +209,7 @@ These are application defaults. Check documented provider freshness and coverage
 9. Treat finalized historical records as cached by default, **not literally immutable**. Reopen only for explicit force-refresh, known provider corrections, invalidation, schema migrations, or unresolved sections. Current squads, injuries and standings must not be frozen merely because a historical task requested them.
 10. Store odds while available. Pre-match odds have a limited provider archive, and live odds are not a recoverable long-term history. Mark expired/unavailable history honestly; never claim that all historical odds can be backfilled. [R4]
 11. Do not substitute today's roster, injuries, season totals or knowledge for what was known before a historical match. Retrospective prediction tests require legitimate as-of evidence.
-12. Expose progress, next checkpoint, completed/partial dates, failures, quota wait, and an estimate of remaining work when the total is knowable. Use “not yet measured” instead of a fictional exact remaining count.
+12. Record progress, next checkpoint, completed/partial dates, failures, quota wait, and an estimate of remaining work in operational telemetry. Represent the estimate as unknown until the available evidence supports one.
 
 ### 4.4 Worker 4 — Prediction and forecast lifecycle
 
@@ -226,12 +228,14 @@ Implement the detailed decision logic in Section 6. Finished fixtures are used f
 1. Import all available bookmaker and market catalogs. Keep **pre-match and live market ID namespaces separate**; the same numeric ID is not automatically the same market. [R4]
 2. Fetch all pages of prices for the required scope without restricting to one bookmaker or one bet type. Normalize each exact combination of fixture, phase, period, market, line, selection, player/team, and bookmaker/source.
 3. Store provider timestamps, observation timestamps, availability, and price history without duplicating identical snapshots. A returned live source must not be assigned an invented bookmaker identity.
-4. For the displayed reference price: use the configured preferred bookmaker if its exact selection is available and fresh; otherwise the configured fallback order; otherwise the freshest valid exact match, with bookmaker/source ID as a deterministic tie-break. Do not compare different lines or periods as though they were the same selection.
-5. Preserve other bookmaker prices for match-detail comparison. Honor an existing user-selected bookmaker; identify when the displayed source is a fallback. Never present another bookmaker's price as the user's chosen bookmaker's price.
-6. Reject malformed prices and respect suspension flags. Label stale prices with their timestamp rather than presenting them as current offers.
-7. A supported forecast remains visible without a price: **“Odds unavailable.”** A bookmaker offering a price does not prove that GoalHint has enough evidence to forecast that market.
+4. For the server-side reference price, use the configured preferred bookmaker if its exact selection is available and fresh; otherwise the configured fallback order; otherwise the freshest valid exact match, with bookmaker/source ID as a deterministic tie-break. Do not compare different lines or periods as though they were the same selection.
+5. Preserve prices from other bookmakers. Honor the bookmaker ID supplied by an existing user selection. Record the actual source ID and fallback status separately from the requested bookmaker ID.
+6. Reject malformed prices and respect suspension flags. Retain timestamps for stale prices and exclude them from current-offer selection.
+7. Keep supported forecasts eligible when a price is unavailable and represent the missing price explicitly in the existing data contract. Apply the forecast evidence gate independently of bookmaker coverage.
 8. An odds-only change updates prices. It must not rerun an odds-independent probability model unless its declared inputs actually include odds.
 9. Do not introduce a minimum-odds requirement or force high-odds selections. Do not equate bookmaker implied probability with GoalHint's independently estimated probability.
+
+Keep the existing server-side odds access rules. Return public prices only where provider display rights have been verified for the source and public odds are enabled. Preserve viewer entitlement checks for protected prices.
 
 ## 6. Upgrade the prediction mechanism
 
@@ -257,9 +261,9 @@ If A performed well against C, and C performed well against B, that can inform A
 
 - **Win probability:** the model's estimated chance of the specified outcome under that market's settlement rules.
 - **Evidence/model confidence:** reliability of that estimate, considering support, completeness, freshness, disagreement, domain fit and measured calibration.
-- **Ranking score:** an internal selection aid, if needed; never label it probability or use it to silently override the required ranking order.
+- **Ranking score:** an internal selection aid, if needed; keep it distinct from probability in the model contract and preserve the required ranking order.
 
-Low confidence does not automatically mean a low probability. For example, a likely outcome can still have an uncertain probability estimate. Do not multiply probability by a made-up confidence percentage. Store uncertainty/support diagnostics; label any confidence score as a model-reliability measure, not another chance of winning.
+Low confidence does not automatically mean a low probability. For example, a likely outcome can still have an uncertain probability estimate. Do not multiply probability by a made-up confidence percentage. Store uncertainty and support diagnostics. Define confidence in the model contract as a reliability measure separate from the estimated probability of the outcome.
 
 Define versioned, market-specific evidence gates and validate thresholds on held-out data. Do not require every optional field, use one universal minimum-match count, or consider team names and kickoff alone sufficient evidence.
 
@@ -275,9 +279,9 @@ Use **AI → local engine → API-Football predictions**.
 
 Fallback should preserve successful independent market families rather than discard an entire fixture. However, coupled probabilities must come from one coherent distribution or pass reconciliation checks; do not combine contradictory AI/local/API outputs.
 
-For the API adapter, preserve the documented meaning of every field: `win_or_draw` is a flag, not a probability; home/draw/away percentages refer to those outcomes; signed goal/under-over strings may describe thresholds, not expected-goal means. Derive double-chance probability only from compatible outcome probabilities. Advice without a defensible numeric probability can be shown as provider advice, but must not receive a fabricated percentage or enter probability-based ranking.
+For the API adapter, preserve the documented meaning of every field: `win_or_draw` is a flag, not a probability; home/draw/away percentages refer to those outcomes; signed goal/under-over strings may describe thresholds, not expected-goal means. Derive double-chance probability only from compatible outcome probabilities. Retain advice without a defensible numeric probability as provider advice and exclude it from probability-based ranking.
 
-An AI language model's unsupported percentage is not a validated probability. AI may structure evidence, produce bounded sourced adjustments, explain results, or invoke a validated numerical model. Without a supported numerical basis, it must defer. Label the actual source honestly; local calculations explained by AI remain locally calculated.
+An AI language model's unsupported percentage is not a validated probability. AI may structure evidence, produce bounded sourced adjustments, explain results, or invoke a validated numerical model. Without a supported numerical basis, it must defer. Record the numerical source in forecast metadata. Attribute local calculations explained by AI to the local engine.
 
 Use a **60-second AI-call timeout**, one transient retry, then local fallback. After **five consecutive provider-level AI failures**, open a **10-minute circuit breaker** and use local/API during that period. Log engine transitions and per-market reasons.
 
@@ -298,7 +302,7 @@ Training/calibration may run as maintenance jobs managed by the prediction infra
 
 ### 6.6 Shared market registry and per-market evaluation
 
-Use one **versioned market-definition registry across fixtures**. Each entry defines period, selection set, line/player/team parameters, settlement rules, evidence needs, model capability, source mappings, and display name. The registry is shared; applicable players, lines, available odds and supported predictions vary by fixture.
+Use one **versioned market-definition registry across fixtures**. Each entry defines period, selection set, line/player/team parameters, settlement rules, evidence needs, model capability, source mappings, and canonical English market name in the domain contract. The registry is shared; applicable players, lines, available odds and supported predictions vary by fixture.
 
 Reconcile the existing registry with API catalogs. Enumerate every catalog entry and map it explicitly, marking unsupported/unmapped entries with reasons rather than silently dropping them. Do not guess the contents of an unprovided market file.
 
@@ -337,63 +341,28 @@ Never fabricate unrealistic new goal lines solely to obtain near-100% recommenda
 
 For each supported market save: fixture ID, market key/parameters, recommended selection, outcome probabilities, confidence/support diagnostics, optional uncertainty interval, explanation/evidence references, engine/model version, evidence hash/cutoff, generation time, forecast type, and status. Join odds separately with source and timestamp. Save unavailable-market reasons as well.
 
-Choose the match-card recommendation from eligible supported predictions by **estimated win probability descending**, then **confidence**, then available comparable odds only as a final tie-break, followed by a stable market/selection key. Do not force double chance, artificial diversity, minimum odds, or fixed 90% probabilities. Diversity should follow the evidence, not a quota for different market labels.
+Choose the fixture’s top recommendation from eligible supported predictions by **estimated win probability descending**, then **confidence**, then available comparable odds only as a final tie-break, followed by a stable market/selection key. Do not force double chance, artificial diversity, minimum odds, or fixed 90% probabilities. Diversity should follow the evidence, not a quota for different market labels.
 
-Match details must expose every supported market's pick, probability, confidence and available bookmaker prices. Unsupported markets may show an explanation but no invented percentage.
+Keep each supported market’s pick, probability, confidence, and available exact-match bookmaker prices available to existing read services. Record unsupported-market reasons and leave their probabilities unset.
 
-Freeze and retain each published pre-match forecast version. If live forecasting exists or is added within the approved scope, store and label it separately, conditioned on current time/score. Never overwrite a pre-match forecast with hindsight, silently change its outcome after kickoff, or count post-event forecasts as successful pre-match predictions.
+Freeze and retain each published pre-match forecast version. If live forecasting exists or is added within the approved scope, store it separately with a distinct forecast type, conditioned on current time/score. Never overwrite a pre-match forecast with hindsight, silently change its outcome after kickoff, or count post-event forecasts as successful pre-match predictions.
 
 For slips, retain existing functionality but do not claim that many low-odds selections are collectively safe. Multiplying probabilities assumes independence; correlated selections require dependence-aware handling. Do not promise that a target combined odd can also achieve a guaranteed hit rate.
 
-## 7. Repair publication, settlement, and admin visibility
+## 7. Repair publication, settlement, and operational reporting
 
-1. **Fixture visibility and prediction availability are separate.** Publish every valid fixture in the intended public scope even when optional data, odds or a reliable forecast are missing. Show the appropriate unavailable/awaiting-data state while preserving subscription restrictions on protected content.
+1. **Fixture visibility and prediction availability are separate.** Publish every valid fixture in the intended public scope even when optional data, odds or a reliable forecast are missing. Supply the applicable unavailable or awaiting-data state through the existing data contract and enforce subscription restrictions on protected content.
 2. Do not block all publication until all 1,000 fixtures have been predicted. Publish and update incrementally as each fixture/data section becomes ready.
 3. Use distinct fields for provider match status, data freshness, forecast availability, publication state, and prediction settlement. “Pending prediction result” is not the same as “upcoming match.”
-4. A scheduled kickoff passing must not automatically produce void, cancellation, loss, or completion. Show an awaiting-update state where appropriate while retaining the source status and next check.
+4. A scheduled kickoff passing must not automatically produce void, cancellation, loss, or completion. Record an awaiting-update state where appropriate while retaining the source status and next check.
 5. Settle predictions from authoritative outcomes and exact market rules, including period boundaries, extra-time exclusions, pushes, VAR corrections and player participation conditions. Handle provider corrections idempotently.
-6. Keep distinct admin totals for discovered, stored, public-scope, visible, prediction-ready, priced, awaiting data, and excluded fixtures. Every excluded ID must have a reason. Reconcile the original 334-fixture gap without hardcoding the screenshot's counts.
-7. Report worker heartbeat, last success/error, queue lag, next run, quota usage/reserve/reset, checkpoint, complete/partial/unavailable sections, odds freshness and market-mapping coverage. Do not claim a complete import when only its first page or fixture list was saved.
-8. Preserve the performance panel's layout. Audit its counting definitions: do not mix fixture counts with multi-market prediction counts or label wins/all fixtures as a resolved-pick hit rate. Any metric wording change must make the denominator explicit.
+6. Keep distinct totals in backend reporting for discovered, stored, public-scope, published, prediction-ready, priced, awaiting-data, and excluded fixtures. Every excluded ID must have a reason. Reconcile the original 334-fixture gap without hardcoding the screenshot's counts.
+7. Record in operational telemetry the worker heartbeat, last success/error, queue lag, next run, quota usage/reserve/reset, checkpoint, complete/partial/unavailable sections, odds freshness and market-mapping coverage. Do not claim a complete import when only its first page or fixture list was saved.
+8. Audit backend performance definitions and test their denominators. Count fixtures and market-level predictions separately. Calculate the resolved-pick hit rate using resolved picks as the denominator.
 
-## 8. Apply the agreed desktop and mobile improvements
+## 8. Tests, acceptance criteria, and rollout
 
-### 8.1 Desktop match rows
-
-- Keep the existing wide-table layout and **do not increase the current row height**.
-- Stack the **date above kickoff time** in one narrow column. Start with **12px text / 14px line-height** and adjust against the actual existing row height; the objective is two readable lines within the previous vertical space, not blindly halving text into unreadability.
-- Move the country flag/name and then the league logo/name left into the freed space. Give the league flexible width so fewer names truncate. Preserve team, score, prediction, odds and probability information.
-- When truncation is unavoidable, provide full league text through an accessible tooltip/focus or equivalent interaction.
-
-### 8.2 Mobile match cards
-
-- Remove the match sequence number and reclaim its space.
-- Stack date above time, keeping a compact two-line block. Move the league logo/name left into the newly available space.
-- Continue omitting the country from the mobile card; do not introduce another column.
-- Slightly strengthen small text using font weight, not an outline/stroke. Start with weight **500** for secondary information and **600** for key values; retain hierarchy and confirm legibility on real mobile widths.
-- Preserve the existing card structure and avoid unnecessary additional height or horizontal scrolling.
-
-### 8.3 Status on both layouts
-
-Remove the live badge's background and border. Show compact status/time text with the pulsing dot immediately to its left, starting with a **4px gap**, without the old badge's excess padding.
-
-Use accurate provider-derived timing. If only minutes are supplied, display minutes rather than an invented second-by-second clock. Freeze clocks for halftime/interruption and label statuses correctly. Respect reduced-motion preferences and provide a non-color-only status label.
-
-### 8.4 Shared default sorting
-
-Implement the same server-side comparator for mobile and desktop, **before pagination**:
-
-1. Live matches first, with the most advanced match phase/progress first: later live phases, then greater elapsed time/added time. Missing-progress live matches follow live matches with known progress. Use a stable fixture-ID tie-break.
-2. Upcoming matches next, ordered by nearest scheduled kickoff ascending.
-3. Overdue-unverified, postponed, suspended/nonactive and completed fixtures remain visible in clearly defined subsequent groups; document their stable ordering and preserve explicit status filters. Do not disguise overdue fixtures as future upcoming matches.
-
-Set **Live first** as the default for a new/reset filter state. Preserve explicitly selected alternatives: probability high-to-low, probability low-to-high, earliest first and latest first. Preserve match-status, date/time, league, country, probability, odds and recommended-only controls.
-
-Test phase changes, missing times, extra time, cross-midnight fixtures and pagination so matches are not duplicated, lost, or differently ordered across devices.
-
-## 9. Tests, acceptance criteria, and rollout
-
-Implement automated tests plus manual responsive checks covering at least:
+Use automated backend tests and regression checks of existing behavior to cover at least:
 
 1. Replaying the same response/job does not create duplicate fixtures, events, odds, jobs or predictions.
 2. An authoritative correction updates records and settlement; an older in-flight response cannot overwrite newer state.
@@ -407,14 +376,13 @@ Implement automated tests plus manual responsive checks covering at least:
 10. Public fixture coverage reconciles independently of missing predictions or odds; no arbitrary fixture-count cap remains.
 11. Missing head-to-head data can use valid indirect evidence; a wholly unsupported market abstains with a reason.
 12. A common-opponent chain and a player transfer affect estimates without becoming guaranteed conclusions or double-counted evidence.
-13. AI failure/invalid output falls back to local, then API only for supported outputs; partial success is retained and source labels remain accurate.
+13. AI failure/invalid output falls back to local, then API only for supported outputs; partial success is retained and source metadata remains accurate.
 14. Outcome-sum, double-chance, threshold, BTTS, joint-event, score-tail and push-settlement invariants hold.
-15. A reliable prediction without odds is visible; another bookmaker's price never receives the preferred bookmaker's label.
+15. A supported prediction remains available in the read service without odds, and a fallback price retains its actual bookmaker ID.
 16. New meaningful evidence triggers one fresh forecast; unchanged data and ordinary odds-only updates do not trigger unnecessary AI runs.
 17. A queue of at least **1,000 fixtures** saves progress fixture by fixture, survives interruption, and does not stop after a subset or one bad fixture.
 18. Pre-match results are evaluated against forecasts actually issued beforehand; historical reconstruction and live forecasts are not counted as pre-match wins.
-19. Desktop row height does not increase; mobile numbering disappears; date/time stacking, league width, font weight and plain live status work in light/dark modes and at **360, 390, 412, 768, 1280 and 1440px** widths.
-20. Existing authentication, subscriptions, filters, pagination, match details, slips and unrelated routes keep working.
+19. Existing authentication, subscriptions, filters, pagination, match details, slips and unrelated routes keep working.
 
 Run tests with mocked/replayed provider responses before spending production quota. Measure proposed daily/minute request demand using actual fixture volumes and the configured plan. Report infeasible freshness targets instead of silently exhausting quota.
 
@@ -426,7 +394,7 @@ Deploy with reversible migrations, backups, feature flags and a staged rollout. 
 
 ## Reference notes for the implementing agent
 
-These references support provider mechanics and modeling methods. The application design, scheduling defaults, validation policy, and acceptance criteria above are implementation requirements—not provider guarantees. Recheck the current documentation and account access during implementation.
+These references support provider mechanics and modeling methods. The scheduling defaults, validation policy, and acceptance criteria above describe the requested implementation. Provider support depends on the available data and account access. Recheck the current documentation and account access during implementation.
 
 - **R1 — API-Football v3 documentation:** endpoint schemas, additional batch parameters, profiles/career endpoints, half statistics and status semantics. `https://www.api-football.com/documentation-v3`
 - **R2 — API-Football, “How to Optimize API-Sports Calls and Quota Usage” (2026):** coverage-aware requests, shared fetching, caching and quota control. `https://www.api-football.com/news/post/how-to-optimize-api-sports-calls-and-quota-usage`
