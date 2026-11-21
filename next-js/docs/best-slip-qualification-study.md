@@ -153,3 +153,33 @@ records cannot establish a contemporaneous pre-kickoff publication on
 November 21. The public model binding is still absent. The private study
 runs at 06:30 Kampala time with the new bookmaker scope and keeps earlier
 capture files readable.
+
+## Historical four-match study
+
+This separate retrospective study uses four matches and the 2.50–5.00
+combined-odds band at a fixed 06:30 Kampala observation time. For the
+November 21 audit, the fit window starts September 1 and ends November 4,
+2026. The untouched chronological holdout starts November 6 and ends
+November 21, 2026. End dates are exclusive. The November 21 live smoke
+capture stays outside this historical evaluation and the scheduled
+prospective study.
+
+The runner uses one approved read-only database session and returns an
+aggregate report. A reconstructed pick needs its original sealed pre-clock
+forecast and an exact bookmaker receipt available by the same clock. All
+four legs must be eligible then and share a bookmaker. Slates are fixed
+before reading results. Settlement uses sealed original-cycle evidence
+and the latest verified regulation result recorded before the applicable
+window closes. Unavailable days, incomplete coverage, and search limits
+are recorded separately. Keep historical and prospective evidence separate.
+
+```sh
+node --conditions=react-server scripts/best-slip-historical-study.mjs \
+  --fit-from 2026-09-01 --fit-until 2026-11-04 \
+  --holdout-from 2026-11-06 --holdout-until 2026-11-21
+```
+
+The historical study can support candidate fitting and its initial
+holdout comparison. An independently reviewed model still needs a fresh
+prospective test on its intended top-ranked slips. The runner cannot
+approve a model or publish.

@@ -220,6 +220,34 @@ function sampleFromRows(row: DecisionRow, settlementRow: HistoryRow | undefined,
   } catch { return null; }
 }
 
+/** The latest original-occurrence regulation result with source and recording proof before the study boundary. */
+export async function readVerifiedSlipResultRows(tx: Prisma.TransactionClient, resultIds: readonly string[],
+  competitionIds: readonly number[], before: Date) {
+  if (!resultIds.length || !competitionIds.length) return [];
+  return tx.$queryRaw<HistoryRow[]>(Prisma.sql`
+    SELECT r.*, event.at AS recordedAt, life.cycleId AS lifecycleCycleId,
+      JSON_UNQUOTE(JSON_EXTRACT(life.receiptJson, '$.observation.kickoffAt')) AS lifecycleKickoffAt,
+      JSON_UNQUOTE(JSON_EXTRACT(life.receiptJson, '$.observation.homeExternalId')) AS lifecycleHomeId,
+      JSON_UNQUOTE(JSON_EXTRACT(life.receiptJson, '$.observation.awayExternalId')) AS lifecycleAwayId,
+      JSON_UNQUOTE(JSON_EXTRACT(life.receiptJson, '$.observation.actualStartedAt')) AS lifecycleStartedAt,
+      JSON_UNQUOTE(JSON_EXTRACT(life.receiptJson, '$.observation.status')) AS lifecycleStatus,
+      r.integrity = SHA2(CAST(r.body AS CHAR),256) AS validIntegrity
+    FROM FixtureResult r JOIN PredictionChangeEvent event ON event.fixtureResultId = r.id
+    JOIN ResultProviderObservation proof ON proof.id = JSON_UNQUOTE(JSON_EXTRACT(r.body, '$.observationId'))
+      AND proof.fixtureId = r.fixtureId AND proof.retrievedAt = r.observedAt
+    JOIN FixtureLifecycleObservation life ON life.id = proof.lifecycleId AND life.fixtureId = r.fixtureId
+      AND life.retrievedAt = r.observedAt AND life.at < ${before} AND life.outcome IN ('accepted', 'unchanged')
+    WHERE r.id IN (${Prisma.join(resultIds)}) AND r.observedAt < ${before} AND event.at < ${before}
+      AND life.integrity = SHA2(CAST(life.receiptJson AS CHAR),256) AND proof.integrity = SHA2(CAST(proof.body AS CHAR),256)
+      AND CAST(JSON_UNQUOTE(JSON_EXTRACT(life.receiptJson, '$.observation.competitionExternalId')) AS UNSIGNED)
+        IN (${Prisma.join(competitionIds)})
+      AND JSON_UNQUOTE(JSON_EXTRACT(proof.body, '$.resultId')) = r.id
+      AND NOT EXISTS (SELECT 1 FROM FixtureResult newer
+        JOIN PredictionChangeEvent receipt ON receipt.fixtureResultId = newer.id
+        WHERE newer.fixtureId = r.fixtureId AND newer.fixtureVersion > r.fixtureVersion
+          AND newer.observedAt < ${before} AND receipt.at < ${before})`);
+}
+
 /** Study first-party cutoff captures. Versions reconstructed later by replay, recovered prices, and mutable pointers are excluded. */
 export async function readBestSlipHistory(database: Pick<DatabaseRuntime, "transaction">, asOf: number,
   competitionIds: readonly number[]) {
@@ -273,28 +301,7 @@ export async function readBestSlipHistory(database: Pick<DatabaseRuntime, "trans
             integrity = SHA2(CAST(body AS CHAR),256) AS validIntegrity FROM MarketSettlementRevision WHERE id IN (${Prisma.join(settlementIds)})`);
           const resultIds = settlements.flatMap(({ resultId }) => typeof resultId === "string" ? [resultId] : []);
           if (!resultIds.length) continue;
-          const results = await tx.$queryRaw<HistoryRow[]>(Prisma.sql`
-            SELECT r.*, event.at AS recordedAt, life.cycleId AS lifecycleCycleId,
-              JSON_UNQUOTE(JSON_EXTRACT(life.receiptJson, '$.observation.kickoffAt')) AS lifecycleKickoffAt,
-              JSON_UNQUOTE(JSON_EXTRACT(life.receiptJson, '$.observation.homeExternalId')) AS lifecycleHomeId,
-              JSON_UNQUOTE(JSON_EXTRACT(life.receiptJson, '$.observation.awayExternalId')) AS lifecycleAwayId,
-              JSON_UNQUOTE(JSON_EXTRACT(life.receiptJson, '$.observation.actualStartedAt')) AS lifecycleStartedAt,
-              JSON_UNQUOTE(JSON_EXTRACT(life.receiptJson, '$.observation.status')) AS lifecycleStatus,
-              r.integrity = SHA2(CAST(r.body AS CHAR),256) AS validIntegrity
-            FROM FixtureResult r JOIN PredictionChangeEvent event ON event.fixtureResultId = r.id
-            JOIN ResultProviderObservation proof ON proof.id = JSON_UNQUOTE(JSON_EXTRACT(r.body, '$.observationId'))
-              AND proof.fixtureId = r.fixtureId AND proof.retrievedAt = r.observedAt
-            JOIN FixtureLifecycleObservation life ON life.id = proof.lifecycleId AND life.fixtureId = r.fixtureId
-              AND life.retrievedAt = r.observedAt AND life.at < ${before} AND life.outcome IN ('accepted', 'unchanged')
-            WHERE r.id IN (${Prisma.join(resultIds)}) AND r.observedAt < ${before} AND event.at < ${before}
-              AND life.integrity = SHA2(CAST(life.receiptJson AS CHAR),256) AND proof.integrity = SHA2(CAST(proof.body AS CHAR),256)
-              AND CAST(JSON_UNQUOTE(JSON_EXTRACT(life.receiptJson, '$.observation.competitionExternalId')) AS UNSIGNED)
-                IN (${Prisma.join(competitionIds)})
-              AND JSON_UNQUOTE(JSON_EXTRACT(proof.body, '$.resultId')) = r.id
-              AND NOT EXISTS (SELECT 1 FROM FixtureResult newer
-                JOIN PredictionChangeEvent receipt ON receipt.fixtureResultId = newer.id
-                WHERE newer.fixtureId = r.fixtureId AND newer.fixtureVersion > r.fixtureVersion
-                  AND newer.observedAt < ${before} AND receipt.at < ${before})`);
+          const results = await readVerifiedSlipResultRows(tx, resultIds, competitionIds, before);
           const bySettlement = new Map(settlements.map((row) => [row.id, row]));
           const byResult = new Map(results.map((row) => [row.id, row]));
           for (const row of batch) {
