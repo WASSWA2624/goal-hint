@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { legacyLocalFirstGoalMarketDefinitions } from "../src/domain/goal-market-definitions.ts";
+import { legacyLocalFeaturedDecisionVersion, localFeaturedDecisionVersion } from "../src/domain/local-featured-decision.ts";
 import { LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION, LOCAL_FIRST_MARKET_REGISTRY_VERSION } from "../src/domain/market-registry.ts";
 import { marketSelections } from "../src/domain/markets.ts";
 import { compareForecastPicks } from "../src/domain/recommendation.ts";
@@ -171,7 +172,7 @@ test("reviewed replay persists verified evidence and only its owner can reverse 
     const originalPointer = (await readProjection()).get(fixtureId);
     const replayAsOf = p.now();
     const { evidence: pricedEvidence, result: pricedResult } = await p.a.query((tx) =>
-      preparePricedNovemberReplay(tx, occurrence, replayAsOf));
+      preparePricedNovemberReplay(tx, occurrence, replayAsOf, undefined, legacyLocalFeaturedDecisionVersion));
     assert.ok(pricedResult, pricedEvidence.reason);
     assert.equal(pricedResult.featuredDecision.status, "abstained");
     assert.equal(pricedResult.selected, null);
@@ -189,6 +190,15 @@ test("reviewed replay persists verified evidence and only its owner can reverse 
     assert.equal(active?.selected, null);
     assert.deepEqual(active?.featuredDecision, pricedResult.featuredDecision);
     assert.equal(active?.markets.length, originalPointer?.markets.length);
+    const unchangedDelta = await store.stage({ ...stage, ...pricedResult, replayAsOf, generatedAt: p.now(),
+      teams: [occurrence.homeTeamId, occurrence.awayTeamId], evidenceCutoffAt: pricedEvidence.cutoffAt,
+      evidenceHash: pricedEvidence.evidenceHash, evidenceReceiptIds: pricedEvidence.evidenceReceiptIds,
+      featuredDecision: { ...pricedResult.featuredDecision, version: localFeaturedDecisionVersion },
+      policyDelta: { baselineRevisionId: revised.id, expectedProjectionRevisionId: revised.id } });
+    assert.equal((await store.activationDiff([unchangedDelta.id]))[0].reason, "no-featured-display-change");
+    await assert.rejects(store.activate({ revisionId: unchangedDelta.id, operationId: "unchanged-policy-delta",
+      expectedProjectionRevisionId: revised.id }), denied("no-featured-display-change"));
+    assert.deepEqual((await readProjection()).get(fixtureId), active);
     assert.deepEqual(await p.history.findRevision(sourceRevisionId), published.revision);
     await store.rollback({ fixtureId, operationId: "restore-older-projection", activationOperationId: replacement.operationId });
     assert.deepEqual((await readProjection()).get(fixtureId), originalPointer);

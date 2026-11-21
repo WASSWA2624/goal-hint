@@ -177,6 +177,15 @@ The restricted MariaDB pointer lock uses the grants above.
    it with the same workspace for any `rollback`.
    [Replay commands and evidence](../november-forecast-replay.md)
 
+For a featured ranking change over the same forecasts, keep the previous
+activation and its sealed audit files intact. The delta rehearsal writes
+separate receipts alongside the reviewed baseline and stages only verified
+display changes, with the expected active pointer recorded for each fixture.
+Confirm staging activation and rollback
+before preparing the production delta. Reuse the existing approvals,
+publication lock and quota-bounded worker. A policy-only release keeps the
+existing migration ledger when schema verification reports it current.
+
 On 14 October 2026, a private backup was taken before the corrective migration
 `20261014161000_transactional_storage` converted the seven analytics tables and
 `OperationsMonitorState` from MyISAM to InnoDB. Prisma's history table was converted

@@ -186,8 +186,12 @@ def verify_feed_cards(origin):
     match(r'data-pick-selection[^>]*title="Under 5\.5"[^>]*>U 5\.5</span>', cards["feed-extended"])
     match(r'data-forecast-source="local-engine"[^>]*title="Local Engine prediction"[^>]*>L</small>', cards["feed-extended"])
     match(r'data-card-odds[^>]*title="[^"]*1\.1543 · Synthetic second bookmaker[^"]*"[^>]*>1\.1543', cards["feed-extended"])
-    match('No recommended pick', cards['feed-featured-abstained'])
-    no_match(r'data-pick-price=""|data-pick-selection=""', cards['feed-featured-abstained'])
+    abstained = cards['feed-featured-abstained']
+    match(r'data-featured-abstention=""[^>]*title="No recommended pick"[^>]*>\s*<svg[^>]*aria-hidden="true"[^>]*focusable="false"[^>]*>', abstained)
+    match(r'<path d="M8 12h8"[^>]*></path>[\s\S]*?No recommended pick', abstained)
+    no_match(r'data-pick-price=""|data-pick-selection=""', abstained)
+    for untouched in ['feed-upcoming', 'feed-gated', 'feed-extended', 'feed-replay-empty']:
+        no_match(r'data-featured-abstention', cards[untouched])
     match(r'data-mobile-only=""[^>]*>A O/U</span>', cards["feed-replay-live"])
     match(r'data-card-odds[^>]*data-odds-kind="historical-pre-match"[^>]*title="Historical pre-match odds: 1\.90"[^>]*>1\.90</span>',
           cards["feed-replay-live"])

@@ -1,6 +1,6 @@
 import "server-only";
 import { createRecommendationQuoteLoader } from "../odds/recommendation-quotes.ts";
-import { localFeaturedDecisionVersion } from "../../domain/local-featured-decision.ts";
+import { legacyLocalFeaturedDecisionVersion } from "../../domain/local-featured-decision.ts";
 import { evidenceFirstRecommendationPolicy } from "../../domain/recommendation.ts";
 import { goalProfileForLocalFirstCascade, LEGACY_LOCAL_FIRST_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE,
   QUALIFIED_FORECAST_CASCADE, type LocalFirstForecastCascade } from "../fallback/fallback-contract.ts";
@@ -216,14 +216,15 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     if (coordinated && !localFirstForecasts && aiModel?.evaluation.status !== "evaluated") aiModel = null;
     const sourceOrder = coordinated || localFootball ? "ai-first" : liveSourceOrder(policy);
     const localEvidence = localFirstForecasts || sourceOrder === "ai-first";
-    const localFirstLifecycle = (cascade: LocalFirstForecastCascade, featuredPolicy?: typeof localFeaturedDecisionVersion) => ({
+    const localFirstLifecycle = (cascade: LocalFirstForecastCascade, featuredPolicy?: typeof legacyLocalFeaturedDecisionVersion) => ({
       engineVersion: evidenceFingerprint([cascade, goalProfileForLocalFirstCascade(cascade),
         evidenceFirstRecommendationPolicy.version, apiFallbackEnabled, LOCAL_GOALS_VERSION, API_FOOTBALL_CONTRACT_VERSION,
         ...(featuredPolicy ? [featuredPolicy] : [])]),
       marketRegistryVersion: cascade === LEGACY_LOCAL_FIRST_FORECAST_CASCADE ? LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION : LOCAL_FIRST_MARKET_REGISTRY_VERSION,
     });
+    // The v2 featured ladder uses the same published forecast, so ordinary refresh intents retain their existing identity.
     const selection = Object.freeze({ ...selectionPolicy(policy, refs, workload), ...(coordinated || localFirstForecasts ? { forecastLifecycle: {
-      ...(localFirstForecasts ? localFirstLifecycle(LOCAL_FIRST_FORECAST_CASCADE, localFeaturedDecisionVersion) : {
+      ...(localFirstForecasts ? localFirstLifecycle(LOCAL_FIRST_FORECAST_CASCADE, legacyLocalFeaturedDecisionVersion) : {
         engineVersion: evidenceFingerprint([QUALIFIED_FORECAST_CASCADE, evidenceFirstRecommendationPolicy.version, aiModel,
           LOCAL_GOALS_VERSION, API_FOOTBALL_CONTRACT_VERSION]),
         marketRegistryVersion: MARKET_REGISTRY_VERSION,

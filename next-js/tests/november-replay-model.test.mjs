@@ -4,6 +4,8 @@ import { getDayBoundsInTimeZone } from "../src/domain/device-calendar.ts";
 import { inclusiveReplayEvidenceCutoff, novemberReplayRange, novemberReplayZone, replaySuppressionClocks } from "../src/domain/november-replay.ts";
 import { compareForecastPicks } from "../src/domain/recommendation.ts";
 import { goalProbabilities, localGoalModelVersion } from "../src/server/intelligence/local-goals-model.ts";
+import { replayFeaturedCalibration } from "../src/server/intelligence/november-replay-evaluation.ts";
+import { sameReplayFeaturedDisplay } from "../src/server/intelligence/november-replay-featured.ts";
 import { buildNovemberReplayMarkets } from "../src/server/intelligence/november-replay-model.ts";
 
 test("the November replay covers the full Kampala browsing month with an exclusive December boundary", () => {
@@ -29,6 +31,27 @@ test("prior-pointer suppression retains the archived evidence window and a verif
   assert.deepEqual(replaySuppressionClocks(exclusiveCutoffAt, null),
     { decisionAt: exclusiveCutoffAt, evidenceCutoffAt: exclusiveCutoffAt });
   assert.equal(replaySuppressionClocks(exclusiveCutoffAt, exclusiveCutoffAt - 2), null);
+});
+
+test("retrospective policy comparison ignores private policy metadata and preserves meaningful display changes", () => {
+  const first = { version: "local-featured-pre-match-v1", status: "priced", marketKey: "m", selection: "under", probability: 0.84,
+    quote: { decimal: "1.37", bookmakerId: 6 } };
+  const second = { ...first, version: "local-featured-pre-match-v2", threshold: 0.8 };
+  assert.equal(sameReplayFeaturedDisplay(first, second), true);
+  assert.equal(sameReplayFeaturedDisplay(first, { ...second, selection: "over" }), false);
+  assert.equal(sameReplayFeaturedDisplay(first, { ...second, quote: { ...second.quote, decimal: "1.3701" } }), false);
+  assert.equal(sameReplayFeaturedDisplay(first, { ...second, status: "abstained" }), false);
+  assert.equal(sameReplayFeaturedDisplay({ status: "abstained" }, { status: "abstained" }), true);
+});
+
+test("featured calibration uses inclusive lower bands, an inclusive upper bound at one, and outright wins", () => {
+  const bands = replayFeaturedCalibration([{ probability: 0.6, won: true }, { probability: 0.649, won: false },
+    { probability: 0.65, won: true }, { probability: 0.7, won: false }, { probability: 1, won: true }]);
+  assert.deepEqual(bands.map(({ n, outrightWins }) => [n, outrightWins]), [[2, 1], [1, 1], [1, 0], [0, 0], [0, 0], [0, 0], [0, 0], [1, 1]]);
+  assert.ok(Math.abs(bands[0].brier - ((0.6 - 1) ** 2 + 0.649 ** 2) / 2) < 1e-12);
+  assert.ok(bands.every(({ sufficientSample }) => !sufficientSample));
+  assert.equal(bands[3].meanModelProbability, null);
+  assert.equal(bands[7].brier, 0);
 });
 
 test("a retrospective estimate uses approved local families and ranks exact distributions without prices", () => {

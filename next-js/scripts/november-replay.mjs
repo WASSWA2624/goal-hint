@@ -4,14 +4,14 @@ import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { openForecastDatabase } from "./lib/forecast-database-target.mjs";
 import { LOCAL_FIRST_MARKET_REGISTRY_VERSION } from "../src/domain/market-registry.ts";
-import { localFeaturedDecisionVersion } from "../src/domain/local-featured-decision.ts";
+import { legacyLocalFeaturedDecisionVersion, localFeaturedDecisionVersion } from "../src/domain/local-featured-decision.ts";
 import { inclusiveReplayEvidenceCutoff, novemberReplayRange, replaySuppressionClocks, resolveReplayRange } from "../src/domain/november-replay.ts";
 import { evidenceFingerprint } from "../src/server/evidence/evidence-input.ts";
 import { localGoalModelVersion } from "../src/server/intelligence/local-goals-model.ts";
 import { auditNovemberReplay } from "../src/server/intelligence/november-replay-audit.ts";
-import { evaluateNovemberReplay } from "../src/server/intelligence/november-replay-evaluation.ts";
+import { evaluateNovemberReplay, evaluateReplayFeaturedDelta } from "../src/server/intelligence/november-replay-evaluation.ts";
 import { readNovemberReplayPage, readNovemberReplayTrainingMembership } from "../src/server/intelligence/november-replay-evidence.ts";
-import { preparePricedNovemberReplay } from "../src/server/intelligence/november-replay-featured.ts";
+import { loadNovemberReplayPrices, preparePricedNovemberReplay, replayFeaturedSelection, sameReplayFeaturedDisplay } from "../src/server/intelligence/november-replay-featured.ts";
 import { statusShowsPlay } from "../src/server/predictions/publication-eligibility.ts";
 
 const phases = ["canonical", "displaced"];
@@ -19,6 +19,9 @@ const pageSize = 100;
 const occurrenceKey = ({ fixtureId, kickoffAt }) => `${fixtureId}:${kickoffAt}`;
 const missingFile = (error) => error?.code === "ENOENT";
 const abort = new AbortController();
+const validOperationId = (value) => /^[a-z0-9][a-z0-9._:-]{0,95}$/iu.test(value ?? "");
+const deltaManifestFile = "policy-delta.json";
+const deltaDiffFile = "policy-delta-activation-diff.json";
 class ReplayCommandError extends Error {}
 const stop = () => abort.abort();
 process.once("SIGINT", stop);
@@ -204,14 +207,146 @@ async function stage(workspace, audit, store) {
   console.log(JSON.stringify(summary));
 }
 
-async function changeProjection(workspace, audit, store, action, operationId) {
-  if (!/^[a-z0-9][a-z0-9._:-]{0,95}$/iu.test(operationId ?? ""))
+async function deltaAudit(database, workspace, audit, baseline, v1OperationId) {
+  const path = join(workspace, deltaManifestFile);
+  const complete = await readSealed(join(workspace, "dry-run.json"));
+  const reviewed = await readSealed(join(workspace, "activation-diff.json"));
+  if (complete.auditHash !== audit.auditHash || !complete.summary.finished || reviewed.auditHash !== audit.auditHash)
+    throw new ReplayCommandError("The policy delta requires a completed and reviewed v1 replay.");
+  const approved = new Map(reviewed.diff.filter(({ eligible }) => eligible).map((item) => [occurrenceKey(item), item]));
+  const baselineOperationId = baseline === "active" ? evidenceFingerprint({ operationId: v1OperationId, auditHash: audit.auditHash, action: "activate" }) : null;
+  if (baselineOperationId) {
+    const receipt = await readSealed(join(workspace, `activate-${baselineOperationId}.json`));
+    const actions = new Map(receipt.actions.map((item) => [item.fixtureId, item]));
+    if (receipt.auditHash !== audit.auditHash || actions.size !== approved.size || [...approved.values()].some((row) => {
+      const action = actions.get(row.fixtureId);
+      return action?.revisionId !== row.revisionId || action.kind !== "activate" || action.activationOperationId !== baselineOperationId;
+    })) throw new ReplayCommandError("The active policy delta requires a matching completed v1 activation receipt.");
+  }
+  const estimates = (await loadPages(workspace, audit)).flatMap(({ rows }) => rows.flatMap(({ input }) => input ? [input] : []));
+  const inputs = new Map(estimates.map((value) => [occurrenceKey(value), value]));
+  let delta = await readSealed(path).catch((error) => { if (!missingFile(error)) throw error; });
+  if (delta && (delta.auditHash !== audit.auditHash || delta.version !== localFeaturedDecisionVersion ||
+    delta.baseline !== baseline || delta.baselineOperationId !== baselineOperationId))
+    throw new ReplayCommandError("The existing policy delta uses a different baseline or version.");
+  if (!delta) {
+    const rows = [];
+    for (const input of estimates) {
+      if (abort.signal.aborted) return;
+      const { fixtureId, kickoffAt, decisionAt, replayAsOf, evidenceHash, sourceRevisionId, markets, featuredDecision: v1 } = input;
+      if (v1?.version !== legacyLocalFeaturedDecisionVersion || replayAsOf !== audit.auditedAt)
+        throw new ReplayCommandError("A v1 replay checkpoint has an unexpected policy or decision clock.");
+      const evidenceCutoffAt = sourceRevisionId === null ? inclusiveReplayEvidenceCutoff(input.evidenceCutoffAt, decisionAt) : input.evidenceCutoffAt;
+      const old = approved.get(occurrenceKey(input));
+      const row = { fixtureId, kickoffAt, evidenceCutoffAt, decisionAt, replayAsOf, evidenceHash, sourceRevisionId, v1,
+        baselineRevisionId: old?.revisionId ?? null,
+        expectedProjectionRevisionId: baseline === "active" ? old?.revisionId ?? null : old?.previousProjectionRevisionId ?? null };
+      // Lower rungs cannot displace a priced v1 selection or change the discovery of modeled, comparable offers.
+      if (v1.status === "priced" || v1.reason !== "no-qualifying-outcome") {
+        rows.push({ ...row, status: "unchanged", method: "sealed-v1", reason: old ? null : "v1-replay-ineligible",
+          v2: { ...v1, version: localFeaturedDecisionVersion } });
+        continue;
+      }
+      const price = await database.query(async (tx) => {
+        const assess = await loadNovemberReplayPrices(tx, { fixtureId, kickoffAt, decisionAt }, replayAsOf, markets);
+        return { reproduced: assess(legacyLocalFeaturedDecisionVersion), candidate: assess(localFeaturedDecisionVersion) };
+      });
+      if (evidenceFingerprint(v1) !== evidenceFingerprint(price.reproduced)) {
+        rows.push({ ...row, status: "unverifiable", method: "retained-odds", reason: "v1-decision-no-longer-reproducible", v2: null });
+      } else {
+        rows.push({ ...row, status: sameReplayFeaturedDisplay(v1, price.candidate) ? "unchanged" : "changed",
+          method: "retained-odds", reason: old ? null : "v1-replay-ineligible", v2: price.candidate });
+      }
+    }
+    delta = { auditHash: audit.auditHash, version: localFeaturedDecisionVersion, baseline, baselineOperationId,
+      approvedWithoutEstimate: [...approved.keys()].filter((key) => !inputs.has(key)).length, rows };
+    await sealOnce(path, delta);
+  }
+  const calibrationPath = join(workspace, "policy-delta-calibration.json"), deltaHash = evidenceFingerprint(delta);
+  let calibration = await readSealed(calibrationPath).catch((error) => { if (!missingFile(error)) throw error; });
+  if (calibration && calibration.deltaHash !== deltaHash) throw new ReplayCommandError("Calibration belongs to a different frozen policy delta.");
+  if (!calibration) {
+    const pairs = delta.rows.flatMap((row) => {
+      if (!row.v2 || row.v1.status !== "priced" && row.v2.status !== "priced") return [];
+      const { fixtureId, kickoffAt } = row;
+      const input = inputs.get(occurrenceKey(row));
+      const pick = (decision) => {
+        if (decision.status !== "priced") return null;
+        const definition = input?.markets.find(({ definition }) => definition.key === decision.marketKey)?.definition;
+        if (!definition) throw new ReplayCommandError("A frozen pick has no verified market definition.");
+        return { definition, selection: decision.selection, probability: decision.probability };
+      };
+      return [{ fixtureId, kickoffAt, v1: pick(row.v1), v2: pick(row.v2) }];
+    });
+    const evaluatedAt = await database.query(async (tx) => {
+      const [{ at }] = await tx.$queryRaw`SELECT UTC_TIMESTAMP(3) AS at`;
+      return at.getTime();
+    });
+    const evaluation = await evaluateReplayFeaturedDelta(database, audit, pairs, evaluatedAt);
+    calibration = { deltaHash, evaluation };
+    await sealOnce(calibrationPath, calibration);
+  }
+  const summary = { compared: 0, changed: 0, unchanged: 0, unverifiable: 0, reviewedChanges: 0, quoteRechecks: 0,
+    retained: {}, approvedWithoutEstimate: delta.approvedWithoutEstimate };
+  for (const row of delta.rows) {
+    summary[row.status]++;
+    if (row.v2) summary.compared++;
+    if (row.status === "changed" && row.baselineRevisionId) summary.reviewedChanges++;
+    if (row.method === "retained-odds") summary.quoteRechecks++;
+    else {
+      const key = row.v1.status === "priced" ? "priced" : row.v1.reason;
+      summary.retained[key] = (summary.retained[key] ?? 0) + 1;
+    }
+  }
+  console.log(JSON.stringify({ deltaHash, baseline, ...summary, calibration: calibration.evaluation }));
+}
+
+async function readPolicyDelta(workspace, audit) {
+  const delta = await readSealed(join(workspace, deltaManifestFile));
+  if (delta.auditHash !== audit.auditHash || delta.version !== localFeaturedDecisionVersion)
+    throw new ReplayCommandError("The reviewed policy delta uses another audit or version.");
+  return delta;
+}
+
+async function stageDelta(workspace, audit, store) {
+  const delta = await readPolicyDelta(workspace, audit);
+  const changes = delta.rows.filter((row) => row.status === "changed" && row.baselineRevisionId && row.v2);
+  const estimates = (await loadPages(workspace, audit)).flatMap(({ rows }) => rows.flatMap(({ input }) => input ? [[occurrenceKey(input), input]] : []));
+  const inputs = new Map(estimates), active = new Map(changes.length
+    ? (await store.activeProjections(audit.range)).map((prior) => [occurrenceKey(prior), prior]) : []);
+  const records = [], skipped = [];
+  for (const row of changes) {
+    if (abort.signal.aborted) return;
+    const key = occurrenceKey(row), input = inputs.get(key);
+    const { baselineRevisionId, expectedProjectionRevisionId } = row;
+    if ((active.get(key)?.revisionId ?? null) !== expectedProjectionRevisionId) {
+      skipped.push({ fixtureId: row.fixtureId, kickoffAt: row.kickoffAt, reason: "baseline-projection-changed" });
+      continue;
+    }
+    if (!input || evidenceFingerprint(input.featuredDecision) !== evidenceFingerprint(row.v1))
+      throw new ReplayCommandError("A frozen policy delta no longer matches its v1 evidence.");
+    const { id } = await store.stage({ ...input, generatedAt: Date.now(), evidenceCutoffAt: row.evidenceCutoffAt,
+      selected: replayFeaturedSelection(row.v2), featuredDecision: row.v2, policyDelta: { baselineRevisionId, expectedProjectionRevisionId } });
+    records.push(id);
+  }
+  const diff = await store.activationDiff(records);
+  await sealOnce(join(workspace, deltaDiffFile), { auditHash: audit.auditHash, deltaHash: evidenceFingerprint(delta), diff, skipped });
+  const reasons = {};
+  for (const row of [...diff, ...skipped]) reasons[row.reason] = (reasons[row.reason] ?? 0) + 1;
+  console.log(JSON.stringify({ staged: records.length, proposedReplacements: diff.filter(({ eligible }) => eligible).length, reasons }));
+}
+
+async function changeProjection(workspace, audit, store, action, operationId, policyDelta = false) {
+  if (!validOperationId(operationId))
     throw new ReplayCommandError("Supply a stable --operation-id for activation or rollback.");
-  const { diff, auditHash } = await readSealed(join(workspace, "activation-diff.json"));
+  const { diff, auditHash, deltaHash } = await readSealed(join(workspace, policyDelta ? deltaDiffFile : "activation-diff.json"));
   if (auditHash !== audit.auditHash) throw new ReplayCommandError("The activation diff does not belong to this audit.");
+  if (policyDelta && deltaHash !== evidenceFingerprint(await readPolicyDelta(workspace, audit)))
+    throw new ReplayCommandError("The activation diff does not belong to this policy delta.");
   const ready = diff.filter(({ eligible }) => eligible), actions = [];
-  const activationOperationId = evidenceFingerprint({ operationId, auditHash, action: "activate" });
-  const rollbackOperationId = evidenceFingerprint({ operationId, auditHash, action: "rollback" });
+  const identity = { operationId, auditHash, ...(policyDelta && { deltaHash }) };
+  const activationOperationId = evidenceFingerprint({ ...identity, action: "activate" });
+  const rollbackOperationId = evidenceFingerprint({ ...identity, action: "rollback" });
   for (const { fixtureId, revisionId, previousProjectionRevisionId: expectedProjectionRevisionId } of ready) {
     if (abort.signal.aborted) break;
     const result = action === "activate" ? await store.activate({ operationId: activationOperationId, revisionId, expectedProjectionRevisionId })
@@ -220,7 +355,7 @@ async function changeProjection(workspace, audit, store, action, operationId) {
   }
   const completed = actions.length === ready.length;
   if (completed) await sealOnce(join(workspace, `${action}-${activationOperationId}.json`), { auditHash, actions });
-  console.log(JSON.stringify({ action, completed, proposed: ready.length, checked: actions.length }));
+  console.log(JSON.stringify({ action, completed, proposed: ready.length, checked: actions.length, ...(policyDelta && { deltaHash }) }));
 }
 
 let database;
@@ -228,10 +363,17 @@ try {
   const { positionals: [action, ...extra], values } = parseArgs({ allowPositionals: true, options: {
     environment: { type: "string", default: "development" }, workspace: { type: "string" },
     pages: { type: "string" }, "operation-id": { type: "string" }, from: { type: "string" }, to: { type: "string" },
+    "delta-baseline": { type: "string" }, "v1-operation-id": { type: "string" },
   } });
-  if (!values.workspace || extra.length || !["audit", "dry-run", "stage", "activate", "rollback"].includes(action) ||
+  const actions = ["audit", "dry-run", "stage", "activate", "rollback", "delta-audit", "delta-stage", "delta-activate", "delta-rollback"];
+  if (!values.workspace || extra.length || !actions.includes(action) ||
     values.pages !== undefined && !/^[1-9]\d{0,3}$/u.test(values.pages))
-    throw new ReplayCommandError("Use audit, dry-run, stage, activate or rollback with --workspace.");
+    throw new ReplayCommandError("Supply a replay or policy-delta action and --workspace.");
+  const delta = action.startsWith("delta-"), baseline = values["delta-baseline"] ?? "active";
+  if (action === "delta-audit" ? !["active", "reviewed"].includes(baseline) ||
+      (baseline === "active" ? !validOperationId(values["v1-operation-id"]) : values["v1-operation-id"] !== undefined)
+    : values["delta-baseline"] !== undefined || values["v1-operation-id"] !== undefined)
+    throw new ReplayCommandError("Use delta-audit with an active v1 operation ID or an explicitly reviewed baseline.");
   const workspace = resolve(values.workspace);
   if ((values.from === undefined) !== (values.to === undefined) || values.from !== undefined && action !== "audit")
     throw new ReplayCommandError("Use --from and --to together when creating an audit.");
@@ -250,15 +392,20 @@ try {
     console.log(JSON.stringify({ auditHash: audit.auditHash, auditedAt: new Date(audit.auditedAt).toISOString(), ...audit.summary }));
   } else {
     const audit = await readSealed(join(workspace, "audit.json"));
+    const versionMatches = delta ? audit.featuredDecisionVersion === legacyLocalFeaturedDecisionVersion :
+      audit.featuredDecisionVersion === localFeaturedDecisionVersion ||
+        action === "rollback" && audit.featuredDecisionVersion === legacyLocalFeaturedDecisionVersion;
     if (audit.environment !== values.environment || audit.engineVersion !== localGoalModelVersion() ||
-      audit.registryVersion !== LOCAL_FIRST_MARKET_REGISTRY_VERSION || audit.featuredDecisionVersion !== localFeaturedDecisionVersion)
+      audit.registryVersion !== LOCAL_FIRST_MARKET_REGISTRY_VERSION || !versionMatches)
       throw new ReplayCommandError("The audit target or model no longer matches this operation.");
     if (action === "dry-run") await dryRun(database, workspace, audit, Number(values.pages ?? Infinity));
+    else if (action === "delta-audit") await deltaAudit(database, workspace, audit, baseline, values["v1-operation-id"]);
     else {
       const { createMysqlNovemberReplayStore } = await import("../src/server/intelligence/november-replay-store.ts");
       const store = createMysqlNovemberReplayStore(database);
       if (action === "stage") await stage(workspace, audit, store);
-      else await changeProjection(workspace, audit, store, action, values["operation-id"]);
+      else if (action === "delta-stage") await stageDelta(workspace, audit, store);
+      else await changeProjection(workspace, audit, store, delta ? action.slice(6) : action, values["operation-id"], delta);
     }
   }
 } catch (error) {

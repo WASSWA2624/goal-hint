@@ -115,6 +115,14 @@ test('Matches and Match Details share the exact Local Engine featured quote and 
     assert.equal(lockedDetail.snapshot.applicability, 'locked');
     assert.deepEqual(currentFeaturedOutcome(gateDetailResponse(lockedDetail, full)), record(lockedFeed).featuredPrediction);
 
+    const newRungAt = await store([book(7, 'Synthetic away book', 17, 'Total - Away', 'Under 1.5', '1.6001')]);
+    const [lowerRungFeed, lowerRungDetail] = await Promise.all([readFeed(), readDetail()]);
+    const lowerRung = record(lowerRungFeed).featuredPrediction;
+    assert.deepEqual([lowerRung.key, lowerRung.selection, lowerRung.odds], ['goal:full-time:totals:away:1.5:binary', 'under', '1.6001']);
+    assert.ok(lowerRung.probability >= 0.65 && lowerRung.probability < 0.70);
+    assert.equal(lowerRung.featuredQuote.checkedAt, newRungAt);
+    assert.deepEqual(currentFeaturedOutcome(gateDetailResponse(lowerRungDetail, full)), lowerRung);
+
     await store([book(8, 'Primary synthetic book', 16, 'Total - Home', 'Under 4.5', '1.0999')]);
     const [unpricedFeed, unpricedDetail] = await Promise.all([readFeed(), readDetail()]);
     assert.equal(record(unpricedFeed).featuredPrediction, null);

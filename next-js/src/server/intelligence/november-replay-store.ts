@@ -4,7 +4,7 @@ import { z } from "zod";
 import { legacyLocalFirstGoalMarketDefinitions, LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localFirstGoalMarketDefinitions,
   registeredForecastGoalMarkets, type RegisteredGoalMarketDefinition } from "../../domain/goal-market-definitions.ts";
 import { LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION, LOCAL_FIRST_MARKET_REGISTRY_VERSION } from "../../domain/market-registry.ts";
-import { localFeaturedDecisionSchema } from "../../domain/local-featured-decision.ts";
+import { legacyLocalFeaturedDecisionVersion, localFeaturedDecisionSchema, localFeaturedDecisionVersion } from "../../domain/local-featured-decision.ts";
 import { isPlayedFinalStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
 import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
 import { novemberReplayRange, replaySuppressionClocks } from "../../domain/november-replay.ts";
@@ -22,7 +22,7 @@ import { storedRefreshResult } from "../predictions/publication-read.ts";
 import { localGoalModelVersion } from "./local-goals-model.ts";
 import { loadNovemberReplayEvidenceInTransaction, readNovemberReplayTrainingMembership, type NovemberReplayTrainingMembership } from "./november-replay-evidence.ts";
 import { buildNovemberReplayMarkets } from "./november-replay-model.ts";
-import { preparePricedNovemberReplay } from "./november-replay-featured.ts";
+import { preparePricedNovemberReplay, sameLegacyReplaySelection, sameReplayFeaturedDisplay } from "./november-replay-featured.ts";
 import { decodeShadowArchive, encodeShadowArchive } from "./shadow-store.ts";
 
 type Tx = Prisma.TransactionClient;
@@ -41,12 +41,13 @@ const publicMarketSchema = z.strictObject({ ...marketIdentity, selections: marke
 const marketSchema = z.strictObject({ ...marketIdentity, unrepresentedProbability: probability.optional(), selections: marketSelectionsSchema });
 const decisionFields = { featuredDecision: localFeaturedDecisionSchema.optional(), decisionAt: historyInstant.optional(),
   teams: z.tuple([historyId, historyId]).optional() };
+const policyDeltaSchema = z.strictObject({ baselineRevisionId: historyHash, expectedProjectionRevisionId: historyHash.nullable() });
 const stageSchema = z.strictObject({ fixtureId: historyId, kickoffAt: historyInstant.nullable(), cycleId: historyId.nullable(),
   scheduleVersion: historyVersion.nullable(), sourceRevisionId: historyId.nullable(), evidenceCutoffAt: historyInstant.nullable(), evidenceHash: historyHash,
   engineVersion: token, registryVersion: token, artifactHash: historyHash.nullable(), evidenceReceiptIds: z.array(historyHash).max(20_000),
   generatedAt: historyInstant, status: z.enum(["estimated", "abstained"]), reason: token.nullable(), markets: z.array(marketSchema).max(maxMarkets),
   selected: topSchema.nullable(), ...decisionFields, replayAsOf: historyInstant.optional(),
-  suppressedProjectionRevisionId: historyHash.optional() });
+  suppressedProjectionRevisionId: historyHash.optional(), policyDelta: policyDeltaSchema.optional() });
 type MarketValue = z.input<typeof marketSchema>;
 export type NovemberReplayMarket = Omit<MarketValue, "selections"> & Readonly<{ selections: readonly MarketValue["selections"][number][] }>;
 export type NovemberReplayStageInput = Readonly<Omit<z.input<typeof stageSchema>, "markets" | "evidenceReceiptIds"> & {
@@ -124,7 +125,7 @@ function checkedStage(value: unknown) {
   if (!parsed.success) return deny("invalid-input");
   const input = parsed.data, { kickoffAt, evidenceCutoffAt, generatedAt } = input;
   const definitions = registered.get(input.registryVersion);
-  const { featuredDecision, decisionAt, replayAsOf, teams, suppressedProjectionRevisionId } = input;
+  const { featuredDecision, decisionAt, replayAsOf, teams, suppressedProjectionRevisionId, policyDelta } = input;
   if (!definitions || !featuredDecision && kickoffAt !== null && !inNovember(kickoffAt) || evidenceCutoffAt !== null &&
       (kickoffAt === null || evidenceCutoffAt >= kickoffAt || generatedAt < evidenceCutoffAt) ||
       input.sourceRevisionId !== null && input.cycleId === null || input.scheduleVersion !== null && input.cycleId === null ||
@@ -137,6 +138,7 @@ function checkedStage(value: unknown) {
     suppressedProjectionRevisionId && (featuredDecision.status !== "abstained" || featuredDecision.reason !== "no-local-forecast")
     : decisionAt !== undefined || replayAsOf !== undefined || teams !== undefined || suppressedProjectionRevisionId !== undefined)
     return deny("invalid-input");
+  if (policyDelta && (input.status !== "estimated" || featuredDecision?.version !== localFeaturedDecisionVersion)) return deny("invalid-input");
   if (input.status === "estimated" ? input.reason !== null || kickoffAt === null || generatedAt < kickoffAt || evidenceCutoffAt === null ||
     input.artifactHash === null || input.evidenceReceiptIds.length === 0 || !validateMarkets(input, definitions) :
     input.reason === null || input.markets.length !== 0 || input.selected !== null) return deny("invalid-input");
@@ -148,9 +150,9 @@ function replayId(input: NovemberReplayStageInput) {
   const { fixtureId, kickoffAt, cycleId, scheduleVersion, sourceRevisionId, engineVersion, registryVersion, evidenceHash } = input;
   const legacy = { cohort: "2026-11-africa-kampala", fixtureId, kickoffAt, cycleId, scheduleVersion, sourceRevisionId,
     engineVersion, registryVersion, evidenceHash };
-  const { featuredDecision, decisionAt, replayAsOf, suppressedProjectionRevisionId } = input;
+  const { featuredDecision, decisionAt, replayAsOf, suppressedProjectionRevisionId, policyDelta } = input;
   return evidenceFingerprint(featuredDecision ? { ...legacy, cohort: "point-in-time-featured-replay", featuredDecision, decisionAt,
-    replayAsOf, ...(suppressedProjectionRevisionId && { suppressedProjectionRevisionId }) } : legacy);
+    replayAsOf, ...(suppressedProjectionRevisionId && { suppressedProjectionRevisionId }), ...(policyDelta && { policyDelta }) } : legacy);
 }
 
 function storedClock(value: unknown) {
@@ -239,7 +241,7 @@ export async function readNovemberReplayProjections(tx: Tx, fixtureIds: readonly
 }
 
 type Rejection = "not-staged" | "abstained" | "missing-locked-source" | "occurrence-changed" | "source-not-api" |
-  "evidence-changed" | "projection-owned" | "registry-superseded";
+  "evidence-changed" | "projection-owned" | "registry-superseded" | "no-featured-display-change";
 type ReplayDiff = Readonly<{ revisionId: string; fixtureId: string | null; sourceRevisionId: string | null;
   kickoffAt: number | null; selected: NovemberReplayRecord["selected"]; eligible: boolean; reason: Rejection | "eligible";
   featuredDecision?: NovemberReplayRecord["featuredDecision"]; previousProjectionRevisionId?: string | null;
@@ -307,7 +309,11 @@ async function activationRejection(tx: Tx, record: NovemberReplayRecord, at: num
     homeTeamId: fixture.homeTeamId, homeTeamName: fixture.homeTeam.name, awayTeamId: fixture.awayTeamId, awayTeamName: fixture.awayTeam.name,
     status: fixture.status, applicable: true, cycleId, originalRevisionId: sourceRevisionId };
   if (record.featuredDecision && record.replayAsOf !== undefined) {
-    const { evidence, result } = await preparePricedNovemberReplay(tx, occurrence, record.replayAsOf, training);
+    const { policyDelta } = record;
+    if (policyDelta && (previous?.revisionId ?? null) !== policyDelta.expectedProjectionRevisionId) return "projection-owned";
+    if (policyDelta && previous && !(await readNovemberReplayProjections(tx, [fixtureId])).has(fixtureId)) return "occurrence-changed";
+    const { evidence, result, comparativeDecision } = await preparePricedNovemberReplay(tx, occurrence, record.replayAsOf, training,
+      record.featuredDecision.version, policyDelta ? legacyLocalFeaturedDecisionVersion : undefined);
     if (record.suppressedProjectionRevisionId) {
       if (previous?.revisionId !== record.suppressedProjectionRevisionId || previous.featuredDecision || result ||
         evidence.evidenceHash !== record.evidenceHash) return "evidence-changed";
@@ -316,9 +322,19 @@ async function activationRejection(tx: Tx, record: NovemberReplayRecord, at: num
     }
     const approved = { artifactHash: record.artifactHash, markets: record.markets, selected: record.selected,
       decisionAt: record.decisionAt, featuredDecision: record.featuredDecision };
-    return evidence.evidenceHash === record.evidenceHash && evidence.cutoffAt === evidenceCutoffAt && evidence.scheduleVersion === scheduleVersion &&
-      evidenceFingerprint(evidence.evidenceReceiptIds) === evidenceFingerprint(record.evidenceReceiptIds) &&
-      evidenceFingerprint(result) === evidenceFingerprint(approved) ? null : "evidence-changed";
+    if (evidence.evidenceHash !== record.evidenceHash || evidence.cutoffAt !== evidenceCutoffAt || evidence.scheduleVersion !== scheduleVersion ||
+      evidenceFingerprint(evidence.evidenceReceiptIds) !== evidenceFingerprint(record.evidenceReceiptIds) ||
+      evidenceFingerprint(result) !== evidenceFingerprint(approved)) return "evidence-changed";
+    if (!policyDelta) return null;
+    const baseline = await readRecord(tx, policyDelta.baselineRevisionId);
+    if (!baseline || baseline.status !== "estimated" || baseline.featuredDecision?.version !== legacyLocalFeaturedDecisionVersion ||
+      !comparativeDecision || evidenceFingerprint(comparativeDecision) !== evidenceFingerprint(baseline.featuredDecision) ||
+      evidenceFingerprint(deltaReplayEvidence(baseline)) !== evidenceFingerprint(deltaReplayEvidence(record)))
+      return "evidence-changed";
+    if (sameReplayFeaturedDisplay(baseline.featuredDecision, record.featuredDecision) ||
+      (previous?.featuredDecision ? sameReplayFeaturedDisplay(previous.featuredDecision, record.featuredDecision)
+        : sameLegacyReplaySelection(previous?.selected ?? null, record.featuredDecision))) return "no-featured-display-change";
+    return null;
   }
   if (!cycle || !await verifiedSource(tx, record, cycle, fixture)) return "source-not-api";
   const evidence = await loadNovemberReplayEvidenceInTransaction(tx, occurrence, at, training);
@@ -328,6 +344,13 @@ async function activationRejection(tx: Tx, record: NovemberReplayRecord, at: num
   const forecast = buildNovemberReplayMarkets(evidence.forecast);
   return !forecast || evidenceFingerprint(forecast) !== evidenceFingerprint({ markets: record.markets, selected: record.selected })
     ? "evidence-changed" : null;
+}
+
+function deltaReplayEvidence(record: NovemberReplayRecord) {
+  const { fixtureId, kickoffAt, cycleId, scheduleVersion, sourceRevisionId, evidenceCutoffAt, evidenceHash, engineVersion,
+    registryVersion, artifactHash, evidenceReceiptIds, markets, decisionAt, replayAsOf, teams } = record;
+  return { fixtureId, kickoffAt, cycleId, scheduleVersion, sourceRevisionId, evidenceCutoffAt, evidenceHash, engineVersion,
+    registryVersion, artifactHash, evidenceReceiptIds, markets, decisionAt, replayAsOf, teams };
 }
 
 const actionId = (fixtureId: string, operationId: string) => evidenceFingerprint({ fixtureId, operationId });

@@ -78,6 +78,42 @@ competition scope for that target. The deployment guide documents the
 staging rehearsal, restricted grants and rollback procedure.
 [Hosted November replay](deployment/how-to-deploy.md#hosted-november-replay)
 
+## Bounded change to the probability ladder
+
+Use the original private v1 workspace and the v2 release to compare the
+additional 70%, 65% and 60% rungs. The comparison reuses frozen v1 forecast
+distributions, receipt identity and decision clocks. It rereads retained
+pre-decision quotes only for v1 decisions with comparable offers and no
+qualifying outcome. It reproduces those sealed v1 decisions before calculating
+v2. The audit retains already priced picks and forecast or quote gaps. It
+records unverifiable candidates separately.
+
+```sh
+npm run november:replay -- delta-audit --workspace "$workspace" --delta-baseline reviewed
+npm run november:replay -- delta-stage --workspace "$workspace"
+npm run november:replay -- delta-activate --workspace "$workspace" --operation-id november-ladder-02
+npm run november:replay -- delta-rollback --workspace "$workspace" --operation-id november-ladder-02
+```
+
+Use the `reviewed` baseline in staging when v1 has been reviewed and its
+rehearsal has been rolled back. For a completed v1 activation, use the default
+`active` baseline and pass its original `--v1-operation-id` to `delta-audit`.
+Pass the same environment flag used for the original workspace on each command.
+
+`policy-delta.json` contains both frozen decisions for every comparable estimate,
+including unchanged picks. A separate `policy-delta-calibration.json` joins
+verified results after the comparison is sealed. It reports matched v1/v2 and
+newly priced outcomes by probability band. Outright wins count as successes
+for calibration, and pushes and half settlements count as zero. Bands with
+fewer than 30 verified observations are marked as insufficient for conclusions.
+
+Review `policy-delta-activation-diff.json` before activation. Only reviewed v1
+fixtures with an attributable change and the expected active or prior
+projection are eligible. The writer revalidates the occurrence, evidence,
+quotes and prior pointer under the activation lock. Zero eligible changes
+produce an empty operation receipt. The separate delta rollback restores
+the exact prior pointer and keeps both decision versions in the archive.
+
 ## Previous owned development audit
 
 At 20:03 Kampala time on November 20, the stored Matches cohort contained

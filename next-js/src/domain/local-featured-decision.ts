@@ -7,9 +7,15 @@ import { binaryGoalTotalOddsMapping, fullTimeTeamTotalOddsMapping, launchOddsMap
 import { preMatchReferenceOddsFreshMs } from "./reference-odds.ts";
 import type { GoalGrade } from "./score-distribution-markets.ts";
 
-export const localFeaturedDecisionVersion = "local-featured-pre-match-v1";
+export const legacyLocalFeaturedDecisionVersion = "local-featured-pre-match-v1";
+export const localFeaturedDecisionVersion = "local-featured-pre-match-v2";
 export const localFeaturedBookmakerBetIds = replayBookmakerBetIds;
-const thresholds = [0.95, 0.90, 0.85, 0.80, 0.75] as const;
+const legacyThresholds = [0.95, 0.90, 0.85, 0.80, 0.75] as const;
+const thresholds = [...legacyThresholds, 0.70, 0.65, 0.60] as const;
+const featuredDecisionVersionSchema = z.literal([legacyLocalFeaturedDecisionVersion, localFeaturedDecisionVersion]);
+export type LocalFeaturedDecisionVersion = z.infer<typeof featuredDecisionVersionSchema>;
+const thresholdsByVersion = { [legacyLocalFeaturedDecisionVersion]: legacyThresholds, [localFeaturedDecisionVersion]: thresholds } as const;
+const thresholdFor = (probability: number, version: LocalFeaturedDecisionVersion) => thresholdsByVersion[version].find((floor) => probability >= floor);
 const minimumPrice = parseDecimalOdds("1.10")!;
 const unitPrice = 10_000n;
 const instant = z.number().int().nonnegative().max(253_402_300_799_999);
@@ -29,11 +35,11 @@ export type LocalFeaturedQuote = z.infer<typeof localFeaturedQuoteSchema>;
 
 const outcomeKey = z.string().min(1).max(128);
 export const localFeaturedDecisionSchema = z.discriminatedUnion("status", [
-  z.strictObject({ version: z.literal(localFeaturedDecisionVersion), status: z.literal("priced"),
-    marketKey: outcomeKey, selection: outcomeKey, probability: z.number().min(0.75).max(1),
+  z.strictObject({ version: featuredDecisionVersionSchema, status: z.literal("priced"),
+    marketKey: outcomeKey, selection: outcomeKey, probability: z.number().min(0.60).max(1),
     threshold: z.literal(thresholds), expectedNetReturn: featuredExpectedReturnSchema, quote: localFeaturedQuoteSchema,
-  }).refine(({ probability, threshold }) => thresholds.find((floor) => probability >= floor) === threshold),
-  z.strictObject({ version: z.literal(localFeaturedDecisionVersion), status: z.literal("abstained"),
+  }).refine(({ probability, threshold, version }) => thresholdFor(probability, version) === threshold),
+  z.strictObject({ version: featuredDecisionVersionSchema, status: z.literal("abstained"),
     reason: z.enum(["odds-not-permitted", "no-local-forecast", "no-verified-odds", "no-comparable-quote", "no-qualifying-outcome"]),
   }),
 ]);
@@ -56,6 +62,8 @@ type BookmakerQuotes = Readonly<{
   provenance?: "pre-match" | "historical-pre-match" | "in-play" | "closing";
   bookmakers: readonly Readonly<{ bookmakerId: number; bookmakerName: string | null; offers: readonly BookmakerOffer[] }>[];
 }>;
+type FeaturedDecisionInput = Readonly<{ fixtureId: string; kickoffAt: number; decisionAt: number;
+  outcomes: readonly LocalOutcome[]; quotes: BookmakerQuotes | null | undefined; quotesPermitted: boolean }>;
 
 export function binaryFeaturedSettlement(win: number): Settlement {
   return { win, loss: 1 - win, push: 0, "half-win": 0, "half-loss": 0 };
@@ -146,29 +154,38 @@ function bestQuote(books: BookmakerQuotes["bookmakers"], mapping: NonNullable<Re
   return { best, comparable };
 }
 
-/** Rank only independently validated Local Engine outcomes and keep the qualifying quote frozen with the pick. */
-export function decideLocalFeaturedPick(input: Readonly<{ fixtureId: string; kickoffAt: number; decisionAt: number;
-  outcomes: readonly LocalOutcome[]; quotes: BookmakerQuotes | null | undefined; quotesPermitted: boolean }>): LocalFeaturedDecision {
+/** Count modeled outcomes at each gate and rank the survivors using the selected policy version. */
+export function assessLocalFeaturedPick(input: FeaturedDecisionInput, version: LocalFeaturedDecisionVersion = localFeaturedDecisionVersion) {
   const { fixtureId, kickoffAt, decisionAt, outcomes, quotes, quotesPermitted } = input;
-  const abstain = (reason: Extract<LocalFeaturedDecision, { status: "abstained" }>["reason"]): LocalFeaturedDecision =>
-    ({ version: localFeaturedDecisionVersion, status: "abstained", reason });
+  const eligible = new Map<PricedDecision["threshold"], number>();
+  let comparableQuoteOutcomes = 0, oddsFloorOutcomes = 0, positiveReturnOutcomes = 0;
+  const finish = (decision: LocalFeaturedDecision) => ({ decision, diagnostics: {
+    modeledOutcomes: outcomes.length, comparableQuoteOutcomes, oddsFloorOutcomes, positiveReturnOutcomes,
+    eligibleByRung: thresholdsByVersion[version].map((threshold) => ({ threshold, outcomes: eligible.get(threshold) ?? 0 })),
+  } });
+  const abstain = (reason: Extract<LocalFeaturedDecision, { status: "abstained" }>["reason"]) =>
+    finish({ version, status: "abstained", reason });
   if (!outcomes.length) return abstain("no-local-forecast");
   if (!quotesPermitted) return abstain("odds-not-permitted");
   if (!quotes || quotes.fixtureId !== fixtureId || quotes.kickoffAt !== kickoffAt || quotes.checkedAt > decisionAt ||
     quotes.provenance === "in-play" || quotes.provenance === "closing" ||
     !instant.safeParse(decisionAt).success || decisionAt >= kickoffAt) return abstain("no-verified-odds");
 
-  let chosen: { decision: PricedDecision; price: DecimalOdds; order: string } | null = null, comparable = false;
+  let chosen: { decision: PricedDecision; price: DecimalOdds; order: string } | null = null;
   for (const { marketKey, selection, settlementProbabilities, unrepresentedProbability } of outcomes) {
     const mapping = verifiedMapping(marketKey, selection);
     if (!mapping) continue;
     const { best, comparable: hasQuote } = bestQuote(quotes.bookmakers, mapping, decisionAt);
-    comparable ||= hasQuote;
+    if (hasQuote) comparableQuoteOutcomes++;
     if (!best) continue;
+    oddsFloorOutcomes++;
     const expectedNetReturn = positiveFeaturedReturn(settlementProbabilities, best.price, mapping.terms, unrepresentedProbability);
-    const probability = settlementProbabilities.win, threshold = thresholds.find((floor) => probability >= floor);
-    if (!expectedNetReturn || threshold === undefined) continue;
-    const decision: PricedDecision = { version: localFeaturedDecisionVersion, status: "priced",
+    if (!expectedNetReturn) continue;
+    positiveReturnOutcomes++;
+    const probability = settlementProbabilities.win, threshold = thresholdFor(probability, version);
+    if (threshold === undefined) continue;
+    eligible.set(threshold, (eligible.get(threshold) ?? 0) + 1);
+    const decision: PricedDecision = { version, status: "priced",
       marketKey, selection, expectedNetReturn, probability, threshold, quote: best.quote };
     const order = outcomeOrder(marketKey, selection);
     if (!chosen || (chosen.decision.threshold - threshold || byPrice(best.price, chosen.price) ||
@@ -177,5 +194,10 @@ export function decideLocalFeaturedPick(input: Readonly<{ fixtureId: string; kic
       chosen = { decision, price: best.price, order };
     }
   }
-  return chosen?.decision ?? abstain(comparable ? "no-qualifying-outcome" : "no-comparable-quote");
+  return chosen ? finish(chosen.decision) : abstain(comparableQuoteOutcomes ? "no-qualifying-outcome" : "no-comparable-quote");
+}
+
+/** Keep the qualifying quote frozen with the pick. */
+export function decideLocalFeaturedPick(input: FeaturedDecisionInput, version: LocalFeaturedDecisionVersion = localFeaturedDecisionVersion): LocalFeaturedDecision {
+  return assessLocalFeaturedPick(input, version).decision;
 }

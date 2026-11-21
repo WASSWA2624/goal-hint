@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { binaryFeaturedSettlement, decideLocalFeaturedPick, localFeaturedDecisionSchema, positiveFeaturedReturn }
+import { assessLocalFeaturedPick, binaryFeaturedSettlement, decideLocalFeaturedPick, legacyLocalFeaturedDecisionVersion,
+  localFeaturedDecisionSchema, localFeaturedDecisionVersion, positiveFeaturedReturn }
   from "../src/domain/local-featured-decision.ts";
 import { parseDecimalOdds } from "../src/domain/odds.ts";
 import { preMatchReferenceOddsFreshMs } from "../src/domain/reference-odds.ts";
@@ -17,10 +18,11 @@ const chance = (values, observation) => offer(12, "Double Chance", values, obser
 const outcome = (marketKey, selection, probability) =>
   ({ marketKey, selection, settlementProbabilities: binaryFeaturedSettlement(probability) });
 const total = (period, side, line, probability) => outcome(`goal:${period}:totals:${side}:${line}:binary`, "under", probability);
-const decide = (outcomes, bookmakers, options = {}) => decideLocalFeaturedPick({
+const inputs = (outcomes, bookmakers, options = {}) => ({
   fixtureId, kickoffAt, decisionAt, quotesPermitted: true, outcomes,
   quotes: { fixtureId, kickoffAt, checkedAt: decisionAt, bookmakers }, ...options,
 });
+const decide = (outcomes, bookmakers, options, version) => decideLocalFeaturedPick(inputs(outcomes, bookmakers, options), version);
 
 test("unpriced Under 5.5 does not displace a priced outcome, including a lower-probability double chance outcome", () => {
   const result = decide([
@@ -73,14 +75,52 @@ test("rejects stale, suspended, unpermitted, post-cutoff, in-play and different-
 });
 
 test("includes each probability floor and 1.10, stops on the first populated rung and never rounds into eligibility", () => {
-  for (const floor of [0.95, 0.90, 0.85, 0.80, 0.75]) {
+  for (const floor of [0.95, 0.90, 0.85, 0.80, 0.75, 0.70, 0.65, 0.60]) {
     assert.equal(decide([total("full-time", "total", 4.5, floor)], [book(1, totals({ "Under 4.5": "2" }))]).threshold, floor);
   }
   const outcomes = [total("full-time", "total", 4.5, 0.95), total("full-time", "total", 3.5, 0.94999999999999)];
   assert.equal(decide(outcomes, [book(1, totals({ "Under 4.5": "1.10", "Under 3.5": "2" }))]).quote?.decimal, "1.1");
   assert.equal(decide(outcomes, [book(1, totals({ "Under 4.5": "1.0999", "Under 3.5": "2" }))]).threshold, 0.90);
-  assert.equal(decide([total("full-time", "total", 4.5, 0.74999999999999)], [book(1, totals({ "Under 4.5": "2" }))]).status, "abstained");
+  assert.equal(decide([total("full-time", "total", 4.5, 0.74999999999999)], [book(1, totals({ "Under 4.5": "2" }))]).threshold, 0.70);
+  assert.equal(decide([total("full-time", "total", 4.5, 0.59999999999999)], [book(1, totals({ "Under 4.5": "2" }))]).status, "abstained");
   assert.equal(decide([total("full-time", "total", 4.5, 0.8)], [book(1, totals({ "Under 4.5": "1.25" }))]).status, "abstained");
+});
+
+test("the 60% boundary requires strictly profitable unrounded odds and each version validates its own serialized threshold", () => {
+  const outcomes = [total("full-time", "total", 4.5, 0.60)];
+  const books = [book(1, totals({ "Under 4.5": "1.6667" }))];
+  const current = decide(outcomes, books);
+  assert.deepEqual([current.status, current.version, current.threshold, current.quote.decimal, current.expectedNetReturn],
+    ["priced", localFeaturedDecisionVersion, 0.60, "1.6667", "0.00002"]);
+  assert.equal(decide(outcomes, [book(1, totals({ "Under 4.5": "1.6666" }))]).status, "abstained");
+  assert.equal(decide([total("full-time", "total", 4.5, 0.625)], [book(1, totals({ "Under 4.5": "1.6" }))]).status, "abstained");
+  const legacy = decide(outcomes, books, {}, legacyLocalFeaturedDecisionVersion);
+  assert.deepEqual(legacy, { version: legacyLocalFeaturedDecisionVersion, status: "abstained", reason: "no-qualifying-outcome" });
+  const legacyPriced = decide([total("full-time", "total", 4.5, 0.75)], books, {}, legacyLocalFeaturedDecisionVersion);
+  for (const decision of [current, legacy, legacyPriced]) {
+    assert.deepEqual(localFeaturedDecisionSchema.parse(JSON.parse(JSON.stringify(decision))), decision);
+  }
+  assert.equal(localFeaturedDecisionSchema.safeParse({ ...current, version: legacyLocalFeaturedDecisionVersion }).success, false);
+  assert.equal(localFeaturedDecisionSchema.safeParse({ ...legacyPriced, version: localFeaturedDecisionVersion, threshold: 0.70 }).success, false);
+  assert.equal(localFeaturedDecisionSchema.safeParse({ ...current, version: "unrecognized-policy" }).success, false);
+});
+
+test("both versions measure the same quote and value gates before lower rungs can change a decision", () => {
+  const outcomes = [total("full-time", "total", 4.5, 0.70), total("full-time", "total", 3.5, 0.69), total("full-time", "total", 2.5, 0.62),
+    total("full-time", "total", 1.5, 0.59), total("full-time", "total", 5.5, 0.97), total("full-time", "total", 6.5, 0.625),
+    total("full-time", "total", 7.5, 0.96)];
+  const books = [book(4, totals({ "Under 4.5": "1.5", "Under 3.5": "3.5", "Under 2.5": "10", "Under 1.5": "40",
+    "Under 5.5": "1.0999", "Under 6.5": "1.6" }))];
+  const input = inputs(outcomes, books);
+  const current = assessLocalFeaturedPick(input), legacy = assessLocalFeaturedPick(input, legacyLocalFeaturedDecisionVersion);
+  const diagnostics = { modeledOutcomes: 7, comparableQuoteOutcomes: 6, oddsFloorOutcomes: 5, positiveReturnOutcomes: 4 };
+  const upperRungs = [0.95, 0.90, 0.85, 0.80, 0.75].map((threshold) => ({ threshold, outcomes: 0 }));
+  assert.equal(legacy.decision.status, "abstained");
+  assert.deepEqual(legacy.diagnostics, { ...diagnostics, eligibleByRung: upperRungs });
+  assert.deepEqual(current.decision, decide(outcomes, books));
+  assert.deepEqual([current.decision.threshold, current.decision.quote.decimal], [0.70, "1.5"]);
+  assert.deepEqual(current.diagnostics, { ...diagnostics, eligibleByRung: [...upperRungs, ...[0.70, 0.65, 0.60]
+    .map((threshold) => ({ threshold, outcomes: 1 }))] });
 });
 
 test("keeps exact expected return through pushes and half payouts and abstains with missing mass or unverified terms", () => {
