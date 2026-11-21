@@ -100,7 +100,9 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 1
         await dialog.locator("[data-dialog-reset]").click(); await apply(); await settled();
         assert((await bar.innerText()).includes("2.50–5.00"), "Reset applies default odds to today's slips");
         await checkCount(3);
-        assert(await page.getByText("Whole-slip win probability", { exact: false }).count() === 3, "Whole-slip probability is labeled separately on each slip");
+        assert(await page.locator("[data-whole-slip-probability]").count() === 0
+          && await page.getByText("Average pick probability", { exact: false }).count() >= 3,
+        "Hourly slips label their average and omit any unavailable whole-slip estimate");
         if (width === 390 || width === 1440) {
           await open();
           const choose = async (name, label) => {
@@ -116,6 +118,7 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 1
           assert(new URL(page.url()).searchParams.get("probMin") === "80" && new URL(page.url()).searchParams.get("matchesMin") === "2", "The URL pins the numeric filters");
           assert((await bar.innerText()).includes("12-Oct-2026") && (await bar.innerText()).includes("Lost"), "The results bar reports the applied archive date and status");
           await checkCount(1);
+          assert(await page.locator("[data-whole-slip-probability]").count() === 1, "The archived model-backed slip retains its original estimate");
           assert(await page.locator('[data-summary-count="all"]').innerText() === "2", "The date and range restrictions apply before result drilldown counts");
           await page.reload(); await checkCount(1);
           await open(); await dialog.locator("[data-dialog-reset]").click(); await apply(); await settled();
