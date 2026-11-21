@@ -89,6 +89,80 @@ before the traced fixture's page. The trace contains exact supported outcomes,
 quote or failure reasons, evidence clocks and model sample metrics. Keep it in
 the private workspace. Use a fresh workspace for this coverage format.
 
+## Historical ranking evaluation
+
+The candidate uses accepted original Local Engine probabilities and verified
+settlement for the same canonical market, period, scope, line and outcome.
+Each historical fixture contributes at most one accepted forecast to an
+outcome. When a result is corrected or withdrawn, each target uses the latest
+proof available before its selection clock. Scores without original forecasts
+supply fixture context. Older replay decisions are evaluation targets.
+
+The comparison starts with similar forecast probabilities from the same
+competition and comparable teams, roles, venue or independently verified
+strength where available. It backs off to the competition and then to the
+broader original archive for that outcome. Minimum effective sample sizes are
+40, 50, and 80. The comparison measures observed outright wins relative to
+each forecast's original probability. Recency and similarity influence the
+sample, an uncertainty margin requires a consistent signal, and shrinkage
+toward zero limits the adjustment. Sparse or inconclusive samples use the
+original ranking.
+
+Exact bookmaker eligibility, settlement-aware expected return, tier priority,
+and the first populated probability rung continue to govern the comparison.
+History can resolve the probability order among equal exact prices on that
+rung, or among forecast-only outcomes with the same market coverage priority.
+Each candidate retains the original published forecast probability, price,
+provenance, and expected return for the comparison. This is a qualification
+exercise for featured picks. The released policy remains in force until the
+chronological comparison supports a promotion.
+
+Run from `next-js/` using the read-only database profile and a completed v3
+workspace for that environment. The command captures one database UTC clock
+and prints an aggregate report without changing the database or the workspace.
+
+```sh
+node --conditions=react-server scripts/evaluate-featured-history.mjs \
+  --environment production --workspace /path/to/sealed-v3-workspace
+```
+
+The report keeps the full November census as the scope denominator, compares
+estimates on identical frozen inputs, and reports newer sealed ordinary
+cutoffs separately. Verified results are joined after the selections are
+fixed. Calibration uses original win probabilities and outright wins.
+Realized return uses one unit per settled selection with an exact verified
+quote, including the actual payout for pushes and partial outcomes.
+
+### Production qualification on 21 November 2026
+
+The read-only comparison at 16:29:24 Africa/Kampala reproduced the released
+decision on all 1,672 estimates in the sealed November audit and on all 507
+newer ordinary cutoff decisions. The November audit covers 15,191 occurrences
+across 13,935 fixtures, including 4,884 prospective occurrences and 8,635
+withheld before comparison. Newer ordinary cutoffs were evaluated separately.
+
+The available history comprised 644 verified original Local Engine forecasts,
+of which 265 had at least one supported outcome with verified settlement.
+The candidate found 9,994 outcome assessments where the existing priorities
+allowed a ranking comparison. Seven had enough support for a nonzero
+adjustment, all in the broad cross-competition sample for newer decisions.
+Only 24 target occurrences had verified competition context. None had
+qualified venue neutrality or comparable strength context. No chosen outcome
+or tier changed across the 2,179 comparisons.
+
+| Scope | Compared | Standard / fallback / forecast-only | Outright wins / settled | Mean modeled win probability | Raw Brier | Net units / settled priced |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Sealed November | 1,672 | 165 / 20 / 1,487 | 1,366 / 1,671 (81.75%) | 84.68% | 0.14724 | −5.34 / 185 |
+| Newer ordinary cutoffs | 507 | 36 / 8 / 463 | 76 / 90 (84.44%) | 84.06% | 0.12044 | −0.53 / 15 |
+| Combined | 2,179 | 201 / 28 / 1,950 | 1,442 / 1,761 (81.89%) | 84.65% | 0.14587 | −5.87 / 200 |
+
+Both variants produced the same values. Quoted return was −2.94% at one
+hypothetical unit per exact quote. Results were unverified for 418 predictions.
+This comparison found no gain in selection
+coverage, outright hit rate, calibration, or quoted return. The experimental
+ranking remains available for read-only evaluation. The released featured
+policy and the previously activated replay remain in use.
+
 ## Review and activate
 
 `stage` stores qualifying retrospective revisions with their actual generation

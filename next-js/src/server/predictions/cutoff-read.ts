@@ -15,7 +15,10 @@ const operationSchema = z.strictObject({ id: historyHash, fixtureId: historyId, 
 export async function storedCutoffOperation(tx: Prisma.TransactionClient, cycleId: string, kind: "close" | "void"): Promise<CutoffOperation | null> {
   const rows = await tx.$queryRaw<Record<string, unknown>[]>`SELECT *, integrity = SHA2(CAST(operationJson AS CHAR), 256) AS validIntegrity
     FROM PredictionCycleOperation WHERE cycleId = ${cycleId} AND kind = ${kind}`;
-  const row = rows[0]; if (!row) return null;
+  return rows[0] ? cutoffOperationFromRow(rows[0], kind) : null;
+}
+
+export function cutoffOperationFromRow(row: Record<string, unknown>, kind: "close" | "void"): CutoffOperation {
   try {
     assertHistorySeal(row.validIntegrity);
     const value = parseCutoff(operationSchema, historyJson(row.operationJson)), cycle = parseStoredCycle(value.cycle);

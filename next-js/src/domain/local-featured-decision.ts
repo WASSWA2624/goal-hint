@@ -220,12 +220,24 @@ function commonMarketOrder(marketKey: string) {
 }
 
 type FeaturedSelection = z.infer<z.ZodObject<typeof selectionFields>>;
+type RankingProbability = (selection: Readonly<FeaturedSelection>) => number;
+
+function compareRankingProbability(left: FeaturedSelection, right: FeaturedSelection, rank: RankingProbability | undefined) {
+  if (!rank) return right.probability - left.probability;
+  const probability = (pick: FeaturedSelection) => {
+    const value = rank({ marketKey: pick.marketKey, selection: pick.selection, probability: pick.probability });
+    return Number.isFinite(value) && value >= 0 && value <= 1 ? value : pick.probability;
+  };
+  return probability(right) - probability(left) || right.probability - left.probability;
+}
+
 function stableSelectionOrder(left: FeaturedSelection, right: FeaturedSelection) {
   return byText(outcomeOrder(left.marketKey, left.selection), outcomeOrder(right.marketKey, right.selection)) ||
     byText(left.marketKey, right.marketKey) || byText(left.selection, right.selection);
 }
 
-function bestForecastOnlyOutcome(outcomes: readonly LocalFeaturedOutcome[], coverage: ReadonlyMap<string, number> | undefined) {
+function bestForecastOnlyOutcome(outcomes: readonly LocalFeaturedOutcome[], coverage: ReadonlyMap<string, number> | undefined,
+  rank: RankingProbability | undefined) {
   type Ranked = FeaturedSelection & Readonly<{ coverage: number; commonOrder: number }>;
   let best: Ranked | null = null;
   for (const { marketKey, selection, settlementProbabilities, unrepresentedProbability } of outcomes) {
@@ -237,7 +249,7 @@ function bestForecastOnlyOutcome(outcomes: readonly LocalFeaturedOutcome[], cove
       coverage: Number.isSafeInteger(count) && count > 0 ? count : 0 };
     if (!best || (best.coverage - candidate.coverage ||
       (best.coverage ? 0 : candidate.commonOrder - best.commonOrder) ||
-      best.probability - candidate.probability || stableSelectionOrder(candidate, best)) < 0) best = candidate;
+      compareRankingProbability(candidate, best, rank) || stableSelectionOrder(candidate, best)) < 0) best = candidate;
   }
   return best && { marketKey: best.marketKey, selection: best.selection, probability: best.probability };
 }
@@ -262,8 +274,7 @@ function bestQuote(books: LocalFeaturedBookmakerQuotes["bookmakers"], mapping: N
   return { best, comparable };
 }
 
-/** Count modeled outcomes at each gate and rank the survivors using the selected policy version. */
-export function assessLocalFeaturedPick(input: FeaturedDecisionInput, version: LocalFeaturedDecisionVersion = localFeaturedDecisionVersion) {
+function assessPick(input: FeaturedDecisionInput, version: LocalFeaturedDecisionVersion, rank?: RankingProbability) {
   const { kickoffAt, decisionAt, outcomes, quotes, quotesPermitted, coverageByMarket } = input;
   const tiered = version === localFeaturedDecisionVersion;
   const eligible = new Map<PricedDecision["threshold"], number>();
@@ -276,7 +287,7 @@ export function assessLocalFeaturedPick(input: FeaturedDecisionInput, version: L
     finish({ version, status: "abstained", reason });
   const withoutPrice = (reason: z.infer<typeof featuredForecastOnlyReasonSchema>) => {
     if (!tiered) return abstain(reason);
-    const forecast = bestForecastOnlyOutcome(outcomes, coverageByMarket);
+    const forecast = bestForecastOnlyOutcome(outcomes, coverageByMarket, rank);
     return forecast ? finish({ ...forecast, version, status: "forecast-only", reason }) : abstain("no-modeled-outcome-meets-floor");
   };
   if (!outcomes.length) return abstain("no-local-forecast");
@@ -288,7 +299,7 @@ export function assessLocalFeaturedPick(input: FeaturedDecisionInput, version: L
   type Rated = Readonly<{ decision: PricedDecision; price: DecimalOdds; positive: boolean }>;
   const rankPriced = (left: Rated, right: Rated) => Number(right.positive) - Number(left.positive) ||
     right.decision.threshold - left.decision.threshold || byPrice(left.price, right.price) ||
-    right.decision.probability - left.decision.probability || stableSelectionOrder(left.decision, right.decision);
+    compareRankingProbability(left.decision, right.decision, rank) || stableSelectionOrder(left.decision, right.decision);
   let chosen: Rated | null = null, fallback: Rated | null = null;
   for (const { marketKey, selection, settlementProbabilities, unrepresentedProbability } of outcomes) {
     const mapping = verifiedLocalFeaturedBinding(marketKey, selection);
@@ -316,6 +327,16 @@ export function assessLocalFeaturedPick(input: FeaturedDecisionInput, version: L
   }
   const selected = chosen ?? fallback;
   return selected ? finish(selected.decision) : withoutPrice(comparableQuoteOutcomes ? "no-qualifying-outcome" : "no-comparable-quote");
+}
+
+/** Count modeled outcomes at each gate and rank the survivors using the released policy version. */
+export function assessLocalFeaturedPick(input: FeaturedDecisionInput, version: LocalFeaturedDecisionVersion = localFeaturedDecisionVersion) {
+  return assessPick(input, version);
+}
+
+/** Chronological validation only. Do not publish these candidate decisions as released-policy records. */
+export function assessLocalFeaturedPickWithHistory(input: FeaturedDecisionInput, rankingProbability: RankingProbability) {
+  return assessPick(input, localFeaturedDecisionVersion, rankingProbability);
 }
 
 /** Keep the qualifying quote frozen with the pick. */
