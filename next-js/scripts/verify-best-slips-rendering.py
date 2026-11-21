@@ -25,10 +25,12 @@ def verify(origin):
         elif suffix == legacy:
             assert "3 slips published" in html and "of 10 slips published" not in html
         elif suffix == empty:
-            assert "0 of 10 slips published" in html and "validated whole-slip estimate" in html
+            assert "0 of 10 slips published" in html and "at the start of each hour" in html
         else:
             assert "3 of 10 slips published" in html
-        if suffix == archive:
+        if not suffix:
+            assert "Average pick probability" in html and "Whole-slip win probability" not in html
+        elif suffix == archive:
             assert "12-Oct-2026" in html
             assert html.count("data-slip-key=") == 1
             assert "1 of 1 slip" in html

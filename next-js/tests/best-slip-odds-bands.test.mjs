@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { bestSlipOddsBands, bestSlipOddsBandFor, bestSlipPublicRank } from '../src/domain/best-slip-odds-bands.ts';
-import { bestSlipBandCriteria, bestSlipCombinationIdentity, buildDailyBestSlips } from '../src/domain/best-slips.ts';
+import { bestSlipPublicationHour } from '../src/domain/best-slip-publication-hour.ts';
+import { bestSlipBandCriteria, bestSlipCombinationIdentity, buildDailyBestSlips, buildHourlyBestSlips } from '../src/domain/best-slips.ts';
 import { parseBestSlipsQuery, serializeBestSlipsQuery, selectSlipSummaryResult, defaultBestSlipsQuery } from '../src/domain/best-slips-query.ts';
 import { bestSlipsRangeKey } from '../src/domain/best-slips-client.ts';
-import { createDailySlipPublisher } from '../src/server/slips/daily-slip-publication.ts';
+import { createDailySlipPublisher, runDailySlipPublisher } from '../src/server/slips/daily-slip-publication.ts';
 import { readFeaturedSlipSelections, verifyFeaturedSlipOffers } from '../src/server/slips/best-slip-recommendations.ts';
 import { verifiedLocalFeaturedBinding } from '../src/domain/local-featured-decision.ts';
 import { liveRecord, now, today } from './helpers/live-refresh-fixtures.mjs';
@@ -27,31 +28,87 @@ test('odds bands have unambiguous boundaries and preserve their scope through da
   assert.notEqual(bestSlipsRangeKey({...defaultBestSlipsQuery(),oddsBand:'5-10'},today),bestSlipsRangeKey(defaultBestSlipsQuery(),today));
   assert.throws(()=>parseBestSlipsQuery({oddsBand:'5-500'},today));
 });
-test('publisher reads one cohort, fills missing bands only and resumes without replacing prior cohorts', async () => {
-  const published=new Set(['1.5-5']), calls=[], record=liveRecord();
-  const model={calibrationReference:'test',correlationReference:'test',validFrom:now-1000,validUntil:now+86400000,estimate:()=>0.72};
-  const cohort = { today, asOf: now, range: { from: today, to: today }, searchLimited: false, partialCoverage: false,
-    records: [record], featuredSelections: bestSlipOddsBands.map((band, index) =>
-      pricedEditorialSelection(index + 1, { odds: (band.minimumTotal / 100).toFixed(2), probability: 0.72 })) };
-  let reads = 0;
-  const options={database:{},competitionIds:[],model,now:()=>now,verifyModel:()=>true,verifyPublicOdds:()=>true,
-    historicalEvidence: async () => ({ order: values => values, report: { status: 'insufficient', scannedDecisions: 0, settledDecisions: 0 } }),
-    store:{publishedBands:async()=>[...published],publish:async(input)=>{calls.push(input);published.add(input.oddsBand);return 'published';}},
-    read:async (parameters) => { reads++; assert.equal(parameters.get('from'), today); return cohort; }};
-  const publisher=createDailySlipPublisher(options);
-  const result = await publisher.publish();
-  assert.equal(result.status, 'published');
-  assert.equal(result.eligibleSelections, 6);
-  assert.equal(calls.length, 5);
-  assert.deepEqual(calls.map(input=>input.oddsBand),bestSlipOddsBands.slice(1).map(band=>band.id));
-  assert.ok(calls.every(input=>input.slips.length<=10));
-  assert.equal((await publisher.publish()).status,'already-published');assert.equal(calls.length,5);
-  assert.equal(reads, 1);
-  const unavailable=createDailySlipPublisher({...options,store:{...options.store,publishedBands:async()=>[]},read:async()=>({...cohort, asOf: now - 1})});
-  assert.equal((await unavailable.publish()).status,'unavailable');
-  const noPrices=createDailySlipPublisher({...options,store:{...options.store,publishedBands:async()=>[]},
-    read:async()=>({...cohort, records: [{...record, forecast: {}}], featuredSelections: []})});
-  assert.equal((await noPrices.publish()).status,'odds-unavailable'); assert.equal(calls.length,5);
+test('hourly publisher appends to earlier bands, keeps searching other bands, and stops once all are full', async () => {
+  const start = bestSlipPublicationHour(now).hourAt, record = liveRecord(), calls = [], counts = new Map(
+    bestSlipOddsBands.map(({ id }) => [id, id === '1.5-5' || id === '100-200' ? 9 : 10]));
+  const publishedHours = new Map(), fixtures = new Set(), combinations = new Set();
+  let clock = start, reads = 0;
+  const selection = (index, odds) => pricedEditorialSelection(index, { at: clock, kickoffAt: start + 12_000_000,
+    odds, bookmakerId: index, probability: 0.64 });
+  let selections = [selection(1, '4.00')];
+  const state = () => ({ counts, publishedHours, fixtures, combinations, closed: new Set() });
+  const options = { database: {}, competitionIds: [], now: () => clock, verifyPublicOdds: () => true,
+    store: { hourlyState: async () => state(), async append(input) {
+      calls.push(input);
+      counts.set(input.oddsBand, counts.get(input.oddsBand) + input.slips.length);
+      publishedHours.set(input.oddsBand, new Set([input.hourAt]));
+      for (const slip of input.slips) {
+        combinations.add(bestSlipCombinationIdentity(slip.selections));
+        slip.selections.forEach(({ fixtureId }) => fixtures.add(fixtureId));
+      }
+      return { status: 'published', appended: input.slips.length };
+    } },
+    read: async (parameters, context, time) => {
+      reads++;
+      assert.equal(parameters.get('from'), today);
+      assert.equal(context.featured, true);
+      return { today, asOf: time.now(), range: { from: today, to: today }, records: [record],
+        featuredSelections: selections, searchLimited: false, partialCoverage: false };
+    } };
+  const publisher = createDailySlipPublisher(options);
+  const first = await publisher.publish(start);
+  assert.equal(first.status, 'published');
+  assert.equal(first.dayComplete, false);
+  assert.equal(first.newSlips, 1);
+  assert.equal(calls[0].oddsBand, '1.5-5');
+  assert.equal(calls[0].hourAt, start);
+  assert.equal(Object.hasOwn(calls[0].slips[0], 'estimatedProbability'), false);
+  const original = structuredClone(calls[0].slips);
+
+  clock += 3_600_000;
+  selections = [selection(2, '3.00'), selection(3, '101.00')];
+  const second = await publisher.publish(clock);
+  assert.equal(second.status, 'published');
+  assert.equal(second.dayComplete, true);
+  assert.equal(second.newSlips, 1);
+  assert.equal(calls[1].oddsBand, '100-200');
+  assert.deepEqual(calls[0].slips, original);
+  assert.equal(await publisher.publish(start).then(({ status }) => status), 'unavailable');
+  assert.equal(await publisher.publish(clock).then(({ status }) => status), 'already-published');
+  assert.equal(reads, 2);
+  assert.equal(calls.length, 2);
+
+  const noPrices = createDailySlipPublisher({ ...options, store: { ...options.store, hourlyState: async () => ({ ...state(), counts: new Map() }) },
+    read: async () => ({ today, asOf: clock, range: { from: today, to: today }, records: [record], featuredSelections: [] }) });
+  assert.equal(await noPrices.publish(clock).then(({ status }) => status), 'odds-unavailable');
+  assert.equal(calls.length, 2);
+});
+
+test('odds-guide hourly batches can fill with overlapping distinct combinations and preserve prior membership', () => {
+  const selections = Array.from({ length: 5 }, (_, index) => pricedEditorialSelection(index, { odds: '1.80', probability: 0.61 }));
+  const initial = buildHourlyBestSlips(today, '1.5-5', 10, now, { selections }, new Set());
+  const identities = initial.slips.map(slip => bestSlipCombinationIdentity(slip.selections));
+  assert.equal(identities.length, 10);
+  assert.equal(new Set(identities).size, 10);
+  assert.ok(initial.slips.every(slip => slip.selections.length === 2 && slip.totalOdds === '3.24' && !('estimatedProbability' in slip)));
+  const next = buildHourlyBestSlips(today, '1.5-5', 10, now, { selections }, new Set(identities.slice(0, 4)));
+  assert.equal(next.slips.length, 6);
+  assert.ok(next.slips.every(slip => !identities.slice(0, 4).includes(bestSlipCombinationIdentity(slip.selections))));
+});
+
+test('supervised loop uses Kampala hour boundaries and skips later hours when the day is complete', async () => {
+  let clock = Date.parse('2026-11-21T16:37:00Z');
+  const calls = [], delays = [], controller = new AbortController();
+  await runDailySlipPublisher({ async publish(hourAt) {
+    calls.push(hourAt);
+    return { day: getReportingDate(clock), status: 'published', dayComplete: calls.length === 2 };
+  } }, controller.signal, () => { if (calls.length === 3) controller.abort(); }, false, {
+    now: () => clock,
+    wait: async delay => { delays.push(delay); clock += delay; },
+  });
+  assert.deepEqual(calls.map(at => new Date(at).toISOString()),
+    ['2026-11-21T17:00:00.000Z', '2026-11-21T18:00:00.000Z', '2026-11-21T21:00:00.000Z']);
+  assert.deepEqual(delays, [23 * 60_000, 3_600_000, 3 * 3_600_000]);
 });
 
 test('Best Slips orders sub-75 percent picks by probability then exact price and keeps three feasible slips', () => {
@@ -197,6 +254,12 @@ test('the publication recheck locks the occurrence and verifies the chosen non-p
   const recheck = (current = quotes, proposed = selection) => verifyFeaturedSlipOffers(locked, [proposed], now,
     async () => new Map([[fixtureId, current]]));
   assert.equal(await recheck(), true);
+  const alternative = { ...selection, odds: '1.50', bookmaker: { id: 21, name: null },
+    offer: { ...offer, decimal: '1.5', bookmakerId: 21, snapshotId: 'a'.repeat(64) } };
+  const alternateBook = { bookmakerId: 21, bookmakerName: null, offers: [{ ...original,
+    snapshotId: alternative.offer.snapshotId, values: [{ label, odd: '1.5' }] }] };
+  assert.equal(await verifyFeaturedSlipOffers(locked, [selection, alternative], now,
+    async () => new Map([[fixtureId, { ...quotes, bookmakers: [book, alternateBook] }]])), true);
   assert.equal(await recheck({ ...quotes, kickoffAt: kickoffAt + 60_000 }), false);
   assert.equal(await recheck({ ...quotes, checkedAt: now + 1 }), false);
   assert.equal(await recheck({ ...quotes, bookmakers: [{ ...book, offers: [{ ...original, receiptId: 'd'.repeat(64) }] }] }), false);

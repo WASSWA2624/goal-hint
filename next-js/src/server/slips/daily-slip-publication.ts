@@ -1,106 +1,127 @@
 import "server-only";
 
 import { setTimeout as sleep } from "node:timers/promises";
-import { getPublicationDeadline, getReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
-import { bestSlipCombinationIdentity, buildDailyBestSlips, qualifiedJointModel, type JointSlipModel } from "../../domain/best-slips.ts";
-import { publicPolicy } from "../../domain/public-policy.ts";
+import { bestSlipOddsBands, dailyBestSlipBandLimit, type BestSlipOddsBand } from "../../domain/best-slip-odds-bands.ts";
+import { bestSlipPublicationHour } from "../../domain/best-slip-publication-hour.ts";
+import { bestSlipCombinationIdentity, buildHourlyBestSlips } from "../../domain/best-slips.ts";
+import { getPublicationDeadline, getReportingDayBounds, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { feedQueryRules } from "../../domain/feed-query.ts";
+import { publicPolicy } from "../../domain/public-policy.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { provenTrue } from "../shared/authority-proof.ts";
-import { bestSlipOddsBands } from "../../domain/best-slip-odds-bands.ts";
 import { createPublishedSlips } from "./published-slips.ts";
 import { createStoredSlipCohort, type SlipCohortReader } from "./slip-cohort.ts";
-import { readBestSlipHistory, type BestSlipHistoryReport } from "./best-slip-history.ts";
 
 export type DailySlipPublicationResult = Readonly<{ day: string; status:
-  "published" | "already-published" | "model-unavailable" | "odds-unavailable" | "no-qualifying" | "unavailable";
-  eligibleSelections?: number; newBands?: number; newSlips?: number;
-  history?: Pick<BestSlipHistoryReport, "status" | "scannedDecisions" | "settledDecisions">;
+  "published" | "already-published" | "odds-unavailable" | "no-qualifying" | "unavailable";
+  eligibleSelections?: number; newBands?: number; newSlips?: number; dayComplete?: boolean;
 }>;
-/** The private worker alone owns generation/publication. Visitors read the first committed daily snapshot. */
-export function createDailySlipPublisher({ database, competitionIds, model, verifyModel, verifyPublicOdds,
-  providerOdds = true, now = Date.now, read, historicalEvidence = readBestSlipHistory,
+
+/** Read one stored same-day cohort, and append only newly validated combination identities. */
+export function createDailySlipPublisher({ database, competitionIds, verifyPublicOdds, providerOdds = true, now = Date.now, read,
   store = createPublishedSlips(database) }: Readonly<{
-  database: DatabaseRuntime; competitionIds: readonly number[]; model: JointSlipModel | null;
-  verifyModel: (model: JointSlipModel) => boolean; verifyPublicOdds: () => boolean;
-  providerOdds?: boolean; now?: () => number; read?: SlipCohortReader; historicalEvidence?: typeof readBestSlipHistory;
-  store?: Pick<ReturnType<typeof createPublishedSlips>, "publishedBands" | "publish"> &
-    Partial<Pick<ReturnType<typeof createPublishedSlips>, "publishedSelections">>;
+  database: DatabaseRuntime; competitionIds: readonly number[]; verifyPublicOdds: () => boolean;
+  providerOdds?: boolean; now?: () => number; read?: SlipCohortReader;
+  store?: Pick<ReturnType<typeof createPublishedSlips>, "hourlyState" | "append">;
 }>) {
   const oddsEnabled = () => providerOdds && provenTrue(verifyPublicOdds);
   const storedRead = read ?? createStoredSlipCohort({ database: () => database, competitionIds: () => competitionIds, providerOdds });
   return Object.freeze({
-    async publish(): Promise<DailySlipPublicationResult> {
-      const asOf = utcInstantFromEpochMilliseconds(now()), day = getReportingDate(asOf);
+    async publish(requestedHour?: number): Promise<DailySlipPublicationResult> {
+      const asOf = utcInstantFromEpochMilliseconds(now()), { day, hourAt } = bestSlipPublicationHour(asOf);
+      if (requestedHour !== undefined && requestedHour !== hourAt) return { day, status: "unavailable" };
       if (!oddsEnabled()) return { day, status: "odds-unavailable" };
-      if (!qualifiedJointModel(model, asOf) || !provenTrue(() => verifyModel(model))) return { day, status: "model-unavailable" };
-      const existing = await store.publishedBands(day);
-      if (existing.includes("legacy") || bestSlipOddsBands.every(band => existing.includes(band.id))) return { day, status: "already-published" };
-      const [cohort, prior] = await Promise.all([storedRead(new URLSearchParams({ from: day, to: day,
-        status: "scheduled", market: publicPolicy.markets.join(","), sort: "probability", dir: "desc", pageSize: String(feedQueryRules.maximumPageSize),
-      }), { featured: true }, { now: () => asOf }), store.publishedSelections?.(day)]);
-      if (cohort.today !== day || cohort.range.from !== day || cohort.range.to !== day || cohort.asOf !== asOf || !cohort.featuredSelections) {
-        return { day, status: "unavailable" };
-      }
-      const unexpired = () => {
-        const current = utcInstantFromEpochMilliseconds(now());
-        return cohort.featuredSelections!.filter(({ kickoffAt }) => current < getPublicationDeadline(utcInstantFromEpochMilliseconds(kickoffAt)));
+
+      let stored = await store.hourlyState(day);
+      let counts = new Map(stored.counts), fixtures = new Set(stored.fixtures), combinations = new Set(stored.combinations);
+      const reload = async () => {
+        stored = await store.hourlyState(day);
+        counts = new Map(stored.counts); fixtures = new Set(stored.fixtures); combinations = new Set(stored.combinations);
       };
-      const eligibleSelections = new Set(unexpired().map(({ fixtureId }) => fixtureId)).size;
-      if (!eligibleSelections) return { day, status: !cohort.featuredSelections.length && cohort.records.some(({ forecast }) => forecast !== null)
+      const bandFull = (id: BestSlipOddsBand) => stored.closed.has(id) || (counts.get(id) ?? 0) >= dailyBestSlipBandLimit;
+      const dayComplete = () => bestSlipOddsBands.every(({ id }) => bandFull(id));
+      const openBands = bestSlipOddsBands.filter(({ id }) =>
+        !bandFull(id) && !stored.publishedHours.get(id)?.has(hourAt));
+      if (!openBands.length) return { day, status: "already-published", dayComplete: dayComplete() };
+
+      const cohort = await storedRead(new URLSearchParams({ from: day, to: day, status: "scheduled", market: publicPolicy.markets.join(","),
+        sort: "probability", dir: "desc", pageSize: String(feedQueryRules.maximumPageSize) }), { featured: true }, { now: () => asOf });
+      if (cohort.today !== day || cohort.range.from !== day || cohort.range.to !== day || cohort.asOf !== asOf || !cohort.featuredSelections)
+        return { day, status: "unavailable" };
+      const { featuredSelections } = cohort;
+      const unexpired = (at: number) => featuredSelections.filter(({ kickoffAt }) =>
+        at < getPublicationDeadline(utcInstantFromEpochMilliseconds(kickoffAt)));
+      const eligibleSelections = new Set(unexpired(now()).map(({ fixtureId }) => fixtureId)).size;
+      if (!eligibleSelections) return { day, status: !featuredSelections.length && cohort.records.some(({ forecast }) => forecast !== null)
         ? "odds-unavailable" : "no-qualifying", eligibleSelections };
-      const history = await historicalEvidence(database, asOf, competitionIds);
-      const historySummary = { status: history.report.status, scannedDecisions: history.report.scannedDecisions, settledDecisions: history.report.settledDecisions };
-      const fixtures = prior?.fixtures ?? new Set<string>(), combinations = prior?.combinations ?? new Set<string>();
-      let newBands = 0, newSlips = 0, alreadyPublished = false, unestimated = 0, unavailable = false;
-      for (const band of bestSlipOddsBands) {
-        if (existing.includes(band.id)) continue;
-        const current = utcInstantFromEpochMilliseconds(now());
-        if (!qualifiedJointModel(model, current) || getReportingDate(current) !== day || !oddsEnabled()) { unavailable = true; break; }
-        const result = buildDailyBestSlips(day, band.id, model, asOf,
-          { selections: unexpired(), priorFixtures: fixtures, order: history.order }, combinations);
-        unestimated += result.excludedUnestimated;
+
+      let newBands = 0, newSlips = 0, alreadyPublished = false, unavailable = false;
+      for (const { id } of openBands) {
+        const current = now();
+        if (bestSlipPublicationHour(current).hourAt !== hourAt || !oddsEnabled()) { unavailable = true; break; }
+        const count = counts.get(id) ?? 0;
+        if (bandFull(id) || stored.publishedHours.get(id)?.has(hourAt)) continue;
+
+        const result = buildHourlyBestSlips(day, id, dailyBestSlipBandLimit - count, current,
+          { selections: unexpired(current), priorFixtures: fixtures }, combinations);
         if (!result.slips.length) continue;
         try {
-          const status = await store.publish({ day, oddsBand: band.id, slips: result.slips, model, verifyModel, verifyPublicOdds,
+          const appended = await store.append({ day, oddsBand: id, hourAt, slips: result.slips, verifyPublicOdds,
             searchLimited: cohort.searchLimited || result.searchLimited, partialCoverage: cohort.partialCoverage });
-          if (status === "published") {
+          if (appended.status === "published") {
             newBands++;
-            newSlips += result.slips.length;
-            for (const slip of result.slips) {
-              combinations.add(bestSlipCombinationIdentity(slip.selections));
-              slip.selections.forEach(({ fixtureId }) => fixtures.add(fixtureId));
+            newSlips += appended.appended;
+            if (appended.appended !== result.slips.length) await reload();
+            else {
+              counts.set(id, count + appended.appended);
+              for (const slip of result.slips) {
+                combinations.add(bestSlipCombinationIdentity(slip.selections));
+                slip.selections.forEach(({ fixtureId }) => fixtures.add(fixtureId));
+              }
             }
-          } else {
-            alreadyPublished = true;
-            const committed = await store.publishedSelections?.(day);
-            committed?.combinations.forEach((value) => combinations.add(value));
-            committed?.fixtures.forEach((value) => fixtures.add(value));
+          } else if (appended.status !== "no-qualifying") {
+            alreadyPublished ||= appended.status === "already-published" || appended.status === "full";
+            unavailable ||= appended.status === "stale";
+            await reload();
           }
         } catch {
-          // Retry this day from fresh storage after concurrent membership or cutoff/quote drift.
+          // Other bands can still receive valid additions when this band encounters quote drift or a conflict.
           unavailable = true;
-          break;
         }
       }
-      return { day, status: newBands ? "published" : unavailable ? "unavailable" : alreadyPublished ? "already-published" :
-        unestimated ? "model-unavailable" : "no-qualifying", newBands, newSlips, eligibleSelections, history: historySummary };
+      return { day, status: newBands ? "published" : unavailable ? "unavailable" : alreadyPublished ? "already-published" : "no-qualifying",
+        newBands, newSlips, eligibleSelections, dayComplete: dayComplete() };
     },
   });
 }
 
-/** Retry current EAT day until it has a feasible, qualified cohort. Durable uniqueness survives restarts. */
+type HourlyTiming = Readonly<{
+  now?: () => number;
+  wait?: (delay: number, signal: AbortSignal) => Promise<unknown>;
+}>;
+
+/** A supervised loop waits for Kampala hour boundaries. The one-shot command services the current slot. */
 export async function runDailySlipPublisher(publisher: Pick<ReturnType<typeof createDailySlipPublisher>, "publish">,
-  signal: AbortSignal, onResult: (result: DailySlipPublicationResult) => void, once = false) {
-  let previous = "";
-  do {
-    if (signal.aborted) return;
+  signal: AbortSignal, onResult: (result: DailySlipPublicationResult) => void, once = false,
+  { now = Date.now, wait = (delay, stop) => sleep(delay, undefined, { signal: stop }) }: HourlyTiming = {}) {
+  const startedAt = now(), first = bestSlipPublicationHour(startedAt);
+  let dueAt = once || startedAt === first.hourAt ? first.hourAt : first.nextAt;
+  while (!signal.aborted) {
+    const delay = dueAt - now();
+    if (!once && delay > 0) {
+      try { await wait(delay, signal); }
+      catch (error) { if (signal.aborted) return; throw error; }
+      if (signal.aborted) return;
+    }
+    const slot = bestSlipPublicationHour(now());
+    if (!once && slot.hourAt < dueAt) continue;
+    if (!once && slot.hourAt > dueAt) { dueAt = slot.nextAt; continue; }
+
     let result: DailySlipPublicationResult;
-    try { result = await publisher.publish(); }
-    catch { result = { day: getReportingDate(utcInstantFromEpochMilliseconds(Date.now())), status: "unavailable" }; }
-    const key = JSON.stringify(result);
-    if (key !== previous) { onResult(result); previous = key; }
-    if (once || signal.aborted) return;
-    await sleep(60_000, undefined, { signal }).catch(() => {});
-  } while (!signal.aborted);
+    try { result = await publisher.publish(slot.hourAt); }
+    catch { result = { day: slot.day, status: "unavailable" }; }
+    onResult(result);
+    if (once) return;
+    dueAt = result.dayComplete && result.day === slot.day ? getReportingDayBounds(slot.day).endExclusive : slot.nextAt;
+  }
 }

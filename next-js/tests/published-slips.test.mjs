@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { bestSlipOddsBands } from '../src/domain/best-slip-odds-bands.ts';
+import { bestSlipPublicationHour } from '../src/domain/best-slip-publication-hour.ts';
 import { bestSlipViews } from '../src/domain/best-slips.ts';
 import { gateBestSlips } from '../src/server/slips/best-slips.ts';
 import { createPublishedSlips, parsePublishedSlipHistoryQuery, slipPublicationIdentity } from '../src/server/slips/published-slips.ts';
@@ -19,7 +20,7 @@ function slip(last = 1) {
 }
 const priceSelection = (selection, odds) => ({ ...selection, odds, offer: { ...selection.offer, decimal: parseDecimalOdds(odds).text } });
 function fixture() {
-  const parents = [], rows = [], legs = [], combinations = [], bound = [], outcomes = new Map(), fixtureCompletion = new Map(), fixtureStatuses = new Map();
+  const parents = [], batches = [], rows = [], legs = [], combinations = [], bound = [], outcomes = new Map(), fixtureCompletion = new Map(), fixtureStatuses = new Map();
   let at = now, corrupted = false, ignored = false, normalized = false, afterMembership = () => {};
   const databaseSnapshot = json => {
     const snapshot = JSON.parse(json);
@@ -35,6 +36,16 @@ function fixture() {
       if (sql.text.includes('UTC_TIMESTAMP')) return [{ at: new Date(at) }];
       if (sql.text.includes('SELECT JSON_EXTRACT')) return [{ snapshot: databaseSnapshot(sql.values[0]) }];
       if (sql.text.includes('FROM FootballFixture')) return [{ id: sql.values[0] }];
+      if (sql.text.includes('FROM DailyBestSlipAppendBatch')) {
+        if (sql.text.includes('LOCK IN SHARE MODE')) return batches.filter(row => row.publicationId === sql.values[0] &&
+          (+row.hourAt === +sql.values[1] || row.firstRank === sql.values[2]));
+        return batches.filter(row => sql.values.includes(row.publicationId)).map(row => ({ ...row, validIntegrity: corrupted ? 0 : 1 }));
+      }
+      if (sql.text.includes('FROM DailyBestSlipCombination')) return combinations.filter(([date, key]) =>
+        +date === +sql.values[0] && key === sql.values[1]).map(([, , slipId]) => ({ slipId }));
+      if (sql.text.includes('JOIN PublishedSlip s')) return rows.filter(row =>
+        parents.some(parent => parent.id === row.publicationId && +parent.eatDate === +sql.values[0]))
+        .map(row => ({ ...row, validIntegrity: corrupted ? 0 : 1 }));
       if (sql.text.includes('FROM DailySlipPublication')) return parents.filter(row => !sql.text.includes('oddsBand') || !sql.values.some(value => bestSlipOddsBands.some(band => band.id === value)) || sql.values.includes(row.oddsBand)).map(row => ({ ...row, validIntegrity: corrupted ? 0 : 1 }));
       if (sql.text.includes('FROM PublishedSlip')) return rows.filter(row => sql.values.includes(row.publicationId)).map(row => ({ ...row, validIntegrity: corrupted ? 0 : 1 }));
       assert.fail(sql.text);
@@ -44,10 +55,23 @@ function fixture() {
       if (sql.text.includes('INSERT IGNORE INTO DailySlipPublication')) {
         if (ignored) return 0;
         if (parents.some(row => +row.eatDate === +v[1] && row.oddsBand === v[2])) return 0;
-        parents.push({ id: v[0], eatDate: v[1], oddsBand: v[2], publishedAt: v[3], modelId: v[4], bodyJson: JSON.parse(v[5]) }); return 1;
+        const modelLess = sql.text.includes(',NULL,');
+        parents.push({ id: v[0], eatDate: v[1], oddsBand: v[2], publishedAt: v[3],
+          modelId: modelLess ? null : v[4], bodyJson: JSON.parse(v[modelLess ? 4 : 5]) }); return 1;
+      }
+      if (sql.text.includes('INSERT IGNORE INTO DailyBestSlipAppendBatch')) {
+        if (batches.some(row => row.publicationId === v[1] && (+row.hourAt === +v[2] || row.firstRank === v[4]))) return 0;
+        batches.push({ id: v[0], publicationId: v[1], hourAt: v[2], publishedAt: v[3], firstRank: v[4],
+          count: v[5], bodyJson: JSON.parse(v[6]) }); return 1;
       }
       if (sql.text.includes('INSERT INTO PublishedSlip')) {
-        rows.push({ id: v[0], publicationId: v[1], rank: v[2], snapshotJson: databaseSnapshot(v[3]) }); return 1;
+        const appended = sql.text.includes('appendBatchId');
+        rows.push({ id: v[0], publicationId: v[1], ...(appended ? { appendBatchId: v[2] } : {}),
+          rank: v[appended ? 3 : 2], snapshotJson: databaseSnapshot(v[appended ? 4 : 3]) }); return 1;
+      }
+      if (sql.text.includes('INSERT IGNORE INTO DailyBestSlipCombination')) {
+        if (combinations.some(([date, key]) => +date === +v[0] && key === v[1])) return 0;
+        combinations.push(v); return 1;
       }
       if (sql.text.includes('INSERT INTO DailyBestSlipCombination')) {
         if (combinations.some(([date, key]) => +date === +v[0] && key === v[1])) throw new Error('duplicate combination');
@@ -57,9 +81,9 @@ function fixture() {
     },
   };
   const store = createPublishedSlips({ async transaction(run) {
-    const before = [parents.length, rows.length, legs.length, combinations.length];
+    const tables = [parents, rows, legs, combinations, batches], before = tables.map(table => table.length);
     try { return await run(tx); } catch (error) {
-      parents.length = before[0]; rows.length = before[1]; legs.length = before[2]; combinations.length = before[3]; throw error;
+      tables.forEach((table, index) => { table.length = before[index]; }); throw error;
     }
   } }, {
     async verifyOffers() { return true; },
@@ -77,7 +101,7 @@ function fixture() {
   });
   const publish = (changes = {}) => store.publish({ day: today, slips: [slip()], model,
     searchLimited: false, partialCoverage: false, verifyModel: () => true, verifyPublicOdds: () => true, ...changes });
-  return { store, publish, parents, rows, legs, bound, outcomes, fixtureCompletion, fixtureStatuses, advance(value) { at = value; }, corrupt() { corrupted = true; },
+  return { store, publish, parents, batches, rows, legs, bound, outcomes, fixtureCompletion, fixtureStatuses, advance(value) { at = value; }, corrupt() { corrupted = true; },
     ignoreInsert() { ignored = true; }, normalizeNumbers() { normalized = true; }, afterMembership(callback) { afterMembership = callback; } };
 }
 const query = { from: today, to: today, page: 1, pageSize: 1 };
@@ -180,6 +204,63 @@ test('larger custom-slip storage limits do not widen the daily publication match
   })) };
   await assert.rejects(() => f.publish({ slips: [nine] }));
   assert.equal(f.parents.length, 0);
+});
+
+
+const modelFreeSlip = (indices, { odds = '4.00', oddsPerLeg = '4.00', at = now, bookmakerId = 8 } = {}) => ({
+  id: `hourly-${indices.join('-')}`, totalOdds: odds, oddsBasis: 'bookmaker', averageProbability: 0.75,
+  selections: indices.map(index => pricedEditorialSelection(index, { odds: oddsPerLeg, at, bookmakerId, kickoffAt: now + 6 * 3_600_000 })),
+});
+const hourlyInput = (at, slips, oddsBand = '1.5-5') => ({ ...bestSlipPublicationHour(at), slips, oddsBand,
+  searchLimited: false, partialCoverage: false, verifyPublicOdds: () => true });
+
+test('hourly append fills a modern band through distinct frozen batches without changing its initial legacy ranks', async () => {
+  const f = fixture(); await f.publish();
+  const previous = structuredClone(f.rows[0]), parent = structuredClone(f.parents[0]);
+  const later = bestSlipPublicationHour(now).nextAt; f.advance(later + 30_000);
+  const one = modelFreeSlip([1, 2], { oddsPerLeg: '2.00', at: later });
+  assert.deepEqual(await f.store.append(hourlyInput(later, [one])), { status: 'published', appended: 1 });
+  assert.deepEqual(f.rows[0], previous); assert.deepEqual(f.parents[0], parent);
+  assert.equal(f.rows[1].rank, 2); assert.equal('estimatedProbability' in f.rows[1].snapshotJson, false);
+  const [legacy, added] = (await f.store.day(today, false, '1.5-5')).slips;
+  assert.equal(legacy.estimatedProbability, 0.75); assert.equal('estimatedProbability' in added, false);
+  assert.equal(added.publishedAt, later + 30_000);
+  assert.deepEqual(await f.store.append(hourlyInput(later, [modelFreeSlip([3], { at: later })])), { status: 'already-published', appended: 0 });
+  assert.equal((await f.store.hourlyState(today)).counts.get('1.5-5'), 2);
+
+  const next = later + 3_600_000; f.advance(next + 30_000);
+  const proposals = Array.from({ length: 10 }, (_, i) => modelFreeSlip([i + 10], { at: next }));
+  assert.deepEqual(await f.store.append(hourlyInput(next, proposals)), { status: 'published', appended: 8 });
+  assert.deepEqual(f.rows.map(row => row.rank), Array.from({ length: 10 }, (_, i) => i + 1));
+  assert.deepEqual(f.rows[0], previous); assert.deepEqual(f.parents[0], parent);
+  f.advance(next + 3_600_000 + 30_000);
+  assert.deepEqual(await f.store.append(hourlyInput(next + 3_600_000, [modelFreeSlip([31], { at: next + 3_600_000 })])),
+    { status: 'full', appended: 0 });
+});
+
+test('model-less hourly bands allow distinct slips with overlapping fixtures and reject duplicate combinations across bands', async () => {
+  const f = fixture(), slot = bestSlipPublicationHour(now), at = slot.hourAt + 300_000; f.advance(at);
+  const first = modelFreeSlip([1, 2], { oddsPerLeg: '2.00', at });
+  const overlap = modelFreeSlip([2, 3], { oddsPerLeg: '2.00', at, bookmakerId: 19 });
+  assert.deepEqual(await f.store.append(hourlyInput(at, [first, overlap])), { status: 'published', appended: 2 });
+  assert.equal(f.parents[0].modelId, null); assert.equal(f.parents[0].bodyJson.count, 0);
+  assert.equal(f.batches[0].bodyJson.count, 2);
+  assert.equal(f.rows[0].appendBatchId, f.batches[0].id);
+  const repriced = modelFreeSlip([2, 1], { odds: '6.25', oddsPerLeg: '2.50', at, bookmakerId: 19 });
+  assert.deepEqual(await f.store.append(hourlyInput(at, [repriced], '5-10')), { status: 'no-qualifying', appended: 0 });
+  assert.equal(f.parents.length, 1); assert.equal(f.rows.length, 2);
+  const state = await f.store.hourlyState(today);
+  assert.equal(state.counts.get('1.5-5'), 2);
+  assert.equal(state.fixtures.size, 3);
+  assert.equal(state.combinations.size, 2);
+});
+
+test('crossing a Kampala hour after durable writes rolls back the new batch and anchor', async () => {
+  const f = fixture(), { hourAt, nextAt } = bestSlipPublicationHour(now), at = nextAt - 1000; f.advance(at);
+  const ready = modelFreeSlip([17], { at });
+  f.afterMembership(() => f.advance(nextAt));
+  assert.deepEqual(await f.store.append(hourlyInput(hourAt, [ready])), { status: 'stale', appended: 0 });
+  assert.deepEqual([f.parents.length, f.batches.length, f.rows.length, f.legs.length], [0, 0, 0, 0]);
 });
 
 test('first qualified publication preserves quotes, model evidence and original references; retries never replace it', async () => {
@@ -301,13 +382,14 @@ test('publication refuses overlaps, invalid probability, revoked authority, late
     assert.throws(() => parsePublishedSlipHistoryQuery({ ...query, ...change }));
 });
 
-test('private publisher skips unqualified generation, respects existing publication and handles sparse days', async () => {
+test('hourly publisher skips frozen legacy days and checks retained odds rights before reading', async () => {
   let reads = 0, writes = 0;
-  const options = { database: {}, competitionIds: [], model, providerOdds: true, now: () => now,
-    verifyModel: () => true, verifyPublicOdds: () => true, read: async () => { reads++; throw new Error('must not generate'); },
-    store: { async publishedBands() { return ['legacy']; }, async publish() { writes++; return 'published'; } } };
+  const options = { database: {}, competitionIds: [], providerOdds: true, now: () => now,
+    verifyPublicOdds: () => true, read: async () => { reads++; throw new Error('must not generate'); },
+    store: { async hourlyState() { return { counts: new Map(), fixtures: new Set(), combinations: new Set(),
+      publishedHours: new Map(), closed: new Set(bestSlipOddsBands.map(({ id }) => id)) }; },
+    async append() { writes++; return { status: 'published', appended: 1 }; } } };
   assert.equal((await createDailySlipPublisher(options).publish()).status, 'already-published');
-  assert.equal((await createDailySlipPublisher({ ...options, model: null }).publish()).status, 'model-unavailable');
   assert.equal((await createDailySlipPublisher({ ...options, verifyPublicOdds: () => false }).publish()).status, 'odds-unavailable');
   assert.equal(reads, 0); assert.equal(writes, 0);
   const output = [], controller = new AbortController();

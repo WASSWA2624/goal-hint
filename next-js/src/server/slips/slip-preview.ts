@@ -1,5 +1,5 @@
 import "server-only";
-import type { BestSlipsResult, BestSlipView, SlipPreviewView } from "../../domain/best-slips.ts";
+import type { BestSlipsResult, SlipPreviewView } from "../../domain/best-slips.ts";
 import type { ContentAccess } from "../../domain/paywall.ts";
 import { slipMatchStateForSelection } from "../../domain/slip-match-state.ts";
 import { slipSelectionCard } from "../../domain/slip-card.ts";
@@ -10,13 +10,11 @@ export function gateBestSlips(result: BestSlipsResult, access: ContentAccess): B
     slips: result.slips.map((view) => gateSlipView(view, access)) };
 }
 
-export function gateSlipView(view: BestSlipView, access: ContentAccess): BestSlipView;
-export function gateSlipView(view: SlipPreviewView, access: ContentAccess): SlipPreviewView;
 export function gateSlipView(view: SlipPreviewView, access: ContentAccess): SlipPreviewView {
   const entitled = access.tier === "full";
   const { rank, matchCount, totalOdds, averageProbability, id, publicationDay, publishedAt, outcome, status, completed } = view;
   const summary = { rank, matchCount, totalOdds, averageProbability,
-    ...("estimatedProbability" in view ? { estimatedProbability: view.estimatedProbability } : {}),
+    ...(view.estimatedProbability === undefined ? {} : { estimatedProbability: view.estimatedProbability }),
     ...(id !== undefined ? { id } : {}), ...(publicationDay ? { publicationDay } : {}),
     ...(publishedAt !== undefined ? { publishedAt } : {}), ...(outcome ? { outcome } : {}),
     ...(status ? { status } : {}), ...(completed !== undefined ? { completed } : {}) };

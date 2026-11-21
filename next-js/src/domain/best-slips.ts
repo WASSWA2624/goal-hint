@@ -53,7 +53,7 @@ export type SlipPreviewView = Omit<BestSlipSummary, "estimatedProbability"> & Re
   /** Server proof that every original selection and its canonical fixture are complete. */
   completed?: boolean;
 }>;
-export type BestSlipView = SlipPreviewView & Readonly<{ estimatedProbability: number; slip?: BestSlip }>;
+export type BestSlipView = SlipPreviewView;
 export type SlipsBrowseResult<T extends SlipPreviewView = SlipPreviewView> = Readonly<{
   day: ReportingDate; state: SlipBuildState | "awaiting-publication"; slips: readonly T[];
   /** Unfinished prediction access, freshly checked at the response boundary. */
@@ -91,20 +91,37 @@ export function bestSlipDailyCriteria(today: string, band: BestSlipOddsBand): Sl
   return { ...bestSlipCriteria(today, { minimumTotal: minimum, maximumTotal: maximum, count: dailyBestSlipBandLimit }), probMin: 0 };
 }
 
-export function buildDailyBestSlips(day: ReportingDate, band: BestSlipOddsBand, model: JointSlipModel, asOf: number,
-  editorial: Omit<EditorialSlipSearch, "exclusiveMaximum" | "combinationIdentity">, priorCombinations: ReadonlySet<string>) {
-  if (!qualifiedJointModel(model, asOf)) throw new RangeError("A current calibrated joint model is required.");
-  const joint = jointSlipRanking(model);
+function cachedPriceOrder() {
   const prices = new WeakMap<BuiltSlip, ReturnType<typeof bestSlipExactTotal>>();
   const exactPrice = (slip: BuiltSlip) => {
     const price = prices.get(slip) ?? bestSlipExactTotal(slip.selections);
     prices.set(slip, price);
     return price;
   };
+  return (left: BuiltSlip, right: BuiltSlip) => compareBestSlipPrices(left, right, exactPrice(left), exactPrice(right));
+}
+
+/** Rank distinct odds-guide slips by their stored individual picks and exact combined odds. */
+export function buildHourlyBestSlips(day: ReportingDate, band: BestSlipOddsBand, capacity: number, asOf: number,
+  editorial: Omit<EditorialSlipSearch, "exclusiveMaximum" | "combinationIdentity">, priorCombinations: ReadonlySet<string>) {
+  const comparePrice = cachedPriceOrder();
+  const compare = (left: BuiltSlip, right: BuiltSlip) => right.averageProbability - left.averageProbability || comparePrice(left, right);
+  const result = buildSlips({ ...bestSlipDailyCriteria(day, band), slips: capacity, reuse: true }, [], asOf, {
+    accepts: (slip) => !priorCombinations.has(bestSlipCombinationIdentity(slip.selections)),
+    compare,
+  }, { editorial: { ...editorial, combinationIdentity: bestSlipCombinationIdentity, exclusiveMaximum: bestSlipExactRange(band).exclusiveMaximum } });
+  return { ...result, slips: [...result.slips].sort(compare) };
+}
+
+export function buildDailyBestSlips(day: ReportingDate, band: BestSlipOddsBand, model: JointSlipModel, asOf: number,
+  editorial: Omit<EditorialSlipSearch, "exclusiveMaximum" | "combinationIdentity">, priorCombinations: ReadonlySet<string>) {
+  if (!qualifiedJointModel(model, asOf)) throw new RangeError("A current calibrated joint model is required.");
+  const joint = jointSlipRanking(model);
+  const comparePrice = cachedPriceOrder();
   const result = buildSlips(bestSlipDailyCriteria(day, band), [], asOf, {
     probability: joint.probability,
     accepts: (slip) => !priorCombinations.has(bestSlipCombinationIdentity(slip.selections)) && joint.ranking.accepts(slip),
-    compare: (left, right) => joint.probability(right)! - joint.probability(left)! || compareBestSlipPrices(left, right, exactPrice(left), exactPrice(right)),
+    compare: (left, right) => joint.probability(right)! - joint.probability(left)! || comparePrice(left, right),
   }, { editorial: { ...editorial, combinationIdentity: bestSlipCombinationIdentity, exclusiveMaximum: bestSlipExactRange(band).exclusiveMaximum } });
   return { ...result, excludedUnestimated: joint.unestimated(), slips: result.slips.map((slip): BestSlip =>
     ({ ...slip, estimatedProbability: result.jointProbabilities![slip.id]! })) };
@@ -119,10 +136,15 @@ export function bestSlipBuilder(model: JointSlipModel) {
 }
 
 /** Aggregate projection allowlist; viewer access and completion eligibility are enforced by the slip service. */
-export function bestSlipViews(slips: readonly BestSlip[], entitled: boolean, matchStates?: readonly SlipMatchState[]): readonly BestSlipView[] {
-  return [...slips].sort(compareBestSlips).map((slip, index) => ({ rank: index + 1, matchCount: slip.selections.length,
-    totalOdds: slip.totalOdds, estimatedProbability: slip.estimatedProbability, averageProbability: slip.averageProbability,
+export function bestSlipView(slip: BuiltSlip & Readonly<{ estimatedProbability?: number }>, rank: number,
+  entitled: boolean, matchStates?: readonly SlipMatchState[]): BestSlipView {
+  return { rank, matchCount: slip.selections.length, totalOdds: slip.totalOdds, averageProbability: slip.averageProbability,
+    ...(slip.estimatedProbability === undefined ? {} : { estimatedProbability: slip.estimatedProbability }),
     ...(entitled ? { slip, ...(matchStates ? { matchStates: slip.selections.flatMap((selection) => {
       const state = slipMatchStateForSelection(selection, matchStates); return state ? [state] : [];
-    }) } : {}) } : {}) }));
+    }) } : {}) } : {}) };
+}
+
+export function bestSlipViews(slips: readonly BestSlip[], entitled: boolean, matchStates?: readonly SlipMatchState[]): readonly BestSlipView[] {
+  return [...slips].sort(compareBestSlips).map((slip, index) => bestSlipView(slip, index + 1, entitled, matchStates));
 }

@@ -2,20 +2,21 @@ import "server-only";
 
 import { z } from "zod";
 import { getPublicationDeadline, getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange } from "../../domain/calendar.ts";
-import { bestSlipCombinationIdentity, bestSlipDailyCriteria, bestSlipExactTotal, bestSlipViews, compareBestSlips, jointSlipProbability, qualifiedJointModel, type BestSlip, type BestSlipView, type BestSlipsResult, type JointSlipModel } from "../../domain/best-slips.ts";
+import { bestSlipCombinationIdentity, bestSlipDailyCriteria, bestSlipExactTotal, bestSlipView, compareBestSlips, jointSlipProbability, qualifiedJointModel, type BestSlip, type BestSlipView, type BestSlipsResult, type JointSlipModel } from "../../domain/best-slips.ts";
 import { bestSlipExactRange, bestSlipOddsBands, bestSlipBandLimit, bestSlipOddsBandFor, bestSlipPublicationBands, bestSlipPublicRank, dailyBestSlipBandLimit, defaultBestSlipOddsBand, type BestSlipOddsBand } from "../../domain/best-slip-odds-bands.ts";
 import { bestSlipsQueryRules, matchesBestSlipsRanges, parseBestSlipsCursor, parseBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "../../domain/best-slips-query.ts";
 import type { ReportingDate } from "../../domain/calendar.ts";
 import { preMatchReferenceOddsFreshMs } from "../../domain/reference-odds.ts";
+import { bestSlipPublicationHour } from "../../domain/best-slip-publication-hour.ts";
 import { publishedSlipRules, type PublishedSlipHistory, type PublishedSlipHistoryQuery } from "../../domain/published-slips.ts";
-import { completedSlipFixtureIds, indexSlipResults, slipCompleted, slipSnapshotOutcome, slipSnapshotStatus, slipSnapshotSchema, slipResultView } from "../../domain/slip-snapshot.ts";
+import { completedSlipFixtureIds, indexSlipResults, slipCompleted, slipSnapshotOutcome, slipSnapshotStatus, slipSnapshotSchema, slipResultView, type SlipResult } from "../../domain/slip-snapshot.ts";
 import { slipStatusCategory } from "../../domain/slip-status.ts";
 import { predictionResults } from "../../domain/performance-summary.ts";
 import { summarizeSlipPerformance } from "../../domain/slip-performance.ts";
 import { slipMatchStatesFromResults } from "../../domain/slip-match-state.ts";
 import { compareSlipDisplayProbability } from "../../domain/slip-pagination.ts";
 import { parseSlipCriteria, serializeSlipCriteria, type BuiltSlip, type SlipCriteria } from "../../domain/slip-builder.ts";
-import { getDatabase, type DatabaseRuntime } from "../database/client.ts";
+import { DatabaseOperationError, getDatabase, type DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { assertHistorySeal, historyJson } from "../predictions/history-read.ts";
@@ -31,20 +32,29 @@ const modelSchema = z.strictObject({ id: hash, calibrationReference: z.string().
   correlationReference: z.string().trim().min(1).max(512), validFrom: instant, validUntil: instant });
 const oddsBandSchema = z.enum(bestSlipOddsBands.map(band => band.id));
 const historyStatusSchema = z.enum(["all", ...predictionResults]);
-const publicationSchema = z.strictObject({ version: z.literal([1, 2, 3]), oddsBand: oddsBandSchema.optional(), day: z.string().refine((value) => {
+const publicationSchema = z.strictObject({ version: z.literal([1, 2, 3, 4]), oddsBand: oddsBandSchema.optional(), day: z.string().refine((value) => {
   try { parseReportingDate(value); return true; } catch { return false; }
-}), publishedAt: instant, model: modelSchema, criteria: z.string().max(2048),
-  count: z.number().int().min(1).max(publishedSlipRules.maximumDailySlips), searchLimited: z.boolean(), partialCoverage: z.boolean(),
-}).refine((value) => value.model.validFrom <= value.publishedAt && value.publishedAt < value.model.validUntil
-  && getReportingDate(utcInstantFromEpochMilliseconds(value.publishedAt)) === value.day
-  && (value.version === 1 ? value.oddsBand === undefined && value.count <= 100
-    : value.oddsBand !== undefined && value.count <= (value.version === 2 ? bestSlipBandLimit : dailyBestSlipBandLimit)));
-const snapshotSchema = z.strictObject({ slip: slipSnapshotSchema, estimatedProbability: z.number().min(0).max(1) })
+}), publishedAt: instant, model: modelSchema.nullable(), criteria: z.string().max(2048),
+  count: z.number().int().min(0).max(publishedSlipRules.maximumDailySlips), searchLimited: z.boolean(), partialCoverage: z.boolean(),
+}).refine((value) => getReportingDate(utcInstantFromEpochMilliseconds(value.publishedAt)) === value.day
+  && (value.version === 4 ? value.oddsBand !== undefined && value.count === 0 && value.model === null
+    : value.model !== null && value.model.validFrom <= value.publishedAt && value.publishedAt < value.model.validUntil && value.count > 0
+    && (value.version === 1 ? value.oddsBand === undefined && value.count <= 100
+      : value.oddsBand !== undefined && value.count <= (value.version === 2 ? bestSlipBandLimit : dailyBestSlipBandLimit))));
+const snapshotSchema = z.strictObject({ slip: slipSnapshotSchema, estimatedProbability: z.number().min(0).max(1).optional() })
   .refine((value) => value.slip.selections.every((selection) => selection.forecast !== undefined), "Reviewed original forecasts are required.")
   .transform((value) => ({ ...value, slip: value.slip as BuiltSlip }));
+const appendBatchSchema = z.strictObject({ version: z.literal(1), hourAt: instant, publishedAt: instant,
+  firstRank: z.number().int().min(1).max(dailyBestSlipBandLimit), count: z.number().int().positive().max(dailyBestSlipBandLimit),
+  searchLimited: z.boolean(), partialCoverage: z.boolean(),
+}).refine(({ hourAt, publishedAt, firstRank, count }) => hourAt % 3_600_000 === 0 && publishedAt >= hourAt
+  && publishedAt - hourAt < 3_600_000 && firstRank + count - 1 <= dailyBestSlipBandLimit);
 type Publication = z.infer<typeof publicationSchema> & Readonly<{ bounds: SlipCriteria | null }>;
-type PublicationRow = { id: string; eatDate: Date; oddsBand?: string; publishedAt: Date; modelId: string; bodyJson: unknown; validIntegrity: unknown };
-type SlipRow = { id: string; publicationId: string; rank: number; snapshotJson: unknown; validIntegrity: unknown };
+type PublicationRow = { id: string; eatDate: Date; oddsBand?: string; publishedAt: Date; modelId: string | null; bodyJson: unknown; validIntegrity: unknown };
+type SlipRow = { id: string; publicationId: string; appendBatchId?: string | null; rank: number; snapshotJson: unknown; validIntegrity: unknown };
+type AppendBatch = z.infer<typeof appendBatchSchema> & Readonly<{ id: string }>;
+type AppendBatchRow = { id: string; publicationId: string; hourAt: Date; publishedAt: Date; firstRank: number; count: number;
+  bodyJson: unknown; validIntegrity: unknown };
 export class SlipPublicationError extends Error {
   readonly reason: "invalid-input" | "unauthorized" | "unavailable";
   constructor(reason: SlipPublicationError["reason"]) {
@@ -59,12 +69,54 @@ export function slipModelIdentity(model: JointSlipModel) {
   return evidenceFingerprint({ calibrationReference: model.calibrationReference, correlationReference: model.correlationReference,
     validFrom: model.validFrom, validUntil: model.validUntil });
 }
+const appendBatchIdentity = (publicationId: string, hourAt: number) =>
+  evidenceFingerprint({ kind: "hourly-best-slip-append", publicationId, hourAt });
+
 function publication(row: PublicationRow): Publication {
   assertHistorySeal(row.validIntegrity);
   const value = publicationSchema.parse(historyJson(row.bodyJson));
   if (row.id !== slipPublicationIdentity(value.day, value.oddsBand) || (row.oddsBand ?? "legacy") !== (value.oddsBand ?? "legacy") || row.eatDate.toISOString().slice(0, 10) !== value.day ||
-    row.publishedAt.getTime() !== value.publishedAt || row.modelId !== value.model.id) fail("unavailable");
+    row.publishedAt.getTime() !== value.publishedAt || row.modelId !== (value.model?.id ?? null)) fail("unavailable");
   return { ...value, bounds: value.oddsBand ? parseSlipCriteria(new URLSearchParams(value.criteria), value.day) : null };
+}
+
+async function readAppendBatches(tx: Prisma.TransactionClient, parents: ReadonlyMap<string, Publication>, asOf?: number) {
+  const appendable = [...parents].filter(([, parent]) => parent.version >= 3).map(([id]) => id);
+  const batches = new Map<string, AppendBatch[]>();
+  if (!appendable.length) return batches;
+  const maximum = appendable.length * dailyBestSlipBandLimit;
+  const rows = await tx.$queryRaw<AppendBatchRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(bodyJson AS CHAR),256) AS validIntegrity
+    FROM DailyBestSlipAppendBatch WHERE publicationId IN (${Prisma.join(appendable)}) ORDER BY publicationId,firstRank LIMIT ${maximum + 1}`);
+  if (rows.length > maximum) fail("unavailable");
+  for (const row of rows) {
+    assertHistorySeal(row.validIntegrity);
+    const parent = parents.get(row.publicationId), batch = appendBatchSchema.parse(historyJson(row.bodyJson));
+    if (!parent || parent.version < 3 || row.id !== appendBatchIdentity(row.publicationId, batch.hourAt)
+      || row.hourAt.getTime() !== batch.hourAt || row.publishedAt.getTime() !== batch.publishedAt
+      || row.firstRank !== batch.firstRank || row.count !== batch.count
+      || getReportingDate(utcInstantFromEpochMilliseconds(batch.publishedAt)) !== parent.day
+      || asOf !== undefined && batch.publishedAt > asOf) return fail("unavailable");
+    const group = batches.get(row.publicationId) ?? [], last = group.at(-1);
+    const nextRank = last ? last.firstRank + last.count : parent.count + 1;
+    if (batch.firstRank !== nextRank || (last ? batch.hourAt <= last.hourAt
+      : parent.version === 4 ? batch.publishedAt !== parent.publishedAt : batch.publishedAt < parent.publishedAt)) fail("unavailable");
+    group.push({ id: row.id, ...batch });
+    batches.set(row.publicationId, group);
+  }
+  for (const id of appendable) {
+    if (parents.get(id)!.version === 4 && !batches.has(id)) fail("unavailable");
+  }
+  return batches;
+}
+
+function publicationCount(parent: Publication, appendBatches: readonly AppendBatch[] = []) {
+  const last = appendBatches.at(-1);
+  return last ? last.firstRank + last.count - 1 : parent.count;
+}
+
+function publicationCoverage(parents: ReadonlyMap<string, Publication>, batches: ReadonlyMap<string, readonly AppendBatch[]>) {
+  const sources = [...parents.values(), ...[...batches.values()].flat()];
+  return { searchLimited: sources.some((source) => source.searchLimited), partialCoverage: sources.some((source) => source.partialCoverage) };
 }
 function exactSlipOdds(slip: BuiltSlip, { minimum, maximum, exclusiveMaximum }: ReturnType<typeof bestSlipExactRange>) {
   const { product, denominator } = bestSlipExactTotal(slip.selections), scaled = product * 100n;
@@ -75,11 +127,11 @@ function exactSlipOdds(slip: BuiltSlip, { minimum, maximum, exclusiveMaximum }: 
 }
 
 /** Stored version-two bounds and public rank addresses remain valid for the original archive. */
-function verifyPublishedOdds(parent: Publication, slip: BuiltSlip): BestSlipOddsBand | null {
-  if (parent.version === 3) {
+function verifyPublishedOdds(parent: Publication, slip: BuiltSlip, publishedAt: number): BestSlipOddsBand | null {
+  if (parent.version >= 3) {
     if (!parent.oddsBand || !parent.bounds || parent.bounds.totalMax === undefined || !exactSlipOdds(slip, {
       minimum: parent.bounds.totalMin, maximum: parent.bounds.totalMax, exclusiveMaximum: parent.oddsBand !== "100-200",
-    }) || !reviewedSlipOffers(slip, parent.publishedAt)) return fail("unavailable");
+    }) || !reviewedSlipOffers(slip, publishedAt)) return fail("unavailable");
     return parent.oddsBand;
   }
   const value = BigInt(slip.totalOdds.replace(".", ""));
@@ -115,6 +167,44 @@ export function parsePublishedSlipHistoryQuery(input: PublishedSlipHistoryQuery)
   } catch { return fail("invalid-input"); }
 }
 
+const emptyAppend = (status: "already-published" | "full" | "stale" | "no-qualifying") => ({ status, appended: 0 } as const);
+
+async function readHourlyPublicationState(tx: Prisma.TransactionClient, day: ReportingDate, asOf: number) {
+  const date = new Date(`${day}T00:00:00Z`);
+  const parents = new Map((await tx.$queryRaw<PublicationRow[]>`SELECT *,integrity=SHA2(CAST(bodyJson AS CHAR),256) AS validIntegrity
+    FROM DailySlipPublication WHERE eatDate=${date}`).map(row => [row.id, publication(row)]));
+  if (parents.size > bestSlipOddsBands.length || [...parents.values()].some(parent => parent.publishedAt > asOf)) fail("unavailable");
+  const batches = await readAppendBatches(tx, parents, asOf);
+  const rows = parents.size ? await tx.$queryRaw<SlipRow[]>`SELECT s.*,s.integrity=SHA2(CAST(s.snapshotJson AS CHAR),256) AS validIntegrity
+    FROM DailySlipPublication p JOIN PublishedSlip s ON p.id=s.publicationId WHERE p.eatDate=${date}
+    ORDER BY p.oddsBand,s.\`rank\` LIMIT ${publishedSlipRules.maximumDailySlips + 1}` : [];
+  if (rows.length > publishedSlipRules.maximumDailySlips) fail("unavailable");
+  const snapshots = await readAuditedPublicationSnapshots(tx, parents, rows, batches);
+  const counts = new Map<BestSlipOddsBand, number>(), publishedHours = new Map<BestSlipOddsBand, ReadonlySet<number>>();
+  const bandFixtures = new Map<BestSlipOddsBand, Set<string>>(), fixtures = new Set<string>(), combinations = new Set<string>();
+  const closed = new Set<BestSlipOddsBand>();
+  for (const [id, parent] of parents) {
+    if (!parent.oddsBand) {
+      for (const { id: band } of bestSlipOddsBands) closed.add(band);
+      continue;
+    }
+    const current = batches.get(id);
+    counts.set(parent.oddsBand, publicationCount(parent, current));
+    publishedHours.set(parent.oddsBand, new Set(current?.map(({ hourAt }) => hourAt)));
+    if (parent.version === 2) closed.add(parent.oddsBand);
+  }
+  for (const { parent, snapshot } of snapshots) {
+    combinations.add(bestSlipCombinationIdentity(snapshot.slip.selections));
+    const inBand = parent.oddsBand ? bandFixtures.get(parent.oddsBand) ?? new Set<string>() : undefined;
+    for (const { fixtureId } of snapshot.slip.selections) {
+      fixtures.add(fixtureId);
+      inBand?.add(fixtureId);
+    }
+    if (parent.oddsBand && inBand) bandFixtures.set(parent.oddsBand, inBand);
+  }
+  return { parents, counts, publishedHours, bandFixtures, fixtures, combinations, closed };
+}
+
 /** Append-only editorial publications, independent of member saves, erasure and visitor requests. */
 export function createPublishedSlips(database: DatabaseRuntime, {
   bindForecasts = bindSlipForecasts, resolveResults = readSlipForecastResults, verifyOffers = verifyFeaturedSlipOffers,
@@ -122,6 +212,134 @@ export function createPublishedSlips(database: DatabaseRuntime, {
   const transaction = <T>(run: (tx: Prisma.TransactionClient) => Promise<T>) => database.transaction(run,
     { isolationLevel: "RepeatableRead", timeout: 30_000 });
   return Object.freeze({
+    async hourlyState(day: ReportingDate) {
+      parseReportingDate(day);
+      return transaction(async tx => {
+        const { counts, publishedHours, bandFixtures, fixtures, combinations, closed } =
+          await readHourlyPublicationState(tx, day, await databaseTime(tx));
+        return { counts, publishedHours, bandFixtures, fixtures, combinations, closed };
+      });
+    },
+    async append(input: Readonly<{ day: ReportingDate; oddsBand: BestSlipOddsBand; hourAt: number; slips: readonly BuiltSlip[];
+      searchLimited: boolean; partialCoverage: boolean; verifyPublicOdds: () => boolean }>) {
+      const oddsBand = oddsBandSchema.parse(input.oddsBand), slot = bestSlipPublicationHour(input.hourAt);
+      if (slot.day !== input.day || slot.hourAt !== input.hourAt || !input.slips.length || input.slips.length > dailyBestSlipBandLimit)
+        return fail("invalid-input");
+      const range = bestSlipExactRange(oddsBand), criteria = bestSlipDailyCriteria(input.day, oddsBand);
+      const publicationId = slipPublicationIdentity(input.day, oddsBand), date = new Date(`${input.day}T00:00:00Z`);
+      const batchId = appendBatchIdentity(publicationId, input.hourAt), hourAt = new Date(input.hourAt);
+      const proposed = new Map<string, BuiltSlip>();
+      for (const slip of input.slips) {
+        const snapshot = snapshotSchema.parse({ slip }).slip;
+        const key = bestSlipCombinationIdentity(snapshot.selections);
+        const average = snapshot.selections.reduce((value, selection) => value + selection.probability, 0) / snapshot.selections.length;
+        if (proposed.has(key) || snapshot.selections.length < criteria.teamsMin
+          || criteria.teamsMax !== undefined && snapshot.selections.length > criteria.teamsMax
+          || !exactSlipOdds(snapshot, range) || !reviewedSlipOffers(snapshot, Number.MAX_SAFE_INTEGER)
+          || Math.abs(average - snapshot.averageProbability) > Number.EPSILON * snapshot.selections.length * 2
+          || snapshot.selections.some(({ kickoffAt }) => getReportingDate(utcInstantFromEpochMilliseconds(kickoffAt)) !== input.day))
+          return fail("invalid-input");
+        proposed.set(key, snapshot);
+      }
+      const authorized = (at: number) => {
+        if (!provenTrue(input.verifyPublicOdds)) fail("unauthorized");
+        const current = bestSlipPublicationHour(at);
+        return current.day === input.day && current.hourAt === input.hourAt;
+      };
+      // Return a retry status after throwing through the transaction boundary so every provisional row rolls back.
+      let rolledBack = false;
+      const rollback = (): never => { rolledBack = true; return fail("unavailable"); };
+      try {
+        return await database.transaction(async tx => {
+          const now = await databaseTime(tx);
+          if (!authorized(now)) return emptyAppend("stale");
+          const state = await readHourlyPublicationState(tx, input.day, now);
+          const parent = state.parents.get(publicationId), count = state.counts.get(oddsBand) ?? 0;
+          if (state.publishedHours.get(oddsBand)?.has(input.hourAt)) return emptyAppend("already-published");
+          if (state.closed.has(oddsBand) || count >= dailyBestSlipBandLimit) return emptyAppend("full");
+          const advancing = [...proposed].filter(([key]) => !state.combinations.has(key));
+          if (!advancing.length) return emptyAppend("no-qualifying");
+
+          const fixtures = [...new Set(advancing.flatMap(([, slip]) => slip.selections.map(({ fixtureId }) => fixtureId)))].sort();
+          for (const fixture of fixtures) await tx.$queryRaw`SELECT id FROM FootballFixture WHERE id=${fixture} LOCK IN SHARE MODE`;
+          const eligible: BuiltSlip[] = [];
+          for (const [, slip] of advancing) {
+            const bound = await bindForecasts(tx, slip, await databaseTime(tx));
+            if (bound) eligible.push(bound);
+          }
+          const at = await databaseTime(tx);
+          if (!authorized(at)) return emptyAppend("stale");
+          const fresh = eligible.filter(({ selections }) => selections.every(selection => offerStillEligible(selection, at)));
+          if (!fresh.length) return emptyAppend("no-qualifying");
+          const approved = await verifyOffers(tx, fresh.flatMap(({ selections }) => selections), at) ? fresh : [];
+          if (approved !== fresh) {
+            for (const slip of fresh) {
+              if (await verifyOffers(tx, slip.selections, at)) approved.push(slip);
+            }
+          }
+          const publishable = approved.slice(0, dailyBestSlipBandLimit - count);
+          if (!publishable.length) return emptyAppend("no-qualifying");
+
+          if (!parent) {
+            const body = publicationSchema.parse({ version: 4, oddsBand, day: input.day, publishedAt: at, model: null,
+              criteria: serializeSlipCriteria(criteria).toString(), count: 0, searchLimited: false, partialCoverage: false });
+            const json = JSON.stringify(body);
+            const stored = await tx.$executeRaw`INSERT IGNORE INTO DailySlipPublication
+              (id,eatDate,oddsBand,publishedAt,modelId,bodyJson,integrity) VALUES
+              (${publicationId},${date},${oddsBand},${new Date(at)},NULL,JSON_EXTRACT(${json},'$'),SHA2(CAST(JSON_EXTRACT(${json},'$') AS CHAR),256))`;
+            if (!stored) {
+              const [existing] = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM DailySlipPublication
+                WHERE eatDate=${date} AND oddsBand=${oddsBand} LOCK IN SHARE MODE`;
+              if (existing?.id !== publicationId) return fail("unavailable");
+              return emptyAppend("stale");
+            }
+          }
+          const firstRank = count + 1;
+          const body = appendBatchSchema.parse({ version: 1, hourAt: input.hourAt, publishedAt: at, firstRank,
+            count: publishable.length, searchLimited: input.searchLimited, partialCoverage: input.partialCoverage });
+          const json = JSON.stringify(body);
+          const inserted = await tx.$executeRaw`INSERT IGNORE INTO DailyBestSlipAppendBatch
+            (id,publicationId,hourAt,publishedAt,firstRank,count,bodyJson,integrity) VALUES
+            (${batchId},${publicationId},${hourAt},${new Date(at)},${firstRank},${publishable.length},
+              JSON_EXTRACT(${json},'$'),SHA2(CAST(JSON_EXTRACT(${json},'$') AS CHAR),256))`;
+          if (!inserted) {
+            const existing = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM DailyBestSlipAppendBatch
+              WHERE publicationId=${publicationId} AND (hourAt=${hourAt} OR firstRank=${firstRank}) LOCK IN SHARE MODE`;
+            if (!existing.length || !parent) return fail("unavailable");
+            return emptyAppend(existing.some(({ id }) => id === batchId) ? "already-published" : "stale");
+          }
+          for (const [index, slip] of publishable.entries()) {
+            const rank = firstRank + index;
+            const snapshot = JSON.stringify(snapshotSchema.parse({ slip }));
+            const [stored] = await tx.$queryRaw<{ snapshot: unknown }[]>`SELECT JSON_EXTRACT(${snapshot},'$') AS snapshot`;
+            if (!stored) return fail("unavailable");
+            const slipId = evidenceFingerprint({ publicationId, rank, snapshot: snapshotSchema.parse(historyJson(stored.snapshot)) });
+            await tx.$executeRaw`INSERT INTO PublishedSlip (id,publicationId,appendBatchId,\`rank\`,snapshotJson,integrity)
+              VALUES (${slipId},${publicationId},${batchId},${rank},JSON_EXTRACT(${snapshot},'$'),SHA2(CAST(JSON_EXTRACT(${snapshot},'$') AS CHAR),256))`;
+            const expected = evidenceFingerprint(bestSlipCombinationIdentity(slip.selections));
+            const linked = await tx.$executeRaw`INSERT IGNORE INTO DailyBestSlipCombination (eatDate,combination,slipId)
+              VALUES (${date},${expected},${slipId})`;
+            if (linked === 0) {
+              const [existing] = await tx.$queryRaw<{ slipId: string }[]>`SELECT slipId FROM DailyBestSlipCombination
+                WHERE eatDate=${date} AND combination=${expected} LOCK IN SHARE MODE`;
+              if (!existing) return fail("unavailable");
+              return rollback();
+            }
+            await tx.publishedSlipLeg.createMany({ data: slip.selections.map(({ fixtureId, forecast }) => ({
+              slipId, fixtureId, cycleId: forecast!.cycleId, revisionId: forecast!.revisionId,
+            })) });
+          }
+          const commitAt = await databaseTime(tx);
+          if (!authorized(commitAt) || publishable.some(({ selections }) => !selections.every(selection => offerStillEligible(selection, commitAt))))
+            return rollback();
+          return { status: "published", appended: publishable.length } as const;
+        }, { isolationLevel: "RepeatableRead", timeout: 30_000 });
+      } catch (error) {
+        if (rolledBack || error instanceof DatabaseOperationError && (error.code === "conflict" || error.code === "lock-timeout"))
+          return emptyAppend("stale");
+        throw error;
+      }
+    },
     async publishedBands(day: string): Promise<readonly (BestSlipOddsBand | "legacy")[]> {
       parseReportingDate(day);
       return transaction(async tx => {
@@ -203,6 +421,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
             correlationReference: input.model.correlationReference, validFrom: input.model.validFrom, validUntil: input.model.validUntil },
           criteria: serializeSlipCriteria(criteria).toString(), count: snapshots.length,
           searchLimited: input.searchLimited, partialCoverage: input.partialCoverage });
+        if (body.model === null) return fail("invalid-input");
         const json = JSON.stringify(body);
         const inserted = await tx.$executeRaw`INSERT IGNORE INTO DailySlipPublication (id,eatDate,oddsBand,publishedAt,modelId,bodyJson,integrity)
           VALUES (${id},${dayDate},${oddsBand},${new Date(at)},${body.model.id},JSON_EXTRACT(${json},'$'),SHA2(CAST(JSON_EXTRACT(${json},'$') AS CHAR),256))`;
@@ -234,7 +453,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
       }, { isolationLevel: "ReadCommitted", timeout: 30_000 });
     },
     async day(day: string, completedOnly = false, oddsBand?: BestSlipOddsBand): Promise<BestSlipsResult | null> {
-      parseReportingDate(day);
+      const publicationDay = parseReportingDate(day);
       return transaction(async tx => {
         const rows = await tx.$queryRaw<PublicationRow[]>`SELECT *,integrity=SHA2(CAST(bodyJson AS CHAR),256) AS validIntegrity
           FROM DailySlipPublication WHERE eatDate=${new Date(`${day}T00:00:00Z`)}`;
@@ -242,33 +461,23 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         const parents = new Map(rows.map(row => [row.id, publication(row)]));
         const asOf = await databaseTime(tx);
         if (rows.length > bestSlipOddsBands.length || [...parents.values()].some(parent => parent.publishedAt > asOf)) fail("unavailable");
+        const batches = await readAppendBatches(tx, parents, asOf);
         const items = await tx.$queryRaw<SlipRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(snapshotJson AS CHAR),256) AS validIntegrity
-          FROM PublishedSlip WHERE publicationId IN (${Prisma.join([...parents.keys()])}) ORDER BY publicationId,\`rank\``);
-        const snapshots = await readSnapshots(tx, items);
-        for (const [id, parent] of parents) {
-          const family = items.filter(row => row.publicationId === id);
-          if (family.length !== parent.count || family.some((row, index) => row.rank !== index + 1)) fail("unavailable");
-        }
-        const results = await resolveResults(tx, snapshots.flatMap(snapshot => snapshot.slip.selections), asOf);
+          FROM PublishedSlip WHERE publicationId IN (${Prisma.join([...parents.keys()])}) ORDER BY publicationId,\`rank\`
+          LIMIT ${publishedSlipRules.maximumDailySlips + 1}`);
+        const entries = await readAuditedPublicationSnapshots(tx, parents, items, batches);
+        const results = await resolveResults(tx, entries.flatMap(({ snapshot }) => snapshot.slip.selections), asOf);
         const resultsFor = indexSlipResults(results);
-        const views: BestSlipView[] = [];
-        for (const [index, row] of items.entries()) {
-          const snapshot = snapshots[index]!, parent = parents.get(row.publicationId)!;
-          const band = verifyPublishedOdds(parent, snapshot.slip);
-          if (oddsBand && oddsBand !== band) continue;
-          const slipResults = resultsFor(snapshot.slip), completed = slipCompleted(snapshot.slip, slipResults);
-          if (completedOnly && !completed) continue;
-          const [view] = bestSlipViews([{ ...publicEditorialSlip(snapshot.slip), estimatedProbability: snapshot.estimatedProbability }], true,
-            slipMatchStatesFromResults(snapshot.slip.selections, slipResults));
-          views.push({ ...view!, id: row.id, rank: publicRank(parent, row.rank), publicationDay: parseReportingDate(day), publishedAt: parent.publishedAt,
-            outcome: slipSnapshotOutcome(snapshot.slip, slipResults), status: slipSnapshotStatus(snapshot.slip, slipResults), completed,
-            completedFixtureIds: completedSlipFixtureIds(snapshot.slip, slipResults) });
-        }
-        views.sort((a,b) => a.rank - b.rank);
+        const views = entries.flatMap((entry) => {
+          const { parent, snapshot, publishedAt } = entry;
+          const band = verifyPublishedOdds(parent, snapshot.slip, publishedAt);
+          if (oddsBand && oddsBand !== band) return [];
+          const view = publishedSlipView(entry, resultsFor(snapshot.slip));
+          return completedOnly && !view.completed ? [] : [view];
+        }).sort((left, right) => left.rank - right.rank);
         const statistics = { total: views.length, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0 };
         for (const view of views) statistics[slipStatusCategory(view.status ?? "pending")]++;
-        return { day: parseReportingDate(day), state: "generated", slips: views, statistics,
-          searchLimited: [...parents.values()].some(parent => parent.searchLimited), partialCoverage: [...parents.values()].some(parent => parent.partialCoverage) };
+        return { day: publicationDay, state: "generated", slips: views, statistics, ...publicationCoverage(parents, batches) };
       });
     },
     /** Date/result browsing reuses original-cycle adjudication and keeps active rows behind the caller's access gate. */
@@ -302,33 +511,28 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         }
         const parents = new Map(selected.map((row) => [row.id, publication(row)]));
         const requestedBand = query.oddsBand ?? defaultBestSlipOddsBand;
-        const dailyPublication = dailyView ? [...parents.values()].find((parent) => parent.version === 3 && parent.oddsBand === requestedBand) : undefined;
+        const batches = await readAppendBatches(tx, parents, asOf);
+        const dailyPublication = dailyView ? [...parents].find(([, parent]) => parent.version >= 3 && parent.oddsBand === requestedBand) : undefined;
         const legacyDailyOrder = dailyView && !dailyPublication;
         const statistics = { total: 0, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0 };
         const views: BestSlipView[] = [];
         let total = 0, bandTotal = 0;
         const membership: string[] = [];
         const offset = (query.page - 1) * bestSlipsQueryRules.pageSize;
-        for (let start = 0; start < selected.length; start += bestSlipsQueryRules.scanDays) {
-          const batch = selected.slice(start, start + bestSlipsQueryRules.scanDays);
+        for (let start = 0; start < selected.length;) {
+          let end = Math.min(start + bestSlipsQueryRules.scanDays, selected.length);
+          // Keep the last date intact without widening the existing bounded result read.
+          while (end < selected.length && end > start && +selected[end]!.eatDate === +selected[end - 1]!.eatDate) end--;
+          if (end === start) fail("unavailable");
+          const batch = selected.slice(start, end);
+          start = end;
           const rows = await tx.$queryRaw<SlipRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(snapshotJson AS CHAR),256) AS validIntegrity
             FROM PublishedSlip WHERE publicationId IN (${Prisma.join(batch.map((row) => row.id))}) ORDER BY publicationId,\`rank\`
             LIMIT ${bestSlipsQueryRules.scanDays * publishedSlipRules.maximumDailySlips + 1}`);
-          if (rows.length !== batch.reduce((count, row) => count + parents.get(row.id)!.count, 0)) fail("unavailable");
-          const siblings = new Map<string, SlipRow[]>();
-          for (const row of rows) {
-            if (!parents.has(row.publicationId)) fail("unavailable");
-            const family = siblings.get(row.publicationId) ?? []; family.push(row); siblings.set(row.publicationId, family);
-          }
-          for (const row of batch) {
-            const family = siblings.get(row.id) ?? [];
-            if (family.length !== parents.get(row.id)!.count || family.some((slip, index) => slip.rank !== index + 1)) fail("unavailable");
-          }
-          const snapshots = await readSnapshots(tx, rows);
-          const ordered = rows.map((row, index) => ({ row, snapshot: snapshots[index]!, parent: parents.get(row.publicationId)! }))
-            .filter(({ parent, snapshot }) => {
-              return verifyPublishedOdds(parent, snapshot.slip) === requestedBand;
-            }).sort((left, right) => (legacyDailyOrder ? compareSlipDisplayProbability(left.snapshot.slip, right.snapshot.slip) : 0)
+          const batchParents = new Map(batch.map((row) => [row.id, parents.get(row.id)!]));
+          const entries = await readAuditedPublicationSnapshots(tx, batchParents, rows, batches);
+          const ordered = entries.filter(({ parent, snapshot, publishedAt }) => verifyPublishedOdds(parent, snapshot.slip, publishedAt) === requestedBand)
+            .sort((left, right) => (legacyDailyOrder ? compareSlipDisplayProbability(left.snapshot.slip, right.snapshot.slip) : 0)
               || right.parent.day.localeCompare(left.parent.day) || publicRank(left.parent, left.row.rank) - publicRank(right.parent, right.row.rank));
           const candidates = ordered.filter(({ snapshot }) => matchesBestSlipsRanges(query, {
             averageProbability: snapshot.slip.averageProbability, matchCount: snapshot.slip.selections.length,
@@ -336,7 +540,8 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           const results = await resolveResults(tx, (completedOnly ? ordered : candidates).flatMap(({ snapshot }) => snapshot.slip.selections), asOf);
           const resultsFor = indexSlipResults(results);
           bandTotal += completedOnly ? ordered.filter(({ snapshot }) => slipCompleted(snapshot.slip, resultsFor(snapshot.slip))).length : ordered.length;
-          for (const { row, snapshot, parent } of candidates) {
+          for (const entry of candidates) {
+            const { row, snapshot, parent } = entry;
             const slipResults = resultsFor(snapshot.slip);
             const completed = slipCompleted(snapshot.slip, slipResults);
             if (completedOnly && !completed) continue;
@@ -348,9 +553,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
             membership.push(row.id);
             const position = total++;
             if (allDates ? views.length > bestSlipsQueryRules.pageSize : position < offset || position >= offset + bestSlipsQueryRules.pageSize) continue;
-            const slip: BestSlip = { ...publicEditorialSlip(snapshot.slip), estimatedProbability: snapshot.estimatedProbability };
-            const [view] = bestSlipViews([slip], true, slipMatchStatesFromResults(slip.selections, slipResults));
-            views.push({ ...view!, id: row.id, rank: publicRank(parent, row.rank), publicationDay: parseReportingDate(parent.day), publishedAt: parent.publishedAt, outcome, status, completed, completedFixtureIds: completedSlipFixtureIds(snapshot.slip, slipResults) });
+            views.push(publishedSlipView(entry, slipResults, outcome, status, completed));
           }
         }
         const retained = views.slice(0, bestSlipsQueryRules.pageSize), overflow = views.length > retained.length;
@@ -358,12 +561,12 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         const nextCursor = allDates && overflow && last ? `${last.publicationDay}:${last.rank}`
           : allDates && hasOlder && oldest ? `${parents.get(oldest.id)!.day}:${publishedSlipRules.maximumDailySlips}` : null;
         // Legacy boundary rows can also belong to this displayed band. The modern cap applies only to the sealed cohort.
-        const dailyBandLimit = !completedOnly && (dailyPublication?.count === bandTotal || dates.from === today && dates.to === today && bandTotal === 0)
+        const dailyCount = dailyPublication ? publicationCount(dailyPublication[1], batches.get(dailyPublication[0])) : undefined;
+        const dailyBandLimit = !completedOnly && (dailyCount === bandTotal || dates.from === today && dates.to === today && bandTotal === 0)
           ? dailyBestSlipBandLimit : undefined;
         return { day: today, state: "generated", slips: retained,
-          searchLimited: [...parents.values()].some((value) => value.searchLimited),
-          partialCoverage: [...parents.values()].some((value) => value.partialCoverage), statistics: allDates ? null : statistics,
-          browse: { query, version: allDates ? null : evidenceFingerprint(membership), total: allDates ? null : total,
+          ...publicationCoverage(parents, batches), statistics: allDates ? null : statistics,
+          browse: { query, version: allDates ? null : evidenceFingerprint({ bandTotal, membership }), total: allDates ? null : total,
             bandTotal: allDates ? null : bandTotal, ...(dailyBandLimit === undefined ? {} : { dailyBandLimit }), pageSize: bestSlipsQueryRules.pageSize,
             hasMore: allDates ? nextCursor !== null : offset + retained.length < total, nextCursor,
             from: allDates ? oldest ? parseReportingDate(parents.get(oldest.id)!.day) : null : dates.from,
@@ -384,30 +587,26 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         const rows = publications.length ? await tx.$queryRaw<SlipRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(snapshotJson AS CHAR),256) AS validIntegrity
           FROM PublishedSlip WHERE publicationId IN (${Prisma.join([...parents.keys()])}) ORDER BY publicationId,\`rank\`
           LIMIT ${publishedSlipRules.maximumDays * publishedSlipRules.maximumDailySlips + 1}`) : [];
-        if (rows.length !== [...parents.values()].reduce((sum, value) => sum + value.count, 0)) fail("unavailable");
-        const snapshots = await readSnapshots(tx, rows);
-        for (const id of parents.keys()) {
-          const siblings = rows.filter((row) => row.publicationId === id);
-          if (siblings.length !== parents.get(id)!.count || siblings.some((row, index) => row.rank !== index + 1)) fail("unavailable");
-        }
-        const results = await resolveResults(tx, snapshots.flatMap((snapshot) => snapshot.slip.selections), asOf);
+        const batches = await readAppendBatches(tx, parents, asOf);
+        const entries = await readAuditedPublicationSnapshots(tx, parents, rows, batches);
+        const results = await resolveResults(tx, entries.flatMap(({ snapshot }) => snapshot.slip.selections), asOf);
         const resultsFor = indexSlipResults(results);
         const samples = [], records = [];
-        for (const [index, row] of rows.entries()) {
-          const parent = parents.get(row.publicationId)!, snapshot = snapshots[index]!;
-          const band = verifyPublishedOdds(parent, snapshot.slip);
+        for (const { row, parent, snapshot, publishedAt: at } of entries) {
+          const band = verifyPublishedOdds(parent, snapshot.slip, at);
           if (band !== (query.oddsBand ?? defaultBestSlipOddsBand)) continue;
           const slipResults = resultsFor(snapshot.slip);
           if (completedOnly && !slipCompleted(snapshot.slip, slipResults)) continue;
-          const publishedAt = new Date(parent.publishedAt).toISOString();
+          const publishedAt = new Date(at).toISOString();
           const view = slipResultView(row.id, publishedAt, publicEditorialSlip(snapshot.slip), slipResults);
           const outcome = view?.outcome ?? slipSnapshotOutcome(snapshot.slip, slipResults);
           const status = view?.status ?? slipSnapshotStatus(snapshot.slip, slipResults, outcome);
-          samples.push({ id: row.id, publishedAt: parent.publishedAt, rank: publicRank(parent, row.rank),
+          samples.push({ id: row.id, publishedAt: at, rank: publicRank(parent, row.rank),
             totalOdds: view ? snapshot.slip.totalOdds : "", outcome, status });
           // Until every original cycle has ended, no selections, quote or probabilities leave this boundary.
-          if (view && (query.status === "all" || slipStatusCategory(status) === query.status)) records.push({ ...view, publicationDay: parent.day, publishedAt, modelId: parent.model.id,
-            rank: publicRank(parent, row.rank), estimatedProbability: snapshot.estimatedProbability });
+          if (view && (query.status === "all" || slipStatusCategory(status) === query.status)) records.push({ ...view,
+            publicationDay: parseReportingDate(parent.day), publishedAt, rank: publicRank(parent, row.rank),
+            ...(snapshot.estimatedProbability !== undefined && parent.model ? { modelId: parent.model.id, estimatedProbability: snapshot.estimatedProbability } : {}) });
         }
         records.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt) || a.rank - b.rank);
         return { asOf, records: records.slice((query.page - 1) * query.pageSize, query.page * query.pageSize),
@@ -415,6 +614,41 @@ export function createPublishedSlips(database: DatabaseRuntime, {
       });
     },
   });
+}
+
+type PublishedSlipEntry = Readonly<{ row: SlipRow; parent: Publication; snapshot: z.infer<typeof snapshotSchema>;
+  publishedAt: number; appendBatch?: AppendBatch }>;
+
+async function readAuditedPublicationSnapshots(tx: Prisma.TransactionClient, parents: ReadonlyMap<string, Publication>,
+  rows: readonly SlipRow[], batches: ReadonlyMap<string, readonly AppendBatch[]>): Promise<readonly PublishedSlipEntry[]> {
+  const counts = new Map([...parents].map(([id, parent]) => [id, publicationCount(parent, batches.get(id))]));
+  if (rows.length !== [...counts.values()].reduce((sum, count) => sum + count, 0)) fail("unavailable");
+  const checked = new Map<string, number>();
+  const memberships = rows.map((row) => {
+    const parent = parents.get(row.publicationId), rank = (checked.get(row.publicationId) ?? 0) + 1;
+    if (!parent || row.rank !== rank || rank > counts.get(row.publicationId)!) return fail("unavailable");
+    checked.set(row.publicationId, rank);
+    const appendBatch = rank > parent.count ? batches.get(row.publicationId)?.find((batch) =>
+      rank >= batch.firstRank && rank < batch.firstRank + batch.count) : undefined;
+    if ((rank > parent.count && !appendBatch) || (row.appendBatchId ?? null) !== (appendBatch?.id ?? null)) return fail("unavailable");
+    return { row, parent, publishedAt: appendBatch?.publishedAt ?? parent.publishedAt, ...(appendBatch ? { appendBatch } : {}) };
+  });
+  const snapshots = await readSnapshots(tx, rows);
+  return memberships.map((membership, index) => {
+    const snapshot = snapshots[index]!;
+    if ((snapshot.estimatedProbability === undefined) !== Boolean(membership.appendBatch)) fail("unavailable");
+    return { ...membership, snapshot };
+  });
+}
+
+function publishedSlipView({ row, parent, snapshot, publishedAt }: PublishedSlipEntry, results: readonly SlipResult[],
+  outcome = slipSnapshotOutcome(snapshot.slip, results), status = slipSnapshotStatus(snapshot.slip, results, outcome),
+  completed = slipCompleted(snapshot.slip, results)): BestSlipView {
+  const slip = { ...publicEditorialSlip(snapshot.slip),
+    ...(snapshot.estimatedProbability === undefined ? {} : { estimatedProbability: snapshot.estimatedProbability }) };
+  return { ...bestSlipView(slip, publicRank(parent, row.rank), true, slipMatchStatesFromResults(snapshot.slip.selections, results)),
+    id: row.id, publicationDay: parseReportingDate(parent.day), publishedAt, outcome, status, completed,
+    completedFixtureIds: completedSlipFixtureIds(snapshot.slip, results) };
 }
 
 async function readSnapshots(tx: Prisma.TransactionClient, rows: readonly SlipRow[]) {

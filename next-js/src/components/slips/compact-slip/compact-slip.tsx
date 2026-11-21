@@ -88,8 +88,9 @@ export function CompactSlipDisclosure({ totalOdds, averageProbability, estimated
 } & SlipHeaderPublication) {
   const messages = createMessages(locale), id = useId();
   const hasWholeSlipEstimate = estimatedProbability !== undefined;
-  const averageLabel = hasWholeSlipEstimate ? "slips.averagePick" : "slips.average";
-  const shortAverageLabel = hasWholeSlipEstimate ? "slips.averagePickShort" : "slips.averageShort";
+  const distinguishAverage = hasWholeSlipEstimate || publicationDay !== undefined;
+  const averageLabel = distinguishAverage ? "slips.averagePick" : "slips.average";
+  const shortAverageLabel = distinguishAverage ? "slips.averagePickShort" : "slips.averageShort";
   const summary = <>
         <h3 data-summary-identity id={headingId ?? `${id}-heading`}><span>{messages.text("slips.slipTitle", { number: messages.number(index + 1) })}</span>
           <SlipHeaderDate locale={locale} {...(publicationDay ? { publicationDay } : {})} {...(publishedAt !== undefined ? { publishedAt } : {})} />
@@ -106,7 +107,7 @@ export function CompactSlipDisclosure({ totalOdds, averageProbability, estimated
   </>;
   const header = variant === "clean-ledger"
     ? <MobileSlipHeader totalOdds={totalOdds} averageProbability={averageProbability} selectionCount={selectionCount}
-      distinguishAverage={hasWholeSlipEstimate}
+      distinguishAverage={distinguishAverage}
       index={index} locale={locale} outcome={outcome} status={status} headingId={headingId ?? `${id}-heading`} headerOnly={!collapsible} showRank={showRank} hasAction={!!action} {...(!collapsible && action ? { action } : {})}
       {...(publicationDay ? { publicationDay } : {})} {...(publishedAt !== undefined ? { publishedAt } : {})} />
     : collapsible ? <summary data-slip-toggle data-slip-summary aria-describedby={`${id}-average-note`}>{summary}</summary>

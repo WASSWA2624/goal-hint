@@ -329,26 +329,47 @@ model DailySlipPublication {
   eatDate     DateTime        @db.Date
   oddsBand    String          @default("legacy") @db.VarChar(16)
   publishedAt DateTime        @db.DateTime(3)
-  modelId     String          @db.Char(64)
+  modelId     String?         @db.Char(64)
   bodyJson    Json
   integrity   String          @db.Char(64)
   slips       PublishedSlip[]
+  appendBatches DailyBestSlipAppendBatch[]
 
   @@unique([eatDate, oddsBand])
   @@index([publishedAt])
 }
 
+model DailyBestSlipAppendBatch {
+  id            String               @id @db.Char(64)
+  publicationId String               @db.Char(64)
+  hourAt        DateTime             @db.DateTime(3)
+  publishedAt   DateTime             @db.DateTime(3)
+  firstRank     Int                  @db.UnsignedTinyInt
+  count         Int                  @db.UnsignedTinyInt
+  bodyJson      Json
+  integrity     String               @db.Char(64)
+  publication   DailySlipPublication @relation(fields: [publicationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  slips         PublishedSlip[]
+
+  @@unique([id, publicationId])
+  @@unique([publicationId, hourAt])
+  @@unique([publicationId, firstRank])
+}
+
 model PublishedSlip {
   id            String               @id @db.Char(64)
   publicationId String               @db.Char(64)
+  appendBatchId String?              @db.Char(64)
   rank          Int                  @db.UnsignedTinyInt
   snapshotJson  Json
   integrity     String               @db.Char(64)
   publication   DailySlipPublication @relation(fields: [publicationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  appendBatch   DailyBestSlipAppendBatch? @relation(fields: [appendBatchId, publicationId], references: [id, publicationId], onDelete: Restrict, onUpdate: Restrict)
   legs          PublishedSlipLeg[]
   combination   DailyBestSlipCombination?
 
   @@unique([publicationId, rank])
+  @@index([appendBatchId, publicationId])
 }
 
 model DailyBestSlipCombination {

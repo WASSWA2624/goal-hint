@@ -98,7 +98,7 @@ export async function readFeaturedSlipSelections(tx: Prisma.TransactionClient, r
 export async function verifyFeaturedSlipOffers(tx: Prisma.TransactionClient, selections: readonly SlipSelection[], at: number,
   readQuotes = storedCurrentBookmakerQuotes) {
   if (!selections.length) return false;
-  const ids = selections.map(({ fixtureId }) => fixtureId).sort();
+  const ids = [...new Set(selections.map(({ fixtureId }) => fixtureId))].sort();
   const locked = await tx.$queryRaw<{ fixtureId: string }[]>(Prisma.sql`SELECT fixtureId FROM FixtureOddsState
     WHERE fixtureId IN (${Prisma.join(ids)}) ORDER BY fixtureId LOCK IN SHARE MODE`);
   if (locked.length !== ids.length) return false;

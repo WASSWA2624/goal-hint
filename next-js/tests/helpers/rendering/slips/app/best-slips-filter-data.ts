@@ -1,4 +1,4 @@
-import { bestSlipViews, type BestSlip, type BestSlipsResult, type BestSlipView } from "@/domain/best-slips";
+import { bestSlipView, type BestSlipsResult, type BestSlipView } from "@/domain/best-slips";
 import { bestSlipsQueryRules, matchesBestSlipsRanges, parseBestSlipsCursor, resolveBestSlipsDates, type BestSlipsQuery } from "@/domain/best-slips-query";
 import { addReportingDays, type ReportingDate } from "@/domain/calendar";
 import { bestSlipOddsBands, bestSlipOddsBandFor, dailyBestSlipBandLimit, defaultBestSlipOddsBand } from "@/domain/best-slip-odds-bands";
@@ -17,9 +17,9 @@ const publications: readonly BestSlipView[] = Array.from({ length: 41 }, (_, day
     const totalOdds = (band.minimumTotal / 100).toFixed(2);
     const averageProbability = [0.75, 0.85, 0.95][index]!;
     const count = index === 0 ? 1 : 2;
-    const slip: BestSlip = {
+    const slip = {
       ...source, id: `synthetic-filter-${publicationDay}-${bandKey}-${index + 1}`, totalOdds,
-      averageProbability, estimatedProbability: count === 1 ? averageProbability : averageProbability - 0.1,
+      averageProbability, ...(publicationDay !== today ? { estimatedProbability: count === 1 ? averageProbability : averageProbability - 0.1 } : {}),
       selections: source.selections.slice(0, count).map((selection, leg) => ({ ...selection, probability: averageProbability, odds: totalOdds,
         fixtureId: `synthetic-filter-${publicationDay}-${bandKey}-${index + 1}-leg-${leg + 1}`,
         kickoffAt: selection.kickoffAt - dayIndex * 86_400_000,
@@ -32,8 +32,7 @@ const publications: readonly BestSlipView[] = Array.from({ length: 41 }, (_, day
       score: outcome === "pending" ? null : { home: 2, away: 1 },
       outcome: outcome === "won" ? "correct" : outcome === "lost" ? "incorrect" : "pending",
     }));
-    return { ...bestSlipViews([slip], true, matchStates)[0]!, id: slip.id,
-      rank: bandIndex * 20 + index + 1, publicationDay, outcome };
+    return { ...bestSlipView(slip, bandIndex * 20 + index + 1, true, matchStates), id: slip.id, publicationDay, outcome };
   }));
 }).flat();
 

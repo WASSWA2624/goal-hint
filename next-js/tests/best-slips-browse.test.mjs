@@ -8,11 +8,13 @@ import { gateBestSlips } from '../src/server/slips/best-slips.ts';
 import { createBestSlipsHandler } from '../src/server/slips/best-slips-http.ts';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
 import { liveRecord, now, today as dayString } from './helpers/live-refresh-fixtures.mjs';
+import { pricedEditorialSelection } from './helpers/best-slip-publication-fixtures.mjs';
 
 const today = parseReportingDate(dayString), free = { tier: 'free', signedIn: false, mode: 'off' }, full = { tier: 'full', signedIn: true, mode: 'off' };
 const uuid = (number) => `20000000-0000-4000-8000-${String(number).padStart(12, '0')}`;
 function fixture(days = 1, daily = 4, replacementCycles = false, valuesForRank = () => ({ averageProbability: 0.7, totalOdds: '4.00' })) {
   const publications = [], slips = [], legs = [], outcomes = new Map(), reads = [], resultBatches = [], source = liveRecord();
+  const batches = [];
   let corrupt = false;
   for (let dateIndex = 0; dateIndex < days; dateIndex++) {
     const day = addReportingDays(today, -dateIndex), publicationId = evidenceFingerprint({ kind: 'daily-best-slips', version: 1, day });
@@ -41,11 +43,17 @@ function fixture(days = 1, daily = 4, replacementCycles = false, valuesForRank =
       const sql = Array.isArray(query) ? { text: query.join('?'), values: arguments_ } : { text: query.sql, values: query.values };
       reads.push(sql);
       if (sql.text.includes('UTC_TIMESTAMP')) return [{ at: new Date(now) }];
+      if (sql.text.includes('FROM DailyBestSlipAppendBatch')) return batches.filter(row => sql.values.includes(row.publicationId))
+        .sort((left, right) => left.publicationId.localeCompare(right.publicationId) || left.firstRank - right.firstRank)
+        .map(row => ({ ...row, validIntegrity: corrupt ? 0 : 1 }));
       if (sql.text.includes('FROM DailySlipPublication')) {
         const dates = sql.values.filter(value => value instanceof Date);
         if (sql.text.includes('WHERE eatDate=')) return publications.filter(row => +row.eatDate === +dates[0]).map(row => ({ ...row, validIntegrity: corrupt ? 0 : 1 }));
-        let rows = publications.filter((row) => +row.publishedAt <= +dates[0]);
-        if (sql.text.includes('eatDate>=')) rows = rows.filter((row) => +row.eatDate >= +dates[1] && +row.eatDate <= +dates[2]);
+        const historic = sql.text.includes('WHERE eatDate>=');
+        const available = historic ? dates[2] : dates[0];
+        let rows = publications.filter((row) => +row.publishedAt <= +available);
+        if (historic) rows = rows.filter((row) => +row.eatDate >= +dates[0] && +row.eatDate <= +dates[1]);
+        else if (sql.text.includes('eatDate>=')) rows = rows.filter((row) => +row.eatDate >= +dates[1] && +row.eatDate <= +dates[2]);
         else if (sql.text.includes('eatDate<=')) rows = rows.filter((row) => +row.eatDate <= +dates[1]);
         rows = rows.filter(row => sql.values.includes(row.oddsBand ?? 'legacy') || row.oddsBand === undefined);
         return rows.sort((a, b) => +b.eatDate - +a.eatDate).slice(0, sql.values.at(-1)).map((row) => ({ ...row, validIntegrity: corrupt ? 0 : 1 }));
@@ -72,7 +80,7 @@ function fixture(days = 1, daily = 4, replacementCycles = false, valuesForRank =
         completed: true, status: 'finished-regulation', regulationHome: result.regulationAway, regulationAway: result.regulationHome })), ...results] : results;
     },
   });
-  return { store, reads, resultBatches, outcomes, publications, slips, legs, corrupt() { corrupt = true; } };
+  return { store, reads, resultBatches, outcomes, publications, slips, legs, batches, corrupt() { corrupt = true; } };
 }
 const query = (input = {}) => parseBestSlipsQuery({ period: 'last30', ...input }, today);
 
@@ -335,6 +343,68 @@ test('modern browsing uses the sealed rank and the exact band before display rou
   assert.equal(filtered.browse.bandTotal, 2);
   assert.equal(filtered.browse.dailyBandLimit, 10);
   assert.equal((await f.store.browse(query({ period: 'today', oddsBand: '5-10' }), today)).browse.bandTotal, 0);
+});
+
+test('hourly records extend v3 and v4 bands with stable ranks, their own publication time and no invented estimates', async () => {
+  for (const version of [3, 4]) {
+    const f = fixture(1, 2), oddsBand = '1.5-5', parent = f.publications[0];
+    const firstAt = now - 2 * 3_600_000 + 15_000, secondAt = firstAt + 3_600_000;
+    Object.assign(parent, { id: slipPublicationIdentity(today, oddsBand), oddsBand, publishedAt: new Date(firstAt) });
+    Object.assign(parent.bodyJson, { version, oddsBand, publishedAt: firstAt,
+      criteria: `dateFrom=${today}&dateTo=${today}&totalMin=2.50&totalMax=5.00`, count: version === 3 ? 1 : 0 });
+    if (version === 4) {
+      parent.modelId = null;
+      parent.bodyJson.model = null;
+    }
+    const makeBatch = (firstRank, at) => {
+      const count = 1, hourAt = Math.floor(at / 3_600_000) * 3_600_000;
+      const id = evidenceFingerprint({ kind: 'hourly-best-slip-append', publicationId: parent.id, hourAt });
+      return { id, publicationId: parent.id, hourAt: new Date(hourAt), publishedAt: new Date(at), firstRank, count,
+        bodyJson: { version: 1, hourAt, publishedAt: at, firstRank, count, searchLimited: false, partialCoverage: false } };
+    };
+    const firstBatch = version === 4 ? makeBatch(1, firstAt) : null, secondBatch = makeBatch(2, secondAt);
+    const rows = f.slips.splice(0);
+    for (const [index, row] of rows.entries()) {
+      const at = index === 0 ? firstAt : secondAt, batch = index === 0 ? firstBatch : secondBatch;
+      const oldId = row.id, leg = f.legs.find(item => item.slipId === oldId), { snapshotJson: snapshot } = row;
+      Object.assign(snapshot.slip, { selections: [pricedEditorialSelection(index + 1, {
+        fixtureId: leg.fixtureId, cycleId: leg.cycleId, revisionId: leg.revisionId, at, probability: snapshot.slip.averageProbability,
+      })] });
+      if (batch) {
+        delete snapshot.estimatedProbability;
+        row.appendBatchId = batch.id;
+      }
+      row.publicationId = parent.id;
+      row.id = evidenceFingerprint({ publicationId: parent.id, rank: row.rank, snapshot });
+      leg.slipId = row.id;
+    }
+    if (firstBatch) f.batches.push(firstBatch);
+    f.slips.push(rows[0]);
+    const request = query({ period: 'today', oddsBand, status: 'won' });
+    const before = await f.store.browse(request, today), first = structuredClone(before.slips[0]);
+    f.batches.push(secondBatch);
+    f.slips.push(rows[1]);
+    const after = await f.store.browse(request, today);
+    assert.deepEqual(after.slips, [first]);
+    assert.equal(after.browse.total, 1);
+    assert.equal(after.browse.bandTotal, 2);
+    assert.equal(after.browse.dailyBandLimit, 10);
+    assert.notEqual(after.browse.version, before.browse.version);
+    const both = await f.store.browse({ ...request, status: 'all' }, today);
+    assert.deepEqual(both.slips.map(view => [view.rank, view.publishedAt]), [[1, firstAt], [2, secondAt]]);
+    assert.equal(Object.hasOwn(both.slips[0], 'estimatedProbability'), version === 3);
+    assert.equal(Object.hasOwn(both.slips[1], 'estimatedProbability'), false);
+    assert.ok(both.slips.every(view => !Object.hasOwn(view.slip.selections[0], 'offer')));
+    assert.deepEqual((await f.store.day(today)).slips, both.slips);
+    const history = await f.store.history({ from: today, to: today, oddsBand, page: 1, pageSize: 2 });
+    assert.deepEqual(history.records.map(view => view.rank), [2, 1]);
+    assert.equal(history.records[0].publishedAt, new Date(secondAt).toISOString());
+    assert.equal(Object.hasOwn(history.records[0], 'modelId'), false);
+    assert.equal(Object.hasOwn(history.records[0], 'estimatedProbability'), false);
+    assert.equal(Object.hasOwn(history.records[1], 'modelId'), version === 3);
+    rows[1].appendBatchId = 'f'.repeat(64);
+    await assert.rejects(f.store.day(today), /unavailable/);
+  }
 });
 
 

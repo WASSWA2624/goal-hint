@@ -233,8 +233,8 @@ function HistorySection({ locale, filters, history, loading = false }: SectionPr
         activeResult={filters.slipStatus} onResult={selectResult} disabled={pending || loading} />
         : loading ? <PerformanceSummary counts={null} locale={locale} kind="slips" period={performancePeriod(m, filters)} loading /> : <MutedText>{m.text("performance.statisticsUnavailable")}</MutedText>}
       {history?.records.length ? <SlipList $inset={false} data-slip-list>{history.records.map((item) => <article key={item.id} data-published-slip={item.id}>
-        <SlipCard slip={item.slip} index={item.rank - 1} estimatedProbability={item.estimatedProbability} results={item.results} locale={locale}
-          publishedAt={Date.parse(item.publishedAt)} outcome={item.outcome} {...(item.status ? { status: item.status } : {})} />
+        <SlipCard slip={item.slip} index={item.rank - 1} wholeSlipProbability={item.estimatedProbability} results={item.results} locale={locale}
+          publicationDay={item.publicationDay} publishedAt={Date.parse(item.publishedAt)} outcome={item.outcome} {...(item.status ? { status: item.status } : {})} />
       </article>)}</SlipList> : loading && history === null ? null : <EmptyState headingLevel={3} title={m.text(history === null ? "performance.historyUnavailable" : outOfRange ? "performance.pageUnavailable" : "performance.historyEmpty")}
         {...(outOfRange ? { action: <ButtonLink href={href(1)}>{m.text("performance.firstPage")}</ButtonLink> } : {})} />}
       {pages > 1 && !outOfRange && <NumberedPagination page={history!.page} pages={pages} labels={numberedPaginationLabels(m, m.text("performance.historyPagination"))} href={href} />}
