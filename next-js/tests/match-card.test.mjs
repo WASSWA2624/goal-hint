@@ -274,7 +274,7 @@ test("mobile and desktop cards retain complete visible and accessible team names
 
 /** A component template and its responsive entry point, when present. */
 async function styledBlock(name) {
-  const match = (await cardSource).match(new RegExp(`const ${name} = styled(?:\\.[a-z]+|\\([A-Za-z]+\\))(?:<[^>]*>)?\`([^\`]*)\`;`, "u"));
+  const match = (await cardSource).match(new RegExp(`const ${name} = styled(?:\\.[a-z]+|\\([A-Za-z]+\\))(?:<[^>]*>)?\`([\\s\\S]*?)\\r?\\n\`;`, "u"));
   assert.ok(match, `${name} styles`);
   const tileStart = match[1].indexOf("${tile} {");
   return { all: match[1], tile: tileStart < 0 ? match[1] : match[1].slice(tileStart) };
