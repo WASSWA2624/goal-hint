@@ -49,6 +49,48 @@ Provider fixture coverage and stored observations determine what can be
 processed within the ordinary worker's budgets. Replay reports pending
 prospective processing separately.
 
+## Market and evidence coverage
+
+The dry run records numeric coverage for each occurrence. It checks every
+stored, permitted group with contemporaneous catalog, exact occurrence and
+receipt proof. Reconciliation uses the same binding and price rules as the
+featured decision. It reports validated outcomes with an eligible quote,
+outcomes with only ineligible offers or no exact offer, and outcomes without a
+verified price binding. It also reports bookmaker selections without a
+validated model, unbound price rows, freshness failures and standard rule
+exclusions. `market-catalog.json` inventories the latest sealed catalog
+available at audit time. Each decision uses the catalog available at its own
+cutoff. A nominal-cutoff inventory on a fixture without proven lock evidence is
+diagnostic only. Dry-run and stage summaries report fixture counts and distinct
+market families by tier.
+
+The existing family registry specifies possible outcomes, period and participant
+scope, model and evidence requirements, and separate settlement rules for
+integer and quarter lines. Stored offers can appear for unqualified periods,
+handicaps, correct-score, player, card or corner markets. A price for those
+markets only enters selection when the exact binding, payout and independent
+forecast all validate. The report preserves the distinction between unavailable
+model evidence and missing bookmaker mapping.
+
+The history inventory looks back up to three years using only sealed score
+observations recorded before the original evidence cutoff. It reports league,
+both teams, home/away side, head-to-head, common-opponent and verified half-time
+counts within the retained sample cap. The actual regulation fit still uses its
+existing lookback, sample minimums and recency weighting. An archived forecast
+retains its original model sample and probabilities. Its evidence snapshot can
+also show context coverage, stale sources and missing or conflicting inputs.
+Without sufficient point-in-time proof, history and contextual coverage are
+withheld or incomplete. The replay never fills missing inputs with live facts
+or the target fixture's result.
+
+Use `--trace-fixture <uuid>` on a dry run to seal rows for up to ten named
+fixtures alongside their aggregate counts. Repeat those options when resuming
+before the traced fixture's page. The trace contains exact supported outcomes,
+quote or failure reasons, evidence clocks and model sample metrics. Keep it in
+the private workspace. Use a fresh workspace for this coverage format.
+
+## Review and activate
+
 `stage` stores qualifying retrospective revisions with their actual generation
 time, declared earlier decision clock, evidence and decision identities.
 It writes `activation-diff.json` with nullable featured selections, exact

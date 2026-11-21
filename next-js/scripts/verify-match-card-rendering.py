@@ -188,6 +188,8 @@ def verify_feed_cards(origin):
     match(r'data-card-odds[^>]*title="[^"]*1\.1543 · Synthetic second bookmaker[^"]*"[^>]*>1\.1543', cards["feed-extended"])
     match(r'1\.1543<sup[^>]*data-positive-value[^>]*title="Estimated return at these odds: \+10\.81% per unit staked"[^>]*>V</sup>',
           cards["feed-extended"])
+    match(r'<a\b(?=[^>]*data-match-open)(?=[^>]*title="[^"]*Estimated return at these odds: \+10\.81% per unit staked)[^>]*>',
+          cards["feed-extended"])
     abstained = cards['feed-featured-abstained']
     match(r'data-pick-absence="no-qualifying-pick"[^>]*title="No qualifying pick"[^>]*>\s*<svg[^>]*aria-hidden="true"[^>]*focusable="false"[^>]*>', abstained)
     match(r'<path d="M8 12h8"[^>]*></path>[\s\S]*?No qualifying pick', abstained)

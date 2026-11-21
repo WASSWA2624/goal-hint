@@ -1,10 +1,12 @@
 import "server-only";
 
-import { decideLocalFeaturedPick, localFeaturedDecisionVersion, type LocalFeaturedDecision } from "../../domain/local-featured-decision.ts";
+import { getPublicationDeadline, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { auditLocalFeaturedCoverage } from "../../domain/local-featured-coverage.ts";
+import { assessLocalFeaturedPick, decideLocalFeaturedPick, localFeaturedDecisionVersion, type LocalFeaturedDecision } from "../../domain/local-featured-decision.ts";
 import { inclusiveReplayEvidenceCutoff } from "../../domain/november-replay.ts";
 import type { GoalGrade } from "../../domain/score-distribution-markets.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
-import { storedPointInTimeFeaturedBookmakerQuotes } from "../odds/odds-mysql-store.ts";
+import { hasRetainedPreMatchQuoteCandidates, storedPointInTimeFeaturedBookmakerQuotes } from "../odds/odds-mysql-store.ts";
 import { publicOddsEnabled } from "../odds/public-odds-policy.ts";
 import { loadNovemberReplayEvidenceInTransaction, type NovemberReplayOccurrence,
   type NovemberReplayTrainingMembership } from "./november-replay-evidence.ts";
@@ -15,17 +17,25 @@ type ReplayPricingMarket = Readonly<{ definition: { key: string };
   selections: readonly { key: string; outcomes: Readonly<Record<GoalGrade, number>> }[];
   unrepresentedProbability?: number }>;
 
-export async function loadNovemberReplayPrices(tx: Prisma.TransactionClient, fixture: Readonly<{
-  fixtureId: string; kickoffAt: number; decisionAt: number;
-}>, auditedAt: number, markets: readonly ReplayPricingMarket[]) {
+type PricingOccurrence = Readonly<{ fixtureId: string; kickoffAt: number; decisionAt: number }>;
+
+async function loadPricingInput(tx: Prisma.TransactionClient, fixture: PricingOccurrence, auditedAt: number,
+  markets: readonly ReplayPricingMarket[], inventoryAllMarkets = false) {
   const quotesPermitted = publicOddsEnabled();
-  const quotes = quotesPermitted ? (await storedPointInTimeFeaturedBookmakerQuotes(tx, [fixture], auditedAt)).get(fixture.fixtureId) : null;
-  const input = {
+  const hasCandidates = quotesPermitted && (markets.length > 0 || inventoryAllMarkets &&
+    await hasRetainedPreMatchQuoteCandidates(tx, fixture.fixtureId, fixture.decisionAt, auditedAt));
+  const quotes = hasCandidates ? (await storedPointInTimeFeaturedBookmakerQuotes(tx, [fixture], auditedAt, inventoryAllMarkets)).get(fixture.fixtureId) : null;
+  return {
     ...fixture, quotes, quotesPermitted,
     outcomes: markets.flatMap(({ definition, selections, unrepresentedProbability }) => selections.map(({ key: selection, outcomes }) => ({
       marketKey: definition.key, selection, settlementProbabilities: outcomes, unrepresentedProbability: unrepresentedProbability ?? 0,
     }))),
   };
+}
+
+export async function loadNovemberReplayPrices(tx: Prisma.TransactionClient, fixture: PricingOccurrence,
+  auditedAt: number, markets: readonly ReplayPricingMarket[]) {
+  const input = await loadPricingInput(tx, fixture, auditedAt, markets);
   return (version: ReplayDecisionVersion) => decideLocalFeaturedPick(input, version);
 }
 
@@ -54,8 +64,9 @@ export function sameLegacyReplaySelection(before: ReturnType<typeof replayFeatur
 
 export async function preparePricedNovemberReplay(tx: Prisma.TransactionClient, occurrence: NovemberReplayOccurrence,
   auditedAt: number, training?: NovemberReplayTrainingMembership, version: ReplayDecisionVersion = localFeaturedDecisionVersion,
-  comparisonVersion?: ReplayDecisionVersion) {
-  const loadedEvidence = await loadNovemberReplayEvidenceInTransaction(tx, occurrence, auditedAt, training, true);
+  comparisonVersion?: ReplayDecisionVersion, coverage?: "counts" | "trace") {
+  const withCoverage = coverage !== undefined;
+  const loadedEvidence = await loadNovemberReplayEvidenceInTransaction(tx, occurrence, auditedAt, training, true, withCoverage);
   const evidence = occurrence.originalRevisionId === null ? Object.freeze({ ...loadedEvidence,
     cutoffAt: inclusiveReplayEvidenceCutoff(loadedEvidence.cutoffAt, loadedEvidence.decisionAt) }) : loadedEvidence;
   const archived = evidence.archivedDecision && buildArchivedNovemberReplayMarkets(evidence.archivedDecision);
@@ -63,11 +74,18 @@ export async function preparePricedNovemberReplay(tx: Prisma.TransactionClient, 
   const markets = archived?.length ? archived : rebuilt?.markets;
   const artifactHash = evidence.archivedDecision?.hash ?? evidence.forecast?.hash;
   const { decisionAt } = evidence;
-  if (evidence.status !== "qualified" || !markets?.length || !artifactHash || decisionAt === undefined)
-    return { evidence, result: null, comparativeDecision: null };
   const { fixtureId, kickoffAt } = occurrence;
-  const assess = await loadNovemberReplayPrices(tx, { fixtureId, kickoffAt, decisionAt }, auditedAt, markets);
-  const featuredDecision = assess(version);
+  if (evidence.status !== "qualified" || !markets?.length || !artifactHash || decisionAt === undefined) {
+    const catalogOnlyAt = decisionAt ?? getPublicationDeadline(utcInstantFromEpochMilliseconds(kickoffAt)) - 1;
+    const diagnostic = withCoverage && occurrence.applicable && kickoffAt <= auditedAt && evidence.status !== "prospective"
+      ? auditLocalFeaturedCoverage(await loadPricingInput(tx, { fixtureId, kickoffAt, decisionAt: catalogOnlyAt }, auditedAt, [], true), coverage === "trace") : null;
+    return { evidence, result: null, comparativeDecision: null, diagnostic, priceGates: null,
+      inventoryClock: diagnostic ? decisionAt ?? null : null };
+  }
+  const input = await loadPricingInput(tx, { fixtureId, kickoffAt, decisionAt }, auditedAt, markets, withCoverage);
+  const diagnostic = withCoverage ? auditLocalFeaturedCoverage(input, coverage === "trace") : null;
+  const { decision: featuredDecision, diagnostics: priceGates } = assessLocalFeaturedPick(input, version);
   return { evidence, result: { artifactHash, markets, selected: replayFeaturedSelection(featuredDecision), decisionAt, featuredDecision },
-    comparativeDecision: comparisonVersion ? assess(comparisonVersion) : null };
+    comparativeDecision: comparisonVersion ? decideLocalFeaturedPick(input, comparisonVersion) : null, diagnostic, priceGates,
+    inventoryClock: diagnostic ? decisionAt : null };
 }

@@ -58,24 +58,27 @@ export const localFeaturedDecisionSchema = z.discriminatedUnion("status", [
 export type LocalFeaturedDecision = Readonly<z.infer<typeof localFeaturedDecisionSchema>>;
 type PricedDecision = Extract<LocalFeaturedDecision, { status: "priced" }>;
 type Settlement = Readonly<Record<GoalGrade, number>>;
-type LocalOutcome = Readonly<{
+export type LocalFeaturedOutcome = Readonly<{
   marketKey: string; selection: string; settlementProbabilities: Settlement; unrepresentedProbability?: number;
 }>;
 type Observation = Readonly<{ observedAt: number; checkedAt: number; providerUpdatedAt: number | null;
   snapshotId?: string; receiptId?: string }>;
-type BookmakerOffer = Readonly<{
+export type LocalFeaturedBookmakerOffer = Readonly<{
   betId: number; betName: string; values: readonly Readonly<{
     label: string; odd: string; observation?: Observation; suspended?: boolean; permitted?: boolean;
   }>[];
   observedAt?: number; checkedAt?: number; providerUpdatedAt: number | null; snapshotId?: string; receiptId?: string;
 }>;
-type BookmakerQuotes = Readonly<{
+export type LocalFeaturedBookmaker = Readonly<{
+  bookmakerId: number; bookmakerName: string | null; offers: readonly LocalFeaturedBookmakerOffer[];
+}>;
+export type LocalFeaturedBookmakerQuotes = Readonly<{
   fixtureId: string; kickoffAt: number; checkedAt: number;
   provenance?: "pre-match" | "historical-pre-match" | "in-play" | "closing";
-  bookmakers: readonly Readonly<{ bookmakerId: number; bookmakerName: string | null; offers: readonly BookmakerOffer[] }>[];
+  bookmakers: readonly LocalFeaturedBookmaker[];
 }>;
-type FeaturedDecisionInput = Readonly<{ fixtureId: string; kickoffAt: number; decisionAt: number;
-  outcomes: readonly LocalOutcome[]; quotes: BookmakerQuotes | null | undefined; quotesPermitted: boolean;
+export type FeaturedDecisionInput = Readonly<{ fixtureId: string; kickoffAt: number; decisionAt: number;
+  outcomes: readonly LocalFeaturedOutcome[]; quotes: LocalFeaturedBookmakerQuotes | null | undefined; quotesPermitted: boolean;
   coverageByMarket?: ReadonlyMap<string, number> }>;
 
 export function binaryFeaturedSettlement(win: number): Settlement {
@@ -95,7 +98,7 @@ function decimalText(value: bigint, places: number) {
   return value < 0n ? `-${text}` : text;
 }
 
-function representedSettlement(settlement: Settlement, terms: "binary" | "asian", unrepresentedProbability = 0) {
+export function representedSettlement(settlement: Settlement, terms: "binary" | "asian", unrepresentedProbability = 0) {
   const masses = [settlement.win, settlement.loss, settlement.push, settlement["half-win"], settlement["half-loss"]];
   if (unrepresentedProbability !== 0 || masses.some((mass) => !Number.isFinite(mass) || mass < 0 || mass > 1) ||
     Math.abs(masses.reduce((sum, mass) => sum + mass, 0) - 1) > 1e-12 ||
@@ -125,7 +128,7 @@ export function positiveFeaturedReturn(settlement: Settlement, price: DecimalOdd
   return result !== null && positiveReturn(result) ? result : null;
 }
 
-function verifiedMapping(marketKey: string, selection: string) {
+export function verifiedLocalFeaturedBinding(marketKey: string, selection: string) {
   const legacy = legacyForecastOutcome(marketKey, selection);
   const launch = launchOddsMapping.find(({ family }) => family === (legacy?.family ?? marketKey));
   const label = launch && Object.entries(launch.selections).find(([key]) => key === (legacy?.selection ?? selection))?.[1];
@@ -140,14 +143,53 @@ function verifiedMapping(marketKey: string, selection: string) {
   return mapping ? { ...mapping, label: `${selection === "over" ? "Over" : "Under"} ${line}`, terms: "binary" as const } : null;
 }
 
-function freshObservation(offer: BookmakerOffer, observation: Observation | undefined, decisionAt: number) {
+type ObservationIssue = "missing-observation-clock" | "incoherent-observation-clock" | "post-decision-quote" | "stale-quote";
+type QuoteIssue = ObservationIssue | "suspended-quote" | "quote-not-permitted" | "invalid-decimal-quote" | "invalid-quote-attribution";
+type QuoteInspection = Readonly<{ quote: LocalFeaturedQuote; price: DecimalOdds }> | Readonly<{ reason: QuoteIssue }>;
+
+function inspectObservation(offer: LocalFeaturedBookmakerOffer, observation: Observation | undefined, decisionAt: number):
+  Readonly<{ clocks: Observation }> | Readonly<{ reason: ObservationIssue }> {
   const clocks = observation ?? { observedAt: offer.observedAt, checkedAt: offer.checkedAt, providerUpdatedAt: offer.providerUpdatedAt,
     snapshotId: offer.snapshotId, receiptId: offer.receiptId };
   const { observedAt, checkedAt, providerUpdatedAt, snapshotId, receiptId } = clocks;
-  if (observedAt === undefined || checkedAt === undefined || observedAt > checkedAt || checkedAt > decisionAt ||
-    decisionAt - observedAt > preMatchReferenceOddsFreshMs ||
-    providerUpdatedAt !== null && (providerUpdatedAt > checkedAt || decisionAt - providerUpdatedAt > preMatchReferenceOddsFreshMs)) return null;
-  return { observedAt, checkedAt, providerUpdatedAt, ...(snapshotId ? { snapshotId } : {}), ...(receiptId ? { receiptId } : {}) };
+  if (observedAt === undefined || checkedAt === undefined) return { reason: "missing-observation-clock" } as const;
+  if (observedAt > checkedAt || providerUpdatedAt !== null && providerUpdatedAt > checkedAt)
+    return { reason: "incoherent-observation-clock" } as const;
+  if (checkedAt > decisionAt) return { reason: "post-decision-quote" } as const;
+  if (decisionAt - observedAt > preMatchReferenceOddsFreshMs ||
+    providerUpdatedAt !== null && decisionAt - providerUpdatedAt > preMatchReferenceOddsFreshMs)
+    return { reason: "stale-quote" } as const;
+  return { clocks: { observedAt, checkedAt, providerUpdatedAt, ...(snapshotId ? { snapshotId } : {}), ...(receiptId ? { receiptId } : {}) } } as const;
+}
+
+export function validLocalFeaturedDecisionTime(kickoffAt: number, decisionAt: number): boolean {
+  return instant.safeParse(decisionAt).success && decisionAt < kickoffAt;
+}
+
+export function localFeaturedQuoteScopeReason(input: Pick<FeaturedDecisionInput, "fixtureId" | "kickoffAt" | "decisionAt" | "quotes" | "quotesPermitted">) {
+  const { fixtureId, kickoffAt, decisionAt, quotes, quotesPermitted } = input;
+  if (!validLocalFeaturedDecisionTime(kickoffAt, decisionAt)) return "invalid-decision-time";
+  if (!quotesPermitted) return "odds-not-permitted";
+  if (!quotes) return "no-stored-odds";
+  if (quotes.fixtureId !== fixtureId || quotes.kickoffAt !== kickoffAt) return "different-fixture-occurrence";
+  if (quotes.provenance === "closing" || quotes.provenance === "in-play") return "unverified-pre-match-phase";
+  if (quotes.checkedAt > decisionAt) return "post-decision-quote";
+  return null;
+}
+
+export function inspectLocalFeaturedQuote(book: LocalFeaturedBookmaker, offer: LocalFeaturedBookmakerOffer,
+  value: LocalFeaturedBookmakerOffer["values"][number], decisionAt: number): QuoteInspection {
+  if (value.suspended) return { reason: "suspended-quote" } as const;
+  if (value.permitted === false) return { reason: "quote-not-permitted" } as const;
+  const price = parseDecimalOdds(value.odd);
+  if (!price) return { reason: "invalid-decimal-quote" } as const;
+  const observed = inspectObservation(offer, value.observation, decisionAt);
+  if ("reason" in observed) return observed;
+  const name = oddsDisplayText(128).safeParse(book.bookmakerName);
+  const checked = localFeaturedQuoteSchema.safeParse({ bookmakerId: book.bookmakerId, bookmakerName: name.success ? name.data : null,
+    betId: offer.betId, betName: offer.betName, providerSelection: value.label, decimal: price.text, ...observed.clocks });
+  if (!checked.success) return { reason: "invalid-quote-attribution" } as const;
+  return { quote: checked.data, price } as const;
 }
 
 const byText = (left: string, right: string) => left < right ? -1 : Number(left > right);
@@ -183,7 +225,7 @@ function stableSelectionOrder(left: FeaturedSelection, right: FeaturedSelection)
     byText(left.marketKey, right.marketKey) || byText(left.selection, right.selection);
 }
 
-function bestForecastOnlyOutcome(outcomes: readonly LocalOutcome[], coverage: ReadonlyMap<string, number> | undefined) {
+function bestForecastOnlyOutcome(outcomes: readonly LocalFeaturedOutcome[], coverage: ReadonlyMap<string, number> | undefined) {
   type Ranked = FeaturedSelection & Readonly<{ coverage: number; commonOrder: number }>;
   let best: Ranked | null = null;
   for (const { marketKey, selection, settlementProbabilities, unrepresentedProbability } of outcomes) {
@@ -200,32 +242,29 @@ function bestForecastOnlyOutcome(outcomes: readonly LocalOutcome[], coverage: Re
   return best && { marketKey: best.marketKey, selection: best.selection, probability: best.probability };
 }
 
-function bestQuote(books: BookmakerQuotes["bookmakers"], mapping: NonNullable<ReturnType<typeof verifiedMapping>>, decisionAt: number) {
+function bestQuote(books: LocalFeaturedBookmakerQuotes["bookmakers"], mapping: NonNullable<ReturnType<typeof verifiedLocalFeaturedBinding>>, decisionAt: number) {
   let best: { quote: LocalFeaturedQuote; price: DecimalOdds } | null = null;
   let comparable = false;
-  for (const { bookmakerId, bookmakerName, offers } of books) {
-    const markets = offers.filter(({ betId, betName }) => betId === mapping.betId && betName === mapping.betName);
+  for (const book of books) {
+    const markets = book.offers.filter(({ betId, betName }) => betId === mapping.betId && betName === mapping.betName);
     if (markets.length !== 1) continue;
     const offer = markets[0]!;
     const selections = offer.values.filter(({ label }) => label === mapping.label);
     if (selections.length !== 1) continue;
-    const value = selections[0]!;
-    if (value.suspended || value.permitted === false) continue;
-    const price = parseDecimalOdds(value.odd), clocks = freshObservation(offer, value.observation, decisionAt);
-    if (!price || !clocks) continue;
+    const inspected = inspectLocalFeaturedQuote(book, offer, selections[0]!, decisionAt);
+    if ("reason" in inspected) {
+      if (inspected.reason === "invalid-quote-attribution") comparable = true;
+      continue;
+    }
     comparable = true;
-    const name = oddsDisplayText(128).safeParse(bookmakerName);
-    const quote = localFeaturedQuoteSchema.safeParse({ bookmakerId, bookmakerName: name.success ? name.data : null,
-      betId: mapping.betId, betName: mapping.betName, providerSelection: mapping.label, decimal: price.text, ...clocks });
-    if (quote.success && (!best || (byPrice(price, best.price) || bookmakerId - best.quote.bookmakerId) < 0))
-      best = { quote: quote.data, price };
+    if (!best || (byPrice(inspected.price, best.price) || book.bookmakerId - best.quote.bookmakerId) < 0) best = inspected;
   }
   return { best, comparable };
 }
 
 /** Count modeled outcomes at each gate and rank the survivors using the selected policy version. */
 export function assessLocalFeaturedPick(input: FeaturedDecisionInput, version: LocalFeaturedDecisionVersion = localFeaturedDecisionVersion) {
-  const { fixtureId, kickoffAt, decisionAt, outcomes, quotes, quotesPermitted, coverageByMarket } = input;
+  const { kickoffAt, decisionAt, outcomes, quotes, quotesPermitted, coverageByMarket } = input;
   const tiered = version === localFeaturedDecisionVersion;
   const eligible = new Map<PricedDecision["threshold"], number>();
   let comparableQuoteOutcomes = 0, oddsFloorOutcomes = 0, positiveReturnOutcomes = 0;
@@ -241,11 +280,10 @@ export function assessLocalFeaturedPick(input: FeaturedDecisionInput, version: L
     return forecast ? finish({ ...forecast, version, status: "forecast-only", reason }) : abstain("no-modeled-outcome-meets-floor");
   };
   if (!outcomes.length) return abstain("no-local-forecast");
-  const validTime = instant.safeParse(decisionAt).success && decisionAt < kickoffAt;
+  const validTime = validLocalFeaturedDecisionTime(kickoffAt, decisionAt);
   if (tiered && !validTime) return abstain("invalid-decision-time");
   if (!quotesPermitted) return withoutPrice("odds-not-permitted");
-  if (!validTime || !quotes || quotes.fixtureId !== fixtureId || quotes.kickoffAt !== kickoffAt || quotes.checkedAt > decisionAt ||
-    quotes.provenance === "in-play" || quotes.provenance === "closing") return withoutPrice("no-verified-odds");
+  if (!quotes || localFeaturedQuoteScopeReason(input)) return withoutPrice("no-verified-odds");
 
   type Rated = Readonly<{ decision: PricedDecision; price: DecimalOdds; positive: boolean }>;
   const rankPriced = (left: Rated, right: Rated) => Number(right.positive) - Number(left.positive) ||
@@ -253,7 +291,7 @@ export function assessLocalFeaturedPick(input: FeaturedDecisionInput, version: L
     right.decision.probability - left.decision.probability || stableSelectionOrder(left.decision, right.decision);
   let chosen: Rated | null = null, fallback: Rated | null = null;
   for (const { marketKey, selection, settlementProbabilities, unrepresentedProbability } of outcomes) {
-    const mapping = verifiedMapping(marketKey, selection);
+    const mapping = verifiedLocalFeaturedBinding(marketKey, selection);
     if (!mapping) continue;
     const { best, comparable: hasQuote } = bestQuote(quotes.bookmakers, mapping, decisionAt);
     if (hasQuote) comparableQuoteOutcomes++;

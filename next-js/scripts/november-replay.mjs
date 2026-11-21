@@ -3,7 +3,7 @@ import { link, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { openForecastDatabase } from "./lib/forecast-database-target.mjs";
-import { LOCAL_FIRST_MARKET_REGISTRY_VERSION } from "../src/domain/market-registry.ts";
+import { LOCAL_FIRST_MARKET_REGISTRY_VERSION, reconcileOddsCatalog } from "../src/domain/market-registry.ts";
 import { legacyLocalFeaturedDecisionVersion, localFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion } from "../src/domain/local-featured-decision.ts";
 import { inclusiveReplayEvidenceCutoff, novemberReplayRange, replaySuppressionClocks, resolveReplayRange } from "../src/domain/november-replay.ts";
 import { evidenceFingerprint } from "../src/server/evidence/evidence-input.ts";
@@ -12,6 +12,7 @@ import { auditNovemberReplay } from "../src/server/intelligence/november-replay-
 import { evaluateNovemberReplay, evaluateReplayFeaturedDelta } from "../src/server/intelligence/november-replay-evaluation.ts";
 import { readNovemberReplayPage, readNovemberReplayTrainingMembership } from "../src/server/intelligence/november-replay-evidence.ts";
 import { loadNovemberReplayPrices, preparePricedNovemberReplay, replayFeaturedMode, replayFeaturedSelection, sameReplayFeaturedDisplay } from "../src/server/intelligence/november-replay-featured.ts";
+import { storedPreMatchBetCatalogAt } from "../src/server/odds/odds-mysql-store.ts";
 import { statusShowsPlay } from "../src/server/predictions/publication-eligibility.ts";
 
 const phases = ["canonical", "displaced"];
@@ -22,6 +23,7 @@ const abort = new AbortController();
 const validOperationId = (value) => /^[a-z0-9][a-z0-9._:-]{0,95}$/iu.test(value ?? "");
 const deltaManifestFile = "policy-delta.json";
 const deltaDiffFile = "policy-delta-activation-diff.json";
+const coverageVersion = "november-market-coverage-v1";
 // This optimization is only valid when the new rule adds lower rungs to the same gates.
 const deltaDecisionVersion = previousLocalFeaturedDecisionVersion;
 class ReplayCommandError extends Error {}
@@ -48,25 +50,27 @@ async function sealOnce(path, body) {
   } finally { await rm(temp, { force: true }); }
 }
 
-async function loadPages(workspace, audit) {
+async function loadPages(workspace, audit, requireCoverage = false) {
   const names = (await readdir(workspace)).filter((name) => /^page-\d{5}\.json$/u.test(name)).sort();
   const pages = [];
   for (const [index, name] of names.entries()) {
     const page = await readSealed(join(workspace, name));
-    if (page.auditHash !== audit.auditHash || page.index !== index || !phases.includes(page.phase))
+    if (page.auditHash !== audit.auditHash || page.index !== index || !phases.includes(page.phase) ||
+      requireCoverage && page.coverageVersion !== coverageVersion)
       throw new ReplayCommandError("The replay pages do not match the audit.");
     pages.push(page);
   }
   return pages;
 }
 
-async function inspectOccurrence(database, audit, occurrence, original, training) {
+async function inspectOccurrence(database, audit, occurrence, original, training, trace) {
   if (original?.status === "scheduled" && original.effectiveCutoffAt > audit.auditedAt) {
     return { fixtureId: occurrence.fixtureId, kickoffAt: occurrence.kickoffAt, status: "prospective",
       reason: "normal-prospective-processing", cutoffAt: original.effectiveCutoffAt,
       evidenceHash: evidenceFingerprint({ auditedAt: audit.auditedAt, original }) };
   }
-  const { evidence, result } = await database.query((tx) => preparePricedNovemberReplay(tx, occurrence, audit.auditedAt, training));
+  const { evidence, result, diagnostic, priceGates, inventoryClock } = await database.query((tx) =>
+    preparePricedNovemberReplay(tx, occurrence, audit.auditedAt, training, localFeaturedDecisionVersion, undefined, trace ? "trace" : "counts"));
   const { fixtureId, kickoffAt } = occurrence;
   const input = result ? { fixtureId, kickoffAt, cycleId: evidence.scheduleVersion === null ? null : occurrence.cycleId,
     scheduleVersion: evidence.scheduleVersion, sourceRevisionId: evidence.scheduleVersion === null ? null : original?.sourceRevisionId ?? null,
@@ -74,17 +78,29 @@ async function inspectOccurrence(database, audit, occurrence, original, training
     registryVersion: audit.registryVersion, evidenceReceiptIds: evidence.evidenceReceiptIds,
     replayAsOf: audit.auditedAt, teams: [occurrence.homeTeamId, occurrence.awayTeamId],
     generatedAt: Date.now(), status: "estimated", reason: null, ...result } : null;
+  const archived = evidence.archivedDecision;
+  const unavailableMarkets = {};
+  for (const group of archived?.unavailable ?? []) unavailableMarkets[group.reason] = (unavailableMarkets[group.reason] ?? 0) + group.marketKeys.length;
+  for (const { source } of archived?.markets ?? []) if (source !== "local-engine")
+    unavailableMarkets["no-validated-local-model"] = (unavailableMarkets["no-validated-local-model"] ?? 0) + 1;
+  const modelEvidence = evidence.modelCoverage ?? null;
+  const contextCoverage = evidence.contextCoverage ?? null;
   return { fixtureId, kickoffAt, evidenceHash: evidence.evidenceHash, cutoffAt: evidence.cutoffAt, decisionAt: evidence.decisionAt ?? null,
     historyMatches: evidence.historyMatches,
     status: result ? "estimated" : evidence.status === "prospective" ? "prospective" : "abstained",
     reason: result ? result.featuredDecision.reason ?? null : evidence.reason ?? "unqualified-local-engine",
     forecastOrigin: result ? evidence.archivedDecision ? "archived" : "rebuilt" : null,
-    input, probabilities: result ? evidence.forecast?.probabilities ?? null : null };
+    input, probabilities: result ? evidence.forecast?.probabilities ?? null : null,
+    expectedGoals: result ? evidence.forecast?.expectedGoals ?? null : null,
+    coverage: { auditedQuoteCutoff: diagnostic ? inventoryClock === null ? "nominal-only" : "proven" : null,
+      marketCounts: diagnostic?.counts ?? null, priceGates, unavailableMarkets, modelEvidence, contextCoverage },
+    ...(trace && { trace: { marketCoverage: diagnostic, modelEvidence, contextCoverage, archivedMarketAvailability: archived?.unavailable ?? null,
+      archivedSample: archived?.markets.find(({ source, confidence }) => source === "local-engine" && confidence.sample)?.confidence.sample ?? null } }) };
 }
 
-async function dryRun(database, workspace, audit, maxPages) {
+async function dryRun(database, workspace, audit, maxPages, traceFixtures) {
   const originals = new Map(audit.occurrences.map((row) => [occurrenceKey(row), row]));
-  const pages = await loadPages(workspace, audit);
+  const pages = await loadPages(workspace, audit, true);
   const processed = new Set(pages.flatMap(({ rows }) => rows.map(occurrenceKey)));
   let remaining = maxPages;
   for (const phase of phases) {
@@ -110,14 +126,14 @@ async function dryRun(database, workspace, audit, maxPages) {
             return { fixtureId, kickoffAt, status: "abstained", reason: "occurrence-changed-since-audit",
               evidenceHash: evidenceFingerprint({ original, occurrence }) };
           }
-          return inspectOccurrence(database, audit, occurrence, original, membership);
+          return inspectOccurrence(database, audit, occurrence, original, membership, traceFixtures.has(fixtureId));
         }));
         for (const record of records) if (record) { rows.push(record); processed.add(occurrenceKey(record)); }
         const { fixtureId, kickoffAt } = batch.at(-1);
         cursor = { fixtureId, kickoffAt };
       }
       const finished = occurrences.length < pageSize && !abort.signal.aborted;
-      const page = { auditHash: audit.auditHash, index: pages.length, phase, cursor: cursor ?? null, finished, rows };
+      const page = { auditHash: audit.auditHash, coverageVersion, index: pages.length, phase, cursor: cursor ?? null, finished, rows };
       await sealOnce(join(workspace, `page-${String(page.index).padStart(5, "0")}.json`), page);
       pages.push(page);
       if (--remaining <= 0 || finished) break;
@@ -126,7 +142,11 @@ async function dryRun(database, workspace, audit, maxPages) {
   const finished = phases.every((phase) => pages.some((page) => page.phase === phase && page.finished));
   const rows = pages.flatMap((page) => page.rows);
   const summary = { finished, processed: rows.length, estimated: 0, prospective: 0, abstained: 0, reasons: {}, byStatus: {},
-    archived: 0, rebuilt: 0, priced: 0, forecastOnly: 0, featuredAbstentions: 0, modes: {}, marketFamiliesByMode: {}, originalsMissingFromReplay: 0 };
+    archived: 0, rebuilt: 0, priced: 0, forecastOnly: 0, featuredAbstentions: 0, modes: {}, marketFamiliesByMode: {}, originalsMissingFromReplay: 0,
+    marketCoverage: { provenCutoffFixtures: 0, nominalCutoffOnlyFixtures: 0, noOddsInventoryFixtures: 0,
+      modelEvidenceFixtures: 0, modelEvidenceAtSampleCap: 0, fixturesWithHeadToHead: 0, fixturesWithVerifiedHalfTimeHistory: 0,
+      archivedContextFixtures: 0, counts: {}, unavailableMarkets: {}, archivedContextGaps: {},
+      standardGates: { comparable: 0, meetsPrice: 0, positiveReturn: 0, eligibleByRung: {} } } };
   for (const row of rows) {
     summary[row.status]++;
     if (row.reason) summary.reasons[row.reason] = (summary.reasons[row.reason] ?? 0) + 1;
@@ -134,6 +154,31 @@ async function dryRun(database, workspace, audit, maxPages) {
     const statuses = summary.byStatus[originalStatus] ??= { estimated: 0, prospective: 0, abstained: 0, priced: 0,
       forecastOnly: 0, featuredAbstentions: 0, modes: {} };
     statuses[row.status]++;
+    const coverage = row.coverage, totals = summary.marketCoverage;
+    if (coverage?.auditedQuoteCutoff === "proven") totals.provenCutoffFixtures++;
+    else if (coverage?.auditedQuoteCutoff === "nominal-only") totals.nominalCutoffOnlyFixtures++;
+    else totals.noOddsInventoryFixtures++;
+    if (coverage?.modelEvidence) {
+      totals.modelEvidenceFixtures++;
+      if (coverage.modelEvidence.competitionMatches >= coverage.modelEvidence.sampleCap) totals.modelEvidenceAtSampleCap++;
+      if (coverage.modelEvidence.headToHeadMatches) totals.fixturesWithHeadToHead++;
+      if (coverage.modelEvidence.verifiedHalfTime) totals.fixturesWithVerifiedHalfTimeHistory++;
+    }
+    if (coverage?.contextCoverage) {
+      totals.archivedContextFixtures++;
+      for (const [name, count] of Object.entries(coverage.contextCoverage.missingOrConflicting))
+        totals.archivedContextGaps[name] = (totals.archivedContextGaps[name] ?? 0) + count;
+    }
+    if (coverage?.priceGates) {
+      const { comparableQuoteOutcomes, oddsFloorOutcomes, positiveReturnOutcomes, eligibleByRung } = coverage.priceGates;
+      totals.standardGates.comparable += comparableQuoteOutcomes;
+      totals.standardGates.meetsPrice += oddsFloorOutcomes;
+      totals.standardGates.positiveReturn += positiveReturnOutcomes;
+      for (const { threshold, outcomes } of eligibleByRung)
+        totals.standardGates.eligibleByRung[threshold] = (totals.standardGates.eligibleByRung[threshold] ?? 0) + outcomes;
+    }
+    for (const [name, count] of Object.entries(coverage?.marketCounts ?? {})) totals.counts[name] = (totals.counts[name] ?? 0) + count;
+    for (const [name, count] of Object.entries(coverage?.unavailableMarkets ?? {})) totals.unavailableMarkets[name] = (totals.unavailableMarkets[name] ?? 0) + count;
     if (row.input) {
       summary[row.forecastOrigin]++;
       const mode = replayFeaturedMode(row.input.featuredDecision);
@@ -155,7 +200,7 @@ async function dryRun(database, workspace, audit, maxPages) {
         const featured = definition ? { definition, selection: input.selected.selection, mode: replayFeaturedMode(input.featuredDecision) } : undefined;
         return [{ fixtureId, kickoffAt, probabilities, featured }];
       }));
-      await sealOnce(path, { auditHash: audit.auditHash, summary, evaluation });
+      await sealOnce(path, { auditHash: audit.auditHash, coverageVersion, summary, evaluation });
     }
   }
   const final = finished && !abort.signal.aborted ? await readSealed(join(workspace, "dry-run.json")) : null;
@@ -164,8 +209,9 @@ async function dryRun(database, workspace, audit, maxPages) {
 
 async function stage(workspace, audit, store) {
   const complete = await readSealed(join(workspace, "dry-run.json"));
-  if (complete.auditHash !== audit.auditHash || !complete.summary.finished) throw new ReplayCommandError("Finish the audited dry run before staging.");
-  const rows = (await loadPages(workspace, audit)).flatMap((page) => page.rows);
+  if (complete.auditHash !== audit.auditHash || complete.coverageVersion !== coverageVersion || !complete.summary.finished)
+    throw new ReplayCommandError("Finish the audited dry run before staging.");
+  const rows = (await loadPages(workspace, audit, true)).flatMap((page) => page.rows);
   // Checkpoints from an earlier dry run recorded the exclusive lock for rebuilt
   // forecasts without an original. Keep the checkpoint and its evidence hash.
   const candidates = rows.flatMap(({ input }) => !input ? [] : [input.sourceRevisionId === null ? { ...input,
@@ -388,12 +434,15 @@ try {
   const { positionals: [action, ...extra], values } = parseArgs({ allowPositionals: true, options: {
     environment: { type: "string", default: "development" }, workspace: { type: "string" },
     pages: { type: "string" }, "operation-id": { type: "string" }, from: { type: "string" }, to: { type: "string" },
-    "delta-baseline": { type: "string" }, "v1-operation-id": { type: "string" },
+    "delta-baseline": { type: "string" }, "v1-operation-id": { type: "string" }, "trace-fixture": { type: "string", multiple: true },
   } });
   const actions = ["audit", "dry-run", "stage", "activate", "rollback", "delta-audit", "delta-stage", "delta-activate", "delta-rollback"];
   if (!values.workspace || extra.length || !actions.includes(action) ||
     values.pages !== undefined && !/^[1-9]\d{0,3}$/u.test(values.pages))
     throw new ReplayCommandError("Supply a replay or policy-delta action and --workspace.");
+  const traces = new Set(values["trace-fixture"] ?? []);
+  if (traces.size > 10 || traces.size && (action !== "dry-run" || [...traces].some((id) =>
+    !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/u.test(id)))) throw new ReplayCommandError("Supply up to ten fixture UUIDs to trace in the dry run.");
   const delta = action.startsWith("delta-"), baseline = values["delta-baseline"] ?? "active";
   if (action === "delta-audit" ? !["active", "reviewed"].includes(baseline) ||
       (baseline === "active" ? !validOperationId(values["v1-operation-id"]) : values["v1-operation-id"] !== undefined)
@@ -414,6 +463,9 @@ try {
         evidenceFingerprint(audit.range) !== evidenceFingerprint(range.window))
       throw new ReplayCommandError("The audit workspace belongs to another target, date range or decision policy.");
     if (!existing) await sealOnce(path, audit);
+    const catalog = await database.query((tx) => storedPreMatchBetCatalogAt(tx, audit.auditedAt));
+    await sealOnce(join(workspace, "market-catalog.json"), { auditHash: audit.auditHash, coverageVersion,
+      latestAtAudit: catalog, bindingInventory: catalog ? reconcileOddsCatalog("pre-match", catalog.catalog) : null });
     console.log(JSON.stringify({ auditHash: audit.auditHash, auditedAt: new Date(audit.auditedAt).toISOString(), ...audit.summary }));
   } else {
     const audit = await readSealed(join(workspace, "audit.json"));
@@ -423,7 +475,7 @@ try {
     if (audit.environment !== values.environment || audit.engineVersion !== localGoalModelVersion() ||
       audit.registryVersion !== LOCAL_FIRST_MARKET_REGISTRY_VERSION || !versionMatches)
       throw new ReplayCommandError("The audit target or model no longer matches this operation.");
-    if (action === "dry-run") await dryRun(database, workspace, audit, Number(values.pages ?? Infinity));
+    if (action === "dry-run") await dryRun(database, workspace, audit, Number(values.pages ?? Infinity), traces);
     else if (action === "delta-audit") await deltaAudit(database, workspace, audit, baseline, values["v1-operation-id"]);
     else {
       const { createMysqlNovemberReplayStore } = await import("../src/server/intelligence/november-replay-store.ts");

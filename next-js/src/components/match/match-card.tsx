@@ -624,6 +624,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const sourceName = retrospective ? messages.text("touchline.retrospective") : source ? messages.text(`market.source.${source}`) : null;
   const sourceMarker = source ? <ForecastSourceLabel source={source} messages={messages} label={sourceName ?? undefined} /> : null;
   const tierDescription = featuredPickStatusText(featured, messages);
+  const pickDescription = [sourceName, tierDescription, valueDescription].filter(Boolean).join(" · ");
   const tierMarker = <FeaturedPickStatus pick={featured} description={tierDescription} compact />;
   const valueLabel = <FeaturedPriceValue description={valueDescription} messages={messages} />;
   const family = featured?.label ?? messages.text(`market.family.${shownFamily}`);
@@ -673,7 +674,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   if (desktop) {
     const marketDescription = offline ? "Predictions are unavailable in the saved view."
       : gated ? messages.text("paywall.card")
-      : selection ? [`${family}: ${predictionDescription(messages, selection, selectionContext)}`, sourceName, tierDescription].filter(Boolean).join(" · ")
+      : selection ? [`${family}: ${predictionDescription(messages, selection, selectionContext)}`, pickDescription].filter(Boolean).join(" · ")
       : absenceTitle ?? reason ?? undefined;
     const publication = !phoneFeed && prediction && [retrospective ? messages.text("touchline.retrospective") : source ? messages.text(`market.source.${source}`) : null,
       prediction.provisional ? messages.text("match.provisional") : null,
@@ -777,7 +778,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
         liveClock={fixture.liveClock ?? null} awaitingResult={awaitingResult} compactMatch={phoneFeed} regulationOnly={regulationOnly} exactSettlement={exactSettlement} />
     </Result>
     {!offline && interactive && <Open data-match-open href={targetHref} prefetch={false}
-      title={gated ? undefined : (absenceTitle ?? (sourceName && [sourceName, tierDescription].filter(Boolean).join(" · "))) ?? undefined}>
+      title={gated ? undefined : absenceTitle ?? (pickDescription || undefined)}>
       <VisuallyHidden>{gated ? `${messages.text("paywall.unlock")}: ${title}` : messages.text("match.analysisLabel", { home, away })}</VisuallyHidden><ChevronIcon />
     </Open>}
   </Card>;

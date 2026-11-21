@@ -5,14 +5,15 @@ import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { marketRules } from "../../domain/markets.ts";
 import { novemberReplayRange, novemberReplayZone } from "../../domain/november-replay.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
-import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
-import { buildFixtureModelEvidence, fixtureModelEvidenceBounds, type FixtureModelHistoryRow } from "../evidence/fixture-model-evidence.ts";
+import { evidenceFingerprint, freezeEvidence, parseEvidenceSnapshot } from "../evidence/evidence-input.ts";
+import { evidenceSourceExclusion } from "../evidence/evidence-snapshot.ts";
+import { buildFixtureModelEvidence, fixtureModelEvidenceBounds, type FixtureModelEvidence, type FixtureModelHistoryRow } from "../evidence/fixture-model-evidence.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import type { CutoffSchedule } from "../predictions/cutoff-contract.ts";
 import { reconstructCutoff, revisionEligibleForLock } from "../predictions/cutoff-eligibility.ts";
 import { storedCutoffOperation } from "../predictions/cutoff-read.ts";
 import { PredictionHistoryError, type StoredCycle } from "../predictions/history-contract.ts";
-import { historyTime, storedCycle, storedRevision, type HistoryRow } from "../predictions/history-read.ts";
+import { historyJson, historyTime, storedCycle, storedRevision, type HistoryRow } from "../predictions/history-read.ts";
 import { storedLifecycleReceipt } from "../predictions/lifecycle-read.ts";
 import { statusShowsPlay } from "../predictions/publication-eligibility.ts";
 import type { ForecastDecision } from "../predictions/forecast-decision.ts";
@@ -36,8 +37,10 @@ export type NovemberReplayEvidence = Readonly<{
   status: "qualified" | "abstained" | "prospective"; reason: string | null; evidenceHash: string;
   cutoffAt: number | null; scheduleHash: string | null; scheduleVersion: number | null;
   historyMatches: number; evidenceReceiptIds: readonly string[]; forecast: LocalGoalForecast | null;
-  archivedDecision?: ForecastDecision; decisionAt?: number;
+  archivedDecision?: ForecastDecision; decisionAt?: number; modelCoverage?: ReplayModelCoverage;
+  contextCoverage?: ReturnType<typeof archivedContextCoverage>;
 }>;
+type ReplayModelCoverage = ReturnType<typeof replayModelCoverage>;
 type ReplayDatabase = Pick<DatabaseRuntime, "query">;
 export type NovemberReplayTrainingMembership = Readonly<{
   observedBefore: number; byCompetition: ReadonlyMap<string, readonly string[]>;
@@ -146,7 +149,7 @@ async function readShadowScheduleProof(tx: Prisma.TransactionClient, occurrence:
 
 /** A published receipt already passed the original observation-freshness policy. */
 async function readPublishedScheduleProof(tx: Prisma.TransactionClient, occurrence: NovemberReplayOccurrence, cycle: StoredCycle,
-  schedules: readonly CutoffSchedule[], cutoffAt: number) {
+  schedules: readonly CutoffSchedule[], cutoffAt: number, withCoverage: boolean) {
   const revisionId = occurrence.originalRevisionId;
   if (!revisionId || cycle.state !== "closed" || cycle.lockedSetId !== revisionId) return null;
   const known = await tx.predictionRefreshResult.findFirst({ where: { cycleId: cycle.id, fixtureId: occurrence.fixtureId,
@@ -169,18 +172,36 @@ async function readPublishedScheduleProof(tx: Prisma.TransactionClient, occurren
     context.home.teamId !== occurrence.homeTeamId || context.away.teamId !== occurrence.awayTeamId || observation.kickoffAt !== occurrence.kickoffAt)
     return null;
   // The accepted publication validated the snapshot and bound its immutable team pair and fixture.
-  const [evidence] = await tx.$queryRaw<{ requestId: string }[]>`SELECT requestId FROM FixtureEvidenceSnapshot
+  const [evidence] = await tx.$queryRaw<{ requestId: string; snapshotJson: unknown }[]>`SELECT requestId,
+    ${withCoverage ? Prisma.sql`snapshotJson` : Prisma.sql`NULL`} AS snapshotJson FROM FixtureEvidenceSnapshot
     WHERE requestId=${revision.evidenceSnapshotId} AND contentHash=${revision.evidenceHash} AND fixtureId=${occurrence.fixtureId}
       AND fixtureVersion=${revision.fixtureVersion} AND cycleId=${cycle.id} AND runId=${revision.runId}
       AND homeTeamId=${occurrence.homeTeamId} AND awayTeamId=${occurrence.awayTeamId} AND kickoffAt=${new Date(occurrence.kickoffAt)}
       AND analysisAt<=${new Date(revision.generationCompletedAt)}
       AND integrity=SHA2(CONCAT(requestId,':',requestFingerprint,':',CAST(snapshotJson AS CHAR)),256)`;
   return evidence ? { receiptId: receipt.id, snapshotId: evidence.requestId, confirmedAt: observation.retrievedAt,
-    evidenceCutoffAt: revision.evidenceCutoffAt, decision: receipt.forecastDecision } : null;
+    evidenceCutoffAt: revision.evidenceCutoffAt, decision: receipt.forecastDecision,
+    ...(withCoverage && { contextCoverage: archivedContextCoverage(evidence.snapshotJson, revision.evidenceHash, revision.evidenceCutoffAt) }) } : null;
+}
+
+function archivedContextCoverage(body: unknown, expectedHash: string, cutoffAt: number) {
+  try {
+    const { hash, sources, facts, exclusions, missingness, context, policy } = parseEvidenceSnapshot(historyJson(body));
+    if (hash !== expectedHash || context.cutoffAt > cutoffAt) return null;
+    const eligible = new Map(sources.filter((source) => source.kind === "football" &&
+      evidenceSourceExclusion(source, context, policy) === null).map((source) => [source.id, source.retrievedAt]));
+    const tally = (values: readonly string[]) => Object.fromEntries([...new Set(values)].sort()
+      .map((value) => [value, values.filter((entry) => entry === value).length]));
+    const confirmed = facts.filter(({ flags, values }) => !flags.includes("conflict") && values.some(({ certainty, asOfAt, sourceIds }) =>
+      certainty === "confirmed" && (asOfAt === null || asOfAt <= context.cutoffAt) && sourceIds.some((id) => eligible.has(id))));
+    return { cutoffAt: context.cutoffAt, footballSources: eligible.size, latestSourceAt: eligible.size ? Math.max(...eligible.values()) : null,
+      confirmedFacts: tally(confirmed.map(({ kind }) => kind)), exclusions: tally(exclusions.map(({ reason }) => reason)),
+      missingOrConflicting: tally(missingness.map(({ kind, reason }) => `${kind}:${reason}`)) };
+  } catch { return null; }
 }
 
 async function readReplaySchedule(tx: Prisma.TransactionClient, occurrence: NovemberReplayOccurrence, auditedAt: number,
-  preferPublication = false): Promise<ScheduleCheck> {
+  preferPublication = false, withCoverage = false): Promise<ScheduleCheck> {
   const nominal = getPublicationDeadline(utcInstantFromEpochMilliseconds(occurrence.kickoffAt));
   const auditClock = new Date(auditedAt), now = utcInstantFromEpochMilliseconds(auditedAt);
   const [current, cycle, lifeStarts] = await Promise.all([
@@ -267,7 +288,7 @@ async function readReplaySchedule(tx: Prisma.TransactionClient, occurrence: Nove
   const fresh = identity && provenSchedule && !stale;
   const shadowId = identity && provenSchedule && stale ? await readShadowScheduleProof(tx, occurrence, cutoffAt) : null;
   const published = cycle && (preferPublication || !fresh && shadowId === null && (season?.value === current.seasonId || lifecycleIdentity))
-    ? await readPublishedScheduleProof(tx, occurrence, cycle, schedules, cutoffAt) : null;
+    ? await readPublishedScheduleProof(tx, occurrence, cycle, schedules, cutoffAt, withCoverage) : null;
   const correctedAfterObservation = published !== null && (
     (kickoff && kickoff.observedAt >= published.confirmedAt && kickoff.value !== new Date(occurrence.kickoffAt).toISOString()) ||
     (status && status.observedAt >= published.confirmedAt && status.value !== "scheduled") ||
@@ -312,8 +333,8 @@ export async function readNovemberReplayTrainingMembership(database: ReplayDatab
 }
 
 async function readHistoryCandidates(tx: Pick<Prisma.TransactionClient, "$queryRaw">, occurrence: NovemberReplayOccurrence,
-  cutoffAt: number, membership: Prisma.Sql): Promise<HistoryRow[]> {
-  const lock = new Date(cutoffAt), lower = new Date(cutoffAt - 1 - localGoalDefaults.lookbackMs);
+  cutoffAt: number, membership: Prisma.Sql, lookbackMs: number): Promise<HistoryRow[]> {
+  const lock = new Date(cutoffAt), lower = new Date(cutoffAt - 1 - lookbackMs);
   return tx.$queryRaw<HistoryRow[]>(Prisma.sql`
     WITH candidates AS (
       ${membership}
@@ -382,20 +403,20 @@ const descendingText = (left: string, right: string) => left === right ? 0 : lef
 
 /** Reconstruct each training label from append-only records visible before this lock. */
 export async function readNovemberReplayHistory(tx: Pick<Prisma.TransactionClient, "$queryRaw">, occurrence: NovemberReplayOccurrence,
-  cutoffAt: number, fixtureIds?: readonly string[]): Promise<FixtureModelHistoryRow[]> {
+  cutoffAt: number, fixtureIds?: readonly string[], lookbackMs = localGoalDefaults.lookbackMs): Promise<FixtureModelHistoryRow[]> {
   let rows: HistoryRow[] = [];
   if (fixtureIds === undefined) {
     rows = await readHistoryCandidates(tx, occurrence, cutoffAt, Prisma.sql`
       SELECT f.id AS fixtureId FROM FootballSeason s JOIN FootballFixture f ON f.seasonId=s.id
       WHERE s.competitionId=${occurrence.competitionId} AND f.provider='api-football'
       UNION
-      SELECT prior.fixtureId FROM (${displacedTrainingFixtures}) prior WHERE prior.competitionId=${occurrence.competitionId}`);
+      SELECT prior.fixtureId FROM (${displacedTrainingFixtures}) prior WHERE prior.competitionId=${occurrence.competitionId}`, lookbackMs);
   } else {
     const ids = [...new Set(fixtureIds)];
     for (let offset = 0; offset < ids.length; offset += maximumMembershipBatch) {
       const batch = ids.slice(offset, offset + maximumMembershipBatch);
       const candidates = await readHistoryCandidates(tx, occurrence, cutoffAt, Prisma.sql`
-        SELECT id AS fixtureId FROM FootballFixture WHERE id IN (${Prisma.join(batch)})`);
+        SELECT id AS fixtureId FROM FootballFixture WHERE id IN (${Prisma.join(batch)})`, lookbackMs);
       // Every global top-N row is also in its own batch's top N. Apply the
       // global cutoff before decoding or filtering any sealed result.
       rows = [...rows, ...candidates].sort((a, b) => descendingText(String(a.kickoff), String(b.kickoff)) ||
@@ -412,8 +433,22 @@ export async function readNovemberReplayHistory(tx: Pick<Prisma.TransactionClien
     return [{ fixtureId: result.fixtureId, competitionId: String(row.competitionId),
       homeTeamId: String(row.homeTeamId), awayTeamId: String(row.awayTeamId), kickoffAt, availableAt,
       homeGoals: result.regulation.home!, awayGoals: result.regulation.away!, period: marketRules.period,
-      observationHash: result.id, evidenceRef: result.regulation.evidenceRef!, halfTime: null }];
+      observationHash: result.id, evidenceRef: result.regulation.evidenceRef!,
+      halfTime: result.halfTime ? { home: result.halfTime.home, away: result.halfTime.away } : null }];
   });
+}
+
+function replayModelCoverage(inputs: FixtureModelEvidence, historyFrom: number) {
+  const { history, fixture, relationships, coverage } = inputs;
+  return { historyFrom, cutoffAt: fixture.forecastAt + 1, competitionMatches: history.length,
+    homeTeamMatches: relationships.home.length, awayTeamMatches: relationships.away.length,
+    headToHeadMatches: relationships.direct.length, commonOpponents: relationships.commonOpponents.length,
+    homeTeamAsHome: history.filter(({ homeTeamId, neutralVenue }) => homeTeamId === fixture.homeTeamId && neutralVenue !== true).length,
+    awayTeamAsAway: history.filter(({ awayTeamId, neutralVenue }) => awayTeamId === fixture.awayTeamId && neutralVenue !== true).length,
+    verifiedVenueFacts: history.filter(({ neutralVenue }) => neutralVenue !== undefined).length,
+    verifiedHalfTime: coverage.verifiedHalfTime, excludedRows: coverage.excludedRows,
+    ambiguousOccurrences: coverage.ambiguousOccurrences, sampleCap: fixtureModelEvidenceBounds.history,
+    latestKickoffAt: history[0]?.kickoffAt ?? null, earliestKickoffAt: history.at(-1)?.kickoffAt ?? null };
 }
 
 /** Uses one millisecond before effective lock as the final instant a pre-match prediction could have used. */
@@ -423,37 +458,51 @@ export async function loadNovemberReplayEvidence(database: ReplayDatabase, occur
 }
 
 export async function loadNovemberReplayEvidenceInTransaction(tx: Prisma.TransactionClient, occurrence: NovemberReplayOccurrence,
-  auditedAt: number, training?: NovemberReplayTrainingMembership, priced = false): Promise<NovemberReplayEvidence> {
-  return loadReplayEvidence(tx, occurrence, auditedAt, training, priced);
+  auditedAt: number, training?: NovemberReplayTrainingMembership, priced = false, withCoverage = false): Promise<NovemberReplayEvidence> {
+  return loadReplayEvidence(tx, occurrence, auditedAt, training, priced, withCoverage);
 }
 
 async function loadReplayEvidence(tx: Prisma.TransactionClient, occurrence: NovemberReplayOccurrence, auditedAt: number,
-  training?: NovemberReplayTrainingMembership, priced = false): Promise<NovemberReplayEvidence> {
+  training?: NovemberReplayTrainingMembership, priced = false, withCoverage = false): Promise<NovemberReplayEvidence> {
   utcInstantFromEpochMilliseconds(auditedAt);
   const identity = { fixtureId: occurrence.fixtureId, competitionId: occurrence.competitionId,
     homeTeamId: occurrence.homeTeamId, awayTeamId: occurrence.awayTeamId, kickoffAt: occurrence.kickoffAt };
   function finish(status: NovemberReplayEvidence["status"], reason: string | null, schedule: ScheduleEvidence | null,
-    forecast: LocalGoalForecast | null = null, decisionAt?: number): NovemberReplayEvidence {
+    forecast: LocalGoalForecast | null = null, decisionAt?: number, modelCoverage?: ReplayModelCoverage): NovemberReplayEvidence {
     return freezeEvidence({ status, reason, cutoffAt: schedule?.cutoffAt ?? null, scheduleHash: schedule?.scheduleHash ?? null,
-      ...(decisionAt !== undefined && { decisionAt }),
+      ...(decisionAt !== undefined && { decisionAt }), ...(modelCoverage && { modelCoverage }),
       scheduleVersion: schedule?.scheduleVersion ?? null, historyMatches: forecast?.diagnostics.matches ?? 0,
       evidenceReceiptIds: forecast?.historyIds ?? [], forecast,
       evidenceHash: evidenceFingerprint({ version: "november-replay-evidence-v1", identity, status, reason, schedule,
         modelVersion: localGoalModelVersion(), forecastHash: forecast?.hash ?? null }) });
   }
   if (!occurrence.applicable) return finish("abstained", "displaced-occurrence", null);
-  const { prospective, reason, schedule, publication } = await readReplaySchedule(tx, occurrence, auditedAt, priced);
+  const { prospective, reason, schedule, publication } = await readReplaySchedule(tx, occurrence, auditedAt, priced, withCoverage);
   if (prospective) return finish("prospective", null, null);
   if (!schedule) return finish("abstained", reason, null);
   const decisionAt = priced ? schedule.cutoffAt - 1 : undefined;
   const originalCutoffAt = priced ? publication?.evidenceCutoffAt : undefined;
   const forecastSchedule = originalCutoffAt === undefined ? schedule : { ...schedule, cutoffAt: originalCutoffAt };
   const archivedDecision = priced ? publication?.decision : undefined;
+  const forecastAt = forecastSchedule.cutoffAt - 1;
+  const fixture = { ...identity, forecastAt };
+  const fixtureIds = training ? training.byCompetition.get(occurrence.competitionId) ?? [] : undefined;
+  let modelCoverage: ReplayModelCoverage | undefined, coveredHistory: readonly FixtureModelHistoryRow[] | undefined;
+  if (withCoverage && (!priced || occurrence.originalRevisionId === null || originalCutoffAt !== undefined) &&
+    (!training || training.observedBefore >= forecastSchedule.cutoffAt)) {
+    const from = new Date(forecastAt);
+    from.setUTCFullYear(from.getUTCFullYear() - 3);
+    const history = await readNovemberReplayHistory(tx, occurrence, forecastSchedule.cutoffAt, fixtureIds, forecastAt - from.getTime());
+    const inputs = buildFixtureModelEvidence({ fixture, history });
+    modelCoverage = replayModelCoverage(inputs, from.getTime());
+    coveredHistory = history;
+  }
   if (publication && decisionAt !== undefined &&
     archivedDecision?.markets.some((market) => market.source === "local-engine" && market.definition)) {
     return freezeEvidence({ status: "qualified", reason: null, cutoffAt: archivedDecision.evidenceCutoffAt,
       scheduleHash: schedule.scheduleHash, scheduleVersion: schedule.scheduleVersion, historyMatches: 0, forecast: null,
-      decisionAt, archivedDecision, evidenceReceiptIds: [publication.receiptId, publication.snapshotId],
+      decisionAt, archivedDecision, ...(modelCoverage && { modelCoverage }), contextCoverage: publication.contextCoverage ?? null,
+      evidenceReceiptIds: [publication.receiptId, publication.snapshotId],
       evidenceHash: evidenceFingerprint({ version: "archived-local-replay-v1", identity, schedule,
         receipt: publication.receiptId, snapshot: publication.snapshotId, decision: archivedDecision.hash }) });
   }
@@ -461,14 +510,14 @@ async function loadReplayEvidence(tx: Prisma.TransactionClient, occurrence: Nove
     return finish("abstained", "original-evidence-cutoff-unverified", schedule, null, decisionAt);
   if (training && training.observedBefore < forecastSchedule.cutoffAt)
     return finish("abstained", "training-membership-precedes-cutoff", forecastSchedule, null, decisionAt);
-  const fixtureIds = training ? training.byCompetition.get(occurrence.competitionId) ?? [] : undefined;
-  const history = await readNovemberReplayHistory(tx, occurrence, forecastSchedule.cutoffAt, fixtureIds);
-  const inputs = buildFixtureModelEvidence({ fixture: { ...identity, forecastAt: forecastSchedule.cutoffAt - 1 }, history });
+  const history = coveredHistory?.filter(({ kickoffAt }) => kickoffAt >= forecastAt - localGoalDefaults.lookbackMs) ??
+    await readNovemberReplayHistory(tx, occurrence, forecastSchedule.cutoffAt, fixtureIds);
+  const inputs = buildFixtureModelEvidence({ fixture, history });
   const forecast = estimateLocalGoals({ fixture: inputs.fixture, history: inputs.history.map(({ halfTime, ...result }) => {
     void halfTime;
     return result;
   }) });
   return forecast.status === "estimated" && forecast.expectedGoals && forecast.probabilities
-    ? finish("qualified", null, forecastSchedule, forecast, decisionAt)
-    : finish("abstained", forecast.reasons[0] ?? "insufficient-point-in-time-history", forecastSchedule, forecast, decisionAt);
+    ? finish("qualified", null, forecastSchedule, forecast, decisionAt, modelCoverage)
+    : finish("abstained", forecast.reasons[0] ?? "insufficient-point-in-time-history", forecastSchedule, forecast, decisionAt, modelCoverage);
 }

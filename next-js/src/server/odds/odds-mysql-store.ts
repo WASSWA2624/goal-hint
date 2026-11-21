@@ -460,11 +460,28 @@ export function storedVerifiedReplayBookmakerQuotes(tx: Tx, fixtures: readonly B
 
 /** A retrospective decision can use only locally observed prices and sealed receipts available at its declared cutoff. */
 export function storedPointInTimeFeaturedBookmakerQuotes(tx: Tx,
-  fixtures: readonly (BookmakerFixture & { decisionAt: number })[], asOf: number) {
+  fixtures: readonly (BookmakerFixture & { decisionAt: number })[], asOf: number, inventoryAllMarkets = false) {
   const eligible = fixtures.filter(({ kickoffAt, decisionAt }) => kickoffAt !== null && kickoffAt <= asOf &&
     Number.isSafeInteger(decisionAt) && decisionAt >= 0 && decisionAt < kickoffAt);
-  return readHistoricalBookmakerQuotes(tx, eligible, asOf, localFeaturedBookmakerBetIds, true,
+  return readHistoricalBookmakerQuotes(tx, eligible, asOf, inventoryAllMarkets ? undefined : localFeaturedBookmakerBetIds, true,
     new Map(eligible.map(({ fixtureId, decisionAt }) => [fixtureId, decisionAt])));
+}
+
+export async function storedPreMatchBetCatalogAt(tx: Tx, asOf: number) {
+  const [row] = await tx.$queryRaw<SealedRow[]>`SELECT id,body,integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity
+    FROM OddsImportBatch WHERE scopeKey='bets' AND kind='bets' AND status='complete' AND receivedAt<=${new Date(asOf)}
+    ORDER BY receivedAt DESC,id DESC LIMIT 1`;
+  if (!row) return null;
+  const { id, receivedAt, catalog } = parsedBatch(row);
+  return { id, receivedAt, catalog };
+}
+
+/** A coverage-only shortcut. A hit still goes through the full clock, identity, retention and receipt checks. */
+export async function hasRetainedPreMatchQuoteCandidates(tx: Tx, fixtureId: string, decisionAt: number, asOf: number) {
+  const [row] = await tx.$queryRaw<{ present: unknown }[]>`SELECT EXISTS(SELECT 1 FROM ProviderOddsSnapshot
+    WHERE fixtureId=${fixtureId} AND retrievedAt BETWEEN ${new Date(decisionAt - preMatchOddsFreshMs)} AND ${new Date(decisionAt)}
+      AND retainUntil>=${new Date(asOf)}) AS present`;
+  return Boolean(row?.present);
 }
 
 /** Freeze only sealed observations available before the effective lock, using actual database time for retention. */
