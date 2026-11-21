@@ -131,6 +131,14 @@ test('equivalent explicit date ranges can reuse a complete cohort, while unrelat
   assert.equal(findBestSlipsSnapshot(emptyCache(source), source, true, query({ period: 'tomorrow' })), null);
 });
 
+test('snapshot reuse keeps different probability and match-count denominators isolated', () => {
+  const source = daily(), narrow = query({ probMin: 80, matchesMax: 2 });
+  const cache = rememberBestSlipsSnapshot(emptyCache(source), source, narrow, page(source, narrow));
+  assert.notEqual(bestSlipsRangeKey(narrow, day), bestSlipsRangeKey(query({ probMin: 81, matchesMax: 2 }), day));
+  assert.equal(findBestSlipsSnapshot(cache, source, true, query({ probMin: 80, matchesMax: 3 })), null);
+  assert.equal(findBestSlipsSnapshot(cache, source, true, narrow).retained, false);
+});
+
 test('the complete daily All source remains available while every rendered page is limited to 20 slips', () => {
   const source = daily(Array.from({ length: 83 }, () => 'pending'));
   const accepted = projectBestSlipsSnapshot({ query: query(), data: source }, query());

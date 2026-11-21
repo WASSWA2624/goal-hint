@@ -9,7 +9,14 @@ export const bestSlipOddsBands = [
 ] as const;
 export type BestSlipOddsBand = typeof bestSlipOddsBands[number]["id"];
 export const defaultBestSlipOddsBand: BestSlipOddsBand = "1.5-5";
+/** Original band capacity and permanent stride for historical rank links. */
 export const bestSlipBandLimit = 20;
+export const dailyBestSlipBandLimit = 10;
+export function bestSlipExactRange(band: BestSlipOddsBand): Readonly<{ minimum: number; maximum: number; exclusiveMaximum: boolean }> {
+  const range = bestSlipBand(band);
+  const exclusiveMaximum = range.id !== "100-200";
+  return { minimum: range.minimumTotal, maximum: range.maximumTotal + Number(exclusiveMaximum), exclusiveMaximum };
+}
 export function bestSlipBand(value: BestSlipOddsBand = defaultBestSlipOddsBand) {
   const band = bestSlipOddsBands.find(band => band.id === value);
   if (!band) throw new RangeError("Unknown Best Slips odds range.");

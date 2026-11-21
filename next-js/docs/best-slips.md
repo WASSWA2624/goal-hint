@@ -1,5 +1,8 @@
 # Best Slips (30 October 2026)
 
+This records the October design. See [current bands and browsing](best-slip-odds-bands.md)
+and [daily publications](daily-slip-publications.md) for the current behavior.
+
 `/en` is Best Slips; `/en/matches` preserves the match feed and `/en/slips` keeps
 the editable builder. Old feed-query bookmarks redirect to Matches. Public
 previews use the selected responsive slip layout and show the rank, match count,

@@ -7,12 +7,28 @@ account erasure. Personal saved slips retain their separate privacy lifecycle.
 
 ## Publication boundary
 
-`createDailySlipPublisher` generates a bounded current-day cohort from the
-existing stored feed and price reader. It requires both a currently qualified
-joint model and verified public-odds permission. It uses current confirmed
-primary-bookmaker offers at the fixture's scheduled kickoff. A frozen quote
-from a prediction publication cannot qualify a new slip. Missing odds or model
-evidence produces an explicit worker status.
+`createDailySlipPublisher` takes one bounded Kampala-day cohort from the stored
+Matches forecast and exact featured-pick reader. It requires a currently
+qualified joint model and verified public odds rights. Inputs are Local Engine
+featured selections that clear the existing 75% floor, use the configured
+primary bookmaker and have exact original-cycle settlement support. The launch
+markets and a verified regulation Over/Under 1.5 selection are supported. A
+book or market mismatch leaves that fixture out. All legs of a slip must share
+one bookmaker. The worker records the original quote snapshot and sealed import
+receipt, and rechecks the exact offer under lock before publication.
+
+The six bands are lower-inclusive and upper-exclusive, except the last band
+includes 200.00. The engine multiplies the full prices and assigns the band
+before formatting the total to two places. A display value that rounds onto a
+boundary retains its stored band. Candidate order starts with model probability
+and exact price. Historical evidence affects ties only where comparable, priced
+original decisions have sufficient verified settlement samples in both training
+and validation. Worker summaries report sample counts and evidence availability.
+The final stored rank uses qualified joint probability, exact total, fewer legs
+and stable identity. Disjoint fixtures within a band remain the diversity rule.
+Band selection prefers combinations with fewer previously published fixtures
+where the bounded search finds alternatives. Identical selection sets cannot
+be published twice on the same day.
 
 `createPublishedSlips.publish` validates the original quoted total, marginal
 average, joint estimate, daily odds target, diversity and current EAT day. It
@@ -22,8 +38,8 @@ cycle changes produce a new builder ID; an obsolete custom save returns 409
 instead of quietly substituting another forecast.
 
 The publication, slip snapshots and normalized cycle/revision membership commit
-together. A unique reporting day selects the first successful writer. Concurrent
-retries retain that publication, even if a later cohort differs. An ignored
+together. The first successful write for each reporting day and band is final.
+Concurrent retries retain that publication, even if a later cohort differs. An ignored
 insert is considered a replay only after a current locking read proves that the
 original publication exists. Model rights, day and cutoff eligibility are
 rechecked after membership writes, so a slow operation crossing a deadline rolls
@@ -34,6 +50,8 @@ source revision references, model identity, calibration/correlation references
 and publication time. Reading them does not reinterpret current defaults or
 require the old model to remain active. Model expiry never replaces an already
 published forecast. Changes to model qualification affect future publications.
+Version three permits up to 10 slips per band. Versions one and two keep their
+original limits and rank addresses. The public rank stride remains 20.
 The stored model identity hashes its immutable qualification references and
 validity window; the trusted verifier must bind those references to the exact
 reviewed implementation and artifacts.
@@ -52,8 +70,12 @@ requiring an UPDATE grant on the canonical fixture or append-only publication
 tables. See the [MySQL locking-read contract](https://dev.mysql.com/doc/refman/8.4/en/innodb-locking-reads.html).
 
 Apply the reviewed migration using the existing migration-role procedure before
-enabling the archive. It has been generated and schema-validated here, but was
-not applied to the configured application database.
+promoting this worker. The `20261122180000_daily_best_slip_combinations`
+migration adds the immutable same-day combination key and extends the versioned
+publication check. Give the dedicated publisher `SELECT, INSERT` on
+`DailyBestSlipCombination` and the existing archive tables, and read access to
+sealed forecast, odds and settlement evidence. The web worker retains its
+existing archive grants.
 
 The private worker accepts an explicitly supplied trusted local module:
 
@@ -71,14 +93,18 @@ does not establish calibration, rights or promotion evidence.
 
 The hosted web runtime reads the archive when the matching
 `GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF` is verified in its private owner register.
-An empty odds band for today shows that it is awaiting publication. Archived
-dates and empty outcome filters retain their own empty-result state.
+Today and archived dates show the selected band and whether a publication was
+found. A date or interval can be combined with odds band, average pick
+probability, match count and result. Aggregate counts cover the selected
+numeric and date filters before the result filter and pagination.
 
-Without `--once`, the worker checks the current EAT day once a minute, including
-after midnight or restart. It retries sparse/unavailable cohorts and stops
-generating for an already-published day. Only status changes are logged. No
-visitor or cron HTTP route writes the archive. No production joint-model
-binding, schedule or provider permission was activated by this change.
+Without `--once`, the supervised worker checks the current EAT day once a minute,
+including after midnight or restart. It retries sparse or unavailable bands and
+skips every committed band. The private worker emits status and coverage changes.
+The page and API are read-only. Hosted deployment still requires a trusted
+supervised binding and independently reviewed temporal whole-slip calibration
+and dependence evidence. See the
+[November 21 hosted check](reports/best-slips-publication-evidence-2026-11-21.md).
 
 ## Original-cycle results and public access
 
@@ -105,7 +131,8 @@ aggregate counts are allowed; pending/void quotes are excluded from return and
 average-odds statistics. Making the daily slip summary public does not release
 an active slip's match details through the completed-history response.
 
-History accepts at most 31 EAT publication dates and 100 slips per day,
+History accepts at most 31 EAT publication dates and reads up to 120 legacy
+banded slips per day,
 then paginates completed records. Statistics use the whole selected period,
 including pending counts, before slicing the page. A corrupt seal, inconsistent
 membership or incomplete publication produces unavailable, never a fabricated

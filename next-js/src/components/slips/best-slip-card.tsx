@@ -17,11 +17,12 @@ export function BestSlipCard({ view, day, locale, signedIn = false }: { view: Sl
     ...(view.publishedAt !== undefined ? { publishedAt: view.publishedAt } : {}),
     ...(view.outcome ? { outcome: view.outcome } : {}), ...(view.status ? { status: view.status } : {}) };
   if (view.slip) return <SlipCard index={view.rank - 1} locale={locale} {...publication}
+    wholeSlipProbability={view.estimatedProbability}
     {...(view.completed ? { publicShareHref: publicBestSlipPath(locale, publicationDay, view.rank) } : {})}
     shareSource={{ source: "best", day: publicationDay, slipId: view.slip.id }} slip={view.slip}
     {...(view.matchStates ? { matchStates: view.matchStates } : {})} />;
   return <LockedSurface data-locked-slip><SlipCardSummary locale={locale} index={view.rank - 1} {...publication} collapsible={false}
-    totalOdds={view.totalOdds} averageProbability={view.averageProbability} selectionCount={view.matchCount}
+    totalOdds={view.totalOdds} averageProbability={view.averageProbability} estimatedProbability={view.estimatedProbability} selectionCount={view.matchCount}
     headerAction={<UnlockButton locale={locale} signedIn={signedIn} returnTo={returnTo} compact />}>
     <MatchCardLayoutContext value={desktop}>
       {view.preview?.map(({ fixture, pick }, index) => <MatchCard key={fixture.fixtureId} fixture={fixture} locale={locale}

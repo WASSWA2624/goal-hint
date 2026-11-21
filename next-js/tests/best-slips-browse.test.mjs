@@ -47,6 +47,7 @@ function fixture(days = 1, daily = 4, replacementCycles = false, valuesForRank =
         let rows = publications.filter((row) => +row.publishedAt <= +dates[0]);
         if (sql.text.includes('eatDate>=')) rows = rows.filter((row) => +row.eatDate >= +dates[1] && +row.eatDate <= +dates[2]);
         else if (sql.text.includes('eatDate<=')) rows = rows.filter((row) => +row.eatDate <= +dates[1]);
+        rows = rows.filter(row => sql.values.includes(row.oddsBand ?? 'legacy') || row.oddsBand === undefined);
         return rows.sort((a, b) => +b.eatDate - +a.eatDate).slice(0, sql.values.at(-1)).map((row) => ({ ...row, validIntegrity: corrupt ? 0 : 1 }));
       }
       if (sql.text.includes('FROM PublishedSlip')) return slips.filter((row) => sql.values.includes(row.publicationId))
@@ -265,7 +266,65 @@ test('an unpublished odds range today differs from an empty result filter or arc
   const paged = await service(full, query({ period: 'today', page: '2' }));
   assert.equal(paged.state, 'generated');
   assert.deepEqual(paged.slips, []);
+  const filtered = await service(full, query({ period: 'today', probMin: '80' }));
+  assert.equal(filtered.state, 'generated');
+  assert.equal(filtered.statistics.total, 0);
+  assert.equal(filtered.browse.bandTotal, 4);
   assert.equal((await service(full, query({ period: 'yesterday' }))).state, 'generated');
+});
+
+test('stored probability and match count precede exact cohort totals, settlement and result pagination', async () => {
+  const f = fixture(7, 8, false, rank => ({ averageProbability: rank < 5 ? 0.75 : 0.9, totalOdds: '4.00' }));
+  for (const row of f.slips.filter(row => row.rank === 6)) {
+    const oldId = row.id, slip = row.snapshotJson.slip, original = slip.selections[0];
+    const forecast = { ...original.forecast, cycleId: uuid(600000 + f.legs.length), revisionId: uuid(700000 + f.legs.length) };
+    const second = { ...original, fixtureId: uuid(500000 + f.legs.length), odds: '2.00', forecast };
+    slip.selections = [{ ...original, odds: '2.00' }, second];
+    row.id = evidenceFingerprint({ publicationId: row.publicationId, rank: row.rank, snapshot: row.snapshotJson });
+    f.legs.find(leg => leg.slipId === oldId).slipId = row.id;
+    f.legs.push({ slipId: row.id, fixtureId: second.fixtureId, cycleId: forecast.cycleId, revisionId: forecast.revisionId });
+    f.outcomes.set(second.fixtureId, 'won');
+  }
+  const result = await f.store.browse(query({ period: 'last7', probMin: '90', matchesMin: '2', matchesMax: '2', status: 'lost' }), today);
+  assert.equal(result.browse.bandTotal, 56);
+  assert.deepEqual(result.statistics, { total: 7, won: 0, lost: 7, pending: 0, void: 0, cancelled: 0 });
+  assert.equal(result.browse.total, 7);
+  assert.ok(result.slips.every(view => view.rank === 6 && view.matchCount === 2 && view.averageProbability === 0.9 && view.outcome === 'lost'));
+  assert.deepEqual(f.resultBatches, [14]);
+  const won = await f.store.browse({ ...result.browse.query, status: 'won' }, today);
+  assert.deepEqual(won.statistics, result.statistics);
+  assert.equal(won.browse.total, 0);
+});
+
+test('modern browsing uses the sealed rank and the exact band before display rounding', async () => {
+  const f = fixture(1, 2, false, rank => ({ averageProbability: rank === 1 ? 0.8 : 0.95, totalOdds: rank === 1 ? '5.00' : '4.00' }));
+  const parent = f.publications[0], oddsBand = '1.5-5';
+  parent.oddsBand = oddsBand;
+  parent.id = slipPublicationIdentity(today, oddsBand);
+  Object.assign(parent.bodyJson, { version: 3, oddsBand, criteria: `dateFrom=${today}&dateTo=${today}&totalMin=2.50&totalMax=5.00` });
+  for (const row of f.slips) {
+    const oldId = row.id, snapshot = row.snapshotJson, first = snapshot.slip.selections[0];
+    const forecast = { ...first.forecast, cycleId: uuid(610000 + row.rank), revisionId: uuid(620000 + row.rank) };
+    const second = { ...first, fixtureId: uuid(630000 + row.rank), forecast };
+    const prices = row.rank === 1 ? ['1.44', '3.47'] : ['1.81', '2.21'];
+    snapshot.slip.selections = [first, second].map((selection, index) => ({ ...selection, odds: prices[index],
+      bookmaker: { id: 1, name: 'Test bookmaker' }, source: 'local-engine', offer: {
+        bookmakerId: 1, bookmakerName: 'Test bookmaker', betId: 1, betName: 'Match Winner', providerSelection: 'Home',
+        decimal: prices[index], observedAt: parent.bodyJson.publishedAt - 500, checkedAt: parent.bodyJson.publishedAt - 100,
+        providerUpdatedAt: null, snapshotId: 'b'.repeat(64), receiptId: 'c'.repeat(64),
+      } }));
+    snapshot.estimatedProbability = row.rank === 1 ? 0.7 : 0.6;
+    row.publicationId = parent.id;
+    row.id = evidenceFingerprint({ publicationId: row.publicationId, rank: row.rank, snapshot });
+    f.legs.find(leg => leg.slipId === oldId).slipId = row.id;
+    f.legs.push({ slipId: row.id, fixtureId: second.fixtureId, cycleId: forecast.cycleId, revisionId: forecast.revisionId });
+    f.outcomes.set(second.fixtureId, 'won');
+  }
+  const lower = await f.store.browse(query({ period: 'today', oddsBand }), today);
+  assert.deepEqual(lower.slips.map(view => [view.rank, view.totalOdds, view.estimatedProbability, view.averageProbability]),
+    [[1, '5.00', 0.7, 0.8], [2, '4.00', 0.6, 0.95]]);
+  assert.ok(lower.slips.every(view => view.slip.selections.every(selection => selection.offer === undefined)));
+  assert.equal((await f.store.browse(query({ period: 'today', oddsBand: '5-10' }), today)).browse.bandTotal, 0);
 });
 
 

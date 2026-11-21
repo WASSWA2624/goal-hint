@@ -4,6 +4,8 @@ import { storedMatchFeedRecordSchema } from "./match-feed.ts";
 import { refineSlipPricePools, slipSelectionPricesSchema } from "./slip-price-page.ts";
 import { matchesSlipForecast, type SlipTotal15Forecast } from "./slip-markets.ts";
 import { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
+import { slipSelectionSnapshotSchema } from "./slip-snapshot.ts";
+import type { SlipSelection } from "./slip-builder.ts";
 
 export const slipCohortRules = Object.freeze({ maximumRecords: 500, hydrationBatchSize: 10 });
 const date = z.string().refine((value) => { try { parseReportingDate(value); return true; } catch { return false; } });
@@ -20,6 +22,7 @@ export const slipCohortSchema = z.strictObject({
   records: z.array(storedMatchFeedRecordSchema).max(slipCohortRules.maximumRecords),
   selectionPrices: slipSelectionPricesSchema,
   total15Forecasts: z.record(z.uuid(), slipTotal15ForecastSchema).optional(),
+  featuredSelections: z.array(slipSelectionSnapshotSchema.transform(value => value as SlipSelection)).max(slipCohortRules.maximumRecords).optional(),
   asOf: instant, today: date,
   range: z.strictObject({ from: date, to: date, startInclusive: instant, endExclusive: instant }),
   searchLimited: z.boolean(), partialCoverage: z.boolean(),

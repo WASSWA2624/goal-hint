@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import { getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock } from "../../domain/calendar.ts";
+import { calendarRules, getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock } from "../../domain/calendar.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { feedQueryRules, getFeedToday, maximumCompetitionScope, resolveFeedDates, type FeedParameters } from "../../domain/feed-query.ts";
 import { storedMatchFeedRecordSchema, type StoredMatchFeedRecord } from "../../domain/match-feed.ts";
@@ -18,9 +18,10 @@ import { parseMatchFeedQuery } from "../matches/feed-service.ts";
 import { storedFeedFixtures } from "../matches/fixture-read.ts";
 import { storedSlipPricePools } from "./price-read.ts";
 import { storedSlipTotal15Forecasts } from "./slip-goal-forecast.ts";
+import { readFeaturedSlipSelections } from "./best-slip-recommendations.ts";
 
 export type SlipCohortReader = (parameters: FeedParameters,
-  context: Readonly<{ locale?: string; primaryBookmakerOnly?: boolean; total15?: "include" | "only" }>, clock: Clock) => Promise<SlipCohort>;
+  context: Readonly<{ locale?: string; primaryBookmakerOnly?: boolean; total15?: "include" | "only"; featured?: boolean }>, clock: Clock) => Promise<SlipCohort>;
 
 /** Reuses the production feed's exact filtering, order, record projection and approved price rules.
  * One repeatable-read snapshot covers ordered IDs, forecasts and all prices. No page re-probes or
@@ -43,12 +44,14 @@ export function createStoredSlipCohort(options: Readonly<{
     return database.transaction(async (tx) => {
       const search = await storedFeedSearch(tx, query.search, range, configured, query.locale);
       const primaryOnly = context.primaryBookmakerOnly === true;
-      const sql = feedSql(query, range, configured, primaryOnly && enabled, search, false, !primaryOnly);
+      const sql = feedSql(query, range, configured, primaryOnly && enabled, search, false, !primaryOnly || context.featured);
       const total15 = primaryOnly ? undefined : context.total15;
       const goals = total15 ? Prisma.sql`LEFT JOIN GoalMarketExtension goal ON goal.revisionId=rp.id` : Prisma.empty;
       const extended = Prisma.sql`goal.revisionId IS NOT NULL AND ${sql.cohortWhere}`;
       const where = total15 === "only" ? extended : total15 ? Prisma.sql`((${sql.where}) OR (${extended}))` : sql.where;
-      const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT f.id ${sql.joins} ${goals} ${sql.searchJoin} WHERE ${where}
+      const openDeadline = context.featured ? Prisma.sql`AND f.kickoff>${new Date(asOf + calendarRules.cutoffSecondsBeforeKickoff * 1000)}
+        AND NOT EXISTS (SELECT 1 FROM PredictionPublicationBarrier barrier WHERE barrier.cycleId=f.activeCycleId AND barrier.closedAt<=${new Date(asOf)})` : Prisma.empty;
+      const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT f.id ${sql.joins} ${goals} ${sql.searchJoin} WHERE (${where}) ${openDeadline}
         ORDER BY ${sql.order} LIMIT ${slipCohortRules.maximumRecords + 1}`);
       if (rows.length > slipCohortRules.maximumRecords + 1 || new Set(rows.map((row) => row.id)).size !== rows.length) {
         throw new MatchFeedError("unavailable");
@@ -63,6 +66,7 @@ export function createStoredSlipCohort(options: Readonly<{
       const { window } = await storedFeedRunContext(tx, reportingToday, range);
       const selected = rows.slice(0, slipCohortRules.maximumRecords), records: StoredMatchFeedRecord[] = [];
       const selectionPrices: SlipCohort["selectionPrices"] = {};
+      const featuredSelections: NonNullable<SlipCohort["featuredSelections"]> = [];
       const batchSize = primaryOnly ? slipCohortRules.hydrationBatchSize : feedQueryRules.maximumPageSize;
       for (let offset = 0; offset < selected.length; offset += batchSize) {
         const ids = selected.slice(offset, offset + batchSize).map(({ id }) => id);
@@ -75,12 +79,16 @@ export function createStoredSlipCohort(options: Readonly<{
           return storedMatchFeedRecordSchema.parse(record);
         });
         records.push(...batch);
-        if (primaryOnly) Object.assign(selectionPrices, await storedSlipPricePools(tx, batch, asOf, { enabled, primaryBookmakerOnly: true }));
+        if (context.featured) {
+          featuredSelections.push(...await readFeaturedSlipSelections(tx, batch, asOf));
+          for (const { fixtureId } of batch) selectionPrices[fixtureId] = [];
+        } else if (primaryOnly) Object.assign(selectionPrices, await storedSlipPricePools(tx, batch, asOf, { enabled, primaryBookmakerOnly: true }));
       }
       const total15Forecasts = total15 ? await storedSlipTotal15Forecasts(tx, records, asOf) : undefined;
-      if (!primaryOnly) Object.assign(selectionPrices, await storedSlipPricePools(tx, records, asOf, { enabled, families: query.markets,
+      if (!primaryOnly && !context.featured) Object.assign(selectionPrices, await storedSlipPricePools(tx, records, asOf, { enabled, families: query.markets,
         ...(total15Forecasts ? { total15Forecasts } : {}) }));
       return freezeEvidence(slipCohortSchema.parse({ records, selectionPrices, asOf, today, ...(total15Forecasts ? { total15Forecasts } : {}),
+        ...(context.featured ? { featuredSelections } : {}),
         range: { from: range.startDate, to: range.endDate, ...range.window }, searchLimited: rows.length > selected.length, partialCoverage }));
     }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 60_000 });
   };

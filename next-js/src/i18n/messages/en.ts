@@ -44,7 +44,7 @@ export const en = {
   "bestSlips.probability": "Win probability",
   "bestSlips.emptyTitle": "No Best Slips available yet",
   "bestSlips.oddsUnavailable": "Best Slips need current bookmaker odds approved for display. You can still browse matches and results.",
-  "bestSlips.awaitingPublication": "No slips have been published in this odds range today. Each slip needs eligible predictions, current bookmaker odds, and a verified probability estimate.",
+  "bestSlips.awaitingPublication": "No slips have been published in the {oddsRange} band today. Publication requires eligible picks, approved bookmaker prices and a validated whole-slip estimate.",
   "bestSlips.modelUnavailable": "Best Slips are waiting for verified probability estimates. You can still browse matches and results.",
   "bestSlips.insufficient": "There are not enough qualifying upcoming matches with current odds and verified estimates. Check back later.",
   "bestSlips.partial": "Fewer than ten qualifying slips or limited coverage is available. These are the best slips found within the search limits.",

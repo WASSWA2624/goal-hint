@@ -1,5 +1,5 @@
 import type { SlipsBrowseResult } from "./best-slips.ts";
-import { bestSlipsQueryRules, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "./best-slips-query.ts";
+import { bestSlipsQueryRules, bestSlipsRangeFields, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "./best-slips-query.ts";
 import { slipStatusCategory } from "./slip-status.ts";
 import { defaultBestSlipOddsBand } from "./best-slip-odds-bands.ts";
 
@@ -18,7 +18,8 @@ export function bestSlipsStatisticsMatch(left: SlipsBrowseResult, right: SlipsBr
 
 export function bestSlipsRangeKey(query: BestSlipsQuery, day: SlipsBrowseResult["day"]): string {
   const dates = resolveBestSlipsDates(query, day);
-  return `${dates.from ?? "all"}:${dates.to ?? "all"}:${query.oddsBand ?? defaultBestSlipOddsBand}`;
+  return [dates.from ?? "all", dates.to ?? "all", query.oddsBand ?? defaultBestSlipOddsBand,
+    ...bestSlipsRangeFields.map((field) => query[field] ?? "")].join(":");
 }
 
 /** Only a complete, unfiltered cohort can establish every result and its exact total locally. */
@@ -33,6 +34,7 @@ export function projectBestSlipsSnapshot(snapshot: BestSlipsSnapshot, query: Bes
   const pageSize = bestSlipsQueryRules.pageSize, offset = (query.page - 1) * pageSize;
   return { query, data: { ...data, slips: slips.slice(offset, offset + pageSize),
     browse: { query, total: slips.length, pageSize, hasMore: offset + pageSize < slips.length, nextCursor: null,
+      ...(browse?.bandTotal !== undefined ? { bandTotal: browse.bandTotal } : {}),
       ...resolveBestSlipsDates(query, data.day) } } };
 }
 

@@ -2,27 +2,26 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { SlipsBrowseResult } from "@/domain/best-slips";
-import { bestSlipsQueryRules, defaultBestSlipsQuery, serializeBestSlipsQuery, type BestSlipsQuery } from "@/domain/best-slips-query";
-import { slipBrowseScope } from "@/domain/slip-browse-window";
+import { bestSlipsPageSearch, bestSlipsQueryRules, defaultBestSlipsQuery, parseBestSlipsQuery, serializeBestSlipsQuery, type BestSlipsQuery } from "@/domain/best-slips-query";
 import { shareUnchanged } from "@/domain/structural-sharing";
 
 import { singleSlipPage } from "@/domain/slip-pagination";
 
-type Intent = { query: BestSlipsQuery; mode: "replace" | "refresh" | "background"; revision: number; scroll: boolean };
+type Intent = { query: BestSlipsQuery; mode: "replace" | "refresh" | "background"; revision: number; scroll: boolean; pushHistory: boolean };
 /** Both slip collections share paging, pinned dates, cancellation and access-safe refreshes. */
 export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: () => void, endpoint = "/api/best-slips") {
   const initial = useMemo(() => singleSlipPage(input), [input]);
-  const seedKey = `${initial.day}:${initial.entitled}:${initial.access?.signedIn}`;
-  const [seed, setSeed] = useState(seedKey);
+  const [seed, setSeed] = useState(initial);
   const [content, setContent] = useState(initial);
-  const [intent, setIntent] = useState<Intent>(() => ({ query: initial.browse?.query ?? defaultBestSlipsQuery(), mode: "refresh", revision: 0, scroll: false }));
+  const [intent, setIntent] = useState<Intent>(() => ({ query: initial.browse.query, mode: "refresh", revision: 0, scroll: false, pushHistory: false }));
   const [busy, setBusy] = useState(false), [failed, setFailed] = useState(false);
   const root = useRef<HTMLDivElement>(null), latest = useRef(content), lock = useRef(false);
   const pending = useRef<AbortController | null>(null);
-  if (seed !== seedKey) {
-    setBusy(false); setFailed(false); setSeed(seedKey); setContent(initial); setIntent({ query: initial.browse?.query ?? defaultBestSlipsQuery(), mode: "refresh", revision: 0, scroll: false });
+  if (seed !== initial) {
+    setBusy(false); setFailed(false); setSeed(initial); setContent(initial);
+    setIntent({ query: initial.browse.query, mode: "refresh", revision: 0, scroll: false, pushHistory: false });
   }
-  const accepted = seed === seedKey ? content : initial;
+  const accepted = seed === initial ? content : initial;
   useLayoutEffect(() => { latest.current = accepted; }, [accepted]);
   useEffect(() => {
     if (intent.revision === 0) return;
@@ -41,18 +40,24 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
       if (!result?.browse || !Array.isArray(result.slips) || result.state === "data-unavailable"
         || serializeBestSlipsQuery(result.browse.query).toString() !== serializeBestSlipsQuery(query).toString()) throw new Error("changed");
       if (result.day !== initial.day) { onAccessChanged(); throw new Error("changed"); }
-      if (result.entitled !== latest.current.entitled || result.access?.signedIn !== latest.current.access?.signedIn) {
-        setContent(result); onAccessChanged(); throw new Error("access-changed");
-      }
-      return result;
+      return { ...result, browse: result.browse };
     };
     void (async () => {
       const result = await read(intent.query);
       if (controller.signal.aborted) return;
+      if (intent.pushHistory) {
+        const search = bestSlipsPageSearch(intent.query);
+        if (search !== window.location.search) window.history.pushState(null, "", `${window.location.pathname}${search}${window.location.hash}`);
+      }
       if (intent.mode === "replace" && intent.scroll) root.current?.scrollIntoView({ block: "start" });
       setContent((current) => shareUnchanged(current, result));
+      if (result.entitled !== latest.current.entitled || result.access?.signedIn !== latest.current.access?.signedIn) onAccessChanged();
     })().catch(() => {
-      if (active && pending.current === controller && intent.mode !== "background") setFailed(true);
+      if (active && pending.current === controller && intent.mode !== "background") {
+        setFailed(true);
+        // History traversal already moved the address. Let the server render that address after a failed client read.
+        if (intent.mode === "replace" && !intent.pushHistory) onAccessChanged();
+      }
     }).finally(() => {
       clearTimeout(deadline);
       if (pending.current === controller) { pending.current = null; lock.current = false; if (active) setBusy(false); }
@@ -61,12 +66,12 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
       active = false; clearTimeout(deadline); controller.abort();
       if (pending.current === controller) { pending.current = null; lock.current = false; }
     };
-  }, [endpoint, initial.day, intent, onAccessChanged, seedKey]);
-  const request = useCallback((query: BestSlipsQuery, mode: Intent["mode"], scroll = false) => {
+  }, [endpoint, initial.day, intent, onAccessChanged]);
+  const request = useCallback((query: BestSlipsQuery, mode: Intent["mode"], scroll = false, pushHistory = false) => {
     if (lock.current) return;
     lock.current = true; setBusy(true);
     if (mode !== "background") setFailed(false);
-    setIntent((current) => ({ query, mode, scroll, revision: current.revision + 1 }));
+    setIntent((current) => ({ query, mode, scroll, pushHistory, revision: current.revision + 1 }));
   }, []);
   useEffect(() => {
     if (failed) return;
@@ -80,14 +85,36 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
   }, []);
   const change = useCallback((query: BestSlipsQuery) => {
     cancel();
-    request(query, "replace");
+    request(query, "replace", false, true);
   }, [cancel, request]);
+  useEffect(() => {
+    function onPopState() {
+      let query: BestSlipsQuery;
+      try { query = parseBestSlipsQuery(new URLSearchParams(window.location.search), initial.day); }
+      catch { onAccessChanged(); return; }
+      cancel(); request(query, "replace");
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [cancel, initial.day, onAccessChanged, request]);
   const goToPage = (page: number) => {
     const browse = latest.current.browse;
     if (!browse || browse.total == null || !Number.isSafeInteger(page) || page < 1
       || page > Math.min(bestSlipsQueryRules.maximumPage, Math.ceil(browse.total / bestSlipsQueryRules.pageSize))) return;
     cancel();
-    request({ ...browse.query, page }, "replace", true);
+    request({ ...browse.query, page }, "replace", true, true);
+  };
+  const goToFirstPage = () => {
+    const query = latest.current.browse?.query;
+    if (!query) return;
+    const { cursor, ...first } = query;
+    void cursor;
+    cancel(); request({ ...first, page: 1 }, "replace", true, true);
+  };
+  const goToOlder = () => {
+    const browse = latest.current.browse;
+    if (!browse?.nextCursor || browse.query.page >= bestSlipsQueryRules.maximumPage) return;
+    cancel(); request({ ...browse.query, page: browse.query.page + 1, cursor: browse.nextCursor }, "replace", true, true);
   };
   const revokeAccess = useCallback(() => {
     cancel(); setBusy(false);
@@ -96,12 +123,12 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
     onAccessChanged();
   }, [cancel, onAccessChanged]);
   const applied = accepted.browse?.query ?? defaultBestSlipsQuery();
-  return { root, query: intent.query, displayQuery: applied, change, goToPage,
-    entitled: accepted.entitled === true, revokeAccess, retained: slipBrowseScope(applied) !== slipBrowseScope(intent.query),
-    result: accepted, loading: false, updating: busy && intent.mode !== "background", navigating: busy && intent.mode === "replace", failed,
+  return { root, displayQuery: applied, change, goToPage, goToFirstPage, goToOlder,
+    entitled: accepted.entitled === true, revokeAccess,
+    result: accepted, updating: busy && intent.mode !== "background", navigating: busy && intent.mode === "replace",
     retry: () => {
       if (intent.mode === "background") cancel();
-      request(intent.query, intent.mode === "replace" ? "replace" : "refresh");
+      request(intent.query, intent.mode === "replace" ? "replace" : "refresh", intent.scroll, intent.pushHistory);
     },
   };
 }

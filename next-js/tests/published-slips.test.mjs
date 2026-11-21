@@ -5,19 +5,21 @@ import { bestSlipViews } from '../src/domain/best-slips.ts';
 import { gateBestSlips } from '../src/server/slips/best-slips.ts';
 import { createPublishedSlips, parsePublishedSlipHistoryQuery, slipPublicationIdentity } from '../src/server/slips/published-slips.ts';
 import { createDailySlipPublisher, runDailySlipPublisher } from '../src/server/slips/daily-slip-publication.ts';
-import { liveRecord, now, today } from './helpers/live-refresh-fixtures.mjs';
+import { now, today } from './helpers/live-refresh-fixtures.mjs';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
+import { pricedEditorialSelection } from './helpers/best-slip-publication-fixtures.mjs';
+import { parseDecimalOdds } from '../src/domain/odds.ts';
 
-const base = liveRecord(), model = { calibrationReference: 'synthetic-calibration', correlationReference: 'synthetic-correlation',
+const model = { calibrationReference: 'synthetic-calibration', correlationReference: 'synthetic-correlation',
   validFrom: now - 1000, validUntil: now + 86_400_000, estimate: () => 0.75 };
 const fixtureId = (last) => `10000000-0000-4000-8000-${String(last).padStart(12, '0')}`;
 function slip(last = 1) {
   return { id: `original-${last}`, totalOdds: '4.00', oddsBasis: 'bookmaker', averageProbability: 0.75, estimatedProbability: 0.75,
-    selections: [{ fixtureId: fixtureId(last), kickoffAt: now + 3_600_000, homeTeam: base.homeTeam, awayTeam: base.awayTeam,
-      competition: base.competition, family: 'match-result', selection: 'home-win', probability: 0.75, odds: '4.00', oddsBasis: 'bookmaker' }] };
+    selections: [pricedEditorialSelection(last, { cycleId: fixtureId(90), revisionId: fixtureId(91), at: now + 900 })] };
 }
+const priceSelection = (selection, odds) => ({ ...selection, odds, offer: { ...selection.offer, decimal: parseDecimalOdds(odds).text } });
 function fixture() {
-  const parents = [], rows = [], legs = [], bound = [], outcomes = new Map(), fixtureCompletion = new Map(), fixtureStatuses = new Map();
+  const parents = [], rows = [], legs = [], combinations = [], bound = [], outcomes = new Map(), fixtureCompletion = new Map(), fixtureStatuses = new Map();
   let at = now, corrupted = false, ignored = false, normalized = false, afterMembership = () => {};
   const databaseSnapshot = json => {
     const snapshot = JSON.parse(json);
@@ -47,13 +49,20 @@ function fixture() {
       if (sql.text.includes('INSERT INTO PublishedSlip')) {
         rows.push({ id: v[0], publicationId: v[1], rank: v[2], snapshotJson: databaseSnapshot(v[3]) }); return 1;
       }
+      if (sql.text.includes('INSERT INTO DailyBestSlipCombination')) {
+        if (combinations.some(([date, key]) => +date === +v[0] && key === v[1])) throw new Error('duplicate combination');
+        combinations.push(v); return 1;
+      }
       assert.fail(sql.text);
     },
   };
   const store = createPublishedSlips({ async transaction(run) {
-    const before = [parents.length, rows.length, legs.length];
-    try { return await run(tx); } catch (error) { parents.length = before[0]; rows.length = before[1]; legs.length = before[2]; throw error; }
+    const before = [parents.length, rows.length, legs.length, combinations.length];
+    try { return await run(tx); } catch (error) {
+      parents.length = before[0]; rows.length = before[1]; legs.length = before[2]; combinations.length = before[3]; throw error;
+    }
   } }, {
+    async verifyOffers() { return true; },
     async bindForecasts(_tx, value) {
       bound.push(value.id);
       return { ...value, selections: value.selections.map(item => ({ ...item,
@@ -90,21 +99,30 @@ test('daily publication rejects a 74.999 percent leg and accepts exactly 75 perc
   assert.equal(await f.publish(), 'published');
 });
 
-test('six bands publish twenty slips each, remain idempotent and retain stable public ranks', async () => {
+test('six version-three bands publish at most ten each, retain stable public ranks and read old twenty-slip bands', async () => {
   const f = fixture();
   for (const [index, band] of bestSlipOddsBands.entries()) {
     const price = ["4.00", "7.00", "15.00", "30.00", "60.00", "150.00"][index];
-    const slips = Array.from({ length: 20 }, (_, n) => { const original = slip(n + 1); return { ...original, totalOdds: price,
-      selections: original.selections.map(selection => ({ ...selection, odds: price })) }; });
+    const slips = Array.from({ length: 10 }, (_, n) => { const original = slip(index * 20 + n + 1); return { ...original, totalOdds: price,
+      selections: original.selections.map(selection => priceSelection(selection, price)) }; });
     assert.equal(await f.publish({ slips, oddsBand: band.id }), 'published');
     assert.equal(await f.publish({ slips, oddsBand: band.id }), 'already-published');
     await assert.rejects(() => f.publish({ slips: [...slips, slip(21)], oddsBand: band.id }));
   }
-  assert.equal(f.rows.length, 120);
+  assert.equal(f.rows.length, 60);
   const day = await f.store.day(today);
-  assert.equal(day.slips.length, 120); assert.equal(day.slips[119].rank, 120);
-  assert.equal((await f.store.day(today, false, '1.5-5')).slips.length, 20);
-  Array.from({length:20}, (_,n) => f.outcomes.set(fixtureId(n+1), 'won'));
+  assert.equal(day.slips.length, 60); assert.equal(day.slips[59].rank, 110);
+  assert.equal((await f.store.day(today, false, '1.5-5')).slips.length, 10);
+  const old = f.parents[1]; old.bodyJson.version = 2; old.bodyJson.count = 20;
+  for (let rank = 11; rank <= 20; rank++) {
+    const seed = slip(20 + rank);
+    const snapshot = { slip: { id: seed.id, averageProbability: 0.75, totalOdds: '7.00', oddsBasis: 'bookmaker',
+      selections: seed.selections.map((selection) => priceSelection(selection, '7.00')) }, estimatedProbability: 0.75 };
+    const id = evidenceFingerprint({ publicationId: old.id, rank, snapshot });
+    f.rows.push({ id, rank, publicationId: old.id, snapshotJson: snapshot });
+    f.legs.push(...snapshot.slip.selections.map(({ fixtureId, forecast }) => ({ slipId: id, fixtureId, ...forecast })));
+  }
+  Array.from({length:20}, (_,n) => f.outcomes.set(fixtureId(n+21), 'won'));
   const history = await f.store.history({ ...query, page: 2, pageSize: 10, oddsBand: '5-10' });
   assert.equal(history.total, 20); assert.equal(history.statistics.won, 20); assert.equal(history.records[9].rank, 40);
 });
@@ -118,13 +136,25 @@ test('publication assigns probability order before sealing snapshot ranks', asyn
   assert.deepEqual((await f.store.day(today)).slips.map(view => view.estimatedProbability), [0.8, 0.78, 0.75]);
 });
 
+test('exact unrounded band assignment and cross-band duplicate prevention survive write and read', async () => {
+  const f = fixture(), original = slip();
+  const almost = { ...original, totalOdds: '5.00', selections: original.selections.map((value) => priceSelection(value, '4.9999')) };
+  assert.equal(await f.publish({ slips: [almost] }), 'published');
+  const current = await f.store.day(today, false, '1.5-5');
+  assert.equal(current.slips[0].totalOdds, '5.00');
+  assert.equal((await f.store.browse({ period: 'today', status: 'all', oddsBand: '5-10', page: 1 }, today)).browse.total, 0);
+  const repriced = { ...original, totalOdds: '7.00', selections: original.selections.map((value) => priceSelection(value, '7.00')) };
+  await assert.rejects(f.publish({ slips: [repriced], oddsBand: '5-10' }), /duplicate combination/u);
+  assert.equal(f.parents.length, 1); assert.equal(f.rows.length, 1);
+});
+
 test('historical 100.00 quotes move to the sixth filter without rewriting snapshots or public ranks', async () => {
     const f = fixture(), original = slip(), currentBand = '100-200', oldBand = '50-100', price = '100.00';
     await f.publish({ oddsBand: currentBand, slips: [{ ...original, totalOdds: price,
-      selections: original.selections.map(selection => ({ ...selection, odds: price })) }] });
+      selections: original.selections.map(selection => priceSelection(selection, price)) }] });
     // Reconstruct the original policy's inclusive final 100.00 boundary.
     const parent = f.parents[0], row = f.rows[0], previousId = row.id;
-    parent.oddsBand = oldBand; parent.bodyJson.oddsBand = oldBand;
+    parent.oddsBand = oldBand; parent.bodyJson.oddsBand = oldBand; parent.bodyJson.version = 2;
     const criteria = new URLSearchParams(parent.bodyJson.criteria);
     criteria.set('totalMin', '50.00'); criteria.set('totalMax', '100.00');
     parent.bodyJson.criteria = criteria.toString();
@@ -161,6 +191,8 @@ test('first qualified publication preserves quotes, model evidence and original 
   assert.equal(f.legs[0].cycleId, fixtureId(90)); assert.equal(f.legs[0].revisionId, fixtureId(91));
   const day = await f.store.day(today);
   assert.equal(day.slips[0].slip.totalOdds, '4.00');
+  assert.ok(f.rows[0].snapshotJson.slip.selections[0].offer.snapshotId);
+  assert.equal(day.slips[0].slip.selections[0].offer, undefined);
   const publicViews = bestSlipViews(day.slips.map(view => view.slip), false);
   assert.deepEqual(publicViews, [{ rank: 1, matchCount: 1, totalOdds: '4.00', estimatedProbability: 0.75, averageProbability: 0.75 }]);
   const gated = gateBestSlips(day, { tier: 'free', signedIn: false, mode: 'off' });
@@ -244,7 +276,7 @@ test('daily slip performance includes every published slip and updates from orig
 
 test('a lost leg settles aggregate loss immediately while active selections and quotes stay private', async () => {
   const first = slip(1), second = slip(2);
-  const mixed = { ...first, selections: [{ ...first.selections[0], odds: '2.00' }, { ...second.selections[0], odds: '2.00' }] };
+  const mixed = { ...first, selections: [priceSelection(first.selections[0], '2.00'), priceSelection(second.selections[0], '2.00')] };
   const f = fixture(); await f.publish({ slips: [mixed] });
   f.outcomes.set(fixtureId(1), 'lost');
   assert.deepEqual((await f.store.day(today)).statistics, { total: 1, won: 0, lost: 1, pending: 0, void: 0, cancelled: 0 });

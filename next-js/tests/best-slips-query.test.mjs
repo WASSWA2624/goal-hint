@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseReportingDate } from '../src/domain/calendar.ts';
-import { BestSlipsQueryError, bestSlipsQueryRules, defaultBestSlipsQuery, parseBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery } from '../src/domain/best-slips-query.ts';
+import { BestSlipsQueryError, bestSlipsPageSearch, bestSlipsQueryRules, defaultBestSlipsQuery, matchesBestSlipsRanges,
+  parseBestSlipsQuery, resolveBestSlipsDates, selectSlipSummaryResult, serializeBestSlipsQuery } from '../src/domain/best-slips-query.ts';
 
 const today = parseReportingDate('2026-10-29');
 test('slip presets resolve inclusive EAT publication dates across month and year boundaries', () => {
@@ -52,6 +53,23 @@ test('void and cancelled result filters survive parsing and serialization', () =
     const query = parseBestSlipsQuery({ period: 'last30', status, page: '2' }, today);
     assert.equal(query.status, status);
     assert.deepEqual(parseBestSlipsQuery(serializeBestSlipsQuery(query), today), query);
+  }
+});
+
+test('inclusive average probability and match ranges survive deep links and outcome drilldowns', () => {
+  const selected = parseBestSlipsQuery(new URLSearchParams('period=yesterday&probMin=75.125&probMax=90&matchesMin=2&matchesMax=5&status=cancelled&page=3'), today);
+  assert.equal(bestSlipsPageSearch(defaultBestSlipsQuery()), '');
+  assert.deepEqual(parseBestSlipsQuery(new URLSearchParams(bestSlipsPageSearch(selected)), today), selected);
+  assert.deepEqual(selectSlipSummaryResult(selected, 'won'), { ...selected, status: 'won', page: 1 });
+  const matches = (averageProbability, matchCount) => matchesBestSlipsRanges(selected, { averageProbability, matchCount });
+  assert.equal(matches(75.125 / 100, 2), true);
+  assert.equal(matches(0.9, 5), true);
+  assert.equal(matches(0.751, 2), false);
+  assert.equal(matches(0.8, 1), false);
+  assert.equal(serializeBestSlipsQuery(parseBestSlipsQuery({ probMin: '0.00000001' }, today)).get('probMin'), '0.00000001');
+  for (const invalid of [{ probMin: '101' }, { probMax: 'NaN' }, { probMin: '80', probMax: '70' }, { matchesMin: '0' },
+    { matchesMax: '4.5' }, { matchesMin: '6', matchesMax: '4' }, { matchesMax: ['2', '4'] }]) {
+    assert.throws(() => parseBestSlipsQuery(invalid, today), BestSlipsQueryError);
   }
 });
 

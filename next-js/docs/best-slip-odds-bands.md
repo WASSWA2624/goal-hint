@@ -1,23 +1,32 @@
 # Best Slips and personal builds
 
-Personal slip builds are transient. Users can generate, view and export images in the browser. They can save up to ten named filter presets; generated selections are never saved to their account or published by sharing.
+Best Slips at `/en/best-slips` defaults to today's Kampala date and the
+2.50–5.00 band. The other five bands are 5.00–10.00, 10.00–20.00, 20.00–50.00,
+50.00–100.00 and 100.00–200.00. The exact price product determines membership.
+An exact shared boundary belongs to the next band. The last band includes
+200.00. Display totals round to two decimal places after band assignment.
 
-The private daily publication worker publishes up to twenty qualifying, disjoint slips per odds band per East Africa date (up to 120 total): **2.50–5.00**, **5.00–10.00**, **10.00–20.00**, **20.00–50.00**, **50.00–100.00** and **100.00–200.00**. Labels use two decimal places; engine calculations retain their precision. Exact 5.00, 10.00, 20.00, 50.00 and 100.00 quotes belong to the next band, and 200.00 is included. Engine bounds use inclusive hundredths, ending one hundredth below the first five displayed upper boundaries. Generation checks the exact unrounded product against those bounds; rounding cannot make an otherwise ineligible combination qualify. Publication retains existing model, forecast, quote and cutoff checks. Sparse bands contain fewer slips. Sealed publications remain immutable; retries attempt only missing bands.
+The shared Filters dialog can combine a publication day or interval, total odds,
+average pick probability, match count and result. Outcome drilldowns preserve
+the selected dates and numeric filters. Counts cover the applied cohort before
+the outcome filter and pagination. All dates uses bounded archive traversal and
+reports complete-range totals only when the read can establish them. Empty states
+name the selected band.
 
-The homepage defaults to today's EAT date and 2.50–5.00. **Today’s performance**, result drilldowns, odds changes and pagination retain that reporting day and band, with twenty slips per page. Advanced Filters contains only Total odds, with the same six native single-choice options, cancellable drafts, Reset and Apply on mobile and desktop. The performance snapshot uses 24-hour EAT on desktop. Its heading and date sit closely above the cards, with the original top spacing preserved. Section labels align with outer card edges, and a separate gap distinguishes browsing from performance. Mobile's results line shows **Today’s best slips**, Total odds and the full count, such as `1–4 of 4 slips`, directly on the body background and close above the first slip, without a publication date, EAT or outcome text. The existing top loading indicator remains; inline Updating slips text is removed. A failed refresh retains confirmed rows and applied labels without an update-warning banner or retry button above them. Legacy archive queries remain readable; their summary reports today, and selecting a result returns to today.
+Version-three bands publish up to ten slips once per reporting day. Every leg
+must have a kickoff on that day and a current exact featured price from the
+configured bookmaker. The final order uses validated whole-slip win probability,
+exact combined odds, fewer matches and stable identity. Cards label the
+arithmetic average pick probability and the separately validated whole-slip win
+probability. Original result corrections follow the sealed pick, even if the
+fixture was later rescheduled.
 
-Persisted band IDs remain stable, including `1.5-5`; the new band uses `100-200`. Reads validate original sealed criteria before applying current bounds. Adjacent families retain old boundary quotes, including the previous final 100.00 quote. Snapshots and public ranks are never rewritten. Canonical pages read the original complete day, preserving higher-band links and below-2.50 historical slips. Public ranks reserve twenty positions per band, through **101–120** for the sixth band. Stored per-publication ranks remain 1–20, and legacy publications remain capped at 100. Archive scans retain their thirty-one-day bound and complete-day continuation.
+Persisted band IDs and canonical ranks remain stable. Rank links reserve twenty
+positions per band. Older banded publications can still contain twenty slips,
+and old unbanded daily publications can contain up to one hundred. Adjacent
+bands continue to surface older boundary quotes, including 100.00. The new
+migration and hosted qualification requirements are covered in the
+[publication runbook](daily-slip-publications.md).
 
-Advanced Filters reuses a slightly stronger themed fill for Reset Filters across screens; Apply Filters retains the primary treatment.
-
-## Probabilities
-
-Generation ranks by the qualified whole-slip estimate, then **more selections** and higher total odds. Best Slips and joint custom builds reuse one comparator. Probability remains unrounded during ranking; close estimates that display identically do not become ties. Header probability is the arithmetic mean of original match forecasts, separately labelled from the chance that every leg wins. No minimum probability or replacement estimate was invented.
-
-The local 4 November 2026 demo review traced the displayed 34.7% to an original synthetic forecast of 0.347073 at odds 2.78. Its odds-first demo selection was inconsistent with the engine's probability-first candidate priority. New demo publications now prioritize probability before odds and seal their ranks using the existing Best Slips comparator. Synthetic independent estimates remain confined to demo data; the live joint-model binding remains unqualified until a reviewed model is supplied. Existing sealed examples retain their original values.
-
-## Deployment
-
-For an installation already migrated through `20261103180000_shared_slip_trigger_blocks`, deploy **20261104090000_six_best_slip_odds_bands** before the updated web application and publication worker. It extends the allowed publication-band constraint and preserves sealed rows, legacy limits and per-band capacity. Use the corresponding `prisma/mariadb` overlay on MariaDB. The earlier transient-slip migration remains part of fresh-install history and must not be rerun against an already migrated target.
-
-The sixth-band migration passed on disposable MySQL and was applied to the owned development demo. No configured non-demo or hosted application target was migrated, and no production publications were rewritten. Web, worker and native deployment remain separate from source integration.
+Personal builds remain transient. Members can store up to ten named filter
+presets and export generated slips without adding them to the editorial archive.

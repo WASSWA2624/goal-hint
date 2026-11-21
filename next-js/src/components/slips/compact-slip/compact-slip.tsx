@@ -79,21 +79,24 @@ function SelectionRow({ selection, position, locale, result, matchStates, analys
 }
 
 /** Aggregate-only previews and complete slips share exactly the same compact header and disclosure. */
-export function CompactSlipDisclosure({ totalOdds, averageProbability, selectionCount, index, locale, variant = "clean-ledger",
+export function CompactSlipDisclosure({ totalOdds, averageProbability, estimatedProbability, selectionCount, index, locale, variant = "clean-ledger",
   initiallyOpen = false, collapsible = true, showRank = true, slipId, headingId, outcome = "pending", status = outcome, publicationDay, publishedAt,
   fullProbabilityLabel = false, hasHeaderAction = false, action, children }: {
-  totalOdds: string; averageProbability: number; selectionCount: number; index: number; locale: string;
+  totalOdds: string; averageProbability: number; estimatedProbability?: number | undefined; selectionCount: number; index: number; locale: string;
   variant?: CompactSlipVariant; initiallyOpen?: boolean; collapsible?: boolean; showRank?: boolean; slipId?: string; headingId?: string;
   outcome?: SlipResultView["outcome"]; status?: SlipStatus; fullProbabilityLabel?: boolean; hasHeaderAction?: boolean; action?: ReactNode; children: ReactNode;
 } & SlipHeaderPublication) {
   const messages = createMessages(locale), id = useId();
+  const hasWholeSlipEstimate = estimatedProbability !== undefined;
+  const averageLabel = hasWholeSlipEstimate ? "slips.averagePick" : "slips.average";
+  const shortAverageLabel = hasWholeSlipEstimate ? "slips.averagePickShort" : "slips.averageShort";
   const summary = <>
         <h3 data-summary-identity id={headingId ?? `${id}-heading`}><span>{messages.text("slips.slipTitle", { number: messages.number(index + 1) })}</span>
           <SlipHeaderDate locale={locale} {...(publicationDay ? { publicationDay } : {})} {...(publishedAt !== undefined ? { publishedAt } : {})} />
           {index === 0 && showRank && <span data-rank>{messages.text("slips.topRanked")}</span>}</h3>
         <span data-summary-odds data-summary-fact title={`${messages.text("slips.totalOdds")}: ${totalOdds}`}><span data-fact-label>{messages.text("slips.totalOdds")}</span><strong>{totalOdds}</strong></span>
         <span data-summary-average data-summary-fact title={messages.text("slips.averageHint")}>
-          <span data-fact-label aria-hidden="true">{messages.text(fullProbabilityLabel ? "slips.average" : "slips.averageShort")}</span><VisuallyHidden>{messages.text("slips.average")}: </VisuallyHidden>
+          <span data-fact-label aria-hidden="true">{messages.text(fullProbabilityLabel ? averageLabel : shortAverageLabel)}</span><VisuallyHidden>{messages.text(averageLabel)}: </VisuallyHidden>
           <strong>{formatSlipProbability(averageProbability, messages)}</strong></span>
         <span data-summary-count><span aria-hidden="true">{messages.plural("slips.selections", selectionCount)}</span>
           <VisuallyHidden>{messages.text("slips.selectionCount")}: {messages.number(selectionCount)}</VisuallyHidden></span>
@@ -103,34 +106,39 @@ export function CompactSlipDisclosure({ totalOdds, averageProbability, selection
   </>;
   const header = variant === "clean-ledger"
     ? <MobileSlipHeader totalOdds={totalOdds} averageProbability={averageProbability} selectionCount={selectionCount}
+      distinguishAverage={hasWholeSlipEstimate}
       index={index} locale={locale} outcome={outcome} status={status} headingId={headingId ?? `${id}-heading`} headerOnly={!collapsible} showRank={showRank} hasAction={!!action} {...(!collapsible && action ? { action } : {})}
       {...(publicationDay ? { publicationDay } : {})} {...(publishedAt !== undefined ? { publishedAt } : {})} />
     : collapsible ? <summary data-slip-toggle data-slip-summary aria-describedby={`${id}-average-note`}>{summary}</summary>
       : <header data-slip-summary aria-describedby={`${id}-average-note`}>{summary}</header>;
+  const content = <div data-slip-content>
+    {hasWholeSlipEstimate && <p data-whole-slip-probability>{messages.text("slips.wholeSlipWinProbability")} <strong>{formatSlipProbability(estimatedProbability, messages)}</strong></p>}
+    {children}
+  </div>;
   return <CompactCard data-compact-slip={variant} data-slip-id={slipId} data-phone-shareable={action ? "" : undefined}>
     {variant !== "clean-ledger" && <VisuallyHidden id={`${id}-average-note`}>{messages.text("slips.averageHint")}</VisuallyHidden>}
     {collapsible ? <details data-slip-disclosure open={initiallyOpen}>
       {header}
-      <div data-slip-content>{children}</div>
+      {content}
     </details> : <>
       {header}
-      <div data-slip-content>{children}</div>
+      {content}
     </>}
     {action && (variant !== "clean-ledger" || collapsible) && <div data-phone-share-action>{action}</div>}
   </CompactCard>;
 }
 
 /** Original selection snapshots are reused by Best slips, generated slips and completed history. */
-export function CompactSlip({ slip, index, locale, variant = "clean-ledger", initiallyOpen = false, results, matchStates, analysisLinks = true, collapsible = true, showLogos = false, showRank = true,
+export function CompactSlip({ slip, index, locale, estimatedProbability, variant = "clean-ledger", initiallyOpen = false, results, matchStates, analysisLinks = true, collapsible = true, showLogos = false, showRank = true,
   publicationDay, publishedAt, outcome: suppliedOutcome, status: suppliedStatus, action }: {
-  slip: BuiltSlip; index: number; locale: string; variant?: CompactSlipVariant; initiallyOpen?: boolean; results?: SlipResultView["results"];
+  slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number | undefined; variant?: CompactSlipVariant; initiallyOpen?: boolean; results?: SlipResultView["results"];
   matchStates?: readonly SlipMatchState[]; analysisLinks?: boolean; collapsible?: boolean; showLogos?: boolean; showRank?: boolean;
   outcome?: SlipResultView["outcome"]; status?: SlipStatus; action?: ReactNode;
 } & SlipHeaderPublication) {
   const headingId = useId();
   const currentStates = useRefreshedSlipMatchStates() ?? matchStates;
   const { outcome, status } = slipHeaderState(slip, results, currentStates, suppliedOutcome, suppliedStatus);
-  return <CompactSlipDisclosure totalOdds={slip.totalOdds} averageProbability={slip.averageProbability} selectionCount={slip.selections.length}
+  return <CompactSlipDisclosure totalOdds={slip.totalOdds} averageProbability={slip.averageProbability} estimatedProbability={estimatedProbability} selectionCount={slip.selections.length}
     index={index} locale={locale} variant={variant} initiallyOpen={initiallyOpen} collapsible={collapsible} showRank={showRank} slipId={slip.id} headingId={headingId} outcome={outcome} status={status} action={action}
     {...(publicationDay ? { publicationDay } : {})} {...(publishedAt !== undefined ? { publishedAt } : {})}>
       <ul data-slip-selections aria-labelledby={headingId}>

@@ -6,6 +6,7 @@ import { cycleFromRows, revisionFromRows } from '../src/server/predictions/histo
 import { evidenceFingerprint, evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
 import { bindSlipForecasts, projectSlipForecastResult, readSlipForecastResults, slipForecastReadRules } from '../src/server/slips/slip-forecast.ts';
 import { slipForecastFixture } from './helpers/slip-forecast-fixtures.mjs';
+import { pricedEditorialSelection } from './helpers/best-slip-publication-fixtures.mjs';
 
 function transaction(f) {
   return { footballFixture: { findMany: async () => [f.fixture] }, predictionCycle: { findUnique: async () => f.cycle },
@@ -14,6 +15,7 @@ function transaction(f) {
       if (sql.includes('LOCK IN SHARE MODE')) return [{ id: f.fixture.id }];
       if (sql.includes('FROM PredictionSet')) return [f.row];
       if (sql.includes('FROM MarketPrediction')) return f.marketRows;
+      if (sql.includes('FROM PredictionPublicationBarrier')) return f.barrier ? [f.barrier] : [];
       throw new Error('Unexpected query');
     } };
 }
@@ -38,6 +40,23 @@ test('server binding preserves the exact published revision and refuses source d
   assert.equal(await bindSlipForecasts(tx, f.slip, f.cycle.cutoffAt.getTime()), null);
   f.fixture.status = 'live';
   assert.equal(await bindSlipForecasts(tx, f.slip, f.at), null);
+});
+
+test('an editorial quote cannot publish after a sealed early-play barrier or a postponement', async () => {
+  const f = slipForecastFixture(), selection = bound(f), tx = transaction(f);
+  const { offer } = pricedEditorialSelection(1, { odds: selection.odds, at: f.at });
+  const editorial = { ...f.slip, selections: [{ ...selection, offer }] };
+  assert.ok(await bindSlipForecasts(tx, editorial, f.at));
+  const clock = f.at - 1000;
+  const observation = { provider: 'api-football', fixtureId: f.fixture.id, externalFixtureId: 1, cycleId: f.cycle.id,
+    kickoffAt: selection.kickoffAt, status: 'live', retrievedAt: f.at, providerUpdatedAt: null, actualStartedAt: clock,
+    evidenceRef: 'synthetic-early-play' };
+  f.barrier = { fixtureId: f.fixture.id, cycleId: f.cycle.id, observationJson: evidenceSerialize(observation), validIntegrity: 1,
+    closedAt: new Date(clock), recordedAt: new Date(f.at) };
+  assert.equal(await bindSlipForecasts(tx, editorial, f.at), null);
+  f.barrier = null;
+  f.fixture.kickoff = new Date(selection.kickoffAt + 86_400_000);
+  assert.equal(await bindSlipForecasts(tx, editorial, f.at), null);
 });
 
 test('a formally void original cycle retains its adjudication but remains private while its replacement is live', () => {
