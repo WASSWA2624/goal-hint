@@ -59,7 +59,7 @@ export async function readBestSlipHistoricalInputs(database: Pick<DatabaseRuntim
       orderBy: [{ observedAt: "desc" }, { sequence: "desc" }], select: { status: true },
     });
     const rows = await tx.$queryRaw<ArchivedFixture[]>(Prisma.sql`
-      SELECT f.id AS fixtureId,f.externalId,p.cycleId,p.id AS revisionId,s.kickoffAt AS kickoff,
+      SELECT STRAIGHT_JOIN f.id AS fixtureId,f.externalId,p.cycleId,p.id AS revisionId,s.kickoffAt AS kickoff,
         f.kickoff AS currentKickoff,f.status AS currentStatus,
         f.homeTeamId,ht.name AS homeTeamName,f.awayTeamId,aw.name AS awayTeamName,
         l.id AS competitionId,l.name AS competitionName,l.country AS competitionCountry,
@@ -67,18 +67,19 @@ export async function readBestSlipHistoricalInputs(database: Pick<DatabaseRuntim
         (SELECT refresh.id FROM PredictionRefreshResult refresh
           WHERE refresh.fixtureId=f.id AND refresh.cycleId=p.cycleId AND refresh.at<=${at}
           ORDER BY refresh.at DESC,refresh.runSequence DESC,refresh.id DESC LIMIT 1) AS refreshId
-      FROM FootballFixture f JOIN FootballSeason fs ON fs.id=f.seasonId
+      FROM PredictionSchedule s
+      JOIN PredictionSet p ON p.cycleId=s.cycleId AND p.scheduleVersion=s.version AND p.fixtureId=s.fixtureId
+      JOIN PredictionCycle c ON c.id=s.cycleId AND c.fixtureId=s.fixtureId
+      JOIN FootballFixture f ON f.id=s.fixtureId JOIN FootballSeason fs ON fs.id=f.seasonId
       JOIN FootballCompetition l ON l.id=fs.competitionId
       JOIN FootballTeam ht ON ht.id=f.homeTeamId JOIN FootballTeam aw ON aw.id=f.awayTeamId
-      JOIN PredictionSet p ON p.id=(SELECT newest.id FROM PredictionSet newest
-        WHERE newest.fixtureId=f.id AND newest.recordedAt<=${at} AND newest.publishedAt<=${at}
-        ORDER BY newest.fixtureRevision DESC LIMIT 1)
-      JOIN PredictionCycle c ON c.id=p.cycleId AND c.fixtureId=f.id
-      JOIN PredictionSchedule s ON s.cycleId=p.cycleId AND s.version=p.scheduleVersion AND s.fixtureId=f.id
-      WHERE f.provider='api-football' AND f.createdAt<=${at}
-        AND s.kickoffAt>=${new Date(startInclusive)} AND s.kickoffAt<${new Date(endExclusive)}
+      WHERE s.kickoffAt>=${new Date(startInclusive)} AND s.kickoffAt<${new Date(endExclusive)}
         AND s.observedAt<=${at} AND s.cutoffAt>${at}
+        AND f.provider='api-football' AND f.createdAt<=${at}
         AND c.openedAt<=${at} AND (c.voidedAt IS NULL OR c.voidedAt>${at})
+        AND p.id=(SELECT newest.id FROM PredictionSet newest
+          WHERE newest.fixtureId=s.fixtureId AND newest.recordedAt<=${at} AND newest.publishedAt<=${at}
+          ORDER BY newest.fixtureRevision DESC LIMIT 1)
         AND EXISTS (SELECT 1 FROM FootballCompetitionProvider cp
           WHERE cp.competitionId=l.id AND cp.provider='api-football' AND cp.mappedAt<=${at}
           AND cp.externalId IN (${Prisma.join(input.competitionIds)}))

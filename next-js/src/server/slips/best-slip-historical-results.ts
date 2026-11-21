@@ -40,7 +40,7 @@ async function originalSettlement(tx: Tx, selection: SlipSelection, revision: St
   })), closed.effectiveCloseAt)) return null;
 
   const newest = await tx.marketSettlementRevision.findFirst({ where: { fixtureId: selection.fixtureId, cycleId: reference.cycleId,
-    family: selection.family, at: { lt: before } }, orderBy: [{ at: "desc" }, { id: "desc" }], select: { id: true } });
+    family: selection.family, at: { lt: before } }, orderBy: [{ at: "desc" }, { batch: { fixtureVersion: "desc" } }, { id: "desc" }], select: { id: true } });
   if (!newest) return null;
   const settlement = await storedSettlementRevision(tx, newest.id);
   if (settlement.fixtureId !== selection.fixtureId || settlement.cycleId !== reference.cycleId || settlement.family !== selection.family ||
