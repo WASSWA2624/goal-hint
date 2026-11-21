@@ -24,7 +24,6 @@ test('equal-probability price ranking compares exact large totals without overfl
     const high = { ...low, id: 'z-high', totalOdds: higher };
     assert.ok(ranking.compare(high, low) < 0);
     assert.ok(ranking.compare(low, high) > 0);
-    assert.ok(compareBestSlips(high, low) < 0);
   }
 });
 function record(id, odds = '2.00', probability = 0.8, offset = 0) {
@@ -44,13 +43,23 @@ function record(id, odds = '2.00', probability = 0.8, offset = 0) {
     prices: [{ family: 'match-result', selection: 'home-win', price: odds, basis: 'bookmaker', retrievedAt: asOf - 1000, providerUpdatedAt: null }] });
 }
 
-test('unrounded whole-slip probability wins before descending match count and then total odds', () => {
-  const selection = { probability: 0.8 };
-  const short = { id: 'short', selections: [{ probability: 0.7 }], totalOdds: '5.00', averageProbability: 0.7, estimatedProbability: 0.7 };
-  const long = { ...short, id: 'long', selections: [selection, selection, selection], totalOdds: '4.00' };
-  const largerOdds = { ...long, id: 'larger-odds', totalOdds: '6.00' };
-  const precise = { ...short, id: 'precise', selections: [{ probability: 0.7000000001 }], estimatedProbability: 0.7000000001 };
-  assert.deepEqual([short, long, largerOdds, precise].sort(compareBestSlips).map(slip => slip.id), ['precise', 'larger-odds', 'long', 'short']);
+test('Best Slips compares exact leg products when displayed totals round to the same price', () => {
+  const low = { id: 'a-low', selections: [{ odds: '1.3333' }, { odds: '2.00' }], totalOdds: '2.67', estimatedProbability: 0.7 };
+  const high = { ...low, id: 'z-high', selections: [{ odds: '1.3334' }, { odds: '2.00' }] };
+  assert.ok(compareBestSlips(high, low) < 0);
+  assert.ok(compareBestSlips(low, high) > 0);
+});
+
+test('unrounded whole-slip probability leads both rankings with Best Slips using exact odds then fewer matches', () => {
+  const selection = { probability: 0.8, odds: '1.50' };
+  const short = { id: 'short', selections: [{ probability: 0.7, odds: '5.00' }], totalOdds: '5.00', estimatedProbability: 0.7 };
+  const long = { ...short, id: 'long', selections: [selection, selection, { ...selection, odds: '2.00' }], totalOdds: '4.50' };
+  const compact = { ...short, id: 'compact', selections: [{ probability: 0.7, odds: '4.50' }], totalOdds: '4.50' };
+  const largerOdds = { ...long, id: 'larger-odds', selections: [selection, { ...selection, odds: '2.00' }, { ...selection, odds: '2.00' }],
+    totalOdds: '6.00' };
+  const precise = { ...short, id: 'precise', selections: [{ probability: 0.7000000001, odds: '5.00' }], estimatedProbability: 0.7000000001 };
+  assert.deepEqual([short, long, largerOdds, precise, compact].sort(compareBestSlips).map(slip => slip.id),
+    ['precise', 'larger-odds', 'short', 'compact', 'long']);
   const { ranking } = jointSlipRanking({ ...synthetic, estimate: selections => selections.length === 1 ? selections[0].probability : 0.7 });
   assert.ok(ranking.compare(precise, largerOdds) < 0);
   assert.ok(ranking.compare(largerOdds, long) < 0);
