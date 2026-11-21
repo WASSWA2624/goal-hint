@@ -130,3 +130,26 @@ market and qualified sealed forecast. None of those four had a price from
 the configured bookmaker. The one priced featured pick from that bookmaker
 used a market outside the supported settlement scope. The public archive
 remained empty. Automatic publication still requires whole-slip qualification.
+
+## Any-bookmaker rollout and November 21
+
+Staging and production serve the same package from `9eecacc7`. Both checked all
+88 required migrations and passed the Best Slips filters and archive checks.
+The page shows the published count for a single day and band, with a ten-slip
+limit for current publications. Public count remained zero on both hosts.
+
+A point-in-time production check at 18:50 Kampala time found two eligible
+featured picks. Only one bookmaker covered both and their product matched
+none of the six bands. At 18:56 the revised production study sealed a fresh
+November 21 capture with 191 fixtures examined, four eligible picks and
+one four-leg combination in the 2.50–5.00 band. Repeated collection returned
+the same sealed record. This private sample is outside the declared fit
+and holdout windows.
+
+A separate retrospective audit verified 24 original priced fixture picks,
+18 with verified regulation outcomes. Combinations across their separate
+fixture cutoffs provide exploratory examples. The underlying decision
+records cannot establish a contemporaneous pre-kickoff publication on
+November 21. The public model binding is still absent. The private study
+runs at 06:30 Kampala time with the new bookmaker scope and keeps earlier
+capture files readable.
