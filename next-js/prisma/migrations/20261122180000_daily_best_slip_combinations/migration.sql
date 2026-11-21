@@ -8,10 +8,14 @@ CREATE TABLE `DailyBestSlipCombination` (
 ) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 
 CREATE TRIGGER `DailyBestSlipCombination_no_update` BEFORE UPDATE ON `DailyBestSlipCombination` FOR EACH ROW
-SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Daily Best Slips combination membership is immutable';
+BEGIN
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Daily Best Slips combination membership is immutable';
+END;
 
 CREATE TRIGGER `DailyBestSlipCombination_no_delete` BEFORE DELETE ON `DailyBestSlipCombination` FOR EACH ROW
-SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Daily Best Slips combination membership is immutable';
+BEGIN
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Daily Best Slips combination membership is immutable';
+END;
 
 ALTER TABLE DailySlipPublication
   DROP CHECK DailySlipPublication_body_shape_v4,

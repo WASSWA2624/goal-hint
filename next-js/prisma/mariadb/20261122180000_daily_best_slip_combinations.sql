@@ -18,11 +18,18 @@ CREATE TABLE `DailyBestSlipCombination` (
     CONSTRAINT `DailyBestSlipCombination_slipId_fkey` FOREIGN KEY (`slipId`) REFERENCES `PublishedSlip` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 
+DELIMITER //
 CREATE TRIGGER `DailyBestSlipCombination_no_update` BEFORE UPDATE ON `DailyBestSlipCombination` FOR EACH ROW
-SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Daily Best Slips combination membership is immutable';
+BEGIN
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Daily Best Slips combination membership is immutable';
+END //
 
 CREATE TRIGGER `DailyBestSlipCombination_no_delete` BEFORE DELETE ON `DailyBestSlipCombination` FOR EACH ROW
-SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Daily Best Slips combination membership is immutable';
+BEGIN
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Daily Best Slips combination membership is immutable';
+END //
+
+DELIMITER ;
 
 ALTER TABLE DailySlipPublication
   DROP CONSTRAINT DailySlipPublication_body_shape_v4,
@@ -37,4 +44,4 @@ ALTER TABLE DailySlipPublication
     ), FALSE) = TRUE);
 
 INSERT INTO _prisma_migrations (id,checksum,finished_at,migration_name,started_at,applied_steps_count)
-VALUES (UUID(),'005e46677e1a02f44086d8a2eeb342016046c6fa3f6a425dab69d54e0ba4c881',NOW(3),'20261122180000_daily_best_slip_combinations',NOW(3),1);
+VALUES (UUID(),'f2921ff970c47a98bc06af9d8df7689aa051f9afe0e21278978a9e9dcff01c77',NOW(3),'20261122180000_daily_best_slip_combinations',NOW(3),1);
