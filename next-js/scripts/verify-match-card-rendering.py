@@ -163,7 +163,7 @@ def verify_feed_cards(origin):
     response = request(origin, "/feed")
     assert response.status == 200
     cards = dict(re.findall(r'<article\b[^>]*data-fixture-id="(feed-[^"]+)"[^>]*>([\s\S]*?)</article>', visible_html(response.text)))
-    assert len(cards) == 11
+    assert len(cards) == 13
     for key, label in {"live": "67:00", "stoppage": r"45\+2", "halftime": "HT"}.items():
         card = cards[f"feed-{key}"]
         match(rf'data-status-clock[^>]*><span[^>]*>{label}</span>', card)
@@ -182,7 +182,14 @@ def verify_feed_cards(origin):
     no_match(r'data-prediction="home-win"', cards["feed-gated"])
     match(r'data-match-status="pending"', cards["feed-overdue"])
     match(r'data-match-status="upcoming"', cards["feed-upcoming"])
-    match(r'data-pick-selection[^>]*>Under 5\.5</span>', cards["feed-extended"])
+    match(r'data-mobile-only=""[^>]*>H O/U</span>', cards["feed-extended"])
+    match(r'data-pick-selection[^>]*title="Under 5\.5"[^>]*>U 5\.5</span>', cards["feed-extended"])
+    match(r'data-forecast-source="local-engine"[^>]*title="Local Engine prediction"[^>]*>L</small>', cards["feed-extended"])
+    match(r'data-mobile-only=""[^>]*>A O/U</span>', cards["feed-replay-live"])
+    match(r'data-card-odds[^>]*data-odds-kind="historical-pre-match"[^>]*title="Historical pre-match odds: 1\.90"[^>]*>1\.90</span>',
+          cards["feed-replay-live"])
+    no_match(r'data-positive-value', cards["feed-replay-live"])
+    match(r'data-card-odds[^>]*>—</span>[\s\S]*?data-pick-value[^>]*>96%</span>', cards["feed-replay-empty"])
     print("Matches card score, clock, compact status, missing-price and access rendering passed.")
 
 

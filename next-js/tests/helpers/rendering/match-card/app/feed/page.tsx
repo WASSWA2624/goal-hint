@@ -1,6 +1,7 @@
 import { MatchCard } from "@/components/match/match-card";
 import { MatchCardList } from "@/components/match/match-card-list";
 import { Container, PageMain } from "@/components/ui/layout";
+import { utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { parseFixtureSnapshot, type FixtureSnapshot } from "@/domain/fixture-snapshot";
 import examples from "../examples.json";
 
@@ -13,6 +14,11 @@ export default function FeedCardExamples() {
   const local = { ...pick, prices: [], forecast: pick.forecast && !("gated" in pick.forecast) ? {
     ...pick.forecast, markets: pick.forecast.markets.map((row) => ({ ...row, market: { ...row.market, source: "local-engine" as const } })),
   } : null };
+  const kickoffAt = pick.kickoffAt!, generatedAt = utcInstantFromEpochMilliseconds(kickoffAt + 86_400_000);
+  const replay = { revisionId: "replayed-forecast", sourceRevisionId: pick.forecast!.revisionId,
+    evidenceCutoffAt: utcInstantFromEpochMilliseconds(kickoffAt - 300_000), generatedAt, activatedAt: generatedAt,
+    pick: { key: "goal:full-time:totals:away:5.5:binary", family: "total-goals" as const, label: "Full time · Away team goals 5.5",
+      code: "O/U 5.5", selection: "under", selectionLabel: "Under 5.5", probability: 0.96, odds: null, source: "local-engine" as const } };
   const cases: { fixture: FixtureSnapshot; gated?: boolean; featured?: boolean }[] = [
     { fixture: { ...names(live, "Brighton", "Everton"), fixtureId: "feed-live", score: { home: 2, away: 1 } } },
     { fixture: { ...live, fixtureId: "feed-stoppage", liveClock: { phase: "first-half", minute: 45, stoppageMinutes: 2 } } },
@@ -29,6 +35,10 @@ export default function FeedCardExamples() {
     { featured: true, fixture: { ...local, fixtureId: "feed-extended", status: "scheduled", score: null,
       featuredPrediction: { key: "goal:full-time:totals:home:5.5:binary", family: "total-goals", label: "Full time · Home team goals 5.5",
         code: "O/U 5.5", selection: "under", selectionLabel: "Under 5.5", probability: 0.96, odds: null, source: "local-engine" } } },
+    { featured: true, fixture: { ...pick, fixtureId: "feed-replay-empty", retrospective: replay } },
+    { featured: true, fixture: { ...pick, fixtureId: "feed-replay-live", status: "live", retrospective: { ...replay, pick: {
+      ...replay.pick, odds: "1.9", historicalOdds: { bookmakerId: 8, bookmakerName: "Example Bookmaker", observedAt: generatedAt,
+        providerUpdatedAt: utcInstantFromEpochMilliseconds(kickoffAt - 60_000) } } } } },
   ];
 
   return <PageMain><Container><section data-feed-match-results>

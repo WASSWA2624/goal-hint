@@ -47,6 +47,12 @@ export const binaryGoalTotalOddsMapping = Object.freeze({
   "half-time": Object.freeze({ betId: 6, betName: "Goals Over/Under First Half" }),
 });
 
+/** API-Football pre-match team totals. Odds reads also require the sealed catalog to confirm both names. */
+export const fullTimeTeamTotalOddsMapping = Object.freeze({
+  home: Object.freeze({ betId: 16, betName: "Total - Home" }),
+  away: Object.freeze({ betId: 17, betName: "Total - Away" }),
+});
+
 export type OddsBetObservation = Readonly<{
   betId: number;
   betName: string | null;

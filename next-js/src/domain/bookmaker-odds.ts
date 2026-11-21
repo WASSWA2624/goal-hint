@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parseDecimalOdds } from "./odds.ts";
 import type { MarketFamily } from "./markets.ts";
-import { binaryGoalTotalOddsMapping, launchOddsMapping } from "./odds-markets.ts";
+import { binaryGoalTotalOddsMapping, fullTimeTeamTotalOddsMapping, launchOddsMapping } from "./odds-markets.ts";
 import { preMatchReferenceOddsFreshMs, resolveReferenceOdds, type ReferenceBookmakerPolicy, type ReferenceOddsOffer, type ReferenceOddsSelection }
   from "./reference-odds.ts";
 import type { GoalMarketPeriod } from "./score-distribution-markets.ts";
@@ -11,6 +11,12 @@ export const oddsVersionSchema = z.string().regex(/^[a-f0-9]{64}$/u);
 export const bookmakerOddsId = z.number().int().positive().max(4_294_967_295);
 export const oddsDisplayText = (maximum: number) => z.string().min(1).max(maximum)
   .refine((value) => value === value.trim() && !/[\p{Cc}\p{Cf}<>]/u.test(value));
+
+export function isVerifiedPreMatchObservation({ observedAt, providerUpdatedAt }: {
+  observedAt: number; providerUpdatedAt: number | null;
+}, kickoffAt: number) {
+  return observedAt < kickoffAt || providerUpdatedAt !== null && providerUpdatedAt < kickoffAt;
+}
 
 const observation = z.strictObject({ observedAt: at, checkedAt: at, providerUpdatedAt: at.nullable() })
   .refine(({ observedAt, checkedAt, providerUpdatedAt }) => observedAt <= checkedAt && (providerUpdatedAt === null || providerUpdatedAt <= checkedAt));
@@ -52,12 +58,14 @@ export function bookmakerMarketQuote(odds: PreMatchBookmakerOdds | null | undefi
     requestedBookmakerId === undefined ? {} : { requestedBookmakerId }) : null;
 }
 
+const fullTimeMappings = [...launchOddsMapping, ...Object.values(fullTimeTeamTotalOddsMapping)];
+
 /** The sealed read already enforces occurrence freshness at its own as-of time. */
 export function bookmakerReferencePrice(odds: PreMatchBookmakerOdds, mapping: { betId: number; betName: string },
   label: string, period: GoalMarketPeriod, policy: ReferenceBookmakerPolicy & { asOf?: number; freshnessMs?: number } = {}) {
   const selection: ReferenceOddsSelection = { fixtureId: odds.fixtureId, phase: odds.kind, period, marketId: mapping.betId,
     marketName: mapping.betName, label, line: null, playerId: null, teamId: null };
-  const source = period === "full-time" ? launchOddsMapping.find(({ betId, betName }) => betId === mapping.betId && betName === mapping.betName)
+  const source = period === "full-time" ? fullTimeMappings.find(({ betId, betName }) => betId === mapping.betId && betName === mapping.betName)
     : period === "half-time" ? binaryGoalTotalOddsMapping["half-time"] : null;
   const candidates = source?.betId === mapping.betId && source.betName === mapping.betName ? odds.books.flatMap<ReferenceOddsOffer>(({ bookmakerId, markets }) => {
     const book = markets.find(({ betId, name }) => betId === mapping.betId && name === mapping.betName);
@@ -74,19 +82,31 @@ export function bookmakerReferencePrice(odds: PreMatchBookmakerOdds, mapping: { 
 }
 
 export const featuredBookmakerBetIds = Object.freeze([...launchOddsMapping.map(({ betId }) => betId), binaryGoalTotalOddsMapping["half-time"].betId]);
+export const replayBookmakerBetIds = Object.freeze([...featuredBookmakerBetIds, ...Object.values(fullTimeTeamTotalOddsMapping).map(({ betId }) => betId)]);
 
-/** Provider prices are matched by verified bet identity and exact outcome/line. */
+function binaryGoalQuote(odds: PreMatchBookmakerOdds | null | undefined, marketKey: string, selection: string,
+  teamTotals: boolean, requestedBookmakerId?: number) {
+  if (!odds || (selection !== "over" && selection !== "under")) return null;
+  const identity = /^goal:(full-time|half-time):totals:(total|home|away):(\d+\.5):binary$/u.exec(marketKey);
+  if (!identity) return null;
+  const [, period, scope, line] = identity;
+  if (period !== "full-time" && period !== "half-time") return null;
+  const mapping = scope === "total" ? binaryGoalTotalOddsMapping[period]
+    : teamTotals && period === "full-time" && (scope === "home" || scope === "away") ? fullTimeTeamTotalOddsMapping[scope] : null;
+  if (!mapping) return null;
+  const label = `${selection === "over" ? "Over" : "Under"} ${line}`;
+  return bookmakerReferencePrice(odds, mapping, label, period, requestedBookmakerId === undefined ? {} : { requestedBookmakerId });
+}
+
+/** Provider prices are matched by verified bet identity and exact outcome and line. */
 export function bookmakerGoalPrice(odds: PreMatchBookmakerOdds | null | undefined, marketKey: string, selection: string,
   requestedBookmakerId?: number): string | null {
-  if (selection !== "over" && selection !== "under") return null;
-  const identity = /^goal:(full-time|half-time):totals:total:(\d+(?:\.\d+)?):(binary|asian)$/u.exec(marketKey);
-  if (!identity) return null;
-  const [, period, line, payout] = identity;
-  // The stored totals mapping has verified binary half-line semantics. Asian and team/second-half bets need their own verified mappings.
-  if (payout !== "binary" || !line?.endsWith(".5")) return null;
-  if (!odds) return null;
-  const label = `${selection === "over" ? "Over" : "Under"} ${line}`;
-  const quote = bookmakerReferencePrice(odds, binaryGoalTotalOddsMapping[period as keyof typeof binaryGoalTotalOddsMapping],
-    label, period as keyof typeof binaryGoalTotalOddsMapping, requestedBookmakerId === undefined ? {} : { requestedBookmakerId });
-  return quote.state === "available" ? quote.offer.price : null;
+  const quote = binaryGoalQuote(odds, marketKey, selection, false, requestedBookmakerId);
+  return quote?.state === "available" ? quote.offer.price : null;
+}
+
+export function replayBookmakerQuote(odds: PreMatchBookmakerOdds, pick: { key: string; family: MarketFamily; selection: string }) {
+  if (odds.kind !== "historical-pre-match") return null;
+  return pick.key === pick.family ? bookmakerMarketQuote(odds, pick.family, pick.selection)
+    : binaryGoalQuote(odds, pick.key, pick.selection, true);
 }

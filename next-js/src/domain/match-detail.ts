@@ -5,9 +5,9 @@ import { dailyRunProgressSchema, matchFeedRecordSchema, storedMatchFeedRecordSch
 import { contentAccessSchema } from "./content-access.ts";
 import { liveMatchSnapshotSchema } from "./live-match.ts";
 import { inPlayOddsObservationSchema } from "./in-play-odds.ts";
-import { featuredPredictionSchema, publicExtendedMarketSnapshotSchema, total15OddsSchema } from "./extended-markets.ts";
+import { publicExtendedMarketSnapshotSchema, retrospectivePredictionSchema, total15OddsSchema } from "./extended-markets.ts";
 import { marketSources } from "./markets.ts";
-import { preMatchBookmakerOddsSchema } from "./bookmaker-odds.ts";
+import { isVerifiedPreMatchObservation, preMatchBookmakerOddsSchema } from "./bookmaker-odds.ts";
 
 /** Why API-Football supplied a published market; "provider-first" is the reviewed baseline order with AI enabled. */
 export const detailFallbackReasons = ["ai-failure", "ai-timeout", "ai-insufficient-evidence", "ai-budget-exhausted", "ai-missing-group",
@@ -85,7 +85,7 @@ const storedDetailBaseSchema = z.strictObject({ fixture: storedMatchFeedRecordSc
   recoveredBookmakerOdds: preMatchBookmakerOddsSchema.nullable().optional(),
   extendedMarkets: publicExtendedMarketSnapshotSchema.nullable().optional(),
   extendedOdds: total15OddsSchema.nullable().optional(),
-  retrospectiveMarkets: z.array(featuredPredictionSchema.extend({ source: z.literal("local-engine") })).min(1).max(256).nullable().optional(),
+  retrospectiveMarkets: z.array(retrospectivePredictionSchema).min(1).max(256).nullable().optional(),
   route: z.strictObject({ fixtureId: id, slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u).max(160), path: z.string().max(512) }),
   currentRevisionId: id.nullable(), selection: z.enum(["applicable", "revision", "cycle"]), selectedCycle: detailCycleSchema.nullable(), snapshot: storedDetailSnapshotSchema.nullable(),
   history: z.strictObject({ limit: z.number().int().min(1).max(matchDetailRules.maximumLimit),
@@ -115,8 +115,11 @@ function refineDetail(v: z.infer<typeof wireDetailBaseSchema>, ctx: z.Refinement
   const replay = v.fixture.retrospective, replayMarkets = v.retrospectiveMarkets;
   if (replay ? v.selection !== "applicable" || replay.activatedAt > v.asOf || !replayMarkets ||
     new Set(replayMarkets.map(({ key }) => key)).size !== replayMarkets.length ||
+    replayMarkets.some(({ historicalOdds }) => historicalOdds && (historicalOdds.observedAt > v.asOf ||
+      v.fixture.kickoffAt === null || !isVerifiedPreMatchObservation(historicalOdds, v.fixture.kickoffAt))) ||
     !replayMarkets.some((pick) => pick.key === replay.pick.key && pick.selection === replay.pick.selection &&
-      pick.probability === replay.pick.probability) : replayMarkets != null) {
+      pick.probability === replay.pick.probability && pick.odds === replay.pick.odds &&
+      JSON.stringify(pick.historicalOdds) === JSON.stringify(replay.pick.historicalOdds)) : replayMarkets != null) {
     ctx.addIssue({ code: "custom", message: "Retrospective markets require one active retrospective detail forecast." });
   }
   if (v.liveMatch) {

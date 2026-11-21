@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { featuredPredictionSchema } from "./extended-markets.ts";
+import { featuredPredictionSchema, retrospectivePredictionSchema } from "./extended-markets.ts";
 import { utcInstantFromEpochMilliseconds } from "./calendar.ts";
 import { isMarketFamily, validateMarketSnapshot, MARKET_RULE_VERSION, type AcceptedMarket } from "./markets.ts";
 import { isPlayedFinalStatus, settlementStatuses, type SettlementOutcomeStatus } from "./market-settlement.ts";
@@ -8,7 +8,7 @@ import { isSafeRemoteImageUrl } from "./remote-image.ts";
 import { teamCodePattern } from "./team-name.ts";
 import { publicRecommendationSchema } from "./recommendation-view.ts";
 import { marketOddsObservationSchema } from "./in-play-odds.ts";
-import { bookmakerOddsId } from "./bookmaker-odds.ts";
+import { bookmakerOddsId, isVerifiedPreMatchObservation } from "./bookmaker-odds.ts";
 import { parseDecimalOdds } from "./odds.ts";
 
 import { parseFixtureVersion } from "./fixture-version.ts";
@@ -181,7 +181,7 @@ const fixtureSnapshotBaseSchema = z.strictObject({
   filteredPrediction: featuredPredictionSchema.nullable().optional(),
   retrospective: z.strictObject({
     revisionId: identity, sourceRevisionId: identity, evidenceCutoffAt: instant, generatedAt: instant, activatedAt: instant,
-    pick: featuredPredictionSchema.extend({ source: z.literal("local-engine") }),
+    pick: retrospectivePredictionSchema,
   }).nullable().optional(),
 });
 export const publishedFamiliesSchema = z.array(marketFamilySchema).max(4).refine((families) => families.join() === publicPolicy.markets.filter((family) => families.includes(family)).join(), "Families must be unique and in policy order.");
@@ -204,6 +204,7 @@ function refineFixture(value: z.infer<typeof wireFixtureBaseSchema>, context: z.
   if (replay && (!forecast || replay.sourceRevisionId !== forecast.revisionId || replay.revisionId === forecast.revisionId ||
       value.cycle?.state !== "closed" || value.kickoffAt === null || replay.evidenceCutoffAt >= value.kickoffAt ||
       replay.generatedAt < value.kickoffAt || replay.activatedAt < replay.generatedAt ||
+      replay.pick.historicalOdds && !isVerifiedPreMatchObservation(replay.pick.historicalOdds, value.kickoffAt) ||
       value.status !== "live" && !isPlayedFinalStatus(value.status))) {
     context.addIssue({ code: "custom", message: "A retrospective forecast must belong to the displayed locked occurrence." });
   }

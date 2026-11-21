@@ -14,7 +14,7 @@ import { readExtendedMarketSnapshot } from "../predictions/extended-market-read.
 import { storedFeedFixture } from "./fixture-read.ts";
 import { isNovemberReplayKickoff } from "../../domain/november-replay.ts";
 import { readNovemberReplayProjections } from "../intelligence/november-replay-store.ts";
-import { projectRetrospectiveForecast } from "./retrospective-picks.ts";
+import { projectRetrospectiveForecast, readReplayBookmakerQuotes, replayPickPricing } from "./retrospective-picks.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { storedFixtureOddsGroups, storedUpcomingOddsForFixtures } from "../odds/odds-read.ts";
 import { storedClosingBookmakerQuotes, storedCurrentBookmakerQuotes, storedRecoveredBookmakerQuotes, total15OddsForBookmaker } from "../odds/odds-mysql-store.ts";
@@ -155,7 +155,8 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
       if (!allowLiveMatch && !allowInPlayOdds && !providerOdds) return response;
       // The live envelope bypasses the revision/detail cache; repeated visitor reads only read this bounded stored row.
       if (!historical && response.fixture.status !== "live" && !isPlayedFinalStatus(response.fixture.status) && response.fixture.status !== "abandoned") return response;
-      const [liveMatch, inPlayOdds, closingQuotes, recoveredQuotes] = await Promise.all([
+      const replay = response.fixture.retrospective;
+      const [liveMatch, inPlayOdds, closingQuotes, recoveredQuotes, replayQuotes] = await Promise.all([
         allowLiveMatch ? options.database.query((tx) => storedLiveMatchSnapshot(tx, { fixtureId: id, asOf, historical,
           cycleId: historical ? response.selectedCycle?.id ?? null : response.fixture.cycleId,
           kickoffAt: historical ? response.selectedCycle?.kickoffAt ?? null : kickoffAt })).catch(() => null) : undefined,
@@ -167,10 +168,17 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
         providerOdds && !historical && kickoffAt !== null && (response.fixture.status === "live" || isPlayedFinalStatus(response.fixture.status))
           ? options.database.transaction((tx) => storedRecoveredBookmakerQuotes(tx, [{ fixtureId: id, kickoffAt }], asOf),
             { isolationLevel: "RepeatableRead", maxWait: 2_000, timeout: 5_000 }).then((quotes) => quotes.get(id)).catch(() => undefined) : undefined,
+        providerOdds && !historical && replay && kickoffAt !== null
+          ? readReplayBookmakerQuotes(options.database, [{ fixtureId: id, kickoffAt }], asOf).then((quotes) => quotes?.get(id)) : undefined,
       ]);
       const extendedOdds: Total15Odds | null = total15Available && inPlayOdds?.prices.total15Prices
         ? { marketKey: total15MarketKey, kind: "in-play", checkedAt: inPlayOdds.checkedAt, selections: inPlayOdds.prices.total15Prices } : null;
+      const retrospectiveMarkets = replay && replayQuotes?.kickoffAt === kickoffAt
+        ? response.retrospectiveMarkets?.map(replayPickPricing(replayQuotes)) : null;
+      const replayPick = retrospectiveMarkets?.find((pick) => pick.key === replay?.pick.key && pick.selection === replay.pick.selection);
       const compact = { ...response, asOf: response.asOf > asOf ? response.asOf : asOf,
+        ...(replay && replayPick && retrospectiveMarkets
+          ? { fixture: { ...response.fixture, retrospective: { ...replay, pick: replayPick } }, retrospectiveMarkets } : {}),
         ...(allowLiveMatch ? { liveMatch } : {}),
         ...(allowInPlayOdds ? { inPlayOdds: inPlayOdds ?? null } : {}),
         ...(extendedOdds ? { extendedOdds } : {}) };

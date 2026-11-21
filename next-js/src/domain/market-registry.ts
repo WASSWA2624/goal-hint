@@ -1,7 +1,7 @@
 import { marketSelections, type MarketFamily } from "./markets.ts";
 import { IMPLIED_MARKET_MAPPING_VERSION } from "./market-implied-markets.ts";
 import { NON_GOAL_MARKET_RULE_VERSION, countMetrics, eventMetrics, type NonGoalRule } from "./non-goal-market-definitions.ts";
-import { LIVE_ODDS_MAPPING_VERSION, ODDS_MAPPING_VERSION, binaryGoalTotalOddsMapping, launchLiveOddsMapping, launchOddsMapping } from "./odds-markets.ts";
+import { LIVE_ODDS_MAPPING_VERSION, ODDS_MAPPING_VERSION, binaryGoalTotalOddsMapping, fullTimeTeamTotalOddsMapping, launchLiveOddsMapping, launchOddsMapping } from "./odds-markets.ts";
 import { GOAL_MARKET_RULE_VERSION, goalMarketPeriods, type GoalMarketPeriod, type GoalRule } from "./score-distribution-markets.ts";
 
 export const MARKET_REGISTRY_VERSION = "football-market-registry-v3";
@@ -192,6 +192,9 @@ const reviewedCatalogMappings: readonly CatalogMarketMapping[] = Object.freeze([
     id: betId, name: betName, family, period: "full-time" as const })),
   { namespace: "pre-match", id: binaryGoalTotalOddsMapping["half-time"].betId,
     name: binaryGoalTotalOddsMapping["half-time"].betName, family: "total-goals", period: "half-time" },
+  ...Object.values(fullTimeTeamTotalOddsMapping).map(({ betId, betName }) => ({
+    namespace: "pre-match" as const, id: betId, name: betName, family: "team-goals" as const, period: "full-time" as const,
+  })),
   ...(Object.entries(launchLiveOddsMapping) as [MarketFamily, typeof launchLiveOddsMapping[MarketFamily]][])
     .map(([family, { id, name }]) => ({ namespace: "in-play" as const, id, name, family, period: "full-time" as const })),
 ]);

@@ -1,6 +1,7 @@
 "use client";
 
 import { SearchBar } from "@/components/ui/search-bar";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
 
 import { memo, useDeferredValue, useEffect, useRef, useState } from "react";
 import styled from "styled-components";
@@ -29,6 +30,7 @@ import {
 } from "./details-ui";
 import { useEmbeddedSection, useReturnFocus } from "./section-card";
 import { marketName, percent } from "./labels";
+import { historicalReplayOddsSource } from "./touchline-featured";
 
 const Search = styled(SearchBar)`min-inline-size: min(100%, var(--gh-size-48));`;
 /** Narrow cards drop the probability bar and keep the percentage; wide cards show both. */
@@ -315,9 +317,15 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
           {shownReplay?.length ? <RowList ref={list} aria-label={messages.text("touchline.retrospective")}>
             {shownReplay.map((pick) => {
               const Icon = familyIcon[pick.family];
+              const price = pick.historicalOdds && pick.odds ? displayMarketOddsPrice(pick.odds) : null;
+              const oddsLabel = price && pick.historicalOdds ?
+                `${messages.text("touchline.recoveredOdds")} ${price} · ${historicalReplayOddsSource(pick.historicalOdds, messages)}` : null;
               return <li key={pick.key}><MarketRow as="div" $family={pick.family} data-retrospective-market>
                 <span data-name><IconBadge $accent={familyAccent[pick.family]}><Icon /></IconBadge><span>{pick.label}</span></span>
-                <span data-pick><span>{pick.selectionLabel}</span></span>
+                <span data-pick><span><span>{pick.selectionLabel}</span>
+                  <PredictionOdds odds={price} title={oddsLabel ?? undefined} aria-hidden="true" />
+                  {oddsLabel && <VisuallyHidden>{oddsLabel}</VisuallyHidden>}
+                </span></span>
                 <span data-bar><b>{percent(messages, pick.probability)}</b></span>
               </MarketRow></li>;
             })}

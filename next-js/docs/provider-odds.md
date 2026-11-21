@@ -303,6 +303,17 @@ privately. They become eligible for display after verified play or a finish for
 that occurrence. Current and closing projections, original publication prices
 and historical display each retain their source evidence.
 
+November replay picks apply a separate verification step before choosing the
+latest quote for an outcome. A saved pre-kickoff observation qualifies. A
+post-kickoff recovery qualifies when its provider clock is strictly before the
+same kickoff or an earlier verified start. Both require sealed receipts and
+eligible retention and access.
+The pre-match catalog confirms IDs 16 and 17 as `Total - Home` and `Total - Away`.
+These names and the exact binary half-goal label distinguish team quotes from
+match totals, alternate lines, and in-play offers. Replay prices are historical
+display references and leave ranking, odds-range membership and original
+publication untouched.
+
 ## Identity widths
 
 Bookmaker and bet ids are stored as unsigned 32-bit integers. The normalizer

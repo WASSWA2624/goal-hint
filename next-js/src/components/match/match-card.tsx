@@ -8,19 +8,20 @@ import Link from "@/components/navigation/navigation-link";
 import { memo, useContext, useId, type ComponentProps, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { toUtcIsoString } from "@/domain/calendar";
+import { formatMarketShortLabel } from "@/domain/betting-short-forms";
 import { countryCode, countryDisplayName, countryShortName } from "@/domain/country-code";
 import { compactLeagueName, compactMarketName } from "@/domain/compact-fixture-label";
 import { bestCardFamily, noPickReason } from "@/domain/feed-presentation";
 import { defaultMarkets } from "@/domain/feed-query";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
-import { marketOddsPrice } from "@/domain/in-play-odds";
+import { displayMarketOddsPrice, marketOddsPrice } from "@/domain/in-play-odds";
 import { forecastExpectedReturn } from "@/domain/forecast-value";
 import { cardResultStatus, featuredCardPrediction, hasFinalScoreStatus, matchCardScore, sameCardFixture, selectedCardPrediction, selectedCardPrice, snapshotCardPrediction, type CardSnapshotPick } from "@/domain/match-card";
 import { liveClockLabel } from "@/domain/match-clock";
 import type { MarketFamily } from "@/domain/markets";
 import { isCompletedFixtureStatus } from "@/domain/market-settlement";
 import { matchHref } from "@/domain/navigation";
-import { predictionDescription, predictionLabel, predictionText } from "@/domain/prediction-label";
+import { predictionDescription, predictionLabel } from "@/domain/prediction-label";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import { createMessages, type Messages } from "@/i18n/messages";
 import { useMessages } from "@/i18n/use-messages";
@@ -593,30 +594,36 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const livePrice = selection && observation?.kind === "in-play" ? marketOddsPrice(observation, shownFamily, selection) : null;
   const preMatchPrice = featured?.odds ?? (selection && fixture.status === "scheduled" && observation?.kind === "pre-match"
     ? marketOddsPrice(observation, shownFamily, selection) : null);
-  const storedPrice = filtered ? fixture.prices?.find((quote) => quote.family === filtered.key && quote.selection === selection) ?? null
+  const storedPrice = retrospective ? null : filtered ? fixture.prices?.find((quote) => quote.family === filtered.key && quote.selection === selection) ?? null
     : featured || fixture.status === "live" ? null : selectedCardPrice(fixture, shownFamily, !publishedMarket);
-  const confirmedPrice = filtered ? filtered.odds : fixture.status === "live" ? livePrice : preMatchPrice;
+  const replayPick = retrospective?.pick;
+  const historicalReplayPrice = selection && replayPick?.historicalOdds && replayPick.odds ? displayMarketOddsPrice(replayPick.odds) : null;
+  const confirmedPrice = retrospective ? historicalReplayPrice : filtered ? filtered.odds : fixture.status === "live" ? livePrice : preMatchPrice;
   const price = !selection ? null : snapshotPick ? { price: snapshotPick.odds }
     : confirmedPrice ? { price: confirmedPrice } : storedPrice;
-  const oddsKind = (price === storedPrice ? storedPrice?.recovery?.kind : undefined) ?? observation?.kind ?? (filtered && price ? "pre-match" : undefined);
+  const oddsKind = historicalReplayPrice ? "historical-pre-match"
+    : (price === storedPrice ? storedPrice?.recovery?.kind : undefined) ?? observation?.kind ?? (filtered && price ? "pre-match" : undefined);
   const oddsCaption = messages.text("details.odds");
   const stackOddsCaption = `${oddsCaption}:`;
   const stackProbabilityCaption = `${messages.text("match.columns.probabilityCompact")}:`;
-  const oddsLabel = oddsKind === "pre-match" || oddsKind === "historical-pre-match" ? messages.text("touchline.preMatchOdds") : oddsCaption;
+  const oddsLabel = historicalReplayPrice ? messages.text("touchline.recoveredOdds")
+    : oddsKind === "pre-match" || oddsKind === "historical-pre-match" ? messages.text("touchline.preMatchOdds") : oddsCaption;
   const oddsDescription = `${oddsLabel}: ${price?.price ?? messages.text("outcome.unavailable")}`;
   const market = prediction?.item.market;
-  const expectedReturn = market?.source ? forecastExpectedReturn(market.selectedProbability, preMatchPrice) : null;
+  const expectedReturn = !retrospective && market?.source ? forecastExpectedReturn(market.selectedProbability, preMatchPrice) : null;
   const source = prediction?.item.market.source;
-  const sourceLabel = source ? <ForecastSourceLabel source={source} messages={messages}
+  const sourceLabel = (compact: boolean) => source ? <ForecastSourceLabel source={source} messages={messages}
     label={retrospective && !phoneFeed ? messages.text("touchline.retrospective") : undefined}
-    compactLabel={source === "local-engine" ? messages.text("match.source.localShort") : undefined} /> : null;
+    compactLabel={!compact && source === "local-engine" ? messages.text("match.source.localShort") : undefined} /> : null;
   const valueLabel = <ForecastValueLabel expectedReturn={expectedReturn} messages={messages} />;
   const family = featured?.label ?? messages.text(`market.family.${shownFamily}`);
-  const teamTotal = /^goal:[^:]+:totals:(home|away):/u.exec(featured?.key ?? "")?.[1];
-  const shortFamily = teamTotal === "home" || teamTotal === "away" ? messages.text(`match.teamTotal.${teamTotal}`)
+  const [, totalPeriod, totalScope] = /^goal:([^:]+):totals:(total|home|away):/u.exec(featured?.key ?? "") ?? [];
+  const shortFamily = totalScope === "home" || totalScope === "away" ? messages.text(`match.teamTotal.${totalScope}`)
     : featured?.code ?? compactMarketName(shownFamily);
+  const mobileFamily = phoneFeed && totalScope ? formatMarketShortLabel({ market: "total-goals", scope: totalScope,
+    ...(totalPeriod && totalPeriod !== "full-time" ? { period: totalPeriod } : {}) }) : shortFamily;
   const selectionContext = featured?.code ? { marketKey: featured.key, label: featured.selectionLabel } : undefined;
-  const mobileSelection = selection && (phoneFeed && shownFamily === "total-goals" ? predictionText : predictionLabel)(messages, selection, selectionContext);
+  const mobileSelection = selection && predictionLabel(messages, selection, selectionContext);
   const locked = !retrospective && fixture.cycle?.state === "closed";
   const originalOutcome = filtered && filtered.key === filtered.family ? selectedCardPrediction(fixture, filtered.family, false) : null;
   const outcome = retrospective || filtered && originalOutcome?.item.market.selection !== filtered.selection ? "unavailable"
@@ -670,11 +677,12 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       market={offline ? <span>Unavailable offline</span> : gated ? <><SubscriberIcon /><span data-subscriber-notice>{messages.text("paywall.unlock")}</span></> : <>
         {prediction && <span data-market-label aria-hidden="true">{shortFamily}:</span>}
         {selection ? <PickLine as="strong" data-pick-line="" data-pick-label title={publication || undefined}>
-          <span data-pick-selection>{predictionLabel(messages, selection, selectionContext)}</span>{sourceLabel}
+          <span data-pick-selection>{predictionLabel(messages, selection, selectionContext)}</span>{sourceLabel(false)}
         </PickLine> : <strong data-pick-label data-no-pick={missing ?? undefined}>{noPickLabel}</strong>}
       </>}
       odds={<span data-card-odds data-pick-price={prediction ? "" : undefined} data-odds-kind={oddsKind}
-        title={oddsDescription}>{price?.price ?? "—"}{expectedReturn !== null && expectedReturn > 0 && <> {valueLabel}</>}</span>}
+        title={oddsDescription}>{price?.price ?? "—"}{historicalReplayPrice && <VisuallyHidden> {oddsLabel}</VisuallyHidden>}
+        {expectedReturn !== null && expectedReturn > 0 && <> {valueLabel}</>}</span>}
       probability={gated ? <span data-public-probability>{publicChanceLabel}</span> : <span data-pick-value>{prediction ? percent : "—"}</span>}
       details={offline ? <VisuallyHidden>Predictions are unavailable in the saved view.</VisuallyHidden>
         : !gated && !prediction && reason ? <span data-no-pick-reason>{reason}</span> : null}
@@ -706,7 +714,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     </Teams>
     <Pick $family={shownFamily} data-ledger-facts data-pick-state={pickState} data-result={result}>
       <MarketName $family={shownFamily} data-ledger-field="market" aria-hidden={gated ? undefined : true} title={family}>
-        <span data-pick-value="" data-mobile-only="">{gated ? null : shortFamily}</span>
+        <span data-pick-value="" data-mobile-only="">{gated ? null : mobileFamily}</span>
         <span data-pick-value="" data-desktop-only="">{gated ? null : family}</span>
       </MarketName>
       {offline ? <PredictionCell prediction={null} price={null} reason="Predictions are unavailable in the saved view." locale={locale}>
@@ -720,7 +728,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       </> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale} compact={phoneFeed}>
         <PickShort $family={shownFamily} $available={prediction !== null} data-ledger-field="prediction" aria-hidden="true"
           data-no-pick={missing ?? undefined}>
-          {selection ? <PickLine data-pick-line="" data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection, selectionContext)}>{mobileSelection}</span>{sourceLabel}</PickLine> : <>
+          {selection ? <PickLine data-pick-line="" data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection, selectionContext)}>{mobileSelection}</span>{sourceLabel(true)}</PickLine> : <>
             <b data-mobile-only="">{noPickLabel}</b>
             <span data-pick-value="" data-mobile-only="">{messages.text(`match.noPickReason.short.${missing!}`)}</span>
             <span data-pick-value="" data-desktop-only="">{noPickLabel}</span>
@@ -758,7 +766,8 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
  * A server refresh of the same query also brings an equal but new `markets` array. The country flag is decoration
  * that can change without a version bump, so it is compared by value too. */
 function sameCardProps(previous: MatchCardProps, next: MatchCardProps): boolean {
-  if (!sameCardFixture(previous.fixture, next.fixture) || countryFlagUrl(previous.fixture) !== countryFlagUrl(next.fixture)) return false;
+  if (!sameCardFixture(previous.fixture, next.fixture) || countryFlagUrl(previous.fixture) !== countryFlagUrl(next.fixture) ||
+      Boolean(previous.fixture.retrospective?.pick.historicalOdds) !== Boolean(next.fixture.retrospective?.pick.historicalOdds)) return false;
   for (const key of new Set([...Object.keys(previous), ...Object.keys(next)]) as Set<keyof MatchCardProps>) {
     if (key === "fixture" || Object.is(previous[key], next[key])) continue;
     if (key !== "markets" || previous.markets?.length !== next.markets?.length ||

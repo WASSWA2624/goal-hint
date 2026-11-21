@@ -1,11 +1,16 @@
 import "server-only";
 
 import { createMessages } from "../../i18n/messages.ts";
+import { isVerifiedPreMatchObservation, replayBookmakerBetIds, replayBookmakerQuote } from "../../domain/bookmaker-odds.ts";
+import type { RetrospectivePrediction } from "../../domain/extended-markets.ts";
 import { feedMarketPickIdentity } from "../../domain/feed-market-picks.ts";
 import type { StoredFixtureSnapshot } from "../../domain/fixture-snapshot.ts";
 import { formatOddsHundredths } from "../../domain/odds.ts";
 import { predictionText } from "../../domain/prediction-label.ts";
 import type { NovemberReplayProjection } from "../intelligence/november-replay-store.ts";
+import type { DatabaseRuntime } from "../database/client.ts";
+import { projectBookmakerOdds } from "../odds/bookmaker-odds-read.ts";
+import { storedVerifiedReplayBookmakerQuotes, type StoredCurrentBookmakerQuotes } from "../odds/odds-mysql-store.ts";
 import type { FeedSelectedPick } from "./feed-selected-picks.ts";
 
 export function displayFeedSelectedPick({ marketKey, selection, probability, source, priceHundredths }: FeedSelectedPick, locale: string) {
@@ -37,4 +42,24 @@ export function projectRetrospectiveForecast(fixture: StoredFixtureSnapshot, rep
   return { card: { revisionId: replay.revisionId, sourceRevisionId: replay.sourceRevisionId,
     evidenceCutoffAt: replay.evidenceCutoffAt, generatedAt: replay.generatedAt, activatedAt: replay.activatedAt, pick },
     markets: entries.map((entry) => entry.pick) };
+}
+
+export function readReplayBookmakerQuotes(database: DatabaseRuntime,
+  fixtures: readonly { fixtureId: string; kickoffAt: number | null }[], asOf: number) {
+  return database.transaction((tx) => storedVerifiedReplayBookmakerQuotes(tx, fixtures, asOf, replayBookmakerBetIds),
+    { isolationLevel: "RepeatableRead", maxWait: 2_000, timeout: 5_000 }).catch(() => null);
+}
+
+/** Attach display-only prices without changing the replay's selection, model or original publication. */
+export function replayPickPricing(quotes: StoredCurrentBookmakerQuotes | undefined) {
+  const odds = projectBookmakerOdds(quotes, "historical-pre-match");
+  return (pick: RetrospectivePrediction): RetrospectivePrediction => {
+    if (!odds) return pick;
+    const quote = replayBookmakerQuote(odds, pick);
+    if (quote?.state !== "available" || quote.offer.price === null || quote.actualBookmakerId === null ||
+        !isVerifiedPreMatchObservation(quote.offer, odds.kickoffAt)) return pick;
+    const { observedAt, providerUpdatedAt } = quote.offer, bookmakerId = quote.actualBookmakerId;
+    return { ...pick, odds: quote.offer.price, historicalOdds: { bookmakerId,
+      bookmakerName: odds.books.find((book) => book.bookmakerId === bookmakerId)?.name ?? null, observedAt, providerUpdatedAt } };
+  };
 }

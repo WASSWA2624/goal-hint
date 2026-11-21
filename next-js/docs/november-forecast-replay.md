@@ -49,6 +49,15 @@ The public pointer applies to the exact source revision and occurrence.
 Matches, supported exact-outcome filters and the ordinary Match Details view
 read that projection. Explicit revision history and original prices,
 settlements and performance remain tied to their original publication IDs.
+With public odds access, Matches and applicable Match Details can show a
+historical reference price for the selected replay outcome. The price must
+match the verified fixture occurrence, market, period, team, line and outcome.
+A sealed capture before kickoff qualifies. A later recovery needs a provider
+update before kickoff. When verified play started earlier, that time sets the
+limit. Match Details keeps both clocks visible. The
+historical reference may follow the evidence cutoff. It leaves the replay
+decision, published prices, return estimates and settlement history independent.
+Markets with no qualifying exact quote keep their blank price.
 The audit workspace contains private source and replay data and belongs outside
 the web root. Use distinct workspaces for each new audit or environment.
 Run the hosted workflow with the verified database profile and Matches

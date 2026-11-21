@@ -58,7 +58,8 @@ function refineFeed(value: Omit<z.infer<typeof storedFeedBaseSchema>, "records">
     new Set(value.leagues.map((league) => league.id)).size !== value.leagues.length ||
     value.totalPages !== Math.ceil(value.total / value.pageSize) ||
     new Set(value.records.map((record) => record.fixtureId)).size !== value.records.length ||
-    value.records.some(({ retrospective }) => retrospective && retrospective.activatedAt > value.asOf) ||
+    value.records.some(({ retrospective }) => retrospective && (retrospective.activatedAt > value.asOf ||
+      retrospective.pick.historicalOdds && retrospective.pick.historicalOdds.observedAt > value.asOf)) ||
     value.nextPage !== null && value.nextPage !== value.page + 1 || value.previousPage !== null && value.previousPage >= value.page ||
     (value.links.next === null) !== (value.nextPage === null) || (value.links.previous === null) !== (value.previousPage === null) ||
     value.coverage.partial !== value.coverage.dates.some((entry) => !entry.authoritative) ||

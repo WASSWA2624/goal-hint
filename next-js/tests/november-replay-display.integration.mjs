@@ -20,6 +20,8 @@ import { feedSql } from '../src/server/matches/feed-read.ts';
 import { createMatchFeedSummaryService } from '../src/server/matches/feed-summary-service.ts';
 import { createMatchDetailService } from '../src/server/matches/detail-service.ts';
 import { projectRetrospectiveForecast } from '../src/server/matches/retrospective-picks.ts';
+import { createMysqlOddsStore } from '../src/server/odds/odds-mysql-store.ts';
+import { createOddsImportService } from '../src/server/odds/odds-service.ts';
 import { createScheduleLifecycleService } from '../src/server/predictions/lifecycle-service.ts';
 import { parseLifecycleInput } from '../src/server/predictions/lifecycle-input.ts';
 import { createMysqlRefreshStore } from '../src/server/refresh/refresh-mysql-store.ts';
@@ -28,6 +30,8 @@ import { createMarketSettlementService } from '../src/server/settlement/settleme
 import { catalogFixture } from './helpers/catalog-fixtures.mjs';
 import { fallbackAiDenied, fallbackFixture, fallbackProvider } from './helpers/fallback-fixtures.mjs';
 import { lifecycleAuthority, lifecyclePolicy, lifecycleInput } from './helpers/lifecycle-fixtures.mjs';
+import { createSyntheticOddsAdapter, launchBetCatalog, ODDS_BOOKMAKER, oddsAuthority, oddsBounds, oddsPolicy,
+  oddsRequest, offsetTime, rawOddsRow } from './helpers/odds-fixtures.mjs';
 import { historyCandidate } from './helpers/prediction-history-fixtures.mjs';
 import { modelVersion } from './helpers/predictor-fixtures.mjs';
 import { resultHash } from './helpers/result-sync-fixtures.mjs';
@@ -60,6 +64,7 @@ test('November replay has one display across feed, exact outcome and detail whil
   await withPredictionPipeline(t, async (p) => {
     const date = '2026-11-18', providerId = 41310;
     const selectionAt = Date.parse(`${date}T08:00:00Z`), publicationAt = selectionAt + 4000, kickoffAt = publicationAt + 301_000;
+    const actualStartedAt = kickoffAt - 5000;
     await p.cohort(date, p.first, { rows: [catalogFixture(providerId, { kickoff: new Date(kickoffAt).toISOString() })], selectionAt, afterSelectionAt: publicationAt });
     const state = await p.setup(providerId, date, { publicationAt });
     state.input.candidate = historyCandidate({ snapshot: state.snapshot, model: modelVersion(), jobId: state.lease.jobId, source: 'api-football' });
@@ -71,11 +76,42 @@ test('November replay has one display across feed, exact outcome and detail whil
     await p.first.close(p.target(state));
     const accountId = resultHash('november-display-results');
     await p.a.query((tx) => tx.apiQuotaAccount.create({ data: { id: accountId } }));
+    const clock = { now: () => p.now() };
+    const { adapter, state: oddsState } = createSyntheticOddsAdapter(clock);
+    const policy = oddsPolicy();
+    const oddsImporter = createOddsImportService({ adapter: adapter.odds, store: createMysqlOddsStore(p.a),
+      authority: oddsAuthority({ publicDisplay: true }, policy), accountId: () => accountId,
+      bounds: () => oddsBounds(p.now()), clock });
+    const oddsRow = (bets, update = null) => rawOddsRow(providerId, kickoffAt, { bets, update });
+    const bet = (id, name, values) => ({ id, name, values: Object.entries(values).map(([value, odd]) => ({ value, odd })) });
+    const homeBet = (values) => bet(16, 'Total - Home', values);
+    const awayBet = (values) => bet(17, 'Total - Away', values);
+    const importPrices = async (raw, recovery = false) => {
+      oddsState.rows = [raw];
+      const request = oddsRequest('prices', p.now(), { date, policy, id: resultHash(`replay-odds:${p.now()}`) });
+      const imported = recovery ? await oddsImporter.importHistoricalDate({ ...request, recovery }) : await oddsImporter.importDate(request);
+      assert.equal(imported.status, 'complete');
+      assert.equal(imported.outcomes[recovery ? 'recover' : 'apply'], 1);
+    };
+    const capturedAt = kickoffAt - 60_000;
+    p.setTime(capturedAt - 1000);
+    oddsState.bets = [...launchBetCatalog(), { id: 16, name: 'Total - Home' }, { id: 17, name: 'Total - Away' },
+      { id: 6, name: 'Goals Over/Under First Half' }];
+    assert.equal((await oddsImporter.importCatalog(oddsRequest('bets', p.now(), { policy }))).status, 'complete');
+    p.setTime(capturedAt);
+    await importPrices(oddsRow([
+      bet(1, 'Match Winner', { Away: '3.90' }), bet(5, 'Goals Over/Under', { 'Under 5.5': '7.20' }),
+      bet(6, 'Goals Over/Under First Half', { 'Under 5.5': '7.40' }),
+      homeBet({ 'Under 5.5': '1.17', 'Over 5.5': '8.80' }), awayBet({ 'Under 4.5': '9.20', 'Over 5.5': '9.30' }),
+    ]));
+    // The delayed status arrives below. Odds may already have captured an apparent pre-match row after actual start.
+    p.setTime(actualStartedAt + 1000);
+    await importPrices(oddsRow([homeBet({ 'Under 5.5': '2.31' })]));
     const lifecycle = createScheduleLifecycleService({ database: p.a, cutoff: p.first, policy: lifecyclePolicy(), authority: lifecycleAuthority() });
     const resultStore = createMysqlResultSyncStore({ database: p.a, accountId, lifecycle });
     const settlement = createMarketSettlementService({ database: p.a, queue: p.queue });
     const applyResult = async (status, home, away) => {
-      const observation = parseLifecycleInput(lifecycleInput(state, p.now(), { status, actualStartedAt: kickoffAt,
+      const observation = parseLifecycleInput(lifecycleInput(state, p.now(), { status, actualStartedAt,
         raw: { goals: { home, away }, ...(status === 'FT' ? { score: { fulltime: { home, away } } } : {}) } }));
       const lease = await resultStore.acquire(resultHash('november-display-result-owner'), 30_000); assert.ok(lease);
       const batch = { id: resultHash(`november-display-result:${status}`), accountId, policyHash: resultHash('november-display-result-policy'),
@@ -87,9 +123,12 @@ test('November replay has one display across feed, exact outcome and detail whil
     const locked = await p.history.findCycle(cycleId);
     assert.equal(locked.state, 'closed');
     assert.equal(locked.lockedSetId, sourceRevisionId);
-    const clock = { now: () => p.now() }, cache = createMysqlPublicResponseCache(p.a, clock.now);
-    const feed = createMatchFeedService({ database: p.a, competitionIds: [39], clock, cache });
-    const detail = createMatchDetailService({ database: p.a, clock, cache });
+    const lifecycleState = await p.a.query((tx) => tx.fixtureLifecycleState.findUnique({ where: { fixtureId } }));
+    assert.equal(lifecycleState.actualStartedAt.getTime(), actualStartedAt);
+    assert.equal(lifecycleState.issue, null);
+    const cache = createMysqlPublicResponseCache(p.a, clock.now);
+    const feed = createMatchFeedService({ database: p.a, competitionIds: [39], clock, cache, providerOdds: false });
+    const detail = createMatchDetailService({ database: p.a, clock, cache, providerOdds: false });
     const summary = createMatchFeedSummaryService({ database: p.a, competitionIds: [39], clock, cache });
     const scope = { publishedForecasts: true }, data = () => feed.query({ date }, scope), free = { tier: 'free', signedIn: false };
     const exact = (marketPick) => feed.query({ date, marketPick }, scope);
@@ -105,14 +144,20 @@ test('November replay has one display across feed, exact outcome and detail whil
     const generatedAt = p.now(), activatedAt = p.now() + 1000;
     const definitions = [...registeredForecastGoalMarkets(true).map(({ definition }) => definition), ...localFirstGoalMarketDefinitions];
     const goals = definitions.find(({ key }) => key === 'goal:full-time:totals:total:1.5:binary');
+    const homeGoals = definitions.find(({ key }) => key === 'goal:full-time:totals:home:5.5:binary');
+    const awayGoals = definitions.find(({ key }) => key === 'goal:full-time:totals:away:5.5:binary');
     const result = definitions.find(({ key }) => key === 'goal:full-time:result');
-    assert.ok(goals && result);
+    assert.ok(goals && homeGoals && awayGoals && result);
+    const homeUnder = feedMarketPickId(homeGoals.key, 'under'), awayUnder = feedMarketPickId(awayGoals.key, 'under');
+    const publishedMarkets = [homeUnder, awayUnder, 'match-result:away-win', 'total-goals:under-1.5'].sort();
     const probability = 0.8365637684146764;
     const selected = { marketKey: result.key, selection: 'away', probability };
     const projection = { fixtureId, revisionId, sourceRevisionId, cycleId, scheduleVersion: locked.scheduleVersion, kickoffAt,
       evidenceCutoffAt, generatedAt, activatedAt, selected, markets: [
         { definition: result, selected: { selection: selected.selection, probability } },
         { definition: goals, selected: { selection: 'under', probability: 0.71 } },
+        { definition: homeGoals, selected: { selection: 'under', probability: 0.79 } },
+        { definition: awayGoals, selected: { selection: 'under', probability: 0.77 } },
       ] };
     const archived = sqlArchive(projection), placeholder = sqlArchive({ purpose: 'private reader permission fixture' });
     await p.instance.executeAdmin(`INSERT INTO NovemberReplayRevision (id,fixtureId,kickoffAt,cycleId,scheduleVersion,sourceRevisionId,
@@ -162,18 +207,54 @@ test('November replay has one display across feed, exact outcome and detail whil
     assert.equal((await feed.query({ date, market: 'match-result', marketPick: 'total-goals:under-1.5' }, scope)).total, 0);
     const withPrices = createMatchFeedService({ database: p.a, competitionIds: [39], clock, providerOdds: true });
     assert.equal((await withPrices.query({ date, marketPick: 'total-goals:under-1.5', odds: '1.50-3.00' }, scope)).total, 0);
-    assert.deepEqual(await readStoredFeedMarkets(p.a, [39], false), ['match-result:away-win', 'total-goals:under-1.5']);
+    assert.deepEqual(await readStoredFeedMarkets(p.a, [39], false), publishedMarkets);
     assert.deepEqual(await readStoredFeedMarkets(p.a, [39], true), []);
     assert.ok(matchFeedResponseSchema.parse(gateFeedResponse(live, free)).records[0].retrospective == null);
     const freeDetail = matchDetailResponseSchema.parse(gateDetailResponse(detailLive, free));
     assert.equal(freeDetail.fixture.retrospective, null);
     assert.equal(freeDetail.retrospectiveMarkets, undefined);
+    const pricedDetail = createMatchDetailService({ database: p.a, clock, cache, providerOdds: true, allowLiveMatch: false });
+    const pricedFeed = () => withPrices.query({ date }, scope);
+    const pricedExact = async (marketPick) => (await withPrices.query({ date, marketPick }, scope)).records[0].retrospective.pick;
+    const quote = (observedAt, providerUpdatedAt) => ({ bookmakerId: ODDS_BOOKMAKER, bookmakerName: 'Synthetic bookmaker', observedAt, providerUpdatedAt });
+    const shownCapture = (await pricedFeed()).records[0].retrospective.pick;
+    assert.ok(capturedAt > evidenceCutoffAt, 'a historic reference quote can postdate the forecast cutoff');
+    assert.equal(shownCapture.odds, '3.9');
+    assert.deepEqual(shownCapture.historicalOdds, quote(capturedAt, null));
+    assert.equal((await pricedExact(homeUnder)).odds, '1.17', 'a later capture before scheduled kickoff came after verified actual start');
+    assert.equal((await pricedExact(awayUnder)).odds, null, 'wrong team, direction, and line cannot supply a price');
+
+    const providerUpdatedAt = kickoffAt - 10_000, recoveredAt = p.now() + 1000;
+    p.setTime(recoveredAt);
+    await importPrices(oddsRow([homeBet({ 'Under 5.5': '1.42' })], offsetTime(providerUpdatedAt)), true);
+    for (const [update, price] of [[null, '4.20'], [actualStartedAt, '5.70'], [actualStartedAt + 1000, '5.80'],
+      [kickoffAt, '5.90'], [kickoffAt + 1000, '6.50']]) {
+      p.setTime(p.now() + 1000);
+      await importPrices(oddsRow([homeBet({ 'Under 5.5': price }), awayBet({ 'Under 5.5': price })],
+        update === null ? null : offsetTime(update)), true);
+    }
+    const homeReplay = await pricedExact(homeUnder), pricedLive = await pricedDetail.query(fixtureId);
+    assert.equal(homeReplay.odds, '1.42', 'later unverified recovery cannot mask a valid recovered quote');
+    assert.deepEqual(homeReplay.historicalOdds, quote(recoveredAt, providerUpdatedAt));
+    assert.deepEqual(pricedLive.retrospectiveMarkets.find(({ key }) => key === homeGoals.key), homeReplay);
+    assert.equal(pricedLive.retrospectiveMarkets.find(({ key }) => key === awayGoals.key).odds, null);
+    assert.deepEqual(pricedLive.fixture.retrospective.pick, shownCapture);
+    p.setTime(p.now() + 1000);
+    await importPrices(oddsRow([awayBet({ 'Under 5.5': '1.52' })], offsetTime(providerUpdatedAt)), true);
+    const awayReplay = await pricedExact(awayUnder);
+    assert.equal(awayReplay.odds, '1.52');
+    assert.deepEqual(awayReplay.historicalOdds, quote(p.now(), providerUpdatedAt));
+    assert.deepEqual((await pricedDetail.query(fixtureId)).retrospectiveMarkets.find(({ key }) => key === awayGoals.key), awayReplay);
+    assert.equal((await exact(homeUnder)).records[0].retrospective.pick.odds, null, 'disabled odds rights withhold prices');
+    assert.equal(gateFeedResponse(await pricedFeed(), free).records[0].retrospective, null);
+    assert.equal(gateDetailResponse(pricedLive, free).retrospectiveMarkets, undefined);
     for (const query of [`revision=${sourceRevisionId}`, `cycle=${cycleId}`]) {
-      const history = await detail.query(fixtureId, new URLSearchParams(query));
+      const history = await pricedDetail.query(fixtureId, new URLSearchParams(query));
       assert.equal(history.fixture.retrospective, undefined);
       assert.equal(history.retrospectiveMarkets, undefined);
       assert.equal(history.snapshot.revisionId, sourceRevisionId);
       assert.equal(history.snapshot.markets[0].market.selection, 'home-win');
+      assert.deepEqual(history.fixture.prices, originalLive.records[0].prices);
     }
     assert.equal((await feed.query({ date })).records[0].retrospective, undefined, 'non-Matches consumers retain canonical reads');
 
@@ -189,7 +270,9 @@ test('November replay has one display across feed, exact outcome and detail whil
     assert.equal((await feed.query({ date, status: 'finished', result: 'won' }, scope)).records[0].fixtureId, fixtureId);
     assert.equal((await feed.query({ date, status: 'finished', result: 'lost' }, scope)).total, 0);
     assert.equal((await feed.query({ date, status: 'live' }, scope)).total, 0);
-    assert.deepEqual(await readStoredFeedMarkets(p.a, [39], true), ['match-result:away-win', 'total-goals:under-1.5']);
+    assert.deepEqual(await readStoredFeedMarkets(p.a, [39], true), publishedMarkets);
+    assert.deepEqual(gateFeedResponse(await pricedFeed(), free).records[0].retrospective.pick, shownCapture);
+    assert.deepEqual(gateDetailResponse(await pricedDetail.query(fixtureId), free).fixture.retrospective.pick, shownCapture);
     const capturedFeed = matchFeedResponseSchema.parse(gateFeedResponse(finished, free));
     const capturedDetail = matchDetailResponseSchema.parse(gateDetailResponse(finishedDetail, free));
     await savePageScenarios(t, 'MATCH_FEED_PAGE_CAPTURE', { 'november-replay': { query: parseFeedQuery({ date }, { today: date }),
@@ -209,6 +292,8 @@ test('November replay has one display across feed, exact outcome and detail whil
     assert.notEqual(restored.paginationVersion, finished.paginationVersion);
     assert.equal(restored.records[0].retrospective, undefined);
     assert.equal(restoredDetail.fixture.retrospective, undefined);
+    assert.equal((await pricedFeed()).records[0].retrospective, undefined);
+    assert.equal((await pricedDetail.query(fixtureId)).retrospectiveMarkets, undefined);
     assert.deepEqual(restoredDetail.snapshot, finishedDetail.snapshot);
     assert.deepEqual(restored.performance, finished.performance);
     assert.equal((await exact('total-goals:under-1.5')).total, 0);

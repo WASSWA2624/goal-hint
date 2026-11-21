@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { bookmakerOddsId, oddsDisplayText } from "./bookmaker-odds.ts";
 import { parseDecimalOdds } from "./odds.ts";
 import { marketSources } from "./markets.ts";
 import { publicPolicy } from "./public-policy.ts";
@@ -22,6 +23,14 @@ export const featuredPredictionSchema = z.strictObject({ key: label, family: z.e
   label, code: label.max(16).nullable(), selection: label.max(64), selectionLabel, probability,
   odds: z.string().refine((price) => parseDecimalOdds(price) !== null).nullable(), source: z.enum(marketSources) });
 export type FeaturedPrediction = Readonly<z.infer<typeof featuredPredictionSchema>>;
+const observationInstant = z.number().int().nonnegative().max(253_402_300_799_999);
+export const retrospectivePredictionSchema = featuredPredictionSchema.extend({
+  source: z.literal("local-engine"),
+  historicalOdds: z.strictObject({ bookmakerId: bookmakerOddsId, bookmakerName: oddsDisplayText(128).nullable(),
+    observedAt: observationInstant, providerUpdatedAt: observationInstant.nullable(),
+  }).refine(({ observedAt, providerUpdatedAt }) => providerUpdatedAt === null || providerUpdatedAt <= observedAt).optional(),
+}).refine(({ odds, historicalOdds }) => (odds !== null) === (historicalOdds !== undefined));
+export type RetrospectivePrediction = Readonly<z.infer<typeof retrospectivePredictionSchema>>;
 export type FeaturedGoalMarket = Pick<PublicExtendedMarket, "key" | "label" | "code" | "source" | "selections">;
 
 /** Additive public contract. Model events and normalized bookmaker prices retain distinct meanings. */

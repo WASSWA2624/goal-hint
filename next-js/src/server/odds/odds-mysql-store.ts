@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { isVerifiedPreMatchObservation } from "../../domain/bookmaker-odds.ts";
 import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
 import { launchOddsGroup, launchOddsMapping } from "../../domain/odds-markets.ts";
 import { total15MarketKey, total15OddsSchema, total15Selections, type Total15Odds } from "../../domain/extended-markets.ts";
@@ -245,9 +246,8 @@ export async function storedClosingBookmakerQuotes(tx: Tx, fixture: BookmakerFix
   return (await storedBookmakerQuotes(tx, [fixture], asOf, true)).get(fixture.fixtureId) ?? null;
 }
 
-/** Historical display reads kept outside the current/closing and forecast-publication paths. */
-export async function storedRecoveredBookmakerQuotes(tx: Tx, fixtures: readonly BookmakerFixture[], asOf: number,
-  betIds?: readonly number[]): Promise<ReadonlyMap<string, StoredCurrentBookmakerQuotes>> {
+async function readHistoricalBookmakerQuotes(tx: Tx, fixtures: readonly BookmakerFixture[], asOf: number,
+  betIds: readonly number[] | undefined, verifiedBeforeKickoff: boolean): Promise<ReadonlyMap<string, StoredCurrentBookmakerQuotes>> {
   const expectedKickoff = new Map(fixtures.flatMap(({ fixtureId, kickoffAt }) =>
     kickoffAt !== null && kickoffAt <= asOf ? [[fixtureId, kickoffAt]] : []));
   const found = new Map<string, StoredCurrentBookmakerQuotes>();
@@ -258,17 +258,23 @@ export async function storedRecoveredBookmakerQuotes(tx: Tx, fixtures: readonly 
     ORDER BY receivedAt DESC,id DESC LIMIT 1`;
   if (!catalogRow) return found;
   const catalog = new Map(parsedBatch(catalogRow).catalog.map(({ id, name }) => [id, name]));
-  type SnapshotRow = SealedRow & { externalId: bigint; kickoff: Date; batchId: string; recovered: unknown };
+  type SnapshotRow = SealedRow & { externalId: bigint; kickoff: Date; preMatchUntil: Date; batchId: string; recovered: unknown };
   const fixtureIds = Prisma.join([...expectedKickoff.keys()]);
+  const lifecycle = verifiedBeforeKickoff ? Prisma.sql`LEFT JOIN FixtureLifecycleState life
+    ON life.fixtureId=f.id AND life.retrievedAt<=${at} AND life.issue IS NULL` : Prisma.empty;
+  const preMatchUntil = verifiedBeforeKickoff ? Prisma.sql`LEAST(f.kickoff,COALESCE(life.actualStartedAt,f.kickoff))` : Prisma.sql`f.kickoff`;
   const eligible = Prisma.sql`f.id IN (${fixtureIds}) AND f.provider='api-football' AND f.kickoff<=${at}
     AND f.status IN (${Prisma.join([...recoveredPreMatchFixtureStatuses])}) AND s.retrievedAt<=${at} AND s.retainUntil>=${at}
+    ${verifiedBeforeKickoff ? Prisma.sql`AND (s.retrievedAt<${preMatchUntil} OR s.providerUpdatedAt<${preMatchUntil})` : Prisma.empty}
     ${betIds ? Prisma.sql`AND s.betExternalId IN (${Prisma.join([...new Set(betIds)])})` : Prisma.empty}`;
   const rows = await tx.$queryRaw<SnapshotRow[]>(Prisma.sql`
-    SELECT s.id,s.batchId,f.externalId,f.kickoff,s.body,s.integrity=SHA2(CAST(s.body AS CHAR),256) AS validIntegrity,TRUE AS recovered
-    FROM FootballFixture f JOIN RecoveredPreMatchOddsSnapshot s ON s.fixtureId=f.id AND s.kickoffAt=f.kickoff WHERE ${eligible}
+    SELECT s.id,s.batchId,f.externalId,f.kickoff,CAST(${preMatchUntil} AS DATETIME(3)) AS preMatchUntil,
+      s.body,s.integrity=SHA2(CAST(s.body AS CHAR),256) AS validIntegrity,TRUE AS recovered
+    FROM FootballFixture f JOIN RecoveredPreMatchOddsSnapshot s ON s.fixtureId=f.id AND s.kickoffAt=f.kickoff ${lifecycle} WHERE ${eligible}
     UNION ALL
-    SELECT s.id,s.batchId,f.externalId,f.kickoff,s.body,s.integrity=SHA2(CAST(s.body AS CHAR),256) AS validIntegrity,FALSE AS recovered
-    FROM FootballFixture f JOIN ProviderOddsSnapshot s ON s.fixtureId=f.id AND s.retrievedAt<f.kickoff WHERE ${eligible}`);
+    SELECT s.id,s.batchId,f.externalId,f.kickoff,CAST(${preMatchUntil} AS DATETIME(3)) AS preMatchUntil,
+      s.body,s.integrity=SHA2(CAST(s.body AS CHAR),256) AS validIntegrity,FALSE AS recovered
+    FROM FootballFixture f JOIN ProviderOddsSnapshot s ON s.fixtureId=f.id AND s.retrievedAt<f.kickoff ${lifecycle} WHERE ${eligible}`);
   const receipts = new Map<string, Readonly<{ batch: OddsBatchBody; fixtures: ReadonlyMap<number, OddsBatchBody["fixtures"][number]>;
     checked: ReadonlySet<number> }>>();
   for (const ids of chunks([...new Set(rows.map(({ batchId }) => batchId))], 250)) {
@@ -301,6 +307,7 @@ export async function storedRecoveredBookmakerQuotes(tx: Tx, fixtures: readonly 
     const observedAt = utcInstantFromEpochMilliseconds(snapshot.retrievedAt);
     const observation: HistoricalObservation = { snapshotId: snapshot.id, receiptId: row.batchId, observedAt, checkedAt: observedAt,
       providerUpdatedAt: snapshot.providerUpdatedAt === null ? null : utcInstantFromEpochMilliseconds(snapshot.providerUpdatedAt) };
+    if (verifiedBeforeKickoff && !isVerifiedPreMatchObservation(observation, time(row.preMatchUntil))) continue;
     const fixture = projected.get(fixtureId) ?? { kickoffAt, checkedAt: observedAt,
       primaryBookmakerId: entry.quoteManifest.bookmakerId, books: new Map<number, Book>() };
     if (observedAt > fixture.checkedAt || observedAt === fixture.checkedAt && entry.quoteManifest.bookmakerId < fixture.primaryBookmakerId) {
@@ -339,6 +346,16 @@ export async function storedRecoveredBookmakerQuotes(tx: Tx, fixtures: readonly 
     if (bookmakers.length) found.set(fixtureId, { fixtureId, ...fixture, provenance: "historical-pre-match", bookmakers });
   }
   return found;
+}
+
+/** Historical display reads kept outside the current/closing and forecast-publication paths. */
+export function storedRecoveredBookmakerQuotes(tx: Tx, fixtures: readonly BookmakerFixture[], asOf: number, betIds?: readonly number[]) {
+  return readHistoricalBookmakerQuotes(tx, fixtures, asOf, betIds, false);
+}
+
+/** A late recovery needs a pre-kickoff provider clock. Filter it before selecting each latest quote. */
+export function storedVerifiedReplayBookmakerQuotes(tx: Tx, fixtures: readonly BookmakerFixture[], asOf: number, betIds?: readonly number[]) {
+  return readHistoricalBookmakerQuotes(tx, fixtures, asOf, betIds, true);
 }
 
 export function exactTotal15Odds(values: readonly StoredBookmakerValue[], checkedAt: number): Total15Odds | null {

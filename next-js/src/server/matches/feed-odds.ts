@@ -14,6 +14,7 @@ import { projectBookmakerOdds } from "../odds/bookmaker-odds-read.ts";
 import { readFeaturedGoalMarkets } from "../predictions/extended-market-read.ts";
 import { rankFixtureOutcomes } from "../../domain/market-ranking.ts";
 import { bookmakerMarketQuote, featuredBookmakerBetIds } from "../../domain/bookmaker-odds.ts";
+import { readReplayBookmakerQuotes, replayPickPricing } from "./retrospective-picks.ts";
 
 /** Feature a current outcome across the complete stored goal and launch forecasts. */
 export async function withUpcomingFeaturedOutcomes(database: DatabaseRuntime, response: StoredMatchFeedResponse, asOf: number, providerOdds: boolean) {
@@ -65,24 +66,33 @@ export async function withFeedOdds(database: DatabaseRuntime, response: StoredMa
   }
   const started = response.records.filter(({ status, kickoffAt, forecast, prices }) => kickoffAt !== null && kickoffAt <= asOf &&
     (status === "live" || isPlayedFinalStatus(status)) && forecast !== null && prices.length < forecast.markets.length);
-  const [upcoming, live, recovered] = await Promise.all([
+  const replays = response.records.filter(({ retrospective }) => !!retrospective);
+  const [upcoming, live, recovered, replayQuotes] = await Promise.all([
     scheduled.length ? database.query((tx) => storedUpcomingOddsForFixtures(tx, scheduled, asOf)).catch(() => []) : [],
     playing.length ? database.query((tx) => storedInPlayOddsForFixtures(tx, playing, asOf)).catch(() => []) : [],
     started.length ? database.transaction((tx) => storedRecoveredBookmakerQuotes(tx, started, asOf, featuredBookmakerBetIds),
       { isolationLevel: "RepeatableRead", maxWait: 2_000, timeout: 5_000 }).catch(() => null) : null,
+    replays.length ? readReplayBookmakerQuotes(database, replays, asOf) : null,
   ]);
   const observations = new Map<string, { kickoffAt: number; observation: MarketOddsObservation }>(
     upcoming.map(({ fixtureId, kickoffAt, observation }) => [fixtureId, { kickoffAt, observation }]),
   );
   for (const { fixtureId, kickoffAt, checkedAt, prices } of live)
     observations.set(fixtureId, { kickoffAt, observation: { kind: "in-play", checkedAt, prices } });
-  if (!observations.size && !recovered?.size) return response;
+  if (!observations.size && !recovered?.size && !replayQuotes?.size) return response;
+  let latestReplayQuoteAt = response.asOf;
   const records = response.records.map((record) => {
     const entry = observations.get(record.fixtureId);
     const prices = recoveredPrices(record, recovered?.get(record.fixtureId), preferRecommendation);
     const marketOdds = entry && entry.kickoffAt === record.kickoffAt ? entry.observation : record.marketOdds;
-    return prices === record.prices && marketOdds === record.marketOdds ? record : { ...record, prices, marketOdds };
+    const replay = record.retrospective, quotes = replayQuotes?.get(record.fixtureId);
+    const replayPick = replay && quotes?.kickoffAt === record.kickoffAt ? replayPickPricing(quotes)(replay.pick) : null;
+    if (replayPick?.historicalOdds && replayPick.historicalOdds.observedAt > latestReplayQuoteAt)
+      latestReplayQuoteAt = utcInstantFromEpochMilliseconds(replayPick.historicalOdds.observedAt);
+    const retrospective = replay && replayPick && replayPick !== replay.pick ? { ...replay, pick: replayPick } : replay;
+    return prices === record.prices && marketOdds === record.marketOdds && retrospective === replay ? record
+      : { ...record, prices, marketOdds, ...(retrospective !== replay ? { retrospective } : {}) };
   });
-  const projected = { ...response, records };
+  const projected = { ...response, asOf: latestReplayQuoteAt, records };
   return Buffer.byteLength(JSON.stringify(projected), "utf8") <= matchFeedRules.maximumResponseBytes ? freezeEvidence(projected) : response;
 }
