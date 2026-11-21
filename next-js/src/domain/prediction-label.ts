@@ -2,6 +2,7 @@ import { createMessages, type Messages, type TextKey } from "../i18n/messages.ts
 import type { GoalRule } from "./score-distribution-markets.ts";
 import type { NonGoalRule } from "./non-goal-market-definitions.ts";
 import { predictionSelectionAliases } from "./betting-short-forms.ts";
+import { additionalSlipGoalSelection } from "./slip-markets.ts";
 
 type LabelMessages = Pick<Messages, "text">;
 type Result = "home" | "draw" | "away";
@@ -131,6 +132,10 @@ function formatPrediction(messages: LabelMessages, selection: string, context: P
   if (extended !== null) return extended;
   const canonical = Object.hasOwn(selectionAliases, value) ? selectionAliases[value]! : value;
   if (coreSelections.has(canonical as CoreSelection)) return messages.text(`market.selection.${canonical as CoreSelection}`);
+  const teamTotal = additionalSlipGoalSelection(value);
+  if (teamTotal?.family === "team-goals") {
+    return `${messages.text(`market.selection.${teamTotal.metric}-team`)} ${lineLabel(messages, value === teamTotal.over ? "over" : "under", teamTotal.line)}`;
+  }
   const total = /^(over|under|o|u)[\s:_-]*(\d+(?:\.\d+)?)$/u.exec(value);
   if (total) return lineLabel(messages, total[1] === "over" || total[1] === "o" ? "over" : "under", Number(total[2]));
   if ((value === "over" || value === "under") && Number.isFinite(context.line)) return lineLabel(messages, value, context.line!);

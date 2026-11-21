@@ -31,43 +31,35 @@ selected square Compact toolbar treatment, consistent with Matches filters.
 
 ## Responsive criteria layout
 
-The toolbar keeps Total slips, Total odds per slip, and Matches per slip visible
-in the settings section. Reset and the primary action stay with the filters.
-The settings reuse the Matches search/filter chrome: flat surfaces, quiet borders,
-compact labels, and square controls, with usable touch targets on phones.
+The toolbar shows settings for the next build alongside **Filters** and
+**Build slips**. Filters uses one editable form across screen sizes. It groups
+slip targets, individual odds and probability limits, the kickoff window,
+match reuse and Markets. Related fields share a row where there is space.
+Controls use the shared height and theme. Numeric bounds use floating labels,
+and desktop mouse steppers fit inside the shared field.
 
-From the 1024px desktop breakpoint, the individual odds and probability
-ranges appear inline, with combined probability when available.
-The date and time inputs use floating From date and time and To date and time
-labels. The date range and daily kickoff times in EAT use the same criteria
-as the combined mobile inputs. The Markets dialog groups each market with
-Automatic and its specific results. The toolbar summary shows selected markets,
-selection mode and whether match reuse is on.
+Signed-in visitors see **Custom Filters** and **Manage Custom Filters** at the
+top of this dialog. Selecting a preset fills the editable form. Apply updates
+the next build settings. Saving or updating a preset is a separate action in
+Manage. See [saved filters](saved-slip-configurations.md).
 
-Range controls use associated floating Min/Max labels on the field border on
-both layouts. The labels remain visible with entered values and blank Any
-placeholders, reclaiming the former sub-label row. Numeric values are centered;
-desktop mouse steppers reserve equal side padding so values remain centered.
-
-Below 1024px, Advanced Filters shares a row with Custom Filters for signed-in
-users. The dialog contains the odds and probability ranges, the two combined
-date-time fields, and the match reuse checkbox. Markets is the final section
-and starts expanded. Its Automatic checkbox enables all markets and clears
-manual picks. Individual markets and results can also be selected. The
-Advanced Filters badge counts changed ranges, the kickoff window and market
-settings. The compact summary shows the dates, times and market selections.
+Markets opens a searchable child dialog. Enabled families use Automatic until
+the user picks specific outcomes. Match goal lines pair Over and Under in
+ascending order. Team goal lines are opt-in and group the same pairs by team.
+Restore automatic defaults selects the original four families and clears
+outcome restrictions. Markets Apply stages its changes in Filters.
 
 Apply validates and retains the current dialog's changes. Reset restores its
 defaults. Cancel and Escape
 discard changes made since that dialog opened. Backdrop clicks leave it open. Native dialog
 behavior contains keyboard focus while open and returns it to the trigger after
-closing. Deselecting a market clears its specific results. On desktop,
-checking Automatic clears specific results for the selected market.
+closing. Deselecting a market or setting that family to Automatic clears
+its specific results.
 The match-reuse checkbox defaults to off and can be enabled explicitly or by
 applying a saved filter.
 
 All fields remain uniquely named and associated with the same native GET form.
-Before JavaScript attaches, Advanced Filters renders inline with separate
+Before JavaScript attaches, Filters renders inline with separate
 native date and time inputs. Hydration enables the modal and combined controls.
 
 Numeric fields preserve what the user types, deletes or pastes, including
@@ -85,10 +77,9 @@ Empty numeric ranges stay editable as Any, with blank minima using their
 configured defaults.
 Native dates retain calendar selection with valid supported years, an ordered
 date window of at most 31 days and valid ordered minute-resolution times.
-Incomplete date segments remain editable; field warnings and the existing
-shared parser prevent invalid windows being applied. The dialog triggers use
-right-facing chevrons. Both layouts use a 6px gap below the toolbar. Input
-validation, grouped-count parsing, blank Any bounds and criteria defaults are shared.
+Incomplete date segments remain editable. Field warnings and the shared parser
+prevent invalid windows being applied. Grouped-count parsing, blank Any bounds
+and criteria defaults are shared.
 
 A validation error exposes its invalid optional group; essential target errors
 stay beside the visible controls. Draft values remain editable and retain their
@@ -105,7 +96,7 @@ browser-safe `src/domain/slip-builder.ts` contract:
 | --- | --- | --- |
 | Kickoff date range | Inclusive reporting dates, up to 31 days | Today through today |
 | Kickoff time range | Inclusive daily minutes in Africa/Kampala (EAT) | 00:00–23:59, all day |
-| Markets | One or more match result, double chance, total goals or both teams to score | All four |
+| Markets | Match result, double chance, match total goals, both teams to score and team total goals | First four |
 | Market outcomes | Automatic or one or more supported results within each selected family | Any (Automatic) |
 | Total odds | Inclusive minimum from 1.01; optional maximum | 5.00–10.00 |
 | Individual selection odds | Inclusive minimum from 1.01; optional maximum | 1.01–Any |
@@ -119,7 +110,7 @@ Total odds default to 5.00–10.00 and submit with two decimal places.
 Individual minimum odds display 1.01, minimum matches displays 1, and probability
 displays 75–100. Individual odds and match-count maxima start blank with Any
 placeholders. Custom criteria retain their supplied values, including a 0% minimum.
-Reset restores these defaults, today's from/to dates, 00:00–23:59, all markets
+Reset restores these defaults, today's from/to dates, 00:00–23:59, the default markets
 with Automatic outcomes, five requested slips, and disabled match reuse,
 including after loading a criteria query.
 Each dialog's Reset restores only that dialog's fields. Apply retains those
@@ -150,17 +141,15 @@ validated criteria. The route owns the locale; locale is not a criteria query
 parameter. Market checkboxes can repeat the `markets` query key; a build with no
 selected market is invalid. The native hidden `reuse=0` followed by the checked
 `reuse=1` pair means reuse is enabled. Canonical serialization uses one `reuse`
-value and markets in public-policy order. Invalid input receives a specific
-criteria error rather than generating with silently corrected ranges.
+value and markets in Builder catalog order. Invalid input receives a specific
+criteria error and keeps the draft editable.
 
 When subscriber access is required, the primary action shows Sign in to build
 slips for a signed-out viewer and opens the login form with the Slip Builder
 return path. Signed-in viewers without the required subscription see Subscribe
 to build slips; eligible viewers see Build slips. Sign up remains reachable
-from the account screen. Desktop actions retain their fixed 208px by 32px size
-(44px high for coarse pointers); mobile actions use 208px by 36px, including
-the pending label, so changing access status does not resize the button.
-Both layouts show the action only in the toolbar. The notice explains
+from the account screen. Both layouts use the shared control height and show
+the action in the toolbar. The notice explains
 that guests must sign in and need an active subscription; signed-in viewers
 without access are directed to the subscription action above. Eligible viewers
 see ready-to-build guidance or their generated results. Mobile uses a concise
@@ -173,15 +162,15 @@ selections. Explicit arrays must be nonempty and belong to that family. Valid
 submitted choices for an unchecked market are inactive drafts and are omitted
 from the resulting criteria, so native forms can deselect a market without
 JavaScript updating its outcome controls. Invalid choices still fail validation.
-Canonical serialization omits Automatic and inactive fields and orders
-manual selections by the source-owned market list. Total goals currently supports
-Over 2.5 and Under 2.5, matching the published source distribution; additional
-lines are not inferred.
+Canonical serialization omits Automatic and inactive fields and orders manual
+selections by the Builder catalog. Regulation match totals and home or away
+team totals support Over and Under at 1.5, 2.5, 3.5, 4.5 and 5.5. The original
+match totals retain their outcome keys. Team totals use side-qualified keys,
+such as `picks.team-goals=home-under-2.5`.
 
-Submission parsing streams entries and bounds work before joining repeated
-values: at most 32 form entries, 2 KiB of form-encoded data and 256 characters per
-value. This accommodates all ten manual outcome checkboxes, all four market
-checkboxes and the hidden reuse pair while bounding each family's outcome count.
+Submission parsing bounds the number and size of entries before joining
+repeated values. It accepts the full set of native checkboxes under the 2 KiB
+form-encoded limit and bounds each family's outcome count.
 
 ## Qualifying selections and calculations
 
@@ -189,9 +178,11 @@ The engine considers every requested family independently. Automatic considers
 all of its published outcomes with approved prices and keeps those meeting the
 criteria; it can choose a result below the highest-probability forecast when
 that result's own probability and odds qualify. Manual choices restrict the
-candidate set to the chosen results. Both modes use the exact outcome's
-`market.probabilities[selection]` value and its own price, matched by family and
-selection. They do not borrow the published top pick's probability or price.
+candidate set to the chosen results. Both modes require the outcome's own
+forecast and matching bookmaker quote. The additional goals options bind the
+stored independent forecast and reviewed pre-match quote by regulation period,
+goals metric, team where applicable, direction and line. Settlement uses the
+corresponding verified regulation score.
 A higher-probability unpriced family cannot hide a priced qualifying pick from
 another requested family. Missing probabilities or prices are never inferred.
 
@@ -205,8 +196,9 @@ remain usable by the pure engine's isolated tests.
 
 Only future scheduled fixtures with an open current prediction cycle qualify.
 Generation excludes fixtures within the existing five-minute publication cutoff,
-closed cycles, unavailable or delayed predictions, provisional forecasts and
-future publication timestamps. The stored projection supplies the source-owned
+closed cycles, unavailable or delayed predictions, and future publication
+timestamps. The existing qualified Local Engine fallback policy governs
+provisional records. The stored projection supplies the source-owned
 fresh-price decision. Future observation timestamps, unavailable prices and
 median estimates are excluded; this builder uses actual approved bookmaker
 prices only.

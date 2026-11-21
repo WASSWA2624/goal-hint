@@ -105,7 +105,7 @@ export function CleanLedgerSelection({ selection, locale, result, matchStates, a
     </h4>
     <div data-ledger-facts data-mobile-facts id={`${id}-facts`}>
       <span data-ledger-field="market" data-mobile-field="market" title={family}><span data-field-label aria-hidden="true">Mkt</span>
-        <span data-field-value data-market-label aria-hidden="true">{compactMarketName(selection.family)}</span><VisuallyHidden>{family}</VisuallyHidden></span>
+        <span data-field-value data-market-label aria-hidden="true">{selection.family === "team-goals" ? family : compactMarketName(selection.family)}</span><VisuallyHidden>{family}</VisuallyHidden></span>
       <span data-ledger-field="prediction" data-mobile-field="prediction" data-pick title={`${family}: ${description}${publication}`}>
         <span data-field-label aria-hidden="true">Pick</span><strong data-field-value data-pick-label title={`${family}: ${description}`} aria-hidden="true">{predictionLabel(m, selection.selection)}</strong>
         <VisuallyHidden>{description}</VisuallyHidden></span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ComponentProps, type ReactNode } from "react";
+import { useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import styled from "styled-components";
 import { searchMarketFilters, type MarketFilterMatches } from "@/domain/market-filter-search";
 import { createMessages } from "@/i18n/messages";
@@ -63,13 +63,15 @@ export function MarketFilterDialog({ id, locale, open, children, published, onAp
   locale: string; id: string; open: boolean; group?: string;
   onApply: () => void; onCancel: () => void; onReset?: () => void;
 } & MarketFilterBody) {
-  const messages = createMessages(locale);
+  const messages = useMemo(() => createMessages(locale), [locale]);
   const title = messages.text("feed.filters.markets");
   const resultsId = `${id}-results`;
   const [search, setSearch] = useState({ open, query: "" });
   if (search.open !== open) setSearch({ open, query: "" });
   const query = search.open === open ? search.query : "";
-  const matches = open && !published ? searchMarketFilters(query, messages) : null;
+  const searchesBuilderMarkets = open && !published;
+  const matches = useMemo(() => searchesBuilderMarkets ? searchMarketFilters(query, messages) : null,
+    [searchesBuilderMarkets, query, messages]);
 
   return <CriteriaDialog {...props} id={id} open={open} onCancel={onCancel} onApply={onApply}
     closeLabel={messages.text("feed.filters.closeSection", { section: title })}

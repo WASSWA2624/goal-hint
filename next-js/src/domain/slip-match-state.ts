@@ -1,15 +1,14 @@
 import type { LiveClock } from "./match-card.ts";
 import type { StoredMatchFeedRecord } from "./match-feed.ts";
 import { isPlayedFinalStatus, type SettlementStatus } from "./market-settlement.ts";
-import type { MarketFamily } from "./markets.ts";
-import type { SlipMarketSelection } from "./slip-markets.ts";
+import type { SlipMarketFamily, SlipMarketSelection } from "./slip-markets.ts";
 import { settleSlipSelection } from "./slip-settlement.ts";
 import type { SlipResult } from "./slip-snapshot.ts";
 import type { BuiltSlip, SlipForecastReference, SlipSelection } from "./slip-builder.ts";
 
 /** Current presentation facts stay outside the immutable saved/publication snapshot. */
 export type SlipMatchState = Readonly<{
-  fixtureId: string; family: MarketFamily; selection: SlipMarketSelection; forecast?: SlipForecastReference;
+  fixtureId: string; family: SlipMarketFamily; selection: SlipMarketSelection; forecast?: SlipForecastReference;
   status: SettlementStatus; score: Readonly<{ home: number; away: number }> | null; liveClock: LiveClock | null;
   outcome: "correct" | "incorrect" | "pending" | "void";
 }>;

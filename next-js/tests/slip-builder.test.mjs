@@ -273,7 +273,7 @@ test('all ten manual outcome checkboxes fit the bounded full native GET contract
 
 for (const input of [
   { 'picks.match-result': 'auto,home-win' }, { 'picks.match-result': ['auto', 'home-win'] },
-  { 'picks.match-result': 'over-2.5' }, { 'picks.total-goals': 'over-3.5' }, { 'picks.match-result': '' },
+  { 'picks.match-result': 'over-2.5' }, { 'picks.total-goals': 'over-6.5' }, { 'picks.match-result': '' },
   { 'picks.match-result': [] },
 ]) {
   test(`manual outcome criteria reject ${JSON.stringify(input)}`, () => {
@@ -316,6 +316,15 @@ test('repeated market aggregation stops at four total CSV and checkbox tokens', 
   // An oversized array is rejected from its length without inspecting or copying its entries.
   Object.defineProperty(oversized, 0, { get: () => { throw new Error('Oversized array was read.'); } });
   assert.throws(() => parseSlipCriteria({ markets: oversized }, today), (error) => error instanceof SlipCriteriaError && error.code === 'invalid-query');
+});
+
+test('a fifth market token supports team goals and the native form remains bounded', () => {
+  const five = ['match-result', 'double-chance', 'total-goals', 'both-teams-to-score', 'team-goals'];
+  assert.deepEqual(parseSlipCriteria({ markets: five }, today).markets, five);
+  assert.throws(() => parseSlipCriteria(new URLSearchParams({ markets: [...five, 'match-result'].join(',') }), today),
+    (error) => error instanceof SlipCriteriaError && error.code === 'invalid-market');
+  assert.throws(() => parseSlipCriteria({ markets: 'team-goals', 'picks.team-goals': 'home-over-2.25' }, today),
+    (error) => error instanceof SlipCriteriaError && error.code === 'invalid-pick');
 });
 
 test('aggregate encoded bytes and entry counts are bounded before query values are combined', () => {

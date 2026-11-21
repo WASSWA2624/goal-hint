@@ -4,7 +4,7 @@ import { isCompletedFixtureStatus, isPlayedFinalStatus, selectionOccurred, type 
 import { recommendationMarket, type DisplayedMarketPick } from "./recommendation-view.ts";
 import { sameMarketOdds } from "./in-play-odds.ts";
 import type { UtcInstant } from "./calendar.ts";
-import { isSlipMarketSelection, type SlipMarketSelection } from "./slip-markets.ts";
+import { isSlipMarketSelection, type SlipMarketFamily, type SlipMarketSelection } from "./slip-markets.ts";
 import { featuredSettlementTone, type FeaturedPrediction } from "./extended-markets.ts";
 
 export function featuredCardPrediction(pick: FeaturedPrediction, publishedAt: UtcInstant | null, provisional: boolean) {
@@ -18,7 +18,7 @@ export function featuredCardPrediction(pick: FeaturedPrediction, publishedAt: Ut
 
 /** An original saved selection has one probability, not a complete current forecast distribution. */
 export type CardSnapshotPick = Readonly<{
-  family: MarketFamily; selection: SlipMarketSelection; probability: number; odds: string;
+  family: SlipMarketFamily; selection: SlipMarketSelection; probability: number; odds: string;
   outcome: "correct" | "incorrect" | "pending" | "void";
   publishedAt?: UtcInstant;
 }>;

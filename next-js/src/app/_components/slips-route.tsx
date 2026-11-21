@@ -2,9 +2,8 @@ import "server-only";
 
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { validTimeZone } from "@/domain/device-calendar";
-import { isMarketFamily, type MarketFamily } from "@/domain/markets";
-import { isSlipMarketSelection, slipMarketSelections, type SlipMarketSelection } from "@/domain/slip-markets";
-import { publicPolicy } from "@/domain/public-policy";
+import { isSlipMarketFamily, isSlipMarketSelection, slipMarketFamilies, slipMarketOutcomeMaximumLength, slipMarketSelections,
+  type SlipMarketFamily, type SlipMarketSelection } from "@/domain/slip-markets";
 import { slipsHref } from "@/domain/navigation";
 import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipInputFields, type SlipInputs } from "@/domain/slip-builder";
 import { SlipBuilder, type SlipCriteriaIssue } from "@/components/slips/slip-builder";
@@ -65,12 +64,12 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
       const rawMarkets = query.markets;
       const marketValues = Array.isArray(rawMarkets) ? rawMarkets : [rawMarkets ?? ""];
       const initialMarkets = rawMarkets === undefined && query.build !== "1" ? undefined
-        : marketValues.length <= 4 && marketValues.every((value) => value.length <= 256)
-          ? marketValues.flatMap((value) => value.split(",")).filter(isMarketFamily) : [];
-      const initialOutcomes: Partial<Record<MarketFamily, readonly SlipMarketSelection[]>> = {};
-      for (const family of publicPolicy.markets) {
+        : marketValues.length <= slipMarketFamilies.length && marketValues.every((value) => value.length <= 256)
+          ? marketValues.flatMap((value) => value.split(",")).filter(isSlipMarketFamily) : [];
+      const initialOutcomes: Partial<Record<SlipMarketFamily, readonly SlipMarketSelection[]>> = {};
+      for (const family of slipMarketFamilies) {
         const raw = query[`picks.${family}`], values = Array.isArray(raw) ? raw : [raw ?? "auto"];
-        if (values.length > slipMarketSelections[family].length || values.some((value) => value.length > 256)) continue;
+        if (values.length > slipMarketSelections[family].length || values.some((value) => value.length > slipMarketOutcomeMaximumLength(family))) continue;
         const choices = values.flatMap((value) => value.split(",")).filter((value): value is SlipMarketSelection => isSlipMarketSelection(family, value));
         if (choices.length) initialOutcomes[family] = choices;
       }

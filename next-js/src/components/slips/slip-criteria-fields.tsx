@@ -1,19 +1,16 @@
-import { ChoicePicker } from "@/components/ui/choice-picker";
-import { FilterDateTimeRow, FilterDialogContent, FilterDialogSection, FilterSection } from "@/components/ui/advanced-filter-dialog";
+import { FilterDateTimeRow, FilterSection } from "@/components/ui/advanced-filter-dialog";
 import type { TextInputProps } from "@/components/ui/controls";
 import { DateTimeField } from "@/components/ui/date-time-field";
-import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { fullDayKickoffTime } from "@/domain/kickoff-time";
 import type { MarketFilterMatches } from "@/domain/market-filter-search";
-import type { MarketFamily } from "@/domain/markets";
-import { predictionLabel, predictionText } from "@/domain/prediction-label";
 import { publicPolicy } from "@/domain/public-policy";
 import { serializeSlipCriteria, slipBuilderRules, slipInputFields, type SlipCriteria, type SlipCriteriaErrorCode, type SlipInputs } from "@/domain/slip-builder";
 import { commitSlipNumber, slipDateBounds, slipNumberRangeIssue, type SlipDateTimeField, type SlipNumericField } from "@/domain/slip-input-guards";
-import { slipMarketSelections, type SlipMarketSelection } from "@/domain/slip-markets";
+import type { SlipMarketFamily, SlipMarketSelection } from "@/domain/slip-markets";
 import { createMessages } from "@/i18n/messages";
+import { SlipMarketFilterFields } from "./slip-market-filter-fields";
 import { SlipNumericInput } from "./slip-numeric-input";
-import { BuilderEssentials, FieldGroup, Fields, MarketChoice, MarketChoices, MarketField, Note, ReuseRow, TargetGroups } from "./slip-styles";
+import { BuilderCriteriaGrid, Fields, Note, ReuseRow } from "./slip-styles";
 
 export type SlipCriteriaIssue = Readonly<{ code: SlipCriteriaErrorCode; field: keyof SlipCriteria | "query" }>;
 export type BuilderIssue = SlipCriteriaIssue | Readonly<{ field: SlipNumericField; message: string }>;
@@ -64,40 +61,23 @@ export function criteriaDraft(criteria: SlipCriteria, inputs: SlipInputs = {}): 
   }));
 }
 
-export function allSlipMarketsAutomatic(selectedMarkets: readonly MarketFamily[], outcomes: Outcomes) {
-  return publicPolicy.markets.every(family => selectedMarkets.includes(family) && !outcomes[family]?.length);
-}
-
-type Messages = ReturnType<typeof createMessages>;
-const slipMarketLabel = (m: Messages, family: MarketFamily) => m.text(family === "total-goals" ? "slips.totalGoalsMarket" : `market.family.${family}`);
-
-export function slipMarketFilterSummary(m: Messages, markets: readonly MarketFamily[], outcomes: Outcomes) {
-  if (!markets.length) return m.plural("slips.marketCount", 0);
-  if (allSlipMarketsAutomatic(markets, outcomes)) return m.text("slips.summary.markets", {
-    markets: m.text("slips.summary.allMarkets", { count: m.number(markets.length) }), results: m.text("slips.summary.automaticResults"),
-  });
-  return publicPolicy.markets.filter(family => markets.includes(family)).map(family => {
-    const label = slipMarketLabel(m, family), values = outcomes[family];
-    const choice = values?.length ? values.map(value => predictionText(m, value)).join(", ") : m.text("slips.automatic");
-    return `${label} (${choice})`;
-  }).join(" · ");
-}
+export { allSlipMarketsAutomatic, slipMarketFilterSummary } from "./slip-market-filter-fields";
 
 type CriteriaFieldsOptions = Readonly<{
   locale: string; prefix: string; draft: SlipInputs; resetDraft: SlipInputs; error: BuilderIssue | null; errorId: string;
-  feedbackKey: number; desktop: boolean; enhanced: boolean; showJoint: boolean;
-  selectedMarkets: readonly MarketFamily[]; outcomes: Outcomes; reuse: boolean;
+  feedbackKey: number; enhanced: boolean; showJoint: boolean;
+  selectedMarkets: readonly SlipMarketFamily[]; outcomes: Outcomes; reuse: boolean;
   onFieldChange: (field: SlipInputField, value: string) => void;
   onKickoffChange: (endpoint: KickoffEndpoint, day: string, minute: string) => void;
-  onMarketToggle: (family: MarketFamily) => void;
-  onOutcomesChange: (family: MarketFamily, outcomes: readonly SlipMarketSelection[]) => void;
+  onMarketToggle: (family: SlipMarketFamily) => void;
+  onOutcomesChange: (family: SlipMarketFamily, outcomes: readonly SlipMarketSelection[]) => void;
   onAutomaticMarkets: () => void;
   onReuseChange: (enabled: boolean) => void;
   resetKickoffOnFeedback?: boolean; timeZone?: string; interval?: boolean;
 }>;
 
 /** Builder and saved filters share field controls and validation feedback. */
-export function renderSlipCriteriaFields({ locale, prefix, draft, resetDraft, error, errorId, feedbackKey, desktop, enhanced, showJoint,
+export function renderSlipCriteriaFields({ locale, prefix, draft, resetDraft, error, errorId, feedbackKey, enhanced, showJoint,
   selectedMarkets, outcomes, reuse, onFieldChange, onKickoffChange, onMarketToggle, onOutcomesChange, onAutomaticMarkets, onReuseChange,
   resetKickoffOnFeedback = false, timeZone = publicPolicy.reportingTimeZone, interval = false }: CriteriaFieldsOptions) {
   const messages = createMessages(locale);
@@ -145,40 +125,34 @@ export function renderSlipCriteriaFields({ locale, prefix, draft, resetDraft, er
     </>;
   }
 
-  const targets = <BuilderEssentials data-slip-builder-essentials>
-    <fieldset data-slip-count data-toolbar-group="slips"><legend>{messages.text("slips.totalSlips")}</legend>{field("slips", null, { min: 1, max: slipBuilderRules.maximumSlips, step: 1, inputMode: "numeric", required: true, "aria-label": messages.text("slips.count") })}</fieldset>
-    <FieldGroup data-criteria-field="targets"><VisuallyHidden as="legend">{messages.text("slips.yourSlips")}</VisuallyHidden><TargetGroups data-slip-target-groups>
-      <fieldset data-toolbar-group="total"><legend><span data-slip-label="mobile">{messages.text("slips.mobile.totalOdds")}</span><span data-slip-label="desktop">{messages.text("slips.totalOddsRange")}</span></legend><Fields>
-        {field("totalMin", messages.text("slips.minimum"), { ...oddsOptions, "aria-label": messages.text("slips.totalMin") })}
-        {field("totalMax", messages.text("slips.maximum"), { ...oddsOptions, "aria-label": messages.text("slips.totalMax") })}
-      </Fields></fieldset>
-      <fieldset data-toolbar-group="matches"><legend><span data-slip-label="mobile">{messages.text("slips.mobile.matches")}</span><span data-slip-label="desktop">{messages.text("slips.selectionsRange")}</span></legend><Fields>
-        {field("teamsMin", messages.text("slips.minimum"), { min: 1, step: 1, inputMode: "numeric", "aria-label": messages.text("slips.teamsMin") })}
-        {field("teamsMax", messages.text("slips.maximum"), { min: 1, step: 1, inputMode: "numeric", "aria-label": messages.text("slips.teamsMax") })}
-      </Fields></fieldset>
-    </TargetGroups></FieldGroup>
-  </BuilderEssentials>;
+  const targets = <BuilderCriteriaGrid data-slip-builder-essentials data-criteria-field="targets">
+    <FilterSection data-slip-count><legend>{messages.text("slips.totalSlips")}</legend>
+      {field("slips", null, { min: 1, max: slipBuilderRules.maximumSlips, step: 1, inputMode: "numeric", required: true, "aria-label": messages.text("slips.count") })}
+    </FilterSection>
+    <FilterSection><legend>{messages.text("slips.mobile.totalOdds")}</legend><Fields>
+      {field("totalMin", messages.text("slips.minimum"), { ...oddsOptions, "aria-label": messages.text("slips.totalMin") })}
+      {field("totalMax", messages.text("slips.maximum"), { ...oddsOptions, "aria-label": messages.text("slips.totalMax") })}
+    </Fields></FilterSection>
+    <FilterSection><legend>{messages.text("slips.mobile.matches")}</legend><Fields>
+      {field("teamsMin", messages.text("slips.minimum"), { min: 1, step: 1, inputMode: "numeric", "aria-label": messages.text("slips.teamsMin") })}
+      {field("teamsMax", messages.text("slips.maximum"), { min: 1, step: 1, inputMode: "numeric", "aria-label": messages.text("slips.teamsMax") })}
+    </Fields></FilterSection>
+  </BuilderCriteriaGrid>;
 
-  const limits = <FilterDialogContent>
-    <FilterDialogSection>
-      <FilterSection><legend>{messages.text("slips.individualOdds")}</legend><Fields>
-        {field("oddsMin", messages.text("filters.minimum"), { ...oddsOptions, "aria-label": messages.text("slips.oddsMin") })}
-        {field("oddsMax", messages.text("filters.maximum"), { ...oddsOptions, "aria-label": messages.text("slips.oddsMax") })}
-      </Fields></FilterSection>
-    </FilterDialogSection>
-    <FilterDialogSection>
-      <FilterSection><legend>{messages.text("slips.probabilityPercent")}</legend><Fields>
-        {field("probMin", messages.text("filters.minimum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.probMin") })}
-        {field("probMax", messages.text("filters.maximum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.probMax") })}
-      </Fields></FilterSection>
-    </FilterDialogSection>
-    {showJoint && <FilterDialogSection>
-      <FilterSection data-joint-limit><legend>{messages.text("slips.combinedProbabilityPercent")}</legend><Fields>
-        {field("totalProbMin", messages.text("filters.minimum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.totalProbMin") })}
-        {field("totalProbMax", messages.text("filters.maximum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.totalProbMax") })}
-      </Fields><Note>{messages.text("slips.combinedProbabilityHint")}</Note></FilterSection>
-    </FilterDialogSection>}
-  </FilterDialogContent>;
+  const limits = <BuilderCriteriaGrid data-slip-limits>
+    <FilterSection><legend>{messages.text("slips.individualOdds")}</legend><Fields>
+      {field("oddsMin", messages.text("slips.minimum"), { ...oddsOptions, "aria-label": messages.text("slips.oddsMin") })}
+      {field("oddsMax", messages.text("slips.maximum"), { ...oddsOptions, "aria-label": messages.text("slips.oddsMax") })}
+    </Fields></FilterSection>
+    <FilterSection><legend>{messages.text("slips.probabilityPercent")}</legend><Fields>
+      {field("probMin", messages.text("slips.minimum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.probMin") })}
+      {field("probMax", messages.text("slips.maximum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.probMax") })}
+    </Fields></FilterSection>
+    {showJoint && <FilterSection data-joint-limit><legend>{messages.text("slips.combinedProbabilityPercent")}</legend><Fields>
+      {field("totalProbMin", messages.text("slips.minimum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.totalProbMin") })}
+      {field("totalProbMax", messages.text("slips.maximum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.totalProbMax") })}
+    </Fields><Note>{messages.text("slips.combinedProbabilityHint")}</Note></FilterSection>}
+  </BuilderCriteriaGrid>;
 
   const kickoff = <>
     <legend>{messages.text("filters.dateTimeWindow")}</legend>
@@ -196,42 +170,13 @@ export function renderSlipCriteriaFields({ locale, prefix, draft, resetDraft, er
   const reuseField = <ReuseRow>
     <input type="hidden" name="reuse" value="0" />
     <label><input type="checkbox" name="reuse" value="1" checked={reuse}
-      aria-describedby={desktop ? `${prefix}-reuse-hint` : undefined} onChange={event => onReuseChange(event.target.checked)} />{messages.text("slips.reuse")}</label>
-    {desktop && <Note id={`${prefix}-reuse-hint`}>{messages.text("slips.reuseHint")}</Note>}
+      aria-describedby={`${prefix}-reuse-hint`} onChange={event => onReuseChange(event.target.checked)} />{messages.text("slips.reuse")}</label>
+    <Note id={`${prefix}-reuse-hint`}>{messages.text("slips.reuseHint")}</Note>
   </ReuseRow>;
 
-  const markets = (matches: MarketFilterMatches | null) => <FieldGroup data-criteria-field="markets"
-    hidden={matches !== null && matches.families.size === 0 && matches.outcomes.size === 0}
-    aria-describedby={invalidField === "markets" || invalidField === "outcomes" ? errorId : undefined}>
-    <VisuallyHidden as="legend">{messages.text("slips.accordion.markets")}</VisuallyHidden>
-    {enhanced && matches === null && <>
-      <MarketChoice>
-        <input type="checkbox" checked={allSlipMarketsAutomatic(selectedMarkets, outcomes)} aria-describedby={`${prefix}-all-automatic-hint`}
-          onChange={onAutomaticMarkets} />
-        {messages.text("slips.automatic")}
-      </MarketChoice>
-      <Note id={`${prefix}-all-automatic-hint`}>{messages.text("slips.automaticAllHint")}</Note>
-    </>}
-    <MarketChoices>
-      {publicPolicy.markets.map(family => {
-        const enabled = selectedMarkets.includes(family);
-        const market = slipMarketLabel(messages, family);
-        return <MarketField key={family} data-market-family={family}
-          hidden={matches !== null && !matches.families.has(family) && !matches.outcomes.has(family)}>
-          <legend><MarketChoice>
-            <input type="checkbox" name="markets" value={family} checked={enabled} onChange={() => onMarketToggle(family)}
-              aria-invalid={invalidField === "markets" || undefined} />{market}
-          </MarketChoice></legend>
-          <ChoicePicker inline name={`picks.${family}`} label={messages.text("slips.outcomeLabel", { market })}
-            automaticLabel={messages.text("slips.automatic")} automaticHint={messages.text("slips.automaticHint")}
-            options={slipMarketSelections[family].map(value => ({ value, label: predictionLabel(messages, value) }))}
-            visibleValues={matches?.outcomes.get(family)}
-            selected={outcomes[family] ?? []} onChange={values => onOutcomesChange(family, values as readonly SlipMarketSelection[])}
-            disabled={!enabled} invalid={invalidField === "outcomes"} {...(invalidField === "outcomes" ? { describedBy: errorId } : {})} />
-        </MarketField>;
-      })}
-    </MarketChoices>
-  </FieldGroup>;
+  const markets = (matches: MarketFilterMatches | null) => <SlipMarketFilterFields
+    {...{ messages, prefix, matches, enhanced, selectedMarkets, outcomes, invalidField, errorId,
+      onMarketToggle, onOutcomesChange, onAutomaticMarkets }} />;
 
   return { targets, limits, kickoff, markets, reuse: reuseField };
 }

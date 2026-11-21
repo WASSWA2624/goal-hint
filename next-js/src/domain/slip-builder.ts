@@ -3,13 +3,13 @@ import { dateTimeIntervalRange, type DateTimeInterval } from "./date-time.ts";
 import { formatProbabilityValue, parseProbabilityValue, probabilityFraction, type FeedParameters } from "./feed-query.ts";
 import { kickoffTimeWindows, validKickoffTime } from "./kickoff-time.ts";
 import type { StoredMatchFeedRecord } from "./match-feed.ts";
-import { isMarketFamily, type MarketFamily } from "./markets.ts";
 import { formatOddsHundredths, oddsRules, parseDecimalOdds } from "./odds.ts";
 import { publicPolicy } from "./public-policy.ts";
 import type { SlipForecastReference } from "./slip-forecast-reference.ts";
 import type { SlipBookmaker } from "./slip-quote.ts";
-import { isSlipMarketSelection, isTotal15SlipSelection, matchesSlipForecast, slipMarketSelections,
-  type SlipMarketSelection, type SlipTotal15Forecast } from "./slip-markets.ts";
+import { additionalSlipGoalMarket, isSlipGoalExtensionSelection, isSlipMarketFamily, isSlipMarketSelection, matchesSlipForecast,
+  slipMarketFamilies, slipMarketOutcomeMaximumLength, slipMarketSelections, type SlipAdditionalGoalForecast, type SlipMarketFamily, type SlipMarketSelection,
+  type SlipTotal15Forecast } from "./slip-markets.ts";
 export type { SlipForecastReference } from "./slip-forecast-reference.ts";
 
 const maximumCandidates = 800;
@@ -30,9 +30,9 @@ export type SlipCriteria = Readonly<{
   timeFrom: string; timeTo: string;
   /** An exact continuous range takes precedence over the legacy recurring kickoff window. */
   interval?: SlipDateTimeInterval;
-  markets: readonly MarketFamily[];
+  markets: readonly SlipMarketFamily[];
   /** Missing family means Automatic; explicit choices use their own published probabilities and prices. */
-  outcomes?: Readonly<Partial<Record<MarketFamily, readonly SlipMarketSelection[]>>>;
+  outcomes?: Readonly<Partial<Record<SlipMarketFamily, readonly SlipMarketSelection[]>>>;
   /** Inclusive decimal odds bounds in hundredths; an omitted maximum means unrestricted. */
   totalMin: number; totalMax?: number; oddsMin: number; oddsMax?: number;
   /** Optional whole-slip probability percentage bounds require a qualified joint estimator. */
@@ -43,15 +43,18 @@ export const slipInputFields = ["dateFrom", "dateTo", "timeFrom", "timeTo", "tot
   "probMin", "probMax", "totalProbMin", "totalProbMax", "teamsMin", "teamsMax", "slips"] as const;
 export type SlipInputs = Partial<Record<typeof slipInputFields[number], string>>;
 /** Slip-only approved outcome prices leave the ordinary selected-pick feed contract intact. */
-export type SlipSelectionPrice = StoredMatchFeedRecord["prices"][number] & Readonly<{ bookmaker?: SlipBookmaker | undefined }>;
+export type SlipSelectionPrice = Omit<StoredMatchFeedRecord["prices"][number], "family"> & Readonly<{
+  family: SlipMarketFamily; bookmaker?: SlipBookmaker | undefined;
+}>;
 export type SlipMatchRecord = StoredMatchFeedRecord & Readonly<{
   selectionPrices?: readonly SlipSelectionPrice[];
   total15Forecast?: SlipTotal15Forecast;
+  additionalGoalForecast?: SlipAdditionalGoalForecast;
 }>;
 export type SlipSelection = Readonly<{
   fixtureId: string; kickoffAt: number;
   homeTeam: StoredMatchFeedRecord["homeTeam"]; awayTeam: StoredMatchFeedRecord["awayTeam"]; competition: StoredMatchFeedRecord["competition"];
-  family: MarketFamily; selection: SlipMarketSelection; probability: number; odds: string; oddsBasis: "bookmaker" | "median";
+  family: SlipMarketFamily; selection: SlipMarketSelection; probability: number; odds: string; oddsBasis: "bookmaker" | "median";
   bookmaker?: SlipBookmaker;
   forecast?: SlipForecastReference;
 }>;
@@ -97,10 +100,10 @@ export function slipCriteriaRange({ dateFrom, dateTo, interval }: Pick<SlipCrite
 }
 
 const legacyDateTimeKeys = ["dateFrom", "dateTo", "timeFrom", "timeTo"] as const;
-const outcomeKeys = new Map(publicPolicy.markets.map((family) => [`picks.${family}`, family]));
+const outcomeKeys = new Map(slipMarketFamilies.map((family) => [`picks.${family}`, family]));
 const keys = new Set([...legacyDateTimeKeys, "start", "end", "tz", "markets", "totalMin", "totalMax", "oddsMin", "oddsMax",
   "probMin", "probMax", "totalProbMin", "totalProbMax", "teamsMin", "teamsMax", "slips", "reuse", "build", ...outcomeKeys.keys()]);
-const parameterLimits = Object.freeze({ maximumEntries: keys.size + publicPolicy.markets.length
+const parameterLimits = Object.freeze({ maximumEntries: keys.size + slipMarketFamilies.length
   + Object.values(slipMarketSelections).reduce((total, selections) => total + selections.length - 1, 0), maximumBytes: 2048, maximumValueLength: 256 });
 function parameters(input: FeedParameters): Map<string, string> {
   const result = new Map<string, string>();
@@ -112,7 +115,7 @@ function parameters(input: FeedParameters): Map<string, string> {
       const value = input[key];
       const family = outcomeKeys.get(key);
       if (Array.isArray(value) && (key === "markets" || key === "reuse" || family)) {
-        const maximum = key === "markets" ? publicPolicy.markets.length : family ? slipMarketSelections[family].length : 2;
+        const maximum = key === "markets" ? slipMarketFamilies.length : family ? slipMarketSelections[family].length : 2;
         if (value.length > maximum) fail("query", "invalid-query");
         if (family && value.length === 0) fail("outcomes", "invalid-pick");
         for (const item of value) yield [key, item];
@@ -120,19 +123,20 @@ function parameters(input: FeedParameters): Map<string, string> {
     }
   }
   let entryCount = 0, queryBytes = 0, marketCount = 0;
-  const outcomeCounts = new Map<MarketFamily, number>();
+  const outcomeCounts = new Map<SlipMarketFamily, number>();
   for (const [key, value] of entries()) {
     if (++entryCount > parameterLimits.maximumEntries) fail("query", "invalid-query");
     if (value === undefined) continue;
-    if (!keys.has(key) || typeof value !== "string" || value.length > parameterLimits.maximumValueLength) fail("query", "invalid-query");
+    const family = outcomeKeys.get(key);
+    const maximumValueLength = family ? slipMarketOutcomeMaximumLength(family) : parameterLimits.maximumValueLength;
+    if (!keys.has(key) || typeof value !== "string" || value.length > maximumValueLength) fail("query", "invalid-query");
     // Form encoding is ASCII; this measures encoded UTF-8 bytes, including separators, before any aggregation.
     queryBytes += new URLSearchParams([[key, value]]).toString().length + 1;
     if (queryBytes > parameterLimits.maximumBytes) fail("query", "invalid-query");
     if (key === "markets") {
       marketCount += value.split(",").length;
-      if (marketCount > publicPolicy.markets.length) fail("markets", "invalid-market");
+      if (marketCount > slipMarketFamilies.length) fail("markets", "invalid-market");
     }
-    const family = outcomeKeys.get(key);
     if (family) {
       const count = (outcomeCounts.get(family) ?? 0) + value.split(",").length;
       if (count > slipMarketSelections[family].length) fail("outcomes", "invalid-pick");
@@ -186,10 +190,12 @@ export function parseSlipCriteria(input: FeedParameters, today: string): SlipCri
   }
   if (get("build") === "1" && get("markets") === undefined) fail("markets", "invalid-market");
   const requested = get("markets")?.split(",") ?? defaults.markets;
-  if (requested.length === 0 || requested.length > 4 || requested.some((family) => !isMarketFamily(family))) fail("markets", "invalid-market");
-  const markets = publicPolicy.markets.filter((family) => requested.includes(family));
-  const outcomes: Partial<Record<MarketFamily, readonly SlipMarketSelection[]>> = {};
-  for (const family of publicPolicy.markets) {
+  if (requested.length === 0 || requested.length > slipMarketFamilies.length ||
+    requested.length > publicPolicy.markets.length && !requested.includes("team-goals") ||
+    requested.some((family) => !isSlipMarketFamily(family))) fail("markets", "invalid-market");
+  const markets = slipMarketFamilies.filter((family) => requested.includes(family));
+  const outcomes: Partial<Record<SlipMarketFamily, readonly SlipMarketSelection[]>> = {};
+  for (const family of slipMarketFamilies) {
     const value = get(`picks.${family}`);
     if (value === undefined || value === "auto") continue;
     const choices = value.split(",");
@@ -231,18 +237,18 @@ export function serializeSlipCriteria(criteria: SlipCriteria): URLSearchParams {
   } else {
     for (const key of legacyDateTimeKeys) result.set(key, criteria[key]);
   }
-  if (!Array.isArray(criteria.markets) || criteria.markets.length === 0 || criteria.markets.some((family) => !isMarketFamily(family))) fail("markets", "invalid-market");
-  result.set("markets", publicPolicy.markets.filter((family) => criteria.markets.includes(family)).join(","));
+  if (!Array.isArray(criteria.markets) || criteria.markets.length === 0 || criteria.markets.some((family) => !isSlipMarketFamily(family))) fail("markets", "invalid-market");
+  result.set("markets", slipMarketFamilies.filter((family) => criteria.markets.includes(family)).join(","));
   if (criteria.outcomes !== undefined) {
     if (!criteria.outcomes || typeof criteria.outcomes !== "object" || Array.isArray(criteria.outcomes)) fail("outcomes", "invalid-pick");
     for (const family in criteria.outcomes) {
       if (!Object.hasOwn(criteria.outcomes, family)) continue;
-      if (!isMarketFamily(family)) fail("outcomes", "invalid-pick");
+      if (!isSlipMarketFamily(family)) fail("outcomes", "invalid-pick");
       const choices = criteria.outcomes[family];
       if (!criteria.markets.includes(family) || !Array.isArray(choices) || choices.length === 0 || choices.length > slipMarketSelections[family].length
         || choices.some((selection) => !isSlipMarketSelection(family, selection))) fail("outcomes", "invalid-pick");
     }
-    for (const family of publicPolicy.markets) {
+    for (const family of slipMarketFamilies) {
       const choices = criteria.outcomes[family];
       if (choices) result.set(`picks.${family}`, slipMarketSelections[family].filter((selection) => choices.includes(selection)).join(","));
     }
@@ -400,13 +406,21 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
     const requiredProbability = forecast.provisional ? Math.max(minimumProbability, slipBuilderRules.minimumPickPercent / 100) : minimumProbability;
     const quotes: readonly SlipSelectionPrice[] = record.selectionPrices ?? record.prices;
     const reference: SlipForecastReference = { cycleId: record.cycleId, revisionId: forecast.revisionId, publishedAt: forecast.publishedAt };
-    const available = forecast.markets.flatMap(({ market, outcome }) =>
+    const available: { family: SlipMarketFamily; probabilities: Readonly<Record<string, number>> }[] = forecast.markets.flatMap(({ market, outcome }) =>
       criteria.markets.includes(market.family) && (!outcome || outcome.status === "pending") && (!forecast.provisional || market.source !== "ai")
         ? [{ family: market.family, probabilities: market.probabilities as Readonly<Record<string, number>> }] : []);
     const total15 = record.total15Forecast;
     if (options.allowPublishedFallback && ranking === undefined && criteria.markets.includes("total-goals") && total15
       && matchesSlipForecast(total15.reference, reference) && (!forecast.provisional || total15.source === "local-poisson")) {
       available.push({ family: "total-goals", probabilities: total15.probabilities });
+    }
+    const additional = record.additionalGoalForecast;
+    if (options.allowPublishedFallback && ranking === undefined && additional && matchesSlipForecast(additional.reference, reference)) {
+      for (const { key, source, probabilities } of additional.markets) {
+        const market = additionalSlipGoalMarket(key);
+        if (!market || !criteria.markets.includes(market.family) || forecast.provisional && source !== "local-poisson") continue;
+        available.push({ family: market.family, probabilities: { [market.over]: probabilities.over, [market.under]: probabilities.under } });
+      }
     }
     let hasRequestedForecast = false, missingOdds = false;
     for (const { family, probabilities } of available) {
@@ -417,11 +431,11 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
         if (!isSlipMarketSelection(family, selection) || probability === undefined || !Number.isFinite(probability)) continue;
         hasRequestedForecast = true;
         if (probability < requiredProbability || probability > maximumProbability ||
-          isTotal15SlipSelection(selection) && probability < slipBuilderRules.minimumPickPercent / 100) continue;
+          isSlipGoalExtensionSelection(selection) && probability < slipBuilderRules.minimumPickPercent / 100) continue;
         let chosen: { quote: SlipSelectionPrice; scaled: bigint } | null = null, priced = false;
         for (const quote of quotes) {
           if (quote.family !== family || quote.selection !== selection || quote.basis !== "bookmaker" ||
-            isTotal15SlipSelection(selection) && !quote.bookmaker ||
+            isSlipGoalExtensionSelection(selection) && !quote.bookmaker ||
             quote.retrievedAt > asOf || quote.providerUpdatedAt !== null && quote.providerUpdatedAt > asOf) continue;
           const odds = parseDecimalOdds(quote.price);
           if (!odds) continue;

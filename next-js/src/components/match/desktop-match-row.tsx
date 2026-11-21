@@ -8,7 +8,7 @@ import { countryDisplayName } from "@/domain/country-code";
 import type { ExtendedSettlementStatus } from "@/domain/extended-markets";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import { isPlayedFinalStatus } from "@/domain/market-settlement";
-import type { MarketFamily } from "@/domain/markets";
+import type { SlipMarketFamily } from "@/domain/slip-markets";
 import { createMessages, type Messages } from "@/i18n/messages";
 import type { OutcomeTone } from "@/styles/theme";
 import { TeamLogo } from "./team-logo";
@@ -27,7 +27,7 @@ export type DesktopMatchRowProps = Readonly<{
   shootout?: NonNullable<FixtureSnapshot["phaseScores"]>["shootout"];
   liveClock?: FixtureSnapshot["liveClock"]; outcome: OutcomeTone; awaitingResult?: boolean; exactSettlement?: ExtendedSettlementStatus | undefined;
   /** A preformatted authorized market; the row never selects or fabricates a forecast. */
-  market: ReactNode; marketFamily?: MarketFamily; marketDescription?: string;
+  market: ReactNode; marketFamily?: SlipMarketFamily; marketDescription?: string;
   odds: ReactNode; probability: ReactNode; analysisHref?: string; analysisLabel?: string;
   /** One access action replaces all private prediction fields on a locked row. */
   predictionAction?: ReactNode;

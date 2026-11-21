@@ -14,7 +14,7 @@ function matches(query, family, outcomes, familyControl = false) {
 
 test('blank searches are inactive and unsupported markets do not invent choices', () => {
   for (const query of ['', '  ', '--?']) assert.equal(searchMarketFilters(query, messages), null, query);
-  for (const query of ['corners', 'draw no bet', 'over 3.5', 'over 1.5 under 2.5']) {
+  for (const query of ['corners', 'draw no bet', 'over 6.5', 'home under 0.5', 'over 1.5 under 2.5']) {
     assert.deepEqual(searchMarketFilters(query, messages), { families: new Set(), outcomes: new Map() }, query);
   }
 });
@@ -30,6 +30,7 @@ test('family labels, prefixes, reordered words, misspellings and short forms exp
     ['1X2', 'match-result'], ['1 x 2', 'match-result'], ['result match', 'match-result'], ['DC', 'double-chance'],
     ['doub', 'double-chance'], ['doubel chnace', 'double-chance'], ['BTTS', 'both-teams-to-score'],
     ['both teams score', 'both-teams-to-score'], ['O/U', 'total-goals'], ['over or under', 'total-goals'], ['total goals', 'total-goals'],
+    ['team goals', 'team-goals'],
   ]) matches(query, family, slipMarketSelections[family], true);
 });
 
@@ -45,8 +46,12 @@ test('directions and decimal goal lines stay exact even with compact forms, reor
   for (const query of ['over 1.5', '1.5 over', 'ovre 1.5', 'O1.5']) matches(query, 'total-goals', ['over-1.5']);
   for (const query of ['U2.5', 'under 2,50']) matches(query, 'total-goals', ['under-2.5']);
   for (const query of ['1.5', 'O/U1.5', 'total goals 1.5']) matches(query, 'total-goals', ['over-1.5', 'under-1.5']);
-  matches('over', 'total-goals', ['over-2.5', 'over-1.5']);
+  matches('over', 'total-goals', slipMarketSelections['total-goals'].filter((selection) => selection.startsWith('over-')));
   matches('total goals 2.5', 'total-goals', ['over-2.5', 'under-2.5'], true);
+  matches('over 3.5', 'total-goals', ['over-3.5']);
+  matches('U5.5', 'total-goals', ['under-5.5']);
+  matches('home over 3.5', 'team-goals', ['home-over-3.5']);
+  matches('away under 4.5', 'team-goals', ['away-under-4.5']);
 });
 
 test('published search keeps exact lines, named periods and directions within offered options', () => {

@@ -1,7 +1,5 @@
 import { z } from "zod";
 import { storedMatchFeedRecordSchema } from "./match-feed.ts";
-import type { MarketFamily } from "./markets.ts";
-import { marketFamilySchema } from "./fixture-snapshot.ts";
 import { completedFixtureStatuses, isCompletedFixtureStatus, isPlayedFinalStatus, type CycleEligibility, type SettlementStatus } from "./market-settlement.ts";
 import { slipBuilderRules, type BuiltSlip, type SlipForecastReference } from "./slip-builder.ts";
 import { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
@@ -9,7 +7,7 @@ import { slipBookmakerSchema, slipQuoteOddsSchema } from "./slip-quote.ts";
 import type { SlipMatchProgress } from "./slip-match-state.ts";
 import { slipOutcome } from "./slip-outcome.ts";
 import { slipStatus, type SlipStatus } from "./slip-status.ts";
-import { isSlipMarketSelection, isTotal15SlipSelection, type SlipMarketSelection } from "./slip-markets.ts";
+import { isSlipGoalExtensionSelection, isSlipMarketSelection, slipMarketFamilySchema, type SlipMarketFamily, type SlipMarketSelection } from "./slip-markets.ts";
 import { settleSlipSelection } from "./slip-settlement.ts";
 export { slipOutcome } from "./slip-outcome.ts";
 export { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
@@ -23,13 +21,13 @@ export const slipSnapshotRules = Object.freeze({
 });
 const selection = z.strictObject({
   fixtureId: z.uuid(), kickoffAt: z.number().int().positive(), homeTeam: record.homeTeam, awayTeam: record.awayTeam,
-  competition: record.competition, family: marketFamilySchema, selection: z.string().max(64),
+  competition: record.competition, family: slipMarketFamilySchema, selection: z.string().max(64),
   probability: z.number().min(0).max(1), odds: slipQuoteOddsSchema,
   oddsBasis: z.enum(["bookmaker", "median"]),
   bookmaker: slipBookmakerSchema.optional(),
   forecast: slipForecastReferenceSchema.optional(),
 }).refine((value) => isSlipMarketSelection(value.family, value.selection) && (!value.bookmaker || value.oddsBasis === "bookmaker")
-  && (!isTotal15SlipSelection(value.selection) || !!value.forecast && !!value.bookmaker), "Invalid slip selection.");
+  && (!isSlipGoalExtensionSelection(value.selection) || !!value.forecast && !!value.bookmaker), "Invalid slip selection.");
 
 /** Neutral slip data shared by transient builders, image exports and editorial publications. */
 export const slipSnapshotSchema = z.strictObject({
@@ -42,7 +40,7 @@ export const slipSnapshotSchema = z.strictObject({
 export type SlipResult = Readonly<{
   fixtureId: string; status: SettlementStatus; regulationVerified: boolean; regulationHome: number | null; regulationAway: number | null;
   forecast?: SlipForecastReference;
-  family?: MarketFamily;
+  family?: SlipMarketFamily;
   selection?: SlipMarketSelection;
   /** A terminal original cycle stays complete even when a replacement fixture is active. */
   completed?: boolean;

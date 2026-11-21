@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { utcInstantFromEpochMilliseconds } from "./calendar.ts";
-import { liveClockSchema, marketFamilySchema } from "./fixture-snapshot.ts";
+import { liveClockSchema } from "./fixture-snapshot.ts";
 import { isPlayedFinalStatus, settlementStatuses } from "./market-settlement.ts";
-import { isSlipMarketSelection, isTotal15SlipSelection } from "./slip-markets.ts";
+import { isSlipGoalExtensionSelection, isSlipMarketSelection, slipMarketFamilySchema } from "./slip-markets.ts";
 import { slipBuilderRules, type SlipSelection } from "./slip-builder.ts";
 import { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
 import type { SlipMatchState } from "./slip-match-state.ts";
@@ -23,10 +23,10 @@ const instant = z.number().int().positive().refine((value) => {
 const identity = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u);
 export const slipMatchWatchSchema = z.strictObject({
   fixtureId: z.uuid(), kickoffAt: instant, homeTeam: z.strictObject({ id: identity }), awayTeam: z.strictObject({ id: identity }),
-  family: marketFamilySchema, selection: z.string().min(1).max(64), probability: z.number().min(0).max(1),
+  family: slipMarketFamilySchema, selection: z.string().min(1).max(64), probability: z.number().min(0).max(1),
   forecast: slipForecastReferenceSchema.optional(),
 }).refine((value) => isSlipMarketSelection(value.family, value.selection)
-  && (!isTotal15SlipSelection(value.selection) || !!value.forecast), "Invalid original selection.")
+  && (!isSlipGoalExtensionSelection(value.selection) || !!value.forecast), "Invalid original selection.")
   .transform((value) => value as SlipMatchWatch);
 
 export function slipMatchSelectionKey(selection: Pick<SlipMatchWatch, "fixtureId" | "family" | "selection" | "forecast">): string {
@@ -62,12 +62,12 @@ export const slipMatchRefreshRequestSchema = z.strictObject({
 
 const score = z.strictObject({ home: z.number().int().min(0).max(1000), away: z.number().int().min(0).max(1000) });
 export const slipMatchStateSchema = z.strictObject({
-  fixtureId: z.uuid(), family: marketFamilySchema, selection: z.string().min(1).max(64), forecast: slipForecastReferenceSchema.optional(),
+  fixtureId: z.uuid(), family: slipMarketFamilySchema, selection: z.string().min(1).max(64), forecast: slipForecastReferenceSchema.optional(),
   status: z.enum(settlementStatuses), score: score.nullable(), liveClock: liveClockSchema.nullable(),
   outcome: z.enum(["correct", "incorrect", "pending", "void"]),
 }).superRefine((value, context) => {
   const final = isPlayedFinalStatus(value.status);
-  if (!isSlipMarketSelection(value.family, value.selection) || isTotal15SlipSelection(value.selection) && !value.forecast
+  if (!isSlipMarketSelection(value.family, value.selection) || isSlipGoalExtensionSelection(value.selection) && !value.forecast
     || value.status !== "live" && value.liveClock !== null
     || value.status !== "live" && !final && value.score !== null
     || (value.outcome === "correct" || value.outcome === "incorrect") && (!final || value.score === null)

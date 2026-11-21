@@ -3,11 +3,12 @@ import "server-only";
 import { getPublicationDeadline, getReportingDate, utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
 import { feedQueryRules, getFeedToday, type FeedParameters } from "../../domain/feed-query.ts";
 import { storedMatchFeedResponseSchema, type StoredMatchFeedResponse } from "../../domain/match-feed.ts";
+import { isMarketFamily } from "../../domain/markets.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { scheduledSlipMatchStates } from "../../domain/slip-match-state.ts";
 import { buildSlips, hasJointProbabilityBounds, slipBuilderRules, slipCriteriaRange, type SlipCriteria, type SlipMatchRecord } from "../../domain/slip-builder.ts";
-import { isTotal15SlipSelection } from "../../domain/slip-markets.ts";
+import { additionalSlipGoalMarkets, isSlipGoalExtensionSelection, isTotal15SlipSelection } from "../../domain/slip-markets.ts";
 import { jointSlipBuilder } from "../../domain/joint-slip-model.ts";
 import { slipPricePageSchema, type SlipPricePage } from "../../domain/slip-price-page.ts";
 import { slipCohortRules, slipCohortSchema } from "../../domain/slip-cohort.ts";
@@ -51,8 +52,10 @@ export function createSlipBuildService(options: Readonly<SlipReadSource & {
       const today = interval ? getFeedToday({ zone: interval.zone }, asOf) : reportingToday;
       const dates: Record<string, string> = interval ? { start: interval.from, end: interval.to, tz: interval.zone }
         : { from: criteria.dateFrom, to: criteria.dateTo };
-      const parameters = new URLSearchParams({ ...dates,
-        status: "scheduled", market: criteria.markets.join(","), sort: "probability", dir: "desc", pageSize: String(slipReadRules.pageSize) });
+      const coreMarkets = criteria.markets.filter(isMarketFamily);
+      const parameters = new URLSearchParams({ ...dates, status: "scheduled",
+        ...(coreMarkets.length ? { market: coreMarkets.join(",") } : {}),
+        sort: "probability", dir: "desc", pageSize: String(slipReadRules.pageSize) });
       if (!interval && (criteria.timeFrom !== "" || criteria.timeTo !== "")) {
         parameters.set("timeFrom", criteria.timeFrom); parameters.set("timeTo", criteria.timeTo); parameters.set("tz", publicPolicy.reportingTimeZone);
       }
@@ -61,10 +64,18 @@ export function createSlipBuildService(options: Readonly<SlipReadSource & {
       if (options.readCohort) {
         readStage = "read-cohort";
         const goals = criteria.outcomes?.["total-goals"], primaryBookmakerOnly = !!(joint || options.build);
+        const additionalGoalKeys = primaryBookmakerOnly ? [] : additionalSlipGoalMarkets.flatMap((market) => {
+          if (!criteria.markets.includes(market.family)) return [];
+          const choices = criteria.outcomes?.[market.family];
+          return !choices || choices.includes(market.over) || choices.includes(market.under) ? [market.key] : [];
+        });
+        const extendedOnly = !coreMarkets.length || coreMarkets.length === 1 && coreMarkets[0] === "total-goals"
+          && goals?.every(isSlipGoalExtensionSelection) === true;
         const total15 = !primaryBookmakerOnly && criteria.markets.includes("total-goals") && (!goals || goals.some(isTotal15SlipSelection))
-          ? criteria.markets.length === 1 && goals?.every(isTotal15SlipSelection) ? "only" : "include" : undefined;
+          ? extendedOnly ? "only" : "include" : undefined;
         const cohort = slipCohortSchema.parse(await options.readCohort(parameters, {
           locale, ...(primaryBookmakerOnly ? { primaryBookmakerOnly: true } : {}), ...(total15 ? { total15 } : {}),
+          ...(additionalGoalKeys.length ? { additionalGoals: { keys: additionalGoalKeys, only: extendedOnly } } : {}),
         }, pinnedClock));
         readStage = "validate-cohort";
         if (cohort.asOf !== asOf || cohort.today !== today || cohort.range.from !== range.startDate || cohort.range.to !== range.endDate
@@ -74,7 +85,9 @@ export function createSlipBuildService(options: Readonly<SlipReadSource & {
         partialCoverage = cohort.partialCoverage; searchLimited = cohort.searchLimited;
         records.push(...cohort.records.map((record) => {
           const total15Forecast = cohort.total15Forecasts?.[record.fixtureId];
-          return { ...record, selectionPrices: cohort.selectionPrices[record.fixtureId]!, ...(total15Forecast ? { total15Forecast } : {}) };
+          const additionalGoalForecast = cohort.additionalGoalForecasts?.[record.fixtureId];
+          return { ...record, selectionPrices: cohort.selectionPrices[record.fixtureId]!, ...(total15Forecast ? { total15Forecast } : {}),
+            ...(additionalGoalForecast ? { additionalGoalForecast } : {}) };
         }));
       } else {
         const read = options.read;

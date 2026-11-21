@@ -605,6 +605,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const detailHref = matchHref(fixture.fixtureId, analysisSlug, locale);
   const targetHref = gated ? subscriberHref(signedIn, detailHref) : detailHref;
   const shownFamily = best ?? eligible[0]!;
+  const coreFamily = shownFamily === "team-goals" ? "total-goals" : shownFamily;
   const publicChance = gatedForecast?.probabilities.find((entry) => entry.family === shownFamily)?.probability;
   const publicChanceLabel = publicChance === undefined ? "—" : messages.number(publicChance, { style: "percent", maximumFractionDigits: 0 });
   const home = fixture.homeTeam.name?.trim() || messages.text("match.homeUnknown");
@@ -617,15 +618,15 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const prediction = offline || gated || suppressPick ? null : snapshotPick ? snapshotCardPrediction(snapshotPick)
     : featured ? featuredCardPrediction(featured, retrospective ? null : fixture.forecast?.publishedAt ?? null,
       retrospective ? false : fixture.forecast?.provisional ?? true)
-      : selectedCardPrediction(fixture, shownFamily, !publishedMarket);
+      : selectedCardPrediction(fixture, coreFamily, !publishedMarket);
   const observation = !prediction || snapshotPick || featured || fixture.marketOdds?.kind !== (fixture.status === "live" ? "in-play" : "pre-match")
     ? null : fixture.marketOdds;
   const selection = prediction?.item.market.selection;
-  const livePrice = selection && observation?.kind === "in-play" ? marketOddsPrice(observation, shownFamily, selection) : null;
+  const livePrice = selection && observation?.kind === "in-play" ? marketOddsPrice(observation, coreFamily, selection) : null;
   const preMatchPrice = featured?.odds ?? (selection && fixture.status === "scheduled" && observation?.kind === "pre-match"
-    ? marketOddsPrice(observation, shownFamily, selection) : null);
-  const storedPrice = retrospective ? null : filtered ? fixture.prices?.find((quote) => quote.family === filtered.key && quote.selection === selection) ?? null
-    : featured || fixture.status === "live" ? null : selectedCardPrice(fixture, shownFamily, !publishedMarket);
+    ? marketOddsPrice(observation, coreFamily, selection) : null);
+  const storedPrice = retrospective || snapshotPick ? null : filtered ? fixture.prices?.find((quote) => quote.family === filtered.key && quote.selection === selection) ?? null
+    : featured || fixture.status === "live" ? null : selectedCardPrice(fixture, coreFamily, !publishedMarket);
   const replayPick = retrospective?.pick;
   const historicalReplayPrice = selection && replayPick?.historicalOdds && replayPick.odds ? displayMarketOddsPrice(replayPick.odds) : null;
   const confirmedPrice = retrospective ? historicalReplayPrice : filtered ? filtered.odds : featured?.featuredQuote && preMatchPrice
@@ -652,7 +653,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const family = featured?.label ?? messages.text(`market.family.${shownFamily}`);
   const [, totalPeriod, totalScope] = /^goal:([^:]+):totals:(total|home|away):/u.exec(featured?.key ?? "") ?? [];
   const shortFamily = totalScope === "home" || totalScope === "away" ? messages.text(`match.teamTotal.${totalScope}`)
-    : featured?.code ?? compactMarketName(shownFamily);
+    : featured?.code ?? (shownFamily === "team-goals" ? family : compactMarketName(coreFamily));
   const mobileFamily = phoneFeed && totalScope ? formatMarketShortLabel({ market: "total-goals", scope: totalScope,
     ...(totalPeriod && totalPeriod !== "full-time" ? { period: totalPeriod } : {}) }) : shortFamily;
   const selectionContext = featured?.code ? { marketKey: featured.key, label: featured.selectionLabel } : undefined;
@@ -758,13 +759,13 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       {showProgress && <MatchState fixture={fixture} display={display} description={scoreDescription} lead={lead} clock={clock}
         messages={messages} snapshot={snapshotPick !== undefined} phoneFeed={phoneFeed} />}
     </Teams>
-    <Pick $family={shownFamily} data-ledger-facts data-pick-state={pickState} data-result={result}>
-      <MarketName $family={shownFamily} data-ledger-field="market" aria-hidden={gated ? undefined : true} title={family}>
+    <Pick $family={coreFamily} data-ledger-facts data-pick-state={pickState} data-result={result}>
+      <MarketName $family={coreFamily} data-ledger-field="market" aria-hidden={gated ? undefined : true} title={family}>
         <span data-pick-value="" data-mobile-only="">{gated ? null : mobileFamily}</span>
         <span data-pick-value="" data-desktop-only="">{gated ? null : family}</span>
       </MarketName>
       {offline ? <PredictionCell prediction={null} price={null} reason="Predictions are unavailable in the saved view." locale={locale}>
-        <PickShort $family={shownFamily} $available={false} data-ledger-field="prediction"><span data-pick-value="">Unavailable offline</span></PickShort>
+        <PickShort $family={coreFamily} $available={false} data-ledger-field="prediction"><span data-pick-value="">Unavailable offline</span></PickShort>
         <span data-match-metrics><Odds data-ledger-field="odds" data-stack-label={stackOddsCaption} aria-hidden="true">—</Odds><Probability data-ledger-field="probability" data-stack-label={stackProbabilityCaption} aria-hidden="true"><Percent>—</Percent></Probability></span>
       </PredictionCell> : gated ? <><GatedPick data-ledger-field="prediction"><SubscriberIcon />
         <span data-subscriber-notice>{messages.text("paywall.unlock")}</span>
@@ -772,7 +773,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
         <span data-match-metrics><Odds data-ledger-field="odds" aria-hidden="true">—</Odds>
         <Probability data-ledger-field="probability" data-stack-label={stackProbabilityCaption} aria-label={messages.text("details.probability")}><Percent data-public-probability>{publicChanceLabel}</Percent></Probability></span>
       </> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale} compact={phoneFeed}>
-        <PickShort $family={shownFamily} $available={prediction !== null} data-ledger-field="prediction" aria-hidden={abstention ? undefined : true}
+        <PickShort $family={coreFamily} $available={prediction !== null} data-ledger-field="prediction" aria-hidden={abstention ? undefined : true}
           data-no-pick={missing ?? undefined}>
           {selection ? <PickLine data-pick-line="" data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection, selectionContext)}>{mobileSelection}</span>{sourceMarker}{tierMarker}</PickLine> : abstention ?? <>
             {missing && <b data-mobile-only="">{noPickLabel}</b>}
@@ -783,7 +784,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
         <span data-match-metrics><Odds data-ledger-field="odds" data-stack-label={stackOddsCaption} aria-hidden={valueDescription === null}
           data-card-odds data-odds-kind={oddsKind} data-pick-price={prediction ? "" : undefined} title={oddsDescription}>{price?.price ?? "—"}{valueLabel}</Odds>
         <Probability data-ledger-field="probability" data-stack-label={stackProbabilityCaption} aria-hidden="true">
-          {prediction && <ProbabilityBar $family={shownFamily} data-probability-meter=""><span style={{ inlineSize: `${Math.max(2, prediction.probability.roundedPercent)}%` }} /></ProbabilityBar>}
+          {prediction && <ProbabilityBar $family={coreFamily} data-probability-meter=""><span style={{ inlineSize: `${Math.max(2, prediction.probability.roundedPercent)}%` }} /></ProbabilityBar>}
           <Percent data-pick-value="">{prediction ? percent : "—"}</Percent>
         </Probability></span>
         {prediction && selection ? <VisuallyHidden>{messages.text("match.pickLabel", { market: family, selection: predictionDescription(messages, selection, selectionContext),

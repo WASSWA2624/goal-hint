@@ -2,20 +2,23 @@ import type { Messages } from "../i18n/messages.ts";
 import { bettingShortForm, marketShortCode, marketShortForms, predictionSelectionAliases, predictionShortForms } from "./betting-short-forms.ts";
 import { searchFilterOptions } from "./filter-option-search.ts";
 import { normalizeFootballSearch, prepareFootballSearch } from "./football-search.ts";
-import type { MarketFamily } from "./markets.ts";
 import { predictionLabel, predictionText } from "./prediction-label.ts";
-import { publicPolicy } from "./public-policy.ts";
-import { slipMarketSelections, type SlipMarketSelection } from "./slip-markets.ts";
+import { slipMarketFamilies, slipMarketSelections, type SlipMarketFamily, type SlipMarketSelection } from "./slip-markets.ts";
 
 export type MarketFilterMatches = Readonly<{
-  families: ReadonlySet<MarketFamily>;
-  outcomes: ReadonlyMap<MarketFamily, ReadonlySet<SlipMarketSelection>>;
+  families: ReadonlySet<SlipMarketFamily>;
+  outcomes: ReadonlyMap<SlipMarketFamily, ReadonlySet<SlipMarketSelection>>;
 }>;
 
 type LabelMessages = Pick<Messages, "text">;
-type SearchEntry = Readonly<{ family: MarketFamily; selection?: SlipMarketSelection; label: string; detail?: string; line?: string }>;
+type SearchEntry = Readonly<{ family: SlipMarketFamily; selection?: SlipMarketSelection; label: string; detail?: string; line?: string }>;
 const decimal = /^\d+\.\d+$/u;
 const selectionLine = (selection: SlipMarketSelection) => selection.split("-").find(word => decimal.test(word));
+const localizedMarketEntries = new WeakMap<LabelMessages, readonly SearchEntry[]>();
+
+export function slipMarketFamilyLabel(messages: LabelMessages, family: SlipMarketFamily): string {
+  return messages.text(family === "total-goals" ? "slips.totalGoalsMarket" : `market.family.${family}`);
+}
 
 /** Keep football folding and numeric normalization, with betting-specific totals vocabulary. */
 function marketSearchText(value: string): string {
@@ -27,15 +30,17 @@ function marketSearchText(value: string): string {
     .replace(/\b(?:over (?:or )?under|under (?:or )?over)\b/gu, "ou");
 }
 
-function marketEntries(messages: LabelMessages): SearchEntry[] {
-  return publicPolicy.markets.flatMap(family => {
-    const form = marketShortForms[family], title = messages.text(`market.family.${family}`);
-    const familyLabel = family === "total-goals" ? messages.text("slips.totalGoalsMarket") : title;
-    const familyEntries = [...new Set([family, title, familyLabel, form.label, form.code].map(marketSearchText))].map(label => {
+function marketEntries(messages: LabelMessages): readonly SearchEntry[] {
+  const cached = localizedMarketEntries.get(messages);
+  if (cached) return cached;
+  const entries = slipMarketFamilies.flatMap(family => {
+    const forms = family === "team-goals" ? [] : [marketShortForms[family].label, marketShortForms[family].code];
+    const familyLabel = slipMarketFamilyLabel(messages, family);
+    const familyEntries = [...new Set([family, familyLabel, messages.text(`market.family.${family}`), ...forms].map(marketSearchText))].map(label => {
       const line = label.split(" ").find(word => decimal.test(word));
       return { family, label, ...(line ? { line } : {}) };
     });
-    const detail = marketSearchText(`${familyLabel} ${form.code}`);
+    const detail = marketSearchText([familyLabel, ...forms].join(" "));
     const outcomeEntries = slipMarketSelections[family].flatMap(selection => {
       const line = selectionLine(selection);
       const aliases = [selection, predictionText(messages, selection), predictionLabel(messages, selection),
@@ -45,15 +50,17 @@ function marketEntries(messages: LabelMessages): SearchEntry[] {
         const form = bettingShortForm(predictionShortForms, selection);
         if (form) aliases.push(form.label);
       }
-      if (line) aliases.push(line, selection.slice(0, selection.indexOf("-")));
+      if (line && family === "total-goals") aliases.push(line, selection.slice(0, selection.indexOf("-")));
       return [...new Set(aliases.map(marketSearchText))].map(label => ({ family, selection, label, detail, ...(line ? { line } : {}) }));
     });
     return [...familyEntries, ...outcomeEntries];
   });
+  localizedMarketEntries.set(messages, entries);
+  return entries;
 }
 
 function collectMatches(entries: readonly SearchEntry[], line?: string): MarketFilterMatches {
-  const families = new Set<MarketFamily>(), outcomes = new Map<MarketFamily, Set<SlipMarketSelection>>();
+  const families = new Set<SlipMarketFamily>(), outcomes = new Map<SlipMarketFamily, Set<SlipMarketSelection>>();
   for (const { family, selection } of entries) {
     let choices = outcomes.get(family);
     if (!choices) outcomes.set(family, choices = new Set());
@@ -73,7 +80,11 @@ export function searchMarketFilters(needle: string, messages: LabelMessages): Ma
   const lines = new Set(query.split(" ").filter(word => decimal.test(word)));
   if (lines.size > 1) return collectMatches([]);
   const [line] = lines;
-  const entries = marketEntries(messages).filter(entry => !line || entry.line === line);
+  const teamWords = ["home", "away", "team", ...(["market.selection.home-team", "market.selection.away-team"] as const)
+    .flatMap(key => marketSearchText(messages.text(key)).split(" "))];
+  // Preserve the conventional meaning of a bare Over/Under line as the match total.
+  const teamQuery = query.split(" ").some(word => teamWords.includes(word));
+  const entries = marketEntries(messages).filter(entry => !line || entry.line === line && (entry.family !== "team-goals" || teamQuery));
   const literal = entries.filter(entry => entry.label === query);
   if (literal.length) {
     const families = literal.filter(entry => !entry.selection);

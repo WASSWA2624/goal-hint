@@ -38,7 +38,7 @@ export function DesktopSlipRow({ selection, locale, result, matchStates, analysi
       {...(status === "unknown" && !state && hasResult ? { matchState: "snapshot" } : {})}
       savedScore={hasResult && score !== null} preview={preview} marketFamily={selection.family}
       marketDescription={`${family}: ${description}`}
-      market={<><span data-market-label data-row-market-label aria-hidden="true">{shortMarkets[selection.family]}</span>
+      market={<><span data-market-label data-row-market-label aria-hidden="true">{selection.family === "team-goals" ? family : shortMarkets[selection.family]}</span>
         <strong data-pick-label aria-hidden="true">{predictionLabel(m, selection.selection)}</strong><VisuallyHidden>{family}: {description}</VisuallyHidden></>}
       odds={<SlipSelectionOdds selection={selection} />} probability={formatSlipProbability(selection.probability, m)}
       {...(analysisLinks ? { analysisHref: matchHref(selection.fixtureId, canonicalMatchSlug(selection.homeTeam.name, selection.awayTeam.name), locale) } : {})} />

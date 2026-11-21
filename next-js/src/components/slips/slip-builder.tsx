@@ -15,13 +15,13 @@ import { PagePaginationSection } from "@/components/ui/pagination-styles";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import { getDateInTimeZone } from "@/domain/device-calendar";
-import type { MarketFamily } from "@/domain/markets";
 import { slipsHref } from "@/domain/navigation";
 import { subscriberHref } from "@/domain/subscriber-navigation";
 import { publicPolicy } from "@/domain/public-policy";
 import { fullDayKickoffTime } from "@/domain/kickoff-time";
 import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipInputFields,
   type SlipCriteria, type SlipInputs } from "@/domain/slip-builder";
+import type { SlipMarketFamily } from "@/domain/slip-markets";
 import { createMessages } from "@/i18n/messages";
 import { useDeviceTimeZone } from "@/i18n/use-messages";
 import type { SlipBuildPageResult } from "@/domain/slip-page";
@@ -97,7 +97,7 @@ function rangeValue(name: NumericRangeField, value: string | undefined, defaults
 
 type Props = Readonly<{
   locale: string; today: ReportingDate; criteria: SlipCriteria; result: SlipBuildPageResult | null;
-  error?: SlipCriteriaIssue | null; initialInputs?: SlipInputs; initialTimeZone?: string; initialMarkets?: readonly MarketFamily[];
+  error?: SlipCriteriaIssue | null; initialInputs?: SlipInputs; initialTimeZone?: string; initialMarkets?: readonly SlipMarketFamily[];
   initialOutcomes?: SlipCriteria["outcomes"];
   initialReuse?: boolean; showAccount?: boolean; subscriberOnly?: boolean; signedIn?: boolean;
   jointEstimates?: boolean;
@@ -356,7 +356,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   const emptyState = result?.state === "generated" ? "data-unavailable" : result?.state;
   const accessRequired = <UnlockPanel locale={locale} signedIn={signedIn} returnTo={action} guestView="login" />;
   const { targets, limits: limitsFields, kickoff: kickoffFields, markets: marketFields, reuse: reuseField } = renderSlipCriteriaFields({
-    locale, prefix, draft, resetDraft, error, errorId, feedbackKey, desktop, enhanced, showJoint, selectedMarkets, outcomes, reuse,
+    locale, prefix, draft, resetDraft, error, errorId, feedbackKey, enhanced, showJoint, selectedMarkets, outcomes, reuse,
     ...(kickoffZone ? { timeZone: kickoffZone, interval: true } : {}),
     onFieldChange: updateField,
     onKickoffChange: (endpoint, day, minute) => {

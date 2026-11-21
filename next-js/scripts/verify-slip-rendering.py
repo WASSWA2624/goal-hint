@@ -212,17 +212,26 @@ def criteria_groups(document, path, error_group=None):
     assert all(by_name[name] in advanced.nodes() and by_name[name] not in markets.nodes() for name in ("limits", "kickoff")), f"{path}: ranges belong to Filters"
     date_headings = [child for child in by_name["kickoff"].children if isinstance(child, Element) and child.tag == "legend"]
     assert len(date_headings) == 1 and date_headings[0].text.strip() == "Date and time window", f"{path}: Date and time window groups both endpoints"
-    expected_families = {"match-result": "Match result", "double-chance": "Double chance", "total-goals": "Total goals (Over/Under)", "both-teams-to-score": "Both teams to score"}
+    expected_families = {"match-result": "Match result", "double-chance": "Double chance",
+                         "total-goals": "Total goals (Over/Under)", "both-teams-to-score": "Both teams to score", "team-goals": "Team goals"}
     families = by_name["markets"].nodes("fieldset", "data-market-family")
     assert [group.attrs["data-market-family"] for group in families] == list(expected_families), f"{path}: separate groups cover every supported market family"
     for group in families:
         family = group.attrs["data-market-family"]
         legend, = [child for child in group.children if isinstance(child, Element) and child.tag == "legend"]
         assert legend.text.strip() == expected_families[family], f"{path}: {family} has a distinct group heading"
-        toggle, = legend.nodes("input")
-        assert toggle.attrs.get("name") == "markets" and toggle.attrs.get("value") == family, f"{path}: the heading controls its market family"
-        choices = [node.attrs.get("name") for node in group.nodes("input") if (node.attrs.get("name") or "").startswith("picks.")]
-        assert choices and set(choices) == {f"picks.{family}"}, f"{path}: {family} offers its own outcomes"
+        toggle, = [node for node in group.nodes("label") if any(control.attrs.get("name") == "markets" and
+                   control.attrs.get("value") == family for control in node.nodes("input"))]
+        assert toggle.text.strip() == expected_families[family], f"{path}: the heading controls its market family"
+        choices = [node for node in group.nodes("input") if (node.attrs.get("name") or "").startswith("picks.")]
+        assert choices and {node.attrs.get("name") for node in choices} == {f"picks.{family}"}, f"{path}: {family} offers its own outcomes"
+        if family in {"total-goals", "team-goals"}:
+            prefixes = ("",) if family == "total-goals" else ("home-", "away-")
+            expected = [[f"{prefix}{direction}-{line}.5" for direction in ("over", "under")]
+                        for prefix in prefixes for line in range(1, 6)]
+            pairs = [[control.attrs["value"] for control in row.nodes("input")]
+                     for row in group.nodes("div") if len(row.nodes("input")) == 2]
+            assert pairs == expected, f"{path}: {family} pairs Over and Under in ascending line order"
     toolbars = document.nodes(attr="data-slip-builder-toolbar")
     assert len(toolbars) == 1, f"{path}: one shared compact settings toolbar"
     toolbar = toolbars[0]
@@ -241,17 +250,17 @@ def criteria_groups(document, path, error_group=None):
     assert summary_id and any(node.attrs.get("id") == summary_id and node.text.strip() for node in advanced.nodes()), f"{path}: Markets has a visible selection summary after hydration"
     manage_filters = document.nodes("button", "data-saved-filters-trigger")
     saved_filter_selects = document.nodes("button", "data-saved-filter-select")
-    assert len(manage_filters) == len(saved_filter_selects) <= 1, f"{path}: a single dropdown and Manage action"
+    assert len(manage_filters) == len(saved_filter_selects) <= 1, f"{path}: a single Custom Filters dropdown and management action"
     body, = [child for child in advanced.children if isinstance(child, Element) and child.tag == "div"]
     content, = [child for child in body.children if isinstance(child, Element) and child.tag == "div"]
     sections = [section for section in content.children if isinstance(section, Element) and "data-filter-section" in section.attrs]
     assert len(sections) == 5 + bool(manage_filters), f"{path}: Filters separates targets, limits, dates, reuse and Markets"
-    assert sections[0].nodes("button", "data-saved-filters-trigger") == manage_filters and sections[0].nodes("button", "data-saved-filter-select") == saved_filter_selects, f"{path}: Saved filters leads the Filters sections when available"
+    assert sections[0].nodes("button", "data-saved-filters-trigger") == manage_filters and sections[0].nodes("button", "data-saved-filter-select") == saved_filter_selects, f"{path}: Custom Filters leads the Filters sections when available"
     if manage_filters:
         row, = sections[0].nodes(attr="data-saved-filters-row")
         assert "data-analytics-ignore" in row.attrs, f"{path}: private preset names stay out of click analytics"
-        assert row.nodes("button") == saved_filter_selects + manage_filters, f"{path}: Manage immediately follows the Saved filters dropdown"
-        assert manage_filters[0].text.strip() == "Manage" and has_builder_icon(manage_filters[0], "manage-filters"), f"{path}: Manage has its label and icon"
+        assert row.nodes("button") == saved_filter_selects + manage_filters, f"{path}: Manage Custom Filters immediately follows the Custom Filters dropdown"
+        assert manage_filters[0].text.strip() == "Manage Custom Filters" and has_builder_icon(manage_filters[0], "manage-filters"), f"{path}: Manage Custom Filters has its label and icon"
     values = {}
     for name, group in by_name.items():
         inputs = group.nodes("input")
@@ -272,7 +281,6 @@ def criteria_groups(document, path, error_group=None):
         assert any(title in heading.text for heading in advanced.nodes("legend")), f"{path}: {title} keeps its section heading"
     floating_fields = [node for node in advanced.nodes(attr="data-slip-floating-field") if node.attrs["data-slip-floating-field"] == "true"]
     numeric_inputs = advanced.nodes("input", "data-slip-numeric-field")
-    limit_labels = {"oddsMin": "Minimum", "oddsMax": "Maximum", "probMin": "Minimum", "probMax": "Maximum", "totalProbMin": "Minimum", "totalProbMax": "Maximum"}
     for control in numeric_inputs:
         name = control.attrs["data-slip-numeric-field"]
         if name == "slips":
@@ -281,7 +289,7 @@ def criteria_groups(document, path, error_group=None):
         assert len(containers) == 1, f"{path}: {name} uses one reusable floating-label field"
         labels = containers[0].nodes("label")
         assert len(labels) == 1 and labels[0].attrs.get("for") == control.attrs.get("id"), f"{path}: {name} retains its associated accessible floating label"
-        assert labels[0].text.strip() == limit_labels.get(name, "Min" if name.endswith("Min") else "Max"), f"{path}: {name} keeps a visible range-bound label"
+        assert labels[0].text.strip() == ("Min" if name.endswith("Min") else "Max"), f"{path}: {name} keeps a visible range-bound label"
     builder_form, = [form for form in toolbar.nodes("form") if advanced in form.nodes("dialog")]
     reset_links = [node for node in advanced.nodes("a") if node.text.strip() == "Reset Filters"]
     assert len(reset_links) == 1 and reset_links[0].attrs.get("href") == builder_form.attrs.get("action"), f"{path}: native Reset stays inside Filters"
@@ -455,7 +463,7 @@ def verify_builder_access(origin, directory):
         toolbar, = document.nodes(attr="data-slip-builder-toolbar")
         summary = applied_criteria(toolbar, path)
         assert summary["Total odds"] == "5.00–10.00" and summary["Match reuse"] == "Off", f"{path}: summary shows the default odds range and match reuse"
-        assert summary["Markets"] == "All 4 markets · Automatic results", f"{path}: summary shows the default market selections"
+        assert summary["Markets"] == "4 markets · Automatic results", f"{path}: summary shows the four default market selections"
         account_actions = document.nodes(attr="data-slip-access-action")
         assert len(account_actions) == 1, f"{path}: one account-aware toolbar action without a duplicate below"
         account_action = account_actions[0]

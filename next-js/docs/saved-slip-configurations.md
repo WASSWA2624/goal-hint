@@ -1,19 +1,21 @@
-# Saved filters
+# Custom Filters
 
 Every signed-in account can keep up to ten named presets, including while access
-is expired or subscription sales are closed. The **Saved filters** chooser and
-**Manage** button sit at the top of Builder **Filters**. Long names wrap in the
-scrollable chooser. Choosing a preset fills the criteria form as a draft.
-**Apply Filters** commits the visible values to the next build and updates its
-summary. Closing Filters discards the draft. **Reset Filters** restores defaults
-in the form and keeps the saved presets available.
+is expired or subscription sales are closed. The **Custom Filters** chooser and
+**Manage Custom Filters** button are side by side at the top of Builder
+**Filters**. Long names wrap in the scrollable chooser. Choosing a preset fills
+the criteria form as a draft. **Apply Filters** commits the visible values to
+the next build and updates the summary. Closing Filters discards the draft.
+**Reset Filters** restores the form defaults and keeps the saved presets.
 
-**Manage** opens a child dialog with the saved count, preset selection, default
-control and **Create**, **Rename**, **Update**, and **Delete** actions. Create and
-Update save the values currently entered in the main Filters form. Create and
-Rename ask for a name. Update and Delete ask for confirmation. Escape closes
-the active dialog and returns focus to its opener. Deleting the applied record
-clears its ID and preserves the Builder values.
+The management dialog shows the selection from **Custom Filters** and how many
+records are saved. **Save as new** stores a snapshot of the current form under
+a new name and is available below the limit, even with no preset selected.
+**Update selected** saves the current form values to the selected preset after
+confirmation. **Rename**, **Delete** and **Use as default** also target that
+selection. Rename asks for a name and Delete asks for explicit confirmation.
+Escape closes the active dialog and returns focus to its opener. Deleting the
+applied record clears its ID and preserves the Builder values.
 
 Names are trimmed, Unicode-normalized and unique per account without case
 distinctions. The **Date and time window** displays **From** and **To** in the

@@ -5,7 +5,7 @@ import { formatOddsHundredths } from "@/domain/odds";
 import { publicPolicy } from "@/domain/public-policy";
 import type { SlipCriteria } from "@/domain/slip-builder";
 import { createMessages } from "@/i18n/messages";
-import { allSlipMarketsAutomatic, slipMarketFilterSummary } from "./slip-criteria-fields";
+import { slipMarketFilterSummary } from "./slip-market-filter-fields";
 import { CriteriaSummary, CriteriaSummaryPanel } from "./slip-styles";
 
 export function SlipCriteriaSummary({ criteria, locale, showJoint }: { criteria: SlipCriteria; locale: string; showJoint: boolean }) {
@@ -25,10 +25,7 @@ export function SlipCriteriaSummary({ criteria, locale, showJoint }: { criteria:
   const zoneLabel = !zone || zone === publicPolicy.reportingTimeZone ? "EAT" : zone.replaceAll("_", " ");
   const kickoff = criteria.dateFrom === criteria.dateTo ? `${dateFrom} · ${timeFrom}–${timeTo} ${zoneLabel}`
     : `${dateFrom} ${timeFrom} – ${dateTo} ${timeTo} ${zoneLabel}`;
-  const outcomes = criteria.outcomes ?? {};
-  const selection = slipMarketFilterSummary(m, criteria.markets, outcomes);
-  const markets = allSlipMarketsAutomatic(criteria.markets, outcomes) ? selection
-    : `${m.plural("slips.marketCount", criteria.markets.length)} · ${selection}`;
+  const markets = slipMarketFilterSummary(m, criteria.markets, criteria.outcomes ?? {});
 
   return <CriteriaSummaryPanel aria-labelledby={heading}>
     <h2 id={heading}>{m.text("slips.summary.title")}</h2>
