@@ -12,7 +12,7 @@ records.
 - Define the fit and untouched holdout windows in Kampala dates before
   reviewing results. Each starts inclusively and ends exclusively. Allow a
   gap for late settlements when setting the dates. Each phase uses only the
-  latest complete receipt recorded strictly before its own end. A later score
+  latest sealed receipt covering the slate, recorded strictly before its own end. A later score
   correction cannot change the evidence available to an earlier phase.
 - Choose the earliest sealed capture for each calendar day, using the seal as
   a stable tie-break for simultaneous captures. Retain the selected day's slate
@@ -76,3 +76,35 @@ capture and observes results for the prior seven days. For a later settlement
 or correction, use the original date with `results`. Keep empty captures to
 account for coverage. A scope includes the configured bookmaker, competition
 IDs and deployment environment. Keep each scope separate in evaluation.
+
+## November 21 production audit
+
+The read-only production ledger contained 608 original-cycle frozen decisions
+across one Kampala day. Exact original forecast and quote receipts verified 63
+priced selections. Of the 55 selections at or above 75%, one matched the
+configured bookmaker and had no verified original-market settlement. Replay
+contained 185 exact-price observations with supported outcomes across two days,
+assembled after kickoff. This audit supports a coverage diagnosis. The replay
+observations supply no prospective fit or holdout examples.
+
+The 18:12 Kampala production smoke capture examined 264 fixtures with complete
+feed coverage and found zero eligible picks or slates. The retry returned the
+same sealed capture and created no second file. Staging verified the read-only
+database session and refused real capture because its profile lacks a configured
+primary bookmaker and verified odds rights. Both publication archives had zero
+rows. The public web and football worker stayed on their existing releases.
+
+The production study uses source release `77bb18b6` and its private
+`goalhint-joint-study.timer`. It runs at 06:30 Kampala time from November 22.
+The service allows a five-minute start window and skips late or missed starts.
+In the November 21 receipts, 669 pre-cutoff fixtures had both a fresh odds
+receipt and a sealed qualified Local Engine forecast by 06:30. There were 676
+by 09:30, by which time another 37 fixtures had crossed cutoff. These counts
+measure input overlap and include forecasts that cannot form eligible slates.
+
+The initial fit window is November 22 to December 20, 2026. Its untouched
+holdout is December 23, 2026 to January 20, 2027. The end dates are exclusive,
+and the November 21 smoke capture falls outside both windows. The windows
+produce an insufficient report if the evidence floors are unmet. Public
+automatic publishing remains disabled and requires independently reviewed
+whole-slip evidence and a verified publisher binding.
