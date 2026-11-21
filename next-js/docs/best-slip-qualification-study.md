@@ -111,3 +111,21 @@ and the November 21 smoke capture falls outside both windows. The windows
 produce an insufficient report if the evidence floors are unmet. Public
 automatic publishing remains disabled and requires independently reviewed
 whole-slip evidence and a verified publisher binding.
+
+## Revised eligibility rollout
+
+On November 21, the same clean web package from `97b85700` passed on staging
+before production promotion. Both hosts verified all 88 required migrations.
+Best Slips, filtered archive and counts, Builder, and Matches passed over HTTPS.
+The production collector was updated from `27a88345` and its next capture
+remained November 22 at 06:30 Kampala time. The revised scope uses separate
+files and retains the earlier smoke capture unchanged. The initial fit and
+holdout dates above apply to the revised scope.
+
+A revised read-only production probe at 18:36 Kampala time examined 233
+fixtures and found zero eligible picks. At 18:38, nineteen featured picks
+preserved valid bookmaker prices and four also had a supported settlement
+market and qualified sealed forecast. None of those four had a price from
+the configured bookmaker. The one priced featured pick from that bookmaker
+used a market outside the supported settlement scope. The public archive
+remained empty. Automatic publication still requires whole-slip qualification.
