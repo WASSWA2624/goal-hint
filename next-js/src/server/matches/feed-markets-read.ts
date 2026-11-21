@@ -47,9 +47,11 @@ export async function readStoredFeedMarkets(database: DatabaseRuntime, competiti
       if (id) marketPicks.add(id);
     }
     for (const { markets } of projections.values()) {
-      for (const { definition, selected } of markets) {
-        const id = feedMarketPickId(definition.key, selected.selection);
-        if (id) marketPicks.add(id);
+      for (const { definition, selected, selections } of markets) {
+        for (const { key } of selections ?? [{ key: selected.selection }]) {
+          const id = feedMarketPickId(definition.key, key);
+          if (id) marketPicks.add(id);
+        }
       }
     }
     return [...marketPicks].sort();

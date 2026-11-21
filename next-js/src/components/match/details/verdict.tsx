@@ -6,12 +6,14 @@ import { memo } from "react";
 import styled from "styled-components";
 import { PredictionOdds, PredictionOutcome } from "@/components/match/prediction-presentation";
 import { predictionDescription } from "@/domain/prediction-label";
-import { detailRecordNotices } from "@/domain/detail-presentation";
-import { detailMarketValue, featuredFamily, liveStanding, marketRow, selectedDetailPrice } from "@/domain/match-details";
+import { bookmakerOddsSource, detailRecordNotices } from "@/domain/detail-presentation";
+import { isFeaturedPickSuppressed } from "@/domain/fixture-snapshot";
+import { displayMarketOddsPrice } from "@/domain/in-play-odds";
+import { currentFeaturedOutcome, detailMarketValue, featuredFamily, liveStanding, marketRow, selectedDetailPrice } from "@/domain/match-details";
 import { ForecastValueLabel } from "../forecast-labels";
 import { toUtcIsoString } from "@/domain/calendar";
 import { openDetailTab } from "@/domain/match-detail-tabs";
-import type { MarketFamily } from "@/domain/markets";
+import type { MarketFamily, MarketSource } from "@/domain/markets";
 import { media } from "@/styles/theme";
 import { contentGutter, desktopContentPadding } from "@/components/ui/layout";
 import { DetailOutcome } from "./match-banner";
@@ -77,9 +79,9 @@ const Publication = styled.p`
 `;
 
 /** Keep attribution and stale-result warnings beside the pick on every viewport and in the initial HTML. */
-function PredictionRecord() {
+function PredictionRecord({ source }: { source?: MarketSource | undefined }) {
   const { data, messages } = useStableDetails();
-  const notices = detailRecordNotices(data).filter(key => key !== "history.status.current");
+  const notices = detailRecordNotices(data, source).filter(key => key !== "history.status.current");
   const publishedAt = data.snapshot?.publishedAt;
   return notices.length > 0 || publishedAt !== undefined ? <Publication data-prediction-record>
     {notices.length > 0 && <span>{notices.map(key => messages.text(key)).join(" · ")}</span>}
@@ -100,26 +102,34 @@ export const Verdict = memo(function Verdict() {
   if ("gated" in data.history && snapshot) {
     return <Box><UnlockPanel locale={locale} signedIn={data.access.signedIn} returnTo={data.route.path} /></Box>;
   }
-  const featured = featuredFamily(data), row = featured ? marketRow(data, featured) : null;
-  if (!featured || !row?.item) return <Box aria-labelledby="verdict-title" data-featured-pick="none">
-    <Eyebrow><h2 id="verdict-title">{messages.text("details.verdict")}</h2></Eyebrow>
-    <strong>{messages.text("details.noPick")}</strong>
+  const selected = data.fixture.featuredPrediction?.featuredQuote ? currentFeaturedOutcome(data) : null;
+  const featured = selected?.family ?? featuredFamily(data), row = featured && !selected ? marketRow(data, featured) : null;
+  if (!featured || !selected && !row?.item) return <Box aria-labelledby="verdict-title" data-featured-pick="none">
+    <Eyebrow><h2 id="verdict-title">{messages.text(data.fixture.retrospectiveSuppression ? "touchline.retrospective" : "details.verdict")}</h2></Eyebrow>
+    <strong>{messages.text(data.selection === "applicable" && isFeaturedPickSuppressed(data.fixture) ? "match.noRecommendedPick" : "details.noPick")}</strong>
   </Box>;
-  const item = row.item, price = selectedDetailPrice(data, featured), standing = liveStanding(data, featured);
-  const pick = predictionDescription(messages, item.market.selection), chance = percent(messages, item.market.selectedProbability);
-  const settled = snapshot?.applicability === "historical" ? null : row.outcome?.status ?? (snapshot?.applicability === "void" ? "void" : null);
+  const item = row?.item, price = selected ? selected.odds && displayMarketOddsPrice(selected.odds) : selectedDetailPrice(data, featured);
+  const standing = liveStanding(data, featured);
+  const pick = selected?.selectionLabel ?? predictionDescription(messages, item!.market.selection);
+  const chance = percent(messages, selected?.probability ?? item!.market.selectedProbability);
+  const market = selected?.label ?? marketName(messages, featured);
+  const exactQuote = selected?.featuredQuote;
+  const attribution = exactQuote ? bookmakerOddsSource(exactQuote, messages) : undefined;
+  const expectedReturn = selected?.featuredExpectedNetReturn !== undefined ? Number(selected.featuredExpectedNetReturn) : detailMarketValue(data, featured);
+  const settled = snapshot?.applicability === "historical" ? null : row?.outcome?.status ?? (snapshot?.applicability === "void" ? "void" : null);
   const oddsLabel = messages.text("details.odds");
   return <Box aria-labelledby="verdict-title" data-verdict={featured} data-featured-pick={featured}>
     <Eyebrow><h2 id="verdict-title">{messages.text("details.verdict")}</h2>
       {standing ? <Standing standing={standing} /> : settled && settled !== "pending" ? <DetailOutcome status={settled} /> : null}</Eyebrow>
-    <Pick type="button" $family={featured} onClick={() => update((current) => ({ ...openDetailTab(current, "markets"), market: featured }))}
-      aria-label={[messages.text("details.featuredOpen", { market: marketName(messages, featured), pick, probability: chance }),
-        price ? `${oddsLabel}: ${price}` : null].filter(Boolean).join(". ")}>
-      <span data-pick><strong><PredictionOutcome messages={messages} selection={item.market.selection} /></strong><small>{marketName(messages, featured)}
-        <PredictionOdds odds={price} /></small>
-        <ForecastValueLabel expectedReturn={detailMarketValue(data, featured)} messages={messages} /></span>
+    <Pick type="button" $family={featured} onClick={() => update((current) => ({ ...openDetailTab(current, "markets"),
+      ...(selected?.code ? { marketCategory: "goals" } : { market: featured }) }))}
+      aria-label={[messages.text("details.featuredOpen", { market, pick, probability: chance }),
+        price ? `${oddsLabel}: ${price}` : null, attribution].filter(Boolean).join(". ")}>
+      <span data-pick><strong>{selected ? pick : <PredictionOutcome messages={messages} selection={item!.market.selection} />}</strong><small>{market}
+        <PredictionOdds odds={price} title={attribution} /></small>
+        <ForecastValueLabel expectedReturn={expectedReturn} messages={messages} /></span>
       <span data-chance><b>{chance}</b><small>{messages.text("details.probability")}</small></span>
     </Pick>
-    <PredictionRecord />
+    <PredictionRecord source={selected?.source} />
   </Box>;
 });

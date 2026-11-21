@@ -1,7 +1,6 @@
 import "server-only";
 import { kickoffTimeWindows } from "../../domain/kickoff-time.ts";
 import { completedFixtureStatuses, playedFinalFixtureStatuses } from "../../domain/market-settlement.ts";
-import { overlapsNovemberReplay } from "../../domain/november-replay.ts";
 
 import { addReportingDays, createPredictionWindow, type PredictionWindow, type ReportingDateRange, type ReportingDate, type UtcInstant } from "../../domain/calendar.ts";
 import { getDayBoundsInTimeZone } from "../../domain/device-calendar.ts";
@@ -80,7 +79,7 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
   const pickSelection = preferRecommendation ? Prisma.sql`CASE WHEN ${chosen} THEN JSON_UNQUOTE(JSON_EXTRACT(rp.feedRecommendation,
     '$.selection')) ELSE m.selection END` : Prisma.sql`m.selection`;
   const exactOutcome = Boolean(query.marketPicks?.length);
-  const replayScope = publishedForecasts && overlapsNovemberReplay(range.window) && (exactOutcome || !isAnyMarkets(query.markets) ||
+  const replayScope = publishedForecasts && (exactOutcome || !isAnyMarkets(query.markets) ||
     !isAnyProbability(query.probability) || Boolean(query.odds) || query.picks === "only" || publishedOnly || query.sort.by === "probability");
   const projected = exactOutcome || replayScope ? feedSelectedPickJoin(query, displayedSet, replayScope, providerOdds) : null;
   const displayUsesProjection = exactOutcome ? Prisma.sql`TRUE` : projected?.replayActive ?? Prisma.sql`FALSE`;

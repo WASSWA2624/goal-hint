@@ -32,6 +32,17 @@ async function observed(rows, options = {}) {
 }
 const row = (id = 101, overrides = {}) => rawOddsRow(id, overrides.kickoff ?? KICKOFF, { update: offsetTime(NOW - 60_000), ...overrides });
 
+test('explicitly suspended pre-match outcomes are excluded before a bookmaker receipt can seal them', async () => {
+  const fixture = row();
+  const [bet] = fixture.bookmakers[0].bets;
+  bet.values[0].suspended = true;
+  bet.values[0].odd = '0';
+  const { result } = await observed([fixture]);
+  const [book] = result.data[0].bookmakers;
+  assert.equal(book.bets.find(({ id }) => id === bet.id).values.some(({ label }) => label === bet.values[0].value), false);
+  assert.ok(book.bets.find(({ id }) => id === bet.id).values.length);
+});
+
 test('odds policies and requests are strict, frozen and bound to one documented bookmaker', () => {
   const policy = parseOddsPolicy(oddsPolicy());
   assert.ok(Object.isFrozen(policy));

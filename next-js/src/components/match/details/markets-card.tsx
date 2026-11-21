@@ -8,7 +8,7 @@ import styled from "styled-components";
 import { PredictionOdds, PredictionOutcome, ProbabilityBar } from "@/components/match/prediction-presentation";
 import { ForecastSourceLabel, ForecastValueLabel } from "@/components/match/forecast-labels";
 import { predictionDescription } from "@/domain/prediction-label";
-import { detailAnalysis } from "@/domain/detail-presentation";
+import { bookmakerOddsSource, detailAnalysis } from "@/domain/detail-presentation";
 import { fullDetailSnapshot } from "@/domain/detail-snapshot";
 import { SubscriberNotice } from "@/components/members/subscriber-notice";
 import { currentFeaturedOutcome, detailMarketValue, exclusiveFamily, featuredFamily, liveStanding, marketCategoryMembers, marketOutcomes, marketRow, selectedDetailPrice, visibleMarkets } from "@/domain/match-details";
@@ -30,7 +30,6 @@ import {
 } from "./details-ui";
 import { useEmbeddedSection, useReturnFocus } from "./section-card";
 import { marketName, percent } from "./labels";
-import { historicalReplayOddsSource } from "./touchline-featured";
 
 const Search = styled(SearchBar)`min-inline-size: min(100%, var(--gh-size-48));`;
 /** Narrow cards drop the probability bar and keep the percentage; wide cards show both. */
@@ -280,9 +279,9 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
   const snapshot = fullDetailSnapshot(data);
   // As on the verdict, only a published forecast is locked.
   if ("gated" in data.history && data.snapshot) return <SubscriberRow><SubscriberNotice kind="markets" signedIn={data.access.signedIn} returnTo={data.route.path} /></SubscriberRow>;
-  const replayMarkets = data.selection === "applicable" ? data.retrospectiveMarkets : null;
+  const replayMarkets = data.selection === "applicable" && data.retrospectiveMarkets?.length ? data.retrospectiveMarkets : null;
   const current = embedded ? currentFeaturedOutcome(data) : null;
-  const featured = embedded ? current ? current.key === current.family ? current.family : null : featuredFamily(data) : null;
+  const featured = embedded ? current ? current.key === current.family && !current.featuredQuote ? current.family : null : featuredFamily(data) : null;
   const goalMarkets = data.extendedMarkets?.markets.filter(({ key, source }) => source !== "market-implied" &&
     key !== "goal:full-time:totals:total:2.5:binary") ?? [];
   const published = replayMarkets?.length ?? (snapshot?.markets.filter(entry => entry.market.family !== featured).length ?? 0) + goalMarkets.length;
@@ -319,7 +318,7 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
               const Icon = familyIcon[pick.family];
               const price = pick.historicalOdds && pick.odds ? displayMarketOddsPrice(pick.odds) : null;
               const oddsLabel = price && pick.historicalOdds ?
-                `${messages.text("touchline.recoveredOdds")} ${price} · ${historicalReplayOddsSource(pick.historicalOdds, messages)}` : null;
+                `${messages.text("touchline.recoveredOdds")} ${price} · ${bookmakerOddsSource(pick.historicalOdds, messages)}` : null;
               return <li key={pick.key}><MarketRow as="div" $family={pick.family} data-retrospective-market>
                 <span data-name><IconBadge $accent={familyAccent[pick.family]}><Icon /></IconBadge><span>{pick.label}</span></span>
                 <span data-pick><span><span>{pick.selectionLabel}</span>

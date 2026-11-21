@@ -119,12 +119,16 @@ export function sameCardFixture(previous: FixtureSnapshot, next: FixtureSnapshot
     previous.forecast?.updateDelayed === next.forecast?.updateDelayed && samePrices(previous.prices, next.prices) &&
     sameMarketOdds(previous.marketOdds, next.marketOdds) && sameFeatured(previous.featuredPrediction, next.featuredPrediction) &&
     sameFeatured(previous.filteredPrediction, next.filteredPrediction) &&
+    previous.retrospectiveSuppression?.revisionId === next.retrospectiveSuppression?.revisionId &&
     previous.retrospective?.revisionId === next.retrospective?.revisionId &&
     sameFeatured(previous.retrospective?.pick, next.retrospective?.pick);
 }
 function sameFeatured(left: FixtureSnapshot["featuredPrediction"], right: FixtureSnapshot["featuredPrediction"]): boolean {
   return left === right || !!left && !!right && left.key === right.key && left.selection === right.selection &&
-    left.probability === right.probability && left.odds === right.odds && left.source === right.source;
+    left.probability === right.probability && left.odds === right.odds && left.source === right.source &&
+    left.featuredExpectedNetReturn === right.featuredExpectedNetReturn &&
+    left.featuredQuote?.bookmakerId === right.featuredQuote?.bookmakerId && left.featuredQuote?.bookmakerName === right.featuredQuote?.bookmakerName &&
+    left.featuredQuote?.observedAt === right.featuredQuote?.observedAt && left.featuredQuote?.providerUpdatedAt === right.featuredQuote?.providerUpdatedAt;
 }
 function samePrices(previous: FixtureSnapshot["prices"], next: FixtureSnapshot["prices"]): boolean {
   const left = previous ?? [], right = next ?? [];

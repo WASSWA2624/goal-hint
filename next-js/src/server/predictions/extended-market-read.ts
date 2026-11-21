@@ -18,16 +18,27 @@ import { readImpliedMarketSettlement, type ImpliedMarketSettlementRevision } fro
 type Tx = Prisma.TransactionClient;
 const pending = Object.freeze({ status: "pending" as const, reason: "awaiting-final-result", correctedAt: null });
 const rankingMarket = publicExtendedMarketSchema.shape;
+const rankingSelection = rankingMarket.selections.element.shape;
+const rankingDerivation = z.discriminatedUnion("available", [z.object({ available: z.literal(false) }),
+  z.object({ available: z.literal(true), market: z.object({ definition: z.object({ key: rankingMarket.key,
+    label: rankingMarket.label, code: rankingMarket.code }), source: z.enum(["local-poisson", "ai-score-distribution"]),
+    selections: z.array(z.object({ key: rankingMarket.selection, label: rankingMarket.selectionLabel,
+      winProbability: rankingMarket.selectedProbability, outcomes: rankingSelection.settlementProbabilities.unwrap() })).min(2).max(1000),
+  }) }),
+]);
 const rankingExtension = z.object({ revisionId: historyId, contentHash: z.string(),
-  markets: z.array(z.object({ derivation: z.discriminatedUnion("available", [z.object({ available: z.literal(false) }),
-    z.object({ available: z.literal(true), market: z.object({ definition: z.object({ key: rankingMarket.key,
-      label: rankingMarket.label, code: rankingMarket.code }), source: z.enum(["local-poisson", "ai-score-distribution"]),
-      selections: z.array(z.object({ key: rankingMarket.selection, label: rankingMarket.selectionLabel,
-        winProbability: rankingMarket.selectedProbability })).min(2).max(1000) }) }),
-  ]) })).max(256) });
+  markets: z.array(z.object({ derivation: rankingDerivation, localDerivation: rankingDerivation.optional() })).max(256) });
+export type FeaturedGoalMarkets = Readonly<{ published: readonly FeaturedGoalMarket[]; local: readonly FeaturedGoalMarket[] }>;
+
+function rankingGoalMarket(derivation: z.infer<typeof rankingDerivation>, includeSettlement: boolean): FeaturedGoalMarket | null {
+  if (!derivation.available) return null;
+  const { definition, source, selections } = derivation.market;
+  return { ...definition, source, selections: selections.map(({ key, label, winProbability, outcomes }) =>
+    ({ key, label, probability: winProbability, ...(includeSettlement ? { settlementProbabilities: outcomes } : {}) })) };
+}
 
 /** Read the sealed goal sets for one bounded upcoming page and return only ranking inputs. */
-export async function readFeaturedGoalMarkets(tx: Tx, revisionIds: readonly string[]): Promise<ReadonlyMap<string, readonly FeaturedGoalMarket[]>> {
+export async function readFeaturedGoalMarkets(tx: Tx, revisionIds: readonly string[]): Promise<ReadonlyMap<string, FeaturedGoalMarkets>> {
   if (!revisionIds.length) return new Map();
   const rows = await tx.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT *, integrity = SHA2(CAST(body AS CHAR), 256) AS validIntegrity
     FROM GoalMarketExtension WHERE revisionId IN (${Prisma.join(revisionIds)})`);
@@ -35,13 +46,14 @@ export async function readFeaturedGoalMarkets(tx: Tx, revisionIds: readonly stri
     assertHistorySeal(row.validIntegrity);
     const extension = rankingExtension.parse(historyJson(row.body));
     if (extension.revisionId !== row.revisionId || extension.contentHash !== row.contentHash) return historyFail("invalid-state");
-    const markets = extension.markets.flatMap(({ derivation }) => {
-      if (!derivation.available) return [];
-      const { definition, source, selections } = derivation.market;
-      return [{ key: definition.key, label: definition.label, code: definition.code, source,
-        selections: selections.map(({ key, label, winProbability }) => ({ key, label, probability: winProbability })) }];
-    });
-    return [extension.revisionId, markets];
+    const published: FeaturedGoalMarket[] = [], local: FeaturedGoalMarket[] = [];
+    for (const { derivation, localDerivation } of extension.markets) {
+      const primary = rankingGoalMarket(derivation, false);
+      const candidate = rankingGoalMarket(localDerivation ?? derivation, true);
+      if (primary) published.push(primary);
+      if (candidate?.source === "local-poisson") local.push(candidate);
+    }
+    return [extension.revisionId, { published, local }];
   }));
 }
 

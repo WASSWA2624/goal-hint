@@ -10,6 +10,7 @@ import { createFootballCatalogStore } from "../src/server/football/catalog-mysql
 import { createFootballCatalogImporter } from "../src/server/football/catalog-service.ts";
 import { localGoalModelVersion } from "../src/server/intelligence/local-goals-model.ts";
 import { loadNovemberReplayEvidence } from "../src/server/intelligence/november-replay-evidence.ts";
+import { preparePricedNovemberReplay } from "../src/server/intelligence/november-replay-featured.ts";
 import { buildNovemberReplayMarkets } from "../src/server/intelligence/november-replay-model.ts";
 import { createMysqlNovemberReplayStore, readNovemberReplayProjections } from "../src/server/intelligence/november-replay-store.ts";
 import { encodeShadowArchive } from "../src/server/intelligence/shadow-store.ts";
@@ -56,11 +57,13 @@ async function archiveLegacyDraft(database, current, expectedGoals) {
   return { id, draft, selected };
 }
 
-test("reviewed replay persists verified evidence and only its owner can reverse the display", { timeout: 360_000 }, async (t) => {
+test("reviewed replay persists verified evidence and only its owner can reverse the display", { timeout: 480_000 }, async (t) => {
   await withPredictionPipeline(t, async (p) => {
     await p.instance.executeAdmin(`
       GRANT SELECT, INSERT ON goal_hint_test.NovemberReplayRevision TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT ON goal_hint_test.NovemberReplayAction TO 'cutoff_app'@'127.0.0.1';
+      GRANT SELECT ON goal_hint_test.OddsImportBatch TO 'cutoff_app'@'127.0.0.1';
+      GRANT SELECT ON goal_hint_test.ProviderOddsSnapshot TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT (fixtureId,changedAt), UPDATE (revisionId,sourceRevisionId,cycleId,scheduleVersion,kickoffAt,
         evidenceCutoffAt,activationOperationId,changedAt,integrity,body) ON goal_hint_test.NovemberReplayProjection TO 'cutoff_app'@'127.0.0.1';
     `);
@@ -165,7 +168,53 @@ test("reviewed replay persists verified evidence and only its owner can reverse 
     const later = await store.activate({ ...input, operationId: "later-reviewed-activation" });
     await assert.rejects(store.rollback({ ...rollback, operationId: "stale-rollback" }), denied("projection-owned"));
     assert.equal((await readProjection()).get(fixtureId)?.revisionId, later.revisionId);
+    const originalPointer = (await readProjection()).get(fixtureId);
+    const replayAsOf = p.now();
+    const { evidence: pricedEvidence, result: pricedResult } = await p.a.query((tx) =>
+      preparePricedNovemberReplay(tx, occurrence, replayAsOf));
+    assert.ok(pricedResult, pricedEvidence.reason);
+    assert.equal(pricedResult.featuredDecision.status, "abstained");
+    assert.equal(pricedResult.selected, null);
+    assert.ok(pricedResult.decisionAt < kickoffAt);
+    const revised = await store.stage({ ...stage, ...pricedResult, replayAsOf, generatedAt: p.now(),
+      teams: [occurrence.homeTeamId, occurrence.awayTeamId], evidenceCutoffAt: pricedEvidence.cutoffAt,
+      evidenceHash: pricedEvidence.evidenceHash, evidenceReceiptIds: pricedEvidence.evidenceReceiptIds });
+    const [revisedDiff] = await store.activationDiff([revised.id]);
+    assert.equal(revisedDiff.previousProjectionRevisionId, later.revisionId);
+    assert.equal(revisedDiff.eligible, true, revisedDiff.reason);
+    const replacement = { revisionId: revised.id, operationId: "suppress-unpriced" };
+    await assert.rejects(store.activate(replacement), denied("projection-owned"));
+    await store.activate({ ...replacement, expectedProjectionRevisionId: later.revisionId });
+    const active = (await readProjection()).get(fixtureId);
+    assert.equal(active?.selected, null);
+    assert.deepEqual(active?.featuredDecision, pricedResult.featuredDecision);
+    assert.equal(active?.markets.length, originalPointer?.markets.length);
+    assert.deepEqual(await p.history.findRevision(sourceRevisionId), published.revision);
+    await store.rollback({ fixtureId, operationId: "restore-older-projection", activationOperationId: replacement.operationId });
+    assert.deepEqual((await readProjection()).get(fixtureId), originalPointer);
     await assert.rejects(p.instance.executeAdmin(`UPDATE NovemberReplayRevision SET stagedAt=stagedAt WHERE id='${staged.id}';`));
     assert.deepEqual(await p.history.findRevision(sourceRevisionId), published.revision);
-  }, { migrationTimeoutMs: 240_000 });
+
+    // Exercise the new storage constraint independently from occurrence-proof
+    // checks. The locked November fixture above used the legacy CHECK branch.
+    const owner = await p.a.query((tx) => tx.footballFixture.findFirstOrThrow({
+      where: { externalId: 60000n }, select: { id: true, homeTeamId: true, awayTeamId: true },
+    }));
+    const laterKickoffAt = Date.parse("2027-01-01T15:00:00Z");
+    p.setTime(laterKickoffAt + 30_000);
+    const times = { kickoffAt: laterKickoffAt, evidenceCutoffAt: laterKickoffAt - 600_000,
+      decisionAt: laterKickoffAt - 300_001, generatedAt: p.now() };
+    const withoutSource = { fixtureId: owner.id, cycleId: null, sourceRevisionId: null, scheduleVersion: null,
+      teams: [owner.homeTeamId, owner.awayTeamId] };
+    const outsideNovember = await store.stage({ ...stage, ...pricedResult, ...times, ...withoutSource, replayAsOf: p.now() });
+    const body = encodeShadowArchive({ ...withoutSource, ...times, revisionId: outsideNovember.id, activatedAt: p.now(),
+      selected: null, markets: active.markets, featuredDecision: pricedResult.featuredDecision });
+    await p.a.transaction(async (tx) => {
+      await tx.$executeRaw`INSERT INTO NovemberReplayProjection (fixtureId,changedAt) VALUES (${owner.id},${new Date(p.now())})`;
+      assert.equal(await tx.$executeRaw`UPDATE NovemberReplayProjection SET revisionId=${outsideNovember.id},kickoffAt=${new Date(times.kickoffAt)},
+        evidenceCutoffAt=${new Date(times.evidenceCutoffAt)},activationOperationId='outside-november-test',
+        integrity=SHA2(CAST(JSON_EXTRACT(${body},'$') AS CHAR CHARACTER SET utf8mb4),256),body=JSON_EXTRACT(${body},'$')
+        WHERE fixtureId=${owner.id}`, 1);
+    });
+  }, { migrationTimeoutMs: 300_000 });
 });

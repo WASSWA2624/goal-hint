@@ -1,5 +1,6 @@
 import "server-only";
 import { createRecommendationQuoteLoader } from "../odds/recommendation-quotes.ts";
+import { localFeaturedDecisionVersion } from "../../domain/local-featured-decision.ts";
 import { evidenceFirstRecommendationPolicy } from "../../domain/recommendation.ts";
 import { goalProfileForLocalFirstCascade, LEGACY_LOCAL_FIRST_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE,
   QUALIFIED_FORECAST_CASCADE, type LocalFirstForecastCascade } from "../fallback/fallback-contract.ts";
@@ -215,13 +216,14 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     if (coordinated && !localFirstForecasts && aiModel?.evaluation.status !== "evaluated") aiModel = null;
     const sourceOrder = coordinated || localFootball ? "ai-first" : liveSourceOrder(policy);
     const localEvidence = localFirstForecasts || sourceOrder === "ai-first";
-    const localFirstLifecycle = (cascade: LocalFirstForecastCascade) => ({
+    const localFirstLifecycle = (cascade: LocalFirstForecastCascade, featuredPolicy?: typeof localFeaturedDecisionVersion) => ({
       engineVersion: evidenceFingerprint([cascade, goalProfileForLocalFirstCascade(cascade),
-        evidenceFirstRecommendationPolicy.version, apiFallbackEnabled, LOCAL_GOALS_VERSION, API_FOOTBALL_CONTRACT_VERSION]),
+        evidenceFirstRecommendationPolicy.version, apiFallbackEnabled, LOCAL_GOALS_VERSION, API_FOOTBALL_CONTRACT_VERSION,
+        ...(featuredPolicy ? [featuredPolicy] : [])]),
       marketRegistryVersion: cascade === LEGACY_LOCAL_FIRST_FORECAST_CASCADE ? LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION : LOCAL_FIRST_MARKET_REGISTRY_VERSION,
     });
     const selection = Object.freeze({ ...selectionPolicy(policy, refs, workload), ...(coordinated || localFirstForecasts ? { forecastLifecycle: {
-      ...(localFirstForecasts ? localFirstLifecycle(LOCAL_FIRST_FORECAST_CASCADE) : {
+      ...(localFirstForecasts ? localFirstLifecycle(LOCAL_FIRST_FORECAST_CASCADE, localFeaturedDecisionVersion) : {
         engineVersion: evidenceFingerprint([QUALIFIED_FORECAST_CASCADE, evidenceFirstRecommendationPolicy.version, aiModel,
           LOCAL_GOALS_VERSION, API_FOOTBALL_CONTRACT_VERSION]),
         marketRegistryVersion: MARKET_REGISTRY_VERSION,
@@ -506,7 +508,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     const refresh = createPredictionRefreshService({ type: LIVE_REFRESH_TYPE, handlerVersion: 1, store: refreshStore,
       selection: selectionStore, authority: authorities.refresh,
       ...(selection.forecastLifecycle ? { forecastLifecycle: selection.forecastLifecycle } : {}),
-      ...(localFirstForecasts ? { compatibleForecastLifecycles: [localFirstLifecycle(LEGACY_LOCAL_FIRST_FORECAST_CASCADE)] } : {}),
+      ...(localFirstForecasts ? { compatibleForecastLifecycles: [localFirstLifecycle(LOCAL_FIRST_FORECAST_CASCADE),
+        localFirstLifecycle(LEGACY_LOCAL_FIRST_FORECAST_CASCADE)] } : {}),
       ...(!localFirstForecasts ? { prepare: async (member, context) => {
         const football = await footballPreparation?.(member, context);
         let news: readonly import("../evidence/evidence-contract.ts").EvidenceSource[] = [];

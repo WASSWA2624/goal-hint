@@ -1,15 +1,27 @@
 import type { StoredDetailSnapshot, MatchDetailResponse } from "./match-detail.ts";
 import { fullDetailSnapshot } from "./detail-snapshot.ts";
-import type { MarketFamily } from "./markets.ts";
+import type { MarketFamily, MarketSource } from "./markets.ts";
 import { isSafeEvidenceUrl } from "./evidence-url.ts";
 import { marketRow } from "./match-details.ts";
-import type { TextKey } from "../i18n/messages.ts";
+import { utcInstantFromEpochMilliseconds } from "./calendar.ts";
+import type { Messages, TextKey } from "../i18n/messages.ts";
+
+export function bookmakerOddsSource({ bookmakerId, bookmakerName, observedAt, providerUpdatedAt }: Readonly<{
+  bookmakerId: number; bookmakerName: string | null; observedAt: number; providerUpdatedAt: number | null;
+}>, messages: Messages): string {
+  const format = (at: number) => messages.reportingInstant(utcInstantFromEpochMilliseconds(at));
+  const bookmaker = bookmakerName ?? messages.text("touchline.bookmakerNumber", { id: messages.number(bookmakerId, { useGrouping: false }) });
+  const retrieved = `${messages.text("detail.retrieved")} ${format(observedAt)}`;
+  return providerUpdatedAt === null ? `${bookmaker} · ${retrieved}`
+    : [bookmaker, retrieved, messages.text("liveMatch.updated", { time: format(providerUpdatedAt) })].join(" · ");
+}
 
 /** The visible pick keeps its own revision's provenance and applicability, even when another revision exists. */
-export function detailRecordNotices(data: MatchDetailResponse): readonly TextKey[] {
+export function detailRecordNotices(data: MatchDetailResponse, featuredSource?: MarketSource): readonly TextKey[] {
   const fixture = data.fixture, snapshot = fullDetailSnapshot(data), notices: TextKey[] = [];
   if (snapshot) {
-    for (const source of new Set(snapshot.markets.map((item) => item.source.kind))) notices.push(`market.source.short.${source}`);
+    for (const source of featuredSource ? [featuredSource] : new Set(snapshot.markets.map((item) => item.source.kind)))
+      notices.push(`market.source.short.${source}`);
     if (snapshot.markets.some((item) => item.source.provisional)) notices.push("match.provisional");
     notices.push(`history.status.${snapshot.applicability}`);
   }

@@ -25,6 +25,7 @@ export function gateFixture<T extends StoredFixtureSnapshot>(fixture: T, access:
     ...(fixture.featuredPrediction === undefined ? {} : { featuredPrediction: null }),
     ...(fixture.filteredPrediction === undefined ? {} : { filteredPrediction: null }),
     ...(fixture.retrospective === undefined ? {} : { retrospective: null }),
+    ...(fixture.retrospectiveSuppression === undefined ? {} : { retrospectiveSuppression: null }),
     forecast: forecast ? { gated: true, runId: forecast.runId, revisionId: forecast.revisionId,
     publishedAt: forecast.publishedAt, families: families(forecast.markets), probabilities: [],
     ...(forecast.runSequence !== undefined ? { runSequence: forecast.runSequence } : {}),

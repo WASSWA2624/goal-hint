@@ -13,7 +13,8 @@ import { countryCode, countryDisplayName, countryShortName } from "@/domain/coun
 import { compactLeagueName, compactMarketName } from "@/domain/compact-fixture-label";
 import { bestCardFamily, noPickReason } from "@/domain/feed-presentation";
 import { defaultMarkets } from "@/domain/feed-query";
-import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
+import { bookmakerOddsSource } from "@/domain/detail-presentation";
+import { isFeaturedPickSuppressed, type FixtureSnapshot } from "@/domain/fixture-snapshot";
 import { displayMarketOddsPrice, marketOddsPrice } from "@/domain/in-play-odds";
 import { forecastExpectedReturn } from "@/domain/forecast-value";
 import { cardResultStatus, featuredCardPrediction, hasFinalScoreStatus, matchCardScore, sameCardFixture, selectedCardPrediction, selectedCardPrice, snapshotCardPrediction, type CardSnapshotPick } from "@/domain/match-card";
@@ -565,11 +566,13 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const retrospective = publishedMarket && !snapshotPick ? fixture.retrospective : null;
   const filtered = publishedMarket && !snapshotPick ? fixture.filteredPrediction : undefined;
   const missingFilteredPick = filtered === null && gatedForecast === null;
+  const missingFeaturedPick = publishedMarket && !snapshotPick && filtered === undefined && gatedForecast === null && isFeaturedPickSuppressed(fixture);
+  const suppressPick = missingFilteredPick || missingFeaturedPick;
   const featured = retrospective?.pick ?? filtered ??
-    (publishedMarket && !snapshotPick && !missingFilteredPick && fixture.status === "scheduled" ? fixture.featuredPrediction : null);
+    (publishedMarket && !snapshotPick && !suppressPick && fixture.status === "scheduled" ? fixture.featuredPrediction : null);
   // Only a published eligible family is locked: forecast null means none was published, and the gated families already
   // name the published markets, so a filter outside them shows the subscriber's no-prediction reason.
-  const best = snapshotPick?.family ?? featured?.family ?? (missingFilteredPick ? null : bestCardFamily(fixture, eligible, !publishedMarket));
+  const best = snapshotPick?.family ?? featured?.family ?? (suppressPick ? null : bestCardFamily(fixture, eligible, !publishedMarket));
   const gated = lockedPrediction || (snapshotPick ? requiresAccess || gatedForecast !== null
     : !isCompletedFixtureStatus(fixture.status) && best !== null && (requiresAccess || gatedForecast !== null));
   const detailHref = matchHref(fixture.fixtureId, analysisSlug, locale);
@@ -584,7 +587,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const country = fixture.competition.country?.trim();
   const countryName = countryDisplayName(country);
   const flagUrl = countryFlagUrl(fixture);
-  const prediction = offline || gated || missingFilteredPick ? null : snapshotPick ? snapshotCardPrediction(snapshotPick)
+  const prediction = offline || gated || suppressPick ? null : snapshotPick ? snapshotCardPrediction(snapshotPick)
     : featured ? featuredCardPrediction(featured, retrospective ? null : fixture.forecast?.publishedAt ?? null,
       retrospective ? false : fixture.forecast?.provisional ?? true)
       : selectedCardPrediction(fixture, shownFamily, !publishedMarket);
@@ -598,19 +601,22 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     : featured || fixture.status === "live" ? null : selectedCardPrice(fixture, shownFamily, !publishedMarket);
   const replayPick = retrospective?.pick;
   const historicalReplayPrice = selection && replayPick?.historicalOdds && replayPick.odds ? displayMarketOddsPrice(replayPick.odds) : null;
-  const confirmedPrice = retrospective ? historicalReplayPrice : filtered ? filtered.odds : fixture.status === "live" ? livePrice : preMatchPrice;
+  const confirmedPrice = retrospective ? historicalReplayPrice : filtered ? filtered.odds : fixture.status === "live" ? livePrice
+    : preMatchPrice && featured?.featuredQuote ? displayMarketOddsPrice(preMatchPrice) : preMatchPrice;
   const price = !selection ? null : snapshotPick ? { price: snapshotPick.odds }
     : confirmedPrice ? { price: confirmedPrice } : storedPrice;
   const oddsKind = historicalReplayPrice ? "historical-pre-match"
-    : (price === storedPrice ? storedPrice?.recovery?.kind : undefined) ?? observation?.kind ?? (filtered && price ? "pre-match" : undefined);
+    : (price === storedPrice ? storedPrice?.recovery?.kind : undefined) ?? observation?.kind ?? ((featured?.featuredQuote || filtered) && price ? "pre-match" : undefined);
   const oddsCaption = messages.text("details.odds");
   const stackOddsCaption = `${oddsCaption}:`;
   const stackProbabilityCaption = `${messages.text("match.columns.probabilityCompact")}:`;
   const oddsLabel = historicalReplayPrice ? messages.text("touchline.recoveredOdds")
     : oddsKind === "pre-match" || oddsKind === "historical-pre-match" ? messages.text("touchline.preMatchOdds") : oddsCaption;
-  const oddsDescription = `${oddsLabel}: ${price?.price ?? messages.text("outcome.unavailable")}`;
+  const quote = featured?.featuredQuote ?? (retrospective?.featuredDecisionSealed ? replayPick?.historicalOdds : undefined);
+  const oddsDescription = `${oddsLabel}: ${price?.price ?? messages.text("outcome.unavailable")}${price && quote ? ` · ${bookmakerOddsSource(quote, messages)}` : ""}`;
   const market = prediction?.item.market;
-  const expectedReturn = !retrospective && market?.source ? forecastExpectedReturn(market.selectedProbability, preMatchPrice) : null;
+  const expectedReturn = !retrospective && market?.source ? featured?.featuredExpectedNetReturn !== undefined
+    ? Number(featured.featuredExpectedNetReturn) : forecastExpectedReturn(market.selectedProbability, preMatchPrice) : null;
   const source = prediction?.item.market.source;
   const sourceLabel = (compact: boolean) => source ? <ForecastSourceLabel source={source} messages={messages}
     label={retrospective && !phoneFeed ? messages.text("touchline.retrospective") : undefined}
@@ -648,9 +654,10 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     || fixture.status !== "scheduled" && fixture.status !== "unknown" && fixture.status !== result);
   const scoreDescription = final || fixture.status === "live" || snapshotPick && score
     ? matchScoreDescription(display, { home, away }, messages, final, snapshotPick !== undefined) : undefined;
-  const missing = gated || prediction ? null : noPickReason(fixture);
-  const noPickLabel = messages.text("match.noPick");
-  const reason = missing ? messages.text(`match.noPickReason.${missing}`) : null;
+  const missing = gated || prediction || missingFeaturedPick ? null : noPickReason(fixture);
+  const noPickLabel = messages.text(missingFeaturedPick ? "match.noRecommendedPick" : "match.noPick");
+  const reason = missing ? messages.text(`match.noPickReason.${missing}`)
+    : missingFeaturedPick && fixture.retrospectiveSuppression ? messages.text("touchline.retrospective") : null;
   const pickState = gated ? "subscriber" : !prediction ? "none" : settledOutcome(outcome) ? "settled" : "open";
   if (desktop) {
     const marketDescription = offline ? "Predictions are unavailable in the saved view."
@@ -729,8 +736,8 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
         <PickShort $family={shownFamily} $available={prediction !== null} data-ledger-field="prediction" aria-hidden="true"
           data-no-pick={missing ?? undefined}>
           {selection ? <PickLine data-pick-line="" data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection, selectionContext)}>{mobileSelection}</span>{sourceLabel(true)}</PickLine> : <>
-            <b data-mobile-only="">{noPickLabel}</b>
-            <span data-pick-value="" data-mobile-only="">{messages.text(`match.noPickReason.short.${missing!}`)}</span>
+            {missing && <b data-mobile-only="">{noPickLabel}</b>}
+            <span data-pick-value="" data-mobile-only="">{missing ? messages.text(`match.noPickReason.short.${missing}`) : noPickLabel}</span>
             <span data-pick-value="" data-desktop-only="">{noPickLabel}</span>
           </>}
         </PickShort>

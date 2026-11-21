@@ -19,13 +19,14 @@ test("football clocks retain minute zero, both stoppage periods and extra time",
 });
 
 test("the browser clock advances through a delayed minute and then holds the estimate", () => {
-  const clock = { phase: "first-half", minute: 1, observedAt: 100_000 };
-  assert.equal(liveClockLabel(clock, messages, 99_000).visible, "01:00");
-  assert.equal(liveClockLabel(clock, messages, 106_900).visible, "01:06");
-  assert.equal(liveClockLabel(clock, messages, 159_999).visible, "01:59");
-  assert.equal(liveClockLabel(clock, messages, 160_000).visible, "02:00");
-  assert.equal(liveClockLabel(clock, messages, 181_000).visible, "02:21");
-  assert.equal(liveClockLabel(clock, messages, 600_000).visible, "02:59");
+  const clock = { phase: "first-half", minute: 6, observedAt: 100_000 };
+  assert.equal(liveClockLabel(clock, messages, 99_000).visible, "06:00");
+  assert.equal(liveClockLabel(clock, messages, 101_000).visible, "06:01");
+  assert.equal(liveClockLabel(clock, messages, 106_900).visible, "06:06");
+  assert.equal(liveClockLabel(clock, messages, 159_999).visible, "06:59");
+  assert.equal(liveClockLabel(clock, messages, 160_000).visible, "07:00");
+  assert.equal(liveClockLabel(clock, messages, 181_000).visible, "07:21");
+  assert.equal(liveClockLabel(clock, messages, 600_000).visible, "07:59");
   assert.equal(liveClockLabel({ ...clock, phase: "half-time" }, messages, 181_000).visible, "HT");
 });
 
@@ -54,11 +55,11 @@ test("paused phases override stale minutes and missing clocks invent no time", (
 test("desktop badges center running time, explicit added minutes and named phases without inferring added time", () => {
   for (const [clock, badge, badgeTicks] of [
     [{ phase: "first-half", minute: 44, observedAt: 100_000 }, "45:59", true],
-    [{ phase: "first-half", minute: 45, stoppageMinutes: 2 }, "45+2", false],
-    [{ phase: "second-half", minute: 90, stoppageMinutes: 4 }, "90+4", false],
+    [{ phase: "first-half", minute: 45, stoppageMinutes: 2 }, "45+02", false],
+    [{ phase: "second-half", minute: 90, stoppageMinutes: 4 }, "90+04", false],
     [{ phase: "half-time", minute: 45, stoppageMinutes: 2 }, "HT", false],
     [{ phase: "extra-time", minute: 104, observedAt: 100_000 }, "ET 105:59", true],
-    [{ phase: "extra-time", minute: 120, stoppageMinutes: 1 }, "ET 120+1", false],
+    [{ phase: "extra-time", minute: 120, stoppageMinutes: 1 }, "ET 120+01", false],
     [{ phase: "break", minute: 105, stoppageMinutes: 1 }, "Break", false],
     [{ phase: "extra-time", minute: null }, "ET", false],
     [{ phase: "first-half", minute: null }, "Live", false],

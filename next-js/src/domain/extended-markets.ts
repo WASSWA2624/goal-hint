@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { bookmakerOddsId, oddsDisplayText } from "./bookmaker-odds.ts";
+import { featuredExpectedReturnSchema, localFeaturedQuoteSchema } from "./local-featured-decision.ts";
 import { parseDecimalOdds } from "./odds.ts";
 import { marketSources } from "./markets.ts";
 import { publicPolicy } from "./public-policy.ts";
@@ -19,17 +20,24 @@ const text = z.string().min(1).refine((value) => value === value.trim() && !/[\p
 const label = text.max(128), selectionLabel = text.max(512);
 const probability = z.number().finite().min(0).max(1);
 const outcomes = z.strictObject({ win: probability, "half-win": probability, push: probability, "half-loss": probability, loss: probability });
-export const featuredPredictionSchema = z.strictObject({ key: label, family: z.enum(publicPolicy.markets),
+const featuredPredictionFields = z.strictObject({ key: label, family: z.enum(publicPolicy.markets),
   label, code: label.max(16).nullable(), selection: label.max(64), selectionLabel, probability,
-  odds: z.string().refine((price) => parseDecimalOdds(price) !== null).nullable(), source: z.enum(marketSources) });
+  odds: z.string().refine((price) => parseDecimalOdds(price) !== null).nullable(), source: z.enum(marketSources),
+  featuredQuote: localFeaturedQuoteSchema.optional(), featuredExpectedNetReturn: featuredExpectedReturnSchema.optional(),
+});
+function qualifyingQuoteCoherent({ featuredQuote, featuredExpectedNetReturn, odds, source }: z.infer<typeof featuredPredictionFields>) {
+  return featuredQuote === undefined ? featuredExpectedNetReturn === undefined
+    : source === "local-engine" && odds === featuredQuote.decimal && featuredExpectedNetReturn !== undefined;
+}
+export const featuredPredictionSchema = featuredPredictionFields.refine(qualifyingQuoteCoherent);
 export type FeaturedPrediction = Readonly<z.infer<typeof featuredPredictionSchema>>;
 const observationInstant = z.number().int().nonnegative().max(253_402_300_799_999);
-export const retrospectivePredictionSchema = featuredPredictionSchema.extend({
+export const retrospectivePredictionSchema = featuredPredictionFields.extend({
   source: z.literal("local-engine"),
   historicalOdds: z.strictObject({ bookmakerId: bookmakerOddsId, bookmakerName: oddsDisplayText(128).nullable(),
     observedAt: observationInstant, providerUpdatedAt: observationInstant.nullable(),
   }).refine(({ observedAt, providerUpdatedAt }) => providerUpdatedAt === null || providerUpdatedAt <= observedAt).optional(),
-}).refine(({ odds, historicalOdds }) => (odds !== null) === (historicalOdds !== undefined));
+}).refine((pick) => qualifyingQuoteCoherent(pick) && (pick.odds !== null) === (pick.historicalOdds !== undefined));
 export type RetrospectivePrediction = Readonly<z.infer<typeof retrospectivePredictionSchema>>;
 export type FeaturedGoalMarket = Pick<PublicExtendedMarket, "key" | "label" | "code" | "source" | "selections">;
 

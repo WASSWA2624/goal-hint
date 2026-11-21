@@ -12,6 +12,7 @@ import { bookmakerMarketPrice } from "./bookmaker-odds.ts";
 import { forecastExpectedReturn } from "./forecast-value.ts";
 import { resultFor } from "./match-insight-presentation.ts";
 import { recommendationFamily } from "./recommendation-view.ts";
+import { isFeaturedPickSuppressed } from "./fixture-snapshot.ts";
 
 /**
  * Pure presentation rules for the match-details screen. Every value is read from the stored
@@ -74,6 +75,7 @@ export function selectedDetailPrice(data: MatchDetailResponse, family: MarketFam
 
 /** Use the displayed revision's frozen recommendation or rank its published picks. */
 export function featuredFamily(data: MatchDetailResponse): MarketFamily | null {
+  if (data.selection === "applicable" && isFeaturedPickSuppressed(data.fixture)) return null;
   const snapshot = fullDetailSnapshot(data);
   if (!snapshot) return null;
   const recommended = recommendationFamily(snapshot.recommendation, publicPolicy.markets);
@@ -86,9 +88,14 @@ export function featuredFamily(data: MatchDetailResponse): MarketFamily | null {
 }
 
 export function currentFeaturedOutcome(data: MatchDetailResponse) {
-  if (data.selection === "applicable" && data.fixture.retrospective) return data.fixture.retrospective.pick;
   const snapshot = fullDetailSnapshot(data);
-  if (snapshot?.applicability !== "current" || data.fixture.status !== "scheduled") return null;
+  if (data.selection !== "applicable") return null;
+  if (data.fixture.retrospective) return data.fixture.retrospective.pick;
+  if (isFeaturedPickSuppressed(data.fixture)) return null;
+  if (!snapshot || data.fixture.status !== "scheduled") return null;
+  if (data.fixture.featuredPrediction !== undefined && (snapshot.applicability === "current" || snapshot.applicability === "locked"))
+    return data.fixture.featuredPrediction;
+  if (snapshot.applicability !== "current") return null;
   return rankFixtureOutcomes(snapshot.markets, data.extendedMarkets?.markets ?? [],
     data.bookmakerOdds?.kind === "pre-match" ? data.bookmakerOdds : null, data.fixture.marketOdds, snapshot.recommendation);
 }

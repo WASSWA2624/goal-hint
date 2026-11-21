@@ -4,12 +4,15 @@ import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { openForecastDatabase } from "./lib/forecast-database-target.mjs";
 import { LOCAL_FIRST_MARKET_REGISTRY_VERSION } from "../src/domain/market-registry.ts";
+import { localFeaturedDecisionVersion } from "../src/domain/local-featured-decision.ts";
+import { novemberReplayRange, resolveReplayRange } from "../src/domain/november-replay.ts";
 import { evidenceFingerprint } from "../src/server/evidence/evidence-input.ts";
 import { localGoalModelVersion } from "../src/server/intelligence/local-goals-model.ts";
 import { auditNovemberReplay } from "../src/server/intelligence/november-replay-audit.ts";
 import { evaluateNovemberReplay } from "../src/server/intelligence/november-replay-evaluation.ts";
-import { loadNovemberReplayEvidence, readNovemberReplayPage, readNovemberReplayTrainingMembership } from "../src/server/intelligence/november-replay-evidence.ts";
-import { buildNovemberReplayMarkets } from "../src/server/intelligence/november-replay-model.ts";
+import { readNovemberReplayPage, readNovemberReplayTrainingMembership } from "../src/server/intelligence/november-replay-evidence.ts";
+import { preparePricedNovemberReplay } from "../src/server/intelligence/november-replay-featured.ts";
+import { statusShowsPlay } from "../src/server/predictions/publication-eligibility.ts";
 
 const phases = ["canonical", "displaced"];
 const pageSize = 100;
@@ -58,17 +61,20 @@ async function inspectOccurrence(database, audit, occurrence, original, training
       reason: "normal-prospective-processing", cutoffAt: original.effectiveCutoffAt,
       evidenceHash: evidenceFingerprint({ auditedAt: audit.auditedAt, original }) };
   }
-  const evidence = await loadNovemberReplayEvidence(database, occurrence, audit.auditedAt, training);
-  const result = evidence.forecast && evidence.status === "qualified" ? buildNovemberReplayMarkets(evidence.forecast) : null;
+  const { evidence, result } = await database.query((tx) => preparePricedNovemberReplay(tx, occurrence, audit.auditedAt, training));
   const { fixtureId, kickoffAt } = occurrence;
   const input = result ? { fixtureId, kickoffAt, cycleId: evidence.scheduleVersion === null ? null : occurrence.cycleId,
     scheduleVersion: evidence.scheduleVersion, sourceRevisionId: evidence.scheduleVersion === null ? null : original?.sourceRevisionId ?? null,
     evidenceCutoffAt: evidence.cutoffAt, evidenceHash: evidence.evidenceHash, engineVersion: audit.engineVersion,
-    registryVersion: audit.registryVersion, artifactHash: evidence.forecast.hash, evidenceReceiptIds: evidence.evidenceReceiptIds,
+    registryVersion: audit.registryVersion, evidenceReceiptIds: evidence.evidenceReceiptIds,
+    replayAsOf: audit.auditedAt, teams: [occurrence.homeTeamId, occurrence.awayTeamId],
     generatedAt: Date.now(), status: "estimated", reason: null, ...result } : null;
-  return { fixtureId, kickoffAt, evidenceHash: evidence.evidenceHash, cutoffAt: evidence.cutoffAt, historyMatches: evidence.historyMatches,
+  return { fixtureId, kickoffAt, evidenceHash: evidence.evidenceHash, cutoffAt: evidence.cutoffAt, decisionAt: evidence.decisionAt ?? null,
+    historyMatches: evidence.historyMatches,
     status: result ? "estimated" : evidence.status === "prospective" ? "prospective" : "abstained",
-    reason: result ? null : evidence.reason ?? "unqualified-local-engine", input, probabilities: result ? evidence.forecast.probabilities : null };
+    reason: result ? result.featuredDecision.reason ?? null : evidence.reason ?? "unqualified-local-engine",
+    forecastOrigin: result ? evidence.archivedDecision ? "archived" : "rebuilt" : null,
+    input, probabilities: result ? evidence.forecast?.probabilities ?? null : null };
 }
 
 async function dryRun(database, workspace, audit, maxPages) {
@@ -82,7 +88,8 @@ async function dryRun(database, workspace, audit, maxPages) {
     const membership = phase === "canonical" && remaining > 0 ? await readNovemberReplayTrainingMembership(database, audit.auditedAt) : undefined;
     let cursor = last?.cursor;
     while (remaining > 0 && !abort.signal.aborted) {
-      const occurrences = await readNovemberReplayPage(database, { after: cursor, limit: pageSize, auditedAt: audit.auditedAt, scope: phase });
+      const occurrences = await readNovemberReplayPage(database, { after: cursor, limit: pageSize, auditedAt: audit.auditedAt,
+        scope: phase, range: audit.range });
       const rows = [];
       // Match the development pool's two connections and retain the database's keyset order.
       for (let offset = 0; offset < occurrences.length && !abort.signal.aborted; offset += 2) {
@@ -93,7 +100,8 @@ async function dryRun(database, workspace, audit, maxPages) {
           if (processed.has(key) || phase === "canonical" && !original) return null;
           if (phase === "canonical" && (occurrence.cycleId !== original.cycleId ||
             occurrence.originalRevisionId !== original.sourceRevisionId && original.cycleState !== "void" ||
-            occurrence.homeTeamId !== original.teams[0] || occurrence.awayTeamId !== original.teams[1] || occurrence.status !== original.status)) {
+            occurrence.homeTeamId !== original.teams[0] || occurrence.awayTeamId !== original.teams[1] ||
+            occurrence.status !== original.status && !(statusShowsPlay(original.status) && statusShowsPlay(occurrence.status)))) {
             return { fixtureId, kickoffAt, status: "abstained", reason: "occurrence-changed-since-audit",
               evidenceHash: evidenceFingerprint({ original, occurrence }) };
           }
@@ -112,15 +120,18 @@ async function dryRun(database, workspace, audit, maxPages) {
   }
   const finished = phases.every((phase) => pages.some((page) => page.phase === phase && page.finished));
   const rows = pages.flatMap((page) => page.rows);
-  const summary = { finished, processed: rows.length, estimated: 0, prospective: 0, abstained: 0, reasons: {},
-    retainedOriginal: 0, eligiblePriorCandidates: 0, originalsMissingFromReplay: 0 };
+  const summary = { finished, processed: rows.length, estimated: 0, prospective: 0, abstained: 0, reasons: {}, byStatus: {},
+    archived: 0, rebuilt: 0, priced: 0, featuredAbstentions: 0, originalsMissingFromReplay: 0 };
   for (const row of rows) {
     summary[row.status]++;
     if (row.reason) summary.reasons[row.reason] = (summary.reasons[row.reason] ?? 0) + 1;
-    const original = originals.get(occurrenceKey(row));
-    if (original?.sourceRevisionId) {
-      if (row.status === "estimated" && original.markets.some(({ preCutoffProviderReceipt }) => preCutoffProviderReceipt)) summary.eligiblePriorCandidates++;
-      else summary.retainedOriginal++;
+    const originalStatus = originals.get(occurrenceKey(row))?.status ?? "displaced";
+    const statuses = summary.byStatus[originalStatus] ??= { estimated: 0, prospective: 0, abstained: 0, priced: 0, featuredAbstentions: 0 };
+    statuses[row.status]++;
+    if (row.input) {
+      summary[row.forecastOrigin]++;
+      if (row.input.selected) { summary.priced++; statuses.priced++; }
+      else { summary.featuredAbstentions++; statuses.featuredAbstentions++; }
     }
   }
   if (finished && !abort.signal.aborted) {
@@ -128,17 +139,39 @@ async function dryRun(database, workspace, audit, maxPages) {
     const path = join(workspace, "dry-run.json");
     const existing = await readSealed(path).catch((error) => { if (!missingFile(error)) throw error; });
     if (!existing) {
-      const evaluation = await evaluateNovemberReplay(database, audit, rows.filter(({ probabilities }) => probabilities));
+      const evaluation = await evaluateNovemberReplay(database, audit, rows.flatMap(({ fixtureId, kickoffAt, input, probabilities }) => {
+        if (!input) return [];
+        const definition = input.selected && input.markets.find(({ definition }) => definition.key === input.selected.marketKey)?.definition;
+        const featured = definition ? { definition, selection: input.selected.selection } : undefined;
+        return [{ fixtureId, kickoffAt, probabilities, featured }];
+      }));
       await sealOnce(path, { auditHash: audit.auditHash, summary, evaluation });
     }
   }
-  console.log(JSON.stringify({ auditHash: audit.auditHash, ...summary }));
+  const final = finished && !abort.signal.aborted ? await readSealed(join(workspace, "dry-run.json")) : null;
+  console.log(JSON.stringify({ auditHash: audit.auditHash, ...summary, ...(final && { evaluation: final.evaluation }) }));
 }
 
 async function stage(workspace, audit, store) {
   const complete = await readSealed(join(workspace, "dry-run.json"));
   if (complete.auditHash !== audit.auditHash || !complete.summary.finished) throw new ReplayCommandError("Finish the audited dry run before staging.");
-  const candidates = (await loadPages(workspace, audit)).flatMap(({ rows }) => rows.flatMap(({ input }) => input ? [input] : []));
+  const rows = (await loadPages(workspace, audit)).flatMap((page) => page.rows);
+  const candidates = rows.flatMap(({ input }) => input ? [input] : []);
+  const byOccurrence = new Map(rows.map((row) => [occurrenceKey(row), row]));
+  const originals = new Map(audit.occurrences.map((row) => [occurrenceKey(row), row]));
+  for (const prior of await store.activeProjections(audit.range)) {
+    const key = occurrenceKey(prior), row = byOccurrence.get(key), original = originals.get(key);
+    if (prior.featuredDecision || !row || !original || row.status !== "abstained" ||
+      row.reason === "occurrence-changed-since-audit" || prior.sourceRevisionId !== original.sourceRevisionId ||
+      prior.cycleId !== original.cycleId || prior.scheduleVersion !== original.scheduleVersion) continue;
+    const { fixtureId, kickoffAt, cycleId, scheduleVersion, sourceRevisionId, evidenceCutoffAt } = prior;
+    candidates.push({ fixtureId, kickoffAt, cycleId, scheduleVersion, sourceRevisionId, evidenceCutoffAt,
+      engineVersion: audit.engineVersion, registryVersion: audit.registryVersion, evidenceHash: row.evidenceHash, evidenceReceiptIds: [],
+      replayAsOf: audit.auditedAt, decisionAt: row.decisionAt ?? evidenceCutoffAt, generatedAt: Date.now(), teams: original.teams,
+      status: "abstained", reason: row.reason, artifactHash: null, markets: [], selected: null,
+      featuredDecision: { version: audit.featuredDecisionVersion, status: "abstained", reason: "no-local-forecast" },
+      suppressedProjectionRevisionId: prior.revisionId });
+  }
   const records = [];
   for (const input of candidates) {
     if (abort.signal.aborted) return;
@@ -147,7 +180,16 @@ async function stage(workspace, audit, store) {
   }
   const diff = await store.activationDiff(records.map(({ id }) => id));
   await sealOnce(join(workspace, "activation-diff.json"), { auditHash: audit.auditHash, diff });
-  console.log(JSON.stringify({ staged: records.length, proposedReplacements: diff.filter(({ eligible }) => eligible).length }));
+  const summary = { staged: records.length, proposedReplacements: 0, priced: 0, suppressed: 0, replacedProjections: 0, reasons: {} };
+  for (const row of diff) {
+    summary.reasons[row.reason] = (summary.reasons[row.reason] ?? 0) + 1;
+    if (!row.eligible) continue;
+    summary.proposedReplacements++;
+    if (row.selected) summary.priced++;
+    else summary.suppressed++;
+    if (row.previousProjectionRevisionId) summary.replacedProjections++;
+  }
+  console.log(JSON.stringify(summary));
 }
 
 async function changeProjection(workspace, audit, store, action, operationId) {
@@ -158,9 +200,9 @@ async function changeProjection(workspace, audit, store, action, operationId) {
   const ready = diff.filter(({ eligible }) => eligible), actions = [];
   const activationOperationId = evidenceFingerprint({ operationId, auditHash, action: "activate" });
   const rollbackOperationId = evidenceFingerprint({ operationId, auditHash, action: "rollback" });
-  for (const { fixtureId, revisionId } of ready) {
+  for (const { fixtureId, revisionId, previousProjectionRevisionId: expectedProjectionRevisionId } of ready) {
     if (abort.signal.aborted) break;
-    const result = action === "activate" ? await store.activate({ operationId: activationOperationId, revisionId })
+    const result = action === "activate" ? await store.activate({ operationId: activationOperationId, revisionId, expectedProjectionRevisionId })
       : await store.rollback({ operationId: rollbackOperationId, activationOperationId, fixtureId });
     actions.push(result);
   }
@@ -173,25 +215,31 @@ let database;
 try {
   const { positionals: [action, ...extra], values } = parseArgs({ allowPositionals: true, options: {
     environment: { type: "string", default: "development" }, workspace: { type: "string" },
-    pages: { type: "string" }, "operation-id": { type: "string" },
+    pages: { type: "string" }, "operation-id": { type: "string" }, from: { type: "string" }, to: { type: "string" },
   } });
   if (!values.workspace || extra.length || !["audit", "dry-run", "stage", "activate", "rollback"].includes(action) ||
     values.pages !== undefined && !/^[1-9]\d{0,3}$/u.test(values.pages))
     throw new ReplayCommandError("Use audit, dry-run, stage, activate or rollback with --workspace.");
   const workspace = resolve(values.workspace);
+  if ((values.from === undefined) !== (values.to === undefined) || values.from !== undefined && action !== "audit")
+    throw new ReplayCommandError("Use --from and --to together when creating an audit.");
+  const range = values.from === undefined ? novemberReplayRange : resolveReplayRange(values.from, values.to);
   database = await openForecastDatabase(values.environment);
   if (action === "audit") {
     await mkdir(workspace, { recursive: true, mode: 0o700 });
     const scope = values.environment === "development" ? undefined : process.env.GOAL_HINT_COMPETITION_IDS?.split(",").map(Number) ?? [];
     const path = join(workspace, "audit.json");
     const existing = await readSealed(path).catch((error) => { if (!missingFile(error)) throw error; });
-    const audit = existing ?? { ...await auditNovemberReplay(database, scope), environment: values.environment };
-    if (audit.environment !== values.environment) throw new ReplayCommandError("The audit workspace belongs to another database target.");
+    const audit = existing ?? { ...await auditNovemberReplay(database, scope, range), environment: values.environment };
+    if (audit.environment !== values.environment || audit.featuredDecisionVersion !== localFeaturedDecisionVersion ||
+        evidenceFingerprint(audit.range) !== evidenceFingerprint(range.window))
+      throw new ReplayCommandError("The audit workspace belongs to another target, date range or decision policy.");
     if (!existing) await sealOnce(path, audit);
     console.log(JSON.stringify({ auditHash: audit.auditHash, auditedAt: new Date(audit.auditedAt).toISOString(), ...audit.summary }));
   } else {
     const audit = await readSealed(join(workspace, "audit.json"));
-    if (audit.environment !== values.environment || audit.engineVersion !== localGoalModelVersion() || audit.registryVersion !== LOCAL_FIRST_MARKET_REGISTRY_VERSION)
+    if (audit.environment !== values.environment || audit.engineVersion !== localGoalModelVersion() ||
+      audit.registryVersion !== LOCAL_FIRST_MARKET_REGISTRY_VERSION || audit.featuredDecisionVersion !== localFeaturedDecisionVersion)
       throw new ReplayCommandError("The audit target or model no longer matches this operation.");
     if (action === "dry-run") await dryRun(database, workspace, audit, Number(values.pages ?? Infinity));
     else {

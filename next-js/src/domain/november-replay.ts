@@ -15,6 +15,12 @@ if (novemberReplayRange.window.startInclusive !== getDayBoundsInTimeZone(firstDa
   throw new Error("The November replay window differs from the Matches browsing window.");
 }
 
+export function resolveReplayRange(from: string, to: string) {
+  const first = parseReportingDate(from), last = parseReportingDate(to);
+  if (first > last) throw new RangeError("The replay start date must precede its end date.");
+  return resolveFeedDates({ dates: { kind: "range", from: first, to: last }, zone: novemberReplayZone }, first);
+}
+
 export function overlapsNovemberReplay(window: InstantWindow): boolean {
   return window.startInclusive < novemberReplayRange.window.endExclusive &&
     window.endExclusive > novemberReplayRange.window.startInclusive;

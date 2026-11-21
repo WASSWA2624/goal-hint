@@ -21,7 +21,7 @@ export default function FeedCardExamples() {
       code: "O/U 5.5", selection: "under", selectionLabel: "Under 5.5", probability: 0.96, odds: null, source: "local-engine" as const } };
   const cases: { fixture: FixtureSnapshot; gated?: boolean; featured?: boolean }[] = [
     { fixture: { ...names(live, "Brighton", "Everton"), fixtureId: "feed-live", score: { home: 2, away: 1 } } },
-    { fixture: { ...live, fixtureId: "feed-stoppage", liveClock: { phase: "first-half", minute: 45, stoppageMinutes: 2 } } },
+    { fixture: { ...live, fixtureId: "feed-stoppage", liveClock: { phase: "second-half", minute: 90, stoppageMinutes: 4 } } },
     { fixture: { ...live, fixtureId: "feed-halftime", liveClock: { phase: "half-time", minute: null } } },
     { fixture: { ...names(final, "Lyon", "Lille"), fixtureId: "feed-aet", status: "finished-extra-time", score: { home: 1, away: 1 },
       scorePeriod: "regulation", phaseScores: { extraTime: { home: 2, away: 1 }, shootout: null } } },
@@ -34,7 +34,12 @@ export default function FeedCardExamples() {
     { fixture: { ...example("card-delayed"), fixtureId: "feed-upcoming", forecast: null } },
     { featured: true, fixture: { ...local, fixtureId: "feed-extended", status: "scheduled", score: null,
       featuredPrediction: { key: "goal:full-time:totals:home:5.5:binary", family: "total-goals", label: "Full time · Home team goals 5.5",
-        code: "O/U 5.5", selection: "under", selectionLabel: "Under 5.5", probability: 0.96, odds: null, source: "local-engine" } } },
+        code: "O/U 5.5", selection: "under", selectionLabel: "Under 5.5", probability: 0.96, odds: "1.1543", source: "local-engine",
+        featuredExpectedNetReturn: "0.108128", featuredQuote: { bookmakerId: 6, bookmakerName: "Synthetic second bookmaker", betId: 16,
+          betName: "Total - Home", providerSelection: "Under 5.5", decimal: "1.1543", observedAt: kickoffAt - 60_000,
+          checkedAt: kickoffAt - 60_000, providerUpdatedAt: null } } } },
+    { featured: true, fixture: { ...local, fixtureId: "feed-featured-abstained", status: "scheduled", score: null,
+      featuredPrediction: null } },
     { featured: true, fixture: { ...pick, fixtureId: "feed-replay-empty", retrospective: replay } },
     { featured: true, fixture: { ...pick, fixtureId: "feed-replay-live", status: "live", retrospective: { ...replay, pick: {
       ...replay.pick, odds: "1.9", historicalOdds: { bookmakerId: 8, bookmakerName: "Example Bookmaker", observedAt: generatedAt,

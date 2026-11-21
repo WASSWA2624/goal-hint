@@ -45,22 +45,22 @@ function sqlArchive(value) {
   return `JSON_EXTRACT(CONVERT(X'${Buffer.from(encodeShadowArchive(value)).toString('hex')}' USING utf8mb4), '$')`;
 }
 
-test('only Matches windows intersecting the Kampala replay month reference the projection', () => {
+test('published Matches windows can reference replay projections in any date range', () => {
   const today = '2026-11-20';
   function hasReplay(date, zone, publishedForecasts = true) {
     const query = parseFeedQuery({ date, tz: zone, marketPick: 'match-result:away-win' }, { today });
     const range = resolveFeedDates(query, today);
     return feedSql(query, range, [39], false, null, false, false, null, publishedForecasts).pageJoins.sql.includes('NovemberReplayProjection');
   }
-  assert.equal(hasReplay('2026-10-31', 'Africa/Kampala'), false);
+  assert.equal(hasReplay('2026-10-31', 'Africa/Kampala'), true);
   assert.equal(hasReplay('2026-10-31', 'UTC'), true);
   assert.equal(hasReplay('2026-11-01', 'Africa/Kampala'), true);
   assert.equal(hasReplay('2026-11-30', 'Africa/Kampala'), true);
-  assert.equal(hasReplay('2026-12-01', 'Africa/Kampala'), false);
+  assert.equal(hasReplay('2026-12-01', 'Africa/Kampala'), true);
   assert.equal(hasReplay('2026-11-18', 'Africa/Kampala', false), false);
 });
 
-test('November replay has one display across feed, exact outcome and detail while originals remain reproducible', { timeout: 360_000 }, async (t) => {
+test('November replay has one display across feed, exact outcome and detail while originals remain reproducible', { timeout: 480_000 }, async (t) => {
   await withPredictionPipeline(t, async (p) => {
     const date = '2026-11-18', providerId = 41310;
     const selectionAt = Date.parse(`${date}T08:00:00Z`), publicationAt = selectionAt + 4000, kickoffAt = publicationAt + 301_000;
@@ -360,5 +360,5 @@ test('November replay has one display across feed, exact outcome and detail whil
     assert.equal(trustedMatch.total, 1);
     assert.equal(trustedMatch.records[0].fixtureId, provider.fixture.id);
     assert.equal(trustedMatch.records[0].filteredPrediction.source, 'api-football');
-  }, { migrationTimeoutMs: 240_000 });
+  }, { migrationTimeoutMs: 300_000 });
 });

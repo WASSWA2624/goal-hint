@@ -154,6 +154,8 @@ export const publicForecastSchema = z.strictObject({
 });
 
 /** Visitor-facing projection only. Every field is replaced together at a new version. */
+const retrospectiveMetadataSchema = z.strictObject({ revisionId: identity, sourceRevisionId: identity.nullable(),
+  evidenceCutoffAt: instant, generatedAt: instant, activatedAt: instant, featuredDecisionSealed: z.literal(true).optional() });
 const fixtureSnapshotBaseSchema = z.strictObject({
   fixtureId: identity,
   dataVersion: version,
@@ -179,10 +181,8 @@ const fixtureSnapshotBaseSchema = z.strictObject({
   marketOdds: marketOddsObservationSchema.nullable().optional(),
   featuredPrediction: featuredPredictionSchema.nullable().optional(),
   filteredPrediction: featuredPredictionSchema.nullable().optional(),
-  retrospective: z.strictObject({
-    revisionId: identity, sourceRevisionId: identity, evidenceCutoffAt: instant, generatedAt: instant, activatedAt: instant,
-    pick: retrospectivePredictionSchema,
-  }).nullable().optional(),
+  retrospective: retrospectiveMetadataSchema.extend({ pick: retrospectivePredictionSchema }).nullable().optional(),
+  retrospectiveSuppression: retrospectiveMetadataSchema.nullable().optional(),
 });
 export const publishedFamiliesSchema = z.array(marketFamilySchema).max(4).refine((families) => families.join() === publicPolicy.markets.filter((family) => families.includes(family)).join(), "Families must be unique and in policy order.");
 /** Public chance only: neither a selection nor the complete group from which it could be reconstructed. */
@@ -194,17 +194,20 @@ export const gatedForecastSchema = z.strictObject({ gated: z.literal(true), runI
 const wireFixtureBaseSchema = fixtureSnapshotBaseSchema.extend({ forecast: z.union([publicForecastSchema, gatedForecastSchema]).nullable() });
 function refineFixture(value: z.infer<typeof wireFixtureBaseSchema>, context: z.RefinementCtx) {
   const forecast = value.forecast && !("gated" in value.forecast) ? value.forecast : null;
-  if (value.featuredPrediction && (!forecast || value.status !== "scheduled")) {
+  const featuredQuote = value.featuredPrediction?.featuredQuote;
+  if (value.featuredPrediction && (!forecast || value.status !== "scheduled" ||
+      featuredQuote && (value.kickoffAt === null || featuredQuote.checkedAt >= value.kickoffAt))) {
     context.addIssue({ code: "custom", message: "A featured outcome requires a current scheduled prediction." });
   }
   if (value.filteredPrediction && !forecast) {
     context.addIssue({ code: "custom", message: "A filtered outcome requires a published forecast." });
   }
-  const replay = value.retrospective;
-  if (replay && (!forecast || replay.sourceRevisionId !== forecast.revisionId || replay.revisionId === forecast.revisionId ||
-      value.cycle?.state !== "closed" || value.kickoffAt === null || replay.evidenceCutoffAt >= value.kickoffAt ||
+  const replay = value.retrospective ?? value.retrospectiveSuppression, historicalOdds = value.retrospective?.pick.historicalOdds;
+  if (replay && (value.retrospective && value.retrospectiveSuppression || value.retrospectiveSuppression && !replay.featuredDecisionSealed ||
+      value.forecast && !forecast || replay.sourceRevisionId !== (forecast?.revisionId ?? null) || replay.revisionId === forecast?.revisionId ||
+      forecast && value.cycle?.state !== "closed" || value.kickoffAt === null || replay.evidenceCutoffAt >= value.kickoffAt ||
       replay.generatedAt < value.kickoffAt || replay.activatedAt < replay.generatedAt ||
-      replay.pick.historicalOdds && !isVerifiedPreMatchObservation(replay.pick.historicalOdds, value.kickoffAt) ||
+      historicalOdds && !isVerifiedPreMatchObservation(historicalOdds, value.kickoffAt) ||
       value.status !== "live" && !isPlayedFinalStatus(value.status))) {
     context.addIssue({ code: "custom", message: "A retrospective forecast must belong to the displayed locked occurrence." });
   }
@@ -250,6 +253,10 @@ export const storedFixtureSnapshotSchema = fixtureSnapshotBaseSchema.superRefine
 export const fixtureSnapshotSchema = wireFixtureBaseSchema.superRefine(refineFixture);
 export type StoredFixtureSnapshot = z.infer<typeof storedFixtureSnapshotSchema>;
 export type FixtureSnapshot = z.infer<typeof fixtureSnapshotSchema>;
+
+export function isFeaturedPickSuppressed(fixture: Pick<FixtureSnapshot, "featuredPrediction" | "retrospective" | "retrospectiveSuppression">): boolean {
+  return fixture.retrospectiveSuppression != null || fixture.retrospective == null && fixture.featuredPrediction === null;
+}
 
 export function parseFixtureSnapshot(value: unknown): FixtureSnapshot {
   return fixtureSnapshotSchema.parse(value);

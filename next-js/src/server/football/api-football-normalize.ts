@@ -306,6 +306,7 @@ const oddsSchema = z.object({
   bookmakers: z.array(z.object({ id: identity, name: oddsNameText, bets: z.array(oddsBetSchema).max(1_000) })).max(200),
 });
 const oddsValueSchema = z.object({ value: z.string(), odd: z.string() });
+const preMatchOddsValueSchema = oddsValueSchema.extend({ suspended: optionalBoolean });
 const oddsCatalogSchema = z.object({ id: identity, name: z.string().min(1).max(256) });
 const inPlayOddsSchema = z.object({
   fixture: z.object({ id: identity }),
@@ -686,14 +687,17 @@ function oddsBet(raw: z.infer<typeof oddsBetSchema>): NormalizedOddsBet | null {
   // Stored snapshots hold 1..1,000 selections per bet, keyed by an unsigned 32-bit bet id.
   if (raw.id > 4_294_967_295 || raw.values.length === 0 || raw.values.length > 1_000) return null;
   for (const entry of raw.values) {
-    const parsed = oddsValueSchema.safeParse(entry);
+    const parsed = preMatchOddsValueSchema.safeParse(entry);
     if (!parsed.success) return null;
     const label = parsed.data.value, odds = parseDecimalOdds(parsed.data.odd);
     // Labels are verbatim: untrimmed, control-character or over-long (64 UTF-16 units) labels quarantine the bet.
-    if (odds === null || label !== label.trim() || label.length > 64 || !oddsLabel.test(label) || labels.has(label)) return null;
-    labels.add(label); values.push({ label, odd: odds.text });
+    if (label !== label.trim() || label.length > 64 || !oddsLabel.test(label) || labels.has(label)) return null;
+    labels.add(label);
+    if (parsed.data.suspended === true) continue;
+    if (odds === null) return null;
+    values.push({ label, odd: odds.text });
   }
-  return { id: raw.id, name: oddsName(raw.name, oddsNameLimits.bet), values };
+  return values.length ? { id: raw.id, name: oddsName(raw.name, oddsNameLimits.bet), values } : null;
 }
 
 /** One /odds row: one fixture, the requested bookmaker(s) and every bet they publish. */

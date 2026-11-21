@@ -131,8 +131,8 @@ grant once. Verify the table checks and role grants before activating the
 release. The released web reads historical quotes even when provider import
 jobs are disabled in staging. [Odds grants](../provider-odds.md#application-grants)
 
-Apply `20261120160000_november_replay` before starting the revised web release
-on either target. The web role needs `SELECT` on `NovemberReplayProjection`
+Ensure `20261120160000_november_replay` and `20261121120000_featured_replay_projection`
+are applied before starting the revised web release on either target. The web role needs `SELECT` on `NovemberReplayProjection`
 and its existing fixture, cycle, lifecycle state, and publication barrier
 reads. Use a separate operator connection for replay writes. That role needs
 `SELECT, INSERT` on `NovemberReplayRevision` and `NovemberReplayAction`,
@@ -141,11 +141,14 @@ the projection, and `UPDATE (revisionId, sourceRevisionId, cycleId,
 scheduleVersion, kickoffAt, evidenceCutoffAt, activationOperationId, changedAt,
 integrity, body)` on the projection. It also needs the established
 read access to fixture identities, audit, schedule, publication and result
-evidence. The migration account's cache trigger needs to retain access to
+evidence. The replay roles need `SELECT` on `OddsImportBatch` and
+`ProviderOddsSnapshot` for price and observation proof. Use the target's
+approved odds rights reference in each private replay profile. The migration
+account's cache trigger needs to retain access to
 `PublicCacheTag` and `PublicCacheInvalidation`. Verify the three tables and
-trigger definers after migration. Installing the migration leaves the projection
-empty. The restricted MariaDB pointer lock uses the grants above and the
-existing schema.
+trigger definers after migration. The featured replay migration keeps existing
+projections and changes only the revision and projection check constraints.
+The restricted MariaDB pointer lock uses the grants above.
 
 ### Hosted November replay
 
@@ -160,13 +163,13 @@ existing schema.
    `dry-run --pages <count>` in the same sealed workspace until it reports
    completion. Both commands work from stored evidence.
 3. With the staging operator connection, run `stage` and review the sealed
-   `activation-diff.json` for the locked API forecast and proposed Local Engine
-   pick. Record the original publication IDs, prices, settlements and
+   `activation-diff.json` for verified replacements, priced picks, suppressions
+   and expected prior projection IDs. Record the original publication IDs, prices, settlements and
    performance before `activate`. Use a stable `--operation-id` for staging.
    Verify the revised display in Matches, the exact-outcome filter and Match
    Details. Compare the original revision history, prices, settlements and
    published performance with the recorded values. Run `rollback` with the
-   same staging operation ID and verify the original display returns.
+   same staging operation ID and verify the prior projection or original display returns.
 4. Once staging passes and production replay is authorized, repeat the audit
    and dry run independently on production. Run `stage` with its operator
    connection and review its own diff before `activate`. Repeat the public and

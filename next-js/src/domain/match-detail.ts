@@ -85,7 +85,7 @@ const storedDetailBaseSchema = z.strictObject({ fixture: storedMatchFeedRecordSc
   recoveredBookmakerOdds: preMatchBookmakerOddsSchema.nullable().optional(),
   extendedMarkets: publicExtendedMarketSnapshotSchema.nullable().optional(),
   extendedOdds: total15OddsSchema.nullable().optional(),
-  retrospectiveMarkets: z.array(retrospectivePredictionSchema).min(1).max(256).nullable().optional(),
+  retrospectiveMarkets: z.array(retrospectivePredictionSchema).max(256).nullable().optional(),
   route: z.strictObject({ fixtureId: id, slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u).max(160), path: z.string().max(512) }),
   currentRevisionId: id.nullable(), selection: z.enum(["applicable", "revision", "cycle"]), selectedCycle: detailCycleSchema.nullable(), snapshot: storedDetailSnapshotSchema.nullable(),
   history: z.strictObject({ limit: z.number().int().min(1).max(matchDetailRules.maximumLimit),
@@ -112,15 +112,18 @@ function refineDetail(v: z.infer<typeof wireDetailBaseSchema>, ctx: z.Refinement
     v.selection === "applicable" && v.snapshot?.revisionId !== (v.currentRevisionId ?? undefined) ||
     v.snapshot && (v.snapshot.historical !== (v.snapshot.revisionId !== v.currentRevisionId) || v.snapshot.cycleId !== v.selectedCycle?.id)) ctx.addIssue({ code: "custom", message: "Incoherent detail response." });
   if (v.odds && new Set(v.odds.map((group) => group.family)).size !== v.odds.length) ctx.addIssue({ code: "custom", message: "One odds group per family." });
-  const replay = v.fixture.retrospective, replayMarkets = v.retrospectiveMarkets;
-  if (replay ? v.selection !== "applicable" || replay.activatedAt > v.asOf || !replayMarkets ||
+  const replay = v.fixture.retrospective, replayMetadata = replay ?? v.fixture.retrospectiveSuppression, replayMarkets = v.retrospectiveMarkets;
+  if (replayMetadata ? v.selection !== "applicable" || replayMetadata.activatedAt > v.asOf || !replayMarkets ||
     new Set(replayMarkets.map(({ key }) => key)).size !== replayMarkets.length ||
     replayMarkets.some(({ historicalOdds }) => historicalOdds && (historicalOdds.observedAt > v.asOf ||
       v.fixture.kickoffAt === null || !isVerifiedPreMatchObservation(historicalOdds, v.fixture.kickoffAt))) ||
-    !replayMarkets.some((pick) => pick.key === replay.pick.key && pick.selection === replay.pick.selection &&
+    replay && !replayMarkets.some((pick) => pick.key === replay.pick.key && pick.selection === replay.pick.selection &&
       pick.probability === replay.pick.probability && pick.odds === replay.pick.odds &&
       JSON.stringify(pick.historicalOdds) === JSON.stringify(replay.pick.historicalOdds)) : replayMarkets != null) {
     ctx.addIssue({ code: "custom", message: "Retrospective markets require one active retrospective detail forecast." });
+  }
+  if ((v.fixture.featuredPrediction?.featuredQuote?.checkedAt ?? 0) > v.asOf) {
+    ctx.addIssue({ code: "custom", message: "A featured quote must be available when the detail was read." });
   }
   if (v.liveMatch) {
     const cycleId = v.selection === "applicable" ? v.fixture.cycleId : v.selectedCycle?.id ?? null;
@@ -160,7 +163,8 @@ export const matchDetailResponseSchema = wireDetailBaseSchema.superRefine(refine
     || v.fixture.forecast !== null && (!("gated" in v.fixture.forecast) || v.fixture.forecast.probabilities.length !== 0)
     || v.snapshot !== null && "gated" in v.snapshot && v.snapshot.probabilities.length !== 0
     || v.liveMatch != null || v.inPlayOdds != null || v.bookmakerOdds != null || v.recoveredBookmakerOdds != null || v.extendedMarkets != null || v.extendedOdds != null
-    || v.fixture.marketOdds != null || v.fixture.prices.length !== 0
+    || v.fixture.marketOdds != null || v.fixture.featuredPrediction != null || v.fixture.retrospective != null ||
+      v.fixture.retrospectiveSuppression != null || v.fixture.prices.length !== 0
     : "gated" in v.history || v.snapshot !== null && "gated" in v.snapshot || v.fixture.forecast !== null && "gated" in v.fixture.forecast) {
     ctx.addIssue({ code: "custom", message: "Detail content must match its access tier and fixture status." });
   }

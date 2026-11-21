@@ -10,7 +10,8 @@ import { normalizeOdds } from '../src/server/football/api-football-normalize.ts'
 import { OddsError } from '../src/server/odds/odds-contract.ts';
 import { oddsPolicyHash, oddsPricePageScopeKey, oddsScopeKey } from '../src/server/odds/odds-input.ts';
 import { createMysqlOddsStore, fixtureQuoteManifests, oddsValuesHash, storedClosingBookmakerQuotes,
-  storedCurrentBookmakerQuotes, storedRecoveredBookmakerQuotes } from '../src/server/odds/odds-mysql-store.ts';
+  storedCurrentBookmakerQuotes, storedPointInTimeFeaturedBookmakerQuotes,
+  storedRecoveredBookmakerQuotes } from '../src/server/odds/odds-mysql-store.ts';
 import { storedFixtureOddsGroups, storedFixturePrices } from '../src/server/odds/odds-read.ts';
 import { createOddsImportService } from '../src/server/odds/odds-service.ts';
 import { createMatchDetailService } from '../src/server/matches/detail-service.ts';
@@ -512,7 +513,11 @@ test('odds import persistence on isolated genuine MySQL', { timeout: 300_000 }, 
         assert.deepEqual(current.bookmakers.map(bookmaker => [bookmaker.bookmakerId, bookmaker.offers[0].values.find(value => value.label === 'Home').odd]).sort(),
           [[6, '2.1003'], [ODDS_BOOKMAKER, '1.85']]);
         assert.ok((await prices('G')).every(price => price.bookmakerExternalId === ODDS_BOOKMAKER));
-        advance(HOUR);
+        advance(30 * MINUTE);
+        const suspended = launchBets().map((bet) => bet.id === 1 ? { ...bet, values: bet.values.map((value) => ({ ...value, suspended: true })) } : bet);
+        odds.state.rows = [row('G', { bets: suspended })];
+        assert.notEqual((await importDate('2026-10-16')).status, 'failed');
+        advance(30 * MINUTE);
         odds.state.rows = [row('G', { bookmakerId: 6, bookmakerName: 'Synthetic second bookmaker', bets: launchBets({ home: '2.1003' }) })];
         assert.equal((await refresh()).status, 'complete');
         assert.deepEqual((await offers()).get(F.G.id).bookmakers.map(bookmaker => bookmaker.bookmakerId), [6]);
@@ -620,6 +625,23 @@ test('odds import persistence on isolated genuine MySQL', { timeout: 300_000 }, 
         assert.equal(exact(ODDS_BOOKMAKER, 'Over 3.5').observation.providerUpdatedAt, providerUpdatedAt);
         assert.equal(exact(ODDS_BOOKMAKER, 'Over 3.5').observation.observedAt, correctedAt);
         assert.equal(exact(6, 'Over 3.5').odd, '3.25');
+        const decisionAt = Date.parse('2026-10-16T10:00:00Z');
+        const pointInTime = (cutoff) => a.query((tx) =>
+          storedPointInTimeFeaturedBookmakerQuotes(tx, [{ ...target, decisionAt: cutoff }], p.now()));
+        const atDecision = (await pointInTime(decisionAt)).get(F.G.id);
+        assert.ok(atDecision);
+        assert.deepEqual(atDecision.bookmakers.map(({ bookmakerId }) => bookmakerId), [6, ODDS_BOOKMAKER]);
+        assert.equal(atDecision.bookmakers[0].offers.find(({ betId }) => betId === 1)
+          .values.find(({ label }) => label === 'Home').odd, '2.1003');
+        assert.ok(atDecision.bookmakers.every(({ offers }) => offers.every(({ values }) =>
+          values.every(({ observation }) => observation.checkedAt <= decisionAt))));
+        assert.equal((await pointInTime(decisionAt - 1)).size, 0, 'the sealed receipt must exist by the declared cutoff');
+        const atSuspension = (await pointInTime(decisionAt + 30 * MINUTE)).get(F.G.id);
+        assert.equal(atSuspension.bookmakers.find(({ bookmakerId }) => bookmakerId === ODDS_BOOKMAKER).offers.some(({ betId }) => betId === 1), false);
+        assert.equal(atSuspension.bookmakers.find(({ bookmakerId }) => bookmakerId === 6).offers.find(({ betId }) => betId === 1)
+          .values.find(({ label }) => label === 'Home').odd, '2.1003', 'a one-book receipt cannot withdraw an exact offer from another book');
+        const atBookRemoval = (await pointInTime(decisionAt + HOUR)).get(F.G.id);
+        assert.deepEqual(atBookRemoval.bookmakers.map(({ bookmakerId }) => bookmakerId), [6], 'a newer all-book observation can withdraw a book');
         assert.deepEqual(await closing(), originalClosing);
         assert.deepEqual(await state('G'), originalState);
         assert.deepEqual(await prices('G'), originalPrices);

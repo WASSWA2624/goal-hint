@@ -4,18 +4,16 @@ import { UnlockPanel } from "@/components/members/prediction-unlock";
 import { memo } from "react";
 import styled from "styled-components";
 import { ChevronRightIcon } from "@/components/ui/icons";
-import { utcInstantFromEpochMilliseconds } from "@/domain/calendar";
-import type { RetrospectivePrediction } from "@/domain/extended-markets";
 import { currentFeaturedOutcome, detailMarketValue, featuredFamily, liveStanding, marketRow, selectedDetailPrice } from "@/domain/match-details";
 import { displayMarketOddsPrice } from "@/domain/in-play-odds";
 import { forecastExpectedReturn } from "@/domain/forecast-value";
 import { hasMatchPredictionAccess, openDetailTab } from "@/domain/match-detail-tabs";
-import { detailRecordNotices } from "@/domain/detail-presentation";
+import { bookmakerOddsSource, detailRecordNotices } from "@/domain/detail-presentation";
 import { ForecastValueLabel } from "../forecast-labels";
 import { PredictionOutcome } from "../prediction-presentation";
 import { DetailOutcome } from "./match-banner";
 import { ResultIcon } from "./details-icons";
-import { Standing, useStableDetails, type Messages } from "./details-ui";
+import { Standing, useStableDetails } from "./details-ui";
 import { marketName, percent } from "./labels";
 import { Verdict } from "./verdict";
 import { TouchlineLinkButton, TouchlineSurface } from "./touchline-ui";
@@ -51,16 +49,6 @@ const Numbers = styled.div`
 `;
 const Actions = styled.div`display: grid; justify-items: end; gap: var(--gh-spacing-1_5); font-size: var(--gh-font-secondary);`;
 
-type HistoricalReplayOdds = NonNullable<RetrospectivePrediction["historicalOdds"]>;
-
-export function historicalReplayOddsSource({ bookmakerId, bookmakerName, observedAt, providerUpdatedAt }: HistoricalReplayOdds, messages: Messages): string {
-  const format = (at: number) => messages.reportingInstant(utcInstantFromEpochMilliseconds(at));
-  const bookmaker = bookmakerName ?? messages.text("touchline.bookmakerNumber", { id: messages.number(bookmakerId, { useGrouping: false }) });
-  const retrieved = `${messages.text("detail.retrieved")} ${format(observedAt)}`;
-  return providerUpdatedAt === null ? `${bookmaker} · ${retrieved}`
-    : [bookmaker, retrieved, messages.text("liveMatch.updated", { time: format(providerUpdatedAt) })].join(" · ");
-}
-
 export const TouchlineFeatured = memo(function TouchlineFeatured() {
   const { data, messages, locale, update } = useStableDetails();
   if (!hasMatchPredictionAccess(data)) return <>
@@ -76,10 +64,13 @@ export const TouchlineFeatured = memo(function TouchlineFeatured() {
   const replay = data.selection === "applicable" ? data.fixture.retrospective : null;
   const historicalOdds = replay?.pick.historicalOdds;
   const displayedOdds = replay ? historicalOdds ? replay.pick.odds : null : featured?.odds;
+  const exactQuote = featured?.featuredQuote;
   const price = featured ? displayedOdds ? displayMarketOddsPrice(displayedOdds) : null : selectedDetailPrice(data, family);
+  const expectedReturn = featured?.featuredExpectedNetReturn !== undefined ? Number(featured.featuredExpectedNetReturn)
+    : featured ? forecastExpectedReturn(chance, featured.odds) : detailMarketValue(data, family);
   const standing = featured ? null : liveStanding(data, family), outcome = data.snapshot?.applicability === "historical" ? null
     : row?.outcome?.status ?? (data.snapshot?.applicability === "void" ? "void" : null);
-  const notices = replay ? [] : detailRecordNotices(data).map(key => messages.text(key));
+  const notices = replay ? [] : detailRecordNotices(data, exactQuote ? featured?.source : undefined).map(key => messages.text(key));
   const record = replay ? [
     messages.text("touchline.retrospectiveGenerated", { time: messages.reportingInstant(replay.generatedAt) }),
     messages.text("touchline.retrospectiveCutoff", { time: messages.reportingInstant(replay.evidenceCutoffAt) }),
@@ -92,12 +83,12 @@ export const TouchlineFeatured = memo(function TouchlineFeatured() {
       <p data-prediction-record>{[...record, ...notices].join(" · ")}</p></div></Lead>
     <Numbers data-historical-odds={historicalOdds && price !== null ? "" : undefined}>
       <div><b>{percent(messages, chance)}</b><small>{messages.text("details.estimatedProbability")}</small><i style={{ inlineSize: `${chance * 100}%` }} /></div>
-      {price !== null && <div><b>{price}</b><small>{messages.text(historicalOdds ? "touchline.recoveredOdds" : "details.odds")}</small>
-        {historicalOdds && <small data-historical-odds-source>{historicalReplayOddsSource(historicalOdds, messages)}</small>}
-        {!replay && <ForecastValueLabel expectedReturn={featured ? forecastExpectedReturn(chance, featured.odds) : detailMarketValue(data, family)} messages={messages} />}</div>}
+      {price !== null && <div><b title={exactQuote ? bookmakerOddsSource(exactQuote, messages) : undefined}>{price}</b><small>{messages.text(historicalOdds ? "touchline.recoveredOdds" : "details.odds")}</small>
+        {historicalOdds && <small data-historical-odds-source>{bookmakerOddsSource(historicalOdds, messages)}</small>}
+        {!replay && <ForecastValueLabel expectedReturn={expectedReturn} messages={messages} />}</div>}
     </Numbers>
     <Actions>{standing ? <Standing standing={standing} /> : outcome && outcome !== "pending" ? <DetailOutcome status={outcome} /> : null}
-      <TouchlineLinkButton type="button" onClick={() => update(current => openDetailTab(current, replay ? "history" : "analysis"))}>
-        {messages.text(replay ? "touchline.originalPublication" : "touchline.why")}<ChevronRightIcon aria-hidden="true" /></TouchlineLinkButton></Actions>
+      <TouchlineLinkButton type="button" onClick={() => update(current => openDetailTab(current, replay?.sourceRevisionId ? "history" : "analysis"))}>
+        {messages.text(replay?.sourceRevisionId ? "touchline.originalPublication" : "touchline.why")}<ChevronRightIcon aria-hidden="true" /></TouchlineLinkButton></Actions>
   </Frame>;
 });

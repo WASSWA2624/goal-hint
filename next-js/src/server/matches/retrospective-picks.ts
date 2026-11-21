@@ -5,6 +5,7 @@ import { isVerifiedPreMatchObservation, replayBookmakerBetIds, replayBookmakerQu
 import type { RetrospectivePrediction } from "../../domain/extended-markets.ts";
 import { feedMarketPickIdentity } from "../../domain/feed-market-picks.ts";
 import type { StoredFixtureSnapshot } from "../../domain/fixture-snapshot.ts";
+import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { formatOddsHundredths } from "../../domain/odds.ts";
 import { predictionText } from "../../domain/prediction-label.ts";
 import type { NovemberReplayProjection } from "../intelligence/november-replay-store.ts";
@@ -12,6 +13,12 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import { projectBookmakerOdds } from "../odds/bookmaker-odds-read.ts";
 import { storedVerifiedReplayBookmakerQuotes, type StoredCurrentBookmakerQuotes } from "../odds/odds-mysql-store.ts";
 import type { FeedSelectedPick } from "./feed-selected-picks.ts";
+
+/** Archived Local Engine publications need a replay decision to supply an applicable default pick. */
+export function lacksRetrospectiveFeaturedPick(fixture: Pick<StoredFixtureSnapshot, "status" | "forecast" | "retrospective" | "retrospectiveSuppression">): boolean {
+  return (fixture.status === "live" || isPlayedFinalStatus(fixture.status)) && !fixture.retrospective && !fixture.retrospectiveSuppression &&
+    fixture.forecast?.markets.some(({ market }) => market.source === "local-engine") === true;
+}
 
 export function displayFeedSelectedPick({ marketKey, selection, probability, source, priceHundredths }: FeedSelectedPick, locale: string) {
   const identity = feedMarketPickIdentity(`${marketKey}~${selection}`);
@@ -29,19 +36,29 @@ export function displayFeedSelectedPick({ marketKey, selection, probability, sou
 
 /** Public replay picks preserve the decision's own identity, probability and original forecast reference. */
 export function projectRetrospectiveForecast(fixture: StoredFixtureSnapshot, replay: NovemberReplayProjection | undefined,
-  locale: string, shown?: Pick<FeedSelectedPick, "marketKey" | "selection">) {
+  locale: string, shown?: Pick<FeedSelectedPick, "marketKey" | "selection">, providerOdds = false) {
   if (!replay || fixture.fixtureId !== replay.fixtureId || fixture.cycleId !== replay.cycleId ||
-      fixture.kickoffAt !== replay.kickoffAt || fixture.forecast?.revisionId !== replay.sourceRevisionId) return null;
-  const entries = replay.markets.flatMap(({ definition, selected }) => {
-    const pick = displayFeedSelectedPick({ marketKey: definition.key, ...selected, source: "local-engine", priceHundredths: null }, locale);
-    return pick ? [{ marketKey: definition.key, selection: selected.selection, pick: { ...pick, source: "local-engine" as const } }] : [];
+      fixture.kickoffAt !== replay.kickoffAt || (fixture.forecast?.revisionId ?? null) !== replay.sourceRevisionId) return null;
+  const wanted = shown ?? replay.selected;
+  const decision = replay.featuredDecision;
+  const quote = providerOdds && decision?.status === "priced" ? decision.quote : null;
+  const entries = replay.markets.flatMap(({ definition, selected, selections }) => {
+    const exact = wanted?.marketKey === definition.key && selections?.find(({ key }) => key === wanted.selection);
+    const choice = exact ? { selection: exact.key, probability: exact.outcomes.win } : selected;
+    const pick = displayFeedSelectedPick({ marketKey: definition.key, ...choice, source: "local-engine", priceHundredths: null }, locale);
+    if (!pick) return [];
+    const price = quote && decision?.status === "priced" && decision.marketKey === definition.key && decision.selection === choice.selection
+      ? { odds: quote.decimal, historicalOdds: { bookmakerId: quote.bookmakerId, bookmakerName: quote.bookmakerName,
+        observedAt: quote.observedAt, providerUpdatedAt: quote.providerUpdatedAt } } : {};
+    return [{ marketKey: definition.key, selection: choice.selection, pick: { ...pick, ...price, source: "local-engine" as const } }];
   });
-  const selected = shown ?? replay.selected;
-  const pick = entries.find(({ marketKey, selection }) => selected.marketKey === marketKey && selected.selection === selection)?.pick;
-  if (!pick) return null;
-  return { card: { revisionId: replay.revisionId, sourceRevisionId: replay.sourceRevisionId,
-    evidenceCutoffAt: replay.evidenceCutoffAt, generatedAt: replay.generatedAt, activatedAt: replay.activatedAt, pick },
-    markets: entries.map((entry) => entry.pick) };
+  const pick = wanted && entries.find(({ marketKey, selection }) => wanted.marketKey === marketKey && wanted.selection === selection)?.pick;
+  if (wanted && !pick) return null;
+  const metadata = { revisionId: replay.revisionId, sourceRevisionId: replay.sourceRevisionId,
+    evidenceCutoffAt: replay.evidenceCutoffAt, generatedAt: replay.generatedAt, activatedAt: replay.activatedAt,
+    ...(decision && { featuredDecisionSealed: true as const }) };
+  return { metadata, card: pick ? { ...metadata, pick } : null, featuredDecisionSealed: Boolean(decision),
+    markets: entries.map((entry) => entry.pick), activatedAt: replay.activatedAt };
 }
 
 export function readReplayBookmakerQuotes(database: DatabaseRuntime,

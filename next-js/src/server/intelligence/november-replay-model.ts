@@ -5,6 +5,7 @@ import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
 import { compareForecastPicks } from "../../domain/recommendation.ts";
 import { deriveLocalGoalMarket } from "../../domain/score-distribution-markets.ts";
 import { canonicalLegacyForecastSelection, legacyForecastMarketKey } from "../predictions/forecast-market-evaluator.ts";
+import type { ForecastDecision } from "../predictions/forecast-decision.ts";
 import type { LocalGoalForecast } from "./intelligence-contract.ts";
 import { localGoalModelVersion } from "./local-goals-model.ts";
 
@@ -12,6 +13,24 @@ const launchFamilies = Object.keys(marketSelections) as MarketFamily[];
 const legacy = new Map(launchFamilies.map((family) => [legacyForecastMarketKey(family), family]));
 const replayDefinitions = registeredForecastGoalMarkets(true).filter(({ definition }) =>
   legacy.has(definition.key) || localFirstGoalMarketDefinitions.some(({ key }) => definition.key === key));
+
+export function buildArchivedNovemberReplayMarkets(decision: ForecastDecision) {
+  return decision.markets.flatMap(({ definition, source, selections, unrepresentedProbability }) => {
+    if (!definition || source !== "local-engine" || !replayDefinitions.some((row) => row.definition.key === definition.key)) return [];
+    const exact = selections.map(({ key, outcomes }) => ({ key, outcomes: {
+      win: Number(outcomes.win), loss: Number(outcomes.loss), push: Number(outcomes.push),
+      "half-win": Number(outcomes["half-win"]), "half-loss": Number(outcomes["half-loss"]),
+    } }));
+    const selected = rankReplayMarket(definition.key, exact);
+    return [{ definition, selections: exact, selected, unrepresentedProbability: Number(unrepresentedProbability) }];
+  });
+}
+
+function rankReplayMarket(marketKey: string, selections: readonly { key: string; outcomes: { win: number } }[]) {
+  const { selection, probability } = selections.map(({ key: selection, outcomes }) =>
+    ({ key: marketKey, selection, probability: outcomes.win, odds: null })).sort(compareForecastPicks)[0]!;
+  return { selection, probability };
+}
 
 /** Use the approved prospective formulas without creating a backdated prospective publication. */
 export function buildNovemberReplayMarkets(forecast: LocalGoalForecast) {
@@ -29,9 +48,7 @@ export function buildNovemberReplayMarkets(forecast: LocalGoalForecast) {
       if (!result.available) throw new Error("A replay definition has lost its approved model.");
       return result.market.selections.map(({ key, outcomes }) => ({ key, outcomes }));
     })();
-    const selected = selections.map(({ key: selection, outcomes }) => ({ key: definition.key, selection, probability: outcomes.win, odds: null }))
-      .sort(compareForecastPicks)[0]!;
-    return { definition, selections, selected: { selection: selected.selection, probability: selected.probability } };
+    return { definition, selections, selected: rankReplayMarket(definition.key, selections) };
   });
   const best = markets.map(({ definition, selected }) => ({ key: definition.key, ...selected, odds: null })).sort(compareForecastPicks)[0]!;
   return { markets, selected: { marketKey: best.key, selection: best.selection, probability: best.probability } };

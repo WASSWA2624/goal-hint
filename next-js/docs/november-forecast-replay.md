@@ -1,9 +1,12 @@
 # November 2026 forecast replay
 
-The manifest uses November 1 through December 1 exclusive in `Africa/Kampala`,
+The default manifest uses November 1 through December 1 exclusive in `Africa/Kampala`,
 or October 31 at 21:00 UTC through November 30 at 21:00 UTC. This matches a
 November query in the Kampala Matches browsing zone. A device's different
 browsing zone can include different fixtures near either boundary.
+For another cohort, set `--from YYYY-MM-DD --to YYYY-MM-DD` when creating
+the audit. Both dates are inclusive in Kampala and the workspace records
+the resulting UTC window.
 
 From `next-js`, run against the owned development snapshot while its database
 is available. Reuse the same private workspace to resume an interrupted run.
@@ -15,49 +18,59 @@ npm run november:replay -- dry-run --workspace .tmp/november-replay-development
 npm run november:replay -- stage --workspace .tmp/november-replay-development
 ```
 
-`audit` reads the ordinary Matches cohort by occurrence, date, league and
-team, with original sources, publication coverage, schedule and lock clocks,
-and verified result references. `dry-run` checks the canonical and displaced
-occurrences using checkpointed pages. It records the cutoff, evidence hash,
-exact history receipt identities where a forecast qualifies, and an explicit
-reason for abstention. The chronological evaluation uses each fixture's
-sealed result as a label after its forecast is computed. It reports coverage,
-accuracy, Brier score, log loss and calibration for identical local/prior
-markets where both sources qualify. Original published performance reads
-the canonical publication and settlement ledger.
+`audit` records the ordinary Matches cohort by occurrence, date, league,
+team and status, with original publication coverage and schedule and lock
+clocks. `dry-run` checks canonical and displaced occurrences in checkpointed
+pages. It prefers the sealed, independently estimated Local Engine
+distributions from an eligible original publication. A rebuild uses only
+training observations recorded before the original forecast evidence cutoff.
+A fixture without an original publication needs its own verified pre-match
+schedule and history available before effective lock.
+
+The quote decision is as of one millisecond before effective pre-match
+lock, independently of the model evidence cutoff. The decision accepts
+only exact, permitted offers captured and recorded before the declared
+clock. It records the bookmaker, unrounded price, observation clocks,
+verified receipt and positive expected net return for the selected
+outcome. The checkpoint records the estimate origin, selected rung or
+absence reason, and evidence identity. Verified result references are
+joined to frozen checkpointed decisions for evaluation. Original published
+performance continues to read the canonical publication and settlement ledger.
 
 Fixtures still before lock remain in the ordinary forecast schedule. The
 development launcher runs private prospective capture on stored evidence.
 Hosted prospective publication continues through the authorized live worker.
 Provider fixture coverage and stored observations determine what can be
-processed as November progresses. The replay uses stored evidence, with a
-cutoff independent of bookmaker-price retention.
+processed within the ordinary worker's budgets. Replay reports pending
+prospective processing separately.
 
-`stage` stores qualifying replays as retrospective records with their actual
-generation time, archived point-in-time evidence, and current approved engine
-and registry identities. It writes `activation-diff.json`. Review that diff
-for a locked API-sourced original and the proposed Local Engine replacement.
-Activation repeats the source, occurrence, evidence and market checks under
-the write transaction. Use the same stable ID to roll back its projection.
+`stage` stores qualifying retrospective revisions with their actual generation
+time, declared earlier decision clock, evidence and decision identities.
+It writes `activation-diff.json` with nullable featured selections, exact
+priced outcomes, prior projection identities and rejection reasons.
+Review the diff before activation, including projected suppressions. If a
+previously active legacy projection retains valid occurrence identity but
+its forecast can no longer be verified for this audit, the new revision
+suppresses its featured pick and retains its market forecasts. Activation
+revalidates occurrence, forecast, quote eligibility and expected prior
+pointer in the write transaction. Use the same stable ID to roll back an
+activation. Rollback restores the previous pointer when the activation
+replaced one.
 
 ```sh
 npm run november:replay -- activate --workspace .tmp/november-replay-development --operation-id november-reviewed-01
 npm run november:replay -- rollback --workspace .tmp/november-replay-development --operation-id november-reviewed-01
 ```
 
-The public pointer applies to the exact source revision and occurrence.
+The public pointer applies to the exact occurrence and original source
+revision, when present.
 Matches, supported exact-outcome filters and the ordinary Match Details view
 read that projection. Explicit revision history and original prices,
 settlements and performance remain tied to their original publication IDs.
-With public odds access, Matches and applicable Match Details can show a
-historical reference price for the selected replay outcome. The price must
-match the verified fixture occurrence, market, period, team, line and outcome.
-A sealed capture before kickoff qualifies. A later recovery needs a provider
-update before kickoff. When verified play started earlier, that time sets the
-limit. Match Details keeps both clocks visible. The
-historical reference may follow the evidence cutoff. It leaves the replay
-decision, published prices, return estimates and settlement history independent.
-Markets with no qualifying exact quote keep their blank price.
+Public odds access controls display of the precise sealed quote. The
+featured slot stays empty for abstentions, while the supported market
+forecasts are available in All Markets. Previously activated legacy
+records remain readable and rollback can restore them.
 The audit workspace contains private source and replay data and belongs outside
 the web root. Use distinct workspaces for each new audit or environment.
 Run the hosted workflow with the verified database profile and Matches
@@ -65,7 +78,7 @@ competition scope for that target. The deployment guide documents the
 staging rehearsal, restricted grants and rollback procedure.
 [Hosted November replay](deployment/how-to-deploy.md#hosted-november-replay)
 
-## Owned development audit
+## Previous owned development audit
 
 At 20:03 Kampala time on November 20, the stored Matches cohort contained
 13,589 fixtures across 571 competitions. It held 953 API-Football forecasts,

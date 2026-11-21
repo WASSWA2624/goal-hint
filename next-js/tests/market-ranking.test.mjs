@@ -98,8 +98,9 @@ test("public forecast rows require a published market without applying the recom
   const today = parseReportingDate("2026-10-14"), range = validateReportingDateRange(today, today, 1);
   const query = parseFeedQuery({ sort: "live-first" }, { today });
   const published = feedSql(query, range, [39], true, null, false, true);
-  assert.match(published.where.sql, /AND m\.available=TRUE$/u);
+  assert.ok(published.where.sql.endsWith(`AND ${published.displayAvailable.sql}`));
   assert.equal(published.pickAvailable.sql, "m.available=TRUE");
+  assert.match(published.displayAvailable.sql, /^CASE WHEN .+ THEN feedPick\.marketKey IS NOT NULL ELSE m\.available=TRUE END$/su);
   assert.doesNotMatch(published.joins.sql, /feedRecommendation/u);
   assert.match(published.order.sql, /^CASE f.status WHEN 'live' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END/u);
   assert.equal(published.pageJoins, published.countJoins);

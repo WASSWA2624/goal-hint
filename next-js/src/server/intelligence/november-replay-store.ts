@@ -4,6 +4,7 @@ import { z } from "zod";
 import { legacyLocalFirstGoalMarketDefinitions, LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localFirstGoalMarketDefinitions,
   registeredForecastGoalMarkets, type RegisteredGoalMarketDefinition } from "../../domain/goal-market-definitions.ts";
 import { LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION, LOCAL_FIRST_MARKET_REGISTRY_VERSION } from "../../domain/market-registry.ts";
+import { localFeaturedDecisionSchema } from "../../domain/local-featured-decision.ts";
 import { isPlayedFinalStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
 import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
 import { novemberReplayRange } from "../../domain/november-replay.ts";
@@ -21,6 +22,7 @@ import { storedRefreshResult } from "../predictions/publication-read.ts";
 import { localGoalModelVersion } from "./local-goals-model.ts";
 import { loadNovemberReplayEvidenceInTransaction, readNovemberReplayTrainingMembership, type NovemberReplayTrainingMembership } from "./november-replay-evidence.ts";
 import { buildNovemberReplayMarkets } from "./november-replay-model.ts";
+import { preparePricedNovemberReplay } from "./november-replay-featured.ts";
 import { decodeShadowArchive, encodeShadowArchive } from "./shadow-store.ts";
 
 type Tx = Prisma.TransactionClient;
@@ -34,13 +36,17 @@ const outcomesSchema = z.strictObject({ win: probability, loss: probability, pus
 const selectedSchema = z.strictObject({ selection: selectionKey, probability });
 const topSchema = selectedSchema.extend({ marketKey: token });
 const marketIdentity = { definition: goalMarketDefinitionSchema, selected: selectedSchema };
-const publicMarketSchema = z.strictObject(marketIdentity);
-const marketSchema = z.strictObject({ ...marketIdentity, selections: z.array(z.strictObject({ key: selectionKey, outcomes: outcomesSchema })).min(2).max(128) });
+const marketSelectionsSchema = z.array(z.strictObject({ key: selectionKey, outcomes: outcomesSchema })).min(2).max(128);
+const publicMarketSchema = z.strictObject({ ...marketIdentity, selections: marketSelectionsSchema.optional() });
+const marketSchema = z.strictObject({ ...marketIdentity, unrepresentedProbability: probability.optional(), selections: marketSelectionsSchema });
+const decisionFields = { featuredDecision: localFeaturedDecisionSchema.optional(), decisionAt: historyInstant.optional(),
+  teams: z.tuple([historyId, historyId]).optional() };
 const stageSchema = z.strictObject({ fixtureId: historyId, kickoffAt: historyInstant.nullable(), cycleId: historyId.nullable(),
   scheduleVersion: historyVersion.nullable(), sourceRevisionId: historyId.nullable(), evidenceCutoffAt: historyInstant.nullable(), evidenceHash: historyHash,
   engineVersion: token, registryVersion: token, artifactHash: historyHash.nullable(), evidenceReceiptIds: z.array(historyHash).max(20_000),
   generatedAt: historyInstant, status: z.enum(["estimated", "abstained"]), reason: token.nullable(), markets: z.array(marketSchema).max(maxMarkets),
-  selected: topSchema.nullable() });
+  selected: topSchema.nullable(), ...decisionFields, replayAsOf: historyInstant.optional(),
+  suppressedProjectionRevisionId: historyHash.optional() });
 type MarketValue = z.input<typeof marketSchema>;
 export type NovemberReplayMarket = Omit<MarketValue, "selections"> & Readonly<{ selections: readonly MarketValue["selections"][number][] }>;
 export type NovemberReplayStageInput = Readonly<Omit<z.input<typeof stageSchema>, "markets" | "evidenceReceiptIds"> & {
@@ -48,16 +54,18 @@ export type NovemberReplayStageInput = Readonly<Omit<z.input<typeof stageSchema>
 }>;
 export type NovemberReplayRecord = NovemberReplayStageInput & Readonly<{ id: string; stagedAt: number }>;
 
-const projectionSchema = z.strictObject({ fixtureId: historyId, revisionId: historyHash, sourceRevisionId: historyId, cycleId: historyId,
-  kickoffAt: historyInstant, scheduleVersion: historyVersion, evidenceCutoffAt: historyInstant, generatedAt: historyInstant, activatedAt: historyInstant,
-  markets: z.array(publicMarketSchema).min(1).max(maxMarkets), selected: topSchema });
+const projectionSchema = z.strictObject({ fixtureId: historyId, revisionId: historyHash, sourceRevisionId: historyId.nullable(),
+  cycleId: historyId.nullable(), kickoffAt: historyInstant, scheduleVersion: historyVersion.nullable(),
+  evidenceCutoffAt: historyInstant, generatedAt: historyInstant, activatedAt: historyInstant,
+  markets: z.array(publicMarketSchema).min(1).max(maxMarkets), selected: topSchema.nullable(), ...decisionFields });
 export type NovemberReplayProjection = Readonly<z.infer<typeof projectionSchema>>;
 
 const actionSchema = z.strictObject({ id: historyHash, fixtureId: historyId, operationId: token,
-  kind: z.enum(["activate", "rollback"]), activationOperationId: token, revisionId: historyHash, at: historyInstant });
+  kind: z.enum(["activate", "rollback"]), activationOperationId: token, revisionId: historyHash, at: historyInstant,
+  previousProjection: z.strictObject({ projection: projectionSchema, operationId: token }).optional() });
 export type NovemberReplayAction = Readonly<z.infer<typeof actionSchema>>;
 type RollbackInput = Readonly<{ fixtureId: string; operationId: string; activationOperationId: string }>;
-type ActivationInput = Readonly<{ operationId: string; revisionId: string }>;
+type ActivationInput = Readonly<{ operationId: string; revisionId: string; expectedProjectionRevisionId?: string | null }>;
 
 function replayMarketFingerprints(markets: readonly RegisteredGoalMarketDefinition[], enabled: readonly GoalMarketDefinition[]) {
   const supported = new Set([...enabled.map(({ key }) => key), ...(Object.keys(marketSelections) as MarketFamily[]).map(legacyForecastMarketKey)]);
@@ -81,10 +89,12 @@ export class NovemberReplayStoreError extends Error {
 const deny = (reason: NovemberReplayStoreError["reason"]): never => { throw new NovemberReplayStoreError(reason); };
 
 function validateMarkets(input: z.output<typeof stageSchema>, definitions: ReadonlyMap<string, string>) {
-  const { markets, selected } = input;
-  if (!selected || markets.length !== definitions.size || new Set(markets.map(({ definition }) => definition.key)).size !== markets.length) return false;
+  const { markets, selected, featuredDecision } = input;
+  if (!markets.length || !featuredDecision && markets.length !== definitions.size ||
+      new Set(markets.map(({ definition }) => definition.key)).size !== markets.length) return false;
   const best = markets.map(({ definition, selected: pick }) => ({ key: definition.key, ...pick, odds: null })).sort(compareForecastPicks)[0];
-  if (!best || best.key !== selected.marketKey || best.selection !== selected.selection || best.probability !== selected.probability) return false;
+  if (featuredDecision ? !featuredSelectionMatches(input) :
+    !selected || !best || best.key !== selected.marketKey || best.selection !== selected.selection || best.probability !== selected.probability) return false;
   return markets.every((market) => {
     const { definition, selections } = market;
     const choice = selections.map(({ key: selection, outcomes }) => ({ key: definition.key, selection, probability: outcomes.win, odds: null }))
@@ -94,8 +104,19 @@ function validateMarkets(input: z.output<typeof stageSchema>, definitions: Reado
       definition.selections.every(({ key }) => selections.some((selection) => selection.key === key)) &&
       choice?.selection === market.selected.selection && choice.probability === market.selected.probability &&
       selections.every(({ outcomes }) =>
-        Math.abs(Object.values(outcomes).reduce((sum, mass) => sum + mass, 0) - 1) <= 1e-6);
+        Math.abs(Object.values(outcomes).reduce((sum, mass) => sum + mass, market.unrepresentedProbability ?? 0) - 1) <= 1e-6);
   });
+}
+
+function featuredSelectionMatches({ selected, featuredDecision, decisionAt, markets }: Pick<NovemberReplayProjection,
+  "selected" | "featuredDecision" | "decisionAt" | "markets">) {
+  if (!featuredDecision || decisionAt === undefined) return false;
+  if (featuredDecision.status !== "priced") return selected === null;
+  return Boolean(selected && selected.marketKey === featuredDecision.marketKey && selected.selection === featuredDecision.selection &&
+    selected.probability === featuredDecision.probability && featuredDecision.quote.observedAt <= decisionAt &&
+    featuredDecision.quote.checkedAt <= decisionAt && (featuredDecision.quote.providerUpdatedAt ?? 0) <= decisionAt &&
+    markets.some(({ definition, selections }) => definition.key === selected.marketKey &&
+      selections?.some(({ key, outcomes }) => key === selected.selection && outcomes.win === selected.probability)));
 }
 
 function checkedStage(value: unknown) {
@@ -103,10 +124,19 @@ function checkedStage(value: unknown) {
   if (!parsed.success) return deny("invalid-input");
   const input = parsed.data, { kickoffAt, evidenceCutoffAt, generatedAt } = input;
   const definitions = registered.get(input.registryVersion);
-  if (!definitions || kickoffAt !== null && !inNovember(kickoffAt) || evidenceCutoffAt !== null &&
+  const { featuredDecision, decisionAt, replayAsOf, teams, suppressedProjectionRevisionId } = input;
+  if (!definitions || !featuredDecision && kickoffAt !== null && !inNovember(kickoffAt) || evidenceCutoffAt !== null &&
       (kickoffAt === null || evidenceCutoffAt >= kickoffAt || generatedAt < evidenceCutoffAt) ||
       input.sourceRevisionId !== null && input.cycleId === null || input.scheduleVersion !== null && input.cycleId === null ||
       new Set(input.evidenceReceiptIds).size !== input.evidenceReceiptIds.length) return deny("invalid-input");
+  if (featuredDecision ? !teams || teams[0] === teams[1] || kickoffAt === null ||
+    evidenceCutoffAt === null || decisionAt === undefined || evidenceCutoffAt > decisionAt || decisionAt >= kickoffAt ||
+    replayAsOf === undefined || decisionAt >= replayAsOf || replayAsOf > generatedAt ||
+    (input.cycleId === null) !== (input.scheduleVersion === null) ||
+    (input.status === "abstained") !== (suppressedProjectionRevisionId !== undefined) ||
+    suppressedProjectionRevisionId && (featuredDecision.status !== "abstained" || featuredDecision.reason !== "no-local-forecast")
+    : decisionAt !== undefined || replayAsOf !== undefined || teams !== undefined || suppressedProjectionRevisionId !== undefined)
+    return deny("invalid-input");
   if (input.status === "estimated" ? input.reason !== null || kickoffAt === null || generatedAt < kickoffAt || evidenceCutoffAt === null ||
     input.artifactHash === null || input.evidenceReceiptIds.length === 0 || !validateMarkets(input, definitions) :
     input.reason === null || input.markets.length !== 0 || input.selected !== null) return deny("invalid-input");
@@ -116,8 +146,11 @@ function checkedStage(value: unknown) {
 
 function replayId(input: NovemberReplayStageInput) {
   const { fixtureId, kickoffAt, cycleId, scheduleVersion, sourceRevisionId, engineVersion, registryVersion, evidenceHash } = input;
-  return evidenceFingerprint({ cohort: "2026-11-africa-kampala", fixtureId, kickoffAt, cycleId, scheduleVersion, sourceRevisionId,
-    engineVersion, registryVersion, evidenceHash });
+  const legacy = { cohort: "2026-11-africa-kampala", fixtureId, kickoffAt, cycleId, scheduleVersion, sourceRevisionId,
+    engineVersion, registryVersion, evidenceHash };
+  const { featuredDecision, decisionAt, replayAsOf, suppressedProjectionRevisionId } = input;
+  return evidenceFingerprint(featuredDecision ? { ...legacy, cohort: "point-in-time-featured-replay", featuredDecision, decisionAt,
+    replayAsOf, ...(suppressedProjectionRevisionId && { suppressedProjectionRevisionId }) } : legacy);
 }
 
 function storedClock(value: unknown) {
@@ -153,30 +186,42 @@ function projectionFromRow(row: HistoryRow): NovemberReplayProjection {
   if (!parsed.success) return deny("corrupt-record");
   const result = parsed.data;
   if (result.fixtureId !== row.fixtureId || result.revisionId !== row.revisionId || result.cycleId !== row.cycleId ||
-    result.sourceRevisionId !== row.sourceRevisionId || result.scheduleVersion !== Number(row.scheduleVersion) ||
+    result.sourceRevisionId !== row.sourceRevisionId || result.scheduleVersion !== (row.scheduleVersion === null ? null : Number(row.scheduleVersion)) ||
     result.kickoffAt !== storedClock(row.kickoffAt) || result.evidenceCutoffAt !== storedClock(row.evidenceCutoffAt) ||
-    result.activatedAt !== storedClock(row.changedAt) || !inNovember(result.kickoffAt) || result.evidenceCutoffAt >= result.kickoffAt ||
+    result.activatedAt !== storedClock(row.changedAt) || !result.featuredDecision && !inNovember(result.kickoffAt) ||
+    result.evidenceCutoffAt >= result.kickoffAt ||
     result.generatedAt < result.kickoffAt || result.generatedAt > result.activatedAt ||
     new Set(result.markets.map(({ definition }) => definition.key)).size !== result.markets.length ||
-    !result.markets.some(({ definition, selected }) => definition.key === result.selected.marketKey &&
-      selected.selection === result.selected.selection && selected.probability === result.selected.probability)) return deny("corrupt-record");
+    (result.featuredDecision ? !result.teams || result.decisionAt === undefined || result.decisionAt < result.evidenceCutoffAt ||
+      result.decisionAt >= result.kickoffAt || !featuredSelectionMatches(result) : !result.selected || !result.cycleId || !result.sourceRevisionId ||
+      !result.markets.some(({ definition, selected }) => definition.key === result.selected?.marketKey &&
+        selected.selection === result.selected.selection && selected.probability === result.selected.probability))) return deny("corrupt-record");
   return freezeEvidence(result);
 }
 
 /** Shared eligibility for public batch hydration and SQL outcome filtering. */
+const projectionBody = Prisma.sql`JSON_UNQUOTE(JSON_EXTRACT(p.body,'$.canonicalBody'))`;
+const storedDecisionAt = Prisma.sql`CAST(JSON_UNQUOTE(JSON_EXTRACT(${projectionBody},'$.decisionAt')) AS SIGNED)`;
+const decisionTime = Prisma.sql`COALESCE(TIMESTAMPADD(MICROSECOND,${storedDecisionAt}*1000,'1970-01-01 00:00:00.000'),p.evidenceCutoffAt)`;
 export const activeNovemberReplaySql = Prisma.sql`(SELECT p.*,TRUE AS validIntegrity
-  FROM NovemberReplayProjection p JOIN FootballFixture f ON f.id=p.fixtureId AND f.activeCycleId=p.cycleId AND f.kickoff=p.kickoffAt
-  JOIN PredictionCycle c ON c.id=p.cycleId AND c.fixtureId=p.fixtureId AND c.state='closed' AND c.lockedSetId=p.sourceRevisionId
-    AND c.scheduleVersion=p.scheduleVersion AND c.kickoffAt=p.kickoffAt AND c.closedAt>=p.evidenceCutoffAt
-  JOIN PredictionSet s ON s.id=p.sourceRevisionId AND s.cycleId=p.cycleId AND s.fixtureId=p.fixtureId
-    AND JSON_UNQUOTE(JSON_EXTRACT(s.candidateJson,'$.context.context.home.teamId'))=f.homeTeamId
-    AND JSON_UNQUOTE(JSON_EXTRACT(s.candidateJson,'$.context.context.away.teamId'))=f.awayTeamId
+  FROM NovemberReplayProjection p JOIN FootballFixture f ON f.id=p.fixtureId AND f.activeCycleId<=>p.cycleId AND f.kickoff=p.kickoffAt
+  LEFT JOIN PredictionCycle c ON c.id=p.cycleId AND c.fixtureId=p.fixtureId AND c.state='closed' AND c.lockedSetId<=>p.sourceRevisionId
+    AND c.scheduleVersion=p.scheduleVersion AND c.kickoffAt=p.kickoffAt AND c.closedAt>=${decisionTime}
+  LEFT JOIN PredictionSet s ON s.id=p.sourceRevisionId AND s.cycleId=p.cycleId AND s.fixtureId=p.fixtureId
   LEFT JOIN FixtureLifecycleState l ON l.fixtureId=f.id
   LEFT JOIN PredictionPublicationBarrier b ON b.cycleId=c.id
   WHERE p.revisionId IS NOT NULL AND p.integrity=SHA2(CAST(p.body AS CHAR CHARACTER SET utf8mb4),256) AND f.provider='api-football'
+    AND (p.cycleId IS NULL OR c.id IS NOT NULL)
+    AND (p.sourceRevisionId IS NULL OR s.id IS NOT NULL
+      AND JSON_UNQUOTE(JSON_EXTRACT(s.candidateJson,'$.context.context.home.teamId'))=f.homeTeamId
+      AND JSON_UNQUOTE(JSON_EXTRACT(s.candidateJson,'$.context.context.away.teamId'))=f.awayTeamId)
+    AND ((${storedDecisionAt} IS NULL AND p.sourceRevisionId IS NOT NULL) OR
+      (JSON_UNQUOTE(JSON_EXTRACT(${projectionBody},'$.teams[0]'))=f.homeTeamId AND
+       JSON_UNQUOTE(JSON_EXTRACT(${projectionBody},'$.teams[1]'))=f.awayTeamId))
     AND f.status IN ('live','finished-regulation','finished-extra-time','finished-penalties') AND l.issue IS NULL
-    AND (l.actualStartedAt IS NULL OR l.actualStartedAt>=p.evidenceCutoffAt)
-    AND (b.closedAt IS NULL OR b.closedAt>=p.evidenceCutoffAt))`;
+    AND (l.actualStartedAt IS NULL OR l.actualStartedAt>${decisionTime}
+      OR (${storedDecisionAt} IS NULL AND l.actualStartedAt=p.evidenceCutoffAt))
+    AND (b.closedAt IS NULL OR b.closedAt>=${decisionTime}))`;
 
 /** The public role reads only the compact projection, under the same fixture snapshot as Matches. */
 export async function readNovemberReplayProjections(tx: Tx, fixtureIds: readonly string[]): Promise<ReadonlyMap<string, NovemberReplayProjection>> {
@@ -196,7 +241,9 @@ export async function readNovemberReplayProjections(tx: Tx, fixtureIds: readonly
 type Rejection = "not-staged" | "abstained" | "missing-locked-source" | "occurrence-changed" | "source-not-api" |
   "evidence-changed" | "projection-owned" | "registry-superseded";
 type ReplayDiff = Readonly<{ revisionId: string; fixtureId: string | null; sourceRevisionId: string | null;
-  kickoffAt: number | null; selected: NovemberReplayRecord["selected"]; eligible: boolean; reason: Rejection | "eligible" }>;
+  kickoffAt: number | null; selected: NovemberReplayRecord["selected"]; eligible: boolean; reason: Rejection | "eligible";
+  featuredDecision?: NovemberReplayRecord["featuredDecision"]; previousProjectionRevisionId?: string | null;
+  previousSelection?: NovemberReplayRecord["selected"] }>;
 
 async function verifiedSource(tx: Tx, record: NovemberReplayRecord, cycle: StoredCycle,
   fixture: { externalId: bigint; homeTeamId: string; awayTeamId: string }) {
@@ -235,30 +282,42 @@ async function verifiedSource(tx: Tx, record: NovemberReplayRecord, cycle: Store
 }
 
 async function activationRejection(tx: Tx, record: NovemberReplayRecord, at: number,
-  training: NovemberReplayTrainingMembership): Promise<Rejection | null> {
+  training: NovemberReplayTrainingMembership, previous: NovemberReplayProjection | null): Promise<Rejection | null> {
   if (record.registryVersion !== LOCAL_FIRST_MARKET_REGISTRY_VERSION) return "registry-superseded";
-  if (record.status !== "estimated") return "abstained";
+  if (record.status !== "estimated" && !record.suppressedProjectionRevisionId) return "abstained";
   const { fixtureId, cycleId, scheduleVersion, sourceRevisionId, evidenceCutoffAt, kickoffAt } = record;
-  if (!cycleId || scheduleVersion === null || !sourceRevisionId || evidenceCutoffAt === null || kickoffAt === null)
+  if (evidenceCutoffAt === null || kickoffAt === null || !record.featuredDecision && (!cycleId || scheduleVersion === null || !sourceRevisionId))
     return "missing-locked-source";
   const fixture = await tx.footballFixture.findUnique({ where: { id: fixtureId }, include: { homeTeam: { select: { name: true } },
     awayTeam: { select: { name: true } }, season: { include: { competition: { select: { name: true } } } },
     lifecycleState: { select: { issue: true, actualStartedAt: true } } } });
-  const cycle = await storedCycle(tx, cycleId);
+  const cycle = cycleId === null ? null : await storedCycle(tx, cycleId);
+  const decisionAt = record.decisionAt ?? evidenceCutoffAt;
   if (!fixture || fixture.provider !== "api-football" || !played(fixture.status) || fixture.kickoff?.getTime() !== kickoffAt ||
     fixture.activeCycleId !== cycleId || fixture.lifecycleState?.issue ||
-    (fixture.lifecycleState?.actualStartedAt?.getTime() ?? Infinity) < evidenceCutoffAt ||
-    !cycle || cycle.fixtureId !== fixtureId || cycle.kickoffAt !== kickoffAt || cycle.scheduleVersion !== scheduleVersion)
+    (fixture.lifecycleState?.actualStartedAt?.getTime() ?? Infinity) < (record.featuredDecision ? decisionAt + 1 : decisionAt) ||
+    cycleId !== null && (!cycle || cycle.fixtureId !== fixtureId || cycle.kickoffAt !== kickoffAt || cycle.scheduleVersion !== scheduleVersion) ||
+    record.teams && (record.teams[0] !== fixture.homeTeamId || record.teams[1] !== fixture.awayTeamId))
     return "occurrence-changed";
-  if (cycle.state !== "closed" || cycle.lockedSetId !== sourceRevisionId || cycle.closedAt === null || cycle.closedAt < evidenceCutoffAt)
+  if (cycle && (cycle.state !== "closed" || cycle.lockedSetId !== sourceRevisionId || cycle.closedAt === null || cycle.closedAt < decisionAt))
     return "missing-locked-source";
-  if (!await verifiedSource(tx, record, cycle, fixture))
-    return "source-not-api";
   if (record.engineVersion !== localGoalModelVersion()) return "evidence-changed";
-  const evidence = await loadNovemberReplayEvidenceInTransaction(tx, { fixtureId, externalId: fixture.externalId,
+  const occurrence = { fixtureId, externalId: fixture.externalId,
     kickoffAt, fixtureVersion: fixture.dataVersion, competitionId: fixture.season.competitionId, competitionName: fixture.season.competition.name,
     homeTeamId: fixture.homeTeamId, homeTeamName: fixture.homeTeam.name, awayTeamId: fixture.awayTeamId, awayTeamName: fixture.awayTeam.name,
-    status: fixture.status, applicable: true, cycleId, originalRevisionId: sourceRevisionId }, at, training);
+    status: fixture.status, applicable: true, cycleId, originalRevisionId: sourceRevisionId };
+  if (record.featuredDecision && record.replayAsOf !== undefined) {
+    const { evidence, result } = await preparePricedNovemberReplay(tx, occurrence, record.replayAsOf, training);
+    if (record.suppressedProjectionRevisionId) return previous?.revisionId === record.suppressedProjectionRevisionId &&
+      !previous.featuredDecision && !result && evidence.evidenceHash === record.evidenceHash ? null : "evidence-changed";
+    const approved = { artifactHash: record.artifactHash, markets: record.markets, selected: record.selected,
+      decisionAt: record.decisionAt, featuredDecision: record.featuredDecision };
+    return evidence.evidenceHash === record.evidenceHash && evidence.cutoffAt === evidenceCutoffAt && evidence.scheduleVersion === scheduleVersion &&
+      evidenceFingerprint(evidence.evidenceReceiptIds) === evidenceFingerprint(record.evidenceReceiptIds) &&
+      evidenceFingerprint(result) === evidenceFingerprint(approved) ? null : "evidence-changed";
+  }
+  if (!cycle || !await verifiedSource(tx, record, cycle, fixture)) return "source-not-api";
+  const evidence = await loadNovemberReplayEvidenceInTransaction(tx, occurrence, at, training);
   if (evidence.status !== "qualified" || !evidence.forecast || evidence.forecast.hash !== record.artifactHash ||
     evidence.evidenceHash !== record.evidenceHash || evidence.cutoffAt !== evidenceCutoffAt || evidence.scheduleVersion !== scheduleVersion ||
     evidenceFingerprint(evidence.evidenceReceiptIds) !== evidenceFingerprint(record.evidenceReceiptIds)) return "evidence-changed";
@@ -277,7 +336,9 @@ async function readAction(tx: Tx, fixtureId: string, operationId: string): Promi
   const value = parsed.data;
   if (value.id !== row.id || value.id !== actionId(fixtureId, operationId) || value.fixtureId !== fixtureId || value.operationId !== operationId ||
     value.kind !== row.kind || value.activationOperationId !== row.activationOperationId || value.revisionId !== row.revisionId ||
-    value.at !== storedClock(row.at)) return deny("corrupt-record");
+    value.at !== storedClock(row.at) || value.previousProjection && (value.kind !== "activate" ||
+      value.previousProjection.projection.fixtureId !== fixtureId || value.previousProjection.projection.revisionId === value.revisionId ||
+      value.previousProjection.projection.activatedAt > value.at)) return deny("corrupt-record");
   return freezeEvidence(value);
 }
 
@@ -298,16 +359,37 @@ async function lockFixture(tx: Tx, fixtureId: string) {
 
 class ReplayPointerInitializationRace extends Error {}
 
+async function readPointer(tx: Tx, fixtureId: string) {
+  const [pointer] = await tx.$queryRaw<HistoryRow[]>`
+    SELECT *,integrity=SHA2(CAST(body AS CHAR CHARACTER SET utf8mb4),256) AS validIntegrity
+    FROM NovemberReplayProjection WHERE fixtureId=${fixtureId}`;
+  if (!pointer) return null;
+  if (pointer.revisionId === null) return { revisionId: null, operationId: null, projection: null };
+  const operationId = token.safeParse(pointer.activationOperationId);
+  if (!operationId.success) return deny("corrupt-record");
+  const projection = projectionFromRow(pointer);
+  return { revisionId: projection.revisionId, operationId: operationId.data, projection };
+}
+
 async function lockPointer(tx: Tx, fixtureId: string, at: number) {
-  const [pointer] = await tx.$queryRaw<{ revisionId: string | null; activationOperationId: string | null }[]>`
+  const [locked] = await tx.$queryRaw<{ revisionId: string | null; activationOperationId: string | null }[]>`
     SELECT revisionId,activationOperationId FROM NovemberReplayProjection WHERE fixtureId=${fixtureId} FOR UPDATE`;
-  if (pointer) return pointer;
+  if (locked) return await readPointer(tx, fixtureId) ?? deny("unavailable");
   const inserted = await tx.$executeRaw`INSERT IGNORE INTO NovemberReplayProjection (fixtureId,changedAt)
     VALUES (${fixtureId},${new Date(at)})`;
   // Dropping the transaction releases a concurrent duplicate's shared lock
   // before the retry acquires the existing pointer exclusively.
   if (inserted !== 1) throw new ReplayPointerInitializationRace();
-  return { revisionId: null, activationOperationId: null };
+  return { revisionId: null, operationId: null, projection: null };
+}
+
+async function writeProjection(tx: Tx, projection: NovemberReplayProjection, operationId: string) {
+  const body = encodeShadowArchive(projection);
+  await tx.$executeRaw`UPDATE NovemberReplayProjection SET revisionId=${projection.revisionId},sourceRevisionId=${projection.sourceRevisionId},
+    cycleId=${projection.cycleId},scheduleVersion=${projection.scheduleVersion},kickoffAt=${new Date(projection.kickoffAt)},
+    evidenceCutoffAt=${new Date(projection.evidenceCutoffAt)},activationOperationId=${operationId},changedAt=${new Date(projection.activatedAt)},
+    integrity=SHA2(CAST(JSON_EXTRACT(${body},'$') AS CHAR CHARACTER SET utf8mb4),256),body=JSON_EXTRACT(${body},'$')
+    WHERE fixtureId=${projection.fixtureId}`;
 }
 
 // Runtime errors from the database are sanitized. Preserve classified replay
@@ -360,6 +442,11 @@ export function createMysqlNovemberReplayStore(database: Pick<DatabaseRuntime, "
         return saved;
       });
     },
+    async activeProjections(window: Readonly<{ startInclusive: number; endExclusive: number }>) {
+      return runReplay(database, async (tx) => (await tx.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT p.*
+        FROM ${activeNovemberReplaySql} p WHERE p.kickoffAt>=${new Date(window.startInclusive)} AND p.kickoffAt<${new Date(window.endExclusive)}`))
+        .map(projectionFromRow));
+    },
     async activationDiff(ids: readonly string[]): Promise<readonly ReplayDiff[]> {
       if (ids.some((id) => !historyHash.safeParse(id).success)) return deny("invalid-input");
       const result: ReplayDiff[] = [];
@@ -370,17 +457,21 @@ export function createMysqlNovemberReplayStore(database: Pick<DatabaseRuntime, "
           const record = await readRecord(tx, revisionId);
           if (!record) return { revisionId, fixtureId: null, sourceRevisionId: null, kickoffAt: null, selected: null,
             eligible: false, reason: "not-staged" };
-          const { fixtureId, sourceRevisionId, kickoffAt, selected } = record;
+          const { fixtureId, sourceRevisionId, kickoffAt, selected, featuredDecision } = record;
           const pointer = record.registryVersion === LOCAL_FIRST_MARKET_REGISTRY_VERSION
-            ? await tx.novemberReplayProjection.findUnique({ where: { fixtureId }, select: { revisionId: true } }) : null;
-          const reason = pointer?.revisionId ? "projection-owned" : await activationRejection(tx, record, await serverNow(tx), membership);
-          return { revisionId, fixtureId, sourceRevisionId, kickoffAt, selected, eligible: reason === null, reason: reason ?? "eligible" };
+            ? await readPointer(tx, fixtureId) : null;
+          const owned = pointer?.revisionId && (!featuredDecision || pointer.revisionId === revisionId);
+          const reason = owned ? "projection-owned" : await activationRejection(tx, record, await serverNow(tx), membership, pointer?.projection ?? null);
+          return { revisionId, fixtureId, sourceRevisionId, kickoffAt, selected, featuredDecision,
+            previousProjectionRevisionId: pointer?.revisionId ?? null, previousSelection: pointer?.projection?.selected ?? null,
+            eligible: reason === null, reason: reason ?? "eligible" };
         }));
       }
       return freezeEvidence(result);
     },
-    async activate({ operationId, revisionId }: ActivationInput): Promise<NovemberReplayAction> {
-      if (!token.safeParse(operationId).success || !historyHash.safeParse(revisionId).success) return deny("invalid-input");
+    async activate({ operationId, revisionId, expectedProjectionRevisionId }: ActivationInput): Promise<NovemberReplayAction> {
+      if (!token.safeParse(operationId).success || !historyHash.safeParse(revisionId).success ||
+        expectedProjectionRevisionId != null && !historyHash.safeParse(expectedProjectionRevisionId).success) return deny("invalid-input");
       const activationReceipt = (prior: NovemberReplayAction) => prior.kind === "activate" && prior.revisionId === revisionId
         ? prior : deny("conflicting-operation");
       if (!training) {
@@ -402,20 +493,22 @@ export function createMysqlNovemberReplayStore(database: Pick<DatabaseRuntime, "
         const prior = await readAction(tx, fixtureId, operationId);
         if (prior) return activationReceipt(prior);
         if (record.registryVersion !== LOCAL_FIRST_MARKET_REGISTRY_VERSION) return deny("registry-superseded");
-        if (pointer.revisionId !== null) return deny("projection-owned");
-        const reason = await activationRejection(tx, record, await serverNow(tx), membership);
+        if (pointer.revisionId !== (expectedProjectionRevisionId ?? null) ||
+          pointer.revisionId !== null && (!record.featuredDecision || pointer.revisionId === revisionId)) return deny("projection-owned");
+        const reason = await activationRejection(tx, record, await serverNow(tx), membership, pointer.projection);
         if (reason) return deny(reason);
         const at = await serverNow(tx);
         const projection = projectionSchema.parse({ fixtureId, revisionId, sourceRevisionId: record.sourceRevisionId, cycleId: record.cycleId,
           scheduleVersion: record.scheduleVersion, kickoffAt: record.kickoffAt, evidenceCutoffAt: record.evidenceCutoffAt,
           generatedAt: record.generatedAt, activatedAt: at, selected: record.selected,
-          markets: record.markets.map(({ definition, selected }) => ({ definition, selected })) });
-        const body = encodeShadowArchive(projection);
-        const receipt = await addAction(tx, { fixtureId, operationId, activationOperationId: operationId, revisionId, kind: "activate", at });
-        await tx.$executeRaw`UPDATE NovemberReplayProjection SET revisionId=${revisionId},sourceRevisionId=${projection.sourceRevisionId},
-          cycleId=${projection.cycleId},scheduleVersion=${projection.scheduleVersion},kickoffAt=${new Date(projection.kickoffAt)},
-          evidenceCutoffAt=${new Date(projection.evidenceCutoffAt)},activationOperationId=${operationId},changedAt=${new Date(at)},
-          integrity=SHA2(CAST(JSON_EXTRACT(${body},'$') AS CHAR CHARACTER SET utf8mb4),256),body=JSON_EXTRACT(${body},'$') WHERE fixtureId=${fixtureId}`;
+          markets: record.suppressedProjectionRevisionId ? pointer.projection?.markets :
+            record.markets.map(({ definition, selected, selections }) => ({ definition, selected, ...(record.featuredDecision && { selections }) })),
+          ...(record.featuredDecision && { featuredDecision: record.featuredDecision, decisionAt: record.decisionAt, teams: record.teams }) });
+        const previousProjection = pointer.projection && pointer.operationId
+          ? { projection: pointer.projection, operationId: pointer.operationId } : undefined;
+        const receipt = await addAction(tx, { fixtureId, operationId, activationOperationId: operationId, revisionId, kind: "activate", at,
+          ...(previousProjection && { previousProjection }) });
+        await writeProjection(tx, projection, operationId);
         return receipt;
       });
     },
@@ -428,10 +521,11 @@ export function createMysqlNovemberReplayStore(database: Pick<DatabaseRuntime, "
         const prior = await readAction(tx, fixtureId, operationId);
         if (prior) return prior.kind === "rollback" && prior.activationOperationId === activationOperationId ? prior : deny("conflicting-operation");
         const activation = await readAction(tx, fixtureId, activationOperationId);
-        if (!activation || activation.kind !== "activate" || pointer.activationOperationId !== activationOperationId ||
+        if (!activation || activation.kind !== "activate" || pointer.operationId !== activationOperationId ||
           pointer.revisionId !== activation.revisionId) return deny("projection-owned");
         const receipt = await addAction(tx, { fixtureId, operationId, activationOperationId, revisionId: activation.revisionId, kind: "rollback", at });
-        await tx.$executeRaw`UPDATE NovemberReplayProjection SET revisionId=NULL,sourceRevisionId=NULL,cycleId=NULL,scheduleVersion=NULL,
+        if (activation.previousProjection) await writeProjection(tx, activation.previousProjection.projection, activation.previousProjection.operationId);
+        else await tx.$executeRaw`UPDATE NovemberReplayProjection SET revisionId=NULL,sourceRevisionId=NULL,cycleId=NULL,scheduleVersion=NULL,
           kickoffAt=NULL,evidenceCutoffAt=NULL,activationOperationId=NULL,integrity=NULL,body=NULL,changedAt=${new Date(at)}
           WHERE fixtureId=${fixtureId}`;
         return receipt;

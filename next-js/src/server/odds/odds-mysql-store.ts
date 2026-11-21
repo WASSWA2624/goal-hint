@@ -2,7 +2,8 @@ import "server-only";
 
 import { z } from "zod";
 import { isVerifiedPreMatchObservation } from "../../domain/bookmaker-odds.ts";
-import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
+import { localFeaturedBookmakerBetIds } from "../../domain/local-featured-decision.ts";
+import { getReportingDate, utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
 import { launchOddsGroup, launchOddsMapping } from "../../domain/odds-markets.ts";
 import { total15MarketKey, total15OddsSchema, total15Selections, type Total15Odds } from "../../domain/extended-markets.ts";
 import { parseDecimalOdds } from "../../domain/odds.ts";
@@ -246,33 +247,101 @@ export async function storedClosingBookmakerQuotes(tx: Tx, fixture: BookmakerFix
   return (await storedBookmakerQuotes(tx, [fixture], asOf, true)).get(fixture.fixtureId) ?? null;
 }
 
+type HistoricalManifest = Readonly<{ receivedAt: number; latestObservationAt: number; bookmakerScope: number | null;
+  books: ReadonlyMap<number, NonNullable<OddsBatchBody["fixtures"][number]["quoteManifest"]>> }>;
+
+async function readReplayAvailability(tx: Tx, encounters: ReadonlyMap<number, Readonly<{
+  kickoffAt: number; decisionAt: number; preMatchUntil: number; reportingDate: string;
+}>>, accountIds: readonly string[], from: Date, through: Date) {
+  const manifests = new Map<number, HistoricalManifest[]>();
+  if (!encounters.size || !accountIds.length) return manifests;
+  const rows = await tx.$queryRaw<SealedRow[]>(Prisma.sql`
+    SELECT b.id,b.body,b.integrity=SHA2(CAST(b.body AS CHAR),256) AS validIntegrity
+    FROM OddsImportBatch b WHERE b.accountId IN (${Prisma.join(accountIds)})
+      AND b.receivedAt BETWEEN ${from} AND ${through} AND b.kind='prices' AND b.status IN ('complete','partial')
+      AND EXISTS (SELECT 1 FROM JSON_TABLE(b.body,'$.fixtures[*]' COLUMNS (
+        externalId BIGINT PATH '$.externalId', outcome VARCHAR(24) PATH '$.outcome'
+      )) fixture WHERE fixture.externalId IN (${Prisma.join([...encounters.keys()])}) AND fixture.outcome='apply')
+    ORDER BY b.receivedAt DESC,b.id DESC`);
+  for (const row of rows) {
+    const batch = parsedBatch(row);
+    const captures = batch.pages.filter(({ endpoint, fromCache }) => endpoint === "odds" && !fromCache);
+    const first = captures[0];
+    if (batch.recovery || !first || captures.some(({ requestParameters, retrievedAt }) => requestParameters.date !== batch.date ||
+      requestParameters.bookmaker !== first.requestParameters.bookmaker || retrievedAt > batch.receivedAt)) continue;
+    const selectedBookmaker = first.requestParameters.bookmaker;
+    if (selectedBookmaker !== undefined && !/^[1-9]\d*$/u.test(selectedBookmaker)) continue;
+    const bookmakerScope = selectedBookmaker === undefined ? null : Number(selectedBookmaker);
+    const latestObservationAt = Math.max(...captures.map(({ retrievedAt }) => retrievedAt));
+    for (const { externalId, outcome, quoteManifest, additionalQuoteManifests } of batch.fixtures) {
+      const encounter = encounters.get(externalId);
+      if (!encounter || outcome !== "apply" || quoteManifest?.kickoffAt !== encounter.kickoffAt ||
+        batch.date !== encounter.reportingDate ||
+        batch.receivedAt > encounter.decisionAt || batch.receivedAt >= encounter.preMatchUntil) continue;
+      const books = new Map([quoteManifest, ...(additionalQuoteManifests ?? [])].map((book) => [book.bookmakerId, book]));
+      const observations = manifests.get(externalId) ?? [];
+      observations.push({ receivedAt: batch.receivedAt, latestObservationAt, bookmakerScope, books });
+      manifests.set(externalId, observations);
+    }
+  }
+  return manifests;
+}
+
+function replayOfferStillAvailable(snapshot: Pick<StoredOddsSnapshot, "retrievedAt" | "bookmakerId" | "betId" | "betName" | "valuesHash">,
+  originalReceivedAt: number, availability: readonly HistoricalManifest[]) {
+  let newest = originalReceivedAt;
+  for (const receipt of availability) {
+    if (receipt.receivedAt < newest || receipt.latestObservationAt < snapshot.retrievedAt ||
+      receipt.bookmakerScope !== null && receipt.bookmakerScope !== snapshot.bookmakerId) continue;
+    const market = receipt.books.get(snapshot.bookmakerId)?.bets.find(({ betId }) => betId === snapshot.betId);
+    if (!market || market.betName !== snapshot.betName || market.valuesHash !== snapshot.valuesHash) return false;
+    newest = receipt.receivedAt;
+  }
+  return true;
+}
+
 async function readHistoricalBookmakerQuotes(tx: Tx, fixtures: readonly BookmakerFixture[], asOf: number,
-  betIds: readonly number[] | undefined, verifiedBeforeKickoff: boolean): Promise<ReadonlyMap<string, StoredCurrentBookmakerQuotes>> {
+  betIds: readonly number[] | undefined, verifiedBeforeKickoff: boolean, decisionTimes?: ReadonlyMap<string, number>):
+  Promise<ReadonlyMap<string, StoredCurrentBookmakerQuotes>> {
   const expectedKickoff = new Map(fixtures.flatMap(({ fixtureId, kickoffAt }) =>
     kickoffAt !== null && kickoffAt <= asOf ? [[fixtureId, kickoffAt]] : []));
   const found = new Map<string, StoredCurrentBookmakerQuotes>();
   if (!expectedKickoff.size || betIds?.length === 0) return found;
   const at = new Date(asOf);
-  const [catalogRow] = await tx.$queryRaw<SealedRow[]>`SELECT id,body,integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity
-    FROM OddsImportBatch WHERE scopeKey='bets' AND kind='bets' AND status='complete' AND receivedAt<=${at}
+  const decisionClocks = decisionTimes ? [...decisionTimes.values()] : [asOf];
+  const oldestDecision = new Date(Math.min(...decisionClocks)), newestDecision = new Date(Math.max(...decisionClocks));
+  const [baseline] = await tx.$queryRaw<SealedRow[]>`SELECT id,body,integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity
+    FROM OddsImportBatch WHERE scopeKey='bets' AND kind='bets' AND status='complete' AND receivedAt<=${oldestDecision}
     ORDER BY receivedAt DESC,id DESC LIMIT 1`;
-  if (!catalogRow) return found;
-  const catalog = new Map(parsedBatch(catalogRow).catalog.map(({ id, name }) => [id, name]));
-  type SnapshotRow = SealedRow & { externalId: bigint; kickoff: Date; preMatchUntil: Date; batchId: string; recovered: unknown };
+  const recent = decisionTimes ? await tx.$queryRaw<SealedRow[]>`SELECT id,body,integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity
+    FROM OddsImportBatch WHERE scopeKey='bets' AND kind='bets' AND status='complete'
+      AND receivedAt>${oldestDecision} AND receivedAt<=${newestDecision}
+    ORDER BY receivedAt DESC,id DESC` : [];
+  const catalogs = [...recent, ...(baseline ? [baseline] : [])].map((row) => {
+    const { receivedAt, catalog } = parsedBatch(row);
+    return { receivedAt, names: new Map(catalog.map(({ id, name }) => [id, name])) };
+  });
+  if (!catalogs.length) return found;
+  type SnapshotRow = SealedRow & { fixtureId: string; externalId: bigint; kickoff: Date; preMatchUntil: Date; batchId: string; recovered: unknown };
   const fixtureIds = Prisma.join([...expectedKickoff.keys()]);
   const lifecycle = verifiedBeforeKickoff ? Prisma.sql`LEFT JOIN FixtureLifecycleState life
     ON life.fixtureId=f.id AND life.retrievedAt<=${at} AND life.issue IS NULL` : Prisma.empty;
   const preMatchUntil = verifiedBeforeKickoff ? Prisma.sql`LEAST(f.kickoff,COALESCE(life.actualStartedAt,f.kickoff))` : Prisma.sql`f.kickoff`;
   const eligible = Prisma.sql`f.id IN (${fixtureIds}) AND f.provider='api-football' AND f.kickoff<=${at}
     AND f.status IN (${Prisma.join([...recoveredPreMatchFixtureStatuses])}) AND s.retrievedAt<=${at} AND s.retainUntil>=${at}
-    ${verifiedBeforeKickoff ? Prisma.sql`AND (s.retrievedAt<${preMatchUntil} OR s.providerUpdatedAt<${preMatchUntil})` : Prisma.empty}
+    ${decisionTimes ? Prisma.sql`AND s.retrievedAt BETWEEN ${new Date(oldestDecision.getTime() - preMatchOddsFreshMs)} AND ${newestDecision}
+      AND s.retrievedAt<${preMatchUntil}` : verifiedBeforeKickoff
+      ? Prisma.sql`AND (s.retrievedAt<${preMatchUntil} OR s.providerUpdatedAt<${preMatchUntil})` : Prisma.empty}
     ${betIds ? Prisma.sql`AND s.betExternalId IN (${Prisma.join([...new Set(betIds)])})` : Prisma.empty}`;
-  const rows = await tx.$queryRaw<SnapshotRow[]>(Prisma.sql`
-    SELECT s.id,s.batchId,f.externalId,f.kickoff,CAST(${preMatchUntil} AS DATETIME(3)) AS preMatchUntil,
+  // The recovery store only accepts captures taken at or after kickoff.
+  const recovered = decisionTimes ? Prisma.empty : Prisma.sql`
+    SELECT s.id,s.batchId,f.id AS fixtureId,f.externalId,f.kickoff,CAST(${preMatchUntil} AS DATETIME(3)) AS preMatchUntil,
       s.body,s.integrity=SHA2(CAST(s.body AS CHAR),256) AS validIntegrity,TRUE AS recovered
     FROM FootballFixture f JOIN RecoveredPreMatchOddsSnapshot s ON s.fixtureId=f.id AND s.kickoffAt=f.kickoff ${lifecycle} WHERE ${eligible}
-    UNION ALL
-    SELECT s.id,s.batchId,f.externalId,f.kickoff,CAST(${preMatchUntil} AS DATETIME(3)) AS preMatchUntil,
+    UNION ALL`;
+  const rows = await tx.$queryRaw<SnapshotRow[]>(Prisma.sql`
+    ${recovered}
+    SELECT s.id,s.batchId,f.id AS fixtureId,f.externalId,f.kickoff,CAST(${preMatchUntil} AS DATETIME(3)) AS preMatchUntil,
       s.body,s.integrity=SHA2(CAST(s.body AS CHAR),256) AS validIntegrity,FALSE AS recovered
     FROM FootballFixture f JOIN ProviderOddsSnapshot s ON s.fixtureId=f.id AND s.retrievedAt<f.kickoff ${lifecycle} WHERE ${eligible}`);
   const receipts = new Map<string, Readonly<{ batch: OddsBatchBody; fixtures: ReadonlyMap<number, OddsBatchBody["fixtures"][number]>;
@@ -286,8 +355,17 @@ async function readHistoricalBookmakerQuotes(tx: Tx, fixtures: readonly Bookmake
         checked: new Set(batch.pages.filter((item) => item.endpoint === "odds" && !item.fromCache).map(({ retrievedAt }) => retrievedAt)) });
     }
   }
+  const availability = decisionTimes && receipts.size ? await readReplayAvailability(tx,
+    new Map(rows.flatMap(({ fixtureId, externalId, kickoff, preMatchUntil }) => {
+      const decisionAt = decisionTimes.get(fixtureId);
+      if (decisionAt === undefined) return [];
+      const kickoffAt = utcInstantFromEpochMilliseconds(kickoff.getTime());
+      return [[Number(externalId), { kickoffAt, decisionAt, preMatchUntil: time(preMatchUntil), reportingDate: getReportingDate(kickoffAt) }]];
+    })), [...new Set([...receipts.values()].map(({ batch }) => batch.accountId))],
+    new Date(Math.min(...[...receipts.values()].map(({ batch }) => batch.receivedAt))), newestDecision) : null;
   type Quote = { value: StoredBookmakerValue & { observation: HistoricalObservation }; ambiguous: boolean };
-  type Market = { betId: number; betName: string; values: Map<string, { dated?: Quote; undated?: Quote }> };
+  type Market = { betId: number; betName: string; values: Map<string, { dated?: Quote; undated?: Quote }>;
+    newestSnapshot?: { observedAt: number; valuesHash: string; ambiguous: boolean } };
   type Book = { name: string | null; checkedAt: number; markets: Map<number, Market> };
   type Fixture = { kickoffAt: number; checkedAt: HistoricalObservation["checkedAt"]; primaryBookmakerId: number; books: Map<number, Book> };
   const projected = new Map<string, Fixture>();
@@ -296,27 +374,45 @@ async function readHistoricalBookmakerQuotes(tx: Tx, fixtures: readonly Bookmake
   for (const row of rows) {
     const recovery = asBoolean(row.recovered), snapshot = recovery ? parsedRecoveredSnapshot(row) : parsedSnapshot(row);
     const kickoffAt = row.kickoff.getTime(), receipt = receipts.get(row.batchId), entry = receipt?.fixtures.get(Number(row.externalId));
-    if (expectedKickoff.get(snapshot.fixtureId) !== kickoffAt || !receipt || receipt.batch.kind !== "prices" || receipt.batch.status === "failed" ||
+    if (snapshot.fixtureId !== row.fixtureId || expectedKickoff.get(snapshot.fixtureId) !== kickoffAt || !receipt || receipt.batch.kind !== "prices" || receipt.batch.status === "failed" ||
       entry?.outcome !== (recovery ? "recover" : "apply") || !entry.quoteManifest || !receipt.checked.has(snapshot.retrievedAt) ||
       snapshot.valuesHash !== oddsValuesHash(snapshot.values) || (snapshot.providerUpdatedAt !== null && snapshot.providerUpdatedAt > snapshot.retrievedAt) ||
       ("kickoffAt" in snapshot && (snapshot.kickoffAt !== kickoffAt || snapshot.batchId !== row.batchId))) continue;
+    const { betId, fixtureId, bookmakerId, bookmakerName } = snapshot;
+    const decisionAt = decisionTimes?.get(fixtureId) ?? asOf;
+    if (decisionTimes && (snapshot.retrievedAt > decisionAt || receipt.batch.receivedAt > decisionAt ||
+      snapshot.retrievedAt > receipt.batch.receivedAt || receipt.batch.receivedAt >= time(row.preMatchUntil) ||
+      decisionAt - snapshot.retrievedAt > preMatchOddsFreshMs)) continue;
     const manifest = [entry.quoteManifest, ...(entry.additionalQuoteManifests ?? [])].find((book) => book.bookmakerId === snapshot.bookmakerId);
-    const { betId, fixtureId, bookmakerId, bookmakerName } = snapshot, betName = catalog.get(betId);
-    if (!manifest || manifest.kickoffAt !== kickoffAt || !betName || snapshot.betName !== null && snapshot.betName !== betName ||
-      !manifest.bets.some((bet) => bet.betId === betId && bet.betName === snapshot.betName && bet.valuesHash === snapshot.valuesHash)) continue;
+    const betName = catalogs.find(({ receivedAt }) => receivedAt <= decisionAt)?.names.get(betId);
+    if (!manifest || manifest.kickoffAt !== kickoffAt || !betName ||
+      (decisionTimes || snapshot.betName !== null) && snapshot.betName !== betName ||
+      !manifest.bets.some((bet) => bet.betId === betId && bet.betName === snapshot.betName && bet.valuesHash === snapshot.valuesHash) ||
+      availability && !replayOfferStillAvailable(snapshot, receipt.batch.receivedAt, availability.get(Number(row.externalId)) ?? [])) continue;
     const observedAt = utcInstantFromEpochMilliseconds(snapshot.retrievedAt);
-    const observation: HistoricalObservation = { snapshotId: snapshot.id, receiptId: row.batchId, observedAt, checkedAt: observedAt,
+    const checkedAt = decisionTimes ? utcInstantFromEpochMilliseconds(receipt.batch.receivedAt) : observedAt;
+    const observation: HistoricalObservation = { snapshotId: snapshot.id, receiptId: row.batchId, observedAt, checkedAt,
       providerUpdatedAt: snapshot.providerUpdatedAt === null ? null : utcInstantFromEpochMilliseconds(snapshot.providerUpdatedAt) };
     if (verifiedBeforeKickoff && !isVerifiedPreMatchObservation(observation, time(row.preMatchUntil))) continue;
-    const fixture = projected.get(fixtureId) ?? { kickoffAt, checkedAt: observedAt,
+    const fixture = projected.get(fixtureId) ?? { kickoffAt, checkedAt,
       primaryBookmakerId: entry.quoteManifest.bookmakerId, books: new Map<number, Book>() };
-    if (observedAt > fixture.checkedAt || observedAt === fixture.checkedAt && entry.quoteManifest.bookmakerId < fixture.primaryBookmakerId) {
-      fixture.checkedAt = observedAt;
+    if (checkedAt > fixture.checkedAt || checkedAt === fixture.checkedAt && entry.quoteManifest.bookmakerId < fixture.primaryBookmakerId) {
+      fixture.checkedAt = checkedAt;
       fixture.primaryBookmakerId = entry.quoteManifest.bookmakerId;
     }
     const book = fixture.books.get(bookmakerId) ?? { name: bookmakerName, checkedAt: observedAt, markets: new Map<number, Market>() };
     if (bookmakerName !== null && (book.name === null || observedAt > book.checkedAt)) { book.name = bookmakerName; book.checkedAt = observedAt; }
     const market: Market = book.markets.get(betId) ?? { betId, betName, values: new Map() };
+    if (decisionTimes) {
+      const previous = market.newestSnapshot;
+      if (previous && previous.observedAt > observedAt) continue;
+      if (previous?.observedAt === observedAt) {
+        if (previous.valuesHash !== snapshot.valuesHash) previous.ambiguous = true;
+      } else {
+        market.values.clear();
+        market.newestSnapshot = { observedAt, valuesHash: snapshot.valuesHash, ambiguous: false };
+      }
+    }
     for (const value of snapshot.values) {
       const clocks = market.values.get(value.label) ?? {};
       const stream = observation.providerUpdatedAt === null ? "undated" : "dated";
@@ -334,7 +430,8 @@ async function readHistoricalBookmakerQuotes(tx: Tx, fixtures: readonly Bookmake
   }
   for (const [fixtureId, { books, ...fixture }] of projected) {
     const bookmakers = [...books].sort(([left], [right]) => left - right).flatMap(([bookmakerId, book]) => {
-      const offers = [...book.markets.values()].sort((left, right) => left.betId - right.betId).flatMap(({ values, ...market }) => {
+      const offers = [...book.markets.values()].sort((left, right) => left.betId - right.betId).flatMap(({ values, newestSnapshot, ...market }) => {
+        if (newestSnapshot?.ambiguous) return [];
         const exact = [...values].sort(([left], [right]) => byCodePoint(left, right)).flatMap(([, { dated, undated }]) => {
           const latest = dated && (!undated || dated.value.observation.observedAt >= undated.value.observation.observedAt) ? dated : undated;
           return latest && !latest.ambiguous ? [latest.value] : [];
@@ -356,6 +453,15 @@ export function storedRecoveredBookmakerQuotes(tx: Tx, fixtures: readonly Bookma
 /** A late recovery needs a pre-kickoff provider clock. Filter it before selecting each latest quote. */
 export function storedVerifiedReplayBookmakerQuotes(tx: Tx, fixtures: readonly BookmakerFixture[], asOf: number, betIds?: readonly number[]) {
   return readHistoricalBookmakerQuotes(tx, fixtures, asOf, betIds, true);
+}
+
+/** A retrospective decision can use only locally observed prices and sealed receipts available at its declared cutoff. */
+export function storedPointInTimeFeaturedBookmakerQuotes(tx: Tx,
+  fixtures: readonly (BookmakerFixture & { decisionAt: number })[], asOf: number) {
+  const eligible = fixtures.filter(({ kickoffAt, decisionAt }) => kickoffAt !== null && kickoffAt <= asOf &&
+    Number.isSafeInteger(decisionAt) && decisionAt >= 0 && decisionAt < kickoffAt);
+  return readHistoricalBookmakerQuotes(tx, eligible, asOf, localFeaturedBookmakerBetIds, true,
+    new Map(eligible.map(({ fixtureId, decisionAt }) => [fixtureId, decisionAt])));
 }
 
 export function exactTotal15Odds(values: readonly StoredBookmakerValue[], checkedAt: number): Total15Odds | null {

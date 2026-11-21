@@ -71,12 +71,12 @@ export function feedSelectedPickJoin(query: FeedQuery, displayedSet: Prisma.Sql,
     Prisma.join(values.map(({ marketKey, selection }) => Prisma.sql`(${marketKey},${selection})`));
   const legacy = options.flatMap(({ legacy }) => legacy ? [legacy] : []);
   if (legacy.length) rows.push(Prisma.sql`SELECT f.id AS fixtureId,${canonicalMarket} AS marketKey,${canonicalSelection} AS selection,
-    mp.selectedProbability AS probability,mp.source,mp.family AS oddsKey,mp.selection AS oddsSelection
+    mp.selectedProbability AS probability,mp.source,mp.family AS oddsKey,mp.selection AS oddsSelection,NULL AS replayPrice
     FROM FeedPickScope f JOIN MarketPrediction mp ON mp.setId=f.displayRevision
     WHERE f.replayBody IS NULL AND ${exactLegacyFeedPickSource}
       AND (mp.family,mp.selection) IN (${Prisma.join(legacy.map(({ family, selection }) => Prisma.sql`(${family},${selection})`))})`);
   if (options.length) rows.push(Prisma.sql`SELECT f.id AS fixtureId,ep.marketKey,ep.selection,ep.selectedProbability AS probability,
-    CASE ep.source WHEN 'local-poisson' THEN 'local-engine' ELSE 'ai' END AS source,ep.marketKey AS oddsKey,ep.selection AS oddsSelection
+    CASE ep.source WHEN 'local-poisson' THEN 'local-engine' ELSE 'ai' END AS source,ep.marketKey AS oddsKey,ep.selection AS oddsSelection,NULL AS replayPrice
     FROM FeedPickScope f JOIN ExtendedMarketPublishedPick ep ON ep.revisionId=f.displayRevision
     WHERE f.replayBody IS NULL AND ${exactExtendedFeedPickSource}
       AND (ep.marketKey,ep.selection) IN (${tuples(options)})`);
@@ -85,17 +85,44 @@ export function feedSelectedPickJoin(query: FeedQuery, displayedSet: Prisma.Sql,
     const keys = isAnyMarkets(query.markets) ? null : registry.filter(({ family }) => query.markets.some((item) => item === family))
       .map(({ definition }) => definition.key);
     const market = (field: string) => Prisma.sql`JSON_UNQUOTE(JSON_EXTRACT(f.replayBody,CONCAT('$.markets[',slot.ordinal,'].',${field})))`;
-    rows.push(Prisma.sql`SELECT rp.fixtureId,rp.marketKey,rp.selection,rp.probability,'local-engine' AS source,NULL AS oddsKey,NULL AS oddsSelection
-      FROM (SELECT f.id AS fixtureId,${market("definition.key")} AS marketKey,${market("selected.selection")} AS selection,
-        ${market("selected.probability")}+0e0 AS probability
+    const sealed = Prisma.sql`JSON_CONTAINS_PATH(f.replayBody,'one','$.featuredDecision')`;
+    const selected = (field: string) => Prisma.sql`NULLIF(JSON_UNQUOTE(JSON_EXTRACT(f.replayBody,${`$.selected.${field}`})), 'null')`;
+    const replayPrice = (marketKey: Prisma.Sql, selection: Prisma.Sql) => Prisma.sql`CASE
+      WHEN ${selected("marketKey")}=${marketKey} AND ${selected("selection")}=${selection} THEN
+      ROUND(CAST(JSON_UNQUOTE(JSON_EXTRACT(f.replayBody,'$.featuredDecision.quote.decimal')) AS DECIMAL(9,4))*100) END`;
+    if (!exact && keys === null) rows.push(Prisma.sql`SELECT f.id AS fixtureId,${selected("marketKey")} AS marketKey,
+      ${selected("selection")} AS selection,${selected("probability")}+0e0 AS probability,'local-engine' AS source,
+      NULL AS oddsKey,NULL AS oddsSelection,${replayPrice(selected("marketKey"), selected("selection"))} AS replayPrice
+      FROM FeedPickScope f WHERE ${sealed} AND ${selected("marketKey")} IS NOT NULL`);
+    const marketKey = market("definition.key");
+    rows.push(Prisma.sql`SELECT rp.fixtureId,rp.marketKey,rp.selection,rp.probability,'local-engine' AS source,
+      NULL AS oddsKey,NULL AS oddsSelection,rp.replayPrice
+      FROM (SELECT f.id AS fixtureId,${marketKey} AS marketKey,${market("selected.selection")} AS selection,
+        ${market("selected.probability")}+0e0 AS probability,${replayPrice(marketKey, market("selected.selection"))} AS replayPrice
         FROM FeedPickScope f JOIN ${ordinals} slot ON slot.ordinal<JSON_LENGTH(f.replayBody,'$.markets')
-        WHERE f.replayBody IS NOT NULL) rp WHERE rp.marketKey IS NOT NULL
+        WHERE f.replayBody IS NOT NULL AND (NOT ${sealed}
+          ${exact ? Prisma.sql`OR ${market("selections")} IS NULL` : Prisma.empty})) rp WHERE rp.marketKey IS NOT NULL
         ${exact ? Prisma.sql`AND (rp.marketKey,rp.selection) IN (${tuples(options)})`
-          : keys ? Prisma.sql`AND rp.marketKey IN (${Prisma.join(keys)})` : Prisma.empty}`);
+          : keys?.length ? Prisma.sql`AND rp.marketKey IN (${Prisma.join(keys)})` : keys ? Prisma.sql`AND FALSE` : Prisma.empty}`);
+    if (!exact && keys?.length) rows.push(Prisma.sql`SELECT f.id AS fixtureId,${marketKey} AS marketKey,
+      ${market("selected.selection")} AS selection,${market("selected.probability")}+0e0 AS probability,'local-engine' AS source,
+      NULL AS oddsKey,NULL AS oddsSelection,${replayPrice(marketKey, market("selected.selection"))} AS replayPrice
+      FROM FeedPickScope f JOIN ${ordinals} slot ON slot.ordinal<JSON_LENGTH(f.replayBody,'$.markets')
+      WHERE ${sealed} AND ${marketKey} IN (${Prisma.join(keys)})`);
+    if (exact && options.length) {
+      const requested = Prisma.join(options.map(({ marketKey: key, selection }) => Prisma.sql`SELECT ${key} AS marketKey,${selection} AS selection`), " UNION ALL ");
+      const path = Prisma.sql`REPLACE(JSON_UNQUOTE(JSON_SEARCH(f.replayBody,'one',wanted.selection,NULL,
+        CONCAT('$.markets[',slot.ordinal,'].selections[*].key'))),'.key','.outcomes.win')`;
+      rows.push(Prisma.sql`SELECT f.id AS fixtureId,wanted.marketKey,wanted.selection,
+        JSON_UNQUOTE(JSON_EXTRACT(f.replayBody,${path}))+0e0 AS probability,'local-engine' AS source,
+        NULL AS oddsKey,NULL AS oddsSelection,${replayPrice(Prisma.sql`wanted.marketKey`, Prisma.sql`wanted.selection`)} AS replayPrice
+        FROM FeedPickScope f JOIN ${ordinals} slot ON slot.ordinal<JSON_LENGTH(f.replayBody,'$.markets')
+        JOIN (${requested}) wanted ON wanted.marketKey=${marketKey} WHERE ${sealed} AND ${path} IS NOT NULL`);
+    }
   }
   const source = rows.length ? Prisma.sql`${Prisma.join(rows, " UNION ALL ")}` : Prisma.sql`
-    SELECT NULL AS fixtureId,NULL AS marketKey,NULL AS selection,NULL AS probability,NULL AS source,NULL AS oddsKey,NULL AS oddsSelection WHERE FALSE`;
-  const price = providerOdds ? Prisma.sql`quote.displayHundredths` : Prisma.sql`NULL`;
+    SELECT NULL AS fixtureId,NULL AS marketKey,NULL AS selection,NULL AS probability,NULL AS source,NULL AS oddsKey,NULL AS oddsSelection,NULL AS replayPrice WHERE FALSE`;
+  const price = providerOdds ? Prisma.sql`COALESCE(pick.replayPrice,quote.displayHundredths)` : Prisma.sql`NULL`;
   const quoteJoin = providerOdds ? Prisma.sql`LEFT JOIN FixtureOddsPrice quote ON quote.fixtureId=pick.fixtureId
     AND quote.marketKey=pick.oddsKey AND quote.selection=pick.oddsSelection
     AND quote.stale=FALSE AND quote.priceDecimal>=${minimumFixturePrice}` : Prisma.empty;
