@@ -13,8 +13,9 @@ export function gateBestSlips(result: BestSlipsResult, access: ContentAccess): B
 export function gateSlipView(view: SlipPreviewView, access: ContentAccess): SlipPreviewView {
   const entitled = access.tier === "full";
   const { rank, matchCount, totalOdds, averageProbability, id, publicationDay, publishedAt, outcome, status, completed } = view;
-  const summary = { rank, matchCount, totalOdds, averageProbability,
+  const summary = { rank, matchCount, totalOdds,
     ...(view.estimatedProbability === undefined ? {} : { estimatedProbability: view.estimatedProbability }),
+    averageProbability,
     ...(id !== undefined ? { id } : {}), ...(publicationDay ? { publicationDay } : {}),
     ...(publishedAt !== undefined ? { publishedAt } : {}), ...(outcome ? { outcome } : {}),
     ...(status ? { status } : {}), ...(completed !== undefined ? { completed } : {}) };

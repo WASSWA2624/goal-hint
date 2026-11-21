@@ -138,8 +138,9 @@ export function bestSlipBuilder(model: JointSlipModel) {
 /** Aggregate projection allowlist; viewer access and completion eligibility are enforced by the slip service. */
 export function bestSlipView(slip: BuiltSlip & Readonly<{ estimatedProbability?: number }>, rank: number,
   entitled: boolean, matchStates?: readonly SlipMatchState[]): BestSlipView {
-  return { rank, matchCount: slip.selections.length, totalOdds: slip.totalOdds, averageProbability: slip.averageProbability,
+  return { rank, matchCount: slip.selections.length, totalOdds: slip.totalOdds,
     ...(slip.estimatedProbability === undefined ? {} : { estimatedProbability: slip.estimatedProbability }),
+    averageProbability: slip.averageProbability,
     ...(entitled ? { slip, ...(matchStates ? { matchStates: slip.selections.flatMap((selection) => {
       const state = slipMatchStateForSelection(selection, matchStates); return state ? [state] : [];
     }) } : {}) } : {}) };
