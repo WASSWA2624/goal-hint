@@ -8,6 +8,7 @@ import { SectionHeader, sectionHeaderMetadata } from "@/components/ui/section-he
 import { CheckIcon, ClockIcon, CloseIcon } from "@/components/ui/icons";
 import { predictedPerformanceSummary, type PerformanceSummaryCounts, type PredictionResult } from "@/domain/performance-summary";
 import { createMessages } from "@/i18n/messages";
+import { performanceResultColors } from "@/styles/performance-result-colors";
 import { media } from "@/styles/theme";
 
 const Panel = styled.section`
@@ -47,9 +48,7 @@ const Actions = styled.div`
 type Status = PredictionResult | "all";
 const Count = styled.div<{ $status: Status }>`
   ${({ theme, $status }) => {
-    const tone = $status === "all" ? { text: theme.color.accent.blue.text, background: theme.color.accent.blue.soft }
-      : $status === "cancelled" ? { text: theme.color.accent.orange.text, background: theme.color.accent.orange.soft }
-        : theme.color.outcome[$status === "won" ? "correct" : $status === "lost" ? "incorrect" : $status === "void" ? "void" : "pending"];
+    const tone = performanceResultColors(theme, $status);
     return `--summary-text: ${tone.text}; --summary-background: ${tone.background};`;
   }}
   ${controlHeight}

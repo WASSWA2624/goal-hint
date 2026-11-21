@@ -162,8 +162,16 @@ def verify(origin, directory):
 def verify_feed_cards(origin):
     response = request(origin, "/feed")
     assert response.status == 200
-    cards = dict(re.findall(r'<article\b[^>]*data-fixture-id="(feed-[^"]+)"[^>]*>([\s\S]*?)</article>', visible_html(response.text)))
-    assert len(cards) == 17
+    articles = re.findall(r'(<article\b[^>]*data-fixture-id="(feed-[^"]+)"[^>]*>)([\s\S]*?)</article>', visible_html(response.text))
+    cards = {key: body for _, key, body in articles}
+    assert len(cards) == 20
+    header_results = {"feed-missing-odds": "won", "feed-frozen-lost": "lost", "feed-frozen-pending": "pending",
+                      "feed-frozen-void": "void", "feed-cancelled": "cancelled"}
+    for article, key, _ in articles:
+        if key in header_results:
+            match(rf'data-match-header-result="{header_results[key]}"', article)
+        else:
+            no_match(r'data-match-header-result', article)
     for key, label in {"live": "67:00", "stoppage": r"90\+04", "halftime": "HT"}.items():
         card = cards[f"feed-{key}"]
         match(rf'data-status-clock[^>]*><span[^>]*>{label}</span>', card)

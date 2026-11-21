@@ -5,7 +5,7 @@ import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { OutcomeBadge } from "@/components/match/prediction-presentation";
 import { CompetitionLogo } from "@/components/match/competition-media";
-import { LiveMatchTime } from "@/components/match/score-presentation";
+import { LiveMatchTime, liveScoreText } from "@/components/match/score-presentation";
 import { formLetters } from "@/domain/match-details";
 import type { MarketFamily } from "@/domain/markets";
 import { toUtcIsoString } from "@/domain/calendar";
@@ -150,6 +150,7 @@ const Versus = styled.div`
     font-variant-numeric: tabular-nums;
   }
   > b[data-score] { block-size: auto; color: ${({ theme }) => theme.color.text}; background: none; font-size: var(--gh-font-displayLarge); font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: var(--gh-leading-dense); white-space: nowrap; }
+  > b[data-live-score] { ${liveScoreText} }
   > span { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("secondary")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   > span[data-live] { display: inline-flex; align-items: center; gap: var(--gh-spacing-1_25); color: ${({ theme }) => theme.color.live.text}; }
   > span[data-live]::before { content: ""; inline-size: var(--gh-size-1_75); block-size: var(--gh-size-1_75); background: ${({ theme }) => theme.color.live.solid}; border-radius: ${({ theme }) => theme.radius.circle}; }
@@ -171,6 +172,7 @@ export const MatchBanner = memo(function MatchBanner({ touchline = false }: { to
   const { data, preview, messages, locale, home, away } = useStableDetails();
   const fixture = data.fixture, context = preview?.sections.context;
   const played = fixture.score && (fixture.status === "live" || fixture.status.startsWith("finished") || fixture.status === "awarded");
+  const currentLiveScore = fixture.status === "live";
   const form = (side: "home" | "away") => {
     const team = side === "home" ? fixture.homeTeam : fixture.awayTeam, records = preview?.sections.form[side] ?? [];
     return records.length ? <FormLetters letters={formLetters(records, team.id, 5)} label={messages.text("details.lastFive", { team: side === "home" ? home : away })} /> : null;
@@ -192,7 +194,7 @@ export const MatchBanner = memo(function MatchBanner({ touchline = false }: { to
     <Team $side="home"><Crest name={fixture.homeTeam.name} url={fixture.homeTeam.logoUrl} size={48} eager />
       <TeamText $side="home" $touchline={touchline}>{touchline && <small>{messages.text("touchline.home")}</small>}<strong title={home}>{home}</strong>{!touchline && form("home")}</TeamText></Team>
     <Versus>
-      {played ? <b data-score>{messages.number(fixture.score!.home)} – {messages.number(fixture.score!.away)}</b> : <b>{fixture.status.startsWith("finished") || fixture.status === "awarded" ? "–" : messages.text("details.versus")}</b>}
+      {played ? <b data-score data-live-score={currentLiveScore || undefined}>{messages.number(fixture.score!.home)} – {messages.number(fixture.score!.away)}</b> : <b>{fixture.status.startsWith("finished") || fixture.status === "awarded" ? "–" : messages.text("details.versus")}</b>}
       {(played || fixture.status !== "scheduled") && <span data-live={fixture.status === "live" || undefined}>{status}</span>}
     </Versus>
     <Team $side="away"><Crest name={fixture.awayTeam.name} url={fixture.awayTeam.logoUrl} size={48} eager />

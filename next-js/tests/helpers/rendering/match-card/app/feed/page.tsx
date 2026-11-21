@@ -1,5 +1,6 @@
 import { MatchCard } from "@/components/match/match-card";
 import { MatchCardList } from "@/components/match/match-card-list";
+import { PerformanceSummary } from "@/components/performance/performance-summary";
 import { Container, PageMain } from "@/components/ui/layout";
 import { utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import type { FeaturedPrediction } from "@/domain/extended-markets";
@@ -46,6 +47,11 @@ export default function FeedCardExamples() {
     { featured: true, fixture: { ...local, fixtureId: "feed-frozen-lost", score: { home: 3, away: 2 }, featuredDecisionFrozen: true,
       featuredPrediction: { ...standard, key: "goal:full-time:totals:total:4.5:binary", code: "O/U 4.5", label: "Full time · Total goals 4.5", selectionLabel: "Under 4.5",
         featuredQuote: { ...quote, betId: 5, betName: "Goals Over/Under", providerSelection: "Under 4.5" }, settlementStatus: "incorrect" } } },
+    { featured: true, fixture: { ...local, fixtureId: "feed-frozen-pending", featuredDecisionFrozen: true,
+      featuredPrediction: { ...standard, settlementStatus: "pending" } } },
+    { featured: true, fixture: { ...local, fixtureId: "feed-frozen-void", featuredDecisionFrozen: true,
+      featuredPrediction: { ...standard, settlementStatus: "void" } } },
+    { featured: true, fixture: { ...final, fixtureId: "feed-cancelled", status: "canceled", score: null, scorePeriod: null } },
     { featured: true, fixture: { ...local, fixtureId: "feed-featured-abstained", status: "scheduled", score: null,
       featuredPrediction: null } },
     { featured: true, fixture: { ...pick, fixtureId: "feed-replay-empty", retrospective: replay } },
@@ -54,12 +60,15 @@ export default function FeedCardExamples() {
         providerUpdatedAt: utcInstantFromEpochMilliseconds(kickoffAt - 60_000) } } } } },
   ];
 
-  return <PageMain><Container><section data-feed-match-results>
+  return <PageMain><Container>
+    <PerformanceSummary locale="en" kind="matches" counts={{ total: 5, won: 1, lost: 1, pending: 1, void: 1, cancelled: 1 }} />
+    <section data-feed-match-results>
     <MatchCardList id="feed-card-examples">
       {cases.map(({ fixture, gated, featured }) => <li key={fixture.fixtureId}>
         <MatchCard fixture={fixture} analysisSlug="example-home-v-away" selectedFamily="match-result" phoneFeed
           {...(gated ? { gated } : {})} {...(featured ? { publishedMarket: true } : {})} />
       </li>)}
     </MatchCardList>
-  </section></Container></PageMain>;
+    </section>
+  </Container></PageMain>;
 }

@@ -22,11 +22,13 @@ import { liveClockLabel } from "@/domain/match-clock";
 import type { MarketFamily } from "@/domain/markets";
 import { isCompletedFixtureStatus } from "@/domain/market-settlement";
 import { matchHref } from "@/domain/navigation";
+import type { PredictionResult } from "@/domain/performance-summary";
 import { predictionDescription, predictionLabel } from "@/domain/prediction-label";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import { createMessages, type Messages } from "@/i18n/messages";
 import { useMessages } from "@/i18n/use-messages";
 import { resolveLocale } from "@/i18n/locales";
+import { performanceResultColors } from "@/styles/performance-result-colors";
 import { media, type OutcomeTone } from "@/styles/theme";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { ChevronIcon } from "./match-icons";
@@ -82,7 +84,10 @@ const countryFlagUrl = (fixture: FixtureSnapshot) => fixture.competition.country
 const tile = media.belowDesktop, table = media.desktop, wideTable = media.wide;
 const ellipsis = css`min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;`;
 const settledOutcome = (outcome: OutcomeTone) => outcome === "correct" || outcome === "incorrect" || outcome === "void";
-const Card = styled.article`
+const headerResults: Partial<Record<ReturnType<typeof cardResultStatus> | OutcomeTone, PredictionResult>> = {
+  correct: "won", incorrect: "lost", pending: "pending", void: "void", canceled: "cancelled",
+};
+const Card = styled.article<{ $headerResult?: PredictionResult | undefined }>`
   position: relative;
   display: grid;
   min-inline-size: 0;
@@ -113,7 +118,24 @@ const Card = styled.article`
     [data-mobile-only] { display: inline; }
     [data-desktop-only] { display: none; }
   }
-  ${media.phone} { &[data-phone-feed-card] { ${phoneFeedRowStyles} } }
+  ${media.phone} {
+    &[data-phone-feed-card] {
+      ${phoneFeedRowStyles}
+      ${({ theme, $headerResult }) => {
+        if (!$headerResult) return;
+        const tone = performanceResultColors(theme, $headerResult);
+        return css`
+          &::before {
+            content: ""; grid-area: 1 / 1 / 2 / -1; align-self: stretch;
+            margin-inline: calc(-1 * var(--gh-spacing-2)); margin-block-start: calc(-1 * var(--gh-spacing-2));
+            border-start-start-radius: inherit; border-start-end-radius: inherit;
+            background: ${tone.background}; pointer-events: none;
+          }
+          > [data-stack-result] [data-match-status] { color: ${tone.text}; }
+        `;
+      }}
+    }
+  }
   ${table} {
     grid-template-columns: ${matchTableColumns.compact};
     grid-template-rows: auto auto;
@@ -643,6 +665,8 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     : originalOutcome?.status ?? prediction?.status ?? "unavailable";
   const awaitingResult = fixture.update?.statusFreshness?.state === "awaiting-update";
   const result = snapshotPick ? outcome : cardResultStatus(fixture.status, outcome, awaitingResult);
+  const headerResult = phoneFeed && !offline && !snapshotPick && (result !== "pending" || prediction && outcome === "pending")
+    ? headerResults[result] : undefined;
   const percent = prediction && (prediction.probability.labelKey === "probability.percent"
     ? messages.text("probability.percent", { percent: messages.number(prediction.probability.roundedPercent, snapshotPick
       ? { minimumFractionDigits: 1, maximumFractionDigits: 1 } : undefined) })
@@ -710,6 +734,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     />;
   }
   return <Card tabIndex={-1} aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={gated ? undefined : shownFamily}
+    $headerResult={headerResult} data-match-header-result={headerResult}
     data-status={fixture.status} data-mobile-locked={gated && !offline ? "" : undefined} data-mobile-design="team-stack"
     data-numbered={position !== undefined ? "" : undefined} data-phone-feed-card={phoneFeed || undefined}
     data-extended-market={featured?.code ? "" : undefined}>

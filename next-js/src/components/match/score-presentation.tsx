@@ -1,11 +1,13 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import styled from "styled-components";
+import styled, { css } from "styled-components";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import type { matchCardScore } from "@/domain/match-card";
 import { liveClockLabel } from "@/domain/match-clock";
 import type { Messages } from "@/i18n/messages";
+
+export const liveScoreText = css`color: ${({ theme }) => theme.color.live.text};`;
 
 /** Larger figures and a wider separator fit inside the existing score slot. */
 export const Scoreline = styled.span`
@@ -14,7 +16,7 @@ export const Scoreline = styled.span`
   /* Retain the original 13px × 1.3 line box so compact cards do not grow. */
   line-height: var(--gh-size-4_225); font-variant-numeric: tabular-nums; white-space: nowrap;
   [data-score-separator] { flex: none; inline-size: var(--gh-size-4); text-align: center; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-  [data-status="live"] & { color: ${({ theme }) => theme.color.live.text}; }
+  [data-status="live"] & { ${liveScoreText} }
 `;
 
 const ShootoutScore = styled.span`

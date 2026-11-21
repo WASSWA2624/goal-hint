@@ -53,10 +53,10 @@ function render(scenario) {
       },
     });
     const at = (path) => import(new URL(path, root).href);
-    const [{ createElement: h }, { renderToString }, { ThemeProvider }, { Provider }, { AppRouterContext }] = await Promise.all([
+    const [{ createElement: h, Fragment }, { renderToString }, { ServerStyleSheet, ThemeProvider }, { Provider }, { AppRouterContext }] = await Promise.all([
       import('react'), import('react-dom/server'), import('styled-components'), import('react-redux'),
       import('next/dist/shared/lib/app-router-context.shared-runtime.js')]);
-    const [{ lightTheme }, { createMessages }, { defaultMatchView }, { makeDetailStore }, ui, card, banner, teams, info, { cardFixture }] = await Promise.all([
+    const [{ lightTheme, darkTheme }, { createMessages }, { defaultMatchView }, { makeDetailStore }, ui, card, banner, teams, info, { cardFixture }] = await Promise.all([
       at('src/styles/theme.ts'), at('src/i18n/messages.ts'), at('src/domain/match-view.ts'), at('src/state/detail-store.ts'),
       at('src/components/match/details/details-ui.tsx'), at('src/components/match/details/section-card.tsx'),
       at('src/components/match/details/match-banner.tsx'), at('src/components/match/details/team-sections.tsx'),
@@ -79,11 +79,42 @@ function render(scenario) {
     const details = { data: { fixture, route: { path: '/en/matches/x/y' } }, preview, locale: 'en', messages: createMessages('en'),
       go() {}, update() {}, home: fixture.homeTeam.name, away: fixture.awayTeam.name, fixtureId: fixture.fixtureId, history: null };
     const router = { back() {}, forward() {}, refresh() {}, push() {}, replace() {}, prefetch() {} };
-    const page = (child) => renderToString(h(AppRouterContext.Provider, { value: router }, h(Provider, { store: makeDetailStore() },
-      h(ThemeProvider, { theme: lightTheme }, h(ui.DetailsProvider, { value: details }, h(ui.ViewProvider, { value: defaultMatchView },
-        h(card.DisclosureProvider, { value: { open: true, byDefault: false, reveal: 0, toggle() {} } }, child)))))));
-    process.stdout.write(JSON.stringify({ banner: page(h(banner.MatchBanner)), form: page(h(teams.FormSection)), h2h: page(h(teams.H2HSection)),
-      context: page(h(info.ContextSection)) }));
+    const pageTree = (child, theme, value) => h(AppRouterContext.Provider, { value: router }, h(Provider, { store: makeDetailStore() },
+      h(ThemeProvider, { theme }, h(ui.DetailsProvider, { value }, h(ui.ViewProvider, { value: defaultMatchView },
+        h(card.DisclosureProvider, { value: { open: true, byDefault: false, reveal: 0, toggle() {} } }, child))))));
+    const page = (child) => renderToString(pageTree(child, lightTheme, details));
+    if (scenario.liveScores) {
+      const [{ bracketFromFixtures }, { KnockoutBracketView }] = await Promise.all([
+        at('src/domain/competition-view.ts'), at('src/components/match/details/knockout-bracket.tsx')]);
+      const score = { home: 2, away: 1 };
+      const cases = [
+        ['live', 'live', score, 'live', 'applicable'],
+        ['revision-live', 'live', score, 'live', 'revision'],
+        ['historical', 'finished-regulation', score, 'regulation', 'revision'],
+        ['future', 'scheduled', null, null, 'applicable'],
+        ['no-score', 'live', null, null, 'applicable'],
+        ['final', 'finished-regulation', score, 'regulation', 'applicable'],
+      ];
+      process.stdout.write(JSON.stringify([lightTheme, darkTheme].flatMap((theme) => cases.map(([name, status, score, scorePeriod, selection]) => {
+        const value = { ...details, data: { ...details.data, selection,
+          fixture: cardFixture({ kickoffAt: scenario.kickoffAt, status, score, scorePeriod }, 'ai', null) } };
+        const current = { id: value.data.fixture.fixtureId, slug: 'current-cup-match', round: 'Final', kickoffAt: scenario.kickoffAt,
+          status, scorePeriod, home: team(fixture.homeTeam), away: team(fixture.awayTeam),
+          homeGoals: score?.home ?? null, awayGoals: score?.away ?? null, penaltyHome: null, penaltyAway: null };
+        const otherLive = { ...current, id: 'other-fixture', home: team(other), away: team(second.away), status: 'live',
+          scorePeriod: 'live', homeGoals: 4, awayGoals: 3 };
+        const bracket = bracketFromFixtures([current, otherLive], scenario.kickoffAt);
+        const sheet = new ServerStyleSheet();
+        try {
+          const views = h(Fragment, null, h(banner.MatchBanner), h(KnockoutBracketView, { bracket, roundId: null, onRoundChange() {} }));
+          const html = renderToString(sheet.collectStyles(pageTree(views, theme, value)));
+          return { name, html, css: sheet.getStyleTags(), liveColor: theme.color.live.text, neutralColor: theme.color.text };
+        } finally { sheet.seal(); }
+      }))));
+    } else {
+      process.stdout.write(JSON.stringify({ banner: page(h(banner.MatchBanner)), form: page(h(teams.FormSection)), h2h: page(h(teams.H2HSection)),
+        context: page(h(info.ContextSection)) }));
+    }
   `;
   return JSON.parse(execFileSync(process.execPath, ['--input-type=module', '--eval', program],
     { cwd: fileURLToPath(root), encoding: 'utf8', windowsHide: true, timeout: 60_000, maxBuffer: 16 * 1024 * 1024 }));
@@ -114,6 +145,22 @@ test('the banner date, result rows and last results render as crawlable links ke
     assert.doesNotMatch(html[section], /<button[^>]*data-item-key="result-/u, `${section} keeps no result-row buttons`);
   }
   for (const value of Object.values(html)) assert.doesNotMatch(value, /54%|70%|Home win|Synthetic fixture explanation/u, 'Rows and banner carry no forecast.');
+});
+
+test('the current Details banner and knockout score use the shared live color in both themes', () => {
+  const cases = render({ kickoffAt: lateKickoff, liveScores: true });
+  assert.equal(cases.length, 12);
+  for (const { name, html, css, liveColor, neutralColor } of cases) {
+    assert.match(css, new RegExp(`>b\\[data-live-score\\]\\{color:${liveColor.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}`, 'u'));
+    assert.ok(css.includes(`color:${neutralColor};`));
+    const markup = html.replaceAll('<!-- -->', '');
+    if (name === 'live' || name === 'revision-live') {
+      assert.match(markup, /<b data-score="true" data-live-score="true">2 – 1<\/b>/u);
+      assert.equal([...markup.matchAll(/<b data-live-score="true">[12]<\/b>/gu)].length, 2);
+      assert.equal([...markup.matchAll(/data-live-score=/gu)].length, 3);
+    } else assert.doesNotMatch(markup, /data-live-score=/u);
+    if (name === 'final' || name === 'historical') assert.match(markup, /<b data-score="true">2 – 1<\/b>/u);
+  }
 });
 
 test('match titles claim a prediction only on indexable dated pages and descriptions add the known competition', () => {

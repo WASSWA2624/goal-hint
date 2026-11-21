@@ -11,6 +11,7 @@ import { CriteriaDialog, CriteriaDialogButton } from "@/components/ui/criteria-d
 import { bracketGeometry, layoutBracket, tieScore, type KnockoutBracket, type KnockoutTie } from "@/domain/competition-view";
 import { matchHref } from "@/domain/navigation";
 import { utcInstantFromEpochMilliseconds } from "@/domain/calendar";
+import { liveScoreText } from "../score-presentation";
 import { Crest, Note, focusRing, useStableDetails } from "./details-ui";
 
 const Toolbar = styled.div`
@@ -55,6 +56,7 @@ const TieCard = styled.button`
   > span { display: flex; align-items: center; gap: var(--gh-spacing-1_5); min-inline-size: 0; font-size: var(--gh-font-secondary); }
   > span > span[data-name] { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; }
   > span[data-winner] { font-weight: var(--gh-weight-heavy); color: ${({ theme }) => theme.color.accent.emerald.text}; }
+  > span > b[data-live-score] { ${liveScoreText} }
   > span > small { font-size: var(--gh-font-micro); color: ${({ theme }) => theme.color.mutedText}; }
   > em { font-size: var(--gh-font-micro); font-style: normal; color: ${({ theme }) => theme.color.mutedText}; }
   &:hover { background: ${({ theme }) => theme.color.rowHover}; } ${focusRing}
@@ -65,6 +67,7 @@ const FixtureList = styled.div`
   > section > div { display: flex; align-items: center; gap: var(--gh-spacing-1_5); }
   > section > div > span { flex: 1; }
   > section > div > b { font-variant-numeric: tabular-nums; }
+  > section > div > b[data-live-score] { ${liveScoreText} }
   a { color: ${({ theme }) => theme.color.link}; font-size: var(--gh-font-body); }
 `;
 const scrollBehavior = (animate: boolean) => animate && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "instant";
@@ -113,6 +116,9 @@ export function KnockoutBracketView({ bracket, roundId, onRoundChange }: {
   }, [roundId, geometry, bracket.rounds, showRound, showCurrent]);
   useLayoutEffect(() => () => { if (frame.current !== null) cancelAnimationFrame(frame.current); }, []);
   const number = (value: number | null) => value === null ? "—" : messages.number(value);
+  const isCurrentLiveScore = (match: KnockoutTie["fixtures"][number] | undefined) =>
+    data.fixture.status === "live" && match?.fixtureId === data.fixture.fixtureId &&
+    match.status === "live" && match.scorePeriod === "live" && match.homeGoals !== null && match.awayGoals !== null;
   const teamName = (tie: KnockoutTie, id: string) => (id === tie.home?.id ? tie.home.name : id === tie.away?.id ? tie.away.name : null) ?? messages.text("competition.toBeDecided");
   const date = (value: number | null) => value === null ? messages.text("competition.toBeDecided") : messages.shortKickoffDate(utcInstantFromEpochMilliseconds(value), true);
   return <>
@@ -169,13 +175,14 @@ export function KnockoutBracketView({ bracket, roundId, onRoundChange }: {
           const point = geometry.positions.get(tie.id)!, score = tieScore(tie), match = tie.fixtures[0];
           const penalties = tie.fixtures.find(fixture => fixture.penaltyHome !== null && fixture.penaltyAway !== null);
           const isCurrent = tie.id === currentTie?.id;
+          const liveScore = !score.aggregate && tie.fixtures.length === 1 && isCurrentLiveScore(match);
           return <TieCard key={tie.id} type="button" data-knockout-tie={tie.id} data-current={isCurrent || undefined} onClick={() => setSelected(tie)}
             aria-label={`${tie.home?.name ?? messages.text("competition.toBeDecided")} v ${tie.away?.name ?? messages.text("competition.toBeDecided")}. ${messages.text("competition.tieDetails")}`}
             style={{ left:point.x, top:point.y + 32, width:bracketGeometry.cardWidth, height:bracketGeometry.cardHeight }}>
             <small><span>{date(match?.kickoffAt ?? null)}</span>{isCurrent && <b>{messages.text("competition.current")}</b>}</small>
             {(["home","away"] as const).map(side => <span key={side} data-winner={Boolean(tie[side] && tie.winnerId === tie[side]?.id) || undefined}>
               {tie[side] && <Crest name={tie[side]!.name} url={tie[side]!.logoUrl} size={16} />}<span data-name>{tie[side]?.name ?? messages.text("competition.toBeDecided")}</span>
-              <b>{number(score[side])}</b>{penalties && <small title={messages.text("competition.penalties")}>{number(penalties.homeId === tie[side]?.id ? penalties.penaltyHome : penalties.penaltyAway)}</small>}
+              <b data-live-score={liveScore && score[side] !== null || undefined}>{number(score[side])}</b>{penalties && <small title={messages.text("competition.penalties")}>{number(penalties.homeId === tie[side]?.id ? penalties.penaltyHome : penalties.penaltyAway)}</small>}
             </span>)}
             <em>{score.aggregate ? messages.text("competition.aggregate") : tie.fixtures.length > 1 ? messages.text("competition.fixtures",{count:messages.number(tie.fixtures.length)})
               : penalties ? messages.text("competition.penalties") : match?.scorePeriod === "regulation" ? messages.text("competition.regulation")
@@ -190,7 +197,7 @@ export function KnockoutBracketView({ bracket, roundId, onRoundChange }: {
       {selected.aggregateHome !== null && selected.aggregateAway !== null && <Note>{messages.text("competition.aggregate")}: {number(selected.aggregateHome)}–{number(selected.aggregateAway)}</Note>}
       <FixtureList>{selected.fixtures.map((fixture,index) => <section key={fixture.fixtureId ?? index}>
         <Note>{fixture.kickoffAt === null ? messages.text("competition.toBeDecided") : messages.reportingInstant(utcInstantFromEpochMilliseconds(fixture.kickoffAt))}</Note>
-        <div><span>{teamName(selected, fixture.homeId)}</span><b>{number(fixture.homeGoals)}–{number(fixture.awayGoals)}</b><span>{teamName(selected, fixture.awayId)}</span></div>
+        <div><span>{teamName(selected, fixture.homeId)}</span><b data-live-score={isCurrentLiveScore(fixture) || undefined}>{number(fixture.homeGoals)}–{number(fixture.awayGoals)}</b><span>{teamName(selected, fixture.awayId)}</span></div>
         {fixture.scorePeriod === "regulation" && <Note>{messages.text("competition.regulation")}</Note>}
         {fixture.penaltyHome !== null && fixture.penaltyAway !== null && <Note>{messages.text("competition.penalties")}: {number(fixture.penaltyHome)}–{number(fixture.penaltyAway)}</Note>}
         {fixture.fixtureId && fixture.slug && <Link href={matchHref(fixture.fixtureId, fixture.slug, locale)} prefetch={false}>{messages.text("competition.openMatch")}</Link>}
