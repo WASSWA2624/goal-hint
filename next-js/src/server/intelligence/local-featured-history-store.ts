@@ -313,7 +313,7 @@ export async function readLocalFeaturedHistory(database: Pick<DatabaseRuntime, "
       for (const { revision, context } of archives) contextByOriginalRevision.set(revision.id, context);
       return { pointers, observations: archives.length ? await readResultObservations(tx, archives, before, coverage) : [] };
     });
-    observations.push(...page.observations);
+    for (const observation of page.observations) observations.push(observation);
     if (page.pointers.length < pageSize) return { observations, coverage, contextByOriginalRevision };
     cursor = page.pointers.at(-1);
   }

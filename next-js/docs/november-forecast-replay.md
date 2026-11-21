@@ -117,6 +117,22 @@ provenance, and expected return for the comparison. This is a qualification
 exercise for featured picks. The released policy remains in force until the
 chronological comparison supports a promotion.
 
+Run from `next-js/` using the read-only database profile and a completed v3
+workspace for that environment. The command captures one database UTC clock
+and prints an aggregate report without changing the database or the workspace.
+
+```sh
+node --conditions=react-server scripts/evaluate-featured-history.mjs \
+  --environment production --workspace /path/to/sealed-v3-workspace
+```
+
+The report keeps the full November census as the scope denominator, compares
+estimates on identical frozen inputs, and reports newer sealed ordinary
+cutoffs separately. Verified results are joined after the selections are
+fixed. Calibration uses original win probabilities and outright wins.
+Realized return uses one unit per settled selection with an exact verified
+quote, including the actual payout for pushes and partial outcomes.
+
 ## Review and activate
 
 `stage` stores qualifying retrospective revisions with their actual generation
