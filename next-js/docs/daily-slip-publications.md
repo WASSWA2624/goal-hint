@@ -136,3 +136,24 @@ MySQL, starts a new owned loopback instance and verifies ownership before cleanu
 It does not reuse an application database or installed service. The paid fixture
 formats raw connector Date parameters as UTC SQL strings; production already
 uses the Prisma adapter's UTC formatting.
+
+## Hosted hourly rollout
+
+Staging and production promoted the same verified package from `51c1aa0b` on
+November 21, 2026. Both migration ledgers verified 89 required migrations.
+The scoped backups covered the affected publication tables and the migration
+ledger. Browse, filters, archived dates, Builder and Matches passed over HTTPS.
+An isolated MariaDB verification exercised concurrent retries, legacy snapshot
+preservation and immutable append constraints.
+
+Each hosted account uses a dedicated TLS database role with SELECT on
+fixture and forecast evidence and SELECT/INSERT on the five publication tables.
+The staging one-shot run read its configured cohort and found zero qualifying
+picks. The production preflight read 173 fixtures from the same-day cohort.
+Both hourly timers are enabled. Their first automatic slot was scheduled for
+20:00 Kampala time on November 21. The 06:30 private model study stays
+separate from the hourly publisher.
+
+Older web builds can still serve the migrated schema before any hourly batch
+exists. Once hourly batches are present, recovery needs an append-aware read
+build so the archived ranks and counts remain readable.
