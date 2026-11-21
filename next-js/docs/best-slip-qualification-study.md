@@ -183,3 +183,21 @@ The historical study can support candidate fitting and its initial
 holdout comparison. An independently reviewed model still needs a fresh
 prospective test on its intended top-ranked slips. The runner cannot
 approve a model or publish.
+
+### November 21 historical results
+
+The read-only production run from `601b358e` completed at 19:23 Kampala
+time. It checked 64 fit dates and 15 holdout dates at 06:30. It found no
+original forecast occurrences in the fit window. The holdout read 1,153
+archived occurrence rows. None passed the original forecast and publication
+receipt checks. Seventy-eight of the 79 dates had incomplete catalog or
+occurrence coverage. On November 14, the scan reached the 500-row limit.
+Both phases recovered zero eligible four-match slates and zero decisive
+whole-slip results, so the study produced an insufficient report.
+
+An independent read of November 1–21 checked the whole day rather than
+the fixed morning clock. Sealed, qualified Local Engine forecasts were
+available before cutoff on only November 20 and November 21. On November
+20, the earliest appeared at 22:19 Kampala time. Those two dates fall
+short of the study's 14 distinct days per phase. The original November 21
+four-match smoke capture remains separate from these windows.
