@@ -82,8 +82,12 @@ export async function preparePricedNovemberReplay(tx: Prisma.TransactionClient, 
     return { evidence, result: null, comparativeDecision: null, diagnostic, priceGates: null,
       inventoryClock: diagnostic ? decisionAt ?? null : null };
   }
-  const input = await loadPricingInput(tx, { fixtureId, kickoffAt, decisionAt }, auditedAt, markets, withCoverage);
-  const diagnostic = withCoverage ? auditLocalFeaturedCoverage(input, coverage === "trace") : null;
+  const occurrenceAtDecision = { fixtureId, kickoffAt, decisionAt };
+  // The broader catalog scan may see unrelated receipt accounts and offers. Keep the
+  // exact selector input identical to the read used for activation revalidation.
+  const input = await loadPricingInput(tx, occurrenceAtDecision, auditedAt, markets);
+  const diagnostic = withCoverage ? auditLocalFeaturedCoverage(
+    await loadPricingInput(tx, occurrenceAtDecision, auditedAt, markets, true), coverage === "trace") : null;
   const { decision: featuredDecision, diagnostics: priceGates } = assessLocalFeaturedPick(input, version);
   return { evidence, result: { artifactHash, markets, selected: replayFeaturedSelection(featuredDecision), decisionAt, featuredDecision },
     comparativeDecision: comparisonVersion ? decideLocalFeaturedPick(input, comparisonVersion) : null, diagnostic, priceGates,

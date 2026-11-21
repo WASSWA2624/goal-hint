@@ -143,7 +143,7 @@ async function dryRun(database, workspace, audit, maxPages, traceFixtures) {
   const rows = pages.flatMap((page) => page.rows);
   const summary = { finished, processed: rows.length, estimated: 0, prospective: 0, abstained: 0, reasons: {}, byStatus: {},
     archived: 0, rebuilt: 0, priced: 0, forecastOnly: 0, featuredAbstentions: 0, modes: {}, marketFamiliesByMode: {}, originalsMissingFromReplay: 0,
-    marketCoverage: { provenCutoffFixtures: 0, nominalCutoffOnlyFixtures: 0, noOddsInventoryFixtures: 0,
+    marketCoverage: { provenCutoffFixtures: 0, nominalCutoffOnlyFixtures: 0, noOddsInventoryFixtures: 0, auditedWithoutVerifiedBooks: 0,
       modelEvidenceFixtures: 0, modelEvidenceAtSampleCap: 0, fixturesWithHeadToHead: 0, fixturesWithVerifiedHalfTimeHistory: 0,
       archivedContextFixtures: 0, counts: {}, unavailableMarkets: {}, archivedContextGaps: {},
       standardGates: { comparable: 0, meetsPrice: 0, positiveReturn: 0, eligibleByRung: {} } } };
@@ -158,6 +158,7 @@ async function dryRun(database, workspace, audit, maxPages, traceFixtures) {
     if (coverage?.auditedQuoteCutoff === "proven") totals.provenCutoffFixtures++;
     else if (coverage?.auditedQuoteCutoff === "nominal-only") totals.nominalCutoffOnlyFixtures++;
     else totals.noOddsInventoryFixtures++;
+    if (coverage?.marketCounts?.bookmakerBooks === 0) totals.auditedWithoutVerifiedBooks++;
     if (coverage?.modelEvidence) {
       totals.modelEvidenceFixtures++;
       if (coverage.modelEvidence.competitionMatches >= coverage.modelEvidence.sampleCap) totals.modelEvidenceAtSampleCap++;

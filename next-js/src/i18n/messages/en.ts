@@ -1027,7 +1027,7 @@ export const en = {
   "market.featuredStatus.atBreakEven": "At model break-even",
   "market.featuredStatus.belowStandardPrice": "Price below 1.10",
   "market.featuredStatus.oddsNotPermitted": "Bookmaker odds unavailable to show",
-  "market.featuredStatus.noVerifiedOdds": "No verified bookmaker odds",
+  "market.featuredStatus.noVerifiedOdds": "No verified featured price",
   "market.featuredStatus.noComparableQuote": "No eligible exact price",
   "market.featuredStatus.noQualifyingOutcome": "No qualifying priced outcome",
   "market.source.short.ai": "AI",

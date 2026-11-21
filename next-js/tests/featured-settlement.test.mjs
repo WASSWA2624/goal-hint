@@ -29,3 +29,19 @@ test("parts, pushes, corrections and voids keep the displayed pick's actual grad
   assert.equal(settleFeaturedPick(pick, { ...fixture, cycleState: "void", voidReason: "formal-postponement" }, result).status, "void");
   assert.equal(settleFeaturedPick({ key: "goal:unsupported", selection: "under" }, fixture, result).status, "unavailable");
 });
+
+test("the screenshot's full-time totals grade 2–2, 0–0 and a 1–1 shootout fixture from verified regulation", () => {
+  for (const [fixtureId, status, home, away, line] of [
+    ["recoleta-guarani", "finished-regulation", 2, 2, "4.5"],
+    ["cali-millonarios", "finished-regulation", 0, 0, "4.5"],
+    ["velez-belgrano", "finished-penalties", 1, 1, "3.5"],
+  ]) {
+    const target = { ...fixture, fixtureId, status, regulationHome: home, regulationAway: away };
+    const recorded = { ...result, fixtureId, status, halfTime: undefined,
+      regulation: { ...result.regulation, home, away }, penaltyScore: { home: 5, away: 4 } };
+    const pick = { key: `goal:full-time:totals:total:${line}:binary`, selection: "under" };
+    assert.equal(settleFeaturedPick(pick, target, recorded).status, "correct");
+    assert.equal(settleFeaturedPick(pick, target, null).status, "pending");
+    assert.equal(settleFeaturedPick(pick, { ...target, regulationHome: home + 1 }, recorded).status, "pending");
+  }
+});

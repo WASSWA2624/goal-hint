@@ -201,6 +201,10 @@ test("reviewed replay persists verified evidence and only its owner can reverse 
     assert.deepEqual((await readProjection()).get(fixtureId), active);
     const { evidence: v3Evidence, result: forecastOnly } = await p.a.query((tx) =>
       preparePricedNovemberReplay(tx, occurrence, replayAsOf, undefined, localFeaturedDecisionVersion));
+    const covered = await p.a.query((tx) =>
+      preparePricedNovemberReplay(tx, occurrence, replayAsOf, undefined, localFeaturedDecisionVersion, undefined, "counts"));
+    assert.deepEqual(covered.result, forecastOnly);
+    assert.ok(covered.diagnostic.counts.validModeledOutcomes > 0);
     assert.equal(forecastOnly.featuredDecision.status, "forecast-only");
     assert.ok(forecastOnly.selected.probability >= 0.6);
     assert.equal(forecastOnly.featuredDecision.quote, undefined);
