@@ -133,6 +133,36 @@ fixed. Calibration uses original win probabilities and outright wins.
 Realized return uses one unit per settled selection with an exact verified
 quote, including the actual payout for pushes and partial outcomes.
 
+### Production qualification on 21 November 2026
+
+The read-only comparison at 16:29:24 Africa/Kampala reproduced the released
+decision on all 1,672 estimates in the sealed November audit and on all 507
+newer ordinary cutoff decisions. The November audit covers 15,191 occurrences
+across 13,935 fixtures, including 4,884 prospective occurrences and 8,635
+withheld before comparison. Newer ordinary cutoffs were evaluated separately.
+
+The available history comprised 644 verified original Local Engine forecasts,
+of which 265 had at least one supported outcome with verified settlement.
+The candidate found 9,994 outcome assessments where the existing priorities
+allowed a ranking comparison. Seven had enough support for a nonzero
+adjustment, all in the broad cross-competition sample for newer decisions.
+Only 24 target occurrences had verified competition context. None had
+qualified venue neutrality or comparable strength context. No chosen outcome
+or tier changed across the 2,179 comparisons.
+
+| Scope | Compared | Standard / fallback / forecast-only | Outright wins / settled | Mean modeled win probability | Raw Brier | Net units / settled priced |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Sealed November | 1,672 | 165 / 20 / 1,487 | 1,366 / 1,671 (81.75%) | 84.68% | 0.14724 | −5.34 / 185 |
+| Newer ordinary cutoffs | 507 | 36 / 8 / 463 | 76 / 90 (84.44%) | 84.06% | 0.12044 | −0.53 / 15 |
+| Combined | 2,179 | 201 / 28 / 1,950 | 1,442 / 1,761 (81.89%) | 84.65% | 0.14587 | −5.87 / 200 |
+
+Both variants produced the same values. Quoted return was −2.94% at one
+hypothetical unit per exact quote. Results were unverified for 418 predictions.
+This comparison found no gain in selection
+coverage, outright hit rate, calibration, or quoted return. The experimental
+ranking remains available for read-only evaluation. The released featured
+policy and the previously activated replay remain in use.
+
 ## Review and activate
 
 `stage` stores qualifying retrospective revisions with their actual generation
