@@ -31,6 +31,6 @@ No publisher, model binding or slip was activated. The investigation made no hos
 
 ## Migration verification
 
-The new overlay records the canonical SQL SHA-256 `005e46677e1a02f44086d8a2eeb342016046c6fa3f6a425dab69d54e0ba4c881`. The nine deployment-script checks passed. An isolated MariaDB 11.4.13 instance verified the actual overlay against a synthetic predecessor schema. It preserved version 1 and 2 rows, enforced the version 3 limit of ten and rejected missing prerequisites, replay and membership mutation.
+The overlay records the canonical SQL SHA-256 `f2921ff970c47a98bc06af9d8df7689aa051f9afe0e21278978a9e9dcff01c77`. Both append-only guards use compound trigger bodies for backup and restore compatibility. Nine deployment-script checks passed. An isolated MariaDB 11.4.13 dry run against a synthetic predecessor schema preserved version 1 and 2 rows, enforced the version 3 limit of ten and rejected missing prerequisites, replay and membership mutation.
 
 Two raw SQL concurrency checks observed actual InnoDB lock waits. When different bands attempted to claim the same day's combination, the winning transaction committed and the duplicate claim rolled back the other publication and slip. A concurrent retry for the same publication inserted zero rows, then read the committed parent under a shared lock. Each race left one parent, slip and combination membership. These checks cover database behavior with synthetic rows.
