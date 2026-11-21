@@ -77,7 +77,7 @@
     "worker:jobs": "node --conditions=react-server --env-file-if-exists=.env.development src/workers/jobs.ts",
     "worker:results": "node --conditions=react-server --env-file-if-exists=.env.development src/workers/results.ts",
     "worker:slips": "node --conditions=react-server --env-file-if-exists=.env.development --env-file-if-exists=.env.operations src/workers/slips.ts",
-    "test:publications": "node --conditions=react-server --test --test-concurrency=1 tests/best-slip-odds-bands.test.mjs tests/published-slips.test.mjs tests/published-slips.integration.mjs tests/slip-forecast.test.mjs tests/slip-snapshot.test.mjs",
+    "test:publications": "node --conditions=react-server --test --test-concurrency=1 tests/best-slip-history.test.mjs tests/best-slip-odds-bands.test.mjs tests/published-slips.test.mjs tests/published-slips.integration.mjs tests/slip-forecast.test.mjs tests/slip-snapshot.test.mjs",
     "live": "node --conditions=react-server --env-file-if-exists=.env.development --env-file-if-exists=.env.operations src/workers/live.ts",
     "live:competitions": "python scripts/live-competitions.py",
     "live:status": "python scripts/live-status.py",

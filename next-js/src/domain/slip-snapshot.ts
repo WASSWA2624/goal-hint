@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { storedMatchFeedRecordSchema } from "./match-feed.ts";
+import { marketSources } from "./markets.ts";
 import { completedFixtureStatuses, isCompletedFixtureStatus, isPlayedFinalStatus, type CycleEligibility, type SettlementStatus } from "./market-settlement.ts";
 import { slipBuilderRules, type BuiltSlip, type SlipForecastReference } from "./slip-builder.ts";
 import { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
-import { slipBookmakerSchema, slipQuoteOddsSchema } from "./slip-quote.ts";
+import { editorialSlipOfferSchema, slipBookmakerSchema, slipQuoteOddsSchema } from "./slip-quote.ts";
+import { parseDecimalOdds } from "./odds.ts";
 import type { SlipMatchProgress } from "./slip-match-state.ts";
 import { slipOutcome } from "./slip-outcome.ts";
 import { slipStatus, type SlipStatus } from "./slip-status.ts";
@@ -19,19 +21,23 @@ export const slipSnapshotRules = Object.freeze({
   maximumTotalOddsDigits: slipBuilderRules.maximumSelections * 4,
   maximumRequestBytes: slipBuilderRules.maximumSelections * 256 + 4096,
 });
-const selection = z.strictObject({
+export const slipSelectionSnapshotSchema = z.strictObject({
   fixtureId: z.uuid(), kickoffAt: z.number().int().positive(), homeTeam: record.homeTeam, awayTeam: record.awayTeam,
   competition: record.competition, family: slipMarketFamilySchema, selection: z.string().max(64),
   probability: z.number().min(0).max(1), odds: slipQuoteOddsSchema,
   oddsBasis: z.enum(["bookmaker", "median"]),
   bookmaker: slipBookmakerSchema.optional(),
   forecast: slipForecastReferenceSchema.optional(),
+  source: z.enum(marketSources).optional(),
+  offer: editorialSlipOfferSchema.optional(),
 }).refine((value) => isSlipMarketSelection(value.family, value.selection) && (!value.bookmaker || value.oddsBasis === "bookmaker")
+  && (!value.offer || !!value.forecast && !!value.source && value.bookmaker?.id === value.offer.bookmakerId &&
+    value.bookmaker.name === value.offer.bookmakerName && parseDecimalOdds(value.odds)?.text === value.offer.decimal)
   && (!isSlipGoalExtensionSelection(value.selection) || !!value.forecast && !!value.bookmaker), "Invalid slip selection.");
 
 /** Neutral slip data shared by transient builders, image exports and editorial publications. */
 export const slipSnapshotSchema = z.strictObject({
-  id: z.string().min(1).max(slipSnapshotRules.maximumIdentityLength), selections: z.array(selection).min(1).max(slipBuilderRules.maximumSelections),
+  id: z.string().min(1).max(slipSnapshotRules.maximumIdentityLength), selections: z.array(slipSelectionSnapshotSchema).min(1).max(slipBuilderRules.maximumSelections),
   totalOdds: z.string().max(slipSnapshotRules.maximumTotalOddsDigits + 3).regex(/^\d+\.\d{2}$/u), oddsBasis: z.enum(["bookmaker", "median"]),
   averageProbability: z.number().min(0).max(1),
 }).refine((value) => new Set(value.selections.map((item) => item.fixtureId)).size === value.selections.length,

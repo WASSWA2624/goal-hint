@@ -15,7 +15,7 @@ import type { SlipHeaderPublication } from "../slip-header-meta";
 import { slipHeaderState } from "../slip-header-outcome";
 
 export type DesktopSlipDisclosureProps = {
-  totalOdds: string; averageProbability: number; selectionCount: number; index: number; locale: string;
+  totalOdds: string; averageProbability: number; estimatedProbability?: number | undefined; selectionCount: number; index: number; locale: string;
   initiallyOpen?: boolean; collapsible?: boolean; showRank?: boolean; slipId?: string; headingId?: string; children: ReactNode; headerAction?: ReactNode;
   outcome?: SlipResultView["outcome"]; status?: SlipStatus;
 } & SlipHeaderPublication;
@@ -29,16 +29,17 @@ export function DesktopSlipDisclosure({ children, headerAction, ...props }: Desk
 }
 
 /** Original snapshot facts and any supplied regulation results remain unchanged by desktop presentation. */
-export function DesktopSlip({ slip, index, locale, results, matchStates, initiallyOpen = false, shareSource, sharedSlip, publicShareHref,
+export function DesktopSlip({ slip, index, locale, estimatedProbability, results, matchStates, initiallyOpen = false, shareSource, sharedSlip, publicShareHref,
   publicationDay, publishedAt, outcome: suppliedOutcome, status: suppliedStatus }: {
-  slip: BuiltSlip; index: number; locale: string; results?: SlipResultView["results"]; matchStates?: readonly SlipMatchState[]; initiallyOpen?: boolean;
+  slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number | undefined; results?: SlipResultView["results"]; matchStates?: readonly SlipMatchState[]; initiallyOpen?: boolean;
   publicShareHref?: string; shareSource?: ShareSlipSource; sharedSlip?: SharedSlip; outcome?: SlipResultView["outcome"]; status?: SlipStatus;
 } & SlipHeaderPublication) {
   const headingId = useId();
   const currentStates = useRefreshedSlipMatchStates() ?? matchStates;
   const { outcome, status } = slipHeaderState(slip, results, currentStates, suppliedOutcome, suppliedStatus);
   return <DesktopSlipDisclosure index={index} locale={locale} initiallyOpen={initiallyOpen} headingId={headingId} showRank={!sharedSlip}
-    totalOdds={slip.totalOdds} averageProbability={slip.averageProbability} selectionCount={slip.selections.length} slipId={slip.id} outcome={outcome} status={status}
+    totalOdds={slip.totalOdds} averageProbability={slip.averageProbability} estimatedProbability={estimatedProbability}
+    selectionCount={slip.selections.length} slipId={slip.id} outcome={outcome} status={status}
     {...(publicationDay ? { publicationDay } : {})} {...(publishedAt !== undefined ? { publishedAt } : {})}
     headerAction={shareSource || sharedSlip ? <SlipShareAction key={sharedSlip?.id ?? slip.id} localSlip={slip} {...(shareSource ? { source: shareSource } : {})}
       {...(sharedSlip ? { sharedSlip } : {})} locale={locale} status={status} outcome={outcome}

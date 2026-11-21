@@ -46,13 +46,13 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 1
       }
       const checkCount = async count => {
         const label = await page.locator("[data-best-slips-summary]").innerText();
-        assert(label.includes(`of ${count} slips`), "The count includes the visible range, total and slips label on every screen");
+        assert(label.includes(`of ${count} ${count === 1 ? "slip" : "slips"}`), "The count includes the visible range and total on every screen");
       };
       await checkCount(3);
       assert((await bar.innerText()).includes("2.50–5.00"), "The default odds retain two decimal places");
       if (width < 1024) {
         const text = await bar.innerText();
-        assert(text.includes("Today’s best slips") && !text.includes("All slips") && !text.includes("EAT") && !text.includes("Browsing") && !text.includes("Oct"), "The mobile summary replaces browsing dates and result labels with today's title");
+        assert(text.includes("13-Oct-2026") && !text.includes("All slips") && !text.includes("EAT") && !text.includes("Browsing"), "The mobile summary keeps the applied date without repeating the browsing and All labels");
         assert(geometry.background === "rgba(0, 0, 0, 0)" && geometry.summaryPaddingEnd === 0 && geometry.firstSlipGap <= 2.5 && geometry.firstSlipGap >= 0, "The mobile summary sits on the body background directly above the first slip");
       }
       await page.locator("[data-best-slips-filters]").screenshot({ path: `output/playwright/best-slips-${mode}-${width}${geometry.coarse ? "-touch" : ""}.png` });
@@ -67,7 +67,7 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 1
         const chooseOdds = label => dialog.getByText(label, { exact: true }).click();
         const selected = label => dialog.getByRole("radio", { name: label, exact: true }).isChecked();
         await open();
-        assert(await dialog.locator('input[type="date"], [data-slip-period-select]').count() === 0, "Best Slips Filters contains no date controls");
+        assert(await dialog.locator('[name="period"]').count() === 1, "Best Slips Filters includes one publication date control");
         {
           const group = dialog.getByRole("group", { name: "Total odds", exact: true });
           assert(await group.getByRole("radio").count() === 6, "Every odds band is listed");
@@ -97,7 +97,35 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 1
         await dialog.locator("[data-dialog-reset]").click(); await apply(); await settled();
         assert((await bar.innerText()).includes("2.50–5.00"), "Reset applies default odds to today's slips");
         await checkCount(3);
-        assert(requests.every(url => url.searchParams.get("period") === "today" && !url.searchParams.has("from") && !url.searchParams.has("to")), "Every UI request remains limited to today");
+        assert(await page.getByText("Whole-slip win probability", { exact: false }).count() === 3, "Whole-slip probability is labeled separately on each slip");
+        if (width === 390 || width === 1440) {
+          await open();
+          const choose = async (name, label) => {
+            await dialog.getByRole("combobox", { name: new RegExp(`^${name}:`) }).click();
+            await dialog.getByRole("option", { name: label, exact: true }).click();
+          };
+          await choose("Slip date", "Yesterday");
+          await choose("Status", "Lost");
+          await dialog.locator('[name="probMin"]').fill("80");
+          await dialog.locator('[name="matchesMin"]').fill("2");
+          await apply(); await settled();
+          assert(new URL(page.url()).searchParams.get("period") === "yesterday", "Applying the date updates the shareable URL");
+          assert(new URL(page.url()).searchParams.get("probMin") === "80" && new URL(page.url()).searchParams.get("matchesMin") === "2", "The URL pins the numeric filters");
+          assert((await bar.innerText()).includes("12-Oct-2026") && (await bar.innerText()).includes("Lost"), "The results bar reports the applied archive date and status");
+          await checkCount(1);
+          assert(await page.locator('[data-summary-count="all"]').innerText() === "2", "The date and range restrictions apply before result drilldown counts");
+          await page.reload(); await checkCount(1);
+          await open(); await dialog.locator("[data-dialog-reset]").click(); await apply(); await settled();
+          assert(new URL(page.url()).search === "", "Resetting and applying restores the clean today URL");
+          await page.goBack(); await settled(); await checkCount(1);
+          assert(new URL(page.url()).searchParams.get("status") === "lost", "Back restores the audited query and its count");
+          await page.goto(`${origin}/best-slips/browse?period=all`);
+          await page.getByRole("button", { name: "Older slips" }).click(); await settled();
+          assert(new URL(page.url()).searchParams.has("cursor"), "Archive continuation is addressable");
+          await page.getByRole("button", { name: "First archive page" }).click(); await settled();
+          assert(!new URL(page.url()).searchParams.has("cursor"), "The first archive page removes the cursor");
+          await page.goto(`${origin}/best-slips/browse`);
+        }
         const retained = await bar.innerText();
         let releaseResponse;
         const heldResponse = new Promise(resolve => { releaseResponse = resolve; });

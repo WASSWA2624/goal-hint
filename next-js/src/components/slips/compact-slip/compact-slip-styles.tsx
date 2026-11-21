@@ -53,6 +53,11 @@ export const CompactCard = styled.article`
     border-end-start-radius: ${({ theme }) => theme.radius.none}; border-end-end-radius: ${({ theme }) => theme.radius.none};
   }
   [data-slip-content] { border-end-start-radius: var(--slip-inner-radius); border-end-end-radius: var(--slip-inner-radius); }
+  [data-whole-slip-probability] {
+    margin: 0; padding: var(--gh-spacing-1_25) var(--gh-spacing-2_25);
+    color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-compact);
+    strong { margin-inline-start: var(--gh-spacing-0_75); color: ${({ theme }) => theme.color.text}; font-variant-numeric: tabular-nums; }
+  }
   details { min-inline-size: 0; }
   [data-slip-summary]:not([data-mobile-slip-header]) {
     position: relative; display: grid; align-items: center; min-inline-size: 0; min-block-size: var(--gh-size-11);

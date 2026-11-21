@@ -251,6 +251,12 @@ rollback; do not reset job, forecast or quota data.
 
 ## VPS staging and release promotion
 
+For Best Slips, promote the web archive reader and its migration through the
+same staging checks as other web releases. The supervised slip publisher uses
+the matching source release, its own database grants, and a private reviewed
+model binding. See [daily slip publications](../daily-slip-publications.md) for
+its activation prerequisites and status checks.
+
 `https://test.goalhint.com` runs under the `ghstage` cPanel account on the
 Ubuntu VPS. Apache serves the Next.js bundle through Passenger using the
 repository's pinned Node.js. The VPS keeps MariaDB on loopback. The staging

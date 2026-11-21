@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { snapshotCardPrediction } from "../src/domain/match-card.ts";
-import { parseSlipCriteria, serializeSlipCriteria } from "../src/domain/slip-builder.ts";
+import { buildSlips, parseSlipCriteria, serializeSlipCriteria } from "../src/domain/slip-builder.ts";
 import { slipSelectionCard } from "../src/domain/slip-card.ts";
 import { canonicalSlipConfigurationParameters, slipConfigurationCriteria } from "../src/domain/slip-configurations.ts";
 import { slipMarketSelections } from "../src/domain/slip-markets.ts";
@@ -9,6 +9,7 @@ import { slipMatchWatch, slipMatchWatchSchema } from "../src/domain/slip-match-r
 import { slipResultView, slipSnapshotSchema } from "../src/domain/slip-snapshot.ts";
 import { slipRevisionMatches } from "../src/server/slips/slip-forecast.ts";
 import { createSlipBuildService } from "../src/server/slips/slip-service.ts";
+import { pricedEditorialSelection } from "./helpers/best-slip-publication-fixtures.mjs";
 import { additionalGoalFixture, now, today } from "./helpers/slip-additional-goal-fixture.mjs";
 
 test("all team-total outcomes round-trip in saved criteria without changing the legacy match-total order", () => {
@@ -58,6 +59,8 @@ test("explicit match and team totals build from their sealed event and exact boo
     const watch = slipMatchWatchSchema.parse(slipMatchWatch(leg));
     const revision = { ...reference, id: reference.revisionId, fixtureId: leg.fixtureId };
     assert.equal(slipRevisionMatches(watch, revision, extension, now), true);
+    assert.equal(slipRevisionMatches({ ...watch, source: "local-engine" }, revision, extension, now), true);
+    assert.equal(slipRevisionMatches({ ...watch, source: "ai" }, revision, extension, now), false);
     assert.equal(slipRevisionMatches({ ...watch, probability: 0.999 }, revision, extension, now), false);
     assert.equal(slipRevisionMatches(watch, revision, { ...extension, recordedAt: now + 1 }, now), false);
     const final = { fixtureId: leg.fixtureId, family, selection, forecast: reference, completed: true,
@@ -65,4 +68,35 @@ test("explicit match and team totals build from their sealed event and exact boo
     assert.equal(slipResultView("sealed", "", slip, [final]).outcome, expectedOutcome);
     assert.equal(slipResultView("sealed", "", slip, [{ ...final, regulationVerified: false }]).outcome, "pending");
   }
+});
+
+test("editorial combination search excludes manual goal records and keeps all legs at one bookmaker", async () => {
+  const { record, readCohort } = additionalGoalFixture();
+  const cohort = await readCohort(new URLSearchParams({ date: today }), {
+    additionalGoals: { keys: ["goal:full-time:totals:home:2.5:binary"], only: true },
+  }, { now: () => now });
+  const records = [{ ...record, selectionPrices: cohort.selectionPrices[record.fixtureId],
+    additionalGoalForecast: cohort.additionalGoalForecasts[record.fixtureId] }];
+  const criteria = parseSlipCriteria({
+    markets: "match-result,team-goals", "picks.team-goals": "home-under-2.5",
+    totalMin: "1.01", totalMax: "5.00", teamsMin: "2", teamsMax: "2",
+  }, today);
+  const reviewed = [pricedEditorialSelection(1, { odds: "2.00", probability: 0.81 }),
+    pricedEditorialSelection(2, { odds: "2.00", probability: 0.82 }),
+    pricedEditorialSelection(3, { odds: "2.00", probability: 0.99, bookmakerId: 9 })];
+  const editorial = buildSlips(criteria, records, now, undefined, {
+    allowPublishedFallback: true, editorial: { selections: reviewed, exclusiveMaximum: true },
+  });
+  assert.equal(editorial.qualifyingMatches, reviewed.length);
+  assert.equal(editorial.slips.length, 1);
+  assert.deepEqual(editorial.slips[0].selections.map(({ fixtureId }) => fixtureId).sort(),
+    reviewed.slice(0, 2).map(({ fixtureId }) => fixtureId));
+  assert.ok(editorial.slips[0].selections.every((leg) => leg.offer?.bookmakerId === 8));
+
+  const custom = buildSlips({ ...criteria, teamsMin: 1, teamsMax: 1 }, records, now, undefined, { allowPublishedFallback: true });
+  assert.equal(custom.slips.length, 1);
+  const [pick] = custom.slips[0].selections;
+  assert.equal(pick.selection, "home-under-2.5");
+  assert.equal(pick.odds, "1.2451");
+  assert.equal(pick.offer, undefined);
 });

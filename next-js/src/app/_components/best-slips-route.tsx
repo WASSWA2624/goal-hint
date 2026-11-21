@@ -9,7 +9,9 @@ import { CriteriaPanel } from "@/components/slips/slip-styles";
 import { TextLink } from "@/components/ui/controls";
 import { Inline, Stack } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { defaultBestSlipsQuery } from "@/domain/best-slips-query";
+import { redirect } from "next/navigation";
+import { BestSlipsQueryError, parseBestSlipsQuery, type BestSlipsQuery } from "@/domain/best-slips-query";
+import { bestSlipsHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import { resolveViewerAccessFresh } from "@/server/members/viewer-access";
 import { readBestSlipsBrowseSnapshot } from "@/server/slips/best-slips-browse";
@@ -21,9 +23,9 @@ import { getShellDate, PublicShell } from "./public-shell";
 
 type Props = Readonly<{ params: Promise<{ locale: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }>;
 export function createBestSlipsRoute({ read = readBestSlipsBrowseSnapshot, access = resolveViewerAccessFresh, policy = getDiscoveryPolicy } = {}) {
-  async function Content({ locale }: { locale: string }) {
+  async function Content({ locale, query }: { locale: string; query: BestSlipsQuery }) {
     const m = createMessages(locale);
-    const published = await read(defaultBestSlipsQuery(), locale);
+    const published = await read(query, locale);
     // The stored cohort is viewer-independent. A fresh access check after the
     // read covers an entitlement change before any selections enter the HTML.
     const viewer = await access();
@@ -44,13 +46,18 @@ export function createBestSlipsRoute({ read = readBestSlipsBrowseSnapshot, acces
       const [{ locale }, query] = await Promise.all([params, searchParams]);
       return bestSlipsMetadata(locale, query, policy);
     },
-    async Page({ params }: Props) {
-      const { locale } = await params;
-      const today = await getShellDate();
+    async Page({ params, searchParams }: Props) {
+      const [{ locale }, values, today] = await Promise.all([params, searchParams, getShellDate()]);
+      let query: BestSlipsQuery;
+      try { query = parseBestSlipsQuery(values, today); }
+      catch (error) {
+        if (error instanceof BestSlipsQueryError) redirect(bestSlipsHref(locale));
+        throw error;
+      }
       return <PublicShell locale={locale} today={today} current="best-slips" app compact>
         <VisuallyHidden as="h1">{createMessages(locale).text("bestSlips.title")}</VisuallyHidden>
         <Suspense fallback={<BestSlipsLoading locale={locale} today={today} heading={false} />}>
-          <ServerThemeUntilHydrated><Content locale={locale} /></ServerThemeUntilHydrated>
+          <ServerThemeUntilHydrated><Content locale={locale} query={query} /></ServerThemeUntilHydrated>
         </Suspense>
       </PublicShell>;
     },

@@ -1,6 +1,7 @@
 import { addReportingDays, parseReportingDate, validateReportingDateRange, type ReportingDate } from "./calendar.ts";
 import { bestSlipsRules } from "./best-slips.ts";
 import { slipPageSize } from "./slip-pagination.ts";
+import { formatProbabilityValue, parseProbabilityValue } from "./feed-query.ts";
 import { bestSlipOddsBands, defaultBestSlipOddsBand, type BestSlipOddsBand } from "./best-slip-odds-bands.ts";
 
 export const bestSlipsPeriods = ["today", "yesterday", "tomorrow", "last3", "last7", "last30", "next3", "next7", "next30", "all", "custom"] as const;
@@ -9,13 +10,17 @@ export type BestSlipsPeriod = typeof bestSlipsPeriods[number];
 export type BestSlipsStatus = typeof bestSlipsStatuses[number];
 export const bestSlipsQueryRules = Object.freeze({ maximumDays: 366, pageSize: slipPageSize, scanDays: 31, maximumPage: 9999 });
 export type BestSlipsQuery = Readonly<{
-  period: BestSlipsPeriod; status: BestSlipsStatus; oddsBand?: BestSlipOddsBand; from?: ReportingDate; to?: ReportingDate; page: number; cursor?: string; summary?: "yesterday";
+  period: BestSlipsPeriod; status: BestSlipsStatus; oddsBand?: BestSlipOddsBand; from?: ReportingDate; to?: ReportingDate;
+  probMin?: number; probMax?: number; matchesMin?: number; matchesMax?: number;
+  page: number; cursor?: string; summary?: "yesterday";
 }>;
+export const bestSlipsRangeFields = ["probMin", "probMax", "matchesMin", "matchesMax"] as const;
+export type BestSlipsRangeField = typeof bestSlipsRangeFields[number];
 export type BestSlipsDates = Readonly<{ from: ReportingDate | null; to: ReportingDate | null }>;
 export class BestSlipsQueryError extends Error {
   readonly code: "invalid-query" | "invalid-date" | "invalid-range" | "range-too-large";
   constructor(code: BestSlipsQueryError["code"]) {
-    super(`Invalid BetSlip filter: ${code}.`); this.name = "BestSlipsQueryError"; this.code = code;
+    super(`Invalid Best Slips filter: ${code}.`); this.name = "BestSlipsQueryError"; this.code = code;
   }
 }
 const fail = (code: BestSlipsQueryError["code"]): never => { throw new BestSlipsQueryError(code); };
@@ -61,6 +66,19 @@ export function parseBestSlipsCursor(value: string): Readonly<{ day: ReportingDa
   return { day, rank };
 }
 
+function parseMatchCount(value: string): number | null {
+  const count = Number(value);
+  return /^\d+$/u.test(value) && Number.isSafeInteger(count) && count > 0 ? count : null;
+}
+
+/** Average probability bounds use percentage points, match bounds use whole matches, and both are inclusive. */
+export function matchesBestSlipsRanges(query: BestSlipsQuery, { averageProbability, matchCount }: {
+  averageProbability: number; matchCount: number;
+}): boolean {
+  return averageProbability >= (query.probMin ?? 0) / 100 && averageProbability <= (query.probMax ?? 100) / 100
+    && matchCount >= (query.matchesMin ?? 1) && matchCount <= (query.matchesMax ?? Number.MAX_SAFE_INTEGER);
+}
+
 export function parseBestSlipsQuery(input: URLSearchParams | Readonly<Record<string, string | string[] | undefined>>, today: ReportingDate): BestSlipsQuery {
   const value = (key: string): string | undefined => {
     const values = input instanceof URLSearchParams ? input.getAll(key) : input[key];
@@ -81,8 +99,19 @@ export function parseBestSlipsQuery(input: URLSearchParams | Readonly<Record<str
   if (page > bestSlipsQueryRules.maximumPage || cursor !== undefined && period !== "all") return fail("invalid-query");
   if (cursor !== undefined) parseBestSlipsCursor(cursor);
   const dates = period === "custom" ? customDates(value("from"), value("to")) : null;
+  const ranges: Partial<Record<BestSlipsRangeField, number>> = {};
+  for (const field of bestSlipsRangeFields) {
+    const raw = value(field);
+    if (raw === undefined || raw === "") continue;
+    const number = field.startsWith("prob") ? parseProbabilityValue(raw) : parseMatchCount(raw);
+    if (number === null) return fail("invalid-query");
+    ranges[field] = number;
+  }
+  if ((ranges.probMin ?? 0) > (ranges.probMax ?? 100)
+    || (ranges.matchesMin ?? 1) > (ranges.matchesMax ?? Number.MAX_SAFE_INTEGER)) return fail("invalid-range");
   const query: BestSlipsQuery = { period: period as BestSlipsPeriod, status: status as BestSlipsStatus, oddsBand: oddsBand as BestSlipOddsBand, page,
-    ...(dates?.from && dates.to ? { from: dates.from, to: dates.to } : {}), ...(cursor === undefined ? {} : { cursor }), ...(summary ? { summary } : {}) };
+    ...(dates?.from && dates.to ? { from: dates.from, to: dates.to } : {}), ...ranges,
+    ...(cursor === undefined ? {} : { cursor }), ...(summary ? { summary } : {}) };
   resolveBestSlipsDates(query, today);
   return query;
 }
@@ -92,8 +121,18 @@ export function serializeBestSlipsQuery(query: BestSlipsQuery): URLSearchParams 
   result.set("oddsBand", query.oddsBand ?? defaultBestSlipOddsBand);
   if (query.summary) result.set("summary", query.summary);
   if (query.period === "custom") { result.set("from", query.from ?? ""); result.set("to", query.to ?? ""); }
+  for (const field of bestSlipsRangeFields) {
+    const value = query[field];
+    if (value !== undefined) result.set(field, field.startsWith("prob") ? formatProbabilityValue(value) : String(value));
+  }
   if (query.period === "all" && query.cursor !== undefined) result.set("cursor", query.cursor);
   return result;
+}
+
+/** Keep the default collection URL clean; nondefault queries can be reloaded or shared. */
+export function bestSlipsPageSearch(query: BestSlipsQuery): string {
+  const search = serializeBestSlipsQuery(query).toString();
+  return search === serializeBestSlipsQuery(defaultBestSlipsQuery()).toString() ? "" : `?${search}`;
 }
 
 /** Outcome drilldowns retain the selected period and odds band, restarting pagination. */

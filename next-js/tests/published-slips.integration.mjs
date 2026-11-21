@@ -9,6 +9,7 @@ import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
 import { liveRecord } from './helpers/live-refresh-fixtures.mjs';
 import { MysqlServerUnavailableError } from './helpers/mysql-instance.mjs';
 import { paidDatabase } from './helpers/paid-database.mjs';
+import { pricedEditorialSelection } from './helpers/best-slip-publication-fixtures.mjs';
 
 const migration = name => readFile(new URL(`../prisma/migrations/${name}/migration.sql`, import.meta.url), 'utf8');
 test('MySQL cleanup preserves presets, legacy publications and explicit public links; bands seal independently and concurrently', { timeout: 180000 }, async t => {
@@ -49,22 +50,27 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
   const before=await root.query('SELECT bodyJson,integrity FROM DailySlipPublication');
   await root.query(await migration('20261103120000_transient_slips_and_odds_bands'));
   await root.query(await migration('20261104090000_six_best_slip_odds_bands'));
+  await root.query(await migration('20261122180000_daily_best_slip_combinations'));
   assert.deepEqual(await root.query('SELECT bodyJson,integrity FROM DailySlipPublication'),before);
   assert.equal((await root.query("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('SavedSlip','SavedSlipFixture')")).length,0);
   assert.equal(await database.query(tx=>tx.slipConfiguration.count()),1);
   const publicLinks=await root.query('SELECT id,snapshotJson FROM SharedSlip'); assert.equal(publicLinks.length,2);
   assert.equal(publicLinks[0].snapshotJson.id,slip.id);
-  for (const table of ['DailySlipPublication','PublishedSlip','PublishedSlipLeg','SharedSlip']) await root.query(`GRANT SELECT, INSERT ON goal_hint_test.${table} TO 'paid_application'@'127.0.0.1'`);
+  for (const table of ['DailySlipPublication','PublishedSlip','PublishedSlipLeg','DailyBestSlipCombination','SharedSlip']) await root.query(`GRANT SELECT, INSERT ON goal_hint_test.${table} TO 'paid_application'@'127.0.0.1'`);
   await root.query("GRANT SELECT ON goal_hint_test.FootballFixture TO 'paid_application'@'127.0.0.1'");
-  const store=createPublishedSlips(database,{bindForecasts:async(_tx,value)=>value,
+  const store=createPublishedSlips(database,{bindForecasts:async(_tx,value)=>value, verifyOffers:async()=>true,
     resolveResults:async(_tx,selections)=>selections.map(selection=>({...selection,completed:true,status:'finished-regulation',regulationVerified:true,regulationHome:0,regulationAway:1}))});
   assert.equal((await store.day(yesterday)).slips[0].id,rowId); assert.deepEqual(await store.publishedBands(yesterday),['legacy']);
   for(const table of ['DailySlipPublication','PublishedSlip','PublishedSlipLeg','SharedSlip']) await assert.rejects(root.query(`DELETE FROM ${table}`),/append-only|permanent/);
   const kickoffAt=Date.parse(`${day}T20:59:00Z`);
   if(kickoffAt-at<600000){t.diagnostic('Cleanup and legacy checks passed; live publication skipped at the EAT day cutoff.');return;}
-  const current={...slip,averageProbability:0.75,estimatedProbability:0.75,selections:slip.selections.map(selection=>({...selection,probability:0.75,kickoffAt,forecast:{...selection.forecast,publishedAt:at-1000}}))};
+  const current={...slip,averageProbability:0.75,estimatedProbability:0.75,
+    selections:[pricedEditorialSelection(1,{odds:'4.00',kickoffAt,at,fixtureId,cycleId,revisionId})]};
   const input={day,slips:[current],searchLimited:false,partialCoverage:false,model:{...model,estimate:()=>0.75},verifyModel:()=>true,verifyPublicOdds:()=>true};
-  const upper = { ...current, totalOdds: '150.00', selections: current.selections.map(selection => ({ ...selection, odds: '150.00' })) };
+  const other = { fixtureId: randomUUID(), cycleId: randomUUID(), revisionId: randomUUID() };
+  await root.query('INSERT INTO FootballFixture(id) VALUES (?)', [other.fixtureId]);
+  await root.query('INSERT INTO PredictionSet(id,cycleId,fixtureId) VALUES (?,?,?)', [other.revisionId,other.cycleId,other.fixtureId]);
+  const upper = { ...current, totalOdds: '150.00', selections: [pricedEditorialSelection(2,{odds:'150.00',kickoffAt,at,...other})] };
   assert.deepEqual((await Promise.all([store.publish({ ...input, slips: [upper], oddsBand: '100-200' }),
     store.publish({ ...input, slips: [upper], oddsBand: '100-200' })])).sort(), ['already-published', 'published']);
   const upperDay = await store.day(day, false, '100-200');
@@ -72,9 +78,10 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
   assert.deepEqual((await Promise.all([store.publish(input),store.publish(input)])).sort(),['already-published','published']);
   assert.equal((await store.browse(defaultBestSlipsQuery(),day)).slips.length,1);
   assert.equal((await store.history({from:day,to:day,page:1,pageSize:10})).records[0].outcome,'lost');
-  const high={...current,totalOdds:'7.00',selections:current.selections.map(selection=>({...selection,odds:'7.00'}))};
-  assert.equal(await store.publish({...input,oddsBand:'5-10',slips:[high]}),'published');
-  assert.equal((await store.day(day,false,'5-10')).slips[0].rank,21);
+  const high={...current,totalOdds:'7.00',selections:[pricedEditorialSelection(1,{odds:'7.00',kickoffAt,at,fixtureId,cycleId,revisionId})]};
+  await assert.rejects(() => store.publish({...input,oddsBand:'5-10',slips:[high]}));
+  assert.equal((await store.day(day,false,'5-10')).slips.length,0);
+  await assert.rejects(root.query('DELETE FROM DailyBestSlipCombination'), /membership is immutable/u);
   await assert.rejects(root.query(`INSERT INTO DailySlipPublication(id,eatDate,oddsBand,publishedAt,modelId,bodyJson,integrity)
     SELECT REPEAT('d',64),DATE_ADD(eatDate,INTERVAL 1 DAY),oddsBand,publishedAt,modelId,JSON_SET(bodyJson,'$.count',21),integrity FROM DailySlipPublication WHERE oddsBand='1.5-5' LIMIT 1`),/check|constraint/);
   await assert.rejects(root.query(`INSERT INTO DailySlipPublication(id,eatDate,publishedAt,modelId,bodyJson,integrity)

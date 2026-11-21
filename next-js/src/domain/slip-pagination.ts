@@ -9,7 +9,7 @@ export function compareSlipDisplayProbability(left: { averageProbability: number
 }
 
 /** Also bound legacy daily seeds that predate the paginated response contract. */
-export function singleSlipPage(result: SlipsBrowseResult): SlipsBrowseResult {
+export function singleSlipPage(result: SlipsBrowseResult): SlipsBrowseResult & { browse: NonNullable<SlipsBrowseResult["browse"]> } {
   const browse = result.browse ?? { query: { period: "today" as const, status: "all" as const, page: 1 },
     total: result.slips.length, pageSize: slipPageSize, hasMore: result.slips.length > slipPageSize,
     nextCursor: null, from: result.day, to: result.day };

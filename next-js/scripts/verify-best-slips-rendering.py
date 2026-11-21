@@ -5,7 +5,7 @@ from lib.runtime import ROOT, main_guard
 
 
 def verify(origin):
-    for suffix in ("", "?period=yesterday", "?period=all"):
+    for suffix in ("", "?period=yesterday", "?period=all", "?period=custom&from=2026-10-12&to=2026-10-12&probMin=80&matchesMin=2&status=lost"):
         response = request(origin, "/best-slips/browse" + suffix)
         assert response.status == 200
         html = visible_html(response.text)
@@ -17,7 +17,11 @@ def verify(origin):
         assert "data-performance-heading" in html
         trigger = match(r'<button\b[^>]*data-best-slips-filter-trigger="[^"]*"[^>]*>[\s\S]*?</button>', html).group()
         assert ">Filters</span>" in trigger
-    print("Best Slips SSR passed: one filter action and results bar across multi-day, single-day and bounded All dates views.", flush=True)
+        if "period=custom" in suffix:
+            assert "12-Oct-2026" in html
+            assert html.count("data-slip-key=") == 1
+            assert "Average pick probability" in html and "Whole-slip win probability" in html
+    print("Best Slips SSR passed for defaults, dated filters, numeric and result filters, and bounded All dates browsing.", flush=True)
 
 
 def main():

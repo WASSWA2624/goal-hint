@@ -10,9 +10,9 @@ import { MobileHeaderRow } from "./mobile-slip-header-styles";
 import { SlipHeaderDate, SlipStatusBadge, type SlipHeaderPublication } from "../slip-header-meta";
 
 /** Shared by full slips, aggregate-only summaries and the design comparison. */
-export function MobileSlipHeader({ totalOdds, averageProbability, selectionCount, index, locale, outcome = "pending", status = outcome,
+export function MobileSlipHeader({ totalOdds, averageProbability, distinguishAverage = false, selectionCount, index, locale, outcome = "pending", status = outcome,
   headingId, headerOnly = false, showRank = false, className, variant, publicationDay, publishedAt, hasAction = false, action }: {
-  totalOdds: string; averageProbability: number; selectionCount: number; index: number; locale: string;
+  totalOdds: string; averageProbability: number; distinguishAverage?: boolean; selectionCount: number; index: number; locale: string;
   outcome?: SlipResultView["outcome"]; status?: SlipStatus; headingId?: string; headerOnly?: boolean; showRank?: boolean; className?: string; variant?: string; hasAction?: boolean; action?: ReactNode;
 } & SlipHeaderPublication) {
   const m = createMessages(locale), id = useId(), noteId = `${id}-probability-note`;
@@ -26,8 +26,9 @@ export function MobileSlipHeader({ totalOdds, averageProbability, selectionCount
       <VisuallyHidden>{m.text("slips.totalOdds")}: </VisuallyHidden><strong>{totalOdds}</strong>
     </span>
     <span data-header-field="probability" title={m.text("slips.averageHint")}>
-      <span data-header-label aria-hidden="true"><span data-label-full>{m.text("slips.probability")}</span><span data-label-compact>{m.text("slips.header.probabilityShort")}</span></span>
-      <VisuallyHidden>{m.text("slips.probability")}: </VisuallyHidden><strong>{formatSlipProbability(averageProbability, m)}</strong>
+      <span data-header-label aria-hidden="true"><span data-label-full>{m.text(distinguishAverage ? "slips.averagePickShort" : "slips.probability")}</span>
+        <span data-label-compact>{m.text(distinguishAverage ? "slips.averagePickMobile" : "slips.header.probabilityShort")}</span></span>
+      <VisuallyHidden>{m.text(distinguishAverage ? "slips.averagePick" : "slips.probability")}: </VisuallyHidden><strong>{formatSlipProbability(averageProbability, m)}</strong>
     </span>
     <span data-header-field="count" title={m.plural("slips.header.matchCount", selectionCount)}>
       <strong>{m.number(selectionCount)}</strong><span data-header-label aria-hidden="true">{m.text("slips.header.matches")}</span>

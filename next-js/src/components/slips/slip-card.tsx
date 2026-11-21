@@ -25,21 +25,23 @@ const PhoneSlipFallback = styled.div`
 `;
 
 export type SlipCardProps = {
-  slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number; results?: SlipResultView["results"]; matchStates?: readonly SlipMatchState[];
+  slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number; wholeSlipProbability?: number | undefined;
+  results?: SlipResultView["results"]; matchStates?: readonly SlipMatchState[];
   publicShareHref?: string; shareSource?: ShareSlipSource; sharedSlip?: SharedSlip; initiallyOpen?: boolean; outcome?: SlipResultView["outcome"]; status?: SlipStatus;
 } & SlipHeaderPublication;
 
 /** The shared production slip card for Best Slips, the builder, history and shared snapshots. */
-export const SlipCard = memo(function SlipCard({ slip, index, locale, results, matchStates, shareSource, sharedSlip, initiallyOpen = true, publicShareHref,
+export const SlipCard = memo(function SlipCard({ slip, index, locale, wholeSlipProbability, results, matchStates, shareSource, sharedSlip, initiallyOpen = true, publicShareHref,
   publicationDay, publishedAt, outcome, status }: SlipCardProps) {
   const desktop = useDesktopLayout();
   const publication = { ...(publicationDay ? { publicationDay } : {}), ...(publishedAt !== undefined ? { publishedAt } : {}),
     ...(outcome ? { outcome } : {}), ...(status ? { status } : {}) };
-  if (desktop) return <DesktopSlip slip={slip} index={index} locale={locale} initiallyOpen={initiallyOpen}
+  if (desktop) return <DesktopSlip slip={slip} index={index} locale={locale} initiallyOpen={initiallyOpen} estimatedProbability={wholeSlipProbability}
     {...publication} {...(publicShareHref ? { publicShareHref } : {})}
     {...(shareSource ? { shareSource } : {})} {...(sharedSlip ? { sharedSlip } : {})} {...(results ? { results } : {})}
     {...(matchStates ? { matchStates } : {})} />;
   return <PhoneSlipFallback><CompactSlip slip={slip} index={index} locale={locale} variant="clean-ledger" initiallyOpen={initiallyOpen} showRank={!sharedSlip}
+    estimatedProbability={wholeSlipProbability}
     {...publication}
     {...(results ? { results } : {})} {...(matchStates ? { matchStates } : {})}
     action={shareSource || sharedSlip ? <SlipShareAction key={sharedSlip?.id ?? slip.id} localSlip={slip} locale={locale} iconOnly {...publication}

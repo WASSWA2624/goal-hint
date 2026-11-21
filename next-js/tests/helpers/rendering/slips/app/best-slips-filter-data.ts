@@ -1,5 +1,5 @@
 import { bestSlipViews, type BestSlip, type BestSlipsResult, type BestSlipView } from "@/domain/best-slips";
-import { bestSlipsQueryRules, parseBestSlipsCursor, resolveBestSlipsDates, type BestSlipsQuery } from "@/domain/best-slips-query";
+import { bestSlipsQueryRules, matchesBestSlipsRanges, parseBestSlipsCursor, resolveBestSlipsDates, type BestSlipsQuery } from "@/domain/best-slips-query";
 import { addReportingDays, type ReportingDate } from "@/domain/calendar";
 import { bestSlipOddsBands, bestSlipOddsBandFor, defaultBestSlipOddsBand } from "@/domain/best-slip-odds-bands";
 import type { SlipMatchState } from "@/domain/slip-match-state";
@@ -15,10 +15,12 @@ const publications: readonly BestSlipView[] = Array.from({ length: 41 }, (_, day
   return bestSlipOddsBands.flatMap((band, bandIndex) => outcomes.map((outcome, index): BestSlipView => {
     const bandKey = band.id.replaceAll(".", "-");
     const totalOdds = (band.minimumTotal / 100).toFixed(2);
+    const averageProbability = [0.75, 0.85, 0.95][index]!;
+    const count = index === 0 ? 1 : 2;
     const slip: BestSlip = {
       ...source, id: `synthetic-filter-${publicationDay}-${bandKey}-${index + 1}`, totalOdds,
-      averageProbability: source.selections[0]!.probability, estimatedProbability: source.selections[0]!.probability,
-      selections: source.selections.slice(0, 1).map((selection, leg) => ({ ...selection, odds: totalOdds,
+      averageProbability, estimatedProbability: count === 1 ? averageProbability : averageProbability - 0.1,
+      selections: source.selections.slice(0, count).map((selection, leg) => ({ ...selection, probability: averageProbability, odds: totalOdds,
         fixtureId: `synthetic-filter-${publicationDay}-${bandKey}-${index + 1}-leg-${leg + 1}`,
         kickoffAt: selection.kickoffAt - dayIndex * 86_400_000,
       })),
@@ -43,7 +45,8 @@ export async function fixtureBestSlips(access: ViewerAccess): Promise<BestSlipsR
 export async function fixtureBrowseBestSlips(access: ViewerAccess, query: BestSlipsQuery): Promise<BestSlipsResult> {
   const dates = resolveBestSlipsDates(query, today);
   const scoped = publications.filter(view => bestSlipOddsBandFor(view.totalOdds) === (query.oddsBand ?? defaultBestSlipOddsBand));
-  const inRange = scoped.filter((view) => !dates.from || view.publicationDay! >= dates.from && view.publicationDay! <= dates.to!);
+  const bandRows = scoped.filter((view) => !dates.from || view.publicationDay! >= dates.from && view.publicationDay! <= dates.to!);
+  const inRange = bandRows.filter((view) => matchesBestSlipsRanges(query, view));
   const cursor = query.cursor ? parseBestSlipsCursor(query.cursor) : null;
   const remaining = inRange.filter((view) => !cursor || view.publicationDay! < cursor.day || view.publicationDay === cursor.day && view.rank > cursor.rank);
   const matches = remaining.filter((view) => query.status === "all" || view.outcome === query.status);
@@ -58,10 +61,10 @@ export async function fixtureBrowseBestSlips(access: ViewerAccess, query: BestSl
     lost: summarized.filter(view => view.outcome === "lost").length,
     pending: summarized.filter(view => view.outcome === "pending").length, void: 0 });
   const statistics = query.period === "all" ? null : counts(inRange);
-  const summary = { asOf: now, from: today, to: today, statistics: counts(scoped.filter(view => view.publicationDay === today)) };
+  const summary = { asOf: now, ...dates, statistics };
   return gateBestSlips({ day: today, state: "generated", slips, searchLimited: false, partialCoverage: false,
     statistics, summary,
-    browse: { query, total: query.period === "all" ? null : matches.length,
+    browse: { query, total: query.period === "all" ? null : matches.length, bandTotal: query.period === "all" ? null : bandRows.length,
       pageSize: bestSlipsQueryRules.pageSize, hasMore,
       nextCursor: query.period === "all" && hasMore && last ? `${last.publicationDay}:${last.rank}` : null, from, to },
   }, access);

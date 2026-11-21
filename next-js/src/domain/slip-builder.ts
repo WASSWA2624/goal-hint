@@ -3,10 +3,11 @@ import { dateTimeIntervalRange, type DateTimeInterval } from "./date-time.ts";
 import { formatProbabilityValue, parseProbabilityValue, probabilityFraction, type FeedParameters } from "./feed-query.ts";
 import { kickoffTimeWindows, validKickoffTime } from "./kickoff-time.ts";
 import type { StoredMatchFeedRecord } from "./match-feed.ts";
+import type { MarketSource } from "./markets.ts";
 import { formatOddsHundredths, oddsRules, parseDecimalOdds } from "./odds.ts";
 import { publicPolicy } from "./public-policy.ts";
 import type { SlipForecastReference } from "./slip-forecast-reference.ts";
-import type { SlipBookmaker } from "./slip-quote.ts";
+import type { EditorialSlipOffer, SlipBookmaker } from "./slip-quote.ts";
 import { additionalSlipGoalMarket, isSlipGoalExtensionSelection, isSlipMarketFamily, isSlipMarketSelection, matchesSlipForecast,
   slipMarketFamilies, slipMarketOutcomeMaximumLength, slipMarketSelections, type SlipAdditionalGoalForecast, type SlipMarketFamily, type SlipMarketSelection,
   type SlipTotal15Forecast } from "./slip-markets.ts";
@@ -57,6 +58,8 @@ export type SlipSelection = Readonly<{
   family: SlipMarketFamily; selection: SlipMarketSelection; probability: number; odds: string; oddsBasis: "bookmaker" | "median";
   bookmaker?: SlipBookmaker;
   forecast?: SlipForecastReference;
+  source?: MarketSource;
+  offer?: EditorialSlipOffer;
 }>;
 export type BuiltSlip = Readonly<{
   id: string; selections: readonly SlipSelection[]; totalOdds: string; oddsBasis: "bookmaker" | "median";
@@ -77,6 +80,7 @@ export type SlipRanking = Readonly<{
   compare: (left: BuiltSlip, right: BuiltSlip) => number;
   probability?: (slip: BuiltSlip) => number | null;
 }>;
+
 export type SlipCriteriaErrorCode = "invalid-query" | "invalid-date-range" | "invalid-time-range" | "invalid-market" | "invalid-pick"
   | "invalid-odds-range" | "invalid-probability-range" | "invalid-selection-range" | "invalid-slip-count";
 export class SlipCriteriaError extends RangeError {
@@ -377,8 +381,15 @@ function compatibleBatch(combinations: readonly Combination[], requested: number
 
 /** Uses only public, current, pre-cutoff published outcome probabilities and their own approved fresh prices.
  * No provider calls, synthetic prices, score guesses, stored slip writes or joint-probability assumptions. */
+export type EditorialSlipSearch = Readonly<{
+  selections: readonly SlipSelection[];
+  exclusiveMaximum: boolean;
+  priorFixtures?: ReadonlySet<string>;
+  order?: (values: readonly SlipSelection[]) => readonly SlipSelection[];
+}>;
+
 export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRecord[], asOf: number, ranking?: SlipRanking,
-  options: Readonly<{ allowPublishedFallback?: boolean }> = {}): SlipBuildResult {
+  options: Readonly<{ allowPublishedFallback?: boolean; editorial?: EditorialSlipSearch }> = {}): SlipBuildResult {
   serializeSlipCriteria(criteria); utcInstantFromEpochMilliseconds(asOf);
   if (hasJointProbabilityBounds(criteria) && !ranking?.probability) throw new RangeError("Whole-slip probability bounds require a qualified joint estimator.");
   const range = slipCriteriaRange(criteria);
@@ -391,7 +402,21 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
   const minimumOdds = BigInt(criteria.oddsMin) * 100n;
   const maximumOdds = Math.min(criteria.oddsMax ?? Infinity, criteria.totalMax ?? Infinity);
   const maximumScaledOdds = Number.isFinite(maximumOdds) ? BigInt(maximumOdds) * 100n : null;
-  for (const record of records) {
+  const isAboveMaximum = (scaled: bigint, maximum: bigint) => options.editorial?.exclusiveMaximum ? scaled >= maximum : scaled > maximum;
+  for (const selection of options.editorial?.selections ?? []) {
+    const scaled = parseDecimalOdds(selection.odds)?.scaled;
+    if (!selection.bookmaker || !selection.forecast || !selection.offer || selection.oddsBasis !== "bookmaker" ||
+      !criteria.markets.includes(selection.family) || selection.probability < minimumProbability || selection.probability > maximumProbability ||
+      selection.kickoffAt < range.window.startInclusive || selection.kickoffAt >= range.window.endExclusive ||
+      selection.kickoffAt <= asOf + calendarRules.cutoffSecondsBeforeKickoff * 1000 ||
+      scaled === undefined || scaled < minimumOdds || maximumScaledOdds !== null && scaled > maximumScaledOdds || seen.has(selection.fixtureId)) continue;
+    seen.add(selection.fixtureId);
+    qualifying.add(selection.fixtureId);
+    const key = [selection.fixtureId, selection.family, selection.selection, selection.probability, selection.odds,
+      selection.forecast.cycleId, selection.forecast.revisionId, selection.forecast.publishedAt, selection.bookmaker.id].join(":");
+    candidates.push({ selection, key, scaledOdds: scaled });
+  }
+  for (const record of options.editorial ? [] : records) {
     if (seen.has(record.fixtureId)) continue;
     seen.add(record.fixtureId);
     const kickoff = record.kickoffAt;
@@ -461,6 +486,11 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
     if (missingOdds && !qualifying.has(record.fixtureId)) excludedMissingOdds++;
   }
   candidates.sort(compareCandidates);
+  if (options.editorial?.order) {
+    const bySelection = new Map(candidates.map((candidate) => [candidate.selection, candidate]));
+    candidates.splice(0, candidates.length, ...options.editorial.order(candidates.map(({ selection }) => selection))
+      .map((selection) => bySelection.get(selection)!));
+  }
   if (candidates.length > slipBuilderRules.maximumCandidates) { candidates.length = slipBuilderRules.maximumCandidates; searchLimited = true; }
   const retained: Combination[] = [], diversified: Combination[] = [], diversifiedFixtures = new Set<string>();
   const compare = ranking ? (left: Combination, right: Combination) => ranking.compare(left.slip, right.slip) : compareCombinations;
@@ -517,7 +547,7 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
     diversifying = false): boolean {
     const remaining = target - selected.length, minimum = prices.minimum(start, remaining), maximum = prices.maximum(start, remaining);
     if (minimum === undefined || maximum === undefined || product * maximum * 100n < minimumProducts[target]!
-      || maximumProducts !== null && product * minimum * 100n > maximumProducts[target]!) return false;
+      || maximumProducts !== null && isAboveMaximum(product * minimum * 100n, maximumProducts[target]!)) return false;
     if (selected.length === target) {
       // Compact candidate indexes keep the bounded seed memo small and prevent duplicate model estimates.
       const seedKey = !criteria.reuse ? selected.map((candidate) => candidateIndexes.get(candidate)!).join(",") : "";
@@ -537,9 +567,10 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
       }
       searchNodes++; searchWork += weight;
       const candidate = pool[index]!;
-      if (fixtures.has(candidate.selection.fixtureId) || selected.length > 0 && candidate.selection.oddsBasis !== selected[0]!.selection.oddsBasis) continue;
+      if (fixtures.has(candidate.selection.fixtureId) || selected.length > 0 && (candidate.selection.oddsBasis !== selected[0]!.selection.oddsBasis ||
+        options.editorial && candidate.selection.bookmaker?.id !== selected[0]!.selection.bookmaker?.id)) continue;
       const nextProduct = product * candidate.scaledOdds, denominator = SCALE ** BigInt(selected.length + 1);
-      if (criteria.totalMax !== undefined && nextProduct * 100n > BigInt(criteria.totalMax) * denominator) continue;
+      if (criteria.totalMax !== undefined && isAboveMaximum(nextProduct * 100n, BigInt(criteria.totalMax) * denominator)) continue;
       selected.push(candidate); fixtures.add(candidate.selection.fixtureId);
       const accepted = enumerate(pool, prices, index + 1, target, nextProduct, diversifying);
       selected.pop(); fixtures.delete(candidate.selection.fixtureId);
@@ -548,16 +579,26 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
     return false;
   }
   function select(): BuiltSlip[] {
-    const combinations = [...new Map([...retained, ...diversified].map((item) => [item.key, item])).values()].sort(compare);
+    const combinations = [...new Map([...retained, ...diversified].map((item) => [item.key, item])).values()];
+    const prior = options.editorial?.priorFixtures;
+    const overlaps = new Map(prior?.size ? combinations.map((item) => [item,
+      item.slip.selections.filter(({ fixtureId }) => prior.has(fixtureId)).length]) : []);
+    combinations.sort((left, right) => (overlaps.get(left) ?? 0) - (overlaps.get(right) ?? 0) || compare(left, right));
     if (criteria.reuse) return combinations.slice(0, criteria.slips).map((item) => item.slip);
     const batch = compatibleBatch(combinations, criteria.slips, diversified); searchLimited ||= batch.limited;
-    return batch.slips;
+    return prior?.size && ranking ? batch.slips.sort(ranking.compare) : batch.slips;
   }
   let slips: BuiltSlip[] = [];
   if (!criteria.reuse) {
     for (let count = criteria.teamsMin; count <= maximumSelections && diversified.length < criteria.slips && !diversificationLimited; count++) {
       while (diversified.length < criteria.slips && !diversificationLimited) {
         const available = candidates.filter((candidate) => !diversifiedFixtures.has(candidate.selection.fixtureId));
+        const prior = options.editorial?.priorFixtures;
+        if (prior?.size) {
+          const unused = available.filter(({ selection }) => !prior.has(selection.fixtureId));
+          if (unused.length !== available.length && enumerate(unused, completionBounds(unused), 0, count, 1n, true)) continue;
+          if (diversificationLimited) break;
+        }
         if (!enumerate(available, completionBounds(available), 0, count, 1n, true)) break;
       }
     }

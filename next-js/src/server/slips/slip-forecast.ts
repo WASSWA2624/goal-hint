@@ -4,16 +4,17 @@ import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { isCompletedFixtureStatus, isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { liveClockFromProvider } from "../../domain/match-card.ts";
 import { total15MarketKey } from "../../domain/extended-markets.ts";
-import { isMarketFamily, type MarketFamily } from "../../domain/markets.ts";
+import { isMarketFamily, type MarketFamily, type MarketSource } from "../../domain/markets.ts";
 import type { SlipMatchWatch } from "../../domain/slip-match-refresh.ts";
 import { slipCompletedStatuses, type SlipResult } from "../../domain/slip-snapshot.ts";
 import { slipBuilderRules, type BuiltSlip, type SlipSelection } from "../../domain/slip-builder.ts";
-import { additionalSlipGoalSelection, isSlipGoalExtensionSelection, isTotal15SlipSelection } from "../../domain/slip-markets.ts";
+import { additionalSlipGoalSelection, isSlipGoalExtensionSelection, isTotal15SlipSelection, type SlipTotal15Forecast } from "../../domain/slip-markets.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { reconstructCutoff, revisionEligibleForLock } from "../predictions/cutoff-eligibility.ts";
 import type { CutoffSchedule } from "../predictions/cutoff-contract.ts";
 import { historyFail, type StoredCycle, type StoredRevision } from "../predictions/history-contract.ts";
 import { cycleFromRows, historyTime, revisionFromRows, storedCycle, storedRevision, type HistoryRow } from "../predictions/history-read.ts";
+import { storedPublicationBarrier } from "../predictions/publication-read.ts";
 import { readGoalMarketSettlement, type StoredGoalMarketExtension } from "../predictions/goal-market-store.ts";
 import { fixtureResultFromRow, fixtureResultMatchesCanonical, resultStatus, storedFixtureResult, type StoredFixtureResult } from "../results/result-read.ts";
 import { cycleEligibilityFor, storedSettlementRevision } from "../settlement/settlement-read.ts";
@@ -30,25 +31,30 @@ const fixtureSelect = { id: true, status: true, activeCycleId: true, kickoff: tr
   lifecycleState: { select: { issue: true } }, resultState: { select: { resultId: true } } } as const;
 type Fixture = Prisma.FootballFixtureGetPayload<{ select: typeof fixtureSelect }>;
 
-export function slipRevisionMatches(selection: SlipMatchWatch, revision: StoredRevision | null,
+const matchesGoalSource = (source: MarketSource | undefined, goalSource: SlipTotal15Forecast["source"]) =>
+  source === undefined || source === (goalSource === "local-poisson" ? "local-engine" : "ai");
+
+export function slipRevisionMatches(selection: SlipMatchWatch & { source?: MarketSource }, revision: StoredRevision | null,
   extension: StoredGoalMarketExtension | null = null, asOf = revision?.publishedAt ?? 0): revision is StoredRevision {
   const reference = selection.forecast;
   if (!revision || revision.fixtureId !== selection.fixtureId || reference &&
     (reference.cycleId !== revision.cycleId || reference.revisionId !== revision.id || reference.publishedAt !== revision.publishedAt)) return false;
   if (isTotal15SlipSelection(selection.selection)) {
-    return selection.family === "total-goals" && !!reference &&
-      projectSlipTotal15Forecast(extension, selection.fixtureId, selection.kickoffAt, reference, asOf)
-        ?.probabilities[selection.selection] === selection.probability;
+    if (selection.family !== "total-goals" || !reference) return false;
+    const total = projectSlipTotal15Forecast(extension, selection.fixtureId, selection.kickoffAt, reference, asOf);
+    return !!total && matchesGoalSource(selection.source, total.source) &&
+      total.probabilities[selection.selection] === selection.probability;
   }
   const additional = additionalSlipGoalSelection(selection.selection);
   if (additional) {
     if (selection.family !== additional.family || !reference) return false;
-    const forecast = projectSlipAdditionalGoalForecast(extension, selection.fixtureId, selection.kickoffAt, reference, asOf, [additional.key]);
-    return forecast?.markets[0]?.probabilities[selection.selection === additional.over ? "over" : "under"] === selection.probability;
+    const market = projectSlipAdditionalGoalForecast(extension, selection.fixtureId, selection.kickoffAt, reference, asOf, [additional.key])?.markets[0];
+    return !!market && matchesGoalSource(selection.source, market.source) &&
+      market.probabilities[selection.selection === additional.over ? "over" : "under"] === selection.probability;
   }
   if (!isMarketFamily(selection.family)) return false;
   const market = revision.candidate.markets[selection.family];
-  return market?.available === true &&
+  return market?.available === true && (!selection.source || selection.source === market.market.source) &&
     (market.market.probabilities as Readonly<Record<string, number>>)[selection.selection] === selection.probability;
 }
 
@@ -69,6 +75,10 @@ export async function bindSlipForecasts(tx: Tx, slip: BuiltSlip, at: number): Pr
     const cycle = await storedCycle(tx, fixture.activeCycleId);
     if (!cycle || cycle.fixtureId !== fixture.id || cycle.state !== "open" || cycle.kickoffAt !== selection.kickoffAt ||
       cycle.openedAt > instant || cycle.cutoffAt <= instant || !cycle.currentSetId) return null;
+    if (selection.offer) {
+      const barrier = await storedPublicationBarrier(tx, cycle.id);
+      if (barrier && (barrier.fixtureId !== fixture.id || barrier.closedAt <= instant)) return null;
+    }
     const revision = await storedRevision(tx, cycle.currentSetId);
     if (!slipRevisionMatches(selection, revision, goalExtensions.get(cycle.currentSetId) ?? null, instant)
       || revision.cycleId !== cycle.id || revision.publishedAt > instant) return null;

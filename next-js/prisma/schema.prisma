@@ -346,8 +346,18 @@ model PublishedSlip {
   integrity     String               @db.Char(64)
   publication   DailySlipPublication @relation(fields: [publicationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   legs          PublishedSlipLeg[]
+  combination   DailyBestSlipCombination?
 
   @@unique([publicationId, rank])
+}
+
+model DailyBestSlipCombination {
+  eatDate     DateTime      @db.Date
+  combination String        @db.Char(64)
+  slipId      String        @unique @db.Char(64)
+  slip        PublishedSlip @relation(fields: [slipId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([eatDate, combination])
 }
 
 model PublishedSlipLeg {

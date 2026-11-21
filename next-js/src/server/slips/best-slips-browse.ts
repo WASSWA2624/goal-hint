@@ -39,7 +39,8 @@ function createBestSlipsSnapshotReader({ read = readPublishedBestSlips, provider
       // The browse reader aggregates the entire selected period before outcome
       // filtering and pagination. Reuse that snapshot for both list and summary.
       const result = await read(query, day, locale, false);
-      const state = result.state === "generated" && dates.from === day && dates.to === day && result.statistics?.total === 0
+      const state = result.state === "generated" && dates.from === day && dates.to === day
+        && (result.browse?.bandTotal ?? result.statistics?.total) === 0
         ? "awaiting-publication" : result.state;
       return { ...result, state, summary: { asOf, ...dates, statistics: result.statistics ?? null } };
     }
