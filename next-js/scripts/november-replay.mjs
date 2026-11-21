@@ -5,7 +5,7 @@ import { parseArgs } from "node:util";
 import { openForecastDatabase } from "./lib/forecast-database-target.mjs";
 import { LOCAL_FIRST_MARKET_REGISTRY_VERSION } from "../src/domain/market-registry.ts";
 import { localFeaturedDecisionVersion } from "../src/domain/local-featured-decision.ts";
-import { novemberReplayRange, resolveReplayRange } from "../src/domain/november-replay.ts";
+import { inclusiveReplayEvidenceCutoff, novemberReplayRange, replaySuppressionClocks, resolveReplayRange } from "../src/domain/november-replay.ts";
 import { evidenceFingerprint } from "../src/server/evidence/evidence-input.ts";
 import { localGoalModelVersion } from "../src/server/intelligence/local-goals-model.ts";
 import { auditNovemberReplay } from "../src/server/intelligence/november-replay-audit.ts";
@@ -156,7 +156,11 @@ async function stage(workspace, audit, store) {
   const complete = await readSealed(join(workspace, "dry-run.json"));
   if (complete.auditHash !== audit.auditHash || !complete.summary.finished) throw new ReplayCommandError("Finish the audited dry run before staging.");
   const rows = (await loadPages(workspace, audit)).flatMap((page) => page.rows);
-  const candidates = rows.flatMap(({ input }) => input ? [input] : []);
+  // Checkpoints from an earlier dry run recorded the exclusive lock for rebuilt
+  // forecasts without an original. Keep the checkpoint and its evidence hash.
+  const candidates = rows.flatMap(({ input }) => !input ? [] : [input.sourceRevisionId === null ? { ...input,
+    evidenceCutoffAt: inclusiveReplayEvidenceCutoff(input.evidenceCutoffAt, input.decisionAt) } : input]);
+  const skippedSuppressions = [];
   const byOccurrence = new Map(rows.map((row) => [occurrenceKey(row), row]));
   const originals = new Map(audit.occurrences.map((row) => [occurrenceKey(row), row]));
   for (const prior of await store.activeProjections(audit.range)) {
@@ -164,10 +168,16 @@ async function stage(workspace, audit, store) {
     if (prior.featuredDecision || !row || !original || row.status !== "abstained" ||
       row.reason === "occurrence-changed-since-audit" || prior.sourceRevisionId !== original.sourceRevisionId ||
       prior.cycleId !== original.cycleId || prior.scheduleVersion !== original.scheduleVersion) continue;
-    const { fixtureId, kickoffAt, cycleId, scheduleVersion, sourceRevisionId, evidenceCutoffAt } = prior;
-    candidates.push({ fixtureId, kickoffAt, cycleId, scheduleVersion, sourceRevisionId, evidenceCutoffAt,
+    const { fixtureId, kickoffAt, cycleId, scheduleVersion, sourceRevisionId } = prior;
+    const clocks = replaySuppressionClocks(prior.evidenceCutoffAt, row.decisionAt);
+    if (!clocks) {
+      skippedSuppressions.push({ fixtureId, kickoffAt, previousProjectionRevisionId: prior.revisionId,
+        reason: "prior-evidence-cutoff-after-decision" });
+      continue;
+    }
+    candidates.push({ fixtureId, kickoffAt, cycleId, scheduleVersion, sourceRevisionId, ...clocks,
       engineVersion: audit.engineVersion, registryVersion: audit.registryVersion, evidenceHash: row.evidenceHash, evidenceReceiptIds: [],
-      replayAsOf: audit.auditedAt, decisionAt: row.decisionAt ?? evidenceCutoffAt, generatedAt: Date.now(), teams: original.teams,
+      replayAsOf: audit.auditedAt, generatedAt: Date.now(), teams: original.teams,
       status: "abstained", reason: row.reason, artifactHash: null, markets: [], selected: null,
       featuredDecision: { version: audit.featuredDecisionVersion, status: "abstained", reason: "no-local-forecast" },
       suppressedProjectionRevisionId: prior.revisionId });
@@ -179,8 +189,10 @@ async function stage(workspace, audit, store) {
     records.push({ id, fixtureId });
   }
   const diff = await store.activationDiff(records.map(({ id }) => id));
-  await sealOnce(join(workspace, "activation-diff.json"), { auditHash: audit.auditHash, diff });
+  await sealOnce(join(workspace, "activation-diff.json"), { auditHash: audit.auditHash, diff,
+    ...(skippedSuppressions.length > 0 && { skippedSuppressions }) });
   const summary = { staged: records.length, proposedReplacements: 0, priced: 0, suppressed: 0, replacedProjections: 0, reasons: {} };
+  for (const { reason } of skippedSuppressions) summary.reasons[reason] = (summary.reasons[reason] ?? 0) + 1;
   for (const row of diff) {
     summary.reasons[row.reason] = (summary.reasons[row.reason] ?? 0) + 1;
     if (!row.eligible) continue;

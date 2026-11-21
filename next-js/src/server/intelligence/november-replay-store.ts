@@ -7,7 +7,7 @@ import { LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION, LOCAL_FIRST_MARKET_REGISTRY
 import { localFeaturedDecisionSchema } from "../../domain/local-featured-decision.ts";
 import { isPlayedFinalStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
 import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
-import { novemberReplayRange } from "../../domain/november-replay.ts";
+import { novemberReplayRange, replaySuppressionClocks } from "../../domain/november-replay.ts";
 import { compareForecastPicks } from "../../domain/recommendation.ts";
 import { goalMarketDefinitionSchema, type GoalMarketDefinition } from "../../domain/score-distribution-markets.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
@@ -308,8 +308,12 @@ async function activationRejection(tx: Tx, record: NovemberReplayRecord, at: num
     status: fixture.status, applicable: true, cycleId, originalRevisionId: sourceRevisionId };
   if (record.featuredDecision && record.replayAsOf !== undefined) {
     const { evidence, result } = await preparePricedNovemberReplay(tx, occurrence, record.replayAsOf, training);
-    if (record.suppressedProjectionRevisionId) return previous?.revisionId === record.suppressedProjectionRevisionId &&
-      !previous.featuredDecision && !result && evidence.evidenceHash === record.evidenceHash ? null : "evidence-changed";
+    if (record.suppressedProjectionRevisionId) {
+      if (previous?.revisionId !== record.suppressedProjectionRevisionId || previous.featuredDecision || result ||
+        evidence.evidenceHash !== record.evidenceHash) return "evidence-changed";
+      const clocks = replaySuppressionClocks(previous.evidenceCutoffAt, evidence.decisionAt);
+      return clocks && clocks.decisionAt === record.decisionAt && clocks.evidenceCutoffAt === evidenceCutoffAt ? null : "evidence-changed";
+    }
     const approved = { artifactHash: record.artifactHash, markets: record.markets, selected: record.selected,
       decisionAt: record.decisionAt, featuredDecision: record.featuredDecision };
     return evidence.evidenceHash === record.evidenceHash && evidence.cutoffAt === evidenceCutoffAt && evidence.scheduleVersion === scheduleVersion &&

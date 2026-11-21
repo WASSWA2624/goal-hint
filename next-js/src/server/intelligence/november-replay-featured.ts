@@ -1,6 +1,7 @@
 import "server-only";
 
 import { decideLocalFeaturedPick } from "../../domain/local-featured-decision.ts";
+import { inclusiveReplayEvidenceCutoff } from "../../domain/november-replay.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { storedPointInTimeFeaturedBookmakerQuotes } from "../odds/odds-mysql-store.ts";
 import { publicOddsEnabled } from "../odds/public-odds-policy.ts";
@@ -10,7 +11,9 @@ import { buildArchivedNovemberReplayMarkets, buildNovemberReplayMarkets } from "
 
 export async function preparePricedNovemberReplay(tx: Prisma.TransactionClient, occurrence: NovemberReplayOccurrence,
   auditedAt: number, training?: NovemberReplayTrainingMembership) {
-  const evidence = await loadNovemberReplayEvidenceInTransaction(tx, occurrence, auditedAt, training, true);
+  const loadedEvidence = await loadNovemberReplayEvidenceInTransaction(tx, occurrence, auditedAt, training, true);
+  const evidence = occurrence.originalRevisionId === null ? Object.freeze({ ...loadedEvidence,
+    cutoffAt: inclusiveReplayEvidenceCutoff(loadedEvidence.cutoffAt, loadedEvidence.decisionAt) }) : loadedEvidence;
   const archived = evidence.archivedDecision && buildArchivedNovemberReplayMarkets(evidence.archivedDecision);
   const rebuilt = evidence.forecast && buildNovemberReplayMarkets(evidence.forecast);
   const markets = archived?.length ? archived : rebuilt?.markets;

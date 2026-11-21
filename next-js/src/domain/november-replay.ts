@@ -21,6 +21,17 @@ export function resolveReplayRange(from: string, to: string) {
   return resolveFeedDates({ dates: { kind: "range", from: first, to: last }, zone: novemberReplayZone }, first);
 }
 
+/** An exclusive lock exactly one millisecond later describes the same evidence window. */
+export function inclusiveReplayEvidenceCutoff(exclusiveCutoffAt: number | null, decisionAt: number | null | undefined) {
+  return decisionAt != null && exclusiveCutoffAt === decisionAt + 1 ? decisionAt : exclusiveCutoffAt;
+}
+
+export function replaySuppressionClocks(previousCutoffAt: number, attemptedDecisionAt: number | null | undefined) {
+  const decisionAt = attemptedDecisionAt ?? previousCutoffAt;
+  const evidenceCutoffAt = inclusiveReplayEvidenceCutoff(previousCutoffAt, decisionAt);
+  return evidenceCutoffAt === null || evidenceCutoffAt > decisionAt ? null : { decisionAt, evidenceCutoffAt };
+}
+
 export function overlapsNovemberReplay(window: InstantWindow): boolean {
   return window.startInclusive < novemberReplayRange.window.endExclusive &&
     window.endExclusive > novemberReplayRange.window.startInclusive;
