@@ -9,7 +9,6 @@ import { assessLocalFeaturedHistory, historyAdjustedFeaturedProbability, localFe
 import { legacyForecastMarketKey } from "../src/domain/legacy-goal-market-identities.ts";
 import { isMarketFamily } from "../src/domain/markets.ts";
 import { evidenceFingerprint } from "../src/server/evidence/evidence-input.ts";
-import { Prisma } from "../src/server/generated/prisma/client.ts";
 import { featuredEvaluationOccurrence, summarizeFeaturedHistoryComparison } from "../src/server/intelligence/local-featured-history-evaluation.ts";
 import { readLocalFeaturedHistory } from "../src/server/intelligence/local-featured-history-store.ts";
 import { readVerifiedReplayComparisonResults } from "../src/server/intelligence/november-replay-evaluation.ts";

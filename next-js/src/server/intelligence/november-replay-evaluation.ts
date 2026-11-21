@@ -13,7 +13,7 @@ import type { auditNovemberReplay } from "./november-replay-audit.ts";
 
 type Audit = Awaited<ReturnType<typeof auditNovemberReplay>>;
 type ReplayResultOccurrence = Pick<Audit["occurrences"][number], "fixtureId" | "kickoffAt" | "teams" | "status">;
-type ReplayResultRow = HistoryRow & { occurrenceKickoff: Date };
+type ReplayResultRow = HistoryRow & { fixtureId: string; occurrenceKickoff: Date };
 const resultKey = (fixtureId: string, kickoffAt: number) => `${fixtureId}:${kickoffAt}`;
 export type NovemberReplayPrediction = Readonly<{ fixtureId: string; kickoffAt: number; probabilities: IntelligenceProbabilities | null;
   featured?: { definition: GoalMarketDefinition; selection: string; mode?: "standard" | "priced-fallback" | "forecast-only" } }>;
