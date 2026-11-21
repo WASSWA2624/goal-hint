@@ -1,8 +1,8 @@
 import "server-only";
 
-import { isPlayedFinalStatus, playedFinalFixtureStatuses, type SettlementContext, type SettlementStatus } from "../../domain/market-settlement.ts";
+import { isPlayedFinalStatus, playedFinalFixtureStatuses, type SettlementStatus } from "../../domain/market-settlement.ts";
 import { marketRules, marketSelections, validateMarketSnapshot, type MarketFamily } from "../../domain/markets.ts";
-import { settleGoalSelection, type GoalMarketDefinition } from "../../domain/score-distribution-markets.ts";
+import { settleGoalSelection, type GoalMarketDefinition, type GoalSettlementContext } from "../../domain/score-distribution-markets.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { createMarketMetricsAccumulator } from "../evaluation/evaluation-metrics.ts";
 import { Prisma } from "../generated/prisma/client.ts";
@@ -12,6 +12,9 @@ import type { IntelligenceProbabilities } from "./intelligence-contract.ts";
 import type { auditNovemberReplay } from "./november-replay-audit.ts";
 
 type Audit = Awaited<ReturnType<typeof auditNovemberReplay>>;
+type ReplayResultOccurrence = Pick<Audit["occurrences"][number], "fixtureId" | "kickoffAt" | "teams" | "status">;
+type ReplayResultRow = HistoryRow & { occurrenceKickoff: Date };
+const resultKey = (fixtureId: string, kickoffAt: number) => `${fixtureId}:${kickoffAt}`;
 export type NovemberReplayPrediction = Readonly<{ fixtureId: string; kickoffAt: number; probabilities: IntelligenceProbabilities | null;
   featured?: { definition: GoalMarketDefinition; selection: string; mode?: "standard" | "priced-fallback" | "forecast-only" } }>;
 const families = Object.keys(marketSelections) as MarketFamily[];
@@ -22,12 +25,12 @@ function reportMetrics(metrics: ReturnType<ReturnType<typeof createMarketMetrics
   return metrics;
 }
 
-async function readReplayResultPage(database: Pick<DatabaseRuntime, "query">, page: Audit["occurrences"],
+async function readReplayResultPage(database: Pick<DatabaseRuntime, "query">, page: readonly ReplayResultOccurrence[],
   asOf: number, allowNewlyFinished = false) {
   const identity = Prisma.join(page.map(({ fixtureId, kickoffAt, teams, status }) => Prisma.sql`(${fixtureId},${new Date(kickoffAt)},
     ${teams[0]},${teams[1]}${allowNewlyFinished ? Prisma.empty : Prisma.sql`,${status}`})`));
   const readAt = new Date(asOf);
-  const rows = await database.query((tx) => tx.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT r.*,
+  const rows = await database.query((tx) => tx.$queryRaw<ReplayResultRow[]>(Prisma.sql`SELECT r.*, f.kickoff AS occurrenceKickoff,
     r.integrity=SHA2(CAST(r.body AS CHAR),256) AS validIntegrity
     FROM FootballFixture f JOIN FixtureResultState rs ON rs.fixtureId=f.id
     JOIN FixtureResult r ON r.id=rs.resultId AND r.fixtureId=f.id AND r.status=f.status
@@ -39,11 +42,11 @@ async function readReplayResultPage(database: Pick<DatabaseRuntime, "query">, pa
       AND f.status IN (${Prisma.join(playedFinalFixtureStatuses)}) AND life.issue IS NULL
       AND r.regulationVerified=TRUE AND r.observedAt>f.kickoff AND r.observedAt<=${readAt}
       AND COALESCE(changeEvent.at,resultImport.recordedAt)<=${readAt}`));
-  return new Map(rows.map((row) => [row.fixtureId, row]));
+  return new Map(rows.map((row) => [resultKey(row.fixtureId, row.occurrenceKickoff.getTime()), row]));
 }
 
 type VerifiedReplayResult = StoredFixtureResult & { regulation: { home: number; away: number } };
-function checkedReplayResult(row: HistoryRow, occurrence: Audit["occurrences"][number], asOf: number): VerifiedReplayResult | null {
+function checkedReplayResult(row: HistoryRow, occurrence: ReplayResultOccurrence, asOf: number): VerifiedReplayResult | null {
   let result;
   try { result = fixtureResultFromRow(row); }
   catch { return null; }
@@ -52,9 +55,28 @@ function checkedReplayResult(row: HistoryRow, occurrence: Audit["occurrences"][n
   return result as VerifiedReplayResult;
 }
 
-function resultContext(result: VerifiedReplayResult): SettlementContext {
-  return { status: result.status, cycleEligibility: { eligible: true },
-    regulationScore: { verified: true, period: marketRules.period, home: result.regulation.home, away: result.regulation.away } };
+function resultContext(result: VerifiedReplayResult) {
+  const half = result.halfTime;
+  return { status: result.status, cycleEligibility: { eligible: true as const },
+    regulationScore: { verified: true as const, period: marketRules.period, home: result.regulation.home, away: result.regulation.away },
+    halfTimeScore: half ? { verified: half.verified, period: half.period, home: half.home, away: half.away } : null,
+  } satisfies GoalSettlementContext;
+}
+
+/** Read checked terminal labels for exact occurrences after both comparison selections have been made. */
+export async function readVerifiedReplayComparisonResults(database: Pick<DatabaseRuntime, "query">,
+  occurrences: readonly ReplayResultOccurrence[], evaluatedAt: number) {
+  const truth = new Map<string, GoalSettlementContext>();
+  for (let offset = 0; offset < occurrences.length; offset += 100) {
+    const page = occurrences.slice(offset, offset + 100);
+    const rows = await readReplayResultPage(database, page, evaluatedAt, true);
+    for (const occurrence of page) {
+      const key = resultKey(occurrence.fixtureId, occurrence.kickoffAt), row = rows.get(key);
+      const result = row && checkedReplayResult(row, occurrence, evaluatedAt);
+      if (result) truth.set(key, resultContext(result));
+    }
+  }
+  return truth;
 }
 
 /** Result references are joined to the exact audited occurrence only after decisions have been checkpointed. */
@@ -70,7 +92,7 @@ export async function evaluateNovemberReplay(database: Pick<DatabaseRuntime, "qu
     const page = occurrences.slice(offset, offset + 100);
     const results = await readReplayResultPage(database, page, audit.auditedAt);
     for (const item of page) {
-      const row = results.get(item.fixtureId);
+      const row = results.get(resultKey(item.fixtureId, item.kickoffAt));
       if (!row) continue;
       const result = checkedReplayResult(row, item, audit.auditedAt);
       if (!result) { counts.unreadable++; continue; }
@@ -81,7 +103,7 @@ export async function evaluateNovemberReplay(database: Pick<DatabaseRuntime, "qu
       const truth = resultContext(result);
       const { probabilities, featured } = prediction;
       if (featured) {
-        const { status } = settleGoalSelection(featured.definition, featured.selection, { ...truth, halfTimeScore: result.halfTime ?? null });
+        const { status } = settleGoalSelection(featured.definition, featured.selection, truth);
         counts.featuredGrades[status] = (counts.featuredGrades[status] ?? 0) + 1;
         const mode = counts.featuredGradesByMode[featured.mode ?? "standard"] ??= {};
         mode[status] = (mode[status] ?? 0) + 1;
@@ -143,10 +165,10 @@ export async function evaluateReplayFeaturedDelta(database: Pick<DatabaseRuntime
     for (const item of page) {
       const pair = pairs.get(`${item.fixtureId}:${item.kickoffAt}`)!;
       if (!pair.v1 && pair.v2) counts.newlyPriced++;
-      const row = results.get(item.fixtureId), result = row && checkedReplayResult(row, item, evaluatedAt);
+      const row = results.get(resultKey(item.fixtureId, item.kickoffAt)), result = row && checkedReplayResult(row, item, evaluatedAt);
       if (!result) continue;
       counts.resultAvailable++;
-      const truth = { ...resultContext(result), halfTimeScore: result.halfTime ?? null };
+      const truth = resultContext(result);
       const grade = (pick: FrozenPick | null) => {
         if (!pick) return null;
         const { status } = settleGoalSelection(pick.definition, pick.selection, truth);

@@ -89,6 +89,34 @@ before the traced fixture's page. The trace contains exact supported outcomes,
 quote or failure reasons, evidence clocks and model sample metrics. Keep it in
 the private workspace. Use a fresh workspace for this coverage format.
 
+## Historical ranking evaluation
+
+The candidate uses accepted original Local Engine probabilities and verified
+settlement for the same canonical market, period, scope, line and outcome.
+Each historical fixture contributes at most one accepted forecast to an
+outcome. When a result is corrected or withdrawn, each target uses the latest
+proof available before its selection clock. Scores without original forecasts
+supply fixture context. Older replay decisions are evaluation targets.
+
+The comparison starts with similar forecast probabilities from the same
+competition and comparable teams, roles, venue or independently verified
+strength where available. It backs off to the competition and then to the
+broader original archive for that outcome. Minimum effective sample sizes are
+40, 50, and 80. The comparison measures observed outright wins relative to
+each forecast's original probability. Recency and similarity influence the
+sample, an uncertainty margin requires a consistent signal, and shrinkage
+toward zero limits the adjustment. Sparse or inconclusive samples use the
+original ranking.
+
+Exact bookmaker eligibility, settlement-aware expected return, tier priority,
+and the first populated probability rung continue to govern the comparison.
+History can resolve the probability order among equal exact prices on that
+rung, or among forecast-only outcomes with the same market coverage priority.
+Each candidate retains the original published forecast probability, price,
+provenance, and expected return for the comparison. This is a qualification
+exercise for featured picks. The released policy remains in force until the
+chronological comparison supports a promotion.
+
 ## Review and activate
 
 `stage` stores qualifying retrospective revisions with their actual generation

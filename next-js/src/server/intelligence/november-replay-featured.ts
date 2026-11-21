@@ -19,7 +19,7 @@ type ReplayPricingMarket = Readonly<{ definition: { key: string };
 
 type PricingOccurrence = Readonly<{ fixtureId: string; kickoffAt: number; decisionAt: number }>;
 
-async function loadPricingInput(tx: Prisma.TransactionClient, fixture: PricingOccurrence, auditedAt: number,
+export async function loadNovemberReplayPricingInput(tx: Prisma.TransactionClient, fixture: PricingOccurrence, auditedAt: number,
   markets: readonly ReplayPricingMarket[], inventoryAllMarkets = false) {
   const quotesPermitted = publicOddsEnabled();
   const hasCandidates = quotesPermitted && (markets.length > 0 || inventoryAllMarkets &&
@@ -35,7 +35,7 @@ async function loadPricingInput(tx: Prisma.TransactionClient, fixture: PricingOc
 
 export async function loadNovemberReplayPrices(tx: Prisma.TransactionClient, fixture: PricingOccurrence,
   auditedAt: number, markets: readonly ReplayPricingMarket[]) {
-  const input = await loadPricingInput(tx, fixture, auditedAt, markets);
+  const input = await loadNovemberReplayPricingInput(tx, fixture, auditedAt, markets);
   return (version: ReplayDecisionVersion) => decideLocalFeaturedPick(input, version);
 }
 
@@ -78,16 +78,16 @@ export async function preparePricedNovemberReplay(tx: Prisma.TransactionClient, 
   if (evidence.status !== "qualified" || !markets?.length || !artifactHash || decisionAt === undefined) {
     const catalogOnlyAt = decisionAt ?? getPublicationDeadline(utcInstantFromEpochMilliseconds(kickoffAt)) - 1;
     const diagnostic = withCoverage && occurrence.applicable && kickoffAt <= auditedAt && evidence.status !== "prospective"
-      ? auditLocalFeaturedCoverage(await loadPricingInput(tx, { fixtureId, kickoffAt, decisionAt: catalogOnlyAt }, auditedAt, [], true), coverage === "trace") : null;
+      ? auditLocalFeaturedCoverage(await loadNovemberReplayPricingInput(tx, { fixtureId, kickoffAt, decisionAt: catalogOnlyAt }, auditedAt, [], true), coverage === "trace") : null;
     return { evidence, result: null, comparativeDecision: null, diagnostic, priceGates: null,
       inventoryClock: diagnostic ? decisionAt ?? null : null };
   }
   const occurrenceAtDecision = { fixtureId, kickoffAt, decisionAt };
   // The broader catalog scan may see unrelated receipt accounts and offers. Keep the
   // exact selector input identical to the read used for activation revalidation.
-  const input = await loadPricingInput(tx, occurrenceAtDecision, auditedAt, markets);
+  const input = await loadNovemberReplayPricingInput(tx, occurrenceAtDecision, auditedAt, markets);
   const diagnostic = withCoverage ? auditLocalFeaturedCoverage(
-    await loadPricingInput(tx, occurrenceAtDecision, auditedAt, markets, true), coverage === "trace") : null;
+    await loadNovemberReplayPricingInput(tx, occurrenceAtDecision, auditedAt, markets, true), coverage === "trace") : null;
   const { decision: featuredDecision, diagnostics: priceGates } = assessLocalFeaturedPick(input, version);
   return { evidence, result: { artifactHash, markets, selected: replayFeaturedSelection(featuredDecision), decisionAt, featuredDecision },
     comparativeDecision: comparisonVersion ? decideLocalFeaturedPick(input, comparisonVersion) : null, diagnostic, priceGates,

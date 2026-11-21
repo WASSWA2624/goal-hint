@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assessLocalFeaturedPick, binaryFeaturedSettlement, decideLocalFeaturedPick, legacyLocalFeaturedDecisionVersion,
+import { assessLocalFeaturedPick, assessLocalFeaturedPickWithHistory, binaryFeaturedSettlement, decideLocalFeaturedPick, legacyLocalFeaturedDecisionVersion,
   localFeaturedDecisionSchema, localFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion, positiveFeaturedReturn }
   from "../src/domain/local-featured-decision.ts";
 import { parseDecimalOdds } from "../src/domain/odds.ts";
@@ -214,4 +214,29 @@ test("first standard rung spans market families and books before any fallback", 
     book(5, offer(1, "Match Winner", { Home: "2.55" }))]);
   assert.deepEqual([result.tier, result.threshold, result.marketKey, result.quote.bookmakerId, result.quote.decimal],
     ["standard", 0.90, "goal:full-time:totals:total:2.5:binary", 4, "1.17"]);
+});
+
+test("a historical comparison can break an exact-price tie without changing the raw forecast or any price and rung gate", () => {
+  const outcomes = [total("full-time", "total", 1.5, 0.84), outcome("double-chance", "home-or-draw", 0.82),
+    total("full-time", "total", 3.5, 0.79), total("full-time", "total", 4.5, 0.99)];
+  const sample = (equalOdds = "1.3") => inputs(outcomes, [book(1,
+    totals({ "Under 1.5": equalOdds, "Under 3.5": "2.55", "Under 4.5": "1.05" }), chance({ "Home/Draw": "1.3" }))]);
+  const rank = ({ marketKey }) => marketKey === "double-chance" ? 0.87 : 0.84;
+  const base = assessLocalFeaturedPick(sample());
+  const comparison = assessLocalFeaturedPickWithHistory(sample(), rank);
+  assert.equal(base.decision.marketKey, "goal:full-time:totals:total:1.5:binary");
+  assert.deepEqual([comparison.decision.marketKey, comparison.decision.threshold, comparison.decision.probability,
+    comparison.decision.expectedNetReturn, comparison.decision.quote.decimal], ["double-chance", 0.80, 0.82, "0.066", "1.3"]);
+  assert.deepEqual(comparison.diagnostics, base.diagnostics);
+  assert.equal(assessLocalFeaturedPickWithHistory(sample("1.3001"), rank).decision.marketKey, base.decision.marketKey);
+  assert.deepEqual(assessLocalFeaturedPickWithHistory(sample(), () => Number.NaN), base);
+});
+
+test("historical ranking never introduces a price or supersedes the forecast-only scope and minimum", () => {
+  const unquoted = inputs([total("full-time", "total", 1.5, 0.80), total("full-time", "total", 2.5, 0.81),
+    total("full-time", "total", 5.5, 0.98), total("full-time", "total", 3.5, 0.59)], [], { quotes: null });
+  const result = assessLocalFeaturedPickWithHistory(unquoted, ({ marketKey }) =>
+    /:(?:1|3|5)\.5:/u.test(marketKey) ? 0.99 : 0.81).decision;
+  assert.deepEqual([result.status, result.marketKey, result.probability, result.quote],
+    ["forecast-only", "goal:full-time:totals:total:1.5:binary", 0.80, undefined]);
 });
