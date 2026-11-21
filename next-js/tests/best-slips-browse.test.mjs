@@ -112,6 +112,8 @@ test('daily pages order by card probability across different odds and keep the c
   assert.deepEqual(first.slips.map(view => view.rank), [...ranks.slice(20), ...ranks.slice(0, 15)]);
   assert.deepEqual(second.slips.map(view => view.rank), ranks.slice(15, 20));
   assert.equal(first.browse.total, 25);
+  assert.equal(first.browse.bandTotal, 25);
+  assert.equal(first.browse.dailyBandLimit, undefined, 'legacy bands keep their historical capacity');
   assert.equal(first.browse.version, second.browse.version);
   assert.equal(first.slips[0].id, canonical.slips[20].id);
   const won = await store.browse(query({ period: 'today', status: 'won' }), today);
@@ -263,6 +265,8 @@ test('an unpublished odds range today differs from an empty result filter or arc
   const unpublished = await service(full, query({ period: 'today', oddsBand: '10-20' }));
   assert.equal(unpublished.state, 'awaiting-publication');
   assert.deepEqual(unpublished.slips, []);
+  assert.equal(unpublished.browse.bandTotal, 0);
+  assert.equal(unpublished.browse.dailyBandLimit, 10);
   const paged = await service(full, query({ period: 'today', page: '2' }));
   assert.equal(paged.state, 'generated');
   assert.deepEqual(paged.slips, []);
@@ -324,6 +328,12 @@ test('modern browsing uses the sealed rank and the exact band before display rou
   assert.deepEqual(lower.slips.map(view => [view.rank, view.totalOdds, view.estimatedProbability, view.averageProbability]),
     [[1, '5.00', 0.7, 0.8], [2, '4.00', 0.6, 0.95]]);
   assert.ok(lower.slips.every(view => view.slip.selections.every(selection => selection.offer === undefined)));
+  assert.equal(lower.browse.bandTotal, 2);
+  assert.equal(lower.browse.dailyBandLimit, 10);
+  const filtered = await f.store.browse(query({ period: 'custom', from: today, to: today, oddsBand, probMin: '95' }), today);
+  assert.equal(filtered.browse.total, 1);
+  assert.equal(filtered.browse.bandTotal, 2);
+  assert.equal(filtered.browse.dailyBandLimit, 10);
   assert.equal((await f.store.browse(query({ period: 'today', oddsBand: '5-10' }), today)).browse.bandTotal, 0);
 });
 

@@ -10,13 +10,14 @@ account erasure. Personal saved slips retain their separate privacy lifecycle.
 `createDailySlipPublisher` takes one bounded Kampala-day cohort from the stored
 Matches forecast and exact featured-pick reader. It requires a currently
 qualified joint model and verified public odds rights. Inputs are Local Engine
-featured selections that use the configured primary bookmaker and have
-exact original-cycle settlement support. Daily Best Slips adds no per-pick
-probability minimum. The launch
-markets and a verified regulation Over/Under 1.5 selection are supported. A
-book or market mismatch leaves that fixture out. All legs of a slip must share
-one bookmaker. The worker records the original quote snapshot and sealed import
-receipt, and rechecks the exact offer under lock before publication.
+featured selections with exact original-cycle settlement support. Daily Best
+Slips adds no per-pick probability minimum. The launch markets and a verified
+regulation Over/Under 1.5 selection are supported. The worker can use a
+verified price from any bookmaker in the stored receipt for the same featured
+selection. It uses one bookmaker per slip, including a compatible alternate
+book when the highest individual prices come from different books. Combined
+odds guide band placement. The worker records the original quote snapshot and
+sealed import receipt and rechecks the exact offer under lock before publication.
 
 The six bands are lower-inclusive and upper-exclusive, except the last band
 includes 200.00. The engine multiplies the full leg prices and assigns the
@@ -95,14 +96,17 @@ does not establish calibration, rights or promotion evidence.
 
 The hosted web runtime reads the archive when the matching
 `GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF` is verified in its private owner register.
-Today and archived dates show the selected band and whether a publication was
-found. A date or interval can be combined with odds band, average pick
+A single date shows how many slips were published for its selected band. Current
+publications show the ten-slip capacity, and legacy dates show their audited
+count. Result and range filters keep their own visible totals. A date or interval can be combined with odds band, average pick
 probability, match count and result. Aggregate counts cover the selected
 numeric and date filters before the result filter and pagination.
 
 Without `--once`, the supervised worker checks the current EAT day once a minute,
-including after midnight or restart. It retries sparse or unavailable bands and
-skips every committed band. The private worker emits status and coverage changes.
+including after midnight or restart. It retries unpublished bands while there
+is time before kickoff and skips every committed band, including bands with
+fewer than ten slips. It cannot create a pre-kickoff publication for an elapsed
+day. The private worker emits status and coverage changes.
 The page and API are read-only. Hosted deployment still requires a trusted
 supervised binding and independently reviewed temporal whole-slip calibration
 and dependence evidence. See the

@@ -5,7 +5,10 @@ from lib.runtime import ROOT, main_guard
 
 
 def verify(origin):
-    for suffix in ("", "?period=yesterday", "?period=all", "?period=custom&from=2026-10-12&to=2026-10-12&probMin=80&matchesMin=2&status=lost"):
+    archive = "?period=custom&from=2026-10-12&to=2026-10-12&probMin=80&matchesMin=2&status=lost"
+    legacy = "?period=custom&from=2026-10-11&to=2026-10-11"
+    empty = "?oddsBand=100-200"
+    for suffix in ("", "?period=yesterday", "?period=all", archive, legacy, empty):
         response = request(origin, "/best-slips/browse" + suffix)
         assert response.status == 200
         html = visible_html(response.text)
@@ -17,9 +20,18 @@ def verify(origin):
         assert "data-performance-heading" in html
         trigger = match(r'<button\b[^>]*data-best-slips-filter-trigger="[^"]*"[^>]*>[\s\S]*?</button>', html).group()
         assert ">Filters</span>" in trigger
-        if "period=custom" in suffix:
+        if suffix == "?period=all":
+            assert "data-best-slips-band-count" not in html
+        elif suffix == legacy:
+            assert "3 slips published" in html and "of 10 slips published" not in html
+        elif suffix == empty:
+            assert "0 of 10 slips published" in html and "validated whole-slip estimate" in html
+        else:
+            assert "3 of 10 slips published" in html
+        if suffix == archive:
             assert "12-Oct-2026" in html
             assert html.count("data-slip-key=") == 1
+            assert "1 of 1 slip" in html
             assert "Average pick probability" in html and "Whole-slip win probability" in html
     print("Best Slips SSR passed for defaults, dated filters, numeric and result filters, and bounded All dates browsing.", flush=True)
 

@@ -80,10 +80,7 @@ async function collect(directory, requestedDay, names, probe = false) {
   const environment = process.env.GOAL_HINT_DEPLOYMENT_ENVIRONMENT;
   if (!['development', 'staging', 'production'].includes(environment) || !publicOddsEnabled())
     throw new Error('A validated study target and verified odds rights are required.');
-  const { bookmakerId: primaryBookmakerId } = policy.choices.odds;
-  if (!Number.isSafeInteger(primaryBookmakerId) || primaryBookmakerId <= 0)
-    throw new Error('A configured primary bookmaker is required.');
-  const options = { environment, primaryBookmakerId };
+  const options = { environment };
   const competitionIds = policy.choices.competitionIds ?? [];
   const scopeHash = bestSlipStudyScopeHash(competitionIds, options);
   const database = createReadOnlyDatabase(policy);

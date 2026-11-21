@@ -62,6 +62,7 @@ export const AppliedSummary = styled.div`
   font-size: var(--gh-font-caption); line-height: var(--gh-leading-compact);
   [data-applied-result] { color: ${({ theme }) => theme.color.text}; }
   [data-best-slips-summary] { grid-column: -2 / -1; grid-row: 1; text-align: end; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  [data-best-slips-summary] > span { display: block; }
   ${media.desktop} {
     padding: 0; background: transparent; font-size: var(--gh-font-secondary);
   }

@@ -6,8 +6,9 @@ exact original featured selection, forecast reference, offered decimal price and
 quote receipt for each leg. Capture and settlement files are private and sealed.
 An evaluation records their hashes without returning raw bookmaker or fixture
 records. The current construction scope accepts the day’s eligible priced
-featured picks without an extra 75% floor. It uses the combined price to
-assign each slip to one band. Earlier captures remain in their original
+featured picks without an extra 75% floor, using valid offers from any verified
+bookmaker. All legs of a study slip share one book. It uses the combined price
+to assign each slip to one band. Earlier captures remain in their original
 study scope.
 
 ## Fixed samples and clocks
@@ -59,8 +60,8 @@ public-odds approvals.
 ## Running the collector
 
 Run from the tracked Next.js release with its generated Prisma client and the
-target's approved database settings and bookmaker rights. The CLI requires a
-configured primary bookmaker and checks that its MariaDB session is read-only.
+target's approved database settings and bookmaker rights. The CLI checks
+that its MariaDB session is read-only.
 Use a directory owned by the service account and restricted to that account.
 The only writes are immutable capture and settlement files in this directory.
 
@@ -77,8 +78,8 @@ Schedule one capture after the expected same-day odds refresh and before the
 fixtures it can observe reach cutoff. A repeated run preserves the same day's
 capture and observes results for the prior seven days. For a later settlement
 or correction, use the original date with `results`. Keep empty captures to
-account for coverage. A scope includes the configured bookmaker, competition
-IDs and deployment environment. Keep each scope separate in evaluation.
+account for coverage. A scope includes the sampling policy, competition IDs and deployment
+environment. Keep each scope separate in evaluation.
 
 ## November 21 production audit
 

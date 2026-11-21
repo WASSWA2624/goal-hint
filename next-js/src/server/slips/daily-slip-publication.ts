@@ -46,7 +46,7 @@ export function createDailySlipPublisher({ database, competitionIds, model, veri
         const current = utcInstantFromEpochMilliseconds(now());
         return cohort.featuredSelections!.filter(({ kickoffAt }) => current < getPublicationDeadline(utcInstantFromEpochMilliseconds(kickoffAt)));
       };
-      const eligibleSelections = unexpired().length;
+      const eligibleSelections = new Set(unexpired().map(({ fixtureId }) => fixtureId)).size;
       if (!eligibleSelections) return { day, status: !cohort.featuredSelections.length && cohort.records.some(({ forecast }) => forecast !== null)
         ? "odds-unavailable" : "no-qualifying", eligibleSelections };
       const history = await historicalEvidence(database, asOf, competitionIds);

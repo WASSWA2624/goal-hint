@@ -47,8 +47,12 @@ test('projection paginates the full matching cohort and preserves original ranks
 
 test('only exact complete All responses can create a different result view locally', () => {
   const source = daily(), selected = query({ period: 'custom', from: day, to: day });
-  const complete = page(source, selected);
-  assert.ok(projectBestSlipsSnapshot({ query: selected, data: complete }, query({ status: 'won' })));
+  const base = page(source, selected);
+  const complete = { ...base, browse: { ...base.browse, bandTotal: source.slips.length, dailyBandLimit: 10 } };
+  const projected = projectBestSlipsSnapshot({ query: selected, data: complete }, query({ status: 'won' }));
+  assert.equal(projected.data.browse.bandTotal, source.slips.length);
+  assert.equal(projected.data.browse.dailyBandLimit, 10);
+  assert.equal(projected.data.browse.total, 1);
   for (const snapshot of [
     { query: selected, data: page(source, selected, 80, true) },
     { query: selected, data: { ...complete, statistics: { ...source.statistics, total: 80 } } },

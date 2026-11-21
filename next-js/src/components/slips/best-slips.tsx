@@ -38,7 +38,7 @@ export function BestSlips({ result, locale, signedIn = false }: { result: SlipsB
     <AppBrandBar locale={locale} />
     <BestSlipsFilters query={browse.displayQuery} today={content.day} locale={locale} busy={browse.updating}
       scannedDates={listWindow?.total === null ? listWindow : undefined}
-      summary={content.summary} statistics={content.summary ? content.summary.statistics : content.statistics} countSummary={content.state === "generated"
+      summary={content.summary} statistics={content.summary ? content.summary.statistics : content.statistics} countSummary={content.state === "generated" || content.state === "awaiting-publication" && listWindow?.bandTotal === 0
         ? <BestSlipsSummary result={content} locale={locale} /> : null} onChange={browse.change} />
     {content.state === "data-unavailable" ? <CriteriaPanel role="alert"><Stack $gap="sm">
       <h2>{m.text("bestSlips.filters.dataUnavailable")}</h2>

@@ -35,6 +35,7 @@ export function projectBestSlipsSnapshot(snapshot: BestSlipsSnapshot, query: Bes
   return { query, data: { ...data, slips: slips.slice(offset, offset + pageSize),
     browse: { query, total: slips.length, pageSize, hasMore: offset + pageSize < slips.length, nextCursor: null,
       ...(browse?.bandTotal !== undefined ? { bandTotal: browse.bandTotal } : {}),
+      ...(browse?.dailyBandLimit !== undefined ? { dailyBandLimit: browse.dailyBandLimit } : {}),
       ...resolveBestSlipsDates(query, data.day) } } };
 }
 

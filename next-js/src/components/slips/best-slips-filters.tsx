@@ -141,6 +141,7 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
       <FilterDialogContent data-best-slips-dialog-fields>
         <FilterDialogSection><SegmentedChoice value={draft.oddsBand} label={m.text("bestSlips.filters.oddsRange")}
           options={bestSlipOddsBands.map(band => ({ value: band.id, label: band.label }))} onValueChange={band => edit("oddsBand", band)} />
+          <MutedText>{m.text("bestSlips.filters.oddsGuide")}</MutedText>
         </FilterDialogSection>
         <FilterDialogSection><FilterFieldRow>
           <SelectInput label={m.text("bestSlips.filters.slipDate")} name="period" value={draft.period} data-slip-period-select

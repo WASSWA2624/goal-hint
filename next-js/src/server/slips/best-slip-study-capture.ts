@@ -16,19 +16,16 @@ import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { sealBestSlipStudyCapture } from "./best-slip-study-contract.ts";
 import { createStoredSlipCohort, type SlipCohortReader } from "./slip-cohort.ts";
 
-const samplingPolicy = "same-day-featured-compact-disjoint-v2";
+const samplingPolicy = "same-day-featured-compact-disjoint-v3";
 const maximumCaptureAgeMs = 30_000;
 
-type StudyScope = Readonly<{ environment?: "development" | "staging" | "production"; primaryBookmakerId?: number }>;
+type StudyScope = Readonly<{ environment?: "development" | "staging" | "production" }>;
 
-export function bestSlipStudyScopeHash(competitionIds: readonly number[], { environment, primaryBookmakerId }: StudyScope) {
+export function bestSlipStudyScopeHash(competitionIds: readonly number[], { environment }: StudyScope) {
   if (competitionIds.length === 0 || competitionIds.length > maximumCompetitionScope || new Set(competitionIds).size !== competitionIds.length
     || competitionIds.some((id) => !Number.isSafeInteger(id) || id <= 0)) throw new RangeError("Invalid Best Slips study competition scope.");
-  if (primaryBookmakerId !== undefined && (!Number.isSafeInteger(primaryBookmakerId) || primaryBookmakerId <= 0)) {
-    throw new RangeError("Invalid Best Slips study bookmaker scope.");
-  }
   return evidenceFingerprint({ policy: samplingPolicy, environment: environment ?? null,
-    primaryBookmakerId: primaryBookmakerId ?? null, competitionIds: [...competitionIds].sort((left, right) => left - right) });
+    competitionIds: [...competitionIds].sort((left, right) => left - right) });
 }
 
 async function databaseNow(database: Pick<DatabaseRuntime, "query">) {
@@ -50,7 +47,7 @@ export async function captureBestSlipStudy(database: DatabaseRuntime, competitio
   options: StudyScope & Readonly<{ read?: SlipCohortReader }> = {}) {
   if (isDevelopmentDemo()) throw new RangeError("Best Slips study capture requires real stored evidence.");
   const scopeHash = bestSlipStudyScopeHash(competitionIds, options);
-  const { primaryBookmakerId, read = createStoredSlipCohort({
+  const { read = createStoredSlipCohort({
     database: () => database, competitionIds: () => competitionIds, providerOdds: true,
   }) } = options;
   const observedAt = await databaseNow(database), day = getReportingDate(observedAt), window = getReportingDayBounds(day);
@@ -70,23 +67,19 @@ export async function captureBestSlipStudy(database: DatabaseRuntime, competitio
       && observedAt < getPublicationDeadline(utcInstantFromEpochMilliseconds(kickoffAt))
       && forecast !== undefined && forecast.publishedAt <= observedAt
       && offer !== undefined && bookmaker?.id === offer.bookmakerId && bookmaker.name === offer.bookmakerName
-      && (primaryBookmakerId === undefined || offer.bookmakerId === primaryBookmakerId)
       && parseDecimalOdds(odds)?.text === offer.decimal && quoteIsFresh(selection, observedAt);
   });
-  if (new Set(candidates.map(({ fixtureId }) => fixtureId)).size !== candidates.length) {
-    throw new RangeError("Best Slips study requires one original selection per fixture.");
-  }
 
   const retained = new Set<string>();
   const slates: { band: BestSlipOddsBand; slip: BuiltSlip }[] = [];
   let searchLimited = cohort.searchLimited;
   for (const { id: band } of bestSlipOddsBands) {
     const selections = candidates.filter(({ fixtureId }) => !retained.has(fixtureId));
-    if (selections.length < 2) break;
+    if (new Set(selections.map(({ fixtureId }) => fixtureId)).size < 2) break;
     const result = buildSlips({ ...bestSlipDailyCriteria(day, band), teamsMin: 2 }, [], observedAt, {
       accepts: ({ selections }) => new Set(selections.flatMap(({ homeTeam, awayTeam }) => [homeTeam.id, awayTeam.id])).size === selections.length * 2,
       compare: (left, right) => left.selections.length - right.selections.length || (left.id < right.id ? -1 : Number(left.id > right.id)),
-    }, { editorial: { selections, exclusiveMaximum: bestSlipExactRange(band).exclusiveMaximum } });
+    }, { editorial: { selections, combinationIdentity: bestSlipCombinationIdentity, exclusiveMaximum: bestSlipExactRange(band).exclusiveMaximum } });
     searchLimited ||= result.searchLimited;
     for (const slip of result.slips) {
       slip.selections.forEach(({ fixtureId }) => retained.add(fixtureId));
@@ -98,8 +91,9 @@ export async function captureBestSlipStudy(database: DatabaseRuntime, competitio
   if (capturedAt < observedAt || capturedAt - observedAt > maximumCaptureAgeMs || getReportingDate(capturedAt) !== day) {
     throw new RangeError("Best Slips study capture crossed its time boundary.");
   }
-  const eligible = new Set(candidates.filter((selection) => quoteIsFresh(selection, capturedAt)
-    && capturedAt < getPublicationDeadline(utcInstantFromEpochMilliseconds(selection.kickoffAt))).map(({ fixtureId }) => fixtureId));
-  return sealBestSlipStudyCapture({ observedAt, capturedAt, scopeHash, examined: cohort.records.length, eligible: eligible.size,
-    searchLimited, partialCoverage: cohort.partialCoverage, slates: slates.filter(({ slip }) => slip.selections.every(({ fixtureId }) => eligible.has(fixtureId))) });
+  const stillEligible = (selection: SlipSelection) => quoteIsFresh(selection, capturedAt)
+    && capturedAt < getPublicationDeadline(utcInstantFromEpochMilliseconds(selection.kickoffAt));
+  const eligible = new Set(candidates.filter(stillEligible).map(({ fixtureId }) => fixtureId)).size;
+  return sealBestSlipStudyCapture({ observedAt, capturedAt, scopeHash, examined: cohort.records.length, eligible,
+    searchLimited, partialCoverage: cohort.partialCoverage, slates: slates.filter(({ slip }) => slip.selections.every(stillEligible)) });
 }

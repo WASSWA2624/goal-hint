@@ -45,8 +45,11 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 1
         assert(geometry.period === "13-Oct-2026 · 11:00 EAT", "Today's cards show the actual 24-hour EAT snapshot time");
       }
       const checkCount = async count => {
-        const label = await page.locator("[data-best-slips-summary]").innerText();
-        assert(label.includes(`of ${count} ${count === 1 ? "slip" : "slips"}`), "The count includes the visible range and total on every screen");
+        assert((await page.locator("[data-best-slips-band-count]").innerText()).trim() === "3 of 10 slips published",
+          "The published band count stays independent of the active filters on every screen");
+        const matching = page.locator("[data-best-slips-match-count]");
+        if (count === 3) assert(await matching.count() === 0, "The full band count is displayed once");
+        else assert((await matching.innerText()).includes(`of ${count} ${count === 1 ? "slip" : "slips"}`), "The result count reflects the applied filters");
       };
       await checkCount(3);
       assert((await bar.innerText()).includes("2.50–5.00"), "The default odds retain two decimal places");
@@ -69,7 +72,7 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 1
         await open();
         assert(await dialog.locator('[name="period"]').count() === 1, "Best Slips Filters includes one publication date control");
         {
-          const group = dialog.getByRole("group", { name: "Total odds", exact: true });
+          const group = dialog.getByRole("group", { name: "Combined odds", exact: true });
           assert(await group.getByRole("radio").count() === 6, "Every odds band is listed");
           assert(await group.evaluate(element => Math.abs(element.querySelector("legend").getBoundingClientRect().left - element.querySelector("label").getBoundingClientRect().left) < 1), "The odds section label aligns with its option edges");
           const radio = group.getByRole("radio", { name: "2.50–5.00", exact: true });

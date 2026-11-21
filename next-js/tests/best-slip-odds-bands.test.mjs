@@ -5,7 +5,7 @@ import { bestSlipBandCriteria, bestSlipCombinationIdentity, buildDailyBestSlips 
 import { parseBestSlipsQuery, serializeBestSlipsQuery, selectSlipSummaryResult, defaultBestSlipsQuery } from '../src/domain/best-slips-query.ts';
 import { bestSlipsRangeKey } from '../src/domain/best-slips-client.ts';
 import { createDailySlipPublisher } from '../src/server/slips/daily-slip-publication.ts';
-import { readFeaturedSlipSelections } from '../src/server/slips/best-slip-recommendations.ts';
+import { readFeaturedSlipSelections, verifyFeaturedSlipOffers } from '../src/server/slips/best-slip-recommendations.ts';
 import { verifiedLocalFeaturedBinding } from '../src/domain/local-featured-decision.ts';
 import { liveRecord, now, today } from './helpers/live-refresh-fixtures.mjs';
 import { pricedEditorialSelection } from './helpers/best-slip-publication-fixtures.mjs';
@@ -125,7 +125,7 @@ test('final rank uses odds before fewer matches when joint probabilities tie', (
   assert.deepEqual(build('2.10').map((slip) => slip.selections.length), [2, 1]);
 });
 
-test('the editorial reader requires the qualified sealed original after exact pick and primary bookmaker checks', async () => {
+test('the editorial reader retains the sealed featured outcome with verified offers from multiple bookmakers', async () => {
   const fixture = liveRecord();
   const source = slipForecastFixture({ localQualification: 'qualified', homeWin: 0.77, at: now });
   const legacy = slipForecastFixture({ localQualification: 'unqualified', homeWin: 0.77, at: now });
@@ -141,7 +141,16 @@ test('the editorial reader requires the qualified sealed original after exact pi
     checkedAt: now - 1000, observedAt: now - 1000, snapshotId: 'a'.repeat(64), receiptId: 'b'.repeat(64) };
   const book = { bookmakerId: 8, bookmakerName: 'Synthetic bookmaker', offers: [offer] };
   const quotes = { fixtureId: record.fixtureId, kickoffAt: record.kickoffAt, checkedAt: now - 1000,
-    primaryBookmakerId: 8, bookmakers: [book] };
+    primaryBookmakerId: 99, bookmakers: [book, { ...book, bookmakerId: 19, offers: [
+      { ...offer, values: [{ label, odd: '1.4219' }, { label: 'Away', odd: '3.80' }], snapshotId: 'c'.repeat(64) },
+    ] }, { ...book, bookmakerId: 25, offers: [{ ...offer, values: [{ label, odd: '1.33' }], receiptId: undefined }] },
+    { ...book, bookmakerId: 33, offers: [{ ...offer, betName: 'Incorrect market' }] },
+    { ...book, bookmakerId: 44, offers: [{ ...offer, values: [{ label, odd: '2.10', suspended: true }] }] },
+    { ...book, bookmakerId: 55, offers: [{ ...offer, observedAt: now - 86_400_000 }] },
+    { ...book, bookmakerId: 66, offers: [{ ...offer, values: [{ label, odd: '1.55' }] }] },
+    { ...book, bookmakerId: 66, offers: [{ ...offer, values: [{ label, odd: '1.51' }] }] },
+    { ...book, bookmakerId: 77, offers: [{ ...offer, values: [{ label: 'Away', odd: '90.00' }] }] },
+    { ...book, bookmakerId: 88, offers: [offer, offer] }] };
   const sealedReads = [];
   const tx = { async $queryRaw(query) {
     sealedReads.push(query.sql);
@@ -152,13 +161,17 @@ test('the editorial reader requires the qualified sealed original after exact pi
   } };
   const load = (current, currentQuotes = quotes, at = now) => readFeaturedSlipSelections(tx, [current], at,
     async () => ({ goals: new Map(), quotes: new Map([[current.fixtureId, currentQuotes]]), total15: {} }));
-  const [selection] = await load(record);
-  assert.deepEqual([selection.family, selection.selection, selection.probability, selection.odds, selection.source],
-    ['match-result', 'home-win', 0.77, '1.6437', 'local-engine']);
-  assert.deepEqual(selection.forecast, { cycleId: record.cycleId, revisionId: record.forecast.revisionId, publishedAt: source.row.publishedAt.getTime() });
-  assert.equal(selection.offer.snapshotId, offer.snapshotId);
-  assert.equal(sealedReads.length, 2);
-  assert.deepEqual(await load(record, { ...quotes, primaryBookmakerId: 99 }), []);
+  const selections = await load(record);
+  assert.deepEqual(selections.map((selection) => [selection.family, selection.selection, selection.probability, selection.odds,
+    selection.source, selection.bookmaker.id, selection.offer.snapshotId]), [
+    ['match-result', 'home-win', 0.77, '1.6437', 'local-engine', 8, 'a'.repeat(64)],
+    ['match-result', 'home-win', 0.77, '1.4219', 'local-engine', 19, 'c'.repeat(64)],
+  ]);
+  for (const selection of selections) assert.deepEqual(selection.forecast, {
+    cycleId: record.cycleId, revisionId: record.forecast.revisionId, publishedAt: source.row.publishedAt.getTime(),
+  });
+  assert.equal(sealedReads.length, 2, 'each offered price shares one sealed forecast revision');
+  assert.deepEqual(await load(record, { ...quotes, bookmakers: [quotes.bookmakers[3]] }), []);
   assert.deepEqual(await load({ ...record, kickoffAt: record.kickoffAt + 86_400_000 }), []);
   assert.deepEqual(await load(record, quotes, getPublicationDeadline(record.kickoffAt)), []);
   assert.equal(sealedReads.length, 2, 'ineligible prices, occurrences and cutoffs never trigger sealed revision reads');
@@ -167,4 +180,29 @@ test('the editorial reader requires the qualified sealed original after exact pi
   const [item] = record.forecast.markets;
   assert.deepEqual(await load({ ...record, forecast: { ...record.forecast, markets: [{ ...item,
     market: { ...item.market, probabilities: { ...item.market.probabilities, 'home-win': 0.79 } } }] } }), []);
+});
+
+test('the publication recheck locks the occurrence and verifies the chosen non-primary bookmaker receipt', async () => {
+  const selection = pricedEditorialSelection(11, { odds: '1.4219', bookmakerId: 19 });
+  const { fixtureId, kickoffAt, offer } = selection;
+  const { betId, betName, providerSelection: label, decimal: odd, checkedAt, observedAt, providerUpdatedAt, snapshotId, receiptId } = offer;
+  const original = { betId, betName, values: [{ label, odd }], checkedAt, observedAt, providerUpdatedAt, snapshotId, receiptId };
+  const book = { bookmakerId: 19, bookmakerName: null, offers: [original] };
+  const quotes = { fixtureId, kickoffAt, checkedAt, primaryBookmakerId: 99, bookmakers: [book] };
+  const locked = { async $queryRaw(query) {
+    assert.ok(query.sql.includes('LOCK IN SHARE MODE'));
+    assert.deepEqual(query.values, [fixtureId]);
+    return [{ fixtureId }];
+  } };
+  const recheck = (current = quotes, proposed = selection) => verifyFeaturedSlipOffers(locked, [proposed], now,
+    async () => new Map([[fixtureId, current]]));
+  assert.equal(await recheck(), true);
+  assert.equal(await recheck({ ...quotes, kickoffAt: kickoffAt + 60_000 }), false);
+  assert.equal(await recheck({ ...quotes, checkedAt: now + 1 }), false);
+  assert.equal(await recheck({ ...quotes, bookmakers: [{ ...book, offers: [{ ...original, receiptId: 'd'.repeat(64) }] }] }), false);
+  assert.equal(await recheck({ ...quotes, bookmakers: [{ ...book, offers: [{ ...original, values: [{ label, odd: '1.4221' }] }] }] }), false);
+  assert.equal(await recheck({ ...quotes, bookmakers: [{ ...book, bookmakerId: 99 }] }), false);
+  assert.equal(await recheck({ ...quotes, bookmakers: [{ ...book, offers: [original, original] }] }), false);
+  assert.equal(await verifyFeaturedSlipOffers({ $queryRaw: async () => [] }, [selection], now,
+    () => { throw new Error('odds must be locked before rereading quotes'); }), false);
 });

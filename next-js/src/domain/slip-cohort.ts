@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parseReportingDate } from "./calendar.ts";
 import { storedMatchFeedRecordSchema } from "./match-feed.ts";
-import { refineSlipPricePools, slipSelectionPricesSchema } from "./slip-price-page.ts";
+import { refineSlipPricePools, slipPricePageRules, slipSelectionPricesSchema } from "./slip-price-page.ts";
 import { additionalSlipGoalMarket, additionalSlipGoalMarkets, matchesSlipForecast,
   type AdditionalSlipGoalMarketKey, type SlipAdditionalGoalForecast, type SlipTotal15Forecast } from "./slip-markets.ts";
 import { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
@@ -36,7 +36,8 @@ export const slipCohortSchema = z.strictObject({
   selectionPrices: slipSelectionPricesSchema,
   total15Forecasts: z.record(z.uuid(), slipTotal15ForecastSchema).optional(),
   additionalGoalForecasts: z.record(z.uuid(), slipAdditionalGoalForecastSchema).optional(),
-  featuredSelections: z.array(slipSelectionSnapshotSchema.transform(value => value as SlipSelection)).max(slipCohortRules.maximumRecords).optional(),
+  featuredSelections: z.array(slipSelectionSnapshotSchema.transform(value => value as SlipSelection)).max(
+    slipCohortRules.maximumRecords * slipPricePageRules.maximumBookmakersPerFixture).optional(),
   asOf: instant, today: date,
   range: z.strictObject({ from: date, to: date, startInclusive: instant, endExclusive: instant }),
   searchLimited: z.boolean(), partialCoverage: z.boolean(),
@@ -46,6 +47,21 @@ export const slipCohortSchema = z.strictObject({
     context.addIssue({ code: "custom", message: "Incoherent bounded slip cohort." });
   }
   const byFixture = new Map(value.records.map((record) => [record.fixtureId, record]));
+  const featured = new Map<string, { original: SlipSelection; books: Set<number> }>();
+  for (const [index, selection] of (value.featuredSelections ?? []).entries()) {
+    const { fixtureId, bookmaker, forecast, offer } = selection, record = byFixture.get(fixtureId);
+    const group = featured.get(fixtureId);
+    if (!record?.forecast || !record.cycleId || !forecast || !bookmaker || !offer || selection.kickoffAt !== record.kickoffAt ||
+      !matchesSlipForecast(forecast, { cycleId: record.cycleId, revisionId: record.forecast.revisionId, publishedAt: record.forecast.publishedAt }) ||
+      group && (group.books.has(bookmaker.id) || group.books.size >= slipPricePageRules.maximumBookmakersPerFixture ||
+        group.original.family !== selection.family || group.original.selection !== selection.selection ||
+        group.original.probability !== selection.probability || group.original.source !== selection.source)) {
+      context.addIssue({ code: "custom", path: ["featuredSelections", index], message: "Featured offers must share the same original pick." });
+      continue;
+    }
+    if (group) group.books.add(bookmaker.id);
+    else featured.set(fixtureId, { original: selection, books: new Set([bookmaker.id]) });
+  }
   for (const [fixtureId, total15] of Object.entries(value.total15Forecasts ?? {})) {
     const record = byFixture.get(fixtureId);
     if (!record?.forecast || !record.cycleId || !matchesSlipForecast(total15.reference, {

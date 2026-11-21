@@ -302,7 +302,8 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         }
         const parents = new Map(selected.map((row) => [row.id, publication(row)]));
         const requestedBand = query.oddsBand ?? defaultBestSlipOddsBand;
-        const legacyDailyOrder = dailyView && ![...parents.values()].some((parent) => parent.version >= 3 && parent.oddsBand === requestedBand);
+        const dailyPublication = dailyView ? [...parents.values()].find((parent) => parent.version === 3 && parent.oddsBand === requestedBand) : undefined;
+        const legacyDailyOrder = dailyView && !dailyPublication;
         const statistics = { total: 0, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0 };
         const views: BestSlipView[] = [];
         let total = 0, bandTotal = 0;
@@ -356,11 +357,14 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         const last = retained.at(-1), oldest = selected.at(-1);
         const nextCursor = allDates && overflow && last ? `${last.publicationDay}:${last.rank}`
           : allDates && hasOlder && oldest ? `${parents.get(oldest.id)!.day}:${publishedSlipRules.maximumDailySlips}` : null;
+        // Legacy boundary rows can also belong to this displayed band. The modern cap applies only to the sealed cohort.
+        const dailyBandLimit = !completedOnly && (dailyPublication?.count === bandTotal || dates.from === today && dates.to === today && bandTotal === 0)
+          ? dailyBestSlipBandLimit : undefined;
         return { day: today, state: "generated", slips: retained,
           searchLimited: [...parents.values()].some((value) => value.searchLimited),
           partialCoverage: [...parents.values()].some((value) => value.partialCoverage), statistics: allDates ? null : statistics,
           browse: { query, version: allDates ? null : evidenceFingerprint(membership), total: allDates ? null : total,
-            bandTotal: allDates ? null : bandTotal, pageSize: bestSlipsQueryRules.pageSize,
+            bandTotal: allDates ? null : bandTotal, ...(dailyBandLimit === undefined ? {} : { dailyBandLimit }), pageSize: bestSlipsQueryRules.pageSize,
             hasMore: allDates ? nextCursor !== null : offset + retained.length < total, nextCursor,
             from: allDates ? oldest ? parseReportingDate(parents.get(oldest.id)!.day) : null : dates.from,
             to: allDates ? selected[0] ? parseReportingDate(parents.get(selected[0].id)!.day) : null : dates.to } };

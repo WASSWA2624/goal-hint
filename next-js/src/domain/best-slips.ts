@@ -67,6 +67,8 @@ export type SlipsBrowseResult<T extends SlipPreviewView = SlipPreviewView> = Rea
     query: BestSlipsQuery; firstPage?: number; version?: string | null; total: number | null; pageSize: number; hasMore: boolean; nextCursor: string | null;
     /** Audited band membership before probability, match count and result filters. Unknown across a bounded All dates scan. */
     bandTotal?: number | null;
+    /** The current daily capacity when the entire selected day and band use the modern publication rules. */
+    dailyBandLimit?: number;
     /** Requested range for exact totals; actually scanned publication dates for All dates. */
     from: ReportingDate | null; to: ReportingDate | null;
   }>;
@@ -90,7 +92,7 @@ export function bestSlipDailyCriteria(today: string, band: BestSlipOddsBand): Sl
 }
 
 export function buildDailyBestSlips(day: ReportingDate, band: BestSlipOddsBand, model: JointSlipModel, asOf: number,
-  editorial: Omit<EditorialSlipSearch, "exclusiveMaximum">, priorCombinations: ReadonlySet<string>) {
+  editorial: Omit<EditorialSlipSearch, "exclusiveMaximum" | "combinationIdentity">, priorCombinations: ReadonlySet<string>) {
   if (!qualifiedJointModel(model, asOf)) throw new RangeError("A current calibrated joint model is required.");
   const joint = jointSlipRanking(model);
   const prices = new WeakMap<BuiltSlip, ReturnType<typeof bestSlipExactTotal>>();
@@ -103,7 +105,7 @@ export function buildDailyBestSlips(day: ReportingDate, band: BestSlipOddsBand, 
     probability: joint.probability,
     accepts: (slip) => !priorCombinations.has(bestSlipCombinationIdentity(slip.selections)) && joint.ranking.accepts(slip),
     compare: (left, right) => joint.probability(right)! - joint.probability(left)! || compareBestSlipPrices(left, right, exactPrice(left), exactPrice(right)),
-  }, { editorial: { ...editorial, exclusiveMaximum: bestSlipExactRange(band).exclusiveMaximum } });
+  }, { editorial: { ...editorial, combinationIdentity: bestSlipCombinationIdentity, exclusiveMaximum: bestSlipExactRange(band).exclusiveMaximum } });
   return { ...result, excludedUnestimated: joint.unestimated(), slips: result.slips.map((slip): BestSlip =>
     ({ ...slip, estimatedProbability: result.jointProbabilities![slip.id]! })) };
 }

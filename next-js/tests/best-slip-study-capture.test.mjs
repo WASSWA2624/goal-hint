@@ -48,7 +48,7 @@ function scenario(selections, times = [now, now + 1000]) {
     assert.deepEqual(context, { featured: true });
     assert.equal(clock.now(), times[0]);
     return { asOf: times[0], today: day, range: { from: day, to: day, ...window },
-      records: selections.map(({ fixtureId }) => ({ fixtureId })), featuredSelections: selections,
+      records: [...new Set(selections.map(({ fixtureId }) => fixtureId))].map((fixtureId) => ({ fixtureId })), featuredSelections: selections,
       searchLimited: false, partialCoverage: false };
   };
   return { probes, database, read, window };
@@ -78,12 +78,25 @@ test('study uses original exact quotes with disjoint fixtures and no whole-slip 
   const repeated = await captureBestSlipStudy(reversed.database, [1, 2], { environment: 'production', read: reversed.read });
   assert.deepEqual(repeated, capture);
 
-  const primary = scenario(selections);
-  const selected = await captureBestSlipStudy(primary.database, [1, 2], { environment: 'production', primaryBookmakerId: 2, read: primary.read });
-  assert.notEqual(selected.scopeHash, capture.scopeHash);
-  assert.equal(selected.eligible, 2);
-  assert.deepEqual(selected.slates.map(({ band }) => band), ['5-10']);
-  assert.ok(selected.slates[0].slip.selections.every(({ bookmaker, offer }) => bookmaker.id === 2 && offer.bookmakerId === 2));
+});
+
+test('study uses a common alternate bookmaker when each featured pick has a different best book', async () => {
+  const a = original(1, '1.55', 3);
+  const b = original(2, '1.80', 3);
+  const fixture = scenario([original(1, '2.10', 1), original(2, '2.30', 2), a, b]);
+  const capture = await captureBestSlipStudy(fixture.database, [1], { read: fixture.read });
+  assert.equal(capture.examined, 2);
+  assert.equal(capture.eligible, 2);
+  assert.deepEqual(capture.slates.map(({ slip }) => [slip.totalOdds, slip.selections]), [['2.79', [a, b]]]);
+});
+
+test('a fresh offer at another bookmaker cannot keep an expired selected offer in the capture', async () => {
+  const stale = original(1, '1.55', 3);
+  stale.offer.observedAt = now - preMatchReferenceOddsFreshMs;
+  const fixture = scenario([original(1, '1.55', 2), stale, original(2, '1.80', 3)]);
+  const capture = await captureBestSlipStudy(fixture.database, [1], { read: fixture.read });
+  assert.equal(capture.eligible, 2);
+  assert.deepEqual(capture.slates, []);
 });
 
 test('quotes or fixtures that expire before the database capture clock leave honest empty slates', async () => {
@@ -115,7 +128,7 @@ test('below-75% picks can form a new sealed slate while legacy capture proof ret
   const a = original(1, '1.55', 1, { probability: 0.72 });
   const b = original(2, '1.80', 1, { probability: 0.68 });
   const fixture = scenario([b, a]);
-  const capture = await captureBestSlipStudy(fixture.database, [1], { environment: 'production', primaryBookmakerId: 1, read: fixture.read });
+  const capture = await captureBestSlipStudy(fixture.database, [1], { environment: 'production', read: fixture.read });
   assert.equal(capture.eligible, 2);
   assert.deepEqual(capture.slates.map(({ band, slip }) => [band, slip.totalOdds, slip.selections]),
     [['1.5-5', '2.79', [a, b]]]);
@@ -138,7 +151,7 @@ test('CLI evaluates old and new scopes separately when both captured the same Ka
   const at = Date.parse(day + 'T08:00:00Z');
   const legacyScope = evidenceFingerprint({ policy: 'same-day-featured-compact-disjoint-v1',
     environment: 'production', primaryBookmakerId: 1, competitionIds: [1] });
-  const scopeHash = bestSlipStudyScopeHash([1], { environment: 'production', primaryBookmakerId: 1 });
+  const scopeHash = bestSlipStudyScopeHash([1], { environment: 'production' });
   const fields = { observedAt: at, capturedAt: at + 1000, examined: 2, eligible: 0,
     searchLimited: false, partialCoverage: false, slates: [] };
   const old = { ...fields, version: 'best-slips-study-capture-v1', scopeHash: legacyScope, examined: 1 };
