@@ -5,10 +5,11 @@ import { bestSlipBandCriteria, bestSlipCombinationIdentity, buildDailyBestSlips 
 import { parseBestSlipsQuery, serializeBestSlipsQuery, selectSlipSummaryResult, defaultBestSlipsQuery } from '../src/domain/best-slips-query.ts';
 import { bestSlipsRangeKey } from '../src/domain/best-slips-client.ts';
 import { createDailySlipPublisher } from '../src/server/slips/daily-slip-publication.ts';
-import { reviewedFeaturedSlipSelection } from '../src/server/slips/best-slip-recommendations.ts';
+import { readFeaturedSlipSelections } from '../src/server/slips/best-slip-recommendations.ts';
 import { verifiedLocalFeaturedBinding } from '../src/domain/local-featured-decision.ts';
 import { liveRecord, now, today } from './helpers/live-refresh-fixtures.mjs';
 import { pricedEditorialSelection } from './helpers/best-slip-publication-fixtures.mjs';
+import { slipForecastFixture } from './helpers/slip-forecast-fixtures.mjs';
 import { getPublicationDeadline, getReportingDate } from '../src/domain/calendar.ts';
 
 test('odds bands have unambiguous boundaries and preserve their scope through dates, summary and pagination', () => {
@@ -99,23 +100,46 @@ test('final rank uses odds before fewer matches when joint probabilities tie', (
   assert.deepEqual(build('2.10').map((slip) => slip.selections.length), [2, 1]);
 });
 
-test('the editorial leg keeps the actual featured market, occurrence, exact offer and source revision', () => {
-  const fixture = liveRecord(), market = fixture.forecast.markets[0].market;
-  const record = { ...fixture, kickoffAt: now + 3_600_000, forecast: { ...fixture.forecast,
-    publishedAt: now - 2000, provisional: false, updateDelayed: false, markets: [{ market: { ...market,
-      family: 'match-result', source: 'local-engine', probabilities: { 'home-win': 0.77, draw: 0.15, 'away-win': 0.08 } }, outcome: null }] } };
+test('the editorial reader requires the qualified sealed original after exact pick and primary bookmaker checks', async () => {
+  const fixture = liveRecord();
+  const source = slipForecastFixture({ localQualification: 'qualified', homeWin: 0.77, at: now });
+  const legacy = slipForecastFixture({ localQualification: 'unqualified', homeWin: 0.77, at: now });
+  function projected(f) {
+    const [leg] = f.slip.selections;
+    return { ...fixture, fixtureId: leg.fixtureId, homeTeam: leg.homeTeam, awayTeam: leg.awayTeam, cycleId: f.cycle.id,
+      kickoffAt: leg.kickoffAt, forecast: { ...fixture.forecast, revisionId: f.row.id, publishedAt: f.row.publishedAt.getTime(),
+        provisional: true, updateDelayed: false, markets: [{ market: f.candidate.markets['match-result'].market, outcome: null }] } };
+  }
+  const record = projected(source), legacyRecord = projected(legacy);
   const { betId, betName, label } = verifiedLocalFeaturedBinding('match-result', 'home-win');
   const offer = { betId, betName, values: [{ label, odd: '1.6437' }], providerUpdatedAt: null,
     checkedAt: now - 1000, observedAt: now - 1000, snapshotId: 'a'.repeat(64), receiptId: 'b'.repeat(64) };
   const book = { bookmakerId: 8, bookmakerName: 'Synthetic bookmaker', offers: [offer] };
   const quotes = { fixtureId: record.fixtureId, kickoffAt: record.kickoffAt, checkedAt: now - 1000,
     primaryBookmakerId: 8, bookmakers: [book] };
-  const selection = reviewedFeaturedSlipSelection(record, undefined, quotes, undefined, now);
+  const sealedReads = [];
+  const tx = { async $queryRaw(query) {
+    sealedReads.push(query.sql);
+    const originals = [source, legacy].filter((item) => query.values.includes(item.row.id));
+    if (query.sql.includes('FROM PredictionSet')) return originals.map(({ row }) => row);
+    if (query.sql.includes('FROM MarketPrediction')) return originals.flatMap(({ marketRows }) => marketRows);
+    throw new Error('Unexpected read');
+  } };
+  const load = (current, currentQuotes = quotes, at = now) => readFeaturedSlipSelections(tx, [current], at,
+    async () => ({ goals: new Map(), quotes: new Map([[current.fixtureId, currentQuotes]]), total15: {} }));
+  const [selection] = await load(record);
   assert.deepEqual([selection.family, selection.selection, selection.probability, selection.odds, selection.source],
     ['match-result', 'home-win', 0.77, '1.6437', 'local-engine']);
-  assert.deepEqual(selection.forecast, { cycleId: record.cycleId, revisionId: record.forecast.revisionId, publishedAt: now - 2000 });
+  assert.deepEqual(selection.forecast, { cycleId: record.cycleId, revisionId: record.forecast.revisionId, publishedAt: source.row.publishedAt.getTime() });
   assert.equal(selection.offer.snapshotId, offer.snapshotId);
-  assert.equal(reviewedFeaturedSlipSelection(record, undefined, { ...quotes, primaryBookmakerId: 99 }, undefined, now), null);
-  assert.equal(reviewedFeaturedSlipSelection({ ...record, kickoffAt: record.kickoffAt + 86400000 }, undefined, quotes, undefined, now), null);
-  assert.equal(reviewedFeaturedSlipSelection(record, undefined, quotes, undefined, getPublicationDeadline(record.kickoffAt)), null);
+  assert.equal(sealedReads.length, 2);
+  assert.deepEqual(await load(record, { ...quotes, primaryBookmakerId: 99 }), []);
+  assert.deepEqual(await load({ ...record, kickoffAt: record.kickoffAt + 86_400_000 }), []);
+  assert.deepEqual(await load(record, quotes, getPublicationDeadline(record.kickoffAt)), []);
+  assert.equal(sealedReads.length, 2, 'ineligible prices, occurrences and cutoffs never trigger sealed revision reads');
+  assert.deepEqual(await load(legacyRecord, { ...quotes, fixtureId: legacyRecord.fixtureId }), []);
+  assert.equal(sealedReads.length, 4, 'a valid legacy Local Engine revision does not prove numerical qualification');
+  const [item] = record.forecast.markets;
+  assert.deepEqual(await load({ ...record, forecast: { ...record.forecast, markets: [{ ...item,
+    market: { ...item.market, probabilities: { ...item.market.probabilities, 'home-win': 0.79 } } }] } }), []);
 });

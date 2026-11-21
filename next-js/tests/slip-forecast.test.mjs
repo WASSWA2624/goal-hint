@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
+import { liveGoalMarketDefinitions } from '../src/domain/goal-market-definitions.ts';
 import { slipCompleted, slipSnapshotSchema, slipResultView } from '../src/domain/slip-snapshot.ts';
 import { cycleFromRows, revisionFromRows } from '../src/server/predictions/history-read.ts';
+import { goalMarketExtensionFromRow, prepareGoalMarketExtension } from '../src/server/predictions/goal-market-store.ts';
 import { evidenceFingerprint, evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
 import { bindSlipForecasts, projectSlipForecastResult, readSlipForecastResults, slipForecastReadRules } from '../src/server/slips/slip-forecast.ts';
+import { projectSlipTotal15Forecast } from '../src/server/slips/slip-goal-forecast.ts';
 import { slipForecastFixture } from './helpers/slip-forecast-fixtures.mjs';
 import { pricedEditorialSelection } from './helpers/best-slip-publication-fixtures.mjs';
 
@@ -15,6 +18,7 @@ function transaction(f) {
       if (sql.includes('LOCK IN SHARE MODE')) return [{ id: f.fixture.id }];
       if (sql.includes('FROM PredictionSet')) return [f.row];
       if (sql.includes('FROM MarketPrediction')) return f.marketRows;
+      if (sql.includes('FROM GoalMarketExtension')) return f.goalExtension ? [f.goalExtension] : [];
       if (sql.includes('FROM PredictionPublicationBarrier')) return f.barrier ? [f.barrier] : [];
       throw new Error('Unexpected query');
     } };
@@ -43,7 +47,7 @@ test('server binding preserves the exact published revision and refuses source d
 });
 
 test('an editorial quote cannot publish after a sealed early-play barrier or a postponement', async () => {
-  const f = slipForecastFixture(), selection = bound(f), tx = transaction(f);
+  const f = slipForecastFixture({ localQualification: 'qualified' }), selection = bound(f), tx = transaction(f);
   const { offer } = pricedEditorialSelection(1, { odds: selection.odds, at: f.at });
   const editorial = { ...f.slip, selections: [{ ...selection, offer }] };
   assert.ok(await bindSlipForecasts(tx, editorial, f.at));
@@ -57,6 +61,35 @@ test('an editorial quote cannot publish after a sealed early-play barrier or a p
   f.barrier = null;
   f.fixture.kickoff = new Date(selection.kickoffAt + 86_400_000);
   assert.equal(await bindSlipForecasts(tx, editorial, f.at), null);
+});
+
+test('the editorial binder requires numerical qualification on the exact original revision while custom slips retain their existing source rules', async () => {
+  for (const localQualification of [undefined, 'unqualified', 'qualified']) {
+    const f = slipForecastFixture({ localQualification }), selection = bound(f), tx = transaction(f);
+    assert.ok(await bindSlipForecasts(tx, f.slip, f.at));
+    const { offer } = pricedEditorialSelection(1, { odds: selection.odds, at: f.at });
+    const editorial = { ...f.slip, selections: [{ ...selection, offer }] };
+    assert.equal(Boolean(await bindSlipForecasts(tx, editorial, f.at)), localQualification === 'qualified');
+  }
+});
+
+test('an exact sealed Total 1.5 extension still needs a numerically qualified parent total-goals family', async () => {
+  for (const localQualification of ['unqualified', 'qualified']) {
+    const f = slipForecastFixture({ localQualification }), parent = bound(f), tx = transaction(f);
+    const prepared = prepareGoalMarketExtension({ localPoisson: f.candidate.markets['total-goals'].provenance.rates,
+      definitions: liveGoalMarketDefinitions });
+    const sealed = { ...prepared, cycleId: parent.forecast.cycleId, revisionId: parent.forecast.revisionId,
+      fixtureId: parent.fixtureId, contentHash: evidenceFingerprint(prepared), recordedAt: parent.forecast.publishedAt };
+    f.goalExtension = { ...sealed, body: sealed, validIntegrity: 1, recordedAt: new Date(sealed.recordedAt) };
+    const total15 = projectSlipTotal15Forecast(goalMarketExtensionFromRow(f.goalExtension), parent.fixtureId, parent.kickoffAt, parent.forecast, f.at);
+    const { offer, bookmaker } = pricedEditorialSelection(1, { odds: parent.odds, at: f.at });
+    const selection = { ...parent, family: 'total-goals', selection: 'over-1.5', probability: total15.probabilities['over-1.5'], bookmaker,
+      offer: { ...offer, betId: 5, betName: 'Goals Over/Under', providerSelection: 'Over 1.5' } };
+    const editorial = { ...f.slip, selections: [selection], averageProbability: selection.probability };
+    assert.equal(Boolean(await bindSlipForecasts(tx, editorial, f.at)), localQualification === 'qualified');
+    f.goalExtension = undefined;
+    assert.equal(await bindSlipForecasts(tx, editorial, f.at), null);
+  }
 });
 
 test('a formally void original cycle retains its adjudication but remains private while its replacement is live', () => {

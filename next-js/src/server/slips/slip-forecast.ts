@@ -58,6 +58,19 @@ export function slipRevisionMatches(selection: SlipMatchWatch & { source?: Marke
     (market.market.probabilities as Readonly<Record<string, number>>)[selection.selection] === selection.probability;
 }
 
+/** Exact Local Engine authority for editorial slips. The public forecast's provisional label is presentation only. */
+export function qualifiedEditorialSlipRevision(selection: SlipSelection, revision: StoredRevision | null | undefined): boolean {
+  const reference = selection.forecast;
+  if (!revision || !reference || !isMarketFamily(selection.family) || selection.source !== "local-engine" || revision.fixtureId !== selection.fixtureId
+    || revision.cycleId !== reference.cycleId || revision.id !== reference.revisionId || revision.publishedAt !== reference.publishedAt) return false;
+  const context = revision.candidate.context.context;
+  if (context.kickoffAt !== selection.kickoffAt || context.home.teamId !== selection.homeTeam.id || context.away.teamId !== selection.awayTeam.id) return false;
+  const market = revision.candidate.markets[selection.family];
+  return market?.available === true && market.provenance.kind === "local-engine" && market.provenance.numericalBasis === "qualified-local-model"
+    && (isTotal15SlipSelection(selection.selection) ? selection.family === "total-goals"
+      : (market.market.probabilities as Readonly<Record<string, number>>)[selection.selection] === selection.probability);
+}
+
 /** Shared fixture locks block source mutation until commit without requiring canonical UPDATE grants. */
 export async function bindSlipForecasts(tx: Tx, slip: BuiltSlip, at: number): Promise<BuiltSlip | null> {
   const instant = utcInstantFromEpochMilliseconds(at), ids = [...new Set(slip.selections.map((selection) => selection.fixtureId))].sort();
@@ -81,7 +94,8 @@ export async function bindSlipForecasts(tx: Tx, slip: BuiltSlip, at: number): Pr
     }
     const revision = await storedRevision(tx, cycle.currentSetId);
     if (!slipRevisionMatches(selection, revision, goalExtensions.get(cycle.currentSetId) ?? null, instant)
-      || revision.cycleId !== cycle.id || revision.publishedAt > instant) return null;
+      || revision.cycleId !== cycle.id || revision.publishedAt > instant
+      || selection.offer && !qualifiedEditorialSlipRevision(selection, revision)) return null;
     selections.push({ ...selection, forecast: { cycleId: cycle.id, revisionId: revision.id, publishedAt: revision.publishedAt } });
   }
   return { ...slip, selections };

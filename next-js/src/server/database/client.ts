@@ -49,9 +49,10 @@ export class DatabaseRuntime {
   #pool: Pool;
   #closing: Promise<void> | undefined;
 
-  constructor(policy: RuntimePolicy, verifyEvidence?: EvidenceVerifier) {
+  constructor(policy: RuntimePolicy, verifyEvidence?: EvidenceVerifier, readOnly = false) {
     assertOperationAllowed(policy, "database", verifyEvidence);
-    const options = databasePoolOptions(policy);
+    const config = databasePoolOptions(policy);
+    const options = readOnly ? { ...config, connectionLimit: 1, initSql: "SET SESSION TRANSACTION READ ONLY" } : config;
     let pool: Pool | undefined;
     try {
       pool = createPool(options);
@@ -105,6 +106,10 @@ export class DatabaseRuntime {
 
 export function createDatabase(policy: RuntimePolicy, verifyEvidence?: EvidenceVerifier): DatabaseRuntime {
   return new DatabaseRuntime(policy, verifyEvidence);
+}
+
+export function createReadOnlyDatabase(policy: RuntimePolicy): DatabaseRuntime {
+  return new DatabaseRuntime(policy, createDatabaseEvidenceVerifier(), true);
 }
 
 const processState = globalThis as typeof globalThis & { goalHintDatabase?: DatabaseRuntime };
