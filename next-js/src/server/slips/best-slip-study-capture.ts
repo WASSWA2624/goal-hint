@@ -9,15 +9,27 @@ import { isMarketFamily } from "../../domain/markets.ts";
 import { parseDecimalOdds } from "../../domain/odds.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { preMatchReferenceOddsFreshMs } from "../../domain/reference-odds.ts";
-import { buildSlips, slipBuilderRules, type BuiltSlip, type SlipSelection } from "../../domain/slip-builder.ts";
+import { buildSlips, type BuiltSlip, type SlipSelection } from "../../domain/slip-builder.ts";
 import { isSlipMarketSelection } from "../../domain/slip-markets.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { sealBestSlipStudyCapture } from "./best-slip-study-contract.ts";
 import { createStoredSlipCohort, type SlipCohortReader } from "./slip-cohort.ts";
 
-const samplingPolicy = "same-day-featured-compact-disjoint-v1";
+const samplingPolicy = "same-day-featured-compact-disjoint-v2";
 const maximumCaptureAgeMs = 30_000;
+
+type StudyScope = Readonly<{ environment?: "development" | "staging" | "production"; primaryBookmakerId?: number }>;
+
+export function bestSlipStudyScopeHash(competitionIds: readonly number[], { environment, primaryBookmakerId }: StudyScope) {
+  if (competitionIds.length === 0 || competitionIds.length > maximumCompetitionScope || new Set(competitionIds).size !== competitionIds.length
+    || competitionIds.some((id) => !Number.isSafeInteger(id) || id <= 0)) throw new RangeError("Invalid Best Slips study competition scope.");
+  if (primaryBookmakerId !== undefined && (!Number.isSafeInteger(primaryBookmakerId) || primaryBookmakerId <= 0)) {
+    throw new RangeError("Invalid Best Slips study bookmaker scope.");
+  }
+  return evidenceFingerprint({ policy: samplingPolicy, environment: environment ?? null,
+    primaryBookmakerId: primaryBookmakerId ?? null, competitionIds: [...competitionIds].sort((left, right) => left - right) });
+}
 
 async function databaseNow(database: Pick<DatabaseRuntime, "query">) {
   const rows = await database.query((client) => client.$queryRaw<{ at: Date }[]>`SELECT UTC_TIMESTAMP(3) AS at`);
@@ -34,18 +46,13 @@ function quoteIsFresh(selection: SlipSelection, at: number) {
 }
 
 /** Freeze original offers observed in the live decision path independently of any study estimator. */
-export async function captureBestSlipStudy(database: DatabaseRuntime, competitionIds: readonly number[], {
-  environment, primaryBookmakerId,
-  read = createStoredSlipCohort({ database: () => database, competitionIds: () => competitionIds, providerOdds: true }),
-}: Readonly<{ environment?: "development" | "staging" | "production"; primaryBookmakerId?: number; read?: SlipCohortReader }> = {}) {
+export async function captureBestSlipStudy(database: DatabaseRuntime, competitionIds: readonly number[],
+  options: StudyScope & Readonly<{ read?: SlipCohortReader }> = {}) {
   if (isDevelopmentDemo()) throw new RangeError("Best Slips study capture requires real stored evidence.");
-  if (competitionIds.length === 0 || competitionIds.length > maximumCompetitionScope || new Set(competitionIds).size !== competitionIds.length
-    || competitionIds.some((id) => !Number.isSafeInteger(id) || id <= 0)) throw new RangeError("Invalid Best Slips study competition scope.");
-  if (primaryBookmakerId !== undefined && (!Number.isSafeInteger(primaryBookmakerId) || primaryBookmakerId <= 0)) {
-    throw new RangeError("Invalid Best Slips study bookmaker scope.");
-  }
-  const scopeHash = evidenceFingerprint({ policy: samplingPolicy, environment: environment ?? null,
-    primaryBookmakerId: primaryBookmakerId ?? null, competitionIds: [...competitionIds].sort((left, right) => left - right) });
+  const scopeHash = bestSlipStudyScopeHash(competitionIds, options);
+  const { primaryBookmakerId, read = createStoredSlipCohort({
+    database: () => database, competitionIds: () => competitionIds, providerOdds: true,
+  }) } = options;
   const observedAt = await databaseNow(database), day = getReportingDate(observedAt), window = getReportingDayBounds(day);
   const cohort = await read(new URLSearchParams({ from: day, to: day, status: "scheduled", market: publicPolicy.markets.join(","),
     sort: "probability", dir: "desc", pageSize: String(feedQueryRules.maximumPageSize) }), { featured: true }, { now: () => observedAt });
@@ -58,7 +65,7 @@ export async function captureBestSlipStudy(database: DatabaseRuntime, competitio
     const { fixtureId, family, probability, kickoffAt, source, odds, oddsBasis, offer, bookmaker, forecast } = selection;
     return original.has(fixtureId) && source === "local-engine" && oddsBasis === "bookmaker"
       && isMarketFamily(family) && publicPolicy.markets.includes(family) && isSlipMarketSelection(family, selection.selection)
-      && Number.isFinite(probability) && probability >= slipBuilderRules.minimumPickPercent / 100 && probability <= 1
+      && Number.isFinite(probability) && probability >= 0 && probability <= 1
       && kickoffAt >= window.startInclusive && kickoffAt < window.endExclusive
       && observedAt < getPublicationDeadline(utcInstantFromEpochMilliseconds(kickoffAt))
       && forecast !== undefined && forecast.publishedAt <= observedAt

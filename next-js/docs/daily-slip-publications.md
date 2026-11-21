@@ -10,18 +10,19 @@ account erasure. Personal saved slips retain their separate privacy lifecycle.
 `createDailySlipPublisher` takes one bounded Kampala-day cohort from the stored
 Matches forecast and exact featured-pick reader. It requires a currently
 qualified joint model and verified public odds rights. Inputs are Local Engine
-featured selections that clear the existing 75% floor, use the configured
-primary bookmaker and have exact original-cycle settlement support. The launch
+featured selections that use the configured primary bookmaker and have
+exact original-cycle settlement support. Daily Best Slips adds no per-pick
+probability minimum. The launch
 markets and a verified regulation Over/Under 1.5 selection are supported. A
 book or market mismatch leaves that fixture out. All legs of a slip must share
 one bookmaker. The worker records the original quote snapshot and sealed import
 receipt, and rechecks the exact offer under lock before publication.
 
 The six bands are lower-inclusive and upper-exclusive, except the last band
-includes 200.00. The engine multiplies the full prices and assigns the band
-before formatting the total to two places. A display value that rounds onto a
-boundary retains its stored band. Candidate order starts with model probability
-and exact price. Historical evidence affects ties only where comparable, priced
+includes 200.00. The engine multiplies the full leg prices and assigns the
+band from the combined product before formatting the total to two places. A display value that rounds onto a
+boundary retains its stored band. The engine considers higher model probabilities
+first and uses higher exact prices to break ties. Historical evidence affects ties only where comparable, priced
 original decisions have sufficient verified settlement samples in both training
 and validation. Worker summaries report sample counts and evidence availability.
 The final stored rank uses qualified joint probability, exact total, fewer legs
@@ -50,7 +51,8 @@ source revision references, model identity, calibration/correlation references
 and publication time. Reading them does not reinterpret current defaults or
 require the old model to remain active. Model expiry never replaces an already
 published forecast. Changes to model qualification affect future publications.
-Version three permits up to 10 slips per band. Versions one and two keep their
+Version three permits up to 10 distinct slips per band. Sparse bands contain
+only the qualifying combinations found. Versions one and two keep their
 original limits and rank addresses. The public rank stride remains 20.
 The stored model identity hashes its immutable qualification references and
 validity window; the trusted verifier must bind those references to the exact

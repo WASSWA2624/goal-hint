@@ -29,17 +29,20 @@ test('odds bands have unambiguous boundaries and preserve their scope through da
 });
 test('publisher reads one cohort, fills missing bands only and resumes without replacing prior cohorts', async () => {
   const published=new Set(['1.5-5']), calls=[], record=liveRecord();
-  const model={calibrationReference:'test',correlationReference:'test',validFrom:now-1000,validUntil:now+86400000,estimate:()=>0.75};
+  const model={calibrationReference:'test',correlationReference:'test',validFrom:now-1000,validUntil:now+86400000,estimate:()=>0.72};
   const cohort = { today, asOf: now, range: { from: today, to: today }, searchLimited: false, partialCoverage: false,
     records: [record], featuredSelections: bestSlipOddsBands.map((band, index) =>
-      pricedEditorialSelection(index + 1, { odds: (band.minimumTotal / 100).toFixed(2) })) };
+      pricedEditorialSelection(index + 1, { odds: (band.minimumTotal / 100).toFixed(2), probability: 0.72 })) };
   let reads = 0;
   const options={database:{},competitionIds:[],model,now:()=>now,verifyModel:()=>true,verifyPublicOdds:()=>true,
     historicalEvidence: async () => ({ order: values => values, report: { status: 'insufficient', scannedDecisions: 0, settledDecisions: 0 } }),
     store:{publishedBands:async()=>[...published],publish:async(input)=>{calls.push(input);published.add(input.oddsBand);return 'published';}},
     read:async (parameters) => { reads++; assert.equal(parameters.get('from'), today); return cohort; }};
   const publisher=createDailySlipPublisher(options);
-  assert.equal((await publisher.publish()).status,'published'); assert.equal(calls.length,5);
+  const result = await publisher.publish();
+  assert.equal(result.status, 'published');
+  assert.equal(result.eligibleSelections, 6);
+  assert.equal(calls.length, 5);
   assert.deepEqual(calls.map(input=>input.oddsBand),bestSlipOddsBands.slice(1).map(band=>band.id));
   assert.ok(calls.every(input=>input.slips.length<=10));
   assert.equal((await publisher.publish()).status,'already-published');assert.equal(calls.length,5);
@@ -49,6 +52,28 @@ test('publisher reads one cohort, fills missing bands only and resumes without r
   const noPrices=createDailySlipPublisher({...options,store:{...options.store,publishedBands:async()=>[]},
     read:async()=>({...cohort, records: [{...record, forecast: {}}], featuredSelections: []})});
   assert.equal((await noPrices.publish()).status,'odds-unavailable'); assert.equal(calls.length,5);
+});
+
+test('Best Slips orders sub-75 percent picks by probability then exact price and keeps three feasible slips', () => {
+  const model = { calibrationReference: 'synthetic', correlationReference: 'synthetic',
+    validFrom: now - 1000, validUntil: now + 86_400_000,
+    estimate: (selections) => Math.min(...selections.map(({ probability }) => probability)) };
+  const selections = [
+    pricedEditorialSelection(1, { odds: '1.6041', probability: 0.72 }),
+    pricedEditorialSelection(2, { odds: '1.60', probability: 0.74 }),
+    pricedEditorialSelection(3, { odds: '1.6042', probability: 0.72 }),
+    ...Array.from({ length: 3 }, (_, index) => pricedEditorialSelection(index + 4, { odds: '1.60', probability: 0.66 })),
+  ];
+  const order = [];
+  const result = buildDailyBestSlips(today, '1.5-5', model, now, { selections, order: (candidates) => {
+    order.push(...candidates.map(({ fixtureId }) => fixtureId));
+    return candidates;
+  } }, new Set());
+  assert.deepEqual(order, [selections[1], selections[2], selections[0], ...selections.slice(3)].map(({ fixtureId }) => fixtureId));
+  assert.equal(result.slips.length, 3);
+  assert.equal(new Set(result.slips.flatMap((slip) => slip.selections.map(({ fixtureId }) => fixtureId))).size, selections.length);
+  assert.ok(result.slips.every(({ selections, totalOdds }) =>
+    selections.length === 2 && selections.every(({ probability }) => probability < 0.75) && bestSlipOddsBandFor(totalOdds) === '1.5-5'));
 });
 
 test('Best Slips exact products, same-book eligibility, compact ties and Kampala day cutoff', () => {

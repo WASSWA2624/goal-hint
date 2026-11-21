@@ -5,7 +5,10 @@ slip wins. It uses one stored pre-match snapshot per Kampala day, retaining the
 exact original featured selection, forecast reference, offered decimal price and
 quote receipt for each leg. Capture and settlement files are private and sealed.
 An evaluation records their hashes without returning raw bookmaker or fixture
-records.
+records. The current construction scope accepts the day’s eligible priced
+featured picks without an extra 75% floor. It uses the combined price to
+assign each slip to one band. Earlier captures remain in their original
+study scope.
 
 ## Fixed samples and clocks
 

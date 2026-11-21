@@ -7,13 +7,13 @@ import { addReportingDays, getReportingDate, parseReportingDate, utcInstantFromE
 import { getRuntimePolicy } from '../src/server/config/runtime-policy.ts';
 import { createReadOnlyDatabase } from '../src/server/database/client.ts';
 import { publicOddsEnabled } from '../src/server/odds/public-odds-policy.ts';
-import { captureBestSlipStudy } from '../src/server/slips/best-slip-study-capture.ts';
+import { bestSlipStudyScopeHash, captureBestSlipStudy } from '../src/server/slips/best-slip-study-capture.ts';
 import { parseBestSlipStudyCapture, parseBestSlipStudyReceipt } from '../src/server/slips/best-slip-study-contract.ts';
 import { evaluateBestSlipStudy } from '../src/server/slips/best-slip-study-evaluation.ts';
 import { observeBestSlipStudyResults } from '../src/server/slips/best-slip-study-results.ts';
 
 const maximumFileBytes = 4_194_304;
-const captureName = /^capture-(\d{4}-\d{2}-\d{2})\.json$/u;
+const captureName = /^capture-(\d{4}-\d{2}-\d{2})(?:-([a-f0-9]{64}))?\.json$/u;
 const receiptName = /^outcome-([a-f0-9]{64})-(\d{1,15})\.json$/u;
 const reportingDay = at => getReportingDate(utcInstantFromEpochMilliseconds(at));
 
@@ -52,13 +52,17 @@ async function storeRecord(directory, name, value) {
   } finally { await unlink(temporary).catch(error => { if (error?.code !== 'ENOENT') throw error; }); }
 }
 
-async function readCaptures(directory, names, include = () => true) {
+async function readCaptures(directory, names, scopeHash, include = () => true) {
   const captures = new Map();
   for (const name of names) {
-    const day = captureName.exec(name)?.[1];
-    if (!day || !include(day)) continue;
+    const [, day, fileScope] = captureName.exec(name) ?? [];
+    if (!day || !include(day) || (fileScope && fileScope !== scopeHash)) continue;
     const capture = await readRecord(join(directory, name), parseBestSlipStudyCapture);
-    if (reportingDay(capture.capturedAt) !== day) throw new Error('Capture filename and reporting day disagree.');
+    if (reportingDay(capture.capturedAt) !== day || (fileScope && fileScope !== capture.scopeHash)) {
+      throw new Error('Capture filename and seal disagree.');
+    }
+    if (capture.scopeHash !== scopeHash) continue;
+    if (captures.has(day)) throw new Error('Duplicate Best Slips study capture for the reporting day and scope.');
     captures.set(day, capture);
   }
   return captures;
@@ -79,13 +83,15 @@ async function collect(directory, requestedDay, names, probe = false) {
   const { bookmakerId: primaryBookmakerId } = policy.choices.odds;
   if (!Number.isSafeInteger(primaryBookmakerId) || primaryBookmakerId <= 0)
     throw new Error('A configured primary bookmaker is required.');
+  const options = { environment, primaryBookmakerId };
+  const competitionIds = policy.choices.competitionIds ?? [];
+  const scopeHash = bestSlipStudyScopeHash(competitionIds, options);
   const database = createReadOnlyDatabase(policy);
   try {
     const [session] = await database.query(tx => tx.$queryRaw`SELECT @@SESSION.transaction_read_only AS readOnly`);
     if (Number(session?.readOnly) !== 1) throw new Error('The study database session is not read-only.');
-    const options = { environment, primaryBookmakerId };
     if (probe) {
-      const capture = await captureBestSlipStudy(database, policy.choices.competitionIds ?? [], options);
+      const capture = await captureBestSlipStudy(database, competitionIds, options);
       return { mode: 'probe', day: reportingDay(capture.capturedAt), observedAt: capture.observedAt, scopeHash: capture.scopeHash,
         examined: capture.examined, eligible: capture.eligible, combinations: capture.slates.length,
         searchLimited: capture.searchLimited, partialCoverage: capture.partialCoverage };
@@ -93,7 +99,7 @@ async function collect(directory, requestedDay, names, probe = false) {
     const day = reportingDay(Date.now());
     const oldest = addReportingDays(day, -7);
     const targetDay = requestedDay && parseReportingDate(requestedDay);
-    const captures = await readCaptures(directory, names, date => targetDay ? date === targetDay : date >= oldest && date <= day);
+    const captures = await readCaptures(directory, names, scopeHash, date => targetDay ? date === targetDay : date >= oldest && date <= day);
     const recipients = targetDay ? [captures.get(targetDay)]
       : [...captures.entries()].filter(([date, capture]) => date < day && capture.slates.length).map(([, capture]) => capture);
     if (targetDay && !recipients[0]) throw new Error('There is no original capture for that reporting day.');
@@ -110,12 +116,12 @@ async function collect(directory, requestedDay, names, probe = false) {
     if (targetDay) return { mode: 'results', receipts };
     let capture = captures.get(day), stored = false;
     if (!capture) {
-      const candidate = await captureBestSlipStudy(database, policy.choices.competitionIds ?? [], options);
+      const candidate = await captureBestSlipStudy(database, competitionIds, options);
       const captureDay = reportingDay(candidate.capturedAt);
-      const name = 'capture-' + captureDay + '.json';
+      const name = 'capture-' + captureDay + '-' + scopeHash + '.json';
       stored = await storeRecord(directory, name, candidate);
       capture = stored ? candidate : await readRecord(join(directory, name), parseBestSlipStudyCapture);
-      if (reportingDay(capture.capturedAt) !== captureDay || capture.scopeHash !== candidate.scopeHash)
+      if (reportingDay(capture.capturedAt) !== captureDay || capture.scopeHash !== scopeHash)
         throw new Error('A conflicting study capture already exists.');
     }
     return { mode: 'capture', day: reportingDay(capture.capturedAt), observedAt: capture.observedAt,
@@ -138,9 +144,13 @@ async function main() {
   let report;
   if (mode === 'evaluate') {
     if (values.date || !values.scope) throw new Error('Evaluate requires a scope and declared chronological windows.');
-    const captures = [...(await readCaptures(directory, names)).values()];
+    const captures = [...(await readCaptures(directory, names, values.scope)).values()];
+    const captureHashes = new Set(captures.map(({ hash }) => hash));
     const receipts = [];
-    for (const name of names) if (receiptName.test(name)) receipts.push(await readReceipt(directory, name));
+    for (const name of names) {
+      const captureHash = receiptName.exec(name)?.[1];
+      if (captureHashes.has(captureHash)) receipts.push(await readReceipt(directory, name));
+    }
     report = evaluateBestSlipStudy({ captures, receipts, scopeHash: values.scope, assessedAt: Date.now(),
       windows: { fitFrom: values['fit-from'], fitUntil: values['fit-until'],
         holdoutFrom: values['holdout-from'], holdoutUntil: values['holdout-until'] } });

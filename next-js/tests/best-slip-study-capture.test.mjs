@@ -1,10 +1,17 @@
 import assert from 'node:assert/strict';
+import { execFile as executeFile } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
+import { promisify } from 'node:util';
 import { bestSlipCombinationIdentity } from '../src/domain/best-slips.ts';
 import { getReportingDate, getReportingDayBounds } from '../src/domain/calendar.ts';
+import { parseDecimalOdds } from '../src/domain/odds.ts';
 import { preMatchReferenceOddsFreshMs } from '../src/domain/reference-odds.ts';
-import { captureBestSlipStudy } from '../src/server/slips/best-slip-study-capture.ts';
-import { parseBestSlipStudyCapture } from '../src/server/slips/best-slip-study-contract.ts';
+import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
+import { bestSlipStudyScopeHash, captureBestSlipStudy } from '../src/server/slips/best-slip-study-capture.ts';
+import { parseBestSlipStudyCapture, sealBestSlipStudyCapture, sealBestSlipStudyReceipt } from '../src/server/slips/best-slip-study-contract.ts';
 
 const now = Date.parse('2026-11-21T10:00:00Z');
 const uuid = (id) => `a0000000-0000-4000-8000-${String(id).padStart(12, '0')}`;
@@ -19,7 +26,7 @@ function original(id, odds, bookmakerId, overrides = {}) {
     bookmaker: { id: bookmakerId, name: bookmakerName },
     forecast: { cycleId: uuid(3000 + id), revisionId: uuid(4000 + id), publishedAt: now - 20_000 },
     offer: { bookmakerId, bookmakerName, betId: 5, betName: 'Goals Over/Under', providerSelection: 'Under 1.5',
-      decimal: odds, observedAt: now - 10_000, checkedAt: now - 5000, providerUpdatedAt: null,
+      decimal: parseDecimalOdds(odds).text, observedAt: now - 10_000, checkedAt: now - 5000, providerUpdatedAt: null,
       snapshotId: String(id).padStart(64, '0'), receiptId: String(id + 1).padStart(64, '0') },
     ...overrides,
   };
@@ -59,7 +66,7 @@ test('study uses original exact quotes with disjoint fixtures and no whole-slip 
   const capture = await captureBestSlipStudy(fixture.database, [2, 1], { environment: 'production', read: fixture.read });
   assert.deepEqual(fixture.probes, ['SELECT UTC_TIMESTAMP(3) AS at', 'SELECT UTC_TIMESTAMP(3) AS at']);
   assert.equal(capture.examined, 9);
-  assert.equal(capture.eligible, 6);
+  assert.equal(capture.eligible, 7);
   assert.deepEqual(capture.slates.map(({ band, slip }) => [band, slip.totalOdds]), [['1.5-5', '5.00'], ['5-10', '7.89']]);
   assert.deepEqual(capture.slates[0].slip.selections, [a, b]);
   assert.ok(capture.slates.every(({ slip }) => slip.id === bestSlipCombinationIdentity(slip.selections)
@@ -102,4 +109,56 @@ test('a stale read, backwards database clock or Kampala rollover cannot seal a c
   const empty = scenario([]);
   const capture = await captureBestSlipStudy(empty.database, [1], { read: empty.read });
   assert.deepEqual([capture.examined, capture.eligible, capture.slates], [0, 0, []]);
+});
+
+test('below-75% picks can form a new sealed slate while legacy capture proof retains its original criteria', async () => {
+  const a = original(1, '1.55', 1, { probability: 0.72 });
+  const b = original(2, '1.80', 1, { probability: 0.68 });
+  const fixture = scenario([b, a]);
+  const capture = await captureBestSlipStudy(fixture.database, [1], { environment: 'production', primaryBookmakerId: 1, read: fixture.read });
+  assert.equal(capture.eligible, 2);
+  assert.deepEqual(capture.slates.map(({ band, slip }) => [band, slip.totalOdds, slip.selections]),
+    [['1.5-5', '2.79', [a, b]]]);
+  assert.deepEqual(parseBestSlipStudyCapture(capture), capture);
+
+  const legacyScope = evidenceFingerprint({ policy: 'same-day-featured-compact-disjoint-v1',
+    environment: 'production', primaryBookmakerId: 1, competitionIds: [1] });
+  assert.notEqual(capture.scopeHash, legacyScope);
+  const legacy = { ...capture, version: 'best-slips-study-capture-v1', scopeHash: legacyScope };
+  delete legacy.hash;
+  assert.throws(() => parseBestSlipStudyCapture({ ...legacy, hash: evidenceFingerprint(legacy) }), /original pre-cutoff/);
+  const old = { ...legacy, slates: [], eligible: 0 };
+  assert.equal(parseBestSlipStudyCapture({ ...old, hash: evidenceFingerprint(old) }).scopeHash, legacyScope);
+});
+
+test('CLI evaluates old and new scopes separately when both captured the same Kampala day', async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), 'goalhint-best-slip-study-'));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const day = '2020-01-01';
+  const at = Date.parse(day + 'T08:00:00Z');
+  const legacyScope = evidenceFingerprint({ policy: 'same-day-featured-compact-disjoint-v1',
+    environment: 'production', primaryBookmakerId: 1, competitionIds: [1] });
+  const scopeHash = bestSlipStudyScopeHash([1], { environment: 'production', primaryBookmakerId: 1 });
+  const fields = { observedAt: at, capturedAt: at + 1000, examined: 2, eligible: 0,
+    searchLimited: false, partialCoverage: false, slates: [] };
+  const old = { ...fields, version: 'best-slips-study-capture-v1', scopeHash: legacyScope, examined: 1 };
+  const oldCapture = { ...old, hash: evidenceFingerprint(old) };
+  const newCapture = sealBestSlipStudyCapture({ ...fields, scopeHash });
+  for (const [name, capture] of [[`capture-${day}.json`, oldCapture], [`capture-${day}-${scopeHash}.json`, newCapture]]) {
+    const receipt = sealBestSlipStudyReceipt({ captureHash: capture.hash, observedAt: at + 2000, outcomes: [] });
+    await writeFile(join(directory, name), JSON.stringify(capture), { mode: 0o600 });
+    await writeFile(join(directory, `outcome-${capture.hash}-${receipt.observedAt}.json`), JSON.stringify(receipt), { mode: 0o600 });
+  }
+
+  for (const [scope, examined] of [[legacyScope, 1], [scopeHash, 2]]) {
+    const { stdout } = await promisify(executeFile)(process.execPath, ['--conditions=react-server',
+      'scripts/best-slip-study.mjs', 'evaluate', '--directory', directory, '--scope', scope,
+      '--fit-from', day, '--fit-until', '2020-01-02', '--holdout-from', '2020-01-03', '--holdout-until', '2020-01-04'],
+    { cwd: new URL('../', import.meta.url) });
+    const report = JSON.parse(stdout);
+    assert.equal(report.scopeHash, scope);
+    assert.equal(report.fit.capturedDays, 1);
+    assert.equal(report.fit.examined, examined);
+    assert.equal(report.approvedForPublication, false);
+  }
 });

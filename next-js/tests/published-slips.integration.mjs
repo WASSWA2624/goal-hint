@@ -64,13 +64,14 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
   for(const table of ['DailySlipPublication','PublishedSlip','PublishedSlipLeg','SharedSlip']) await assert.rejects(root.query(`DELETE FROM ${table}`),/append-only|permanent/);
   const kickoffAt=Date.parse(`${day}T20:59:00Z`);
   if(kickoffAt-at<600000){t.diagnostic('Cleanup and legacy checks passed; live publication skipped at the EAT day cutoff.');return;}
-  const current={...slip,averageProbability:0.75,estimatedProbability:0.75,
-    selections:[pricedEditorialSelection(1,{odds:'4.00',kickoffAt,at,fixtureId,cycleId,revisionId})]};
-  const input={day,slips:[current],searchLimited:false,partialCoverage:false,model:{...model,estimate:()=>0.75},verifyModel:()=>true,verifyPublicOdds:()=>true};
+  const probability = 0.68;
+  const current={...slip,averageProbability:probability,estimatedProbability:probability,
+    selections:[pricedEditorialSelection(1,{odds:'4.00',kickoffAt,at,fixtureId,cycleId,revisionId,probability})]};
+  const input={day,slips:[current],searchLimited:false,partialCoverage:false,model:{...model,estimate:()=>probability},verifyModel:()=>true,verifyPublicOdds:()=>true};
   const other = { fixtureId: randomUUID(), cycleId: randomUUID(), revisionId: randomUUID() };
   await root.query('INSERT INTO FootballFixture(id) VALUES (?)', [other.fixtureId]);
   await root.query('INSERT INTO PredictionSet(id,cycleId,fixtureId) VALUES (?,?,?)', [other.revisionId,other.cycleId,other.fixtureId]);
-  const upper = { ...current, totalOdds: '150.00', selections: [pricedEditorialSelection(2,{odds:'150.00',kickoffAt,at,...other})] };
+  const upper = { ...current, totalOdds: '150.00', selections: [pricedEditorialSelection(2,{odds:'150.00',kickoffAt,at,...other,probability})] };
   assert.deepEqual((await Promise.all([store.publish({ ...input, slips: [upper], oddsBand: '100-200' }),
     store.publish({ ...input, slips: [upper], oddsBand: '100-200' })])).sort(), ['already-published', 'published']);
   const upperDay = await store.day(day, false, '100-200');
@@ -78,7 +79,7 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
   assert.deepEqual((await Promise.all([store.publish(input),store.publish(input)])).sort(),['already-published','published']);
   assert.equal((await store.browse(defaultBestSlipsQuery(),day)).slips.length,1);
   assert.equal((await store.history({from:day,to:day,page:1,pageSize:10})).records[0].outcome,'lost');
-  const high={...current,totalOdds:'7.00',selections:[pricedEditorialSelection(1,{odds:'7.00',kickoffAt,at,fixtureId,cycleId,revisionId})]};
+  const high={...current,totalOdds:'7.00',selections:[pricedEditorialSelection(1,{odds:'7.00',kickoffAt,at,fixtureId,cycleId,revisionId,probability})]};
   await assert.rejects(() => store.publish({...input,oddsBand:'5-10',slips:[high]}));
   assert.equal((await store.day(day,false,'5-10')).slips.length,0);
   await assert.rejects(root.query('DELETE FROM DailyBestSlipCombination'), /membership is immutable/u);

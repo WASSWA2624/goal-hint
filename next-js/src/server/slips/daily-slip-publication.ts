@@ -5,7 +5,6 @@ import { getPublicationDeadline, getReportingDate, utcInstantFromEpochMillisecon
 import { bestSlipCombinationIdentity, buildDailyBestSlips, qualifiedJointModel, type JointSlipModel } from "../../domain/best-slips.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { feedQueryRules } from "../../domain/feed-query.ts";
-import { slipBuilderRules } from "../../domain/slip-builder.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { provenTrue } from "../shared/authority-proof.ts";
 import { bestSlipOddsBands } from "../../domain/best-slip-odds-bands.ts";
@@ -47,7 +46,7 @@ export function createDailySlipPublisher({ database, competitionIds, model, veri
         const current = utcInstantFromEpochMilliseconds(now());
         return cohort.featuredSelections!.filter(({ kickoffAt }) => current < getPublicationDeadline(utcInstantFromEpochMilliseconds(kickoffAt)));
       };
-      const eligibleSelections = unexpired().filter(({ probability }) => probability >= slipBuilderRules.minimumPickPercent / 100).length;
+      const eligibleSelections = unexpired().length;
       if (!eligibleSelections) return { day, status: !cohort.featuredSelections.length && cohort.records.some(({ forecast }) => forecast !== null)
         ? "odds-unavailable" : "no-qualifying", eligibleSelections };
       const history = await historicalEvidence(database, asOf, competitionIds);

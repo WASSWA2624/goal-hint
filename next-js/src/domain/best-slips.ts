@@ -86,7 +86,7 @@ export function bestSlipBandCriteria(today: string, band: BestSlipOddsBand): Sli
 
 export function bestSlipDailyCriteria(today: string, band: BestSlipOddsBand): SlipCriteria {
   const { minimum, maximum } = bestSlipExactRange(band);
-  return bestSlipCriteria(today, { minimumTotal: minimum, maximumTotal: maximum, count: dailyBestSlipBandLimit });
+  return { ...bestSlipCriteria(today, { minimumTotal: minimum, maximumTotal: maximum, count: dailyBestSlipBandLimit }), probMin: 0 };
 }
 
 export function buildDailyBestSlips(day: ReportingDate, band: BestSlipOddsBand, model: JointSlipModel, asOf: number,

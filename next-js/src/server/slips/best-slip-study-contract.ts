@@ -4,12 +4,14 @@ import { z } from "zod";
 import { bestSlipCombinationIdentity, bestSlipExactTotal } from "../../domain/best-slips.ts";
 import { bestSlipExactRange, bestSlipOddsBands, dailyBestSlipBandLimit } from "../../domain/best-slip-odds-bands.ts";
 import { getPublicationDeadline, getReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
-import { slipBuilderRules, type BuiltSlip } from "../../domain/slip-builder.ts";
+import type { BuiltSlip } from "../../domain/slip-builder.ts";
 import { slipCohortRules } from "../../domain/slip-cohort.ts";
 import { slipSnapshotRules, slipSnapshotSchema } from "../../domain/slip-snapshot.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 
-const captureVersion = "best-slips-study-capture-v1";
+const legacyCaptureVersion = "best-slips-study-capture-v1";
+const captureVersion = "best-slips-study-capture-v2";
+const legacyMinimumPickProbability = 0.75;
 const receiptVersion = "best-slips-study-receipt-v1";
 const instant = z.number().int().positive().max(253_402_300_799_999);
 const hashSchema = z.string().regex(/^[a-f0-9]{64}$/u);
@@ -17,7 +19,7 @@ const band = z.enum(bestSlipOddsBands.map(({ id }) => id));
 const maxSlates = bestSlipOddsBands.length * dailyBestSlipBandLimit;
 const slipId = z.string().min(1).max(slipSnapshotRules.maximumIdentityLength);
 const captureSchema = z.strictObject({
-  version: z.literal(captureVersion),
+  version: z.literal([legacyCaptureVersion, captureVersion]),
   observedAt: instant,
   capturedAt: instant,
   scopeHash: hashSchema,
@@ -64,7 +66,7 @@ function checkCapture(capture: CaptureBody) {
       if (seenFixtures.has(selection.fixtureId) || teams.has(homeTeam.id) || teams.has(awayTeam.id) || homeTeam.id === awayTeam.id ||
         !offer || !forecast || selection.source !== "local-engine" || !bookmakerId || offer.bookmakerId !== bookmakerId ||
         selection.bookmaker?.id !== bookmakerId || selection.oddsBasis !== "bookmaker" ||
-        probability < slipBuilderRules.minimumPickPercent / 100 ||
+        (capture.version === legacyCaptureVersion && probability < legacyMinimumPickProbability) ||
         forecast.publishedAt > capture.observedAt || offer.checkedAt > capture.observedAt ||
         at >= getPublicationDeadline(kickoff) || getReportingDate(kickoff) !== day) {
         throw new RangeError("Best Slips study requires exact original pre-cutoff picks and prices.");

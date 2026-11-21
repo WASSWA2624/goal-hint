@@ -14,7 +14,7 @@ import { predictionResults } from "../../domain/performance-summary.ts";
 import { summarizeSlipPerformance } from "../../domain/slip-performance.ts";
 import { slipMatchStatesFromResults } from "../../domain/slip-match-state.ts";
 import { compareSlipDisplayProbability } from "../../domain/slip-pagination.ts";
-import { parseSlipCriteria, serializeSlipCriteria, slipBuilderRules, type BuiltSlip, type SlipCriteria } from "../../domain/slip-builder.ts";
+import { parseSlipCriteria, serializeSlipCriteria, type BuiltSlip, type SlipCriteria } from "../../domain/slip-builder.ts";
 import { getDatabase, type DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
@@ -187,8 +187,6 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           if (rows.length !== legacyBands.reduce((sum, value) => sum + value.count, 0)) fail("unavailable");
           if ((await readSnapshots(tx, rows)).some(({ slip }) => combinations.has(bestSlipCombinationIdentity(slip.selections)))) fail("invalid-input");
         }
-        if (proposed.some(({ slip }) => slip.selections.some(({ probability }) => probability < slipBuilderRules.minimumPickPercent / 100)))
-          return fail("invalid-input");
         const fixtureIds = [...ids].sort();
         for (const fixtureId of fixtureIds) await tx.$queryRaw`SELECT id FROM FootballFixture WHERE id=${fixtureId} LOCK IN SHARE MODE`;
         const snapshots: z.infer<typeof snapshotSchema>[] = [];

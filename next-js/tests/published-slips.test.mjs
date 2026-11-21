@@ -89,14 +89,15 @@ test('sealed publication identities survive database JSON number normalization',
   assert.equal(day.slips[0].estimatedProbability, 0.75 - Number.EPSILON);
 });
 
-test('daily publication rejects a 74.999 percent leg and accepts exactly 75 percent', async () => {
-  const f = fixture(), below = 0.74999, original = slip();
-  await assert.rejects(() => f.publish({ model: { ...model, estimate: () => below }, slips: [{ ...original,
-    averageProbability: below, estimatedProbability: below, selections: [{ ...original.selections[0], probability: below }] }] }),
-  /invalid-input/u);
-  assert.deepEqual(f.parents, []);
-  assert.deepEqual(f.bound, []);
-  assert.equal(await f.publish(), 'published');
+test('daily publication seals verified legs below 75 percent with the original probabilities', async () => {
+  const f = fixture(), probability = 0.62, original = slip();
+  assert.equal(await f.publish({ model: { ...model, estimate: () => probability }, slips: [{ ...original,
+    averageProbability: probability, estimatedProbability: probability, selections: [{ ...original.selections[0], probability }] }] }),
+  'published');
+  const [view] = (await f.store.day(today)).slips;
+  assert.equal(view.estimatedProbability, probability);
+  assert.equal(f.rows[0].snapshotJson.slip.selections[0].probability, probability);
+  assert.equal(new URLSearchParams(f.parents[0].bodyJson.criteria).get('probMin'), '0');
 });
 
 test('six version-three bands publish at most ten each, retain stable public ranks and read old twenty-slip bands', async () => {
