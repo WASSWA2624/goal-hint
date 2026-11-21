@@ -5,10 +5,10 @@ import { total15MarketKey } from "../../domain/extended-markets.ts";
 import { legacyForecastMarketKey, legacyForecastOutcome } from "../../domain/legacy-goal-market-identities.ts";
 import { localFeaturedDecisionVersion, verifiedLocalFeaturedBinding } from "../../domain/local-featured-decision.ts";
 import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
-import { marketRules, type MarketFamily, type MarketSource } from "../../domain/markets.ts";
+import { isMarketFamily, isMarketSelection, marketRules, type MarketFamily, type MarketSource } from "../../domain/markets.ts";
 import { parseDecimalOdds } from "../../domain/odds.ts";
 import { preMatchReferenceOddsFreshMs } from "../../domain/reference-odds.ts";
-import { isSlipMarketSelection, isTotal15SlipSelection, type SlipMarketSelection } from "../../domain/slip-markets.ts";
+import { isTotal15SlipSelection, type SlipMarketFamily, type SlipMarketSelection } from "../../domain/slip-markets.ts";
 import { settleSlipSelection } from "../../domain/slip-settlement.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { wilson } from "../evaluation/evaluation-metrics.ts";
@@ -30,7 +30,7 @@ const minimumTraining = 30;
 const minimumValidation = 20;
 const priorWeight = 20;
 
-export type BestSlipHistoryCandidate = Readonly<{ family: MarketFamily; selection: SlipMarketSelection;
+export type BestSlipHistoryCandidate = Readonly<{ family: SlipMarketFamily; selection: SlipMarketSelection;
   probability: number; odds: string; offer?: Readonly<{ decimal?: string }>; source?: MarketSource }>;
 
 type Comparable = Readonly<{ family: MarketFamily; line: number | null; selection: SlipMarketSelection;
@@ -46,11 +46,15 @@ export type BestSlipHistoryReport = Readonly<{
   profiles: readonly (Comparable & Readonly<{ training: SampleCounts; validation: SampleCounts }>)[];
 }>;
 
+function reviewedSelection(family: MarketFamily, selection: string): selection is SlipMarketSelection {
+  return isMarketSelection(family, selection) || family === "total-goals" && isTotal15SlipSelection(selection);
+}
+
 function comparable(candidate: BestSlipHistoryCandidate): Comparable | null {
   const { family, selection, probability, odds, offer, source } = candidate;
   const price = parseDecimalOdds(offer?.decimal ?? odds);
   if (source !== "local-engine" || !price || !Number.isFinite(probability) || probability < 0 || probability > 1 ||
-    !isSlipMarketSelection(family, selection)) return null;
+    !isMarketFamily(family) || !reviewedSelection(family, selection)) return null;
   const line = family === "total-goals" ? (isTotal15SlipSelection(selection) ? 1.5 : marketRules.totalGoalsLine) : null;
   return { family, line, selection, probabilityFloor: probabilityFloors.find((floor) => floor <= probability)!,
     oddsFloor: oddsFloors[oddsFloorValues.findIndex((floor) => floor <= price.scaled)]! };
@@ -166,7 +170,7 @@ function originalChoice(marketKey: string, selection: string) {
   const legacy = legacyForecastOutcome(marketKey, selection);
   const family = legacy?.family ?? marketKey;
   selection = legacy?.selection ?? selection;
-  return isSlipMarketSelection(family, selection) ? { family: family as MarketFamily, selection } : null;
+  return isMarketFamily(family) && reviewedSelection(family, selection) ? { family, selection } : null;
 }
 
 function readDecision(row: DecisionRow) {

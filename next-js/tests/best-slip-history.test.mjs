@@ -31,14 +31,21 @@ test("point-in-time hit evidence breaks only exact model probability and price t
   const higherOdds = candidate("high-price", "under-2.5", "1.3501");
   const supportedLower = candidate("supported-lower", "under-2.5");
   const unrelatedLine = candidate("other-line", "over-1.5");
+  const extendedLine = candidate("extended-line", "over-3.5");
+  const teamTotal = { ...candidate("team-total", "home-under-2.5"), family: "team-goals" };
   const supportedHigher = candidate("supported-higher", "over-2.5");
   const unsupportedSource = { ...candidate("other-source", "over-2.5"), source: "api-football" };
   assert.equal(history.report.status, "ready");
   assert.equal(history.report.settledDecisions, 120);
   assert.deepEqual(history.report.profiles.map(({ line, training, validation }) => [line, training.samples, validation.samples]),
     [[2.5, 36, 24], [2.5, 36, 24]]);
-  assert.deepEqual(history.order([higherProbability, higherOdds, supportedLower, unrelatedLine, unsupportedSource, supportedHigher]),
-    [higherProbability, higherOdds, supportedHigher, unrelatedLine, unsupportedSource, supportedLower]);
+  assert.deepEqual(history.order([higherProbability, higherOdds, supportedLower, unrelatedLine, extendedLine, teamTotal, unsupportedSource, supportedHigher]),
+    [higherProbability, higherOdds, supportedHigher, unrelatedLine, extendedLine, teamTotal, unsupportedSource, supportedLower]);
+  const expandedHistory = assessBestSlipHistory([
+    ...samples("over-3.5", 34, 36, 35),
+    ...samples("home-under-2.5", 3, 24, 22).map(row => ({ ...row, family: "team-goals" })),
+  ], asOf);
+  assert.equal(expandedHistory.report.settledDecisions, 0);
 });
 
 test("sparse cohorts, overlapping intervals, a reversed holdout and budget truncation leave the baseline order intact", () => {
