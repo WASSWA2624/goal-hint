@@ -74,7 +74,7 @@ def verify(origin, directory):
             assert len(picks) == 1 and re.fullmatch(r"1|X|2|1X|X2|12|[OU] \d+(?:\.\d+)?|Yes|No", picks[0]), "One recognized betting code per card, with the full meaning retained"
             match(r'data-pick-selection=""[^>]*title="[^\"]+"', article)
             match(r'<span\b[^>]*data-pick-line=""[^>]*><span\b[^>]*data-pick-selection=""[^>]*>[^<]+</span>'
-                  r'<small\b[^>]*data-forecast-source="[^"]+"[^>]*title="[^"]+"[^>]*>(?:AI|API|Local)</small></span>', article)
+                  r'<small\b[^>]*data-forecast-source="[^"]+"[^>]*title="[^"]+"[^>]*>\s*<svg\b', article)
         assert len(re.findall(r'\bdata-card-odds=', article)) == 1, "One price cell serves both phone and desktop layouts"
         match(r'data-ledger-field="odds"[^>]*data-stack-label="Odds:"', article)
         match(r'data-ledger-field="probability"[^>]*data-stack-label="Prob:"', article)
@@ -163,7 +163,7 @@ def verify_feed_cards(origin):
     response = request(origin, "/feed")
     assert response.status == 200
     cards = dict(re.findall(r'<article\b[^>]*data-fixture-id="(feed-[^"]+)"[^>]*>([\s\S]*?)</article>', visible_html(response.text)))
-    assert len(cards) == 14
+    assert len(cards) == 17
     for key, label in {"live": "67:00", "stoppage": r"90\+04", "halftime": "HT"}.items():
         card = cards[f"feed-{key}"]
         match(rf'data-status-clock[^>]*><span[^>]*>{label}</span>', card)
@@ -184,18 +184,29 @@ def verify_feed_cards(origin):
     match(r'data-match-status="upcoming"', cards["feed-upcoming"])
     match(r'data-mobile-only=""[^>]*>H O/U</span>', cards["feed-extended"])
     match(r'data-pick-selection[^>]*title="Under 5\.5"[^>]*>U 5\.5</span>', cards["feed-extended"])
-    match(r'data-forecast-source="local-engine"[^>]*title="Local Engine prediction"[^>]*>L</small>', cards["feed-extended"])
+    match(r'data-forecast-source="local-engine"[^>]*title="Local Engine prediction"[^>]*>\s*<svg\b', cards["feed-extended"])
     match(r'data-card-odds[^>]*title="[^"]*1\.1543 · Synthetic second bookmaker[^"]*"[^>]*>1\.1543', cards["feed-extended"])
+    match(r'1\.1543<sup[^>]*data-positive-value[^>]*title="Estimated return at these odds: \+10\.81% per unit staked"[^>]*>V</sup>',
+          cards["feed-extended"])
     abstained = cards['feed-featured-abstained']
-    match(r'data-featured-abstention=""[^>]*title="No recommended pick"[^>]*>\s*<svg[^>]*aria-hidden="true"[^>]*focusable="false"[^>]*>', abstained)
-    match(r'<path d="M8 12h8"[^>]*></path>[\s\S]*?No recommended pick', abstained)
+    match(r'data-pick-absence="no-qualifying-pick"[^>]*title="No qualifying pick"[^>]*>\s*<svg[^>]*aria-hidden="true"[^>]*focusable="false"[^>]*>', abstained)
+    match(r'<path d="M8 12h8"[^>]*></path>[\s\S]*?No qualifying pick', abstained)
     no_match(r'data-pick-price=""|data-pick-selection=""', abstained)
     for untouched in ['feed-upcoming', 'feed-gated', 'feed-extended', 'feed-replay-empty']:
         no_match(r'data-featured-abstention', cards[untouched])
+    match(r'data-pick-absence="no-forecast"[^>]*title="No forecast available', cards['feed-upcoming'])
+    match(r'data-featured-tier="priced-fallback"[^>]*title="Priced fallback · Below model break-even"', cards['feed-priced-fallback'])
+    match(r'data-card-odds[^>]*>1\.01</span>', cards['feed-priced-fallback'])
+    no_match(r'data-positive-value', cards['feed-priced-fallback'])
+    match(r'data-featured-tier="forecast-only"[^>]*title="Forecast only · No eligible exact price"', cards['feed-forecast-only'])
+    match(r'data-card-odds[^>]*>—</span>[\s\S]*?data-pick-value[^>]*>66%</span>', cards['feed-forecast-only'])
+    no_match(r'data-positive-value', cards['feed-forecast-only'])
+    match(r'data-match-status="incorrect"[^>]*>[\s\S]*?Lost FT</span>', cards['feed-frozen-lost'])
     match(r'data-mobile-only=""[^>]*>A O/U</span>', cards["feed-replay-live"])
     match(r'data-card-odds[^>]*data-odds-kind="historical-pre-match"[^>]*title="Historical pre-match odds: 1\.90"[^>]*>1\.90</span>',
           cards["feed-replay-live"])
     no_match(r'data-positive-value', cards["feed-replay-live"])
+    no_match(r'>Local Engine replay</', cards["feed-replay-live"])
     match(r'data-card-odds[^>]*>—</span>[\s\S]*?data-pick-value[^>]*>96%</span>', cards["feed-replay-empty"])
     print("Matches card score, clock, compact status, missing-price and access rendering passed.")
 

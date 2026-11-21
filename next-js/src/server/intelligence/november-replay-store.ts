@@ -4,7 +4,7 @@ import { z } from "zod";
 import { legacyLocalFirstGoalMarketDefinitions, LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localFirstGoalMarketDefinitions,
   registeredForecastGoalMarkets, type RegisteredGoalMarketDefinition } from "../../domain/goal-market-definitions.ts";
 import { LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION, LOCAL_FIRST_MARKET_REGISTRY_VERSION } from "../../domain/market-registry.ts";
-import { legacyLocalFeaturedDecisionVersion, localFeaturedDecisionSchema, localFeaturedDecisionVersion } from "../../domain/local-featured-decision.ts";
+import { legacyLocalFeaturedDecisionVersion, localFeaturedDecisionSchema, previousLocalFeaturedDecisionVersion } from "../../domain/local-featured-decision.ts";
 import { isPlayedFinalStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
 import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
 import { novemberReplayRange, replaySuppressionClocks } from "../../domain/november-replay.ts";
@@ -112,10 +112,11 @@ function validateMarkets(input: z.output<typeof stageSchema>, definitions: Reado
 function featuredSelectionMatches({ selected, featuredDecision, decisionAt, markets }: Pick<NovemberReplayProjection,
   "selected" | "featuredDecision" | "decisionAt" | "markets">) {
   if (!featuredDecision || decisionAt === undefined) return false;
-  if (featuredDecision.status !== "priced") return selected === null;
+  if (featuredDecision.status === "abstained") return selected === null;
+  if (featuredDecision.status === "priced" && (featuredDecision.quote.observedAt > decisionAt ||
+    featuredDecision.quote.checkedAt > decisionAt || (featuredDecision.quote.providerUpdatedAt ?? 0) > decisionAt)) return false;
   return Boolean(selected && selected.marketKey === featuredDecision.marketKey && selected.selection === featuredDecision.selection &&
-    selected.probability === featuredDecision.probability && featuredDecision.quote.observedAt <= decisionAt &&
-    featuredDecision.quote.checkedAt <= decisionAt && (featuredDecision.quote.providerUpdatedAt ?? 0) <= decisionAt &&
+    selected.probability === featuredDecision.probability &&
     markets.some(({ definition, selections }) => definition.key === selected.marketKey &&
       selections?.some(({ key, outcomes }) => key === selected.selection && outcomes.win === selected.probability)));
 }
@@ -138,7 +139,7 @@ function checkedStage(value: unknown) {
     suppressedProjectionRevisionId && (featuredDecision.status !== "abstained" || featuredDecision.reason !== "no-local-forecast")
     : decisionAt !== undefined || replayAsOf !== undefined || teams !== undefined || suppressedProjectionRevisionId !== undefined)
     return deny("invalid-input");
-  if (policyDelta && (input.status !== "estimated" || featuredDecision?.version !== localFeaturedDecisionVersion)) return deny("invalid-input");
+  if (policyDelta && (input.status !== "estimated" || featuredDecision?.version !== previousLocalFeaturedDecisionVersion)) return deny("invalid-input");
   if (input.status === "estimated" ? input.reason !== null || kickoffAt === null || generatedAt < kickoffAt || evidenceCutoffAt === null ||
     input.artifactHash === null || input.evidenceReceiptIds.length === 0 || !validateMarkets(input, definitions) :
     input.reason === null || input.markets.length !== 0 || input.selected !== null) return deny("invalid-input");

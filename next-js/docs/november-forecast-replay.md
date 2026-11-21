@@ -30,10 +30,15 @@ schedule and history available before effective lock.
 The quote decision is as of one millisecond before effective pre-match
 lock, independently of the model evidence cutoff. The decision accepts
 only exact, permitted offers captured and recorded before the declared
-clock. It records the bookmaker, unrounded price, observation clocks,
-verified receipt and positive expected net return for the selected
-outcome. The checkpoint records the estimate origin, selected rung or
-absence reason, and evidence identity. Verified result references are
+clock. A standard pick requires strictly positive expected net return and
+odds of at least 1.10. If the standard ladder is empty, the priced fallback
+considers verified offers from 1.01 and prefers positive returns. Both use
+the probability ladder down through 60%. The signed expected return,
+unrounded quote, bookmaker, observation clocks and receipt are sealed with
+either priced decision. Without a qualifying price, a supported Local Engine
+forecast at or above 60% can be displayed as forecast-only. The checkpoint
+records the estimate origin, mode, selected rung or absence reason, and
+evidence identity. Verified result references are
 joined to frozen checkpointed decisions for evaluation. Original published
 performance continues to read the canonical publication and settlement ledger.
 
@@ -67,10 +72,10 @@ revision, when present.
 Matches, supported exact-outcome filters and the ordinary Match Details view
 read that projection. Explicit revision history and original prices,
 settlements and performance remain tied to their original publication IDs.
-Public odds access controls display of the precise sealed quote. The
-featured slot stays empty for abstentions, while the supported market
-forecasts are available in All Markets. Previously activated legacy
-records remain readable and rollback can restore them.
+Public odds access controls display of the precise sealed quote. A forecast-only
+pick keeps its selection and probability with no odds. The featured slot
+stays empty for abstentions, and All Markets retains supported forecasts.
+Previously activated records remain readable and rollback can restore them.
 The audit workspace contains private source and replay data and belongs outside
 the web root. Use distinct workspaces for each new audit or environment.
 Run the hosted workflow with the verified database profile and Matches
@@ -78,7 +83,11 @@ competition scope for that target. The deployment guide documents the
 staging rehearsal, restricted grants and rollback procedure.
 [Hosted November replay](deployment/how-to-deploy.md#hosted-november-replay)
 
-## Bounded change to the probability ladder
+## Earlier bounded change to the probability ladder
+
+Run a separate full audit for the standard, priced fallback and forecast-only
+policy. The commands below remain available for the earlier v1-to-v2
+threshold-only review and for rolling it back.
 
 Use the original private v1 workspace and the v2 release to compare the
 additional 70%, 65% and 60% rungs. The comparison reuses frozen v1 forecast

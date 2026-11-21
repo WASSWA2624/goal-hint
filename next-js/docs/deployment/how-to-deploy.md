@@ -150,6 +150,14 @@ trigger definers after migration. The featured replay migration keeps existing
 projections and changes only the revision and projection check constraints.
 The restricted MariaDB pointer lock uses the grants above.
 
+Apply `20261122170000_frozen_local_featured` before switching the web or
+worker release. The migration adds a nullable decision and its integrity
+seal to the append-only `PredictionCycleOperation` table. Verify the named
+check and the existing append-only grants. The web and worker roles need
+`SELECT` on both added columns. The worker needs `INSERT` on them and the
+existing reads of sealed odds snapshots, import receipts and forecast revisions.
+Older releases can continue reading the unchanged cutoff operation payload.
+
 ### Hosted November replay
 
 1. Start on staging. Use the matching verified database profile and Matches
@@ -163,8 +171,9 @@ The restricted MariaDB pointer lock uses the grants above.
    `dry-run --pages <count>` in the same sealed workspace until it reports
    completion. Both commands work from stored evidence.
 3. With the staging operator connection, run `stage` and review the sealed
-   `activation-diff.json` for verified replacements, priced picks, suppressions
-   and expected prior projection IDs. Record the original publication IDs, prices, settlements and
+   `activation-diff.json` for standard picks, priced fallbacks, forecast-only
+   picks, suppressions and expected prior projection IDs. For the three-tier
+   policy, use a full dry run in a fresh workspace. Record the original publication IDs, prices, settlements and
    performance before `activate`. Use a stable `--operation-id` for staging.
    Verify the revised display in Matches, the exact-outcome filter and Match
    Details. Compare the original revision history, prices, settlements and

@@ -163,7 +163,7 @@ export const matchDetailResponseSchema = wireDetailBaseSchema.superRefine(refine
     || v.fixture.forecast !== null && (!("gated" in v.fixture.forecast) || v.fixture.forecast.probabilities.length !== 0)
     || v.snapshot !== null && "gated" in v.snapshot && v.snapshot.probabilities.length !== 0
     || v.liveMatch != null || v.inPlayOdds != null || v.bookmakerOdds != null || v.recoveredBookmakerOdds != null || v.extendedMarkets != null || v.extendedOdds != null
-    || v.fixture.marketOdds != null || v.fixture.featuredPrediction != null || v.fixture.retrospective != null ||
+    || v.fixture.marketOdds != null || v.fixture.featuredPrediction != null || v.fixture.featuredDecisionFrozen != null || v.fixture.retrospective != null ||
       v.fixture.retrospectiveSuppression != null || v.fixture.prices.length !== 0
     : "gated" in v.history || v.snapshot !== null && "gated" in v.snapshot || v.fixture.forecast !== null && "gated" in v.fixture.forecast) {
     ctx.addIssue({ code: "custom", message: "Detail content must match its access tier and fixture status." });

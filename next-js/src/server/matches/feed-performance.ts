@@ -16,6 +16,9 @@ import { selectionOccurred } from "../../domain/market-settlement.ts";
 import { readPublicCacheGenerations } from "../cache/mysql-public-cache.ts";
 
 type Summary = z.infer<typeof feedPerformanceSchema>;
+type PerformanceCounts = Readonly<{ total: number; available: number; void: number; cancelled?: number }>;
+type Result = PredictionResult | "unavailable";
+export type FeedResultOverrides = ReadonlyMap<string, Readonly<{ baseline: Result; result: Result }>>;
 const batchSize = 500, batchCacheLifetimeMs = 6 * 60 * 60 * 1000;
 const batchDeltaSchema = z.strictObject({ won: z.number().int().min(0).max(batchSize), lost: z.number().int().min(0).max(batchSize),
   void: z.number().int().min(0).max(batchSize), cancelled: z.number().int().min(0).max(batchSize).default(0) })
@@ -27,7 +30,7 @@ type SummaryCacheContext = Readonly<{ key: string; nowMs: number }>;
  * SQL cohort, filters and pick-ranking rules are exactly the same. */
 export function feedPerformanceCacheKey(sql: ReturnType<typeof feedSql>, locale: string, providerOdds: boolean): string {
   const statement = (value: Prisma.Sql) => ({ text: value.sql, values: value.values.map(item => item instanceof Date ? item.getTime() : item) });
-  return evidenceFingerprint({ contract: "feed-performance-query-v3", locale, providerOdds, ruleVersion: MARKET_RULE_VERSION,
+  return evidenceFingerprint({ contract: "feed-performance-query-v4", locale, providerOdds, ruleVersion: MARKET_RULE_VERSION,
     joins: statement(sql.joins), where: statement(sql.where) });
 }
 type Sample = HistoryRow & Readonly<{
@@ -40,11 +43,51 @@ type Sample = HistoryRow & Readonly<{
   marketPayload: unknown; marketValidIntegrity: unknown;
 }>;
 
+export function restrictFeedResultSql(sql: ReturnType<typeof feedSql>, ids: readonly string[], include: boolean) {
+  if (ids.length === 0 && !include) return sql;
+  const membership = ids.length ? Prisma.sql`f.id ${include ? Prisma.empty : Prisma.sql`NOT`} IN (
+    SELECT matched.id FROM JSON_TABLE(${JSON.stringify(ids)}, '$[*]' COLUMNS (id VARCHAR(128) PATH '$')) AS matched)` : Prisma.sql`FALSE`;
+  return { ...sql, where: Prisma.sql`${sql.where} AND ${membership}`, cohortWhere: Prisma.sql`${sql.cohortWhere} AND ${membership}` };
+}
+
+export function adjustPerformanceAvailability(available: number, overrides: FeedResultOverrides) {
+  for (const { baseline, result } of overrides.values())
+    available += Number(result !== "unavailable") - Number(baseline !== "unavailable");
+  return available;
+}
+
 /** Counts the entire filtered cohort. Only closed predictions with recorded settlements need audit reads;
  * open picks are pending, missing picks unavailable, and void cycles stay distinct from losses.
  * Keyset batches bound memory without limiting the reporting period or using the visible page. */
 export async function readFeedPerformance(tx: Prisma.TransactionClient, sql: ReturnType<typeof feedSql>,
-  counts: Readonly<{ total: number; available: number; void: number; cancelled?: number }>, cache?: SummaryCacheContext, onSettled?: (fixtureId: string, result: PredictionResult) => void): Promise<Summary> {
+  counts: PerformanceCounts, cache?: SummaryCacheContext, onSettled?: (fixtureId: string, result: PredictionResult) => void,
+  overrides?: FeedResultOverrides): Promise<Summary> {
+  if (!overrides?.size) return readArchivedFeedPerformance(tx, sql, counts, cache, onSettled);
+  let available = counts.available, voided = counts.void, cancelled = counts.cancelled;
+  for (const { baseline } of overrides.values()) {
+    if (baseline !== "unavailable") available--;
+    if (baseline === "void" || baseline === "cancelled" && cancelled === undefined) voided--;
+    else if (baseline === "cancelled" && cancelled !== undefined) cancelled--;
+  }
+  const ids = [...overrides.keys()].sort(), total = counts.total - ids.length;
+  if (available < 0 || available > total || voided < 0 || (cancelled ?? 0) < 0 || voided + (cancelled ?? 0) > available)
+    throw new MatchFeedError("unavailable");
+  const remaining = { total, available, void: voided, ...(cancelled !== undefined && { cancelled }) };
+  const summary = await readArchivedFeedPerformance(tx, restrictFeedResultSql(sql, ids, false), remaining,
+    cache ? { ...cache, key: evidenceFingerprint({ query: cache.key, excludedFixtures: ids }) } : undefined, onSettled);
+  summary.total += ids.length;
+  for (const [id, { result }] of overrides) {
+    if (result !== "unavailable" && result !== "pending") onSettled?.(id, result);
+    if (result === "cancelled") {
+      if (summary.cancelled === undefined) summary.void++;
+      else summary.cancelled++;
+    } else summary[result]++;
+  }
+  return summary;
+}
+
+async function readArchivedFeedPerformance(tx: Prisma.TransactionClient, sql: ReturnType<typeof feedSql>,
+  counts: PerformanceCounts, cache?: SummaryCacheContext, onSettled?: (fixtureId: string, result: PredictionResult) => void): Promise<Summary> {
   const summary: Summary = { total: counts.total, won: 0, lost: 0, pending: counts.available - counts.void - (counts.cancelled ?? 0),
     ...(counts.cancelled === undefined ? {} : { cancelled: counts.cancelled }),
     void: counts.void, unavailable: counts.total - counts.available };

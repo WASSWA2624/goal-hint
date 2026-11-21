@@ -223,8 +223,7 @@ function MarketPanel({ family, inline = false }: { family: MarketFamily; inline?
       <Note>{messages.text(exclusiveFamily(family) ? "details.exclusiveOutcomes" : "detail.overlappingProbabilities")}</Note>
       <SubHeading>{messages.text("details.sourceAndTiming")}</SubHeading>
       <Facts>
-        <dt>{messages.text("details.source")}</dt><dd><span title={messages.text(`market.source.${item.source.kind}`)}
-          aria-label={messages.text(`market.source.${item.source.kind}`)}>{messages.text(`market.source.short.${item.source.kind}`)}</span>
+        <dt>{messages.text("details.source")}</dt><dd><ForecastSourceLabel source={item.source.kind} messages={messages} />
           {item.source.provisional && <> · {messages.text("match.provisional")}</>}</dd>
         {item.source.fallbackReason && <><dt>{messages.text("details.fallback")}</dt><dd>{messages.text(`detail.fallback.${item.source.fallbackReason}`)}</dd></>}
         <dt>{messages.text("match.published")}</dt><dd><Time at={snapshot.publishedAt} /></dd>

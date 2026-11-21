@@ -18,7 +18,7 @@ import { feedSql, historicalFeedCutoff, storedFeedCoverage, storedFeedRunContext
 import { storedFeedSearch } from "./feed-search.ts";
 import { storedFeedFixtures } from "./fixture-read.ts";
 import { feedPerformanceCacheKey, readFeedPerformance } from "./feed-performance.ts";
-import { filterFeedResult } from "./feed-result-filter.ts";
+import { adjustPerformanceAvailability, filterFeedResult, readFeedResultOverrides, resultOverridesFor } from "./feed-result-filter.ts";
 import { withFeedOdds, withUpcomingFeaturedOutcomes } from "./feed-odds.ts";
 import { performanceFeedQuery } from "../../domain/feed-performance-summary.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
@@ -29,6 +29,10 @@ import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { readNovemberReplayProjections } from "../intelligence/november-replay-store.ts";
 import { displayFeedSelectedPick, lacksRetrospectiveFeaturedPick, projectRetrospectiveForecast } from "./retrospective-picks.ts";
 import { selectedFeedPickColumns, type FeedSelectedPick } from "./feed-selected-picks.ts";
+import { isDefaultFeaturedScope } from "./default-featured-scope.ts";
+import { toFeaturedLocalDecision } from "./featured-pick-presentation.ts";
+import { readFeaturedSettlements, type FeaturedSettlementPick } from "./featured-settlement.ts";
+import { eligibleFrozenFeaturedStatus, readFrozenLocalFeaturedPicks } from "./frozen-featured-picks.ts";
 
 export function parseMatchFeedQuery(input: FeedParameters, today: ReportingDate,
   context: Readonly<{ locale?: string; routeDate?: string; providerOdds?: boolean; asOf?: number }> = {}) {
@@ -54,7 +58,7 @@ export async function storedFeedVersions(tx: Prisma.TransactionClient, query: Fe
   historyBefore: number | null = null, providerOdds = publicPolicy.features.providerOdds, publishedForecasts = publishedOnly) {
   const tags = ["global:catalog", ...Array.from({ length: sourceRange.dayCount }, (_, day) => `date:${addReportingDays(sourceRange.startDate, day)}`)];
   const generations = await readPublicCacheGenerations(tx, tags), scope = [...competitionIds].sort((a, b) => a - b);
-  const version = (query: FeedQuery) => evidenceFingerprint({ contract: "feed-pagination-v12",
+  const version = (query: FeedQuery) => evidenceFingerprint({ contract: "feed-pagination-v13",
     completedOnly, publishedOnly, historyBefore, providerOdds, publishedForecasts,
     query: feedQueryKey(query, today), scope, generations });
   return { paginationVersion: version(query), performanceVersion: version(performanceFeedQuery(query)) };
@@ -92,7 +96,10 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           publishedOnly, historyBefore, providerOdds, publishedForecasts);
         const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale, context.completedOnly);
         const baseSql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly, publishedOnly, historyBefore, publishedForecasts);
-        const sql = query.result ? await filterFeedResult(tx, baseSql, query.result) : baseSql;
+        const useDefaultFeatured = isDefaultFeaturedScope(query);
+        let overrides = query.result || options.includePerformance !== false
+          ? await readFeedResultOverrides(tx, baseSql, { publishedForecasts, useDefaultFeatured }) : new Map();
+        const sql = query.result ? await filterFeedResult(tx, baseSql, query.result, undefined, overrides) : baseSql;
         // Start with the indexed date cohort. Choosing the competition/season
         // join first scans its entire archive before applying the date window.
         // Options cover the entire date cohort, independently of applied filters/page.
@@ -112,10 +119,16 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           ${sql.countJoins} ${sql.searchJoin} WHERE ${sql.where}`);
         if (!matching) throw new MatchFeedError("unavailable");
         const total = Number(matching.total), knownFixtures = Number(leagueRows[0]?.knownFixtures ?? 0), matchingWithMarket = Number(matching.available ?? 0);
-        const matchingWithPerformancePick = Number(matching.performanceAvailable ?? 0);
+        const legacyPerformanceAvailable = Number(matching.performanceAvailable ?? 0);
+        // Only a true zero may skip the separate summary read. Replay can add a
+        // displayed selection to fixtures without an original publication.
+        if (total > 0 && legacyPerformanceAvailable === 0 && !query.result && options.includePerformance === false)
+          overrides = await readFeedResultOverrides(tx, baseSql, { publishedForecasts, useDefaultFeatured });
+        const visibleOverrides = resultOverridesFor(overrides, query.result);
+        const matchingWithPerformancePick = adjustPerformanceAvailability(legacyPerformanceAvailable, visibleOverrides);
         const performance = options.includePerformance === false ? null
-          : await readFeedPerformance(tx, sql, { total, available: matchingWithPerformancePick, void: Number(matching.void ?? 0) }, options.cache ? {
-            key: feedPerformanceCacheKey(sql, query.locale, providerOdds), nowMs: asOf } : undefined);
+          : await readFeedPerformance(tx, sql, { total, available: legacyPerformanceAvailable, void: Number(matching.void ?? 0) }, options.cache ? {
+            key: feedPerformanceCacheKey(sql, query.locale, providerOdds), nowMs: asOf } : undefined, undefined, visibleOverrides);
         // Exact matches precede similar results, so a record's position on its page tells which kind it is.
         const exactMatches = sql.exact ? Number(matching.exact ?? 0) : null;
         type SelectedRow = { id: string; projected?: number | bigint | boolean } &
@@ -129,11 +142,14 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         if (run?.phase === "updating") run.message = messages.text("feed.updating");
         const records = await storedFeedFixtures(tx, rows.map(({ id }) => id), false, window, query.locale,
           { prices: providerOdds, preferRecommendation: !publishedForecasts, asOf });
-        const useDefaultFeatured = isDefaultFeaturedScope(query);
         const replayIds = publishedForecasts ? records.filter(({ kickoffAt, status, forecast, cycle }) =>
           kickoffAt !== null && (status === "live" || isPlayedFinalStatus(status)) && (!forecast || cycle?.state === "closed"))
           .map(({ fixtureId }) => fixtureId) : [];
         const replays = await readNovemberReplayProjections(tx, replayIds);
+        const frozen = publishedForecasts && useDefaultFeatured
+          ? await readFrozenLocalFeaturedPicks(tx, records.filter(({ fixtureId, status, forecast, cycle }) =>
+            !replays.has(fixtureId) && forecast && eligibleFrozenFeaturedStatus(status, cycle?.state)).map(({ fixtureId }) => fixtureId))
+          : null;
         const pageRows = new Map(rows.map((row) => [row.id, row]));
         for (const record of records) {
           const date = record.kickoffAt === null ? null : getReportingDate(record.kickoffAt);
@@ -142,11 +158,15 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           const shown = marketKey != null && selection != null && probability != null && source != null
             ? { marketKey, selection, probability, source, priceHundredths: priceHundredths ?? null } : null;
           const replay = replays.get(record.fixtureId);
+          const frozenPick = frozen?.get(record.fixtureId);
           if (replay && (!projected || shown || useDefaultFeatured)) {
             const display = projectRetrospectiveForecast(record, replay, query.locale, useDefaultFeatured ? undefined : shown ?? undefined, providerOdds);
             if (!display) throw new MatchFeedError("unavailable");
             if (display.card) record.retrospective = display.card;
             else record.retrospectiveSuppression = display.metadata;
+          } else if (frozenPick) {
+            record.featuredDecisionFrozen = true;
+            record.featuredPrediction = toFeaturedLocalDecision(frozenPick, query.locale, providerOdds);
           } else if (publishedForecasts && useDefaultFeatured && lacksRetrospectiveFeaturedPick(record)) {
             record.featuredPrediction = null;
           } else if (projected) {
@@ -154,6 +174,20 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
             if (shown && !display) throw new MatchFeedError("unavailable");
             record.filteredPrediction = display;
           }
+        }
+        const finalPicks = new Map<string, FeaturedSettlementPick>();
+        for (const record of records) {
+          const pick = record.retrospective?.pick ?? record.filteredPrediction ?? record.featuredPrediction;
+          if (pick && (isPlayedFinalStatus(record.status) || record.featuredDecisionFrozen && record.cycle?.state === "void"))
+            finalPicks.set(record.fixtureId, pick);
+        }
+        const exactSettlements = await readFeaturedSettlements(tx, finalPicks);
+        for (const record of records) {
+          const settlementStatus = exactSettlements.get(record.fixtureId)?.status;
+          if (!settlementStatus) continue;
+          if (record.retrospective) record.retrospective = { ...record.retrospective, pick: { ...record.retrospective.pick, settlementStatus } };
+          else if (record.filteredPrediction) record.filteredPrediction = { ...record.filteredPrediction, settlementStatus };
+          else if (record.featuredPrediction) record.featuredPrediction = { ...record.featuredPrediction, settlementStatus };
         }
         const totalPages = Math.ceil(total / query.pageSize);
         const nextPage = query.page < totalPages && query.page < feedQueryRules.maximumPage ? query.page + 1 : null;
@@ -173,7 +207,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       const response = options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: 32, providerOdds, completedOnly: context.completedOnly === true,
+        query: { ...query, projection: 33, providerOdds, completedOnly: context.completedOnly === true,
           publishedOnly, publishedForecasts, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } },
         scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => storedMatchFeedResponseSchema.parse(value) }), read) : await read();
@@ -185,9 +219,4 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       throw new MatchFeedError("unavailable");
     }
   } });
-}
-
-function isDefaultFeaturedScope(query: FeedQuery): boolean {
-  return query.markets.length === publicPolicy.markets.length && !query.marketPicks?.length && !query.odds && !query.result &&
-    query.probability.min === 0 && query.probability.max === 100 && !query.probability.minExclusive && query.sort.by !== "probability";
 }

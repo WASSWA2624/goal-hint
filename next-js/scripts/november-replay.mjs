@@ -4,14 +4,14 @@ import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { openForecastDatabase } from "./lib/forecast-database-target.mjs";
 import { LOCAL_FIRST_MARKET_REGISTRY_VERSION } from "../src/domain/market-registry.ts";
-import { legacyLocalFeaturedDecisionVersion, localFeaturedDecisionVersion } from "../src/domain/local-featured-decision.ts";
+import { legacyLocalFeaturedDecisionVersion, localFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion } from "../src/domain/local-featured-decision.ts";
 import { inclusiveReplayEvidenceCutoff, novemberReplayRange, replaySuppressionClocks, resolveReplayRange } from "../src/domain/november-replay.ts";
 import { evidenceFingerprint } from "../src/server/evidence/evidence-input.ts";
 import { localGoalModelVersion } from "../src/server/intelligence/local-goals-model.ts";
 import { auditNovemberReplay } from "../src/server/intelligence/november-replay-audit.ts";
 import { evaluateNovemberReplay, evaluateReplayFeaturedDelta } from "../src/server/intelligence/november-replay-evaluation.ts";
 import { readNovemberReplayPage, readNovemberReplayTrainingMembership } from "../src/server/intelligence/november-replay-evidence.ts";
-import { loadNovemberReplayPrices, preparePricedNovemberReplay, replayFeaturedSelection, sameReplayFeaturedDisplay } from "../src/server/intelligence/november-replay-featured.ts";
+import { loadNovemberReplayPrices, preparePricedNovemberReplay, replayFeaturedMode, replayFeaturedSelection, sameReplayFeaturedDisplay } from "../src/server/intelligence/november-replay-featured.ts";
 import { statusShowsPlay } from "../src/server/predictions/publication-eligibility.ts";
 
 const phases = ["canonical", "displaced"];
@@ -22,6 +22,8 @@ const abort = new AbortController();
 const validOperationId = (value) => /^[a-z0-9][a-z0-9._:-]{0,95}$/iu.test(value ?? "");
 const deltaManifestFile = "policy-delta.json";
 const deltaDiffFile = "policy-delta-activation-diff.json";
+// This optimization is only valid when the new rule adds lower rungs to the same gates.
+const deltaDecisionVersion = previousLocalFeaturedDecisionVersion;
 class ReplayCommandError extends Error {}
 const stop = () => abort.abort();
 process.once("SIGINT", stop);
@@ -124,17 +126,22 @@ async function dryRun(database, workspace, audit, maxPages) {
   const finished = phases.every((phase) => pages.some((page) => page.phase === phase && page.finished));
   const rows = pages.flatMap((page) => page.rows);
   const summary = { finished, processed: rows.length, estimated: 0, prospective: 0, abstained: 0, reasons: {}, byStatus: {},
-    archived: 0, rebuilt: 0, priced: 0, featuredAbstentions: 0, originalsMissingFromReplay: 0 };
+    archived: 0, rebuilt: 0, priced: 0, forecastOnly: 0, featuredAbstentions: 0, modes: {}, marketFamiliesByMode: {}, originalsMissingFromReplay: 0 };
   for (const row of rows) {
     summary[row.status]++;
     if (row.reason) summary.reasons[row.reason] = (summary.reasons[row.reason] ?? 0) + 1;
     const originalStatus = originals.get(occurrenceKey(row))?.status ?? "displaced";
-    const statuses = summary.byStatus[originalStatus] ??= { estimated: 0, prospective: 0, abstained: 0, priced: 0, featuredAbstentions: 0 };
+    const statuses = summary.byStatus[originalStatus] ??= { estimated: 0, prospective: 0, abstained: 0, priced: 0,
+      forecastOnly: 0, featuredAbstentions: 0, modes: {} };
     statuses[row.status]++;
     if (row.input) {
       summary[row.forecastOrigin]++;
-      if (row.input.selected) { summary.priced++; statuses.priced++; }
-      else { summary.featuredAbstentions++; statuses.featuredAbstentions++; }
+      const mode = replayFeaturedMode(row.input.featuredDecision);
+      const category = mode === "forecast-only" ? "forecastOnly" : mode === "abstained" ? "featuredAbstentions" : "priced";
+      summary[category]++; statuses[category]++;
+      summary.modes[mode] = (summary.modes[mode] ?? 0) + 1;
+      statuses.modes[mode] = (statuses.modes[mode] ?? 0) + 1;
+      countFeaturedFamily(summary.marketFamiliesByMode, mode, row.input.selected?.marketKey);
     }
   }
   if (finished && !abort.signal.aborted) {
@@ -145,7 +152,7 @@ async function dryRun(database, workspace, audit, maxPages) {
       const evaluation = await evaluateNovemberReplay(database, audit, rows.flatMap(({ fixtureId, kickoffAt, input, probabilities }) => {
         if (!input) return [];
         const definition = input.selected && input.markets.find(({ definition }) => definition.key === input.selected.marketKey)?.definition;
-        const featured = definition ? { definition, selection: input.selected.selection } : undefined;
+        const featured = definition ? { definition, selection: input.selected.selection, mode: replayFeaturedMode(input.featuredDecision) } : undefined;
         return [{ fixtureId, kickoffAt, probabilities, featured }];
       }));
       await sealOnce(path, { auditHash: audit.auditHash, summary, evaluation });
@@ -194,17 +201,32 @@ async function stage(workspace, audit, store) {
   const diff = await store.activationDiff(records.map(({ id }) => id));
   await sealOnce(join(workspace, "activation-diff.json"), { auditHash: audit.auditHash, diff,
     ...(skippedSuppressions.length > 0 && { skippedSuppressions }) });
-  const summary = { staged: records.length, proposedReplacements: 0, priced: 0, suppressed: 0, replacedProjections: 0, reasons: {} };
+  const summary = { staged: records.length, proposedReplacements: 0, priced: 0, forecastOnly: 0, suppressed: 0, replacedProjections: 0,
+    modes: {}, marketFamiliesByMode: {}, reasons: {} };
   for (const { reason } of skippedSuppressions) summary.reasons[reason] = (summary.reasons[reason] ?? 0) + 1;
   for (const row of diff) {
     summary.reasons[row.reason] = (summary.reasons[row.reason] ?? 0) + 1;
     if (!row.eligible) continue;
     summary.proposedReplacements++;
-    if (row.selected) summary.priced++;
-    else summary.suppressed++;
+    const mode = reviewedDisplayMode(row);
+    const category = mode === "forecast-only" ? "forecastOnly" : mode === "abstained" ? "suppressed" : "priced";
+    summary[category]++;
+    summary.modes[mode] = (summary.modes[mode] ?? 0) + 1;
+    countFeaturedFamily(summary.marketFamiliesByMode, mode, row.selected?.marketKey);
     if (row.previousProjectionRevisionId) summary.replacedProjections++;
   }
   console.log(JSON.stringify(summary));
+}
+
+function reviewedDisplayMode(row) {
+  return row.featuredDecision ? replayFeaturedMode(row.featuredDecision) : row.selected ? "legacy" : "abstained";
+}
+
+function countFeaturedFamily(counts, mode, marketKey) {
+  if (!marketKey) return;
+  const family = marketKey.startsWith("goal:") ? marketKey.split(":", 3)[2] : marketKey;
+  const families = counts[mode] ??= {};
+  families[family] = (families[family] ?? 0) + 1;
 }
 
 async function deltaAudit(database, workspace, audit, baseline, v1OperationId) {
@@ -226,7 +248,7 @@ async function deltaAudit(database, workspace, audit, baseline, v1OperationId) {
   const estimates = (await loadPages(workspace, audit)).flatMap(({ rows }) => rows.flatMap(({ input }) => input ? [input] : []));
   const inputs = new Map(estimates.map((value) => [occurrenceKey(value), value]));
   let delta = await readSealed(path).catch((error) => { if (!missingFile(error)) throw error; });
-  if (delta && (delta.auditHash !== audit.auditHash || delta.version !== localFeaturedDecisionVersion ||
+  if (delta && (delta.auditHash !== audit.auditHash || delta.version !== deltaDecisionVersion ||
     delta.baseline !== baseline || delta.baselineOperationId !== baselineOperationId))
     throw new ReplayCommandError("The existing policy delta uses a different baseline or version.");
   if (!delta) {
@@ -244,12 +266,12 @@ async function deltaAudit(database, workspace, audit, baseline, v1OperationId) {
       // Lower rungs cannot displace a priced v1 selection or change the discovery of modeled, comparable offers.
       if (v1.status === "priced" || v1.reason !== "no-qualifying-outcome") {
         rows.push({ ...row, status: "unchanged", method: "sealed-v1", reason: old ? null : "v1-replay-ineligible",
-          v2: { ...v1, version: localFeaturedDecisionVersion } });
+          v2: { ...v1, version: deltaDecisionVersion } });
         continue;
       }
       const price = await database.query(async (tx) => {
         const assess = await loadNovemberReplayPrices(tx, { fixtureId, kickoffAt, decisionAt }, replayAsOf, markets);
-        return { reproduced: assess(legacyLocalFeaturedDecisionVersion), candidate: assess(localFeaturedDecisionVersion) };
+        return { reproduced: assess(legacyLocalFeaturedDecisionVersion), candidate: assess(deltaDecisionVersion) };
       });
       if (evidenceFingerprint(v1) !== evidenceFingerprint(price.reproduced)) {
         rows.push({ ...row, status: "unverifiable", method: "retained-odds", reason: "v1-decision-no-longer-reproducible", v2: null });
@@ -258,7 +280,7 @@ async function deltaAudit(database, workspace, audit, baseline, v1OperationId) {
           method: "retained-odds", reason: old ? null : "v1-replay-ineligible", v2: price.candidate });
       }
     }
-    delta = { auditHash: audit.auditHash, version: localFeaturedDecisionVersion, baseline, baselineOperationId,
+    delta = { auditHash: audit.auditHash, version: deltaDecisionVersion, baseline, baselineOperationId,
       approvedWithoutEstimate: [...approved.keys()].filter((key) => !inputs.has(key)).length, rows };
     await sealOnce(path, delta);
   }
@@ -303,7 +325,7 @@ async function deltaAudit(database, workspace, audit, baseline, v1OperationId) {
 
 async function readPolicyDelta(workspace, audit) {
   const delta = await readSealed(join(workspace, deltaManifestFile));
-  if (delta.auditHash !== audit.auditHash || delta.version !== localFeaturedDecisionVersion)
+  if (delta.auditHash !== audit.auditHash || delta.version !== deltaDecisionVersion)
     throw new ReplayCommandError("The reviewed policy delta uses another audit or version.");
   return delta;
 }
@@ -343,19 +365,22 @@ async function changeProjection(workspace, audit, store, action, operationId, po
   if (auditHash !== audit.auditHash) throw new ReplayCommandError("The activation diff does not belong to this audit.");
   if (policyDelta && deltaHash !== evidenceFingerprint(await readPolicyDelta(workspace, audit)))
     throw new ReplayCommandError("The activation diff does not belong to this policy delta.");
-  const ready = diff.filter(({ eligible }) => eligible), actions = [];
+  const ready = diff.filter(({ eligible }) => eligible), actions = [], modes = {};
   const identity = { operationId, auditHash, ...(policyDelta && { deltaHash }) };
   const activationOperationId = evidenceFingerprint({ ...identity, action: "activate" });
   const rollbackOperationId = evidenceFingerprint({ ...identity, action: "rollback" });
-  for (const { fixtureId, revisionId, previousProjectionRevisionId: expectedProjectionRevisionId } of ready) {
+  for (const row of ready) {
     if (abort.signal.aborted) break;
+    const { fixtureId, revisionId, previousProjectionRevisionId: expectedProjectionRevisionId } = row;
     const result = action === "activate" ? await store.activate({ operationId: activationOperationId, revisionId, expectedProjectionRevisionId })
       : await store.rollback({ operationId: rollbackOperationId, activationOperationId, fixtureId });
     actions.push(result);
+    const mode = reviewedDisplayMode(row);
+    modes[mode] = (modes[mode] ?? 0) + 1;
   }
   const completed = actions.length === ready.length;
   if (completed) await sealOnce(join(workspace, `${action}-${activationOperationId}.json`), { auditHash, actions });
-  console.log(JSON.stringify({ action, completed, proposed: ready.length, checked: actions.length, ...(policyDelta && { deltaHash }) }));
+  console.log(JSON.stringify({ action, completed, proposed: ready.length, checked: actions.length, modes, ...(policyDelta && { deltaHash }) }));
 }
 
 let database;
@@ -394,7 +419,7 @@ try {
     const audit = await readSealed(join(workspace, "audit.json"));
     const versionMatches = delta ? audit.featuredDecisionVersion === legacyLocalFeaturedDecisionVersion :
       audit.featuredDecisionVersion === localFeaturedDecisionVersion ||
-        action === "rollback" && audit.featuredDecisionVersion === legacyLocalFeaturedDecisionVersion;
+        action === "rollback" && [legacyLocalFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion].includes(audit.featuredDecisionVersion);
     if (audit.environment !== values.environment || audit.engineVersion !== localGoalModelVersion() ||
       audit.registryVersion !== LOCAL_FIRST_MARKET_REGISTRY_VERSION || !versionMatches)
       throw new ReplayCommandError("The audit target or model no longer matches this operation.");

@@ -14,9 +14,9 @@ import { compactLeagueName, compactMarketName } from "@/domain/compact-fixture-l
 import { bestCardFamily, noPickReason } from "@/domain/feed-presentation";
 import { defaultMarkets } from "@/domain/feed-query";
 import { bookmakerOddsSource } from "@/domain/detail-presentation";
+import { featuredSettlementTone } from "@/domain/extended-markets";
 import { isFeaturedPickSuppressed, type FixtureSnapshot } from "@/domain/fixture-snapshot";
 import { displayMarketOddsPrice, marketOddsPrice } from "@/domain/in-play-odds";
-import { forecastExpectedReturn } from "@/domain/forecast-value";
 import { cardResultStatus, featuredCardPrediction, hasFinalScoreStatus, matchCardScore, sameCardFixture, selectedCardPrediction, selectedCardPrice, snapshotCardPrediction, type CardSnapshotPick } from "@/domain/match-card";
 import { liveClockLabel } from "@/domain/match-clock";
 import type { MarketFamily } from "@/domain/markets";
@@ -31,7 +31,7 @@ import { media, type OutcomeTone } from "@/styles/theme";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { ChevronIcon } from "./match-icons";
 import { CompetitionCountryFlag, CompetitionLogo } from "./competition-media";
-import { ForecastSourceLabel, ForecastValueLabel } from "./forecast-labels";
+import { FeaturedPickStatus, FeaturedPriceValue, featuredPickStatusText, featuredPriceValueText, ForecastSourceLabel } from "./forecast-labels";
 import { phoneFeedRowStyles, teamStackStyles } from "./team-stack-styles";
 import { matchTableColumns, matchTableGap } from "./match-columns";
 import { TeamLogo } from "./team-logo";
@@ -574,7 +574,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const missingFeaturedPick = publishedMarket && !snapshotPick && filtered === undefined && gatedForecast === null && isFeaturedPickSuppressed(fixture);
   const suppressPick = missingFilteredPick || missingFeaturedPick;
   const featured = retrospective?.pick ?? filtered ??
-    (publishedMarket && !snapshotPick && !suppressPick && fixture.status === "scheduled" ? fixture.featuredPrediction : null);
+    (publishedMarket && !snapshotPick && !suppressPick && (fixture.status === "scheduled" || fixture.featuredDecisionFrozen) ? fixture.featuredPrediction : null);
   // Only a published eligible family is locked: forecast null means none was published, and the gated families already
   // name the published markets, so a filter outside them shows the subscriber's no-prediction reason.
   const best = snapshotPick?.family ?? featured?.family ?? (suppressPick ? null : bestCardFamily(fixture, eligible, !publishedMarket));
@@ -606,8 +606,8 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     : featured || fixture.status === "live" ? null : selectedCardPrice(fixture, shownFamily, !publishedMarket);
   const replayPick = retrospective?.pick;
   const historicalReplayPrice = selection && replayPick?.historicalOdds && replayPick.odds ? displayMarketOddsPrice(replayPick.odds) : null;
-  const confirmedPrice = retrospective ? historicalReplayPrice : filtered ? filtered.odds : fixture.status === "live" ? livePrice
-    : preMatchPrice && featured?.featuredQuote ? displayMarketOddsPrice(preMatchPrice) : preMatchPrice;
+  const confirmedPrice = retrospective ? historicalReplayPrice : filtered ? filtered.odds : featured?.featuredQuote && preMatchPrice
+    ? displayMarketOddsPrice(preMatchPrice) : fixture.status === "live" ? livePrice : preMatchPrice;
   const price = !selection ? null : snapshotPick ? { price: snapshotPick.odds }
     : confirmedPrice ? { price: confirmedPrice } : storedPrice;
   const oddsKind = historicalReplayPrice ? "historical-pre-match"
@@ -619,14 +619,13 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     : oddsKind === "pre-match" || oddsKind === "historical-pre-match" ? messages.text("touchline.preMatchOdds") : oddsCaption;
   const quote = featured?.featuredQuote ?? (retrospective?.featuredDecisionSealed ? replayPick?.historicalOdds : undefined);
   const oddsDescription = `${oddsLabel}: ${price?.price ?? messages.text("outcome.unavailable")}${price && quote ? ` · ${bookmakerOddsSource(quote, messages)}` : ""}`;
-  const market = prediction?.item.market;
-  const expectedReturn = !retrospective && market?.source ? featured?.featuredExpectedNetReturn !== undefined
-    ? Number(featured.featuredExpectedNetReturn) : forecastExpectedReturn(market.selectedProbability, preMatchPrice) : null;
+  const valueDescription = featuredPriceValueText(featured, price?.price, messages);
   const source = prediction?.item.market.source;
-  const sourceLabel = (compact: boolean) => source ? <ForecastSourceLabel source={source} messages={messages}
-    label={retrospective && !phoneFeed ? messages.text("touchline.retrospective") : undefined}
-    compactLabel={!compact && source === "local-engine" ? messages.text("match.source.localShort") : undefined} /> : null;
-  const valueLabel = <ForecastValueLabel expectedReturn={expectedReturn} messages={messages} />;
+  const sourceName = retrospective ? messages.text("touchline.retrospective") : source ? messages.text(`market.source.${source}`) : null;
+  const sourceMarker = source ? <ForecastSourceLabel source={source} messages={messages} label={sourceName ?? undefined} /> : null;
+  const tierDescription = featuredPickStatusText(featured, messages);
+  const tierMarker = <FeaturedPickStatus pick={featured} description={tierDescription} compact />;
+  const valueLabel = <FeaturedPriceValue description={valueDescription} messages={messages} />;
   const family = featured?.label ?? messages.text(`market.family.${shownFamily}`);
   const [, totalPeriod, totalScope] = /^goal:([^:]+):totals:(total|home|away):/u.exec(featured?.key ?? "") ?? [];
   const shortFamily = totalScope === "home" || totalScope === "away" ? messages.text(`match.teamTotal.${totalScope}`)
@@ -636,8 +635,10 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const selectionContext = featured?.code ? { marketKey: featured.key, label: featured.selectionLabel } : undefined;
   const mobileSelection = selection && predictionLabel(messages, selection, selectionContext);
   const locked = !retrospective && fixture.cycle?.state === "closed";
-  const originalOutcome = filtered && filtered.key === filtered.family ? selectedCardPrediction(fixture, filtered.family, false) : null;
-  const outcome = retrospective || filtered && originalOutcome?.item.market.selection !== filtered.selection ? "unavailable"
+  const exactSettlement = featured?.settlementStatus;
+  const originalOutcome = !exactSettlement && filtered && filtered.key === filtered.family ? selectedCardPrediction(fixture, filtered.family, false) : null;
+  const outcome = exactSettlement ? featuredSettlementTone(exactSettlement)
+    : retrospective || filtered && originalOutcome?.item.market.selection !== filtered.selection ? "unavailable"
     : originalOutcome?.status ?? prediction?.status ?? "unavailable";
   const awaitingResult = fixture.update?.statusFreshness?.state === "awaiting-update";
   const result = snapshotPick ? outcome : cardResultStatus(fixture.status, outcome, awaitingResult);
@@ -660,18 +661,20 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const scoreDescription = final || fixture.status === "live" || snapshotPick && score
     ? matchScoreDescription(display, { home, away }, messages, final, snapshotPick !== undefined) : undefined;
   const missing = gated || prediction || missingFeaturedPick ? null : noPickReason(fixture);
-  const noPickLabel = messages.text(missingFeaturedPick ? "match.noRecommendedPick" : "match.noPick");
-  const abstention = missingFeaturedPick ? <NoRecommendedPick data-featured-abstention="" title={noPickLabel}>
-    <CircleMinusIcon /><VisuallyHidden>{noPickLabel}</VisuallyHidden>
+  const noForecast = publishedMarket && !fixture.forecast && !snapshotPick && !prediction;
+  const noPickLabel = messages.text(noForecast ? "match.noForecast" : missingFeaturedPick ? "match.noQualifyingPick" : "match.noPick");
+  const reason = missing ? messages.text(`match.noPickReason.${missing}`) : null;
+  const absenceTitle = noForecast || missingFeaturedPick ? [noPickLabel, reason].filter(Boolean).join(" · ") : null;
+  const abstention = absenceTitle ? <NoRecommendedPick data-featured-abstention={missingFeaturedPick ? "" : undefined}
+    data-pick-absence={noForecast ? "no-forecast" : "no-qualifying-pick"} title={absenceTitle}>
+    <CircleMinusIcon /><VisuallyHidden>{absenceTitle}</VisuallyHidden>
   </NoRecommendedPick> : null;
-  const reason = missing ? messages.text(`match.noPickReason.${missing}`)
-    : missingFeaturedPick && fixture.retrospectiveSuppression ? messages.text("touchline.retrospective") : null;
   const pickState = gated ? "subscriber" : !prediction ? "none" : settledOutcome(outcome) ? "settled" : "open";
   if (desktop) {
     const marketDescription = offline ? "Predictions are unavailable in the saved view."
       : gated ? messages.text("paywall.card")
-      : selection ? `${family}: ${predictionDescription(messages, selection, selectionContext)}`
-      : missingFeaturedPick ? [noPickLabel, reason].filter(Boolean).join(" · ") : reason ?? undefined;
+      : selection ? [`${family}: ${predictionDescription(messages, selection, selectionContext)}`, sourceName, tierDescription].filter(Boolean).join(" · ")
+      : absenceTitle ?? reason ?? undefined;
     const publication = !phoneFeed && prediction && [retrospective ? messages.text("touchline.retrospective") : source ? messages.text(`market.source.${source}`) : null,
       prediction.provisional ? messages.text("match.provisional") : null,
       prediction.publishedAt !== null ? `${messages.text("match.published")}: ${messages.reportingInstant(prediction.publishedAt)}` : null].filter(Boolean).join(" · ");
@@ -683,6 +686,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       status={fixture.status} score={showScore || snapshotPick ? score : null} shootout={shootout} liveClock={offline ? null : fixture.liveClock ?? null}
       regulationOnly={regulationOnly} compactMatch={phoneFeed} {...(scoreDescription ? { scoreDescription } : {})}
       outcome={offline ? "unavailable" : outcome} awaitingResult={awaitingResult} headingLevel={headingLevel} pickState={pickState}
+      exactSettlement={exactSettlement}
       {...(position !== undefined ? { position } : {})} {...(titleNote ? { titleNote } : {})}
       {...(!offline && interactive && !gated ? { analysisHref: detailHref } : {})}
       {...(gated && !offline ? { predictionAction: <UnlockButton locale={locale} signedIn={signedIn}
@@ -693,15 +697,15 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       market={offline ? <span>Unavailable offline</span> : gated ? <><SubscriberIcon /><span data-subscriber-notice>{messages.text("paywall.unlock")}</span></> : <>
         {prediction && <span data-market-label aria-hidden="true">{shortFamily}:</span>}
         {selection ? <PickLine as="strong" data-pick-line="" data-pick-label title={publication || undefined}>
-          <span data-pick-selection>{predictionLabel(messages, selection, selectionContext)}</span>{sourceLabel(false)}
+          <span data-pick-selection>{predictionLabel(messages, selection, selectionContext)}</span>{sourceMarker}{tierMarker}
         </PickLine> : abstention ?? <strong data-pick-label data-no-pick={missing ?? undefined}>{noPickLabel}</strong>}
       </>}
       odds={<span data-card-odds data-pick-price={prediction ? "" : undefined} data-odds-kind={oddsKind}
         title={oddsDescription}>{price?.price ?? "—"}{historicalReplayPrice && <VisuallyHidden> {oddsLabel}</VisuallyHidden>}
-        {expectedReturn !== null && expectedReturn > 0 && <> {valueLabel}</>}</span>}
+        {valueLabel}</span>}
       probability={gated ? <span data-public-probability>{publicChanceLabel}</span> : <span data-pick-value>{prediction ? percent : "—"}</span>}
       details={offline ? <VisuallyHidden>Predictions are unavailable in the saved view.</VisuallyHidden>
-        : !gated && !prediction && reason ? <span data-no-pick-reason>{reason}</span> : null}
+        : !gated && !prediction && reason && !abstention ? <span data-no-pick-reason>{reason}</span> : null}
     />;
   }
   return <Card tabIndex={-1} aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={gated ? undefined : shownFamily}
@@ -744,21 +748,21 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       </> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale} compact={phoneFeed}>
         <PickShort $family={shownFamily} $available={prediction !== null} data-ledger-field="prediction" aria-hidden={abstention ? undefined : true}
           data-no-pick={missing ?? undefined}>
-          {selection ? <PickLine data-pick-line="" data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection, selectionContext)}>{mobileSelection}</span>{sourceLabel(true)}</PickLine> : abstention ?? <>
+          {selection ? <PickLine data-pick-line="" data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection, selectionContext)}>{mobileSelection}</span>{sourceMarker}{tierMarker}</PickLine> : abstention ?? <>
             {missing && <b data-mobile-only="">{noPickLabel}</b>}
             <span data-pick-value="" data-mobile-only="">{missing ? messages.text(`match.noPickReason.short.${missing}`) : noPickLabel}</span>
             <span data-pick-value="" data-desktop-only="">{noPickLabel}</span>
           </>}
         </PickShort>
-        <span data-match-metrics><Odds data-ledger-field="odds" data-stack-label={stackOddsCaption} aria-hidden={expectedReturn === null || expectedReturn <= 0}
-          data-card-odds data-odds-kind={oddsKind} data-pick-price={prediction ? "" : undefined} title={oddsDescription}>{price?.price ?? "—"}{expectedReturn !== null && expectedReturn > 0 && <> {valueLabel}</>}</Odds>
+        <span data-match-metrics><Odds data-ledger-field="odds" data-stack-label={stackOddsCaption} aria-hidden={valueDescription === null}
+          data-card-odds data-odds-kind={oddsKind} data-pick-price={prediction ? "" : undefined} title={oddsDescription}>{price?.price ?? "—"}{valueLabel}</Odds>
         <Probability data-ledger-field="probability" data-stack-label={stackProbabilityCaption} aria-hidden="true">
           {prediction && <ProbabilityBar $family={shownFamily} data-probability-meter=""><span style={{ inlineSize: `${Math.max(2, prediction.probability.roundedPercent)}%` }} /></ProbabilityBar>}
           <Percent data-pick-value="">{prediction ? percent : "—"}</Percent>
         </Probability></span>
         {prediction && selection ? <VisuallyHidden>{messages.text("match.pickLabel", { market: family, selection: predictionDescription(messages, selection, selectionContext),
           probability: messages.text(prediction.probability.labelKey, { percent: messages.number(prediction.probability.roundedPercent) }) })}
-          {source && `. ${messages.text(`market.source.${source}`)}`}
+          {sourceName && `. ${sourceName}`}{tierDescription && `. ${tierDescription}`}
           {locked && `. ${messages.text("match.lockedPrediction")}`}
         </VisuallyHidden> : !abstention && <VisuallyHidden>{messages.text("match.noPickLabel", { market: family })}: {reason}</VisuallyHidden>}
       </PredictionCell>}
@@ -770,9 +774,10 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     <Result data-result-badge={offline ? "saved" : result} data-stack-result
       data-live-minute={clock ? clock.minute ?? "" : undefined}>
       <MatchStatus status={fixture.status} outcome={outcome} messages={messages} snapshot={snapshotPick !== undefined} offline={offline}
-        liveClock={fixture.liveClock ?? null} awaitingResult={awaitingResult} compactMatch={phoneFeed} regulationOnly={regulationOnly} />
+        liveClock={fixture.liveClock ?? null} awaitingResult={awaitingResult} compactMatch={phoneFeed} regulationOnly={regulationOnly} exactSettlement={exactSettlement} />
     </Result>
-    {!offline && interactive && <Open data-match-open href={targetHref} prefetch={false} title={!gated && abstention ? noPickLabel : undefined}>
+    {!offline && interactive && <Open data-match-open href={targetHref} prefetch={false}
+      title={gated ? undefined : (absenceTitle ?? (sourceName && [sourceName, tierDescription].filter(Boolean).join(" · "))) ?? undefined}>
       <VisuallyHidden>{gated ? `${messages.text("paywall.unlock")}: ${title}` : messages.text("match.analysisLabel", { home, away })}</VisuallyHidden><ChevronIcon />
     </Open>}
   </Card>;

@@ -10,7 +10,8 @@ import { formLetters } from "@/domain/match-details";
 import type { MarketFamily } from "@/domain/markets";
 import { toUtcIsoString } from "@/domain/calendar";
 import { matchArchiveHref } from "@/domain/navigation";
-import { media, type AccentName, type OutcomeTone } from "@/styles/theme";
+import { media, type AccentName } from "@/styles/theme";
+import { featuredSettlementTone, type ExtendedSettlementStatus } from "@/domain/extended-markets";
 import { ShieldIcon } from "@/components/ui/icons";
 import { contentGutter, desktopContentPadding } from "@/components/ui/layout";
 import { BothTeamsIcon, GoalsIcon, ResultIcon } from "./details-icons";
@@ -32,14 +33,15 @@ const Outcome = styled(OutcomeBadge)`
   }
 `;
 
-function outcomeLabel(messages: Messages, status: OutcomeTone) {
-  const label = status === "correct" ? "match.result.won" : status === "incorrect" ? "match.result.lost" : `outcome.${status}` as const;
+function outcomeLabel(messages: Messages, status: ExtendedSettlementStatus) {
+  const label = status === "half-win" || status === "half-loss" || status === "push" ? `match.featuredSettlement.${status}` as const
+    : status === "correct" ? "match.result.won" : status === "incorrect" ? "match.result.lost" : `outcome.${status}` as const;
   return messages.text(label);
 }
 
-export function DetailOutcome({ status, ...props }: Omit<ComponentPropsWithoutRef<"span">, "children"> & { status: OutcomeTone }) {
+export function DetailOutcome({ status, ...props }: Omit<ComponentPropsWithoutRef<"span">, "children"> & { status: ExtendedSettlementStatus }) {
   const { messages } = useStableDetails();
-  return <Outcome {...props} data-outcome={status} $outcome={status}>{outcomeLabel(messages, status)}</Outcome>;
+  return <Outcome {...props} data-outcome={status} $outcome={featuredSettlementTone(status)}>{outcomeLabel(messages, status)}</Outcome>;
 }
 
 /**

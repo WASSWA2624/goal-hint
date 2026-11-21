@@ -75,7 +75,11 @@ export function selectedDetailPrice(data: MatchDetailResponse, family: MarketFam
 
 /** Use the displayed revision's frozen recommendation or rank its published picks. */
 export function featuredFamily(data: MatchDetailResponse): MarketFamily | null {
-  if (data.selection === "applicable" && isFeaturedPickSuppressed(data.fixture)) return null;
+  if (data.selection === "applicable") {
+    if (isFeaturedPickSuppressed(data.fixture)) return null;
+    const featured = data.fixture.retrospective?.pick ?? data.fixture.featuredPrediction;
+    if (featured) return featured.family;
+  }
   const snapshot = fullDetailSnapshot(data);
   if (!snapshot) return null;
   const recommended = recommendationFamily(snapshot.recommendation, publicPolicy.markets);
@@ -92,6 +96,7 @@ export function currentFeaturedOutcome(data: MatchDetailResponse) {
   if (data.selection !== "applicable") return null;
   if (data.fixture.retrospective) return data.fixture.retrospective.pick;
   if (isFeaturedPickSuppressed(data.fixture)) return null;
+  if (data.fixture.featuredDecisionFrozen) return data.fixture.featuredPrediction ?? null;
   if (!snapshot || data.fixture.status !== "scheduled") return null;
   if (data.fixture.featuredPrediction !== undefined && (snapshot.applicability === "current" || snapshot.applicability === "locked"))
     return data.fixture.featuredPrediction;

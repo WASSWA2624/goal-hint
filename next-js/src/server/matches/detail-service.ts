@@ -30,6 +30,9 @@ import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { prepareDemoFixture } from "../demo/read-seed.ts";
 import { createSettlementProjectionReader } from "../settlement/settlement-read.ts";
 import { upcomingFeaturedPick } from "./upcoming-featured-pick.ts";
+import { toFeaturedLocalDecision } from "./featured-pick-presentation.ts";
+import { readFeaturedSettlements } from "./featured-settlement.ts";
+import { eligibleFrozenFeaturedStatus, readFrozenLocalFeaturedPicks } from "./frozen-featured-picks.ts";
 
 export { canonicalMatchSlug } from "../../domain/match-slug.ts";
 
@@ -66,7 +69,21 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
             ? projectRetrospectiveForecast(fixture, (await readNovemberReplayProjections(tx, [id])).get(id), "en", undefined, providerOdds) : null;
           if (replay?.card) fixture.retrospective = replay.card;
           else if (replay) fixture.retrospectiveSuppression = replay.metadata;
-          else if (!query.cycle && !query.revision && lacksRetrospectiveFeaturedPick(fixture)) fixture.featuredPrediction = null;
+          else if (!query.cycle && !query.revision) {
+            const frozen = currentRevisionId && eligibleFrozenFeaturedStatus(fixture.status, fixture.cycle?.state)
+              ? (await readFrozenLocalFeaturedPicks(tx, [id])).get(id) : undefined;
+            if (frozen) {
+              fixture.featuredDecisionFrozen = true;
+              fixture.featuredPrediction = toFeaturedLocalDecision(frozen, "en", providerOdds);
+            } else if (lacksRetrospectiveFeaturedPick(fixture)) fixture.featuredPrediction = null;
+          }
+          const featured = fixture.retrospective?.pick ?? fixture.featuredPrediction;
+          if (featured && (isPlayedFinalStatus(fixture.status) || fixture.featuredDecisionFrozen && fixture.cycle?.state === "void")) {
+            const settlementStatus = (await readFeaturedSettlements(tx, new Map([[id, featured]]))).get(id)?.status;
+            if (settlementStatus && fixture.retrospective)
+              fixture.retrospective = { ...fixture.retrospective, pick: { ...fixture.retrospective.pick, settlementStatus } };
+            else if (settlementStatus) fixture.featuredPrediction = { ...featured, settlementStatus };
+          }
           // History selections replace the detail snapshot; the card keeps the active cycle.
           let display = !query.cycle && !query.revision ? currentDisplay : null;
           if (query.cycle) {
@@ -136,7 +153,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
         } catch (error) { if (error instanceof MatchFeedError) refused = error; throw error; }
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       const descriptor = publicCacheDescriptor({ kind: "detail", locale: "en", now: asOf, fixtureId: id,
-        query: { id, projection: 17, providerOdds, extendedMarketsEnabled, ...query }, parse: (value) => storedMatchDetailResponseSchema.parse(value) });
+        query: { id, projection: 18, providerOdds, extendedMarketsEnabled, ...query }, parse: (value) => storedMatchDetailResponseSchema.parse(value) });
       const response = options.cache ? await options.cache.read({ ...descriptor, validUntil: () => permissionDeadline }, read) : await read();
       const historical = response.selection !== "applicable", kickoffAt = response.fixture.kickoffAt;
       const total15Available = response.extendedMarkets?.markets.some(({ key, source }) => key === total15MarketKey && source !== "market-implied");
@@ -147,13 +164,14 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
           providerOdds ? options.database.transaction((tx) => storedCurrentBookmakerQuotes(tx, [{ fixtureId: id, kickoffAt }], asOf),
             { isolationLevel: "RepeatableRead", maxWait: 2_000, timeout: 5_000 }).then((read) => read.get(id)).catch(() => undefined)
             : undefined,
-          extendedMarketsEnabled && revisionId ? options.database.query((tx) => readFeaturedGoalMarkets(tx, [revisionId]))
+          !response.fixture.featuredDecisionFrozen && extendedMarketsEnabled && revisionId ? options.database.query((tx) => readFeaturedGoalMarkets(tx, [revisionId]))
             .then((read) => read.get(revisionId)).catch(() => null) : undefined,
         ]) : [[], null, undefined] as const;
         const marketOdds = entry?.kickoffAt === kickoffAt ? entry.observation : null;
         const extendedOdds = total15Available ? total15OddsForBookmaker(quotes) : null;
         const withObservation = { ...response.fixture, ...(providerOdds ? { marketOdds } : {}) };
-        const featuredPrediction = revisionId ? upcomingFeaturedPick(withObservation, goals, quotes, asOf, providerOdds) : undefined;
+        const featuredPrediction = response.fixture.featuredDecisionFrozen ? response.fixture.featuredPrediction
+          : revisionId ? upcomingFeaturedPick(withObservation, goals, quotes, asOf, providerOdds) : undefined;
         const fixture = { ...withObservation, featuredPrediction };
         const compact = { ...response, asOf, fixture, ...(extendedOdds ? { extendedOdds } : {}) };
         const bytes = Buffer.byteLength(JSON.stringify(compact), "utf8");
@@ -192,7 +210,8 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
       const replayPick = retrospectiveMarkets?.find((pick) => pick.key === replay?.pick.key && pick.selection === replay.pick.selection);
       const compact = { ...response, asOf: response.asOf > asOf ? response.asOf : asOf,
         ...(replay && replayPick && retrospectiveMarkets
-          ? { fixture: { ...response.fixture, retrospective: { ...replay, pick: replayPick } }, retrospectiveMarkets } : {}),
+          ? { fixture: { ...response.fixture, retrospective: { ...replay,
+            pick: { ...replayPick, ...(replay.pick.settlementStatus ? { settlementStatus: replay.pick.settlementStatus } : {}) } } }, retrospectiveMarkets } : {}),
         ...(allowLiveMatch ? { liveMatch } : {}),
         ...(allowInPlayOdds ? { inPlayOdds: inPlayOdds ?? null } : {}),
         ...(extendedOdds ? { extendedOdds } : {}) };

@@ -1473,6 +1473,8 @@ model PredictionCycleOperation {
   at             DateTime               @db.DateTime(3)
   integrity      String                 @db.Char(64)
   operationJson  Json
+  featuredDecisionJson      Json?
+  featuredDecisionIntegrity String? @db.Char(64)
   cycle          PredictionCycle        @relation(fields: [cycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
   revision       PredictionSet?         @relation(fields: [revisionId, cycleId, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
   event          PredictionChangeEvent?

@@ -13,7 +13,7 @@ import type { auditNovemberReplay } from "./november-replay-audit.ts";
 
 type Audit = Awaited<ReturnType<typeof auditNovemberReplay>>;
 export type NovemberReplayPrediction = Readonly<{ fixtureId: string; kickoffAt: number; probabilities: IntelligenceProbabilities | null;
-  featured?: { definition: GoalMarketDefinition; selection: string } }>;
+  featured?: { definition: GoalMarketDefinition; selection: string; mode?: "standard" | "priced-fallback" | "forecast-only" } }>;
 const families = Object.keys(marketSelections) as MarketFamily[];
 const bands = [0, 0.2, 0.4, 0.6, 0.8, 1];
 
@@ -62,7 +62,8 @@ export async function evaluateNovemberReplay(database: Pick<DatabaseRuntime, "qu
   predictions: readonly NovemberReplayPrediction[]) {
   const qualified = new Map(predictions.map((value) => [`${value.fixtureId}:${value.kickoffAt}`, value]));
   const occurrences = audit.occurrences.filter((row) => isPlayedFinalStatus(row.status as SettlementStatus) && row.kickoffAt < audit.auditedAt);
-  const counts = { finished: occurrences.length, verified: 0, readable: 0, unreadable: 0, featuredGrades: {} as Record<string, number> };
+  const counts = { finished: occurrences.length, verified: 0, readable: 0, unreadable: 0, featuredGrades: {} as Record<string, number>,
+    featuredGradesByMode: {} as Record<string, Record<string, number>> };
   const metrics = families.map((family) => ({ family, allLocal: createMarketMetricsAccumulator(family, bands, 1.96),
     matchedLocal: createMarketMetricsAccumulator(family, bands, 1.96), matchedPrior: createMarketMetricsAccumulator(family, bands, 1.96) }));
   for (let offset = 0; offset < occurrences.length; offset += 100) {
@@ -82,6 +83,8 @@ export async function evaluateNovemberReplay(database: Pick<DatabaseRuntime, "qu
       if (featured) {
         const { status } = settleGoalSelection(featured.definition, featured.selection, { ...truth, halfTimeScore: result.halfTime ?? null });
         counts.featuredGrades[status] = (counts.featuredGrades[status] ?? 0) + 1;
+        const mode = counts.featuredGradesByMode[featured.mode ?? "standard"] ??= {};
+        mode[status] = (mode[status] ?? 0) + 1;
       }
       if (!probabilities) continue;
       const local = validateMarketSnapshot({

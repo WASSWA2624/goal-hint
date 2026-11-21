@@ -263,16 +263,23 @@ test('November replay has one display across feed, exact outcome and detail whil
     await settlement.settleFixture(fixtureId);
     const finished = await data(), finishedDetail = await detail.query(fixtureId), performance = (await summary.query({ date }, scope)).performance;
     const unchanged = await feed.query({ date });
-    assert.deepEqual(finished.performance, unchanged.performance);
-    assert.deepEqual(performance, { cancelled: 0, ...unchanged.performance });
+    assert.equal(unchanged.performance.won, 1, 'canonical archive performance keeps its own selection');
+    assert.equal(finished.performance.won, 0);
+    assert.equal(finished.performance.lost, 1, 'public performance settles the displayed replay selection');
+    assert.deepEqual(performance, { cancelled: 0, ...finished.performance });
     assert.equal(finishedDetail.snapshot.outcomes[0].status, 'correct');
     assert.equal(finishedDetail.fixture.retrospective.pick.selection, 'away-win');
-    assert.equal((await feed.query({ date, status: 'finished', result: 'won' }, scope)).records[0].fixtureId, fixtureId);
-    assert.equal((await feed.query({ date, status: 'finished', result: 'lost' }, scope)).total, 0);
+    assert.equal((await feed.query({ date, status: 'finished', result: 'lost' }, scope)).records[0].fixtureId, fixtureId);
+    assert.equal((await feed.query({ date, status: 'finished', result: 'won' }, scope)).total, 0);
+    const under15 = { date, status: 'finished', marketPick: 'total-goals:under-1.5' };
+    assert.equal((await feed.query({ ...under15, result: 'won' }, scope)).records[0].fixtureId, fixtureId);
+    assert.equal((await feed.query({ ...under15, result: 'lost' }, scope)).total, 0);
+    assert.equal((await summary.query(under15, scope)).performance.won, 1);
     assert.equal((await feed.query({ date, status: 'live' }, scope)).total, 0);
     assert.deepEqual(await readStoredFeedMarkets(p.a, [39], true), publishedMarkets);
-    assert.deepEqual(gateFeedResponse(await pricedFeed(), free).records[0].retrospective.pick, shownCapture);
-    assert.deepEqual(gateDetailResponse(await pricedDetail.query(fixtureId), free).fixture.retrospective.pick, shownCapture);
+    const settledCapture = { ...shownCapture, settlementStatus: 'incorrect' };
+    assert.deepEqual(gateFeedResponse(await pricedFeed(), free).records[0].retrospective.pick, settledCapture);
+    assert.deepEqual(gateDetailResponse(await pricedDetail.query(fixtureId), free).fixture.retrospective.pick, settledCapture);
     const capturedFeed = matchFeedResponseSchema.parse(gateFeedResponse(finished, free));
     const capturedDetail = matchDetailResponseSchema.parse(gateDetailResponse(finishedDetail, free));
     await savePageScenarios(t, 'MATCH_FEED_PAGE_CAPTURE', { 'november-replay': { query: parseFeedQuery({ date }, { today: date }),
@@ -295,7 +302,7 @@ test('November replay has one display across feed, exact outcome and detail whil
     assert.equal((await pricedFeed()).records[0].retrospective, undefined);
     assert.equal((await pricedDetail.query(fixtureId)).retrospectiveMarkets, undefined);
     assert.deepEqual(restoredDetail.snapshot, finishedDetail.snapshot);
-    assert.deepEqual(restored.performance, finished.performance);
+    assert.deepEqual(restored.performance, unchanged.performance, 'rollback restores the active original performance scope');
     assert.equal((await exact('total-goals:under-1.5')).total, 0);
     assert.deepEqual(await readStoredFeedMarkets(p.a, [39], false), [], 'unqualified legacy upstream picks do not enter exact filters');
     assert.equal(sameCardFixture(finished.records[0], restored.records[0]), false);

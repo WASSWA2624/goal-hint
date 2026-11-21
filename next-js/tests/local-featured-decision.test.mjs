@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { assessLocalFeaturedPick, binaryFeaturedSettlement, decideLocalFeaturedPick, legacyLocalFeaturedDecisionVersion,
-  localFeaturedDecisionSchema, localFeaturedDecisionVersion, positiveFeaturedReturn }
+  localFeaturedDecisionSchema, localFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion, positiveFeaturedReturn }
   from "../src/domain/local-featured-decision.ts";
 import { parseDecimalOdds } from "../src/domain/odds.ts";
 import { preMatchReferenceOddsFreshMs } from "../src/domain/reference-odds.ts";
@@ -22,7 +22,9 @@ const inputs = (outcomes, bookmakers, options = {}) => ({
   fixtureId, kickoffAt, decisionAt, quotesPermitted: true, outcomes,
   quotes: { fixtureId, kickoffAt, checkedAt: decisionAt, bookmakers }, ...options,
 });
-const decide = (outcomes, bookmakers, options, version) => decideLocalFeaturedPick(inputs(outcomes, bookmakers, options), version);
+const decide = (outcomes, bookmakers, options, version = previousLocalFeaturedDecisionVersion) =>
+  decideLocalFeaturedPick(inputs(outcomes, bookmakers, options), version);
+const decideCurrent = (outcomes, bookmakers, options) => decideLocalFeaturedPick(inputs(outcomes, bookmakers, options));
 
 test("unpriced Under 5.5 does not displace a priced outcome, including a lower-probability double chance outcome", () => {
   const result = decide([
@@ -91,7 +93,7 @@ test("the 60% boundary requires strictly profitable unrounded odds and each vers
   const books = [book(1, totals({ "Under 4.5": "1.6667" }))];
   const current = decide(outcomes, books);
   assert.deepEqual([current.status, current.version, current.threshold, current.quote.decimal, current.expectedNetReturn],
-    ["priced", localFeaturedDecisionVersion, 0.60, "1.6667", "0.00002"]);
+    ["priced", previousLocalFeaturedDecisionVersion, 0.60, "1.6667", "0.00002"]);
   assert.equal(decide(outcomes, [book(1, totals({ "Under 4.5": "1.6666" }))]).status, "abstained");
   assert.equal(decide([total("full-time", "total", 4.5, 0.625)], [book(1, totals({ "Under 4.5": "1.6" }))]).status, "abstained");
   const legacy = decide(outcomes, books, {}, legacyLocalFeaturedDecisionVersion);
@@ -112,7 +114,8 @@ test("both versions measure the same quote and value gates before lower rungs ca
   const books = [book(4, totals({ "Under 4.5": "1.5", "Under 3.5": "3.5", "Under 2.5": "10", "Under 1.5": "40",
     "Under 5.5": "1.0999", "Under 6.5": "1.6" }))];
   const input = inputs(outcomes, books);
-  const current = assessLocalFeaturedPick(input), legacy = assessLocalFeaturedPick(input, legacyLocalFeaturedDecisionVersion);
+  const current = assessLocalFeaturedPick(input, previousLocalFeaturedDecisionVersion);
+  const legacy = assessLocalFeaturedPick(input, legacyLocalFeaturedDecisionVersion);
   const diagnostics = { modeledOutcomes: 7, comparableQuoteOutcomes: 6, oddsFloorOutcomes: 5, positiveReturnOutcomes: 4 };
   const upperRungs = [0.95, 0.90, 0.85, 0.80, 0.75].map((threshold) => ({ threshold, outcomes: 0 }));
   assert.equal(legacy.decision.status, "abstained");
@@ -156,4 +159,59 @@ test("canonical replay and legacy feed keys resolve the same tie", () => {
   const books = [book(1, totals({ "Under 4.5": "1.25" }), offer(1, "Match Winner", { Home: "1.25" }))];
   assert.equal(decide([goalTotal, outcome("match-result", "home-win", 0.95)], books).selection, "home-win");
   assert.equal(decide([goalTotal, outcome("goal:full-time:result", "home", 0.95)], books).selection, "home");
+});
+
+test("priced fallback includes 1.01, records signed return and exact clocks, and preserves old decision serialization", () => {
+  const outcomes = [total("full-time", "total", 2.5, 0.67)];
+  const books = [book(1, totals({ "Under 2.5": "1.01" })), book(2, totals({ "Under 3.5": "99" }))];
+  const result = decideCurrent(outcomes, books);
+  assert.equal(result.tier, "priced-fallback");
+  assert.equal(result.expectedNetReturn, "-0.3233");
+  assert.deepEqual(result.quote, { bookmakerId: 1, bookmakerName: "Book 1", betId: 5, betName: "Goals Over/Under",
+    providerSelection: "Under 2.5", decimal: "1.01", ...clocks });
+  assert.deepEqual(localFeaturedDecisionSchema.parse(JSON.parse(JSON.stringify(result))), result);
+  assert.equal(localFeaturedDecisionSchema.safeParse({ ...result, version: previousLocalFeaturedDecisionVersion }).success, false);
+  assert.equal(decide(outcomes, books).status, "abstained");
+  assert.equal(decideCurrent(outcomes, [book(1, totals({ "Under 2.5": "1.0099" }))]).status, "forecast-only");
+});
+
+test("standard qualifies before positive fallback, which qualifies before any break-even or below-value fallback", () => {
+  const outcomes = [total("full-time", "total", 1.5, 0.65),
+    total("full-time", "total", 3.5, 0.97), total("full-time", "total", 4.5, 0.99)];
+  const quotes = { "Under 1.5": "1.55", "Under 3.5": "1.06", "Under 4.5": "1.01" };
+  const standard = decideCurrent(outcomes, [book(1, totals(quotes))]);
+  assert.equal(standard.tier, "standard");
+  assert.equal(standard.quote.providerSelection, "Under 1.5");
+  const fallback = decideCurrent(outcomes.slice(1), [book(1, totals(quotes))]);
+  assert.equal(fallback.tier, "priced-fallback");
+  assert.equal(fallback.quote.providerSelection, "Under 3.5");
+  assert.equal(fallback.expectedNetReturn, "0.0282");
+  const breakEven = decideCurrent([total("full-time", "total", 2.5, 0.625)], [book(1, totals({ "Under 2.5": "1.6" }))]);
+  assert.equal(breakEven.tier, "priced-fallback");
+  assert.equal(breakEven.expectedNetReturn, "0");
+});
+
+test("forecast only prefers common exact model markets without importing adjacent quotes", () => {
+  const common = outcome("goal:full-time:totals:total:1.5:binary", "over", 0.83);
+  const extreme = total("full-time", "total", 5.5, 0.9964);
+  const books = [book(1, totals({ "Under 6.5": "1.30" }))];
+  const result = decideCurrent([extreme, common], books);
+  assert.deepEqual(result, { marketKey: common.marketKey, selection: "over", probability: 0.83,
+    version: localFeaturedDecisionVersion, status: "forecast-only", reason: "no-comparable-quote" });
+  assert.equal(localFeaturedDecisionSchema.safeParse({ ...result, quote: null }).success, false);
+  assert.equal(decideCurrent([extreme, common], books, { coverageByMarket: new Map([[extreme.marketKey, 12]]) }).marketKey, extreme.marketKey);
+  assert.equal(decideCurrent([common], [], { quotes: null, quotesPermitted: false }).reason, "odds-not-permitted");
+  assert.equal(decideCurrent([common], [], { quotes: null, decisionAt: kickoffAt }).reason, "invalid-decision-time");
+  assert.equal(decideCurrent([total("full-time", "total", 3.5, .599999)], []).reason, "no-modeled-outcome-meets-floor");
+  assert.equal(decideCurrent([{ ...common, unrepresentedProbability: .01 }], books).status, "abstained");
+});
+
+test("first standard rung spans market families and books before any fallback", () => {
+  const outcomes = [total("full-time", "away", 4.5, 1), outcome("double-chance", "home-or-draw", 0.93),
+    total("full-time", "total", 2.5, 0.91), outcome("match-result", "home-win", 0.89)];
+  const result = decideCurrent(outcomes, [book(1, offer(17, "Total - Away", { "Under 4.5": "1.09" })),
+    book(3, chance({ "Home/Draw": "1.13" })), book(4, totals({ "Under 2.5": "1.17" })),
+    book(5, offer(1, "Match Winner", { Home: "2.55" }))]);
+  assert.deepEqual([result.tier, result.threshold, result.marketKey, result.quote.bookmakerId, result.quote.decimal],
+    ["standard", 0.90, "goal:full-time:totals:total:2.5:binary", 4, "1.17"]);
 });

@@ -1,22 +1,26 @@
 import "server-only";
 
+import { getPublicationDeadline } from "../../domain/calendar.ts";
 import type { FeaturedPrediction } from "../../domain/extended-markets.ts";
 import type { StoredFixtureSnapshot } from "../../domain/fixture-snapshot.ts";
 import { binaryFeaturedSettlement, decideLocalFeaturedPick } from "../../domain/local-featured-decision.ts";
 import { rankFixtureOutcomes } from "../../domain/market-ranking.ts";
+import type { AcceptedMarket } from "../../domain/markets.ts";
 import { predictionText } from "../../domain/prediction-label.ts";
 import { createMessages } from "../../i18n/messages.ts";
 import { projectBookmakerOdds } from "../odds/bookmaker-odds-read.ts";
 import type { StoredCurrentBookmakerQuotes } from "../odds/odds-mysql-store.ts";
 import type { FeaturedGoalMarkets } from "../predictions/extended-market-read.ts";
+import { toFeaturedLocalDecision } from "./featured-pick-presentation.ts";
 
 const messages = createMessages("en");
 const fullTimeTotal25 = "goal:full-time:totals:total:2.5:binary";
 type Candidate = Parameters<typeof decideLocalFeaturedPick>[0]["outcomes"][number];
 
 /** Reuse the accepted Local Engine distributions for display and read-only decision comparisons. */
-export function collectUpcomingLocalFeaturedCandidates(forecast: NonNullable<StoredFixtureSnapshot["forecast"]>, goals: FeaturedGoalMarkets | undefined) {
-  const launch = forecast.markets.filter(({ market }) => market.source === "local-engine");
+export function collectUpcomingLocalFeaturedCandidates(forecast: Readonly<{ markets: readonly Readonly<{ market: AcceptedMarket }>[] }> | null,
+  goals: FeaturedGoalMarkets | undefined) {
+  const launch = forecast?.markets.filter(({ market }) => market.source === "local-engine") ?? [];
   if (!launch.length && !goals?.local.length) return null;
   const candidates: { outcome: Candidate; pick: Omit<FeaturedPrediction, "odds" | "probability"> }[] = [];
   for (const { market } of launch) for (const [selection, probability] of Object.entries(market.probabilities)) {
@@ -46,11 +50,9 @@ export function upcomingFeaturedPick(fixture: Pick<StoredFixtureSnapshot, "fixtu
     return rankFixtureOutcomes(forecast.markets, goals?.published ?? [], quotesPermitted ? projectBookmakerOdds(quotes, "pre-match") : null,
       quotesPermitted ? marketOdds : null, forecast.recommendation);
   }
+  if (decisionAt >= getPublicationDeadline(kickoffAt)) return null;
   const decision = decideLocalFeaturedPick({ fixtureId, kickoffAt, decisionAt, outcomes: candidates.map(({ outcome }) => outcome), quotes, quotesPermitted });
-  if (decision.status !== "priced") return null;
+  if (decision.status === "abstained") return null;
   const candidate = candidates.find(({ outcome }) => outcome.marketKey === decision.marketKey && outcome.selection === decision.selection);
-  const { snapshotId: _snapshotId, receiptId: _receiptId, ...featuredQuote } = decision.quote;
-  void _snapshotId; void _receiptId;
-  return candidate ? { ...candidate.pick, probability: decision.probability, odds: decision.quote.decimal,
-    featuredQuote, featuredExpectedNetReturn: decision.expectedNetReturn } : null;
+  return candidate ? toFeaturedLocalDecision(decision, "en", quotesPermitted, candidate.pick) : null;
 }

@@ -5,7 +5,7 @@ import { inclusiveReplayEvidenceCutoff, novemberReplayRange, novemberReplayZone,
 import { compareForecastPicks } from "../src/domain/recommendation.ts";
 import { goalProbabilities, localGoalModelVersion } from "../src/server/intelligence/local-goals-model.ts";
 import { replayFeaturedCalibration } from "../src/server/intelligence/november-replay-evaluation.ts";
-import { sameReplayFeaturedDisplay } from "../src/server/intelligence/november-replay-featured.ts";
+import { replayFeaturedMode, replayFeaturedSelection, sameReplayFeaturedDisplay } from "../src/server/intelligence/november-replay-featured.ts";
 import { buildNovemberReplayMarkets } from "../src/server/intelligence/november-replay-model.ts";
 
 test("the November replay covers the full Kampala browsing month with an exclusive December boundary", () => {
@@ -42,6 +42,19 @@ test("retrospective policy comparison ignores private policy metadata and preser
   assert.equal(sameReplayFeaturedDisplay(first, { ...second, quote: { ...second.quote, decimal: "1.3701" } }), false);
   assert.equal(sameReplayFeaturedDisplay(first, { ...second, status: "abstained" }), false);
   assert.equal(sameReplayFeaturedDisplay({ status: "abstained" }, { status: "abstained" }), true);
+});
+
+test("featured replay keeps a selected forecast-only outcome and separates it from priced displays and abstentions", () => {
+  const pick = { marketKey: "goal:full-time:result", selection: "home", probability: 0.66 };
+  const forecastOnly = { ...pick, version: "local-featured-pre-match-v3", status: "forecast-only", reason: "no-verified-odds" };
+  const priced = { ...pick, status: "priced", quote: { decimal: "1.42", bookmakerId: 1 } };
+  assert.deepEqual(replayFeaturedSelection(forecastOnly), pick);
+  assert.equal(replayFeaturedMode(forecastOnly), "forecast-only");
+  assert.equal(sameReplayFeaturedDisplay(forecastOnly, { ...forecastOnly, reason: "odds-not-permitted" }), true);
+  assert.equal(sameReplayFeaturedDisplay(forecastOnly, priced), false);
+  assert.equal(sameReplayFeaturedDisplay(priced, { ...priced, tier: "priced-fallback" }), false);
+  assert.equal(sameReplayFeaturedDisplay(priced, { ...priced, tier: "standard" }), true);
+  assert.equal(replayFeaturedSelection({ status: "abstained" }), null);
 });
 
 test("featured calibration uses inclusive lower bands, an inclusive upper bound at one, and outright wins", () => {

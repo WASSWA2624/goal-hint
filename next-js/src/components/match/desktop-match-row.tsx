@@ -5,6 +5,7 @@ import Link from "@/components/navigation/navigation-link";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { toUtcIsoString, type UtcInstant } from "@/domain/calendar";
 import { countryDisplayName } from "@/domain/country-code";
+import type { ExtendedSettlementStatus } from "@/domain/extended-markets";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import { isPlayedFinalStatus } from "@/domain/market-settlement";
 import type { MarketFamily } from "@/domain/markets";
@@ -24,7 +25,7 @@ export type DesktopMatchRowProps = Readonly<{
   homeTeam: RowTeam; awayTeam: RowTeam; competition: RowCompetition;
   status: FixtureSnapshot["status"]; score: Readonly<{ home: number; away: number }> | null;
   shootout?: NonNullable<FixtureSnapshot["phaseScores"]>["shootout"];
-  liveClock?: FixtureSnapshot["liveClock"]; outcome: OutcomeTone; awaitingResult?: boolean;
+  liveClock?: FixtureSnapshot["liveClock"]; outcome: OutcomeTone; awaitingResult?: boolean; exactSettlement?: ExtendedSettlementStatus | undefined;
   /** A preformatted authorized market; the row never selects or fabricates a forecast. */
   market: ReactNode; marketFamily?: MarketFamily; marketDescription?: string;
   odds: ReactNode; probability: ReactNode; analysisHref?: string; analysisLabel?: string;
@@ -44,7 +45,8 @@ export type DesktopMatchRowProps = Readonly<{
 export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTeam, competition, status, score, shootout, liveClock,
   outcome, awaitingResult = false, market, marketFamily, marketDescription, odds, probability, predictionAction, analysisHref, analysisLabel, headingLevel = 4, titleNote, position,
   matchState: suppliedMatchState, savedScore = false, scoreDescription: suppliedScoreDescription, regulationOnly = false, details,
-  pickState, eagerLogos = false, offline = false, preview = false, messages, datePrefix, interactive = true, clockInBadge = false, compactMatch = false }: DesktopMatchRowProps) {
+  pickState, eagerLogos = false, offline = false, preview = false, messages, datePrefix, interactive = true, clockInBadge = false, compactMatch = false,
+  exactSettlement }: DesktopMatchRowProps) {
   const m = messages ?? createMessages(locale), id = useId();
   const final = isPlayedFinalStatus(status), clock = !offline && status === "live" ? liveClock : null;
   const halftime = status === "live" && clock?.phase === "half-time";
@@ -103,7 +105,7 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
     <span data-row-odds id={`${id}-odds`}><span data-number-label data-row-number-label>{m.text("details.odds")}:</span><strong>{odds}</strong></span>
     <span data-row-probability id={`${id}-probability`}><span data-number-label data-row-number-label aria-hidden="true">{m.text("match.columns.probabilityCompact")}:</span><VisuallyHidden>{m.text("slips.probability")}: </VisuallyHidden><strong>{probability}</strong></span>
     </>}
-    <span data-row-status id={`${id}-status`}><MatchStatus status={status} outcome={outcome} messages={m} awaitingResult={awaitingResult}
+    <span data-row-status id={`${id}-status`}><MatchStatus status={status} outcome={outcome} messages={m} awaitingResult={awaitingResult} exactSettlement={exactSettlement}
       snapshot={matchState === "snapshot"} offline={offline} compactMatch={compactMatch}
       {...(clockInBadge ? { liveClock: clock, desktopClock: true } : {})} /></span>
     {details && <div data-row-details id={`${id}-details`}>{details}</div>}

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { featuredPredictionSchema, retrospectivePredictionSchema } from "./extended-markets.ts";
+import { featuredPredictionSchema, retrospectivePredictionSchema, settledExtendedStatuses } from "./extended-markets.ts";
 import { utcInstantFromEpochMilliseconds } from "./calendar.ts";
 import { isMarketFamily, validateMarketSnapshot, MARKET_RULE_VERSION, type AcceptedMarket } from "./markets.ts";
 import { isPlayedFinalStatus, settlementStatuses, type SettlementOutcomeStatus } from "./market-settlement.ts";
@@ -180,6 +180,7 @@ const fixtureSnapshotBaseSchema = z.strictObject({
   prices: z.array(fixturePriceSchema).max(4).optional(),
   marketOdds: marketOddsObservationSchema.nullable().optional(),
   featuredPrediction: featuredPredictionSchema.nullable().optional(),
+  featuredDecisionFrozen: z.literal(true).nullable().optional(),
   filteredPrediction: featuredPredictionSchema.nullable().optional(),
   retrospective: retrospectiveMetadataSchema.extend({ pick: retrospectivePredictionSchema }).nullable().optional(),
   retrospectiveSuppression: retrospectiveMetadataSchema.nullable().optional(),
@@ -194,10 +195,17 @@ export const gatedForecastSchema = z.strictObject({ gated: z.literal(true), runI
 const wireFixtureBaseSchema = fixtureSnapshotBaseSchema.extend({ forecast: z.union([publicForecastSchema, gatedForecastSchema]).nullable() });
 function refineFixture(value: z.infer<typeof wireFixtureBaseSchema>, context: z.RefinementCtx) {
   const forecast = value.forecast && !("gated" in value.forecast) ? value.forecast : null;
+  const frozen = value.featuredDecisionFrozen === true;
+  const startedOrPlayed = value.status === "live" || isPlayedFinalStatus(value.status);
+  const sameOccurrenceVoid = value.cycle?.state === "void" && value.cycle.voidReason?.code === `fixture-${value.status}` &&
+    (value.status === "canceled" || value.status === "abandoned" || value.status === "awarded");
+  const frozenStatus = sameOccurrenceVoid || value.cycle?.state === "closed" && (value.status === "scheduled" || startedOrPlayed);
+  const featuredStatus = value.status === "scheduled" || frozen && frozenStatus;
   const featuredQuote = value.featuredPrediction?.featuredQuote;
-  if (value.featuredPrediction && (!forecast || value.status !== "scheduled" ||
-      featuredQuote && (value.kickoffAt === null || featuredQuote.checkedAt >= value.kickoffAt))) {
-    context.addIssue({ code: "custom", message: "A featured outcome requires a current scheduled prediction." });
+  if (frozen && (!forecast || value.featuredPrediction === undefined || !frozenStatus) ||
+      value.featuredPrediction && (!forecast || !featuredStatus ||
+        featuredQuote && (value.kickoffAt === null || featuredQuote.checkedAt >= value.kickoffAt))) {
+    context.addIssue({ code: "custom", message: "A featured outcome requires a scheduled prediction or a frozen decision on the same occurrence." });
   }
   if (value.filteredPrediction && !forecast) {
     context.addIssue({ code: "custom", message: "A filtered outcome requires a published forecast." });
@@ -237,6 +245,10 @@ function refineFixture(value: z.infer<typeof wireFixtureBaseSchema>, context: z.
   if (!isPlayedFinalStatus(value.status) && forecast?.markets.some((item) =>
     item.outcome?.status === "correct" || item.outcome?.status === "incorrect")) {
     context.addIssue({ code: "custom", message: "Correctness requires a played final fixture." });
+  }
+  if (!isPlayedFinalStatus(value.status) && [value.featuredPrediction, value.filteredPrediction, value.retrospective?.pick]
+    .some((pick) => settledExtendedStatuses.some((settled) => settled === pick?.settlementStatus))) {
+    context.addIssue({ code: "custom", message: "A featured pick requires a played final fixture before it can be graded." });
   }
   if (value.cycle && (value.cycleId === null || (value.cycle.state === "void") !== (value.cycle.voidReason !== null))) {
     context.addIssue({ code: "custom", message: "Cycle metadata must preserve identity and void reason." });

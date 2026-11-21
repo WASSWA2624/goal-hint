@@ -77,7 +77,7 @@ export const matchFeedResponseSchema = z.strictObject({ ...storedFeedBaseSchema.
   records: z.array(matchFeedRecordSchema).max(feedQueryRules.maximumPageSize), access: contentAccessSchema,
 }).superRefine(refineFeed).refine((value) => value.access.tier === "full" || value.records.every((record) =>
   isCompletedFixtureStatus(record.status) || (!record.prices?.length && record.marketOdds == null && record.retrospective == null &&
-    record.retrospectiveSuppression == null && record.featuredPrediction == null && record.filteredPrediction == null &&
+    record.retrospectiveSuppression == null && record.featuredPrediction == null && record.featuredDecisionFrozen == null && record.filteredPrediction == null &&
     (record.forecast === null || "gated" in record.forecast))),
 "Unfinished public matches must not contain prices or predictions.");
 export type StoredMatchFeedResponse = z.infer<typeof storedMatchFeedResponseSchema>;

@@ -30,19 +30,25 @@ export async function loadNovemberReplayPrices(tx: Prisma.TransactionClient, fix
 }
 
 export function replayFeaturedSelection(decision: LocalFeaturedDecision) {
-  return decision.status === "priced"
-    ? { marketKey: decision.marketKey, selection: decision.selection, probability: decision.probability } : null;
+  return decision.status === "abstained" ? null :
+    { marketKey: decision.marketKey, selection: decision.selection, probability: decision.probability };
+}
+
+export function replayFeaturedMode(decision: LocalFeaturedDecision) {
+  return decision.status === "priced" ? decision.tier ?? "standard" : decision.status;
 }
 
 /** The policy version and rung are private; they do not change the displayed outcome. */
 export function sameReplayFeaturedDisplay(before: LocalFeaturedDecision, after: LocalFeaturedDecision) {
-  if (before.status !== "priced" || after.status !== "priced") return before.status === after.status;
-  return before.marketKey === after.marketKey && before.selection === after.selection && before.probability === after.probability &&
+  if (before.status === "abstained" || after.status === "abstained") return before.status === after.status;
+  if (replayFeaturedMode(before) !== replayFeaturedMode(after) || before.marketKey !== after.marketKey ||
+    before.selection !== after.selection || before.probability !== after.probability) return false;
+  return before.status !== "priced" || after.status !== "priced" ||
     before.quote.decimal === after.quote.decimal && before.quote.bookmakerId === after.quote.bookmakerId;
 }
 
 export function sameLegacyReplaySelection(before: ReturnType<typeof replayFeaturedSelection>, after: LocalFeaturedDecision) {
-  return before === null ? after.status !== "priced" : after.status === "priced" &&
+  return before === null ? after.status === "abstained" : after.status !== "abstained" &&
     before.marketKey === after.marketKey && before.selection === after.selection && before.probability === after.probability;
 }
 

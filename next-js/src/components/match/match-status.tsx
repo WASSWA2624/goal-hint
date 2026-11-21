@@ -6,7 +6,9 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { cardResultStatus } from "@/domain/match-card";
 import { liveClockLabel } from "@/domain/match-clock";
+import type { ExtendedSettlementStatus } from "@/domain/extended-markets";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
+import { isPlayedFinalStatus } from "@/domain/market-settlement";
 import type { Messages } from "@/i18n/messages";
 import { media, type OutcomeTone } from "@/styles/theme";
 import { LiveMatchTime } from "./score-presentation";
@@ -51,14 +53,18 @@ const Label = styled(StatusBadge)`
 
 /** Fixture progress takes precedence until a result can be shown. Saved results remain explicit snapshots. */
 export function MatchStatus({ status, outcome, messages, snapshot = false, offline = false, liveClock, desktopClock = false, awaitingResult = false,
-  compactMatch = false, regulationOnly = false }: {
+  compactMatch = false, regulationOnly = false, exactSettlement }: {
   status: FixtureSnapshot["status"]; outcome: OutcomeTone; messages: Messages; snapshot?: boolean; offline?: boolean;
   liveClock?: FixtureSnapshot["liveClock"];
   desktopClock?: boolean; awaitingResult?: boolean; compactMatch?: boolean; regulationOnly?: boolean;
+  exactSettlement?: ExtendedSettlementStatus | undefined;
 }) {
   const result = offline ? "saved" : snapshot ? outcome : cardResultStatus(status, outcome, awaitingResult);
   const isOutcome = result === "correct" || result === "incorrect" || result === "pending" || result === "void" || result === "unavailable";
-  const label = result === "saved" ? "Saved" : result === "upcoming" ? messages.text("match.result.upcoming")
+  const specific = !offline && !snapshot && isPlayedFinalStatus(status) &&
+    (exactSettlement === "half-win" || exactSettlement === "half-loss" || exactSettlement === "push") ? exactSettlement : null;
+  const label = specific ? messages.text(`match.featuredSettlement.${specific}`)
+    : result === "saved" ? "Saved" : result === "upcoming" ? messages.text("match.result.upcoming")
     : result === "correct" ? messages.text("slips.result.won") : result === "incorrect" ? messages.text("slips.result.lost")
     : result === "unavailable" ? "—" : result === "unknown" ? messages.text("slips.match.unknown")
       : messages.text(isOutcome ? `outcome.${result}` : `match.status.${result}`);
@@ -69,9 +75,9 @@ export function MatchStatus({ status, outcome, messages, snapshot = false, offli
   const finished = !offline && !snapshot && (status === "finished-regulation" || status === "finished-extra-time" || status === "finished-penalties");
   const finalPhase = finished ? messages.text(compactMatch && status === "finished-penalties"
     ? "match.final.shootoutCompact" : `match.final.${status}`) : null;
-  const compactFinish = compactMatch && !desktopClock && finalPhase !== null;
+  const compactFinish = compactMatch && finalPhase !== null && (!desktopClock || status === "finished-penalties");
   const decided = result === "correct" || result === "incorrect";
-  const visible = compactFinish && decided ? messages.text("match.resultWithPhase", { result: label, phase: finalPhase })
+  const visible = compactFinish && decided && !desktopClock ? messages.text("match.resultWithPhase", { result: label, phase: finalPhase })
     : compactFinish && !isOutcome ? finalPhase : label;
   const spokenFinish = compactFinish ? [isOutcome ? label : null, messages.text(`match.status.${status}`),
     regulationOnly ? messages.text("match.regulationScoreNote") : null].filter(Boolean).join(", ") : undefined;

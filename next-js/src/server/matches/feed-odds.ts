@@ -20,7 +20,8 @@ import { upcomingFeaturedPick } from "./upcoming-featured-pick.ts";
 
 /** Feature a current outcome across the complete stored goal and launch forecasts. */
 export async function withUpcomingFeaturedOutcomes(database: DatabaseRuntime, response: StoredMatchFeedResponse, asOf: number, providerOdds: boolean) {
-  const fixtures = response.records.filter(({ status, kickoffAt, forecast }) => status === "scheduled" && kickoffAt !== null && kickoffAt > asOf && !!forecast);
+  const fixtures = response.records.filter(({ status, kickoffAt, forecast, featuredDecisionFrozen }) =>
+    status === "scheduled" && kickoffAt !== null && kickoffAt > asOf && !!forecast && !featuredDecisionFrozen);
   if (!fixtures.length) return response;
   const [goals, quotes] = await Promise.all([
     database.query((tx) => readFeaturedGoalMarkets(tx, fixtures.map(({ forecast }) => forecast!.revisionId))).catch(() => null),

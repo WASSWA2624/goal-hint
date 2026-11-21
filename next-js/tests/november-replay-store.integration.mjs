@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { legacyLocalFirstGoalMarketDefinitions } from "../src/domain/goal-market-definitions.ts";
-import { legacyLocalFeaturedDecisionVersion, localFeaturedDecisionVersion } from "../src/domain/local-featured-decision.ts";
+import { legacyLocalFeaturedDecisionVersion, localFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion } from "../src/domain/local-featured-decision.ts";
 import { LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION, LOCAL_FIRST_MARKET_REGISTRY_VERSION } from "../src/domain/market-registry.ts";
 import { marketSelections } from "../src/domain/markets.ts";
 import { compareForecastPicks } from "../src/domain/recommendation.ts";
@@ -193,11 +193,25 @@ test("reviewed replay persists verified evidence and only its owner can reverse 
     const unchangedDelta = await store.stage({ ...stage, ...pricedResult, replayAsOf, generatedAt: p.now(),
       teams: [occurrence.homeTeamId, occurrence.awayTeamId], evidenceCutoffAt: pricedEvidence.cutoffAt,
       evidenceHash: pricedEvidence.evidenceHash, evidenceReceiptIds: pricedEvidence.evidenceReceiptIds,
-      featuredDecision: { ...pricedResult.featuredDecision, version: localFeaturedDecisionVersion },
+      featuredDecision: { ...pricedResult.featuredDecision, version: previousLocalFeaturedDecisionVersion },
       policyDelta: { baselineRevisionId: revised.id, expectedProjectionRevisionId: revised.id } });
     assert.equal((await store.activationDiff([unchangedDelta.id]))[0].reason, "no-featured-display-change");
     await assert.rejects(store.activate({ revisionId: unchangedDelta.id, operationId: "unchanged-policy-delta",
       expectedProjectionRevisionId: revised.id }), denied("no-featured-display-change"));
+    assert.deepEqual((await readProjection()).get(fixtureId), active);
+    const { evidence: v3Evidence, result: forecastOnly } = await p.a.query((tx) =>
+      preparePricedNovemberReplay(tx, occurrence, replayAsOf, undefined, localFeaturedDecisionVersion));
+    assert.equal(forecastOnly.featuredDecision.status, "forecast-only");
+    assert.ok(forecastOnly.selected.probability >= 0.6);
+    assert.equal(forecastOnly.featuredDecision.quote, undefined);
+    const v3 = await store.stage({ ...stage, ...forecastOnly, replayAsOf, generatedAt: p.now(),
+      teams: [occurrence.homeTeamId, occurrence.awayTeamId], evidenceCutoffAt: v3Evidence.cutoffAt,
+      evidenceHash: v3Evidence.evidenceHash, evidenceReceiptIds: v3Evidence.evidenceReceiptIds });
+    await store.activate({ revisionId: v3.id, operationId: "forecast-only-policy", expectedProjectionRevisionId: revised.id });
+    const v3Projection = (await readProjection()).get(fixtureId);
+    assert.deepEqual(v3Projection?.selected, forecastOnly.selected);
+    assert.deepEqual(v3Projection?.featuredDecision, forecastOnly.featuredDecision);
+    await store.rollback({ fixtureId, operationId: "restore-before-forecast-only-policy", activationOperationId: "forecast-only-policy" });
     assert.deepEqual((await readProjection()).get(fixtureId), active);
     assert.deepEqual(await p.history.findRevision(sourceRevisionId), published.revision);
     await store.rollback({ fixtureId, operationId: "restore-older-projection", activationOperationId: replacement.operationId });

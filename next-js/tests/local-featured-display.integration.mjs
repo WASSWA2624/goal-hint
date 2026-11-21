@@ -12,13 +12,16 @@ import { LOCAL_FIRST_FORECAST_CASCADE } from '../src/server/fallback/fallback-co
 import { goalProbabilities } from '../src/server/intelligence/local-goals-model.ts';
 import { createMatchDetailService } from '../src/server/matches/detail-service.ts';
 import { createMatchFeedService } from '../src/server/matches/feed-service.ts';
+import { readFrozenLocalFeaturedPicks } from '../src/server/matches/frozen-featured-picks.ts';
 import { createMysqlOddsStore } from '../src/server/odds/odds-mysql-store.ts';
 import { createOddsImportService } from '../src/server/odds/odds-service.ts';
+import { createCutoffLockingService } from '../src/server/predictions/cutoff-service.ts';
 import { parseLifecycleInput } from '../src/server/predictions/lifecycle-input.ts';
 import { createScheduleLifecycleService } from '../src/server/predictions/lifecycle-service.ts';
 import { createRevisionPublicationService } from '../src/server/predictions/publication-service.ts';
 import { createMysqlRefreshStore } from '../src/server/refresh/refresh-mysql-store.ts';
 import { createMysqlResultSyncStore } from '../src/server/results/result-sync-mysql-store.ts';
+import { cutoffAuthority, cutoffPolicy } from './helpers/cutoff-fixtures.mjs';
 import { lifecycleAuthority, lifecycleInput, lifecyclePolicy } from './helpers/lifecycle-fixtures.mjs';
 import { createSyntheticOddsAdapter, launchBetCatalog, oddsAuthority, oddsBounds, oddsHash, oddsPolicy, oddsRequest, rawOddsRow } from './helpers/odds-fixtures.mjs';
 import { publicationAuthority, publicationPolicy } from './helpers/publication-fixtures.mjs';
@@ -57,12 +60,16 @@ async function publishLocalForecast(p, target) {
   return publisher.publish({ ...target.input, candidate, generationCompletedAt: staged.at, goalExtension }, target.lease);
 }
 
-test('Matches and Match Details share the exact Local Engine featured quote and preserve forecasts on abstention', { timeout: 480_000 }, async (t) => {
+test('Matches and Match Details preserve one exact Local Engine featured quote and settle its locked selection', { timeout: 480_000 }, async (t) => {
   await withPredictionPipeline(t, async (p) => {
-    const providerId = 3000, target = await p.setup(providerId);
+    const providerId = 3005, target = await p.setup(providerId);
     const published = await publishLocalForecast(p, target);
     assert.equal(published.refresh.outcome, 'published');
     await p.queue.acknowledge(target.lease);
+    const canceledTarget = await p.setup(3006);
+    const canceledForecast = await publishLocalForecast(p, canceledTarget);
+    assert.equal(canceledForecast.refresh.outcome, 'published');
+    await p.queue.acknowledge(canceledTarget.lease);
     const { fixture: { id }, cycle: { kickoffAt } } = target, date = getReportingDate(kickoffAt);
     const accountId = oddsHash('local-featured-display');
     await p.a.query((tx) => tx.apiQuotaAccount.create({ data: { id: accountId } }));
@@ -81,11 +88,12 @@ test('Matches and Match Details share the exact Local Engine featured quote and 
       assert.equal(result.outcomes.apply, 1);
       return p.now();
     }
-    const observedAt = await store([
+    const preferredBooks = [
       book(8, 'Primary synthetic book', 16, 'Total - Home', 'Under 4.5', '1.15'),
       book(6, 'Other synthetic book', 16, 'Total - Home', 'Under 4.5', '1.1543'),
       book(7, 'Different side synthetic book', 17, 'Total - Away', 'Under 0.5', '7.00'),
-    ]);
+    ];
+    const observedAt = await store(preferredBooks);
     const readFeed = (providerOdds = true, database = p.a, filters = {}) => createMatchFeedService({ database, competitionIds: [39], clock, providerOdds })
       .query({ date, ...filters }, { publishedForecasts: true });
     const readDetail = (providerOdds = true, database = p.a, parameters) => createMatchDetailService({ database, clock, providerOdds }).query(id, parameters);
@@ -93,6 +101,7 @@ test('Matches and Match Details share the exact Local Engine featured quote and 
     const [feed, detail] = await Promise.all([readFeed(), readDetail()]);
     const pick = record(feed).featuredPrediction;
     assert.deepEqual([pick.key, pick.selection, pick.odds], ['goal:full-time:totals:home:4.5:binary', 'under', '1.1543']);
+    assert.equal(pick.tier, 'standard');
     assert.deepEqual(pick.featuredQuote, { bookmakerId: 6, bookmakerName: 'Other synthetic book', betId: 16, betName: 'Total - Home',
       providerSelection: 'Under 4.5', decimal: '1.1543', observedAt, checkedAt: observedAt, providerUpdatedAt: null });
     assert.deepEqual(pick, detail.fixture.featuredPrediction);
@@ -100,20 +109,19 @@ test('Matches and Match Details share the exact Local Engine featured quote and 
     assert.deepEqual(currentFeaturedOutcome(matchDetailResponseSchema.parse(gateDetailResponse(detail, full))), pick);
     assert.equal(record(matchFeedResponseSchema.parse(gateFeedResponse(feed, free))).featuredPrediction, null);
     assert.equal(matchDetailResponseSchema.parse(gateDetailResponse(detail, free)).fixture.featuredPrediction, null);
-    assert.equal(record(await readFeed(false)).featuredPrediction, null);
-    assert.equal((await readDetail(false)).fixture.featuredPrediction, null);
+    const noRights = record(await readFeed(false)).featuredPrediction;
+    assert.equal(noRights.tier, 'forecast-only');
+    assert.equal(noRights.forecastOnlyReason, 'odds-not-permitted');
+    assert.equal(noRights.odds, null);
+    assert.deepEqual((await readDetail(false)).fixture.featuredPrediction, noRights);
     const unavailableQuotes = { query: p.a.query, transaction(operation, options) {
       if (options?.timeout === 5000) return Promise.reject(new Error('Synthetic current quotes timeout'));
       return p.a.transaction(operation, options);
     } };
-    assert.equal(record(await readFeed(true, unavailableQuotes)).featuredPrediction, null);
-    assert.equal((await readDetail(true, unavailableQuotes)).fixture.featuredPrediction, null);
-
-    p.setTime(Math.max(p.now(), target.cycle.cutoffAt));
-    await p.first.close(p.target(target));
-    const [lockedFeed, lockedDetail] = await Promise.all([readFeed(), readDetail()]);
-    assert.equal(lockedDetail.snapshot.applicability, 'locked');
-    assert.deepEqual(currentFeaturedOutcome(gateDetailResponse(lockedDetail, full)), record(lockedFeed).featuredPrediction);
+    const noQuotes = record(await readFeed(true, unavailableQuotes)).featuredPrediction;
+    assert.equal(noQuotes.tier, 'forecast-only');
+    assert.equal(noQuotes.forecastOnlyReason, 'no-verified-odds');
+    assert.deepEqual((await readDetail(true, unavailableQuotes)).fixture.featuredPrediction, noQuotes);
 
     const newRungAt = await store([book(7, 'Synthetic away book', 17, 'Total - Away', 'Under 1.5', '1.6001')]);
     const [lowerRungFeed, lowerRungDetail] = await Promise.all([readFeed(), readDetail()]);
@@ -124,19 +132,61 @@ test('Matches and Match Details share the exact Local Engine featured quote and 
     assert.deepEqual(currentFeaturedOutcome(gateDetailResponse(lowerRungDetail, full)), lowerRung);
 
     await store([book(8, 'Primary synthetic book', 16, 'Total - Home', 'Under 4.5', '1.0999')]);
-    const [unpricedFeed, unpricedDetail] = await Promise.all([readFeed(), readDetail()]);
-    assert.equal(record(unpricedFeed).featuredPrediction, null);
-    const displayed = matchDetailResponseSchema.parse(gateDetailResponse(unpricedDetail, full));
-    assert.equal(currentFeaturedOutcome(displayed), null);
-    assert.equal(featuredFamily(displayed), null);
+    const [fallbackFeed, fallbackDetail] = await Promise.all([readFeed(), readDetail()]);
+    const fallback = record(fallbackFeed).featuredPrediction;
+    assert.equal(fallback.tier, 'priced-fallback');
+    assert.equal(fallback.odds, '1.0999');
+    const displayed = matchDetailResponseSchema.parse(gateDetailResponse(fallbackDetail, full));
+    assert.deepEqual(currentFeaturedOutcome(displayed), fallback);
     assert.equal(displayed.snapshot.revisionId, published.revision.id);
     assert.ok(displayed.extendedMarkets.markets.some(({ key }) => key === pick.key));
 
-    const lifecycle = createScheduleLifecycleService({ database: p.a, cutoff: p.first, policy: lifecyclePolicy(), authority: lifecycleAuthority() });
+    const { cutoffAt } = target.cycle;
+    p.setTime(cutoffAt - 10_000);
+    const frozenQuoteAt = await store([
+      book(8, 'Primary synthetic book', 16, 'Total - Home', 'Under 4.5', '1.1501'),
+      book(6, 'Other synthetic book', 16, 'Total - Home', 'Under 4.5', '1.1546'),
+    ]);
+    p.setTime(cutoffAt - 1000);
+    const atCutoffQuote = await store([book(8, 'At-lock synthetic book', 16, 'Total - Home', 'Under 4.5', '1.4044')]);
+    assert.equal(atCutoffQuote, cutoffAt);
+    const cutoff = createCutoffLockingService({ database: p.a, queue: p.queue, policy: cutoffPolicy(), authority: cutoffAuthority(),
+      featuredPicks: { extendedMarkets: true, oddsPermitted: () => true } });
+    const closed = await cutoff.close(p.target(target));
+    assert.equal(closed.operation.effectiveCloseAt, cutoffAt);
+    const sealed = () => p.a.query((tx) => readFrozenLocalFeaturedPicks(tx, [id])).then((result) => result.get(id));
+    const decision = await sealed();
+    assert.equal(decision.quote.observedAt, frozenQuoteAt);
+    assert.equal(decision.quote.checkedAt, frozenQuoteAt);
+    assert.equal(decision.quote.decimal, '1.1546');
+    assert.ok(decision.quote.snapshotId && decision.quote.receiptId);
+    const [lockedFeed, lockedDetail] = await Promise.all([readFeed(), readDetail()]);
+    assert.equal(lockedDetail.snapshot.applicability, 'locked');
+    const locked = record(lockedFeed).featuredPrediction;
+    assert.equal(record(lockedFeed).featuredDecisionFrozen, true);
+    assert.equal(lockedDetail.fixture.featuredDecisionFrozen, true);
+    assert.equal(locked.odds, '1.1546');
+    assert.deepEqual(currentFeaturedOutcome(gateDetailResponse(lockedDetail, full)), locked);
+    const lockedWithoutOdds = record(await readFeed(false)).featuredPrediction;
+    assert.equal(lockedWithoutOdds.key, locked.key);
+    assert.equal(lockedWithoutOdds.forecastOnlyReason, 'odds-not-permitted');
+    assert.equal(lockedWithoutOdds.featuredQuote, undefined);
+    assert.deepEqual((await readDetail(false)).fixture.featuredPrediction, lockedWithoutOdds);
+    await store([book(8, 'After-lock synthetic book', 16, 'Total - Home', 'Under 4.5', '1.5099')]);
+    assert.deepEqual(await cutoff.close(p.target(target)), closed);
+    assert.deepEqual(await sealed(), decision);
+
+    const lifecycle = createScheduleLifecycleService({ database: p.a, cutoff, policy: lifecyclePolicy(), authority: lifecycleAuthority() });
     const resultStore = createMysqlResultSyncStore({ database: p.a, accountId, lifecycle });
+    await cutoff.close(p.target(canceledTarget));
+    await lifecycle.observe(lifecycleInput(canceledTarget, p.now(), { status: 'CANC', actualStartedAt: null }));
+    const canceledCard = (await readFeed()).records.find(({ fixtureId }) => fixtureId === canceledTarget.fixture.id);
+    const canceledDetail = await createMatchDetailService({ database: p.a, clock, providerOdds: true }).query(canceledTarget.fixture.id);
+    assert.deepEqual([canceledCard.status, canceledCard.featuredDecisionFrozen, canceledCard.featuredPrediction.settlementStatus], ['canceled', true, 'void']);
+    assert.deepEqual(canceledCard.featuredPrediction, canceledDetail.fixture.featuredPrediction);
     for (const [status, expected, elapsed] of [['1H', 'live', 30_000], ['FT', 'finished-regulation', 7_200_000]]) {
       p.setTime(kickoffAt + elapsed);
-      const raw = { goals: { home: 1, away: 0 }, ...(status === 'FT' ? { score: { fulltime: { home: 1, away: 0 } } } : {}) };
+      const raw = { goals: { home: 5, away: 0 }, ...(status === 'FT' ? { score: { fulltime: { home: 5, away: 0 } } } : {}) };
       const observation = parseLifecycleInput(lifecycleInput(target, p.now(), { status, actualStartedAt: kickoffAt, raw }));
       const lease = await resultStore.acquire(oddsHash(`featured-display-owner:${status}`), 30_000);
       assert.ok(lease);
@@ -145,12 +195,19 @@ test('Matches and Match Details share the exact Local Engine featured quote and 
       try { await resultStore.save(lease, batch); await resultStore.apply(lease, batch); } finally { await resultStore.release(lease); }
       const [pastFeed, pastDetail] = await Promise.all([readFeed(), readDetail()]);
       assert.equal(record(pastFeed).status, expected);
-      assert.equal(record(pastFeed).featuredPrediction, null);
-      assert.equal(pastDetail.fixture.featuredPrediction, null);
-      assert.equal(featuredFamily(gateDetailResponse(pastDetail, full)), null);
+      assert.equal(record(pastFeed).featuredDecisionFrozen, true);
+      const expectedPick = status === 'FT' ? { ...locked, settlementStatus: 'incorrect' } : locked;
+      assert.deepEqual(record(pastFeed).featuredPrediction, expectedPick);
+      assert.deepEqual(currentFeaturedOutcome(gateDetailResponse(pastDetail, full)), expectedPick);
+      assert.equal(featuredFamily(gateDetailResponse(pastDetail, full)), 'total-goals');
       assert.equal(pastDetail.snapshot.revisionId, published.revision.id);
       assert.ok(pastDetail.extendedMarkets.markets.some(({ key }) => key === pick.key));
     }
+    const [wins, losses] = await Promise.all([readFeed(true, p.a, { result: 'won' }), readFeed(true, p.a, { result: 'lost' })]);
+    assert.equal(record(wins), undefined);
+    assert.equal(record(losses).featuredPrediction.settlementStatus, 'incorrect');
+    assert.equal(losses.total, 1);
+    assert.equal(wins.total, 0);
     const explicit = await readDetail(true, p.a, new URLSearchParams({ revision: published.revision.id }));
     assert.equal(explicit.fixture.featuredPrediction, undefined);
     assert.equal(explicit.snapshot.revisionId, published.revision.id);

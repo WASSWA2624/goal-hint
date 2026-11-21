@@ -301,10 +301,11 @@ function replayOfferStillAvailable(snapshot: Pick<StoredOddsSnapshot, "retrieved
 }
 
 async function readHistoricalBookmakerQuotes(tx: Tx, fixtures: readonly BookmakerFixture[], asOf: number,
-  betIds: readonly number[] | undefined, verifiedBeforeKickoff: boolean, decisionTimes?: ReadonlyMap<string, number>):
+  betIds: readonly number[] | undefined, verifiedBeforeKickoff: boolean, decisionTimes?: ReadonlyMap<string, number>,
+  includeScheduled = false):
   Promise<ReadonlyMap<string, StoredCurrentBookmakerQuotes>> {
   const expectedKickoff = new Map(fixtures.flatMap(({ fixtureId, kickoffAt }) =>
-    kickoffAt !== null && kickoffAt <= asOf ? [[fixtureId, kickoffAt]] : []));
+    kickoffAt !== null && (includeScheduled || kickoffAt <= asOf) ? [[fixtureId, kickoffAt]] : []));
   const found = new Map<string, StoredCurrentBookmakerQuotes>();
   if (!expectedKickoff.size || betIds?.length === 0) return found;
   const at = new Date(asOf);
@@ -327,8 +328,10 @@ async function readHistoricalBookmakerQuotes(tx: Tx, fixtures: readonly Bookmake
   const lifecycle = verifiedBeforeKickoff ? Prisma.sql`LEFT JOIN FixtureLifecycleState life
     ON life.fixtureId=f.id AND life.retrievedAt<=${at} AND life.issue IS NULL` : Prisma.empty;
   const preMatchUntil = verifiedBeforeKickoff ? Prisma.sql`LEAST(f.kickoff,COALESCE(life.actualStartedAt,f.kickoff))` : Prisma.sql`f.kickoff`;
-  const eligible = Prisma.sql`f.id IN (${fixtureIds}) AND f.provider='api-football' AND f.kickoff<=${at}
-    AND f.status IN (${Prisma.join([...recoveredPreMatchFixtureStatuses])}) AND s.retrievedAt<=${at} AND s.retainUntil>=${at}
+  const eligible = Prisma.sql`f.id IN (${fixtureIds}) AND f.provider='api-football'
+    ${includeScheduled ? Prisma.empty : Prisma.sql`AND f.kickoff<=${at}`}
+    AND f.status IN (${Prisma.join(includeScheduled ? ["scheduled", ...recoveredPreMatchFixtureStatuses] : [...recoveredPreMatchFixtureStatuses])})
+    AND s.retrievedAt<=${at} AND s.retainUntil>=${at}
     ${decisionTimes ? Prisma.sql`AND s.retrievedAt BETWEEN ${new Date(oldestDecision.getTime() - preMatchOddsFreshMs)} AND ${newestDecision}
       AND s.retrievedAt<${preMatchUntil}` : verifiedBeforeKickoff
       ? Prisma.sql`AND (s.retrievedAt<${preMatchUntil} OR s.providerUpdatedAt<${preMatchUntil})` : Prisma.empty}
@@ -462,6 +465,15 @@ export function storedPointInTimeFeaturedBookmakerQuotes(tx: Tx,
     Number.isSafeInteger(decisionAt) && decisionAt >= 0 && decisionAt < kickoffAt);
   return readHistoricalBookmakerQuotes(tx, eligible, asOf, localFeaturedBookmakerBetIds, true,
     new Map(eligible.map(({ fixtureId, decisionAt }) => [fixtureId, decisionAt])));
+}
+
+/** Freeze only sealed observations available before the effective lock, using actual database time for retention. */
+export async function storedCutoffFeaturedBookmakerQuotes(tx: Tx, fixture: BookmakerFixture & { decisionAt: number }, auditedAt: number) {
+  const { fixtureId, kickoffAt, decisionAt } = fixture;
+  if (kickoffAt === null || !Number.isSafeInteger(decisionAt) || decisionAt < 0 || decisionAt >= kickoffAt ||
+    !Number.isSafeInteger(auditedAt) || decisionAt >= auditedAt) return undefined;
+  return (await readHistoricalBookmakerQuotes(tx, [fixture], auditedAt, localFeaturedBookmakerBetIds, true,
+    new Map([[fixtureId, decisionAt]]), true)).get(fixtureId);
 }
 
 export function exactTotal15Odds(values: readonly StoredBookmakerValue[], checkedAt: number): Total15Odds | null {

@@ -87,6 +87,23 @@ test('cohort counts preserve missing predictions and voids without classifying t
     { total: 9, won: 0, lost: 0, pending: 3, void: 0, unavailable: 6 });
 });
 
+test('displayed outcomes replace only their own original audit rows and adjust the denominator', async () => {
+  const legacy = sample(), tx = transaction([legacy]), seen = [];
+  const overrides = new Map([
+    ['replay-loss', { baseline: 'pending', result: 'lost' }],
+    ['no-original', { baseline: 'unavailable', result: 'won' }],
+    ['suppressed', { baseline: 'pending', result: 'unavailable' }],
+    ['archived-cancel', { baseline: 'cancelled', result: 'void' }],
+    ['unverified-display', { baseline: 'unavailable', result: 'pending' }],
+  ]);
+  const summary = await readFeedPerformance(tx, sql, { total: 6, available: 4, void: 0, cancelled: 1 }, undefined,
+    (id, result) => seen.push([id, result]), overrides);
+  assert.deepEqual(summary, { total: 6, won: 2, lost: 1, pending: 1, void: 1, cancelled: 0, unavailable: 1 });
+  assert.deepEqual(seen, [[legacy.row.fixtureId, 'won'], ['replay-loss', 'lost'], ['no-original', 'won'], ['archived-cancel', 'void']]);
+  assert.match(tx.calls[0].sql, /NOT IN\s*\(\s*SELECT matched.id FROM JSON_TABLE/u);
+  assert.match(tx.calls[1].sql, /NOT IN\s*\(\s*SELECT matched.id FROM JSON_TABLE/u);
+});
+
 test('result observers receive audited fixture membership even when aggregate counts are cached', async () => {
   const values = [sample(), sample({ canonicalScore: [0, 0] })], entries = new Map(), generations = new Map();
   const counts = { total: 2, available: 2, void: 0, cancelled: 0 }, context = { key: 'observer-test', nowMs: at };

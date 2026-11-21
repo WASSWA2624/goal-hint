@@ -10,6 +10,7 @@ import { defineJob } from "../jobs/job-registry.ts";
 import { CutoffLockingError, cutoffFail, type CutoffAuthority, type CutoffOperation, type CutoffRecoveryInput,
   type CutoffResult, type CutoffTarget, type VoidLockedCycleInput } from "./cutoff-contract.ts";
 import { reconstructCutoff, revisionEligibleForLock } from "./cutoff-eligibility.ts";
+import { freezeCutoffLocalFeaturedPick, type CutoffFeaturedOptions } from "./cutoff-featured.ts";
 import { CUTOFF_JOB_TYPE, cutoffEnvelope, cutoffPayloadSchema, parseCutoff, parseCutoffPolicy,
   parseCutoffRecovery, parseCutoffTarget, parseCutoffVoid } from "./cutoff-input.ts";
 import { cutoffResult, storedCutoffOperation } from "./cutoff-read.ts";
@@ -23,6 +24,7 @@ import type { PublicationObservation } from "./publication-contract.ts";
 import { observationShowsPlay, statusShowsPlay } from "./publication-eligibility.ts";
 import { parsePublicationObservation } from "./publication-input.ts";
 import { storedPublicationBarrier, storedRefreshResult } from "./publication-read.ts";
+import type { FrozenLocalFeaturedPick } from "../matches/frozen-featured-picks.ts";
 
 type Transaction = Prisma.TransactionClient;
 async function serverNow(tx: Transaction): Promise<UtcInstant> {
@@ -34,6 +36,7 @@ function checked(value: unknown, expected: true | undefined) {
 }
 export function createCutoffLockingService(options: Readonly<{
   database: DatabaseRuntime; queue: JobQueue; policy: unknown; authority: CutoffAuthority;
+  featuredPicks?: CutoffFeaturedOptions;
 }>) {
   const { database, queue, authority } = options, policy = parseCutoffPolicy(options.policy);
   const history = createMysqlPredictionHistoryStore(database);
@@ -57,12 +60,16 @@ export function createCutoffLockingService(options: Readonly<{
       version: row.version, kickoffAt: historyTime(row.kickoffAt), cutoffAt: historyTime(row.cutoffAt), observedAt: historyTime(row.observedAt),
       actualStartedAt: row.actualStartedAt === null ? null : historyTime(row.actualStartedAt) }));
   }
-  async function save(tx: Transaction, operation: CutoffOperation) {
+  async function save(tx: Transaction, operation: CutoffOperation, featured: FrozenLocalFeaturedPick | null = null) {
     const payload = evidenceSerialize(operation);
+    const featuredPayload = featured === null ? null : evidenceSerialize(featured);
     await tx.$executeRaw`INSERT INTO PredictionCycleOperation
-      (id, fixtureId, cycleId, kind, fixtureVersion, revisionId, at, integrity, operationJson)
+      (id, fixtureId, cycleId, kind, fixtureVersion, revisionId, at, integrity, operationJson,
+        featuredDecisionJson, featuredDecisionIntegrity)
       VALUES (${operation.id}, ${operation.fixtureId}, ${operation.cycleId}, ${operation.kind}, ${operation.fixtureVersion},
-        ${operation.cycle.lockedSetId}, ${new Date(operation.at)}, SHA2(CAST(JSON_EXTRACT(${payload}, '$') AS CHAR), 256), JSON_EXTRACT(${payload}, '$'))`;
+        ${operation.cycle.lockedSetId}, ${new Date(operation.at)}, SHA2(CAST(JSON_EXTRACT(${payload}, '$') AS CHAR), 256),
+        JSON_EXTRACT(${payload}, '$'), JSON_EXTRACT(${featuredPayload}, '$'),
+        SHA2(CAST(JSON_EXTRACT(${featuredPayload}, '$') AS CHAR CHARACTER SET utf8mb4), 256))`;
     await tx.predictionChangeEvent.create({ data: { fixtureId: operation.fixtureId, version: operation.fixtureVersion,
       operationId: operation.id, kind: operation.kind === "close" ? "cycle-closed" : "cycle-voided", at: new Date(operation.at) } });
     return cutoffResult(tx, (await storedCutoffOperation(tx, operation.cycleId, operation.kind))!);
@@ -150,6 +157,10 @@ export function createCutoffLockingService(options: Readonly<{
         if (revisionEligibleForLock(candidate, cycle, rows, eligibility.effectiveCloseAt)) { revision = candidate; break; }
       }
       now = await serverNow(tx);
+      const featured = revision && options.featuredPicks
+        ? await freezeCutoffLocalFeaturedPick(tx, fixture, revision, eligibility.effectiveCloseAt, now, options.featuredPicks)
+        : null;
+      now = await serverNow(tx);
       const closedAt = utcInstantFromEpochMilliseconds(Math.max(cycle.openedAt, eligibility.effectiveCloseAt));
       if (now < closedAt) return cutoffFail("unavailable");
       const id = evidenceFingerprint({ cycleId: cycle.id, kind: "close" });
@@ -160,7 +171,7 @@ export function createCutoffLockingService(options: Readonly<{
       const version = (await tx.footballFixture.findUniqueOrThrow({ where: { id: target.fixtureId }, select: { dataVersion: true } })).dataVersion;
       const result = await save(tx, freezeEvidence({ id, ...target, kind: "close", fixtureVersion: version, at: now,
         effectiveCloseAt: eligibility.effectiveCloseAt, actor: "cutoff-locking", reason: eligibility.reason,
-        evidenceRef: observation?.evidenceRef ?? policy.evidenceRef, scheduleHash: evidenceFingerprint(rows), cycle: next }));
+        evidenceRef: observation?.evidenceRef ?? policy.evidenceRef, scheduleHash: evidenceFingerprint(rows), cycle: next }), featured);
       if (lease) await queue.assertOwned(tx, lease);
       authorize(observation ? "observe-play" : "close", target, proof);
       if (await serverNow(tx) < now) return cutoffFail("unavailable");

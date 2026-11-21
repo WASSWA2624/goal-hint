@@ -82,6 +82,7 @@ import { fallbackRefreshPlan, LIVE_REFRESH_TYPE, liveCascadePlan, liveLocalFirst
   oddsPolicy, oddsImportBounds, oddsCatalogBounds, oddsMaxRequests, ODDS_FRESHNESS_MS, teamCodeBounds, teamCodeImportsEnabled,
   refreshEnvelopeFor } from "./live-plan.ts";
 import { oddsFail } from "../odds/odds-contract.ts";
+import { approvedOddsDisplay } from "../odds/public-odds-policy.ts";
 import { createOddsJobDefinitions, oddsHistoryDeadline, oddsHistoryScopeId, oddsQuotaAllows, ODDS_PROVIDER_WINDOW_MS, ODDS_SWEEP_MS,
   type OddsQuotaUsage, type OddsJobDependencies } from "../odds/odds-jobs.ts";
 import { createMysqlOddsStore } from "../odds/odds-mysql-store.ts";
@@ -255,7 +256,9 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       observeCompetitionPage: async (rows, source) => {
         await historySource.savePage({ endpoint: "competitions", rows, parameters: source.requestParameters, retrievedAt: source.retrievedAt });
       } }) : null;
-    const cutoff = createCutoffLockingService({ database, queue, policy: cutoffPolicy(refs), authority: authorities.cutoff });
+    const cutoff = createCutoffLockingService({ database, queue, policy: cutoffPolicy(refs), authority: authorities.cutoff,
+      featuredPicks: { extendedMarkets: localEvidence,
+        oddsPermitted: () => publicPolicy.features.providerOdds || approvedOddsDisplay(policy.choices.odds.rightsRef, verify) } });
     const forecastRecovery = coordinated ? createForecastRecovery({ database, queue, jobType: LIVE_REFRESH_TYPE,
       scheduleCutoff: (target, tx) => cutoff.scheduleCycle(target, undefined, tx) }) : null;
     const lifecycle = createScheduleLifecycleService({ database, cutoff, policy: lifecyclePolicy(refs), authority: authorities.lifecycle });

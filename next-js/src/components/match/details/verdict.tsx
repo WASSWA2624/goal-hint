@@ -9,8 +9,8 @@ import { predictionDescription } from "@/domain/prediction-label";
 import { bookmakerOddsSource, detailRecordNotices } from "@/domain/detail-presentation";
 import { isFeaturedPickSuppressed } from "@/domain/fixture-snapshot";
 import { displayMarketOddsPrice } from "@/domain/in-play-odds";
-import { currentFeaturedOutcome, detailMarketValue, featuredFamily, liveStanding, marketRow, selectedDetailPrice } from "@/domain/match-details";
-import { ForecastValueLabel } from "../forecast-labels";
+import { currentFeaturedOutcome, featuredFamily, liveStanding, marketRow, selectedDetailPrice } from "@/domain/match-details";
+import { FeaturedPickStatus, FeaturedPriceValue, featuredPickStatusText, featuredPriceValueText } from "../forecast-labels";
 import { toUtcIsoString } from "@/domain/calendar";
 import { openDetailTab } from "@/domain/match-detail-tabs";
 import type { MarketFamily, MarketSource } from "@/domain/markets";
@@ -102,32 +102,36 @@ export const Verdict = memo(function Verdict() {
   if ("gated" in data.history && snapshot) {
     return <Box><UnlockPanel locale={locale} signedIn={data.access.signedIn} returnTo={data.route.path} /></Box>;
   }
-  const selected = data.fixture.featuredPrediction?.featuredQuote ? currentFeaturedOutcome(data) : null;
+  const supplied = data.fixture.featuredPrediction;
+  const selected = supplied?.tier || supplied?.featuredQuote || data.fixture.featuredDecisionFrozen || data.fixture.retrospective
+    ? currentFeaturedOutcome(data) : null;
   const featured = selected?.family ?? featuredFamily(data), row = featured && !selected ? marketRow(data, featured) : null;
   if (!featured || !selected && !row?.item) return <Box aria-labelledby="verdict-title" data-featured-pick="none">
     <Eyebrow><h2 id="verdict-title">{messages.text(data.fixture.retrospectiveSuppression ? "touchline.retrospective" : "details.verdict")}</h2></Eyebrow>
-    <strong>{messages.text(data.selection === "applicable" && isFeaturedPickSuppressed(data.fixture) ? "match.noRecommendedPick" : "details.noPick")}</strong>
+    <strong>{messages.text(data.selection === "applicable" && isFeaturedPickSuppressed(data.fixture) ? "match.noQualifyingPick" : "details.noPick")}</strong>
   </Box>;
   const item = row?.item, price = selected ? selected.odds && displayMarketOddsPrice(selected.odds) : selectedDetailPrice(data, featured);
-  const standing = liveStanding(data, featured);
+  const standing = selected ? null : liveStanding(data, featured);
   const pick = selected?.selectionLabel ?? predictionDescription(messages, item!.market.selection);
   const chance = percent(messages, selected?.probability ?? item!.market.selectedProbability);
   const market = selected?.label ?? marketName(messages, featured);
   const exactQuote = selected?.featuredQuote;
   const attribution = exactQuote ? bookmakerOddsSource(exactQuote, messages) : undefined;
-  const expectedReturn = selected?.featuredExpectedNetReturn !== undefined ? Number(selected.featuredExpectedNetReturn) : detailMarketValue(data, featured);
-  const settled = snapshot?.applicability === "historical" ? null : row?.outcome?.status ?? (snapshot?.applicability === "void" ? "void" : null);
+  const valueDescription = featuredPriceValueText(selected, price, messages);
+  const tierDescription = featuredPickStatusText(selected, messages);
+  const settled = snapshot?.applicability === "historical" ? null : selected?.settlementStatus ?? row?.outcome?.status ?? (snapshot?.applicability === "void" ? "void" : null);
   const oddsLabel = messages.text("details.odds");
   return <Box aria-labelledby="verdict-title" data-verdict={featured} data-featured-pick={featured}>
     <Eyebrow><h2 id="verdict-title">{messages.text("details.verdict")}</h2>
-      {standing ? <Standing standing={standing} /> : settled && settled !== "pending" ? <DetailOutcome status={settled} /> : null}</Eyebrow>
+      {standing ? <Standing standing={standing} /> : settled && settled !== "pending" && settled !== "unavailable" ? <DetailOutcome status={settled} /> : null}</Eyebrow>
     <Pick type="button" $family={featured} onClick={() => update((current) => ({ ...openDetailTab(current, "markets"),
       ...(selected?.code ? { marketCategory: "goals" } : { market: featured }) }))}
       aria-label={[messages.text("details.featuredOpen", { market, pick, probability: chance }),
-        price ? `${oddsLabel}: ${price}` : null, attribution].filter(Boolean).join(". ")}>
+        price ? `${oddsLabel}: ${price}` : null, attribution, tierDescription, valueDescription].filter(Boolean).join(". ")}>
       <span data-pick><strong>{selected ? pick : <PredictionOutcome messages={messages} selection={item!.market.selection} />}</strong><small>{market}
-        <PredictionOdds odds={price} title={attribution} /></small>
-        <ForecastValueLabel expectedReturn={expectedReturn} messages={messages} /></span>
+        <span><PredictionOdds odds={price} title={attribution} />{selected?.tier === "forecast-only" && "—"}
+          <FeaturedPriceValue description={valueDescription} messages={messages} /></span></small>
+        <FeaturedPickStatus pick={selected} description={tierDescription} /></span>
       <span data-chance><b>{chance}</b><small>{messages.text("details.probability")}</small></span>
     </Pick>
     <PredictionRecord source={selected?.source} />

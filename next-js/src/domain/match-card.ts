@@ -5,14 +5,15 @@ import { recommendationMarket, type DisplayedMarketPick } from "./recommendation
 import { sameMarketOdds } from "./in-play-odds.ts";
 import type { UtcInstant } from "./calendar.ts";
 import { isSlipMarketSelection, type SlipMarketSelection } from "./slip-markets.ts";
-import type { FeaturedPrediction } from "./extended-markets.ts";
+import { featuredSettlementTone, type FeaturedPrediction } from "./extended-markets.ts";
 
 export function featuredCardPrediction(pick: FeaturedPrediction, publishedAt: UtcInstant | null, provisional: boolean) {
   const roundedPercent = Math.round(pick.probability * 100);
   const labelKey: ProbabilityLabelKey = roundedPercent === 0 && pick.probability > 0 ? "probability.less-than-one"
     : roundedPercent === 100 && pick.probability < 1 ? "probability.more-than-ninety-nine" : "probability.percent";
   return { item: { market: { family: pick.family, selection: pick.selection, source: pick.source, selectedProbability: pick.probability } },
-    probability: { probability: pick.probability, roundedPercent, labelKey }, status: "pending" as const, publishedAt, provisional };
+    probability: { probability: pick.probability, roundedPercent, labelKey },
+    status: pick.settlementStatus ? featuredSettlementTone(pick.settlementStatus) : "pending", publishedAt, provisional };
 }
 
 /** An original saved selection has one probability, not a complete current forecast distribution. */
@@ -117,7 +118,8 @@ export function sameCardFixture(previous: FixtureSnapshot, next: FixtureSnapshot
     previous.update?.statusFreshness?.state === next.update?.statusFreshness?.state &&
     sameScore(previous.phaseScores?.extraTime, next.phaseScores?.extraTime) && sameScore(previous.phaseScores?.shootout, next.phaseScores?.shootout) &&
     previous.forecast?.updateDelayed === next.forecast?.updateDelayed && samePrices(previous.prices, next.prices) &&
-    sameMarketOdds(previous.marketOdds, next.marketOdds) && sameFeatured(previous.featuredPrediction, next.featuredPrediction) &&
+    sameMarketOdds(previous.marketOdds, next.marketOdds) && previous.featuredDecisionFrozen === next.featuredDecisionFrozen &&
+    sameFeatured(previous.featuredPrediction, next.featuredPrediction) &&
     sameFeatured(previous.filteredPrediction, next.filteredPrediction) &&
     previous.retrospectiveSuppression?.revisionId === next.retrospectiveSuppression?.revisionId &&
     previous.retrospective?.revisionId === next.retrospective?.revisionId &&
@@ -126,7 +128,8 @@ export function sameCardFixture(previous: FixtureSnapshot, next: FixtureSnapshot
 function sameFeatured(left: FixtureSnapshot["featuredPrediction"], right: FixtureSnapshot["featuredPrediction"]): boolean {
   return left === right || !!left && !!right && left.key === right.key && left.selection === right.selection &&
     left.probability === right.probability && left.odds === right.odds && left.source === right.source &&
-    left.featuredExpectedNetReturn === right.featuredExpectedNetReturn &&
+    left.featuredExpectedNetReturn === right.featuredExpectedNetReturn && left.tier === right.tier && left.forecastOnlyReason === right.forecastOnlyReason &&
+    left.settlementStatus === right.settlementStatus &&
     left.featuredQuote?.bookmakerId === right.featuredQuote?.bookmakerId && left.featuredQuote?.bookmakerName === right.featuredQuote?.bookmakerName &&
     left.featuredQuote?.observedAt === right.featuredQuote?.observedAt && left.featuredQuote?.providerUpdatedAt === right.featuredQuote?.providerUpdatedAt;
 }

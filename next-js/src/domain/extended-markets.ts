@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { bookmakerOddsId, oddsDisplayText } from "./bookmaker-odds.ts";
-import { featuredExpectedReturnSchema, localFeaturedQuoteSchema } from "./local-featured-decision.ts";
+import { featuredExpectedReturnSchema, featuredNetReturnSchema, localFeaturedQuoteSchema } from "./local-featured-decision.ts";
 import { parseDecimalOdds } from "./odds.ts";
 import { marketSources } from "./markets.ts";
 import { publicPolicy } from "./public-policy.ts";
@@ -16,18 +16,39 @@ export const extendedMarketSourceLabels = {
 export const extendedSettlementStatuses = ["correct", "incorrect", "half-win", "half-loss", "push", "pending", "void", "unavailable"] as const;
 export type ExtendedSettlementStatus = typeof extendedSettlementStatuses[number];
 export const settledExtendedStatuses = ["correct", "incorrect", "half-win", "half-loss", "push"] as const;
+export function featuredSettlementTone(status: ExtendedSettlementStatus) {
+  return status === "half-win" ? "correct" : status === "half-loss" ? "incorrect" : status === "push" ? "void" : status;
+}
 const text = z.string().min(1).refine((value) => value === value.trim() && !/[\p{Cc}<>]/u.test(value));
 const label = text.max(128), selectionLabel = text.max(512);
 const probability = z.number().finite().min(0).max(1);
 const outcomes = z.strictObject({ win: probability, "half-win": probability, push: probability, "half-loss": probability, loss: probability });
+const forecastOnlyReasonSchema = z.enum(["odds-not-permitted", "no-verified-odds", "no-comparable-quote", "no-qualifying-outcome"]);
+const standardFeaturedPrice = parseDecimalOdds("1.10")!.scaled;
 const featuredPredictionFields = z.strictObject({ key: label, family: z.enum(publicPolicy.markets),
   label, code: label.max(16).nullable(), selection: label.max(64), selectionLabel, probability,
   odds: z.string().refine((price) => parseDecimalOdds(price) !== null).nullable(), source: z.enum(marketSources),
-  featuredQuote: localFeaturedQuoteSchema.optional(), featuredExpectedNetReturn: featuredExpectedReturnSchema.optional(),
+  tier: z.enum(["standard", "priced-fallback", "forecast-only"]).optional(), forecastOnlyReason: forecastOnlyReasonSchema.optional(),
+  featuredQuote: localFeaturedQuoteSchema.optional(), featuredExpectedNetReturn: featuredNetReturnSchema.optional(),
+  settlementStatus: z.enum(extendedSettlementStatuses).optional(),
 });
-function qualifyingQuoteCoherent({ featuredQuote, featuredExpectedNetReturn, odds, source }: z.infer<typeof featuredPredictionFields>) {
-  return featuredQuote === undefined ? featuredExpectedNetReturn === undefined
-    : source === "local-engine" && odds === featuredQuote.decimal && featuredExpectedNetReturn !== undefined;
+function qualifyingQuoteCoherent({ tier, forecastOnlyReason, featuredQuote, featuredExpectedNetReturn, odds, source }: z.infer<typeof featuredPredictionFields>) {
+  if (tier === "forecast-only") return source === "local-engine" && odds === null && forecastOnlyReason !== undefined &&
+    featuredQuote === undefined && featuredExpectedNetReturn === undefined;
+  if (forecastOnlyReason !== undefined) return false;
+  if (featuredQuote === undefined) return tier === undefined && featuredExpectedNetReturn === undefined;
+  if (source !== "local-engine" || odds !== featuredQuote.decimal || featuredExpectedNetReturn === undefined) return false;
+  const standard = parseDecimalOdds(odds)!.scaled >= standardFeaturedPrice && featuredExpectedReturnSchema.safeParse(featuredExpectedNetReturn).success;
+  return tier === "priced-fallback" ? !standard : standard;
+}
+
+/** Return the exact saved edge only when the displayed price itself clears the 5% badge threshold. */
+export function featuredPriceValue(pick: FeaturedPrediction | null | undefined, displayedPrice: string | null | undefined): string | null {
+  const value = pick?.featuredExpectedNetReturn, quote = pick?.featuredQuote;
+  if (!quote || !displayedPrice || parseDecimalOdds(displayedPrice)?.text !== quote.decimal ||
+    !value || !featuredExpectedReturnSchema.safeParse(value).success) return null;
+  const [whole, fraction = ""] = value.split(".");
+  return whole !== "0" || fraction.padEnd(2, "0").slice(0, 2) >= "05" ? value : null;
 }
 export const featuredPredictionSchema = featuredPredictionFields.refine(qualifyingQuoteCoherent);
 export type FeaturedPrediction = Readonly<z.infer<typeof featuredPredictionSchema>>;

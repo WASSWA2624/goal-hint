@@ -38,6 +38,9 @@ export const FilterIcon = (props: IconProps) => <Icon {...props}><path d="M4 5h1
 export const ResetIcon = (props: IconProps) => <Icon {...props}><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5" /></Icon>;
 export const InfoIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 7.5h.01" /></Icon>;
 export const CircleMinusIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /></Icon>;
+export const ChipIcon = (props: IconProps) => <Icon {...props}><rect x="6" y="6" width="12" height="12" rx="1" /><path d="M9 3v3m6-3v3m-6 12v3m6-3v3M3 9h3m-3 6h3m12-6h3m-3 6h3m-11-5h4v4h-4z" /></Icon>;
+export const PlugIcon = (props: IconProps) => <Icon {...props}><path d="M9 3v6m6-6v6M7 9h10v3a5 5 0 0 1-5 5v4m0-4a5 5 0 0 1-5-5V9Z" /></Icon>;
+export const SparklesIcon = (props: IconProps) => <Icon {...props}><path d="M11 3l1.9 5.1L18 10l-5.1 1.9L11 17l-1.9-5.1L4 10l5.1-1.9L11 3Zm7 12v6m-3-3h6m-2-15v4m-2-2h4" /></Icon>;
 export const HelpIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 0 1 5 .5c0 1.5-2.5 2-2.5 3.5M12 16.5h.01" /></Icon>;
 export const ShieldIcon = (props: IconProps) => <Icon {...props}><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z" /></Icon>;
 export const DocumentIcon = (props: IconProps) => <Icon {...props}><path d="M14 3H5v18h14V8l-5-5ZM14 3v5h5M8 12h8M8 16h8" /></Icon>;
