@@ -281,6 +281,7 @@ export const en = {
   "account.currentPassword": "Current password",
   "account.forgotCurrent": "Forgot it?",
   "account.yourAccount": "Your account",
+  "account.administrator": "Administrator",
   "account.administratorAccess": "Administrator · Full access",
   "account.noSubscriptionNeeded": "Your administrator account has full access. No subscription is needed.",
   "account.dashboard": "Open dashboard",

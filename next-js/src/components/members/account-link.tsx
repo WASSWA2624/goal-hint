@@ -14,6 +14,8 @@ import { createMessages } from "@/i18n/messages";
 import { memberAuthPath } from "@/domain/member-navigation";
 import { formatPhone } from "@/domain/phone";
 import { accountSectionHref, type AccountSection } from "@/domain/account-navigation";
+import { adminSections } from "@/domain/admin-navigation";
+import { adminSectionIcons } from "@/components/admin/admin-section-icons";
 import { accountSectionIcons } from "./account-navigation";
 import { media } from "@/styles/theme";
 import { MemberSignOut } from "./member-controls";
@@ -88,6 +90,10 @@ const Identity = styled.div`
   > svg { flex: none; font-size: var(--gh-font-headline); color: ${({ theme }) => theme.color.link}; }
   small { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); }
   strong { display: block; font-size: var(--gh-font-emphasis); font-weight: ${({ theme }) => theme.typography.weight.medium}; font-variant-numeric: tabular-nums; }
+  &[data-administrator] {
+    background: ${({ theme }) => theme.color.surfaceMuted};
+    strong { font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
+  }
 `;
 const Destination = styled(Link)`
   display: flex;
@@ -125,7 +131,7 @@ const SignOut = styled(MemberSignOut)`
   }
 `;
 
-function AccountMenu({ locale, phone, administratorName }: { locale: string; phone: string | null; administratorName?: string }) {
+function AccountMenu({ locale, phone, administrator }: { locale: string; phone: string | null; administrator: boolean }) {
   const messages = createMessages(locale);
   const pathname = usePathname(), previousPathname = useRef(pathname);
   const root = useRef<HTMLDetailsElement>(null);
@@ -145,21 +151,26 @@ function AccountMenu({ locale, phone, administratorName }: { locale: string; pho
       dismiss();
       root.current.querySelector("summary")?.focus({ preventScroll: true });
     }}>
-    <summary aria-label={messages.text("account.title")} title={messages.text("account.title")} aria-controls={popupId} aria-expanded={open} aria-describedby={!administratorName ? `${popupId}-unread` : undefined}>
+    <summary aria-label={messages.text("account.title")} title={messages.text("account.title")} aria-controls={popupId} aria-expanded={open} aria-describedby={!administrator ? `${popupId}-unread` : undefined}>
       <UserIcon />
-      {!administratorName && <NotificationUnread locale={locale} dot id={`${popupId}-unread`} />}
+      {!administrator && <NotificationUnread locale={locale} dot id={`${popupId}-unread`} />}
     </summary>
     <Popup id={popupId}>
-      <Identity><UserIcon /><div>{administratorName ? <strong>{administratorName}</strong> : <><small>{messages.text("account.registeredNumber")}</small><strong>+{formatPhone((phone ?? "").replace(/^\+/, ""))}</strong></>}</div></Identity>
-      {!administratorName && <nav aria-label={messages.text("account.title")} onClick={dismiss}>
-        {(["overview", "subscription", "notifications", "payments", "phone", "password"] satisfies AccountSection[]).map(section => {
+      <Identity data-administrator={administrator ? "" : undefined}><UserIcon /><div>{administrator
+        ? <strong>{messages.text("account.administrator")}</strong>
+        : <><small>{messages.text("account.registeredNumber")}</small><strong>+{formatPhone((phone ?? "").replace(/^\+/, ""))}</strong></>}</div></Identity>
+      <nav aria-label={messages.text("account.title")} onClick={dismiss}>
+        {administrator ? adminSections.filter(section => section.key !== "overview").map(({ key, href, label }) => {
+          const Icon = adminSectionIcons[key];
+          return <Destination key={key} href={href} prefetch={false}><Icon />{label}<ChevronRightIcon /></Destination>;
+        }) : (["overview", "subscription", "notifications", "payments", "phone", "password"] satisfies AccountSection[]).map(section => {
           const Icon = accountSectionIcons[section];
           return <Destination key={section} href={accountSectionHref(locale, section)} prefetch={false}><Icon />
             {messages.text(section === "overview" ? "account.title" : `account.section.${section}`)}{section === "notifications" && <NotificationUnread locale={locale} />}<ChevronRightIcon />
           </Destination>;
         })}
-      </nav>}
-      <SignOut logoutAction={administratorName ? "/api/admin/logout" : "/api/account/sign-out"}><SignOutIcon />{messages.text("auth.signOut")}</SignOut>
+      </nav>
+      <SignOut logoutAction={administrator ? "/api/admin/logout" : "/api/account/sign-out"}><SignOutIcon />{messages.text("auth.signOut")}</SignOut>
     </Popup>
   </Disclosure>;
 }
@@ -179,16 +190,16 @@ export function AccountLinks({ locale = "en", administratorName }: { locale?: st
   const administrator = useSyncExternalStore(subscribeMemberSession, getAdminSessionSnapshot, getServerAdminSessionSnapshot);
   useEffect(() => { void ensureMemberSession(); }, [pathname]);
   const messages = createMessages(locale);
-  const adminIdentity = administratorName ?? (administrator ? messages.text("navigation.dashboard") : undefined);
-  const signedIn = !!(phone || adminIdentity);
+  const isAdministrator = !!(administratorName || administrator);
+  const signedIn = !!(phone || isAdministrator);
   return <Actions data-account-actions>
-    {(administratorName || administrator) && <AdminPaymentsLink />}
+    {isAdministrator && <AdminPaymentsLink />}
     <DownloadHeaderLink locale={locale} />
     {!signedIn && <>
       <AuthLink href={memberAuthPath("login")} prefetch={false} data-header-auth="login"><SignInIcon /><span>{messages.text("auth.signIn")}</span></AuthLink>
       <AuthLink href={memberAuthPath("register")} prefetch={false} $primary aria-label={messages.text("auth.signUp")} data-header-auth="register"><UserPlusIcon /><span>{messages.text("auth.signUp")}</span></AuthLink>
     </>}
     <ThemeToggle locale={locale} />
-    {signedIn && <AccountMenu locale={locale} phone={phone} {...(adminIdentity ? { administratorName: adminIdentity } : {})} />}
+    {signedIn && <AccountMenu locale={locale} phone={phone} administrator={isAdministrator} />}
   </Actions>;
 }
