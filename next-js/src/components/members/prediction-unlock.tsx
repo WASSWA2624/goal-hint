@@ -54,6 +54,14 @@ const AccessButton = styled(ButtonLink)<{ $embedded: boolean }>`
   white-space: normal; text-align: start; line-height: var(--gh-leading-normal);
   > svg { flex: none; inline-size: var(--gh-size-3_5); block-size: var(--gh-size-3_5); }
   ${({ $embedded }) => $embedded && `&& { min-block-size: var(--slip-header-action-size); padding: var(--gh-spacing-0_75) var(--gh-spacing-1_5); font-size: var(--gh-font-secondary); }`}
+  &&[data-unlock-card] {
+    position: static;
+    &::after { content: ""; position: absolute; inset: 0; z-index: var(--gh-layer-content); border-radius: inherit; }
+    &:focus-visible::after {
+      outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
+      outline-offset: calc(-1 * ${({ theme }) => theme.border.focusWidth});
+    }
+  }
 `;
 
 const getExpiredSnapshot = () => getSubscriptionSnapshot()?.expired === true;
@@ -67,12 +75,15 @@ function UnlockActionLabel({ locale, signedIn }: { locale: string; signedIn: boo
 }
 
 /** Context-aware access actions reuse the shared button surface and control metric. */
-export function UnlockButton({ locale = "en", signedIn = false, returnTo = "/en", guestView = "register", compact = false, actionSpecific = false }: {
+export function UnlockButton({ locale = "en", signedIn = false, returnTo = "/en", guestView = "register", compact = false,
+  actionSpecific = false, cardTitle }: {
   locale?: string; signedIn?: boolean; returnTo?: string; guestView?: "login" | "register"; compact?: boolean; actionSpecific?: boolean;
+  cardTitle?: string;
 }) {
   const m = createMessages(locale);
-  return <AccessButton href={subscriberHref(signedIn, returnTo, guestView)} prefetch={false} variant="secondary" $embedded={compact} data-unlock-button>
-    <LockIcon aria-hidden="true" />{actionSpecific ? <UnlockActionLabel locale={locale} signedIn={signedIn} />
-      : <span>{m.text(compact ? "paywall.unlock" : signedIn ? "paywall.subscribeUnlock" : "paywall.registerUnlock")}</span>}
+  return <AccessButton href={subscriberHref(signedIn, returnTo, guestView)} prefetch={false} variant="secondary" $embedded={compact}
+    data-unlock-button data-unlock-card={cardTitle ? "" : undefined} aria-label={cardTitle ? `${m.text("paywall.unlock")}: ${cardTitle}` : undefined}>
+    <LockIcon aria-hidden="true" />{actionSpecific && !cardTitle ? <UnlockActionLabel locale={locale} signedIn={signedIn} />
+      : <span>{m.text(compact || cardTitle ? "paywall.unlock" : signedIn ? "paywall.subscribeUnlock" : "paywall.registerUnlock")}</span>}
   </AccessButton>;
 }

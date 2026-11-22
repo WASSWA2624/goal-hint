@@ -5,6 +5,7 @@ import { Container, PageMain } from "@/components/ui/layout";
 import { utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import type { FeaturedPrediction } from "@/domain/extended-markets";
 import { parseFixtureSnapshot, type FixtureSnapshot } from "@/domain/fixture-snapshot";
+import type { MarketFamily } from "@/domain/markets";
 import examples from "../examples.json";
 
 const example = (id: string) => parseFixtureSnapshot(examples.find(({ fixture }) => fixture.fixtureId === id)!.fixture);
@@ -26,9 +27,10 @@ export default function FeedCardExamples() {
     evidenceCutoffAt: utcInstantFromEpochMilliseconds(kickoffAt - 300_000), generatedAt, activatedAt: generatedAt,
     pick: { key: "goal:full-time:totals:away:5.5:binary", family: "total-goals" as const, label: "Full time · Away team goals 5.5",
       code: "O/U 5.5", selection: "under", selectionLabel: "Under 5.5", probability: 0.96, odds: null, source: "local-engine" as const } };
-  const cases: { fixture: FixtureSnapshot; gated?: boolean; featured?: boolean }[] = [
+  const cases: { fixture: FixtureSnapshot; gated?: boolean; signedIn?: boolean; featured?: boolean; family?: MarketFamily }[] = [
     { fixture: { ...names(live, "Brighton", "Everton"), fixtureId: "feed-live", score: { home: 2, away: 1 } } },
     { fixture: { ...live, fixtureId: "feed-stoppage", liveClock: { phase: "second-half", minute: 90, stoppageMinutes: 4 } } },
+    { fixture: { ...live, fixtureId: "feed-first-half-stoppage", liveClock: { phase: "first-half", minute: 45, stoppageMinutes: 2 } } },
     { fixture: { ...live, fixtureId: "feed-halftime", liveClock: { phase: "half-time", minute: null } } },
     { fixture: { ...names(final, "Lyon", "Lille"), fixtureId: "feed-aet", status: "finished-extra-time", score: { home: 1, away: 1 },
       scorePeriod: "regulation", phaseScores: { extraTime: { home: 2, away: 1 }, shootout: null } } },
@@ -36,7 +38,11 @@ export default function FeedCardExamples() {
       scorePeriod: "regulation", phaseScores: { extraTime: { home: 1, away: 1 }, shootout: { home: 3, away: 4 } } } },
     { fixture: { ...final, fixtureId: "feed-incomplete", status: "finished-extra-time", score: { home: 1, away: 1 }, scorePeriod: "regulation" } },
     { fixture: { ...local, fixtureId: "feed-missing-odds" } },
-    { fixture: { ...example("card-delayed"), fixtureId: "feed-gated" }, gated: true },
+    { fixture: { ...example("card-delayed"), fixtureId: "feed-gated" }, gated: true, signedIn: false },
+    { fixture: { ...pick, fixtureId: "feed-guest-completed" }, signedIn: false },
+    { fixture: { ...example("card-delayed"), fixtureId: "feed-expired", forecast: null }, gated: true },
+    { fixture: { ...pick, fixtureId: "feed-double-chance" }, family: "double-chance" },
+    { fixture: { ...example("card-limited"), fixtureId: "feed-btts" }, family: "both-teams-to-score" },
     { fixture: { ...example("card-overdue"), fixtureId: "feed-overdue" } },
     { featured: true, fixture: { ...example("card-delayed"), fixtureId: "feed-upcoming", forecast: null } },
     { featured: true, fixture: { ...local, fixtureId: "feed-extended", status: "scheduled", score: null, featuredPrediction: standard } },
@@ -64,9 +70,9 @@ export default function FeedCardExamples() {
     <PerformanceSummary locale="en" kind="matches" counts={{ total: 5, won: 1, lost: 1, pending: 1, void: 1, cancelled: 1 }} />
     <section data-feed-match-results>
     <MatchCardList id="feed-card-examples">
-      {cases.map(({ fixture, gated, featured }) => <li key={fixture.fixtureId}>
-        <MatchCard fixture={fixture} analysisSlug="example-home-v-away" selectedFamily="match-result" phoneFeed
-          {...(gated ? { gated } : {})} {...(featured ? { publishedMarket: true } : {})} />
+      {cases.map(({ fixture, gated = false, signedIn = true, featured = false, family = "match-result" }) => <li key={fixture.fixtureId}>
+        <MatchCard fixture={fixture} analysisSlug="example-home-v-away" selectedFamily={family} phoneFeed
+          gated={gated} signedIn={signedIn} publishedMarket={featured} />
       </li>)}
     </MatchCardList>
     </section>

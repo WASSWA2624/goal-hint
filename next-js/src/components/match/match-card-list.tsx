@@ -27,6 +27,14 @@ const Board = styled.div<{ $indexLength: number }>`
     [data-row-market], [data-row-odds], [data-row-probability] { gap: var(--gh-spacing-0_75); }
     [data-row-odds] > [data-number-label] { flex: none; }
     [data-row-odds] > strong { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; text-align: end; }
+    [data-desktop-row][data-row-hide-metrics] {
+      --desktop-columns: var(--review-date-width, var(--gh-size-12_6)) var(--gh-size-17_8) var(--review-country-width)
+        var(--review-league-width) minmax(0, 1fr) minmax(var(--gh-size-32), 0.55fr) var(--review-status-width);
+      [data-row-unlock] { grid-column: auto; }
+      [data-row-market] { gap: var(--gh-spacing-1_5); }
+      [data-row-market] > [data-pick-line] { flex: 0 1 auto; }
+      [data-pick-line] { color: ${({ theme }) => theme.color.link}; font-weight: var(--gh-weight-bold); }
+    }
     background: ${({ theme }) => theme.color.page};
     border: 0;
     border-radius: ${({ theme }) => theme.radius.none};
@@ -53,6 +61,7 @@ const List = styled.ul`
     border-radius: ${({ theme }) => theme.radius.none};
     background: ${({ theme }) => theme.color.surface};
     ${media.hover} { &:hover { background: var(--match-card-hover); } }
+    &:has([data-unlock-card]) { cursor: pointer; }
   }
   > li > article > [data-match-open], > li > [data-desktop-row] > [data-match-analysis-link] { border-radius: inherit; }
   ${media.belowDesktop} {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-/** Check real desktop access targets, their geometry and unchanged authorized metrics. */
+/** Check real desktop access targets, their geometry and surface-specific prediction fields. */
 export async function verifyDesktopPredictionAccess(page, {
   signedIn = false, expired = false, expectedLocked, expectedUnlocked, expectedOdds = [], expectedProbabilities = [],
 } = {}) {
@@ -25,7 +25,7 @@ export async function verifyDesktopPredictionAccess(page, {
       const slip = element.closest('[data-locked-slip]');
       const headerButton = slip?.querySelector('[data-slip-header-action] a[data-unlock-button]');
       return {
-        locked: Boolean(area), pickState: element.getAttribute('data-pick-state'),
+        feed: element.hasAttribute('data-row-hide-metrics'), locked: Boolean(area),
         label: button?.textContent.trim(), href: button?.getAttribute('href'), inSlip: Boolean(slip), headerHref: headerButton?.getAttribute('href'),
         buttons: area?.querySelectorAll('a, button').length,
         decorativeIcon: button?.querySelector('svg')?.getAttribute('aria-hidden') === 'true',
@@ -39,7 +39,7 @@ export async function verifyDesktopPredictionAccess(page, {
         controlHeight: Boolean(buttonBounds && buttonBounds.height >= parseFloat(getComputedStyle(button).getPropertyValue('--form-control-height'))),
         receivesPointer: Boolean(button && hit && button.contains(hit)),
         rowOverlay: Boolean(element.querySelector('[data-row-analysis]')),
-        metricCount: metrics.filter(Boolean).length, visibleMetrics: metrics.every(visible),
+        metricCount: metrics.filter(Boolean).length, visibleMetrics: metrics.filter(Boolean).every(visible),
         odds: metrics[1]?.textContent, probability: metrics[2]?.textContent,
         publicFields: ['date', 'time', 'country', 'league', 'teams', 'status'].every((name) => visible(element.querySelector(`[data-row-${name}]`))),
         visibleTeams: ['home', 'away'].every((side) => visible(element.querySelector(`[data-${side}]`))),
@@ -57,49 +57,53 @@ export async function verifyDesktopPredictionAccess(page, {
   }
   for (const card of locked) {
     assert.equal(card.buttons, 1, 'One access target replaces the protected metrics.');
-    assert.equal(card.label, !signedIn ? 'Log in or register to unlock' : expired ? 'Renew to unlock' : 'Subscribe to unlock');
+    assert.equal(card.label, card.feed ? 'Unlock' : !signedIn ? 'Log in or register to unlock' : expired ? 'Renew to unlock' : 'Subscribe to unlock');
     assert.ok(card.labelFits, 'The complete action label fits without clipping or overflow.');
     assert.ok(card.decorativeIcon, 'A decorative lock icon accompanies the accessible button text.');
     assert.equal(card.metricCount, 0, 'Market, odds and probability are replaced, including placeholders.');
-    assert.ok(card.fillsArea && card.spansMetrics, 'The access target fills the former three-column region.');
+    assert.ok(card.fillsArea && card.spansMetrics, 'The access target fills the prediction region.');
     assert.ok(card.controlHeight, 'The access target preserves shared control height.');
     assert.ok(card.receivesPointer && !card.rowOverlay, 'No card or slip overlay intercepts the access target.');
     const target = new URL(card.href, 'https://example.test');
     assert.equal(target.pathname, signedIn ? '/en/subscribe' : '/en/account');
-    if (!signedIn) assert.equal(target.searchParams.get('view'), 'register');
+    if (!signedIn) assert.equal(target.searchParams.get('view'), card.feed ? 'login' : 'register');
     const returnTo = target.searchParams.get('return');
     assert.ok(returnTo?.startsWith(card.inSlip ? '/en/best-slips/' : '/en/matches/'), 'Access retains the original match or slip return destination.');
     if (card.inSlip) assert.equal(card.href, card.headerHref, 'Slip row access retains the header return destination.');
   }
-  for (const card of unlocked) assert.ok(card.metricCount === 3 && card.visibleMetrics, 'Authorized rows retain all three prediction fields.');
-  for (const value of expectedOdds) assert.ok(unlocked.some((card) => card.odds.includes(value)), `Authorized odds ${value} remain visible.`);
-  for (const value of expectedProbabilities) assert.ok(unlocked.some((card) => card.probability.includes(value)), `Authorized probability ${value} remains visible.`);
+  for (const card of unlocked) assert.ok(card.metricCount === (card.feed ? 1 : 3) && card.visibleMetrics, 'Authorized rows show the fields for their surface.');
+  for (const value of expectedOdds) assert.ok(unlocked.some((card) => card.odds?.includes(value)), `Authorized odds ${value} remain visible.`);
+  for (const value of expectedProbabilities) assert.ok(unlocked.some((card) => card.probability?.includes(value)), `Authorized probability ${value} remains visible.`);
   return { locked: locked.length, unlocked: unlocked.length };
 }
 
 /** Browser acceptance for the mobile-only access surface and intrinsic slip-header action slot. */
 export async function verifyMobilePredictionAccess(page, { signedIn = false } = {}) {
   const cards = await page.locator('article[data-mobile-locked]').evaluateAll((elements) => elements.map((card) => {
+    const feed = card.hasAttribute('data-phone-feed-card');
     const area = card.querySelector('[data-mobile-unlock-area]');
     const button = area?.querySelector('a');
     const areaBounds = area?.getBoundingClientRect(), buttonBounds = button?.getBoundingClientRect();
     const visible = (element) => Boolean(element.getClientRects().length);
     return {
-      label: button?.textContent.trim(), href: button?.getAttribute('href'),
+      feed, label: button?.textContent.trim(), href: button?.getAttribute('href'),
       fillsArea: areaBounds && buttonBounds && Math.abs(areaBounds.width - buttonBounds.width) < 1
         && Math.abs(areaBounds.height - buttonBounds.height) < 1,
       controlHeight: buttonBounds && buttonBounds.height >= parseFloat(getComputedStyle(button).getPropertyValue('--form-control-height')),
       visibleTeams: [...card.querySelectorAll('[data-ledger-home], [data-ledger-away]')].filter(visible).length,
-      hiddenFields: [...card.querySelectorAll('[data-ledger-facts], [data-score], [data-score-home], [data-score-away], [data-match-open]')].every((field) => !visible(field)),
+      hiddenFields: [...card.querySelectorAll(feed ? '[data-ledger-facts], [data-match-open]'
+        : '[data-ledger-facts], [data-score], [data-score-home], [data-score-away], [data-match-open]')].every((field) => !visible(field)),
     };
   }));
   for (const card of cards) {
-    assert.equal(card.label, signedIn ? 'Subscribe to unlock' : 'Register / log in to unlock');
-    assert.equal(new URL(card.href, 'https://example.test').pathname, signedIn ? '/en/subscribe' : '/en/account');
+    assert.equal(card.label, card.feed ? 'Unlock' : signedIn ? 'Subscribe to unlock' : 'Register / log in to unlock');
+    const target = new URL(card.href, 'https://example.test');
+    assert.equal(target.pathname, signedIn ? '/en/subscribe' : '/en/account');
+    if (!signedIn) assert.equal(target.searchParams.get('view'), card.feed ? 'login' : 'register');
     assert.ok(card.fillsArea, 'The access button fills the protected region.');
     assert.ok(card.controlHeight, 'The access button retains the shared control height.');
     assert.equal(card.visibleTeams, 2, 'Both teams remain visible.');
-    assert.ok(card.hiddenFields, 'Scores and prediction fields are hidden on locked mobile cards.');
+    assert.ok(card.hiddenFields, 'Restricted fields are hidden on locked mobile cards.');
   }
   const headers = await page.locator('[data-locked-slip] [data-mobile-slip-header]').evaluateAll((elements) => elements.map((header) => {
     const action = header.querySelector('[data-header-actions]'), status = header.querySelector('[data-header-status]');

@@ -17,7 +17,7 @@ export const desktopMatchBaseStyles = css`
   li:nth-child(even) > [data-desktop-row],
   li:nth-child(even) > [data-fixture-id] [data-desktop-row] { background: ${({ theme }) => theme.color.surfaceMuted}; }
   [data-desktop-row]:has(> [data-row-analysis]) { cursor: pointer; }
-  [data-desktop-row] :is(a:not([data-row-analysis]), button, input, select, textarea) { position: relative; z-index: var(--gh-layer-raised); }
+  [data-desktop-row] :is(a:not([data-row-analysis], [data-unlock-card]), button, input, select, textarea) { position: relative; z-index: var(--gh-layer-raised); }
   @media (hover: hover) {
     [data-desktop-row]:has(> [data-row-analysis]):hover { background: var(--match-card-hover, ${({ theme }) => theme.color.rowHover}); }
   }

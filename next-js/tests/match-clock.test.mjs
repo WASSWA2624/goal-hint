@@ -70,3 +70,24 @@ test("desktop badges center running time, explicit added minutes and named phase
     assert.equal(label.badgeTicks, badgeTicks);
   }
 });
+
+test("Matches clocks show the phase boundary and tick during observed stoppage time", () => {
+  for (const [phase, minute, stoppageMinutes, expected] of [
+    ["first-half", 45, 2, "45+02:56"],
+    ["first-half", 47, null, "45+02:56"],
+    ["second-half", 46, null, "46:56"],
+    ["second-half", 90, 3, "90+03:56"],
+    ["second-half", 93, 3, "90+03:56"],
+    ["second-half", 90, null, "90:56"],
+    ["extra-time", 105, 2, "ET 105+02:56"],
+    ["extra-time", 106, null, "ET 106:56"],
+    ["extra-time", 120, 1, "ET 120+01:56"],
+  ]) {
+    const label = liveClockLabel({ phase, minute, stoppageMinutes, observedAt: 100_000 }, messages, 156_000, true);
+    assert.equal(label.badge, expected);
+    assert.equal(label.badgeTicks, true);
+  }
+  const clock = { phase: "second-half", minute: 90, stoppageMinutes: 3, observedAt: 100_000 };
+  assert.equal(liveClockLabel(clock, messages, undefined, true).badge, "90+03:00");
+  assert.equal(liveClockLabel(clock, messages, 200_000, true).badge, "90+03:59");
+});

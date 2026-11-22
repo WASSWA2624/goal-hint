@@ -69,7 +69,7 @@ export function MatchStatus({ status, outcome, messages, snapshot = false, offli
     : result === "unavailable" ? "—" : result === "unknown" ? messages.text("slips.match.unknown")
       : messages.text(isOutcome ? `outcome.${result}` : `match.status.${result}`);
   const clock = result === "live" && liveClock && (liveClock.minute !== null || liveClock.phase !== "in-play")
-    ? liveClockLabel(liveClock, messages) : null;
+    ? liveClockLabel(liveClock, messages, undefined, compactMatch) : null;
   const extraTime = clock !== null && clock.minute !== null && liveClock?.phase === "extra-time";
   const halfTime = clock !== null && liveClock?.phase === "half-time";
   const finished = !offline && !snapshot && (status === "finished-regulation" || status === "finished-extra-time" || status === "finished-penalties");
@@ -88,7 +88,7 @@ export function MatchStatus({ status, outcome, messages, snapshot = false, offli
     aria-label={compactMatch ? undefined : clock?.spoken}
     title={clock?.spoken ?? (awaitingResult && result === "pending" ? messages.text("slips.outcome.pending") : spokenFinish)}>
     {result === "live" && !compactMatch && <LiveDot data-match-live-dot aria-hidden="true" />}
-    <span data-pick-value="" aria-hidden={accessibleStatus ? true : undefined}>{clock ? desktopClock || compactMatch ? <span data-status-clock><LiveMatchTime clock={liveClock} messages={messages} badge /></span>
+    <span data-pick-value="" aria-hidden={accessibleStatus ? true : undefined}>{clock ? desktopClock || compactMatch ? <span data-status-clock><LiveMatchTime clock={liveClock} messages={messages} badge showStoppageSeconds={compactMatch} /></span>
       : <><span data-mobile-only data-status-clock>{halfTime ? <span data-half-time-prefix>{label} </span> : <>{label} </>}
         {extraTime && <>{messages.text("match.clock.extra-timeShort")} </>}<LiveMatchTime clock={liveClock} messages={messages} /></span><span data-desktop-only>{label}</span></> : visible}</span>
     {!compactMatch && !desktopClock && liveClock !== undefined && finalPhase && <span data-mobile-only data-status-phase>{finalPhase}</span>}
