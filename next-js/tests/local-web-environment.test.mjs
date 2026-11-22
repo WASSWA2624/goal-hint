@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { localWebEnvironment } from "../scripts/lib/local-web-environment.mjs";
 
 const require = createRequire(import.meta.url);
 const nextEnv = require.resolve("@next/env");
@@ -72,6 +73,22 @@ test("normal development and its restarted Next child read only dedicated develo
   assert.equal(worker.GH_RUNTIME_MODE, "development");
   assert.equal(worker.DATABASE_URL, "owned-db");
   assert.equal(worker.GH_PREVIEW_ONLY, undefined);
+});
+
+test("the forked Next server retains the inherited mask for excluded settings", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "goal-hint-local-env-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const key = "GOAL_HINT_API_PREDICTION_FALLBACK_ENABLED";
+  writeFileSync(join(directory, ".env.development"), `${key}=true\n`);
+
+  const parent = localWebEnvironment("development", { directory, owned: true, source: {} });
+  const child = localWebEnvironment("development", { directory, owned: true, source: parent });
+  assert.equal(child[key], "");
+  assert.equal(child.__GOAL_HINT_LOCAL_ENV_MASK, key);
+
+  const override = localWebEnvironment("development", { directory, owned: true, source: { ...parent, [key]: "false" } });
+  assert.equal(override[key], "false");
+  assert.equal(override.__GOAL_HINT_LOCAL_ENV_MASK, "");
 });
 
 test("local production Next build and start take their local overlay and block implicit hosted settings", (t) => {
