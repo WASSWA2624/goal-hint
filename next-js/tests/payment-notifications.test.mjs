@@ -6,9 +6,6 @@ import { createReviewHandlers } from "../src/server/admin/codes-http.ts";
 import { createPaymentReview } from "../src/server/admin/payment-review.ts";
 import { DatabaseOperationError } from "../src/server/database/client.ts";
 import { createAccessCodes } from "../src/server/members/access-codes.ts";
-import { createPaymentNotifications } from "../src/server/members/payment-notifications.ts";
-import { createQueuedPaymentNotifications } from "../src/server/members/payment-notification-outbox.ts";
-import { YoolaMessagingError } from "../src/server/members/yoola-messaging.ts";
 
 const instant = Date.parse("2026-12-24T22:30:00Z"), day = 86_400_000;
 const owner = "synthetic-owner";
@@ -196,100 +193,24 @@ test("payment decision HTTP responses report notification status without changin
   assert.equal(rejection.status, 200); assert.deepEqual(await rejection.json(), { status: "saved", notification: "sent" });
 });
 
-test("approval SMS directs the member to sign in without disclosing payment or subscription details", async () => {
-  const f = fixture(), messages = [];
-  const notifications = createPaymentNotifications({ database: f.database, now: () => instant, delivery: { async sendSms(message) { messages.push(message); } } });
-  const result = await notifications.approved({ paymentId: randomUUID(), accountId: f.account.id, phone: f.account.phone, reference: "PABCD", planName: "Weekly", expiresAt: new Date("2026-12-31T22:30:00Z") });
-  assert.equal(result, "sent"); assert.equal(messages.length, 1); assert.equal(messages[0].phone, f.account.phone);
-  assert.match(messages[0].message, /Log in/u);
-  assert.doesNotMatch(messages[0].message, /PABCD|Weekly|2027|EAT|payment|approved/iu);
-  assert.equal(f.state.ownerAuditEvent[0].action, "payment_sms_attempted");
-  assert.ok(!JSON.stringify(f.state.ownerAuditEvent).includes(f.account.phone));
-  assert.ok(!JSON.stringify(f.state.ownerAuditEvent).includes(messages[0].message));
-});
-
-test("rejection SMS excludes payment references, decisions, reasons and private administrator text", async () => {
-  const f = fixture(), messages = [];
-  const notifications = createPaymentNotifications({ database: f.database, delivery: { async sendSms(message) { messages.push(message); } } });
-  await notifications.rejected({ paymentId: randomUUID(), accountId: f.account.id, phone: f.account.phone, reference: "PABCD", reason: "not-received" });
-  assert.match(messages[0].message, /Log in/u); assert.doesNotMatch(messages[0].message, /PABCD|reject|not.received|could not be confirmed/iu);
-  await notifications.rejected({ paymentId: randomUUID(), accountId: f.account.id, phone: f.account.phone, reference: "PEFGH", reason: "Private admin text: secret 256700000333" });
-  assert.ok(!messages[1].message.includes("Private admin text")); assert.ok(!messages[1].message.includes("256700000333"));
-});
-
-test("credit and renewal SMS exclude amounts, balances, plan names and expiry times", async () => {
-  const f = fixture(), messages = [];
-  const notifications = createPaymentNotifications({ database: f.database, delivery: { async sendSms(message) { messages.push(message); } } });
-  await notifications.credited({ paymentId: randomUUID(), accountId: f.account.id, phone: f.account.phone, reference: "PCREDIT", addedUgx: 25000, balanceUgx: 32000 });
-  await notifications.renewed({ accessCodeId: randomUUID(), accountId: f.account.id, phone: f.account.phone, planName: "Private Weekly", expiresAt: new Date("2027-01-01T09:00:00Z"), balanceUgx: 17000 });
-  for (const { message } of messages) {
-    assert.match(message, /Log in/u); assert.ok(message.length <= 160);
-    assert.doesNotMatch(message, /PCREDIT|25000|25,000|32000|17000|UGX|credit|Private Weekly|2027|EAT/iu);
-  }
-  assert.equal(f.state.ownerAuditEvent.at(-1).targetType, "access-code");
-});
-
-test("SMS delivery failures return safe statuses without leaking provider diagnostics", async () => {
-  for (const code of ["configuration", "unsupported-country", "delivery"]) {
-    const f = fixture();
-    const notifications = createPaymentNotifications({ database: f.database, delivery: { async sendSms() { throw new YoolaMessagingError(code); } } });
-    assert.equal(await notifications.rejected({ paymentId: randomUUID(), accountId: f.account.id, phone: f.account.phone, reference: "PABCD", reason: "other" }), "failed");
-    assert.equal(f.state.ownerAuditEvent[0].action, "payment_sms_attempted");
-    assert.ok(!JSON.stringify(f.state.ownerAuditEvent).includes(f.account.phone));
-  }
-  const f = fixture(), secret = "Synthetic private provider payload 256700000333";
-  const notifications = createPaymentNotifications({ database: f.database, delivery: { async sendSms() { throw new Error(secret); } } });
-  assert.equal(await notifications.rejected({ paymentId: randomUUID(), accountId: f.account.id, phone: f.account.phone, reference: "PABCD", reason: "other" }), "failed");
-  assert.ok(!JSON.stringify(f.state.ownerAuditEvent).includes(secret));
-});
-
-test("missing or unsupported registered numbers do not call the SMS provider", async () => {
-  const f = fixture(); let calls = 0;
-  const notifications = createPaymentNotifications({ database: f.database, delivery: { async sendSms() { calls++; } } });
-  for (const [phone, status] of [[null, "unavailable"], ["551155550123", "unsupported"]]) {
-    assert.equal(await notifications.rejected({ paymentId: randomUUID(), accountId: f.account.id, phone, reference: "PABCD", reason: "other" }), status);
-  }
-  assert.equal(calls, 0);
-});
-
-test("an audit outage does not undo an SMS accepted by the provider", async () => {
-  const f = fixture(); let calls = 0;
-  const notifications = createPaymentNotifications({ database: { ...f.database, async transaction() { throw new Error("Synthetic audit outage"); } }, delivery: { async sendSms() { calls++; } } });
-  assert.equal(await notifications.rejected({ paymentId: randomUUID(), accountId: f.account.id, phone: f.account.phone, reference: "PABCD", reason: "other" }), "sent");
-  assert.equal(calls, 1);
-});
-
-test("the direct account-update adapter requires the current verified recipient and fails closed when it cannot read one", async () => {
-  const f = fixture(); let calls = 0;
-  const notifications = createPaymentNotifications({ database: f.database, delivery: { async sendSms() { calls++; } } });
-  const message = { paymentId: randomUUID(), accountId: f.account.id, phone: f.account.phone, reference: "PABCD", reason: "other" };
-  for (const fields of [{ phoneVerifiedAt: null }, { phoneVerifiedAt: new Date(instant), phone: "256700000222" }, { phone: message.phone, blockedAt: new Date(instant) }]) {
-    Object.assign(f.account, fields);
-    assert.equal(await notifications.rejected(message), "unavailable");
-  }
-  const offline = createPaymentNotifications({ database: { async query() { throw new Error("Synthetic read failure"); } }, delivery: { async sendSms() { calls++; } } });
-  assert.equal(await offline.rejected(message), "failed"); assert.equal(calls, 0);
-});
-
-test("production approval and rejection intents commit atomically without contacting a gateway", async () => {
+test("production approval and rejection commit without queuing member messages", async () => {
   const f = fixture(), approved = f.report(), rejected = f.report({ reference: "EFGH" });
-  const notifications = createQueuedPaymentNotifications();
-  const result = await f.codes({ notifications }).approvePayment(approved.id, f.fields(), owner);
-  assert.equal(result.notification, "queued");
-  assert.deepEqual(f.committed.paymentNotificationOutbox.map(row => [row.targetId, row.decision, row.status]), [[approved.id, "approved", "queued"]]);
-  assert.equal((await f.review({ notifications }).reject(rejected.id, "other", "Private text", false, owner)).notification, "queued");
-  assert.deepEqual(f.committed.paymentNotificationOutbox.map(row => row.decision), ["approved", "rejected"]);
-  const serialized = JSON.stringify(f.committed.paymentNotificationOutbox);
-  assert.ok(!serialized.includes(f.account.phone)); assert.ok(!serialized.includes("Private text"));
-  assert.ok(!serialized.includes("Weekly")); assert.ok(!serialized.includes("SYNTHETICPAID"));
+  const codes = createAccessCodes({ database: f.database, now: () => instant });
+  const review = createPaymentReview(f.database, () => instant);
+  const result = await codes.approvePayment(approved.id, f.fields(), owner);
+  assert.equal(result.notification, "skipped");
+  assert.equal((await review.reject(rejected.id, "other", "Private text", false, owner)).notification, "skipped");
+  assert.deepEqual(f.committed.paymentSubmission.map(row => row.status), ["approved", "rejected"]);
+  assert.equal(f.committed.paymentNotificationOutbox.length, 0);
 });
 
-test("a rolled back decision leaves no outbox row and concurrent decisions enqueue once", async () => {
-  const f = fixture(), row = f.report(), codes = f.codes({ notifications: createQueuedPaymentNotifications() });
+test("rollback and concurrent production decisions never create member messages", async () => {
+  const f = fixture(), row = f.report(), codes = createAccessCodes({ database: f.database, now: () => instant });
   f.abortNextCommit(new DatabaseOperationError("unavailable"));
   await assert.rejects(codes.approvePayment(row.id, f.fields(), owner), DatabaseOperationError);
-  assert.equal(f.committed.paymentNotificationOutbox.length, 0); assert.equal(f.committed.paymentSubmission[0].status, "pending");
+  assert.equal(f.committed.paymentNotificationOutbox.length, 0);
+  assert.equal(f.committed.paymentSubmission[0].status, "pending");
   const outcomes = await Promise.all([codes.approvePayment(row.id, f.fields(), owner), codes.approvePayment(row.id, f.fields(), owner)]);
   assert.deepEqual(outcomes.map(outcome => outcome.status).sort(), ["created", "duplicate"]);
-  assert.equal(f.committed.paymentNotificationOutbox.length, 1);
+  assert.equal(f.committed.paymentNotificationOutbox.length, 0);
 });

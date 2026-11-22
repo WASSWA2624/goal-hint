@@ -49,10 +49,10 @@ No production proxy CIDRs or firewall changes are inferred or applied here.
 
 ## Verification codes
 
-The existing 24-hour lifetime serves **account ownership** (registration/phone
-changes) and **signed-out password recovery**, through the user's SMS/WhatsApp
-choice. Logged-in password changes do not send an OTP. Keep the approved lifetime
-and three sends per account/phone/purpose in a rolling 24 hours. Replacing a code
+The existing 24-hour lifetime serves both legacy account codes already delivered
+and signed-out password recovery. Only recovery sends new codes, by the member's
+supported SMS or WhatsApp choice. Recovery allows three sends per account and
+phone in a rolling 24 hours. Replacing a code
 consumes all older challenges; replacing a reset code also revokes reset-only
 authorization. Delivery failures invalidate their own challenge; late delivery
 cannot revive a replaced code. Consumption is account-locked, purpose/phone-bound,
@@ -69,8 +69,11 @@ raw code is placed in an audit event, outbox record or application log.
 Reward creation rechecks both real verified identities under account locks.
 Signed attribution, unique keyed registration-phone identity and atomic reward
 creation prevent repeats/self-referrals, including erase/re-register attempts.
-Verification remains the trigger, independently of payment. Existing earned
-period chaining and original immutable award/access accounting are preserved.
+Successful verification with a previously issued account code remains the award
+trigger. Registration records attribution without proving phone ownership or
+awarding days. Password recovery proves control of the current number without
+triggering a referral award. New attributions remain pending under the current
+policy. Existing earned periods and award and access accounting are preserved.
 
 [Manual fraud review and reversal proposal](referral-fraud-review-proposal.md)
 was approved by the owner on 31 October 2026 for subsequent implementation.

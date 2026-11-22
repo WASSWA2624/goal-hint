@@ -5,7 +5,7 @@ import { defaultMessageTemplates, renderMessageTemplate } from "../../domain/mes
 import { sharedMessageValues, type MessagingSettingsReader } from "./message-content.ts";
 
 export type VerificationMessage = Readonly<{ phone: string; channel: MessageChannel; purpose: VerificationPurpose; code: string }>;
-export type MemberMessaging = Readonly<{ send(message: VerificationMessage): Promise<void> }>;
+export type MemberMessaging = Readonly<{ send(message: VerificationMessage): Promise<void>; recoveryAvailable?(phone: string): Promise<boolean> }>;
 export type SmsMessage = Readonly<{ phone: string; message: string }>;
 /** configured() is optional for injected fakes; a missing method counts as configured. */
 export type WhatsAppMessage = Readonly<{ phone: string; templateName: string; parameters: readonly string[]; consent: true }>;
@@ -90,6 +90,12 @@ export function createYoolaMessaging({ env = process.env, fetch: request = globa
     sendWhatsApp,
     /** The same key and sender rule delivery checks, without a request: an unconfigured process leaves outbox rows alone. */
     configured: () => credentials() !== null,
+    async recoveryAvailable(phone: string) {
+      if (!credentials()) return false;
+      const settings = readSettings ? await readSettings() : null;
+      const recovery = (settings?.messageTemplates ?? defaultMessageTemplates).events["password-reset"];
+      return (!readSettings || !!settings) && recovery.enabled && supportedMessageChannels(phone).some(channel => recovery.channels.includes(channel));
+    },
     async send({ phone, channel, purpose, code }: VerificationMessage): Promise<void> {
       if (typeof code !== "string" || !/^\d{6}$/u.test(code) || !["account", "password-reset"].includes(purpose) || !["sms", "whatsapp"].includes(channel)) {
         throw new YoolaMessagingError("invalid-message");

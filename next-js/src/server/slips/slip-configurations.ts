@@ -6,6 +6,7 @@ import { canonicalSlipConfigurationParameters, slipConfigurationMutationSchema, 
 import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
 import type { Prisma, SlipConfiguration as ConfigurationRow } from "../generated/prisma/client.ts";
 import type { MemberIdentity } from "../members/member-sessions.ts";
+import { hasMemberAdmission } from "../members/member-admission.ts";
 
 type Outcome = Readonly<{ status: "saved"; configurations: readonly SlipConfiguration[] }>
   | Readonly<{ status: SlipConfigurationFailure }>;
@@ -22,7 +23,7 @@ export function createSlipConfigurations({ database, now = Date.now }: { databas
     return !!session && session.accountId === member.accountId && !!session.authenticatedAt && !session.passwordResetAt && session.expiresAt > at
       && !session.account.blockedAt && !session.account.erasedAt && !!session.account.phone
       && (!!session.account.passwordHash || member.administrator === true)
-      && session.account.phone === member.phone && (!!session.account.phoneVerifiedAt || member.administrator === true);
+      && session.account.phone === member.phone && (hasMemberAdmission(session.account) || member.administrator === true);
   }
   const list = async (tx: Prisma.TransactionClient, accountId: string) =>
     (await tx.slipConfiguration.findMany({ where: { accountId }, orderBy: order })).map(view);

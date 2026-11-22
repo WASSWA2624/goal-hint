@@ -3,7 +3,7 @@ import test from "node:test";
 import { randomUUID } from "node:crypto";
 import { createMemberAuth } from "../src/server/members/member-auth.ts";
 import { createMemberSessions } from "../src/server/members/member-sessions.ts";
-import { awardReferralRegistration, createReferrals } from "../src/server/members/referrals.ts";
+import { awardReferralRegistration, createReferrals, ensureReferralCode, recordReferralRegistration } from "../src/server/members/referrals.ts";
 import { createAccessCodes, createAccessPeriod, lockMemberAccount } from "../src/server/members/access-codes.ts";
 import { createSubscribers } from "../src/server/admin/subscribers.ts";
 import { paidDatabase } from "./helpers/paid-database.mjs";
@@ -39,25 +39,35 @@ test("referral award concurrency, paid precedence, immutable identity and deleti
   catch (error) { if (!(error instanceof MysqlServerUnavailableError)) throw error; t.skip(error.message); return; }
   t.after(() => f.close());
   let time = Date.parse("2026-10-31T12:00:00Z");
-  const DAY = 86_400_000, now = () => time, messages = [], password = "correct horse 47", phone = "256700001001", friend = "256700001002";
+  const DAY = 86_400_000, now = () => time, password = "correct horse 47", phone = "256700001001", friend = "256700001002";
+  const passwordHash = await hashPassword(password), messages = [];
   await f.database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "on", trialDays: 0, updatedAt: new Date(time), updatedBy: "synthetic-owner" } }));
   const auth = createMemberAuth({ database: f.database, config: f.config, now, adminPhone: () => false, adminPasswordHash: () => null,
     delivery: { async send(message) { messages.push(message); } } });
   const sessions = createMemberSessions({ database: f.database, config: f.config, now, adminPhone: () => false, adminPasswordHash: () => null });
   const referrals = createReferrals({ database: f.database, now });
   const codes = createAccessCodes({ database: f.database, now, notifications: silentPaymentNotifications });
-  async function signup(number, code) {
-    const pending = await auth.register(number, password, { member: null }, "198.51.100.9", code);
+  async function legacySignup(number, code) {
+    const id = randomUUID(), at = new Date(time), otp = "914385";
+    await f.database.transaction(async tx => {
+      const account = await tx.memberAccount.create({ data: { id, phone: number, passwordHash, createdAt: at, lastSignInAt: at } });
+      await ensureReferralCode(tx, account);
+      await recordReferralRegistration(tx, f.config, account, at, code);
+      await tx.memberVerification.create({ data: { id: randomUUID(), accountId: id, phone: number, purpose: "account", channel: "sms",
+        codeHash: f.config.key("member-verification-code", `${id}:${number}:account:${otp}`),
+        bindingHash: f.config.key("member-verification-binding", id), createdAt: at, sentAt: at, expiresAt: new Date(time + DAY) } });
+    });
+    const pending = await auth.login(number, password, "198.51.100.9");
     assert.equal(pending.status, "authenticated");
-    await auth.requestVerification("sms", pending.token, "198.51.100.9");
-    return { pending, otp: messages.at(-1).code };
+    assert.equal(pending.requiresVerification, true);
+    return { pending, otp };
   }
-  const first = await signup(phone);
+  const first = await legacySignup(phone);
   const owner = await auth.verifyAccount(first.otp, first.pending.token, "198.51.100.9"), member = await sessions.verify(owner.token);
   const link = (await referrals.read(member)).code;
   const paid = await codes.manual({ phone, durationDays: 7, amountReceivedUgx: 0, note: "Synthetic paid-priority period" }, "synthetic-owner");
   assert.equal(paid.status, "created");
-  const invited = await signup(friend, link);
+  const invited = await legacySignup(friend, link);
   await f.database.transaction(tx => awardReferralRegistration(tx, f.config, { id: invited.pending.accountId, phone: friend }, new Date(now())));
   assert.equal(await f.database.query(tx => tx.accessCode.count({ where: { source: "referral" } })), 0,
     "The reward boundary rejects an unverified invitee even when called directly");
@@ -96,17 +106,17 @@ test("referral award concurrency, paid precedence, immutable identity and deleti
   await assert.rejects(f.database.query(tx => tx.memberReferral.updateMany({ where: { accountId: invited.pending.accountId }, data: { inviterId: invited.pending.accountId } })));
   const admin = createSubscribers(f.database, now, f.config);
   assert.equal((await admin.action(invited.pending.accountId, "delete", undefined, "synthetic-owner")).status, "saved");
-  const reused = await signup(friend, link);
+  const reused = await legacySignup(friend, link);
   assert.equal((await auth.verifyAccount(reused.otp, reused.pending.token, "198.51.100.9")).status, "authenticated");
   assert.equal((await referrals.read(member)).earnedDays, 1, "A deleted number cannot earn twice");
   assert.equal((await admin.action(member.accountId, "delete", undefined, "synthetic-owner")).status, "saved");
   assert.equal(await f.database.query(tx => tx.memberReferral.count({ where: { status: "rewarded", accessCodeId: null, inviterId: null } })), 1);
 
   // Existing owner-confirmed number changes deliberately move earned grants intact. Other ownership remains immutable.
-  const moving = await signup("256700009107");
+  const moving = await legacySignup("256700009107");
   const movingLogin = await auth.verifyAccount(moving.otp, moving.pending.token, "198.51.100.9");
   const movingMember = await sessions.verify(movingLogin.token), movingLink = (await referrals.read(movingMember)).code;
-  const movingFriend = await signup("256700009108", movingLink);
+  const movingFriend = await legacySignup("256700009108", movingLink);
   await auth.verifyAccount(movingFriend.otp, movingFriend.pending.token, "198.51.100.9");
   await f.database.transaction(async tx => createAccessPeriod(tx, await lockMemberAccount(tx, movingMember.accountId), {
     source: "referral", planName: "Historical earned access", durationDays: 1, priceUgx: 0, amountReceivedUgx: 0,
@@ -125,4 +135,5 @@ test("referral award concurrency, paid precedence, immutable identity and deleti
   assert.equal((await f.database.query(tx => tx.referralCredit.aggregate({ where: { accountId: moved.grant.accountId }, _sum: { days: true } })))._sum.days, 1);
   assert.equal(await f.database.query(tx => tx.accountMove.count({ where: { fromAccountId: movingMember.accountId, toAccountId: moved.grant.accountId } })), 1);
   assert.equal(await f.database.query(tx => tx.ownerAuditEvent.count({ where: { action: "number_changed", accountId: moved.grant.accountId } })), 1);
+  assert.equal(messages.length, 0);
 });

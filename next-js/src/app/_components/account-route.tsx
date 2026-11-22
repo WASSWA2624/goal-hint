@@ -10,12 +10,11 @@ import { AccountFacts, AccountPageHead, AccountPanel, AccountWorkspace } from "@
 import { AccountWallet } from "@/components/members/account-wallet";
 import { AccountDevices, AccountQuickActions, AccountSubscriptionPanel } from "@/components/members/account-panels";
 import { AccountPayments } from "@/components/members/account-payments";
-import { AccountNotificationPreferences } from "@/components/members/account-notification-preferences";
 import { AccountNotifications } from "@/components/members/account-notifications";
 import { AccountActivity } from "@/components/members/account-activity";
 import { AccountReferrals, AccountReferralSummary } from "@/components/members/account-referrals";
 import { AccountReferralReviews } from "@/components/members/account-referral-reviews";
-import { AccountVerificationForm } from "@/components/members/account-verification";
+import { AccountVerificationForm, ForgotPasswordForm } from "@/components/members/account-verification";
 import { ApprovalRefresh } from "@/components/members/payment-status";
 import { ButtonLink } from "@/components/ui/controls";
 import { Stack } from "@/components/ui/layout";
@@ -71,11 +70,16 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
       <MemberNavigationRecovery /><p role="status">{messages.text("account.unavailable")}</p>
     </Stack></PublicShell>;
     const member = session.kind === "member" ? session.member : null;
+    const canReadReferrals = member?.phoneVerified === true;
     const unavailable = mode === undefined;
     // Administrator sign-in is independent of subscription settings and every account subview.
     if (member && !member.blocked && member.administrator) redirect(memberLandingPath(true, returnTo));
     if (session.kind === "reset") return <PublicShell locale={locale} showAccount><MemberNavigationRecovery expectedPhone={null} /><ResetPasswordForm locale={locale} phone={session.phone} returnTo={returnTo} contact={contact} /></PublicShell>;
-    if (session.kind === "verification") return <PublicShell locale={locale} showAccount><MemberNavigationRecovery expectedPhone={null} /><AccountVerificationForm locale={locale} phone={session.phone} returnTo={returnTo} contact={contact} /></PublicShell>;
+    if (session.kind === "verification") return <PublicShell locale={locale} showAccount>
+      <MemberNavigationRecovery expectedPhone={null} />
+      {authView === "forgot" ? <ForgotPasswordForm locale={locale} phone={session.phone} returnTo={returnTo} contact={contact} />
+        : <AccountVerificationForm locale={locale} phone={session.phone} returnTo={returnTo} contact={contact} />}
+    </PublicShell>;
     if (authView === "forgot" && member && !member.blocked) redirect(accountSectionHref(locale, "password", returnTo));
     if (authView === "forgot" && !member) return <PublicShell locale={locale} showAccount><MemberNavigationRecovery expectedPhone={null} /><AccountAuthForm locale={locale} view="forgot" returnTo={returnTo} contact={contact} /></PublicShell>;
     if (member && !member.blocked && typeof parameters.view === "string" && ["login", "register", "verify", "new-password"].includes(parameters.view))
@@ -86,9 +90,9 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
       (walletSection || settings && (summarySection || section === "payments")) ? resolved.payments?.view(member).catch(() => null) ?? null : null,
       summarySection || section === "payments" || walletSection ? resolved.codes?.subscriptionStatus(member).catch(() => null) ?? null : null,
       summarySection || section === "payments" || section === "activity" ? resolved.dashboard?.read(member).catch(() => null) ?? null : null,
-      summarySection || section === "referrals" ? resolved.referrals?.read(member).catch(() => null) ?? null : null,
+      canReadReferrals && (summarySection || section === "referrals") ? resolved.referrals?.read(member).catch(() => null) ?? null : null,
       section === "notifications" ? resolved.notifications?.read(member, parameters.before).catch(() => null) ?? null : null,
-      section === "referrals" ? resolved.referralReviews?.member(member, referralReviewCursor(parameters.reviewBefore) ? parameters.reviewBefore as string : undefined).catch(() => null) ?? null : null,
+      canReadReferrals && section === "referrals" ? resolved.referralReviews?.member(member, referralReviewCursor(parameters.reviewBefore) ? parameters.reviewBefore as string : undefined).catch(() => null) ?? null : null,
     ]) : [null, null, null, null, null, null, null];
     const queued = view?.codes.filter((code) => codeStatus(code, now) === "queued") ?? [];
     const last = view?.codes.filter((code) => codeStatus(code, now) === "expired").at(-1);
@@ -125,15 +129,16 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
         {parameters.status === "password-changed" && <AccountFlash role="status">{messages.text("account.passwordChanged")}</AccountFlash>}
         {parameters.status === "devices-signed-out" && <AccountFlash role="status">{messages.text("account.devicesSignedOut")}</AccountFlash>}
         {summarySection && <AccountSubscriptionPanel key={member.accountId} locale={locale} subscription={subscription} dashboard={dashboard} now={now.getTime()} trialDays={offeredTrialDays(settings)} showTitle={section === "overview"} {...(last ? { lastEnd: last.endsAt } : {})} />}
-        {summarySection && <AccountReferralSummary locale={locale} summary={referrals} returnTo={returnTo} />}
-        {section === "referrals" && <><AccountReferrals locale={locale} summary={referrals} /><AccountReferralReviews initial={referralReviews} locale={locale} returnTo={returnTo} older={!!referralReviewCursor(parameters.reviewBefore)} /></>}
+        {summarySection && canReadReferrals && <AccountReferralSummary locale={locale} summary={referrals} returnTo={returnTo} />}
+        {section === "referrals" && (canReadReferrals
+          ? <><AccountReferrals locale={locale} summary={referrals} /><AccountReferralReviews initial={referralReviews} locale={locale} returnTo={returnTo} older={!!referralReviewCursor(parameters.reviewBefore)} /></>
+          : <AccountFine>{messages.text("referrals.phoneEligibility")}</AccountFine>)}
         {section === "overview" && <>
           <AccountPanel title={messages.text("account.signInDetails")} data-account-sign-in
             actions={<AccountActionLink href={accountSectionHref(locale, "phone", returnTo)} prefetch={false}>{messages.text("account.editPhone")}</AccountActionLink>}>
-            <AccountFacts $columns={4}>
+            <AccountFacts $columns={3}>
               <div><dt>{messages.text("account.phoneLabel")}</dt><dd>+{formatPhone(member.phone)}</dd></div>
               <div><dt>{messages.text("account.signedInDevices")}</dt><dd>{view ? messages.plural("account.deviceCount", view.devices.length) : messages.text("account.unknownLabel")}</dd></div>
-              <div><dt>{messages.text("account.notificationsLabel")}</dt><dd>{messages.text(member.whatsappNotificationsAt ? "account.enabledLabel" : "account.disabledLabel")}</dd></div>
               <div><dt>{messages.text("account.creditLabel")}</dt><dd>{credit ? formatCredit(credit.balanceUgx) : subscription ? formatCredit(subscription.creditUgx) : messages.text("account.unknownLabel")}</dd></div>
             </AccountFacts>
           </AccountPanel>
@@ -156,10 +161,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
           <AccountSecurityForm key={section} task={section} locale={locale} contact={contact} cancelHref={accountSectionHref(locale, "overview", returnTo)} />
         </AccountPanel>}
         {section === "devices" && <AccountDevices locale={locale} devices={view?.devices.map(device => ({ at: device.lastSeenAt.toISOString(), current: device.tokenHash === member.tokenHash })) ?? null} />}
-        {section === "notifications" && <>
-          <AccountNotifications locale={locale} page={notifications} returnTo={returnTo} older={!!notificationCursor(parameters.before)} />
-          <AccountPanel narrow title={messages.text("notifications.whatsappPreferences")}><AccountNotificationPreferences locale={locale} phone={member.phone} whatsappNotificationsAt={member.whatsappNotificationsAt?.toISOString() ?? null} /></AccountPanel>
-        </>}
+        {section === "notifications" && <AccountNotifications locale={locale} page={notifications} returnTo={returnTo} older={!!notificationCursor(parameters.before)} />}
         {section === "activity" && <AccountActivity locale={locale} dashboard={dashboard} />}
       </AccountWorkspace>
     </PublicShell>;

@@ -6,6 +6,7 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { accessCodeTransaction, lockMemberAccount } from "./access-codes.ts";
 import { isMemberAdminPhone } from "./member-admin.ts";
+import { hasMemberAdmission, memberAdmissionWhere } from "./member-admission.ts";
 import type { MemberIdentity } from "./member-sessions.ts";
 import { purgeReferralReviewEvidence } from "./referral-reviews.ts";
 import { referralReviewReasons, type ReferralReviewReason } from "../../domain/referral-reviews.ts";
@@ -14,7 +15,7 @@ async function authorized(tx: Prisma.TransactionClient, member: MemberIdentity, 
   if (member.blocked || member.administrator) return false;
   const account = await lockMemberAccount(tx, member.accountId);
   const session = await tx.memberSession.findUnique({ where: { tokenHash: member.tokenHash } });
-  return !!account?.phone && account.phone === member.phone && !!account.passwordHash && !!account.phoneVerifiedAt
+  return !!account?.phone && account.phone === member.phone && !!account.passwordHash && hasMemberAdmission(account)
     && !account.blockedAt && !account.erasedAt && !isMemberAdminPhone(account.phone) && session?.accountId === account.id
     && !!session.authenticatedAt && !session.passwordResetAt && session.expiresAt > at;
 }
@@ -117,14 +118,14 @@ export function createAccountNotifications({ database, now = Date.now }: { datab
       let cursor = "";
       while (true) {
         const accounts = await database.query(tx => tx.memberAccount.findMany({ where: { id: { gt: cursor }, phone: { not: null },
-          passwordHash: { not: null }, phoneVerifiedAt: { not: null }, erasedAt: null, blockedAt: null }, orderBy: { id: "asc" }, take: 100,
+          passwordHash: { not: null }, ...memberAdmissionWhere, erasedAt: null, blockedAt: null }, orderBy: { id: "asc" }, take: 100,
           select: { id: true, phone: true } }));
         for (const row of accounts) {
           if (isMemberAdminPhone(row.phone)) continue;
           result.checked++;
           try { await accessCodeTransaction(database, async tx => {
             const account = await lockMemberAccount(tx, row.id);
-            if (account?.phone && account.passwordHash && account.phoneVerifiedAt && !account.blockedAt && !account.erasedAt && !isMemberAdminPhone(account.phone)) await synchronize(tx, account.id, at);
+            if (account?.phone && account.passwordHash && hasMemberAdmission(account) && !account.blockedAt && !account.erasedAt && !isMemberAdminPhone(account.phone)) await synchronize(tx, account.id, at);
           }); } catch { result.failed++; }
         }
         if (accounts.length < 100) break;

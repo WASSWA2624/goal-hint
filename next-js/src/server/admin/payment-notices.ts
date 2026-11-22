@@ -8,7 +8,7 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import type { PaymentNotificationOutbox, Prisma } from "../generated/prisma/client.ts";
 import { lockMemberAccount } from "../members/access-codes.ts";
 
-type NoticeAction = Readonly<{ status: "saved"; notification?: "queued" }> | Readonly<{ status: "refused"; message: string }>;
+type NoticeAction = Readonly<{ status: "saved" }> | Readonly<{ status: "refused"; message: string }>;
 const refused = (): NoticeAction => ({ status: "refused", message: "This message notice can no longer be changed. Refresh to see its status." });
 const interrupted = (row: PaymentNotificationOutbox, at: Date) => row.status === "dispatching" && row.startedAt !== null && +row.startedAt <= +at - paymentNoticeRules.interruptedAfterMs;
 const unconfirmed = (row: PaymentNotificationOutbox, at: Date) => ["failed", "uncertain"].includes(row.status) || interrupted(row, at);
@@ -21,9 +21,9 @@ function attentionWhere(at: Date): Prisma.PaymentNotificationOutboxWhereInput {
   ] };
 }
 
-/** Owner inspection and explicit reconciliation only. Reading or changing a notice never contacts the SMS gateway. */
+/** Inspect and dismiss legacy member message notices. */
 export function createPaymentNoticeAdmin(database: DatabaseRuntime, now = Date.now) {
-  async function change(id: string, actor: string, action: "resend" | "dismiss"): Promise<NoticeAction> {
+  async function dismiss(id: string, actor: string): Promise<NoticeAction> {
     return database.transaction<NoticeAction>(async tx => {
       const initial = await tx.paymentNotificationOutbox.findUnique({ where: { id } });
       if (!initial) return refused();
@@ -31,22 +31,17 @@ export function createPaymentNoticeAdmin(database: DatabaseRuntime, now = Date.n
       const row = await tx.paymentNotificationOutbox.findUnique({ where: { id } });
       const at = new Date(now());
       if (!account || account.erasedAt || account.blockedAt || !row) return refused();
-      const eligible = action === "resend" ? unconfirmed(row, at) : unconfirmed(row, at) || ["unsupported", "unavailable", "cancelled", "skipped"].includes(row.status);
+      const eligible = unconfirmed(row, at) || ["unsupported", "unavailable", "cancelled", "skipped"].includes(row.status);
       if (!eligible) return refused();
       const where = { id, status: row.status, attemptId: row.attemptId };
-      const changed = action === "resend"
-        ? await tx.paymentNotificationOutbox.updateMany({ where, data: { status: "queued", startedAt: null, finishedAt: null, attemptId: null } })
-        : await tx.paymentNotificationOutbox.deleteMany({ where });
-      if (changed.count !== 1) return refused();
-      // Clearing the attempt token fences any late gateway answer from the prior attempt.
-      await writeOwnerAudit(tx, { at, actor, action: action === "resend" ? "payment_sms_resent" : "payment_sms_dismissed", accountId: row.accountId,
-        targetType: row.targetType as "payment" | "access-code" | "member", targetId: row.targetId, details: { decision: row.decision, channel: row.channel ?? "sms", ...(action === "resend" ? { status: "queued" } : {}) } });
-      return { status: "saved", ...(action === "resend" ? { notification: "queued" as const } : {}) };
+      if ((await tx.paymentNotificationOutbox.deleteMany({ where })).count !== 1) return refused();
+      await writeOwnerAudit(tx, { at, actor, action: "payment_sms_dismissed", accountId: row.accountId,
+        targetType: row.targetType as "payment" | "access-code" | "member", targetId: row.targetId, details: { decision: row.decision, channel: row.channel ?? "sms" } });
+      return { status: "saved" };
     }, { isolationLevel: "ReadCommitted", timeout: 15_000 });
   }
   return Object.freeze({
-    resend: (id: string, actor: string) => change(id, actor, "resend"),
-    dismiss: (id: string, actor: string) => change(id, actor, "dismiss"),
+    dismiss,
     attentionCount(): Promise<number> {
       const where = attentionWhere(new Date(now()));
       return database.query(tx => tx.paymentNotificationOutbox.count({ where }));

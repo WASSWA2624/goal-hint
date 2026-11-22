@@ -131,6 +131,31 @@ test('the same guest feed switches between full and redacted projections with th
     assert.doesNotMatch(JSON.stringify(body), /SENTINEL-|7\.73|home-win/);
   }
 });
+test('admission permits a normal session and active trial without conferring verified-member access', async () => {
+  const at = new Date(now);
+  const account = { accountId: 'admitted-member', phone: '256700000187', passwordHash: 'registered', blockedAt: null,
+    memberAdmittedAt: at, phoneVerifiedAt: null, lastSeenAt: at, entitled: 0 };
+  const resolve = createViewerAccess({ now: () => +at,
+    settings: async () => ({ settings: { ...defaultSubscriptionSettings, paywallMode: 'on', allowUnsubscribedMembers: true }, source: 'stored' }),
+    services: async () => ({ config: { production: false, cookies: { session: 'owner' } }, auth: null,
+      database: { query: run => run({ $queryRaw: async (sql) => {
+        assert.match(sql.join(''), /a\.memberAdmittedAt/u);
+        assert.match(sql.join(''), /s\.passwordResetAt IS NULL/u);
+        return [account];
+      } }) } }),
+  });
+  const read = () => resolve(name => name === 'goal-hint-member' ? 'a'.repeat(43) : undefined);
+  assert.deepEqual(await read(), { ...free, signedIn: true });
+  account.entitled = 1;
+  assert.deepEqual(await read(), { ...full, signedIn: true });
+  account.blockedAt = at;
+  assert.deepEqual(await read(), { ...free, signedIn: true });
+  Object.assign(account, { blockedAt: null, entitled: 0, memberAdmittedAt: null });
+  assert.deepEqual(await read(), free);
+  account.phoneVerifiedAt = at;
+  assert.deepEqual(await read(), { ...full, signedIn: true });
+});
+
 test('free and failing resolvers never read slips and malformed gated bodies fail closed', async () => {
   for (const resolveAccess of [async () => free, async () => { throw Error('private'); }]) {
     const reads = createGatedReads({ resolveAccess, readSlips: async () => { assert.fail('slips read'); }, readDetail: async () => ({ ...scenarios.scheduled.detail, secret: 'private' }) });

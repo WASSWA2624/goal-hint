@@ -21,7 +21,7 @@ export async function verifyAuthenticationForms(page, { origin, widths = [320, 3
   const cases = [
     ["login", "state=signed-out&view=login"], ["register", "state=signed-out&view=register"],
     ["recovery", "state=support&view=forgot"], ["recovery-code", "state=support&view=forgot", true],
-    ["verification", "state=unverified"], ["verification-code", "state=unverified", true],
+    ["legacy-verification-code", "state=unverified"],
     ["new-password", "state=password-reset"],
     ["change-password", "state=active&section=password"], ["change-phone", "state=active&section=phone"],
   ];

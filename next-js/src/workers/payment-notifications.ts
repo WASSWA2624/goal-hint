@@ -12,6 +12,6 @@ try {
   const worker = createPaymentOutboxWorker({ database: getDatabase() });
   console.log(JSON.stringify(command === "status" ? await worker.status() : await worker.run(limit)));
 } catch (error) {
-  console.error(error instanceof RangeError ? error.message : "Payment SMS worker failed; private diagnostics are withheld.");
+  console.error(error instanceof RangeError ? error.message : "Legacy payment message cleanup failed; private diagnostics are withheld.");
   process.exitCode = 1;
 } finally { await disconnectDatabase().catch(() => {}); }

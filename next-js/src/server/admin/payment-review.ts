@@ -8,8 +8,7 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import { lockMemberAccount, type CodeOutcome } from "../members/access-codes.ts";
 import { decide } from "../members/settings.ts";
 import { writeOwnerAudit } from "./audit.ts";
-import type { PaymentNotifications, PaymentRejectionNotification } from "../members/payment-notifications.ts";
-import { createQueuedPaymentNotifications } from "../members/payment-notification-outbox.ts";
+import { disabledMemberPaymentNotifications, type PaymentNotifications, type PaymentRejectionNotification } from "../members/payment-notifications.ts";
 import type { PaymentNotificationStatus } from "../../domain/payment-notification.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { checkoutOpenStatuses } from "../../domain/checkout.ts";
@@ -67,7 +66,7 @@ function receiptSummary(row: PaymentRow) {
   };
 }
 
-export function createPaymentReview(database: DatabaseRuntime, now = Date.now, { notifications = createQueuedPaymentNotifications(database) }: {
+export function createPaymentReview(database: DatabaseRuntime, now = Date.now, { notifications = disabledMemberPaymentNotifications }: {
   notifications?: PaymentNotifications;
 } = {}) {
   return {
@@ -149,7 +148,6 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
           ...(deleteImage ? { imagePurgedAt: at } : {}) } });
         if (deleteImage) await tx.paymentScreenshot.deleteMany({ where: { submissionId: id } });
         await writeOwnerAudit(tx, { at, actor, action: "payment_rejected", accountId: row.accountId, targetType: "payment", targetId: id, details: { reason, deleteImage } });
-        await notifications.enqueue?.(tx, { accountId: row.accountId, targetType: "payment", targetId: id, decision: "rejected", at });
         payment = { paymentId: id, accountId: row.accountId, phone: account?.phone ?? null, reference: formatPaymentReference(row.reference), reason: reason as string };
         return { status: "saved" };
       });

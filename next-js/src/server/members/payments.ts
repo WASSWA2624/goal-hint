@@ -12,13 +12,13 @@ import type { Prisma } from "../generated/prisma/client.ts";
 import { imageDimensions } from "../images/image-format.ts";
 import { lockMemberAccount, newReference } from "./access-codes.ts";
 import type { MemberIdentity } from "./member-sessions.ts";
+import { memberAdmissionWhere } from "./member-admission.ts";
 import { acceptedTerms } from "./member-terms.ts";
 import { reservedWalletCredit, walletHistory } from "./wallet.ts";
 import { validTopUp } from "../../domain/wallet.ts";
 import { memberRateRules, takeMemberLimit } from "./rate-limit.ts";
 import { subscriptionCheckoutPublished } from "./sales-readiness.ts";
 import { decide, lockSettings } from "./settings.ts";
-import { enqueueMemberMessage } from "./payment-notification-outbox.ts";
 
 type Outcome = Readonly<{ status: "saved"; reference: string }> | Readonly<{ status: "busy" | "refused" | "invalid" | "duplicate" }>;
 type Bucket = { key: string; count: number; bytes: number };
@@ -109,7 +109,6 @@ export function createPayments({ database, config, now = Date.now }: {
           await tx.rateLimitBucket.update({ where: { key: site.key }, data: { count: { increment: 1 }, bytes: { increment: imageBytes } } });
           await writeOwnerAudit(tx, { at, actor: "member", action: "payment_submitted", accountId: member.accountId,
             targetType: "payment", targetId: id, details: { bytes: imageBytes, ...(topUp === null ? {} : { purpose, topUpUgx: topUp }) } });
-          await enqueueMemberMessage(tx, { accountId: member.accountId, targetType: "payment", targetId: id, decision: "received", at }, settings.messageTemplates);
           return { status: "saved", reference: formatPaymentReference(reference) };
         }); } catch (error) {
           if (attempt >= 3 || !(error instanceof DatabaseOperationError) || !["conflict", "constraint"].includes(error.code)) throw error;
@@ -123,7 +122,7 @@ export function createPayments({ database, config, now = Date.now }: {
       return database.transaction(async (tx) => {
         const at = new Date(now());
         const account = await tx.memberAccount.findFirst({ where: { id: member.accountId, phone: member.phone,
-          passwordHash: { not: null }, phoneVerifiedAt: { not: null }, blockedAt: null, erasedAt: null,
+          passwordHash: { not: null }, ...memberAdmissionWhere, blockedAt: null, erasedAt: null,
           sessions: { some: { tokenHash: member.tokenHash, authenticatedAt: { not: null }, passwordResetAt: null, expiresAt: { gt: at } } } },
           select: { creditUgx: true, autoRenew: true, autoRenewPlanId: true } });
         if (!account) return unavailableView;

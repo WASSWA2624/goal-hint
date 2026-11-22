@@ -11,7 +11,6 @@ export function fixtureServices(state: string) {
     : ["queued", "dashboard-unavailable", "subscription-unavailable", "referral-empty", "referral-unavailable", "notifications-empty", "notifications-unavailable"].includes(state) ? "active" : state;
   const unlocked = ["active", "manual", "trial", "pending-renewal", "expired", "off-active", "registration-trial", "off-trial-active"].includes(scenario), at = Date.now();
   return async () => {
-    const consent = (await cookies()).get("member-fixture-whatsapp")?.value;
     return { config: { production: false },
     settings: { settings: state === "unavailable" ? null : { ...defaultSubscriptionSettings, paywallMode: scenario.startsWith("off") ? "off" : "on",
       allowUnsubscribedMembers: scenario === "member-free", trialDays: scenario === "trial-disabled" ? 0 : 30,
@@ -20,7 +19,7 @@ export function fixtureServices(state: string) {
         { id: "synthetic-secondary", label: "Registration and verification support", network: "other", phone: "256700000102", calls: true, whatsapp: false, enabled: true, primary: false },
       ] } : {}) } },
     sessions: { async verify() { if (state === "session-unavailable") throw new Error("Synthetic session read failure"); return [...subscriptionScenarios.filter(value => value !== "off"), "blocked", "administrator", "history"].includes(scenario)
-      ? { accountId: "00000000-0000-4000-8000-000000000101", tokenHash: "synthetic", phone: state === "administrator" ? fixtureAdminPhone : "256700000101", administrator: state === "administrator", blocked: state === "blocked", codeEnteredAt: unlocked ? new Date(at) : null, whatsappNotificationsAt: consent === "on" ? new Date(at) : null } : null; } },
+      ? { accountId: "00000000-0000-4000-8000-000000000101", tokenHash: "synthetic", phone: state === "administrator" ? fixtureAdminPhone : "256700000101", administrator: state === "administrator", blocked: state === "blocked", phoneVerified: !scenario.startsWith("registration-"), codeEnteredAt: unlocked ? new Date(at) : null, whatsappNotificationsAt: null } : null; } },
     auth: { async passwordResetSession() { if (state === "reset-unavailable") throw new Error("Synthetic reset read failure"); return state === "password-reset" ? { phone: "256700000101" } : null; },
       async verificationSession() { if (state === "verification-unavailable") throw new Error("Synthetic verification read failure"); return ["unverified", "sms-only", "unsupported"].includes(state) ? { phone: state === "unsupported" ? "5511999999999" : state === "sms-only" ? "447700900123" : "256700000101" } : null; } },
     codes: { async subscriptionStatus() { if (state === "subscription-unavailable") throw new Error("Synthetic unavailable subscription"); return fixtureSubscriptionStatus(scenario); },
@@ -48,7 +47,8 @@ export async function fixtureState(parameters: Record<string, string | string[] 
   const jar = await cookies(), token = jar.get("goal-hint-member")?.value;
   const subscriptionState = jar.get("member-fixture-subscription")?.value;
   const cookieState = token === fixtureTokens.reset ? "password-reset" : token === fixtureTokens.pending ? "unverified"
-    : token === fixtureTokens.administrator ? "administrator" : token === fixtureTokens.authenticated ? subscriptionState ?? "signed-in" : "signed-out";
+    : token === fixtureTokens.registered ? subscriptionState === "registration-trial" ? subscriptionState : "registration-no-trial"
+      : token === fixtureTokens.administrator ? "administrator" : token === fixtureTokens.authenticated ? subscriptionState ?? "signed-in" : "signed-out";
   const state = typeof parameters.state === "string" ? parameters.state : parameters.status === "code-accepted" ? "active" : cookieState;
   return fixtureStates.includes(state) ? state : "signed-out";
 }

@@ -23,12 +23,12 @@ export function paymentNoticeKindLabel(kind: string): string {
 export function paymentNoticeLabel({ state, createdAt }: Readonly<{ state: string; createdAt: string | Date }>, now: number): string {
   switch (state) {
     case "sent": return "Accepted by the message gateway (not proof of receipt)";
-    case "queued": return now - +new Date(createdAt) >= paymentNoticeRules.stuckAfterMs ? "Waiting · check messaging settings and the private worker" : "Waiting to send";
-    case "dispatching": return "Sending";
+    case "queued": return now - +new Date(createdAt) >= paymentNoticeRules.stuckAfterMs ? "Waiting for legacy message cleanup" : "Queued for cleanup";
+    case "dispatching": return "Previous delivery pending";
     case "failed": case "uncertain": return "Not confirmed · not resent automatically";
     case "unsupported": return "Country not supported";
     case "unavailable": return "Verified registered number unavailable";
-    case "cancelled": return "Account unavailable";
+    case "cancelled": return "Cancelled";
     case "skipped": return "WhatsApp not enabled by member";
     default: return "Not sent";
   }

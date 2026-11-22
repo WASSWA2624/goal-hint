@@ -76,28 +76,65 @@ export async function verifyAuthenticationJourneys(page, { origin } = {}) {
   await fresh("register");
   await credentials();
   await submit();
-  await page.locator('[data-account-verification="account"]').waitFor();
-  assert.equal(new URL(page.url()).searchParams.get("view"), "verify");
-  await page.getByRole("button", { name: "Back to login", exact: true }).click();
+  await home();
+  assert.equal(await page.locator('[data-account-verification="account"]').count(), 0);
+  assert.equal((await context.cookies()).find(value => value.name === "goal-hint-member")?.value, "n".repeat(43));
+  await open("/en/account");
+  await page.locator("[data-account-details]").waitFor();
+  checks.push("Regular signup opens Matches and Account with a full session");
+
+  await fresh("register");
+  await scenario("automatic-trial");
+  await credentials();
+  await submit();
+  const trial = page.locator('[data-free-trial="active"]');
+  await trial.getByText("2 days", { exact: false }).first().waitFor();
+  assert.equal(await page.locator('[data-account-verification="account"]').count(), 0);
+  assert.equal(await page.getByRole("button", { name: "Activate free trial", exact: true }).count(), 0);
+  await trial.getByRole("link", { name: "Browse app", exact: true }).click();
+  await home();
+  await open("/en/account?section=subscription");
+  await page.locator('[data-free-trial="active"]').waitFor();
+  checks.push("Eligible signup shows its already active trial and preserves access after browsing");
+
+  const legacyVerification = page.locator('[data-account-verification="account"][data-verification-step="code"]');
+  const startLegacyVerification = async () => {
+    await fresh();
+    await scenario("pending-verification");
+    await credentials();
+    await submit();
+    await legacyVerification.waitFor();
+    assert.equal(new URL(page.url()).searchParams.get("view"), "verify");
+    assert.equal(await legacyVerification.locator('form[action="/api/account/verification"]').count(), 0);
+  };
+  await startLegacyVerification();
+  await legacyVerification.getByRole("button", { name: "Back to login", exact: true }).click();
   await page.waitForURL(origin + "/en/account?view=login");
   await page.locator('[data-account-auth] h1').filter({ hasText: "Login" }).waitFor();
   assert.equal((await context.cookies()).some(value => value.name === "goal-hint-member"), false);
-  checks.push("Abandoning registration clears its restricted session and returns to Login");
+  checks.push("Leaving legacy verification clears its restricted session");
 
-  await fresh("register");
-  await credentials();
-  await submit();
-  await page.locator('[data-account-verification="account"]').waitFor();
+  await startLegacyVerification();
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.locator('[data-account-verification="account"]').waitFor();
-  await page.getByRole("button", { name: "Have a code?", exact: true }).click();
-  await page.locator('input[name="code"]').fill("000000");
+  await legacyVerification.waitFor();
+  await legacyVerification.locator('input[name="code"]').fill("000000");
   await submit();
   await page.locator('[data-account-auth] [role="alert"]').waitFor();
-  await page.locator('input[name="code"]').fill("123456");
+  await legacyVerification.locator('input[name="code"]').fill("123456");
   await submit();
   await home();
-  checks.push("Registration survives refresh, rejects an invalid code and finishes at Matches");
+  checks.push("Legacy verification survives refresh, rejects an invalid code, and accepts a valid existing code");
+
+  await open("/en/account?section=phone");
+  const phoneChange = page.locator('form[action="/api/account/phone"]');
+  await phoneChange.locator("[data-phone-input]").fill("700000102");
+  await phoneChange.locator('input[name="currentPassword"]').fill("Synthetic current password");
+  await phoneChange.locator('button[type="submit"]').click();
+  await page.waitForURL(url => url.pathname === "/en/account" && url.searchParams.get("view") === "forgot");
+  const phoneRecovery = page.locator('[data-account-verification="password-reset"][data-verification-step="delivery"]');
+  await phoneRecovery.waitFor();
+  assert.equal(await page.locator("[data-account-details]").count(), 0);
+  checks.push("Changing a phone with the current password enters restricted Forgot password recovery");
 
   await fresh("forgot");
   await page.locator("[data-phone-input]").fill("700000101");

@@ -9,6 +9,7 @@ import type { Prisma } from "../generated/prisma/client.ts";
 import { createMemberRateLimit, memberRateRules, takeMemberLimit } from "./rate-limit.ts";
 import { decide } from "./settings.ts";
 import { isMemberAdminPhone, memberAdminCredential } from "./member-admin.ts";
+import { hasMemberAdmission } from "./member-admission.ts";
 import { developmentMemberToken } from "../demo/member.ts";
 
 export const memberSessionRules = Object.freeze({ expiryMs: 90 * 86_400_000, touchAfterMs: 86_400_000,
@@ -19,7 +20,7 @@ export const validMemberToken = (token: unknown): token is string => typeof toke
 export const memberCookieName = (production: boolean) => `${production ? "__Host-" : ""}goal-hint-member`;
 
 export type MemberIdentity = Readonly<{ tokenHash: string; accountId: string; phone: string; blocked: boolean;
-  expiresAt: Date; administrator?: boolean; whatsappNotificationsAt?: Date | null; referralCode?: string }>;
+  expiresAt: Date; administrator?: boolean; phoneVerified?: boolean; whatsappNotificationsAt?: Date | null; referralCode?: string }>;
 export type MemberSignIn = Readonly<{ status: "signed-in"; token: string }> | Readonly<{ status: "busy" }>;
 
 export const activeMemberSessionsWhere = (accountId: string, at: Date) => ({
@@ -92,7 +93,7 @@ export function createMemberSessions({ database, config, now = Date.now, adminPh
       const configured = adminPasswordHash();
       const administrator = !!configured && adminPhone(row.account.phone) && row.adminPasswordVersion === config.key("admin-password-version", configured);
       if (adminPhone(row.account.phone) && !administrator) return null;
-      if (!administrator && !row.account.phoneVerifiedAt) return null;
+      if (!administrator && !hasMemberAdmission(row.account)) return null;
       if (at.getTime() - row.lastSeenAt.getTime() >= memberSessionRules.touchAfterMs) {
         await database.query((tx) => tx.memberSession.updateMany({ where: { tokenHash: hash, expiresAt: { gt: at },
           lastSeenAt: { lte: new Date(at.getTime() - memberSessionRules.touchAfterMs) } },
@@ -101,7 +102,7 @@ export function createMemberSessions({ database, config, now = Date.now, adminPh
       const { blockedAt, phoneVerifiedAt, referralCode } = row.account;
       const blocked = blockedAt !== null;
       return { tokenHash: hash, accountId: row.accountId, phone: row.account.phone, blocked,
-        expiresAt: row.expiresAt,
+        expiresAt: row.expiresAt, phoneVerified: !!phoneVerifiedAt,
         whatsappNotificationsAt: row.account.whatsappNotificationsAt ?? null, ...(administrator ? { administrator: true } : {}),
         ...(!blocked && phoneVerifiedAt && validReferralCode(referralCode) ? { referralCode } : {}) };
     },

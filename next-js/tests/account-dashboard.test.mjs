@@ -81,6 +81,16 @@ test("accounts without paid-device unlock, including expired accounts, retain th
   assert.equal(view.activity[0].endsAt, ago(1).toISOString());
 });
 
+test("an admitted member can read their account history without proof of phone ownership", async () => {
+  const f = fixture();
+  Object.assign(f.account, { phoneVerifiedAt: null, memberAdmittedAt: ago(1) });
+  f.period("active-trial", { planName: "Free trial" });
+  const view = await f.service.read(f.member);
+  assert.equal(view.activePlanName, "Free trial");
+  assert.equal(view.activity[0].status, "added");
+  assert.equal(f.account.phoneVerifiedAt, null);
+});
+
 test("stale, restricted, mismatched, blocked and erased identities cannot read account history", async t => {
   const cases = {
     missing: f => { f.member.tokenHash = "missing"; },

@@ -3,7 +3,6 @@ import { createHash, randomUUID } from "node:crypto";
 import test from "node:test";
 import { hashPassword } from "../src/server/analytics/analytics-password.ts";
 import { createMemberAuth } from "../src/server/members/member-auth.ts";
-import { createPaymentNotifications } from "../src/server/members/payment-notifications.ts";
 import { createPayments } from "../src/server/members/payments.ts";
 
 const instant = Date.parse("2026-10-23T12:00:00Z");
@@ -46,32 +45,6 @@ function fixture() {
     async removeAccount() { await database.transaction(async () => { account = null; session = null; audits.length = 0; buckets.clear(); }); },
   };
 }
-
-for (const decision of ["approved", "rejected"]) {
-  test(`a delayed ${decision} SMS cannot recreate audit data after account deletion`, async () => {
-    const f = fixture(); let started, finish;
-    const sending = new Promise(resolve => { started = resolve; }), response = new Promise(resolve => { finish = resolve; });
-    const notifications = createPaymentNotifications({ database: f.database, now: () => instant,
-      delivery: { async sendSms() { assert.equal(f.inTransaction, false, "provider delivery holds no account lock"); started(); await response; } } });
-    const result = notifications[decision]({ accountId: f.member.accountId, paymentId: randomUUID(), phone: f.member.phone,
-      reference: "PABCD", planName: "Weekly", expiresAt: new Date(instant + 86_400_000), reason: "not-received" });
-    await sending; await f.removeAccount(); finish();
-    assert.equal(await result, "sent", "deletion does not change the completed provider result");
-    assert.deepEqual(f.audits, []);
-    assert.deepEqual(f.events, ["account-lock"]);
-  });
-}
-
-test("notifications fail closed for erased accounts and unreadable recipient verification", async () => {
-  const f = fixture(); f.account.erasedAt = new Date(instant);
-  const notification = { accountId: f.member.accountId, paymentId: randomUUID(), phone: f.member.phone, reference: "PABCD", reason: "other" };
-  let sends = 0;
-  const delivery = { async sendSms() { sends++; } };
-  assert.equal(await createPaymentNotifications({ database: f.database, delivery }).rejected(notification), "unavailable");
-  assert.deepEqual(f.audits, []);
-  assert.equal(await createPaymentNotifications({ database: { async query() { throw new Error("Synthetic recipient read outage"); } }, delivery }).rejected(notification), "failed");
-  assert.equal(sends, 0);
-});
 
 test("stale authenticated uploads cannot recreate rate buckets after deletion", async () => {
   const f = fixture(), payments = createPayments({ database: f.database, config: f.config, now: () => instant, environment: null });

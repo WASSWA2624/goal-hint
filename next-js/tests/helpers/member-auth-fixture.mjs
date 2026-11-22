@@ -10,7 +10,7 @@ const phone = "256700000001", password = "correct horse 47";
 const key = (purpose, value) => createHmac("sha256", "synthetic-test-secret").update(`${purpose}\0${value}`).digest("hex");
 
 /** Small transactional store: assertions exercise the production auth service, not a second implementation of it. */
-export function createMemberAuthFixture({ admins = [], adminPassword, send, trialDays = 2 } = {}) {
+export function createMemberAuthFixture({ admins = [], adminPassword, send, recoveryAvailable, trialDays = 2 } = {}) {
   let time = Date.parse("2026-10-20T18:00:00Z"), queue = Promise.resolve();
   const accounts = new Map(), sessions = new Map(), challenges = new Map(), buckets = new Map(), accessCodes = new Map(), referrals = new Map(), notifications = new Map(), payments = new Map(), sent = [], messages = [];
   const reviewCases = new Map(), reviewEvidence = new Map(), reviewEvents = new Map(), reversals = new Map();
@@ -58,7 +58,7 @@ export function createMemberAuthFixture({ admins = [], adminPassword, send, tria
     };
   }
   const settings = { ...defaultSubscriptionSettings, paywallMode: "on", trialDays, updatedAt: new Date(time), updatedBy: "synthetic-owner" };
-  const tx = { memberAccount: table(accounts, "id", { passwordHash: null, phoneVerifiedAt: null, passwordChangedAt: null, blockedAt: null, erasedAt: null, referralCode: null }),
+  const tx = { memberAccount: table(accounts, "id", { passwordHash: null, phoneVerifiedAt: null, memberAdmittedAt: null, trialEligibleAt: null, passwordChangedAt: null, blockedAt: null, erasedAt: null, referralCode: null }),
     memberSession: table(sessions, "tokenHash", { codeEnteredAt: null, accessCodeId: null, authenticatedAt: null, passwordResetAt: null }),
     memberReferral: table(referrals, "id", { rewardedAt: null, accessCodeId: null, inviterId: null, accountId: null, status: "pending" }),
     referralCredit: table(referralCredits, "id"),
@@ -92,7 +92,7 @@ export function createMemberAuthFixture({ admins = [], adminPassword, send, tria
     queue = result.catch(() => {}); return result;
   } };
   const adminPhones = new Set(admins), adminPhone = (phone) => adminPhones.has(phone);
-  const delivery = { async send(message) { messages.push(message); await send?.(message); } };
+  const delivery = { async send(message) { messages.push(message); await send?.(message); }, recoveryAvailable };
   const adminPasswordHash = () => memberAdminCredential({ GOAL_HINT_ADMIN_PASSWORD: adminPassword });
   const restart = () => createMemberAuth({ database, config: { key }, now: () => time, adminPhone, adminPasswordHash, delivery });
   const service = restart();
@@ -106,7 +106,16 @@ export function createMemberAuthFixture({ admins = [], adminPassword, send, tria
     const member = await sessionService.verify(logged.token); assert.ok(member);
     return { member, token: logged.token };
   }
-  return { service, database, tx, settings, accounts, sessions, challenges, buckets, accessCodes, sent, messages, referrals, notifications, payments, sessionService, account, authenticate, adminPhones, restart,
+  async function legacyCode(accountId, code = "123456", channel = "sms") {
+    const owner = accounts.get(accountId), at = new Date(time);
+    await tx.memberVerification.updateMany({ where: { accountId, purpose: "account", consumedAt: null }, data: { consumedAt: at } });
+    await tx.memberVerification.create({ data: { id: randomUUID(), accountId, phone: owner.phone, purpose: "account", channel,
+      bindingHash: key("member-verification-binding", accountId),
+      codeHash: key("member-verification-code", `${accountId}:${owner.phone}:account:${code}`),
+      createdAt: at, sentAt: at, expiresAt: new Date(time + 86_400_000) } });
+    return code;
+  }
+  return { service, database, tx, settings, accounts, sessions, challenges, buckets, accessCodes, sent, messages, referrals, notifications, payments, sessionService, account, authenticate, legacyCode, adminPhones, restart,
     reviewCases, reviewEvidence, reviewEvents, reversals, referralCredits, config: { key },
     now: () => time, advance: (ms) => { time += ms; } };
 }

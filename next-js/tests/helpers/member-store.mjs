@@ -146,10 +146,3 @@ export function memberStore({ instant, settings = {} }) {
     fields: (transactionRef = "SYNTHETIC-PAID") => ({ planId: plan.id, network: "mtn", transactionRef, amountReceivedUgx: 5000 }),
   };
 }
-
-/** A recording SMS adapter: `answer` is called per send and may throw a classified YoolaMessagingError. */
-export function recordingDelivery({ answer = async () => {}, configured = true } = {}) {
-  const sent = [];
-  return { sent, delivery: { configured: () => typeof configured === "function" ? configured() : configured,
-    async sendSms(message) { sent.push(message); return answer(message); } } };
-}

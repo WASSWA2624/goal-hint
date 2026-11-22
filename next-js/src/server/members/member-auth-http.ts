@@ -41,8 +41,8 @@ function failure(result: AuthFailure) {
   return json({ error: result.status, message: result.message }, status, result.status === "busy" ? { "Retry-After": "60" } : {});
 }
 
-/** Auth remains available when sales are off. A verified session authorizes password changes; phone changes check its password.
- * Verification precedes member access; signed-out recovery grants a bounded reset-only cookie. All writes are same-origin. */
+/** Auth remains available when sales are off. A member session authorizes password changes; phone changes check its password.
+ * Signed-out recovery grants a bounded reset-only cookie. All writes are same-origin. */
 export function createMemberAuthHandler(action: AuthAction, source: MemberServicesSource = getMemberServices) {
   return async (request: Request): Promise<Response> => {
     if (!isSameOrigin(request)) return json({ error: "forbidden", message: "This request must come from Goal Hint." }, 403);
@@ -58,15 +58,15 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
       const binding: AuthBinding = { member: await services.sessions.verify(currentToken) }, address = clientAddress(request.headers);
       if ((action === "forgot" || action === "reset-code") && binding.member)
         return json({ error: "signed-in", message: authCopy.passwordWhileLoggedIn }, 409);
-      if (action === "forgot" || action === "verification") {
-        const result = action === "forgot" ? await services.auth.requestPasswordReset(body.phone, address, body.channel)
-          : await services.auth.requestVerification(body.channel, currentToken, address);
+      if (action === "verification") return failure(await services.auth.requestVerification());
+      if (action === "forgot") {
+        const result = await services.auth.requestPasswordReset(body.phone, address, body.channel);
         return result.status === "requested" ? json(result) : failure(result);
       }
       const result = action === "login" ? await services.auth.login(body.phone, body.password, address, currentToken)
         : action === "register" ? await services.auth.register(body.phone, body.password, binding, address,
           readReferralAttribution(services.config, readCookie(request, referralCookieName(services.config.production)), Date.now())?.code)
-        : action === "verify" ? await services.auth.verifyAccount(body.code, currentToken, address, body.whatsappNotifications === true)
+        : action === "verify" ? await services.auth.verifyAccount(body.code, currentToken, address)
         : action === "reset-code" ? await services.auth.verifyPasswordReset(body.phone, body.code, address)
         : action === "phone" ? await services.auth.changePhone(body.phone, body.currentPassword, binding)
         : action === "reset" ? await services.auth.resetPassword(body.password, currentToken, address)
@@ -75,7 +75,7 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
       // Shared-slip journeys return to their canonical token; ordinary sign-ins still finish at home.
       const returnTo = ["register", "login", "verify", "reset"].includes(action) ? memberLandingPath(false, body.return) : memberReturnPath(body.return);
       const next = result.requiresPasswordChange ? memberAuthPath("new-password", returnTo)
-        : result.requiresVerification ? memberAuthPath("verify", returnTo)
+        : result.requiresVerification ? memberAuthPath(action === "phone" ? "forgot" : "verify", returnTo)
         : result.administrator ? memberLandingPath(true, body.return)
         : returnTo ?? (action === "phone" ? "/en/account?status=phone-changed"
         : action === "password" ? "/en/account?status=password-changed" : "/en/account");
@@ -103,7 +103,7 @@ export function createMemberSessionHandler(source: MemberServicesSource = getMem
       const administrator = !!member && !member.blocked && member.administrator === true && isMemberAdminPhone(member.phone);
       const identity = { phone: member?.phone ?? null, administrator,
         ...(!member?.blocked && member?.referralCode ? { referralCode: member.referralCode } : {}),
-        freeContentAccess: allowsContentWithoutSubscription(services.settings, !!member && !member.blocked) };
+        freeContentAccess: allowsContentWithoutSubscription(services.settings, !!member?.phoneVerified && !member.blocked) };
       const salesOpen = subscriptionCheckoutPublished(services.settings?.settings, services.config.production);
       const subscription: SubscriptionSummary = { activeUntil: null, paymentPending: false,
         canSubscribe: salesOpen && !member?.blocked && !administrator, ...noCredit };

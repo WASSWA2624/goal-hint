@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { defaultMessageTemplates } from "../src/domain/message-templates.ts";
 import { createPayments } from "../src/server/members/payments.ts";
-import { createPaymentOutboxWorker } from "../src/server/members/payment-notification-outbox.ts";
 import { memberStore } from "./helpers/member-store.mjs";
 
 const instant = Date.parse("2026-10-29T12:00:00Z");
@@ -19,15 +18,12 @@ function fixture() {
   return { ...f, store: f, member, fields, payments };
 }
 
-test("the real payment submission service atomically queues configured report-received content without claiming received money", async () => {
+test("the real payment report persists without a message intent even with a legacy template enabled", async () => {
   const f = fixture(), result = await f.payments.submit(f.member, f.fields);
   assert.equal(result.status, "saved");
-  assert.equal(f.store.state.paymentSubmission.length, 1); assert.equal(f.store.state.paymentNotificationOutbox.length, 1);
-  assert.equal(f.store.state.paymentNotificationOutbox[0].decision, "received");
-  const calls = [], worker = createPaymentOutboxWorker({ database: f.database, now: () => instant, delivery: { async sendSms(value) { calls.push(value); } } });
-  assert.equal((await worker.run()).sent, 1); assert.equal(calls.length, 1);
-  assert.match(calls[0].message, /Payment report .* is waiting for review/u);
-  assert.equal(JSON.stringify(f.store.state.paymentNotificationOutbox).includes(f.account.phone), false);
+  assert.equal(f.store.state.paymentSubmission.length, 1);
+  assert.equal(f.store.state.paymentSubmission[0].status, "pending");
+  assert.equal(f.store.state.paymentNotificationOutbox.length, 0);
 });
 
 test("a rolled-back payment report leaves neither the report nor a message intent", async () => {

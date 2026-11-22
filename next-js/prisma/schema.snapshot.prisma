@@ -1893,6 +1893,7 @@ model MemberAccount {
   phone            String?             @unique @db.VarChar(15)
   passwordHash     String?             @db.VarChar(255)
   phoneVerifiedAt  DateTime?           @db.DateTime(3)
+  memberAdmittedAt DateTime?           @db.DateTime(3)
   whatsappNotificationsAt DateTime?    @db.DateTime(3)
   passwordChangedAt DateTime?          @db.DateTime(3)
   createdAt        DateTime            @db.DateTime(3)

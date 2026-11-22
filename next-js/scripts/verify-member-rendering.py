@@ -106,28 +106,54 @@ def post_fixture(origin, action, body, scenario="success", cookie=""):
 
 
 def verify_synthetic_api(origin):
-    for action, body in [("verification", {"channel": "sms"}), ("forgot", {"phone": "256700000101", "channel": "whatsapp"})]:
-        for scenario, expected in [("success", 200), ("send-failed", 503), ("rate-limited", 429), ("unavailable", 503)]:
-            status, reply, headers = post_fixture(origin, action, body, scenario)
-            assert status == expected, (action, scenario, status, reply)
-            if scenario == "success":
-                assert reply["status"] == "requested"
-                assert "123456" not in json.dumps(reply), "Delivery never returns a verification code."
-            if scenario == "rate-limited":
-                assert headers.get("Retry-After") == "60"
-    for action, fields in [("verify", {}), ("reset-code", {"phone": "256700000101"})]:
+    legacy = "goal-hint-member=" + "v" * 43
+    status, retired, headers = post_fixture(origin, "verification", {"channel": "sms"}, cookie=legacy)
+    assert status == 400 and "Forgot password" in retired["message"] and not headers.get("Set-Cookie")
+    body = {"phone": "256700000101", "channel": "whatsapp"}
+    for scenario, expected in [("success", 200), ("send-failed", 503), ("rate-limited", 429), ("unavailable", 503)]:
+        status, reply, headers = post_fixture(origin, "forgot", body, scenario)
+        assert status == expected, (scenario, status, reply)
+        if scenario == "success":
+            assert reply["status"] == "requested"
+            assert "123456" not in json.dumps(reply), "Delivery never returns a verification code."
+        if scenario == "rate-limited":
+            assert headers.get("Retry-After") == "60"
+    for action, fields, cookie in [("verify", {}, legacy), ("reset-code", {"phone": "256700000101"}, "")]:
         for scenario, code in [("success", "000000"), ("invalid-code", "123456")]:
-            status, reply, _ = post_fixture(origin, action, {**fields, "code": code}, scenario)
+            status, reply, _ = post_fixture(origin, action, {**fields, "code": code}, scenario, cookie)
             assert status == 400 and "invalid" in reply["message"], (action, scenario, reply)
     for phone, channel, expected in [("447700900123", "sms", 200), ("447700900123", "whatsapp", 400), ("5511999999999", "sms", 400)]:
         status, _, _ = post_fixture(origin, "forgot", {"phone": phone, "channel": channel})
         assert status == expected, (phone, channel, status)
     status, logged_in, _ = post_fixture(origin, "login", {"phone": "256700000101", "password": "Synthetic password", "return": "/en/matches"})
     assert status == 200 and logged_in["next"] == "/en/matches"
-    status, registered, headers = post_fixture(origin, "register", {"phone": "256700000101", "password": "Synthetic password", "return": "/en/matches"})
-    assert status == 200 and registered["next"] == "/en/account?view=verify&return=%2Fen%2Fmatches"
-    assert "HttpOnly" in headers.get("Set-Cookie", "")
-    status, verified, _ = post_fixture(origin, "verify", {"code": "123456", "return": "/en"})
+    for scenario in ("success", "automatic-trial"):
+        status, registered, headers = post_fixture(origin, "register",
+            {"phone": "256700000101", "password": "Synthetic password", "return": "/en/matches"}, scenario)
+        assert status == 200 and registered["next"] == "/en/matches" and "requiresVerification" not in registered
+        assert "HttpOnly" in headers.get("Set-Cookie", "")
+        cookie = "; ".join(value.split(";", 1)[0] for value in headers.get_all("Set-Cookie")
+            if value.startswith(("goal-hint-member=", "member-fixture-subscription=")))
+        account = visible_html(request(origin, "/en/account?section=subscription", headers={"Cookie": cookie}).text)
+        match('data-account-workspace', account)
+        no_match(r'data-account-auth|Activate free trial|WhatsApp updates', account)
+        overview = visible_html(request(origin, "/en/account", headers={"Cookie": cookie}).text)
+        no_match(r'data-account-referral-summary|Referral details are temporarily unavailable|WhatsApp updates', account_workspace(overview))
+        referrals = visible_html(request(origin, "/en/account?section=referrals", headers={"Cookie": cookie}).text)
+        match("Referral rewards require a verified phone number.", account_workspace(referrals))
+        no_match(r'data-account-referrals|temporarily unavailable|view=forgot', account_workspace(referrals))
+        if scenario == "automatic-trial":
+            assert registered["trial"]["active"] is True and registered["trial"]["days"] == 2
+            assert registered["trial"]["startsAt"] < registered["trial"]["endsAt"]
+            match(r'data-free-trial="active"', account)
+        else:
+            assert "trial" not in registered
+            no_match(r'data-free-trial=', account)
+    phone_change = {"phone": "256700000103", "currentPassword": "Synthetic current password"}
+    for token in ("n", "a"):
+        status, changed, _ = post_fixture(origin, "phone", phone_change, cookie="goal-hint-member=" + token * 43)
+        assert status == 200 and changed["next"] == "/en/account?view=forgot" and changed["requiresVerification"] is True
+    status, verified, _ = post_fixture(origin, "verify", {"code": "123456", "return": "/en"}, cookie=legacy)
     assert status == 200 and verified["next"] == "/en/matches"
     match("data-fixture-feed", request(origin, verified["next"]).text)
     status, reset, headers = post_fixture(origin, "reset-code", {"phone": "256700000101", "code": "123456"})
@@ -320,14 +346,13 @@ def subscriber_dashboard(origin):
         if section == "devices":
             match(r'action="/api/account/devices"', body)
         if section == "notifications":
-            match(r'data-account-notifications', body)
             match(r'data-account-notification-feed', body)
-            for label in ["Inbox", "WhatsApp preferences", "Payment approved", "Payment rejected", "Access activated", "Access ends soon", "Access expired", "1 free day earned", "Mark all as read", "Dismiss"]:
+            for label in ["Inbox", "Payment approved", "Payment rejected", "Access activated", "Access ends soon", "Access expired", "1 free day earned", "Mark all as read", "Dismiss"]:
                 match(label, body)
             match(r'data-unread="true"', body)
             footer = match(r'<[^>]+data-record-footer[^>]*>([\s\S]*?)</[^>]+>', body).group(1)
             match("View payments", footer)
-            no_match(r'eventKey|accountId|tokenHash', body)
+            no_match(r'eventKey|accountId|tokenHash|WhatsApp preferences|/api/account/preferences', body)
         if section == "referrals":
             match(r'data-account-referrals', body)
             for label in ["Copy link", "WhatsApp", "Telegram"]:
@@ -352,7 +377,7 @@ def subscriber_dashboard(origin):
     match(r'No notifications\.', empty_notifications)
     unavailable_notifications = visible_html(request(origin, "/en/account?state=notifications-unavailable&section=notifications").text)
     match(r'Notifications are temporarily unavailable', unavailable_notifications)
-    match(r'WhatsApp preferences', unavailable_notifications)
+    no_match(r'WhatsApp preferences', unavailable_notifications)
     for view in ["forgot", "reset"]:
         response = request(origin, f"/en/account?state=active&view={view}")
         assert response.status == 307 and response.headers["location"] == "/en/account?section=password"
@@ -384,8 +409,12 @@ def authentication_routes(origin):
         response = request(origin, f"/en/account?state=active&view={view}")
         assert response.status == 307 and response.headers.get("Location") == "/en/matches"
     pending = visible_html(request(origin, "/en/account?state=unverified&view=forgot").text)
-    match('data-account-verification="account"', pending)
-    no_match('action="/api/account/forgot"', pending)
+    match('data-account-verification="password-reset"', pending)
+    match('action="/api/account/forgot"', pending)
+    no_match('action="/api/account/verify"', pending)
+    reset_only = visible_html(request(origin, "/en/account?state=password-reset&view=forgot").text)
+    match('action="/api/account/reset"', reset_only)
+    no_match('action="/api/account/forgot"', reset_only)
     outgoing = Request(origin + "/api/account/sign-out?destination=login", data=b"", method="POST",
         headers={"Cookie": "goal-hint-member=" + "v" * 43, "Sec-Fetch-Site": "same-origin"})
     try:
@@ -454,8 +483,8 @@ def main():
         match(r'autoComplete="new-password"', register.text)
         register_html = authentication_form(visible_html(register.text), "register", "Register")
         phone_field(register_html)
-        match("Register and verify your number by SMS or WhatsApp", register_html)
-        no_match(r'Use 8–128 characters|By logging in|You can stay logged in on two devices', register_html)
+        match("Create your account with your phone number and a password.", register_html)
+        no_match(r'Use 8–128 characters|By logging in|You can stay logged in on two devices|name="code"|name="channel"|name="whatsappNotifications"', register_html)
         login = visible_html(request(server.origin, "/en/account?return=%2Fen%2Fmatches").text)
         match(r'href="/en/account\?view=forgot&amp;return=%2Fen%2Fmatches"', login)
         for state in ["signed-out"]:
@@ -469,19 +498,20 @@ def main():
             no_match(r'name="code"|temporary password|request to the admin', forgot)
             phone_field(auth_card(forgot))
             match(r'href="/en/account\?view=login&amp;return=%2Fen%2Fmatches"', forgot)
-        verify = visible_html(request(server.origin, "/en/account?state=unverified&view=verify").text)
-        delivery_step(verify)
-        for text in ["Verify phone", "SMS", "WhatsApp"]:
-            match(text, verify)
-        match(r'action="/api/account/verification"', verify)
-        no_match(r'action="/api/account/verify"', verify)
+        verify = visible_html(request(server.origin, "/en/account?state=unverified&view=verify&return=%2Fen%2Fmatches").text)
+        match('data-verification-step="code"', verify)
+        match("Verify phone", verify)
+        match("Use the code already sent to this number", verify)
+        match(r'action="/api/account/verify"', verify)
+        match(r'name="code"[^>]*autoComplete="one-time-code"|autoComplete="one-time-code"[^>]*name="code"', verify)
+        match(r'href="/en/account\?view=forgot&amp;return=%2Fen%2Fmatches"', verify)
         match(r'action="/api/account/sign-out\?destination=login"', verify)
-        no_match(r'value="[0-9]{6}"', verify)
-        sms_only = visible_html(request(server.origin, "/en/account?state=sms-only").text)
+        no_match(r'action="/api/account/verification"|name="channel"|name="whatsappNotifications"|value="[0-9]{6}"', verify)
+        sms_only = visible_html(request(server.origin, "/en/account?state=sms-only&view=forgot").text)
         default_sms(sms_only)
         match(r'value="sms"', sms_only)
         no_match(r'value="whatsapp"', sms_only)
-        unsupported = visible_html(request(server.origin, "/en/account?state=unsupported").text)
+        unsupported = visible_html(request(server.origin, "/en/account?state=unsupported&view=forgot").text)
         match("Messaging is unavailable for this country", unsupported)
         no_match(r'name="channel"', unsupported)
         disabled_send(unsupported)

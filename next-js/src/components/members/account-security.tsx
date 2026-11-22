@@ -89,7 +89,7 @@ export function AccountSecurityForm({ task, locale, contact, cancelHref }: {
     <MemberForm method="post" action={`/api/account/${task}`} onSubmit={save} data-analytics-ignore aria-busy={busy}>
       {task === "phone" ? <><PhoneInput name="phone" label={m.text("account.newPhone")} value={newPhone} onValueChange={setNewPhone} required />{currentField}</>
         : <NewPasswordFields locale={locale} password={password} setPassword={setPassword} confirm={confirm} setConfirm={setConfirm} />}
-      {task === "password" ? <PasswordChangeNote locale={locale} /> : <AccountNote>{m.text("account.newPhoneVerification")}</AccountNote>}
+      {task === "password" ? <PasswordChangeNote locale={locale} /> : <AccountNote>{m.text("account.newPhoneHelp")}</AccountNote>}
       {error && <AccountError role="alert">{error}</AccountError>}
       <AccountPrimary type="submit" disabled={busy}>{m.text(task === "phone" ? "account.savePhone" : "account.savePassword")}</AccountPrimary>
       <AccountLink href={cancelHref} prefetch={false}>{m.text("account.cancelLabel")}</AccountLink>

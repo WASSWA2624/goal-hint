@@ -4,7 +4,7 @@ import type { MemberServices } from "@/server/members/member-http";
 import { fixtureMemberSessions } from "./fixture-admin";
 
 const eligibleTrialScenarios: readonly string[] = ["trial-eligible", "trial-disabled", "off-trial-eligible", "member-free"];
-export const subscriptionScenarios = ["free", "active", "manual", "trial", "pending", "pending-renewal", "expired", "off", "off-active", "registration-trial",
+export const subscriptionScenarios = ["free", "active", "manual", "trial", "pending", "pending-renewal", "expired", "off", "off-active", "registration-trial", "registration-no-trial",
   "trial-eligible", "trial-disabled", "off-trial-eligible", "member-free", "off-trial-active"] as const;
 export type SubscriptionScenario = (typeof subscriptionScenarios)[number];
 // Route modules can compile independently; anchor API and HTML expiry to the same UTC day.
@@ -25,7 +25,7 @@ export function subscriptionScenarioFromHeaders(headers: Headers): SubscriptionS
 }
 
 export function fixtureSubscriptionStatus(scenario: string): SubscriptionStatus {
-  const trial: TrialStatus | undefined = scenario === "off-trial-active"
+  const trial: TrialStatus | undefined = (scenario === "registration-trial" || scenario === "off-trial-active")
     ? { state: "active", startsAt: fixtureRegistrationTrial.startsAt, endsAt: fixtureRegistrationTrial.endsAt }
     : eligibleTrialScenarios.includes(scenario) ? { state: "available" } : undefined;
   return { activeUntil: scenario === "registration-trial" || scenario === "off-trial-active" ? fixtureRegistrationTrial.endsAt : activeScenarios.includes(scenario) ? fixtureSubscriptionEnd : null,

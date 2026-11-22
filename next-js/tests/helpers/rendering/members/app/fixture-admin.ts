@@ -14,7 +14,8 @@ function session(hash: string) {
     expiresAt: new Date(+at + (kind === "expired" ? -1 : 86_400_000)), codeEnteredAt: null, accessCodeId: null,
     adminPasswordVersion: administrator ? kind === "stale" ? "stale" : fixtureKey("admin-password-version", `plain:${fixtureAdminPassword}`) : null,
     account: { phone: administrator ? fixtureAdminPhone : "256700000101", passwordHash: "synthetic registered password",
-      phoneVerifiedAt: at, blockedAt: kind === "blocked" ? at : null, erasedAt: kind === "erased" ? at : null } };
+      phoneVerifiedAt: kind === "pending" || kind === "registered" ? null : at,
+      memberAdmittedAt: kind === "registered" ? at : null, blockedAt: kind === "blocked" ? at : null, erasedAt: kind === "erased" ? at : null } };
 }
 const client = { $executeRaw: async () => 0, memberSession: {
   async findUnique({ where }: { where: { tokenHash: string } }) { return session(where.tokenHash); },

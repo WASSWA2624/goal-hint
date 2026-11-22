@@ -72,8 +72,6 @@ export const AccountPageHead = styled(DeskHead)`
 const Body = styled(PanelBody)`
   h2 { margin: 0; }
   form { max-inline-size: var(--gh-size-152); inline-size: 100%; }
-  [data-account-notifications] { display: flex; border: 0; padding: 0; }
-  [data-account-notifications] strong { font-size: ${({ theme }) => theme.typography.scale.body}; }
 `;
 export function AccountPanel({ title, actions, narrow = false, children, ...props }: Omit<ComponentProps<typeof Panel>, "title"> & { title?: ReactNode; actions?: ReactNode; narrow?: boolean }) {
   return <Panel {...props} {...(narrow ? { style: { maxInlineSize: "var(--gh-layout-formMaxWidth)", ...props.style } } : {})}>

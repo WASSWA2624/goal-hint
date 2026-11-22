@@ -9,6 +9,7 @@ import { readCookie } from "../http/private-http.ts";
 import { createAccessCodes } from "./access-codes.ts";
 import { memberCookieName, memberSessionRules, memberTokenHash, validMemberToken } from "./member-sessions.ts";
 import { isMemberAdminPhone, memberAdminCredential } from "./member-admin.ts";
+import { hasMemberAdmission } from "./member-admission.ts";
 import { accessMode, settingsServiceFor, type SettingsState } from "./settings.ts";
 import { developmentMemberToken } from "../demo/member.ts";
 
@@ -17,7 +18,7 @@ export class ViewerAccessUnavailable extends Error {
   constructor() { super("Viewer access is temporarily unavailable."); }
 }
 type AccessRow = { accountId: string; phone: string; passwordHash: string | null; blockedAt: Date | null;
-  phoneVerifiedAt: Date | null; adminPasswordVersion: string | null; lastSeenAt: Date; entitled: number | bigint;
+  phoneVerifiedAt: Date | null; memberAdmittedAt: Date | null; adminPasswordVersion: string | null; lastSeenAt: Date; entitled: number | bigint;
   canRenew: number | bigint | null; chainEnd: Date | null };
 
 /** Only a confirmed policy can grant access independently of a current subscription or administrator role. */
@@ -48,7 +49,7 @@ export function createViewerAccess({ services = getAnalyticsServices, settings, 
       if (validMemberToken(token)) {
         const hash = memberTokenHash(token), database = resolved.database;
         const read = async (when: Date) => (await database.query((tx) => tx.$queryRaw<AccessRow[]>`
-          SELECT s.accountId, s.lastSeenAt, s.adminPasswordVersion, a.phone, a.passwordHash, a.phoneVerifiedAt, a.blockedAt,
+          SELECT s.accountId, s.lastSeenAt, s.adminPasswordVersion, a.phone, a.passwordHash, a.phoneVerifiedAt, a.memberAdmittedAt, a.blockedAt,
             (a.autoRenew AND a.creditUgx >= (SELECT p.priceUgx FROM SubscriptionPlan p WHERE p.id = a.autoRenewPlanId AND p.active)) AS canRenew,
             EXISTS (
               SELECT 1 FROM AccessCode c WHERE c.accountId = s.accountId AND c.revokedAt IS NULL AND c.startsAt <= ${when} AND c.endsAt > ${when}
@@ -62,7 +63,7 @@ export function createViewerAccess({ services = getAnalyticsServices, settings, 
         // Allowlisting a phone cannot elevate a pre-existing member session. Password rotation also invalidates it.
         const adminHash = adminPhone ? memberAdminCredential() : null;
         if (row && (adminPhone ? !adminHash || row.adminPasswordVersion !== resolved.config.key("admin-password-version", adminHash)
-          : !row.passwordHash || !row.phoneVerifiedAt)) row = undefined;
+          : !row.passwordHash || !hasMemberAdmission(row))) row = undefined;
         // A period about to end renews from credit on the member's own visit, so the background job is never the only trigger.
         if (row && !row.blockedAt && !adminPhone && mode === "on" && Number(row.canRenew) && row.chainEnd && renewalDue(new Date(row.chainEnd), at)) {
           try { if (await createAccessCodes({ database, now }).renewDue(row.accountId) === "renewed") row = await read(new Date(now())); }
@@ -74,11 +75,11 @@ export function createViewerAccess({ services = getAnalyticsServices, settings, 
           data: { lastSeenAt: at, expiresAt: new Date(+at + memberSessionRules.expiryMs) } }));
         }
       }
-      const verifiedMember = row && !row.blockedAt ? row : null;
-      const administrator = !!verifiedMember && isMemberAdminPhone(verifiedMember.phone);
-      const entitled = Boolean(Number(verifiedMember?.entitled));
+      const activeMember = row && !row.blockedAt ? row : null;
+      const administrator = !!activeMember && isMemberAdminPhone(activeMember.phone);
+      const entitled = Boolean(Number(activeMember?.entitled));
       if (failOnUnavailable && entitled && !administrator && !state.settings) throw new ViewerAccessUnavailable();
-      return { tier: administrator || allowsContentWithoutSubscription(state, !!verifiedMember) || state.settings && entitled ? "full" : "free",
+      return { tier: administrator || allowsContentWithoutSubscription(state, !!activeMember?.phoneVerifiedAt) || state.settings && entitled ? "full" : "free",
         signedIn: !!row, mode };
     } catch {
       if (mode === "off") return { tier: "full", signedIn: false, mode };

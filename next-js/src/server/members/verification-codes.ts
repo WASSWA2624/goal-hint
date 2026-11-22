@@ -12,14 +12,15 @@ type Purpose = "account" | "reset";
 type Reservation = Readonly<{ id: string; message: VerificationMessage }>;
 export const verificationAttemptLimit = 5;
 
-/** Call reserve/consume only while holding the account lock. Delivery runs after committing the reservation. */
+/** Call reserve/consume while holding the account lock. Only password recovery can reserve and send a new code. */
 export function createVerificationCodes({ database, config, delivery, now }: {
   database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key">; delivery: MemberMessaging; now: () => number;
 }) {
   const digest = (account: MemberAccount, purpose: Purpose, code: string) =>
     config.key("member-verification-code", `${account.id}:${account.phone}:${purpose}:${code}`);
   return Object.freeze({
-    async reserve(tx: Prisma.TransactionClient, account: MemberAccount, purpose: Purpose, channel: MessageChannel, at: Date): Promise<Reservation | null> {
+    async reservePasswordReset(tx: Prisma.TransactionClient, account: MemberAccount, channel: MessageChannel, at: Date): Promise<Reservation | null> {
+      const purpose = "reset";
       const recent = await tx.memberVerification.findMany({ where: { OR: [{ accountId: account.id }, { phone: account.phone! }], purpose,
         createdAt: { gt: new Date(+at - verificationRequestWindowMs) } }, select: { codeHash: true } });
       if (recent.length >= verificationRequestLimit) return null;
@@ -27,12 +28,12 @@ export function createVerificationCodes({ database, config, delivery, now }: {
       do { code = randomInt(100_000, 1_000_000).toString(); codeHash = digest(account, purpose, code); }
       while (recent.some(row => row.codeHash === codeHash));
       await tx.memberVerification.updateMany({ where: { accountId: account.id, purpose, consumedAt: null }, data: { consumedAt: at } });
-      if (purpose === "reset") await tx.memberSession.deleteMany({ where: { accountId: account.id, passwordResetAt: { not: null } } });
+      await tx.memberSession.deleteMany({ where: { accountId: account.id, passwordResetAt: { not: null } } });
       const id = randomUUID();
       await tx.memberVerification.create({ data: { id, accountId: account.id, phone: account.phone!, purpose, channel,
         bindingHash: config.key("member-verification-binding", account.id), codeHash, createdAt: at,
         expiresAt: new Date(+at + verificationCodeLifetimeMs) } });
-      return { id, message: { phone: account.phone!, channel, purpose: purpose === "account" ? "account" : "password-reset", code } };
+      return { id, message: { phone: account.phone!, channel, purpose: "password-reset", code } };
     },
 
     async deliver(reservation: Reservation): Promise<boolean> {

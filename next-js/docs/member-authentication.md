@@ -1,10 +1,10 @@
 # Member account authentication
 
-Registration requires a supported phone number and a password of 8–128 characters. Numbers are canonicalized with their country code; passwords use salted scrypt hashes. Duplicate registration returns HTTP 409. Registration creates a restricted cookie; password login for an unverified number resumes verification. Pending cookies cannot access protected member content, payment submissions, profile changes, or administrator pages. Verified members can explicitly start one trial for the duration configured in Admin Settings; registration and login do not start or extend it.
+Registration requires a valid mobile number and a password of 8–128 characters. Numbers are canonicalized with their country code. Passwords use salted scrypt hashes. Duplicate registration returns HTTP 409. New regular members get a normal authenticated session immediately, without a message or administrator approval. Eligible new registrations receive the configured one-time trial in the account creation transaction. Disabled offers do not create an entitlement, and only verified members with pre-existing unused trial eligibility retain manual activation.
 
 Phone fields throughout the app share a country selector with flags and a separate national-number input. Countries can be searched by name, abbreviation or calling code; requests still submit the canonical full number, including the selected country code.
 
-Verification shows one step at a time: choose SMS or WhatsApp, then enter the delivered six-digit code. The code step shows only the registered number's last three digits. Contact support and Back to log in stay visible side by side on small screens. Existing-code entry and returning to delivery selection support resuming or requesting another code. Completing signup, member login, account verification or password reset redirects to Matches (`/en/matches`), including ordinary flows begun from protected content or Subscribe; canonical shared-slip journeys return to that slip. Pending verification and password-change sessions finish their required step before reaching home. Signed-in profile changes retain their existing destinations.
+Completing signup, member login, legacy account verification or password reset redirects to Matches (`/en/matches`). Canonical shared-slip journeys return to that slip. A legacy restricted session can enter an already-delivered six-digit code, choose Forgot password for the registered number, or return to Login. Restricted cookies cannot access private member content, payment submissions, profile changes, or administrator pages.
 
 Login and Register use the canonical Account URLs. A signed-out Subscribe visit redirects to Login; verification-only and reset-only sessions resume their required Account form. Pricing and subscription availability do not decide whether someone is signed in. Failed session reads show the existing unavailable message instead of treating the visitor as signed out. An authenticated member opening Login/Register goes to Matches (or their shared slip); the plain Account URL still opens their account workspace. Verification's Back to login clears the restricted session and returns to Login, while ordinary logout returns to Matches.
 
@@ -18,7 +18,7 @@ only for a new password and confirmation, without a current password or code. Re
 cookies before sending or consuming a code. Signed-out and reset-only sessions
 retain the existing delivered-code recovery flow. Saving a password rotates the
 current cookie, keeps that device signed in and revokes every other session.
-Phone changes still require the current password and number verification.
+Changing the number requires the current password, clears admission and ownership proof for the old number, and revokes prior sessions and codes. The replacement requires successful Forgot password recovery before account access resumes. A member in the password recovery cooldown keeps the original number and session until they can complete recovery.
 
 ## Two active sessions
 
@@ -28,18 +28,16 @@ Incorrect credentials, blocked/throttled attempts and rolled-back login transact
 
 Both signed-in devices inherit the account’s active subscription and share its expiry. Administrators and normal users use the same phone-and-password login form and the same two-session policy. Token hashing, 90-day rolling server expiry, daily touch and existing expired-row maintenance remain unchanged.
 
-## Account verification
+## Legacy account verification
 
-SMS is selected by default. The member can switch to WhatsApp when supported; exactly one available method remains selected. The action reads **Send by SMS** or **Send by WhatsApp** to match the selection and is disabled without a valid number and a supported method. Delivery uses YoolaSMS in both production and development when server-only credentials are configured. A code expires exactly 24 hours after issuance or immediately after successful use. Every new request invalidates earlier codes for that purpose, including requests from another session or delivery channel. At most three requests per account and purpose are allowed in a rolling 24 hours; changing numbers does not reset the allowance, and a reused number retains its recent requests. Reservations and failed/uncertain deliveries count toward the limit to prevent concurrent or retried sends from exceeding it. Five incorrect guesses invalidate a code. Codes are stored as keyed hashes; no public response, URL, log, or database field contains the plaintext code.
-
-Successful verification grants a normal member cookie and makes the account's current access period available on that device. A valid registration trial shows an active-trial notice and Browse app action. Verification does not create or extend a trial; there is no trial request or administrator approval step. Changing the phone number requires the current password, revokes existing sessions/codes, and requires verification of the new number before using the account again.
+Previously issued account codes remain usable until consumed or expired. Only Forgot password sends a new code. Successful legacy verification grants a normal member cookie and records proof of the current number. It leaves access dates and existing referral rules intact. Registration alone cannot establish proof of phone ownership.
 
 Pasting accepts only a complete six-digit ASCII code after trimming surrounding whitespace, preserving leading zeros. Message text, letters and longer numbers are rejected without extracting or truncating digits. Clipboard autofill is attempted only during interaction with an empty code field in a secure browser context; permission denial leaves manual entry and native paste available. It never overwrites an edited code, submits automatically, or persists clipboard contents. The server verifies the submitted code before granting access.
 
 ## Password recovery
 
 1. While signed out, Forgot password opens the recovery page. The user enters their registered number and chooses SMS or WhatsApp. Signed-in recovery deep links redirect to Account → Change password; signed-in recovery-code requests and confirmation are rejected.
-2. The acknowledgement is generic for missing or ineligible accounts. Eligible accounts receive a six-digit code through the selected channel. The same 24-hour expiry, three-request rolling allowance, newest-only rule, and guess limit apply independently to recovery.
+2. The acknowledgement is generic for missing or ineligible accounts. Eligible accounts receive a six-digit code through YoolaSMS using their selected supported channel. A code expires after 24 hours. The three-send rolling allowance applies across channels and survives a phone change. A new request replaces older codes, and five incorrect guesses invalidate a code.
 3. A valid code is consumed atomically and grants a reset-only cookie for 15 minutes. The user chooses a new password. This cookie cannot access member or administrator content.
 4. Saving the password invalidates outstanding codes and all existing sessions, and issues a new member cookie.
 
@@ -61,25 +59,27 @@ All writes require same-origin requests. Responses are private and not cached; c
 
 | Endpoint | Request | Success |
 | --- | --- | --- |
-| `POST /api/account/register` | `{phone,password,return?}` | `{next,phone,requiresVerification:true,trial?}` plus restricted cookie |
+| `POST /api/account/register` | `{phone,password,return?}` | `{next,phone,trial?}` plus normal member cookie |
 | `POST /api/account/login` | `{phone,password,return?}` | `{next,phone,...}` plus appropriate cookie |
-| `POST /api/account/verification` | `{channel,return?}` with pending cookie | Verification delivery acknowledgement |
+| `POST /api/account/verification` | Legacy delivery request | Retired with recovery guidance |
 | `POST /api/account/verify` | `{code,return?}` with pending cookie | Normal member cookie and optional active-trial metadata |
 | `POST /api/account/forgot` | `{phone,channel,return?}` | Generic recovery acknowledgement |
 | `POST /api/account/reset-code` | `{phone,code,return?}` | Reset-only cookie |
 | `POST /api/account/reset` | `{password,return?}` with reset-only cookie | New member cookie |
 | `POST /api/account/password` | `{password}` with authenticated member cookie | Fresh current-device cookie; all previous sessions revoked |
 | `POST /api/account/phone` | `{phone,currentPassword}` | Restricted cookie for a changed phone |
-| `GET /api/account/session` | — | Verified phone and role, plus a subscription summary when available. An unavailable summary is `null`; a revoked or expired session has no verified phone. |
+| `GET /api/account/session` | — | Admitted account phone and role, plus a subscription summary when available. An unavailable summary is `null`. An expired or revoked session has no account identity. |
 | `POST /api/account/sign-out` | Optional fixed `?destination=login` for leaving verification | Clear cookies and end session; Matches by default, Login for that fixed intent |
 
 `/api/account/sign-in` remains a password-login alias.
 
 ## Database rollout
 
+Apply `20261122200000_member_admission` before deploying this version. It adds a nullable admission timestamp without backfilling any account or ownership proof. Existing verified accounts continue to use their proof. Run the payment-message worker from the new release to retire legacy queued member messages without delivery and retain previously recorded outcomes.
+
 Deploy `20261029120000_remove_admin_password_requests` with the admin password-workflow removal. It removes the obsolete request timestamp, temporary-password hash/expiry, and queue index. Accounts affected by an unfinished legacy admin reset retain verified-code recovery eligibility through an intentionally unusable password marker; ordinary password hashes, reset-only sessions, verification codes, and historical audit events are preserved. Coordinate migration and application rollout; previous releases still reference the removed columns.
 
-Deploy `20261023090000_member_message_verification` through the existing database deployment workflow before the new code. The migration adds `MemberAccount.phoneVerifiedAt` and `passwordChangedAt`, and restores `MemberVerification` for request/code tracking with a delivery channel. Existing account numbers are grandfathered as verified; new registrations and phone changes require delivery verification. Historical retired challenges are invalidated. Update column-scoped grants for the added account fields, and ensure SELECT/INSERT/UPDATE/DELETE on `MemberVerification` as shown in [manual-account-grants.sql](deployment/manual-account-grants.sql). Schema generation does not apply the migration to any application database.
+The historical `20261023090000_member_message_verification` migration added `MemberAccount.phoneVerifiedAt` and `passwordChangedAt` and restored `MemberVerification` for codes with delivery channels. See [manual-account-grants.sql](deployment/manual-account-grants.sql) for table grants. Schema generation does not apply any migration.
 
 `20261023130000_single_member_login` is a historical, data-only cleanup from the former one-session policy. Keep the applied migration unchanged; do not rerun it to enforce the new limit. Moving from one to two active sessions needs no schema change or new migration. The login transaction enforces the cap and cleans any excess older sessions it encounters.
 

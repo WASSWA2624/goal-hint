@@ -7,7 +7,7 @@ import { createMessages } from "@/i18n/messages";
 import { AccountCard, AccountCardBody } from "./account-styles";
 import { AccountFormHeader } from "./account-form-header";
 
-/** Display an existing trial after verifying the account's number. */
+/** Confirmation for a trial already granted by the server. */
 export type FreeTrialAccess = Readonly<{ days: number; startsAt: string; endsAt: string; active: boolean }>;
 
 export function FreeTrialNotice({ locale, trial, next }: { locale: string; trial: FreeTrialAccess; next: string }) {

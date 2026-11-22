@@ -18,8 +18,7 @@ import type { AccessCode, MemberAccount, Prisma } from "../generated/prisma/clie
 import { activeMemberSessionsWhere, type MemberIdentity } from "./member-sessions.ts";
 import { subscriptionCheckoutPublished } from "./sales-readiness.ts";
 import { decide, lockSettings } from "./settings.ts";
-import type { PaymentNotifications } from "./payment-notifications.ts";
-import { createQueuedPaymentNotifications } from "./payment-notification-outbox.ts";
+import { disabledMemberPaymentNotifications, type PaymentNotifications } from "./payment-notifications.ts";
 import { acceptedTerms } from "./member-terms.ts";
 import { appendWalletEntry, creditPath, InsufficientCredit, lastEntryNumber, lockedCredit, reservedWalletCredit, spendableCredit } from "./wallet.ts";
 import { rechainRewardPeriods } from "./referral-periods.ts";
@@ -110,8 +109,10 @@ function trialStatus(account: Pick<AccessAccount, "trialEligibleAt" | "trialForf
 const readTrial = (tx: Prisma.TransactionClient, accountId: string) => tx.accessCode.findFirst({ where: { accountId, source: "trial" },
   orderBy: { startsAt: "asc" }, select: { startsAt: true, endsAt: true, revokedAt: true } });
 
-export async function createAccessPeriod(tx: Prisma.TransactionClient, account: AccessAccount, fields: Creation, actor: string, at: Date,
-  { appendAfterCurrent: append = false, exactRewardMs }: { appendAfterCurrent?: boolean; exactRewardMs?: number } = {}): Promise<AccessGrant> {
+type AccessPeriodOptions = { appendAfterCurrent?: boolean; exactRewardMs?: number };
+
+async function recordAccessPeriod(tx: Prisma.TransactionClient, account: AccessAccount, fields: Creation, actor: string, at: Date,
+  { appendAfterCurrent: append = false, exactRewardMs }: AccessPeriodOptions = {}): Promise<{ code: AccessCode; grant: AccessGrant }> {
   if (!account.phone) throw new Error("An erased account cannot receive access.");
   if (exactRewardMs !== undefined && (fields.source !== "referral" || !Number.isSafeInteger(exactRewardMs) || exactRewardMs <= 0 || exactRewardMs > subscriptionDayMs))
     throw new RangeError("An exact restoration must be a bounded unused earned day.");
@@ -138,12 +139,32 @@ export async function createAccessPeriod(tx: Prisma.TransactionClient, account: 
     ? (await tx.memberSession.findMany({ where: activeMemberSessionsWhere(account.id, at), select: { tokenHash: true } })).length
     : 0;
   await audit(tx, account.id, code.id, "access_granted", actor, at, { source: fields.source, devicesUnlocked });
-  return { id: code.id, accountId: account.id, reference, planName: code.planName, startsAt: code.startsAt, endsAt: code.endsAt, source: fields.source, devicesUnlocked,
-    ...(fields.paymentSubmissionId ? { paymentSubmissionId: fields.paymentSubmissionId } : {}) };
+  return { code, grant: { id: code.id, accountId: account.id, reference, planName: code.planName, startsAt: code.startsAt, endsAt: code.endsAt,
+    source: fields.source, devicesUnlocked, ...(fields.paymentSubmissionId ? { paymentSubmissionId: fields.paymentSubmissionId } : {}) } };
+}
+
+export async function createAccessPeriod(tx: Prisma.TransactionClient, account: AccessAccount, fields: Creation, actor: string, at: Date,
+  options?: AccessPeriodOptions): Promise<AccessGrant> {
+  return (await recordAccessPeriod(tx, account, fields, actor, at, options)).grant;
+}
+
+async function grantTrial(tx: Prisma.TransactionClient, account: AccessAccount, days: number, at: Date): Promise<AccessCode> {
+  const { code } = await recordAccessPeriod(tx, account, { source: "trial", planName: "Free trial", durationDays: days,
+    priceUgx: 0, amountReceivedUgx: 0 }, "member", at);
+  await audit(tx, account.id, code.id, "trial_activated", "member", at, { startsAt: code.startsAt, endsAt: code.endsAt });
+  return code;
+}
+
+/** Called inside the registration transaction, which holds the newly created account row. */
+export async function startRegistrationTrial(tx: Prisma.TransactionClient, account: MemberAccount, at: Date): Promise<AccessCode | null> {
+  if (account.memberAdmittedAt?.getTime() !== +at || !account.phone || !account.passwordHash || account.blockedAt || account.erasedAt
+    || trialStatus(account, await readTrial(tx, account.id), at)) return null;
+  const days = offeredTrialDays(await lockSettings(tx, "member", at));
+  return validDays(days) ? grantTrial(tx, account, days, at) : null;
 }
 
 /** Access periods without codes to send (068): every new period unlocks the account's signed-in devices directly. */
-export function createAccessCodes({ database, now = Date.now, config, notifications = createQueuedPaymentNotifications(database) }: {
+export function createAccessCodes({ database, now = Date.now, config, notifications = disabledMemberPaymentNotifications }: {
   database: DatabaseRuntime; now?: () => number; notifications?: PaymentNotifications;
   config?: Partial<Pick<AnalyticsConfig, "key" | "production">>;
 }) {
@@ -198,7 +219,6 @@ export function createAccessCodes({ database, now = Date.now, config, notificati
       const entry = await appendWalletEntry(tx, account.id, { kind: "topup", amountUgx: fields.amountReceivedUgx, actor: "admin", at, paymentSubmissionId: submission.id });
       await audit(tx, account.id, submission.id, "payment_approved", actor, at, { purpose: "topup", amountReceivedUgx: fields.amountReceivedUgx,
         creditAddedUgx: fields.amountReceivedUgx, balanceUgx: entry.balanceAfter }, "payment");
-      await notifications.enqueue?.(tx, { accountId: account.id, targetType: "payment", targetId: submission.id, decision: "credited", at });
       return { status: "credited", accountId: account.id, credit: { addedUgx: fields.amountReceivedUgx, balanceUgx: entry.balanceAfter },
         payment: formatPaymentReference(submission.reference), paymentSubmissionId: submission.id };
     }
@@ -226,7 +246,6 @@ export function createAccessCodes({ database, now = Date.now, config, notificati
       paymentSubmissionId: submission.id }) : null;
     await audit(tx, account.id, submission.id, "payment_approved", actor, at, { codeId: grant.id, amountReceivedUgx: fields.amountReceivedUgx,
       ...(credit ? { creditAddedUgx: excess, balanceUgx: credit.balanceAfter } : {}) }, "payment");
-    await notifications.enqueue?.(tx, { accountId: account.id, targetType: "payment", targetId: submission.id, decision: "approved", at });
     return { status: "created", grant: { ...grant, payment: formatPaymentReference(submission.reference),
       ...(credit ? { credit: { addedUgx: excess, balanceUgx: credit.balanceAfter } } : {}) } };
   }
@@ -263,14 +282,15 @@ export function createAccessCodes({ database, now = Date.now, config, notificati
   }
 
   return Object.freeze({
-    /** A verified member starts a trial once. The same account lock covers the first paid grant. */
+    /** Legacy verified members can claim an unused offer. The same account lock covers the first paid grant. */
     async activateTrial(member: MemberIdentity): Promise<TrialActivation> {
       if (member.blocked || member.administrator) return { state: "forbidden" };
       return codeTransaction<TrialActivation>(database, async (tx, rollback) => {
         const account = await lockMemberAccount(tx, member.accountId);
         const at = new Date(now());
         const session = await tx.memberSession.findUnique({ where: { tokenHash: member.tokenHash } });
-        if (!account?.phone || account.phone !== member.phone || !account.passwordHash || !account.phoneVerifiedAt || account.blockedAt || account.erasedAt
+        if (!account?.phone || account.phone !== member.phone || !account.passwordHash || !account.phoneVerifiedAt || account.memberAdmittedAt
+          || account.blockedAt || account.erasedAt
           || session?.accountId !== account.id || !session.authenticatedAt || session.passwordResetAt || session.expiresAt <= at)
           return rollback({ state: "forbidden" });
         const status = trialStatus(account, await readTrial(tx, account.id), at);
@@ -279,10 +299,8 @@ export function createAccessCodes({ database, now = Date.now, config, notificati
         const settings = await lockSettings(tx, "member", at);
         const days = offeredTrialDays(settings);
         if (!validDays(days)) return rollback({ state: "disabled" });
-        const grant = await createAccessPeriod(tx, account, { source: "trial", planName: "Free trial", durationDays: days,
-          priceUgx: 0, amountReceivedUgx: 0 }, "member", at);
-        await audit(tx, account.id, grant.id, "trial_activated", "member", at, { startsAt: grant.startsAt, endsAt: grant.endsAt });
-        return { state: "active", startsAt: grant.startsAt.toISOString(), endsAt: grant.endsAt.toISOString() };
+        const trial = await grantTrial(tx, account, days, at);
+        return { state: "active", startsAt: trial.startsAt.toISOString(), endsAt: trial.endsAt.toISOString() };
       });
     },
 
@@ -555,7 +573,6 @@ export function createAccessCodes({ database, now = Date.now, config, notificati
           termsVersion: account.autoRenewTermsVersion }, "system:auto-renew", at);
         const entry = await appendWalletEntry(tx, accountId, { kind: "renewal", amountUgx: -plan.priceUgx, actor: "system", at, accessCodeId: grant.id, requestKey });
         await audit(tx, accountId, grant.id, "credit_renewed", "system:auto-renew", at, { priceUgx: plan.priceUgx, balanceUgx: entry.balanceAfter });
-        await notifications.enqueue?.(tx, { accountId, targetType: "access-code", targetId: grant.id, decision: "renewed", at });
         renewed = { phone: account.phone, grant, balanceUgx: entry.balanceAfter };
         return "renewed";
       });

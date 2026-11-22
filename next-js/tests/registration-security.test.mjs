@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createMemberAuthFixture } from "./helpers/member-auth-fixture.mjs";
 import { createMemberRateLimit } from "../src/server/members/rate-limit.ts";
-import { awardReferralRegistration } from "../src/server/members/referrals.ts";
+import { awardReferralRegistration, recordReferralRegistration } from "../src/server/members/referrals.ts";
 
 const password = "correct horse 47", address = "198.51.100.90";
 
@@ -27,16 +27,27 @@ test("recovery send/check limits persist by phone when addresses change, without
   assert.equal((await f.service.requestPasswordReset("256700000008", address, "sms")).status, "requested");
 });
 
-test("one shared address permits independent verified referral awards; claimed/unverified invitees cannot award", async () => {
+test("only previously issued verification proofs award referrals, with attribution retained for new registrations", async () => {
   const f = createMemberAuthFixture({ trialDays: 0 }), inviter = await f.account({ referralCode: "a".repeat(32) });
-  for (const phone of ["256700000002", "256700000003"]) {
-    const pending = await f.service.register(phone, password, { member: null }, address, inviter.referralCode);
-    assert.equal(pending.status, "authenticated");
-    const account = f.accounts.get(pending.accountId), config = { key: () => { assert.fail("Unverified identity must not reach reward keying"); } };
+  const newPhone = "256700000004", registered = await f.service.register(newPhone, password, { member: null }, address, inviter.referralCode);
+  assert.equal(registered.status, "authenticated"); assert.equal(registered.requiresVerification, undefined);
+  assert.equal(f.accounts.get(registered.accountId).phoneVerifiedAt, null);
+  assert.equal(f.referralCredits.size, 0); assert.equal(f.messages.length, 0);
+  await f.service.requestPasswordReset(newPhone, address, "sms");
+  const recovered = await f.service.verifyPasswordReset(newPhone, f.messages[0].code, address);
+  assert.equal((await f.service.resetPassword("registered recovery password", recovered.token, address)).status, "authenticated");
+  assert.ok(f.accounts.get(registered.accountId).phoneVerifiedAt);
+  assert.equal(f.referralCredits.size, 0, "A recovery proof does not change referral policy");
+  assert.deepEqual([...f.referrals.values()].map(row => row.status), ["pending"]);
+  for (const [index, phone] of ["256700000002", "256700000003"].entries()) {
+    const account = await f.account({ phone, phoneVerifiedAt: null });
+    await f.database.transaction(tx => recordReferralRegistration(tx, f.config, account, new Date(f.now()), inviter.referralCode));
+    const pending = await f.service.login(phone, password, address);
+    assert.equal(pending.requiresVerification, true);
+    const config = { key: () => { assert.fail("Unverified identity must not reach reward keying"); } };
     await f.database.transaction(tx => awardReferralRegistration(tx, config, account, new Date(f.now())));
-    assert.equal(f.referralCredits.size, phone.endsWith("2") ? 0 : 1, "An unverified identity cannot grant a reward");
-    await f.service.requestVerification("sms", pending.token, address);
-    const code = f.messages.at(-1).code;
+    assert.equal(f.referralCredits.size, index);
+    const code = await f.legacyCode(account.id);
     const verified = await f.service.verifyAccount(code, pending.token, address);
     assert.equal(verified.status, "authenticated");
     assert.equal((await f.service.verifyAccount(code, pending.token, "203.0.113.100")).status, "unauthorized");

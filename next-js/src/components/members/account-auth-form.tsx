@@ -13,24 +13,32 @@ import { AccountCard, AccountCardBody, AccountError, AccountFormFooter, AccountL
 import { AccountFormHeader } from "./account-form-header";
 import { accountRequest, PasswordInput } from "./account-security";
 import { ForgotPasswordForm } from "./account-verification";
+import { FreeTrialNotice, type FreeTrialAccess } from "./free-trial-notice";
 
 export type AccountAuthView = "login" | "register" | "forgot";
 
-/** Registration creates a pending account; a delivered code establishes ownership of its number. */
+/** New members can start using the account as soon as registration succeeds. */
 export function AccountAuthForm({ locale, view = "login", returnTo, contact }: { locale: string; view?: AccountAuthView; returnTo: string | null; contact: AdminContact }) {
   const m = createMessages(locale), [phone, setPhone] = useState("256");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  const [signupTrial, setSignupTrial] = useState<{ trial: FreeTrialAccess; next: string } | null>(null);
   const base = `/${resolveLocale(locale)}`;
   const href = (next: AccountAuthView) => memberAuthPath(next, returnTo);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (busy) return;
     setBusy(true); setError("");
     try {
-      const result = await accountRequest<{ next: string }>(view, { phone, password, ...(returnTo ? { return: returnTo } : {}) });
+      const result = await accountRequest<{ next: string; trial?: FreeTrialAccess }>(view, { phone, password, ...(returnTo ? { return: returnTo } : {}) });
+      if (view === "register" && result.trial?.active) {
+        setPassword("");
+        setSignupTrial({ trial: result.trial, next: result.next });
+        return;
+      }
       location.replace(result.next);
     } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); setBusy(false); }
   }
+  if (signupTrial) return <FreeTrialNotice locale={locale} {...signupTrial} />;
   if (view === "forgot") return <ForgotPasswordForm locale={locale} returnTo={returnTo} contact={contact} />;
   return <AccountCard data-account-auth data-analytics-ignore>
     <AccountFormHeader icon={UserIcon} title={m.text(view === "register" ? "auth.signUp" : "auth.signIn")}

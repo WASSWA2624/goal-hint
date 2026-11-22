@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import styled from "styled-components";
 import { SegmentedChoice, TextInput } from "@/components/ui/controls";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { ChevronRightIcon, KeyIcon, LockIcon, MailIcon } from "@/components/ui/icons";
@@ -10,35 +9,32 @@ import { normalizePhone } from "@/domain/phone";
 import { parseVerificationCode } from "@/domain/verification-code";
 import { memberAuthPath } from "@/domain/member-navigation";
 import { createMessages } from "@/i18n/messages";
-import { media } from "@/styles/theme";
 import { AccountFormSupport, type AdminContact } from "./admin-contact";
 import { AccountFormHeader } from "./account-form-header";
-import { accountRequest } from "./account-security";
+import { accountRequest } from "./account-request";
 import { AccountCard, AccountCardBody, AccountCodeField, AccountError, AccountLink, AccountNote, AccountPrimary,
   AccountSecondaryActions, AccountSteps, AccountTextButton } from "./account-styles";
 import { MemberForm, MemberSignOut } from "./member-controls";
-import { FreeTrialNotice, type FreeTrialAccess } from "./free-trial-notice";
-import { AccountWhatsAppConsentLabel } from "./account-notification-preferences";
 
 type CodeFormProps = { locale: string; returnTo: string | null; contact: AdminContact } & (
-  { purpose: "account"; phone: string } | { purpose: "password-reset"; phone?: never }
+  { purpose: "account"; phone: string } | { purpose: "password-reset"; phone?: string }
 );
 
 /** Both verification flows keep codes in component memory and submit only after an explicit confirmation. */
 function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) {
-  const m = createMessages(locale), [phone, setPhone] = useState(flow.phone ?? "256");
+  const m = createMessages(locale), recovery = flow.purpose === "password-reset";
+  const [phone, setPhone] = useState(flow.phone ?? "256");
   const [channel, setChannel] = useState<MessageChannel | "">("sms"), [code, setCode] = useState("");
-  const [step, setStep] = useState<"delivery" | "code">("delivery");
+  const [step, setStep] = useState<"delivery" | "code">(recovery ? "delivery" : "code");
   const [requested, setRequested] = useState(false), [error, setError] = useState(""), [invalidCode, setInvalidCode] = useState(false);
-  const [whatsappNotifications, setWhatsappNotifications] = useState(false);
   const [busy, setBusy] = useState<"request" | "verify" | null>(null);
-  const [verifiedTrial, setVerifiedTrial] = useState<{ trial: FreeTrialAccess; next: string } | null>(null);
   const codeInput = useRef<HTMLInputElement>(null), codeRevision = useRef(0), clipboardPending = useRef(false);
-  const recovery = flow.purpose === "password-reset", canonicalPhone = normalizePhone(phone);
+  const canonicalPhone = normalizePhone(phone);
   const channels = canonicalPhone ? supportedMessageChannels(canonicalPhone) : messageChannels;
   const selectedChannel = channel && channels.includes(channel) ? channel : channels.includes("sms") ? "sms" : channels[0] ?? "";
   const sendLabel = selectedChannel ? m.text("account.sendCodeBy", { channel: selectedChannel === "sms" ? "SMS" : "WhatsApp" }) : m.text("account.sendCode");
   const loginHref = memberAuthPath("login", returnTo);
+  const hasRestrictedSession = !recovery || !!flow.phone;
   const returnBody = returnTo ? { return: returnTo } : {};
   function updateCode(value: string) { codeRevision.current++; setCode(value); setInvalidCode(false); setError(""); }
   const changePhone = (value: string) => {
@@ -69,36 +65,34 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
     finally { clipboardPending.current = false; }
   }
   async function request(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (busy || !canonicalPhone || !selectedChannel) return;
+    event.preventDefault(); if (!recovery || busy || !canonicalPhone || !selectedChannel) return;
     setBusy("request"); setError("");
     try {
-      await accountRequest(recovery ? "forgot" : "verification", { ...(recovery ? { phone } : {}), channel: selectedChannel, ...returnBody });
+      await accountRequest("forgot", { phone, channel: selectedChannel, ...returnBody });
       setRequested(true); updateCode(""); setStep("code");
     } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); }
     finally { setBusy(null); }
   }
   async function verify(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (busy || !canonicalPhone) return;
+    event.preventDefault(); if (busy || recovery && !canonicalPhone) return;
     const parsed = parseVerificationCode(code);
     if (parsed === null || invalidCode) { setInvalidCode(true); return; }
     setBusy("verify"); setError("");
     try {
-      const result = await accountRequest<{ next: string; trial?: FreeTrialAccess }>(recovery ? "reset-code" : "verify", {
-        ...(recovery ? { phone } : whatsappNotifications ? { whatsappNotifications: true } : {}), code: parsed, ...returnBody });
-      if (!recovery && result.trial?.active) { setCode(""); setVerifiedTrial({ trial: result.trial, next: result.next }); return; }
+      const result = await accountRequest<{ next: string }>(recovery ? "reset-code" : "verify", {
+        ...(recovery ? { phone } : {}), code: parsed, ...returnBody });
       location.replace(result.next);
     } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); setBusy(null); }
   }
-  if (verifiedTrial) return <FreeTrialNotice locale={locale} {...verifiedTrial} />;
   return <AccountCard data-account-auth data-account-verification={flow.purpose} data-verification-step={step} data-analytics-ignore>
     <AccountFormHeader icon={step === "code" ? KeyIcon : LockIcon}
-      title={m.text(step === "code" ? "account.enterCode" : recovery ? "account.resetPassword" : "account.verifyAccount")}
-      description={step === "code" ? m.text(recovery ? "account.resetSteps" : "account.codeHelp") : m.text(recovery ? "account.resetHelp" : "account.verificationHelp")} />
+      title={m.text(recovery ? step === "code" ? "account.enterCode" : "account.resetPassword" : "account.verifyAccount")}
+      description={m.text(recovery ? step === "code" ? "account.resetSteps" : "account.resetHelp" : "account.codeHelp")} />
     <AccountCardBody>
       {step === "delivery" ? <>
-        <MemberForm method="post" action={`/api/account/${recovery ? "forgot" : "verification"}`} onSubmit={request}
+        <MemberForm method="post" action="/api/account/forgot" onSubmit={request}
           data-account-step-form="delivery" data-analytics-ignore aria-busy={busy === "request"}>
-          {recovery && <PhoneInput name="phone" label={m.text("account.registeredNumber")} value={phone} onValueChange={changePhone} lookup required disabled={!!busy} hint="" />}
+          <PhoneInput name="phone" label={m.text("account.registeredNumber")} value={phone} onValueChange={changePhone} lookup required disabled={!!busy} hint="" />
           {channels.length > 0 ? <SegmentedChoice<MessageChannel | ""> name="channel" label={m.text("account.deliveryChannel")} value={selectedChannel}
             options={channels.map(value => ({ value, label: value === "sms" ? "SMS" : "WhatsApp" }))} onValueChange={setChannel} disabled={!!busy} />
             : <AccountNote role="status">{m.text("account.countryUnsupported")}</AccountNote>}
@@ -107,11 +101,11 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
           <AccountPrimary type="submit" disabled={!!busy || !canonicalPhone || !selectedChannel}>{sendLabel}<ChevronRightIcon /></AccountPrimary>
         </MemberForm>
       </> : <>
-        <AccountSteps aria-label={m.text("account.verificationSteps")}>
+        {recovery && <AccountSteps aria-label={m.text("account.verificationSteps")}>
           <li><MailIcon />{m.text("account.deliveryStep")}</li>
           <li aria-current="step"><ChevronRightIcon /><KeyIcon />{m.text("account.codeStep")}</li>
-        </AccountSteps>
-        <AccountNote role={requested ? "status" : undefined}>{m.text(requested ? recovery ? "account.resetSent" : "account.verificationSent" : "account.existingCode", { suffix: (canonicalPhone ?? phone).slice(-3) })}</AccountNote>
+        </AccountSteps>}
+        <AccountNote role={requested ? "status" : undefined}>{m.text(requested ? "account.resetSent" : "account.existingCode", { suffix: (canonicalPhone ?? phone).slice(-3) })}</AccountNote>
         <MemberForm method="post" action={`/api/account/${recovery ? "reset-code" : "verify"}`} onSubmit={verify}
           data-account-step-form="code" data-analytics-ignore aria-busy={busy === "verify"}>
           <AccountCodeField><TextInput ref={codeInput} name="code" label={m.text("account.verificationCode")} value={code}
@@ -124,24 +118,17 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
             onClick={event => { if (event.isTrusted && event.button === 0) void readCopiedCode(event.currentTarget); }}
             autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" minLength={6} required disabled={!!busy} data-analytics-ignore data-validated-code
             error={invalidCode ? <span role="alert">{m.text("account.invalidCode")}</span> : undefined} /></AccountCodeField>
-          {!recovery && channels.includes("whatsapp") && <DesktopConsent data-signup-whatsapp-consent>
-            <AccountWhatsAppConsentLabel>
-              <input type="checkbox" name="whatsappNotifications" checked={whatsappNotifications} disabled={!!busy}
-                onChange={event => setWhatsappNotifications(event.currentTarget.checked)} />
-              <span><strong>{m.text("account.whatsappUpdates")}</strong><small>{m.text("account.whatsappSignupConsent")}</small></span>
-            </AccountWhatsAppConsentLabel>
-          </DesktopConsent>}
           {error && <AccountError role="alert">{error}</AccountError>}
           <AccountPrimary type="submit" disabled={!!busy || code.length !== 6 || invalidCode}>{m.text(recovery ? "account.continueReset" : "account.verifyCode")}<ChevronRightIcon /></AccountPrimary>
         </MemberForm>
       </>}
       <AccountSecondaryActions aria-label={m.text("account.formActions")} data-account-secondary-actions>
-        <AccountTextButton type="button" variant="quiet" disabled={!!busy || step === "delivery" && !canonicalPhone}
+        {recovery ? <AccountTextButton type="button" variant="quiet" disabled={!!busy || step === "delivery" && !canonicalPhone}
           onClick={() => changeStep(step === "delivery" ? "code" : "delivery")}>
-          {m.text(step === "delivery" ? "account.alreadyHaveCode" : recovery ? "account.changeCodeDeliveryNumber" : "account.changeCodeDelivery")}
-        </AccountTextButton>
-        {recovery ? <AccountLink href={loginHref} prefetch={false}>{m.text("auth.backToSignIn")}</AccountLink>
-          : <MemberSignOut logoutAction="/api/account/sign-out?destination=login" disabled={!!busy} variant="quiet">{m.text("auth.backToSignIn")}</MemberSignOut>}
+          {m.text(step === "delivery" ? "account.alreadyHaveCode" : "account.changeCodeDeliveryNumber")}
+        </AccountTextButton> : <AccountLink href={memberAuthPath("forgot", returnTo)} prefetch={false}>{m.text("account.forgotPassword")}</AccountLink>}
+        {hasRestrictedSession ? <MemberSignOut logoutAction="/api/account/sign-out?destination=login" disabled={!!busy} variant="quiet">{m.text("auth.backToSignIn")}</MemberSignOut>
+          : <AccountLink href={loginHref} prefetch={false}>{m.text("auth.backToSignIn")}</AccountLink>}
       </AccountSecondaryActions>
       <AccountFormSupport locale={locale} contact={contact} />
     </AccountCardBody>
@@ -152,12 +139,6 @@ export function AccountVerificationForm(props: { locale: string; phone: string; 
   return <AccountCodeForm {...props} purpose="account" />;
 }
 
-export function ForgotPasswordForm(props: { locale: string; returnTo: string | null; contact: AdminContact }) {
+export function ForgotPasswordForm(props: { locale: string; phone?: string; returnTo: string | null; contact: AdminContact }) {
   return <AccountCodeForm {...props} purpose="password-reset" />;
 }
-
-const DesktopConsent = styled.div`
-  display: none;
-  ${media.desktop} { display: block; }
-  small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.caption}; }
-`;

@@ -5,6 +5,7 @@ import { formatPaymentReference } from "../../domain/payment.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import type { MemberIdentity } from "./member-sessions.ts";
+import { hasMemberAdmission } from "./member-admission.ts";
 
 const paymentStatuses = ["pending", "superseded", "approved", "rejected", "reversed"] as const;
 const paymentSelect = { id: true, reference: true, purpose: true, planName: true, status: true,
@@ -20,11 +21,11 @@ export function createAccountDashboard({ database, now = Date.now }: { database:
         const at = new Date(now());
         const session = await tx.memberSession.findUnique({ where: { tokenHash: member.tokenHash }, select: {
           accountId: true, authenticatedAt: true, passwordResetAt: true, expiresAt: true,
-          account: { select: { phone: true, passwordHash: true, phoneVerifiedAt: true, blockedAt: true, erasedAt: true } },
+          account: { select: { phone: true, passwordHash: true, phoneVerifiedAt: true, memberAdmittedAt: true, blockedAt: true, erasedAt: true } },
         } });
         if (!session || session.accountId !== member.accountId || !session.authenticatedAt || session.passwordResetAt || session.expiresAt <= at
           || session.account.blockedAt || session.account.erasedAt || !session.account.phone || session.account.phone !== member.phone
-          || !session.account.passwordHash || !session.account.phoneVerifiedAt) return null;
+          || !session.account.passwordHash || !hasMemberAdmission(session.account)) return null;
 
         const accountId = member.accountId;
         // Separate bounded reads by each event time include old reports decided/reversed recently.

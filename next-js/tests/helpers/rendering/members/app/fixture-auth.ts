@@ -33,13 +33,12 @@ export function fixtureAuthHandler(action: FixtureAction) {
     };
     const verify = (code: unknown, reset = false) => scenario === "unavailable" ? unavailable()
       : scenario === "invalid-code" || code !== "123456" ? invalid()
-      : authenticated(reset ? { token: fixtureTokens.reset, requiresPasswordChange: true }
-        : scenario === "automatic-trial" ? { trial: { ...fixtureRegistrationTrial, active: true } } : {});
+      : authenticated(reset ? { token: fixtureTokens.reset, requiresPasswordChange: true } : {});
     const source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } },
       sessions: fixtureMemberSessions,
       auth: {
-        async register() { return scenario === "unavailable" ? unavailable() : authenticated({ token: fixtureTokens.pending, requiresVerification: true,
-          ...(scenario === "automatic-trial" ? { trial: { ...fixtureRegistrationTrial, active: false } } : {}) }); },
+        async register() { return scenario === "unavailable" ? unavailable() : authenticated({ token: fixtureTokens.registered,
+          ...(scenario === "automatic-trial" ? { trial: { ...fixtureRegistrationTrial, active: true } } : {}) }); },
         async login(phone: unknown, password: unknown) {
           if (scenario === "unavailable") return unavailable();
           if (scenario === "rate-limited") return { status: "busy", message: "Synthetic sign-in requests are limited. Try again later." };
@@ -51,9 +50,11 @@ export function fixtureAuthHandler(action: FixtureAction) {
             : { status: "unauthorized", message: "The phone number or password is incorrect." };
           return authenticated({ otherDeviceSignedOut: false });
         },
-        async requestVerification(channel: unknown) { return send("256700000101", channel); },
+        async requestVerification() { return { status: "invalid", message: "Use a code you already received or choose Forgot password to recover your account." }; },
         async requestPasswordReset(phone: unknown, _address: string, channel: unknown) { return send(phone, channel); },
-        async verifyAccount(code: unknown) { return verify(code); },
+        async verifyAccount(code: unknown, token: unknown) {
+          return token === fixtureTokens.pending ? verify(code) : { status: "unauthorized", message: "Return to login to continue." };
+        },
         async verifyPasswordReset(_phone: unknown, code: unknown) { return verify(code, true); },
         async resetPassword() { return scenario === "unavailable" ? unavailable() : authenticated(); },
         async changePassword(_password: unknown, binding: { member: unknown }) {
@@ -61,14 +62,17 @@ export function fixtureAuthHandler(action: FixtureAction) {
             : scenario === "unavailable" ? unavailable() : authenticated();
         },
         async changePhone(phone: unknown, current: unknown, binding: { member: unknown }) {
-          return !binding.member || current !== "Synthetic current password" ? { status: "unauthorized", message: "Your current password is incorrect." }
-            : scenario === "unavailable" ? unavailable() : authenticated({ token: fixtureTokens.pending, phone: normalizePhone(phone), requiresVerification: true });
+          if (!binding.member || current !== "Synthetic current password") return { status: "unauthorized", message: "Your current password is incorrect." };
+          if (scenario === "unavailable") return unavailable();
+          return authenticated({ phone: normalizePhone(phone), token: fixtureTokens.pending, requiresVerification: true });
         },
       },
     }) as unknown as MemberServices;
     const response = await createMemberAuthHandler(action, source)(request);
-    if (response.ok && scenario === "automatic-trial" && (action === "register" || action === "verify"))
-      response.headers.append("Set-Cookie", "member-fixture-subscription=registration-trial; Path=/; SameSite=Lax");
+    if (response.ok && action === "register") {
+      const state = scenario === "automatic-trial" ? "registration-trial" : "registration-no-trial";
+      response.headers.append("Set-Cookie", `member-fixture-subscription=${state}; Path=/; SameSite=Lax`);
+    }
     return response;
   };
 }
