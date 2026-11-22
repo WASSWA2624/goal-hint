@@ -24,9 +24,11 @@ def prepare_hosted_activation(source: Path, bundle: Path) -> str:
     shutil.copytree(migrations / "migrations", bundle / "prisma/migrations")
     shutil.copytree(migrations / "mariadb", bundle / "prisma/mariadb")
     shutil.copy2(migrations / "adopted-migrations.json", bundle / "prisma/adopted-migrations.json")
-    (bundle / "scripts").mkdir()
-    for script in ("activate-hosted.sh", "deploy-mariadb.py"):
-        shutil.copy2(ROOT / "scripts" / script, bundle / "scripts" / script)
+    scripts = bundle / "scripts"
+    scripts.mkdir()
+    activation = ROOT / "scripts/activate-hosted.sh"
+    (scripts / activation.name).write_text(activation.read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
+    shutil.copy2(ROOT / "scripts/deploy-mariadb.py", scripts / "deploy-mariadb.py")
     ledger = sha256()
     for migration in sorted((migrations / "migrations").glob("*/migration.sql")):
         ledger.update(migration.parent.name.encode("ascii") + b"\0" + migration.read_bytes())

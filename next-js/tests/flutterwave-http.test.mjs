@@ -4,6 +4,7 @@ import test from "node:test";
 import { createFlutterwaveReturnHandler, createFlutterwaveWebhookHandler } from "../src/server/members/flutterwave-http.ts";
 import { flutterwaveCheckoutOrigin, flutterwaveReturnUrl } from "../src/server/members/flutterwave-navigation.ts";
 import { createFlutterwaveClient } from "../src/server/members/flutterwave.ts";
+import { validFlutterwaveCheckoutUrl } from "../src/domain/flutterwave-checkout.ts";
 
 const reference = "b0e33c9a-8032-4770-9cdc-53b7d0b82fa2";
 const production = "https://goalhint.com", staging = "https://test.goalhint.com";
@@ -12,21 +13,22 @@ const testKey = "synthetic-key-for-transport-tests", secret = "synthetic-webhook
 const key = (purpose, value) => createHmac("sha256", "synthetic-return-key").update(`${purpose}\0${value}`).digest("hex");
 const successful = { id: 12345, tx_ref: reference, amount: 5000, currency: "UGX", status: "successful", created_at: "2026-11-22T06:07:00Z" };
 const hostedLink = "https://checkout.flutterwave.com/v3/hosted/pay/test-link";
+const sandboxLink = "https://checkout-v2.dev-flutterwave.com/v3/hosted/pay/test-link";
 
 test("Flutterwave v3 checkout stays server-side and authenticates only the pinned API", async () => {
   const observed = [];
-  const client = createFlutterwaveClient(testKey, async (address, init) => {
+  const client = createFlutterwaveClient(testKey, "sandbox", async (address, init) => {
     observed.push([address.href, init]);
-    return Response.json({ status: "success", data: init.method === "POST" ? { link: hostedLink } : successful });
+    return Response.json({ status: "success", data: init.method === "POST" ? { link: sandboxLink } : successful });
   });
   const redirectUrl = flutterwaveReturnUrl(staging, reference, "/en/slips", key);
-  assert.equal(await client.create({ reference, amountUgx: 5000, email: "sandbox@example.com", phone: "256700000101", redirectUrl }), hostedLink);
+  assert.equal(await client.create({ reference, amountUgx: 5000, email: "sandbox@example.com", phone: "256700000101", redirectUrl }), sandboxLink);
   const [createUrl, createRequest] = observed[0];
   assert.equal(createUrl, "https://api.flutterwave.com/v3/payments");
   assert.equal(createRequest.redirect, "error");
   assert.equal(createRequest.headers.Authorization, `Bearer ${testKey}`);
   assert.deepEqual(JSON.parse(createRequest.body), {
-    tx_ref: reference, amount: 5000, currency: "UGX", redirect_url: redirectUrl, payment_options: "mobilemoneyuganda", session_duration: 30,
+    tx_ref: reference, amount: 5000, currency: "UGX", redirect_url: redirectUrl, payment_options: "mobilemoneyuganda", configuration: { session_duration: 30 },
     customer: { email: "sandbox@example.com", phone_number: "+256700000101" }, customizations: { title: "Goal Hint subscription" },
   });
   assert.deepEqual(await client.verify(reference, "12345"), {
@@ -40,12 +42,23 @@ test("Flutterwave v3 checkout stays server-side and authenticates only the pinne
 });
 
 test("provider failures and unexpected hosted domains reveal no credentials or provider details", async () => {
-  const invalid = createFlutterwaveClient(testKey, async () => Response.json({ status: "success", data: { link: `${hostedLink}@example.com` } }));
+  const invalid = createFlutterwaveClient(testKey, "sandbox", async () => Response.json({ status: "success", data: { link: `${hostedLink}@example.com` } }));
   await assert.rejects(invalid.create({ reference, amountUgx: 5000, phone: "256700000101", email: "sandbox@example.com", redirectUrl: staging }),
     { message: "Flutterwave checkout is temporarily unavailable." });
-  const error = createFlutterwaveClient(testKey, async () => { throw new Error(`Error containing ${testKey}`); });
+  const error = createFlutterwaveClient(testKey, "sandbox", async () => { throw new Error(`Error containing ${testKey}`); });
   await assert.rejects(error.verify(reference), { message: "Flutterwave is temporarily unavailable." });
-  assert.equal(await createFlutterwaveClient(testKey, async () => new Response(null, { status: 404 })).verify(reference), null);
+  assert.equal(await createFlutterwaveClient(testKey, "sandbox", async () => new Response(null, { status: 404 })).verify(reference), null);
+});
+
+test("only sandbox or a trusted browser response permits the observed development hosted origin", async () => {
+  assert.equal(validFlutterwaveCheckoutUrl(sandboxLink, "sandbox"), true);
+  assert.equal(validFlutterwaveCheckoutUrl(sandboxLink), true);
+  assert.equal(validFlutterwaveCheckoutUrl(sandboxLink, "live"), false);
+  assert.equal(validFlutterwaveCheckoutUrl(hostedLink, "live"), true);
+  assert.equal(validFlutterwaveCheckoutUrl(sandboxLink.replace(".com/", ".com.other.example/"), "sandbox"), false);
+  const client = createFlutterwaveClient(testKey, "live", async () => Response.json({ status: "success", data: { link: sandboxLink } }));
+  await assert.rejects(client.create({ reference, amountUgx: 5000, phone: "256700000101", email: "sandbox@example.com", redirectUrl: production }),
+    { message: "Flutterwave checkout is temporarily unavailable." });
 });
 
 test("a v3 webhook authenticates the environment hash and acknowledges events only after reconciliation", async () => {

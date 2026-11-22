@@ -180,6 +180,21 @@ await sealBackup(input.node,backupText('Synthetic Node backup.'),{...options,met
                 with self.assertRaises(deployment.CommandError):
                     deployment.stage_source(output)
 
+    def test_packaged_host_activation_uses_unix_line_endings(self):
+        packager = load_script("package-cpanel")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, bundle = root / "source", root / "bundle"
+            (source / "prisma/migrations").mkdir(parents=True)
+            (source / "prisma/mariadb").mkdir()
+            (source / "prisma/adopted-migrations.json").write_bytes(b"[]\n")
+            (root / "scripts").mkdir()
+            (root / "scripts/activate-hosted.sh").write_bytes(b"#!/usr/bin/env bash\r\nset -euo pipefail\r\n")
+            (root / "scripts/deploy-mariadb.py").write_bytes(b"# Synthetic migration script\n")
+            with mock.patch.object(packager, "ROOT", root):
+                packager.prepare_hosted_activation(source, bundle)
+            self.assertEqual((bundle / "scripts/activate-hosted.sh").read_bytes(), b"#!/usr/bin/env bash\nset -euo pipefail\n")
+
     def test_web_publication_checksums_and_cleans_staging_after_failed_copy(self):
         packager = load_script("package-cpanel")
         with tempfile.TemporaryDirectory() as directory:

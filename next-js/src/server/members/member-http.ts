@@ -41,7 +41,7 @@ export async function getMemberServices(): Promise<MemberServices> {
   try { config.key("member-readiness", "ready"); } catch { keyed = false; }
   const { mode, checkoutReady, checkoutOrigin, secretKey } = getRuntimePolicy().flutterwave;
   const flutterwave: Parameters<typeof createCheckout>[0]["flutterwave"] = mode && secretKey
-    ? { mode, checkoutReady, hostedOrigin: checkoutOrigin, client: createFlutterwaveClient(secretKey.read()) } : undefined;
+    ? { mode, checkoutReady, hostedOrigin: checkoutOrigin, client: createFlutterwaveClient(secretKey.read(), mode) } : undefined;
   return { config, settings: database ? await settingsServiceFor(database).current() : { settings: null, source: "unavailable" },
     sessions: database && keyed ? createMemberSessions({ database, config }) : null,
     payments: database && keyed ? createPayments({ database, config }) : null,

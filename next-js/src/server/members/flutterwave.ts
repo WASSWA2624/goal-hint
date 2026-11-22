@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import { validFlutterwaveCheckoutUrl } from "../../domain/flutterwave-checkout.ts";
+import { validFlutterwaveCheckoutUrl, type FlutterwaveMode } from "../../domain/flutterwave-checkout.ts";
 import { readLimitedBody } from "../http/private-http.ts";
 
 export { flutterwaveCustomerEmail, validFlutterwaveCheckoutUrl } from "../../domain/flutterwave-checkout.ts";
@@ -27,7 +27,7 @@ const verificationResponse = z.object({ status: z.literal("success"), data: z.ob
 }) });
 
 /** v3 Standard uses the API key's mode for both API requests. Provider errors remain private. */
-export function createFlutterwaveClient(secretKey: string, transport: typeof fetch = fetch): FlutterwaveClient {
+export function createFlutterwaveClient(secretKey: string, mode: FlutterwaveMode, transport: typeof fetch = fetch): FlutterwaveClient {
   async function call(path: string, init?: RequestInit) {
     try {
       const response = await transport(new URL(path, api), {
@@ -47,11 +47,11 @@ export function createFlutterwaveClient(secretKey: string, transport: typeof fet
       const response = linkResponse.safeParse(await call("payments", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
           tx_ref: reference, amount: amountUgx, currency: "UGX", redirect_url: redirectUrl,
-          payment_options: "mobilemoneyuganda", session_duration: flutterwaveSessionMinutes,
+          payment_options: "mobilemoneyuganda", configuration: { session_duration: flutterwaveSessionMinutes },
           customer: { email, phone_number: `+${phone}` }, customizations: { title: "Goal Hint subscription" },
         }),
       }));
-      if (!response.success || !validFlutterwaveCheckoutUrl(response.data.data.link))
+      if (!response.success || !validFlutterwaveCheckoutUrl(response.data.data.link, mode))
         throw new Error("Flutterwave checkout is temporarily unavailable.");
       return response.data.data.link;
     },
