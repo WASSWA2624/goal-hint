@@ -26,7 +26,11 @@ export function localWebEnvironment(mode, { directory = process.cwd(), source = 
     throw new Error("Use npm run package:cpanel to build a standalone release without private environment files.");
   }
   if (owned) excluded.push(development);
-  const masked = new Set(excluded.flatMap(Object.keys).filter((key) => !Object.hasOwn(environment, key)));
+  // Next's forked server inherits the already-masked values and preloads this module again.
+  const masked = new Set(source.__GOAL_HINT_LOCAL_ENV_MASK?.split(",").filter((key) => key && source[key] === ""));
+  for (const key of excluded.flatMap(Object.keys)) {
+    if (!Object.hasOwn(environment, key)) masked.add(key);
+  }
   for (const key of masked) Object.defineProperty(environment, key, { value: "", enumerable: true });
   environment.__GOAL_HINT_LOCAL_ENV_MASK = [...masked].join(",");
   return environment;
