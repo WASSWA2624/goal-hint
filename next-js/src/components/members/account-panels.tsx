@@ -6,18 +6,17 @@ import { createMessages } from "@/i18n/messages";
 import { Button, ButtonLink } from "@/components/ui/controls";
 import { AccountFacts, AccountPanel, AccountSectionActions, AccountStatus } from "./account-workspace";
 import { AccountActionLink, AccountFine } from "./account-overview";
-import { AccountActivity } from "./account-activity";
 import { FreeTrialControl } from "./free-trial-control";
 
-export function AccountSubscriptionPanel({ locale, subscription, dashboard, now, lastEnd, trialDays = 0 }: {
-  locale: string; subscription: SubscriptionStatus | null; dashboard: AccountDashboard | null; now: number; lastEnd?: Date; trialDays?: number;
+export function AccountSubscriptionPanel({ locale, subscription, dashboard, now, lastEnd, trialDays = 0, showTitle = true }: {
+  locale: string; subscription: SubscriptionStatus | null; dashboard: AccountDashboard | null; now: number; lastEnd?: Date; trialDays?: number; showTitle?: boolean;
 }) {
   const m = createMessages(locale), active = !!subscription?.activeUntil;
   const endsAt = subscription?.activeUntil ? new Date(subscription.activeUntil) : lastEnd;
   const left = active && endsAt ? subscriptionTimeLeft(endsAt, now) : null;
   const remaining = !subscription ? m.text("account.unknownLabel") : !left ? "—" : left.unit === "day"
     ? m.plural("paywall.days", left.count) : left.count ? m.plural("account.hoursRemaining", left.count) : m.text("account.underHourRemaining");
-  return <AccountPanel title={m.text("account.section.subscription")} data-subscription-summary={!subscription ? "unavailable" : active ? "active" : "inactive"}
+  return <AccountPanel title={showTitle ? m.text("account.section.subscription") : undefined} data-subscription-summary={!subscription ? "unavailable" : active ? "active" : "inactive"}
     actions={<AccountStatus $active={active}>
       {m.text(!subscription ? "account.unknownLabel" : active ? "account.activeLabel" : subscription.expired || lastEnd ? "account.expiredLabel" : "account.inactiveLabel")}
     </AccountStatus>}>
@@ -33,14 +32,6 @@ export function AccountSubscriptionPanel({ locale, subscription, dashboard, now,
     </AccountFacts>
     {subscription?.trial && <FreeTrialControl locale={locale} trial={subscription.trial} days={trialDays} showHistory />}
   </AccountPanel>;
-}
-
-export function AccountPaymentHistory({ locale, dashboard }: { locale: string; dashboard: AccountDashboard | null }) {
-  const m = createMessages(locale);
-  if (!dashboard) return <AccountPanel title={m.text("account.recentPayments")}><AccountFine role="status">{m.text("account.paymentsUnavailable")}</AccountFine></AccountPanel>;
-  const activity = dashboard.activity.filter(entry => entry.kind === "payment");
-  return activity.length ? <AccountActivity locale={locale} dashboard={{ ...dashboard, activity }} title="account.recentPayments" />
-    : <AccountPanel title={m.text("account.recentPayments")}><AccountFine>{m.text("account.noPayments")}</AccountFine></AccountPanel>;
 }
 
 export function AccountDevices({ locale, devices }: { locale: string; devices: readonly { at: string; current: boolean }[] | null }) {

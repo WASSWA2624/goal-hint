@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { ChevronDownIcon, ClockIcon, InfoIcon, ResetIcon } from "@/components/ui/icons";
 import type { PaymentStatus } from "@/domain/payment";
 import { walletTopUpHref } from "@/domain/account-navigation";
+import { memberNextPath } from "@/domain/member-navigation";
 import { formatPhone } from "@/domain/phone";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import type { SubscriptionSettings } from "@/domain/subscription-settings";
 import { supportContactsOf, type SupportContactSettings } from "@/domain/support-contacts";
 import { createMessages } from "@/i18n/messages";
 import { AccountSupportLink, AdminContactLinks } from "./admin-contact";
-import { AccountBlock, AccountBlockActions, AccountBlockText, AccountContactLinks, AccountFine } from "./account-overview";
+import { AccountActionLink, AccountBlock, AccountBlockActions, AccountBlockText, AccountContactLinks, AccountFine } from "./account-overview";
 import { richText } from "./rich-text";
 import { refreshMemberSession } from "./member-session";
 import { Action, Disclosure, Note, PaymentReviewBox, StatusFacts, StatusTitle } from "./subscribe-styles";
@@ -121,13 +122,23 @@ export function PaymentStatusCard({ locale, status, settings, phone, heading = "
 }
 
 /** The account page's sentence for a report that waits, was refused or was reversed; the subscribe page keeps the card. */
-export function PaymentNotice({ locale, status, settings, phone }: { locale: string; status: PaymentStatus | null; settings: StatusSettings; phone: string }) {
+export function PaymentNotice({ locale, status, settings, phone, part = "notice", returnTo = null }: {
+  locale: string; status: PaymentStatus | null; settings: StatusSettings; phone: string;
+  part?: "notice" | "summary" | "actions"; returnTo?: string | null;
+}) {
   const m = createMessages(locale);
   if (!status) return null;
-  if (["remaining", "disputed", "correction", "reconfirm", "cancelled"].includes(status.status)) return <AccountBlock $attention role="status" data-payment-status={status.status}>
-    <AccountBlockText><p>{checkoutLabels[status.status]} · {status.reference}</p></AccountBlockText>
-    <a href={status.purpose === "topup" ? walletTopUpHref(locale) : `/${locale}/subscribe`}>View request</a>
-  </AccountBlock>;
+  if (["remaining", "disputed", "correction", "reconfirm", "cancelled"].includes(status.status)) {
+    const summary = <p>{checkoutLabels[status.status]} · {status.reference}</p>;
+    const action = <AccountActionLink href={status.purpose === "topup" ? walletTopUpHref(locale, returnTo) : memberNextPath("subscribe", returnTo)} prefetch={false}>
+      {part === "notice" ? "View request" : m.text("account.viewPayment")}
+    </AccountActionLink>;
+    if (part === "summary") return <div role="status" data-payment-status={status.status}>{summary}</div>;
+    if (part === "actions") return action;
+    return <AccountBlock $attention role="status" data-payment-status={status.status}>
+      <AccountBlockText>{summary}</AccountBlockText>{action}
+    </AccountBlock>;
+  }
   const pending = status.status === "pending" || status.status === "superseded", rejected = status.status === "rejected", reversed = status.status === "reversed";
   if (!pending && !rejected && !reversed) return null;
   const topUp = status.purpose === "topup", reason = reasonOf(status.rejectReason);
@@ -139,9 +150,14 @@ export function PaymentNotice({ locale, status, settings, phone }: { locale: str
   const contactDetails = { reference: status.reference, phone: formatPhone(phone) };
   const supportText = pending ? m.text("subscribe.helpPaid", { ...contactDetails, price: String(status.priceUgx), plan: status.planName })
     : m.text(reversed ? "subscribe.helpReversed" : "subscribe.helpRejected", contactDetails);
-  return <AccountBlock $attention role="status" data-payment-status={pending ? "pending" : status.status}>
-    <AccountBlockText><p>{sentence}</p>
-      {pending && settings.reviewTime && <AccountFine>{m.text("subscribe.reviewTime", { time: settings.reviewTime })}</AccountFine>}</AccountBlockText>
-    <AccountBlockActions><AccountContactLinks locale={locale} contact={settings} text={supportText} /></AccountBlockActions>
+  const state = pending ? "pending" : status.status;
+  const summary = <><p>{sentence}</p>
+    {pending && settings.reviewTime && <AccountFine>{m.text("subscribe.reviewTime", { time: settings.reviewTime })}</AccountFine>}</>;
+  const contact = <AccountContactLinks locale={locale} contact={settings} text={supportText} />;
+  if (part === "summary") return <div role="status" data-payment-status={state}>{summary}</div>;
+  if (part === "actions") return contact;
+  return <AccountBlock $attention role="status" data-payment-status={state}>
+    <AccountBlockText>{summary}</AccountBlockText>
+    <AccountBlockActions>{contact}</AccountBlockActions>
   </AccountBlock>;
 }

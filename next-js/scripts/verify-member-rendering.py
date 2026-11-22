@@ -247,12 +247,16 @@ def trial_visibility(origin):
                     no_match("data-free-trial", html)
 
 
+def account_workspace(html):
+    return match(r'<article\b[^>]*data-account-details[^>]*>([\s\S]*?)</main>', html).group(1)
+
+
 def subscriber_dashboard(origin):
     """Focused Account sections retain real auth/renewal paths without the old text stack."""
     for state, package in [("active", "Weekly"), ("trial", "Free trial"), ("off-active", "Weekly"),
             ("queued", "Weekly"), ("free", None), ("expired", None), ("pending", None)]:
         html = visible_html(request(origin, f"/en/account?state={state}").text)
-        body = match(r'<article\b[^>]*data-account-details[^>]*>([\s\S]*?)</article>', html).group(1)
+        body = account_workspace(html)
         summary = match(r'<section\b[^>]*data-subscription-summary[^>]*>([\s\S]*?)</section>', html).group(1)
         if package:
             match(rf'<dd\b[^>]*data-active-package[^>]*>{re.escape(package)}</dd>', summary)
@@ -264,7 +268,8 @@ def subscriber_dashboard(origin):
         no_match(r'data-account-activity|data-payment-status|type="password"|Your access|You have access|saved-slip-configurations', body)
         no_match(r'data-subscription-status-bar', html)
         html = visible_html(request(origin, f"/en/account?state={state}&section=activity").text)
-        activity = match(r'<section\b[^>]*data-account-activity[^>]*>([\s\S]*?)</section>', html).group(1)
+        activity = account_workspace(html)
+        match(r'<div\b[^>]*data-account-activity', activity)
         match("Recent activity", activity)
         no_match(r'Best slips|Custom Filters|saved-slip-configurations|codeHash|passwordHash|payerPhone|transactionRef', activity)
         if state == "queued":
@@ -280,8 +285,10 @@ def subscriber_dashboard(origin):
             match("Access added", activity)
             match(r'<time dateTime="[^"]+">[^<]*\d{4}[^<]* EAT</time>', activity)
     history = visible_html(request(origin, "/en/account?state=history&section=activity").text)
-    activity = match(r'<section\b[^>]*data-account-activity[^>]*>([\s\S]*?)</section>', history).group(1)
-    assert len(re.findall(r'<li\b', activity)) == 10
+    activity = account_workspace(history)
+    match(r'<div\b[^>]*data-account-activity', activity)
+    rows = match(r'<ol\b[^>]*data-record-list-scroll[^>]*>([\s\S]*?)</ol>', activity).group(1)
+    assert len(re.findall(r'<li\b', rows)) == 10
     for label in ["Payment reversed", "Payment approved", "Payment declined", "Payment replaced", "Payment submitted", "Account credit"]:
         match(label, activity)
     unavailable = visible_html(request(origin, "/en/account?state=dashboard-unavailable&section=activity").text)
@@ -297,11 +304,13 @@ def subscriber_dashboard(origin):
         "password": "Change password", "devices": "Devices", "notifications": "Notifications", "activity": "Activity"}
     for section, heading in headings.items():
         html = visible_html(request(origin, f"/en/account?state=active&section={section}&return=%2Fen%2Fslips").text)
-        body = match(r'<article\b[^>]*data-account-details[^>]*>([\s\S]*?)</article>', html).group(1)
+        body = account_workspace(html)
         match(rf'<h1[^>]*>{heading}</h1>', body)
         match(rf'data-account-section="{section}"', html)
         match(r'aria-label="Account sections"', html)
         match(r'href="/en/account\?section=password&amp;return=%2Fen%2Fslips"', html)
+        if section == "subscription":
+            assert len(re.findall(r'<h[1-6][^>]*>Subscription</h[1-6]>', body)) == 1
         if section in ["phone", "password"]:
             match(rf'action="/api/account/{section}"', body)
             if section == "phone":
@@ -313,8 +322,11 @@ def subscriber_dashboard(origin):
         if section == "notifications":
             match(r'data-account-notifications', body)
             match(r'data-account-notification-feed', body)
-            for label in ["Inbox", "WhatsApp preferences", "Payment approved", "Payment rejected", "Access activated", "Access ends soon", "Access expired", "1 free day earned", "Mark as read", "Dismiss"]:
+            for label in ["Inbox", "WhatsApp preferences", "Payment approved", "Payment rejected", "Access activated", "Access ends soon", "Access expired", "1 free day earned", "Mark all as read", "Dismiss"]:
                 match(label, body)
+            match(r'data-unread="true"', body)
+            footer = match(r'<[^>]+data-record-footer[^>]*>([\s\S]*?)</[^>]+>', body).group(1)
+            match("View payments", footer)
             no_match(r'eventKey|accountId|tokenHash', body)
         if section == "referrals":
             match(r'data-account-referrals', body)

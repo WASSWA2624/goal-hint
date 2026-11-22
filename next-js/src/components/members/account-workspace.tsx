@@ -18,6 +18,7 @@ const Frame = styled.div`
   ${media.desktop} {
     --account-workspace-height: calc(100dvh - var(--app-header-height, var(--gh-size-12)) - var(--app-workspace-bottom-band, 0px));
     display: grid; grid-template-columns: var(--gh-size-58) minmax(0, 1fr); align-items: stretch;
+    column-gap: ${({ theme }) => theme.layout.gutter};
   }
 `;
 const Sidebar = styled.aside`
@@ -26,7 +27,8 @@ const Sidebar = styled.aside`
     display: flex; flex-direction: column; gap: var(--gh-spacing-1_5); align-self: start; position: sticky;
     inset-block-start: var(--app-header-height, var(--gh-size-12)); min-block-size: var(--account-workspace-height);
     max-block-size: var(--account-workspace-height); overflow-y: auto;
-    padding: var(--gh-spacing-2) var(--gh-spacing-2_5); background: ${({ theme }) => theme.color.surface}; border-inline-end: 0;
+    padding: var(--gh-spacing-2) 0; background: ${({ theme }) => theme.color.surface};
+    border-inline-end: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
   }
   > h2 { display: flex; align-items: center; min-block-size: var(--gh-size-8); margin: 0; padding-inline: var(--gh-spacing-2_5);
     color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.caption};
@@ -73,8 +75,10 @@ const Body = styled(PanelBody)`
   [data-account-notifications] { display: flex; border: 0; padding: 0; }
   [data-account-notifications] strong { font-size: ${({ theme }) => theme.typography.scale.body}; }
 `;
-export function AccountPanel({ title, actions, narrow = false, children, ...props }: Omit<ComponentProps<typeof Panel>, "title"> & { title: ReactNode; actions?: ReactNode; narrow?: boolean }) {
-  return <Panel {...props} {...(narrow ? { style: { maxInlineSize: "var(--gh-layout-formMaxWidth)", ...props.style } } : {})}><PanelHead><h2>{title}</h2>{actions}</PanelHead><Body>{children}</Body></Panel>;
+export function AccountPanel({ title, actions, narrow = false, children, ...props }: Omit<ComponentProps<typeof Panel>, "title"> & { title?: ReactNode; actions?: ReactNode; narrow?: boolean }) {
+  return <Panel {...props} {...(narrow ? { style: { maxInlineSize: "var(--gh-layout-formMaxWidth)", ...props.style } } : {})}>
+    {(title || actions) && <PanelHead>{title && <h2>{title}</h2>}{actions}</PanelHead>}<Body>{children}</Body>
+  </Panel>;
 }
 export const AccountFacts = styled(StatGrid)`
   > div { padding: var(--gh-spacing-2) var(--gh-spacing-3); }

@@ -8,14 +8,15 @@ import { AccountActionLink, AccountFine, AccountFlash } from "@/components/membe
 import { AccountSecurityForm, ResetPasswordForm } from "@/components/members/account-security";
 import { AccountFacts, AccountPageHead, AccountPanel, AccountWorkspace } from "@/components/members/account-workspace";
 import { AccountWallet } from "@/components/members/account-wallet";
-import { AccountDevices, AccountPaymentHistory, AccountQuickActions, AccountSubscriptionPanel } from "@/components/members/account-panels";
+import { AccountDevices, AccountQuickActions, AccountSubscriptionPanel } from "@/components/members/account-panels";
+import { AccountPayments } from "@/components/members/account-payments";
 import { AccountNotificationPreferences } from "@/components/members/account-notification-preferences";
 import { AccountNotifications } from "@/components/members/account-notifications";
 import { AccountActivity } from "@/components/members/account-activity";
 import { AccountReferrals, AccountReferralSummary } from "@/components/members/account-referrals";
 import { AccountReferralReviews } from "@/components/members/account-referral-reviews";
 import { AccountVerificationForm } from "@/components/members/account-verification";
-import { ApprovalRefresh, PaymentNotice } from "@/components/members/payment-status";
+import { ApprovalRefresh } from "@/components/members/payment-status";
 import { ButtonLink } from "@/components/ui/controls";
 import { Stack } from "@/components/ui/layout";
 import { SignOutIcon } from "@/components/ui/icons";
@@ -123,9 +124,9 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
         {parameters.status === "phone-changed" && <AccountFlash role="status">{messages.text("account.phoneChanged")}</AccountFlash>}
         {parameters.status === "password-changed" && <AccountFlash role="status">{messages.text("account.passwordChanged")}</AccountFlash>}
         {parameters.status === "devices-signed-out" && <AccountFlash role="status">{messages.text("account.devicesSignedOut")}</AccountFlash>}
-        {summarySection && <AccountSubscriptionPanel key={member.accountId} locale={locale} subscription={subscription} dashboard={dashboard} now={now.getTime()} trialDays={offeredTrialDays(settings)} {...(last ? { lastEnd: last.endsAt } : {})} />}
+        {summarySection && <AccountSubscriptionPanel key={member.accountId} locale={locale} subscription={subscription} dashboard={dashboard} now={now.getTime()} trialDays={offeredTrialDays(settings)} showTitle={section === "overview"} {...(last ? { lastEnd: last.endsAt } : {})} />}
         {summarySection && <AccountReferralSummary locale={locale} summary={referrals} returnTo={returnTo} />}
-        {section === "referrals" && <><AccountReferrals locale={locale} summary={referrals} /><AccountReferralReviews initial={referralReviews} locale={locale} older={!!referralReviewCursor(parameters.reviewBefore)} /></>}
+        {section === "referrals" && <><AccountReferrals locale={locale} summary={referrals} /><AccountReferralReviews initial={referralReviews} locale={locale} returnTo={returnTo} older={!!referralReviewCursor(parameters.reviewBefore)} /></>}
         {section === "overview" && <>
           <AccountPanel title={messages.text("account.signInDetails")} data-account-sign-in
             actions={<AccountActionLink href={accountSectionHref(locale, "phone", returnTo)} prefetch={false}>{messages.text("account.editPhone")}</AccountActionLink>}>
@@ -148,18 +149,15 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
         {walletSection && <AccountWallet locale={locale} credit={credit} topUpStatus={topUpStatus} contact={contact}
           phone={member.phone} returnTo={returnTo} topUpOpen={topUpOpen} salesOpen={salesOpen} plans={offers}
           acceptedTerms={paymentView?.acceptedTerms === true} active={!!activeUntil} />}
-        {section === "payments" && <>
-          <PaymentNotice locale={locale} status={status} settings={contact} phone={member.phone} />
-          {paymentView?.otherStatus && <PaymentNotice locale={locale} status={paymentView.otherStatus} settings={contact} phone={member.phone} />}
-          <AccountPaymentHistory locale={locale} dashboard={dashboard} />
-        </>}
+        {section === "payments" && <AccountPayments locale={locale} dashboard={dashboard} reports={[status, paymentView?.otherStatus]}
+          contact={contact} phone={member.phone} returnTo={returnTo} />}
         {(section === "phone" || section === "password") && <AccountPanel narrow title={messages.text(section === "phone" ? "account.phonePanel" : "account.passwordPanel")}>
           {section === "phone" && <AccountFine style={{ marginBlockEnd: "var(--gh-spacing-4)" }}>+{formatPhone(member.phone)}</AccountFine>}
           <AccountSecurityForm key={section} task={section} locale={locale} contact={contact} cancelHref={accountSectionHref(locale, "overview", returnTo)} />
         </AccountPanel>}
         {section === "devices" && <AccountDevices locale={locale} devices={view?.devices.map(device => ({ at: device.lastSeenAt.toISOString(), current: device.tokenHash === member.tokenHash })) ?? null} />}
         {section === "notifications" && <>
-          <AccountNotifications locale={locale} page={notifications} older={!!notificationCursor(parameters.before)} />
+          <AccountNotifications locale={locale} page={notifications} returnTo={returnTo} older={!!notificationCursor(parameters.before)} />
           <AccountPanel narrow title={messages.text("notifications.whatsappPreferences")}><AccountNotificationPreferences locale={locale} phone={member.phone} whatsappNotificationsAt={member.whatsappNotificationsAt?.toISOString() ?? null} /></AccountPanel>
         </>}
         {section === "activity" && <AccountActivity locale={locale} dashboard={dashboard} />}

@@ -18,26 +18,37 @@ const { min, detailMin } = uiGeometry.recordList;
 const handleWidth = uiGeometry.sidebar.handle;
 const recordHistoryKey = "goalHintRecordWorkspace";
 const recordParameter = "workspaceRecord";
+const accountSelectionKey = "goalHintAccountRecord";
 
-export function useRecordView({ initiallyOpen = false } = {}) {
+export function accountRecordSelection(): string | null {
+  const selection = window.history.state?.[accountSelectionKey];
+  return typeof selection === "string" && new URLSearchParams(window.location.search).has(recordParameter) ? selection : null;
+}
+
+export function useRecordView({ initiallyOpen = false, accountHistory = false } = {}) {
   const [detailOpen, setDetailOpen] = useState(initiallyOpen);
   const desktop = useDesktopLayout();
   const entry = useRef<{ path: string; id: string } | null>(null);
   const origin = useRef<{ workspace: HTMLElement; trigger: HTMLElement; scrollTop: number } | null>(null);
 
-  function openDetail(trigger?: HTMLElement | null) {
+  function openDetail(trigger?: HTMLElement | null, options?: { pushHistory?: boolean; selection?: string }) {
     const workspace = trigger?.closest<HTMLElement>("[data-record-workspace]");
     if (trigger && workspace) {
       const scroll = workspace.querySelector<HTMLElement>("[data-record-list-scroll]");
       origin.current = { workspace, trigger, scrollTop: scroll?.scrollTop ?? 0 };
     }
-    if (detailOpen) return;
     const url = new URL(window.location.href);
-    if (!desktop && url.pathname.startsWith("/admin/")) {
+    const historyId = window.history.state?.[recordHistoryKey];
+    if (accountHistory && options?.pushHistory === false && typeof historyId === "string" && accountRecordSelection()) {
+      entry.current = { path: url.pathname, id: historyId };
+    }
+    if (detailOpen) return;
+    if (options?.pushHistory !== false && !desktop && (url.pathname.startsWith("/admin/") || accountHistory)) {
       const id = randomId();
       entry.current = { path: url.pathname, id };
       url.searchParams.set(recordParameter, "1");
-      writeContextHistory({ [recordHistoryKey]: id }, url.pathname + url.search + url.hash, "push");
+      writeContextHistory({ [recordHistoryKey]: id, ...(options?.selection ? { [accountSelectionKey]: options.selection } : {}) },
+        url.pathname + url.search + url.hash, "push");
     }
     setDetailOpen(true);
     requestAnimationFrame(() => {

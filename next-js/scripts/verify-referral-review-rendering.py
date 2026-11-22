@@ -12,10 +12,13 @@ def main():
         admin = request(server.origin).text
         member = request(server.origin, "/member").text
         assert "Referral review" in visible_html(admin) and "Add new case" in visible_html(admin)
-        assert "Reward reviews" in visible_html(member) and "Appeal" in visible_html(member)
+        member_html = visible_html(member)
+        assert "Reward reviews" in member_html and "Awaiting decision" in member_html
+        assert "Unused reward removed" in member_html and 'id="review-10000000-0000-4000-8000-000000000002"' in member_html
+        assert 'data-record-details' in member_html and ">Appeal</button>" not in member_html
         for private in ["support:DEMO-7", "Technical duplicate confirmed", "synthetic reviewer", "grantId", "tokenHash"]:
             assert private not in member, private
-        print("Referral review HTML: shared admin/member components, actions and private evidence separation pass.", flush=True)
+        print("Referral review HTML: member list, selected detail, review deep link and private evidence separation pass.", flush=True)
         if options.serve:
             server.serve()
 

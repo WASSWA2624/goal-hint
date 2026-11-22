@@ -1,7 +1,10 @@
 "use client";
+
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
+import { visuallyHidden } from "@/components/admin/desk-styles";
+import { RecordItemTitle, RecordRowContent } from "@/components/admin/record-workspace";
 import { Button } from "@/components/ui/controls";
 import { CardIcon, ClockIcon, GiftIcon, ShieldIcon } from "@/components/ui/icons";
 import { accountSectionHref } from "@/domain/account-navigation";
@@ -9,30 +12,30 @@ import { accountNotificationRules, notificationSection, type AccountNotification
 import { referralReviewReasonLabel } from "@/domain/referral-review-labels";
 import { formatSubscriptionExpiry } from "@/domain/subscription-expiry";
 import { createMessages } from "@/i18n/messages";
-import { media } from "@/styles/theme";
 import { AccountActionLink, AccountFine } from "./account-overview";
-import { AccountPanel } from "./account-workspace";
+import { AccountRecords } from "./account-records";
+import { accountRequest } from "./account-request";
 import { AccountError } from "./account-styles";
-import { accountRequest } from "./account-security";
+import { AccountSectionActions } from "./account-workspace";
 import { refreshNotificationUnread } from "./notification-state";
 
-const List = styled.ul`
-  list-style: none; margin: 0; padding: 0; display: grid;
-  > li { display: grid; grid-template-columns: var(--gh-size-5) minmax(0, 1fr); gap: var(--gh-spacing-2) var(--gh-spacing-3); padding: var(--gh-spacing-3);
-    border-block-end: 0; }
-  > li:last-child { border-block-end: 0; }
-  > li[data-unread] { background: ${({ theme }) => theme.color.brandSoft}; }
-  > li > svg { color: ${({ theme }) => theme.color.brand}; margin-block-start: var(--gh-spacing-0_75); }
-  h3 { margin: 0; font-size: inherit; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  time { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.caption}; }
-  [data-notice-body] { display: grid; gap: var(--gh-spacing-1); }
-  [data-notice-actions] { display: flex; flex-wrap: wrap; gap: var(--gh-spacing-1); grid-column: 2; }
-  ${media.desktop} { > li { grid-template-columns: var(--gh-size-5) minmax(0, 1fr) auto; } [data-notice-actions] { grid-column: 3; grid-row: 1; align-self: center; } }
+const NoticeTitle = styled(RecordItemTitle)`
+  &[data-unread]::after {
+    content: "";
+    display: inline-block;
+    inline-size: var(--gh-size-1_5);
+    block-size: var(--gh-size-1_5);
+    margin-inline-start: var(--gh-spacing-1_5);
+    vertical-align: middle;
+    border-radius: ${({ theme }) => theme.radius.small};
+    background: ${({ theme }) => theme.color.brand};
+  }
 `;
-const Pages = styled.nav`display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--gh-spacing-3); padding-block-start: var(--gh-spacing-3);`;
-const NotificationButton = styled(Button)`min-block-size: var(--form-control-height);`;
+const UnreadLabel = styled.span`${visuallyHidden}`;
 
-export function AccountNotifications({ locale, page, older = false }: { locale: string; page: AccountNotificationPage | null; older?: boolean }) {
+export function AccountNotifications({ locale, page, older = false, returnTo }: {
+  locale: string; page: AccountNotificationPage | null; older?: boolean; returnTo?: string | null;
+}) {
   const m = createMessages(locale), router = useRouter(), inFlight = useRef(false);
   const [busy, setBusy] = useState(false), [transition, startTransition] = useTransition(), [error, setError] = useState("");
   useEffect(() => {
@@ -41,6 +44,7 @@ export function AccountNotifications({ locale, page, older = false }: { locale: 
     window.addEventListener("focus", refresh); document.addEventListener("visibilitychange", refresh);
     return () => { clearInterval(timer); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
   }, [router]);
+
   async function update(action: "read" | "dismiss" | "read-all", id?: string) {
     if (inFlight.current || transition) return;
     inFlight.current = true; setBusy(true); setError("");
@@ -50,29 +54,41 @@ export function AccountNotifications({ locale, page, older = false }: { locale: 
     } catch { setError(m.text("notifications.updateFailed")); }
     finally { inFlight.current = false; setBusy(false); }
   }
+
   const disabled = busy || transition;
-  return <AccountPanel title={m.text("notifications.inbox")} data-account-notification-feed aria-busy={disabled}
-    actions={page && page.unread > 0 && <NotificationButton type="button" variant="quiet" disabled={disabled} onClick={() => void update("read-all")}>{m.text("notifications.readAll")}</NotificationButton>}>
-    {error && <AccountError role="alert">{error}</AccountError>}
-    {!page ? <AccountFine role="status">{m.text("notifications.unavailable")}</AccountFine> : <>
-      {!page.items.length ? <AccountFine>{m.text("notifications.empty")}</AccountFine> : <List>{page.items.map(item => {
-        const section = notificationSection(item.kind), Icon = section === "payments" ? CardIcon : section === "referrals" ? GiftIcon : item.kind === "access-activated" ? ShieldIcon : ClockIcon;
-        return <li key={item.id} data-notification-id={item.id} data-unread={!item.read ? "true" : undefined}>
-          <Icon /><div data-notice-body><h3>{m.text(`notifications.${item.kind}`)}</h3>
-            {item.reason && <AccountFine>Reason: {referralReviewReasonLabel[item.reason]}</AccountFine>}
-            {item.kind === "access-expiring" && item.expiresAt && <AccountFine>{m.text("notifications.expiry", { date: formatSubscriptionExpiry(new Date(item.expiresAt)) })}</AccountFine>}
-            <time dateTime={item.occurredAt}>{formatSubscriptionExpiry(new Date(item.occurredAt))}</time>
-            <AccountActionLink href={`${accountSectionHref(locale, section)}${item.relatedCaseId ? `#review-${item.relatedCaseId}` : ""}`} prefetch={false}>{m.text(`notifications.view.${section}`)}</AccountActionLink>
-          </div><div data-notice-actions>
-            {!item.read && <NotificationButton type="button" variant="quiet" disabled={disabled} onClick={() => void update("read", item.id)}>{m.text("notifications.read")}</NotificationButton>}
-            <NotificationButton type="button" variant="quiet" disabled={disabled} onClick={() => void update("dismiss", item.id)}>{m.text("notifications.dismiss")}</NotificationButton>
-          </div>
-        </li>;
-      })}</List>}
-      {(older || page.next) && <Pages aria-label={m.text("notifications.pages")}>
-        {older && <AccountActionLink href={accountSectionHref(locale, "notifications")} prefetch={false}>{m.text("notifications.latest")}</AccountActionLink>}
-        {page.next && <AccountActionLink href={`${accountSectionHref(locale, "notifications")}&before=${encodeURIComponent(page.next)}`} prefetch={false}>{m.text("notifications.older")}</AccountActionLink>}
-      </Pages>}
-    </>}
-  </AccountPanel>;
+  const inboxHref = accountSectionHref(locale, "notifications", returnTo);
+  return <div data-account-notification-feed>
+    <AccountRecords locale={locale} title={m.text("notifications.inbox")} items={page?.items ?? []} busy={disabled}
+      toolbar={!!page?.unread && <Button type="button" variant="quiet" disabled={disabled} onClick={() => void update("read-all")}>{m.text("notifications.readAll")}</Button>}
+      feedback={error && <AccountError role="alert">{error}</AccountError>}
+      empty={<AccountFine role="status">{m.text(page ? "notifications.empty" : "notifications.unavailable")}</AccountFine>}
+      row={item => {
+        const section = notificationSection(item.kind);
+        const Icon = section === "payments" ? CardIcon : section === "referrals" ? GiftIcon : item.kind === "access-activated" ? ShieldIcon : ClockIcon;
+        return <RecordRowContent icon={<Icon />} primary={<NoticeTitle data-notification-id={item.id} data-unread={!item.read || undefined}>
+          {m.text(`notifications.${item.kind}`)}
+          {!item.read && <UnreadLabel> • {m.plural("notifications.unread", 1)}</UnreadLabel>}
+        </NoticeTitle>} secondary={<time dateTime={item.occurredAt}>{formatSubscriptionExpiry(new Date(item.occurredAt))}</time>} />;
+      }}
+      detail={item => <>
+        <h3>{m.text(`notifications.${item.kind}`)}</h3>
+        {item.reason && <AccountFine>Reason: {referralReviewReasonLabel[item.reason]}</AccountFine>}
+        {item.kind === "access-expiring" && item.expiresAt && <AccountFine>{m.text("notifications.expiry", { date: formatSubscriptionExpiry(new Date(item.expiresAt)) })}</AccountFine>}
+        <AccountFine><time dateTime={item.occurredAt}>{formatSubscriptionExpiry(new Date(item.occurredAt))}</time></AccountFine>
+      </>}
+      actions={item => {
+        const section = notificationSection(item.kind);
+        const href = accountSectionHref(locale, section, returnTo);
+        return <AccountSectionActions data-record-actions>
+          <AccountActionLink href={item.relatedCaseId ? `${href}#review-${item.relatedCaseId}` : href} prefetch={false}>{m.text(`notifications.view.${section}`)}</AccountActionLink>
+          {!item.read && <Button type="button" variant="quiet" disabled={disabled} onClick={() => void update("read", item.id)}>{m.text("notifications.read")}</Button>}
+          <Button type="button" variant="quiet" disabled={disabled} onClick={() => void update("dismiss", item.id)}>{m.text("notifications.dismiss")}</Button>
+        </AccountSectionActions>;
+      }}
+      pagination={page && (older || page.next) && <AccountSectionActions as="nav" aria-label={m.text("notifications.pages")}>
+        {older && <AccountActionLink href={inboxHref} prefetch={false}>{m.text("notifications.latest")}</AccountActionLink>}
+        {page.next && <AccountActionLink href={`${inboxHref}&before=${encodeURIComponent(page.next)}`} prefetch={false}>{m.text("notifications.older")}</AccountActionLink>}
+      </AccountSectionActions>}
+    />
+  </div>;
 }

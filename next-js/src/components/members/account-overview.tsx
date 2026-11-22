@@ -37,13 +37,6 @@ export const AccountBlockActions = styled.div`
 export const AccountFine = styled.p`
   font-size: ${({ theme }) => theme.typography.scale.secondary}; line-height: var(--gh-leading-normal); color: ${({ theme }) => theme.color.mutedText};
 `;
-export const AccountActivityList = styled.ol`
-  list-style: none; margin: 0; padding: 0; display: grid; gap: var(--gh-spacing-2);
-  li { min-inline-size: 0; padding-block-end: var(--gh-spacing-2); border-block-end: 0; }
-  li:last-child { border-block-end: 0; padding-block-end: 0; }
-  li > p { font-size: ${({ theme }) => theme.typography.scale.body}; }
-  time { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
-`;
 const actionText = css`
   min-block-size: var(--form-control-height); padding: 0; border: 0; background: none;
   color: ${({ theme }) => theme.color.link}; font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.bold}; text-decoration: none;
