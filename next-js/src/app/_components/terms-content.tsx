@@ -5,13 +5,14 @@ import { BodyText, Inline, SectionHeading, Stack } from "@/components/ui/layout"
 import { termsNotice } from "@/domain/terms-notice";
 import { informationHref } from "@/domain/navigation";
 import { createContentMessages, type ContentTextKey } from "@/i18n/content-messages";
-import { InformationNotice } from "./information-notice";
+import { InformationNotice, publishedNoticeDate } from "./information-notice";
 import { ContentsNav } from "./information-styles";
 
 const sections = ["service", "access", "estimates", "updates", "outcomes", "use", "sources", "privacy", "release"] as const;
-const paragraphs = { service: ["body", "markets"], access: ["body", "trial", "review", "credit", "personal", "refunds", "suspension"], estimates: ["body", "sources", "responsibility"], updates: ["body", "limits"],
+const paragraphs = { service: ["supplier", "body", "markets"], access: ["body", "trial", "checkout", "review", "records", "credit", "personal", "refunds", "suspension"], estimates: ["body", "sources", "responsibility"], updates: ["body", "limits"],
   outcomes: ["body", "process"], use: ["body"], sources: ["body", "permissions"], privacy: ["body"], release: ["body"] } as const;
 const links: Partial<Record<typeof sections[number], readonly { href: string; key: ContentTextKey }[]>> = {
+  service: [{ href: "/en/contact", key: "contact.link" }],
   estimates: [{ href: "/en/help#predictions", key: "terms.link.predictions" }],
   updates: [{ href: "/en/help#updates", key: "terms.link.updates" }],
   outcomes: [{ href: "/en/help#results", key: "terms.link.results" }],
@@ -20,12 +21,14 @@ const links: Partial<Record<typeof sections[number], readonly { href: string; ke
 
 export function TermsContent({ locale }: { locale: string }) {
   const messages = createContentMessages(locale);
+  const effectiveOn = publishedNoticeDate(termsNotice);
+  const visibleSections = effectiveOn ? sections.filter(id => id !== "release") : sections;
   return <Stack $gap="xl" data-terms-status={termsNotice.publication} data-terms-release-ready={termsNotice.releaseReady}>
-    <InformationNotice locale={locale} kind="terms" reviewedOn={termsNotice.reviewedOn} />
+    <InformationNotice locale={locale} kind="terms" reviewedOn={termsNotice.reviewedOn} effectiveOn={effectiveOn} />
     <ContentsNav aria-label={messages.text("terms.contents")}>
-      {sections.map((id) => <TextLink key={id} href={`#terms-${id}`} prefetch={false}>{messages.text(`terms.${id}.title`)}</TextLink>)}
+      {visibleSections.map((id) => <TextLink key={id} href={`#terms-${id}`} prefetch={false}>{messages.text(`terms.${id}.title`)}</TextLink>)}
     </ContentsNav>
-    {sections.map((id) => <Stack as="section" id={`terms-${id}`} key={id} aria-labelledby={`terms-${id}-heading`} $gap="md">
+    {visibleSections.map((id) => <Stack as="section" id={`terms-${id}`} key={id} aria-labelledby={`terms-${id}-heading`} $gap="md">
       <SectionHeading id={`terms-${id}-heading`}>{messages.text(`terms.${id}.title`)}</SectionHeading>
       {paragraphs[id].map((part) => <BodyText key={part}>{messages.text(`terms.${id}.${part}` as ContentTextKey)}</BodyText>)}
       {links[id] && <Inline>{links[id].map(({ href, key }) => <TextLink key={key} href={href} prefetch={false}>{messages.text(key)}</TextLink>)}</Inline>}

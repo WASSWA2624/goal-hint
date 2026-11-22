@@ -1,11 +1,11 @@
 import { publicOperator } from "./public-operator.ts";
 
-/** Owner-approved launch facts and reuse terms; final privacy notice remains pending. */
+/** The review date identifies the version recorded with purchase consent. */
 export const termsNotice = Object.freeze({
-  publication: "prelaunch-draft",
-  releaseReady: false,
-  reviewedOn: "2026-10-24",
-  effectiveOn: null,
+  publication: "published",
+  releaseReady: true,
+  reviewedOn: "2026-11-22",
+  effectiveOn: "2026-11-22",
   plannedEffectiveOn: publicOperator.plannedLaunchOn,
   blockers: Object.freeze(["privacy", "payments", "refunds", "data-protection", "jurisdiction", "paid-rights"] as const),
 });

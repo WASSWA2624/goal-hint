@@ -8,24 +8,26 @@ import { privacyNotice } from "@/domain/privacy-notice";
 import { createContentMessages, type ContentTextKey } from "@/i18n/content-messages";
 import { publicCacheRules } from "@/server/cache/public-cache";
 import { AnalyticsChoices } from "@/components/analytics/analytics-tracker";
-import { InformationNotice } from "./information-notice";
+import { InformationNotice, publishedNoticeDate } from "./information-notice";
 import { ContentsNav } from "./information-styles";
 
 const sections = ["access", "payments", "requests", "search", "storage", "tracking", "images", "football", "retention", "choices", "release"] as const;
 
 export function PrivacyContent({ locale }: { locale: string }) {
   const messages = createContentMessages(locale);
+  const effectiveOn = publishedNoticeDate(privacyNotice);
+  const visibleSections = effectiveOn ? sections.filter(id => id !== "release") : sections;
   const values = { entries: messages.number(restorationRules.maximumEntries), minutes: messages.number(restorationRules.maximumAgeMilliseconds / 60_000),
     seconds: messages.number(publicCacheRules.mutableMs / 1000), hours: messages.number(publicCacheRules.immutableMs / 3_600_000) };
-  const paragraphs = { access: ["body", "cookie"], payments: ["body", "images", "messages", "retention", "basis"], requests: ["body", "logs"], search: ["body", "counter", "refresh"], storage: [],
-    tracking: ["body", "data", "minimization", "scope"], images: ["body", "recipients"], football: ["body", "permissions"], retention: ["body", "expiry"],
-    choices: ["body", "contact", "correspondence", "correspondenceRetention", "correspondenceScope"], release: ["body"] } as const;
+  const paragraphs = { access: ["body", "cookie"], payments: ["body", "images", "flutterwave", "messages", "retention", "basis"], requests: ["body", "logs"], search: ["body", "counter", "refresh"], storage: [],
+    tracking: ["body", "data", "minimization", "scope"], images: ["body", "recipients"], football: ["body", "permissions"], retention: ["body", "expiry", "accounts", "tax", "backups"],
+    choices: ["body", "inputs", "contact", "complaint", "correspondence", "correspondenceRetention", "correspondenceScope"], release: ["body"] } as const;
   return <Stack $gap="xl" data-privacy-status={privacyNotice.publication} data-privacy-release-ready={privacyNotice.releaseReady}>
-    <InformationNotice locale={locale} kind="privacy" reviewedOn={privacyNotice.reviewedOn} />
+    <InformationNotice locale={locale} kind="privacy" reviewedOn={privacyNotice.reviewedOn} effectiveOn={effectiveOn} />
     <ContentsNav aria-label={messages.text("privacy.contents")}>
-      {sections.map((id) => <TextLink key={id} href={`#privacy-${id}`} prefetch={false}>{messages.text(`privacy.${id}.title`)}</TextLink>)}
+      {visibleSections.map((id) => <TextLink key={id} href={`#privacy-${id}`} prefetch={false}>{messages.text(`privacy.${id}.title`)}</TextLink>)}
     </ContentsNav>
-    {sections.map((id) => <Stack as="section" id={`privacy-${id}`} key={id} aria-labelledby={`privacy-${id}-heading`} $gap="md">
+    {visibleSections.map((id) => <Stack as="section" id={`privacy-${id}`} key={id} aria-labelledby={`privacy-${id}-heading`} $gap="md">
       <SectionHeading id={`privacy-${id}-heading`}>{messages.text(`privacy.${id}.title`)}</SectionHeading>
       {paragraphs[id].map((part) => <BodyText key={part}>{messages.text(`privacy.${id}.${part}` as ContentTextKey, values)}</BodyText>)}
       {id === "storage" && <>
@@ -36,7 +38,10 @@ export function PrivacyContent({ locale }: { locale: string }) {
       </>}
       {id === "release" && <ul>{privacyNotice.blockers.map((blocker) => <li key={blocker}><BodyText>{messages.text(`privacy.blocker.${blocker}`)}</BodyText></li>)}</ul>}
       {id === "tracking" && <AnalyticsChoices />}
-      {id === "choices" && <TextLink href={informationHref("contact", locale)} prefetch={false}>{messages.text("contact.link")}</TextLink>}
+      {id === "choices" && <>
+        <TextLink href={informationHref("contact", locale)} prefetch={false}>{messages.text("contact.link")}</TextLink>
+        <TextLink href="https://pdpo.go.ug/" prefetch={false}>{messages.text("privacy.choices.pdpoLink")}</TextLink>
+      </>}
     </Stack>)}
     <TextLink href={informationHref("help", locale)} prefetch={false}>{messages.text("privacy.help")}</TextLink>
   </Stack>;

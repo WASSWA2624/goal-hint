@@ -1,5 +1,11 @@
 # Privacy page and data-flow review
 
+On 22 November 2026 the owner approved publication and confirmed Wilson Wasswa
+individually as supplier, with Hoima Road, Wakiso, Uganda as the business and
+service address. The implementation adds current account and payment disclosures
+and the retention decisions below. Statements dated October record the earlier
+prelaunch review. See the app overview for hosted deployment status.
+
 Prompt 039 implements `/en/privacy` in the existing information/public shell.
 The English page is server rendered, has section anchors, readable shared
 typography and square components, and retains the footer link and prelaunch
@@ -184,6 +190,44 @@ Reviewed on 10 October 2026:
   recipients, retention and a usable rights route. No jurisdiction-specific
   deadline, legal basis, regulator, applicability or compliance assertion is
   copied into the public summary. Actual audience/operator facts are still needed.
+
+## Retention decisions on 22 November 2026
+
+The owner delegated the retention decision. Apply these criteria prospectively.
+The review and backup targets require operator implementation. They do not describe
+automatic production deletion or the retention of a hosting provider's copies.
+This decision does not authorize deletion of existing production records or backups.
+
+| Records | Retention rule or review target |
+| --- | --- |
+| Member accounts | Keep the data needed to operate an open account. Review inactive accounts after 24 months without a sign-in. Prioritize accounts with no active access, balance, unresolved payment or support case for closure and removal of data no longer needed. Apply valid erasure requests independently and preserve only records still needed for accounting, reconciliation, or a documented hold. |
+| Payment and accounting | Keep the minimum settlement and ledger facts needed to verify a payment, reconcile credits and grants, and meet accounting duties. Where the Ugandan tax recordkeeping requirement applies, keep required records for five years after the end of the relevant tax period, or the other period required by law. If a proceeding requires them, preserve them through its conclusion. This period does not apply to every screenshot or other item of evidence. |
+| Raw evidence and disputes | Routine checkout evidence follows the configured cleanup rules below. Keep only relevant evidence for a pending or disputed payment through resolution and any required preservation period. Review exceptional holds every 90 days and remove or de-identify material when the hold and the underlying retention purpose end. |
+| Operational and security audit | Review ordinary closed audit and security records on a 12-month target. Dispose of details once they are no longer needed. Payment accounting decisions and evidence subject to a hold follow the rules above. |
+| Operator-controlled backups | Target 30 days for routine encrypted application snapshots once replacement coverage and restore checks are in place. Record exceptions while a documented hold or required recovery chain remains. Restrict access to retained snapshots and reapply completed erasures before serving a restored copy. The provider's own log, snapshot and replica periods require separate verification. |
+
+The current application expires verification codes at use or 24 hours, expires
+member sessions after their configured window, and clears expired sessions, codes
+and throttles during maintenance. It removes unused passwordless accounts after 30
+days when they hold no payment, access or wallet history. Configured screenshot
+and raw checkout-evidence cleanup is 90 days by default after approval or reversal,
+and seven days after applicable rejected or cancelled decisions. Pending, disputed
+and verified unallocated evidence is retained for review. Modern checkout cleanup
+also clears raw evidence text and the claim's payer phone. Core payment, access,
+wallet and audit records have no general automatic expiry. Goal Hint uses the
+owner's existing correspondence periods documented above.
+
+Production cPanel reports processed domain log deletion after statistics and
+previous-month pruning for the account's archived access logs. This establishes a
+calendar cleanup setting only. Error log retention, provider-held snapshots and
+the provider's storage location still need independent confirmation. WHM-managed
+scheduled backups and database binary logging were disabled at inspection.
+
+The [Data Protection and Privacy Act, Cap. 97](https://nita.go.ug/sites/default/files/2026-09/Data%20Protection%20and%20Privacy%20Act%20cap%2097.pdf)
+requires collection notices to cover retention and limits storage to the period
+needed for its purpose subject to statutory exceptions. The
+[Tax Procedures Code Act, section 15](https://media.ulii.org/media/legislation/47540/source_file/2e1f4c569831c484/ug-act-2014-14-publication-document.pdf)
+sets the applicable tax-record period and proceeding exception.
 
 ## Verification
 

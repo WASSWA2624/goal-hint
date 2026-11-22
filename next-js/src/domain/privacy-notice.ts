@@ -1,11 +1,11 @@
 import { publicOperator } from "./public-operator.ts";
 
-/** Confirmed owner facts; outstanding hosting details still prevent a final notice. */
+/** Owner-approved Privacy notice. */
 export const privacyNotice = Object.freeze({
-  publication: "prelaunch-summary",
-  releaseReady: false,
-  reviewedOn: "2026-10-24",
-  effectiveOn: null,
+  publication: "published",
+  releaseReady: true,
+  reviewedOn: "2026-11-22",
+  effectiveOn: "2026-11-22",
   plannedEffectiveOn: publicOperator.plannedLaunchOn,
   blockers: Object.freeze(["logs", "hosting", "sources", "retention", "payments", "refunds", "data-protection"] as const),
 });

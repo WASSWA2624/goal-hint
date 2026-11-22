@@ -21,9 +21,11 @@ test("fresh checkout offers require an active plan and either full wallet fundin
   assert.deepEqual(ids(defaultSubscriptionSettings, 5000), ["daily", "weekly"]);
 });
 
-test("prelaunch notices keep production sales closed even with receiving accounts and published support details", () => {
+test("published notices still require paid access and payment support to open production checkout", () => {
   const readySettings = { ...settings, paywallMode: "on", contactPhone: "256700000903" };
-  assert.equal(subscriptionCheckoutPublished(readySettings, true), false);
+  assert.equal(subscriptionCheckoutPublished(readySettings, true), true);
+  assert.equal(subscriptionCheckoutPublished({ ...readySettings, contactPhone: null }, true), false);
+  assert.equal(subscriptionCheckoutPublished({ ...readySettings, paywallMode: "off" }, true), false);
   assert.equal(subscriptionCheckoutPublished(readySettings, false), true);
   assert.equal(subscriptionCheckoutPublished({ ...readySettings, paywallMode: "off" }, false), false);
 });

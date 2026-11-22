@@ -113,6 +113,34 @@ test("the signed browser return preserves the current attempt and destination wi
   assert.equal(new URL(settled.headers.get("location"), staging).searchParams.has("paymentStatus"), false);
 });
 
+test("a failed Standard return with only a reference guides recovery and honors approval verified by reference", async () => {
+  const match = "/en/matches/a-17/sample-home-away";
+  const callback = new URL(flutterwaveReturnUrl(staging, reference, match, key));
+  callback.searchParams.set("tx_ref", reference);
+  callback.searchParams.set("status", "failed");
+  let verifiedStatus = "provider-pending", calls = 0;
+  const handle = createFlutterwaveReturnHandler(async () => ({ config: { key }, checkout: { async reconcileFlutterwave(ref, id) {
+    assert.equal(ref, reference);
+    assert.equal(id, undefined);
+    calls++;
+    return { requestId: ref, status: verifiedStatus };
+  } } }));
+
+  const abandoned = await handle(new Request(callback), reference);
+  assert.equal(abandoned.status, 303);
+  const next = new URL(abandoned.headers.get("location"), staging);
+  assert.equal(next.pathname, "/en/subscribe");
+  assert.deepEqual(Object.fromEntries(next.searchParams), { return: match, checkout: "1", payment: reference, paymentStatus: "cancelled" });
+  assert.equal(calls, 1);
+
+  verifiedStatus = "approved";
+  const approved = await handle(new Request(callback), reference);
+  assert.equal(approved.status, 303);
+  assert.deepEqual(Object.fromEntries(new URL(approved.headers.get("location"), staging).searchParams),
+    { return: match, checkout: "1", payment: reference });
+  assert.equal(calls, 2);
+});
+
 test("live, hosted sandbox and local sandbox checkout use only their own app origin", () => {
   const request = (host, origin) => new Request("http://localhost:3012/api/account/checkout", { headers: { Host: host, Origin: origin } });
   assert.equal(flutterwaveCheckoutOrigin(request("goalhint.com", production), "live", production), production);

@@ -1,9 +1,10 @@
-/** Owner-supplied publication facts; not a production release or legal approval. */
+/** Owner-supplied facts for public notices. */
 export const publicOperator = Object.freeze({
   name: "Wilson Wasswa",
+  businessAddress: "Hoima Road, Wakiso, Uganda",
   country: "Uganda",
   audience: "English-speaking football fans worldwide",
-  paidAccess: "paying in UGX to our Ugandan MTN or Airtel numbers",
+  paidAccess: "paying in UGX through an available checkout method",
   minimumAge: 18,
   requestsOwner: "Wilson Wasswa",
   confirmedOn: "2026-10-12",

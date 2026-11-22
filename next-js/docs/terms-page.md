@@ -1,12 +1,21 @@
 # Terms page and factual review
 
+On 22 November 2026 the owner approved publication of the updated Terms of
+Service. Wilson Wasswa is the individual supplier. The business and service
+address is Hoima Road, Wakiso, Uganda. The Terms disclose how to review and
+leave checkout, how transactions and access are verified, and how to contact
+support about a cancellation or refund. Applicable consumer rights remain in
+effect. Consent for new purchases uses the 22 November 2026 terms version.
+Live payments still require merchant, settlement and webhook verification. See
+the app overview for hosted deployment status.
+
 Prompt 040 implements `/en/terms` in the existing public/information shell.
 English strings are externalized, headings and topic anchors are semantic, and
 the footer identifies the current page. The shared `InformationNotice` header
 keeps the terms/privacy review date and square status surface consistent. The
 canonical is `https://goalhint.com/en/terms`; prelaunch `noindex, follow` remains.
 
-## Publication gate and owner decisions
+## October prelaunch review and owner decisions
 
 The owner facts confirmed on **12 October 2026** supersede the earlier deferrals:
 Wilson Wasswa operates Goal Hint from Uganda for English-speaking football fans

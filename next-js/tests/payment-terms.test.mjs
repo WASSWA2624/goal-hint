@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { defaultSubscriptionSettings } from "../src/domain/subscription-settings.ts";
 import { termsNotice } from "../src/domain/terms-notice.ts";
+import { privacyNotice } from "../src/domain/privacy-notice.ts";
+import { createContentMessages } from "../src/i18n/content-messages.ts";
 import { createPayments } from "../src/server/members/payments.ts";
+import { createInformationMetadata } from "../src/server/seo/metadata.ts";
 import { jpeg } from "./helpers/payment-fixtures.mjs";
 
-const instant = Date.parse("2026-10-24T12:00:00Z"), at = new Date(instant);
+const instant = Date.parse("2026-11-22T12:00:00Z"), at = new Date(instant);
 const settings = { ...defaultSubscriptionSettings, paywallMode: "on", mtnEnabled: true, mtnNumber: "256700000901", mtnName: "TEST MTN" };
 const fields = { planId: "plan", network: "mtn", payerPhone: "256700000101", transactionId: "NEW1234", screenshotAmount: 5000, accepted: false };
 
@@ -68,10 +71,29 @@ test("optional screenshot reports persist pending without image or screenshot-de
   for (const key of ["screenshot", "imageSha256", "imageBytes"]) assert.equal(key in report, false, key);
 });
 
-test("production payments stay closed with draft notices even while paid access is on", async () => {
+test("production payments stay closed without support even when notices are published and paid access is on", async () => {
   const f = fixture({ production: true });
   assert.equal((await f.submit(true)).status, "refused");
   assert.equal(f.created.length, 0);
+});
+
+test("owner-published notices use the new effective date and preserve the site discovery policy", async () => {
+  for (const [page, notice] of [["privacy", privacyNotice], ["terms", termsNotice]]) {
+    assert.deepEqual([notice.publication, notice.releaseReady, notice.effectiveOn, notice.reviewedOn],
+      ["published", true, "2026-11-22", "2026-11-22"]);
+    const publicMetadata = createInformationMetadata(page, () => ({ index: true }));
+    assert.equal((await publicMetadata({})).robots.index, true);
+    assert.equal((await publicMetadata({ searchParams: Promise.resolve({ q: "query" }) })).robots.index, false);
+    const privateMetadata = createInformationMetadata(page, () => ({ index: false }));
+    assert.equal((await privateMetadata({})).robots.index, false);
+  }
+  const copy = createContentMessages("en");
+  assert.match(copy.text("terms.service.supplier"), /Wilson Wasswa supplies Goal Hint as an individual.*Hoima Road, Wakiso, Uganda/u);
+  assert.match(copy.text("terms.access.refunds"), /cancellation, refund and other consumer rights.*payment reference/u);
+  assert.match(copy.text("privacy.choices.complaint"), /Uganda’s Personal Data Protection Office/u);
+  assert.match(copy.text("privacy.retention.tax"), /five years after the relevant tax period ends/u);
+  assert.match(copy.text("privacy.retention.accounts"), /24 months of inactivity.*12-month target/u);
+  assert.match(copy.text("privacy.retention.backups"), /targets 30 days.*exact retention and removal periods remain unverified/u);
 });
 
 test("current member-report consent survives every payment status on another device", async () => {
@@ -98,7 +120,7 @@ test("recorded access consent survives expiry and reversal; grants without conse
 });
 
 test("new terms, unaccepted or owner reports and another account's consent require explicit acceptance", async () => {
-  for (const options of [{}, { reports: [{ termsVersion: "old-version" }] }, { reports: [{ acceptedAt: null }] },
+  for (const options of [{}, { reports: [{ termsVersion: "2026-10-24" }] }, { reports: [{ acceptedAt: null }] },
     { reports: [{ source: "owner" }] }, { reports: [{ source: "owner", acceptedAt: null, termsVersion: null }] },
     { reports: [{ accountId: "another-account" }] }, { codes: [{ accountId: "another-account", termsVersion: termsNotice.reviewedOn }] }]) {
     const f = fixture(options);

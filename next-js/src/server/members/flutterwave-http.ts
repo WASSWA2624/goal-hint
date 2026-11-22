@@ -64,7 +64,10 @@ export function createFlutterwaveReturnHandler(services: MemberServicesSource = 
     } catch { return empty(503); }
     const next = new URL(memberNextPath("subscribe", returnTo, undefined, !!returnTo), request.url);
     next.searchParams.set("payment", result?.requestId ?? reference);
-    if (query.get("status") === "cancelled" && result?.status !== "approved") next.searchParams.set("paymentStatus", "cancelled");
+    // Standard can report an abandoned checkout as failed with only the reference.
+    // Browser status supplies UI guidance. Reconciliation uses provider verification.
+    const status = query.get("status");
+    if ((status === "cancelled" || status === "failed") && result?.status !== "approved") next.searchParams.set("paymentStatus", "cancelled");
     return redirect(`${next.pathname}${next.search}`);
   };
 }
