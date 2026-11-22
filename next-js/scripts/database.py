@@ -14,6 +14,8 @@ COMMANDS = {
     "deploy": ["migrate", "deploy"], "status": ["migrate", "status"],
     "verify": ["migrate", "diff", "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"],
 }
+PRISMA_DEFAULT_TIMEOUT_SECONDS = 120
+PRISMA_DEPLOY_TIMEOUT_SECONDS = 300
 
 
 def guard_generated_client(directory: Path | None = None) -> None:
@@ -55,14 +57,17 @@ def main() -> None:
     prefix = [node_binary(), "--conditions=react-server"]
     prefix.append(str(ROOT / "node_modules/prisma/build/index.js"))
     output = None
+    timeout = PRISMA_DEPLOY_TIMEOUT_SECONDS if command == "deploy" else PRISMA_DEFAULT_TIMEOUT_SECONDS
     try:
         for prisma_args in ([COMMANDS["status"], COMMANDS[command]] if command == "verify" else [COMMANDS[command]]):
             output = subprocess.run(prefix + prisma_args, capture_output=True, text=True, encoding="utf-8", cwd=working,
-                                    env=env, timeout=120, creationflags=hidden_process())
+                                    env=env, timeout=timeout, creationflags=hidden_process())
             if output.returncode:
                 reason = "Schema drift detected." if command == "verify" and output.returncode == 2 else "Prisma command failed."
                 diagnostic = re.search(r"\bP\d{4}\b", output.stderr)
                 raise CommandError(f"{reason}{' (' + diagnostic[0] + ')' if diagnostic else ''} Check approved target access and migration state; raw diagnostics are withheld.")
+    except subprocess.TimeoutExpired:
+        raise CommandError(f"Prisma {command} timed out after {timeout} seconds.") from None
     finally:
         if command == "generate":
             guard_generated_client()

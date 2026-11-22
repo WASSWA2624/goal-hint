@@ -23,10 +23,20 @@ test("strict defaults, inclusive custom bounds and historical fixtures use the s
       "CREATE TABLE FootballCompetition (id VARCHAR(36) PRIMARY KEY)",
       "CREATE TABLE FootballCompetitionProvider (competitionId VARCHAR(36), provider VARCHAR(32), externalId INT)",
       "CREATE TABLE FootballSeason (id VARCHAR(36) PRIMARY KEY, competitionId VARCHAR(36))",
-      "CREATE TABLE FootballFixture (id VARCHAR(36) PRIMARY KEY, provider VARCHAR(32), homeTeamId VARCHAR(36), awayTeamId VARCHAR(36), seasonId VARCHAR(36), activeCycleId VARCHAR(36), kickoff DATETIME(3), status VARCHAR(32), INDEX FootballFixture_kickoff_idx(kickoff))",
-      "CREATE TABLE PredictionCycle (id VARCHAR(36) PRIMARY KEY, fixtureId VARCHAR(36), state VARCHAR(16), currentSetId VARCHAR(36), lockedSetId VARCHAR(36))",
-      "CREATE TABLE PredictionSet (id VARCHAR(36) PRIMARY KEY, cycleId VARCHAR(36), cycleRevision INT, candidateJson JSON)",
-      "CREATE TABLE MarketPrediction (setId VARCHAR(36), family VARCHAR(32), selection VARCHAR(32), available BOOLEAN, selectedProbability DOUBLE, PRIMARY KEY(setId,family))",
+      `CREATE TABLE FootballFixture (id VARCHAR(36) PRIMARY KEY, provider VARCHAR(32), externalId INT,
+        homeTeamId VARCHAR(36), awayTeamId VARCHAR(36), seasonId VARCHAR(36), activeCycleId VARCHAR(36),
+        kickoff DATETIME(3), status VARCHAR(32), INDEX FootballFixture_kickoff_idx(kickoff))`,
+      `CREATE TABLE PredictionCycle (id VARCHAR(36) PRIMARY KEY, fixtureId VARCHAR(36), state VARCHAR(16),
+        currentSetId VARCHAR(36), lockedSetId VARCHAR(36), scheduleVersion INT, kickoffAt DATETIME(3), closedAt DATETIME(3))`,
+      "CREATE TABLE PredictionSet (id VARCHAR(36) PRIMARY KEY, fixtureId VARCHAR(36), cycleId VARCHAR(36), cycleRevision INT, candidateJson JSON)",
+      `CREATE TABLE MarketPrediction (setId VARCHAR(36), family VARCHAR(32), selection VARCHAR(32), source VARCHAR(16),
+        available BOOLEAN, selectedProbability DOUBLE, PRIMARY KEY(setId,family))`,
+      // Published-only reads also resolve active replay projections, which are empty in this fixture.
+      `CREATE TABLE NovemberReplayProjection (fixtureId VARCHAR(36) PRIMARY KEY, revisionId VARCHAR(64),
+        sourceRevisionId VARCHAR(36), cycleId VARCHAR(36), scheduleVersion INT, kickoffAt DATETIME(3),
+        evidenceCutoffAt DATETIME(3), integrity CHAR(64), body JSON)`,
+      "CREATE TABLE FixtureLifecycleState (fixtureId VARCHAR(36) PRIMARY KEY, actualStartedAt DATETIME(3), issue VARCHAR(128))",
+      "CREATE TABLE PredictionPublicationBarrier (cycleId VARCHAR(36) PRIMARY KEY, closedAt DATETIME(3))",
       "INSERT INTO FootballTeam VALUES ('home'),('away')",
       "INSERT INTO FootballCompetition VALUES ('competition')",
       "INSERT INTO FootballCompetitionProvider VALUES ('competition','api-football',39)",
@@ -34,13 +44,18 @@ test("strict defaults, inclusive custom bounds and historical fixtures use the s
     ]) await connection.query(statement);
     await connection.query(await readFile(new URL("../prisma/migrations/20261028120000_compact_feed_recommendation/migration.sql", import.meta.url), "utf8"));
     await connection.query(await readFile(new URL("../prisma/migrations/20261028121000_feed_choice_covering_index/migration.sql", import.meta.url), "utf8"));
-    for (const [id, probability] of [["decimal", 0.582], ["lower", 0.600041], ["upper", 0.600049], ["outside", 0.7], ["missing", null]]) {
+    async function insertFixture(id, probability, kickoff = "2026-10-12 10:00:00", status = "scheduled") {
       const cycle = probability === null ? null : `cycle-${id}`, set = `set-${id}`;
-      await connection.query("INSERT INTO FootballFixture VALUES (?,'api-football','home','away','season',?,'2026-10-12 10:00:00','scheduled')", [id, cycle]);
-      if (cycle === null) continue;
-      await connection.query("INSERT INTO PredictionCycle VALUES (?,?,'open',?,NULL)", [cycle, id, set]);
-      await connection.query("INSERT INTO PredictionSet(id,cycleId,cycleRevision,candidateJson) VALUES (?,?,1,JSON_OBJECT())", [set, cycle]);
-      await connection.query("INSERT INTO MarketPrediction VALUES (?,'match-result','home-win',TRUE,?)", [set, probability]);
+      await connection.query(`INSERT INTO FootballFixture (id,provider,homeTeamId,awayTeamId,seasonId,activeCycleId,kickoff,status)
+        VALUES (?,'api-football','home','away','season',?,?,?)`, [id, cycle, kickoff, status]);
+      if (cycle === null) return;
+      await connection.query("INSERT INTO PredictionCycle (id,fixtureId,state,currentSetId,kickoffAt) VALUES (?,?,'open',?,?)", [cycle, id, set, kickoff]);
+      await connection.query("INSERT INTO PredictionSet (id,fixtureId,cycleId,cycleRevision,candidateJson) VALUES (?,?,?,1,JSON_OBJECT())", [set, id, cycle]);
+      await connection.query(`INSERT INTO MarketPrediction (setId,family,selection,source,available,selectedProbability)
+        VALUES (?,'match-result','home-win','ai',TRUE,?)`, [set, probability]);
+    }
+    for (const [id, probability] of [["decimal", 0.582], ["lower", 0.600041], ["upper", 0.600049], ["outside", 0.7], ["missing", null]]) {
+      await insertFixture(id, probability);
     }
     const today = parseReportingDate("2026-10-12");
     async function read(prob, dates = {}, publishedOnly = false) {
@@ -66,20 +81,16 @@ test("strict defaults, inclusive custom bounds and historical fixtures use the s
     await connection.query("UPDATE PredictionSet SET candidateJson=? WHERE id='set-outside'", [JSON.stringify({ audit: { recommendation: { selected: null } } })]);
     const [abstention] = await connection.query("SELECT feedRecommendation IS NOT NULL AS decision FROM PredictionSet WHERE id='set-outside'");
     assert.equal(Number(abstention.decision), 1, "an explicit abstention remains distinct from an absent decision");
-    assert.deepEqual(await read("0-99.9"), new Set(["decimal", "lower", "upper"]), "all-market filtering respects the original abstention");
+    assert.deepEqual(await read("70-70"), new Set(["outside"]), "an explicit recommendation abstention retains the published market probability");
 
     for (const [id, probability] of [["exactly75", 0.75], ["justAbove75", 0.75000000001]]) {
-      const cycle = `cycle-${id}`, set = `set-${id}`;
-      await connection.query("INSERT INTO FootballFixture VALUES (?,'api-football','home','away','season',?,'2026-10-12 10:00:00','scheduled')", [id, cycle]);
-      await connection.query("INSERT INTO PredictionCycle VALUES (?,?,'open',?,NULL)", [cycle, id, set]);
-      await connection.query("INSERT INTO PredictionSet(id,cycleId,cycleRevision,candidateJson) VALUES (?,?,1,JSON_OBJECT())", [set, cycle]);
-      await connection.query("INSERT INTO MarketPrediction VALUES (?,'match-result','home-win',TRUE,?)", [set, probability]);
+      await insertFixture(id, probability);
     }
     assert.deepEqual(await read("above-75", { when: "today" }, true), new Set(["justAbove75"]));
     assert.deepEqual(await read("75-100", { when: "today" }, true), new Set(["exactly75", "justAbove75"]));
 
     for (const status of ["finished-regulation", "postponed", "canceled", "scheduled"]) {
-      await connection.query("INSERT INTO FootballFixture VALUES (?,'api-football','home','away','season',NULL,'2026-10-11 10:00:00',?)", [status, status]);
+      await insertFixture(status, null, "2026-10-11 10:00:00", status);
     }
     const yesterday = { when: "yesterday" };
     assert.deepEqual(await read("0-100", yesterday, true), new Set(["finished-regulation", "postponed", "canceled"]));

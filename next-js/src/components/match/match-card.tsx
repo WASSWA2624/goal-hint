@@ -94,20 +94,20 @@ const headerResults: Partial<Record<CardResult, PredictionResult>> = {
   correct: "won", incorrect: "lost", pending: "pending", void: "void", canceled: "cancelled",
 };
 
-function matchHeaderColors(theme: GoalHintTheme, result: HeaderResult) {
+function matchHeaderStatusColor(theme: GoalHintTheme, result: HeaderResult) {
   switch (result) {
-    case "live": return { text: theme.color.live.text, background: theme.color.live.soft };
-    case "upcoming": return performanceResultColors(theme, "all");
+    case "live": return theme.color.live.text;
+    case "upcoming": return performanceResultColors(theme, "all").text;
     case "half-time":
     case "postponed":
-    case "abandoned": return performanceResultColors(theme, "cancelled");
-    case "delayed": return performanceResultColors(theme, "pending");
+    case "abandoned": return performanceResultColors(theme, "cancelled").text;
+    case "delayed": return performanceResultColors(theme, "pending").text;
     case "won":
     case "lost":
     case "pending":
     case "void":
-    case "cancelled": return performanceResultColors(theme, result);
-    default: return theme.color.outcome.unavailable;
+    case "cancelled": return performanceResultColors(theme, result).text;
+    default: return theme.color.outcome.unavailable.text;
   }
 }
 
@@ -137,19 +137,9 @@ const Card = styled.article<{ $headerResult?: HeaderResult | undefined }>`
     }
     &[data-phone-feed-card] {
       ${feedFactsStyles}
-      ${({ theme, $headerResult }) => {
-        if (!$headerResult) return;
-        const tone = matchHeaderColors(theme, $headerResult);
-        return css`
-          &::before {
-            content: ""; grid-area: 1 / 1 / 2 / -1; align-self: stretch;
-            margin-inline: calc(-1 * var(--gh-spacing-2)); margin-block-start: calc(-1 * var(--gh-spacing-2));
-            border-start-start-radius: inherit; border-start-end-radius: inherit;
-            background: ${tone.background}; pointer-events: none;
-          }
-          > [data-stack-result] [data-match-status] { color: ${tone.text}; }
-        `;
-      }}
+      ${({ theme, $headerResult }) => $headerResult && css`
+        > [data-stack-result] [data-match-status] { color: ${matchHeaderStatusColor(theme, $headerResult)}; }
+      `}
     }
     font-family: ${({ theme }) => theme.typography.family};
     /* Match and slip tiles share the active theme's shared, shadow-free phone frame. */

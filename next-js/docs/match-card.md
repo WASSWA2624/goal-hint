@@ -130,7 +130,8 @@ receives an invented time or value.
 ### Phone and tablet: Team stack (below 64rem)
 
 On the Matches feed below 48rem the league and text-only status share the top
-row. Kickoff date and time share a width beside the teams and align with the
+row. Status colors apply to the text, and the header uses the card surface.
+Kickoff date and time share a width beside the teams and align with the
 leading league icon or flag. The kickoff clock uses two-digit hours and a time-zone label. Available
 live and finished scores align with their teams. Upcoming matches skip the
 score cells. The market occupies one line in the right column and uses its

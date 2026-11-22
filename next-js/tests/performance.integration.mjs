@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomUUID } from 'node:crypto';
-import { performanceResponseSchema } from '../src/domain/performance.ts';
+import { performanceResponseSchema, performanceRules } from '../src/domain/performance.ts';
 import { createPerformanceService } from '../src/server/performance/performance-service.ts';
 import { createPerformanceHandler } from '../src/server/performance/performance-http.ts';
 import { createMysqlEvidenceStore } from '../src/server/evidence/evidence-mysql-store.ts';
@@ -149,7 +149,10 @@ test('stored performance acceptance on owned genuine MySQL', { timeout: 300_000 
       assert.ok(data.comparisons.every((c) => c.count === 0 && c.state === 'unavailable'));
     });
     await t.test('source, model, version and EAT boundaries filter immutable selections', async () => {
-      const ai = await read(`${period}&source=ai&market=match-result`); assert.equal(ai.cells.length, 6);
+      const ai = await read(`${period}&source=ai&market=match-result`);
+      const sources = ['combined', 'ai', 'local-engine', 'api-football'];
+      assert.deepEqual(ai.cells.map(({ family, source, horizon }) => [family, source, horizon?.id ?? null]),
+        [null, 'day-ahead'].flatMap((horizon) => sources.map((source) => ['match-result', source, horizon])));
       capture('ai', ai);
       assert.equal(cell(ai).coverage.available, 3); assert.equal(cell(ai).coverage.filteredOut, 2); assert.equal(cell(ai).metrics.denominator, 3);
       const model = await read(`${period}&model=${modelVersion().id}`); assert.equal(cell(model).coverage.available, 3);
@@ -169,8 +172,10 @@ test('stored performance acceptance on owned genuine MySQL', { timeout: 300_000 
         assert.equal(cell(data).metrics.denominator, 4); assert.deepEqual(cell(data).metrics.calibration, []);
       }
       let calls = 0;
-      const revoked = await read(period, { policy: { protocol, verifyProtocol: () => ++calls === 1 } });
-      assert.equal(revoked.policy.state, 'unapproved'); assert.equal(cell(revoked).metrics.brier, null); assert.equal(calls, 2);
+      const revoked = await read(period, { policy: { protocol, verifyProtocol: () => ++calls <= 2 } });
+      assert.ok(calls > 2, 'Policy is checked again after reading the approved cohort.');
+      assert.equal(revoked.policy.state, 'unapproved'); assert.equal(cell(revoked).metrics.brier, null);
+      assert.equal(cell(revoked).metrics.denominator, 4);
       assert.equal((await read()).policy.publicClaimAuthorized, false);
     });
     await t.test('a corrected result first removes stale scores, then replaces current metrics without changing the lock', async () => {
@@ -187,21 +192,28 @@ test('stored performance acceptance on owned genuine MySQL', { timeout: 300_000 
       assert.notEqual(corrected.freshness.snapshotKey, pending.freshness.snapshotKey); assert.deepEqual(cell(corrected).evidence.links, original);
     });
     await t.test('oversized stored JSON fails before loading or evaluating its payload', async () => {
-      let preflights = 0, payloadReads = 0;
+      const preflightRows = [];
+      let payloadReads = 0;
       const database = { transaction: (operation, options) => p.a.transaction((tx) => operation(new Proxy(tx, { get(target, key) {
         const value = Reflect.get(target, key);
         if (key !== '$queryRaw') return value;
         return (sql, ...values) => {
           const query = (Array.isArray(sql) ? sql : sql.strings).join(' ');
           if (/FROM PredictionSet r/u.test(query)) {
-            if (/SUM\(OCTET_LENGTH/u.test(query)) { preflights++; return [{ bytes: 16_777_217n, total: 5n }]; }
+            if (/SUM\(OCTET_LENGTH/u.test(query)) {
+              const total = (Array.isArray(sql) ? values : sql.values).length;
+              preflightRows.push(total);
+              return [{ bytes: BigInt(performanceRules.maximumStoredBytes) + 1n, total: BigInt(total) }];
+            }
             payloadReads++;
           }
           return value.call(target, sql, ...values);
         };
       } })), options) };
       await assert.rejects(read(period, { database }), (e) => e.code === 'unavailable');
-      assert.equal(preflights, 1); assert.equal(payloadReads, 0);
+      assert.ok(preflightRows[0] > 1, 'The initial batch contains multiple locked predictions.');
+      assert.equal(preflightRows.at(-1), 1, 'The reader retries down to a single oversized prediction.');
+      assert.equal(payloadReads, 0);
     });
     await t.test('old postponed cycles remain in their original date period when the applicable fixture moves out', async () => {
       const before = await read();

@@ -12,10 +12,8 @@ from lib.rendering import ROOT, Server, build_fixture, create_fixture, environme
 from lib.runtime import main_guard
 
 PREDICTION_LABELS = {
-    "home-win": "1", "draw": "X", "away-win": "2",
-    "home-or-draw": "1X", "away-or-draw": "X2", "home-or-away": "12",
-    "over-2.5": "O 2.5", "under-2.5": "U 2.5",
-    "yes": "Yes", "no": "No",
+    "Home win", "Draw", "Away win", "Home or draw", "Away or draw", "Home or away",
+    "Over 2.5", "Under 2.5", "Yes", "No",
 }
 
 
@@ -43,6 +41,11 @@ def prepare(args):
     scenarios = json.loads((directory / "scenarios.json").read_text(encoding="utf-8"))
     details = json.loads((directory / "detail-scenarios.json").read_text(encoding="utf-8")) if include_detail else None
     assert len(scenarios["today"]["result"]["data"]["records"]) == 30, "Real MySQL acceptance cannot be skipped."
+    # Exercise the unlocked renderer for genuine full-access projections.
+    for scenario in scenarios.values():
+        data = scenario["result"].get("data")
+        if data and data["access"]["tier"] == "full":
+            data["access"]["signedIn"] = True
     if details:
         assert len(details["open"]["data"]["snapshot"]["markets"]) == 4 and details["navigation"]["data"], "Genuine detail projections required."
         long = deepcopy(details["open"])
@@ -105,7 +108,7 @@ def verify_filter_form(visible, name):
     assert len(re.findall(r'\bdata-feed-dialog=', filter_form)) == 1
     assert len(re.findall(r'>Reset Filters</button>', filter_form)) == 1
     assert len(re.findall(r'>Apply Filters</button>', filter_form)) == 1
-    assert len(re.findall(r'Recommended picks only</label>', filter_form)) == 1
+    no_match("Recommended picks only", filter_form)
 
 
 def verify_feed(origin, directory, scenarios):
@@ -140,25 +143,30 @@ def verify_feed(origin, directory, scenarios):
                      "No prediction was locked for this market", article)
             assert record["homeTeam"]["name"] in article and record["awayTeam"]["name"] in article
             match("Kickoff: |Kickoff unavailable", article)
-            match("prediction: |prediction unavailable", article)
-            for pick in re.findall(r'data-pick-selection=""[^>]*>([^<]+)</span>', article):
-                assert pick in PREDICTION_LABELS.values(), name + ": generic full-word prediction"
-            # Market-family abbreviations are legitimate labels in the shared Clean ledger facts row;
-            # they must never stand in for the actual selected prediction.
-            no_match(r'data-pick-selection=""[^>]*>(?:1X2|DC|BTTS|O/U 2\.5)</span>', article)
+            prediction = match(r'<span\b[^>]*data-ledger-field="prediction"[^>]*>', article)
+            pick = re.search(r'<span\b[^>]*data-pick-selection=""[^>]*>([^<]+)</span>', article)
+            if pick:
+                assert pick.group(1) in PREDICTION_LABELS, name + ": full-word prediction"
+                engine = match(r'<small\b[^>]*data-forecast-source="[^"]+"[^>]*>\s*<svg\b', article)
+                probability = match(r'<span\b[^>]*data-pick-probability[^>]*>\((?:&[lg]t;)?\d+%\)</span>', article)
+                assert prediction.end() <= engine.start() < pick.start() < probability.start(), name + ": engine, pick and inline probability"
+            else:
+                no_match(r'data-forecast-source=|data-pick-probability=', article)
             assert len(re.findall(r"<a\b", article)) == 1
+            match(r'<a\b[^>]*data-match-open', article)
             if record["kickoffAt"] is not None:
                 assert iso(record["kickoffAt"]) in article
-            if record.get("forecast"):
-                match(r"Published: [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{2}:\d{2} EAT", article)
-            no_match(r"/_next/image|\s\$[\w-]+=", article)
+            if record["status"] == "scheduled":
+                no_match(r'data-score-home|data-score-away', article)
+            no_match(r'/_next/image|\s\$[\w-]+=|data-card-odds=|data-probability-meter=|'
+                     r'data-ledger-field="(?:odds|probability)"|data-public-probability=|Published:', article)
         # The ascending cohort contains the two published fixtures; the latest-first page does not.
         if name == "earliest":
-            match(r'data-prediction="(?!none)', visible)
+            assert len(re.findall(r'data-pick-selection=""', visible)) == 2
             match("No prediction locked", visible)
         no_match("prediction jobs completed|Partial fixture coverage|Prediction data unavailable|Score and result updates delayed", visible)
         if name == "historical":
-            for pattern in ["Locked prediction", "Final score", 'data-outcome="correct"']:
+            for pattern in ["Final score", 'data-match-status="correct"', 'data-match-header-result="won"']:
                 match(pattern, visible)
         if name == "empty":
             match("No fixtures confirmed", visible)
@@ -180,32 +188,34 @@ def verify_feed(origin, directory, scenarios):
             no_match("Predictions become available within seven days of the match", visible)
         if name in ("not-started", "selecting"):
             no_match(r"of \d+ prediction jobs completed", visible)
-    print(f"PASS {len(scenarios)} anonymous server-rendered scenarios: stored cards/clocks, initial CSS, coverage/errors, current/locked forecasts and EAT window.")
+    print(f"PASS {len(scenarios)} server-rendered scenarios: stored cards/clocks, initial CSS, coverage/errors, current/locked forecasts and EAT window.")
 
 
 def verify_status_routes(origin):
     """The real page route repairs incompatible filters before accessing any stored data."""
+    defaults = {"picks": "all", "sort": "live-first"}
     redirects = [
         ({"date": "2026-10-01", "status": "live", "timeFrom": "08:00", "timeTo": "10:00", "tz": "Africa/Kampala",
           "q": "Club", "league": "league-a", "page": "3"}, "/en/matches",
-         {"when": "today", "tz": "Africa/Kampala", "q": "Club", "league": "league-a", "status": "live", "picks": "only", "sort": "probability"}),
+         {"when": "today", "tz": "Africa/Kampala", "q": "Club", "league": "league-a", "status": "live"}),
         ({"date": "2026-10-01", "status": "scheduled"}, "/en/matches",
-         {"when": "next-30-days", "status": "scheduled", "picks": "only", "sort": "probability"}),
-        ({"when": "tomorrow", "status": "finished"}, "/en/matches", {"status": "finished", "picks": "only", "sort": "probability", "when": "last-30-days"}),
-        ({"period": "next-7-days", "date": "2026-10-01"}, "/en/matches", {"when": "next-7-days", "picks": "only", "sort": "probability"}),
+         {"when": "next-30-days", "status": "scheduled"}),
+        ({"when": "tomorrow", "status": "finished"}, "/en/matches", {"status": "finished", "when": "last-30-days"}),
+        ({"period": "next-7-days", "date": "2026-10-01"}, "/en/matches", {"when": "next-7-days"}),
         ({"period": "next-3-days", "from": "2026-10-01", "to": "2026-10-04", "q": "Club"}, "/en/matches",
-         {"when": "next-3-days", "q": "Club", "picks": "only", "sort": "probability"}),
+         {"when": "next-3-days", "q": "Club"}),
         ({"period": "custom", "date": "2026-10-01", "country": "Spain"}, "/en/predictions/2026-10-01",
-         {"country": "Spain", "picks": "only", "sort": "probability"}),
+         {"country": "Spain"}),
         ({"period": "next-30-days", "status": "live", "timeFrom": "08:00", "timeTo": "10:00", "tz": "Africa/Kampala"}, "/en/matches",
-         {"when": "today", "tz": "Africa/Kampala", "status": "live", "picks": "only", "sort": "probability"}),
+         {"when": "today", "tz": "Africa/Kampala", "status": "live"}),
     ]
     for parameters, path, expected in redirects:
         response = request(origin, "/route-status?" + urlencode(parameters))
         assert response.status == 307, f"Status/date request must redirect before reading: {parameters}, got {response.status}"
         location = urlsplit(urljoin(origin, response.headers.get("location", "")))
         assert location.path == path, f"Status/date redirect retains the correct destination: {parameters}"
-        assert parse_qs(location.query) == {name: [value] for name, value in expected.items()}, f"Synchronized redirect criteria: {parameters}"
+        expected_query = {name: [value] for name, value in (defaults | expected).items()}
+        assert parse_qs(location.query) == expected_query, f"Synchronized redirect criteria: {parameters}"
         assert response.headers.get("set-cookie") is None, "Read-only synchronization must not create visitor state"
     invalid = [
         {"period": "invalid"}, [("period", "today"), ("period", "tomorrow")],
@@ -216,16 +226,17 @@ def verify_status_routes(origin):
         response = request(origin, "/route-status?" + urlencode(parameters))
         assert response.status == 404, f"Malformed status/date/period values must fail before reading: {parameters}"
     archives = [
-        ({"status": "live"}, "/en/matches", {"when": "today", "status": "live", "picks": "only", "sort": "kickoff"}),
-        ({"period": "next-7-days"}, "/en/matches", {"when": "next-7-days", "picks": "only", "sort": "kickoff"}),
-        ({"period": "custom", "status": "finished"}, "/en/predictions/2026-10-01", {"status": "finished", "picks": "only"}),
-        ({"period": "custom", "to": "2026-10-04"}, "/en/predictions/2026-10-01", {"to": "2026-10-04", "picks": "only"}),
+        ({"status": "live"}, "/en/matches", {"when": "today", "status": "live"}),
+        ({"period": "next-7-days"}, "/en/matches", {"when": "next-7-days"}),
+        ({"period": "custom", "status": "finished"}, "/en/predictions/2026-10-01", {"status": "finished"}),
+        ({"period": "custom", "to": "2026-10-04"}, "/en/predictions/2026-10-01", {"to": "2026-10-04"}),
     ]
     for parameters, path, expected in archives:
         response = request(origin, "/route-status-archive/2026-10-01?" + urlencode(parameters))
         assert response.status == 307, f"Legacy archive filter transition redirects before reading: {parameters}"
         location = urlsplit(urljoin(origin, response.headers.get("location", "")))
-        assert location.path == path and parse_qs(location.query) == {name: [value] for name, value in expected.items()}, f"Legacy archive retains the synchronized filter: {parameters}"
+        expected_query = {name: [value] for name, value in (defaults | expected).items()}
+        assert location.path == path and parse_qs(location.query) == expected_query, f"Legacy archive retains the synchronized filter: {parameters}"
     print(f"PASS {len(redirects) + len(archives)} status/date redirects and {len(invalid)} invalid-query guards: Live Today, native periods, compatible filters and historical custom dates.")
 
 

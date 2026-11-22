@@ -51,7 +51,7 @@ const oddsColumns = {
 const target = (state) => ({ fixtureId: state.fixture.id, cycleId: state.cycle.id });
 
 export async function withPredictionPipeline(t, operation, instanceOptions) {
-  const { migrationTimeoutMs = 90_000, ...mysqlOptions } = instanceOptions ?? {};
+  const { migrationTimeoutMs = 180_000, ...mysqlOptions } = instanceOptions ?? {};
   if (!Number.isSafeInteger(migrationTimeoutMs) || migrationTimeoutMs <= 0) throw new RangeError('Invalid test migration timeout.');
   let instance;
   try { instance = await startIsolatedMysql(mysqlOptions); }

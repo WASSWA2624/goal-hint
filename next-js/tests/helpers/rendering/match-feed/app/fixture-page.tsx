@@ -12,7 +12,7 @@ import scenarios from './scenarios.json';
 const cases = scenarios as unknown as Record<string, { query: ReturnType<typeof parseFeedQuery>; today: ReturnType<typeof parseReportingDate>; result: FeedPageResult }>;
 const today = parseReportingDate('2026-10-09');
 const routeOptions = {
-  resolveAccess: fullAccess, document: async () => false,
+  resolveAccess: async () => ({ ...(await fullAccess()), signedIn: true }), document: async () => false,
   instant: async () => utcInstantFromEpochMilliseconds(cases.today!.result.data!.asOf),
   read: async (parameters: URLSearchParams | Readonly<Record<string, string | string[] | undefined>>) => {
     const query = parseFeedQuery(parameters, { today });

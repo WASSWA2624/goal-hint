@@ -45,12 +45,15 @@ def main():
             elif state == "reviewed":
                 assert "Reviewed sample metrics" in html and "Calibration by probability band" in html and "Confidence interval" in html
             elif state == "priced-picks":
-                picks = re.search(r'<section\b[^>]*aria-labelledby="individual-performance"[\s\S]*?</section>', html).group()
+                picks = re.search(r'<section\b[^>]*aria-labelledby="individual-performance"[\s\S]*?'
+                                  r'(?=<section\b[^>]*aria-labelledby="league-performance")', html).group()
                 assert 'data-return-performance="pick"' in picks and "17.5%" in picks
                 assert "stored quote from its original cycle" in picks and "Current and later prices are excluded" in picks
                 assert "Quality metrics awaiting review" in picks and "Reviewed sample metrics" not in picks
             elif state == "second":
-                assert html.count('data-published-slip=') == 1 and "No settled score" in html and "Void" in html
+                published = re.search(r'<article\b[^>]*data-published-slip=[\s\S]*?</article>', html).group()
+                assert html.count('data-published-slip=') == 1 and 'data-slip-outcome="void"' in published and "Void" in published
+                assert "data-score-home" not in published and "data-score-away" not in published
             elif state == "outside":
                 assert "This publication page is outside the selected period" in html and "View first page" in html
             elif state == "empty":

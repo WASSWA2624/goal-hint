@@ -163,6 +163,8 @@ def verify(origin, directory):
 def verify_feed_cards(origin):
     response = request(origin, "/feed")
     assert response.status == 200
+    no_match(r'\[data-phone-feed-card\]::?before\s*\{[^}]*background', response.text,
+             "Mobile Matches cards leave the header on the card surface.")
     articles = re.findall(r'(<article\b[^>]*data-fixture-id="(feed-[^"]+)"[^>]*>)([\s\S]*?)</article>', visible_html(response.text))
     cards = {key: body for _, key, body in articles}
     tags = {key: tag for tag, key, _ in articles}
