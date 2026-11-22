@@ -48,6 +48,13 @@ one pick. Missing prices remain unavailable; another family's price never fills
 the cell. `markets`, `selectedFamily` and the existing default-family policy
 retain their normal behavior.
 
+Matches cards render the published market, pick and prediction engine icon.
+Signed-out visitors and signed-in viewers without valid access see one Unlock
+link that covers the card and preserves the match return path. It opens Login
+for guests and subscription checkout for signed-in viewers. The server's
+existing feed and direct-match access policies still govern which data it
+returns. Slip selections retain their saved picks, odds and probabilities.
+
 Public match lists contain only canonically completed fixtures. The completed
 cohort is selected before filtering, summary counts and pagination; subscriber
 lists keep every eligible fixture. Public cache identities include this scope.
@@ -93,6 +100,9 @@ reuse the same base component. Live adds the slip header's steady dot and softly
 reversing halo; reduced motion keeps a still glow. The supplied minute and phase
 stay above the score.
 
+Matches rows omit the odds and probability tracks. The market and pick share
+the resulting prediction cell with the engine icon. Slip rows keep all nine tracks.
+
 Actual score figures use a shared 16px presentation and wider en dash. Live
 scores use the theme's red, while only the minute prime has a subtle glow.
 Clock text sits closer to the separator; FT and HT stay steady. Reduced motion
@@ -106,7 +116,7 @@ targets. No separate desktop `#` column is introduced: one-based feed positions
 remain available in accessible text, and the existing results toolbar keeps the
 visible match range/count.
 
-The complete row opens the corresponding match details through a native analysis
+The complete unlocked row opens the corresponding match details through a native analysis
 link using `matchHref`, the canonical fixture ID and supplied slug, with prefetch
 disabled. Its contextual accessible name identifies both teams. Team, country
 and league names remain on one line; their native link aliases share that
@@ -115,22 +125,25 @@ Only clipped aliases add a keyboard stop. The primary row link remains the
 keyboard destination for the whole match, supports standard modified-click and
 new-tab behavior, and receives restored focus after returning from details.
 Heading levels and the similar-result title note remain intact. The group
-describes its date, time, competition, score, market, odds, probability and
-status; missing kickoff or score never receives an invented time or value.
+describes its date, time, competition, score, prediction and status. Slip
+descriptions include odds and probability. Missing kickoff or score never
+receives an invented time or value.
 
 ### Phone and tablet: Team stack (below 64rem)
 
 On the Matches feed below 48rem the league and text-only status share the top
-row. Kickoff date and time are stacked beside the teams and aligned with the
-leading league icon or flag. The date shows the year in smaller type and the
-12-hour time uses two-digit hours. Available scores align with their teams, and
-the score column stays blank until scores are available. Odds, probability,
-market and prediction use a compact right-hand column. The results header and
+row. Kickoff date and time share a width beside the teams and align with the
+leading league icon or flag. The 12-hour time uses two-digit hours. Available
+live and finished scores align with their teams. Upcoming matches skip the
+score cells. The market occupies one line in the right column and uses its
+abbreviation if the full name is too wide. The pick and engine icon share the
+next line. Stoppage time reads as 45+02:14 or 90+03:56. The results header and
 lightly rounded cards span the shell's outer content rails. The gaps between
 cards use the same background as the app header. Access controls keep the locked
 layout.
 
-Tablet feed cards and slip selections share the following geometry:
+Tablet feed cards and slip selections share the following layout. Matches uses
+the same two forecast lines as on phones.
 
 1. A faintly tinted, 18px-wide match-number slot matches the team logos; the
    kickoff date aligns with team names. Number, date, AM/PM clock and league stay on
@@ -140,7 +153,7 @@ Tablet feed cards and slip selections share the following geometry:
    names stay on one line and use ellipsis before the reserved score column; full
    names remain in accessible labels and titles. Each supplied score aligns with its team, immediately
    before the fixed-width status/facts column. Scheduled matches omit a redundant VS row.
-3. Below the status badge, Odds and Prob. share one compact line, each label
+3. On slip selections, Odds and Prob. share one compact line below the status badge, each label
    followed immediately by its value; market and prediction codes share the
    second line. Odds and the market start at the left badge edge; the probability
    percentage and selection finish at its right edge. These details end by the
@@ -244,8 +257,10 @@ the settlement domain/server owns regulation-time decisions.
 The server projection derives `liveClock` from the sealed, coherent
 `FixtureResult` version (`providerStatus`, `elapsedMinutes` and optional `stoppageMinutes`) with
 `liveClockFromProvider`. A changed minute creates a new result and fixture data
-version, so the card's minute advances with the existing live-refresh cadence;
-the browser does not extrapolate the clock between refreshes.
+version, so the card's minute advances with the existing live-refresh cadence.
+The Matches clock estimates seconds within bounded limits from the last
+observation. A provider observation is required to enter stoppage time or
+start a new phase.
 
 ## Probabilities, source and notices
 

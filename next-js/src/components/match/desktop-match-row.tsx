@@ -28,7 +28,7 @@ export type DesktopMatchRowProps = Readonly<{
   liveClock?: FixtureSnapshot["liveClock"]; outcome: OutcomeTone; awaitingResult?: boolean; exactSettlement?: ExtendedSettlementStatus | undefined;
   /** A preformatted authorized market; the row never selects or fabricates a forecast. */
   market: ReactNode; marketFamily?: SlipMarketFamily; marketDescription?: string;
-  odds: ReactNode; probability: ReactNode; analysisHref?: string; analysisLabel?: string;
+  odds?: ReactNode; probability?: ReactNode; hideMetrics?: boolean; analysisHref?: string; analysisLabel?: string;
   /** One access action replaces all private prediction fields on a locked row. */
   predictionAction?: ReactNode;
   headingLevel?: 2 | 3 | 4; titleNote?: string; position?: number;
@@ -46,7 +46,7 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
   outcome, awaitingResult = false, market, marketFamily, marketDescription, odds, probability, predictionAction, analysisHref, analysisLabel, headingLevel = 4, titleNote, position,
   matchState: suppliedMatchState, savedScore = false, scoreDescription: suppliedScoreDescription, regulationOnly = false, details,
   pickState, eagerLogos = false, offline = false, preview = false, messages, datePrefix, interactive = true, clockInBadge = false, compactMatch = false,
-  exactSettlement }: DesktopMatchRowProps) {
+  exactSettlement, hideMetrics = false }: DesktopMatchRowProps) {
   const m = messages ?? createMessages(locale), id = useId();
   const final = isPlayedFinalStatus(status), clock = !offline && status === "live" ? liveClock : null;
   const halftime = status === "live" && clock?.phase === "half-time";
@@ -75,10 +75,11 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
     : <span data-score {...scoreProps}>{status === "live" || final ? "–" : "VS"}</span>;
   const Heading = `h${headingLevel}` as "h2" | "h3" | "h4";
   const descriptionIds = ["date", "time", "country", "league", "score", ...(visibleClock || clockText ? ["clock"] : []),
-    ...(predictionAction ? ["access"] : ["market", "odds", "probability"]), "status", ...(details ? ["details"] : [])]
+    ...(predictionAction ? ["access"] : hideMetrics ? ["market"] : ["market", "odds", "probability"]), "status", ...(details ? ["details"] : [])]
     .map((name) => `${id}-${name}`).join(" ");
   return <div data-desktop-row data-desktop-design="aligned-ledger" data-desktop-preview-row={preview || undefined}
     data-fixture-id={preview ? undefined : fixtureId} data-market={marketFamily} data-outcome={outcome} data-pick-state={pickState}
+    data-row-hide-metrics={hideMetrics || undefined}
     data-status={status} data-match-state={matchState} data-numbered-date={datePrefix ? "" : undefined}
     role="group" tabIndex={-1} aria-labelledby={`${id}-teams`} aria-describedby={descriptionIds}>
     {datePrefix ? <span data-row-date data-kickoff-unknown={kickoffAt === null ? "" : undefined} id={`${id}-date`}>
@@ -102,8 +103,10 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
     </Heading>
     {predictionAction ? <div data-row-unlock id={`${id}-access`}>{predictionAction}</div> : <>
     <span data-row-market id={`${id}-market`} title={marketDescription}>{market}</span>
-    <span data-row-odds id={`${id}-odds`}><span data-number-label data-row-number-label>{m.text("details.odds")}:</span><strong>{odds}</strong></span>
-    <span data-row-probability id={`${id}-probability`}><span data-number-label data-row-number-label aria-hidden="true">{m.text("match.columns.probabilityCompact")}:</span><VisuallyHidden>{m.text("slips.probability")}: </VisuallyHidden><strong>{probability}</strong></span>
+    {!hideMetrics && <>
+      <span data-row-odds id={`${id}-odds`}><span data-number-label data-row-number-label>{m.text("details.odds")}:</span><strong>{odds}</strong></span>
+      <span data-row-probability id={`${id}-probability`}><span data-number-label data-row-number-label aria-hidden="true">{m.text("match.columns.probabilityCompact")}:</span><VisuallyHidden>{m.text("slips.probability")}: </VisuallyHidden><strong>{probability}</strong></span>
+    </>}
     </>}
     <span data-row-status id={`${id}-status`}><MatchStatus status={status} outcome={outcome} messages={m} awaitingResult={awaitingResult} exactSettlement={exactSettlement}
       snapshot={matchState === "snapshot"} offline={offline} compactMatch={compactMatch}

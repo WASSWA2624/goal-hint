@@ -165,11 +165,39 @@ export const teamStackStyles = css`
   }
 `;
 
-/** The phone feed puts kickoff beside the existing team and forecast tracks. */
+/** Matches places the market above the selected pick and its prediction engine. */
+export const feedFactsStyles = css`
+  [data-ledger-facts] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "market" "pick";
+    align-items: center;
+    align-content: stretch;
+    [data-ledger-field="market"] {
+      align-self: center;
+      color: ${({ theme }) => theme.color.mutedText};
+      font-size: var(--gh-font-caption);
+    }
+    [data-ledger-field="prediction"] {
+      justify-self: stretch;
+      text-align: start;
+      color: ${({ theme }) => theme.color.link};
+      font-size: var(--gh-font-secondary);
+      font-weight: var(--gh-weight-bold);
+    }
+    &[data-pick-state="none"] [data-ledger-field="prediction"] {
+      align-self: end;
+      color: ${({ theme }) => theme.color.mutedText};
+      font-size: var(--gh-font-caption);
+      font-weight: var(--gh-weight-body);
+    }
+  }
+`;
+
+/** The phone feed puts kickoff beside the team and prediction tracks. */
 export const phoneFeedRowStyles = css`
   --feed-league-mark-size: var(--gh-size-4);
   --feed-kickoff-width: var(--gh-size-15);
-  grid-template-columns: var(--feed-kickoff-width) minmax(0, 1fr) minmax(min-content, clamp(var(--gh-size-23), 31cqi, var(--gh-size-30)));
+  grid-template-columns: var(--feed-kickoff-width) minmax(0, 1fr) minmax(0, clamp(var(--gh-size-23), 31cqi, var(--gh-size-30)));
   grid-template-areas: "league league status" "kickoff teams facts";
 
   [data-ledger-meta] { display: contents; }
@@ -191,18 +219,20 @@ export const phoneFeedRowStyles = css`
     grid-area: kickoff;
     display: flex;
     flex-direction: column;
-    align-items: start;
+    align-items: stretch;
     align-self: center;
+    inline-size: max-content;
     min-inline-size: 0;
+    max-inline-size: 100%;
     gap: 0;
     white-space: normal;
     :is([data-kickoff-date], [data-kickoff-time]) {
       white-space: normal;
       > [data-mobile-only] { display: none; }
-      > [data-phone-kickoff] { display: inline; white-space: nowrap; }
+      > [data-phone-kickoff] { display: block; white-space: nowrap; }
     }
     [data-kickoff-date] { font-size: var(--gh-font-caption); font-weight: var(--gh-weight-semibold); }
-    [data-kickoff-time] { font-size: var(--gh-font-secondary); }
+    [data-kickoff-time] { font-size: var(--gh-font-secondary); text-align: justify; text-align-last: justify; }
   }
   [data-ledger-teams] {
     --gh-logo-size: var(--gh-size-4);
@@ -213,29 +243,14 @@ export const phoneFeedRowStyles = css`
     [data-match-state] [data-ledger-versus] { display: none; }
     [data-score-home], [data-score-away] { font-weight: var(--gh-weight-bold); white-space: nowrap; }
   }
-  &:not([data-mobile-locked]) [data-ledger-teams] {
+  [data-ledger-teams]:has([data-score]) {
     grid-template-columns: minmax(0, 1fr) minmax(var(--gh-size-3), max-content);
     column-gap: var(--gh-spacing-1);
-  }
-  [data-ledger-facts] {
-    grid-template-columns: minmax(0, 1fr) minmax(0, max-content);
-    [data-match-metrics] { grid-template-columns: max-content minmax(min-content, 1fr); }
-    [data-ledger-field="odds"], [data-ledger-field="probability"] [data-pick-value] { font-size: var(--gh-font-body); }
-    [data-ledger-field][data-stack-label]::before { font-size: var(--gh-font-caption); font-weight: var(--gh-weight-medium); }
-    [data-pick-line] > [data-forecast-source] { font-size: var(--gh-font-caption); }
   }
   [data-stack-result] [data-match-status] { font-size: var(--gh-font-body); }
 
   @container (max-width: ${({ theme }) => theme.viewport[20]}) {
     grid-template-columns: var(--feed-kickoff-width) minmax(0, 1fr) var(--gh-size-21);
-    [data-ledger-facts] [data-match-metrics] {
-      grid-template-columns: minmax(0, 1fr);
-      row-gap: 0;
-      [data-ledger-field="probability"] { grid-column: 1; justify-content: flex-start; }
-    }
-    &[data-extended-market] [data-ledger-facts] {
-      grid-template-areas: "metrics metrics" "market market" "pick pick";
-    }
   }
 
   @container (max-width: ${({ theme }) => theme.viewport[16]}) {
