@@ -128,12 +128,14 @@ export function PaymentNotice({ locale, status, settings, phone, part = "notice"
 }) {
   const m = createMessages(locale);
   if (!status) return null;
+  const amount = <strong>UGX {m.number(status.priceUgx)}</strong>;
+  const amountLine = <p>{m.text("subscribe.amountLabel")} {amount}</p>;
   if (["remaining", "disputed", "correction", "reconfirm", "cancelled"].includes(status.status)) {
     const summary = <p>{checkoutLabels[status.status]} · {status.reference}</p>;
     const action = <AccountActionLink href={status.purpose === "topup" ? walletTopUpHref(locale, returnTo) : memberNextPath("subscribe", returnTo)} prefetch={false}>
       {part === "notice" ? "View request" : m.text("account.viewPayment")}
     </AccountActionLink>;
-    if (part === "summary") return <div role="status" data-payment-status={status.status}>{summary}</div>;
+    if (part === "summary") return <div data-payment-status={status.status}>{amountLine}</div>;
     if (part === "actions") return action;
     return <AccountBlock $attention role="status" data-payment-status={status.status}>
       <AccountBlockText>{summary}</AccountBlockText>{action}
@@ -142,22 +144,24 @@ export function PaymentNotice({ locale, status, settings, phone, part = "notice"
   const pending = status.status === "pending" || status.status === "superseded", rejected = status.status === "rejected", reversed = status.status === "reversed";
   if (!pending && !rejected && !reversed) return null;
   const topUp = status.purpose === "topup", reason = reasonOf(status.rejectReason);
-  const facts = { amount: <strong>UGX {m.number(status.priceUgx)}</strong>, reference: status.reference };
+  const detail = rejected ? status.rejectText ?? m.text(topUp && reason === "amount-mismatch" ? "credit.reason.amount-mismatch" : `subscribe.reason.${reason}`)
+    : reversed ? m.text(topUp ? "credit.reversedLead" : "subscribe.reversedLead") : null;
+  const facts = { amount, reference: status.reference };
   const sentence = pending ? richText(m.text(topUp ? "account.topUpWaiting" : "account.paymentWaiting"), { ...facts, plan: status.planName })
-    : rejected ? richText(m.text("account.paymentRejected"), { ...facts,
-      reason: status.rejectText ?? m.text(topUp && reason === "amount-mismatch" ? "credit.reason.amount-mismatch" : `subscribe.reason.${reason}`) })
-    : richText(m.text("account.paymentReversed"), { ...facts, lead: m.text(topUp ? "credit.reversedLead" : "subscribe.reversedLead") });
+    : rejected ? richText(m.text("account.paymentRejected"), { ...facts, reason: detail })
+    : richText(m.text("account.paymentReversed"), { ...facts, lead: detail });
   const contactDetails = { reference: status.reference, phone: formatPhone(phone) };
   const supportText = pending ? m.text("subscribe.helpPaid", { ...contactDetails, price: String(status.priceUgx), plan: status.planName })
     : m.text(reversed ? "subscribe.helpReversed" : "subscribe.helpRejected", contactDetails);
   const state = pending ? "pending" : status.status;
-  const summary = <><p>{sentence}</p>
-    {pending && settings.reviewTime && <AccountFine>{m.text("subscribe.reviewTime", { time: settings.reviewTime })}</AccountFine>}</>;
+  const reviewTime = pending && settings.reviewTime && <AccountFine>{m.text("subscribe.reviewTime", { time: settings.reviewTime })}</AccountFine>;
   const contact = <AccountContactLinks locale={locale} contact={settings} text={supportText} />;
-  if (part === "summary") return <div role="status" data-payment-status={state}>{summary}</div>;
+  if (part === "summary") return <div data-payment-status={state}>
+    {amountLine}{detail && <AccountFine>{detail}</AccountFine>}{reviewTime}
+  </div>;
   if (part === "actions") return contact;
   return <AccountBlock $attention role="status" data-payment-status={state}>
-    <AccountBlockText>{summary}</AccountBlockText>
+    <AccountBlockText><p>{sentence}</p>{reviewTime}</AccountBlockText>
     <AccountBlockActions>{contact}</AccountBlockActions>
   </AccountBlock>;
 }

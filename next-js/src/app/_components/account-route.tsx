@@ -6,9 +6,9 @@ import { MemberNavigationRecovery, MemberPanel, MemberSignOut } from "@/componen
 import { AccountAuthForm, type AccountAuthView } from "@/components/members/account-auth-form";
 import { AccountActionLink, AccountFine, AccountFlash } from "@/components/members/account-overview";
 import { AccountSecurityForm, ResetPasswordForm } from "@/components/members/account-security";
-import { AccountFacts, AccountPageHead, AccountPanel, AccountWorkspace } from "@/components/members/account-workspace";
+import { AccountFacts, AccountFormPanel, AccountPanel, AccountSectionActions, AccountWorkspace } from "@/components/members/account-workspace";
 import { AccountWallet } from "@/components/members/account-wallet";
-import { AccountDevices, AccountQuickActions, AccountSubscriptionPanel } from "@/components/members/account-panels";
+import { AccountDevices, AccountSubscriptionPanel } from "@/components/members/account-panels";
 import { AccountPayments } from "@/components/members/account-payments";
 import { AccountNotifications } from "@/components/members/account-notifications";
 import { AccountActivity } from "@/components/members/account-activity";
@@ -16,7 +16,6 @@ import { AccountReferrals, AccountReferralSummary } from "@/components/members/a
 import { AccountReferralReviews } from "@/components/members/account-referral-reviews";
 import { AccountVerificationForm, ForgotPasswordForm } from "@/components/members/account-verification";
 import { ApprovalRefresh } from "@/components/members/payment-status";
-import { ButtonLink } from "@/components/ui/controls";
 import { Stack } from "@/components/ui/layout";
 import { SignOutIcon } from "@/components/ui/icons";
 import { memberLandingPath, memberNextPath, memberReturnPath } from "@/domain/member-navigation";
@@ -38,7 +37,7 @@ import { getMemberServices, type MemberServicesSource } from "@/server/members/m
 import { createPlansService } from "@/server/members/plans";
 import { memberCookieName } from "@/server/members/member-sessions";
 import { readMemberPageSession } from "@/server/members/member-page-session";
-import { subscriptionCheckoutPublished } from "@/server/members/sales-readiness";
+import { payableCheckoutPlans, subscriptionCheckoutPublished } from "@/server/members/sales-readiness";
 import { PublicShell } from "./public-shell";
 
 async function readPlans() {
@@ -90,7 +89,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
       (walletSection || settings && (summarySection || section === "payments")) ? resolved.payments?.view(member).catch(() => null) ?? null : null,
       summarySection || section === "payments" || walletSection ? resolved.codes?.subscriptionStatus(member).catch(() => null) ?? null : null,
       summarySection || section === "payments" || section === "activity" ? resolved.dashboard?.read(member).catch(() => null) ?? null : null,
-      canReadReferrals && (summarySection || section === "referrals") ? resolved.referrals?.read(member).catch(() => null) ?? null : null,
+      canReadReferrals && (section === "overview" || section === "referrals") ? resolved.referrals?.read(member).catch(() => null) ?? null : null,
       section === "notifications" ? resolved.notifications?.read(member, parameters.before).catch(() => null) ?? null : null,
       canReadReferrals && section === "referrals" ? resolved.referralReviews?.member(member, referralReviewCursor(parameters.reviewBefore) ? parameters.reviewBefore as string : undefined).catch(() => null) ?? null : null,
     ]) : [null, null, null, null, null, null, null];
@@ -106,45 +105,52 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const salesOpen = mode === "on";
     const checkoutPublished = subscriptionCheckoutPublished(settings, resolved.config.production);
     const topUpOpen = checkoutPublished && hasManualPaymentProvider(settings);
-    // Plans are read only for an account with credit or auto-renewal to manage.
     const credit = paymentView?.credit ?? null;
-    const offers = walletSection && salesOpen && credit && (credit.availableBalanceUgx > 0 || credit.autoRenew)
-      ? await plans().catch(() => []) : [];
-    // A waiting, refused or reversed plan report sends the member back to it instead of to a second payment; a top-up has
-    // its own notice and leaves Renew in place.
-    const reports = paymentView ? [status, paymentView.otherStatus ?? null].filter((report) => report && report.purpose !== "topup") : null;
-    const viewPayment = reports ? reports.some((report) => ["pending", "superseded", "rejected", "reversed"].includes(report!.status)) : !!subscription?.paymentPending;
+    // Existing plan reports remain accessible through closed sales. Top-ups keep their own notice in Wallet.
+    const viewPayment = paymentView
+      ? [status, paymentView.otherStatus].some(report => report && report.purpose !== "topup" &&
+        [...checkoutOpenStatuses, "superseded", "rejected", "reversed"].some(state => state === report.status))
+      : !!subscription?.paymentPending;
+    const canReadOffers = !!member && !member.blocked && (summarySection && !!subscription && checkoutPublished && !viewPayment
+      || walletSection && salesOpen && !!credit && (credit.availableBalanceUgx > 0 || credit.autoRenew));
+    const offers = canReadOffers ? await plans().catch(() => []) : [];
+    const canPurchase = summarySection && checkoutPublished && payableCheckoutPlans(offers, settings, credit?.availableBalanceUgx ?? 0).length > 0;
+    const subscriptionAction = viewPayment || canPurchase ? {
+      href: `${memberNextPath("subscribe", returnTo)}#${viewPayment ? "report" : "plans"}`,
+      label: messages.text(viewPayment ? "account.viewPayment" : activeUntil ? "account.extend"
+        : subscription?.expired || last ? "account.renewLabel" : "account.subscribe"),
+    } : null;
     if (member && !member.blocked) return <PublicShell locale={locale} showAccount workspace>
       <MemberNavigationRecovery expectedPhone={member.phone} expectedAdministrator={false} />
       <ApprovalRefresh waiting={waiting || !!dashboard?.activity.some(entry => entry.kind === "payment" && entry.status === "pending")} refreshAt={refreshAt} />
       <AccountWorkspace locale={locale} current={section} phone={member.phone} returnTo={returnTo}>
-        <AccountPageHead><h1>{messages.text(section === "overview" ? "account.title" : `account.section.${section}`)}</h1>
-          {summarySection && subscription && (checkoutPublished || viewPayment) && <ButtonLink href={`${memberNextPath("subscribe", returnTo)}#${viewPayment ? "report" : "plans"}`} prefetch={false}>
-            {messages.text(viewPayment ? "account.viewPayment" : activeUntil ? "account.renewLabel" : "account.subscribe")}
-          </ButtonLink>}
-        </AccountPageHead>
         {unavailable && <AccountFine role="status">{messages.text("account.unavailable")}</AccountFine>}
         {parameters.status === "phone-changed" && <AccountFlash role="status">{messages.text("account.phoneChanged")}</AccountFlash>}
         {parameters.status === "password-changed" && <AccountFlash role="status">{messages.text("account.passwordChanged")}</AccountFlash>}
         {parameters.status === "devices-signed-out" && <AccountFlash role="status">{messages.text("account.devicesSignedOut")}</AccountFlash>}
-        {summarySection && <AccountSubscriptionPanel key={member.accountId} locale={locale} subscription={subscription} dashboard={dashboard} now={now.getTime()} trialDays={offeredTrialDays(settings)} showTitle={section === "overview"} {...(last ? { lastEnd: last.endsAt } : {})} />}
-        {summarySection && canReadReferrals && <AccountReferralSummary locale={locale} summary={referrals} returnTo={returnTo} />}
+        {summarySection && <AccountSubscriptionPanel key={member.accountId} locale={locale} subscription={subscription} dashboard={dashboard}
+          trialDays={offeredTrialDays(settings)} showTitle={section === "overview"} action={subscriptionAction}
+          salesAvailable={canPurchase} {...(last ? { lastEnd: last.endsAt } : {})} />}
+        {section === "overview" && canReadReferrals && <AccountReferralSummary locale={locale} summary={referrals} returnTo={returnTo} />}
         {section === "referrals" && (canReadReferrals
-          ? <><AccountReferrals locale={locale} summary={referrals} /><AccountReferralReviews initial={referralReviews} locale={locale} returnTo={returnTo} older={!!referralReviewCursor(parameters.reviewBefore)} /></>
+          ? <><AccountReferrals locale={locale} summary={referrals} returnTo={returnTo} redemptionOpen={salesOpen} /><AccountReferralReviews initial={referralReviews} locale={locale} returnTo={returnTo} older={!!referralReviewCursor(parameters.reviewBefore)} /></>
           : <AccountFine>{messages.text("referrals.phoneEligibility")}</AccountFine>)}
         {section === "overview" && <>
-          <AccountPanel title={messages.text("account.signInDetails")} data-account-sign-in
-            actions={<AccountActionLink href={accountSectionHref(locale, "phone", returnTo)} prefetch={false}>{messages.text("account.editPhone")}</AccountActionLink>}>
+          <AccountPanel title={messages.text("account.signInDetails")} data-account-sign-in>
             <AccountFacts $columns={3}>
               <div><dt>{messages.text("account.phoneLabel")}</dt><dd>+{formatPhone(member.phone)}</dd></div>
               <div><dt>{messages.text("account.signedInDevices")}</dt><dd>{view ? messages.plural("account.deviceCount", view.devices.length) : messages.text("account.unknownLabel")}</dd></div>
               <div><dt>{messages.text("account.creditLabel")}</dt><dd>{credit ? formatCredit(credit.balanceUgx) : subscription ? formatCredit(subscription.creditUgx) : messages.text("account.unknownLabel")}</dd></div>
             </AccountFacts>
+            <AccountSectionActions>
+              <AccountActionLink href={accountSectionHref(locale, "phone", returnTo)} prefetch={false}>{messages.text("account.changePhone")}</AccountActionLink>
+              <AccountActionLink href={accountSectionHref(locale, "password", returnTo)} prefetch={false}>{messages.text("account.changePassword")}</AccountActionLink>
+              <AccountActionLink href={accountSectionHref(locale, "devices", returnTo)} prefetch={false}>{messages.text("account.manageDevices")}</AccountActionLink>
+            </AccountSectionActions>
           </AccountPanel>
-          <AccountQuickActions locale={locale} returnTo={returnTo} />
         </>}
         {section === "subscription" && queued.length > 0 && <AccountPanel title={messages.text("account.nextPackages")}>
-          {queued.map(code => <AccountFacts key={code.id} style={{ marginBlockEnd: "var(--gh-spacing-5)" }} $columns={3}>
+          {queued.map(code => <AccountFacts key={code.id} $columns={3}>
             <div><dt>{messages.text("account.packageLabel")}</dt><dd>{code.planName}</dd></div>
             <div><dt>{messages.text("account.startsLabel")}</dt><dd>{formatSubscriptionExpiry(code.startsAt)}</dd></div>
             <div><dt>{messages.text("account.expiryLabel")}</dt><dd>{formatSubscriptionExpiry(code.endsAt)}</dd></div>
@@ -155,10 +161,12 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
           acceptedTerms={paymentView?.acceptedTerms === true} active={!!activeUntil} />}
         {section === "payments" && <AccountPayments locale={locale} dashboard={dashboard} reports={[status, paymentView?.otherStatus]}
           contact={contact} phone={member.phone} returnTo={returnTo} />}
-        {(section === "phone" || section === "password") && <AccountPanel narrow title={messages.text(section === "phone" ? "account.phonePanel" : "account.passwordPanel")}>
-          {section === "phone" && <AccountFine style={{ marginBlockEnd: "var(--gh-spacing-4)" }}>+{formatPhone(member.phone)}</AccountFine>}
+        {(section === "phone" || section === "password") && <AccountFormPanel>
+          {section === "phone" && <AccountFacts>
+            <div><dt>{messages.text("account.phoneLabel")}</dt><dd>+{formatPhone(member.phone)}</dd></div>
+          </AccountFacts>}
           <AccountSecurityForm key={section} task={section} locale={locale} contact={contact} cancelHref={accountSectionHref(locale, "overview", returnTo)} />
-        </AccountPanel>}
+        </AccountFormPanel>}
         {section === "devices" && <AccountDevices locale={locale} devices={view?.devices.map(device => ({ at: device.lastSeenAt.toISOString(), current: device.tokenHash === member.tokenHash })) ?? null} />}
         {section === "notifications" && <AccountNotifications locale={locale} page={notifications} returnTo={returnTo} older={!!notificationCursor(parameters.before)} />}
         {section === "activity" && <AccountActivity locale={locale} dashboard={dashboard} />}

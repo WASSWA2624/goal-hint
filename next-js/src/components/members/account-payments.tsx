@@ -72,7 +72,7 @@ export function AccountPayments({ locale, reports, dashboard, contact, phone, re
     row={entry => <RecordRowContent icon={<CardIcon />} primary={entry.id} secondary={`${entry.label} · ${entry.plan}`} />}
     detail={entry => <>
       <h3>{entry.id}</h3>
-      <p>{entry.label} · {entry.plan}</p>
+      <p role={entry.report ? "status" : undefined}>{entry.label} · {entry.plan}</p>
       <AccountFine><time dateTime={entry.at}>{date(entry.at)}</time></AccountFine>
       {entry.report && <PaymentNotice {...notice} status={entry.report} part="summary" />}
     </>}

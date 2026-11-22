@@ -63,7 +63,8 @@ export function AccountReferralReviews({ initial, locale = "en", older = false, 
         <h3>{reviewTitle(item)}</h3>
         <p>Reason for review: {referralReviewReasonLabel[item.reason]}</p>
         <AccountFine><time dateTime={item.updatedAt}>{formatSubscriptionExpiry(new Date(item.updatedAt))}</time></AccountFine>
-        {(item.reversedMs > 0 || item.restoredMs > 0) && <AccountFine>Removed: {referralReviewTime(item.reversedMs)} · Restored: {referralReviewTime(item.restoredMs)}</AccountFine>}
+        {item.reversedMs > 0 && <AccountFine>Removed: {referralReviewTime(item.reversedMs)}</AccountFine>}
+        {item.restoredMs > 0 && <AccountFine>Restored: {referralReviewTime(item.restoredMs)}</AccountFine>}
       </>}
       actions={item => item.canAppeal && <Button type="button" variant="secondary" disabled={busy}
         onClick={() => { setSelected(item); setStatement(""); setError(""); setNotice(""); }}>Appeal</Button>}

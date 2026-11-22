@@ -364,8 +364,10 @@ function databaseApprovalRequired(policy: RuntimePolicy, migration = false): boo
 
 // Message-gateway settings retired with one-time codes (068): env files that still carry them keep starting, and nothing reads them.
 const retiredSetting = /^GOAL_HINT_(?:ADMIN_PASSWORD_HASH|(?:SMS|WHATSAPP)_[A-Z_]+|(?:MTN_MOMO|AIRTEL_MONEY)_(?:NUMBER|NAME|MENU_SHORTCUT))$/u;
-const stagingCheckoutSettings = new Set([
-  "GOAL_HINT_FLUTTERWAVE_SECRET_KEY", "GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET", "GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL",
+// Recognize reserved server-side slots without reading them into runtime configuration.
+const inactiveFlutterwaveSettings = new Set([
+  "GOAL_HINT_FLUTTERWAVE_PUBLIC_KEY", "GOAL_HINT_FLUTTERWAVE_SECRET_KEY", "GOAL_HINT_FLUTTERWAVE_ENCRYPTION_KEY",
+  "GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET", "GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL",
 ]);
 
 /** Pure parsing for isolated contracts/tests; never mutates env or performs I/O. */
@@ -377,7 +379,7 @@ export function parseRuntimePolicy(env: Environment): RuntimePolicy {
     if (env[key] === "" && maskedLocalSettings.has(key)) continue;
     if (key.startsWith("NEXT_PUBLIC_") && key !== "NEXT_PUBLIC_GOAL_HINT_DEMO" && key !== "NEXT_PUBLIC_GOAL_HINT_LOCAL_FOOTBALL") {
       issues.push({ field: "NEXT_PUBLIC_*", reason: "Runtime settings must stay server-owned; public settings come from publicPolicy." });
-    } else if (key.startsWith("GOAL_HINT_") && !(key in shape) && !retiredSetting.test(key) && !stagingCheckoutSettings.has(key)) {
+    } else if (key.startsWith("GOAL_HINT_") && !(key in shape) && !retiredSetting.test(key) && !inactiveFlutterwaveSettings.has(key)) {
       issues.push({ field: "GOAL_HINT_*", reason: "Unknown policy setting; use the documented environment contract." });
     }
   }

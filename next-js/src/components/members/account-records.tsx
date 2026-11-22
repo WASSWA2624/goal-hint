@@ -14,6 +14,7 @@ const Workspace = styled(RecordWorkspace)`
   border: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
   background: ${({ theme }) => theme.color.surface};
   > header h2 { font-size: ${({ theme }) => theme.typography.scale.emphasis}; }
+  [data-record-detail-scroll] h3 { margin: 0; font-size: ${({ theme }) => theme.typography.scale.emphasis}; }
   ${media.desktop} {
     block-size: clamp(var(--gh-size-72), calc(100dvh - var(--app-header-height) - var(--gh-size-28)), var(--gh-size-144));
   }
@@ -28,6 +29,11 @@ const Workspace = styled(RecordWorkspace)`
       [data-record-back] { margin-inline-start: var(--gh-spacing-3); }
       [data-record-detail-scroll] { padding: var(--gh-spacing-3); }
     }
+  }
+  &&[data-account-records-empty] {
+    block-size: auto;
+    > [data-record-list-pane] { grid-column: 1 / -1; }
+    > [data-record-list-resize] { display: none; }
   }
 `;
 
@@ -64,7 +70,7 @@ export function AccountRecords<T extends { id: string }>({ title, items, row, de
     };
   }, [hashPrefix]);
 
-  return <Workspace $compact $detailOpen={detailOpen && !!selected} data-account-records aria-labelledby={id} aria-busy={busy || undefined}>
+  return <Workspace $compact $detailOpen={detailOpen && !!selected} data-account-records data-account-records-empty={!items.length || undefined} aria-labelledby={id} aria-busy={busy || undefined}>
     <RecordHead><h2 id={id}>{title}</h2></RecordHead>
     {feedback && <RecordFeedback>{feedback}</RecordFeedback>}
     <RecordList aria-labelledby={id}>

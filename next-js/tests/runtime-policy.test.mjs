@@ -165,7 +165,8 @@ test("the complete documented environment example parses safely without approval
     "GOAL_HINT_ADMIN_PHONES", "GOAL_HINT_ADMIN_PASSWORD",
     // Member messaging credentials do not grant football, research, AI or publication capabilities.
     "YOOLA_SMS_API_KEY", "YOOLA_SMS_SENDER",
-    "GOAL_HINT_FLUTTERWAVE_SECRET_KEY", "GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET", "GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL",
+    "GOAL_HINT_FLUTTERWAVE_PUBLIC_KEY", "GOAL_HINT_FLUTTERWAVE_SECRET_KEY", "GOAL_HINT_FLUTTERWAVE_ENCRYPTION_KEY",
+    "GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET", "GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL",
   ]);
   for (const key of ["NODE_ENV", "GOAL_HINT_PROBABILITY_SUM_TOLERANCE", "GOAL_HINT_CONSISTENCY_TOLERANCE"]) documentedKeys.delete(key);
   assert.deepEqual(Object.keys(env).sort(), [...documentedKeys].sort());
@@ -447,9 +448,17 @@ test("secret serialization and validation errors stay redacted while explicit re
 });
 
 test("the shared Flutterwave slots remain inert on this checkout", () => {
-  const policy = parseRuntimePolicy({ GOAL_HINT_FLUTTERWAVE_SECRET_KEY: "synthetic-key", GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET: "synthetic-secret",
-    GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL: "https://synthetic.invalid/webhook" });
-  assert.deepEqual(policy, parseRuntimePolicy({}));
+  const placeholders = {
+    GOAL_HINT_FLUTTERWAVE_PUBLIC_KEY: "synthetic-public-key",
+    GOAL_HINT_FLUTTERWAVE_SECRET_KEY: "synthetic-secret-key",
+    GOAL_HINT_FLUTTERWAVE_ENCRYPTION_KEY: "synthetic-encryption-key",
+    GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET: "synthetic-webhook-secret",
+    GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL: "https://synthetic.invalid/webhook",
+  };
+  for (const target of ["staging", "production"]) {
+    const environment = { GOAL_HINT_DEPLOYMENT_ENVIRONMENT: target };
+    assert.deepEqual(parseRuntimePolicy({ ...environment, ...placeholders }), parseRuntimePolicy(environment));
+  }
   policyError(() => parseRuntimePolicy({ GOAL_HINT_FLUTTERWAVE_SECRET: "" }), ["GOAL_HINT_*"]);
 });
 

@@ -1,12 +1,14 @@
 import { cookies } from "next/headers";
 import { createAccountRoute } from "@/app/_components/account-route";
 import { pageMetadata } from "@/server/seo/metadata";
+import { fixtureCheckoutPlans } from "../../fixture-checkout";
 import { fixtureServices, fixtureState, fixtureStates } from "../../fixture-member-services";
 import { RefreshProbe } from "./refresh-probe";
 
 export const dynamic = "force-dynamic";
 export const metadata = pageMetadata({ title: "Account", description: "Isolated member acceptance fixture." });
-const accountRoutes = Object.fromEntries(fixtureStates.map(state => [state, createAccountRoute({ services: fixtureServices(state) })]));
+const accountRoutes = Object.fromEntries(fixtureStates.map(state => [state, createAccountRoute({ services: fixtureServices(state),
+  plans: async () => ["no-plan", "trial-eligible"].includes(state) ? [] : fixtureCheckoutPlans })]));
 
 /** Synthetic scenarios never touch an account database or message provider. */
 export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {

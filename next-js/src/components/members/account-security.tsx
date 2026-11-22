@@ -12,7 +12,8 @@ import { AccountFormHeader } from "./account-form-header";
 import { LockIcon } from "@/components/ui/icons";
 import { MemberForm } from "./member-controls";
 import { accountRequest } from "./account-request";
-import { AccountCard, AccountCardBody, AccountError, AccountFormColumn, AccountLink, AccountNote, AccountPrimary } from "./account-styles";
+import { AccountActions, AccountCard, AccountCardBody, AccountError, AccountFormColumn, AccountLink, AccountNote, AccountPrimary } from "./account-styles";
+import { media } from "@/styles/theme";
 
 export { accountRequest } from "./account-request";
 
@@ -65,6 +66,10 @@ const TaskForm = styled(AccountFormColumn)`
   display: grid; gap: var(--gh-spacing-3); min-inline-size: 0;
   input { font-size: var(--gh-font-section); }
 `;
+const FormActions = styled(AccountActions)`
+  justify-content: flex-start;
+  ${media.desktop} { > button { inline-size: auto; } }
+`;
 
 /**
  * Password changes use the authenticated session; phone changes still require the current password and verification.
@@ -91,7 +96,9 @@ export function AccountSecurityForm({ task, locale, contact, cancelHref }: {
         : <NewPasswordFields locale={locale} password={password} setPassword={setPassword} confirm={confirm} setConfirm={setConfirm} />}
       {task === "password" ? <PasswordChangeNote locale={locale} /> : <AccountNote>{m.text("account.newPhoneHelp")}</AccountNote>}
       {error && <AccountError role="alert">{error}</AccountError>}
-      <AccountPrimary type="submit" disabled={busy}>{m.text(task === "phone" ? "account.savePhone" : "account.savePassword")}</AccountPrimary>
-      <AccountLink href={cancelHref} prefetch={false}>{m.text("account.cancelLabel")}</AccountLink>
+      <FormActions>
+        <AccountPrimary type="submit" disabled={busy}>{m.text(task === "phone" ? "account.savePhone" : "account.savePassword")}</AccountPrimary>
+        <AccountLink href={cancelHref} prefetch={false}>{m.text("account.cancelLabel")}</AccountLink>
+      </FormActions>
     </MemberForm><AccountFormSupport locale={locale} contact={contact} /></TaskForm>;
 }

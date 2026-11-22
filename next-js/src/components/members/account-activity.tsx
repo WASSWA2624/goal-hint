@@ -17,12 +17,12 @@ export function AccountActivity({ locale, dashboard }: { locale: string; dashboa
     empty={<AccountFine role={dashboard ? undefined : "status"}>{m.text(dashboard ? "account.activityEmpty" : "account.activityUnavailable")}</AccountFine>}
     row={entry => {
       const Icon = entry.kind === "payment" ? CardIcon : entry.kind === "referral" ? GiftIcon : entry.status === "added" ? ShieldIcon : ClockIcon;
-      return <RecordRowContent icon={<Icon />} primary={m.text(`account.activity.${entry.status}`)} secondary={`${subject(entry)} · ${date(entry.at)}`} />;
+      return <RecordRowContent icon={<Icon />} primary={m.text(`account.activity.${entry.status}`)} secondary={<>{subject(entry)} · <time dateTime={entry.at}>{date(entry.at)}</time></>} />;
     }}
     detail={entry => <>
         <h3>{m.text(`account.activity.${entry.status}`)}</h3>
         <p>{subject(entry)}{entry.kind === "payment" && <> · {entry.reference}</>}</p>
-        <AccountFine><time dateTime={entry.at}>{date(entry.at)}</time></AccountFine>
+        {(entry.kind !== "access" || entry.status !== "added" || entry.at !== entry.startsAt) && <AccountFine><time dateTime={entry.at}>{date(entry.at)}</time></AccountFine>}
         {entry.kind === "access" && entry.status === "added" && <AccountFine>{m.text("account.activityPeriod", { start: date(entry.startsAt), end: date(entry.endsAt) })}</AccountFine>}
     </>} />
   </div>;

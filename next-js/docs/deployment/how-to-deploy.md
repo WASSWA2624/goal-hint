@@ -349,7 +349,15 @@ hosted file. If the active release already uses the intended default, leave
 the default in effect. A blank selected value preserves the server's setting.
 To remove an optional override, preview and then apply
 `--clear KEY`. Run `npm run env:sync -- --help` for the eligible web settings.
-Flutterwave sandbox settings are available only for staging. Hosted database
+The Flutterwave slots in `.env.example` are blank. Keep sandbox credentials in
+the ignored `next-js/.env.test` and leave the corresponding production slots blank.
+Hosted sync accepts the sandbox public and secret keys, optional encryption key,
+webhook secret and staging webhook URL on staging only. The public and secret
+keys must use Flutterwave's documented test prefixes. The staging account must
+supply its own sandbox encryption key if needed. [Flutterwave authentication](https://developer.flutterwave.com/docs/authentication).
+
+Adding values to these slots does not publish checkout or enable a payment
+method. Hosted database
 credentials, permissions, approval files and football worker settings remain
 managed through their respective deployment procedures.
 

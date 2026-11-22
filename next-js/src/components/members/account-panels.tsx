@@ -1,58 +1,52 @@
 import type { AccountDashboard } from "@/domain/account-dashboard";
 import type { SubscriptionStatus } from "@/domain/subscription-summary";
-import { accountSectionHref } from "@/domain/account-navigation";
-import { formatSubscriptionExpiry, subscriptionTimeLeft } from "@/domain/subscription-expiry";
+import { formatSubscriptionExpiry } from "@/domain/subscription-expiry";
 import { createMessages } from "@/i18n/messages";
 import { Button, ButtonLink } from "@/components/ui/controls";
-import { AccountFacts, AccountPanel, AccountSectionActions, AccountStatus } from "./account-workspace";
-import { AccountActionLink, AccountFine } from "./account-overview";
+import { AccountDeviceList, AccountFacts, AccountPanel, AccountSectionActions, AccountStatus } from "./account-workspace";
+import { AccountFine } from "./account-overview";
 import { FreeTrialControl } from "./free-trial-control";
 
-export function AccountSubscriptionPanel({ locale, subscription, dashboard, now, lastEnd, trialDays = 0, showTitle = true }: {
-  locale: string; subscription: SubscriptionStatus | null; dashboard: AccountDashboard | null; now: number; lastEnd?: Date; trialDays?: number; showTitle?: boolean;
+export function AccountSubscriptionPanel({ locale, subscription, dashboard, lastEnd, trialDays = 0, showTitle = true, action, salesAvailable }: {
+  locale: string; subscription: SubscriptionStatus | null; dashboard: AccountDashboard | null; lastEnd?: Date; trialDays?: number;
+  showTitle?: boolean; action: { href: string; label: string } | null; salesAvailable: boolean;
 }) {
   const m = createMessages(locale), active = !!subscription?.activeUntil;
-  const endsAt = subscription?.activeUntil ? new Date(subscription.activeUntil) : lastEnd;
-  const left = active && endsAt ? subscriptionTimeLeft(endsAt, now) : null;
-  const remaining = !subscription ? m.text("account.unknownLabel") : !left ? "—" : left.unit === "day"
-    ? m.plural("paywall.days", left.count) : left.count ? m.plural("account.hoursRemaining", left.count) : m.text("account.underHourRemaining");
+  const trial = subscription?.trial, trialActive = trial?.state === "active";
+  const endsAt = trialActive ? new Date(trial.endsAt) : subscription?.activeUntil ? new Date(subscription.activeUntil) : lastEnd;
+  const plan = active ? dashboard?.activePlanName ?? (trialActive ? m.text("freeTrial.label") : m.text("account.unknownLabel")) : m.text("account.noneLabel");
   return <AccountPanel title={showTitle ? m.text("account.section.subscription") : undefined} data-subscription-summary={!subscription ? "unavailable" : active ? "active" : "inactive"}
-    actions={<AccountStatus $active={active}>
-      {m.text(!subscription ? "account.unknownLabel" : active ? "account.activeLabel" : subscription.expired || lastEnd ? "account.expiredLabel" : "account.inactiveLabel")}
-    </AccountStatus>}>
-    {!subscription && <AccountFine role="status">{m.text("account.subscriptionUnavailable")}</AccountFine>}
-    <AccountFacts $columns={3}>
-      <div><dt>{m.text("account.packageLabel")}</dt><dd {...(active && dashboard?.activePlanName ? { "data-active-package": "" } : {})}>
-        {active ? dashboard?.activePlanName ?? m.text("account.unknownLabel") : subscription ? m.text("account.noneLabel") : m.text("account.unknownLabel")}
-      </dd></div>
-      <div><dt>{m.text(!active && lastEnd ? "account.endedLabel" : "account.expiryLabel")}</dt><dd>
-        {endsAt ? <time dateTime={endsAt.toISOString()}>{formatSubscriptionExpiry(endsAt)}</time> : subscription ? "—" : m.text("account.unknownLabel")}
-      </dd></div>
-      <div><dt>{m.text("account.remainingLabel")}</dt><dd>{remaining}</dd></div>
-    </AccountFacts>
-    {subscription?.trial && <FreeTrialControl locale={locale} trial={subscription.trial} days={trialDays} showHistory />}
+    data-free-trial={trialActive ? "active" : undefined}>
+    {subscription ? <>
+      <AccountFacts $columns={3}>
+        <div><dt>{m.text("account.packageLabel")}</dt><dd data-active-package={active && (dashboard?.activePlanName || trialActive) ? "" : undefined}>{plan}</dd></div>
+        <div><dt>{m.text("account.accessStatus")}</dt><dd><AccountStatus $active={active}>
+          {m.text(active ? "account.activeLabel" : subscription.expired || lastEnd ? "account.expiredLabel" : "account.inactiveLabel")}
+        </AccountStatus></dd></div>
+        {endsAt && <div><dt>{m.text(trialActive ? "account.trialEndLabel" : active ? "account.expiryLabel" : "account.endedLabel")}</dt>
+          <dd><time dateTime={endsAt.toISOString()}>{formatSubscriptionExpiry(endsAt)}</time></dd></div>}
+      </AccountFacts>
+      {trial && !trialActive && <FreeTrialControl locale={locale} trial={trial} days={trialDays} showHistory={active} />}
+      {subscription.renewsFromCredit && <AccountFine>{m.text("account.renewsFromCredit")}</AccountFine>}
+      {subscription.paymentPending && <AccountFine role="status">{m.text("account.paymentPending")}</AccountFine>}
+    </> : <AccountFine role="status">{m.text("account.subscriptionUnavailable")}</AccountFine>}
+    {action ? <AccountSectionActions><ButtonLink href={action.href} prefetch={false}>{action.label}</ButtonLink></AccountSectionActions>
+      : subscription && !salesAvailable && <AccountFine role="status">{m.text("subscribe.salesPaused")}</AccountFine>}
   </AccountPanel>;
 }
 
 export function AccountDevices({ locale, devices }: { locale: string; devices: readonly { at: string; current: boolean }[] | null }) {
   const m = createMessages(locale);
-  return <AccountPanel narrow title={m.text("account.signedInDevices")} data-account-devices>
+  return <AccountPanel narrow data-account-devices>
     {devices === null ? <AccountFine role="status">{m.text("account.devicesUnavailable")}</AccountFine>
       : devices.length ? <>
-        {devices.map((device, index) => <AccountFacts key={`${device.at}:${index}`} style={{ marginBlockEnd: "var(--gh-spacing-5)" }}>
-          <div><dt>{m.text("account.deviceColumn")}</dt><dd>{m.text(device.current ? "account.currentDevice" : "account.deviceLabel", { number: m.number(index + 1) })}</dd></div>
-          <div><dt>{m.text("account.lastUsed")}</dt><dd><time dateTime={device.at}>{formatSubscriptionExpiry(new Date(device.at))}</time></dd></div>
-        </AccountFacts>)}
-        <form method="post" action="/api/account/devices" data-analytics-ignore><Button type="submit" variant="secondary">{m.text("account.signOutOthers")}</Button></form>
+        <AccountDeviceList aria-label={m.text("account.signedInDevices")}>{devices.map((device, index) => <li key={device.current ? "current" : index}>
+          <strong>{m.text(device.current ? "account.currentDevice" : "account.deviceLabel", { number: m.number(index + 1) })}</strong>
+          <time dateTime={device.at}>{m.text("account.deviceLastUsed", { time: formatSubscriptionExpiry(new Date(device.at)) })}</time>
+        </li>)}</AccountDeviceList>
+        {devices.some(device => !device.current) && <form method="post" action="/api/account/devices" data-analytics-ignore>
+          <Button type="submit" variant="secondary">{m.text("account.signOutOthers")}</Button>
+        </form>}
       </> : <AccountFine>{m.text("account.noSignedInDevices")}</AccountFine>}
   </AccountPanel>;
-}
-
-export function AccountQuickActions({ locale, returnTo }: { locale: string; returnTo: string | null }) {
-  const m = createMessages(locale);
-  return <AccountSectionActions style={{ paddingInline: "var(--gh-spacing-4)" }}>
-    <ButtonLink href={accountSectionHref(locale, "phone", returnTo)} prefetch={false} variant="secondary">{m.text("account.changePhone")}</ButtonLink>
-    <ButtonLink href={accountSectionHref(locale, "password", returnTo)} prefetch={false} variant="secondary">{m.text("account.changePassword")}</ButtonLink>
-    <AccountActionLink href={accountSectionHref(locale, "activity", returnTo)} prefetch={false}>{m.text("account.section.activity")}</AccountActionLink>
-  </AccountSectionActions>;
 }

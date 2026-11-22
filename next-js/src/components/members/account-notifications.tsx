@@ -20,12 +20,12 @@ import { AccountSectionActions } from "./account-workspace";
 import { refreshNotificationUnread } from "./notification-state";
 
 const NoticeTitle = styled(RecordItemTitle)`
-  &[data-unread]::after {
+  &[data-unread]::before {
     content: "";
     display: inline-block;
     inline-size: var(--gh-size-1_5);
     block-size: var(--gh-size-1_5);
-    margin-inline-start: var(--gh-spacing-1_5);
+    margin-inline-end: var(--gh-spacing-1_5);
     vertical-align: middle;
     border-radius: ${({ theme }) => theme.radius.small};
     background: ${({ theme }) => theme.color.brand};

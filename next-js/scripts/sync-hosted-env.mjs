@@ -19,7 +19,8 @@ const webKeys = new Set([
   "GOAL_HINT_ANALYTICS_GEO_SOURCE",
 ]);
 const sandboxKeys = new Set([
-  "GOAL_HINT_FLUTTERWAVE_SECRET_KEY", "GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET", "GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL",
+  "GOAL_HINT_FLUTTERWAVE_PUBLIC_KEY", "GOAL_HINT_FLUTTERWAVE_SECRET_KEY", "GOAL_HINT_FLUTTERWAVE_ENCRYPTION_KEY",
+  "GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET", "GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL",
 ]);
 const keyName = /^[A-Z][A-Z0-9_]*$/u;
 const maxBytes = 256 * 1024;
@@ -88,7 +89,9 @@ function validateValue(key, value) {
     GOAL_HINT_ANALYTICS_ENABLED: /^(?:true|false)$/u.test(value),
     GOAL_HINT_ANALYTICS_RETENTION_DAYS: /^[1-9]\d*$/u.test(value) && Number(value) <= 1095,
     GOAL_HINT_ANALYTICS_GEO_SOURCE: /^(?:timezone|cloudflare|vercel)$/u.test(value),
+    GOAL_HINT_FLUTTERWAVE_PUBLIC_KEY: /^FLWPUBK_TEST-\S+$/u.test(value),
     GOAL_HINT_FLUTTERWAVE_SECRET_KEY: /^FLWSECK_TEST-\S+$/u.test(value),
+    GOAL_HINT_FLUTTERWAVE_ENCRYPTION_KEY: token.test(value),
     GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET: token.test(value),
     GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL: value === sandboxWebhook,
   };

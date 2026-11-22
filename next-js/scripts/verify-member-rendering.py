@@ -238,12 +238,12 @@ def subscription_discovery(origin):
         no_match(r'<details\b', summary.group(1))
         if scenario in active:
             match(r'<time dateTime="[^"]+">\d{1,2} \w+ \d{4}, \d{2}:\d{2} EAT</time>', summary.group(1))
-            match(r'\d+ days?', summary.group(1))
+            assert summary.group(1).count("<time ") == 1
         else:
             match("Expired" if scenario == "expired" else "Inactive", summary.group(1))
         if status["canSubscribe"]:
             match(r'href="/en/subscribe[^\"]*"', html)
-            match("View payment" if status["paymentPending"] else "Renew" if scenario in active else "Subscribe", html)
+            match("View payment" if status["paymentPending"] else "Extend" if scenario in active else "Renew" if scenario == "expired" else "Subscribe", html)
         else:
             no_match(r'href="/en/subscribe', html)
     for token, scenario, can_subscribe in [(None, "free", True), (None, "off", False), ("d", "active", False), ("b", "free", False)]:
@@ -268,7 +268,7 @@ def trial_visibility(origin):
                 no_match("Activate free trial", html)
                 if state == "off-trial-active":
                     match(r'data-free-trial="active"', html)
-                    match("Your free trial is active until", html)
+                    match("Trial ends" if route == "account" else "Your free trial is active until", html)
                 else:
                     no_match("data-free-trial", html)
 
@@ -288,7 +288,9 @@ def subscriber_dashboard(origin):
             match(rf'<dd\b[^>]*data-active-package[^>]*>{re.escape(package)}</dd>', summary)
         else:
             no_match("data-active-package", summary)
-        match(r'<h1[^>]*>Account</h1>', body)
+        match(r'<h1[^>]*data-account-page-heading[^>]*>Overview</h1>', body)
+        identity = match(r'data-account-sidebar-identity[^>]*>([^<]+)<', html).group(1)
+        assert body.count(identity) == 1
         match("Login details", body)
         match("Phone", body)
         no_match(r'data-account-activity|data-payment-status|type="password"|Your access|You have access|saved-slip-configurations', body)
@@ -326,12 +328,12 @@ def subscriber_dashboard(origin):
         for section in ["overview", "phone", "password", "payments", "devices"]:
             html = visible_html(request(origin, f"/en/account?state={state}&section={section}").text)
             no_match(r'data-account-workspace|data-account-details|data-account-activity|data-active-package', html)
-    headings = {"overview": "Account", "subscription": "Subscription", "referrals": "Referrals", "payments": "Payments", "phone": "Change phone",
+    headings = {"overview": "Overview", "subscription": "Subscription", "wallet": "Wallet", "referrals": "Referrals", "payments": "Payments", "phone": "Change phone",
         "password": "Change password", "devices": "Devices", "notifications": "Notifications", "activity": "Activity"}
     for section, heading in headings.items():
         html = visible_html(request(origin, f"/en/account?state=active&section={section}&return=%2Fen%2Fslips").text)
         body = account_workspace(html)
-        match(rf'<h1[^>]*>{heading}</h1>', body)
+        match(rf'<h1[^>]*data-account-page-heading[^>]*>{heading}</h1>', body)
         match(rf'data-account-section="{section}"', html)
         match(r'aria-label="Account sections"', html)
         match(r'href="/en/account\?section=password&amp;return=%2Fen%2Fslips"', html)
@@ -345,6 +347,9 @@ def subscriber_dashboard(origin):
                 no_match(r'name="currentPassword"|view=forgot', body)
         if section == "devices":
             match(r'action="/api/account/devices"', body)
+            signed_in = account_workspace(visible_html(request(origin, "/en/account?state=free&section=devices").text))
+            match("This device", signed_in)
+            no_match(r'action="/api/account/devices"', signed_in)
         if section == "notifications":
             match(r'data-account-notification-feed', body)
             for label in ["Inbox", "Payment approved", "Payment rejected", "Access activated", "Access ends soon", "Access expired", "1 free day earned", "Mark all as read", "Dismiss"]:
@@ -386,6 +391,13 @@ def subscriber_dashboard(origin):
         match(r'data-account-section="overview"', html)
     payments = visible_html(request(origin, "/en/account?state=pending&section=payments").text)
     match(r'data-payment-status="pending"', payments)
+    for state, action, anchor in [("free", "Subscribe", "plans"), ("expired", "Renew", "plans"),
+            ("active", "Extend", "plans"), ("pending", "View payment", "report"), ("wallet-only", "Subscribe", "plans")]:
+        html = visible_html(request(origin, f"/en/account?state={state}&section=subscription&return=%2Fen%2Fmatches").text)
+        match(rf'href="/en/subscribe\?return=%2Fen%2Fmatches#{anchor}"[^>]*>{action}</a>', account_workspace(html))
+    closed = account_workspace(visible_html(request(origin, "/en/account?state=off-inactive&section=subscription").text))
+    no_match(r'/en/subscribe', closed)
+    match(r"Subscription purchases are temporarily unavailable\.", closed)
     print("Account workspace: all sections, concise facts, renewal/payment paths, bounded activity and private guards pass.", flush=True)
 
 
@@ -469,7 +481,7 @@ def main():
     with Server(directory, env=env, ready="/en/account") as server:
         for state, expected in [("off", "Login"), ("signed-out", "Phone number"),
                 ("signed-in", "256 700 000 101"), ("unavailable", "Login"),
-                ("active", "Time left"), ("ended", "Expired"), ("blocked", "We couldn&#x27;t complete this.")]:
+                ("active", "Expires"), ("ended", "Expired"), ("blocked", "We couldn&#x27;t complete this.")]:
             response = request(server.origin, f"/en/account?state={state}")
             assert response.status == 200
             match(expected, response.text)
@@ -500,7 +512,10 @@ def main():
             if state in ("signed-in", "active", "ended"):
                 devices = visible_html(request(server.origin, f"/en/account?state={state}&section=devices").text)
                 match("Signed-in devices", devices)
-                match("Log out others", devices)
+                if state == "active":
+                    match("Log out others", devices)
+                else:
+                    no_match("Log out others", devices)
         register = request(server.origin, "/en/account?view=register")
         match(r'<button[^>]*type="submit"[^>]*>Register</button>', register.text)
         match(r'<h1[^>]*>Register</h1>', register.text)

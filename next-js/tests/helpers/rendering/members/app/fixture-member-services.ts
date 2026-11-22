@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { defaultSubscriptionSettings } from "@/domain/subscription-settings";
 import type { MemberServices } from "@/server/members/member-http";
+import type { CreditView } from "@/domain/wallet";
 import { fixtureTokens, fixtureAdminPhone } from "./fixture-identity";
 import { fixtureSubscriptionPeriods, fixtureSubscriptionStatus, subscriptionScenarios } from "./fixture-subscription";
 import { fixtureCheckoutView, fixtureManualMethods } from "./fixture-checkout";
@@ -9,8 +10,15 @@ import { fixtureNotifications } from "./fixture-notifications";
 
 export function fixtureServices(state: string) {
   const scenario = state === "ended" ? "expired" : state === "signed-in" ? "free"
-    : ["queued", "dashboard-unavailable", "subscription-unavailable", "referral-empty", "referral-unavailable", "notifications-empty", "notifications-unavailable"].includes(state) ? "active" : state;
+    : ["queued", "dashboard-unavailable", "subscription-unavailable", "referral-empty", "referral-unavailable", "notifications-empty", "notifications-unavailable", "wallet-history", "wallet-empty"].includes(state) ? "active" : state;
   const unlocked = ["active", "manual", "trial", "pending-renewal", "expired", "off-active", "registration-trial", "off-trial-active"].includes(scenario), at = Date.now();
+  const populatedWallet: CreditView = { balanceUgx: 6500, availableBalanceUgx: 4500, autoRenew: false, autoRenewPlanId: null, history: [
+    { id: "synthetic-wallet-purchase", kind: "purchase", amountUgx: -1500, balanceAfter: 6500, createdAt: new Date(at - 3_600_000).toISOString(),
+      actor: "member", note: "Synthetic wallet purchase", payment: null, period: null },
+    { id: "synthetic-wallet-topup", kind: "topup", amountUgx: 8000, balanceAfter: 8000, createdAt: new Date(at - 86_400_000).toISOString(),
+      actor: "admin", note: null, payment: "PTEST", period: null },
+  ] };
+  const emptyWallet: CreditView = { balanceUgx: 0, availableBalanceUgx: 0, autoRenew: false, autoRenewPlanId: null, history: [] };
   return async () => {
     return { config: { production: false },
     settings: { settings: state === "unavailable" ? null : { ...defaultSubscriptionSettings,
@@ -27,7 +35,9 @@ export function fixtureServices(state: string) {
     codes: { async subscriptionStatus() { if (state === "subscription-unavailable") throw new Error("Synthetic unavailable subscription"); return fixtureSubscriptionStatus(scenario); },
       async accountView() { const codes = fixtureSubscriptionPeriods(scenario);
         if (state === "queued") codes.push({ ...codes[0]!, id: "synthetic-queued", planName: "Next package", startsAt: codes[0]!.endsAt, endsAt: new Date(+codes[0]!.endsAt + 7 * 86_400_000) });
-        return { codes, devices: [{ tokenHash: "synthetic", lastSeenAt: new Date(at) }] }; } },
+        const devices = [{ tokenHash: "synthetic", lastSeenAt: new Date(at) }];
+        if (state === "active") devices.push({ tokenHash: "synthetic-other", lastSeenAt: new Date(at - 3_600_000) });
+        return { codes, devices }; } },
     dashboard: { async read() { if (state === "dashboard-unavailable") throw new Error("Synthetic unavailable history"); return fixtureDashboard(scenario); } },
     notifications: fixtureNotifications(state),
     checkout: { async read() { return fixtureCheckoutView(scenario); } },
@@ -39,12 +49,14 @@ export function fixtureServices(state: string) {
           rewardedAt: index === 0 ? null : new Date(at - index * 86_400_000).toISOString(), status: index === 0 ? "pending" : "rewarded" })) };
     } },
     payments: { async view() { return { acceptedTerms: unlocked,
+      ...(state === "wallet-history" ? { credit: populatedWallet } : state === "wallet-empty" ? { credit: emptyWallet }
+        : scenario === "wallet-only" ? { credit: { ...emptyWallet, balanceUgx: 1000, availableBalanceUgx: 1000 } } : {}),
       status: fixtureSubscriptionStatus(scenario).paymentPending ? { reference: "PFAKE", status: "pending", planName: "Weekly", priceUgx: 5000,
         submittedAt: new Date(at).toISOString(), endsAt: null, rejectText: null, rejectReason: null } : null }; } },
   } as unknown as MemberServices;
   };
 }
-export const fixtureStates = ["signed-out", "support", "signed-in", "unavailable", "session-unavailable", "reset-unavailable", "verification-unavailable", "ended", "blocked", "administrator", "unverified", "sms-only", "unsupported", "password-reset", "queued", "history", "dashboard-unavailable", "subscription-unavailable", "referral-empty", "referral-unavailable", "notifications-empty", "notifications-unavailable", ...subscriptionScenarios];
+export const fixtureStates = ["signed-out", "support", "signed-in", "unavailable", "session-unavailable", "reset-unavailable", "verification-unavailable", "ended", "blocked", "administrator", "unverified", "sms-only", "unsupported", "password-reset", "queued", "history", "dashboard-unavailable", "subscription-unavailable", "referral-empty", "referral-unavailable", "notifications-empty", "notifications-unavailable", "wallet-history", "wallet-empty", ...subscriptionScenarios];
 
 export async function fixtureState(parameters: Record<string, string | string[] | undefined>) {
   const jar = await cookies(), token = jar.get("goal-hint-member")?.value;

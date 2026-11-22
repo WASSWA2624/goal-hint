@@ -42,14 +42,12 @@ export function AccountWallet({ locale, credit, topUpStatus, contact, phone, ret
         {!topUpOpen && <AccountFine>{m.text("wallet.topUpUnavailable")}</AccountFine>}
       </Stack>
     </AccountPanel>
-    <PaymentNotice locale={locale} status={topUpStatus} settings={contact} phone={phone} />
+    <PaymentNotice locale={locale} status={topUpStatus} settings={contact} phone={phone} returnTo={returnTo} />
     {credit && <>
       <AccountPanel title={m.text("wallet.autoRenewal")} data-wallet-auto-renewal>
         <WalletAutoRenewal locale={locale} credit={credit} plans={plans} salesOpen={salesOpen} acceptedTerms={acceptedTerms} active={active} />
       </AccountPanel>
-      <AccountPanel title={m.text("wallet.activity")} data-wallet-activity>
-        <WalletHistory locale={locale} credit={credit} />
-      </AccountPanel>
+      <WalletHistory locale={locale} credit={credit} />
     </>}
   </>;
 }

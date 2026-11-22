@@ -49,13 +49,26 @@ test("invalid target, sensitive policy keys, duplicates and live payment keys ar
   for (const key of ["DATABASE_URL", "GOAL_HINT_OPERATION_SCOPE", "GOAL_HINT_BUDGET_APPROVAL_REF", "API_FOOTBALL_KEY", "UNKNOWN_KEY"]) {
     assert.throws(() => localChanges(staging, "staging", [key], []), /cannot be changed/u);
   }
-  assert.throws(() => localChanges(production, "production", ["GOAL_HINT_FLUTTERWAVE_SECRET_KEY"], []), /cannot be changed/u);
+  for (const key of ["PUBLIC_KEY", "SECRET_KEY", "ENCRYPTION_KEY", "WEBHOOK_SECRET", "WEBHOOK_URL"]) {
+    assert.throws(() => localChanges(production, "production", ["GOAL_HINT_FLUTTERWAVE_" + key], []), /cannot be changed/u);
+  }
   assert.throws(() => localChanges(staging + "GOAL_HINT_FLUTTERWAVE_SECRET_KEY=synthetic-live\n", "staging", ["GOAL_HINT_FLUTTERWAVE_SECRET_KEY"], []),
     (error) => error.message === "GOAL_HINT_FLUTTERWAVE_SECRET_KEY has an invalid value.");
   assert.throws(() => localChanges(staging, "staging", ["YOOLA_SMS_SENDER"], ["YOOLA_SMS_SENDER"]), /only once/u);
   assert.throws(() => localChanges(staging + "YOOLA_SMS_SENDER=One\nYOOLA_SMS_SENDER=Two\n", "staging", ["YOOLA_SMS_SENDER"], []), /more than once/u);
   assert.throws(() => patchSettings("YOOLA_SMS_SENDER=One\nYOOLA_SMS_SENDER=Two\n", [{ key: "YOOLA_SMS_SENDER", action: "clear" }]), /more than once/u);
   assert.throws(() => localChanges(staging, "staging", [], ["GOAL_HINT_ANALYTICS_SECRET"]), /cannot be cleared/u);
+});
+
+test("optional Flutterwave sandbox slots can be selected for staging without exposing invalid values", () => {
+  const publicKey = "GOAL_HINT_FLUTTERWAVE_PUBLIC_KEY", encryptionKey = "GOAL_HINT_FLUTTERWAVE_ENCRYPTION_KEY";
+  const valid = staging + publicKey + "=FLWPUBK_TEST-synthetic\n" + encryptionKey + "=synthetic-encryption\n";
+  assert.deepEqual(localChanges(valid, "staging", [publicKey, encryptionKey], []).map(({ action }) => action), ["set", "set"]);
+  assert.deepEqual(localChanges(staging, "staging", [publicKey, encryptionKey], []).map(({ action }) => action), ["skip", "skip"]);
+  for (const [key, invalid] of [[publicKey, "FLWPUBK-synthetic-live"], [encryptionKey, "'synthetic with space'"]]) {
+    const select = () => localChanges(staging + key + "=" + invalid + "\n", "staging", [key], []);
+    assert.throws(select, error => error.message === key + " has an invalid value.");
+  }
 });
 
 test("the actual Node dotenv parse protects an unselected value from an ambiguous assignment", () => {

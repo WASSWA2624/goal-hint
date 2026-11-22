@@ -1,19 +1,21 @@
 "use client";
 
 import { FloatingField } from "@/components/ui/floating-field";
+import { RecordRowContent } from "@/components/admin/record-workspace";
 
 import { useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
+import { WalletIcon } from "@/components/ui/icons";
 import { formatShortDay } from "@/domain/subscription-expiry";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
-import type { CreditView } from "@/domain/wallet";
+import { formatCreditChange, type CreditView } from "@/domain/wallet";
 import { createMessages } from "@/i18n/messages";
-import { media } from "@/styles/theme";
 import { AccountAction, AccountBlock, AccountBlockActions, AccountBlockText, AccountFine } from "./account-overview";
+import { AccountRecords } from "./account-records";
 import { accountRequest } from "./account-request";
 import { AccountError } from "./account-styles";
 import { refreshMemberSession } from "./member-session";
@@ -33,19 +35,9 @@ const Box = styled.div`
   strong { font-variant-numeric: tabular-nums; }
 `;
 const Line = styled.div`display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--gh-spacing-2); min-inline-size: 0;`;
-/** Day, entry and change on phones; the balance after each entry joins them on desktop. */
-const History = styled.ol`
-  display: grid; gap: var(--gh-spacing-0_5); margin: var(--gh-spacing-1) 0 0; padding: 0; list-style: none;
-  font-size: var(--gh-font-body); line-height: var(--gh-leading-relaxed); color: ${({ theme }) => theme.color.mutedText};
-  li { display: grid; grid-template-columns: var(--gh-size-13) minmax(0, 1fr) auto; gap: 0 var(--gh-spacing-2); }
-  li > strong { font-weight: ${({ theme }) => theme.typography.weight.bold}; color: ${({ theme }) => theme.color.text}; }
-  li > strong[data-credit-change="in"] { color: ${({ theme }) => theme.color.outcome.correct.text}; }
-  li > span:last-child { display: none; text-align: end; }
-  ${media.desktop} {
-    font-size: var(--gh-font-emphasis);
-    li { grid-template-columns: var(--gh-size-16) minmax(0, 1fr) auto var(--gh-size-36); gap: 0 var(--gh-spacing-3); }
-    li > span:last-child { display: block; }
-  }
+const CreditChange = styled.strong`
+  font-variant-numeric: tabular-nums;
+  &[data-credit-change="in"] { color: ${({ theme }) => theme.color.outcome.correct.text}; }
 `;
 const PlanPicker = styled(FloatingField)`max-inline-size: var(--gh-size-96);`;
 
@@ -176,14 +168,17 @@ export function WalletAutoRenewal({ locale, credit, plans, salesOpen, acceptedTe
 
 export function WalletHistory({ locale, credit }: { locale: string; credit: CreditView }) {
   const m = createMessages(locale);
-  if (!credit.history.length) return <AccountFine>{m.text("credit.noHistory")}</AccountFine>;
-  return <History aria-label={m.text("credit.history")} data-credit-history>{credit.history.map((entry) => {
-    const at = new Date(entry.createdAt);
-    return <li key={entry.id}>
-      <time dateTime={entry.createdAt} title={formatPeriodEnd(at)}>{formatShortDay(at)}</time>
-      <span>{[m.text(`credit.kind.${entry.kind}`), entry.payment, entry.note].filter(Boolean).join(" · ")}</span>
-      <strong data-credit-change={entry.amountUgx < 0 ? "out" : "in"}>{entry.amountUgx < 0 ? "−" : "+"}{m.number(Math.abs(entry.amountUgx))}</strong>
-      <span>{m.text("credit.balanceAfter", { amount: m.number(entry.balanceAfter) })}</span>
-    </li>;
-  })}</History>;
+  return <div data-wallet-activity data-credit-history>
+    <AccountRecords locale={locale} title={m.text("wallet.activity")} items={credit.history}
+      empty={<AccountFine>{m.text("credit.noHistory")}</AccountFine>}
+      row={entry => <RecordRowContent icon={<WalletIcon />} primary={m.text(`credit.kind.${entry.kind}`)}
+        secondary={<><time dateTime={entry.createdAt}>{formatShortDay(new Date(entry.createdAt))}</time> · {formatCreditChange(entry.amountUgx)}</>} />}
+      detail={entry => <>
+        <h3>{m.text(`credit.kind.${entry.kind}`)}</h3>
+        <p><CreditChange data-credit-change={entry.amountUgx < 0 ? "out" : "in"}>{formatCreditChange(entry.amountUgx)}</CreditChange>
+          {" · "}{m.text("credit.balanceAfter", { amount: m.number(entry.balanceAfter) })}</p>
+        {(entry.payment || entry.note) && <p>{[entry.payment, entry.note].filter(Boolean).join(" · ")}</p>}
+        <AccountFine><time dateTime={entry.createdAt}>{formatPeriodEnd(new Date(entry.createdAt))}</time></AccountFine>
+      </>} />
+  </div>;
 }
