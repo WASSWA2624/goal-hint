@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseRuntimePolicy } from '../src/server/config/runtime-policy.ts';
-import { liveWorkload, liveMatchPolicy, liveReferences, projectedCriticalRequests, remainingCriticalReserve } from '../src/server/live/live-plan.ts';
+import { liveWorkload, liveMatchPolicy, liveReferences, oddsImportBounds, projectedCriticalRequests, remainingCriticalReserve } from '../src/server/live/live-plan.ts';
 import { createLiveQuotaAdmission } from '../src/server/live/live-detail-quota.ts';
 import { parseLiveMatchPolicy } from '../src/server/live-match/live-match-service.ts';
 
@@ -84,6 +84,31 @@ test('external and previous-plan spending cannot masquerade as completed ordinar
   assert.equal(await admit(noHistory, onlyOrdinaryLeft, request('live-details')), false);
   assert.equal(await admit(noHistory, onlyOrdinaryLeft, request('enrichment')), false);
   assert.equal(await admit(noHistory, onlyOrdinaryLeft, request('results-cutoff')), true);
+});
+
+test('current pre-match odds admit known remaining work after provider-reported usage', async () => {
+  const plan = workload(150_000), admit = createLiveQuotaAdmission(() => plan, undefined, true);
+  const now = Date.UTC(2026, 10, 22, 11, 56), endsAt = Date.UTC(2026, 10, 23);
+  const day = { used: 52_498, dayRemaining: 67_502, providerDailyLimit: 150_000, endsAt,
+    priorityUsed: { 'results-cutoff': 3655, 'near-kickoff-fallback': 58, 'daily-inputs': 43, 'live-details': 6793 } };
+  for (const endpoint of ['/odds', '/odds/bets', '/odds/bookmakers']) {
+    assert.equal(await admit(noHistory, period(day), { priority: 'enrichment', endpoint }, now), true);
+  }
+  for (const endpoint of ['/odds/live', '/players', undefined]) {
+    assert.equal(await admit(noHistory, period(day), { priority: 'enrichment', endpoint }, now), false);
+  }
+  const recovery = oddsImportBounds(endsAt, plan.odds.maxPages, true);
+  assert.equal(recovery.priority, 'historical-backfill');
+  assert.equal(await admit(noHistory, period(day), { priority: recovery.priority, endpoint: '/odds' }, now), false);
+
+  const reserve = Math.max(plan.liveDetails.reserve,
+    remainingCriticalReserve(day.providerDailyLimit, projectedCriticalRequests(plan, endsAt - now)));
+  const protectedRequests = reserve + plan.refreshCapacity * plan.refreshRequestsPerJob + plan.liveDetails.requests - day.priorityUsed['live-details'];
+  const quote = { priority: 'enrichment', endpoint: '/odds' };
+  assert.equal(await admit(noHistory, period({ ...day, dayRemaining: protectedRequests }), quote, now), false);
+  assert.equal(await admit(noHistory, period({ ...day, dayRemaining: protectedRequests + 1 }), quote, now), true);
+  assert.equal(await admit(noHistory, period({ ...day,
+    priorityUsed: { ...day.priorityUsed, 'historical-backfill': plan.odds.spare } }), quote, now), false);
 });
 
 test('a legacy provider day counts all prior dispatches once, including uncertain attempts', async () => {

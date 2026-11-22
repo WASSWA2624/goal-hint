@@ -173,8 +173,9 @@ export function oddsPolicy(policy: RuntimePolicy, refs: LiveReferences, workload
  * day's unspent odds spare before any provider call, so a sweep can never reach the ordinary work of the day. */
 export function oddsMaxRequests(kind: OddsImportKind, maxPages: number): number { return kind === "prices" ? maxPages + 4 : 3; }
 /** One date sweep at enrichment priority: never the essential reserve, never cached, bounded by the slot. */
-export function oddsImportBounds(deadlineAt: UtcInstant, maxPages: number): ApiFootballBounds {
-  return Object.freeze({ priority: "enrichment", deadlineAt, timeoutMs: 30 * SECOND, maxRequests: oddsMaxRequests("prices", maxPages), maxPages, maxRows: maxPages * 10,
+export function oddsImportBounds(deadlineAt: UtcInstant, maxPages: number, recovery = false): ApiFootballBounds {
+  return Object.freeze({ priority: recovery ? "historical-backfill" : "enrichment", deadlineAt, timeoutMs: 30 * SECOND,
+    maxRequests: oddsMaxRequests("prices", maxPages), maxPages, maxRows: maxPages * 10,
     // Re-size from the counted odds trial's bytes-per-page evidence.
     maxResponseBytes: 8_000_000, retry: { maxAttempts: 3, baseDelayMs: SECOND, maxDelayMs: 10 * SECOND }, cacheMaxAgeMs: 0 });
 }

@@ -610,7 +610,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
           request.kind === "prices" ? request.slot + ODDS_SWEEP_MS : request.slot + DAY_MS;
         // The provider walk ends early enough that the receipt and per-fixture writes keep their own part of the job timeout.
         const deadline = utcInstantFromEpochMilliseconds(Math.min(Date.now() + ODDS_PROVIDER_WINDOW_MS, end));
-        return request.kind === "prices" ? oddsImportBounds(deadline, workload.odds.maxPages) : oddsCatalogBounds(deadline);
+        return request.kind === "prices" ? oddsImportBounds(deadline, workload.odds.maxPages, request.recovery) : oddsCatalogBounds(deadline);
       } });
     /** The odds, team code and history jobs share one spare. The limiter counts every enrichment dispatch,
      * including uncertain ones. Null while the provider day is settling. */
@@ -621,7 +621,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       const [row] = await database.query((tx) => tx.$queryRaw<{ spent: bigint | number }[]>`SELECT COUNT(*) AS spent FROM ApiQuotaAttempt
         WHERE accountId = ${accountId} AND periodId = ${periodId}
           AND priority IN (${quotaPriorities.enrichment.rank}, ${quotaPriorities["historical-backfill"].rank})
-          AND JSON_UNQUOTE(JSON_EXTRACT(payloadJson, '$.priority')) = 'enrichment' AND dispatchedAt IS NOT NULL`);
+          AND JSON_UNQUOTE(JSON_EXTRACT(payloadJson, '$.priority')) IN ('enrichment', 'historical-backfill') AND dispatchedAt IS NOT NULL`);
       return Object.freeze({ remaining: counters.remaining, used: counters.used, oddsUsed: Number(row?.spent ?? 0) });
     }
     const enrichmentAllowance = Object.freeze({ floor: workload.odds.floor, spare: workload.odds.spare, reserve: workload.odds.reserve });
