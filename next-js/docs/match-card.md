@@ -48,16 +48,16 @@ one pick. Missing prices remain unavailable; another family's price never fills
 the cell. `markets`, `selectedFamily` and the existing default-family policy
 retain their normal behavior.
 
-Matches cards render the published market, pick and prediction engine icon.
-Signed-out visitors and signed-in viewers without valid access see one Unlock
+Matches cards show the published market and pick with the prediction engine
+icon first and the estimated probability in parentheses after the pick.
+Signed-out visitors and signed-in viewers without valid access see one Unlock predictions
 link that covers the card and preserves the match return path. It opens Login
 for guests and subscription checkout for signed-in viewers. The server's
 existing feed and direct-match access policies still govern which data it
 returns. Slip selections retain their saved picks, odds and probabilities.
 
-Public match lists contain only canonically completed fixtures. The completed
-cohort is selected before filtering, summary counts and pagination; subscriber
-lists keep every eligible fixture. Public cache identities include this scope.
+The Matches list selects published predictions before counting and pagination.
+The performance summary uses the prediction count as its percentage denominator.
 An unfinished direct match link displays a subscription notice; its server
 projection withholds forecast chances, picks, prices, revision history and live
 observations, even for an old kickoff date. Completed results can be public on
@@ -97,8 +97,9 @@ reuse the same base component. Live adds the slip header's steady dot and softly
 reversing halo; reduced motion keeps a still glow. The supplied minute and phase
 stay above the score.
 
-Matches rows omit the odds and probability tracks. The market and pick share
-the resulting prediction cell with the engine icon. Slip rows keep all nine tracks.
+Matches rows place the market and pick in separate tracks. The engine icon
+and parenthesized probability share the pick track. Slip rows keep their
+dedicated odds and probability tracks.
 
 Actual score figures use a shared 16px presentation and wider en dash. Live
 scores use the theme's red, while only the minute prime has a subtle glow.
@@ -133,8 +134,9 @@ row. Kickoff date and time share a width beside the teams and align with the
 leading league icon or flag. The kickoff clock uses two-digit hours and a time-zone label. Available
 live and finished scores align with their teams. Upcoming matches skip the
 score cells. The market occupies one line in the right column and uses its
-abbreviation if the full name is too wide. The pick and engine icon share the
-next line. Stoppage time reads as 45+02:14 or 90+03:56. The results header and
+abbreviation if the full name is too wide. The next line shows the engine
+icon, pick and parenthesized probability in order. Stoppage time reads as
+45+02:14 or 90+03:56. The results header and
 lightly rounded cards span the shell's outer content rails. The gaps between
 cards use the same background as the app header. Access controls keep the locked
 layout.

@@ -197,7 +197,7 @@ export const feedFactsStyles = css`
 export const phoneFeedRowStyles = css`
   --feed-league-mark-size: var(--gh-size-4);
   --feed-kickoff-width: var(--gh-size-15);
-  grid-template-columns: var(--feed-kickoff-width) minmax(0, 1fr) minmax(0, clamp(var(--gh-size-23), 31cqi, var(--gh-size-30)));
+  grid-template-columns: var(--feed-kickoff-width) minmax(0, 1fr) clamp(var(--gh-size-26), 36cqi, var(--gh-size-34));
   grid-template-areas: "league league status" "kickoff teams facts";
 
   [data-ledger-meta] { display: contents; }
@@ -252,14 +252,9 @@ export const phoneFeedRowStyles = css`
   }
   [data-stack-result] [data-match-status] { font-size: var(--gh-font-body); }
 
-  @container (max-width: ${({ theme }) => theme.viewport[20]}) {
-    grid-template-columns: var(--feed-kickoff-width) minmax(0, 1fr) var(--feed-narrow-facts-width, var(--gh-size-21));
-  }
-
   @container (max-width: ${({ theme }) => theme.viewport[16]}) {
     grid-template-columns: var(--feed-kickoff-width) minmax(0, 1fr);
     grid-template-areas: "league status" "kickoff teams" "facts facts";
     [data-ledger-teams] { margin-inline-end: 0; padding-inline-end: 0; border-inline-end: 0; }
   }
-  &:has([data-unlock-card]) { --feed-narrow-facts-width: var(--gh-size-23); }
 `;

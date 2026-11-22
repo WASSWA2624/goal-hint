@@ -29,7 +29,7 @@ const Board = styled.div<{ $indexLength: number }>`
     [data-row-odds] > strong { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; text-align: end; }
     [data-desktop-row][data-row-hide-metrics] {
       --desktop-columns: var(--review-date-width) var(--gh-size-17_8) var(--review-country-width)
-        var(--review-league-width) minmax(0, 1fr) minmax(var(--gh-size-24), 0.3fr) minmax(var(--gh-size-24), 0.25fr) var(--review-status-width);
+        var(--review-league-width) minmax(0, 1fr) minmax(var(--gh-size-24), 0.28fr) minmax(var(--gh-size-32), 0.27fr) var(--review-status-width);
       [data-row-unlock] { grid-column: span 2; }
       [data-row-market] { color: ${({ theme }) => theme.color.mutedText}; }
       [data-row-pick] { display: flex; align-items: center; color: ${({ theme }) => theme.color.link}; font-weight: var(--gh-weight-bold); }

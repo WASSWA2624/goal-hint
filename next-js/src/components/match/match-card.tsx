@@ -457,6 +457,10 @@ const PickLine = styled.span`
     flex: none; font-size: calc(var(--gh-font-micro) - var(--gh-stroke-thin)); line-height: var(--gh-leading-solid);
   }
 `;
+const FeedPickLine = styled(PickLine)`
+  align-items: center;
+  > [data-pick-probability] { flex: none; font-variant-numeric: tabular-nums; }
+`;
 const NoRecommendedPick = styled.span`
   display: inline-flex; align-items: center; flex: none;
   color: ${({ theme }) => theme.color.mutedText};
@@ -692,11 +696,17 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const mobileSelection = selection && predictionLabel(messages, selection, selectionContext);
   const selectionDescription = selection ? predictionDescription(messages, selection, selectionContext) : null;
   const forecastDescription = selectionDescription ? [`${family}: ${selectionDescription}`, pickDescription].filter(Boolean).join(" · ") : null;
+  const percent = prediction && (prediction.probability.labelKey === "probability.percent"
+    ? messages.text("probability.percent", { percent: messages.number(prediction.probability.roundedPercent, snapshotPick
+      ? { minimumFractionDigits: 1, maximumFractionDigits: 1 } : undefined) })
+    : messages.text(prediction.probability.labelKey === "probability.less-than-one" ? "probability.compact.less-than-one" : "probability.compact.more-than-ninety-nine"));
   const feedMarket = <FittedCardText full={family} short={mobileFamily} />;
-  const feedPick = selection && <PickLine data-pick-line data-pick-label>
+  const feedPick = selection && <FeedPickLine data-pick-line data-pick-label>
+    {sourceMarker}
     <span data-pick-selection><FittedCardText full={predictionText(messages, selection, selectionContext)}
-      short={predictionLabel(messages, selection, selectionContext)} /></span>{sourceMarker}
-  </PickLine>;
+      short={predictionLabel(messages, selection, selectionContext)} /></span>
+    {percent && <>{" "}<span data-pick-probability>({percent})</span></>}
+  </FeedPickLine>;
   const unlockCard = feedLocked
     ? <UnlockButton locale={locale} signedIn={signedIn} returnTo={detailHref} guestView="login" cardTitle={title} /> : null;
   const locked = !retrospective && fixture.cycle?.state === "closed";
@@ -710,10 +720,6 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const headerResult = phoneFeed && !offline && !snapshotPick
     ? result === "live" && fixture.liveClock?.phase === "half-time" ? "half-time" : headerResults[result] ?? result
     : undefined;
-  const percent = prediction && (prediction.probability.labelKey === "probability.percent"
-    ? messages.text("probability.percent", { percent: messages.number(prediction.probability.roundedPercent, snapshotPick
-      ? { minimumFractionDigits: 1, maximumFractionDigits: 1 } : undefined) })
-    : messages.text(prediction.probability.labelKey === "probability.less-than-one" ? "probability.compact.less-than-one" : "probability.compact.more-than-ninety-nine"));
   const final = hasFinalScoreStatus(fixture.status);
   const display = matchCardScore(fixture, phoneFeed && !snapshotPick);
   const { score, shootout, regulationOnly } = display;

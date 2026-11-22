@@ -23,6 +23,9 @@ export async function verifyDesktopPredictionAccess(page, {
       const gap = parseFloat(getComputedStyle(element).columnGap);
       const metrics = ['market', 'odds', 'probability', 'pick'].map((name) => element.querySelector(`[data-row-${name}]`));
       const marketBounds = metrics[0]?.getBoundingClientRect(), pickBounds = metrics[3]?.getBoundingClientRect();
+      const chance = metrics[3]?.querySelector('[data-pick-probability]');
+      const engine = metrics[3]?.querySelector('[data-forecast-source]');
+      const selection = metrics[3]?.querySelector('[data-pick-selection]');
       const slip = element.closest('[data-locked-slip]');
       const headerButton = slip?.querySelector('[data-slip-header-action] a[data-unlock-button]');
       return {
@@ -42,6 +45,10 @@ export async function verifyDesktopPredictionAccess(page, {
         rowOverlay: Boolean(element.querySelector('[data-row-analysis]')),
         metricCount: metrics.filter(Boolean).length, visibleMetrics: metrics.filter(Boolean).every(visible),
         separateForecastColumns: Boolean(marketBounds && pickBounds && marketBounds.right <= pickBounds.left),
+        wellOrderedPick: !selection || Boolean(engine && chance && /^\([<>]?\d+%\)$/.test(chance.textContent)
+          && engine.getBoundingClientRect().right <= selection.getBoundingClientRect().left
+          && selection.getBoundingClientRect().right <= chance.getBoundingClientRect().left
+          && chance.getBoundingClientRect().right <= pickBounds.right + 1),
         odds: metrics[1]?.textContent, probability: metrics[2]?.textContent,
         publicFields: ['date', 'time', 'country', 'league', 'teams', 'status'].every((name) => visible(element.querySelector(`[data-row-${name}]`))),
         visibleTeams: ['home', 'away'].every((side) => visible(element.querySelector(`[data-${side}]`))),
@@ -75,7 +82,10 @@ export async function verifyDesktopPredictionAccess(page, {
   }
   for (const card of unlocked) {
     assert.ok(card.metricCount === (card.feed ? 2 : 3) && card.visibleMetrics, 'Authorized rows show the fields for their surface.');
-    if (card.feed) assert.ok(card.separateForecastColumns, 'Matches shows market and pick in distinct columns.');
+    if (card.feed) {
+      assert.ok(card.separateForecastColumns, 'Matches shows market and pick in distinct columns.');
+      assert.ok(card.wellOrderedPick, 'Engine, pick and bracketed probability fit the forecast track.');
+    }
   }
   for (const value of expectedOdds) assert.ok(unlocked.some((card) => card.odds?.includes(value)), `Authorized odds ${value} remain visible.`);
   for (const value of expectedProbabilities) assert.ok(unlocked.some((card) => card.probability?.includes(value)), `Authorized probability ${value} remains visible.`);
