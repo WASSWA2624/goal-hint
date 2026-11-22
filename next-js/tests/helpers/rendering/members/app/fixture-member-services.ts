@@ -3,6 +3,7 @@ import { defaultSubscriptionSettings } from "@/domain/subscription-settings";
 import type { MemberServices } from "@/server/members/member-http";
 import { fixtureTokens, fixtureAdminPhone } from "./fixture-identity";
 import { fixtureSubscriptionPeriods, fixtureSubscriptionStatus, subscriptionScenarios } from "./fixture-subscription";
+import { fixtureCheckoutView, fixtureManualMethods } from "./fixture-checkout";
 import { fixtureDashboard } from "./fixture-dashboard";
 import { fixtureNotifications } from "./fixture-notifications";
 
@@ -12,7 +13,8 @@ export function fixtureServices(state: string) {
   const unlocked = ["active", "manual", "trial", "pending-renewal", "expired", "off-active", "registration-trial", "off-trial-active"].includes(scenario), at = Date.now();
   return async () => {
     return { config: { production: false },
-    settings: { settings: state === "unavailable" ? null : { ...defaultSubscriptionSettings, paywallMode: scenario.startsWith("off") ? "off" : "on",
+    settings: { settings: state === "unavailable" ? null : { ...defaultSubscriptionSettings,
+      ...(scenario === "no-payment-method" || scenario === "wallet-only" ? {} : fixtureManualMethods), paywallMode: scenario.startsWith("off") ? "off" : "on",
       allowUnsubscribedMembers: scenario === "member-free", trialDays: scenario === "trial-disabled" ? 0 : 30,
       ...(state === "support" ? { supportContacts: [
         { id: "synthetic-support", label: "Account support", network: "other", phone: "256700000101", calls: true, whatsapp: true, enabled: true, primary: true },
@@ -28,6 +30,7 @@ export function fixtureServices(state: string) {
         return { codes, devices: [{ tokenHash: "synthetic", lastSeenAt: new Date(at) }] }; } },
     dashboard: { async read() { if (state === "dashboard-unavailable") throw new Error("Synthetic unavailable history"); return fixtureDashboard(scenario); } },
     notifications: fixtureNotifications(state),
+    checkout: { async read() { return fixtureCheckoutView(scenario); } },
     referrals: { async read() {
       if (state === "referral-unavailable") throw new Error("Synthetic unavailable referrals");
       const empty = state === "referral-empty";

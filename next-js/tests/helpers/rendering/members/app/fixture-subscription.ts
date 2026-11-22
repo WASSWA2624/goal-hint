@@ -2,10 +2,11 @@ import { defaultSubscriptionSettings } from "@/domain/subscription-settings";
 import type { SubscriptionStatus, TrialStatus } from "@/domain/subscription-summary";
 import type { MemberServices } from "@/server/members/member-http";
 import { fixtureMemberSessions } from "./fixture-admin";
+import { fixtureManualMethods } from "./fixture-checkout";
 
 const eligibleTrialScenarios: readonly string[] = ["trial-eligible", "trial-disabled", "off-trial-eligible", "member-free"];
 export const subscriptionScenarios = ["free", "active", "manual", "trial", "pending", "pending-renewal", "expired", "off", "off-active", "registration-trial", "registration-no-trial",
-  "trial-eligible", "trial-disabled", "off-trial-eligible", "member-free", "off-trial-active"] as const;
+  "trial-eligible", "trial-disabled", "off-trial-eligible", "member-free", "off-trial-active", "off-inactive", "no-payment-method", "wallet-only", "no-plan"] as const;
 export type SubscriptionScenario = (typeof subscriptionScenarios)[number];
 // Route modules can compile independently; anchor API and HTML expiry to the same UTC day.
 // The seven-day period starts yesterday, so it is active even before 10:00 UTC today.
@@ -44,7 +45,8 @@ export function fixtureSubscriptionPeriods(scenario: string) {
 /** Real HTTP/session adapters, scripted subscription records; no application database or messaging. */
 export function fixtureSubscriptionServices(scenario: SubscriptionScenario): MemberServices {
   return { config: { production: false }, sessions: fixtureMemberSessions,
-    settings: { settings: { ...defaultSubscriptionSettings, paywallMode: scenario.startsWith("off") ? "off" : "on" }, source: "stored" },
+    settings: { settings: { ...defaultSubscriptionSettings,
+      ...(scenario === "no-payment-method" || scenario === "wallet-only" ? {} : fixtureManualMethods), paywallMode: scenario.startsWith("off") ? "off" : "on" }, source: "stored" },
     codes: { async subscriptionStatus() { return fixtureSubscriptionStatus(scenario); } },
   } as unknown as MemberServices;
 }

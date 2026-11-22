@@ -21,7 +21,7 @@ import { Stack } from "@/components/ui/layout";
 import { SignOutIcon } from "@/components/ui/icons";
 import { memberLandingPath, memberNextPath, memberReturnPath } from "@/domain/member-navigation";
 import { publicSupportContactSettings } from "@/domain/public-subscription-settings";
-import { manualPaymentProvider } from "@/domain/subscription-settings";
+import { hasManualPaymentProvider } from "@/domain/subscription-settings";
 import { checkoutOpenStatuses } from "@/domain/checkout";
 import { formatSubscriptionExpiry } from "@/domain/subscription-expiry";
 import { accountSection, accountSectionHref } from "@/domain/account-navigation";
@@ -105,8 +105,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
       || (walletSection && [...checkoutOpenStatuses, "superseded"].some(state => state === topUpStatus?.status));
     const salesOpen = mode === "on";
     const checkoutPublished = subscriptionCheckoutPublished(settings, resolved.config.production);
-    const topUpOpen = checkoutPublished && settings !== null &&
-      (manualPaymentProvider(settings, "mtn").reason === null || manualPaymentProvider(settings, "airtel").reason === null);
+    const topUpOpen = checkoutPublished && hasManualPaymentProvider(settings);
     // Plans are read only for an account with credit or auto-renewal to manage.
     const credit = paymentView?.credit ?? null;
     const offers = walletSection && salesOpen && credit && (credit.availableBalanceUgx > 0 || credit.autoRenew)

@@ -171,6 +171,10 @@ export function manualPaymentProvider(settings: ManualPaymentSettings, network: 
   return { number, name: name.value, reason: null };
 }
 
+export function hasManualPaymentProvider(settings: ManualPaymentSettings | null | undefined): boolean {
+  return !!settings && (manualPaymentProvider(settings, "mtn").reason === null || manualPaymentProvider(settings, "airtel").reason === null);
+}
+
 /**
  * Validate the fields a save sends. Phones become canonical digits (an empty field clears the number), shortcuts lose
  * their spaces, text is trimmed, and whole numbers must sit inside the owner's ranges. Unknown fields are refused.
@@ -290,7 +294,7 @@ export type CheckoutReadinessFacts = Readonly<{ activePlans: number; privacyRele
 export function checkoutReadiness(settings: SubscriptionSettings, facts: CheckoutReadinessFacts): readonly CheckoutReadinessIssue[] {
   const missing: CheckoutReadinessIssue[] = [];
   if (facts.activePlans < 1) missing.push({ key: "plan", message: "Activate a subscription plan" });
-  if (manualPaymentProvider(settings, "mtn").reason !== null && manualPaymentProvider(settings, "airtel").reason !== null) {
+  if (!hasManualPaymentProvider(settings)) {
     missing.push({ key: "payment-number", message: "Set up a Mobile Money receiving account" });
   }
   if (supportContactsOf(settings).length === 0) missing.push({ key: "contact", message: "Add a support contact" });

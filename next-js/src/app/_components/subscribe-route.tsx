@@ -10,20 +10,21 @@ import { FreeTrialControl } from "@/components/members/free-trial-control";
 import { ButtonLink } from "@/components/ui/controls";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { accountSectionHref } from "@/domain/account-navigation";
-import { memberAuthPath, memberReturnPath, sharedSlipReturnPath } from "@/domain/member-navigation";
+import { matchReturnPath, memberAuthPath, memberReturnPath, sharedSlipReturnPath } from "@/domain/member-navigation";
 import { adminLandingPath } from "@/domain/admin-navigation";
 import { checkoutOpenStatuses } from "@/domain/checkout";
 import type { PaymentView } from "@/domain/payment";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { offeredTrialDays, type SubscriptionStatus } from "@/domain/subscription-summary";
 import { publicSubscriptionSettings, publicSupportContactSettings } from "@/domain/public-subscription-settings";
+import { hasManualPaymentProvider } from "@/domain/subscription-settings";
 import { createMessages } from "@/i18n/messages";
 import { getAnalyticsServices } from "@/server/analytics/analytics-http";
 import { getMemberServices, type MemberServicesSource } from "@/server/members/member-http";
 import { memberCookieName, memberTokenHash } from "@/server/members/member-sessions";
 import { createPlansService } from "@/server/members/plans";
 import { readMemberPageSession } from "@/server/members/member-page-session";
-import { subscriptionCheckoutPublished } from "@/server/members/sales-readiness";
+import { payableCheckoutPlans, subscriptionCheckoutPublished } from "@/server/members/sales-readiness";
 import { PublicShell } from "./public-shell";
 
 async function readPlans() {
@@ -36,13 +37,18 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
   return async function SubscribeRoute({ locale, searchParams }: {
     locale: string; searchParams: Promise<Record<string, string | string[] | undefined>>;
   }) {
-    const m = createMessages(locale), resolved = await services().catch(() => null);
+    const m = createMessages(locale);
+    const [resolved, parameters] = await Promise.all([services().catch(() => null), searchParams]);
+    const returnTo = memberReturnPath(parameters.return), topUp = parameters.add === "credit";
+    const returnMatch = matchReturnPath(returnTo);
+    const matchBack = returnMatch && <div><ButtonLink href={returnMatch} variant="quiet" prefetch={false} contextBack>
+      {m.text("subscribe.returnToMatch")}
+    </ButtonLink></div>;
     if (!resolved) return <PublicShell locale={locale} showAccount><SubscribeLayout>
-      <SubscribeIntro locale={locale} /><MemberNavigationRecovery /><p role="status">{m.text("account.unavailable")}</p>
+      <SubscribeIntro locale={locale} />{matchBack}<MemberNavigationRecovery /><p role="status">{m.text("account.unavailable")}</p>
     </SubscribeLayout></PublicShell>;
     const settings = resolved.settings.settings;
     const salesOpen = subscriptionCheckoutPublished(settings, resolved.config.production);
-    const parameters = await searchParams, returnTo = memberReturnPath(parameters.return), topUp = parameters.add === "credit";
     const userAgent = (await headers()).get("user-agent") ?? "";
     const session = await readMemberPageSession(resolved, (await cookies()).get(memberCookieName(resolved.config.production))?.value);
     // Authentication always has its own URL, before pricing or checkout reads can fail.
@@ -59,8 +65,9 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
       eligible ? resolved.checkout?.read(eligible) ?? null : null,
     ]);
     const subscription: SubscriptionStatus | null = status.status === "fulfilled" ? status.value : null;
-    const offers = availablePlans.status === "fulfilled" ? availablePlans.value.filter(plan => plan.active) : [];
+    const plansForSale = availablePlans.status === "fulfilled" ? availablePlans.value.filter(plan => plan.active) : [];
     const checkoutView = checkout.status === "fulfilled" ? checkout.value : null;
+    const offers = payableCheckoutPlans(plansForSale, settings, checkoutView?.availableWalletUgx ?? 0);
     const paymentView = payment.status === "fulfilled" ? payment.value : null;
     const view: PaymentView | null = checkoutView ? { ...paymentView, acceptedTerms: paymentView?.acceptedTerms ?? false,
       status: paymentView?.status ?? null, checkout: checkoutView } : paymentView;
@@ -71,10 +78,10 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
     const administrator = !!member && !member.blocked && member.administrator;
     const draftScope = member ? memberTokenHash(`purchase-progress:${member.tokenHash}`) : "signed-out";
     const referralsOpen = settings?.paywallMode === "on";
-    const newCheckoutAvailable = salesOpen && !unavailable && (topUp || offers.length > 0);
+    const newCheckoutAvailable = salesOpen && !unavailable && (topUp ? hasManualPaymentProvider(settings) : offers.length > 0);
     const checkoutAvailable = !!eligible && !!settings && !!checkoutView && (newCheckoutAvailable ||
       checkoutView.requests.some(request => (request.purpose === "topup") === topUp) || referralsOpen && !topUp && checkoutView.availableReferralDays > 0);
-    const showFlow = checkoutAvailable || !!eligible && !resolved.checkout && salesOpen && !unavailable;
+    const showFlow = checkoutAvailable || !!eligible && !resolved.checkout && newCheckoutAvailable;
     const reports = [paymentView?.status, paymentView?.otherStatus].filter(report => report != null);
     const waiting = !showFlow && (subscription?.paymentPending || reports.some(report => [...checkoutOpenStatuses, "superseded"].some(state => state === report.status)));
     const contact = { ...publicSupportContactSettings(settings), reviewTime: settings?.reviewTime ?? null };
@@ -85,7 +92,7 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
       <MemberNavigationRecovery {...(member ? { expectedPhone: member.blocked ? null : member.phone, expectedAdministrator: !!administrator } : {})} />
       {topUp && member && !member.blocked && !administrator
         ? <div><ButtonLink href={accountSectionHref(locale, "wallet", returnTo)} variant="quiet" prefetch={false}>{m.text("wallet.back")}</ButtonLink></div>
-        : sharedSlipReturnPath(returnTo) && <div><ButtonLink href={returnTo!} prefetch={false}>{m.text("slipShare.return")}</ButtonLink></div>}
+        : matchBack || sharedSlipReturnPath(returnTo) && <div><ButtonLink href={returnTo!} prefetch={false}>{m.text("slipShare.return")}</ButtonLink></div>}
       <ApprovalRefresh waiting={waiting} refreshAt={trial?.state === "active" ? trial.endsAt : activeUntil} />
       {!checkoutAvailable && trialNotice}
       {eligible && !showFlow && reports.length > 0 && <div id="report">
@@ -97,7 +104,9 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
           : unavailable ? <p role="status">{m.text("account.unavailable")}</p>
             : !salesOpen ? <><p role="status">{m.text(settings?.paywallMode === "off" ? "account.closed" : "subscribe.salesPaused")}</p>
               <div><ButtonLink href={accountSectionHref(locale, "overview", returnTo)} prefetch={false}>{m.text("account.title")}</ButtonLink></div></>
-              : resolved.checkout && !newCheckoutAvailable && <p role="status">{m.text("subscribe.noPlans")}</p>}
+              : eligible && !newCheckoutAvailable && <p role="status">
+                {m.text(!topUp && !plansForSale.length ? "subscribe.noPlans" : "subscribe.noPaymentMethods")}
+              </p>}
       {showFlow && settings && eligible && <SubscribeFlow key={`${draftScope}:${topUp ? "credit" : "plans"}`} locale={locale} settings={publicSubscriptionSettings(settings)} plans={offers}
         account={{ id: eligible.accountId, phone: eligible.phone, draftScope }} view={view} returnTo={returnTo} userAgent={userAgent}
         startWithTopUp={topUp} salesOpen={newCheckoutAvailable} referralsOpen={referralsOpen} noticeBeforeCheckout={trialNotice} />}

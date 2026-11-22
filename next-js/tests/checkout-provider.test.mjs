@@ -2,12 +2,31 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { capCheckoutFunding, chooseCheckoutMethod, withCheckoutProvider } from "../src/components/members/checkout-draft.ts";
 import { defaultSubscriptionSettings } from "../src/domain/subscription-settings.ts";
+import { payableCheckoutPlans, subscriptionCheckoutPublished } from "../src/server/members/sales-readiness.ts";
 
 const settings = { ...defaultSubscriptionSettings, mtnEnabled: true, mtnNumber: "256700000901", mtnName: "TEST MTN",
   airtelEnabled: true, airtelNumber: "256700000902", airtelName: "TEST AIRTEL" };
 const draft = { step: 1, purpose: "plan", planId: "weekly", method: "", usePackage: true,
   useWallet: false, useReferral: false, walletUgx: "0", referralDays: "0", accepted: false, attachingId: null };
 const plans = [{ id: "weekly", priceUgx: 5000 }];
+
+test("fresh checkout offers require an active plan and either full wallet funding or a usable receiving account", () => {
+  const catalog = [{ id: "daily", active: true, priceUgx: 1000 }, { id: "weekly", active: true, priceUgx: 5000 },
+    { id: "archived", active: false, priceUgx: 100 }];
+  const ids = (methods, credit) => payableCheckoutPlans(catalog, methods, credit).map(plan => plan.id);
+  assert.deepEqual(ids(settings, 0), ["daily", "weekly"]);
+  assert.deepEqual(ids({ ...settings, mtnEnabled: false, airtelName: "" }, 0), []);
+  assert.deepEqual(ids(defaultSubscriptionSettings, 999), []);
+  assert.deepEqual(ids(defaultSubscriptionSettings, 1000), ["daily"]);
+  assert.deepEqual(ids(defaultSubscriptionSettings, 5000), ["daily", "weekly"]);
+});
+
+test("prelaunch notices keep production sales closed even with receiving accounts and published support details", () => {
+  const readySettings = { ...settings, paywallMode: "on", contactPhone: "256700000903" };
+  assert.equal(subscriptionCheckoutPublished(readySettings, true), false);
+  assert.equal(subscriptionCheckoutPublished(readySettings, false), true);
+  assert.equal(subscriptionCheckoutPublished({ ...readySettings, paywallMode: "off" }, false), false);
+});
 
 test("new Pay selects MTN, or the available previously used subscription provider, without spending balances", () => {
   assert.equal(withCheckoutProvider(draft, settings, null).method, "mtn");

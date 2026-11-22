@@ -126,6 +126,8 @@ export const en = {
   "subscribe.helpRejected": "My Goal Hint payment {reference} was not approved. My Goal Hint number: {phone}.",
   "subscribe.helpPaid": "I have paid UGX {price} for {plan}. My Goal Hint number: {phone}. Ref {reference}.",
   "subscribe.noPlans": "Plans are unavailable. Please try again later.",
+  "subscribe.noPaymentMethods": "No payment method is available for this purchase.",
+  "subscribe.returnToMatch": "Back to match",
   "subscribe.salesPaused": "Subscription purchases are temporarily unavailable.",
   "subscribe.chooseImage": "Choose a screenshot of the payment or its SMS.",
   "subscribe.openMtn": "Open MoMo menu",

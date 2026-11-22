@@ -1,9 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { memberAuthPath, memberHomePath, memberLandingPath, memberLoginPath, memberReturnPath, signedOutPath } from "../src/domain/member-navigation.ts";
+import { matchReturnPath, memberAuthPath, memberHomePath, memberLandingPath, memberLoginPath, memberReturnPath, signedOutPath } from "../src/domain/member-navigation.ts";
+import { subscriberHref } from "../src/domain/subscriber-navigation.ts";
 
 const sharedSlip = `/s/${"a".repeat(32)}`;
 const paymentReview = "/admin/payments?paymentId=7d444840-9dc0-4f60-9b18-050fc43b8813";
+
+test("a signed-in match unlock carries a canonical local match into and back from Subscribe", () => {
+  const target = "/en/matches/a-17/sample-home-away";
+  const url = new URL(subscriberHref(true, target), "https://goal-hint.test");
+  assert.equal(url.pathname, "/en/subscribe");
+  assert.equal(matchReturnPath(memberReturnPath(url.searchParams.get("return"))), target);
+  for (const path of ["/en/matches", "//other.test/en/matches/1/home-away", "https://other.test/en/matches/1/home-away",
+    "/en/matches/1/../admin", "/en/matches/1/home-away?next=external", "/en/matches/1/%2f", paymentReview, [target]]) {
+    assert.equal(matchReturnPath(path), null);
+  }
+});
 
 test("authentication links keep a validated journey separate from the requested auth view", () => {
   assert.equal(memberAuthPath(), memberLoginPath);

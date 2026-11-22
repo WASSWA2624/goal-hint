@@ -27,7 +27,11 @@ export function memberLandingPath(administrator = false, returnTo?: unknown): st
 export function memberReturnPath(value: unknown): string | null {
   const review = reviewReturnPath(value);
   if (review) return review;
-  return typeof value === "string" && value.length <= 512 && (["/en", memberHomePath, "/en/best-slips", "/en/slips"].includes(value) || /^\/en\/best-slips\/\d{4}-\d{2}-\d{2}\/[1-9]\d{0,2}$/u.test(value) || sharedSlipReturnPath(value) || /^\/en\/matches\/[A-Za-z0-9_-]+\/[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value)) ? value : null;
+  return typeof value === "string" && value.length <= 512 && (["/en", memberHomePath, "/en/best-slips", "/en/slips"].includes(value) || /^\/en\/best-slips\/\d{4}-\d{2}-\d{2}\/[1-9]\d{0,2}$/u.test(value) || sharedSlipReturnPath(value) || matchReturnPath(value)) ? value : null;
+}
+
+export function matchReturnPath(value: unknown): string | null {
+  return typeof value === "string" && value.length <= 512 && /^\/en\/matches\/[A-Za-z0-9_-]+\/[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value) ? value : null;
 }
 
 /** Shared tokens are opaque, canonical paths only; no queries, escapes or external origins. */

@@ -3,7 +3,7 @@ import json
 import re
 from html import unescape
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 from urllib.error import HTTPError
 from urllib.request import Request, build_opener, urlopen
 from lib.rendering import NoRedirect, Server, build_fixture, create_fixture, environment, match, no_match, parse_args, request, visible_html
@@ -389,6 +389,30 @@ def subscriber_dashboard(origin):
     print("Account workspace: all sections, concise facts, renewal/payment paths, bounded activity and private guards pass.", flush=True)
 
 
+def checkout_journey(origin):
+    """An inactive member can open checkout and return to the canonical match in every availability state."""
+    path = "/en/matches/0b9b7a29-6eea-434b-8d30-48ce38147fc8/synthetic-club-10-vs-synthetic-club-20"
+    headers = {"Cookie": "goal-hint-member=" + "a" * 43 + "; member-fixture-subscription=free"}
+    match_page = visible_html(request(origin, path, headers=headers).text)
+    destination = f"/en/subscribe?return={quote(path, safe='')}"
+    match(rf'href="{re.escape(destination)}"[^>]*data-unlock-link|data-unlock-link[^>]*href="{re.escape(destination)}"', match_page)
+    for state, label in [("free", "Restoring checkout"), ("wallet-only", "Restoring checkout"),
+            ("off-inactive", "Subscriptions are not open yet"), ("no-plan", "Plans are unavailable"),
+            ("no-payment-method", "No payment method is available")]:
+        checkout = visible_html(request(origin, destination + "&state=" + state, headers=headers).text)
+        match(label, checkout)
+        match(rf'<a\b[^>]*href="{re.escape(path)}"[^>]*>Back to match</a>', checkout)
+        if state not in ("free", "wallet-only"):
+            no_match("Restoring checkout", checkout)
+    topup = visible_html(request(origin, "/en/subscribe?add=credit&state=wallet-only", headers=headers).text)
+    match("No payment method is available", topup)
+    no_match("Restoring checkout", topup)
+    for invalid in ("https://invalid.example" + path, "//invalid.example" + path, "/en/matches"):
+        checkout = visible_html(request(origin, f"/en/subscribe?return={quote(invalid, safe='')}", headers=headers).text)
+        no_match(r'Back to match|href="(?:https:)?//invalid\.example', checkout)
+    print("Checkout journey: canonical match unlock and return, paused sales, missing methods or plans, wallet-only availability and external return rejection pass.", flush=True)
+
+
 def authentication_routes(origin):
     home = request(origin, "/en")
     assert home.status == 307 and home.headers.get("Location") == "/en/matches"
@@ -532,6 +556,7 @@ def main():
         subscriber_dashboard(server.origin)
         trial_visibility(server.origin)
         authentication_routes(server.origin)
+        checkout_journey(server.origin)
         print("Member HTML and synthetic APIs: private subscription status, visible expiry and renewal summaries, shared member/admin login, private-page redirects and role gates, legacy endpoint redirects, restricted sessions, cookie clearing, phone/OTP controls and home destinations pass.", flush=True)
         if options.serve:
             server.serve()
