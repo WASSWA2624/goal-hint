@@ -1,0 +1,25 @@
+# Administrator shortcuts in the Account menu
+
+Update the signed-in administrator's top-right Account menu on desktop and mobile. Show **Administrator** in a distinct identity header, followed by shortcuts to the admin destinations and the existing **Log out** action. Keep this change within the shared Account menu.
+
+## Current source
+
+- `next-js/src/components/members/account-link.tsx` owns the header Account disclosure, its identity and destination rows, and the role-specific logout action. It receives the administrator username from `next-js/src/components/admin/admin-shell.tsx` or derives the role from member-session state. The session fallback uses the Dashboard navigation label for the identity, and the admin branch currently skips the destination list. The separate header Payments indicator links to the pending review tab.
+- `next-js/src/domain/admin-navigation.ts` exports `adminSections`, the canonical order, labels, and hrefs. `next-js/src/components/admin/admin-workspace.tsx` already uses that list for section navigation and defines icons keyed by section. Reuse those icons through a small shared mapping if useful.
+- `next-js/src/components/ui/use-outside-dismiss.ts` and `next-js/src/components/navigation/navigation-link.tsx` support the existing disclosure and foreground navigation behavior. Inspect the header's administrator prop call sites and the session store so that server-seeded and session-discovered administrators see the same menu.
+
+## Implementation
+
+- Render **Administrator** as the role identity in the popup header. Use non-interactive markup with typography or spacing that distinguishes it from navigation rows and keeps it out of the tab order.
+- Derive the list from `adminSections`, excluding the `overview` key. The required order and destinations are Payments (`/admin/payments`), Codes (`/admin/codes`), Subscribers (`/admin/subscribers`), Referral review (`/admin/referrals`), Plans (`/admin/plans`), Audit (`/admin/audit`), Settings (`/admin/settings`), and Analytics (`/analytics`). Keep the labels and hrefs sourced from the canonical list. Payments in the popup goes to the canonical Payments destination, while the pending review indicator in the header retains its existing destination.
+- Reuse the existing navigation link, menu-row styles, and disclosure. Keep the summary's accessible name and expanded state, keyboard operation, Escape dismissal and focus return, outside dismissal, and closure when selecting a shortcut or changing routes. Keep the popup within the viewport and scrollable when needed so every row and Log out remain reachable without horizontal overflow.
+- Use the established administrator session signals for shortcut visibility and keep server-side authorization on each destination. Preserve the administrator logout action at `/api/admin/logout` and its existing completion behavior. Keep the member menu, member logout, guest actions, and admin sidebar behavior intact. Use existing message conventions for new UI text and scope any identity-label change to the Account popup.
+- Follow `AGENTS.md`. Make web changes in `next-js/`. Reuse shared control heights, row layout, and theme tokens with subtle corners from `theme.radius` as appropriate. See `next-js/docs/control-uniformity.md` and `next-js/docs/corner-radius.md`. Verify desktop and mobile in light and dark themes. Use the existing `NavigationProgress` bar immediately below the app header for foreground routing, and mark pending content with `aria-busy` or use `AppLoading` when there is no content container. Keep the header mounted, retain existing labels and content when practical, and keep passive polling and lazy media loading quiet.
+- Update `APP_OVERVIEW.md` in the implementation change to describe the new administrator shortcuts and distinguish source behavior from any verified deployment state.
+
+## Acceptance checks
+
+- Open the menu as an administrator on an admin page and a public-header page. Verify both session entry points show the same **Administrator** header, the eight shortcuts in the stated order, and **Log out** after the shortcuts. The identity stays out of the tab order and has no link or button role. Overview is absent from the popup.
+- Follow every shortcut and verify that it lands at the canonical route, including Analytics. Check that the existing admin sidebar still includes Overview and the header Payments indicator still opens the pending review tab. Exercise a foreground transition and verify progress uses the app header bar.
+- Test the Account disclosure by keyboard and touch. Verify opening, Escape and focus return, outside dismissal, and link selection. In a narrow, short viewport or a wrapped header, reach Log out by touch and keyboard. Verify row focus and identity distinction in both themes and at desktop and mobile sizes.
+- Verify that administrator logout clears the administrator session as before. Confirm member and guest sessions have their existing header behavior and that direct admin destination access still follows existing authorization rules.
