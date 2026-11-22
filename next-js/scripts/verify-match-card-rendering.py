@@ -212,7 +212,7 @@ def verify_feed_cards(origin):
         body = cards[f"feed-{key}"]
         match(re.escape(market), body)
         engine = match(r'<small\b[^>]*data-forecast-source="[^"]+"[^>]*>\s*<svg\b[^>]*>[\s\S]*?</svg></small>', body)
-        pick = match(rf'<span\b[^>]*data-pick-selection[^>]*>\s*<span\b[^>]*title="{re.escape(selection)}"', body)
+        pick = match(rf'<span\b[^>]*data-pick-selection[^>]*>{re.escape(selection)}</span>', body)
         probability = match(rf'<span\b[^>]*data-pick-probability[^>]*>\({re.escape(chance)}\)</span>', body)
         assert engine.end() <= pick.start() < probability.start(), f"{key}: engine precedes the pick and its bracketed probability"
         assert body.count('data-forecast-source=') == 1, f"{key}: one forecast-icon marker"

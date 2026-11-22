@@ -48,6 +48,7 @@ export async function verifyDesktopPredictionAccess(page, {
         wellOrderedPick: !selection || Boolean(engine && chance && /^\([<>]?\d+%\)$/.test(chance.textContent)
           && engine.getBoundingClientRect().right <= selection.getBoundingClientRect().left
           && selection.getBoundingClientRect().right <= chance.getBoundingClientRect().left
+          && chance.getBoundingClientRect().left - selection.getBoundingClientRect().right <= 5
           && chance.getBoundingClientRect().right <= pickBounds.right + 1),
         odds: metrics[1]?.textContent, probability: metrics[2]?.textContent,
         publicFields: ['date', 'time', 'country', 'league', 'teams', 'status'].every((name) => visible(element.querySelector(`[data-row-${name}]`))),

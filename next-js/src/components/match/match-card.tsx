@@ -459,7 +459,6 @@ const PickLine = styled.span`
 `;
 const FeedPickLine = styled(PickLine)`
   align-items: center;
-  > [data-pick-probability] { flex: none; font-variant-numeric: tabular-nums; }
 `;
 const NoRecommendedPick = styled.span`
   display: inline-flex; align-items: center; flex: none;
@@ -703,9 +702,8 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const feedMarket = <FittedCardText full={family} short={mobileFamily} />;
   const feedPick = selection && <FeedPickLine data-pick-line data-pick-label>
     {sourceMarker}
-    <span data-pick-selection><FittedCardText full={predictionText(messages, selection, selectionContext)}
-      short={predictionLabel(messages, selection, selectionContext)} /></span>
-    {percent && <>{" "}<span data-pick-probability>({percent})</span></>}
+    <FittedCardText full={predictionText(messages, selection, selectionContext)}
+      short={predictionLabel(messages, selection, selectionContext)} probability={percent} />
   </FeedPickLine>;
   const unlockCard = feedLocked
     ? <UnlockButton locale={locale} signedIn={signedIn} returnTo={detailHref} guestView="login" cardTitle={title} /> : null;

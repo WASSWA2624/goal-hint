@@ -17,11 +17,15 @@ const Label = styled.span`
     visibility: hidden;
     pointer-events: none;
   }
-  > [data-compact-label] { overflow: hidden; text-overflow: ellipsis; }
+  [data-compact-label] { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
+  &[data-fitted-probability] > :is([data-full-measure], [data-fitted-line]) {
+    display: flex; align-items: baseline; gap: var(--gh-spacing-0_75);
+  }
+  :is([data-pick-probability], [data-pick-probability-measure]) { flex: none; font-variant-numeric: tabular-nums; }
 `;
 
 /** Use the authored abbreviation only when the rendered full wording exceeds its track. */
-export function FittedCardText({ full, short }: { full: string; short: string }) {
+export function FittedCardText({ full, short, probability }: { full: string; short: string; probability?: string | null }) {
   const track = useRef<HTMLSpanElement>(null);
   const measure = useRef<HTMLSpanElement>(null);
   const [useShort, setUseShort] = useState(false);
@@ -35,9 +39,15 @@ export function FittedCardText({ full, short }: { full: string; short: string })
     return () => observer.disconnect();
   }, [useAbbreviation]);
   const abbreviated = useAbbreviation && useShort;
-  return <Label ref={track} title={full}>
-    {useAbbreviation && <span ref={measure} data-full-measure aria-hidden="true">{full}</span>}
-    <span data-compact-label aria-hidden={abbreviated || undefined}>{abbreviated ? short : full}</span>
-    {abbreviated && <VisuallyHidden>{full}</VisuallyHidden>}
+  const chance = probability ? `(${probability})` : null;
+  const label = <span data-compact-label data-pick-selection={chance ? "" : undefined}
+    aria-hidden={abbreviated || undefined}>{abbreviated ? short : full}</span>;
+  const fullLabel = abbreviated && <VisuallyHidden>{full}</VisuallyHidden>;
+  return <Label ref={track} title={full} data-fitted-probability={chance ? "" : undefined}>
+    {useAbbreviation && <span ref={measure} data-full-measure aria-hidden="true">
+      {chance ? <><span>{full}</span><span data-pick-probability-measure>{chance}</span></> : full}
+    </span>}
+    {chance ? <span data-fitted-line>{label}{fullLabel}{" "}<span data-pick-probability>{chance}</span></span>
+      : <>{label}{fullLabel}</>}
   </Label>;
 }
