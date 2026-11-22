@@ -29,6 +29,7 @@ import { shareUnchanged } from "@/domain/structural-sharing";
 import { formatNationalPhone, splitPhoneValue } from "@/domain/phone-countries";
 import { validTopUp, walletRules } from "@/domain/wallet";
 import { createMessages } from "@/i18n/messages";
+import { memberNextPath } from "@/domain/member-navigation";
 import { refreshMemberSession } from "./member-session";
 import { PaymentWizard, WizardActions, WizardNotice, WizardReview } from "./payment-wizard";
 import { PackageSelection } from "./package-selection";
@@ -179,8 +180,12 @@ export function CheckoutFlow({ locale, settings, plans: offeredPlans, account, i
     lastRead.current = next;
     setView(current => shareUnchanged(current, next)); setDraft(current => normalizeDraft(current, next));
     if (background || approved) void refreshMemberSession();
-    if (approved) router.refresh();
-  }, [normalizeDraft, router, topUp]);
+    if (approved) {
+      const currentApproved = next.requests.some(request => request.id === paymentId && request.status === "approved");
+      if (direct && returnTo && paymentId && !currentApproved) router.replace(memberNextPath("subscribe", returnTo, undefined, true));
+      else router.refresh();
+    }
+  }, [direct, normalizeDraft, paymentId, returnTo, router, topUp]);
   async function refresh() {
     return revalidateCheckout({
       paymentId,

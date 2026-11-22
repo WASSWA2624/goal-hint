@@ -11,8 +11,8 @@ import { accountRequest } from "./account-security";
 import { AccountError } from "./account-styles";
 import { refreshMemberSession } from "./member-session";
 
-export function FreeTrialControl({ locale, trial, days, showHistory = false }: {
-  locale: string; trial: TrialStatus | undefined; days: number; showHistory?: boolean;
+export function FreeTrialControl({ locale, trial, days, showHistory = false, activatedHref }: {
+  locale: string; trial: TrialStatus | undefined; days: number; showHistory?: boolean; activatedHref?: string | undefined;
 }) {
   const m = createMessages(locale), router = useRouter(), description = useId();
   const inFlight = useRef(false), [pending, startRefresh] = useTransition();
@@ -25,7 +25,7 @@ export function FreeTrialControl({ locale, trial, days, showHistory = false }: {
     inFlight.current = true; setBusy(true); setError("");
     try {
       setActivated(await accountRequest<Extract<TrialStatus, { state: "active" }>>("trial", {}));
-      startRefresh(() => router.refresh());
+      startRefresh(() => activatedHref ? router.replace(activatedHref) : router.refresh());
       void refreshMemberSession();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : m.text("account.unavailable"));

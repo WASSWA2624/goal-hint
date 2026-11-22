@@ -10,7 +10,7 @@ import { FreeTrialControl } from "@/components/members/free-trial-control";
 import { ButtonLink } from "@/components/ui/controls";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { accountSectionHref } from "@/domain/account-navigation";
-import { matchReturnPath, memberAuthPath, memberReturnPath, sharedSlipReturnPath, subscriptionReturnPath } from "@/domain/member-navigation";
+import { matchReturnPath, memberAuthPath, memberNextPath, memberReturnPath, sharedSlipReturnPath, subscriptionReturnPath } from "@/domain/member-navigation";
 import { adminLandingPath } from "@/domain/admin-navigation";
 import { checkoutOpenStatuses } from "@/domain/checkout";
 import type { PaymentView } from "@/domain/payment";
@@ -110,7 +110,8 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
     const userAgent = requestHeaders.status === "fulfilled" ? requestHeaders.value.get("user-agent") ?? "" : "";
     const contact = { ...publicSupportContactSettings(settings), reviewTime: settings?.reviewTime ?? null };
     const trialNotice = trial && !topUp
-      ? <FreeTrialControl key={member?.accountId} locale={locale} trial={trial} days={offeredTrialDays(settings)} /> : null;
+      ? <FreeTrialControl key={member?.accountId} locale={locale} trial={trial} days={offeredTrialDays(settings)}
+        activatedHref={currentPayment && checkoutReturn ? memberNextPath("subscribe", checkoutReturn, undefined, true) : undefined} /> : null;
     return <PublicShell locale={locale} showAccount><SubscribeLayout>
       {topUp ? <VisuallyHidden as="h1">{m.text("account.section.wallet")}</VisuallyHidden> : <SubscribeIntro locale={locale} />}
       <MemberNavigationRecovery {...(member ? { expectedPhone: member.blocked ? null : member.phone, expectedAdministrator: !!administrator } : {})} />
