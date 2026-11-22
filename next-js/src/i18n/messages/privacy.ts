@@ -3,7 +3,7 @@ import { authLabels } from "./auth.ts";
 // Server-only page prose (see ../content-messages.ts); page metadata lives in en.ts.
 export const privacyMessages = {
   "privacy.help": "Read app help and forecast guidance",
-  "privacy.intro": "Goal Hint is a football information service operated by {operator} in {country} for {audience} aged {minimumAge} and over. This page describes data handling when you browse or use optional subscriber access, including {paidAccess}.",
+  "privacy.intro": "{operator}, of {businessAddress}, operates Goal Hint and is responsible for collecting personal data through the service. Goal Hint is a football information service for {audience} aged {minimumAge} and over. This page describes data handling when you browse or use optional subscriber access, including {paidAccess}.",
   "privacy.status.title": "Prelaunch data-handling summary",
   "privacy.status.body": "This is not a completed, effective privacy notice. Launch and the notice's effective date are planned for {plannedLaunchDate}. The server country and log and backup retention periods are not yet known. Final publication and public release remain blocked until those operating facts and the related privacy disclosures are complete.",
   "privacy.reviewed": "Technical review: {date}.",
