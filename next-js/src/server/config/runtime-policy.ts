@@ -307,7 +307,7 @@ function flutterwaveConfig(settings: z.output<typeof environmentSchema>) {
     publicKey: secret(configuredKey(publicKey, "FLWPUBK")),
     encryptionKey: secret(mode ? privateFlutterwaveToken(settings.GOAL_HINT_FLUTTERWAVE_ENCRYPTION_KEY) : null),
     checkoutReady: usableSecretKey !== null && (local || webhookSecret !== null),
-  };
+  } as const;
 }
 
 function assemble(settings: z.output<typeof environmentSchema>) {
