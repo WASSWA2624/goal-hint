@@ -11,7 +11,7 @@ def main() -> None:
     for path in ["/en/privacy", "/en/privacy?q=%3Cscript%3Euntrusted-query%3C%2Fscript%3E"]:
         visible = policy_document(origin, path, page="privacy", title="Privacy and data handling",
             notice=notice, sections=["access", "payments", "requests", "search", "storage", "tracking", "images", "football", "retention", "choices"],
-            patterns=[r'<time[^>]*datetime="2026-11-22"[^>]*data-notice-effective[^>]*>Effective from Sunday, November 22, 2026',
+            patterns=[r'<time[^>]*date[Tt]ime="2026-11-22"[^>]*data-notice-effective[^>]*>Effective from Sunday, November 22, 2026',
                 "cached pagination links can contain your search text", "not necessarily erased at that exact time",
                 "Wilson Wasswa", "Uganda", "aged 18 and over", "provider-managed copies remain unverified",
                 "handles privacy requests through the email on the Contact page",

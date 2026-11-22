@@ -14,7 +14,7 @@ def main() -> None:
     for path in ["/en/terms", "/en/terms?q=%3Cscript%3Euntrusted-query%3C%2Fscript%3E"]:
         visible = policy_document(origin, path, page="terms", title="Terms of use", notice=notice,
             sections=["service", "access", "estimates", "updates", "outcomes", "use", "sources", "privacy"],
-            patterns=[r'<time[^>]*datetime="2026-11-22"[^>]*data-notice-effective[^>]*>Effective from Sunday, November 22, 2026',
+            patterns=[r'<time[^>]*date[Tt]ime="2026-11-22"[^>]*data-notice-effective[^>]*>Effective from Sunday, November 22, 2026',
                 "Wilson Wasswa supplies Goal Hint as an individual", "Hoima Road, Wakiso, Uganda",
                 "does not offer betting or accept stakes", "payments buy access to information",
                 "UGX 1,000", "UGX 5,000", "UGX 20,000", "registration starts a one-time free trial",

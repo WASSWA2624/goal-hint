@@ -45,7 +45,10 @@ def verify_checkout_entry(origin):
     paused = request(origin, path, headers={"x-test-viewer": "expired", "x-test-sales": "production"})
     assert paused.status == 200 and "Subscription purchases are temporarily unavailable." in paused.text
     assert "Restoring checkout" not in paused.text and 'href="/en/slips"' in paused.text
-    return 8
+    no_method = request(origin, path, headers={"x-test-viewer": "expired", "x-test-sales": "production-no-payment-method"})
+    assert no_method.status == 200 and "No payment method is available for this purchase." in no_method.text
+    assert "Restoring checkout" not in no_method.text and 'href="/en/slips"' in no_method.text
+    return 9
 
 
 def prepare_fixture(scenarios):
