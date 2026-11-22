@@ -4,6 +4,8 @@ import { createHash } from "node:crypto";
 import type { QuotaAdmission, QuotaPeriodState, QuotaTransaction } from "../football/quota-contract.ts";
 import { projectedCriticalRequests, remainingCriticalReserve, type LiveWorkload } from "./live-plan.ts";
 
+const currentPreMatchEndpoints = new Set(["/odds", "/odds/bets", "/odds/bookmakers"]);
+
 /** Upgrade a running provider day once; subsequent admissions use constant-size counters.
  * No historical quota attempt or uncertain dispatch is deleted or refunded. */
 async function priorityUse(tx: QuotaTransaction, period: QuotaPeriodState) {
@@ -37,11 +39,17 @@ export function createLiveQuotaAdmission(workload: () => LiveWorkload | null, ac
     const used = await priorityUse(tx, period);
     // Provider-reported or prior-plan use is not proof that this runtime's
     // selection/result/refresh obligations have been completed.
-    const owed = Math.max(0, plan.liveDetails.floor - used.ordinary);
+    let owed = Math.max(0, plan.liveDetails.floor - used.ordinary);
     if (period.dayRemaining <= plan.liveDetails.reserve) return false;
-    if (archive) {
+    const currentPreMatch = attempt.priority === "enrichment" && attempt.endpoint !== undefined && currentPreMatchEndpoints.has(attempt.endpoint);
+    if (archive || currentPreMatch) {
       const criticalRequests = projectedCriticalRequests(plan, period.endsAt - now);
-      if (period.dayRemaining <= remainingCriticalReserve(period.providerDailyLimit, criticalRequests)) return false;
+      const reserve = remainingCriticalReserve(period.providerDailyLimit, criticalRequests);
+      if (archive && period.dayRemaining <= reserve) return false;
+      // The scheduled result and discovery work shrinks as the day passes. Keep the
+      // full forecast refresh allocation because those jobs can still run near reset.
+      if (currentPreMatch) owed = Math.min(owed, Math.max(plan.liveDetails.reserve, reserve) +
+        plan.refreshCapacity * plan.refreshRequestsPerJob);
     }
     if (attempt.priority === "live-details") {
       if (used.detail >= plan.liveDetails.requests || period.dayRemaining - owed < 1) return false;
