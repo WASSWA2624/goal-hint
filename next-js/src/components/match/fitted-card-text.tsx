@@ -21,7 +21,7 @@ const Label = styled.span`
   &[data-fitted-probability] > :is([data-full-measure], [data-fitted-line]) {
     display: flex; align-items: baseline; gap: var(--gh-spacing-0_75);
   }
-  :is([data-pick-probability], [data-pick-probability-measure]) { flex: none; font-variant-numeric: tabular-nums; }
+  :is([data-pick-probability], [data-fitted-measure-suffix]) { flex: none; font-variant-numeric: tabular-nums; }
 `;
 
 /** Use the authored abbreviation only when the rendered full wording exceeds its track. */
@@ -45,7 +45,7 @@ export function FittedCardText({ full, short, probability }: { full: string; sho
   const fullLabel = abbreviated && <VisuallyHidden>{full}</VisuallyHidden>;
   return <Label ref={track} title={full} data-fitted-probability={chance ? "" : undefined}>
     {useAbbreviation && <span ref={measure} data-full-measure aria-hidden="true">
-      {chance ? <><span>{full}</span><span data-pick-probability-measure>{chance}</span></> : full}
+      {chance ? <><span>{full}</span><span data-fitted-measure-suffix>{chance}</span></> : full}
     </span>}
     {chance ? <span data-fitted-line>{label}{fullLabel}{" "}<span data-pick-probability>{chance}</span></span>
       : <>{label}{fullLabel}</>}

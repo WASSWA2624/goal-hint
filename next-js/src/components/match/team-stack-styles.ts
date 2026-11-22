@@ -167,6 +167,8 @@ export const teamStackStyles = css`
 
 /** Matches places the market above the selected pick and its prediction engine. */
 export const feedFactsStyles = css`
+  grid-template-columns: minmax(0, 1fr) var(--gh-size-36);
+
   [data-ledger-facts] {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "market" "pick";
