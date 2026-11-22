@@ -1,31 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { usePathname } from "next/navigation";
 import { Header, ShellFrame } from "@/components/navigation/shell-styles";
 import { contentGutter, joinedDesktopSections } from "@/components/ui/layout";
-import {
-  CardIcon, ChartIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, GiftIcon, GridIcon, LayersIcon, ListIcon, SlidersIcon, TicketIcon, UserIcon, type IconProps,
-} from "@/components/ui/icons";
+import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ListIcon, UserIcon } from "@/components/ui/icons";
 import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { adminSections, isRecordAdminSection, type AdminSection } from "@/domain/admin-navigation";
 import { media } from "@/styles/theme";
 import { WorkspaceNavigationLink } from "@/components/ui/workspace-navigation";
+import { adminSectionIcons } from "./admin-section-icons";
 import { getPendingPaymentsSnapshot, seedPendingPayments, subscribePendingPayments } from "./pending-payments";
 import { watchPendingPaymentTitle } from "./pending-title";
 import { adminSidebarSize, getServerSidebarSnapshot, getSidebarSnapshot, saveSidebarPreference, setSidebarPreference, subscribeSidebarPreference } from "./admin-sidebar-state";
 import { useHorizontalResize, workspaceResizeRail } from "./workspace-resize";
 
-const sectionIcons: Record<AdminSection, ComponentType<IconProps>> = {
-  overview: GridIcon, payments: CardIcon, codes: TicketIcon, subscribers: UserIcon, referrals: GiftIcon,
-  plans: LayersIcon, settings: SlidersIcon, audit: ListIcon, analytics: ChartIcon,
-};
-
 function SectionLinks({ current, onNavigate, collapsed = false }: { current: AdminSection; onNavigate?: () => void; collapsed?: boolean }) {
   return <SectionList>
     {adminSections.map(({ key, href, label }) => {
-      const Icon = sectionIcons[key];
+      const Icon = adminSectionIcons[key];
       return <li key={key}>
         <SectionLink href={href} prefetch={false} title={label} aria-label={collapsed ? label : undefined}
           aria-current={key === current ? "page" : undefined} {...(onNavigate ? { onClick: onNavigate } : {})}>
