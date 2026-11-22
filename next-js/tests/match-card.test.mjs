@@ -73,10 +73,14 @@ test("cards show fixture progress until completion without altering market settl
   assert.equal(selectedCardPrediction(noPick), null);
   assert.equal(cardResultStatus(noPick.status, "unavailable"), "upcoming");
   assert.equal(cardResultStatus(noPick.status, "unavailable", true), "pending");
+  assert.equal(cardResultStatus(noPick.status, "unavailable", true, true), "delayed");
+  assert.equal(cardResultStatus("unknown", "unavailable", true, true), "delayed");
+  assert.equal(cardResultStatus(noPick.status, "unavailable", false, true), "upcoming");
   assert.equal(cardResultStatus("live", "pending", true), "live");
-  assert.equal(cardResultStatus("finished-extra-time", "unavailable", true), "pending");
+  assert.equal(cardResultStatus("finished-extra-time", "unavailable", true, true), "pending");
   assert.equal(cardResultStatus("finished-extra-time", "correct", true), "correct");
   assert.equal(createMessages().text("match.result.upcoming"), "Upcoming");
+  assert.equal(createMessages().text("match.result.delayed"), "Delayed");
   for (const status of ["scheduled", "live", "postponed", "unknown"]) {
     for (const outcome of ["pending", "correct", "incorrect", "void", "unavailable"]) {
       assert.equal(cardResultStatus(status, outcome), status === "scheduled" ? "upcoming" : status, `${status}: ${outcome}`);
@@ -209,23 +213,23 @@ test("compact kickoff parts use the EAT reporting zone regardless of the visitor
   assert.equal(messages.reportingDay(Date.UTC(2026, 9, 16, 21, 30)), "Sat, Oct 17");
 });
 
-test("Clean ledger dates and AM/PM clocks agree across midnight, noon and an explicit display zone", () => {
+test("Clean ledger dates and 24-hour kickoff clocks agree across midnight, noon and an explicit display zone", () => {
   const messages = createMessages();
   for (const [instant, date, time] of [
-    [Date.UTC(2026, 9, 28, 6), "28-Oct", "9:00 AM"],
-    [Date.UTC(2026, 9, 28, 9), "28-Oct", "12:00 PM"],
-    [Date.UTC(2026, 9, 28, 18), "28-Oct", "9:00 PM"],
-    [Date.UTC(2026, 9, 28, 21), "29-Oct", "12:00 AM"],
-    [Date.UTC(2026, 9, 28, 21, 30), "29-Oct", "12:30 AM"],
+    [Date.UTC(2026, 9, 28, 6), "28-Oct", "09:00 EAT"],
+    [Date.UTC(2026, 9, 28, 9), "28-Oct", "12:00 EAT"],
+    [Date.UTC(2026, 9, 28, 18), "28-Oct", "21:00 EAT"],
+    [Date.UTC(2026, 9, 28, 21), "29-Oct", "00:00 EAT"],
+    [Date.UTC(2026, 9, 28, 21, 30), "29-Oct", "00:30 EAT"],
   ]) {
     assert.equal(messages.shortKickoffDate(instant), date);
-    assert.equal(messages.shortKickoffTime(instant), time);
+    assert.equal(messages.kickoffTime(instant), time);
     assert.match(messages.reportingInstant(instant), /EAT$/u);
   }
   const visitor = createMessages("en", undefined, "America/New_York");
   const instant = Date.UTC(2026, 9, 28, 21, 30);
   assert.equal(visitor.shortKickoffDate(instant), "28-Oct");
-  assert.equal(visitor.shortKickoffTime(instant), "5:30 PM");
+  assert.equal(visitor.kickoffTime(instant), "17:30 EDT");
 });
 
 test("shared compact labels use familiar names and preserve unknown names without inventing provider codes", () => {
@@ -305,12 +309,12 @@ test("the compact mobile forecast retains independent odds, probability and acce
   assert.equal(messages.text("paywall.unlockPredictionPrice", { price: "1,000" }), "Unlock for UGX 1,000");
 });
 
-test("Clean ledger kickoff precedes league metadata and uses the shared date and AM/PM clock", async () => {
+test("Clean ledger kickoff precedes league metadata and uses the shared date and 24-hour clock with zone", async () => {
   const source = await cardSource;
   const metadata = source.slice(source.indexOf("<Meta data-ledger-meta>"), source.indexOf("</Meta>"));
   assert.ok(metadata.indexOf("<CardKickoff ") < metadata.indexOf("<League "));
   assert.match(source, /messages\.shortKickoffDate\(kickoff\)/u);
-  assert.match(source, /messages\.shortKickoffTime\(kickoff\)/u);
+  assert.match(source, /messages\.kickoffTime\(kickoff\)/u);
   assert.match(source, /title=\{messages\.reportingInstant\(kickoff\)\}/u);
   assert.match(source, /compactLeagueName\(competition\)/u);
 });

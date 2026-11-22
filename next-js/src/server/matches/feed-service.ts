@@ -17,7 +17,7 @@ import { createMysqlPublicSearchLimiter } from "./search-limit.ts";
 import { feedSql, historicalFeedCutoff, storedFeedCoverage, storedFeedRunContext } from "./feed-read.ts";
 import { storedFeedSearch } from "./feed-search.ts";
 import { storedFeedFixtures } from "./fixture-read.ts";
-import { feedPerformanceCacheKey, readFeedPerformance } from "./feed-performance.ts";
+import { feedPerformanceCacheKey, readFeedPerformance, restrictFeedPredictionSql } from "./feed-performance.ts";
 import { adjustPerformanceAvailability, filterFeedResult, readFeedResultOverrides, resultOverridesFor } from "./feed-result-filter.ts";
 import { withFeedOdds, withUpcomingFeaturedOutcomes } from "./feed-odds.ts";
 import { performanceFeedQuery } from "../../domain/feed-performance-summary.ts";
@@ -55,17 +55,18 @@ function pageLink(query: FeedQuery, today: ReportingDate, number: number | null)
 /** List membership and period totals share a source snapshot, with independent filter identities. */
 export async function storedFeedVersions(tx: Prisma.TransactionClient, query: FeedQuery, today: ReportingDate,
   sourceRange: ReportingDateRange, competitionIds: readonly number[], completedOnly = false, publishedOnly = false,
-  historyBefore: number | null = null, providerOdds = publicPolicy.features.providerOdds, publishedForecasts = publishedOnly) {
+  historyBefore: number | null = null, providerOdds = publicPolicy.features.providerOdds, publishedForecasts = publishedOnly, predictedMatchesOnly = false) {
   const tags = ["global:catalog", ...Array.from({ length: sourceRange.dayCount }, (_, day) => `date:${addReportingDays(sourceRange.startDate, day)}`)];
   const generations = await readPublicCacheGenerations(tx, tags), scope = [...competitionIds].sort((a, b) => a - b);
-  const version = (query: FeedQuery) => evidenceFingerprint({ contract: "feed-pagination-v13",
+  const version = (query: FeedQuery, predictedOnly = false) => evidenceFingerprint({ contract: "feed-pagination-v13",
     completedOnly, publishedOnly, historyBefore, providerOdds, publishedForecasts,
+    ...(predictedOnly ? { predictedOnly } : {}),
     query: feedQueryKey(query, today), scope, generations });
-  return { paginationVersion: version(query), performanceVersion: version(performanceFeedQuery(query)) };
+  return { paginationVersion: version(query, predictedMatchesOnly), performanceVersion: version(performanceFeedQuery(query)) };
 }
 
 export type MatchFeedReadContext = Readonly<{ locale?: string; routeDate?: string; completedOnly?: boolean;
-  publishedOnly?: boolean; publishedForecasts?: boolean }>;
+  publishedOnly?: boolean; publishedForecasts?: boolean; predictedMatchesOnly?: boolean }>;
 
 /** Public readers supply their verified odds permission. */
 export function createMatchFeedService(options: Readonly<{ database: DatabaseRuntime; competitionIds: readonly number[]; clock?: Clock; cache?: PublicResponseCache;
@@ -79,6 +80,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
   return Object.freeze({ async query(input: FeedParameters, context: MatchFeedReadContext = {}): Promise<StoredMatchFeedResponse> {
     const publishedOnly = context.publishedOnly === true;
     const publishedForecasts = context.publishedForecasts ?? publishedOnly;
+    const predictedMatchesOnly = context.predictedMatchesOnly === true;
     const asOf = clock.now(), reportingToday = getReportingDate(asOf);
     const query = parseMatchFeedQuery(input, reportingToday, { ...context, providerOdds, asOf });
     const today = getFeedToday(query, asOf), range = resolveFeedDates(query, today);
@@ -93,13 +95,16 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       const read = () => database.transaction(async (tx) => {
         // Source writes (including live clock updates) and the generations commit atomically.
         const versions = await storedFeedVersions(tx, query, today, sourceRange, competitionIds, context.completedOnly,
-          publishedOnly, historyBefore, providerOdds, publishedForecasts);
+          publishedOnly, historyBefore, providerOdds, publishedForecasts, predictedMatchesOnly);
         const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale, context.completedOnly);
         const baseSql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly, publishedOnly, historyBefore, publishedForecasts);
         const useDefaultFeatured = isDefaultFeaturedScope(query);
-        let overrides = query.result || options.includePerformance !== false
-          ? await readFeedResultOverrides(tx, baseSql, { publishedForecasts, useDefaultFeatured }) : new Map();
-        const sql = query.result ? await filterFeedResult(tx, baseSql, query.result, undefined, overrides) : baseSql;
+        const includeSettlements = Boolean(query.result || options.includePerformance !== false);
+        let overrides = predictedMatchesOnly || includeSettlements
+          ? await readFeedResultOverrides(tx, baseSql, { publishedForecasts, useDefaultFeatured, includeSettlements }) : new Map();
+        const predictionSql = predictedMatchesOnly ? restrictFeedPredictionSql(baseSql, overrides) : baseSql;
+        if (predictedMatchesOnly) overrides = new Map([...overrides].filter(([, value]) => value.hasPrediction));
+        const sql = query.result ? await filterFeedResult(tx, predictionSql, query.result, undefined, overrides) : predictionSql;
         // Start with the indexed date cohort. Choosing the competition/season
         // join first scans its entire archive before applying the date window.
         // Options cover the entire date cohort, independently of applied filters/page.
@@ -118,11 +123,12 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
             ${sql.exact ? Prisma.sql`SUM(CASE WHEN ${sql.exact} THEN 1 ELSE 0 END)` : Prisma.sql`NULL`} AS exact
           ${sql.countJoins} ${sql.searchJoin} WHERE ${sql.where}`);
         if (!matching) throw new MatchFeedError("unavailable");
-        const total = Number(matching.total), knownFixtures = Number(leagueRows[0]?.knownFixtures ?? 0), matchingWithMarket = Number(matching.available ?? 0);
+        const total = Number(matching.total), knownFixtures = Number(leagueRows[0]?.knownFixtures ?? 0);
+        const matchingWithMarket = predictedMatchesOnly ? total : Number(matching.available ?? 0);
         const legacyPerformanceAvailable = Number(matching.performanceAvailable ?? 0);
         // Only a true zero may skip the separate summary read. Replay can add a
         // displayed selection to fixtures without an original publication.
-        if (total > 0 && legacyPerformanceAvailable === 0 && !query.result && options.includePerformance === false)
+        if (!predictedMatchesOnly && total > 0 && legacyPerformanceAvailable === 0 && !query.result && options.includePerformance === false)
           overrides = await readFeedResultOverrides(tx, baseSql, { publishedForecasts, useDefaultFeatured });
         const visibleOverrides = resultOverridesFor(overrides, query.result);
         const matchingWithPerformancePick = adjustPerformanceAvailability(legacyPerformanceAvailable, visibleOverrides);
@@ -208,7 +214,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       const response = options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
         query: { ...query, projection: 33, providerOdds, completedOnly: context.completedOnly === true,
-          publishedOnly, publishedForecasts, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } },
+          publishedOnly, publishedForecasts, predictedMatchesOnly, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } },
         scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => storedMatchFeedResponseSchema.parse(value) }), read) : await read();
       const current = providerOdds ? await withFeedOdds(database, response, asOf, allowInPlayOdds, !publishedForecasts) : response;

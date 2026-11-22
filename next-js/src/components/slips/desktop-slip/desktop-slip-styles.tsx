@@ -55,7 +55,7 @@ export const DesktopSlipBase = styled.div`
   }
 
   ${desktopMatchBaseStyles}
-  [data-desktop-row][data-numbered-date] { --review-date-width: var(--gh-size-18_6); }
+  [data-desktop-row][data-numbered-date] { --review-date-width: var(--gh-size-29); }
   [data-numbered-date] [data-row-date] { display: flex; align-items: center; gap: var(--gh-spacing-1_25); }
   @media (max-width: ${({ theme }) => theme.viewport[79.99]}) {
     --slip-header-separator-offset: calc(-1 * var(--gh-size-1_25));

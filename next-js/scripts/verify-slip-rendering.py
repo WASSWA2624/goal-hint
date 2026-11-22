@@ -107,7 +107,7 @@ def verify_clean_ledger_selection(card, path):
     assert len(kickoff) == len(competition) == len(country) == 1, f"{path}: top row retains date/time, league and country"
     metadata = meta[0].nodes()
     assert metadata.index(kickoff[0]) < metadata.index(competition[0]) < metadata.index(country[0]), f"{path}: date/time lead league and country"
-    assert re.search(r"\b\d{1,2}-[A-Z][a-z]{2}\s*\d{1,2}:\d{2}\s+(?:AM|PM)\b", kickoff[0].text), f"{path}: compact day-month and time with AM/PM"
+    assert re.search(r"\b\d{1,2}-[A-Z][a-z]{2}\s*\d{2}:\d{2}\s+EAT\b", kickoff[0].text), f"{path}: compact day-month and 24-hour time with zone"
     assert kickoff[0].attrs.get("datetime", "").endswith("Z"), f"{path}: kickoff retains its machine-readable UTC instant"
     assert "EAT" in kickoff[0].text + kickoff[0].attrs.get("title", ""), f"{path}: kickoff identifies the reporting timezone"
     versus = teams[0].nodes(attr="data-versus")

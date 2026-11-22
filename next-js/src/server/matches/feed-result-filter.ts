@@ -36,9 +36,9 @@ function initialFeedOutcome(cycleState: string | null, status: string): Predicti
 
 /** Match the default replay/frozen decision or the explicitly projected search pick before pagination. */
 export async function readFeedResultOverrides(tx: Prisma.TransactionClient, sql: ReturnType<typeof feedSql>, options: Readonly<{
-  publishedForecasts: boolean; useDefaultFeatured: boolean;
+  publishedForecasts: boolean; useDefaultFeatured: boolean; includeSettlements?: boolean;
 }>): Promise<FeedResultOverrides> {
-  const overrides = new Map<string, { baseline: Result; result: Result }>();
+  const overrides = new Map<string, { baseline: Result; result: Result; hasPrediction: boolean }>();
   const defaults = options.publishedForecasts && options.useDefaultFeatured;
   if (!defaults && (!sql.projectPick || options.useDefaultFeatured)) return overrides;
   const local = Prisma.sql`EXISTS (SELECT 1 FROM MarketPrediction localMarket
@@ -81,11 +81,14 @@ export async function readFeedResultOverrides(tx: Prisma.TransactionClient, sql:
       affected.push(row);
       if (shown) picks.set(row.id, { key: shown.marketKey, selection: shown.selection });
     }
-    const settlements = await readFeaturedSettlements(tx, picks);
-    for (const row of affected) overrides.set(row.id, {
-      baseline: row.legacyAvailable ? initialFeedOutcome(row.cycleState, row.fixtureStatus) : "unavailable",
-      result: displayedFeedResult(settlements.get(row.id), row.fixtureStatus === "canceled"),
-    });
+    const settlements = options.includeSettlements === false ? null : await readFeaturedSettlements(tx, picks);
+    for (const row of affected) {
+      const hasPrediction = picks.has(row.id);
+      const initial = initialFeedOutcome(row.cycleState, row.fixtureStatus);
+      const result = settlements ? displayedFeedResult(settlements.get(row.id), row.fixtureStatus === "canceled")
+        : hasPrediction ? initial : "unavailable";
+      overrides.set(row.id, { baseline: row.legacyAvailable ? initial : "unavailable", result, hasPrediction });
+    }
     if (rows.length < 500) break;
     after = rows.at(-1)!;
   }

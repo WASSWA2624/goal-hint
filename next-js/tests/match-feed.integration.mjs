@@ -250,6 +250,16 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       assert.equal(result.coverage.knownFixtures, 72);
       assert.equal(result.coverage.matchingWithMarket, 9);
       assert.equal(result.records.filter(({ forecast }) => forecast === null).length, 63);
+      const predictedContext = { ...context, predictedMatchesOnly: true };
+      const predicted = await service.query({ date, pageSize: '2' }, predictedContext);
+      const nextPredicted = await service.query(new URL(predicted.links.next, 'http://localhost').searchParams, predictedContext);
+      assert.equal(predicted.total, 9);
+      assert.equal(predicted.totalPages, 5);
+      assert.equal(predicted.performanceVersion, result.performanceVersion, 'the separate period summary resolves against the same source generation');
+      assert.notEqual(predicted.paginationVersion, result.paginationVersion);
+      assert.ok([...predicted.records, ...nextPredicted.records].every(({ forecast }) => forecast?.markets.length));
+      assert.equal(gateFeedResponse(predicted, { tier: 'free', signedIn: false }).total, 9);
+      assert.equal((await service.query({ date: '2026-10-10' }, predictedContext)).total, 0);
       const tomorrow = await service.query({ date: '2026-10-10' }, context);
       assert.equal(tomorrow.total, 1);
       assert.equal(tomorrow.records[0].forecast, null);

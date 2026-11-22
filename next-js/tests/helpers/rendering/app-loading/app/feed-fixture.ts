@@ -35,7 +35,7 @@ function fixtureResult(record: { status: string; score: { home: number; away: nu
 
 export function summaryFixture(query: FeedQuery) {
   const { at, selected } = fixtureCohort(query);
-  const performance = { total: selected.length, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0, unavailable: 0 };
+  const performance = { total: selected.length + 1, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0, unavailable: 1 };
   for (const record of selected) performance[fixtureResult(record)]++;
   return feedPerformanceReplySchema.parse({ performance, asOf: at, access: scenarios.feed.access, paginationVersion: scenarios.feed.paginationVersion });
 }

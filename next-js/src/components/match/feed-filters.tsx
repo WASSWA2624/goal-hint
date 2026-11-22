@@ -24,7 +24,6 @@ import { createMessages } from "@/i18n/messages";
 import { useDeviceTimeZone } from "@/i18n/use-messages";
 import { draftChanged, queryApplied } from "@/state/feed";
 import { useAppDispatch } from "@/state/hooks";
-import { PicksOnlyFilter } from "./feed-controls";
 import { DateStrip } from "./feed-dates";
 import { FeedMarketPickerDialog, feedMarketLabels, type FeedMarketDraft } from "./feed-market-filters";
 import { FeedStatusSelect } from "./feed-query-selects";
@@ -198,10 +197,6 @@ export function FeedFilters({ query, today, leagues, onApply, searchText, onSear
           <legend>{messages.text("feed.filters.oddsLabel")}</legend>
           <FilterFieldRow data-fields>{oddsInput("min")}{oddsInput("max")}</FilterFieldRow>
         </FilterSection></FilterDialogSection>
-        <FilterDialogSection>
-          <PicksOnlyFilter locale={query.locale} checked={draft.query.picks === "only"} disabled={locked}
-            onChange={checked => setDraft(current => ({ ...current, query: { ...current.query, picks: checked ? "only" : "all" } }))} />
-        </FilterDialogSection>
         <FilterDialogSection>
           <MarketFilterControl dialogId={marketsId} open={marketDraft !== null} summary={marketSummary}
             onClick={() => {

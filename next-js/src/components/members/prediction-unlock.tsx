@@ -81,9 +81,10 @@ export function UnlockButton({ locale = "en", signedIn = false, returnTo = "/en"
   cardTitle?: string;
 }) {
   const m = createMessages(locale);
+  const cardLabel = cardTitle ? m.text("paywall.unlockPredictions") : null;
   return <AccessButton href={subscriberHref(signedIn, returnTo, guestView)} prefetch={false} variant="secondary" $embedded={compact}
-    data-unlock-button data-unlock-card={cardTitle ? "" : undefined} aria-label={cardTitle ? `${m.text("paywall.unlock")}: ${cardTitle}` : undefined}>
+    data-unlock-button data-unlock-card={cardTitle ? "" : undefined} aria-label={cardLabel ? `${cardLabel}: ${cardTitle}` : undefined}>
     <LockIcon aria-hidden="true" />{actionSpecific && !cardTitle ? <UnlockActionLabel locale={locale} signedIn={signedIn} />
-      : <span>{m.text(compact || cardTitle ? "paywall.unlock" : signedIn ? "paywall.subscribeUnlock" : "paywall.registerUnlock")}</span>}
+      : <span>{cardLabel ?? m.text(compact ? "paywall.unlock" : signedIn ? "paywall.subscribeUnlock" : "paywall.registerUnlock")}</span>}
   </AccessButton>;
 }

@@ -31,7 +31,8 @@ export async function verifyAppLoading(page, origin) {
       assert(await summary.evaluate(element => getComputedStyle(element).backgroundColor) === background, `${theme}/${width}: loading colors differ from the selected theme`);
       assert(summaryRequests === 0, 'The streamed summary must not trigger an immediate duplicate API read');
       assert(await summary.locator('[data-summary-count="all"]').innerText() === '55'
-        && await page.locator('[data-fixture-id]').count() === 50, 'Performance includes the complete cohort across pages');
+        && await page.locator('[data-fixture-id]').count() === 50, 'All counts predictions across pages and excludes the unavailable fixture');
+      assert(await summary.locator('[data-summary-predicted], [data-summary-unavailable]').count() === 0, 'Coverage has no separate summary row');
       assert(await summary.locator('[data-summary-result="won"]').getAttribute('aria-label') === 'Won: 10', 'Audited figures must replace unknown counts');
       assert(await page.evaluate(() => document.querySelectorAll('main').length === 1 && document.documentElement.scrollWidth <= innerWidth), `${theme}/${width}: landmark or viewport overflow`);
       if (width === 390 || width === 1440) await page.screenshot({ path: `output/playwright/ready-matches-${theme}-${width}.png` });

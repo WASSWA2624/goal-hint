@@ -98,8 +98,9 @@ export function selectedCardPrediction(fixture: FixtureSnapshot, family: MarketF
 }
 
 /** Show fixture progress until completion, without changing the market's audited settlement. */
-export function cardResultStatus(status: FixtureSnapshot["status"], outcome: SettlementOutcomeStatus | "unavailable", awaitingResult = false) {
-  if (awaitingResult && (status === "scheduled" || status === "unknown" || isPlayedFinalStatus(status) && outcome === "unavailable")) return "pending";
+export function cardResultStatus(status: FixtureSnapshot["status"], outcome: SettlementOutcomeStatus | "unavailable", awaitingResult = false, kickoffPassed = false) {
+  if (awaitingResult && (status === "scheduled" || status === "unknown")) return kickoffPassed ? "delayed" : "pending";
+  if (awaitingResult && isPlayedFinalStatus(status) && outcome === "unavailable") return "pending";
   if (status === "scheduled") return "upcoming";
   return status !== "canceled" && isCompletedFixtureStatus(status) && outcome !== "unavailable" ? outcome : status;
 }

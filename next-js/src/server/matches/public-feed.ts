@@ -11,20 +11,21 @@ import { createMatchFeedSummaryService } from "./feed-summary-service.ts";
 import { publicOddsEnabled } from "../odds/public-odds-policy.ts";
 
 export const publicMatchProjection = { publishedOnly: false, publishedForecasts: true } as const;
+const publicMatchListProjection = { ...publicMatchProjection, predictedMatchesOnly: true } as const;
 
 /** Pages and HTTP reads share the same stored projection, scope and cache. */
 export function readPublicMatchFeed(parameters: FeedParameters, context: MatchFeedReadContext = {}, clock?: Clock) {
-  return readStoredFeed(parameters, { ...context, ...publicMatchProjection }, clock, true);
+  return readStoredFeed(parameters, { ...context, ...publicMatchListProjection }, clock, true);
 }
 
 /** The offline snapshot contains fixtures and scores independently of forecast availability. */
 export function readOfflineFixtureFeed(parameters: FeedParameters, context: MatchFeedReadContext = {}, clock?: Clock) {
-  return readStoredFeed(parameters, { ...context, publishedOnly: false, publishedForecasts: false }, clock, false, publicPolicy.features.providerOdds);
+  return readStoredFeed(parameters, { ...context, publishedOnly: false, publishedForecasts: false, predictedMatchesOnly: false }, clock, false, publicPolicy.features.providerOdds);
 }
 
 /** Match cards and their exact pagination do not wait for a historical audit. */
 export function readPublicMatchFeedList(parameters: FeedParameters, context: MatchFeedReadContext = {}, clock?: Clock) {
-  return readStoredFeed(parameters, { ...context, ...publicMatchProjection }, clock, false);
+  return readStoredFeed(parameters, { ...context, ...publicMatchListProjection }, clock, false);
 }
 
 /** Independently bounded aggregate request; list navigation keeps its 30s limit. */

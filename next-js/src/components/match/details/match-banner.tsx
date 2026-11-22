@@ -95,6 +95,11 @@ const Context = styled.p`
 const DayLink = styled(Link)`
   color: inherit;
   text-decoration: none;
+  [data-kickoff-full-date] { display: none; }
+  ${desktop} {
+    [data-kickoff-short-date] { display: none; }
+    [data-kickoff-full-date] { display: inline; }
+  }
   ${media.hover} { &:hover { text-decoration: underline; } }
   ${focusRing}
 `;
@@ -185,8 +190,11 @@ export const MatchBanner = memo(function MatchBanner({ touchline = false }: { to
       <CompetitionLogo country={fixture.competition.country} url={fixture.competition.logoUrl} />
       {competition}{"\u00a0· "}
       {fixture.kickoffAt !== null ? <span><DayLink href={matchArchiveHref(fixture.kickoffAt, locale)!} prefetch={false}>
-        <time dateTime={toUtcIsoString(fixture.kickoffAt)}>{messages.reportingDay(fixture.kickoffAt)}</time></DayLink>
-        {"\u00a0· "}{messages.reportingTime(fixture.kickoffAt)} {messages.timeZone(fixture.kickoffAt)}</span> : <span>{messages.text("details.kickoffUnknown")}</span>}
+        <time dateTime={toUtcIsoString(fixture.kickoffAt)}>
+          <span data-kickoff-short-date>{messages.reportingDay(fixture.kickoffAt)}</span>
+          <span data-kickoff-full-date>{messages.shortKickoffDate(fixture.kickoffAt, true)}</span>
+        </time></DayLink>
+        {"\u00a0· "}{messages.kickoffTime(fixture.kickoffAt)}</span> : <span>{messages.text("details.kickoffUnknown")}</span>}
     </Context>
     <h1 id="match-banner-title" style={{ position: "absolute", inlineSize: "var(--gh-size-0_25)", blockSize: "var(--gh-size-0_25)", overflow: "hidden", clipPath: "inset(50%)" }}>
       {messages.text("match.title", { home, away })}

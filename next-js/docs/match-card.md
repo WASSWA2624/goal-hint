@@ -67,15 +67,12 @@ restricted. Reusable locked-card primitives still identify a published eligible
 family without inventing a probability or confusing it with `noPickReason`.
 
 The renderer reuses `selectedCardPrediction`, `selectedCardPrice` and
-`cardResultStatus`; it does not add settlement rules. Scheduled fixtures show
-Upcoming and VS without inventing a score. Running clocks use supplied phases,
-minutes and stoppage time; paused phases retain their phase label. Finished,
-postponed, canceled, abandoned and awarded fixtures keep their stored status.
-One shared status label shows Upcoming before kickoff. Desktop retains Live
-during play; mobile shows the observed live clock or paused phase. Only terminal fixtures show the recorded prediction outcome
-(Won, Lost, Pending, Void or unavailable). Postponed and unknown fixtures retain
-their match status. Saved results can show their recorded outcome without
-inventing a current fixture observation; anonymous offline cards retain Saved.
+`cardResultStatus`. Upcoming fixtures display without scores. Matches cards
+awaiting a verified start after kickoff show Delayed. Running clocks use supplied
+phases, minutes and stoppage time, and paused phases retain their phase label.
+Terminal fixtures show the recorded prediction outcome (Won, Lost, Pending,
+Void or unavailable). Saved results can show their recorded outcome, and
+anonymous offline cards display Saved.
 
 ### Desktop: shared Aligned ledger (64rem and above)
 
@@ -83,7 +80,7 @@ The former eleven-track match table, decorative column heading and alternating
 row striping are replaced by the same nine-cell composition as betting slips
 and the slip builder:
 
-1. Kickoff date.
+1. Kickoff date with year.
 2. Kickoff time and display zone.
 3. Country flag and full country name.
 4. League crest and name.
@@ -133,7 +130,7 @@ receives an invented time or value.
 
 On the Matches feed below 48rem the league and text-only status share the top
 row. Kickoff date and time share a width beside the teams and align with the
-leading league icon or flag. The 12-hour time uses two-digit hours. Available
+leading league icon or flag. The kickoff clock uses two-digit hours and a time-zone label. Available
 live and finished scores align with their teams. Upcoming matches skip the
 score cells. The market occupies one line in the right column and uses its
 abbreviation if the full name is too wide. The pick and engine icon share the
@@ -146,7 +143,7 @@ Tablet feed cards and slip selections share the following layout. Matches uses
 the same two forecast lines as on phones.
 
 1. A faintly tinted, 18px-wide match-number slot matches the team logos; the
-   kickoff date aligns with team names. Number, date, AM/PM clock and league stay on
+   kickoff date aligns with team names. Number, date, kickoff time with zone and league stay on
    one unwrapped row. The league uses remaining space and ellipsis; full league
    and country names remain available in accessible descriptions and titles.
 2. Home and away teams form two left-aligned rows with leading crests. Full
@@ -198,11 +195,10 @@ use the shared 136-entry vocabulary described in `docs/betting-short-forms.md`.
 
 ## Time, images and offline behavior
 
-Date/time display uses the shared `Messages` formatters. Feed kickoff formatting
-adopts the device display zone after hydration with a stable EAT server fallback;
-slips retain their reporting-zone default. UTC instants, EAT reporting cohorts,
-forecast publication and stored snapshot values are never rewritten by visual
-formatting. An unknown kickoff keeps its localized fallback without an invented
+Kickoff times use a shared 24-hour formatter with a visible time zone. Device-zone
+views start with EAT on the server and adopt the device zone after hydration.
+UTC instants, EAT reporting cohorts, forecast publication and stored snapshot
+values are preserved. Unknown kickoffs display a localized fallback without a
 clock or `datetime`.
 
 Local MIT-licensed flags in `public/flags` resolve recognized football countries,

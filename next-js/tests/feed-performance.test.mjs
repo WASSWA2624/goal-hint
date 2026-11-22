@@ -4,7 +4,7 @@ import test from 'node:test';
 import { feedPerformanceSchema } from '../src/domain/match-feed.ts';
 import { parseFeedQuery, resolveFeedDates } from '../src/domain/feed-query.ts';
 import { parseReportingDate } from '../src/domain/calendar.ts';
-import { feedPerformanceCacheKey, readFeedPerformance } from '../src/server/matches/feed-performance.ts';
+import { feedPerformanceCacheKey, readFeedPerformance, restrictFeedPredictionSql } from '../src/server/matches/feed-performance.ts';
 import { feedSql } from '../src/server/matches/feed-read.ts';
 import { evidenceFingerprint, evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
 import { settlementContextFor, settlementInputFor } from '../src/server/settlement/settlement-read.ts';
@@ -13,6 +13,18 @@ import { fixtureResultFromRow } from '../src/server/results/result-read.ts';
 const today = parseReportingDate('2026-10-09'), at = Date.parse('2026-10-09T15:00:00Z');
 const query = parseFeedQuery({ date: today, page: '2', pageSize: '1' }, { today });
 const sql = feedSql(query, resolveFeedDates(query, today), [39]);
+
+test('the predicted feed keeps replay picks and excludes featured abstentions before pagination', () => {
+  const predicted = restrictFeedPredictionSql(sql, new Map([
+    ['replay', { baseline: 'unavailable', result: 'pending', hasPrediction: true }],
+    ['abstention', { baseline: 'pending', result: 'unavailable', hasPrediction: false }],
+  ]));
+  assert.equal(predicted.pageJoins, sql.countJoins);
+  assert.match(predicted.where.sql, /m.available=TRUE OR f.id\s+IN/u);
+  assert.match(predicted.where.sql, /f.id\s+NOT IN/u);
+  assert.ok(predicted.where.values.includes('["replay"]'));
+  assert.ok(predicted.where.values.includes('["abstention"]'));
+});
 
 test('statistics cache identity follows resolved UTC cohorts and exact filtering/ranking rules', () => {
   const key = (parameters, scope = [39], prices = false) => {

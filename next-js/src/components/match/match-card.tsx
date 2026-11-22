@@ -30,6 +30,7 @@ import { useMessages } from "@/i18n/use-messages";
 import { resolveLocale } from "@/i18n/locales";
 import { performanceResultColors } from "@/styles/performance-result-colors";
 import { media, type OutcomeTone } from "@/styles/theme";
+import type { GoalHintTheme } from "@/styles/theme-foundation";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { ChevronIcon } from "./match-icons";
 import { CompetitionCountryFlag, CompetitionLogo } from "./competition-media";
@@ -69,6 +70,8 @@ export type MatchCardProps = {
   position?: number;
   /** The Matches feed uses compact prediction facts and its own kickoff and score layout on phones. */
   phoneFeed?: boolean;
+  /** The scheduled kickoff has passed as of the feed observation. */
+  kickoffPassed?: boolean;
   /** Appended to the card's accessible title, such as "similar result" for an approximate search match. */
   titleNote?: string | undefined;
   /** Anonymous saved fixtures: no live claim, predictions, media requests, or detail action. */
@@ -85,10 +88,30 @@ const countryFlagUrl = (fixture: FixtureSnapshot) => fixture.competition.country
 const tile = media.belowDesktop, table = media.desktop, wideTable = media.wide;
 const ellipsis = css`min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;`;
 const settledOutcome = (outcome: OutcomeTone) => outcome === "correct" || outcome === "incorrect" || outcome === "void";
-const headerResults: Partial<Record<ReturnType<typeof cardResultStatus> | OutcomeTone, PredictionResult>> = {
+type CardResult = ReturnType<typeof cardResultStatus> | OutcomeTone;
+type HeaderResult = CardResult | PredictionResult | "half-time";
+const headerResults: Partial<Record<CardResult, PredictionResult>> = {
   correct: "won", incorrect: "lost", pending: "pending", void: "void", canceled: "cancelled",
 };
-const Card = styled.article<{ $headerResult?: PredictionResult | undefined }>`
+
+function matchHeaderColors(theme: GoalHintTheme, result: HeaderResult) {
+  switch (result) {
+    case "live": return { text: theme.color.live.text, background: theme.color.live.soft };
+    case "upcoming": return performanceResultColors(theme, "all");
+    case "half-time":
+    case "postponed":
+    case "abandoned": return performanceResultColors(theme, "cancelled");
+    case "delayed": return performanceResultColors(theme, "pending");
+    case "won":
+    case "lost":
+    case "pending":
+    case "void":
+    case "cancelled": return performanceResultColors(theme, result);
+    default: return theme.color.outcome.unavailable;
+  }
+}
+
+const Card = styled.article<{ $headerResult?: HeaderResult | undefined }>`
   position: relative;
   display: grid;
   min-inline-size: 0;
@@ -112,20 +135,11 @@ const Card = styled.article<{ $headerResult?: PredictionResult | undefined }>`
       [data-ledger-facts], [data-ledger-teams] > [data-match-state], > [data-match-open] { display: none; }
       [data-ledger-teams] { grid-template-columns: minmax(0, 1fr); }
     }
-    &[data-phone-feed-card] { ${feedFactsStyles} }
-    font-family: ${({ theme }) => theme.typography.family};
-    /* Match and slip tiles share the active theme's shared, shadow-free phone frame. */
-    border: 0;
-    border-radius: ${({ theme }) => theme.phoneCardFrame.radius};
-    [data-mobile-only] { display: inline; }
-    [data-desktop-only] { display: none; }
-  }
-  ${media.phone} {
     &[data-phone-feed-card] {
-      ${phoneFeedRowStyles}
+      ${feedFactsStyles}
       ${({ theme, $headerResult }) => {
         if (!$headerResult) return;
-        const tone = performanceResultColors(theme, $headerResult);
+        const tone = matchHeaderColors(theme, $headerResult);
         return css`
           &::before {
             content: ""; grid-area: 1 / 1 / 2 / -1; align-self: stretch;
@@ -137,6 +151,15 @@ const Card = styled.article<{ $headerResult?: PredictionResult | undefined }>`
         `;
       }}
     }
+    font-family: ${({ theme }) => theme.typography.family};
+    /* Match and slip tiles share the active theme's shared, shadow-free phone frame. */
+    border: 0;
+    border-radius: ${({ theme }) => theme.phoneCardFrame.radius};
+    [data-mobile-only] { display: inline; }
+    [data-desktop-only] { display: none; }
+  }
+  ${media.phone} {
+    &[data-phone-feed-card] { ${phoneFeedRowStyles} }
   }
   ${table} {
     grid-template-columns: ${matchTableColumns.compact};
@@ -158,6 +181,7 @@ const MobileUnlockArea = styled.div`
   ${tile} {
     grid-area: facts; display: flex; min-inline-size: 0; align-self: stretch;
     > a { inline-size: 100%; block-size: 100%; padding: var(--gh-spacing-1_5); gap: var(--gh-spacing-1); font-size: var(--gh-font-caption); }
+    > [data-unlock-card] { padding-inline: var(--gh-spacing-1); }
   }
   ${table} {
     &:has(> [data-unlock-card]) {
@@ -237,12 +261,6 @@ const KickoffTime = styled.span`
     max-inline-size: 100%;
     white-space: normal;
   }
-`;
-const KickoffZone = styled.span`
-  color: ${({ theme }) => theme.color.mutedText};
-  font-weight: var(--gh-weight-body);
-  ${tile} { font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-  ${table} { overflow-wrap: anywhere; }
 `;
 const KickoffDetails = styled.span`
   display: contents;
@@ -356,8 +374,10 @@ const FeedFacts = styled.div`
   min-inline-size: 0;
   ${table} {
     grid-column: 7 / span 4; grid-row: 2;
-    display: flex; align-items: center; gap: var(--gh-spacing-2);
+    display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    align-items: center; gap: var(--gh-spacing-2);
     > [data-ledger-field="market"] { color: ${({ theme }) => theme.color.mutedText}; }
+    > [data-ledger-field="prediction"] { grid-column: 2; }
   }
 `;
 /** A shared value cell keeps every selected-pick fact in the same column on both layouts. */
@@ -566,13 +586,9 @@ function CardKickoff({ kickoff, locale, phoneFeed }: { kickoff: FixtureSnapshot[
         <KickoffDate data-kickoff-date>
           <span data-mobile-only>{messages.shortKickoffDate(kickoff)}</span>
           {phoneFeed && <span data-phone-kickoff>{messages.shortKickoffDate(kickoff, true, "numeric")}</span>}
-          <span data-desktop-only>{messages.reportingDay(kickoff)}</span>
+          <span data-desktop-only>{messages.shortKickoffDate(kickoff, true)}</span>
         </KickoffDate><Dot aria-hidden="true">·</Dot>
-        <KickoffTime data-kickoff-time>
-          <span data-mobile-only>{messages.shortKickoffTime(kickoff)}</span>
-          {phoneFeed && <span data-phone-kickoff>{messages.shortKickoffTime(kickoff, "2-digit")}</span>}
-          <span data-desktop-only>{messages.reportingTime(kickoff)}<KickoffZone data-kickoff-zone> {messages.timeZone(kickoff)}</KickoffZone></span>
-        </KickoffTime>
+        <KickoffTime data-kickoff-time>{messages.kickoffTime(kickoff)}</KickoffTime>
       </KickoffDetails>
     </When>;
 }
@@ -599,7 +615,7 @@ function DesktopCard(props: ComponentProps<typeof DesktopMatchRow>) {
 
 function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, markets, publishedMarket = false, selectedFamily, locale: requestedLocale,
   headingLevel = 2, eagerLogos = false, position, phoneFeed = false, titleNote, offline = false, snapshotPick, lockedPrediction = false,
-  signedIn = false, interactive = true, accessReturnTo }: MatchCardProps) {
+  signedIn = false, interactive = true, accessReturnTo, kickoffPassed = false }: MatchCardProps) {
   const locale = resolveLocale(requestedLocale);
   const messages = createMessages(locale);
   const titleId = `gh-match-${useId()}`;
@@ -690,9 +706,10 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     : retrospective || filtered && originalOutcome?.item.market.selection !== filtered.selection ? "unavailable"
     : originalOutcome?.status ?? prediction?.status ?? "unavailable";
   const awaitingResult = fixture.update?.statusFreshness?.state === "awaiting-update";
-  const result = snapshotPick ? outcome : cardResultStatus(fixture.status, outcome, awaitingResult);
-  const headerResult = phoneFeed && !offline && !snapshotPick && (result !== "pending" || prediction && outcome === "pending")
-    ? headerResults[result] : undefined;
+  const result = snapshotPick ? outcome : cardResultStatus(fixture.status, outcome, awaitingResult, kickoffPassed);
+  const headerResult = phoneFeed && !offline && !snapshotPick
+    ? result === "live" && fixture.liveClock?.phase === "half-time" ? "half-time" : headerResults[result] ?? result
+    : undefined;
   const percent = prediction && (prediction.probability.labelKey === "probability.percent"
     ? messages.text("probability.percent", { percent: messages.number(prediction.probability.roundedPercent, snapshotPick
       ? { minimumFractionDigits: 1, maximumFractionDigits: 1 } : undefined) })
@@ -735,7 +752,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
         logoUrl: fixture.competition.logoUrl, countryFlagUrl: flagUrl }}
       status={fixture.status} score={showScore || snapshotPick ? score : null} shootout={shootout} liveClock={offline ? null : fixture.liveClock ?? null}
       regulationOnly={regulationOnly} compactMatch={phoneFeed} {...(scoreDescription ? { scoreDescription } : {})}
-      outcome={offline ? "unavailable" : outcome} awaitingResult={awaitingResult} headingLevel={headingLevel} pickState={pickState}
+      outcome={offline ? "unavailable" : outcome} awaitingResult={awaitingResult} kickoffPassed={kickoffPassed} headingLevel={headingLevel} pickState={pickState}
       exactSettlement={exactSettlement}
       {...(position !== undefined ? { position } : {})} {...(titleNote ? { titleNote } : {})}
       {...(!offline && interactive && !gated ? { analysisHref: detailHref } : {})}
@@ -744,15 +761,15 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       {...(snapshotPick ? { matchState: "snapshot", savedScore: true } : {})}
       offline={offline} interactive={interactive && !feedLocked} eagerLogos={eagerLogos} {...(!gated && !offline ? { marketFamily: shownFamily } : {})}
       {...(marketDescription ? { marketDescription } : {})}
-      market={offline ? <span>Unavailable offline</span> : gated ? null : phoneFeed ? feedPick
-        ? <><span data-market-label>{feedMarket}</span>{feedPick}</>
-        : <strong data-pick-label data-no-pick={missing ?? undefined} title={absenceTitle ?? undefined}>{noPickLabel}</strong>
+      market={offline ? <span>Unavailable offline</span> : gated ? null : phoneFeed ? (feedPick ? feedMarket : null)
         : <>
         {prediction && <span data-market-label aria-hidden="true">{shortFamily}:</span>}
         {selection ? <PickLine as="strong" data-pick-line="" data-pick-label title={publication || undefined}>
           <span data-pick-selection>{predictionLabel(messages, selection, selectionContext)}</span>{sourceMarker}
         </PickLine> : abstention ?? <strong data-pick-label data-no-pick={missing ?? undefined}>{noPickLabel}</strong>}
       </>}
+      pick={phoneFeed && !offline && !gated ? feedPick
+        ?? <strong data-pick-label data-no-pick={missing ?? undefined} title={absenceTitle ?? undefined}>{noPickLabel}</strong> : undefined}
       odds={<span data-card-odds data-pick-price={prediction ? "" : undefined} data-odds-kind={oddsKind}
         title={oddsDescription}>{price?.price ?? "—"}{historicalReplayPrice && <VisuallyHidden> {oddsLabel}</VisuallyHidden>}
         {valueLabel}</span>}
@@ -830,7 +847,8 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     <Result data-result-badge={offline ? "saved" : result} data-stack-result
       data-live-minute={clock ? clock.minute ?? "" : undefined}>
       <MatchStatus status={fixture.status} outcome={outcome} messages={messages} snapshot={snapshotPick !== undefined} offline={offline}
-        liveClock={fixture.liveClock ?? null} awaitingResult={awaitingResult} compactMatch={phoneFeed} regulationOnly={regulationOnly} exactSettlement={exactSettlement} />
+        liveClock={fixture.liveClock ?? null} awaitingResult={awaitingResult} kickoffPassed={kickoffPassed} compactMatch={phoneFeed}
+        regulationOnly={regulationOnly} exactSettlement={exactSettlement} />
     </Result>
     {!offline && interactive && !feedLocked && <Open data-match-open href={targetHref} prefetch={false}
       title={gated ? undefined : absenceTitle ?? (phoneFeed ? forecastDescription ?? reason : pickDescription || null) ?? undefined}>

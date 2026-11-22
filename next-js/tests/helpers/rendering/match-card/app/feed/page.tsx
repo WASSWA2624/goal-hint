@@ -27,7 +27,7 @@ export default function FeedCardExamples() {
     evidenceCutoffAt: utcInstantFromEpochMilliseconds(kickoffAt - 300_000), generatedAt, activatedAt: generatedAt,
     pick: { key: "goal:full-time:totals:away:5.5:binary", family: "total-goals" as const, label: "Full time · Away team goals 5.5",
       code: "O/U 5.5", selection: "under", selectionLabel: "Under 5.5", probability: 0.96, odds: null, source: "local-engine" as const } };
-  const cases: { fixture: FixtureSnapshot; gated?: boolean; signedIn?: boolean; featured?: boolean; family?: MarketFamily }[] = [
+  const cases: { fixture: FixtureSnapshot; gated?: boolean; signedIn?: boolean; featured?: boolean; family?: MarketFamily; kickoffPassed?: boolean }[] = [
     { fixture: { ...names(live, "Brighton", "Everton"), fixtureId: "feed-live", score: { home: 2, away: 1 } } },
     { fixture: { ...live, fixtureId: "feed-stoppage", liveClock: { phase: "second-half", minute: 90, stoppageMinutes: 4 } } },
     { fixture: { ...live, fixtureId: "feed-first-half-stoppage", liveClock: { phase: "first-half", minute: 45, stoppageMinutes: 2 } } },
@@ -43,7 +43,7 @@ export default function FeedCardExamples() {
     { fixture: { ...example("card-delayed"), fixtureId: "feed-expired", forecast: null }, gated: true },
     { fixture: { ...pick, fixtureId: "feed-double-chance" }, family: "double-chance" },
     { fixture: { ...example("card-limited"), fixtureId: "feed-btts" }, family: "both-teams-to-score" },
-    { fixture: { ...example("card-overdue"), fixtureId: "feed-overdue" } },
+    { fixture: { ...example("card-overdue"), fixtureId: "feed-overdue" }, kickoffPassed: true },
     { featured: true, fixture: { ...example("card-delayed"), fixtureId: "feed-upcoming", forecast: null } },
     { featured: true, fixture: { ...local, fixtureId: "feed-extended", status: "scheduled", score: null, featuredPrediction: standard } },
     { featured: true, fixture: { ...local, fixtureId: "feed-priced-fallback", status: "scheduled", score: null,
@@ -70,9 +70,9 @@ export default function FeedCardExamples() {
     <PerformanceSummary locale="en" kind="matches" counts={{ total: 5, won: 1, lost: 1, pending: 1, void: 1, cancelled: 1 }} />
     <section data-feed-match-results>
     <MatchCardList id="feed-card-examples">
-      {cases.map(({ fixture, gated = false, signedIn = true, featured = false, family = "match-result" }) => <li key={fixture.fixtureId}>
+      {cases.map(({ fixture, gated = false, signedIn = true, featured = false, family = "match-result", kickoffPassed = false }) => <li key={fixture.fixtureId}>
         <MatchCard fixture={fixture} analysisSlug="example-home-v-away" selectedFamily={family} phoneFeed
-          gated={gated} signedIn={signedIn} publishedMarket={featured} />
+          gated={gated} signedIn={signedIn} publishedMarket={featured} kickoffPassed={kickoffPassed} />
       </li>)}
     </MatchCardList>
     </section>

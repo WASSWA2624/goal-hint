@@ -76,7 +76,7 @@ def verify_frame(document, path, total="21.95", average="72.4%", count=3):
         date_cell = single(row.nodes(attr="data-row-date"), f"{path}: date cell")
         date = date_cell if date_cell.tag == "time" else single(date_cell.nodes("time"), f"{path}: date")
         clock = single(row.nodes("time", "data-row-time"), f"{path}: kickoff")
-        assert re.fullmatch(r"\d{1,2}-[A-Z][a-z]{2}", date.text.strip()), f"{path}: short hyphenated date omits weekday"
+        assert re.fullmatch(r"\d{1,2}-[A-Z][a-z]{2}-\d{4}", date.text.strip()), f"{path}: hyphenated date includes year"
         assert re.fullmatch(r"\d{2}:\d{2} EAT", clock.text.strip()), f"{path}: 24-hour reporting timezone"
         assert date.attrs.get("datetime", "").endswith("Z"), f"{path}: canonical source instant"
         assert single(row.nodes("img", "data-country-flag"), f"{path}: local country flag").attrs["src"].startswith("/flags/")
@@ -100,7 +100,7 @@ def verify_desktop(document, path, saved=False):
     rows = verify_frame(document, path)
     assert all(row.attrs.get("data-status") == "unknown" for row in rows), f"{path}: no invented fixture observation"
     assert all(row.attrs.get("data-match-state") == ("snapshot" if saved else "unknown") for row in rows), f"{path}: no invented live/final state"
-    assert rows[1].nodes(attr="data-row-date")[0].nodes("time")[0].text.strip() == "30-Oct" and rows[1].nodes(attr="data-row-time")[0].text.strip() == "00:00 EAT", f"{path}: EAT midnight rollover"
+    assert rows[1].nodes(attr="data-row-date")[0].nodes("time")[0].text.strip() == "30-Oct-2026" and rows[1].nodes(attr="data-row-time")[0].text.strip() == "00:00 EAT", f"{path}: EAT midnight rollover"
     assert rows[1].nodes(attr="data-row-odds")[0].nodes("strong")[0].text == "7.73", f"{path}: original alternative price"
     assert rows[1].nodes(attr="data-row-probability")[0].nodes("strong")[0].text == "61.7%", f"{path}: original forecast precision"
     assert rows[1].nodes(attr="data-pick-label")[0].text == "U 2.5", f"{path}: original alternative selection"

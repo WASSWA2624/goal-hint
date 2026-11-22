@@ -5,7 +5,7 @@ import { css } from "styled-components";
 /** Shared row structure for the Matches feed, published slips and the slip builder. */
 export const desktopMatchBaseStyles = css`
   [data-desktop-row] {
-    --desktop-columns: var(--gh-size-14) var(--gh-size-20_4) minmax(var(--gh-size-22), 1fr) minmax(var(--gh-size-15), 0.65fr) minmax(var(--gh-size-32), 2fr) minmax(var(--gh-size-26), 0.95fr) var(--gh-size-16_8) var(--gh-size-19_2);
+    --desktop-columns: var(--gh-size-22) var(--gh-size-20_4) minmax(var(--gh-size-22), 1fr) minmax(var(--gh-size-15), 0.65fr) minmax(var(--gh-size-32), 2fr) minmax(var(--gh-size-26), 0.95fr) var(--gh-size-16_8) var(--gh-size-19_2);
     position: relative; display: grid; grid-template-columns: var(--desktop-columns);
     grid-template-rows: minmax(var(--gh-size-5), auto); align-items: center; column-gap: var(--gh-spacing-2);
     min-inline-size: 0; min-block-size: var(--gh-size-9); padding: var(--gh-spacing-1) var(--gh-spacing-3);
@@ -63,13 +63,14 @@ export const desktopMatchBaseStyles = css`
 
 /** The approved Aligned ledger presentation is identical in every desktop match context. */
 export const alignedLedgerStyles = css`
+  --review-date-width: var(--gh-size-22);
   --review-country-width: var(--gh-size-23);
   --review-league-width: var(--gh-size-29);
   --review-status-width: var(--gh-size-28);
   --review-centre-width: var(--gh-size-14);
 
   [data-desktop-row] {
-    --desktop-columns: var(--review-date-width, var(--gh-size-12_6)) var(--gh-size-17_8) var(--review-country-width) var(--review-league-width) minmax(0, 1fr) var(--gh-size-26) var(--gh-size-24) var(--gh-size-21) var(--review-status-width);
+    --desktop-columns: var(--review-date-width) var(--gh-size-17_8) var(--review-country-width) var(--review-league-width) minmax(0, 1fr) var(--gh-size-26) var(--gh-size-24) var(--gh-size-21) var(--review-status-width);
     --review-outcome-text: ${({ theme }) => theme.color.outcome.pending.text};
     --review-outcome-fill: ${({ theme }) => theme.color.outcome.pending.background};
     --review-outcome-border: ${({ theme }) => theme.color.outcome.pending.border};

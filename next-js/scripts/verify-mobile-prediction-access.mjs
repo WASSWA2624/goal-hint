@@ -21,7 +21,8 @@ export async function verifyDesktopPredictionAccess(page, {
       const hit = buttonBounds ? document.elementFromPoint(buttonBounds.left + buttonBounds.width / 2,
         buttonBounds.top + buttonBounds.height / 2) : null;
       const gap = parseFloat(getComputedStyle(element).columnGap);
-      const metrics = ['market', 'odds', 'probability'].map((name) => element.querySelector(`[data-row-${name}]`));
+      const metrics = ['market', 'odds', 'probability', 'pick'].map((name) => element.querySelector(`[data-row-${name}]`));
+      const marketBounds = metrics[0]?.getBoundingClientRect(), pickBounds = metrics[3]?.getBoundingClientRect();
       const slip = element.closest('[data-locked-slip]');
       const headerButton = slip?.querySelector('[data-slip-header-action] a[data-unlock-button]');
       return {
@@ -40,6 +41,7 @@ export async function verifyDesktopPredictionAccess(page, {
         receivesPointer: Boolean(button && hit && button.contains(hit)),
         rowOverlay: Boolean(element.querySelector('[data-row-analysis]')),
         metricCount: metrics.filter(Boolean).length, visibleMetrics: metrics.filter(Boolean).every(visible),
+        separateForecastColumns: Boolean(marketBounds && pickBounds && marketBounds.right <= pickBounds.left),
         odds: metrics[1]?.textContent, probability: metrics[2]?.textContent,
         publicFields: ['date', 'time', 'country', 'league', 'teams', 'status'].every((name) => visible(element.querySelector(`[data-row-${name}]`))),
         visibleTeams: ['home', 'away'].every((side) => visible(element.querySelector(`[data-${side}]`))),
@@ -57,7 +59,7 @@ export async function verifyDesktopPredictionAccess(page, {
   }
   for (const card of locked) {
     assert.equal(card.buttons, 1, 'One access target replaces the protected metrics.');
-    assert.equal(card.label, card.feed ? 'Unlock' : !signedIn ? 'Log in or register to unlock' : expired ? 'Renew to unlock' : 'Subscribe to unlock');
+    assert.equal(card.label, card.feed ? 'Unlock predictions' : !signedIn ? 'Log in or register to unlock' : expired ? 'Renew to unlock' : 'Subscribe to unlock');
     assert.ok(card.labelFits, 'The complete action label fits without clipping or overflow.');
     assert.ok(card.decorativeIcon, 'A decorative lock icon accompanies the accessible button text.');
     assert.equal(card.metricCount, 0, 'Market, odds and probability are replaced, including placeholders.');
@@ -71,7 +73,10 @@ export async function verifyDesktopPredictionAccess(page, {
     assert.ok(returnTo?.startsWith(card.inSlip ? '/en/best-slips/' : '/en/matches/'), 'Access retains the original match or slip return destination.');
     if (card.inSlip) assert.equal(card.href, card.headerHref, 'Slip row access retains the header return destination.');
   }
-  for (const card of unlocked) assert.ok(card.metricCount === (card.feed ? 1 : 3) && card.visibleMetrics, 'Authorized rows show the fields for their surface.');
+  for (const card of unlocked) {
+    assert.ok(card.metricCount === (card.feed ? 2 : 3) && card.visibleMetrics, 'Authorized rows show the fields for their surface.');
+    if (card.feed) assert.ok(card.separateForecastColumns, 'Matches shows market and pick in distinct columns.');
+  }
   for (const value of expectedOdds) assert.ok(unlocked.some((card) => card.odds?.includes(value)), `Authorized odds ${value} remain visible.`);
   for (const value of expectedProbabilities) assert.ok(unlocked.some((card) => card.probability?.includes(value)), `Authorized probability ${value} remains visible.`);
   return { locked: locked.length, unlocked: unlocked.length };
@@ -96,7 +101,7 @@ export async function verifyMobilePredictionAccess(page, { signedIn = false } = 
     };
   }));
   for (const card of cards) {
-    assert.equal(card.label, card.feed ? 'Unlock' : signedIn ? 'Subscribe to unlock' : 'Register / log in to unlock');
+    assert.equal(card.label, card.feed ? 'Unlock predictions' : signedIn ? 'Subscribe to unlock' : 'Register / log in to unlock');
     const target = new URL(card.href, 'https://example.test');
     assert.equal(target.pathname, signedIn ? '/en/subscribe' : '/en/account');
     if (!signedIn) assert.equal(target.searchParams.get('view'), card.feed ? 'login' : 'register');

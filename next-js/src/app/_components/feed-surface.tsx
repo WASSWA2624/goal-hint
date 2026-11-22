@@ -117,6 +117,7 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
           <li>
             <MatchCard fixture={fixture} gated={data.access.tier === "free"} signedIn={data.access.signedIn} analysisSlug={canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name)}
               markets={query.markets} publishedMarket phoneFeed locale={query.locale} position={first + index}
+              kickoffPassed={fixture.kickoffAt !== null && fixture.kickoffAt <= data.asOf}
               titleNote={similarFrom !== null && first + index >= similarFrom ? messages.text("feed.search.similarItem") : undefined} />
           </li>
         </Fragment>)}

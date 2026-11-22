@@ -25,9 +25,9 @@ export type DesktopMatchRowProps = Readonly<{
   homeTeam: RowTeam; awayTeam: RowTeam; competition: RowCompetition;
   status: FixtureSnapshot["status"]; score: Readonly<{ home: number; away: number }> | null;
   shootout?: NonNullable<FixtureSnapshot["phaseScores"]>["shootout"];
-  liveClock?: FixtureSnapshot["liveClock"]; outcome: OutcomeTone; awaitingResult?: boolean; exactSettlement?: ExtendedSettlementStatus | undefined;
-  /** A preformatted authorized market; the row never selects or fabricates a forecast. */
-  market: ReactNode; marketFamily?: SlipMarketFamily; marketDescription?: string;
+  liveClock?: FixtureSnapshot["liveClock"]; outcome: OutcomeTone; awaitingResult?: boolean; kickoffPassed?: boolean; exactSettlement?: ExtendedSettlementStatus | undefined;
+  /** Preformatted authorized forecast fields. Slips can supply the market and pick in one cell. */
+  market: ReactNode; pick?: ReactNode; marketFamily?: SlipMarketFamily; marketDescription?: string;
   odds?: ReactNode; probability?: ReactNode; hideMetrics?: boolean; analysisHref?: string; analysisLabel?: string;
   /** One access action replaces all private prediction fields on a locked row. */
   predictionAction?: ReactNode;
@@ -43,10 +43,10 @@ export type DesktopMatchRowProps = Readonly<{
 
 /** One approved desktop match row for live feed records and immutable slip selections. */
 export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTeam, competition, status, score, shootout, liveClock,
-  outcome, awaitingResult = false, market, marketFamily, marketDescription, odds, probability, predictionAction, analysisHref, analysisLabel, headingLevel = 4, titleNote, position,
+  outcome, awaitingResult = false, market, pick, marketFamily, marketDescription, odds, probability, predictionAction, analysisHref, analysisLabel, headingLevel = 4, titleNote, position,
   matchState: suppliedMatchState, savedScore = false, scoreDescription: suppliedScoreDescription, regulationOnly = false, details,
   pickState, eagerLogos = false, offline = false, preview = false, messages, datePrefix, interactive = true, clockInBadge = false, compactMatch = false,
-  exactSettlement, hideMetrics = false }: DesktopMatchRowProps) {
+  exactSettlement, hideMetrics = false, kickoffPassed = false }: DesktopMatchRowProps) {
   const m = messages ?? createMessages(locale), id = useId();
   const final = isPlayedFinalStatus(status), clock = !offline && status === "live" ? liveClock : null;
   const halftime = status === "live" && clock?.phase === "half-time";
@@ -75,7 +75,7 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
     : <span data-score {...scoreProps}>{status === "live" || final ? "–" : "VS"}</span>;
   const Heading = `h${headingLevel}` as "h2" | "h3" | "h4";
   const descriptionIds = ["date", "time", "country", "league", "score", ...(visibleClock || clockText ? ["clock"] : []),
-    ...(predictionAction ? ["access"] : hideMetrics ? ["market"] : ["market", "odds", "probability"]), "status", ...(details ? ["details"] : [])]
+    ...(predictionAction ? ["access"] : hideMetrics ? ["market", "pick"] : ["market", "odds", "probability"]), "status", ...(details ? ["details"] : [])]
     .map((name) => `${id}-${name}`).join(" ");
   return <div data-desktop-row data-desktop-design="aligned-ledger" data-desktop-preview-row={preview || undefined}
     data-fixture-id={preview ? undefined : fixtureId} data-market={marketFamily} data-outcome={outcome} data-pick-state={pickState}
@@ -84,11 +84,11 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
     role="group" tabIndex={-1} aria-labelledby={`${id}-teams`} aria-describedby={descriptionIds}>
     {datePrefix ? <span data-row-date data-kickoff-unknown={kickoffAt === null ? "" : undefined} id={`${id}-date`}>
       {datePrefix}{kickoffAt === null ? <span>{m.text("match.kickoffUnknown")}</span>
-        : <time data-match-kickoff dateTime={iso} title={kickoffTitle}>{m.shortKickoffDate(kickoffAt)}</time>}
+        : <time data-match-kickoff dateTime={iso} title={kickoffTitle}>{m.shortKickoffDate(kickoffAt, true)}</time>}
     </span> : kickoffAt === null ? <span data-row-date data-kickoff-unknown id={`${id}-date`}>{m.text("match.kickoffUnknown")}</span>
-      : <time data-row-date id={`${id}-date`} dateTime={iso} title={kickoffTitle}>{m.shortKickoffDate(kickoffAt)}</time>}
+      : <time data-row-date id={`${id}-date`} dateTime={iso} title={kickoffTitle}>{m.shortKickoffDate(kickoffAt, true)}</time>}
     {kickoffAt === null ? <span data-row-time id={`${id}-time`} hidden>—</span>
-      : <time data-row-time id={`${id}-time`} dateTime={iso}>{m.reportingTime(kickoffAt)} {m.timeZone(kickoffAt)}</time>}
+      : <time data-row-time id={`${id}-time`} dateTime={iso}>{m.kickoffTime(kickoffAt)}</time>}
     <span data-row-country id={`${id}-country`}><CompetitionCountryFlag country={competition.country} url={competition.countryFlagUrl} offline={offline} /><TruncatedText interactive={interactive} text={country} href={detailsHref} /></span>
     <span data-row-league id={`${id}-league`}><CompetitionLogo country={competition.country} url={offline ? undefined : competition.logoUrl} eager={eagerLogos} size={14} /><TruncatedText interactive={interactive} text={league} href={detailsHref} /></span>
     <Heading data-row-teams id={`${id}-teams`} aria-label={titleNote ? `${title}, ${titleNote}` : title}>
@@ -103,12 +103,12 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
     </Heading>
     {predictionAction ? <div data-row-unlock id={`${id}-access`}>{predictionAction}</div> : <>
     <span data-row-market id={`${id}-market`} title={marketDescription}>{market}</span>
-    {!hideMetrics && <>
+    {hideMetrics ? <span data-row-pick id={`${id}-pick`}>{pick}</span> : <>
       <span data-row-odds id={`${id}-odds`}><span data-number-label data-row-number-label>{m.text("details.odds")}:</span><strong>{odds}</strong></span>
       <span data-row-probability id={`${id}-probability`}><span data-number-label data-row-number-label aria-hidden="true">{m.text("match.columns.probabilityCompact")}:</span><VisuallyHidden>{m.text("slips.probability")}: </VisuallyHidden><strong>{probability}</strong></span>
     </>}
     </>}
-    <span data-row-status id={`${id}-status`}><MatchStatus status={status} outcome={outcome} messages={m} awaitingResult={awaitingResult} exactSettlement={exactSettlement}
+    <span data-row-status id={`${id}-status`}><MatchStatus status={status} outcome={outcome} messages={m} awaitingResult={awaitingResult} kickoffPassed={kickoffPassed} exactSettlement={exactSettlement}
       snapshot={matchState === "snapshot"} offline={offline} compactMatch={compactMatch}
       {...(clockInBadge ? { liveClock: clock, desktopClock: true } : {})} /></span>
     {details && <div data-row-details id={`${id}-details`}>{details}</div>}

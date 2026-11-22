@@ -18,7 +18,7 @@ import { readPublicCacheGenerations } from "../cache/mysql-public-cache.ts";
 type Summary = z.infer<typeof feedPerformanceSchema>;
 type PerformanceCounts = Readonly<{ total: number; available: number; void: number; cancelled?: number }>;
 type Result = PredictionResult | "unavailable";
-export type FeedResultOverrides = ReadonlyMap<string, Readonly<{ baseline: Result; result: Result }>>;
+export type FeedResultOverrides = ReadonlyMap<string, Readonly<{ baseline: Result; result: Result; hasPrediction: boolean }>>;
 const batchSize = 500, batchCacheLifetimeMs = 6 * 60 * 60 * 1000;
 const batchDeltaSchema = z.strictObject({ won: z.number().int().min(0).max(batchSize), lost: z.number().int().min(0).max(batchSize),
   void: z.number().int().min(0).max(batchSize), cancelled: z.number().int().min(0).max(batchSize).default(0) })
@@ -43,11 +43,27 @@ type Sample = HistoryRow & Readonly<{
   marketPayload: unknown; marketValidIntegrity: unknown;
 }>;
 
+function feedFixtureMembership(ids: readonly string[], include: boolean) {
+  return ids.length ? Prisma.sql`f.id ${include ? Prisma.empty : Prisma.sql`NOT`} IN (
+    SELECT matched.id FROM JSON_TABLE(${JSON.stringify(ids)}, '$[*]' COLUMNS (id VARCHAR(128) PATH '$')) AS matched)` : Prisma.sql`FALSE`;
+}
+
 export function restrictFeedResultSql(sql: ReturnType<typeof feedSql>, ids: readonly string[], include: boolean) {
   if (ids.length === 0 && !include) return sql;
-  const membership = ids.length ? Prisma.sql`f.id ${include ? Prisma.empty : Prisma.sql`NOT`} IN (
-    SELECT matched.id FROM JSON_TABLE(${JSON.stringify(ids)}, '$[*]' COLUMNS (id VARCHAR(128) PATH '$')) AS matched)` : Prisma.sql`FALSE`;
+  const membership = feedFixtureMembership(ids, include);
   return { ...sql, where: Prisma.sql`${sql.where} AND ${membership}`, cohortWhere: Prisma.sql`${sql.cohortWhere} AND ${membership}` };
+}
+
+/** A replay can supply a published pick without a core forecast. A frozen decision can also abstain. */
+export function restrictFeedPredictionSql(sql: ReturnType<typeof feedSql>, overrides: FeedResultOverrides) {
+  const added = [], excluded = [];
+  for (const [id, { baseline, hasPrediction }] of overrides) {
+    if (!hasPrediction) excluded.push(id);
+    else if (baseline === "unavailable") added.push(id);
+  }
+  const available = added.length ? Prisma.sql`(${sql.displayAvailable} OR ${feedFixtureMembership(added, true)})` : sql.displayAvailable;
+  return restrictFeedResultSql({ ...sql, where: Prisma.sql`${sql.where} AND ${available}`,
+    pageJoins: sql.pageJoins === sql.cohortJoins ? sql.countJoins : sql.pageJoins }, excluded, false);
 }
 
 export function adjustPerformanceAvailability(available: number, overrides: FeedResultOverrides) {

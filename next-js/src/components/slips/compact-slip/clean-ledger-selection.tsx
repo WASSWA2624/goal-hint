@@ -69,8 +69,7 @@ export function CleanLedgerSelection({ selection, locale, result, matchStates, a
       <span data-ledger-kickoff data-mobile-kickoff>
         {position !== undefined && <SlipMatchNumber position={position} locale={locale} />}
         <time data-kickoff dateTime={toUtcIsoString(kickoff)} title={m.reportingInstant(kickoff)}>
-          <span data-date data-mobile-date>{m.shortKickoffDate(kickoff)}</span><span data-clock data-mobile-clock>{m.shortKickoffTime(kickoff)}</span>
-          <VisuallyHidden> {m.timeZone(kickoff)}</VisuallyHidden>
+          <span data-date data-mobile-date>{m.shortKickoffDate(kickoff)}</span><span data-clock data-mobile-clock>{m.kickoffTime(kickoff)}</span>
         </time>
       </span>
       <span data-ledger-competition data-mobile-competition>

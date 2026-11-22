@@ -14,7 +14,7 @@ import { appDownloadMessages } from "./messages/app-downloads.ts";
 const catalog = { ...en, ...matchTouchlineMessages, ...predictionMessages, ...slipsMessages, ...slipSharingMessages, ...slipConfigurationMessages, ...accountDashboardMessages, ...matchCompetitionMessages, ...appDownloadMessages };
 
 type Formatters = { numbers: Intl.NumberFormat; plurals: Intl.PluralRules; dates: Intl.DateTimeFormat; instants: Intl.DateTimeFormat;
-  days: Intl.DateTimeFormat; instantDays: Intl.DateTimeFormat; times: Intl.DateTimeFormat; shortTimes: Intl.DateTimeFormat; mediumDates: Intl.DateTimeFormat;
+  days: Intl.DateTimeFormat; instantDays: Intl.DateTimeFormat; times: Intl.DateTimeFormat; mediumDates: Intl.DateTimeFormat;
   spans: Intl.DateTimeFormat; months: Intl.DateTimeFormat; zones: Intl.DateTimeFormat; publicationDates: Intl.DateTimeFormat; numericDates: Intl.DateTimeFormat };
 // Immutable formatters are shared by locale and display zone; no visitor records are cached.
 const formattersByLocale = new Map<string, Formatters>();
@@ -33,7 +33,6 @@ function formatters(language: string, timeZone: string): Formatters {
     days: new Intl.DateTimeFormat(language, { ...dayOptions, timeZone: publicPolicy.reportingTimeZone }),
     instantDays: new Intl.DateTimeFormat(language, { ...dayOptions, timeZone }),
     times: new Intl.DateTimeFormat(language, { ...instantOptions, hour: "2-digit", minute: "2-digit" }),
-    shortTimes: new Intl.DateTimeFormat(language, { timeZone, calendar: "gregory", hour: "numeric", minute: "2-digit", hourCycle: "h12" }),
     mediumDates: new Intl.DateTimeFormat(language, { ...dateOptions, weekday: "short", month: "short", day: "numeric" }),
     spans: new Intl.DateTimeFormat(language, { timeZone: publicPolicy.reportingTimeZone, calendar: "gregory", month: "short", day: "numeric" }),
     months: new Intl.DateTimeFormat(language, { timeZone: publicPolicy.reportingTimeZone, calendar: "gregory", month: "long", year: "numeric" }),
@@ -94,7 +93,7 @@ export function createMessages(locale?: string, translations?: Partial<MessageCa
 }
 
 function buildMessages(language: string, translations: Partial<MessageCatalog>, timeZone: string) {
-  const { numbers, plurals, dates, instants, days, instantDays, times, shortTimes, mediumDates, spans, months, zones, publicationDates, numericDates } = formatters(language, timeZone);
+  const { numbers, plurals, dates, instants, days, instantDays, times, mediumDates, spans, months, zones, publicationDates, numericDates } = formatters(language, timeZone);
   const zoneName = (value: UtcInstant): string => timeZone === publicPolicy.reportingTimeZone ? "EAT"
     : zones.formatToParts(value).find((part) => part.type === "timeZoneName")!.value;
   const compactReportingDate = (value: ReportingDate, format: "short" | "numeric" = "short") => {
@@ -187,13 +186,10 @@ function buildMessages(language: string, translations: Partial<MessageCatalog>, 
       const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)!.value;
       return `${part("day")}-${part("month")}${includeYear ? `-${part("year")}` : ""}`;
     },
-    /** Compact 12-hour kickoff, with an explicit uppercase AM/PM frame. */
-    shortKickoffTime(value: UtcInstant, hourFormat: "numeric" | "2-digit" = "numeric"): string {
-      const parts = shortTimes.formatToParts(displayInstant(value));
-      const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)!.value;
-      const hour = part("hour");
-      const displayedHour = hourFormat === "2-digit" ? hour.padStart(2, numbers.format(0)) : hour;
-      return `${displayedHour}:${part("minute")} ${part("dayPeriod").toUpperCase()}`;
+    /** Match kickoff in 24-hour time and the configured display zone. */
+    kickoffTime(value: UtcInstant): string {
+      const instant = displayInstant(value);
+      return `${times.format(instant)} ${zoneName(instant)}`;
     },
     /** The zone label at this instant, including its daylight-saving offset. */
     timeZone(value: UtcInstant): string {

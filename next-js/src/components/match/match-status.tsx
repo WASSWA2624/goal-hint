@@ -35,7 +35,7 @@ const Label = styled(StatusBadge)`
   }
   &[data-match-status="correct"] { --status-ink: ${({ theme }) => theme.color.outcome.correct.text}; --status-fill: ${({ theme }) => theme.color.outcome.correct.background}; }
   &[data-match-status="incorrect"] { --status-ink: ${({ theme }) => theme.color.outcome.incorrect.text}; --status-fill: ${({ theme }) => theme.color.outcome.incorrect.background}; }
-  &[data-match-status="pending"] { --status-ink: ${({ theme }) => theme.color.outcome.pending.text}; --status-fill: ${({ theme }) => theme.color.outcome.pending.background}; }
+  &:is([data-match-status="pending"], [data-match-status="delayed"]) { --status-ink: ${({ theme }) => theme.color.outcome.pending.text}; --status-fill: ${({ theme }) => theme.color.outcome.pending.background}; }
   &[data-match-status="void"] { --status-ink: ${({ theme }) => theme.color.outcome.void.text}; --status-fill: ${({ theme }) => theme.color.outcome.void.background}; }
   ${media.phone} {
     [data-feed-match-results] & {
@@ -53,18 +53,18 @@ const Label = styled(StatusBadge)`
 
 /** Fixture progress takes precedence until a result can be shown. Saved results remain explicit snapshots. */
 export function MatchStatus({ status, outcome, messages, snapshot = false, offline = false, liveClock, desktopClock = false, awaitingResult = false,
-  compactMatch = false, regulationOnly = false, exactSettlement }: {
+  compactMatch = false, regulationOnly = false, exactSettlement, kickoffPassed = false }: {
   status: FixtureSnapshot["status"]; outcome: OutcomeTone; messages: Messages; snapshot?: boolean; offline?: boolean;
   liveClock?: FixtureSnapshot["liveClock"];
-  desktopClock?: boolean; awaitingResult?: boolean; compactMatch?: boolean; regulationOnly?: boolean;
+  desktopClock?: boolean; awaitingResult?: boolean; compactMatch?: boolean; regulationOnly?: boolean; kickoffPassed?: boolean;
   exactSettlement?: ExtendedSettlementStatus | undefined;
 }) {
-  const result = offline ? "saved" : snapshot ? outcome : cardResultStatus(status, outcome, awaitingResult);
+  const result = offline ? "saved" : snapshot ? outcome : cardResultStatus(status, outcome, awaitingResult, kickoffPassed);
   const isOutcome = result === "correct" || result === "incorrect" || result === "pending" || result === "void" || result === "unavailable";
   const specific = !offline && !snapshot && isPlayedFinalStatus(status) &&
     (exactSettlement === "half-win" || exactSettlement === "half-loss" || exactSettlement === "push") ? exactSettlement : null;
   const label = specific ? messages.text(`match.featuredSettlement.${specific}`)
-    : result === "saved" ? "Saved" : result === "upcoming" ? messages.text("match.result.upcoming")
+    : result === "saved" ? "Saved" : result === "upcoming" || result === "delayed" ? messages.text(`match.result.${result}`)
     : result === "correct" ? messages.text("slips.result.won") : result === "incorrect" ? messages.text("slips.result.lost")
     : result === "unavailable" ? "—" : result === "unknown" ? messages.text("slips.match.unknown")
       : messages.text(isOutcome ? `outcome.${result}` : `match.status.${result}`);
@@ -82,11 +82,13 @@ export function MatchStatus({ status, outcome, messages, snapshot = false, offli
   const spokenFinish = compactFinish ? [isOutcome ? label : null, messages.text(`match.status.${status}`),
     regulationOnly ? messages.text("match.regulationScoreNote") : null].filter(Boolean).join(", ") : undefined;
   const accessibleStatus = compactMatch ? clock?.spoken ?? spokenFinish : undefined;
+  const statusTitle = result === "delayed" ? messages.text("match.result.delayedDetail")
+    : awaitingResult && result === "pending" ? messages.text("slips.outcome.pending") : spokenFinish;
   return <Label data-match-status={result} data-match-label={!isOutcome ? "" : undefined} data-outcome-label={isOutcome ? "" : undefined}
     data-match-half-time={halfTime || undefined}
     data-live-badge-clock={desktopClock && result === "live" && !compactMatch ? "" : undefined}
     aria-label={compactMatch ? undefined : clock?.spoken}
-    title={clock?.spoken ?? (awaitingResult && result === "pending" ? messages.text("slips.outcome.pending") : spokenFinish)}>
+    title={clock?.spoken ?? statusTitle}>
     {result === "live" && !compactMatch && <LiveDot data-match-live-dot aria-hidden="true" />}
     <span data-pick-value="" aria-hidden={accessibleStatus ? true : undefined}>{clock ? desktopClock || compactMatch ? <span data-status-clock><LiveMatchTime clock={liveClock} messages={messages} badge showStoppageSeconds={compactMatch} /></span>
       : <><span data-mobile-only data-status-clock>{halfTime ? <span data-half-time-prefix>{label} </span> : <>{label} </>}

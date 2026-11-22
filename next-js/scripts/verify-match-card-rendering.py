@@ -63,9 +63,8 @@ def verify(origin, directory):
             attributes, parts = kickoff[0]
             match(r'\bdatetime="2026-10-09T09:00:00\.000Z"', attributes, flags=re.IGNORECASE)
             match(r'\btitle="Oct 9, 2026, 12:00 EAT"', attributes)
-            match(r'data-kickoff-date[^>]*><span data-mobile-only[^>]*>9-Oct</span><span data-desktop-only[^>]*>Fri, Oct 9</span>', parts)
-            match(r'data-kickoff-time[^>]*><span data-mobile-only[^>]*>12:00 PM</span><span data-desktop-only[^>]*>12:00', parts)
-            match(r'data-kickoff-zone[^>]*>\s*EAT</span>', parts)
+            match(r'data-kickoff-date[^>]*><span data-mobile-only[^>]*>9-Oct</span><span data-desktop-only[^>]*>9-Oct-2026</span>', parts)
+            match(r'data-kickoff-time[^>]*>12:00 EAT</span>', parts)
         if 'data-prediction="none"' in article:
             no_match(r"data-pick-odds=|data-pick-price=|data-probability-meter=", article)
         else:
@@ -168,13 +167,11 @@ def verify_feed_cards(origin):
     cards = {key: body for _, key, body in articles}
     tags = {key: tag for tag, key, _ in articles}
     assert len(cards) == 25
-    header_results = {"feed-missing-odds": "won", "feed-double-chance": "won", "feed-frozen-lost": "lost", "feed-frozen-pending": "pending",
-                      "feed-frozen-void": "void", "feed-cancelled": "cancelled"}
-    for article, key, _ in articles:
-        if key in header_results:
-            match(rf'data-match-header-result="{header_results[key]}"', article)
-        else:
-            no_match(r'data-match-header-result', article)
+    header_results = {"correct": "won", "incorrect": "lost", "canceled": "cancelled"}
+    for article, key, body in articles:
+        status = match(r'data-match-status="([^"]+)"', body).group(1)
+        header = "half-time" if key == "feed-halftime" else header_results.get(status, status)
+        match(rf'data-match-header-result="{header}"', article)
     for key, label in {"live": "67:00", "stoppage": r"90\+04:00", "first-half-stoppage": r"45\+02:00", "halftime": "HT"}.items():
         card = cards[f"feed-{key}"]
         match(rf'data-status-clock[^>]*><span[^>]*>{label}</span>', card)
@@ -201,11 +198,11 @@ def verify_feed_cards(origin):
         match(r'\bdata-mobile-locked=', tags[fixture_id])
         unlocks = [contents for attrs, contents in links if "data-unlock-card" in attrs]
         assert len(unlocks) == 1, f"{fixture_id}: one visible unlock button"
-        match(r'<svg\b[^>]*aria-hidden="true"[^>]*>[\s\S]*?</svg>[\s\S]*?>Unlock</span>', unlocks[0])
+        match(r'<svg\b[^>]*aria-hidden="true"[^>]*>[\s\S]*?</svg>[\s\S]*?>Unlock predictions</span>', unlocks[0])
         no_match(r'data-pick-selection=|data-forecast-source=|data-prediction="home-win"', body)
     full_access_link = match(r'<a\b(?=[^>]*\bdata-match-open)(?=[^>]*\bhref="([^"]+)")[^>]*>', cards["feed-live"])
     assert full_access_link.group(1) == "/en/matches/feed-live/example-home-v-away"
-    match(r'data-match-status="pending"', cards["feed-overdue"])
+    match(r'data-match-status="delayed"[^>]*>[\s\S]*?data-pick-value[^>]*>Delayed</span>', cards["feed-overdue"])
     match(r'data-match-status="upcoming"', cards["feed-upcoming"])
     no_match(r'data-score-(?:home|away)|Final score:|Live score:', cards["feed-upcoming"])
     match(r'data-score-home[^>]*>2</span>[\s\S]*?data-score-away[^>]*>1</span>', cards["feed-live"])

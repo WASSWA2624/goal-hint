@@ -28,12 +28,12 @@ const Board = styled.div<{ $indexLength: number }>`
     [data-row-odds] > [data-number-label] { flex: none; }
     [data-row-odds] > strong { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; text-align: end; }
     [data-desktop-row][data-row-hide-metrics] {
-      --desktop-columns: var(--review-date-width, var(--gh-size-12_6)) var(--gh-size-17_8) var(--review-country-width)
-        var(--review-league-width) minmax(0, 1fr) minmax(var(--gh-size-32), 0.55fr) var(--review-status-width);
-      [data-row-unlock] { grid-column: auto; }
-      [data-row-market] { gap: var(--gh-spacing-1_5); }
-      [data-row-market] > [data-pick-line] { flex: 0 1 auto; }
-      [data-pick-line] { color: ${({ theme }) => theme.color.link}; font-weight: var(--gh-weight-bold); }
+      --desktop-columns: var(--review-date-width) var(--gh-size-17_8) var(--review-country-width)
+        var(--review-league-width) minmax(0, 1fr) minmax(var(--gh-size-24), 0.3fr) minmax(var(--gh-size-24), 0.25fr) var(--review-status-width);
+      [data-row-unlock] { grid-column: span 2; }
+      [data-row-market] { color: ${({ theme }) => theme.color.mutedText}; }
+      [data-row-pick] { display: flex; align-items: center; color: ${({ theme }) => theme.color.link}; font-weight: var(--gh-weight-bold); }
+      [data-row-pick] > [data-pick-line] { flex: 0 1 auto; }
     }
     background: ${({ theme }) => theme.color.page};
     border: 0;

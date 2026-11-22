@@ -21,25 +21,6 @@ function probabilityFilterLabel(probability: ProbabilityRange, messages: Message
   return probability.minExclusive ? messages.text("feed.filters.abovePercent", { min })
     : messages.text("feed.filters.percentRange", { min, max: formatProbabilityValue(probability.max) });
 }
-const PicksLabel = styled.label`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--gh-spacing-1_5);
-  min-block-size: var(--form-control-height);
-  color: ${({ theme }) => theme.color.text};
-  font-size: ${({ theme }) => theme.typography.scale.secondary};
-  &:has(input:disabled) { color: ${({ theme }) => theme.color.mutedText}; }
-`;
-export function PicksOnlyFilter({ locale, checked, disabled, onChange }: {
-  locale: string; checked: boolean; disabled: boolean; onChange: (checked: boolean) => void;
-}) {
-  const messages = createMessages(locale);
-  return <PicksLabel><input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
-    {messages.text("paywall.picksOnly")}{disabled && <span>· {messages.text("paywall.subscribersOnly")}</span>}
-  </PicksLabel>;
-}
-
 const SummaryList = styled.ul`
   min-inline-size: 0;
   margin: 0;

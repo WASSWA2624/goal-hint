@@ -224,20 +224,23 @@ export const phoneFeedRowStyles = css`
     inline-size: max-content;
     min-inline-size: 0;
     max-inline-size: 100%;
-    gap: 0;
+    gap: var(--gh-spacing-0_5);
     white-space: normal;
-    :is([data-kickoff-date], [data-kickoff-time]) {
+    [data-kickoff-date] {
       white-space: normal;
+      font-size: var(--gh-font-caption); font-weight: var(--gh-weight-semibold);
       > [data-mobile-only] { display: none; }
       > [data-phone-kickoff] { display: block; white-space: nowrap; }
     }
-    [data-kickoff-date] { font-size: var(--gh-font-caption); font-weight: var(--gh-weight-semibold); }
-    [data-kickoff-time] { font-size: var(--gh-font-secondary); text-align: justify; text-align-last: justify; }
+    [data-kickoff-time] {
+      font-size: var(--gh-font-secondary); white-space: normal; text-align: justify; text-align-last: justify;
+    }
   }
   [data-ledger-teams] {
     --gh-logo-size: var(--gh-size-4);
     --gh-logo-font: var(--gh-size-2);
-    padding-inline: var(--gh-spacing-1);
+    margin-inline: var(--gh-spacing-1);
+    padding-inline: var(--gh-spacing-1_5);
     border-inline: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};
     [data-team-logo] { overflow: hidden; white-space: nowrap; }
     [data-match-state] [data-ledger-versus] { display: none; }
@@ -250,12 +253,13 @@ export const phoneFeedRowStyles = css`
   [data-stack-result] [data-match-status] { font-size: var(--gh-font-body); }
 
   @container (max-width: ${({ theme }) => theme.viewport[20]}) {
-    grid-template-columns: var(--feed-kickoff-width) minmax(0, 1fr) var(--gh-size-21);
+    grid-template-columns: var(--feed-kickoff-width) minmax(0, 1fr) var(--feed-narrow-facts-width, var(--gh-size-21));
   }
 
   @container (max-width: ${({ theme }) => theme.viewport[16]}) {
     grid-template-columns: var(--feed-kickoff-width) minmax(0, 1fr);
     grid-template-areas: "league status" "kickoff teams" "facts facts";
-    [data-ledger-teams] { padding-inline-end: 0; border-inline-end: 0; }
+    [data-ledger-teams] { margin-inline-end: 0; padding-inline-end: 0; border-inline-end: 0; }
   }
+  &:has([data-unlock-card]) { --feed-narrow-facts-width: var(--gh-size-23); }
 `;

@@ -56,6 +56,9 @@ def main():
         for text in ["Today’s performance", "Won", "Lost", "Pending", "Void", "Cancelled"]:
             assert text in visible_html(early), text
         assert 'aria-busy="true"' in early
+        ready = visible_html(events[-1][1])
+        assert 'data-summary-count="all">55<' in ready
+        assert "data-summary-predicted" not in ready and "data-summary-unavailable" not in ready
         assert request(server.origin, "/en/matches?page=0").status == 404
         status, home = stream(server.origin, "/en/best-slips")
         assert status == 200

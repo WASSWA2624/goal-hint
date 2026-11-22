@@ -97,20 +97,20 @@ const outcomes = [
 
 /** Shared period outcomes; null counts remain unknown and all six statuses stay visible. */
 export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title, period, actions, headingLevel = 2,
-  showCoverage = true, showAll = true, showCohortTotal = false, activeResult, onResult, disabled = false, loading = false, resultAttributes, compactHeader = false }: {
+  showCoverage = true, showAll = true, activeResult, onResult, disabled = false, loading = false, resultAttributes, compactHeader = false }: {
   counts: PerformanceSummaryCounts | null; locale: string; kind: "matches" | "slips" | "predictions";
   title?: string | undefined; period?: string | undefined; headingLevel?: 2 | 3 | undefined;
   actions?: ReactNode;
   compactHeader?: boolean;
   loading?: boolean | "background";
-  showCoverage?: boolean | undefined; showAll?: boolean; showCohortTotal?: boolean;
+  showCoverage?: boolean | undefined; showAll?: boolean;
   activeResult?: PredictionResult | undefined; onResult?: ((result: PredictionResult | undefined) => void) | undefined; disabled?: boolean;
   resultAttributes?: ((result: PredictionResult | undefined) => Record<`data-${string}`, string>) | undefined;
 }) {
   const m = createMessages(locale), label = title ?? m.text("performance.summary.title"), unknown = suppliedCounts === null;
   const counts = suppliedCounts ?? { total: 0, won: 0, lost: 0, pending: 0 };
   const predicted = kind === "matches" ? predictedPerformanceSummary(counts) : null;
-  const showPredicted = predicted && (!showAll || showCohortTotal);
+  const showPredicted = predicted && !showAll;
   const number = (value: number) => unknown ? "—" : m.number(value);
   return <Panel role="group" aria-label={label} aria-busy={loading ? true : undefined}
     data-navigation-passive={loading === "background" ? "" : undefined} data-performance-summary={kind}>
@@ -122,7 +122,7 @@ export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title
         {outcomes.map((outcome) => {
           const { key } = outcome, result = key === "all" ? undefined : key;
           const label = m.text(key === "all" && !showAll ? `performance.summary.${kind}` : outcome.message);
-          const count = key === "all" ? (showAll && predicted && !showCohortTotal ? predicted.total : counts.total) : counts[key] ?? 0;
+          const count = key === "all" ? (showAll && predicted ? predicted.total : counts.total) : counts[key] ?? 0;
           const fraction = key === "all" ? null : predicted
             ? (predicted.total > 0 ? count / predicted.total : null) : counts.total > 0 ? count / counts.total : null;
           const percentage = !unknown && fraction !== null && fraction !== undefined
@@ -139,10 +139,10 @@ export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title
       </Counts>{actions && <Actions data-performance-actions>{actions}</Actions>}</Figures>
       {showCoverage && (showPredicted || (counts.unavailable ?? 0) > 0 || (counts.filteredOut ?? 0) > 0) && <Coverage>
         {showPredicted && <div data-summary-predicted>
-          <dt>{m.text(showCohortTotal ? "performance.summary.predictionsForPercentages" : "performance.summary.predicted")}</dt>
+          <dt>{m.text("performance.summary.predicted")}</dt>
           <dd>{number(predicted.total)}</dd>
         </div>}
-        {(showCohortTotal || (counts.unavailable ?? 0) > 0) && <div data-summary-unavailable>
+        {(counts.unavailable ?? 0) > 0 && <div data-summary-unavailable>
           <dt>{m.text("performance.summary.noPrediction")}</dt><dd>{number(counts.unavailable ?? 0)}</dd>
         </div>}
         {(counts.filteredOut ?? 0) > 0 && <div><dt>{m.text("performance.filteredOut")}</dt><dd>{number(counts.filteredOut!)}</dd></div>}

@@ -57,7 +57,7 @@ function SelectionRow({ selection, position, locale, result, matchStates, analys
         {selection.competition.country && <span data-country>{selection.competition.country}</span>}
       </span>
       <time data-kickoff id={`${id}-kickoff`} dateTime={toUtcIsoString(kickoff)} title={messages.reportingInstant(kickoff)}>
-        <span data-date>{messages.reportingDay(kickoff)}</span><span data-clock>{messages.reportingTime(kickoff)} EAT</span>
+        <span data-date>{messages.reportingDay(kickoff)}</span><span data-clock>{messages.kickoffTime(kickoff)}</span>
       </time>
       <span data-pick id={`${id}-pick`} title={`${family}: ${description}${selection.forecast ? ` · ${messages.text("match.published")}: ${messages.reportingInstant(utcInstantFromEpochMilliseconds(selection.forecast.publishedAt))}` : ""}`}>
         <span data-market-label>{family}</span><strong data-pick-label title={`${family}: ${description}`} aria-hidden="true">{predictionLabel(messages, selection.selection)}</strong>
