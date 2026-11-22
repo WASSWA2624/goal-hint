@@ -22,6 +22,15 @@ class CheckoutMigrationTest(unittest.TestCase):
         self.assertNotIn("DELETE FROM MemberAccount", sql)
         self.assertNotRegex(sql, r"SET\s+(?:p\.)?(?:priceUgx|durationDays|reference)\s*=")
 
+    def test_flutterwave_outcomes_preserve_hosted_payment_accounting(self):
+        name = "20261122210000_flutterwave_outcomes"
+        canonical = ROOT / "prisma" / "migrations" / name / "migration.sql"
+        overlay = (ROOT / "prisma" / "mariadb" / f"{name}.sql").read_text(encoding="utf-8")
+        self.assertIn(hashlib.sha256(canonical.read_bytes()).hexdigest(), overlay)
+        self.assertLess(overlay.index("verification failed"), overlay.index("INSERT INTO _prisma_migrations"))
+        self.assertIn("'rejected','cancelled'", canonical.read_text(encoding="utf-8"))
+        self.assertNotIn("UPDATE PaymentSubmission", canonical.read_text(encoding="utf-8"))
+
     def test_accounting_roles_are_append_only(self):
         grants = (ROOT / "docs" / "deployment" / "payment-checkout-grants.sql").read_text(encoding="utf-8")
         for table in ["ReferralCredit", "PaymentEvent"]:

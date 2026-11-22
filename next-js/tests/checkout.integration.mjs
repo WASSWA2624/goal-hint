@@ -56,6 +56,72 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     await reviewWarnings(id, claim);
     return act(id, { action: "verify-receipt", ...verification(detail, claim, amountUgx) });
   }
+
+  await t.test("Flutterwave links and verified payments remain idempotent across status changes and concurrent callbacks", async () => {
+    const who = await member(), other = await member(), selection = select({ method: "flw" });
+    const checkoutUrl = "https://checkout.flutterwave.com/v3/hosted/pay/synthetic";
+    let providerCreateCount = 0, providerVerifyCount = 0, verified = null;
+    let finishCreate, beginCreate;
+    const createEntered = new Promise(resolve => { beginCreate = resolve; });
+    const checkoutCreated = new Promise(resolve => { finishCreate = resolve; });
+    const provider = { async create(input) { providerCreateCount++; beginCreate(input); await checkoutCreated; return checkoutUrl; },
+      async verify() { providerVerifyCount++; return verified; } };
+    const service = createCheckout({ database, config, now, flutterwave: { client: provider, checkoutReady: true, mode: "sandbox" } });
+    const quote = await service.quote(who, selection);
+    assert.equal(quote.ok, true, quote.message);
+    assert.equal(quote.value.recipient, null);
+    assert.equal((await checkout.quote(who, selection)).ok, false, "Absent provider configuration cannot quote a charge");
+    assert.equal((await service.quote(who, { ...selection, purpose: "topup", planId: null, topUpUgx: 5000 })).ok, false);
+    assert.equal((await service.confirm(who, selection, randomUUID(), quote.value.quoteKey, true)).ok, false);
+    const input = { selection, requestKey: randomUUID(), quoteKey: quote.value.quoteKey, confirmed: true,
+      email: "receipt@example.test", returnTo: "/en/slips", origin: "http://localhost:3000" };
+    const starting = service.startFlutterwave(who, input);
+    const sent = await Promise.race([createEntered, starting.then(result => {
+      if (!providerCreateCount) assert.fail(result.message ?? "Checkout did not reach Flutterwave");
+      return null;
+    })]);
+    assert.ok(sent);
+    assert.equal(sent.amountUgx, 5000);
+    assert.equal(sent.email, input.email);
+    const redirect = new URL(sent.redirectUrl);
+    assert.equal(redirect.pathname, `/api/payments/flutterwave/return/${sent.reference}`);
+    try {
+      assert.equal((await service.startFlutterwave(who, input)).code, "provider-pending");
+      assert.equal((await service.startFlutterwave(who, { ...input, requestKey: randomUUID() })).code, "provider-pending");
+      assert.equal((await service.checkFlutterwave(other, sent.reference)).ok, false);
+      assert.equal(providerVerifyCount, 0);
+    } finally { finishCreate(); }
+    const started = await starting;
+    assert.equal(started.ok, true, started.message);
+    assert.equal(started.value.checkoutUrl, checkoutUrl);
+    assert.equal(started.value.request.status, "provider-pending");
+    assert.equal((await service.startFlutterwave(who, input)).value.checkoutUrl, checkoutUrl);
+    assert.equal(providerCreateCount, 1);
+    const reference = started.value.request.id;
+    assert.equal((await service.read(who, reference)).requests.find(row => row.id === reference).checkoutUrl, checkoutUrl);
+    assert.equal((await service.read(other, reference)).requests.some(row => row.id === reference), false);
+    assert.equal((await act(reference, { action: "approve-checkout" })).ok, false);
+    assert.equal((await service.cancel(who, reference)).ok, false);
+    const outcome = { id: "410001", reference, status: "successful", amountUgx: 5000, currency: "UGX", paidAt: new Date(now()) };
+    for (const patch of [{ amountUgx: 4999 }, { amountUgx: 5001 }, { currency: "USD" }, { reference: randomUUID() }, { id: "410002" }, { status: "pending" }]) {
+      verified = { ...outcome, ...patch };
+      assert.equal((await service.reconcileFlutterwave(reference, outcome.id)).status, "provider-pending");
+    }
+    const count = () => database.query(tx => tx.accessCode.count({ where: { accountId: who.accountId, paymentSubmissionId: reference } }));
+    assert.equal(await count(), 0);
+    verified = { ...outcome, status: "cancelled" };
+    assert.equal((await service.reconcileFlutterwave(reference)).status, "cancelled");
+    verified = { ...outcome, status: "failed" };
+    assert.equal((await service.checkFlutterwave(who, reference)).value.status, "rejected");
+    assert.equal(await count(), 0);
+    verified = outcome;
+    const approvals = await Promise.all([service.reconcileFlutterwave(reference, outcome.id), service.reconcileFlutterwave(reference, outcome.id)]);
+    assert.deepEqual(approvals.map(row => row.status), ["approved", "approved"]);
+    assert.equal(await count(), 1);
+    assert.equal(await database.query(tx => tx.paymentReceipt.count({ where: { provider: "flw", allocatedSubmissionId: reference } })), 1);
+    assert.equal((await service.read(who, reference)).requests.find(row => row.id === reference).checkoutUrl, null);
+    assert.equal((await createAccessCodes({ database, now }).subscriptionStatus(who)).activeUntil, new Date(now() + 7 * 86_400_000).toISOString());
+  });
   await t.test("remembered provider follows the latest approved subscription, including legacy payments", async () => {
     const who = await member(), other = await member();
     let sequence = 0;

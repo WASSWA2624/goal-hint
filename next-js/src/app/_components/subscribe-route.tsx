@@ -10,7 +10,7 @@ import { FreeTrialControl } from "@/components/members/free-trial-control";
 import { ButtonLink } from "@/components/ui/controls";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { accountSectionHref } from "@/domain/account-navigation";
-import { matchReturnPath, memberAuthPath, memberReturnPath, sharedSlipReturnPath } from "@/domain/member-navigation";
+import { matchReturnPath, memberAuthPath, memberReturnPath, sharedSlipReturnPath, subscriptionReturnPath } from "@/domain/member-navigation";
 import { adminLandingPath } from "@/domain/admin-navigation";
 import { checkoutOpenStatuses } from "@/domain/checkout";
 import type { PaymentView } from "@/domain/payment";
@@ -24,7 +24,9 @@ import { getMemberServices, type MemberServicesSource } from "@/server/members/m
 import { memberCookieName, memberTokenHash } from "@/server/members/member-sessions";
 import { createPlansService } from "@/server/members/plans";
 import { readMemberPageSession } from "@/server/members/member-page-session";
-import { payableCheckoutPlans, subscriptionCheckoutPublished } from "@/server/members/sales-readiness";
+import { flutterwaveReference } from "@/server/members/flutterwave";
+import { flutterwaveCheckoutPublished, payableCheckoutPlans, subscriptionCheckoutPublished } from "@/server/members/sales-readiness";
+import { allowsContentWithoutSubscription } from "@/server/members/viewer-access";
 import { PublicShell } from "./public-shell";
 
 async function readPlans() {
@@ -39,51 +41,73 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
   }) {
     const m = createMessages(locale);
     const [resolved, parameters] = await Promise.all([services().catch(() => null), searchParams]);
-    const returnTo = memberReturnPath(parameters.return), topUp = parameters.add === "credit";
+    const topUp = parameters.add === "credit";
+    const requestedPayment = flutterwaveReference.safeParse(parameters.payment);
+    const paymentId = !topUp && requestedPayment.success ? requestedPayment.data : undefined;
+    const checkoutReturn = !topUp && parameters.checkout === "1" ? subscriptionReturnPath(parameters.return) : null;
+    const returnTo = !topUp && parameters.checkout === "1" ? checkoutReturn : memberReturnPath(parameters.return);
     const returnMatch = matchReturnPath(returnTo);
-    const matchBack = returnMatch && <div><ButtonLink href={returnMatch} variant="quiet" prefetch={false} contextBack>
-      {m.text("subscribe.returnToMatch")}
-    </ButtonLink></div>;
+    const returnLabel = returnMatch ? "subscribe.returnToMatch" : sharedSlipReturnPath(returnTo) ? "slipShare.return"
+      : returnTo === "/en/slips" ? "subscribe.returnToBuilder" : returnTo === "/en/best-slips" ? "subscribe.returnToSlips"
+        : returnTo?.startsWith("/en/best-slips/") ? "slipShare.return" : "subscribe.returnToMatches";
+    const back = returnTo && (returnMatch || sharedSlipReturnPath(returnTo) || checkoutReturn) &&
+      <div><ButtonLink href={returnTo} variant="quiet" prefetch={false} contextBack>{m.text(returnLabel)}</ButtonLink></div>;
     if (!resolved) return <PublicShell locale={locale} showAccount><SubscribeLayout>
-      <SubscribeIntro locale={locale} />{matchBack}<MemberNavigationRecovery /><p role="status">{m.text("account.unavailable")}</p>
+      <SubscribeIntro locale={locale} />{back}<MemberNavigationRecovery /><p role="status">{m.text("account.unavailable")}</p>
     </SubscribeLayout></PublicShell>;
     const settings = resolved.settings.settings;
     const salesOpen = subscriptionCheckoutPublished(settings, resolved.config.production);
-    const userAgent = (await headers()).get("user-agent") ?? "";
+    const hostedSalesOpen = !topUp && !!resolved.checkout?.flutterwaveReady
+      && flutterwaveCheckoutPublished(settings, resolved.config.production && resolved.checkout.flutterwaveMode !== "sandbox");
+    const checkoutPublished = salesOpen || hostedSalesOpen;
+    if (checkoutReturn && !paymentId && allowsContentWithoutSubscription(resolved.settings, false)) redirect(checkoutReturn);
     const session = await readMemberPageSession(resolved, (await cookies()).get(memberCookieName(resolved.config.production))?.value);
     // Authentication always has its own URL, before pricing or checkout reads can fail.
-    if (session.kind === "guest") redirect(memberAuthPath("login", returnTo));
-    if (session.kind === "verification") redirect(memberAuthPath("verify", returnTo));
-    if (session.kind === "reset") redirect(memberAuthPath("new-password", returnTo));
+    if (session.kind === "guest") redirect(memberAuthPath("login", returnTo, !!checkoutReturn));
+    if (session.kind === "verification") redirect(memberAuthPath("verify", returnTo, !!checkoutReturn));
+    if (session.kind === "reset") redirect(memberAuthPath("new-password", returnTo, !!checkoutReturn));
     const member = session.kind === "member" ? session.member : null;
+    const administrator = !!member && !member.blocked && member.administrator;
     const eligible = member && !member.blocked && !member.administrator ? member : null;
+    const alreadyAllowed = administrator || eligible && allowsContentWithoutSubscription(resolved.settings, eligible.phoneVerified === true);
+    if (checkoutReturn && !paymentId && alreadyAllowed) redirect(checkoutReturn);
+    const status = eligible ? resolved.codes?.subscriptionStatus(eligible).catch(() => null) ?? null : null;
+    if (checkoutReturn && !paymentId && settings) {
+      const activeUntil = (await status)?.activeUntil;
+      if (activeUntil && Date.parse(activeUntil) > Date.now()) redirect(checkoutReturn);
+    }
     // Payment history and the current access period remain available when new sales are paused.
-    const [status, availablePlans, payment, checkout] = await Promise.allSettled([
-      eligible ? resolved.codes?.subscriptionStatus(eligible) ?? null : null,
-      eligible && salesOpen && (!topUp || !resolved.checkout) ? plans() : [],
+    const [subscription, availablePlans, payment, checkout, requestHeaders] = await Promise.allSettled([
+      status,
+      eligible && checkoutPublished && (!topUp || !resolved.checkout) ? plans() : [],
       eligible ? resolved.payments?.view(eligible) ?? null : null,
-      eligible ? resolved.checkout?.read(eligible) ?? null : null,
+      eligible ? resolved.checkout?.read(eligible, paymentId) ?? null : null,
+      headers(),
     ]);
-    const subscription: SubscriptionStatus | null = status.status === "fulfilled" ? status.value : null;
+    const subscriptionStatus: SubscriptionStatus | null = subscription.status === "fulfilled" ? subscription.value : null;
     const plansForSale = availablePlans.status === "fulfilled" ? availablePlans.value.filter(plan => plan.active) : [];
     const checkoutView = checkout.status === "fulfilled" ? checkout.value : null;
-    const offers = payableCheckoutPlans(plansForSale, settings, checkoutView?.availableWalletUgx ?? 0);
+    const currentPayment = paymentId ? checkoutView?.requests.find(request => request.id === paymentId && request.method === "flw") : null;
+    const offers = payableCheckoutPlans(plansForSale, salesOpen ? settings : null, salesOpen ? checkoutView?.availableWalletUgx ?? 0 : 0,
+      hostedSalesOpen && checkoutView?.flutterwaveAvailable === true);
     const paymentView = payment.status === "fulfilled" ? payment.value : null;
     const view: PaymentView | null = checkoutView ? { ...paymentView, acceptedTerms: paymentView?.acceptedTerms ?? false,
       status: paymentView?.status ?? null, checkout: checkoutView } : paymentView;
-    const unavailable = !settings || session.kind === "unavailable" || !!eligible && salesOpen &&
-      (!subscription || availablePlans.status === "rejected" || payment.status === "rejected" || !!resolved.checkout && !checkoutView);
-    const activeUntil = subscription?.activeUntil ?? null;
-    const trial = subscription?.trial;
-    const administrator = !!member && !member.blocked && member.administrator;
+    const unavailable = !settings || session.kind === "unavailable" || !!eligible && checkoutPublished &&
+      (!subscriptionStatus || availablePlans.status === "rejected" || payment.status === "rejected" || !!resolved.checkout && !checkoutView);
+    const activeUntil = subscriptionStatus?.activeUntil ?? null;
+    const confirmedAccess = alreadyAllowed || !!settings && !!activeUntil && Date.parse(activeUntil) > Date.now();
+    if (checkoutReturn && paymentId && confirmedAccess && (!currentPayment || currentPayment.status === "approved")) redirect(checkoutReturn);
+    const trial = subscriptionStatus?.trial;
     const draftScope = member ? memberTokenHash(`purchase-progress:${member.tokenHash}`) : "signed-out";
     const referralsOpen = settings?.paywallMode === "on";
-    const newCheckoutAvailable = salesOpen && !unavailable && (topUp ? hasManualPaymentProvider(settings) : offers.length > 0);
+    const newCheckoutAvailable = checkoutPublished && !unavailable && (topUp ? hasManualPaymentProvider(settings) : offers.length > 0);
     const checkoutAvailable = !!eligible && !!settings && !!checkoutView && (newCheckoutAvailable ||
       checkoutView.requests.some(request => (request.purpose === "topup") === topUp) || referralsOpen && !topUp && checkoutView.availableReferralDays > 0);
     const showFlow = checkoutAvailable || !!eligible && !resolved.checkout && newCheckoutAvailable;
     const reports = [paymentView?.status, paymentView?.otherStatus].filter(report => report != null);
-    const waiting = !showFlow && (subscription?.paymentPending || reports.some(report => [...checkoutOpenStatuses, "superseded"].some(state => state === report.status)));
+    const waiting = !showFlow && (subscriptionStatus?.paymentPending || reports.some(report => [...checkoutOpenStatuses, "superseded"].some(state => state === report.status)));
+    const userAgent = requestHeaders.status === "fulfilled" ? requestHeaders.value.get("user-agent") ?? "" : "";
     const contact = { ...publicSupportContactSettings(settings), reviewTime: settings?.reviewTime ?? null };
     const trialNotice = trial && !topUp
       ? <FreeTrialControl key={member?.accountId} locale={locale} trial={trial} days={offeredTrialDays(settings)} /> : null;
@@ -92,24 +116,28 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
       <MemberNavigationRecovery {...(member ? { expectedPhone: member.blocked ? null : member.phone, expectedAdministrator: !!administrator } : {})} />
       {topUp && member && !member.blocked && !administrator
         ? <div><ButtonLink href={accountSectionHref(locale, "wallet", returnTo)} variant="quiet" prefetch={false}>{m.text("wallet.back")}</ButtonLink></div>
-        : matchBack || sharedSlipReturnPath(returnTo) && <div><ButtonLink href={returnTo!} prefetch={false}>{m.text("slipShare.return")}</ButtonLink></div>}
+        : !checkoutReturn && back}
       <ApprovalRefresh waiting={waiting} refreshAt={trial?.state === "active" ? trial.endsAt : activeUntil} />
       {!checkoutAvailable && trialNotice}
       {eligible && !showFlow && reports.length > 0 && <div id="report">
-        {reports.map(report => <PaymentStatusCard key={report.reference} locale={locale} status={report} settings={contact} phone={eligible.phone} />)}
+        {reports.map(report => <PaymentStatusCard key={report.reference} locale={locale} status={report} settings={contact} phone={eligible.phone}
+          returnTo={returnTo} direct={!!checkoutReturn} />)}
       </div>}
-      {eligible && !salesOpen && activeUntil && <SubscriptionSummaryCard locale={locale} subscription={subscription} canSubscribe={false} returnTo={returnTo} />}
+      {eligible && !checkoutPublished && activeUntil && <SubscriptionSummaryCard locale={locale} subscription={subscriptionStatus} canSubscribe={false} returnTo={returnTo} />}
       {administrator ? <><p>{m.text("account.noSubscriptionNeeded")}</p><div><ButtonLink href={adminLandingPath} prefetch={false}>{m.text("account.dashboard")}</ButtonLink></div></>
         : member?.blocked ? <p role="status">{m.text("account.refused")}</p>
           : unavailable ? <p role="status">{m.text("account.unavailable")}</p>
-            : !salesOpen ? <><p role="status">{m.text(settings?.paywallMode === "off" ? "account.closed" : "subscribe.salesPaused")}</p>
+            : !checkoutPublished ? <><p role="status">{m.text(settings?.paywallMode === "off" ? "account.closed" : "subscribe.salesPaused")}</p>
               <div><ButtonLink href={accountSectionHref(locale, "overview", returnTo)} prefetch={false}>{m.text("account.title")}</ButtonLink></div></>
               : eligible && !newCheckoutAvailable && <p role="status">
                 {m.text(!topUp && !plansForSale.length ? "subscribe.noPlans" : "subscribe.noPaymentMethods")}
               </p>}
       {showFlow && settings && eligible && <SubscribeFlow key={`${draftScope}:${topUp ? "credit" : "plans"}`} locale={locale} settings={publicSubscriptionSettings(settings)} plans={offers}
         account={{ id: eligible.accountId, phone: eligible.phone, draftScope }} view={view} returnTo={returnTo} userAgent={userAgent}
-        startWithTopUp={topUp} salesOpen={newCheckoutAvailable} referralsOpen={referralsOpen} noticeBeforeCheckout={trialNotice} />}
+        startWithTopUp={topUp} salesOpen={newCheckoutAvailable} ordinarySalesOpen={salesOpen} referralsOpen={referralsOpen} noticeBeforeCheckout={trialNotice}
+        direct={!!checkoutReturn} paymentId={currentPayment?.id ?? null}
+        paymentCancelled={currentPayment?.status === "provider-pending" && parameters.paymentStatus === "cancelled"} />}
+      {checkoutReturn && back}
     </SubscribeLayout></PublicShell>;
   };
 }

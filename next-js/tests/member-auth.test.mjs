@@ -658,6 +658,25 @@ test("failed login never returns a completion destination or session cookie", as
   }
 });
 
+test("explicit checkout journeys survive sign-in, signup, verification and password recovery", async () => {
+  const target = "/en/matches/example/home-away", token = "l".repeat(43);
+  for (const [action, method, body] of [["login", "login", { phone, password }], ["register", "register", { phone, password }],
+    ["verify", "verifyAccount", { code: "123456" }], ["reset-code", "verifyPasswordReset", { phone, code: "123456" }], ["reset", "resetPassword", { password }]]) {
+    for (const returnTo of [target, "//other.test", "/en/subscribe", "/en/slips\n", "/admin/payments?paymentId=7d444840-9dc0-4f60-9b18-050fc43b8813"]) {
+      const restricted = action === "reset-code";
+      const source = async () => ({ config: { production: false, cookies: { session: "goal-hint-analytics" } }, sessions: { async verify() { return null; } },
+        auth: { async [method]() { return { status: "authenticated", token, phone, requiresPasswordChange: restricted }; } } });
+      const response = await createMemberAuthHandler(action, source)(authRequest(action, { ...body, checkout: "1", return: returnTo }));
+      assert.equal(response.status, 200);
+      const redirect = new URL((await response.json()).next, "https://goal-hint.test");
+      assert.equal(redirect.pathname, restricted ? "/en/account" : returnTo === target ? "/en/subscribe" : "/en/matches");
+      assert.equal(redirect.searchParams.get("view"), restricted ? "new-password" : null);
+      assert.equal(redirect.searchParams.get("checkout"), returnTo === target ? "1" : null);
+      assert.equal(redirect.searchParams.get("return"), returnTo === target ? target : null);
+    }
+  }
+});
+
 test("authentication preserves shared-slip journeys through restricted steps and limits payment review returns to administrators", async () => {
   const shared = `/s/${"a".repeat(32)}`, review = "/admin/payments?paymentId=7d444840-9dc0-4f60-9b18-050fc43b8813";
   const token = "j".repeat(43);

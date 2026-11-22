@@ -47,6 +47,18 @@ test("current draft wins and unavailable receiving details never become defaults
   assert.equal(withCheckoutProvider(draft, { ...settings, mtnNumber: "invalid", airtelEnabled: false }, null).method, "");
 });
 
+test("Flutterwave pays for the package without wallet or earned-day contributions", () => {
+  const balances = { availableWalletUgx: 6000, availableReferralDays: 7 };
+  const funded = chooseCheckoutMethod(chooseCheckoutMethod(draft, "wallet", true, balances, plans), "referral", true, balances, plans);
+  const hosted = chooseCheckoutMethod(funded, "flw", true, balances, plans);
+  assert.equal(hosted.method, "flw");
+  assert.deepEqual([hosted.useWallet, hosted.walletUgx, hosted.useReferral, hosted.referralDays], [false, "0", false, "0"]);
+  assert.equal(withCheckoutProvider(hosted, settings, "mtn", true).method, "flw");
+  assert.equal(withCheckoutProvider(hosted, settings, null, false).method, "mtn");
+  assert.equal(withCheckoutProvider(draft, defaultSubscriptionSettings, null, true).method, "flw");
+  assert.equal(withCheckoutProvider({ ...draft, purpose: "topup" }, defaultSubscriptionSettings, null, true).method, "");
+});
+
 test("full wallet, changed balances and switching providers preserve the member's transfer preference", () => {
   const balances = { availableWalletUgx: 6000, availableReferralDays: 0 };
   const airtel = withCheckoutProvider({ ...draft, method: "airtel" }, settings, "mtn");

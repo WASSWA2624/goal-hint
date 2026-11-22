@@ -14,7 +14,7 @@ export const checkoutLabels: Record<string, string> = {
 const money = z.number().int().min(0).max(checkoutRules.maximumUgx);
 export const checkoutSelectionSchema = z.object({
   purpose: z.enum(["plan", "referral", "topup"]), planId: z.uuid().nullable(), topUpUgx: money.default(0),
-  method: z.enum(["mtn", "airtel", "wallet", "referral"]), walletUgx: money, referralDays: z.number().int().min(0).max(365),
+  method: z.enum(["mtn", "airtel", "wallet", "referral", "flw"]), walletUgx: money, referralDays: z.number().int().min(0).max(365),
 }).strict();
 export type CheckoutSelection = z.infer<typeof checkoutSelectionSchema>;
 export const receiptInputSchema = z.object({
@@ -37,11 +37,12 @@ export type CheckoutQuote = CheckoutSelection & { quoteKey: string; planName: st
 export type CheckoutRequest = { id: string; reference: string; status: string; purpose: string; method: string; planId: string | null;
   planName: string; priceUgx: number; durationDays: number; walletUgx: number; referralDays: number; amountToSend: number;
   reportedUgx: number; verifiedUgx: number; remainingUgx: number; excessUgx: number; endsAt: string | null;
-  reservationUntil: string | null; reason: string | null; revision: number;
+  reservationUntil: string | null; reason: string | null; revision: number; checkoutUrl?: string | null;
   receipts: { id: string; transactionId: string; amountUgx: number; paidAt: string; verified: boolean; disputed: boolean; withdrawn: boolean }[] };
-export type CheckoutView = { availableWalletUgx: number; availableReferralDays: number; lastMethod: string | null; requests: CheckoutRequest[] };
-export function checkoutMethodAvailable(method: string, balances: Pick<CheckoutView, "availableWalletUgx" | "availableReferralDays">,
+export type CheckoutView = { availableWalletUgx: number; availableReferralDays: number; lastMethod: string | null; requests: CheckoutRequest[]; flutterwaveAvailable?: boolean };
+export function checkoutMethodAvailable(method: string, balances: Pick<CheckoutView, "availableWalletUgx" | "availableReferralDays" | "flutterwaveAvailable">,
   providers: ManualPaymentSettings) {
+  if (method === "flw") return balances.flutterwaveAvailable === true;
   return method === "mtn" || method === "airtel" ? manualPaymentProvider(providers, method).reason === null
     : method === "wallet" ? balances.availableWalletUgx > 0 : method === "referral" && balances.availableReferralDays > 0;
 }

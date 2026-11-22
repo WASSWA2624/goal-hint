@@ -5,6 +5,7 @@ import styled from "styled-components";
 import { TextInput } from "@/components/ui/controls";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { passwordChangeWindowMs } from "@/domain/member-verification";
+import { memberAuthReturnFields } from "@/domain/member-navigation";
 import { formatPhone } from "@/domain/phone";
 import { createMessages } from "@/i18n/messages";
 import { AccountFormSupport, type AdminContact } from "./admin-contact";
@@ -39,14 +40,16 @@ export function PasswordChangeNote({ locale }: { locale: string }) {
 }
 
 /** The reset cookie is deliberately not an authenticated member session. It authorizes this form alone. */
-export function ResetPasswordForm({ locale, phone, returnTo = null, contact }: { locale: string; phone: string; returnTo?: string | null; contact: AdminContact }) {
+export function ResetPasswordForm({ locale, phone, returnTo = null, checkout = false, contact }: {
+  locale: string; phone: string; returnTo?: string | null; checkout?: boolean; contact: AdminContact;
+}) {
   const m = createMessages(locale), [password, setPassword] = useState(""), [confirm, setConfirm] = useState("");
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (busy) return;
     if (password !== confirm) { setError(m.text("account.passwordMismatch")); return; }
     setBusy(true); setError("");
-    try { const result = await accountRequest<{ next: string }>("reset", { password, ...(returnTo ? { return: returnTo } : {}) }); location.replace(result.next); }
+    try { const result = await accountRequest<{ next: string }>("reset", { password, ...memberAuthReturnFields(returnTo, checkout) }); location.replace(result.next); }
     catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); setBusy(false); }
   }
   return <AccountCard data-account-auth data-account-reset data-analytics-ignore>

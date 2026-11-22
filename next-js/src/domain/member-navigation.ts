@@ -11,23 +11,31 @@ export const signedOutPath = memberHomePath;
 export type MemberAuthView = "login" | "register" | "forgot" | "verify" | "new-password";
 
 /** Use one canonical authentication URL and carry only a validated local journey. */
-export function memberAuthPath(view: MemberAuthView = "login", returnTo?: unknown): string {
+export function memberAuthPath(view: MemberAuthView = "login", returnTo?: unknown, checkout = false): string {
   const query = new URLSearchParams({ view });
-  const safeReturn = memberReturnPath(returnTo);
-  if (safeReturn) query.set("return", safeReturn);
+  addReturn(query, returnTo, checkout);
   return `/en/account?${query}`;
 }
 
-/** Ordinary authentication finishes at home; only explicit sharing/review journeys take precedence. */
-export function memberLandingPath(administrator = false, returnTo?: unknown): string {
+/** Ordinary authentication finishes at home. Explicit checkout, sharing and review journeys keep their destination. */
+export function memberLandingPath(administrator = false, returnTo?: unknown, checkout = false): string {
+  if (checkout) {
+    const target = subscriptionReturnPath(returnTo);
+    return target ? administrator ? target : memberNextPath("subscribe", target, undefined, true) : administrator ? adminLandingPath : memberHomePath;
+  }
   return administrator ? reviewReturnPath(returnTo) ?? adminLandingPath : sharedSlipReturnPath(returnTo) ?? memberHomePath;
 }
 
 /** Only known feeds, canonical matches/shared slips, or a validated payment review can be carried through authentication. */
 export function memberReturnPath(value: unknown): string | null {
   const review = reviewReturnPath(value);
-  if (review) return review;
-  return typeof value === "string" && value.length <= 512 && (["/en", memberHomePath, "/en/best-slips", "/en/slips"].includes(value) || /^\/en\/best-slips\/\d{4}-\d{2}-\d{2}\/[1-9]\d{0,2}$/u.test(value) || sharedSlipReturnPath(value) || matchReturnPath(value)) ? value : null;
+  return review ?? subscriptionReturnPath(value);
+}
+
+/** A subscription journey can return only to public or subscriber features. */
+export function subscriptionReturnPath(value: unknown): string | null {
+  return typeof value === "string" && value.length <= 512 && !/\s/u.test(value) &&
+    (["/en", memberHomePath, "/en/best-slips", "/en/slips"].includes(value) || /^\/en\/best-slips\/\d{4}-\d{2}-\d{2}\/[1-9]\d{0,2}$/u.test(value) || sharedSlipReturnPath(value) || matchReturnPath(value)) ? value : null;
 }
 
 export function matchReturnPath(value: unknown): string | null {
@@ -42,10 +50,26 @@ export function sharedSlipReturnPath(value: unknown): string | null {
 /** Purge drafts left behind by older payment forms. */
 export const paymentDraftStoragePrefix = "goal-hint-payment-draft:";
 
-export function memberNextPath(destination: unknown, returnTo: unknown, status?: string): string {
+export function memberNextPath(destination: unknown, returnTo: unknown, status?: string, checkout = false): string {
   const query = new URLSearchParams();
-  const safeReturn = memberReturnPath(returnTo);
-  if (safeReturn) query.set("return", safeReturn);
+  addReturn(query, returnTo, destination === "subscribe" && checkout);
   if (status) query.set("status", status);
   return `/en/${destination === "subscribe" ? "subscribe" : "account"}${query.size ? `?${query}` : ""}`;
+}
+
+export function memberAuthReturnFields(returnTo: string | null, checkout: boolean) {
+  return { ...(returnTo ? { return: returnTo } : {}), ...(checkout ? { checkout: "1" } : {}) };
+}
+
+export function memberSignOutToLoginPath(checkoutReturn?: unknown): `/api/account/sign-out?${string}` {
+  const query = new URLSearchParams({ destination: "login" });
+  addReturn(query, checkoutReturn, true);
+  return `/api/account/sign-out?${query}`;
+}
+
+function addReturn(query: URLSearchParams, returnTo: unknown, checkout: boolean) {
+  const safeReturn = checkout ? subscriptionReturnPath(returnTo) : memberReturnPath(returnTo);
+  if (!safeReturn) return;
+  query.set("return", safeReturn);
+  if (checkout) query.set("checkout", "1");
 }

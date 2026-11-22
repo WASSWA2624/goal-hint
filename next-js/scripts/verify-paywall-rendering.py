@@ -17,7 +17,8 @@ UNFINISHED_SLIP_VALUES = PRIVATE_SLIP_VALUES
 
 
 def verify_private_routes(origin):
-    routes = [("/admin", 307, "/en/account?view=login"), ("/en/account", 200, None), ("/en/subscribe", 200, None)]
+    routes = [("/admin", 307, "/en/account?view=login"), ("/en/account", 200, None),
+              ("/en/subscribe", 307, "/en/account?view=login")]
     for path, status, location in routes:
         page = request(origin, path)
         assert page.status == status, (path, page.status)
@@ -25,6 +26,26 @@ def verify_private_routes(origin):
         assert "no-store" in page.headers.get("Cache-Control", ""), path
         assert "noindex" in page.headers.get("X-Robots-Tag", ""), path
     return len(routes)
+
+
+def verify_checkout_entry(origin):
+    path = "/en/subscribe?checkout=1&return=%2Fen%2Fslips"
+    guest = request(origin, path)
+    assert guest.status == 307
+    auth = urlsplit(guest.headers["Location"])
+    assert auth.path == "/en/account" and parse_qs(auth.query) == {"view": ["login"], "checkout": ["1"], "return": ["/en/slips"]}
+    for viewer in ("test", "expired"):
+        page = request(origin, path, headers={"x-test-viewer": viewer})
+        assert page.status == 200 and "Restoring checkout" in page.text, (viewer, "checkout flow missing")
+    for viewer in ("entitled", "verified-free", "off"):
+        page = request(origin, path, headers={"x-test-viewer": viewer})
+        assert page.status == 307 and page.headers["Location"] == "/en/slips", (viewer, "entitled return missing")
+    unsafe = request(origin, "/en/subscribe?checkout=1&return=%2F%2Fevil.example")
+    assert unsafe.status == 307 and unsafe.headers["Location"] == "/en/account?view=login"
+    paused = request(origin, path, headers={"x-test-viewer": "expired", "x-test-sales": "production"})
+    assert paused.status == 200 and "Subscription purchases are temporarily unavailable." in paused.text
+    assert "Restoring checkout" not in paused.text and 'href="/en/slips"' in paused.text
+    return 8
 
 
 def prepare_fixture(scenarios):
@@ -114,7 +135,7 @@ def main():
                                 linked = re.search(rf'href="/en/matches/{fixture_id}/[a-z0-9-]+"', text)
                                 assert bool(linked) == (full or free_fixture or forecastless), (viewer, url, "appropriate card link")
                                 if not full and not free_fixture and not forecastless:
-                                    assert "return=%2Fen%2Fmatches%2F" in text and "Unlock" in text
+                                    assert "return=%2Fen%2Fmatches%2F" in text and "checkout=1" in text and "Unlock predictions" in text
                             if url.startswith("/en/matches?q=") and not full:
                                 assert 'Subscribers only' in text
                                 assert not re.search(r'<option[^>]*value="probability-desc"[^>]*disabled', text) and not re.search(r'<option[^>]*disabled[^>]*value="probability-desc"', text)
@@ -124,9 +145,9 @@ def main():
                                 if not free_fixture:
                                     assert 'data-fixture-id=' in text, (viewer, url, "unfinished public match preview")
                             if not full and not free_fixture and not url.startswith("/en/matches?q="):
-                                assert 'data-match-access-required' in text and 'Unlock' in text
+                                assert 'data-match-access-required' in text and 'Unlock predictions' in text
                                 assert 'data-featured-pick="top"' not in text
-                                assert 'return=%2Fen%2Fmatches%2F' in text
+                                assert 'return=%2Fen%2Fmatches%2F' in text and 'checkout=1' in text
                             if url.startswith("/en/matches?q="):
                                 assert 'data-account-actions' in text and 'view=register' in text
                         if url.startswith("/api/"):
@@ -161,7 +182,7 @@ def main():
                 builder = document(slips.text).root
                 actions = builder.nodes(attr="data-criteria-actions")
                 signed_in = viewer not in {"anonymous", "off", "evicted"}
-                label = "Unlock"
+                label = "Unlock slip builder"
                 assert len(actions) == 1, (viewer, "one Slip Builder action group")
                 links = builder.nodes("a", "data-slip-access-action")
                 assert len(links) == 1, (viewer, "one Slip Builder toolbar access action")
@@ -172,6 +193,7 @@ def main():
                     destination = urlsplit(link.attrs["href"])
                     assert destination.path == ("/en/subscribe" if signed_in else "/en/account"), (viewer, "Slip Builder access destination")
                     assert parse_qs(destination.query).get("return") == ["/en/slips"], (viewer, "Slip Builder return destination")
+                    assert parse_qs(destination.query).get("checkout") == ["1"], (viewer, "Slip Builder opens checkout")
                     if not signed_in:
                         assert parse_qs(destination.query).get("view") == ["login"], (viewer, "Slip Builder guests open login")
                 checks += 1
@@ -208,7 +230,11 @@ def main():
                         assert not toggles and markup.nodes(attr="data-locked-slip"), (viewer, "single whole-slip access target")
                         slip_headers = markup.nodes("header", "data-slip-summary")
                         assert len(slip_headers) == 1 and "10.98" in slip_headers[0].text and "66.0%" in slip_headers[0].text
-                        assert len(markup.nodes("a", "data-unlock-button")) == 3
+                        slip_actions = markup.nodes("a", "data-unlock-button")
+                        assert len(slip_actions) == 3 and all(action.text.strip() == "Unlock slip" for action in slip_actions)
+                        destinations = [parse_qs(urlsplit(action.attrs["href"]).query) for action in slip_actions]
+                        assert len({tuple(query["return"]) for query in destinations}) == 1
+                        assert all(query["return"][0].startswith("/en/best-slips/") and query.get("checkout") == ["1"] for query in destinations)
                         assert not markup.nodes(attr="data-subscriber-panel")
                         assert not markup.nodes(attr="data-best-slips-access"), (viewer, "no duplicate mobile access panel beneath filters")
                 checks += 1
@@ -238,6 +264,7 @@ def main():
                 checks += 1
             print(f"PASS fresh access during read: {viewer} sees safe previews without unfinished predictions.", flush=True)
         checks += verify_private_routes(server.origin)
+        checks += verify_checkout_entry(server.origin)
         print(f"PASS {checks} raw HTML/RSC/API, history, insights, oracle, slips and private-route checks across nine viewer states.", flush=True)
         if args.serve: server.serve()
 

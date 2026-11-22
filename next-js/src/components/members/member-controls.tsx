@@ -57,7 +57,7 @@ export function MemberNavigationRecovery({ expectedPhone, expectedAdministrator 
 }
 
 export function MemberSignOut({ children, logoutAction = "/api/account/sign-out", ...props }: ComponentProps<typeof Button> & {
-  logoutAction?: "/api/account/sign-out" | "/api/account/sign-out?destination=login" | "/api/admin/logout";
+  logoutAction?: "/api/account/sign-out" | `/api/account/sign-out?${string}` | "/api/admin/logout";
 }) {
   return <form method="post" action={logoutAction} onSubmit={event => {
     resetReviewAlerts();

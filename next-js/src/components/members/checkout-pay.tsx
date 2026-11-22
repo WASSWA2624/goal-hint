@@ -2,11 +2,12 @@
 
 import { useId, type ReactNode } from "react";
 import { Button } from "@/components/ui/controls";
-import { CardIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, CopyIcon, PhoneIcon } from "@/components/ui/icons";
+import { CardIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, CopyIcon, PhoneIcon, ShieldIcon } from "@/components/ui/icons";
 import { localUgandaPhone } from "@/domain/phone";
 import type { PublicSubscriptionSettings } from "@/domain/public-subscription-settings";
 import { formatPlanLength, formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
 import { manualPaymentProvider } from "@/domain/subscription-settings";
+import { createMessages } from "@/i18n/messages";
 import type { CheckoutDraft } from "./checkout-draft";
 import type { CheckoutPayPreview } from "./checkout-parts";
 import { MobileMoneyLogo } from "./mobile-money-logo";
@@ -19,6 +20,7 @@ import {
 const providers = [{ method: "mtn", name: "MTN MoMo" }, { method: "airtel", name: "Airtel Money" }] as const;
 
 type CheckoutPayProps = {
+  locale: string;
   plan: SubscriptionPlanView | undefined;
   settings: PublicSubscriptionSettings;
   method: CheckoutDraft["method"];
@@ -26,9 +28,11 @@ type CheckoutPayProps = {
   walletUgx: number;
   availableWalletUgx: number;
   availableEarnedDays: number;
+  flutterwaveAvailable: boolean;
+  ordinarySalesOpen: boolean;
   lastProvider: string | null;
   disabled: boolean;
-  onMethodChange: (method: "mtn" | "airtel" | "wallet", selected: boolean) => void;
+  onMethodChange: (method: "mtn" | "airtel" | "wallet" | "flw", selected: boolean) => void;
   onChangePackage: () => void;
   onContinue: () => void;
   onRedeem: () => void;
@@ -36,12 +40,13 @@ type CheckoutPayProps = {
 };
 
 /** Presentation is shared across breakpoints; the checkout owner retains drafts and confirmation. */
-export function CheckoutPay({ plan, settings, method, useWallet, walletUgx, availableWalletUgx,
-  availableEarnedDays, lastProvider, disabled, onMethodChange, onChangePackage, onContinue, onRedeem, children }: CheckoutPayProps) {
-  const id = useId();
+export function CheckoutPay({ locale, plan, settings, method, useWallet, walletUgx, availableWalletUgx,
+  availableEarnedDays, flutterwaveAvailable, ordinarySalesOpen, lastProvider, disabled, onMethodChange, onChangePackage, onContinue, onRedeem, children }: CheckoutPayProps) {
+  const id = useId(), m = createMessages(locale);
   const walletOnly = method === "wallet" && !!plan && walletUgx === plan.priceUgx && walletUgx <= availableWalletUgx;
+  const flutterwave = method === "flw" && flutterwaveAvailable;
   const selectedProvider = providers.find(provider => provider.method === method);
-  const methodReady = walletOnly || !!selectedProvider && !manualPaymentProvider(settings, selectedProvider.method).reason;
+  const methodReady = flutterwave || ordinarySalesOpen && (walletOnly || !!selectedProvider && !manualPaymentProvider(settings, selectedProvider.method).reason);
   return <PayLayout data-checkout-pay>
     <PayHelper>Choose how you’d like to pay.</PayHelper>
     <PayColumns>
@@ -57,7 +62,7 @@ export function CheckoutPay({ plan, settings, method, useWallet, walletUgx, avai
       <PayMethods aria-label="Payment methods" data-pay-methods>
         <PayProviders disabled={disabled}>
           <legend data-pay-methods-heading>Mobile Money</legend>
-          <PayProviderGrid>{providers.map(provider => {
+          <PayProviderGrid>{ordinarySalesOpen && providers.map(provider => {
             const unavailable = manualPaymentProvider(settings, provider.method).reason;
             return <PayProvider key={provider.method} data-pay-provider={provider.method}>
               <input type="radio" name="checkout-method" value={provider.method} aria-label={provider.name}
@@ -68,11 +73,18 @@ export function CheckoutPay({ plan, settings, method, useWallet, walletUgx, avai
               <strong>{provider.name}</strong>
               {unavailable && <small id={`${id}-${provider.method}-unavailable`}>{unavailable}</small>}
             </PayProvider>;
-          })}</PayProviderGrid>
+          })}
+            {flutterwaveAvailable && <PayProvider data-pay-provider="flw">
+              <input type="radio" name="checkout-method" value="flw" aria-label={m.text("checkout.flutterwave.method")}
+                checked={flutterwave} disabled={disabled} onChange={() => onMethodChange("flw", true)} />
+              <PayProviderMark><ShieldIcon /></PayProviderMark>
+              <strong>{m.text("checkout.flutterwave.method")}</strong>
+            </PayProvider>}
+          </PayProviderGrid>
           {walletOnly ? <PayNote>Wallet covers this payment. Select a provider to use Mobile Money instead.</PayNote>
             : selectedProvider && lastProvider === method && <PayNote data-pay-remembered>Selected from your last subscription payment.</PayNote>}
         </PayProviders>
-        {availableWalletUgx > 0 && <div data-pay-wallet>
+        {ordinarySalesOpen && availableWalletUgx > 0 && <div data-pay-wallet>
           <PayWallet><CardIcon /><span><strong>Use wallet balance</strong><small>{formatUgx(availableWalletUgx)} available</small></span>
             <input type="checkbox" name="checkout-wallet" checked={useWallet} disabled={disabled || !plan}
               onChange={event => onMethodChange("wallet", event.target.checked)} />
@@ -89,14 +101,15 @@ export function CheckoutPay({ plan, settings, method, useWallet, walletUgx, avai
     <PayFooter>
       <PayTextAction type="button" variant="quiet" disabled={disabled} onClick={onChangePackage}><ChevronLeftIcon />Back</PayTextAction>
       <div><Button type="button" disabled={disabled || !plan || !methodReady} onClick={onContinue} data-pay-continue>
-        {walletOnly ? "Review payment" : "I’ve paid — continue"}<ChevronRightIcon />
+        {flutterwave ? m.text("checkout.flutterwave.review") : walletOnly ? "Review payment" : "I’ve paid — continue"}<ChevronRightIcon />
       </Button>{walletOnly && <PayNote>Confirm before using your wallet</PayNote>}</div>
     </PayFooter>
   </PayLayout>;
 }
 
 /** Keep provider fields mounted while the caller revalidates current server-provided values. */
-export function CheckoutPayTransfer({ quote, availableWalletUgx, pending, failed, copied, onCopy }: {
+export function CheckoutPayTransfer({ locale = "en", quote, availableWalletUgx, pending, failed, copied, onCopy }: {
+  locale?: string;
   quote: CheckoutPayPreview;
   availableWalletUgx: number;
   pending: boolean;
@@ -106,6 +119,15 @@ export function CheckoutPayTransfer({ quote, availableWalletUgx, pending, failed
 }) {
   const walletOnly = quote.method === "wallet" && quote.amountToSend === 0;
   const provider = providers.find(item => item.method === quote.method);
+  if (quote.method === "flw") {
+    const m = createMessages(locale);
+    return <PayTransfer aria-label={m.text("checkout.flutterwave.choose")} aria-live="polite" aria-atomic="true" aria-busy={pending} data-payment-destination>
+      <PayTransferHeading><ShieldIcon />{m.text("checkout.flutterwave.choose")}</PayTransferHeading>
+      <PayAmount data-pay-amount>{formatUgx(quote.amountToSend)}</PayAmount>
+      <PayNote>{m.text("checkout.flutterwave.hosted")}</PayNote>
+      {failed && <PayNote role="alert">{m.text("checkout.flutterwave.unavailable")}</PayNote>}
+    </PayTransfer>;
+  }
   return <PayTransfer aria-label="Payment details" aria-live="polite" aria-atomic="true" aria-busy={pending} data-payment-destination>
     {walletOnly ? <>
       <PayTransferHeading><CardIcon />Pay from your wallet</PayTransferHeading>

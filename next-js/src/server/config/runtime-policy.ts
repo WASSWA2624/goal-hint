@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isIP } from "node:net";
 import { z } from "zod";
 import { calendarRules } from "../../domain/calendar.ts";
 import { marketRules } from "../../domain/markets.ts";
@@ -90,6 +91,8 @@ const optional = <Schema extends z.ZodType>(schema: Schema) =>
   );
 const text = optional(z.string().trim().min(1).regex(/^[^\r\n\0]+$/));
 const token = optional(z.string().min(1).regex(/^\S+$/));
+// Invalid or incomplete private payment configuration closes Flutterwave checkout without taking the app offline.
+const flutterwaveSetting = optional(z.string());
 const integer = z.string().regex(/^(0|[1-9]\d*)$/).transform(Number).pipe(z.int().nonnegative());
 const count = optional(integer.refine((value) => value > 0));
 const money = optional(integer);
@@ -149,6 +152,11 @@ const environmentSchema = z.object({
   GOAL_HINT_TRUSTED_PROXY_CIDRS: text.describe("Comma-separated exact proxy IPs/CIDRs, verified from the actual socket chain. Blank trusts no forwarded address."),
   GOAL_HINT_CUSTOMER_SUPPORT_NUMBER: subscriptionPhone.describe("Supply the customer support call/SMS number separately from receiving wallets."),
   GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER: subscriptionPhone.describe("Supply the customer support WhatsApp number independently, even when it matches the call number."),
+  GOAL_HINT_FLUTTERWAVE_PUBLIC_KEY: flutterwaveSetting.describe("Optional private Flutterwave public key for this environment."),
+  GOAL_HINT_FLUTTERWAVE_SECRET_KEY: flutterwaveSetting.describe("Private Flutterwave v3 secret key for this environment."),
+  GOAL_HINT_FLUTTERWAVE_ENCRYPTION_KEY: flutterwaveSetting.describe("Optional private Flutterwave encryption key for this environment."),
+  GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET: flutterwaveSetting.describe("Private Flutterwave webhook secret unique to this environment."),
+  GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL: flutterwaveSetting.describe("The exact HTTPS Flutterwave webhook address registered for this environment."),
   GOAL_HINT_FOOTBALL_ENABLED: enabled.describe("Use true or false; paid calls require approved bounded policy."),
   GOAL_HINT_AI_ENABLED: enabled.describe("Use true or false; AI calls require an approved billing policy."),
   GOAL_HINT_RESEARCH_ENABLED: enabled.describe("Use true or false; research calls require licensing and a separate budget."),
@@ -258,12 +266,57 @@ export class RuntimePolicyError extends Error {
 
 const secret = (value: string | null) => value === null ? null : new Secret(value);
 
+const flutterwaveWebhookPath = "/api/payments/flutterwave/webhook";
+const flutterwaveHostedOrigins = { staging: "https://test.goalhint.com", production: "https://goalhint.com" } as const;
+
+function privateFlutterwaveToken(value: string | null): string | null {
+  return value && value.length <= 4096 && /^[^\s\u0000-\u001f\u007f]+$/u.test(value) ? value : null;
+}
+
+function validFlutterwaveWebhookUrl(value: string | null, hostedOrigin: string | null): string | null {
+  if (!value) return null;
+  if (hostedOrigin) return value === `${hostedOrigin}${flutterwaveWebhookPath}` ? value : null;
+  let url: URL;
+  try { url = new URL(value); } catch { return null; }
+  return url.protocol === "https:" && url.href === `${url.origin}${flutterwaveWebhookPath}` && url.href === value &&
+    url.hostname.includes(".") && !url.port && !isIP(url.hostname) && !/(?:^|\.)(?:localhost|goalhint\.com)$/u.test(url.hostname)
+    ? value : null;
+}
+
+function flutterwaveConfig(settings: z.output<typeof environmentSchema>) {
+  const deployment = settings.GOAL_HINT_DEPLOYMENT_ENVIRONMENT;
+  const hosted = settings.NODE_ENV === "production" && (deployment === "production" || deployment === "staging");
+  const local = deployment === "development" || deployment === null && settings.NODE_ENV !== "production";
+  const mode = hosted && deployment === "production" ? "live" : hosted || local ? "sandbox" : null;
+  const hostedOrigin = hosted ? flutterwaveHostedOrigins[deployment] : null;
+  const publicKey = privateFlutterwaveToken(settings.GOAL_HINT_FLUTTERWAVE_PUBLIC_KEY);
+  const secretKey = privateFlutterwaveToken(settings.GOAL_HINT_FLUTTERWAVE_SECRET_KEY);
+  const keySuffix = mode === "live" ? "-" : "_TEST-";
+  const configuredKey = (value: string | null, prefix: string) => mode && value?.startsWith(prefix + keySuffix) &&
+    value.length > prefix.length + keySuffix.length ? value : null;
+  const usableSecretKey = configuredKey(secretKey, "FLWSECK");
+  const webhookUrl = mode ? validFlutterwaveWebhookUrl(settings.GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL, hostedOrigin) : null;
+  const webhookSecret = webhookUrl ? privateFlutterwaveToken(settings.GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET) : null;
+
+  return {
+    mode,
+    checkoutOrigin: hostedOrigin,
+    secretKey: secret(usableSecretKey),
+    webhookSecret: secret(webhookSecret),
+    webhookUrl: secret(webhookSecret ? webhookUrl : null),
+    publicKey: secret(configuredKey(publicKey, "FLWPUBK")),
+    encryptionKey: secret(mode ? privateFlutterwaveToken(settings.GOAL_HINT_FLUTTERWAVE_ENCRYPTION_KEY) : null),
+    checkoutReady: usableSecretKey !== null && (local || webhookSecret !== null),
+  };
+}
+
 function assemble(settings: z.output<typeof environmentSchema>) {
   return freeze({
     mode: settings.NODE_ENV,
     scope: settings.GOAL_HINT_OPERATION_SCOPE,
     public: publicPolicy,
     rules: operatingRules,
+    flutterwave: flutterwaveConfig(settings),
     capabilities: {
       database: settings.GOAL_HINT_DATABASE_ENABLED,
       football: settings.GOAL_HINT_FOOTBALL_ENABLED,
@@ -364,11 +417,6 @@ function databaseApprovalRequired(policy: RuntimePolicy, migration = false): boo
 
 // Message-gateway settings retired with one-time codes (068): env files that still carry them keep starting, and nothing reads them.
 const retiredSetting = /^GOAL_HINT_(?:ADMIN_PASSWORD_HASH|(?:SMS|WHATSAPP)_[A-Z_]+|(?:MTN_MOMO|AIRTEL_MONEY)_(?:NUMBER|NAME|MENU_SHORTCUT))$/u;
-// Recognize reserved server-side slots without reading them into runtime configuration.
-const inactiveFlutterwaveSettings = new Set([
-  "GOAL_HINT_FLUTTERWAVE_PUBLIC_KEY", "GOAL_HINT_FLUTTERWAVE_SECRET_KEY", "GOAL_HINT_FLUTTERWAVE_ENCRYPTION_KEY",
-  "GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET", "GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL",
-]);
 
 /** Pure parsing for isolated contracts/tests; never mutates env or performs I/O. */
 export function parseRuntimePolicy(env: Environment): RuntimePolicy {
@@ -379,7 +427,7 @@ export function parseRuntimePolicy(env: Environment): RuntimePolicy {
     if (env[key] === "" && maskedLocalSettings.has(key)) continue;
     if (key.startsWith("NEXT_PUBLIC_") && key !== "NEXT_PUBLIC_GOAL_HINT_DEMO" && key !== "NEXT_PUBLIC_GOAL_HINT_LOCAL_FOOTBALL") {
       issues.push({ field: "NEXT_PUBLIC_*", reason: "Runtime settings must stay server-owned; public settings come from publicPolicy." });
-    } else if (key.startsWith("GOAL_HINT_") && !(key in shape) && !retiredSetting.test(key) && !inactiveFlutterwaveSettings.has(key)) {
+    } else if (key.startsWith("GOAL_HINT_") && !(key in shape) && !retiredSetting.test(key)) {
       issues.push({ field: "GOAL_HINT_*", reason: "Unknown policy setting; use the documented environment contract." });
     }
   }

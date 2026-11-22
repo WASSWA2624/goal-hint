@@ -1,8 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCheckoutRefresh, revalidateCheckout } from "../src/components/members/checkout-refresh.ts";
+import { createCheckoutRefresh, hasNewCheckoutApproval, revalidateCheckout } from "../src/components/members/checkout-refresh.ts";
 
 const view = wallet => ({ availableWalletUgx: wallet, availableReferralDays: 0, lastMethod: null, requests: [] });
+
+test("only a newly approved request in this checkout journey revalidates access", () => {
+  const old = { id: "old", purpose: "plan", status: "approved" };
+  const plan = { id: "plan", purpose: "plan", status: "pending" };
+  const topUp = { id: "topup", purpose: "topup", status: "approved" };
+  const previous = { ...view(0), requests: [plan, old] };
+  const pending = { ...view(0), requests: [topUp, plan, old] };
+  assert.equal(hasNewCheckoutApproval(previous, pending, false), false);
+  assert.equal(hasNewCheckoutApproval(previous, pending, true), true);
+  const approved = { ...pending, requests: [topUp, { ...plan, status: "approved" }, old] };
+  assert.equal(hasNewCheckoutApproval(pending, approved, false), true);
+  assert.equal(hasNewCheckoutApproval(approved, approved, false), false);
+  assert.equal(hasNewCheckoutApproval(pending, { ...pending, requests: [{ ...plan, status: "cancelled" }, old] }, false), false);
+  const redemption = { id: "redemption", purpose: "referral", status: "approved" };
+  assert.equal(hasNewCheckoutApproval(approved, { ...approved, requests: [redemption, ...approved.requests] }, false), true);
+});
 function fixture(t) {
   const requests = [], accepted = [];
   let unauthorized = 0;

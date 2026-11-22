@@ -202,14 +202,17 @@ test('completed analysis is public only with verified canonical terminal status'
     readStatus: async () => { throw Error('unavailable'); } }).insights(fixture.detail.fixture.fixtureId), (error) => error.code === 'subscription-required');
 });
 
-test('locked destinations preserve safe return paths and distinguish guests from members', () => {
-  assert.equal(subscriberHref(false, '/en/best-slips/2026-10-09/1'), '/en/account?view=register&return=%2Fen%2Fbest-slips%2F2026-10-09%2F1');
-  assert.equal(subscriberHref(false, '/en/matches'), '/en/account?view=register&return=%2Fen%2Fmatches');
-  assert.equal(subscriberHref(true, '/en/slips'), '/en/subscribe?return=%2Fen%2Fslips');
-  assert.equal(subscriberHref(false, 'https://outside.test'), '/en/account?view=register');
-  assert.equal(subscriberHref(false, '/en', 'login'), '/en/account?view=login&return=%2Fen');
-  assert.equal(subscriberHref(true, '/en', 'login'), '/en/subscribe?return=%2Fen');
+test('locked destinations carry checkout intent only with a safe return path', () => {
+  for (const [signedIn, path, guestView] of [[false, '/en/best-slips/2026-10-09/1', 'register'],
+    [false, '/en/matches', 'register'], [true, '/en/slips', 'register'], [false, '/en', 'login']]) {
+    const href = new URL(subscriberHref(signedIn, path, guestView), 'https://goalhint.test');
+    assert.equal(href.pathname, signedIn ? '/en/subscribe' : '/en/account');
+    assert.equal(href.searchParams.get('view'), signedIn ? null : guestView);
+    assert.equal(href.searchParams.get('return'), path);
+    assert.equal(href.searchParams.get('checkout'), '1');
+  }
   assert.equal(subscriberHref(false, 'https://outside.test', 'login'), '/en/account?view=login');
+  assert.equal(subscriberHref(true, '//outside.test'), '/en/subscribe');
 });
 
 test('the final access check redacts unfinished feed rows after expiry without hiding matches', async () => {

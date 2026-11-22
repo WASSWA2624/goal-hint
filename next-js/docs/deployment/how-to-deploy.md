@@ -349,17 +349,36 @@ hosted file. If the active release already uses the intended default, leave
 the default in effect. A blank selected value preserves the server's setting.
 To remove an optional override, preview and then apply
 `--clear KEY`. Run `npm run env:sync -- --help` for the eligible web settings.
-The Flutterwave slots in `.env.example` are blank. Keep sandbox credentials in
-the ignored `next-js/.env.test` and leave the corresponding production slots blank.
-Hosted sync accepts the sandbox public and secret keys, optional encryption key,
-webhook secret and staging webhook URL on staging only. The public and secret
-keys must use Flutterwave's documented test prefixes. The staging account must
-supply its own sandbox encryption key if needed. [Flutterwave authentication](https://developer.flutterwave.com/docs/authentication).
+Keep Flutterwave settings in the private profile for the intended target. Use
+sandbox credentials in development and staging and live credentials in production.
+Flutterwave Standard uses `GOAL_HINT_FLUTTERWAVE_SECRET_KEY` on the server. The
+public and encryption key slots are optional for Standard. Treat every slot as
+private. Hosted sync validates the public and secret key mode and requires the
+webhook URL to be the target HTTPS origin with `/api/payments/flutterwave/webhook`.
+It checks that staging and production use different webhook secrets. Configure
+the matching URL and secret in the Flutterwave dashboard for each mode.
+[Flutterwave authentication](https://developer.flutterwave.com/docs/authentication).
 
-Adding values to these slots does not publish checkout or enable a payment
-method. Hosted database
-credentials, permissions, approval files and football worker settings remain
-managed through their respective deployment procedures.
+From `next-js/`, preview the relevant profile before applying it. Add `--apply`
+to the command after reviewing the name-only changes.
+
+```sh
+npm run env:sync -- --target staging --key GOAL_HINT_FLUTTERWAVE_SECRET_KEY --key GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET --key GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL
+```
+
+For production use `--target production` after confirming the release's checkout
+prerequisites, the live merchant's collection and settlement setup, and the
+production webhook registration. Check Privacy and Terms publication, an enabled
+public support contact, paid access, and an active plan. Verify that an unsigned
+request receives an authentication error from the webhook. Qualify staging with
+the provider's sandbox checkout and a successful server-verified entitlement
+grant. Use merchant account and webhook readiness checks for production without
+creating a live charge. Development can verify browser returns locally with a
+sandbox key. To receive real development webhooks, use a separate HTTPS endpoint
+and secret configured for that sandbox deployment.
+
+Hosted database credentials, permissions, approval files and football worker
+settings remain managed through their respective deployment procedures.
 
 An apply backs up the hosted settings privately, updates the canonical file
 and its active copy under the release lock, and reloads Passenger. It checks

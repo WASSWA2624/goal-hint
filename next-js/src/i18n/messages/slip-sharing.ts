@@ -47,7 +47,6 @@ export const slipSharingMessages = {
   "slipShare.accessGuest": "Log in to check access to this unfinished slip. Eligible access is required to view its selections.",
   "slipShare.accessMember": "Your account needs eligible access to view this unfinished slip. Check your access or choose a package.",
   "slipShare.signIn": authLabels.signIn,
-  "slipShare.getAccess": "Check access",
   "slipShare.return": "Return to shared slip",
   "slipShare.captionAccess": "When paid access is on, unfinished selections require eligible access. Completed slips are public.",
   "slipShare.unavailableTitle": "Slip unavailable",

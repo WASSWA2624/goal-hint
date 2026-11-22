@@ -1,12 +1,23 @@
 import type { CheckoutView } from "../../domain/checkout.ts";
 import { startRequestDeadline } from "../../domain/request-deadline.ts";
 
+function readCheckout(options: { paymentId?: string | null }, signal: AbortSignal) {
+  const query = options.paymentId ? `?${new URLSearchParams({ payment: options.paymentId })}` : "";
+  return fetch(`/api/account/checkout${query}`, { cache: "no-store", credentials: "same-origin", signal });
+}
+
+/** A prior approval in history cannot trigger a new access check. */
+export function hasNewCheckoutApproval(previous: CheckoutView, next: CheckoutView, topUp: boolean): boolean {
+  const approved = new Set(previous.requests.filter(request => request.status === "approved").map(request => request.id));
+  return next.requests.some(request => request.status === "approved" && (request.purpose === "topup") === topUp && !approved.has(request.id));
+}
+
 /** Revalidate completed writes with a fresh, bounded GET while background reads are paused. */
-export async function revalidateCheckout(options: { pause(): () => void; accept(view: CheckoutView): void }): Promise<CheckoutView> {
+export async function revalidateCheckout(options: { paymentId?: string | null; pause(): () => void; accept(view: CheckoutView): void }): Promise<CheckoutView> {
   const resume = options.pause(), request = new AbortController();
   const clearDeadline = startRequestDeadline(request);
   try {
-    const response = await fetch("/api/account/checkout", { cache: "no-store", credentials: "same-origin", signal: request.signal });
+    const response = await readCheckout(options, request.signal);
     request.signal.throwIfAborted();
     if (!response.ok) throw new Error("Status could not refresh. Your request is kept.");
     const next: CheckoutView = await response.json();
@@ -17,7 +28,7 @@ export async function revalidateCheckout(options: { pause(): () => void; accept(
 }
 
 /** Keep lifecycle events on one background read, separate from explicit post-mutation reads. */
-export function createCheckoutRefresh(options: { accept(view: CheckoutView): void; unauthorized(): void }) {
+export function createCheckoutRefresh(options: { paymentId?: string | null; accept(view: CheckoutView): void; unauthorized(): void }) {
   let pending: Promise<void> | null = null, controller: AbortController | null = null;
   let stopped = false, paused = 0;
   const cancel = () => { controller?.abort(); controller = null; pending = null; };
@@ -30,7 +41,7 @@ export function createCheckoutRefresh(options: { accept(view: CheckoutView): voi
     pending = Promise.resolve().then(async () => {
       try {
         request.signal.throwIfAborted();
-        const response = await fetch("/api/account/checkout", { cache: "no-store", credentials: "same-origin", signal: request.signal });
+        const response = await readCheckout(options, request.signal);
         request.signal.throwIfAborted();
         if (response.status === 401 || response.status === 403) { options.unauthorized(); return; }
         if (!response.ok) return;

@@ -11,16 +11,17 @@ const targets = {
   staging: { account: "ghstage", database: "ghstage_localcopy", file: ".env.test", host: "test.goalhint.com" },
   production: { account: "ghprod", database: "ghprod_prod", file: ".env.production", host: "goalhint.com" },
 };
-const sandboxWebhook = "https://test.goalhint.com/api/payments/flutterwave/webhook";
+const flutterwaveWebhookPath = "/api/payments/flutterwave/webhook";
+const flutterwaveWebhookSecretKey = "GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET";
 const webKeys = new Set([
   "YOOLA_SMS_API_KEY", "YOOLA_SMS_SENDER",
   "GOAL_HINT_ADMIN_PHONES", "GOAL_HINT_ADMIN_PASSWORD",
   "GOAL_HINT_ANALYTICS_ENABLED", "GOAL_HINT_ANALYTICS_SECRET", "GOAL_HINT_ANALYTICS_RETENTION_DAYS",
   "GOAL_HINT_ANALYTICS_GEO_SOURCE",
 ]);
-const sandboxKeys = new Set([
+const flutterwaveKeys = new Set([
   "GOAL_HINT_FLUTTERWAVE_PUBLIC_KEY", "GOAL_HINT_FLUTTERWAVE_SECRET_KEY", "GOAL_HINT_FLUTTERWAVE_ENCRYPTION_KEY",
-  "GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET", "GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL",
+  flutterwaveWebhookSecretKey, "GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL",
 ]);
 const keyName = /^[A-Z][A-Z0-9_]*$/u;
 const maxBytes = 256 * 1024;
@@ -75,12 +76,14 @@ function requireUnique(records, key) {
 
 function validateSelection(target, key, action) {
   ensure(keyName.test(key), "Select environment keys by their exact uppercase names.");
-  ensure(webKeys.has(key) || target === "staging" && sandboxKeys.has(key), `${key} cannot be changed by this command for ${target}.`);
+  ensure(webKeys.has(key) || flutterwaveKeys.has(key), `${key} cannot be changed by this command for ${target}.`);
   ensure(action !== "clear" || key !== "GOAL_HINT_ANALYTICS_SECRET", `${key} cannot be cleared by this command.`);
 }
 
-function validateValue(key, value) {
+function validateValue(target, key, value) {
   const token = /^\S+$/u;
+  const keySuffix = target === "staging" ? "_TEST-" : "-";
+  const flutterwaveKey = (kind) => value.startsWith(kind + keySuffix) && value.length > kind.length + keySuffix.length && token.test(value);
   const rules = {
     YOOLA_SMS_API_KEY: token.test(value),
     YOOLA_SMS_SENDER: /^[a-z\d]+$/iu.test(value),
@@ -89,11 +92,11 @@ function validateValue(key, value) {
     GOAL_HINT_ANALYTICS_ENABLED: /^(?:true|false)$/u.test(value),
     GOAL_HINT_ANALYTICS_RETENTION_DAYS: /^[1-9]\d*$/u.test(value) && Number(value) <= 1095,
     GOAL_HINT_ANALYTICS_GEO_SOURCE: /^(?:timezone|cloudflare|vercel)$/u.test(value),
-    GOAL_HINT_FLUTTERWAVE_PUBLIC_KEY: /^FLWPUBK_TEST-\S+$/u.test(value),
-    GOAL_HINT_FLUTTERWAVE_SECRET_KEY: /^FLWSECK_TEST-\S+$/u.test(value),
+    GOAL_HINT_FLUTTERWAVE_PUBLIC_KEY: flutterwaveKey("FLWPUBK"),
+    GOAL_HINT_FLUTTERWAVE_SECRET_KEY: flutterwaveKey("FLWSECK"),
     GOAL_HINT_FLUTTERWAVE_ENCRYPTION_KEY: token.test(value),
     GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET: token.test(value),
-    GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL: value === sandboxWebhook,
+    GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL: value === `https://${targets[target].host}${flutterwaveWebhookPath}`,
   };
   ensure(!/[\x00-\x1f\x7f]/u.test(value) && value.length <= 4096 && rules[key] !== false, `${key} has an invalid value.`);
   if (key === "GOAL_HINT_ADMIN_PHONES") {
@@ -122,7 +125,7 @@ export function localChanges(text, target, setKeys, clearKeys) {
       requireUnique(records, key);
       const value = settings[key];
       if (!value?.trim()) return { key, action: "skip" };
-      validateValue(key, value);
+      validateValue(target, key, value);
       return { key, action, value };
     });
 }
@@ -351,6 +354,18 @@ export function applyConfig({ paths, originals, updated, verify, backup, write, 
   }
 }
 
+const webhookSecretUpdate = (changes) => changes.find(({ key, action }) => key === flutterwaveWebhookSecretKey && action === "set");
+
+function verifySeparateWebhookSecret(environment, changes) {
+  const update = webhookSecretUpdate(changes);
+  if (!update) return;
+  const otherEnvironment = environment === "staging" ? "production" : "staging";
+  const other = targets[otherEnvironment];
+  const path = `/home/${other.account}/goal-hint-private/${other.file}`;
+  const settings = parseEnv(envText(readFile(path, { mode: 0o600, privateFile: true })));
+  ensure(update.value !== settings[flutterwaveWebhookSecretKey], `${flutterwaveWebhookSecretKey} must differ across hosted environments.`);
+}
+
 export function remoteMain(request) {
   process.umask(0o077);
   try {
@@ -365,10 +380,11 @@ export function remoteMain(request) {
       validateSelection(environment, key, action);
       if (action === "set") {
         ensure(typeof value === "string" && value.trim(), "Invalid hosted config request.");
-        validateValue(key, value);
+        validateValue(environment, key, value);
       }
     }
     const state = hostedFiles(environment, target);
+    verifySeparateWebhookSecret(environment, changes);
     const patch = patchSettings(state.settings, changes);
     const updated = Buffer.from(patch.updated);
     const details = [`Verified ${environment} / ${target.database} / ${state.commit.slice(0, 12)}.`, ...patch.summary];
@@ -406,9 +422,13 @@ export function remoteMain(request) {
 
 function sshRequest(request) {
   const target = targets[request.environment];
-  const lock = `/home/${target.account}/goal-hint-private/.release.lock`;
-  // Open the existing lock read-only so dry-runs cannot create a file.
-  const remote = `test -f ${lock} && test ! -L ${lock} && { /usr/bin/flock --exclusive --wait 20 9 && exec /usr/bin/env -i PATH=/usr/bin:/bin ${node} --input-type=module -; } 9<${lock}`;
+  // Lock both targets in one order when comparing webhook secrets. Read-only descriptors keep dry runs from creating files.
+  const lockTargets = webhookSecretUpdate(request.changes) ? Object.values(targets) : [target];
+  const locks = lockTargets.map(({ account }) => `/home/${account}/goal-hint-private/.release.lock`);
+  const verifyLocks = locks.map(lock => `test -f ${lock} && test ! -L ${lock}`).join(" && ");
+  const holdLocks = locks.map((_, index) => `/usr/bin/flock --exclusive --wait 20 ${9 - index}`).join(" && ");
+  const descriptors = locks.map((lock, index) => `${9 - index}<${lock}`).join(" ");
+  const remote = `${verifyLocks} && { ${holdLocks} && exec /usr/bin/env -i PATH=/usr/bin:/bin ${node} --input-type=module -; } ${descriptors}`;
   const source = readFileSync(fileURLToPath(import.meta.url), "utf8");
   const input = `${source}\nremoteMain(${JSON.stringify(request)});\n`;
   const options = ["-F", "none", "-T", "-i", join(homedir(), ".ssh", "goalhint_vps_setup"),
@@ -433,7 +453,7 @@ function main() {
     console.log("Usage: npm run env:sync -- --target staging|production --key KEY [--key KEY ...] [--clear OPTIONAL_KEY ...] [--apply]");
     console.log("Reads next-js/.env.test for staging or next-js/.env.production for production. Dry-run is the default.");
     console.log(`Web keys: ${[...webKeys].join(", ")}`);
-    console.log(`Staging-only sandbox keys: ${[...sandboxKeys].join(", ")}`);
+    console.log(`Flutterwave keys (sandbox for staging, live for production): ${[...flutterwaveKeys].join(", ")}`);
     return;
   }
   ensure(Object.hasOwn(targets, values.target), "Use --target staging or --target production.");

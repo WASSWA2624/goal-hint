@@ -1,13 +1,28 @@
-import { PublicShell } from "@/app/_components/public-shell";
-import { PageHeading, Stack } from "@/components/ui/layout";
+import { cookies, headers } from "next/headers";
+import { createSubscribeRoute } from "@/app/_components/subscribe-route";
 import { pageMetadata } from "@/server/seo/metadata";
-import { SegmentedChoiceProbe } from "./probe";
+import { fixtureCheckoutPlans } from "@/../tests/helpers/rendering/members/app/fixture-checkout";
+import { fixtureServices, fixtureState } from "@/../tests/helpers/rendering/members/app/fixture-member-services";
 
-export const metadata = pageMetadata({ title: "Get access", description: "Synthetic plan destination for 062 navigation acceptance." });
+export const metadata = pageMetadata({ title: "Get access", description: "Synthetic subscription checkout fixture." });
 export const dynamic = "force-dynamic";
-/** 063 supplies the production page; this test destination verifies the 062 renewal link contract. */
-export default function Page() {
-  return <PublicShell locale="en"><Stack><PageHeading>Get access</PageHeading>
-    <section id="plans"><h2>2. Choose a plan</h2><p>Synthetic Daily · UGX 1,000 · 1 day</p><SegmentedChoiceProbe /></section>
-  </Stack></PublicShell>;
+
+const viewerStates: Record<string, string> = {
+  entitled: "active", expired: "expired", test: "free", revoked: "free", "verified-free": "member-free", off: "off",
+};
+
+export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const [parameters, request, jar] = await Promise.all([searchParams, headers(), cookies()]);
+  const token = jar.get("goal-hint-member")?.value;
+  const viewer = request.get("x-test-viewer") ?? (token === "f".repeat(43) ? "entitled" : token ?? "");
+  const state = viewerStates[viewer] ?? await fixtureState(parameters);
+  const Subscribe = createSubscribeRoute({
+    services: async () => {
+      const services = await fixtureServices(state)();
+      return { ...services, settings: { ...services.settings, source: "stored" },
+        config: { ...services.config, production: request.get("x-test-sales") === "production" } };
+    },
+    plans: async () => fixtureCheckoutPlans,
+  });
+  return <Subscribe locale="en" searchParams={searchParams} />;
 }

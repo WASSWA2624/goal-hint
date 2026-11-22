@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 
 /** Check real desktop access targets, their geometry and surface-specific prediction fields. */
 export async function verifyDesktopPredictionAccess(page, {
-  signedIn = false, expired = false, expectedLocked, expectedUnlocked, expectedOdds = [], expectedProbabilities = [],
+  signedIn = false, expectedLocked, expectedUnlocked, expectedOdds = [], expectedProbabilities = [],
 } = {}) {
   const rows = page.locator('[data-desktop-row]');
   assert.ok(await rows.count(), 'Desktop match rows are rendered.');
@@ -67,7 +67,7 @@ export async function verifyDesktopPredictionAccess(page, {
   }
   for (const card of locked) {
     assert.equal(card.buttons, 1, 'One access target replaces the protected metrics.');
-    assert.equal(card.label, card.feed ? 'Unlock predictions' : !signedIn ? 'Log in or register to unlock' : expired ? 'Renew to unlock' : 'Subscribe to unlock');
+    assert.equal(card.label, card.inSlip ? 'Unlock slip' : 'Unlock predictions');
     assert.ok(card.labelFits, 'The complete action label fits without clipping or overflow.');
     assert.ok(card.decorativeIcon, 'A decorative lock icon accompanies the accessible button text.');
     assert.equal(card.metricCount, 0, 'Market, odds and probability are replaced, including placeholders.');
@@ -76,6 +76,7 @@ export async function verifyDesktopPredictionAccess(page, {
     assert.ok(card.receivesPointer && !card.rowOverlay, 'No card or slip overlay intercepts the access target.');
     const target = new URL(card.href, 'https://example.test');
     assert.equal(target.pathname, signedIn ? '/en/subscribe' : '/en/account');
+    assert.equal(target.searchParams.get('checkout'), '1');
     if (!signedIn) assert.equal(target.searchParams.get('view'), card.feed ? 'login' : 'register');
     const returnTo = target.searchParams.get('return');
     assert.ok(returnTo?.startsWith(card.inSlip ? '/en/best-slips/' : '/en/matches/'), 'Access retains the original match or slip return destination.');
@@ -99,10 +100,13 @@ export async function verifyMobilePredictionAccess(page, { signedIn = false } = 
     const feed = card.hasAttribute('data-phone-feed-card');
     const area = card.querySelector('[data-mobile-unlock-area]');
     const button = area?.querySelector('a');
+    const slip = card.closest('[data-locked-slip]');
+    const headerButton = slip?.querySelector('[data-header-actions] a[data-unlock-button]');
     const areaBounds = area?.getBoundingClientRect(), buttonBounds = button?.getBoundingClientRect();
     const visible = (element) => Boolean(element.getClientRects().length);
     return {
       feed, label: button?.textContent.trim(), href: button?.getAttribute('href'),
+      inSlip: Boolean(slip), headerHref: headerButton?.getAttribute('href'),
       fillsArea: areaBounds && buttonBounds && Math.abs(areaBounds.width - buttonBounds.width) < 1
         && Math.abs(areaBounds.height - buttonBounds.height) < 1,
       controlHeight: buttonBounds && buttonBounds.height >= parseFloat(getComputedStyle(button).getPropertyValue('--form-control-height')),
@@ -112,10 +116,13 @@ export async function verifyMobilePredictionAccess(page, { signedIn = false } = 
     };
   }));
   for (const card of cards) {
-    assert.equal(card.label, card.feed ? 'Unlock predictions' : signedIn ? 'Subscribe to unlock' : 'Register / log in to unlock');
+    assert.equal(card.label, card.inSlip ? 'Unlock slip' : 'Unlock predictions');
     const target = new URL(card.href, 'https://example.test');
     assert.equal(target.pathname, signedIn ? '/en/subscribe' : '/en/account');
+    assert.equal(target.searchParams.get('checkout'), '1');
     if (!signedIn) assert.equal(target.searchParams.get('view'), card.feed ? 'login' : 'register');
+    assert.ok(target.searchParams.get('return')?.startsWith(card.inSlip ? '/en/best-slips/' : '/en/matches/'));
+    if (card.inSlip) assert.equal(card.href, card.headerHref, 'Slip row access retains the header return destination.');
     assert.ok(card.fillsArea, 'The access button fills the protected region.');
     assert.ok(card.controlHeight, 'The access button retains the shared control height.');
     assert.equal(card.visibleTeams, 2, 'Both teams remain visible.');
@@ -124,7 +131,7 @@ export async function verifyMobilePredictionAccess(page, { signedIn = false } = 
   const headers = await page.locator('[data-locked-slip] [data-mobile-slip-header]').evaluateAll((elements) => elements.map((header) => {
     const action = header.querySelector('[data-header-actions]'), status = header.querySelector('[data-header-status]');
     const a = action?.getBoundingClientRect(), b = status?.getBoundingClientRect();
-    return Boolean(a && b && a.left >= b.right && action.querySelector('a[data-unlock-button]'));
+    return Boolean(a && b && a.left >= b.right && action.querySelector('a[data-unlock-button]')?.textContent.trim() === 'Unlock slip');
   }));
   assert.ok(headers.every(Boolean), 'The slip action has its own track beside the status.');
   return { cards: cards.length, headers: headers.length };

@@ -7,6 +7,8 @@ import { DesktopContent, Inline, PageHeading, Stack, MutedText } from "@/compone
 import { publicPolicy } from "@/domain/public-policy";
 import { sharedSlipPath } from "@/domain/shared-slips";
 import { bestSlipsHref } from "@/domain/navigation";
+import { memberAuthPath } from "@/domain/member-navigation";
+import { subscriberHref } from "@/domain/subscriber-navigation";
 import { readSharedSlipLanding } from "@/server/slips/shared-slips";
 import { pageMetadata } from "@/server/seo/metadata";
 import { createMessages } from "@/i18n/messages";
@@ -36,8 +38,8 @@ export function createSharedSlipRoute(read = readSharedSlipLanding) {
         {shared && <MutedText>{m.text("slipShare.createdWith", { name: publicPolicy.name })}</MutedText>}</Inline>
       {shared ? <SlipCard slip={shared.slip} index={0} locale={locale} sharedSlip={shared} publicShareHref={shared.url ?? sharedSlipPath(id)} initiallyOpen />
         : landing ? <><p>{m.text(landing.access.signedIn ? "slipShare.accessMember" : "slipShare.accessGuest")}</p><Inline>
-          {!landing.access.signedIn && <ButtonLink href={`/en/account?${new URLSearchParams({ view: "login", return: path! })}`} prefetch={false}>{m.text("slipShare.signIn")}</ButtonLink>}
-          <ButtonLink variant="secondary" href={`/en/subscribe?${new URLSearchParams({ return: path! })}`} prefetch={false}>{m.text("slipShare.getAccess")}</ButtonLink>
+          {!landing.access.signedIn && <ButtonLink href={memberAuthPath("login", path)} prefetch={false}>{m.text("slipShare.signIn")}</ButtonLink>}
+          <ButtonLink variant="secondary" href={subscriberHref(landing.access.signedIn, path)} prefetch={false}>{m.text("paywall.unlockSlip")}</ButtonLink>
         </Inline></> : <><p role="status">{m.text("slipShare.unavailable")}</p><ButtonLink href={`/s/${encodeURIComponent(id)}`} prefetch={false}>{m.text("slipShare.retry")}</ButtonLink></>}
       <Inline><ButtonLink href="/en/slips" variant="secondary" prefetch={false}>{m.text("slipShare.buildOwn")}</ButtonLink>
         <ButtonLink href={bestSlipsHref(locale)} variant="secondary" prefetch={false}>{m.text("bestSlips.title")}</ButtonLink></Inline>

@@ -3,11 +3,12 @@ import { paymentRules } from "../../domain/payment.ts";
 import { json, readLimitedBody, clientAddress } from "../http/private-http.ts";
 import { imageInputFormat } from "../images/image-format.ts";
 import { memberRoute, getMemberServices, type MemberServicesSource } from "./member-http.ts";
+import { flutterwaveCheckoutOrigin } from "./flutterwave-navigation.ts";
 
 export function createCheckoutHandlers(services: MemberServicesSource = getMemberServices) {
   return {
-    GET: memberRoute(async ({ services, member }) => {
-      const value = await services.checkout?.read(member!);
+    GET: memberRoute(async ({ request, services, member }) => {
+      const value = await services.checkout?.read(member!, new URL(request.url).searchParams.get("payment") ?? undefined);
       return value ? json(value) : json({ message: "Checkout is unavailable." }, 503);
     }, { services, access: "account" }),
     POST: memberRoute(async ({ request, services, member }) => {
@@ -38,6 +39,11 @@ export function createCheckoutHandlers(services: MemberServicesSource = getMembe
       switch (body.action) {
         case "check-evidence": result = await services.checkout.checkEvidence(member!, body.evidence); break;
         case "quote": result = await services.checkout.quote(member!, body.selection); break;
+        case "start-flutterwave": result = await services.checkout.startFlutterwave(member!, { selection: body.selection,
+          requestKey: body.requestKey, quoteKey: body.quoteKey, confirmed: body.confirmed === true, email: body.email, returnTo: body.return,
+          origin: flutterwaveCheckoutOrigin(request, services.checkout.flutterwaveMode, services.checkout.flutterwaveHostedOrigin),
+        }); break;
+        case "check-flutterwave": result = await services.checkout.checkFlutterwave(member!, id); break;
         case "confirm": result = await services.checkout.confirm(member!, body.selection, String(body.requestKey ?? ""), String(body.quoteKey ?? ""), body.confirmed === true, body.proof, image); break;
         case "attach": result = await services.checkout.attach(member!, id, body.proof, image); break;
         case "cancel": result = await services.checkout.cancel(member!, id); break;

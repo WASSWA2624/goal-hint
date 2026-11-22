@@ -272,3 +272,124 @@ export async function verifyCheckoutPay(page, { origin, outputDirectory } = {}) 
     page.off("request", onRequest);
   }
 }
+
+/** Exercise the hosted handoff with an intercepted provider, without making a payment. */
+export async function verifyFlutterwaveCheckout(page, { origin }) {
+  const address = new URL(origin);
+  assert(["127.0.0.1", "localhost", "[::1]"].includes(address.hostname), "Use a local checkout fixture.");
+  const receiptEmail = "receipt-fixture@example.test";
+  const providerUrl = "https://checkout.flutterwave.com/v3/hosted/pay/synthetic";
+  const endpoint = /\/api\/account\/checkout(?:\?.*)?$/u;
+  const checks = [];
+  let sequence = 0, start = null, statusChecks = 0, providerVisits = 0;
+  let responses = { flutterwaveAvailable: true, availableWalletUgx: 3000, availableReferralDays: 7, requests: [] };
+  const checkout = async route => {
+    if (route.request().method() === "GET") return route.fulfill({ json: responses });
+    const payload = /\r?\n\r?\n(\{[^\r\n]+\})\r?\n/u.exec(route.request().postData() ?? "")?.[1];
+    const body = payload ? JSON.parse(payload) : null;
+    if (body?.action === "start-flutterwave") {
+      start = body;
+      const request = { ...body.selection, id: body.requestKey, reference: "PTEST-FLW", status: "provider-pending",
+        planName: "Weekly", priceUgx: 5000, durationDays: 7, amountToSend: 5000,
+        reportedUgx: 0, verifiedUgx: 0, remainingUgx: 5000, excessUgx: 0, endsAt: null, reservationUntil: null,
+        reason: null, revision: 0, receipts: [], checkoutUrl: providerUrl };
+      responses = { ...responses, requests: [request] };
+      return route.fulfill({ json: { checkoutUrl: providerUrl, request } });
+    }
+    if (body?.action === "check-flutterwave") {
+      statusChecks++;
+      return route.fulfill({ json: { status: "provider-pending" } });
+    }
+    await route.continue();
+  };
+  const hosted = route => {
+    providerVisits++;
+    return route.fulfill({ contentType: "text/html", body: "<h1>Intercepted synthetic Flutterwave checkout</h1>" });
+  };
+  await page.route(endpoint, checkout);
+  await page.route(providerUrl, hosted);
+  await page.addInitScript(() => { try { localStorage.removeItem("goal-hint-theme"); } catch { /* Storage may be unavailable. */ } });
+  async function open(mode, width, values = {}) {
+    const parameters = new URLSearchParams({ flutterwave: "1", packages: "standard", scenario: `flutterwave-${Date.now()}-${++sequence}`, ...values });
+    await page.setViewportSize({ width, height: 980 });
+    await page.emulateMedia({ colorScheme: mode, reducedMotion: "reduce" });
+    await page.goto(`${address.origin}/en/subscribe?${parameters}`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(theme => getComputedStyle(document.documentElement).colorScheme === theme, mode);
+  }
+  async function selectPackage() {
+    await page.getByRole("radio", { name: /Weekly/u }).check();
+    await page.getByRole("button", { name: "Continue to Pay", exact: true }).click();
+  }
+  try {
+    for (const mode of ["light", "dark"]) {
+      for (const width of [320, 390, 1024, 1440]) {
+        await open(mode, width);
+        await selectPackage();
+        await page.getByRole("radio", { name: "Flutterwave", exact: true }).check();
+        assert(await page.getByRole("radio", { name: "MTN MoMo", exact: true }).isEnabled(), "Manual payments remain available.");
+        assert(await page.locator("[data-pay-recipient]").count() === 0, "Hosted checkout never shows a manual receiving number.");
+        await page.getByRole("button", { name: "Review payment", exact: true }).click();
+        const email = page.getByRole("textbox", { name: "Email address" });
+        const submit = page.getByRole("button", { name: "Pay with Flutterwave", exact: true });
+        await email.waitFor();
+        assert(await submit.isDisabled(), "Terms are required before redirect.");
+        const metrics = await email.evaluate(element => ({
+          height: element.getBoundingClientRect().height,
+          expected: parseFloat(getComputedStyle(element).getPropertyValue("--form-control-height")),
+          pageFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,
+        }));
+        assert(Math.abs(metrics.height - metrics.expected) <= 1 && metrics.pageFits, `Checkout field metrics at ${width}px ${mode}.`);
+        await page.getByRole("checkbox", { name: /I checked these details/u }).check();
+        await submit.click();
+        await page.getByText("Enter a valid email address for the payment receipt.").waitFor();
+        assert(start === null, "Invalid receipt email never creates a hosted session.");
+        await email.fill(receiptEmail);
+        assert(!await page.evaluate(email => [localStorage, sessionStorage].some(store => Object.values(store).some(value => value.includes(email))), receiptEmail),
+          "Receipt email must stay out of checkout storage.");
+        checks.push({ check: "hosted email, consent and layout", mode, width });
+      }
+    }
+    const submit = page.getByRole("button", { name: "Pay with Flutterwave", exact: true });
+    await Promise.all([page.waitForURL(providerUrl), submit.click()]);
+    await page.getByRole("heading", { name: "Intercepted synthetic Flutterwave checkout" }).waitFor();
+    assert(providerVisits === 1 && start?.email === receiptEmail && start.confirmed && start.return === "/en/slips"
+      && start.selection.method === "flw" && start.selection.walletUgx === 0 && start.selection.referralDays === 0,
+    "Hosted request carries the approved amount journey and private one-time email.");
+    checks.push({ check: "intercepted hosted redirect and payload" });
+
+    for (const [status, heading] of [["provider-pending", "Flutterwave payment pending"], ["rejected", "Flutterwave payment failed"], ["cancelled", "Flutterwave payment cancelled"]]) {
+      responses = { ...responses, requests: [] };
+      await open("dark", 390, { providerStatus: status, ...(status === "provider-pending" ? { closed: "1" } : {}) });
+      await page.getByRole("heading", { name: heading }).waitFor();
+      assert(!await page.locator("[data-package-selection]").count(), "Return status takes precedence over package selection.");
+      assert(!await page.getByRole("button", { name: "Add payment / correction" }).count(), "Hosted payment never accepts manual evidence.");
+      if (status === "provider-pending") {
+        await page.getByText(/Checkout was closed/u).waitFor();
+        await page.getByRole("button", { name: "Continue on Flutterwave" }).waitFor();
+        await Promise.all([page.waitForResponse(response => response.url().includes("/api/account/checkout?payment=")),
+          page.getByRole("button", { name: "Check payment status" }).click()]);
+        assert(statusChecks === 1, "A pending attempt can be checked.");
+      } else {
+        await page.getByRole("button", { name: "Choose a payment method" }).click();
+        await page.locator("[data-package-selection]").waitFor();
+      }
+      checks.push({ check: status + " recovery" });
+    }
+    await open("light", 320, { ordinarySales: "paused" });
+    await selectPackage();
+    await page.getByRole("radio", { name: "Flutterwave", exact: true }).waitFor();
+    assert(await page.getByRole("radio", { name: "Flutterwave", exact: true }).isChecked(), "Flutterwave is the default when it is the only eligible method.");
+    assert(!await page.getByRole("radio", { name: "MTN MoMo", exact: true }).count() && !await page.locator("[data-pay-wallet]").count(),
+      "Sandbox-only availability cannot expose paused manual or wallet sales.");
+    checks.push({ check: "Flutterwave-only checkout" });
+    await open("light", 320, { flutterwave: "0" });
+    await selectPackage();
+    await page.locator("[data-checkout-pay]").waitFor();
+    assert(!await page.getByRole("radio", { name: "Flutterwave", exact: true }).count(), "Missing or disabled configuration hides Flutterwave.");
+    checks.push({ check: "missing provider configuration" });
+    return { passed: true, checks };
+  } finally {
+    await page.unroute(endpoint, checkout);
+    await page.unroute(providerUrl, hosted);
+  }
+}

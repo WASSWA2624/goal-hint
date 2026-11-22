@@ -23,7 +23,7 @@ export function BestSlipCard({ view, day, locale, signedIn = false }: { view: Sl
     {...(view.matchStates ? { matchStates: view.matchStates } : {})} />;
   return <LockedSurface data-locked-slip><SlipCardSummary locale={locale} index={view.rank - 1} {...publication} collapsible={false}
     totalOdds={view.totalOdds} averageProbability={view.averageProbability} estimatedProbability={view.estimatedProbability} selectionCount={view.matchCount}
-    headerAction={<UnlockButton locale={locale} signedIn={signedIn} returnTo={returnTo} compact />}>
+    headerAction={<UnlockButton locale={locale} signedIn={signedIn} returnTo={returnTo} label="paywall.unlockSlip" compact />}>
     <MatchCardLayoutContext value={desktop}>
       {view.preview?.map(({ fixture, pick }, index) => <MatchCard key={fixture.fixtureId} fixture={fixture} locale={locale}
         interactive={!desktop} signedIn={signedIn} accessReturnTo={returnTo} position={index + 1} headingLevel={3} lockedPrediction={pick === null}

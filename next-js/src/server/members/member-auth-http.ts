@@ -2,7 +2,7 @@ import { authCopy } from "../../i18n/messages/auth.ts";
 import "server-only";
 import { readReferralAttribution, referralCookieName } from "./referral-attribution.ts";
 
-import { memberAuthPath, memberLandingPath, memberReturnPath } from "../../domain/member-navigation.ts";
+import { memberAuthPath, memberLandingPath, memberReturnPath, subscriptionReturnPath } from "../../domain/member-navigation.ts";
 import { noCredit, type SubscriptionSummary } from "../../domain/subscription-summary.ts";
 import { clientAddress, cookie, isSameOrigin, json, readCookie, readLimitedBody } from "../http/private-http.ts";
 import { getMemberServices, type MemberServices, type MemberServicesSource } from "./member-http.ts";
@@ -10,15 +10,15 @@ import type { AuthBinding, AuthFailure } from "./member-auth.ts";
 import { memberCookieName, memberSessionRules } from "./member-sessions.ts";
 import { adminSessionRules } from "../analytics/analytics-auth.ts";
 import { isMemberAdminPhone } from "./member-admin.ts";
-import { subscriptionCheckoutPublished } from "./sales-readiness.ts";
+import { flutterwaveCheckoutPublished, subscriptionCheckoutPublished } from "./sales-readiness.ts";
 import { allowsContentWithoutSubscription } from "./viewer-access.ts";
 
 type AuthAction = "register" | "login" | "phone" | "password" | "forgot" | "reset" | "verification" | "verify" | "reset-code";
 const fields: Readonly<Record<AuthAction, readonly string[]>> = {
-  register: ["phone", "password", "return"], login: ["phone", "password", "return", "destination"],
+  register: ["phone", "password", "return", "checkout"], login: ["phone", "password", "return", "checkout", "destination"],
   phone: ["phone", "currentPassword"], password: ["password", "currentPassword"],
-  forgot: ["phone", "channel", "return"], reset: ["password", "return"],
-  verification: ["channel", "return"], verify: ["code", "return", "whatsappNotifications"], "reset-code": ["phone", "code", "return"],
+  forgot: ["phone", "channel", "return", "checkout"], reset: ["password", "return", "checkout"],
+  verification: ["channel", "return"], verify: ["code", "return", "checkout", "whatsappNotifications"], "reset-code": ["phone", "code", "return", "checkout"],
 };
 
 async function bodyOf(request: Request, allowed: readonly string[]): Promise<Record<string, unknown> | null> {
@@ -72,12 +72,14 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
         : action === "reset" ? await services.auth.resetPassword(body.password, currentToken, address)
         : await services.auth.changePassword(body.password, binding);
       if (result.status !== "authenticated") return failure(result);
-      // Shared-slip journeys return to their canonical token; ordinary sign-ins still finish at home.
-      const returnTo = ["register", "login", "verify", "reset"].includes(action) ? memberLandingPath(false, body.return) : memberReturnPath(body.return);
-      const next = result.requiresPasswordChange ? memberAuthPath("new-password", returnTo)
-        : result.requiresVerification ? memberAuthPath(action === "phone" ? "forgot" : "verify", returnTo)
-        : result.administrator ? memberLandingPath(true, body.return)
-        : returnTo ?? (action === "phone" ? "/en/account?status=phone-changed"
+      const checkout = body.checkout === "1";
+      const returnTo = checkout ? subscriptionReturnPath(body.return) : body.return;
+      const completesSignIn = ["register", "login", "verify", "reset"].includes(action);
+      const stepReturn = checkout ? returnTo : completesSignIn ? memberLandingPath(false, returnTo) : memberReturnPath(returnTo);
+      const next = result.requiresPasswordChange ? memberAuthPath("new-password", stepReturn, checkout)
+        : result.requiresVerification ? memberAuthPath(action === "phone" ? "forgot" : "verify", stepReturn, checkout)
+        : completesSignIn || result.administrator ? memberLandingPath(result.administrator, returnTo, checkout)
+        : memberReturnPath(returnTo) ?? (action === "phone" ? "/en/account?status=phone-changed"
         : action === "password" ? "/en/account?status=password-changed" : "/en/account");
       const response = json({ next, phone: result.phone, ...(result.requiresPasswordChange ? { requiresPasswordChange: true } : {}),
         ...(result.requiresVerification ? { requiresVerification: true } : {}),
@@ -104,7 +106,9 @@ export function createMemberSessionHandler(source: MemberServicesSource = getMem
       const identity = { phone: member?.phone ?? null, administrator,
         ...(!member?.blocked && member?.referralCode ? { referralCode: member.referralCode } : {}),
         freeContentAccess: allowsContentWithoutSubscription(services.settings, !!member?.phoneVerified && !member.blocked) };
-      const salesOpen = subscriptionCheckoutPublished(services.settings?.settings, services.config.production);
+      const salesOpen = subscriptionCheckoutPublished(services.settings?.settings, services.config.production)
+        || !!services.checkout?.flutterwaveReady && flutterwaveCheckoutPublished(services.settings?.settings,
+          services.config.production && services.checkout.flutterwaveMode !== "sandbox");
       const subscription: SubscriptionSummary = { activeUntil: null, paymentPending: false,
         canSubscribe: salesOpen && !member?.blocked && !administrator, ...noCredit };
       // Only a visitor or member without access who can subscribe reads the cheapest plan, for the access bar's offer.

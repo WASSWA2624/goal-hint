@@ -12,9 +12,14 @@ export function subscriptionCheckoutPublished(settings: SubscriptionSettings | n
     && (!production || privacyNotice.releaseReady && termsNotice.releaseReady && supportContactsOf(settings).length > 0);
 }
 
-/** Every visible package must have a usable transfer method or be payable in full from available wallet credit. */
+export function flutterwaveCheckoutPublished(settings: SubscriptionSettings | null | undefined, production: boolean): boolean {
+  return !!settings && subscriptionCheckoutPublished(settings, production)
+    && (!production || supportContactsOf(settings).some(contact => contact.showOnContactPage !== false && (contact.calls || contact.whatsapp)));
+}
+
+/** Every visible package must have a usable payment method. */
 export function payableCheckoutPlans(plans: readonly SubscriptionPlanView[], settings: ManualPaymentSettings | null | undefined,
-  availableWalletUgx: number): readonly SubscriptionPlanView[] {
-  const manual = hasManualPaymentProvider(settings);
-  return plans.filter(plan => plan.active && (manual || plan.priceUgx <= availableWalletUgx));
+  availableWalletUgx: number, flutterwaveAvailable = false): readonly SubscriptionPlanView[] {
+  const external = flutterwaveAvailable || hasManualPaymentProvider(settings);
+  return plans.filter(plan => plan.active && (external || plan.priceUgx <= availableWalletUgx));
 }

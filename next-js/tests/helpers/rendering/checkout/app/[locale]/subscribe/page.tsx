@@ -1,17 +1,27 @@
 import { CheckoutFlow } from "@/components/members/checkout-flow";
 import { SubscribeLayout } from "@/components/members/subscribe-styles";
-import { plans, settings, view } from "../../fixture";
+import { plans, quote, settings, view } from "../../fixture";
+import type { CheckoutRequest } from "@/domain/checkout";
 export const dynamic = "force-dynamic";
 export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const parameters = await searchParams;
   const amount = (value: string | undefined, maximum: number, fallback: number) => value !== undefined && /^\d+$/u.test(value)
     ? Math.min(maximum, Number(value)) : fallback;
   const current = view(), scenario = parameters.scenario?.replace(/[^a-z0-9-]/giu, "").slice(0, 80);
+  const flutterwaveAvailable = parameters.flutterwave === "1";
+  const providerStatus = parameters.providerStatus;
+  const providerPayment: CheckoutRequest | null = providerStatus && ["provider-pending", "cancelled", "rejected"].includes(providerStatus)
+    ? { ...quote({ purpose: "plan", planId: plans[1]!.id, method: "flw", walletUgx: 0, referralDays: 0, topUpUgx: 0 }),
+      id: "a930e909-dea3-4248-b565-476e1a2c063d", reference: "PTEST-FLW", status: providerStatus,
+      reportedUgx: 0, verifiedUgx: 0, remainingUgx: 5000, excessUgx: 0, endsAt: null, reservationUntil: null,
+      reason: null, revision: 0, receipts: [], checkoutUrl: providerStatus === "provider-pending" ? "https://checkout.flutterwave.com/v3/hosted/pay/synthetic" : null }
+    : null;
   const initialView = { ...current,
     availableWalletUgx: amount(parameters.wallet, 2_000_000_000, current.availableWalletUgx),
     availableReferralDays: amount(parameters.earnedDays, 365, current.availableReferralDays),
     lastMethod: parameters.lastProvider === "mtn" || parameters.lastProvider === "airtel" ? parameters.lastProvider : current.lastMethod,
-    ...(scenario ? { requests: [] } : {}) };
+    flutterwaveAvailable,
+    ...(scenario ? { requests: providerPayment ? [providerPayment] : [] } : {}) };
   const scenarioSettings = { ...settings,
     mtnEnabled: settings.mtnEnabled && parameters.disabledProvider !== "mtn" && parameters.disabledProvider !== "both",
     airtelEnabled: settings.airtelEnabled && parameters.disabledProvider !== "airtel" && parameters.disabledProvider !== "both" };
@@ -22,6 +32,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
     <CheckoutFlow locale="en" settings={scenarioSettings} plans={offers} account={{ id: "11111111-1111-4111-8111-111111111111", phone: "256700000101",
       ...(scenario ? { draftScope: `checkout-preview-${scenario}` } : {}) }} initialView={initialView}
       topUp={parameters.add === "credit"} salesOpen={parameters.sales !== "paused"}
+      ordinarySalesOpen={parameters.ordinarySales !== "paused"} returnTo="/en/slips"
+      paymentId={providerPayment?.id ?? null} paymentCancelled={parameters.closed === "1"}
       noticeBeforeCheckout={<p data-checkout-notice>Existing trial notice outside Package and Pay.</p>} />
   </SubscribeLayout><details><summary>Sample screenshots for testing</summary>
     <p>Download an example, then choose it or copy and paste it into the screenshot box.</p>

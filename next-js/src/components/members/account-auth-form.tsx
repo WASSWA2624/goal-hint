@@ -6,7 +6,7 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { InfoIcon, UserIcon } from "@/components/ui/icons";
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
-import { memberAuthPath } from "@/domain/member-navigation";
+import { memberAuthPath, memberAuthReturnFields } from "@/domain/member-navigation";
 import type { AdminContact } from "./admin-contact";
 import { MemberForm } from "./member-controls";
 import { AccountCard, AccountCardBody, AccountError, AccountFormFooter, AccountLink, AccountNote, AccountPrimary, AccountSecondaryActions, AccountSessionInfo } from "./account-styles";
@@ -18,19 +18,21 @@ import { FreeTrialNotice, type FreeTrialAccess } from "./free-trial-notice";
 export type AccountAuthView = "login" | "register" | "forgot";
 
 /** New members can start using the account as soon as registration succeeds. */
-export function AccountAuthForm({ locale, view = "login", returnTo, contact }: { locale: string; view?: AccountAuthView; returnTo: string | null; contact: AdminContact }) {
+export function AccountAuthForm({ locale, view = "login", returnTo, checkout = false, contact }: {
+  locale: string; view?: AccountAuthView; returnTo: string | null; checkout?: boolean; contact: AdminContact;
+}) {
   const m = createMessages(locale), [phone, setPhone] = useState("256");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [signupTrial, setSignupTrial] = useState<{ trial: FreeTrialAccess; next: string } | null>(null);
   const base = `/${resolveLocale(locale)}`;
-  const href = (next: AccountAuthView) => memberAuthPath(next, returnTo);
+  const href = (next: AccountAuthView) => memberAuthPath(next, returnTo, checkout);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (busy) return;
     setBusy(true); setError("");
     try {
-      const result = await accountRequest<{ next: string; trial?: FreeTrialAccess }>(view, { phone, password, ...(returnTo ? { return: returnTo } : {}) });
-      if (view === "register" && result.trial?.active) {
+      const result = await accountRequest<{ next: string; trial?: FreeTrialAccess }>(view, { phone, password, ...memberAuthReturnFields(returnTo, checkout) });
+      if (view === "register" && result.trial?.active && !(checkout && returnTo)) {
         setPassword("");
         setSignupTrial({ trial: result.trial, next: result.next });
         return;
@@ -39,7 +41,7 @@ export function AccountAuthForm({ locale, view = "login", returnTo, contact }: {
     } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); setBusy(false); }
   }
   if (signupTrial) return <FreeTrialNotice locale={locale} {...signupTrial} />;
-  if (view === "forgot") return <ForgotPasswordForm locale={locale} returnTo={returnTo} contact={contact} />;
+  if (view === "forgot") return <ForgotPasswordForm locale={locale} returnTo={returnTo} checkout={checkout} contact={contact} />;
   return <AccountCard data-account-auth data-analytics-ignore>
     <AccountFormHeader icon={UserIcon} title={m.text(view === "register" ? "auth.signUp" : "auth.signIn")}
       description={m.text(view === "register" ? "account.registerHelp" : "account.description")}

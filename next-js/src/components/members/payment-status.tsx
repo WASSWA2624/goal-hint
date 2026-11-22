@@ -79,16 +79,17 @@ function PaymentDetails({ locale, status, pending, reviewTime }: {
 
 /** The account's latest report while it waits for review or after it was refused or reversed.
  * An approval shows no card: access opens on the account's signed-in devices by itself. */
-export function PaymentStatusCard({ locale, status, settings, phone, heading = "h3", replace, newPayment }: {
+export function PaymentStatusCard({ locale, status, settings, phone, heading = "h3", replace, newPayment, returnTo = null, direct = false }: {
   locale: string; status: PaymentStatus | null; settings: StatusSettings; phone: string;
   heading?: "h2" | "h3"; replace?: Readonly<{ open: boolean; controls: string; toggle: () => void; disabled?: boolean }> | undefined;
   newPayment?: Readonly<{ controls: string; start: () => void }> | undefined;
+  returnTo?: string | null; direct?: boolean;
 }) {
   const m = createMessages(locale);
   if (!status) return null;
   if (["remaining", "disputed", "correction", "reconfirm", "cancelled"].includes(status.status)) return <PaymentReviewBox data-payment-status={status.status}>
     <StatusTitle as={heading}>{checkoutLabels[status.status]}</StatusTitle><p>Request {status.reference}{status.rejectText ? ` · ${status.rejectText}` : ""}</p>
-    <a href={status.purpose === "topup" ? walletTopUpHref(locale) : `/${locale}/subscribe`}>View payment status and corrections</a>
+    <a href={status.purpose === "topup" ? walletTopUpHref(locale, returnTo) : returnTo ? memberNextPath("subscribe", returnTo, undefined, direct) : `/${locale}/subscribe`}>View payment status and corrections</a>
   </PaymentReviewBox>;
   const pending = status.status === "pending" || status.status === "superseded", rejected = status.status === "rejected", reversed = status.status === "reversed";
   if (!pending && !rejected && !reversed) return null;

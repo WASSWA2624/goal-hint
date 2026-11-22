@@ -447,7 +447,7 @@ test("secret serialization and validation errors stay redacted while explicit re
   }
 });
 
-test("the shared Flutterwave slots remain inert on this checkout", () => {
+test("Flutterwave recognizes only environment-bound credentials and keeps all settings private", () => {
   const placeholders = {
     GOAL_HINT_FLUTTERWAVE_PUBLIC_KEY: "synthetic-public-key",
     GOAL_HINT_FLUTTERWAVE_SECRET_KEY: "synthetic-secret-key",
@@ -455,10 +455,57 @@ test("the shared Flutterwave slots remain inert on this checkout", () => {
     GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET: "synthetic-webhook-secret",
     GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL: "https://synthetic.invalid/webhook",
   };
-  for (const target of ["staging", "production"]) {
-    const environment = { GOAL_HINT_DEPLOYMENT_ENVIRONMENT: target };
-    assert.deepEqual(parseRuntimePolicy({ ...environment, ...placeholders }), parseRuntimePolicy(environment));
+  const path = "/api/payments/flutterwave/webhook";
+  const sandbox = "FLWSECK_TEST-synthetic-key";
+  const live = "FLWSECK-synthetic-key";
+  for (const [target, host, correct, other, mode] of [
+    ["staging", "test.goalhint.com", sandbox, live, "sandbox"],
+    ["production", "goalhint.com", live, sandbox, "live"],
+  ]) {
+    const environment = { NODE_ENV: "production", GOAL_HINT_DEPLOYMENT_ENVIRONMENT: target };
+    const make = (values) => parseRuntimePolicy({ ...environment, ...values }).flutterwave;
+    assert.equal(make(placeholders).checkoutReady, false);
+    assert.equal(make(placeholders).secretKey, null);
+    const complete = {
+      GOAL_HINT_FLUTTERWAVE_SECRET_KEY: correct,
+      GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET: placeholders.GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET,
+      GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL: `https://${host}${path}`,
+    };
+    const configured = make(complete);
+    assert.equal(configured.mode, mode);
+    assert.equal(configured.checkoutOrigin, `https://${host}`);
+    assert.equal(configured.checkoutReady, true);
+    assert.equal(configured.secretKey.read(), correct);
+    assert.equal(configured.webhookSecret.read(), complete.GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET);
+    assert.equal(configured.webhookUrl.read(), complete.GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL);
+    assert.equal(configured.publicKey, null);
+    assert.equal(configured.encryptionKey, null);
+    assert.equal(make({ ...complete, GOAL_HINT_FLUTTERWAVE_SECRET_KEY: other }).checkoutReady, false);
+    for (const endpoint of ["", `https://synthetic.invalid${path}`, `https://${host}${path}?extra=1`]) {
+      const misconfigured = make({ ...complete, GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL: endpoint });
+      assert.equal(misconfigured.checkoutReady, false);
+      assert.equal(misconfigured.secretKey.read(), correct);
+      assert.equal(misconfigured.webhookSecret, null);
+    }
+    assert.equal(make({ ...complete, GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET: "" }).checkoutReady, false);
+    for (const output of [JSON.stringify(configured), inspect(configured, { depth: null })]) {
+      assert.ok(Object.values(complete).every(value => !output.includes(value)));
+    }
   }
+  assert.equal(parseRuntimePolicy({ NODE_ENV: "production", GOAL_HINT_FLUTTERWAVE_SECRET_KEY: live }).flutterwave.mode, null);
+  assert.equal(parseRuntimePolicy({ GOAL_HINT_DEPLOYMENT_ENVIRONMENT: "production", GOAL_HINT_FLUTTERWAVE_SECRET_KEY: live }).flutterwave.mode, null);
+  const development = (endpoint = "") => parseRuntimePolicy({
+    GOAL_HINT_DEPLOYMENT_ENVIRONMENT: "development",
+    GOAL_HINT_FLUTTERWAVE_SECRET_KEY: sandbox,
+    GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET: "synthetic-development-webhook",
+    GOAL_HINT_FLUTTERWAVE_WEBHOOK_URL: endpoint,
+  }).flutterwave;
+  assert.equal(development().checkoutReady, true);
+  assert.equal(development().checkoutOrigin, null);
+  for (const host of ["goalhint.com", "test.goalhint.com", "127.0.0.1", "webhook.localhost"]) {
+    assert.equal(development(`https://${host}${path}`).webhookSecret, null);
+  }
+  assert.equal(development(`https://development.example.net${path}`).webhookSecret.read(), "synthetic-development-webhook");
   policyError(() => parseRuntimePolicy({ GOAL_HINT_FLUTTERWAVE_SECRET: "" }), ["GOAL_HINT_*"]);
 });
 

@@ -18,7 +18,7 @@ import { AccountVerificationForm, ForgotPasswordForm } from "@/components/member
 import { ApprovalRefresh } from "@/components/members/payment-status";
 import { Stack } from "@/components/ui/layout";
 import { SignOutIcon } from "@/components/ui/icons";
-import { memberLandingPath, memberNextPath, memberReturnPath } from "@/domain/member-navigation";
+import { memberLandingPath, memberNextPath, memberReturnPath, subscriptionReturnPath } from "@/domain/member-navigation";
 import { publicSupportContactSettings } from "@/domain/public-subscription-settings";
 import { hasManualPaymentProvider } from "@/domain/subscription-settings";
 import { checkoutOpenStatuses } from "@/domain/checkout";
@@ -37,7 +37,7 @@ import { getMemberServices, type MemberServicesSource } from "@/server/members/m
 import { createPlansService } from "@/server/members/plans";
 import { memberCookieName } from "@/server/members/member-sessions";
 import { readMemberPageSession } from "@/server/members/member-page-session";
-import { payableCheckoutPlans, subscriptionCheckoutPublished } from "@/server/members/sales-readiness";
+import { flutterwaveCheckoutPublished, payableCheckoutPlans, subscriptionCheckoutPublished } from "@/server/members/sales-readiness";
 import { PublicShell } from "./public-shell";
 
 async function readPlans() {
@@ -57,7 +57,8 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     </Stack></PublicShell>;
     const settings = resolved.settings.settings;
     const token = (await cookies()).get(memberCookieName(resolved.config.production))?.value;
-    const returnTo = memberReturnPath(parameters.return);
+    const checkout = parameters.checkout === "1";
+    const returnTo = checkout ? subscriptionReturnPath(parameters.return) : memberReturnPath(parameters.return);
     const section = accountSection(parameters.section), summarySection = section === "overview" || section === "subscription";
     const walletSection = section === "wallet";
     const contact = { ...publicSupportContactSettings(settings), reviewTime: settings?.reviewTime ?? null };
@@ -72,17 +73,17 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const canReadReferrals = member?.phoneVerified === true;
     const unavailable = mode === undefined;
     // Administrator sign-in is independent of subscription settings and every account subview.
-    if (member && !member.blocked && member.administrator) redirect(memberLandingPath(true, returnTo));
-    if (session.kind === "reset") return <PublicShell locale={locale} showAccount><MemberNavigationRecovery expectedPhone={null} /><ResetPasswordForm locale={locale} phone={session.phone} returnTo={returnTo} contact={contact} /></PublicShell>;
+    if (member && !member.blocked && member.administrator) redirect(memberLandingPath(true, returnTo, checkout));
+    if (session.kind === "reset") return <PublicShell locale={locale} showAccount><MemberNavigationRecovery expectedPhone={null} /><ResetPasswordForm locale={locale} phone={session.phone} returnTo={returnTo} checkout={checkout} contact={contact} /></PublicShell>;
     if (session.kind === "verification") return <PublicShell locale={locale} showAccount>
       <MemberNavigationRecovery expectedPhone={null} />
-      {authView === "forgot" ? <ForgotPasswordForm locale={locale} phone={session.phone} returnTo={returnTo} contact={contact} />
-        : <AccountVerificationForm locale={locale} phone={session.phone} returnTo={returnTo} contact={contact} />}
+      {authView === "forgot" ? <ForgotPasswordForm locale={locale} phone={session.phone} returnTo={returnTo} checkout={checkout} contact={contact} />
+        : <AccountVerificationForm locale={locale} phone={session.phone} returnTo={returnTo} checkout={checkout} contact={contact} />}
     </PublicShell>;
     if (authView === "forgot" && member && !member.blocked) redirect(accountSectionHref(locale, "password", returnTo));
-    if (authView === "forgot" && !member) return <PublicShell locale={locale} showAccount><MemberNavigationRecovery expectedPhone={null} /><AccountAuthForm locale={locale} view="forgot" returnTo={returnTo} contact={contact} /></PublicShell>;
+    if (authView === "forgot" && !member) return <PublicShell locale={locale} showAccount><MemberNavigationRecovery expectedPhone={null} /><AccountAuthForm locale={locale} view="forgot" returnTo={returnTo} checkout={checkout} contact={contact} /></PublicShell>;
     if (member && !member.blocked && typeof parameters.view === "string" && ["login", "register", "verify", "new-password"].includes(parameters.view))
-      redirect(memberLandingPath(false, returnTo));
+      redirect(memberLandingPath(false, returnTo, checkout));
     const now = new Date();
     const [view, paymentView, subscription, dashboard, referrals, notifications, referralReviews] = member && !member.blocked ? await Promise.all([
       summarySection || section === "devices" ? resolved.codes?.accountView(member).catch(() => null) ?? null : null,
@@ -104,17 +105,20 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
       || (walletSection && [...checkoutOpenStatuses, "superseded"].some(state => state === topUpStatus?.status));
     const salesOpen = mode === "on";
     const checkoutPublished = subscriptionCheckoutPublished(settings, resolved.config.production);
+    const flutterwavePublished = !!resolved.checkout?.flutterwaveReady
+      && flutterwaveCheckoutPublished(settings, resolved.config.production && resolved.checkout.flutterwaveMode !== "sandbox");
     const topUpOpen = checkoutPublished && hasManualPaymentProvider(settings);
     const credit = paymentView?.credit ?? null;
     // Existing plan reports remain accessible through closed sales. Top-ups keep their own notice in Wallet.
     const viewPayment = paymentView
       ? [status, paymentView.otherStatus].some(report => report && report.purpose !== "topup" &&
-        [...checkoutOpenStatuses, "superseded", "rejected", "reversed"].some(state => state === report.status))
+        [...checkoutOpenStatuses, "provider-pending", "superseded", "rejected", "reversed"].some(state => state === report.status))
       : !!subscription?.paymentPending;
-    const canReadOffers = !!member && !member.blocked && (summarySection && !!subscription && checkoutPublished && !viewPayment
+    const canReadOffers = !!member && !member.blocked && (summarySection && !!subscription && (checkoutPublished || flutterwavePublished) && !viewPayment
       || walletSection && salesOpen && !!credit && (credit.availableBalanceUgx > 0 || credit.autoRenew));
     const offers = canReadOffers ? await plans().catch(() => []) : [];
-    const canPurchase = summarySection && checkoutPublished && payableCheckoutPlans(offers, settings, credit?.availableBalanceUgx ?? 0).length > 0;
+    const canPurchase = summarySection && (checkoutPublished || flutterwavePublished)
+      && payableCheckoutPlans(offers, checkoutPublished ? settings : null, checkoutPublished ? credit?.availableBalanceUgx ?? 0 : 0, flutterwavePublished).length > 0;
     const subscriptionAction = viewPayment || canPurchase ? {
       href: `${memberNextPath("subscribe", returnTo)}#${viewPayment ? "report" : "plans"}`,
       label: messages.text(viewPayment ? "account.viewPayment" : activeUntil ? "account.extend"
@@ -176,7 +180,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
       <MemberNavigationRecovery expectedPhone={null} />
       {!member ? <>
         {parameters.status === "signed-out" && <p role="status">{messages.text("account.signedOut")}</p>}
-        <AccountAuthForm key={authView} locale={locale} view={authView} returnTo={returnTo} contact={contact} />
+        <AccountAuthForm key={authView} locale={locale} view={authView} returnTo={returnTo} checkout={checkout} contact={contact} />
       </> : <MemberPanel><p role="status">{messages.text("account.refused")}</p><MemberSignOut><SignOutIcon />{messages.text("auth.signOut")}</MemberSignOut></MemberPanel>}
     </Stack></PublicShell>;
   };

@@ -7,7 +7,7 @@ import { ChevronRightIcon, KeyIcon, LockIcon, MailIcon } from "@/components/ui/i
 import { messageChannels, supportedMessageChannels, type MessageChannel } from "@/domain/member-verification";
 import { normalizePhone } from "@/domain/phone";
 import { parseVerificationCode } from "@/domain/verification-code";
-import { memberAuthPath } from "@/domain/member-navigation";
+import { memberAuthPath, memberAuthReturnFields, memberSignOutToLoginPath } from "@/domain/member-navigation";
 import { createMessages } from "@/i18n/messages";
 import { AccountFormSupport, type AdminContact } from "./admin-contact";
 import { AccountFormHeader } from "./account-form-header";
@@ -16,12 +16,13 @@ import { AccountCard, AccountCardBody, AccountCodeField, AccountError, AccountLi
   AccountSecondaryActions, AccountSteps, AccountTextButton } from "./account-styles";
 import { MemberForm, MemberSignOut } from "./member-controls";
 
-type CodeFormProps = { locale: string; returnTo: string | null; contact: AdminContact } & (
+type CodeFormJourney = { locale: string; returnTo: string | null; checkout?: boolean; contact: AdminContact };
+type CodeFormProps = CodeFormJourney & (
   { purpose: "account"; phone: string } | { purpose: "password-reset"; phone?: string }
 );
 
 /** Both verification flows keep codes in component memory and submit only after an explicit confirmation. */
-function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) {
+function AccountCodeForm({ locale, returnTo, checkout = false, contact, ...flow }: CodeFormProps) {
   const m = createMessages(locale), recovery = flow.purpose === "password-reset";
   const [phone, setPhone] = useState(flow.phone ?? "256");
   const [channel, setChannel] = useState<MessageChannel | "">("sms"), [code, setCode] = useState("");
@@ -33,9 +34,9 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
   const channels = canonicalPhone ? supportedMessageChannels(canonicalPhone) : messageChannels;
   const selectedChannel = channel && channels.includes(channel) ? channel : channels.includes("sms") ? "sms" : channels[0] ?? "";
   const sendLabel = selectedChannel ? m.text("account.sendCodeBy", { channel: selectedChannel === "sms" ? "SMS" : "WhatsApp" }) : m.text("account.sendCode");
-  const loginHref = memberAuthPath("login", returnTo);
+  const loginHref = memberAuthPath("login", returnTo, checkout);
   const hasRestrictedSession = !recovery || !!flow.phone;
-  const returnBody = returnTo ? { return: returnTo } : {};
+  const returnBody = memberAuthReturnFields(returnTo, checkout);
   function updateCode(value: string) { codeRevision.current++; setCode(value); setInvalidCode(false); setError(""); }
   const changePhone = (value: string) => {
     if (value === phone) return;
@@ -126,8 +127,8 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
         {recovery ? <AccountTextButton type="button" variant="quiet" disabled={!!busy || step === "delivery" && !canonicalPhone}
           onClick={() => changeStep(step === "delivery" ? "code" : "delivery")}>
           {m.text(step === "delivery" ? "account.alreadyHaveCode" : "account.changeCodeDeliveryNumber")}
-        </AccountTextButton> : <AccountLink href={memberAuthPath("forgot", returnTo)} prefetch={false}>{m.text("account.forgotPassword")}</AccountLink>}
-        {hasRestrictedSession ? <MemberSignOut logoutAction="/api/account/sign-out?destination=login" disabled={!!busy} variant="quiet">{m.text("auth.backToSignIn")}</MemberSignOut>
+        </AccountTextButton> : <AccountLink href={memberAuthPath("forgot", returnTo, checkout)} prefetch={false}>{m.text("account.forgotPassword")}</AccountLink>}
+        {hasRestrictedSession ? <MemberSignOut logoutAction={memberSignOutToLoginPath(checkout ? returnTo : null)} disabled={!!busy} variant="quiet">{m.text("auth.backToSignIn")}</MemberSignOut>
           : <AccountLink href={loginHref} prefetch={false}>{m.text("auth.backToSignIn")}</AccountLink>}
       </AccountSecondaryActions>
       <AccountFormSupport locale={locale} contact={contact} />
@@ -135,10 +136,10 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
   </AccountCard>;
 }
 
-export function AccountVerificationForm(props: { locale: string; phone: string; returnTo: string | null; contact: AdminContact }) {
+export function AccountVerificationForm(props: CodeFormJourney & { phone: string }) {
   return <AccountCodeForm {...props} purpose="account" />;
 }
 
-export function ForgotPasswordForm(props: { locale: string; phone?: string; returnTo: string | null; contact: AdminContact }) {
+export function ForgotPasswordForm(props: CodeFormJourney & { phone?: string }) {
   return <AccountCodeForm {...props} purpose="password-reset" />;
 }

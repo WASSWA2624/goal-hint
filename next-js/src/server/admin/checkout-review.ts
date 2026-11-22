@@ -105,6 +105,7 @@ export function createCheckoutReview(database: DatabaseRuntime, now = Date.now) 
         if (!initial || initial.workflowVersion !== 2) return { ok: false, message: "Payment unavailable." };
         await lockMemberAccount(tx, initial.accountId); await lockSettings(tx, actor, at);
         const row = await tx.paymentSubmission.findUniqueOrThrow({ where: { id } });
+        if (row.method === "flw") return { ok: false, message: "Flutterwave payment status is verified by the provider." };
         if (row.status === "approved" && action.action === "approve-checkout") return { ok: true };
         if (row.revision !== action.revision) return { ok: false, message: "Another reviewer changed this request. Refresh and check the latest details." };
         if (action.action === "approve-checkout") {

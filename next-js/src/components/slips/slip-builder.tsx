@@ -43,7 +43,7 @@ export type { SlipCriteriaIssue } from "./slip-criteria-fields";
 
 export function SlipAccessRequired({ locale, showAccount = false, signedIn = false }: { locale: string; showAccount?: boolean; signedIn?: boolean }) {
   return <SlipStack><AppBrandBar locale={locale} showAccount={showAccount} />
-    <UnlockPanel locale={locale} signedIn={signedIn} returnTo={slipsHref(locale)} guestView="login" />
+    <UnlockPanel locale={locale} signedIn={signedIn} returnTo={slipsHref(locale)} guestView="login" label="paywall.unlockSlipBuilder" />
   </SlipStack>;
 }
 
@@ -53,11 +53,10 @@ type BuilderDialog = "advanced" | "markets";
 function SlipBuildActionLabel({ locale, restricted }: {
   locale: string; restricted: boolean;
 }) {
-  const messages = createMessages(locale);
-  const build = messages.text("slips.build");
+  const text = createMessages(locale).text(restricted ? "paywall.unlockSlipBuilder" : "slips.build");
   return <BuildActionLabel>
-    <span data-action-label="mobile">{restricted ? messages.text("paywall.unlock") : build}</span>
-    <span data-action-label="desktop">{restricted ? messages.text("paywall.unlock") : build}</span>
+    <span data-action-label="mobile">{text}</span>
+    <span data-action-label="desktop">{text}</span>
   </BuildActionLabel>;
 }
 const groupFields = {
@@ -354,7 +353,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   const orderedSlips = useMemo(() => slips ? [...slips].sort(compareSlipDisplayProbability) : [], [slips]);
   const shownSlips = useMemo(() => orderedSlips.slice(offset, offset + slipPageSize), [orderedSlips, offset]);
   const emptyState = result?.state === "generated" ? "data-unavailable" : result?.state;
-  const accessRequired = <UnlockPanel locale={locale} signedIn={signedIn} returnTo={action} guestView="login" />;
+  const accessRequired = <UnlockPanel locale={locale} signedIn={signedIn} returnTo={action} guestView="login" label="paywall.unlockSlipBuilder" />;
   const { targets, limits: limitsFields, kickoff: kickoffFields, markets: marketFields, reuse: reuseField } = renderSlipCriteriaFields({
     locale, prefix, draft, resetDraft, error, errorId, feedbackKey, enhanced, showJoint, selectedMarkets, outcomes, reuse,
     ...(kickoffZone ? { timeZone: kickoffZone, interval: true } : {}),

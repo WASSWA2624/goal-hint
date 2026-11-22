@@ -6,14 +6,15 @@ from lib.runtime import ROOT, main_guard
 
 def verify(origin):
     token = "a" * 32
-    for viewer, expected in [("guest", "Login"), ("member", "Check access"), ("eligible", "Arsenal")]:
+    for viewer, expected in [("guest", "Login"), ("member", "Unlock slip"), ("eligible", "Arsenal")]:
         response = request(origin, "/s/" + token, headers={"Cookie": "fixture-sharing-viewer=" + viewer})
         assert response.status == 200
         assert expected in visible_html(response.text)
         if viewer != "eligible":
             for private in ["Arsenal", "home-win", "Premier League", "fixtureId", "totalOdds", "averageProbability"]:
                 assert private not in response.text, (viewer, private)
-            assert "return=%2Fs%2F" + token in response.text
+            assert "Unlock slip" in visible_html(response.text)
+            assert "return=%2Fs%2F" + token + "&amp;checkout=1" in response.text
         # Generic metadata is independent of entitlement and never includes slip facts.
         head = response.text.split("</head>", 1)[0]
         assert 'noindex' in head and 'og:description' in head

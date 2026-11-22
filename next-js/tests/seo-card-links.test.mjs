@@ -86,7 +86,7 @@ test("locked cards retain the canonical match as their return destination for gu
     { fixture: locked, gated: true, analysisSlug: slug }, { fixture: gateFixture(upcoming("card-gated"), member), gated: true, signedIn: true, analysisSlug: slug },
     { fixture: upcoming("card-gated"), analysisSlug: slug }] });
   const path = `/en/matches/card-gated/${slug}`, returnTo = encodeURIComponent(path);
-  const guestHref = `/en/account?view=register&return=${returnTo}`, memberHref = `/en/subscribe?return=${returnTo}`;
+  const guestHref = `/en/account?view=register&return=${returnTo}&checkout=1`, memberHref = `/en/subscribe?return=${returnTo}&checkout=1`;
   assert.deepEqual(anchors(guest), [guestHref, guestHref]);
   assert.deepEqual(anchors(signedIn), [memberHref, memberHref]);
   assert.deepEqual(anchors(subscriber), [path]);
@@ -95,12 +95,12 @@ test("locked cards retain the canonical match as their return destination for gu
     assert.equal(pickState(html), "subscriber");
     assert.doesNotMatch(html, prediction);
     assert.deepEqual(cardPick(html), []);
-    assert.match(html, /data-subscriber-notice="true"[^>]*>Unlock</u);
+    assert.match(html, /data-subscriber-notice="true"[^>]*>Unlock predictions</u);
     assert.match(html, /data-unlock-button="true"/u);
     assert.match(html, /data-public-probability/u);
   }
-  assert.match(guest, /Register \/ log in to unlock/u);
-  assert.match(signedIn, /Subscribe to unlock/u);
+  assert.match(guest, /<span>Unlock predictions<\/span>/u);
+  assert.match(signedIn, /<span>Unlock predictions<\/span>/u);
   assert.match(subscriber, /data-pick-selection=/u);
 });
 
@@ -143,7 +143,7 @@ test("a delivered forecast stays locked for free viewers, and completed matches 
     { fixture: gateFixture(scenarios.canceled.feed.records[0], anonymous), gated: true, analysisSlug: slug }] });
   assert.equal(pickState(whole), "subscriber");
   assert.doesNotMatch(whole, prediction);
-  assert.match(whole, /data-subscriber-notice="true"[^>]*>Unlock</u);
+  assert.match(whole, /data-subscriber-notice="true"[^>]*>Unlock predictions</u);
   assert.equal(pickState(finished), "settled");
   assert.match(finished, /data-pick-selection=""[^>]*title="Home or draw"[^>]*>1X</u);
   assert.notEqual(pickState(canceled), "subscriber");
@@ -215,8 +215,8 @@ test("the match page locks the verdict, markets and analysis only over a publish
   assert.match(locked.verdict, /data-match-access-required="true"/u);
   for (const html of Object.values(locked)) {
     assert.match(html, /data-unlock-link="true"/u);
-    assert.match(html, />Unlock</u);
-    assert.deepEqual(anchors(html), [`/en/account?view=register&return=${encodeURIComponent(published.route.path)}`]);
+    assert.match(html, />Unlock predictions</u);
+    assert.deepEqual(anchors(html), [`/en/account?view=register&return=${encodeURIComponent(published.route.path)}&checkout=1`]);
     assert.doesNotMatch(html, /SENTINEL-|61\.7|62%|data-public-probability/u);
   }
   assert.match(guest.verdict, /data-featured-pick="none"/u);
