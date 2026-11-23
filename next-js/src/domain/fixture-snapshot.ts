@@ -6,7 +6,7 @@ import { isPlayedFinalStatus, settlementStatuses, type SettlementOutcomeStatus }
 import { publicPolicy } from "./public-policy.ts";
 import { isSafeRemoteImageUrl } from "./remote-image.ts";
 import { teamCodePattern } from "./team-name.ts";
-import { publicRecommendationSchema } from "./recommendation-view.ts";
+import { publicRecommendationSchema, recommendationMarket } from "./recommendation-view.ts";
 import { marketOddsObservationSchema } from "./in-play-odds.ts";
 import { bookmakerOddsId, isVerifiedPreMatchObservation } from "./bookmaker-odds.ts";
 import { parseDecimalOdds } from "./odds.ts";
@@ -220,12 +220,13 @@ function refineFixture(value: z.infer<typeof wireFixtureBaseSchema>, context: z.
     context.addIssue({ code: "custom", message: "A retrospective forecast must belong to the displayed locked occurrence." });
   }
   if (value.prices) {
-    const picks = new Map(forecast?.markets.map((item) => [item.market.family, item.market.selection]) ?? []);
-    if (forecast?.recommendation?.selected) picks.set(forecast.recommendation.selected.family,
-      forecast.recommendation.selected.selection as AcceptedMarket["selection"]);
+    const markets = new Map(forecast?.markets.map(({ market }) => [market.family, market]) ?? []);
     if (new Set(value.prices.map((item) => item.family)).size !== value.prices.length ||
-      value.prices.some((item) => picks.get(item.family) !== item.selection || item.recovery &&
-        (item.recovery.kickoffAt !== value.kickoffAt || value.status !== "live" && !isPlayedFinalStatus(value.status)))) {
+      value.prices.some(({ family, selection, recovery }) => {
+        const market = markets.get(family);
+        return !market || (market.selection !== selection && recommendationMarket(market, forecast?.recommendation).selection !== selection) ||
+          (recovery && (recovery.kickoffAt !== value.kickoffAt || value.status !== "live" && !isPlayedFinalStatus(value.status)));
+      })) {
       context.addIssue({ code: "custom", message: "A price must belong to exactly one published pick of its own family." });
     }
   }

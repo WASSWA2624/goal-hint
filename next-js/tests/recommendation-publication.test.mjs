@@ -4,7 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { publicPolicy } from '../src/domain/public-policy.ts';
 import { parseFixtureSnapshot } from '../src/domain/fixture-snapshot.ts';
 import { bestCardFamily } from '../src/domain/feed-presentation.ts';
-import { probabilityEntry, selectedCardPrediction } from '../src/domain/match-card.ts';
+import { probabilityEntry, selectedCardPrediction, selectedCardPrice } from '../src/domain/match-card.ts';
+import { storedMatchFeedRecordSchema } from '../src/domain/match-feed.ts';
 import { featuredFamily, marketRow } from '../src/domain/match-details.ts';
 import { publicRecommendation } from '../src/domain/recommendation-view.ts';
 import { buildSlips, defaultSlipCriteria } from '../src/domain/slip-builder.ts';
@@ -59,6 +60,24 @@ test('an explicit abstention still displays the leading published probability wi
   assert.equal(featuredFamily({ fixture, snapshot: { ...fixture.forecast } }), family);
   assert.equal(fixture.forecast.recommendation.selected, null);
   assert.equal(fixture.forecast.markets.length, 4);
+});
+
+test('a scheduled feed record accepts the published selection price when its recommendation differs', () => {
+  const fixture = { ...card(), scorePeriod: null, availabilityMessage: null, unavailableMarkets: [],
+    cycle: { state: 'open', mode: 'current', ordinal: 1, lockedAt: null, voidReason: null },
+    update: { prediction: 'current', result: 'untracked' } };
+  const publishedPrice = { family: 'double-chance', selection: 'home-or-draw', price: '1.40', basis: 'bookmaker',
+    retrievedAt: fixture.forecast.publishedAt, providerUpdatedAt: null };
+  const recommendedPrice = { ...publishedPrice, selection: 'home-or-away', price: '1.90' };
+
+  const published = storedMatchFeedRecordSchema.parse({ ...fixture, prices: [publishedPrice] });
+  assert.deepEqual(selectedCardPrice(published, 'double-chance', false), publishedPrice);
+  assert.equal(selectedCardPrice(published, 'double-chance'), null);
+  const recommended = storedMatchFeedRecordSchema.parse({ ...fixture, prices: [recommendedPrice] });
+  assert.deepEqual(selectedCardPrice(recommended, 'double-chance'), recommendedPrice);
+  assert.equal(selectedCardPrice(recommended, 'double-chance', false), null);
+  assert.equal(storedMatchFeedRecordSchema.safeParse({ ...fixture, prices: [publishedPrice, recommendedPrice] }).success, false);
+  assert.equal(storedMatchFeedRecordSchema.safeParse({ ...fixture, prices: [{ ...publishedPrice, selection: 'away-or-draw' }] }).success, false);
 });
 
 test('evidence-first recommendation seals a supported pick with no quote and keeps the original markets', () => {
