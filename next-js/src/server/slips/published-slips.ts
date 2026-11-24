@@ -1,13 +1,13 @@
 import "server-only";
 
 import { z } from "zod";
-import { getPublicationDeadline, getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange } from "../../domain/calendar.ts";
+import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange } from "../../domain/calendar.ts";
 import { bestSlipCombinationIdentity, bestSlipDailyCriteria, bestSlipExactTotal, bestSlipView, compareBestSlips, jointSlipProbability, qualifiedJointModel, type BestSlip, type BestSlipView, type BestSlipsResult, type JointSlipModel } from "../../domain/best-slips.ts";
 import { bestSlipExactRange, bestSlipOddsBands, bestSlipBandLimit, bestSlipOddsBandFor, bestSlipPublicationBands, bestSlipPublicRank, dailyBestSlipBandLimit, defaultBestSlipOddsBand, type BestSlipOddsBand } from "../../domain/best-slip-odds-bands.ts";
 import { bestSlipsQueryRules, matchesBestSlipsRanges, parseBestSlipsCursor, parseBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "../../domain/best-slips-query.ts";
 import type { ReportingDate } from "../../domain/calendar.ts";
 import { preMatchReferenceOddsFreshMs } from "../../domain/reference-odds.ts";
-import { bestSlipPublicationHour } from "../../domain/best-slip-publication-hour.ts";
+import { bestSlipKickoffBufferMs, bestSlipPublicationHour, bestSlipPublicationIntervalMs } from "../../domain/best-slip-publication-hour.ts";
 import { publishedSlipRules, type PublishedSlipHistory, type PublishedSlipHistoryQuery } from "../../domain/published-slips.ts";
 import { completedSlipFixtureIds, indexSlipResults, slipCompleted, slipSnapshotOutcome, slipSnapshotStatus, slipSnapshotSchema, slipResultView, type SlipResult } from "../../domain/slip-snapshot.ts";
 import { slipStatusCategory } from "../../domain/slip-status.ts";
@@ -25,7 +25,7 @@ import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { addReportingDays } from "../../domain/calendar.ts";
 import { bindSlipForecasts, readSlipForecastResults } from "./slip-forecast.ts";
 import { readWithSlipAccess } from "./slip-access.ts";
-import { verifyFeaturedSlipOffers } from "./best-slip-recommendations.ts";
+import { lockFeaturedSlipOdds, verifyFeaturedSlipOffers } from "./best-slip-recommendations.ts";
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/u), instant = z.number().int().positive();
 const modelSchema = z.strictObject({ id: hash, calibrationReference: z.string().trim().min(1).max(512),
@@ -47,8 +47,9 @@ const snapshotSchema = z.strictObject({ slip: slipSnapshotSchema, estimatedProba
 const appendBatchSchema = z.strictObject({ version: z.literal(1), hourAt: instant, publishedAt: instant,
   firstRank: z.number().int().min(1).max(dailyBestSlipBandLimit), count: z.number().int().positive().max(dailyBestSlipBandLimit),
   searchLimited: z.boolean(), partialCoverage: z.boolean(),
-}).refine(({ hourAt, publishedAt, firstRank, count }) => hourAt % 3_600_000 === 0 && publishedAt >= hourAt
-  && publishedAt - hourAt < 3_600_000 && firstRank + count - 1 <= dailyBestSlipBandLimit);
+}).refine(({ hourAt, publishedAt, firstRank, count }) => hourAt % bestSlipPublicationIntervalMs === 0 && publishedAt >= hourAt
+  && publishedAt - hourAt < (hourAt % 3_600_000 === 0 ? 3_600_000 : bestSlipPublicationIntervalMs)
+  && firstRank + count - 1 <= dailyBestSlipBandLimit);
 type Publication = z.infer<typeof publicationSchema> & Readonly<{ bounds: SlipCriteria | null }>;
 type PublicationRow = { id: string; eatDate: Date; oddsBand?: string; publishedAt: Date; modelId: string | null; bodyJson: unknown; validIntegrity: unknown };
 type SlipRow = { id: string; publicationId: string; appendBatchId?: string | null; rank: number; snapshotJson: unknown; validIntegrity: unknown };
@@ -149,12 +150,17 @@ function offerStillEligible(selection: BuiltSlip["selections"][number], at: numb
   const { offer, kickoffAt } = selection;
   return offer && offer.checkedAt <= at && at - offer.observedAt <= preMatchReferenceOddsFreshMs &&
     (offer.providerUpdatedAt === null || at - offer.providerUpdatedAt <= preMatchReferenceOddsFreshMs) &&
-    at < getPublicationDeadline(utcInstantFromEpochMilliseconds(kickoffAt));
+    kickoffAt - at >= bestSlipKickoffBufferMs;
 }
 
 function publicEditorialSlip(slip: BuiltSlip): BuiltSlip {
   if (!slip.selections.some(({ offer }) => offer)) return slip;
-  return { ...slip, selections: slip.selections.map(({ offer: _offer, ...selection }) => selection) };
+  const selections = slip.selections.map((selection) => {
+    const view = { ...selection };
+    delete view.offer;
+    return view;
+  });
+  return { ...slip, selections };
 }
 const databaseTime = async (tx: Prisma.TransactionClient) => (await tx.$queryRaw<{ at: Date }[]>`SELECT UTC_TIMESTAMP(3) AS at`)[0]!.at.getTime();
 export function parsePublishedSlipHistoryQuery(input: PublishedSlipHistoryQuery): PublishedSlipHistoryQuery {
@@ -168,6 +174,23 @@ export function parsePublishedSlipHistoryQuery(input: PublishedSlipHistoryQuery)
 }
 
 const emptyAppend = (status: "already-published" | "full" | "stale" | "no-qualifying") => ({ status, appended: 0 } as const);
+
+const publicationConflict = (error: unknown) => error instanceof DatabaseOperationError
+  && (error.code === "conflict" || error.code === "lock-timeout");
+
+/** Repeatable-read next-key locks on the dated ledger block concurrent inserts into the same day.
+ * A competing writer can take the same shared range, but one insert must then roll back and retry. */
+async function lockPublicationDay(tx: Prisma.TransactionClient, date: Date) {
+  await tx.$queryRaw`SELECT combination FROM DailyBestSlipCombination WHERE eatDate=${date} LOCK IN SHARE MODE`;
+}
+
+async function lockPublicationFixtures(tx: Prisma.TransactionClient, ids: readonly string[]) {
+  const fixtures = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT id FROM FootballFixture
+    WHERE id IN (${Prisma.join([...ids].sort())}) ORDER BY id LOCK IN SHARE MODE`);
+  // Lock odds before the first consistent read so the commit check cannot see superseded prices.
+  await lockFeaturedSlipOdds(tx, fixtures.map(({ id }) => id));
+  return fixtures;
+}
 
 async function readHourlyPublicationState(tx: Prisma.TransactionClient, day: ReportingDate, asOf: number) {
   const date = new Date(`${day}T00:00:00Z`);
@@ -228,7 +251,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
       const range = bestSlipExactRange(oddsBand), criteria = bestSlipDailyCriteria(input.day, oddsBand);
       const publicationId = slipPublicationIdentity(input.day, oddsBand), date = new Date(`${input.day}T00:00:00Z`);
       const batchId = appendBatchIdentity(publicationId, input.hourAt), hourAt = new Date(input.hourAt);
-      const proposed = new Map<string, BuiltSlip>();
+      const proposed = new Map<string, BuiltSlip>(), proposedFixtures = new Set<string>();
       for (const slip of input.slips) {
         const snapshot = snapshotSchema.parse({ slip }).slip;
         const key = bestSlipCombinationIdentity(snapshot.selections);
@@ -237,9 +260,11 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           || criteria.teamsMax !== undefined && snapshot.selections.length > criteria.teamsMax
           || !exactSlipOdds(snapshot, range) || !reviewedSlipOffers(snapshot, Number.MAX_SAFE_INTEGER)
           || Math.abs(average - snapshot.averageProbability) > Number.EPSILON * snapshot.selections.length * 2
-          || snapshot.selections.some(({ kickoffAt }) => getReportingDate(utcInstantFromEpochMilliseconds(kickoffAt)) !== input.day))
+          || snapshot.selections.some(({ fixtureId, kickoffAt }) => proposedFixtures.has(fixtureId)
+            || getReportingDate(utcInstantFromEpochMilliseconds(kickoffAt)) !== input.day))
           return fail("invalid-input");
         proposed.set(key, snapshot);
+        snapshot.selections.forEach(({ fixtureId }) => proposedFixtures.add(fixtureId));
       }
       const authorized = (at: number) => {
         if (!provenTrue(input.verifyPublicOdds)) fail("unauthorized");
@@ -250,18 +275,19 @@ export function createPublishedSlips(database: DatabaseRuntime, {
       let rolledBack = false;
       const rollback = (): never => { rolledBack = true; return fail("unavailable"); };
       try {
-        return await database.transaction(async tx => {
+        const write = () => database.transaction(async tx => {
+          await lockPublicationDay(tx, date);
+          const locked = new Set((await lockPublicationFixtures(tx, [...proposedFixtures])).map(({ id }) => id));
           const now = await databaseTime(tx);
           if (!authorized(now)) return emptyAppend("stale");
           const state = await readHourlyPublicationState(tx, input.day, now);
           const parent = state.parents.get(publicationId), count = state.counts.get(oddsBand) ?? 0;
           if (state.publishedHours.get(oddsBand)?.has(input.hourAt)) return emptyAppend("already-published");
           if (state.closed.has(oddsBand) || count >= dailyBestSlipBandLimit) return emptyAppend("full");
-          const advancing = [...proposed].filter(([key]) => !state.combinations.has(key));
+          const advancing = [...proposed].filter(([key, { selections }]) => !state.combinations.has(key)
+            && selections.every(({ fixtureId }) => locked.has(fixtureId) && !state.fixtures.has(fixtureId)));
           if (!advancing.length) return emptyAppend("no-qualifying");
 
-          const fixtures = [...new Set(advancing.flatMap(([, slip]) => slip.selections.map(({ fixtureId }) => fixtureId)))].sort();
-          for (const fixture of fixtures) await tx.$queryRaw`SELECT id FROM FootballFixture WHERE id=${fixture} LOCK IN SHARE MODE`;
           const eligible: BuiltSlip[] = [];
           for (const [, slip] of advancing) {
             const bound = await bindForecasts(tx, slip, await databaseTime(tx));
@@ -334,8 +360,10 @@ export function createPublishedSlips(database: DatabaseRuntime, {
             return rollback();
           return { status: "published", appended: publishable.length } as const;
         }, { isolationLevel: "RepeatableRead", timeout: 30_000 });
+        try { return await write(); }
+        catch (error) { if (!rolledBack && publicationConflict(error)) return await write(); throw error; }
       } catch (error) {
-        if (rolledBack || error instanceof DatabaseOperationError && (error.code === "conflict" || error.code === "lock-timeout"))
+        if (rolledBack || publicationConflict(error))
           return emptyAppend("stale");
         throw error;
       }
@@ -387,26 +415,15 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         }
         return { slip: snapshot as BuiltSlip, estimatedProbability };
       });
-      // Locks are acquired by fixture identity across the entire batch, before any individual binding.
-      // Competing publishers and lifecycle/result writers use the same order, avoiding crossed-slip deadlocks.
-      return database.transaction(async (tx) => {
-        authorized(await databaseTime(tx));
-        const id = slipPublicationIdentity(input.day, oddsBand);
-        const dayDate = new Date(`${input.day}T00:00:00Z`);
-        const existingDay = await tx.$queryRaw<PublicationRow[]>`SELECT *,integrity=SHA2(CAST(bodyJson AS CHAR),256) AS validIntegrity
-          FROM DailySlipPublication WHERE eatDate=${dayDate}`;
-        const previouslyPublished = existingDay.map((row) => ({ id: row.id, ...publication(row) }));
-        if (previouslyPublished.some((value) => value.oddsBand === undefined || value.oddsBand === oddsBand)) return "already-published";
-        const legacyBands = previouslyPublished.filter(({ version }) => version === 2);
-        if (legacyBands.length) {
-          const rows = await tx.$queryRaw<SlipRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(snapshotJson AS CHAR),256) AS validIntegrity
-            FROM PublishedSlip WHERE publicationId IN (${Prisma.join(legacyBands.map(({ id }) => id))})
-            LIMIT ${publishedSlipRules.maximumDailySlips + 1}`);
-          if (rows.length !== legacyBands.reduce((sum, value) => sum + value.count, 0)) fail("unavailable");
-          if ((await readSnapshots(tx, rows)).some(({ slip }) => combinations.has(bestSlipCombinationIdentity(slip.selections)))) fail("invalid-input");
-        }
-        const fixtureIds = [...ids].sort();
-        for (const fixtureId of fixtureIds) await tx.$queryRaw`SELECT id FROM FootballFixture WHERE id=${fixtureId} LOCK IN SHARE MODE`;
+      const day = parseReportingDate(input.day), id = slipPublicationIdentity(day, oddsBand), dayDate = new Date(`${day}T00:00:00Z`);
+      const write = () => transaction(async (tx): Promise<"published" | "already-published"> => {
+        await lockPublicationDay(tx, dayDate);
+        const locked = await lockPublicationFixtures(tx, [...ids]);
+        const now = await databaseTime(tx);
+        authorized(now);
+        const state = await readHourlyPublicationState(tx, day, now);
+        if (state.parents.has(id) || state.parents.has(slipPublicationIdentity(day))) return "already-published";
+        if (locked.length !== ids.size || [...ids].some(fixture => state.fixtures.has(fixture))) return fail("invalid-input");
         const snapshots: z.infer<typeof snapshotSchema>[] = [];
         for (const item of proposed) {
           const slip = await bindForecasts(tx, item.slip, await databaseTime(tx));
@@ -450,7 +467,9 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         const committedAt = await databaseTime(tx); authorized(committedAt);
         if (!selections.every((selection) => offerStillEligible(selection, committedAt))) fail("invalid-input");
         return "published";
-      }, { isolationLevel: "ReadCommitted", timeout: 30_000 });
+      });
+      try { return await write(); }
+      catch (error) { if (publicationConflict(error)) return write(); throw error; }
     },
     async day(day: string, completedOnly = false, oddsBand?: BestSlipOddsBand): Promise<BestSlipsResult | null> {
       const publicationDay = parseReportingDate(day);
@@ -466,7 +485,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           FROM PublishedSlip WHERE publicationId IN (${Prisma.join([...parents.keys()])}) ORDER BY publicationId,\`rank\`
           LIMIT ${publishedSlipRules.maximumDailySlips + 1}`);
         const entries = await readAuditedPublicationSnapshots(tx, parents, items, batches);
-        const results = await resolveResults(tx, entries.flatMap(({ snapshot }) => snapshot.slip.selections), asOf);
+        const results = await resolveResults(tx, entries.flatMap(({ snapshot }) => snapshot.slip.selections), asOf, { editorial: true });
         const resultsFor = indexSlipResults(results);
         const views = entries.flatMap((entry) => {
           const { parent, snapshot, publishedAt } = entry;
@@ -537,7 +556,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           const candidates = ordered.filter(({ snapshot }) => matchesBestSlipsRanges(query, {
             averageProbability: snapshot.slip.averageProbability, matchCount: snapshot.slip.selections.length,
           }));
-          const results = await resolveResults(tx, (completedOnly ? ordered : candidates).flatMap(({ snapshot }) => snapshot.slip.selections), asOf);
+          const results = await resolveResults(tx, (completedOnly ? ordered : candidates).flatMap(({ snapshot }) => snapshot.slip.selections), asOf, { editorial: true });
           const resultsFor = indexSlipResults(results);
           bandTotal += completedOnly ? ordered.filter(({ snapshot }) => slipCompleted(snapshot.slip, resultsFor(snapshot.slip))).length : ordered.length;
           for (const entry of candidates) {
@@ -564,8 +583,10 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         const dailyCount = dailyPublication ? publicationCount(dailyPublication[1], batches.get(dailyPublication[0])) : undefined;
         const dailyBandLimit = !completedOnly && (dailyCount === bandTotal || dates.from === today && dates.to === today && bandTotal === 0)
           ? dailyBestSlipBandLimit : undefined;
+        const periodStatistics = allDates ? null : statistics;
         return { day: today, state: "generated", slips: retained,
-          ...publicationCoverage(parents, batches), statistics: allDates ? null : statistics,
+          ...publicationCoverage(parents, batches), statistics: periodStatistics,
+          summary: { ...dates, asOf, statistics: periodStatistics },
           browse: { query, version: allDates ? null : evidenceFingerprint({ bandTotal, membership }), total: allDates ? null : total,
             bandTotal: allDates ? null : bandTotal, ...(dailyBandLimit === undefined ? {} : { dailyBandLimit }), pageSize: bestSlipsQueryRules.pageSize,
             hasMore: allDates ? nextCursor !== null : offset + retained.length < total, nextCursor,
@@ -589,7 +610,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           LIMIT ${publishedSlipRules.maximumDays * publishedSlipRules.maximumDailySlips + 1}`) : [];
         const batches = await readAppendBatches(tx, parents, asOf);
         const entries = await readAuditedPublicationSnapshots(tx, parents, rows, batches);
-        const results = await resolveResults(tx, entries.flatMap(({ snapshot }) => snapshot.slip.selections), asOf);
+        const results = await resolveResults(tx, entries.flatMap(({ snapshot }) => snapshot.slip.selections), asOf, { editorial: true });
         const resultsFor = indexSlipResults(results);
         const samples = [], records = [];
         for (const { row, parent, snapshot, publishedAt: at } of entries) {

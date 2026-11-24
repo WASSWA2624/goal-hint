@@ -100,7 +100,7 @@ browser-safe `src/domain/slip-builder.ts` contract:
 | Market outcomes | Automatic or one or more supported results within each selected family | Any (Automatic) |
 | Total odds | Inclusive minimum from 1.01; optional maximum | 5.00–10.00 |
 | Individual selection odds | Inclusive minimum from 1.01; optional maximum | 1.01–Any |
-| Selection probability | Inclusive unrounded percentage bounds, 0–100 | 75–100% |
+| Selection probability | Inclusive unrounded percentage bounds, 0–100; the stored Builder requires at least 75% per pick | 75–100% |
 | Combined probability | Optional `totalProbMin` / `totalProbMax`, inclusive percentage bounds, 0–100; requires a verified joint model | Blank (no joint filter) |
 | Selection count | Whole match counts, minimum 1; optional maximum | 1–Any |
 | Number of slips | 1–100 | 5 |
@@ -208,6 +208,9 @@ The shared `parseDecimalOdds` utility parses prices into exact scaled integers;
 combination products and range comparisons use `BigInt`. Total constraints are
 checked before rounding. For example, `1.01 × 1.99 = 2.0099` exceeds a 2.00
 maximum and is below a 2.01 minimum, even though its displayed total is 2.01.
+When a combination has an upper total limit, the bounded search can consider
+lower verified quotes for the same outcome alongside the highest individual
+quote. It keeps one ranked result for each set of picks.
 Only the displayed total is rounded half-up to two decimal places.
 Very large displayed totals use ellipsis within the compact header; the full
 original value remains available in the header title and accessible text.
@@ -227,11 +230,12 @@ probability filters continue to use the verified binding described below.
 
 ## Ranking and separate slips
 
-Without a joint-model binding, qualifying combinations rank by fewer selections first, then higher arithmetic
-average probability, then higher exact total odds. Canonical fixture, market and
-selection identifiers break ties deterministically. Rows within a slip follow
-kickoff and canonical identifier order. Identical combinations never appear as
-separate slips.
+Without a joint-model binding, the search ranks qualifying combinations by the
+Fréchet lower bound, the minimum chance of all picks winning given their forecast
+probabilities under arbitrary dependence. Higher exact total odds and fewer
+selections break ties, followed by canonical identifiers. This bound is internal
+to ranking. Rows within a slip follow kickoff and canonical identifier order.
+Identical combinations never appear as separate slips.
 
 `src/domain/joint-slip-model.ts` shares the same joint-model contract, validity
 check, marginal probability bounds and estimator ranking between custom and
@@ -252,8 +256,8 @@ authorize an estimator. Explicit editorial/publisher builds retain their own
 model and do not resolve the custom reader's binding.
 
 With a verified current binding, the bounded search considers all allowed
-selection counts and ranks whole-slip probability first. Fewer selections and
-higher odds break equal-probability ties. A longer slip can outrank a shorter
+selection counts and ranks whole-slip probability first. Higher exact total odds
+and fewer selections break equal-probability ties. A longer slip can outrank a shorter
 one. `totalProbMin` and `totalProbMax` filter the unrounded joint estimate;
 individual `probMin` / `probMax` still filter each original pick separately.
 Missing or mathematically impossible estimates exclude that combination. The
@@ -291,10 +295,12 @@ pages of 100 and rechecks every loaded page for cohort or record drift. These
 sequential reads are not claimed to be one atomic global database snapshot.
 Changing, malformed or unavailable data produces an explicit unavailable state
 instead of a partially mixed result. Matches entering the cutoff while the read
-finishes are excluded before generation.
+finishes are excluded before generation. The service checks the cutoff again
+after the bounded combination search.
 
-The pure engine retains at most 800 qualifying selection candidates, ordered by
-probability, odds and canonical identifiers. Any leaves the requested filter
+The pure engine retains at most 800 qualifying selection candidates, keeping a
+quote per outcome before spending the remaining budget on quote alternatives.
+Candidate order uses probability, odds and canonical identifiers. Any leaves the requested filter
 unrestricted; the retained candidates and distinct fixtures still bound the
 physical slip length. Combination enumeration has a 100,000-node budget, with at
 most one quarter used to seed disjoint slips. Persistent suffix price multisets

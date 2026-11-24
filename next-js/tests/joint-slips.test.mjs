@@ -102,7 +102,9 @@ test('a higher whole-slip estimate outranks fewer selections; the mean and produ
   // 1.40^3 = 2.744 and 1.66^2 = 2.7556 are the only combinations within 2.70-2.80.
   const records = [record('a', '1.40', 0.95), record('b', '1.40', 0.95), record('c', '1.40', 0.95), record('d', '1.66', 0.7), record('e', '1.66', 0.7)];
   const bounds = criteria({ teamsMin: 2, teamsMax: 3, totalMin: 270, totalMax: 280, slips: 1 });
-  assert.deepEqual(buildSlips(bounds, records, asOf).slips.map(fixtureIds), [['d', 'e']]);
+  const conservative = buildSlips(bounds, records, asOf);
+  assert.deepEqual(conservative.slips.map(fixtureIds), [['a', 'b', 'c']]);
+  assert.equal(conservative.jointProbabilities, undefined);
   const ranked = jointSlipBuilder(model)(bounds, records, asOf);
   assert.deepEqual(ranked.slips.map(fixtureIds), [['a', 'b', 'c']]); assert.equal(ranked.slips[0].totalOdds, '2.74');
   assert.ok(Math.abs(ranked.jointProbabilities[ranked.slips[0].id] - 0.85) <= Number.EPSILON * 6);

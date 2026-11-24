@@ -68,8 +68,11 @@ test('header progress follows matching live observations and a verified loss sti
   const states = slip.selections.map((selection) => ({ fixtureId: selection.fixtureId, family: selection.family,
     selection: selection.selection, status: 'scheduled', score: null, liveClock: null, outcome: 'pending' }));
   assert.deepEqual(slipHeaderState(slip, undefined, states), { outcome: 'pending', status: 'not-started' });
+  assert.deepEqual(slipHeaderState(slip, undefined, states, 'pending', 'not-started', true), { outcome: 'pending', status: 'pending' });
+  assert.deepEqual(slipHeaderState(slip, undefined, undefined, 'pending', 'not-started', true), { outcome: 'pending', status: 'pending' });
   const live = [{ ...states[0], status: 'live' }, ...states.slice(1)];
   assert.deepEqual(slipHeaderState(slip, undefined, live, 'pending', 'not-started'), { outcome: 'pending', status: 'in-progress' });
+  assert.deepEqual(slipHeaderState(slip, undefined, live, 'pending', 'not-started', true), { outcome: 'pending', status: 'in-progress' });
   const lost = [{ ...states[0], status: 'finished-regulation', outcome: 'incorrect' }, ...states.slice(1)];
   assert.deepEqual(slipHeaderState(slip, undefined, lost, 'pending', 'in-progress'), { outcome: 'lost', status: 'lost' });
 });

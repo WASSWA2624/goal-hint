@@ -94,13 +94,18 @@ export async function readFeaturedSlipSelections(tx: Prisma.TransactionClient, r
   return priced.filter((selection) => qualifiedEditorialSlipRevision(selection, revisions.get(selection.forecast.revisionId)));
 }
 
+export async function lockFeaturedSlipOdds(tx: Prisma.TransactionClient, fixtureIds: readonly string[]) {
+  if (!fixtureIds.length) return [];
+  return tx.$queryRaw<{ fixtureId: string }[]>(Prisma.sql`SELECT fixtureId FROM FixtureOddsState
+    WHERE fixtureId IN (${Prisma.join([...fixtureIds].sort())}) ORDER BY fixtureId LOCK IN SHARE MODE`);
+}
+
 /** The fixture locks are already held. Hold the current odds state through the publication commit. */
 export async function verifyFeaturedSlipOffers(tx: Prisma.TransactionClient, selections: readonly SlipSelection[], at: number,
   readQuotes = storedCurrentBookmakerQuotes) {
   if (!selections.length) return false;
-  const ids = [...new Set(selections.map(({ fixtureId }) => fixtureId))].sort();
-  const locked = await tx.$queryRaw<{ fixtureId: string }[]>(Prisma.sql`SELECT fixtureId FROM FixtureOddsState
-    WHERE fixtureId IN (${Prisma.join(ids)}) ORDER BY fixtureId LOCK IN SHARE MODE`);
+  const ids = [...new Set(selections.map(({ fixtureId }) => fixtureId))];
+  const locked = await lockFeaturedSlipOdds(tx, ids);
   if (locked.length !== ids.length) return false;
   const quotes = await readQuotes(tx, selections, at, localFeaturedBookmakerBetIds);
   return selections.every(({ fixtureId, kickoffAt, family, selection, offer }) => {

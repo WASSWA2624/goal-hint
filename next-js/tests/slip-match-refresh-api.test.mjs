@@ -110,6 +110,24 @@ test('successful missing observations explicitly clear stale current or replacem
   assert.deepEqual(data.states[0].forecast, leg.forecast);
 });
 
+test('Best Slips can refresh pre-match availability without changing personal polling', async () => {
+  const leg = watch();
+  const tx = { $queryRaw: async () => [{ at: new Date(at) }], $executeRaw: async () => 1,
+    rateLimitBucket: { findUniqueOrThrow: async () => ({ count: 1 }) } };
+  const database = { transaction: async operation => operation(tx) };
+  const config = { production: false, cookies: { session: 'owner' }, key: (purpose, value) => `${purpose}:${value}` };
+  const read = createStoredSlipMatchStates({ services: async () => ({ database, config }),
+    resolveResults: async (_tx, _selections, _asOf, { editorial }) => [{ ...leg,
+      status: editorial ? 'unknown' : 'scheduled', regulationVerified: false, regulationHome: null, regulationAway: null,
+      ...(editorial ? { preMatchUnavailable: true } : {}) }] });
+  const handler = createSlipMatchStatesHandler({ access: async () => full, read });
+  const published = await handler(request({ selections: [leg], editorial: true }));
+  assert.equal(published.status, 200);
+  assert.deepEqual((await published.json()).states, [state(leg, { status: 'unknown', score: null, liveClock: null, preMatchUnavailable: true })]);
+  const personal = await handler(request({ selections: [leg] }));
+  assert.deepEqual((await personal.json()).states, [state(leg, { status: 'scheduled', score: null, liveClock: null })]);
+});
+
 test('rate limits and malformed reader responses release no partial observations', async () => {
   let handler = createSlipMatchStatesHandler({ access: async () => full, read: async () => { throw new MatchFeedError('rate-limited', 25); } });
   let response = await handler(request()); assert.equal(response.status, 429);

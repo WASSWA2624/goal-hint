@@ -26,9 +26,14 @@ function sanitized(error: unknown): DatabaseOperationError {
   try {
     code = error !== null && typeof error === "object" && "code" in error ? error.code : null;
     if (code === "P2010" || code === "P2039") {
-      const cause = (error as { meta?: { driverAdapterError?: { cause?: { kind?: unknown; code?: unknown } } } }).meta?.driverAdapterError?.cause;
-      if (cause?.kind === "mysql" && cause.code === 1205) return new DatabaseOperationError("lock-timeout");
-      if (cause?.kind === "mysql" && cause.code === 1213) return new DatabaseOperationError("conflict");
+      const meta = (error as { meta?: { code?: unknown; driverAdapterError?: { cause?: {
+        kind?: unknown; code?: unknown; originalCode?: unknown;
+      } } } }).meta;
+      const cause = meta?.driverAdapterError?.cause;
+      const nativeCode = cause?.kind === "mysql" ? cause.code : cause?.originalCode ?? meta?.code;
+      if (nativeCode === 1205 || nativeCode === "1205") return new DatabaseOperationError("lock-timeout");
+      if (cause?.kind === "TransactionWriteConflict" || nativeCode === 1213 || nativeCode === "1213")
+        return new DatabaseOperationError("conflict");
     }
   } catch { return new DatabaseOperationError("failed"); }
   if (typeof code !== "string") return new DatabaseOperationError("failed");

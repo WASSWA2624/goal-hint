@@ -28,7 +28,7 @@ export const slipForecastReadRules = Object.freeze({
 });
 const fixtureSelect = { id: true, status: true, activeCycleId: true, kickoff: true, homeTeamId: true, awayTeamId: true,
   regulationHome: true, regulationAway: true, regulationVerifiedAt: true, regulationEvidenceRef: true,
-  lifecycleState: { select: { issue: true } }, resultState: { select: { resultId: true } } } as const;
+  lifecycleState: { select: { issue: true, actualStartedAt: true } }, resultState: { select: { resultId: true } } } as const;
 type Fixture = Prisma.FootballFixtureGetPayload<{ select: typeof fixtureSelect }>;
 
 const matchesGoalSource = (source: MarketSource | undefined, goalSource: SlipTotal15Forecast["source"]) =>
@@ -111,20 +111,37 @@ type HistoricalResult = Readonly<{ result: StoredFixtureResult | null; terminalV
 export function projectSlipForecastResult(selection: SlipMatchWatch, input: Readonly<{
   fixture: Fixture; cycle: StoredCycle | null; revision: StoredRevision | null; schedules: readonly CutoffSchedule[];
   goalExtension?: StoredGoalMarketExtension | null;
-  result: StoredFixtureResult | null; historical: HistoricalResult | null; asOf: number;
+  result: StoredFixtureResult | null; historical: HistoricalResult | null; asOf: number; editorial?: boolean;
 }>): SlipResult {
-  const { fixture, cycle, revision, asOf } = input;
-  const base = { ...emptyResult(selection), fixtureCompleted: isCompletedFixtureStatus(resultStatus.parse(fixture.status)) };
+  const { fixture, cycle, revision, asOf, editorial, result } = input;
+  const status = resultStatus.parse(fixture.status);
+  const sameOccurrence = fixture.activeCycleId === selection.forecast?.cycleId && fixture.homeTeamId === selection.homeTeam.id
+    && fixture.awayTeamId === selection.awayTeam.id;
+  const sameSchedule = sameOccurrence && fixture.kickoff?.getTime() === selection.kickoffAt && !fixture.lifecycleState?.issue;
+  const actualStart = fixture.lifecycleState?.actualStartedAt?.getTime();
+  // A replacement forecast cycle can follow a formally postponed occurrence of the same fixture.
+  const started = actualStart !== undefined && actualStart <= asOf && cycle !== null
+    && (cycle.ordinal === 1 || actualStart >= cycle.openedAt);
+  const preMatchUnavailable = editorial && (!sameSchedule || status !== "scheduled" || asOf >= selection.kickoffAt || started);
+  // An overdue scheduled feed row cannot confirm the current phase of the original occurrence.
+  const projectedStatus = preMatchUnavailable && status === "scheduled" ? "unknown" : status;
+  const base: SlipResult = { ...emptyResult(selection), fixtureCompleted: isCompletedFixtureStatus(status),
+    ...(preMatchUnavailable ? { preMatchUnavailable: true } : {}) };
   if (!selection.forecast || !cycle || cycle.id !== selection.forecast.cycleId || cycle.fixtureId !== selection.fixtureId ||
     cycle.openedAt > asOf || !slipRevisionMatches(selection, revision, input.goalExtension, asOf) || revision.publishedAt > asOf) return base;
   if (cycle.state === "void" && cycle.voidedAt !== null && cycle.voidedAt <= asOf) {
-    return { ...base, completed: true, cycleEligibility: cycleEligibilityFor(cycle) };
+    // A sealed original occurrence supplies the match phase, not a bookmaker payout decision.
+    const originalStatus = editorial && cycle.voidReason === "fixture-canceled" ? "canceled"
+      : editorial && cycle.voidReason === "formal-postponement" ? "postponed" : "unknown";
+    return { ...base, status: originalStatus, completed: true, cycleEligibility: cycleEligibilityFor(cycle),
+      ...(editorial ? { preMatchUnavailable: true } : {}) };
   }
+  const coherent = result !== null && result.observedAt <= asOf && result.fixtureId === fixture.id &&
+    fixtureResultMatchesCanonical(fixture, result, fixture.lifecycleState?.issue ?? null);
   if (cycle.state === "open") {
-    return fixture.activeCycleId === cycle.id && fixture.status === "scheduled" && !fixture.lifecycleState?.issue
-      && fixture.kickoff?.getTime() === selection.kickoffAt && fixture.homeTeamId === selection.homeTeam.id
-      && fixture.awayTeamId === selection.awayTeam.id
-      ? resultProjection(base, "scheduled", null, false) : base;
+    if (editorial && sameOccurrence && (status === "live" || status === "canceled" || status === "postponed"))
+      return resultProjection(base, status, coherent ? result : null, false);
+    return sameSchedule && status === "scheduled" ? resultProjection(base, projectedStatus, null, false) : base;
   }
   if (cycle.state !== "closed" || cycle.closedAt === null || cycle.closedAt > asOf) return base;
   const cutoff = reconstructCutoff(cycle, input.schedules, utcInstantFromEpochMilliseconds(asOf), cycle.closedAt);
@@ -137,10 +154,7 @@ export function projectSlipForecastResult(selection: SlipMatchWatch, input: Read
     return result && result.observedAt <= asOf && isPlayedFinalStatus(result.status)
       ? resultProjection(base, result.status, result, true) : { ...base, completed: input.historical?.completed === true };
   }
-  const status = resultStatus.parse(fixture.status), result = input.result;
-  const coherent = result !== null && result.observedAt <= asOf && result.fixtureId === fixture.id &&
-    fixtureResultMatchesCanonical(fixture, result, fixture.lifecycleState?.issue ?? null);
-  return resultProjection(base, status, coherent ? result : null, slipCompletedStatuses.includes(status));
+  return resultProjection(base, projectedStatus, coherent ? result : null, slipCompletedStatuses.includes(status));
 }
 
 /** An extended goals pick follows its original cycle if the fixture was rescheduled. */
@@ -275,7 +289,8 @@ async function prefetchForecasts(tx: Tx, cycleIds: readonly string[], revisionId
 }
 
 /** Batch current result reads; per-original-cycle caches prevent one query per repeated slip leg. */
-export async function readSlipForecastResults(tx: Tx, selections: readonly SlipMatchWatch[], asOf: number): Promise<readonly SlipResult[]> {
+export async function readSlipForecastResults(tx: Tx, selections: readonly SlipMatchWatch[], asOf: number,
+  { editorial = false }: { editorial?: boolean } = {}): Promise<readonly SlipResult[]> {
   utcInstantFromEpochMilliseconds(asOf);
   if (selections.length > slipForecastReadRules.maximumSelections) return historyFail("invalid-request");
   const fixtureIds = [...new Set(selections.map((selection) => selection.fixtureId))];
@@ -321,7 +336,7 @@ export async function readSlipForecastResults(tx: Tx, selections: readonly SlipM
     }
     projected.push(projectSlipForecastResult(selection, { fixture, cycle, revision: revisions.get(reference.revisionId) ?? null,
       goalExtension: goalExtensions.get(reference.revisionId) ?? null,
-      schedules: schedules.get(reference.cycleId) ?? [], result, historical: history.get(key) ?? null, asOf }));
+      schedules: schedules.get(reference.cycleId) ?? [], result, historical: history.get(key) ?? null, asOf, editorial }));
   }
   return projected;
 }

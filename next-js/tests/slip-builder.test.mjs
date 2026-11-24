@@ -360,15 +360,24 @@ for (const [parameters, code] of [
   });
 }
 
-test('ranks fewer picks before average probability, then exact total odds', () => {
+test('ranks the conservative whole-slip bound first across lengths, then exact odds', () => {
   const result = buildSlips(criteria({ teamsMin: 2, teamsMax: 3, totalMin: 400, totalMax: 600, slips: 2 }), [
     record('a', '2.10', 0.71), record('b', '2.10', 0.71), record('c', '1.70', 0.99), record('d', '1.70', 0.99), record('e', '1.70', 0.99),
   ], asOf);
-  assert.deepEqual(result.slips.map(fixtureIds), [['a', 'b'], ['c', 'd', 'e']]);
-  assert.equal(result.slips[0].totalOdds, '4.41'); assert.equal(result.slips[1].totalOdds, '4.91');
+  assert.deepEqual(result.slips.map(fixtureIds), [['c', 'd', 'e'], ['a', 'b']]);
+  assert.equal(result.slips[0].totalOdds, '4.91'); assert.equal(result.slips[1].totalOdds, '4.41');
   assert.equal(result.searchLimited, false);
   const singles = buildSlips(criteria({ teamsMax: 1, slips: 3 }), [record('a', '1.50'), record('b', '3.00'), record('c', '2.00')], asOf);
   assert.deepEqual(singles.slips.map(fixtureIds), [['b'], ['c'], ['a']]);
+});
+
+test('a higher bound outranks a higher independence product and remains an internal ranking value', () => {
+  const result = buildSlips(criteria({ teamsMin: 2, teamsMax: 2, totalMin: 269, totalMax: 271 }), [
+    record('a', '1.33', 0.99), record('b', '2.03', 0.75), record('c', '1.64', 0.865), record('d', '1.65', 0.865),
+  ], asOf);
+  assert.deepEqual(result.slips.map(fixtureIds), [['a', 'b'], ['c', 'd']]);
+  assert.equal('jointProbabilities' in result, false);
+  assert.equal('probabilityLowerBound' in result.slips[0], false);
 });
 
 test('averages the selected forecasts, without presenting the accumulator product as probability', () => {

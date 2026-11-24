@@ -1,4 +1,7 @@
-import { defaultSlipCriteria, buildSlips, type BuiltSlip, type EditorialSlipSearch, type SlipCriteria, type SlipSelection } from "./slip-builder.ts";
+import { defaultSlipCriteria, buildSlips, slipCombinationIdentity as bestSlipCombinationIdentity,
+  type BuiltSlip, type EditorialSlipSearch, type SlipCriteria, type SlipSelection } from "./slip-builder.ts";
+export { bestSlipCombinationIdentity };
+export { slipSelectionIdentity as bestSlipSelectionIdentity } from "./slip-builder.ts";
 import { oddsRules, parseDecimalOdds } from "./odds.ts";
 import { jointSlipBuilder, jointSlipRanking, qualifiedJointModel, type JointSlipModel } from "./joint-slip-model.ts";
 export { jointSlipProbability, qualifiedJointModel, type JointSlipModel } from "./joint-slip-model.ts";
@@ -13,6 +16,8 @@ import type { CardSnapshotPick } from "./match-card.ts";
 import type { PeriodPerformance } from "./browse-period.ts";
 import type { ContentAccess } from "./paywall.ts";
 import { bestSlipBand, bestSlipBandLimit, bestSlipExactRange, bestSlipOddsBands, dailyBestSlipBandLimit, defaultBestSlipOddsBand, type BestSlipOddsBand } from "./best-slip-odds-bands.ts";
+import { bestSlipKickoffBufferMs, bestSlipPreferredKickoffWindowMs } from "./best-slip-publication-hour.ts";
+import { slipProbabilityLowerBound } from "./slip-probability.ts";
 
 export const bestSlipsRules = Object.freeze({ minimumTotal: bestSlipBand().minimumTotal, maximumTotal: bestSlipBand().maximumTotal,
   count: bestSlipOddsBands.length * bestSlipBandLimit, perBand: dailyBestSlipBandLimit });
@@ -24,21 +29,14 @@ export function bestSlipExactTotal(selections: readonly SlipSelection[]) {
   return { product, denominator };
 }
 
-export function bestSlipSelectionIdentity({ fixtureId, family, selection }: SlipSelection): string {
-  return `${fixtureId}:${family}:${selection}`;
-}
-
-export function bestSlipCombinationIdentity(selections: readonly SlipSelection[]): string {
-  return selections.map(bestSlipSelectionIdentity).sort().join("|");
-}
-
-function compareBestSlipPrices(left: BuiltSlip, right: BuiltSlip, a: ReturnType<typeof bestSlipExactTotal>, b: ReturnType<typeof bestSlipExactTotal>) {
+function compareBestSlipPrices(a: ReturnType<typeof bestSlipExactTotal>, b: ReturnType<typeof bestSlipExactTotal>) {
   const price = b.product * a.denominator - a.product * b.denominator;
-  return (price > 0n ? 1 : price < 0n ? -1 : 0) || left.selections.length - right.selections.length || left.id.localeCompare(right.id);
+  return price > 0n ? 1 : price < 0n ? -1 : 0;
 }
 export function compareBestSlips(left: BestSlip, right: BestSlip): number {
   return right.estimatedProbability - left.estimatedProbability ||
-    compareBestSlipPrices(left, right, bestSlipExactTotal(left.selections), bestSlipExactTotal(right.selections));
+    compareBestSlipPrices(bestSlipExactTotal(left.selections), bestSlipExactTotal(right.selections))
+    || left.selections.length - right.selections.length || left.id.localeCompare(right.id);
 }
 export type BestSlipSummary = Readonly<{
   rank: number; totalOdds: string; estimatedProbability: number; averageProbability: number; matchCount: number;
@@ -98,18 +96,28 @@ function cachedPriceOrder() {
     prices.set(slip, price);
     return price;
   };
-  return (left: BuiltSlip, right: BuiltSlip) => compareBestSlipPrices(left, right, exactPrice(left), exactPrice(right));
+  return (left: BuiltSlip, right: BuiltSlip) => compareBestSlipPrices(exactPrice(left), exactPrice(right));
 }
 
-/** Rank distinct odds-guide slips by their stored individual picks and exact combined odds. */
+/** The union bound gives a joint lower bound without assuming independent selections. */
 export function buildHourlyBestSlips(day: ReportingDate, band: BestSlipOddsBand, capacity: number, asOf: number,
-  editorial: Omit<EditorialSlipSearch, "exclusiveMaximum" | "combinationIdentity">, priorCombinations: ReadonlySet<string>) {
+  editorial: Omit<EditorialSlipSearch, "exclusiveMaximum" | "combinationIdentity">, priorCombinations: ReadonlySet<string>,
+  preferredKickoffWindowMs = bestSlipPreferredKickoffWindowMs) {
   const comparePrice = cachedPriceOrder();
-  const compare = (left: BuiltSlip, right: BuiltSlip) => right.averageProbability - left.averageProbability || comparePrice(left, right);
-  const result = buildSlips({ ...bestSlipDailyCriteria(day, band), slips: capacity, reuse: true }, [], asOf, {
-    accepts: (slip) => !priorCombinations.has(bestSlipCombinationIdentity(slip.selections)),
+  const earliestKickoff = (slip: BuiltSlip) => Math.min(...slip.selections.map(({ kickoffAt }) => kickoffAt));
+  const cohesive = (slip: BuiltSlip) => Math.max(...slip.selections.map(({ kickoffAt }) => kickoffAt)) - earliestKickoff(slip) <= preferredKickoffWindowMs;
+  const lowerBound = (slip: BuiltSlip) => slipProbabilityLowerBound(slip.averageProbability * slip.selections.length, slip.selections.length);
+  const bestAvailable = editorial.selections.filter(({ fixtureId, kickoffAt }) => !editorial.priorFixtures?.has(fixtureId)
+    && kickoffAt - asOf >= bestSlipKickoffBufferMs);
+  const compare = (left: BuiltSlip, right: BuiltSlip) => lowerBound(right) - lowerBound(left)
+    || right.averageProbability - left.averageProbability || comparePrice(left, right)
+    || left.selections.length - right.selections.length || Number(cohesive(right)) - Number(cohesive(left)) || left.id.localeCompare(right.id);
+  const result = buildSlips({ ...bestSlipDailyCriteria(day, band), slips: capacity }, [], asOf, {
+    // Let a later check consider far-out combinations when at least one leg enters the release window.
+    accepts: (slip) => earliestKickoff(slip) - asOf <= preferredKickoffWindowMs && !priorCombinations.has(bestSlipCombinationIdentity(slip.selections)),
     compare,
-  }, { editorial: { ...editorial, combinationIdentity: bestSlipCombinationIdentity, exclusiveMaximum: bestSlipExactRange(band).exclusiveMaximum } });
+  }, { editorial: { ...editorial, selections: bestAvailable, prioritizeRank: true,
+    combinationIdentity: bestSlipCombinationIdentity, exclusiveMaximum: bestSlipExactRange(band).exclusiveMaximum } });
   return { ...result, slips: [...result.slips].sort(compare) };
 }
 
@@ -121,7 +129,8 @@ export function buildDailyBestSlips(day: ReportingDate, band: BestSlipOddsBand, 
   const result = buildSlips(bestSlipDailyCriteria(day, band), [], asOf, {
     probability: joint.probability,
     accepts: (slip) => !priorCombinations.has(bestSlipCombinationIdentity(slip.selections)) && joint.ranking.accepts(slip),
-    compare: (left, right) => joint.probability(right)! - joint.probability(left)! || comparePrice(left, right),
+    compare: (left, right) => joint.probability(right)! - joint.probability(left)! || comparePrice(left, right)
+      || left.selections.length - right.selections.length || left.id.localeCompare(right.id),
   }, { editorial: { ...editorial, combinationIdentity: bestSlipCombinationIdentity, exclusiveMaximum: bestSlipExactRange(band).exclusiveMaximum } });
   return { ...result, excludedUnestimated: joint.unestimated(), slips: result.slips.map((slip): BestSlip =>
     ({ ...slip, estimatedProbability: result.jointProbabilities![slip.id]! })) };

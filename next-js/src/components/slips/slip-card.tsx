@@ -28,14 +28,15 @@ export type SlipCardProps = {
   slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number; wholeSlipProbability?: number | undefined;
   results?: SlipResultView["results"]; matchStates?: readonly SlipMatchState[];
   publicShareHref?: string; shareSource?: ShareSlipSource; sharedSlip?: SharedSlip; initiallyOpen?: boolean; outcome?: SlipResultView["outcome"]; status?: SlipStatus;
+  preMatchExpired?: boolean;
 } & SlipHeaderPublication;
 
 /** The shared production slip card for Best Slips, the builder, history and shared snapshots. */
 export const SlipCard = memo(function SlipCard({ slip, index, locale, wholeSlipProbability, results, matchStates, shareSource, sharedSlip, initiallyOpen = true, publicShareHref,
-  publicationDay, publishedAt, outcome, status }: SlipCardProps) {
+  publicationDay, publishedAt, outcome, status, preMatchExpired }: SlipCardProps) {
   const desktop = useDesktopLayout();
   const publication = { ...(publicationDay ? { publicationDay } : {}), ...(publishedAt !== undefined ? { publishedAt } : {}),
-    ...(outcome ? { outcome } : {}), ...(status ? { status } : {}) };
+    ...(outcome ? { outcome } : {}), ...(status ? { status } : {}), ...(preMatchExpired ? { preMatchExpired } : {}) };
   if (desktop) return <DesktopSlip slip={slip} index={index} locale={locale} initiallyOpen={initiallyOpen} estimatedProbability={wholeSlipProbability}
     {...publication} {...(publicShareHref ? { publicShareHref } : {})}
     {...(shareSource ? { shareSource } : {})} {...(sharedSlip ? { sharedSlip } : {})} {...(results ? { results } : {})}

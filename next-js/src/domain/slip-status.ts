@@ -6,7 +6,7 @@ import { slipMatchStateForSelection, type SlipMatchState } from "./slip-match-st
 /** Presentation progress is separate from settled wager outcomes. Pending means progress is not known. */
 export type SlipStatus = "not-started" | "in-progress" | "pending" | "won" | "lost" | "void" | "cancelled";
 
-/** Uses recorded original-selection progress and a separately adjudicated outcome; no clock or score settles a slip. */
+/** Uses recorded original-selection progress and separately adjudicated outcomes. */
 export function slipStatus(slip: BuiltSlip, states: readonly SlipMatchState[] = [],
   outcome: SlipResultView["outcome"] = "pending", fallback?: SlipStatus): SlipStatus {
   const legs = slip.selections.map((selection) => slipMatchStateForSelection(selection, states));
@@ -16,7 +16,8 @@ export function slipStatus(slip: BuiltSlip, states: readonly SlipMatchState[] = 
       || !legs.some(Boolean) && fallback === "cancelled" ? "cancelled" : "void";
   }
   if (legs.some((leg) => leg && (leg.status === "live" || isPlayedFinalStatus(leg.status) || leg.status === "abandoned"))) return "in-progress";
-  if (legs.length > 0 && legs.every((leg) => leg?.status === "scheduled" || leg?.status === "canceled" && leg.outcome === "void")) return "not-started";
+  if (legs.length > 0 && legs.every((leg) => !leg?.preMatchUnavailable
+    && (leg?.status === "scheduled" || leg?.status === "canceled" && leg.outcome === "void"))) return "not-started";
   return !legs.some(Boolean) && (fallback === "not-started" || fallback === "in-progress") ? fallback : "pending";
 }
 

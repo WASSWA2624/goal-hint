@@ -57,7 +57,8 @@ export function BestSlips({ result, locale, signedIn = false }: { result: SlipsB
       <TextLink href={matchesHref(locale)} prefetch={false}>{m.text("bestSlips.browseMatches")}</TextLink>
     </Stack></CriteriaPanel> : <>
       {(content.searchLimited || content.partialCoverage) && <Note role="status">{m.text("bestSlips.partial")}</Note>}
-      <SlipMatchRefreshProvider slips={watchedSlips} initialStates={initialStates} enabled={desktop && browse.entitled} onAccessRevoked={browse.revokeAccess}>
+      <SlipMatchRefreshProvider slips={watchedSlips} initialStates={initialStates} enabled={desktop && browse.entitled} editorial onAccessRevoked={browse.revokeAccess}
+        {...(content.summary?.asOf !== undefined ? { initialAsOf: content.summary.asOf } : {})}>
       <div ref={root} tabIndex={-1} aria-busy={browse.updating}><SlipList data-slip-list>{content.slips.map(view => <div key={slipViewKey(view)} data-slip-key={slipViewKey(view)}>
         <MemoBestSlipCard view={view} day={content.day} locale={locale} signedIn={content.access?.signedIn ?? signedIn} />
       </div>)}</SlipList></div>

@@ -28,7 +28,7 @@ const unknownState = (watch: SlipMatchWatch): SlipMatchState => ({
 export function createStoredSlipMatchStates({ services = getAnalyticsServices, resolveResults = readSlipForecastResults }: {
   services?: () => Promise<Pick<AnalyticsServices, "database" | "config">>; resolveResults?: typeof readSlipForecastResults;
 } = {}) {
-  return async (input: readonly SlipMatchWatch[], request: Request, access?: ViewerAccess): Promise<SlipMatchRefreshResponse> => {
+  return async (input: readonly SlipMatchWatch[], request: Request, access?: ViewerAccess, editorial = false): Promise<SlipMatchRefreshResponse> => {
     const watches = uniqueSlipMatchWatches(slipMatchRefreshRequestSchema.parse({ selections: input }).selections as readonly SlipMatchWatch[]);
     const { database, config } = await services();
     if (!database) throw new MatchFeedError("unavailable");
@@ -52,14 +52,14 @@ export function createStoredSlipMatchStates({ services = getAnalyticsServices, r
       }
       // Unbound legacy snapshots cannot establish the original cycle and never inherit a current replacement.
       const bound = watches.filter((watch) => watch.forecast !== undefined);
-      const results = bound.length ? await resolveResults(tx, bound, asOf) : [];
+      const results = bound.length ? await resolveResults(tx, bound, asOf, { editorial }) : [];
       const states = slipMatchStatesFromResults(bound, results);
       return { states: watches.map((watch) => slipMatchStateForSelection(watch, states) ?? unknownState(watch)), asOf };
     }, { isolationLevel: "RepeatableRead", timeout: 10_000 });
   };
 }
 
-type StateReader = (selections: readonly SlipMatchWatch[], request: Request, access: ViewerAccess) => Promise<SlipMatchRefreshResponse>;
+type StateReader = (selections: readonly SlipMatchWatch[], request: Request, access: ViewerAccess, editorial?: boolean) => Promise<SlipMatchRefreshResponse>;
 
 /** Access is checked before storage and again before releasing any original-selection observation. */
 export function createSlipMatchStatesHandler({ access = viewerAccessFromRequest, read = createStoredSlipMatchStates() }: {
@@ -82,7 +82,7 @@ export function createSlipMatchStatesHandler({ access = viewerAccessFromRequest,
       const parsed = slipMatchRefreshRequestSchema.safeParse(body);
       if (!parsed.success) return json({ error: "invalid-request" }, 400, privateMatchHeaders);
       const selections = uniqueSlipMatchWatches(parsed.data.selections as readonly SlipMatchWatch[]);
-      const response = await read(selections, request, viewer);
+      const response = await read(selections, request, viewer, parsed.data.editorial);
       if ((await access(request)).tier !== "full") return json({ error: "subscription-required" }, 403, privateMatchHeaders);
       const validated = slipMatchRefreshResponseSchema.parse(response);
       // A reader can only release observations for exactly the submitted original identities.

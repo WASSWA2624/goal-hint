@@ -1,5 +1,10 @@
 import type { SlipSelection } from "./slip-builder.ts";
 
+/** Fréchet lower bound for all selections winning, without assuming independence. */
+export function slipProbabilityLowerBound(sumOfProbabilities: number, selectionCount: number): number {
+  return Math.max(0, sumOfProbabilities - (selectionCount - 1));
+}
+
 /** Chance of every selected prediction winning, assuming independent matches. Keep source precision until display. */
 export function independentSlipProbability(selections: readonly Pick<SlipSelection, "probability">[]): number | null {
   if (selections.length === 0) return null;

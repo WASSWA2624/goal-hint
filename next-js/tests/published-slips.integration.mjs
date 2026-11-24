@@ -20,12 +20,14 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
   t.after(() => f.close());
   const { root, database } = f;
   await root.query(`CREATE TABLE FootballFixture (id CHAR(36) PRIMARY KEY) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+    CREATE TABLE FixtureOddsState (fixtureId CHAR(36) PRIMARY KEY) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
     CREATE TABLE PredictionSet (id CHAR(36) NOT NULL, cycleId CHAR(36) NOT NULL, fixtureId CHAR(36) NOT NULL,
       PRIMARY KEY(id), UNIQUE KEY(id,cycleId,fixtureId)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;`);
   for (const name of ['20261021110000_saved_slips','20261025113516_daily_slip_publications','20261028130000_daily_slip_capacity','20261029180000_shared_slips']) await root.query(await migration(name));
   // Read an epoch to keep the raw connector's host-local DATETIME decoding out of the EAT clock.
-  const at = Number((await root.query('SELECT UNIX_TIMESTAMP(UTC_TIMESTAMP(3))*1000 AS epoch'))[0].epoch);
-  const day = getReportingDate(utcInstantFromEpochMilliseconds(at)), yesterday = addReportingDays(day,-1);
+  const realAt = Number((await root.query('SELECT UNIX_TIMESTAMP(UTC_TIMESTAMP(3))*1000 AS epoch'))[0].epoch);
+  const day = getReportingDate(utcInstantFromEpochMilliseconds(realAt)), yesterday = addReportingDays(day,-1);
+  const at = Date.parse(`${day}T10:35:00Z`);
   const fixtureId = randomUUID(), cycleId = randomUUID(), revisionId = randomUUID(), accountId = randomUUID();
   await root.query('INSERT INTO FootballFixture(id) VALUES (?)', [fixtureId]);
   await root.query('INSERT INTO PredictionSet(id,cycleId,fixtureId) VALUES (?,?,?)', [revisionId,cycleId,fixtureId]);
@@ -53,6 +55,7 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
   await root.query(await migration('20261104090000_six_best_slip_odds_bands'));
   await root.query(await migration('20261122180000_daily_best_slip_combinations'));
   await root.query(await migration('20261122190000_hourly_best_slip_appends'));
+  await root.query(await migration('20261124120000_half_hour_best_slip_appends'));
   assert.deepEqual(await root.query('SELECT bodyJson,integrity FROM DailySlipPublication'),before);
   assert.equal((await root.query("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('SavedSlip','SavedSlipFixture')")).length,0);
   assert.equal(await database.query(tx=>tx.slipConfiguration.count()),1);
@@ -60,12 +63,20 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
   assert.equal(publicLinks[0].snapshotJson.id,slip.id);
   for (const table of ['DailySlipPublication','PublishedSlip','PublishedSlipLeg','DailyBestSlipCombination','DailyBestSlipAppendBatch','SharedSlip']) await root.query(`GRANT SELECT, INSERT ON goal_hint_test.${table} TO 'paid_application'@'127.0.0.1'`);
   await root.query("GRANT SELECT ON goal_hint_test.FootballFixture TO 'paid_application'@'127.0.0.1'");
-  const store=createPublishedSlips(database,{bindForecasts:async(_tx,value)=>value, verifyOffers:async()=>true,
+  await root.query("GRANT SELECT ON goal_hint_test.FixtureOddsState TO 'paid_application'@'127.0.0.1'");
+  // Keep the genuine transactions and role, with a deterministic database clock inside a :30 slot.
+  const clockedDatabase = { transaction: (run, options) => database.transaction(tx => run(new Proxy(tx, {
+    get(target, key, receiver) {
+      if (key === '$queryRaw') return (query, ...values) => Array.isArray(query) && query.join('').includes('UTC_TIMESTAMP(3) AS at')
+        ? Promise.resolve([{ at: new Date(at) }]) : target.$queryRaw(query, ...values);
+      return Reflect.get(target, key, receiver);
+    },
+  })), options) };
+  const store=createPublishedSlips(clockedDatabase,{bindForecasts:async(_tx,value)=>value, verifyOffers:async()=>true,
     resolveResults:async(_tx,selections)=>selections.map(selection=>({...selection,completed:true,status:'finished-regulation',regulationVerified:true,regulationHome:0,regulationAway:1}))});
   assert.equal((await store.day(yesterday)).slips[0].id,rowId); assert.deepEqual(await store.publishedBands(yesterday),['legacy']);
   for(const table of ['DailySlipPublication','PublishedSlip','PublishedSlipLeg','SharedSlip']) await assert.rejects(root.query(`DELETE FROM ${table}`),/append-only|permanent/);
   const kickoffAt=Date.parse(`${day}T20:59:00Z`);
-  if(kickoffAt-at<600000){t.diagnostic('Cleanup and legacy checks passed; live publication skipped at the EAT day cutoff.');return;}
   const probability = 0.68;
   const current={...slip,averageProbability:probability,estimatedProbability:probability,
     selections:[pricedEditorialSelection(1,{odds:'4.00',kickoffAt,at,fixtureId,cycleId,revisionId,probability})]};
@@ -85,7 +96,7 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
   await assert.rejects(() => store.publish({...input,oddsBand:'5-10',slips:[high]}));
   assert.equal((await store.day(day,false,'5-10')).slips.length,0);
 
-  const lateAt = Number((await root.query('SELECT UNIX_TIMESTAMP(UTC_TIMESTAMP(3))*1000 AS epoch'))[0].epoch);
+  const lateAt = at;
   const appendClock = bestSlipPublicationHour(lateAt);
   const additional = { fixtureId: randomUUID(), cycleId: randomUUID(), revisionId: randomUUID() };
   await root.query('INSERT INTO FootballFixture(id) VALUES (?)', [additional.fixtureId]);
@@ -93,10 +104,6 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
     [additional.revisionId, additional.cycleId, additional.fixtureId]);
   const additionalSlip = { ...slip, id: 'model-free-editorial', averageProbability: probability,
     selections: [pricedEditorialSelection(3, { odds: '4.00', kickoffAt, at: lateAt, ...additional, probability })] };
-  if (appendClock.day !== day || appendClock.nextAt - lateAt < 15_000) {
-    t.diagnostic('Legacy integration checks passed; hourly write would cross a real hour boundary.');
-    return;
-  }
   const hourly = { day, oddsBand: '1.5-5', hourAt: appendClock.hourAt, slips: [additionalSlip],
     verifyPublicOdds: () => true, searchLimited: false, partialCoverage: false };
   const raced = await Promise.all([store.append(hourly), store.append(hourly)]);
@@ -106,6 +113,21 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
   assert.deepEqual(entries.map(({ rank, estimatedProbability }) => [rank, estimatedProbability]), [[1, 0.68], [2, undefined]]);
   assert.equal(await database.query(tx => tx.dailyBestSlipAppendBatch.count()), 1);
   assert.equal((await store.hourlyState(day)).counts.get('1.5-5'), 2);
+  assert.equal(new Date(appendClock.hourAt).getUTCMinutes(), 30);
+
+  const shared = { fixtureId: randomUUID(), cycleId: randomUUID(), revisionId: randomUUID() };
+  await root.query('INSERT INTO FootballFixture(id) VALUES (?)', [shared.fixtureId]);
+  await root.query('INSERT INTO PredictionSet(id,cycleId,fixtureId) VALUES (?,?,?)', [shared.revisionId, shared.cycleId, shared.fixtureId]);
+  const claim = (oddsBand, odds, family, selection) => ({ ...hourly, oddsBand, slips: [{ ...additionalSlip, totalOdds: odds,
+    selections: [{ ...pricedEditorialSelection(4, { odds, kickoffAt, at, ...shared, probability }), family, selection }] }] });
+  const claims = [claim('5-10', '7.00', 'match-result', 'home-win'), claim('10-20', '17.00', 'total-goals', 'over-2.5')];
+  assert.deepEqual((await Promise.all(claims.map(input => store.append(input)))).map(({ status }) => status).sort(),
+    ['no-qualifying', 'published']);
+  assert.deepEqual((await Promise.all(claims.map(input => store.append(input)))).map(({ status }) => status).sort(),
+    ['already-published', 'no-qualifying']);
+  assert.equal((await root.query('SELECT fixtureId FROM PublishedSlipLeg WHERE fixtureId=?', [shared.fixtureId])).length, 1);
+  assert.equal(await database.query(tx => tx.dailyBestSlipAppendBatch.count()), 2);
+
   await assert.rejects(root.query('DELETE FROM DailyBestSlipAppendBatch'), /batches are immutable/u);
   await assert.rejects(root.query('DELETE FROM DailyBestSlipCombination'), /membership is immutable/u);
   await assert.rejects(root.query(`INSERT INTO DailySlipPublication(id,eatDate,oddsBand,publishedAt,modelId,bodyJson,integrity)

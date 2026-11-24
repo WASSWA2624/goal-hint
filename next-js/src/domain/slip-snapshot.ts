@@ -52,6 +52,8 @@ export type SlipResult = Readonly<{
   completed?: boolean;
   /** Current canonical fixture completion, independent of adjudication of an older prediction cycle. */
   fixtureCompleted?: boolean;
+  /** The current published selection cannot be recommended before the match. */
+  preMatchUnavailable?: true;
   cycleEligibility?: CycleEligibility;
   /** Validated current/original-cycle presentation facts; never part of the persisted slip. */
   progress?: SlipMatchProgress;
@@ -97,6 +99,7 @@ export function slipSnapshotStatus(slip: BuiltSlip, results: readonly SlipResult
     const result = matchingSlipResult(selection, results);
     return result ? [{ fixtureId: selection.fixtureId, family: selection.family, selection: selection.selection,
       ...(selection.forecast ? { forecast: selection.forecast } : {}), status: result.status, score: null, liveClock: null,
+      ...(result.preMatchUnavailable ? { preMatchUnavailable: true as const } : {}),
       outcome: legs[index]?.outcome ?? "pending" as const }] : [];
   });
   return slipStatus(slip, states, outcome);

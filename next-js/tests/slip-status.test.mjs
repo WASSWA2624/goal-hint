@@ -46,6 +46,7 @@ test('all cancelled original selections are distinguished from mixed void outcom
   assert.equal(slipStatus(slip, [state(0, 'canceled', 'void'), state(1, 'finished-regulation', 'correct')], 'void'), 'void');
   assert.equal(slipStatus(slip, [state(0, 'abandoned', 'void'), state(1, 'canceled', 'void')], 'void'), 'void');
   assert.equal(slipStatus(slip, [state(0, 'canceled', 'void'), state(1, 'scheduled')]), 'not-started');
+  assert.equal(slipStatus(slip, [{ ...state(0, 'canceled', 'void'), preMatchUnavailable: true }, state(1, 'scheduled')]), 'pending');
   assert.equal(slipStatus(slip, [state(0, 'canceled'), state(1, 'canceled')]), 'pending');
 });
 

@@ -18,7 +18,8 @@ export function slipHeaderOutcome(slip: BuiltSlip, results?: SlipResultView["res
 
 /** Presentation progress follows the same observations and original-selection binding as the settled result. */
 export function slipHeaderState(slip: BuiltSlip, results?: SlipResultView["results"], states?: readonly SlipMatchState[],
-  fallbackOutcome: SlipResultView["outcome"] = "pending", fallbackStatus?: SlipStatus) {
+  fallbackOutcome: SlipResultView["outcome"] = "pending", fallbackStatus?: SlipStatus, preMatchExpired = false) {
   const outcome = slipHeaderOutcome(slip, results, states, fallbackOutcome);
-  return { outcome, status: slipStatus(slip, states, outcome, fallbackStatus) };
+  const status = slipStatus(slip, states, outcome, fallbackStatus);
+  return { outcome, status: preMatchExpired && status === "not-started" ? "pending" as const : status };
 }

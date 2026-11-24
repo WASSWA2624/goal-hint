@@ -2,9 +2,9 @@ import "server-only";
 
 import { setTimeout as sleep } from "node:timers/promises";
 import { bestSlipOddsBands, dailyBestSlipBandLimit, type BestSlipOddsBand } from "../../domain/best-slip-odds-bands.ts";
-import { bestSlipPublicationHour } from "../../domain/best-slip-publication-hour.ts";
+import { bestSlipKickoffBufferMs, bestSlipPreferredKickoffWindowMs, bestSlipPublicationHour } from "../../domain/best-slip-publication-hour.ts";
 import { bestSlipCombinationIdentity, buildHourlyBestSlips } from "../../domain/best-slips.ts";
-import { getPublicationDeadline, getReportingDayBounds, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { getReportingDayBounds, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { feedQueryRules } from "../../domain/feed-query.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
@@ -19,11 +19,14 @@ export type DailySlipPublicationResult = Readonly<{ day: string; status:
 
 /** Read one stored same-day cohort, and append only newly validated combination identities. */
 export function createDailySlipPublisher({ database, competitionIds, verifyPublicOdds, providerOdds = true, now = Date.now, read,
+  preferredKickoffWindowMs = bestSlipPreferredKickoffWindowMs,
   store = createPublishedSlips(database) }: Readonly<{
   database: DatabaseRuntime; competitionIds: readonly number[]; verifyPublicOdds: () => boolean;
-  providerOdds?: boolean; now?: () => number; read?: SlipCohortReader;
+  providerOdds?: boolean; now?: () => number; read?: SlipCohortReader; preferredKickoffWindowMs?: number;
   store?: Pick<ReturnType<typeof createPublishedSlips>, "hourlyState" | "append">;
 }>) {
+  if (!Number.isSafeInteger(preferredKickoffWindowMs) || preferredKickoffWindowMs < bestSlipKickoffBufferMs)
+    throw new RangeError("Invalid automatic slip kickoff window.");
   const oddsEnabled = () => providerOdds && provenTrue(verifyPublicOdds);
   const storedRead = read ?? createStoredSlipCohort({ database: () => database, competitionIds: () => competitionIds, providerOdds });
   return Object.freeze({
@@ -45,13 +48,14 @@ export function createDailySlipPublisher({ database, competitionIds, verifyPubli
       if (!openBands.length) return { day, status: "already-published", dayComplete: dayComplete() };
 
       const cohort = await storedRead(new URLSearchParams({ from: day, to: day, status: "scheduled", market: publicPolicy.markets.join(","),
-        sort: "probability", dir: "desc", pageSize: String(feedQueryRules.maximumPageSize) }), { featured: true }, { now: () => asOf });
+        sort: "probability", dir: "desc", pageSize: String(feedQueryRules.maximumPageSize) }),
+      { featured: true, minimumKickoffLeadMs: bestSlipKickoffBufferMs }, { now: () => asOf });
       if (cohort.today !== day || cohort.range.from !== day || cohort.range.to !== day || cohort.asOf !== asOf || !cohort.featuredSelections)
         return { day, status: "unavailable" };
       const { featuredSelections } = cohort;
-      const unexpired = (at: number) => featuredSelections.filter(({ kickoffAt }) =>
-        at < getPublicationDeadline(utcInstantFromEpochMilliseconds(kickoffAt)));
-      const eligibleSelections = new Set(unexpired(now()).map(({ fixtureId }) => fixtureId)).size;
+      const available = (at: number) => featuredSelections.filter(({ fixtureId, kickoffAt }) => !fixtures.has(fixtureId)
+        && kickoffAt - at >= bestSlipKickoffBufferMs);
+      const eligibleSelections = new Set(available(now()).map(({ fixtureId }) => fixtureId)).size;
       if (!eligibleSelections) return { day, status: !featuredSelections.length && cohort.records.some(({ forecast }) => forecast !== null)
         ? "odds-unavailable" : "no-qualifying", eligibleSelections };
 
@@ -62,8 +66,9 @@ export function createDailySlipPublisher({ database, competitionIds, verifyPubli
         const count = counts.get(id) ?? 0;
         if (bandFull(id) || stored.publishedHours.get(id)?.has(hourAt)) continue;
 
-        const result = buildHourlyBestSlips(day, id, dailyBestSlipBandLimit - count, current,
-          { selections: unexpired(current), priorFixtures: fixtures }, combinations);
+        const selections = available(current);
+        if (!selections.some(({ kickoffAt }) => kickoffAt - current <= preferredKickoffWindowMs)) break;
+        const result = buildHourlyBestSlips(day, id, dailyBestSlipBandLimit - count, current, { selections }, combinations, preferredKickoffWindowMs);
         if (!result.slips.length) continue;
         try {
           const appended = await store.append({ day, oddsBand: id, hourAt, slips: result.slips, verifyPublicOdds,
@@ -95,15 +100,15 @@ export function createDailySlipPublisher({ database, competitionIds, verifyPubli
   });
 }
 
-type HourlyTiming = Readonly<{
+type PublisherTiming = Readonly<{
   now?: () => number;
   wait?: (delay: number, signal: AbortSignal) => Promise<unknown>;
 }>;
 
-/** A supervised loop waits for Kampala hour boundaries. The one-shot command services the current slot. */
+/** A supervised loop waits for Kampala half-hour boundaries. The one-shot command services the current slot. */
 export async function runDailySlipPublisher(publisher: Pick<ReturnType<typeof createDailySlipPublisher>, "publish">,
   signal: AbortSignal, onResult: (result: DailySlipPublicationResult) => void, once = false,
-  { now = Date.now, wait = (delay, stop) => sleep(delay, undefined, { signal: stop }) }: HourlyTiming = {}) {
+  { now = Date.now, wait = (delay, stop) => sleep(delay, undefined, { signal: stop }) }: PublisherTiming = {}) {
   const startedAt = now(), first = bestSlipPublicationHour(startedAt);
   let dueAt = once || startedAt === first.hourAt ? first.hourAt : first.nextAt;
   while (!signal.aborted) {

@@ -7,6 +7,7 @@ import type { MarketSource } from "./markets.ts";
 import { formatOddsHundredths, oddsRules, parseDecimalOdds } from "./odds.ts";
 import { publicPolicy } from "./public-policy.ts";
 import type { SlipForecastReference } from "./slip-forecast-reference.ts";
+import { slipProbabilityLowerBound } from "./slip-probability.ts";
 import type { EditorialSlipOffer, SlipBookmaker } from "./slip-quote.ts";
 import { additionalSlipGoalMarket, isSlipGoalExtensionSelection, isSlipMarketFamily, isSlipMarketSelection, matchesSlipForecast,
   slipMarketFamilies, slipMarketOutcomeMaximumLength, slipMarketSelections, type SlipAdditionalGoalForecast, type SlipMarketFamily, type SlipMarketSelection,
@@ -77,7 +78,7 @@ export type SlipBuildResult = Readonly<{
 }>;
 export type SlipRanking = Readonly<{
   accepts: (slip: BuiltSlip) => boolean;
-  compare: (left: BuiltSlip, right: BuiltSlip) => number;
+  compare?: (left: BuiltSlip, right: BuiltSlip) => number;
   probability?: (slip: BuiltSlip) => number | null;
 }>;
 
@@ -278,7 +279,9 @@ export function serializeSlipCriteria(criteria: SlipCriteria): URLSearchParams {
 }
 
 type Candidate = { selection: SlipSelection; scaledOdds: bigint; key: string };
-type Combination = { slip: BuiltSlip; product: bigint; denominator: bigint; key: string };
+type QuotedPrice = { quote: SlipSelectionPrice; scaled: bigint };
+type UnpricedPick = Omit<SlipSelection, "odds" | "oddsBasis" | "bookmaker" | "forecast"> & { forecast: SlipForecastReference };
+type Combination = { slip: BuiltSlip; product: bigint; denominator: bigint; key: string; probabilityLowerBound: number; priceGroup: string };
 const SCALE = 10_000n;
 /** Compare canonical two-place slip totals without Number rounding or overflow. */
 export function compareSlipTotalOdds(left: string, right: string): number {
@@ -293,23 +296,37 @@ function compareCandidates(left: Candidate, right: Candidate): number {
   return right.selection.probability - left.selection.probability
     || (left.scaledOdds > right.scaledOdds ? -1 : left.scaledOdds < right.scaledOdds ? 1 : 0) || compareText(left.key, right.key);
 }
-function compareCombinations(left: Combination, right: Combination): number {
-  const first = left.slip.selections.length - right.slip.selections.length
-    || right.slip.averageProbability - left.slip.averageProbability;
-  if (first) return first;
-  const oddsDifference = left.product * right.denominator - right.product * left.denominator;
-  return (oddsDifference > 0n ? -1 : oddsDifference < 0n ? 1 : 0) || compareText(left.key, right.key);
+function compareCombinationPrices(left: Combination, right: Combination): number {
+  const oddsDifference = left.denominator === right.denominator ? left.product - right.product
+    : left.product * right.denominator - right.product * left.denominator;
+  return (oddsDifference > 0n ? -1 : oddsDifference < 0n ? 1 : 0)
+    || left.slip.selections.length - right.slip.selections.length || compareText(left.key, right.key);
+}
+function candidateWithQuote(pick: UnpricedPick, { quote, scaled }: QuotedPrice): Candidate {
+  const { fixtureId, family, selection, probability, forecast } = pick;
+  const key = `${fixtureId}:${family}:${selection}:${probability}:${quote.price}`
+    + `:${forecast.cycleId}:${forecast.revisionId}:${forecast.publishedAt}` + (quote.bookmaker ? `:${quote.bookmaker.id}` : "");
+  return { key, scaledOdds: scaled, selection: { ...pick, odds: quote.price, oddsBasis: quote.basis,
+    ...(quote.bookmaker ? { bookmaker: quote.bookmaker } : {}) } };
 }
 function totalText(product: bigint, denominator: bigint): string {
   const hundredths = (product * 200n + denominator) / (denominator * 2n);
   return `${hundredths / 100n}.${(hundredths % 100n).toString().padStart(2, "0")}`;
 }
-function combination(selected: readonly Candidate[], product: bigint): Combination {
+export function slipSelectionIdentity({ fixtureId, family, selection }: SlipSelection): string {
+  return `${fixtureId}:${family}:${selection}`;
+}
+export function slipCombinationIdentity(selections: readonly SlipSelection[]): string {
+  return selections.map(slipSelectionIdentity).sort().join("|");
+}
+function combination(selected: readonly Candidate[], product: bigint, hasAlternativePrices: boolean): Combination {
   const ordered = [...selected].sort((left, right) => left.selection.kickoffAt - right.selection.kickoffAt || compareText(left.key, right.key));
   const selections = ordered.map((candidate) => candidate.selection), key = selected.map((candidate) => candidate.key).sort().join("|");
-  const denominator = SCALE ** BigInt(selected.length);
-  return { key, product, denominator, slip: { id: key, selections, totalOdds: totalText(product, denominator),
-    oddsBasis: selections[0]!.oddsBasis, averageProbability: selections.reduce((sum, item) => sum + item.probability, 0) / selections.length } };
+  const denominator = SCALE ** BigInt(selected.length), probabilitySum = selections.reduce((sum, item) => sum + item.probability, 0);
+  return { key, product, denominator, probabilityLowerBound: slipProbabilityLowerBound(probabilitySum, selections.length),
+    priceGroup: hasAlternativePrices ? slipCombinationIdentity(selections) : key,
+    slip: { id: key, selections, totalOdds: totalText(product, denominator),
+      oddsBasis: selections[0]!.oddsBasis, averageProbability: probabilitySum / selections.length } };
 }
 
 type CompletionBounds = Readonly<{ minimum: (start: number, count: number) => bigint | undefined;
@@ -387,6 +404,7 @@ export type EditorialSlipSearch = Readonly<{
   priorFixtures?: ReadonlySet<string>;
   order?: (values: readonly SlipSelection[]) => readonly SlipSelection[];
   combinationIdentity?: (values: readonly SlipSelection[]) => string;
+  prioritizeRank?: boolean;
 }>;
 
 export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRecord[], asOf: number, ranking?: SlipRanking,
@@ -397,6 +415,8 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
   const timeWindows = criteria.interval || criteria.timeFrom === "" ? null : kickoffTimeWindows(range,
     { from: criteria.timeFrom, to: criteria.timeTo, zone: publicPolicy.reportingTimeZone });
   let candidates: Candidate[] = [];
+  const considerAlternativePrices = criteria.totalMax !== undefined && criteria.teamsMax !== 1 && !ranking?.compare;
+  const alternativePrices = new Map<Candidate, { pick: UnpricedPick; quotes: QuotedPrice[] }>();
   const seen = new Set<string>(), qualifying = new Set<string>();
   let excludedMissingOdds = 0, excludedMissingForecast = 0, searchLimited = false;
   const minimumProbability = probabilityFraction(criteria.probMin);
@@ -462,7 +482,8 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
         hasRequestedForecast = true;
         if (probability < requiredProbability || probability > maximumProbability ||
           isSlipGoalExtensionSelection(selection) && probability < slipBuilderRules.minimumPickPercent / 100) continue;
-        let chosen: { quote: SlipSelectionPrice; scaled: bigint } | null = null, priced = false;
+        let chosen: QuotedPrice | null = null, priced = false;
+        const prices = considerAlternativePrices ? new Map<bigint, QuotedPrice>() : null;
         for (const quote of quotes) {
           if (quote.family !== family || quote.selection !== selection || quote.basis !== "bookmaker" ||
             isSlipGoalExtensionSelection(selection) && !quote.bookmaker ||
@@ -473,17 +494,22 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
           if (odds.scaled < minimumOdds || maximumScaledOdds !== null && odds.scaled > maximumScaledOdds) continue;
           if (!chosen || odds.scaled > chosen.scaled || odds.scaled === chosen.scaled &&
             (quote.bookmaker?.id ?? 0) < (chosen.quote.bookmaker?.id ?? 0)) chosen = { quote, scaled: odds.scaled };
+          if (prices) {
+            const previous = prices.get(odds.scaled);
+            if (!previous || (quote.bookmaker?.id ?? 0) < (previous.quote.bookmaker?.id ?? 0)) prices.set(odds.scaled, { quote, scaled: odds.scaled });
+          }
         }
         if (!priced) missingOdds = true;
         if (!chosen) continue;
-        const { quote, scaled } = chosen;
-        const key = `${record.fixtureId}:${family}:${selection}:${probability}:${quote.price}`
-          + `:${reference.cycleId}:${reference.revisionId}:${reference.publishedAt}`
-          + (quote.bookmaker ? `:${quote.bookmaker.id}` : "");
-        candidates.push({ key, scaledOdds: scaled, selection: { fixtureId: record.fixtureId, kickoffAt: kickoff,
+        const pick = { fixtureId: record.fixtureId, kickoffAt: kickoff,
           homeTeam: record.homeTeam, awayTeam: record.awayTeam, competition: record.competition, family,
-          selection, probability, odds: quote.price, oddsBasis: quote.basis, forecast: reference,
-          ...(quote.bookmaker ? { bookmaker: quote.bookmaker } : {}) } });
+          selection, probability, forecast: reference };
+        const candidate = candidateWithQuote(pick, chosen);
+        candidates.push(candidate);
+        if (prices && prices.size > 1) {
+          prices.delete(chosen.scaled);
+          alternativePrices.set(candidate, { pick, quotes: [...prices.values()] });
+        }
         qualifying.add(record.fixtureId);
       }
     }
@@ -510,8 +536,30 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
     candidates.length = Math.min(candidates.length, slipBuilderRules.maximumCandidates);
     searchLimited = true;
   }
+  const hasAlternativePrices = alternativePrices.size > 0;
+  // Preserve coverage of distinct picks before spending the existing candidate budget on lower quotes.
+  if (hasAlternativePrices) {
+    for (const candidate of [...candidates]) {
+      const group = alternativePrices.get(candidate);
+      if (!group) continue;
+      group.quotes.sort((left, right) => left.scaled > right.scaled ? -1 : 1);
+      for (const quote of group.quotes) {
+        if (candidates.length === slipBuilderRules.maximumCandidates) { searchLimited = true; break; }
+        candidates.push(candidateWithQuote(group.pick, quote));
+      }
+      if (searchLimited && candidates.length === slipBuilderRules.maximumCandidates) break;
+    }
+    candidates.sort(compareCandidates);
+    alternativePrices.clear();
+  }
   const retained: Combination[] = [], diversified: Combination[] = [], diversifiedFixtures = new Set<string>();
-  const compare = ranking ? (left: Combination, right: Combination) => ranking.compare(left.slip, right.slip) : compareCombinations;
+  const retainedPriceGroups = hasAlternativePrices ? new Map<string, number>() : null;
+  const probability = ranking?.probability;
+  const compareSlips = ranking?.compare;
+  const compare = compareSlips ? (left: Combination, right: Combination) => compareSlips(left.slip, right.slip)
+    : (left: Combination, right: Combination) => (probability
+      ? probability(right.slip)! - probability(left.slip)!
+      : right.probabilityLowerBound - left.probabilityLowerBound) || compareCombinationPrices(left, right);
   let searchNodes = 0, searchWork = 0, exhausted = false, retainedSelections = 0;
   const availableFixtures = new Set(candidates.map((candidate) => candidate.selection.fixtureId)).size;
   const maximumSelections = Math.min(criteria.teamsMax ?? availableFixtures, availableFixtures), bounds = completionBounds(candidates);
@@ -524,6 +572,24 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
   const diversificationWork = Math.floor(slipBuilderRules.maximumSearchWork / 4);
   let diversificationLimited = false;
   const selected: Candidate[] = [], fixtures = new Set<string>();
+  function setRetained(index: number, value: Combination) {
+    retained[index] = value;
+    retainedPriceGroups?.set(value.priceGroup, index);
+  }
+  function swapRetained(first: number, second: number) {
+    const value = retained[first]!;
+    setRetained(first, retained[second]!);
+    setRetained(second, value);
+  }
+  function sinkRetained(index: number) {
+    while (index * 2 + 1 < retained.length) {
+      let worse = index * 2 + 1;
+      if (worse + 1 < retained.length && compare(retained[worse + 1]!, retained[worse]!) > 0) worse++;
+      if (compare(retained[worse]!, retained[index]!) <= 0) break;
+      swapRetained(index, worse);
+      index = worse;
+    }
+  }
   function retain(value: Combination): boolean {
     if (ranking && !ranking.accepts(value.slip)) return false;
     if (ranking?.probability) {
@@ -537,27 +603,33 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
       && value.slip.selections.every((item) => !diversifiedFixtures.has(item.fixtureId))) {
       diversified.push(value); value.slip.selections.forEach((item) => diversifiedFixtures.add(item.fixtureId));
     }
+    const variantPosition = retainedPriceGroups?.get(value.priceGroup);
+    if (variantPosition !== undefined) {
+      if (compare(value, retained[variantPosition]!) < 0) {
+        setRetained(variantPosition, value);
+        sinkRetained(variantPosition);
+      }
+      return true;
+    }
     // The worst-ranked root can be discarded until both combination and aggregate-leg budgets fit.
     // The disjoint reserve contains at most maximumCandidates further legs, keeping final payloads bounded.
     retainedSelections += value.slip.selections.length;
-    let index = retained.push(value) - 1;
+    let index = retained.length;
+    setRetained(index, value);
     while (index > 0) {
       const parent = Math.floor((index - 1) / 2);
       if (compare(retained[index]!, retained[parent]!) <= 0) break;
-      [retained[index], retained[parent]] = [retained[parent]!, retained[index]!]; index = parent;
+      swapRetained(index, parent);
+      index = parent;
     }
     while (retained.length > slipBuilderRules.maximumCombinations || retainedSelections > slipBuilderRules.maximumRetainedSelections) {
       searchLimited = true;
       retainedSelections -= retained[0]!.slip.selections.length;
+      retainedPriceGroups?.delete(retained[0]!.priceGroup);
       const last = retained.pop()!;
       if (!retained.length) break;
-      retained[0] = last; index = 0;
-      while (index * 2 + 1 < retained.length) {
-        let worse = index * 2 + 1;
-        if (worse + 1 < retained.length && compare(retained[worse + 1]!, retained[worse]!) > 0) worse++;
-        if (compare(retained[worse]!, retained[index]!) <= 0) break;
-        [retained[index], retained[worse]] = [retained[worse]!, retained[index]!]; index = worse;
-      }
+      setRetained(0, last);
+      sinkRetained(0);
     }
     return true;
   }
@@ -570,7 +642,7 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
       // Compact candidate indexes keep the bounded seed memo small and prevent duplicate model estimates.
       const seedKey = !criteria.reuse ? selected.map((candidate) => candidateIndexes.get(candidate)!).join(",") : "";
       if (seedResults.has(seedKey)) return seedResults.get(seedKey)!;
-      const accepted = retain(combination(selected, product));
+      const accepted = retain(combination(selected, product, hasAlternativePrices));
       if (diversifying) seedResults.set(seedKey, accepted);
       return accepted;
     }
@@ -603,21 +675,31 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
       item.slip.selections.filter(({ fixtureId }) => prior.has(fixtureId)).length]) : []);
     combinations.sort((left, right) => (overlaps.get(left) ?? 0) - (overlaps.get(right) ?? 0) || compare(left, right));
     let seed = diversified;
-    const identity = options.editorial?.combinationIdentity;
-    if (identity) {
+    const editorialIdentity = options.editorial?.combinationIdentity;
+    if (editorialIdentity || hasAlternativePrices) {
+      const identity = (item: Combination) => editorialIdentity ? editorialIdentity(item.slip.selections) : item.priceGroup;
       const best = new Map<string, Combination>();
       for (const item of combinations) {
-        const key = identity(item.slip.selections);
+        const key = identity(item);
         if (!best.has(key)) best.set(key, item);
       }
       combinations = [...best.values()];
-      seed = diversified.map((item) => best.get(identity(item.slip.selections))!);
+      seed = diversified.map((item) => best.get(identity(item))!);
     }
     if (criteria.reuse) return combinations.slice(0, criteria.slips).map((item) => item.slip);
+    if (options.editorial?.prioritizeRank) {
+      const used = new Set<string>(), slips: BuiltSlip[] = [];
+      for (const { slip } of combinations) {
+        if (slip.selections.some(({ fixtureId }) => used.has(fixtureId))) continue;
+        slip.selections.forEach(({ fixtureId }) => used.add(fixtureId));
+        slips.push(slip);
+        if (slips.length === criteria.slips) break;
+      }
+      return slips;
+    }
     const batch = compatibleBatch(combinations, criteria.slips, seed); searchLimited ||= batch.limited;
-    return prior?.size && ranking ? batch.slips.sort(ranking.compare) : batch.slips;
+    return prior?.size && compareSlips ? batch.slips.sort(compareSlips) : batch.slips;
   }
-  let slips: BuiltSlip[] = [];
   if (!criteria.reuse) {
     for (let count = criteria.teamsMin; count <= maximumSelections && diversified.length < criteria.slips && !diversificationLimited; count++) {
       while (diversified.length < criteria.slips && !diversificationLimited) {
@@ -634,12 +716,9 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
   }
   for (let count = criteria.teamsMin; count <= maximumSelections && !exhausted; count++) {
     enumerate(candidates, bounds, 0, count, 1n);
-    if (ranking) continue;
-    slips = select();
-    if (slips.length === criteria.slips) break;
   }
-  // A qualified ranking may prefer longer slips. Batch only the final retained set, not discarded shorter stages.
-  if (ranking) slips = select();
+  // A stronger whole-slip probability can favour a longer combination.
+  const slips = select();
   return { slips, qualifyingMatches: qualifying.size, excludedMissingOdds, excludedMissingForecast, searchLimited,
     ...(ranking?.probability ? { jointProbabilities: Object.fromEntries(slips.map((slip) => [slip.id, ranking.probability!(slip)!])) } : {}) };
 }

@@ -13,13 +13,15 @@ the outcome filter and pagination. All dates uses bounded archive traversal and
 reports complete-range totals only when the read can establish them. Empty states
 name the selected band.
 
-Version-three bands publish up to ten slips once per reporting day. Every leg
-must have a kickoff on that day and a current exact featured price from the
-configured bookmaker. The final order uses validated whole-slip win probability,
-exact combined odds, fewer matches and stable identity. Cards label the
-arithmetic average pick probability and the separately validated whole-slip win
-probability. Original result corrections follow the sealed pick, even if the
-fixture was later rescheduled.
+Current automatic publication checks at midnight and every 30 minutes in
+Kampala. Each band holds up to ten slips. Every leg must have a kickoff on that
+day at least 30 minutes away and a current exact featured price. All legs of a
+slip share a verified bookmaker, and one fixture can be allocated to one slip
+across the daily bands. Ranking uses the original pick probabilities, exact
+combined odds, match count and kickoff timing. Cards retain the arithmetic
+average pick probability and any qualified whole-slip win probability already
+in the archive. Original result corrections follow the sealed pick, even if
+the fixture was later rescheduled.
 
 Persisted band IDs and canonical ranks remain stable. Rank links reserve twenty
 positions per band. Older banded publications can still contain twenty slips,

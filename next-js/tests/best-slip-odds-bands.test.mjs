@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { bestSlipOddsBands, bestSlipOddsBandFor, bestSlipPublicRank } from '../src/domain/best-slip-odds-bands.ts';
-import { bestSlipPublicationHour } from '../src/domain/best-slip-publication-hour.ts';
 import { bestSlipBandCriteria, bestSlipCombinationIdentity, buildDailyBestSlips, buildHourlyBestSlips } from '../src/domain/best-slips.ts';
 import { parseBestSlipsQuery, serializeBestSlipsQuery, selectSlipSummaryResult, defaultBestSlipsQuery } from '../src/domain/best-slips-query.ts';
 import { bestSlipsRangeKey } from '../src/domain/best-slips-client.ts';
@@ -11,7 +10,7 @@ import { verifiedLocalFeaturedBinding } from '../src/domain/local-featured-decis
 import { liveRecord, now, today } from './helpers/live-refresh-fixtures.mjs';
 import { pricedEditorialSelection } from './helpers/best-slip-publication-fixtures.mjs';
 import { slipForecastFixture } from './helpers/slip-forecast-fixtures.mjs';
-import { getPublicationDeadline, getReportingDate } from '../src/domain/calendar.ts';
+import { getPublicationDeadline, getReportingDate, getReportingDayBounds } from '../src/domain/calendar.ts';
 
 test('odds bands have unambiguous boundaries and preserve their scope through dates, summary and pagination', () => {
   const quotes = ['2.49','2.50','4.99','5.00','9.99','10.00','19.99','20.00','49.99','50.00','99.99','100.00','200.00','200.01'];
@@ -28,8 +27,8 @@ test('odds bands have unambiguous boundaries and preserve their scope through da
   assert.notEqual(bestSlipsRangeKey({...defaultBestSlipsQuery(),oddsBand:'5-10'},today),bestSlipsRangeKey(defaultBestSlipsQuery(),today));
   assert.throws(()=>parseBestSlipsQuery({oddsBand:'5-500'},today));
 });
-test('hourly publisher appends to earlier bands, keeps searching other bands, and stops once all are full', async () => {
-  const start = bestSlipPublicationHour(now).hourAt, record = liveRecord(), calls = [], counts = new Map(
+test('midnight publication appends qualifying half-hour additions and stops after the last band fills', async () => {
+  const start = getReportingDayBounds(today).startInclusive, record = liveRecord(), calls = [], counts = new Map(
     bestSlipOddsBands.map(({ id }) => [id, id === '1.5-5' || id === '100-200' ? 9 : 10]));
   const publishedHours = new Map(), fixtures = new Set(), combinations = new Set();
   let clock = start, reads = 0;
@@ -65,7 +64,7 @@ test('hourly publisher appends to earlier bands, keeps searching other bands, an
   assert.equal(Object.hasOwn(calls[0].slips[0], 'estimatedProbability'), false);
   const original = structuredClone(calls[0].slips);
 
-  clock += 3_600_000;
+  clock += 1_800_000;
   selections = [selection(2, '3.00'), selection(3, '101.00')];
   const second = await publisher.publish(clock);
   assert.equal(second.status, 'published');
@@ -84,19 +83,44 @@ test('hourly publisher appends to earlier bands, keeps searching other bands, an
   assert.equal(calls.length, 2);
 });
 
-test('odds-guide hourly batches can fill with overlapping distinct combinations and preserve prior membership', () => {
+test('sparse odds bands stop at the eligible disjoint count and respect prior membership', () => {
   const selections = Array.from({ length: 5 }, (_, index) => pricedEditorialSelection(index, { odds: '1.80', probability: 0.61 }));
   const initial = buildHourlyBestSlips(today, '1.5-5', 10, now, { selections }, new Set());
   const identities = initial.slips.map(slip => bestSlipCombinationIdentity(slip.selections));
-  assert.equal(identities.length, 10);
-  assert.equal(new Set(identities).size, 10);
+  assert.equal(identities.length, 2);
+  assert.equal(new Set(initial.slips.flatMap(({ selections }) => selections.map(({ fixtureId }) => fixtureId))).size, 4);
   assert.ok(initial.slips.every(slip => slip.selections.length === 2 && slip.totalOdds === '3.24' && !('estimatedProbability' in slip)));
-  const next = buildHourlyBestSlips(today, '1.5-5', 10, now, { selections }, new Set(identities.slice(0, 4)));
-  assert.equal(next.slips.length, 6);
-  assert.ok(next.slips.every(slip => !identities.slice(0, 4).includes(bestSlipCombinationIdentity(slip.selections))));
+  const priorFixtures = new Set(initial.slips.flatMap(({ selections }) => selections.map(({ fixtureId }) => fixtureId)));
+  const next = buildHourlyBestSlips(today, '1.5-5', 10, now, { selections, priorFixtures }, new Set(identities));
+  assert.equal(next.slips.length, 0);
+  assert.equal(buildHourlyBestSlips(today, '100-200', 10, now, { selections }, new Set()).slips.length, 0);
 });
 
-test('supervised loop uses Kampala hour boundaries and skips later hours when the day is complete', async () => {
+test('automatic generation enforces the 30 minute buffer and defers distant slips until their release window', () => {
+  const start = getReportingDayBounds(today).startInclusive;
+  const leg = (index, offset) => pricedEditorialSelection(index, { at: start, kickoffAt: start + offset, odds: '4.00', bookmakerId: index });
+  const tooClose = leg(1, 1_799_999), boundary = leg(2, 1_800_000), distant = leg(3, 10 * 3_600_000);
+  const build = (at, window) => buildHourlyBestSlips(today, '1.5-5', 10, at, { selections: [tooClose, boundary, distant] }, new Set(), window)
+    .slips.flatMap(({ selections }) => selections.map(({ fixtureId }) => fixtureId));
+  assert.deepEqual(build(start), [boundary.fixtureId]);
+  assert.deepEqual(build(start + 4 * 3_600_000), [distant.fixtureId]);
+  assert.deepEqual(build(start + 4 * 3_600_000, 3 * 3_600_000), []);
+});
+
+test('conservative whole-slip ranking beats a higher mean and does not sacrifice the top slip to fill a quota', () => {
+  const selections = [pricedEditorialSelection(1, { odds: '4.00', probability: 0.76 }),
+    pricedEditorialSelection(2, { odds: '2.00', probability: 0.86 }), pricedEditorialSelection(3, { odds: '2.00', probability: 0.87 })];
+  const { slips } = buildHourlyBestSlips(today, '1.5-5', 10, now, { selections }, new Set());
+  assert.deepEqual(slips.map(({ selections }) => selections.length), [1, 2]);
+  assert.ok(slips.every((slip) => !Object.hasOwn(slip, 'estimatedProbability')));
+
+  const pool = [['2.60', 0.90], ['3.00', 0.89], ['2.00', 0.70], ['1.80', 0.72]]
+    .map(([odds, probability], index) => pricedEditorialSelection(index + 1, { odds, probability }));
+  const best = buildHourlyBestSlips(today, '5-10', 10, now, { selections: pool }, new Set()).slips;
+  assert.deepEqual(best.map(({ totalOdds }) => totalOdds), ['7.80']);
+});
+
+test('supervised loop uses Kampala half-hour boundaries and skips later slots when the day is complete', async () => {
   let clock = Date.parse('2026-11-21T16:37:00Z');
   const calls = [], delays = [], controller = new AbortController();
   await runDailySlipPublisher({ async publish(hourAt) {
@@ -107,8 +131,8 @@ test('supervised loop uses Kampala hour boundaries and skips later hours when th
     wait: async delay => { delays.push(delay); clock += delay; },
   });
   assert.deepEqual(calls.map(at => new Date(at).toISOString()),
-    ['2026-11-21T17:00:00.000Z', '2026-11-21T18:00:00.000Z', '2026-11-21T21:00:00.000Z']);
-  assert.deepEqual(delays, [23 * 60_000, 3_600_000, 3 * 3_600_000]);
+    ['2026-11-21T17:00:00.000Z', '2026-11-21T17:30:00.000Z', '2026-11-21T21:00:00.000Z']);
+  assert.deepEqual(delays, [23 * 60_000, 1_800_000, 3.5 * 3_600_000]);
 });
 
 test('Best Slips orders sub-75 percent picks by probability then exact price and keeps three feasible slips', () => {

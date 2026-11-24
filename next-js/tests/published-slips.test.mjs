@@ -35,7 +35,8 @@ function fixture() {
       const sql = statement(query, values);
       if (sql.text.includes('UTC_TIMESTAMP')) return [{ at: new Date(at) }];
       if (sql.text.includes('SELECT JSON_EXTRACT')) return [{ snapshot: databaseSnapshot(sql.values[0]) }];
-      if (sql.text.includes('FROM FootballFixture')) return [{ id: sql.values[0] }];
+      if (sql.text.includes('FROM FootballFixture')) return sql.values.map(id => ({ id }));
+      if (sql.text.includes('FROM FixtureOddsState')) return sql.values.map(fixtureId => ({ fixtureId }));
       if (sql.text.includes('FROM DailyBestSlipAppendBatch')) {
         if (sql.text.includes('LOCK IN SHARE MODE')) return batches.filter(row => row.publicationId === sql.values[0] &&
           (+row.hourAt === +sql.values[1] || row.firstRank === sql.values[2]));
@@ -92,11 +93,14 @@ function fixture() {
       return { ...value, selections: value.selections.map(item => ({ ...item,
         forecast: { cycleId: fixtureId(90), revisionId: fixtureId(91), publishedAt: now - 100 } })) };
     },
-    async resolveResults(_tx, selections) {
-      return selections.map(item => ({ fixtureId: item.fixtureId, family: item.family, selection: item.selection, forecast: item.forecast,
-        completed: outcomes.has(item.fixtureId), fixtureCompleted: fixtureCompletion.get(item.fixtureId) ?? outcomes.has(item.fixtureId),
-        status: fixtureStatuses.get(item.fixtureId) ?? (outcomes.get(item.fixtureId) === 'void' ? 'canceled' : 'finished-regulation'),
-        regulationVerified: true, regulationHome: outcomes.get(item.fixtureId) === 'lost' ? 0 : 2, regulationAway: 1 }));
+    async resolveResults(_tx, selections, asOf, { editorial } = {}) {
+      return selections.map(item => {
+        const status = fixtureStatuses.get(item.fixtureId) ?? (outcomes.get(item.fixtureId) === 'void' ? 'canceled' : 'finished-regulation');
+        return { fixtureId: item.fixtureId, family: item.family, selection: item.selection, forecast: item.forecast,
+          completed: outcomes.has(item.fixtureId), fixtureCompleted: fixtureCompletion.get(item.fixtureId) ?? outcomes.has(item.fixtureId),
+          status: editorial && status === 'scheduled' && item.kickoffAt <= asOf ? 'unknown' : status,
+          regulationVerified: true, regulationHome: outcomes.get(item.fixtureId) === 'lost' ? 0 : 2, regulationAway: 1 };
+      });
     },
   });
   const publish = (changes = {}) => store.publish({ day: today, slips: [slip()], model,
@@ -169,7 +173,7 @@ test('exact unrounded band assignment and cross-band duplicate prevention surviv
   assert.equal(current.slips[0].totalOdds, '5.00');
   assert.equal((await f.store.browse({ period: 'today', status: 'all', oddsBand: '5-10', page: 1 }, today)).browse.total, 0);
   const repriced = { ...original, totalOdds: '7.00', selections: original.selections.map((value) => priceSelection(value, '7.00')) };
-  await assert.rejects(f.publish({ slips: [repriced], oddsBand: '5-10' }), /duplicate combination/u);
+  await assert.rejects(f.publish({ slips: [repriced], oddsBand: '5-10' }), /invalid-input/u);
   assert.equal(f.parents.length, 1); assert.equal(f.rows.length, 1);
 });
 
@@ -218,7 +222,7 @@ test('hourly append fills a modern band through distinct frozen batches without 
   const f = fixture(); await f.publish();
   const previous = structuredClone(f.rows[0]), parent = structuredClone(f.parents[0]);
   const later = bestSlipPublicationHour(now).nextAt; f.advance(later + 30_000);
-  const one = modelFreeSlip([1, 2], { oddsPerLeg: '2.00', at: later });
+  const one = modelFreeSlip([2, 3], { oddsPerLeg: '2.00', at: later });
   assert.deepEqual(await f.store.append(hourlyInput(later, [one])), { status: 'published', appended: 1 });
   assert.deepEqual(f.rows[0], previous); assert.deepEqual(f.parents[0], parent);
   assert.equal(f.rows[1].rank, 2); assert.equal('estimatedProbability' in f.rows[1].snapshotJson, false);
@@ -238,16 +242,24 @@ test('hourly append fills a modern band through distinct frozen batches without 
     { status: 'full', appended: 0 });
 });
 
-test('model-less hourly bands allow distinct slips with overlapping fixtures and reject duplicate combinations across bands', async () => {
+test('incremental batches reject any repeated fixture within a batch and across all six bands', async () => {
   const f = fixture(), slot = bestSlipPublicationHour(now), at = slot.hourAt + 300_000; f.advance(at);
   const first = modelFreeSlip([1, 2], { oddsPerLeg: '2.00', at });
   const overlap = modelFreeSlip([2, 3], { oddsPerLeg: '2.00', at, bookmakerId: 19 });
-  assert.deepEqual(await f.store.append(hourlyInput(at, [first, overlap])), { status: 'published', appended: 2 });
+  await assert.rejects(() => f.store.append(hourlyInput(at, [first, overlap])), /invalid-input/u);
+  assert.equal(f.rows.length, 0);
+  const independent = modelFreeSlip([3], { at });
+  assert.deepEqual(await f.store.append(hourlyInput(at, [first, independent])), { status: 'published', appended: 2 });
   assert.equal(f.parents[0].modelId, null); assert.equal(f.parents[0].bodyJson.count, 0);
   assert.equal(f.batches[0].bodyJson.count, 2);
   assert.equal(f.rows[0].appendBatchId, f.batches[0].id);
-  const repriced = modelFreeSlip([2, 1], { odds: '6.25', oddsPerLeg: '2.50', at, bookmakerId: 19 });
-  assert.deepEqual(await f.store.append(hourlyInput(at, [repriced], '5-10')), { status: 'no-qualifying', appended: 0 });
+  f.outcomes.set(fixtureId(2), 'void');
+  for (const [band, odds] of [['5-10', '6.00'], ['10-20', '13.00'], ['20-50', '25.00'], ['50-100', '80.00'], ['100-200', '150.00']]) {
+    const repriced = modelFreeSlip([2], { odds, oddsPerLeg: odds, at, bookmakerId: 19 });
+    const changedMarket = { ...repriced, selections: repriced.selections.map(selection => ({ ...selection,
+      family: 'total-goals', selection: 'over-2.5' })) };
+    assert.deepEqual(await f.store.append(hourlyInput(at, [changedMarket], band)), { status: 'no-qualifying', appended: 0 });
+  }
   assert.equal(f.parents.length, 1); assert.equal(f.rows.length, 2);
   const state = await f.store.hourlyState(today);
   assert.equal(state.counts.get('1.5-5'), 2);
@@ -255,12 +267,24 @@ test('model-less hourly bands allow distinct slips with overlapping fixtures and
   assert.equal(state.combinations.size, 2);
 });
 
-test('crossing a Kampala hour after durable writes rolls back the new batch and anchor', async () => {
+test('crossing a Kampala half-hour slot after durable writes rolls back the new batch and anchor', async () => {
   const f = fixture(), { hourAt, nextAt } = bestSlipPublicationHour(now), at = nextAt - 1000; f.advance(at);
   const ready = modelFreeSlip([17], { at });
   f.afterMembership(() => f.advance(nextAt));
   assert.deepEqual(await f.store.append(hourlyInput(hourAt, [ready])), { status: 'stale', appended: 0 });
   assert.deepEqual([f.parents.length, f.batches.length, f.rows.length, f.legs.length], [0, 0, 0, 0]);
+  f.afterMembership(() => {});
+  assert.deepEqual(await f.store.append(hourlyInput(nextAt, [ready])), { status: 'published', appended: 1 });
+});
+
+test('a delayed automatic write rolls back when the kickoff lead falls below 30 minutes', async () => {
+  const f = fixture(), at = bestSlipPublicationHour(now).hourAt + 300_000; f.advance(at);
+  const ready = modelFreeSlip([17], { at });
+  const close = { ...ready, selections: ready.selections.map(selection => ({ ...selection, kickoffAt: at + 1_800_000 })) };
+  f.afterMembership(() => f.advance(at + 1));
+  assert.deepEqual(await f.store.append(hourlyInput(at, [close])), { status: 'stale', appended: 0 });
+  assert.deepEqual([f.parents.length, f.batches.length, f.rows.length, f.legs.length], [0, 0, 0, 0]);
+  assert.deepEqual(await f.store.append(hourlyInput(at, [close])), { status: 'no-qualifying', appended: 0 });
 });
 
 test('first qualified publication preserves quotes, model evidence and original references; retries never replace it', async () => {
@@ -415,4 +439,34 @@ test('published forecasts survive model expiry and preserve the historical odds-
   assert.equal((await f.store.day(today)).slips[0].slip.totalOdds, '4.00');
   assert.match(f.parents[0].bodyJson.criteria, /totalMin=1.60/);
   assert.match(f.parents[0].bodyJson.criteria, /slips=10/);
+});
+
+test('published browse and direct reads retain the identical slip after its first kickoff', async () => {
+  const f = fixture(), first = slip(1), later = slip(2);
+  const selections = [priceSelection(first.selections[0], '2.00'),
+    { ...priceSelection(later.selections[0], '2.00'), kickoffAt: later.selections[0].kickoffAt + 1_800_000 }];
+  await f.publish({ slips: [{ ...first, selections }] });
+  for (const { fixtureId } of selections) f.fixtureStatuses.set(fixtureId, 'scheduled');
+  const before = (await f.store.day(today)).slips[0], sealed = structuredClone([f.parents, f.rows, f.legs]);
+  assert.equal(before.status, 'not-started');
+
+  f.advance(selections[0].kickoffAt);
+  const direct = (await f.store.day(today)).slips[0];
+  const browse = await f.store.browse({ period: 'today', status: 'pending', page: 1 }, today);
+  const view = browse.slips[0];
+  assert.equal(direct.status, 'pending');
+  assert.deepEqual(view, { ...before, status: 'pending', matchStates: direct.matchStates });
+  assert.equal(browse.summary.asOf, selections[0].kickoffAt);
+  assert.equal(browse.statistics.pending, 1);
+  assert.equal((await f.store.history(query)).records.length, 0, 'unfinished original legs retain the existing history access rule');
+
+  for (const { fixtureId } of selections) {
+    f.fixtureStatuses.set(fixtureId, 'finished-regulation');
+    f.outcomes.set(fixtureId, 'won');
+  }
+  const history = await f.store.history(query, true);
+  assert.equal(history.records[0].outcome, 'won');
+  assert.deepEqual(history.records[0].slip.selections, before.slip.selections);
+  assert.equal(history.records[0].slip.totalOdds, before.totalOdds);
+  assert.deepEqual([f.parents, f.rows, f.legs], sealed);
 });

@@ -131,14 +131,15 @@ export function CompactSlipDisclosure({ totalOdds, averageProbability, estimated
 
 /** Original selection snapshots are reused by Best slips, generated slips and completed history. */
 export function CompactSlip({ slip, index, locale, estimatedProbability, variant = "clean-ledger", initiallyOpen = false, results, matchStates, analysisLinks = true, collapsible = true, showLogos = false, showRank = true,
-  publicationDay, publishedAt, outcome: suppliedOutcome, status: suppliedStatus, action }: {
+  publicationDay, publishedAt, outcome: suppliedOutcome, status: suppliedStatus, preMatchExpired, action }: {
   slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number | undefined; variant?: CompactSlipVariant; initiallyOpen?: boolean; results?: SlipResultView["results"];
   matchStates?: readonly SlipMatchState[]; analysisLinks?: boolean; collapsible?: boolean; showLogos?: boolean; showRank?: boolean;
   outcome?: SlipResultView["outcome"]; status?: SlipStatus; action?: ReactNode;
+  preMatchExpired?: boolean;
 } & SlipHeaderPublication) {
   const headingId = useId();
   const currentStates = useRefreshedSlipMatchStates() ?? matchStates;
-  const { outcome, status } = slipHeaderState(slip, results, currentStates, suppliedOutcome, suppliedStatus);
+  const { outcome, status } = slipHeaderState(slip, results, currentStates, suppliedOutcome, suppliedStatus, preMatchExpired);
   return <CompactSlipDisclosure totalOdds={slip.totalOdds} averageProbability={slip.averageProbability} estimatedProbability={estimatedProbability} selectionCount={slip.selections.length}
     index={index} locale={locale} variant={variant} initiallyOpen={initiallyOpen} collapsible={collapsible} showRank={showRank} slipId={slip.id} headingId={headingId} outcome={outcome} status={status} action={action}
     {...(publicationDay ? { publicationDay } : {})} {...(publishedAt !== undefined ? { publishedAt } : {})}>

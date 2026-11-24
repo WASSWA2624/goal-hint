@@ -30,19 +30,20 @@ export function DesktopSlipDisclosure({ children, headerAction, ...props }: Desk
 
 /** Original snapshot facts and any supplied regulation results remain unchanged by desktop presentation. */
 export function DesktopSlip({ slip, index, locale, estimatedProbability, results, matchStates, initiallyOpen = false, shareSource, sharedSlip, publicShareHref,
-  publicationDay, publishedAt, outcome: suppliedOutcome, status: suppliedStatus }: {
+  publicationDay, publishedAt, outcome: suppliedOutcome, status: suppliedStatus, preMatchExpired }: {
   slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number | undefined; results?: SlipResultView["results"]; matchStates?: readonly SlipMatchState[]; initiallyOpen?: boolean;
   publicShareHref?: string; shareSource?: ShareSlipSource; sharedSlip?: SharedSlip; outcome?: SlipResultView["outcome"]; status?: SlipStatus;
+  preMatchExpired?: boolean;
 } & SlipHeaderPublication) {
   const headingId = useId();
   const currentStates = useRefreshedSlipMatchStates() ?? matchStates;
-  const { outcome, status } = slipHeaderState(slip, results, currentStates, suppliedOutcome, suppliedStatus);
+  const { outcome, status } = slipHeaderState(slip, results, currentStates, suppliedOutcome, suppliedStatus, preMatchExpired);
   return <DesktopSlipDisclosure index={index} locale={locale} initiallyOpen={initiallyOpen} headingId={headingId} showRank={!sharedSlip}
     totalOdds={slip.totalOdds} averageProbability={slip.averageProbability} estimatedProbability={estimatedProbability}
     selectionCount={slip.selections.length} slipId={slip.id} outcome={outcome} status={status}
     {...(publicationDay ? { publicationDay } : {})} {...(publishedAt !== undefined ? { publishedAt } : {})}
     headerAction={shareSource || sharedSlip ? <SlipShareAction key={sharedSlip?.id ?? slip.id} localSlip={slip} {...(shareSource ? { source: shareSource } : {})}
-      {...(sharedSlip ? { sharedSlip } : {})} locale={locale} status={status} outcome={outcome}
+      {...(sharedSlip ? { sharedSlip } : {})} locale={locale} status={status} outcome={outcome} {...(preMatchExpired ? { preMatchExpired } : {})}
       {...(publishedAt !== undefined ? { publishedAt } : {})} {...(currentStates ? { matchStates: currentStates } : {})} {...(results ? { results } : {})}
       {...(publicShareHref ? { publicHref: publicShareHref } : {})} /> : undefined}>
     <ul data-slip-selections aria-labelledby={headingId}>{slip.selections.map((selection, selectionIndex) => {

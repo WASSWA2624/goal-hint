@@ -11,6 +11,7 @@ export type SlipMatchState = Readonly<{
   fixtureId: string; family: SlipMarketFamily; selection: SlipMarketSelection; forecast?: SlipForecastReference;
   status: SettlementStatus; score: Readonly<{ home: number; away: number }> | null; liveClock: LiveClock | null;
   outcome: "correct" | "incorrect" | "pending" | "void";
+  preMatchUnavailable?: true;
 }>;
 export type SlipMatchProgress = Pick<SlipMatchState, "score" | "liveClock">;
 type SelectionIdentity = Pick<SlipSelection, "fixtureId" | "family" | "selection" | "forecast">;
@@ -69,6 +70,7 @@ export function slipMatchStatesFromResults(selections: readonly SelectionIdentit
     }).status : "pending";
     return [{ fixtureId: selection.fixtureId, family: selection.family, selection: selection.selection,
       ...(selection.forecast ? { forecast: selection.forecast } : {}), status: result.status,
+      ...(result.preMatchUnavailable ? { preMatchUnavailable: true as const } : {}),
       score: final ? regulation : live, liveClock: result.status === "live" ? result.progress?.liveClock ?? null : null,
       outcome: settled === "correct" || settled === "incorrect" || settled === "void" ? settled : "pending" }];
   });

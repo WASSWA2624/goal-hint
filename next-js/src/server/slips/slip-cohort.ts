@@ -23,6 +23,7 @@ import { storedSlipGoalForecasts } from "./slip-goal-forecast.ts";
 
 export type SlipCohortReader = (parameters: FeedParameters,
   context: Readonly<{ locale?: string; primaryBookmakerOnly?: boolean; featured?: boolean; total15?: "include" | "only";
+    minimumKickoffLeadMs?: number;
     additionalGoals?: Readonly<{ keys: readonly AdditionalSlipGoalMarketKey[]; only: boolean }> }>, clock: Clock) => Promise<SlipCohort>;
 
 /** Reuses the production feed's exact filtering, order, record projection and approved price rules.
@@ -56,7 +57,8 @@ export function createStoredSlipCohort(options: Readonly<{
       const goals = hasExtendedGoals ? Prisma.sql`LEFT JOIN GoalMarketExtension goal ON goal.revisionId=rp.id` : Prisma.empty;
       const extended = Prisma.sql`goal.revisionId IS NOT NULL AND ${sql.cohortWhere}`;
       const where = extendedOnly ? extended : hasExtendedGoals ? Prisma.sql`((${sql.where}) OR (${extended}))` : sql.where;
-      const openDeadline = featured ? Prisma.sql`AND f.kickoff>${new Date(asOf + calendarRules.cutoffSecondsBeforeKickoff * 1000)}
+      const minimumKickoffLeadMs = Math.max(context.minimumKickoffLeadMs ?? 0, calendarRules.cutoffSecondsBeforeKickoff * 1000 + 1);
+      const openDeadline = featured ? Prisma.sql`AND f.kickoff>=${new Date(asOf + minimumKickoffLeadMs)}
         AND NOT EXISTS (SELECT 1 FROM PredictionPublicationBarrier barrier WHERE barrier.cycleId=f.activeCycleId AND barrier.closedAt<=${new Date(asOf)})` : Prisma.empty;
       const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT f.id ${sql.joins} ${goals} ${sql.searchJoin} WHERE (${where}) ${openDeadline}
         ORDER BY ${sql.order} LIMIT ${slipCohortRules.maximumRecords + 1}`);

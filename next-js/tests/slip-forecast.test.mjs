@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { liveGoalMarketDefinitions } from '../src/domain/goal-market-definitions.ts';
-import { slipCompleted, slipSnapshotSchema, slipResultView } from '../src/domain/slip-snapshot.ts';
+import { slipHeaderState } from '../src/components/slips/slip-header-outcome.ts';
+import { slipMatchStatesFromResults } from '../src/domain/slip-match-state.ts';
+import { slipCompleted, slipSnapshotSchema, slipResultView, slipSnapshotStatus } from '../src/domain/slip-snapshot.ts';
 import { cycleFromRows, revisionFromRows } from '../src/server/predictions/history-read.ts';
 import { goalMarketExtensionFromRow, prepareGoalMarketExtension } from '../src/server/predictions/goal-market-store.ts';
 import { evidenceFingerprint, evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
@@ -98,11 +100,64 @@ test('a formally void original cycle retains its adjudication but remains privat
   const outcome = projectSlipForecastResult(selection, { ...input, cycle,
     fixture: { ...f.fixture, activeCycleId: randomUUID(), status: 'live' } });
   assert.equal(outcome.completed, true);
+  assert.equal(outcome.status, 'unknown', 'saved slips retain their existing result projection');
   assert.equal(outcome.fixtureCompleted, false);
   assert.equal(slipCompleted({ ...f.slip, selections: [selection] }, [outcome]), false);
   const view = slipResultView('saved', '', { ...f.slip, selections: [selection] }, [outcome]);
   assert.equal(view.outcome, 'void'); assert.equal(view.slip.selections[0].probability, 0.7);
   assert.equal(view.slip.selections[0].odds, '2.00');
+});
+
+test('published slip status expires at kickoff or after schedule drift without settlement or snapshot changes', () => {
+  const early = slipForecastFixture(), late = slipForecastFixture({ at: early.at + 3_600_000 });
+  const selections = [bound(early), bound(late)], snapshot = { ...early.slip, selections, totalOdds: '4.00' };
+  const sealed = structuredClone(snapshot), kickoff = selections[0].kickoffAt;
+  const display = (asOf, changes = {}) => {
+    const results = [projectSlipForecastResult(selections[0], projection(early, { asOf, editorial: true, ...changes })),
+      projectSlipForecastResult(selections[1], { ...projection(late), asOf, editorial: true, cycle: cycleFromRows(late.cycle, late.schedule) })];
+    const status = slipSnapshotStatus(snapshot, results);
+    const states = slipMatchStatesFromResults(selections, results);
+    assert.deepEqual(slipHeaderState(snapshot, undefined, states), { status, outcome: 'pending' });
+    assert.equal(slipCompleted(snapshot, results), false);
+    assert.deepEqual(snapshot, sealed);
+    return { status, states };
+  };
+
+  assert.equal(display(kickoff - 1).status, 'not-started');
+  const overdue = display(kickoff);
+  assert.deepEqual(overdue.states.map(({ status }) => status), ['unknown', 'scheduled']);
+  assert.equal(overdue.status, 'pending');
+  assert.equal(display(kickoff, { editorial: false }).status, 'not-started', 'personal slip observations are unchanged');
+  assert.equal(display(kickoff + 1, { fixture: { ...early.fixture, status: 'live' } }).status, 'in-progress');
+  assert.equal(display(kickoff - 1, { fixture: { ...early.fixture, kickoff: new Date(kickoff + 3_600_000) } }).status, 'pending');
+  assert.equal(display(kickoff - 1, { fixture: { ...early.fixture,
+    lifecycleState: { issue: null, actualStartedAt: new Date(kickoff - 60_000) } } }).status, 'pending');
+  assert.equal(display(kickoff - 1, { cycle: { ...projection(early).cycle, ordinal: 2 }, fixture: { ...early.fixture,
+    lifecycleState: { issue: null, actualStartedAt: new Date(early.at - 86_400_000) } } }).status, 'not-started');
+});
+
+test('sealed cancellation and postponement retain their original phase through rescheduling', () => {
+  const f = slipForecastFixture(), selection = bound(f), input = projection(f);
+  const snapshot = { ...f.slip, selections: [selection] };
+  for (const [voidReason, status, slipStatus] of [['fixture-canceled', 'canceled', 'cancelled'], ['formal-postponement', 'postponed', 'void']]) {
+    const observed = projectSlipForecastResult(selection, { ...input, cycle: cycleFromRows(f.cycle, f.schedule),
+      editorial: true, fixture: { ...f.fixture, status } });
+    assert.equal(observed.status, status);
+    assert.equal(observed.completed, false);
+    assert.equal(slipSnapshotStatus(snapshot, [observed]), 'pending');
+    assert.equal(slipResultView('original', '', snapshot, [observed]), null);
+
+    const cycle = { ...input.cycle, state: 'void', voidedAt: input.asOf - 1000, voidReason };
+    const outcome = projectSlipForecastResult(selection, { ...input, cycle, editorial: true,
+      fixture: { ...f.fixture, status: 'scheduled', activeCycleId: randomUUID(), kickoff: new Date(selection.kickoffAt + 86_400_000) } });
+    const history = slipResultView('original', '', snapshot, [outcome]);
+    assert.equal(outcome.status, status);
+    assert.equal(outcome.fixtureCompleted, false);
+    assert.equal(history.status, slipStatus);
+    assert.equal(history.outcome, 'void');
+    assert.equal(history.slip.totalOdds, snapshot.totalOdds);
+    assert.deepEqual(history.slip.selections, snapshot.selections);
+  }
 });
 
 test('a superseded but cutoff-eligible saved selection is graded unchanged; a replacement cycle score cannot grade it', () => {

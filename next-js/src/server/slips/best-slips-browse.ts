@@ -42,7 +42,7 @@ function createBestSlipsSnapshotReader({ read = readPublishedBestSlips, provider
       const state = result.state === "generated" && dates.from === day && dates.to === day
         && (result.browse?.bandTotal ?? result.statistics?.total) === 0
         ? "awaiting-publication" : result.state;
-      return { ...result, state, summary: { asOf, ...dates, statistics: result.statistics ?? null } };
+      return { ...result, state, summary: { asOf: result.summary?.asOf ?? asOf, ...dates, statistics: result.statistics ?? null } };
     }
     catch { return { ...empty, state: "data-unavailable" }; }
   };

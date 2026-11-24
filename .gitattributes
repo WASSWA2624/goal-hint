@@ -29,3 +29,5 @@ next-js/prisma/migrations/20261113140000_expand_local_goal_markets/migration.sql
 next-js/prisma/mariadb/20261113140000_expand_local_goal_markets.sql text eol=lf
 next-js/prisma/migrations/20261120150000_recovered_pre_match_odds/migration.sql text eol=lf
 next-js/prisma/migrations/20261120160000_november_replay/migration.sql text eol=lf
+next-js/prisma/migrations/20261124120000_half_hour_best_slip_appends/migration.sql text eol=lf
+next-js/prisma/mariadb/20261124120000_half_hour_best_slip_appends.sql text eol=lf

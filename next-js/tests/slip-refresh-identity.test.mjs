@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createSlipMatchObservationStore } from "../src/components/slips/slip-match-observations.ts";
+import { createSlipKickoffExpiry, createSlipMatchObservationStore, currentSlipMatchStates } from "../src/components/slips/slip-match-observations.ts";
 import { shareUnchanged } from "../src/domain/structural-sharing.ts";
 
 const state = (fixtureId, changes = {}) => ({ fixtureId, family: "match-result", selection: "home-win",
@@ -50,6 +50,32 @@ test("empty responses, access revocation and a changed cohort never retain prior
   const changedForecast = { states: [state("1", { forecast: { cycleId: "new-cycle", revisionId: "new-revision", publishedAt: 2 } })], revoked: false };
   second.publish(changedForecast);
   assert.deepEqual(second.getSnapshot(), changedForecast, "forecast identity remains part of the accepted data");
+});
+
+test("an older desktop poll cannot restore an unavailable published slip", () => {
+  const scheduled = [state("1", { status: "scheduled", score: null })];
+  const unavailable = [state("1", { status: "unknown", score: null, preMatchUnavailable: true })];
+  const observation = { states: scheduled, revoked: false, asOf: 10 };
+  assert.equal(currentSlipMatchStates(unavailable, 11, observation), unavailable);
+  assert.equal(currentSlipMatchStates(unavailable, 10, observation), unavailable);
+  assert.equal(currentSlipMatchStates(unavailable, 9, observation), scheduled);
+  assert.equal(currentSlipMatchStates(unavailable, undefined, observation), scheduled, "Builder still uses the latest accepted poll");
+});
+
+test("an open published slip expires at its original kickoff and never reopens on clock rollback", (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1000 });
+  const expiry = createSlipKickoffExpiry(2000);
+  let notifications = 0;
+  const stop = expiry.subscribe(() => notifications++);
+  t.mock.timers.tick(999);
+  assert.equal(expiry.getSnapshot(), false);
+  assert.equal(notifications, 0);
+  t.mock.timers.tick(1);
+  assert.equal(expiry.getSnapshot(), true);
+  assert.equal(notifications, 1);
+  t.mock.timers.setTime(1000);
+  assert.equal(expiry.getSnapshot(), true);
+  stop();
 });
 
 test("slip browse snapshots retain untouched cards while exact changed results and access projections win", () => {

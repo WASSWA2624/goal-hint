@@ -55,6 +55,7 @@ export function uniqueSlipMatchWatches(selections: readonly SlipMatchWatch[]): r
 
 export const slipMatchRefreshRequestSchema = z.strictObject({
   selections: z.array(slipMatchWatchSchema).min(1).max(slipMatchRefreshRules.maximumSelections),
+  editorial: z.literal(true).optional(),
 }).superRefine((value, context) => {
   try { uniqueSlipMatchWatches(value.selections as readonly SlipMatchWatch[]); }
   catch { context.addIssue({ code: "custom", message: "Conflicting original selections." }); }
@@ -65,6 +66,7 @@ export const slipMatchStateSchema = z.strictObject({
   fixtureId: z.uuid(), family: slipMarketFamilySchema, selection: z.string().min(1).max(64), forecast: slipForecastReferenceSchema.optional(),
   status: z.enum(settlementStatuses), score: score.nullable(), liveClock: liveClockSchema.nullable(),
   outcome: z.enum(["correct", "incorrect", "pending", "void"]),
+  preMatchUnavailable: z.literal(true).optional(),
 }).superRefine((value, context) => {
   const final = isPlayedFinalStatus(value.status);
   if (!isSlipMarketSelection(value.family, value.selection) || isSlipGoalExtensionSelection(value.selection) && !value.forecast

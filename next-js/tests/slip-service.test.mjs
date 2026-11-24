@@ -130,6 +130,18 @@ test('a current qualified model ranks and bounds custom builds with a separate w
   assert.equal((await service(read, { jointModel: () => ({ model: jointModel, verifyModel: () => true }) }).query(criteria({ totalProbMin: 71 }))).state, 'no-combinations');
 });
 
+test('a reviewed Builder estimate breaks equal probabilities by odds and then fewer selections', async () => {
+  const records = [record('compact'), record('single-high'), record('pair-first', {}, 0.8), record('pair-second', {}, 0.8)];
+  records[0].prices[0].price = '4.00';
+  records[1].prices[0].price = '4.50';
+  const model = { ...jointModel, estimate: () => 0.75 };
+  const result = await service(async parameters => page(parameters, records), { jointModel: { model, verifyModel: () => true } })
+    .query(criteria({ totalMin: 400, totalMax: 450, teamsMin: 1, slips: 3, reuse: true, markets: ['match-result'] }));
+  assert.equal(result.state, 'generated');
+  assert.deepEqual(result.data.slips.map(({ selections }) => selections.map(({ fixtureId }) => fixtureId)),
+    [['single-high'], ['compact'], ['pair-first', 'pair-second']]);
+});
+
 test('a model expiring during the bounded read withholds the build', async () => {
   const run = (validUntil) => {
     let ticks = 0;
@@ -260,6 +272,16 @@ test('matches entering kickoff cutoff during the scan are excluded at completion
   assert.equal(result.state, 'no-qualifying'); assert.equal(result.asOf, now + 60000); assert.equal(result.examined, 2);
 });
 
+test('a build crossing kickoff cutoff during combination search withholds stale results', async () => {
+  const records = [record('fixture-1', { kickoffAt: now + 330000 }), record('fixture-2', { kickoffAt: now + 330000 })];
+  let ticks = 0;
+  const result = await service(async parameters => page(parameters, records), {
+    clock: { now: () => ticks++ < 2 ? now : now + 30000 },
+  }).query(criteria());
+  assert.equal(result.state, 'data-unavailable');
+  assert.equal(result.data, null);
+});
+
 test('a later-page progress flag change is rejected even when the pagination generation is unchanged', async () => {
   const records = Array.from({ length: 101 }, (_, index) => record(`fixture-${index}`, { prices: [] }));
   let reads = 0;
@@ -386,6 +408,48 @@ test('stored generation meets all custom limits when the recommended pick does n
   assert.ok(selections.every(selection => selection.family === 'double-chance' && selection.selection === 'home-or-draw'
     && selection.odds === '2.00' && selection.probability === 0.85));
   assert.deepEqual(records, original);
+});
+
+test('exact and ranged totals consider lower quoted prices without duplicating the same picks', async () => {
+  const records = ['a', 'b', 'c'].map(id => alternativeRecord(id));
+  const selectionPrices = Object.fromEntries(records.map(value => [value.fixtureId, [
+    { ...alternativePrices()[0], price: '2.10', bookmaker: { id: 4, name: 'First book' } },
+    { ...alternativePrices()[0], price: '2.00', bookmaker: { id: 3, name: 'Second book' } },
+  ]]));
+  const read = async parameters => ({ feed: page(parameters, records), selectionPrices });
+  const reader = service(read), reviewed = service(read, { jointModel: { model: jointModel, verifyModel: () => true } });
+  const input = criteria({ markets: ['double-chance'], outcomes: { 'double-chance': ['home-or-draw'] },
+    oddsMin: 200, oddsMax: 210, totalMin: 400, totalMax: 400, slips: 20, reuse: true });
+  const original = structuredClone({ records, selectionPrices });
+  const [exact, separate, ranged, withModel] = await Promise.all([
+    reader.query(input), reader.query({ ...input, reuse: false }), reader.query({ ...input, totalMax: 420 }),
+    reviewed.query({ ...input, totalProbMin: 75 }),
+  ]);
+  assert.equal(exact.state, 'generated');
+  assert.equal(exact.data.slips.length, 3);
+  assert.ok(exact.data.slips.every(slip => slip.totalOdds === '4.00' && slip.selections.every(item => item.bookmaker.id === 3)));
+  assert.equal(separate.data.slips.length, 1);
+  assert.equal(ranged.data.slips.length, 3);
+  assert.ok(ranged.data.slips.every(slip => slip.totalOdds === '4.20' && slip.selections.every(item => item.selection === 'home-or-draw')));
+  assert.equal(withModel.state, 'generated');
+  assert.deepEqual(withModel.data.slips, exact.data.slips);
+  assert.equal(Object.keys(withModel.data.jointProbabilities).length, 3);
+  assert.equal((await reader.query({ ...input, oddsMin: 205 })).state, 'no-combinations');
+  assert.deepEqual({ records, selectionPrices }, original);
+});
+
+test('all requested Builder slips may share a qualifying match when reuse is enabled', async () => {
+  const records = [record('anchor'), record('first'), record('second'), record('third')];
+  records[0].prices[0].price = '3.00';
+  const reader = service(async parameters => page(parameters, records));
+  const input = criteria({ totalMin: 600, totalMax: 600, slips: 3, markets: ['match-result'] });
+  const [first, separate, second] = await Promise.all([
+    reader.query({ ...input, reuse: true }), reader.query(input), reader.query({ ...input, reuse: true }),
+  ]);
+  assert.equal(first.data.slips.length, 3);
+  assert.ok(first.data.slips.every(slip => slip.selections.length === 2 && slip.selections.some(item => item.fixtureId === 'anchor')));
+  assert.equal(separate.data.slips.length, 1);
+  assert.deepEqual(second.data.slips, first.data.slips);
 });
 
 test('supplementary price-pool drift or a future observation rejects the entire build', async () => {

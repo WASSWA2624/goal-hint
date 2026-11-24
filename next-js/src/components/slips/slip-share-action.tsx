@@ -17,9 +17,10 @@ import type { SlipStatus } from "@/domain/slip-status";
 const SlipShareDrawer = dynamic(() => import("./sharing/slip-share-drawer").then((module) => module.SlipShareDrawer));
 const serverCanShare = () => false;
 
-export function SlipShareAction({ source, sharedSlip, localSlip, locale, iconOnly = false, publicHref, publishedAt, matchStates, results, status, outcome }: {
+export function SlipShareAction({ source, sharedSlip, localSlip, locale, iconOnly = false, publicHref, publishedAt, matchStates, results, status, outcome, preMatchExpired }: {
   publicHref?: string; source?: ShareSlipSource; sharedSlip?: SharedSlip; localSlip?: BuiltSlip; locale: string; iconOnly?: boolean;
   publishedAt?: number; matchStates?: readonly SlipMatchState[]; results?: SlipResultView["results"]; status?: SlipStatus; outcome?: SlipResultView["outcome"];
+  preMatchExpired?: boolean;
 }) {
   const currentStates = useRefreshedSlipMatchStates() ?? matchStates;
   const resultByFixture = useMemo(() => new Map(results?.map(result => [result.fixtureId, result])), [results]);
@@ -42,7 +43,7 @@ export function SlipShareAction({ source, sharedSlip, localSlip, locale, iconOnl
       aria-description={!canShare ? m.text("slipShare.forbidden") : undefined} title={m.text(canShare ? "slipShare.share" : "slipShare.forbidden")}
       aria-controls={open ? id : undefined} onClick={(event) => { event.stopPropagation(); setOpen(true); }}><ShareIcon />{!iconOnly && m.text("slipShare.share")}</ShareTrigger>
     {open && canShare && <SlipShareDrawer id={id} {...(source ? { source } : {})} {...(cached ? { initialShared: cached } : {})}
-      {...(localSlip ? { localSlip, presentation: { status: slipHeaderState(localSlip, results, currentStates, outcome ?? savedOutcome, status ?? savedStatus).status,
+      {...(localSlip ? { localSlip, presentation: { status: slipHeaderState(localSlip, results, currentStates, outcome ?? savedOutcome, status ?? savedStatus, preMatchExpired).status,
         ...(currentStates || results || sharedSlip?.selectionScores ? { selectionScores: Object.fromEntries(localSlip.selections.flatMap(selection => {
           const score = slipMatchStateForSelection(selection, currentStates)?.score ?? sharedSlip?.selectionScores?.[selection.fixtureId];
           const result = resultByFixture.get(selection.fixtureId);

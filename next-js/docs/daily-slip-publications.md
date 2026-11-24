@@ -9,33 +9,43 @@ account erasure. Personal saved slips retain their separate privacy lifecycle.
 
 `createDailySlipPublisher` takes one bounded Kampala-day cohort from the stored
 Matches forecast and exact featured-pick reader. Forecast and quote rights,
-original-cycle settlement support, verified bookmaker offers, and the
-publication cutoff still apply. The worker uses prices from one verified
+original-cycle settlement support, and verified bookmaker offers still apply.
+New slips require scheduled fixtures at least 30 minutes from kickoff at
+selection and commit. The worker uses prices from one verified
 bookmaker per slip. It considers eligible priced picks without adding a
 minimum pick probability. Combined odds are a guide for band placement.
 
 The six bands are lower-inclusive and upper-exclusive, except the last band
 includes 200.00. The engine multiplies leg prices before rounding the displayed
-total. It ranks eligible new combinations using their original pick
-probabilities and exact combined prices. The same combination can appear once
-per Kampala day across all bands. Each slip uses unique fixtures. Different
-slips can share a fixture when their combinations differ.
+total. It ranks eligible new combinations using a conservative whole-slip
+probability bound derived from the original pick probabilities. No assumption
+of independence is needed, and the bound is used internally for ranking. Each
+fixture can appear in one new automatic slip across all six bands for the same
+Kampala day. Earlier published appearances count even if a slip later becomes
+unavailable or void. Historical overlap remains in the archive.
 
-At the start of every Kampala hour, the worker checks every band with fewer
-than ten published slips. It appends only what qualifies within the remaining
-capacity. It assigns new ranks after the last stored rank. Earlier slips,
+At midnight and every 30 minutes in Kampala, the worker checks every band
+with capacity. Ten per band is the existing ceiling. Sparse bands can finish
+the day with fewer slips or none. A combination waits until its earliest leg
+is within the configured release window, six hours by default. Within an
+eligible slot, the worker prefers cohesive kickoff times among otherwise
+comparable combinations. It appends qualifying
+slips at new ranks after the last stored rank. Earlier slips,
 ranks, prices and forecast revisions stay sealed. Full bands skip generation
 for the rest of the day. An empty or sparse band can accept later batches
 until the reporting day ends. The public page shows the accumulated count
 for the selected band, plus separate filter counts where applicable.
 
-The first anchor, the hourly batch, slip snapshots and normalized original
+The first anchor, the append batch, slip snapshots and normalized original
 forecast membership commit together. Each band can commit one nonempty
-batch per hour. A durable day-level combination identity prevents duplicates
-across bands and retries. The transaction checks the current hour, the actual
-publication cutoff, odds rights and exact stored offers before committing.
+batch per half-hour slot. The transaction checks the slot, current fixture
+eligibility and kickoff, odds rights, exact stored offers, and existing daily
+fixture membership before committing. Both publication paths lock the Kampala
+date in the existing indexed combination ledger before reading prior
+membership. A conflicting transaction rolls back with its batch and fixture
+allocations. The combination identity also guards exact duplicates.
 Settlement uses the original sealed picks and updates visible outcomes.
-New hourly slips show combined odds and average pick probability. Archived
+New slips show combined odds and average pick probability. Archived
 slips keep their previously verified whole-slip estimate and rank. The
 private model qualification study continues separately.
 
@@ -48,6 +58,10 @@ rank links. Version three can append to an incomplete current-day band with
 the old snapshot untouched. Version four anchors new hourly bands. Each
 current band holds up to ten slips. The public rank stride remains 20.
 
+Migration `20261124120000_half_hour_best_slip_appends` replaces the append
+slot validation trigger in both MySQL and MariaDB. It admits half-hour slots
+and retains the historic hourly envelope. It changes no rows or table shape.
+
 Use the verified migration role and a current backup of the affected archive
 tables. The dedicated publisher needs SELECT and INSERT on
 `DailySlipPublication`, `DailyBestSlipAppendBatch`, `PublishedSlip`,
@@ -56,8 +70,8 @@ required forecast, odds and fixture evidence. The web role needs read access
 to the batch table. Archive triggers also enforce immutability.
 
 Run the stored-data publisher from a matching source release with the
-approved database profile and private owner approvals. The hourly service
-uses the first-party binding and invokes one Kampala-hour slot.
+approved database profile and private owner approvals. The one-shot service
+uses the first-party binding and invokes the current Kampala slot.
 
 ```sh
 node --conditions=react-server src/workers/slips.ts --stored --once
@@ -66,10 +80,18 @@ node --conditions=react-server src/workers/slips.ts --stored --once
 The stored binding verifies database approval and public odds rights against
 the private register. The worker reads existing data and consumes no provider
 quota. A trusted local binding can be supplied with `--binding` instead.
-Schedule the one-shot command at `*-*-* *:00:00 Africa/Kampala`. A continuous
-`--stored` process also waits for hour boundaries and sleeps to the next
-reporting day after all bands fill. Test an isolated staging run before
-enabling the production schedule. Archive pages and APIs read committed data.
+Schedule the one-shot command at `*-*-* *:00,30:00 Africa/Kampala`. A continuous
+`--stored` process waits for the same boundaries and sleeps to the next
+reporting day after all bands fill. Pause the old publisher before changing
+the trigger and switching writers. Verify both boundaries and archive reads
+on staging before enabling the production schedule. Archive pages and APIs
+read committed data.
+
+To roll back cadence alone, return the one-shot timer to `:00` and keep the
+updated publisher and readers. To roll back generation behavior, pause the
+publisher and keep the readers running until a compatible writer is ready.
+Readers must support already committed half-hour batches. Preserve the
+archive, fixture membership and migration ledger during rollback.
 
 ## Original-cycle results and public access
 
@@ -79,7 +101,11 @@ when another pre-cutoff revision later became the locked forecast. Cutoff
 eligibility still applies. Original void cycles stay void during replacement
 scheduled/live matches; their replacement scores cannot regrade old selections.
 The latest unresolved correction keeps previously published history visible as
-pending without restoring an older winning score.
+pending without restoring an older winning score. The stored slip stays visible
+after kickoff and is no longer presented as a new pre-match opportunity.
+Cancellation and postponement follow the original cycle's recorded evidence.
+The archive retains original odds. Forecast-cycle voids alone cannot establish
+a bookmaker refund, multiplier, or effective settled price.
 
 Legacy personal snapshots remain explicitly unbound. Their missing identities
 are not guessed or backfilled from current forecasts.
@@ -110,6 +136,53 @@ existing history validators. This avoids a separate database round trip for
 every market of every original slip leg.
 
 ## Verification
+
+### Targeted optimization audit
+
+| Requirement | Baseline finding and change |
+| --- | --- |
+| Matches forecasts, market definitions, display and permissions | **Compliant — leave untouched.** Slip generation consumes stored fixture, forecast and quote evidence. The Matches engine, its publication cutoff, public routes and screen components remain unchanged. |
+| Automatic odds bands and price checks | **Compliant — leave untouched.** Exact odds determine membership before rounding. Same-book prices, the current rights checks, and the six public band definitions remain in force. |
+| Automatic cadence, candidate ranking and kickoff buffer | **Partially compliant — minimal fix.** The hourly worker already appended to available bands. It now checks half-hour slots, uses a 30-minute buffer, defers distant eligible groups and ranks on a conservative bound using stored forecasts. |
+| Automatic fixture reuse | **Missing — targeted extension.** The old combination key permitted separate slips to share fixtures. The publisher now enforces daily fixture ownership across bands, including earlier publications, while retaining the combination key and immutable records. |
+| Published snapshots, availability and settlement | **Partially compliant — minimal fix.** The archive already sealed original legs and odds and resolved results against their original cycles. The operational projection now withholds pre-match status after kickoff or an ineligible observation. **Conflicting/unclear —** the stored results grade forecasts. The app lacks bookmaker settlement evidence to establish a canceled or postponed leg's payout or effective odds. |
+| Builder filters and reuse | **Partially compliant — minimal fix.** The reusable search keeps fixture reuse request-local and distinct from automatic publication. Bounds, supported markets and matching exact prices remain binding. Search and ranking corrections use the verified prices and forecast probabilities within those constraints. **Conflicting/unclear —** `0.01` is the input step. The existing decimal odds minimum is `1.01`. The Builder retains its server-side qualification floor where that policy applies. |
+
+The reproducible prediction baseline uses the existing Best Slips historical
+study on the owned local football snapshot. It uses only sealed forecasts and
+exact bookmaker quotes available by 06:30 Kampala on each day, then reads
+verified outcomes after selections have been frozen. From November 1 through
+14, 2026 it inspected 675 occurrences across 14 incomplete dates and verified
+zero eligible forecasts. From November 16 through 23 it inspected zero
+occurrences on eight dates. Both windows recovered zero priced fixtures and
+zero qualifying slates. The snapshot held 3,268 price rows and zero published
+slips. Those rows cannot establish which prices were usable at the decision
+clock. The same study returned identical coverage after the changes. The
+[historical study runbook](best-slip-qualification-study.md#historical-four-match-study)
+gives the command. The fitted and holdout windows used here have exclusive
+ends of November 15 and November 24 respectively.
+
+This evidence cannot support a before-and-after holdout for accuracy,
+calibration, by-band hit or loss rates, intraday live coverage, or ROI. Use
+timestamped pre-match evidence and subsequent original-cycle results when a
+matched holdout is available. Regression tests cover eligibility and integrity
+on controlled data. On a controlled 32-fixture replay, the old hourly selector
+generated 60 slips, reused fixtures 153 times, and included a leg inside the
+30-minute buffer on eight slips. The half-hour selector produced 18 slips
+with 29 distinct fixtures, zero repeated uses, and zero buffer breaches.
+The old selector published every slip before 06:00. The revised selector
+published 12 before 06:00, four from 06:00 to 12:00, and two from 12:00 to
+18:00. It left the four higher bands empty on that input. No fixture had
+started at generation in either run. This measures the selection trade-off
+on a controlled input without assigning outcomes.
+
+MySQL 8.4.11 acceptance installed the trigger migration and exercised the
+publisher role with its existing grants. It verified same-band retries,
+cross-band claims for different markets on the same fixture, and archive
+immutability. A scoped MariaDB 11.4.13 test applied the overlay, accepted
+historic and half-hour slots, and rejected invalid slots. Competing writers
+produced one commit and one rollback on both an empty and a populated date
+range. The retry saw the existing fixture allocation.
 
 `npm run test:publications` covers immutable first publication, original references,
 active-pick privacy, full-period pagination, loss/void outcomes, revocation,

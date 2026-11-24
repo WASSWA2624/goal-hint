@@ -154,11 +154,11 @@ export function createSlipBuildService(options: Readonly<SlipReadSource & {
       const canQualify = criteria.probMax >= minimum;
       const buildCriteria = canQualify && criteria.probMin < minimum ? { ...criteria, probMin: minimum } : criteria;
       const buildRecords = canQualify ? current : [];
-      const build = joint ? jointSlipBuilder(joint.model) : options.build;
+      const build = joint ? jointSlipBuilder(joint.model, "exact-odds") : options.build;
       const data = build ? build(buildCriteria, buildRecords, asOf)
         : buildSlips(buildCriteria, buildRecords, asOf, undefined, { allowPublishedFallback: true });
-      // Estimator callbacks cannot retain approval or validity revoked during generation.
-      const returnedAt = joint ? clock.now() : completedAt;
+      // The bounded search can also cross a kickoff cutoff or the model validity window.
+      const returnedAt = clock.now();
       if (joint && !approvedSlipJointModel(joint, returnedAt)) return { ...base, state: "model-unavailable" };
       if (returnedAt < completedAt || getReportingDate(returnedAt) !== reportingToday
         || data.slips.some((slip) => slip.selections.some((selection) => returnedAt >= getPublicationDeadline(utcInstantFromEpochMilliseconds(selection.kickoffAt))))) {

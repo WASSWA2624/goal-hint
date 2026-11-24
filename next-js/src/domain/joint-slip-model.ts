@@ -1,4 +1,5 @@
 import { buildSlips, compareSlipTotalOdds, type BuiltSlip, type SlipRanking, type SlipSelection } from "./slip-builder.ts";
+import { slipProbabilityLowerBound } from "./slip-probability.ts";
 
 /** Server bindings must independently verify calibration/correlation evidence; references alone are not approval. */
 export type JointSlipModel = Readonly<{
@@ -16,7 +17,7 @@ export function qualifiedJointModel(model: JointSlipModel | null, at: number): m
 export function jointSlipProbability(model: JointSlipModel, slip: BuiltSlip): number | null {
   const value = model.estimate(slip.selections), probabilities = slip.selections.map((selection) => selection.probability);
   if (value === null || !Number.isFinite(value) || value < 0 || value > 1 || probabilities.length === 0) return null;
-  const lower = Math.max(0, probabilities.reduce((sum, probability) => sum + probability, 0) - probabilities.length + 1);
+  const lower = slipProbabilityLowerBound(probabilities.reduce((sum, probability) => sum + probability, 0), probabilities.length);
   const upper = Math.min(...probabilities), tolerance = Number.EPSILON * probabilities.length * 2;
   return value >= lower - tolerance && value <= upper + tolerance ? Math.min(upper, Math.max(lower, value)) : null;
 }
@@ -39,18 +40,20 @@ export function jointSlipRanking(model: JointSlipModel) {
     }
     return estimates.get(slip)!;
   };
-  const ranking: SlipRanking = {
+  const ranking = {
     probability, accepts: (slip) => probability(slip) !== null,
     compare: (left, right) => compareSlipEstimates(left, right, probability(left)!, probability(right)!),
-  };
+  } satisfies SlipRanking;
   return { ranking, probability, unestimated: () => unestimated };
 }
 
 /** Shared by custom and daily slips: whole-slip probability precedes count, mean and price. No multiplication fallback. */
-export function jointSlipBuilder(model: JointSlipModel): typeof buildSlips {
+export function jointSlipBuilder(model: JointSlipModel, order: "legacy" | "exact-odds" = "legacy"): typeof buildSlips {
   return (criteria, records, asOf) => {
     if (!qualifiedJointModel(model, asOf)) throw new RangeError("A current calibrated joint model is required.");
-    const joint = jointSlipRanking(model), result = buildSlips(criteria, records, asOf, joint.ranking);
+    const joint = jointSlipRanking(model);
+    const ranking = order === "exact-odds" ? { accepts: joint.ranking.accepts, probability: joint.probability } : joint.ranking;
+    const result = buildSlips(criteria, records, asOf, ranking);
     return { ...result, excludedUnestimated: joint.unestimated() };
   };
 }
