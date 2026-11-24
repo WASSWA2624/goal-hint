@@ -36,10 +36,12 @@ function eligibleExtension(extension: StoredGoalMarketExtension | null, fixtureI
     && extension.recordedAt < getPublicationDeadline(utcInstantFromEpochMilliseconds(kickoffAt));
 }
 
-function goalProbabilities(extension: StoredGoalMarketExtension, key: GoalMarketDefinition["key"]) {
+function goalProbabilities(extension: StoredGoalMarketExtension, key: GoalMarketDefinition["key"], editorial = false) {
   const entry = extension.markets.find(({ definition }) => definition.key === key);
-  if (!entry?.derivation.available || evidenceFingerprint(entry.definition) !== goalDefinitions.get(key)) return null;
-  const { source, selections } = entry.derivation.market;
+  if (!entry || evidenceFingerprint(entry.definition) !== goalDefinitions.get(key)) return null;
+  const derivation = editorial ? entry.localDerivation ?? entry.derivation : entry.derivation;
+  if (!derivation.available || (editorial && derivation.market.source !== "local-poisson")) return null;
+  const { source, selections } = derivation.market;
   const over = selections.find(({ key }) => key === "over")?.winProbability;
   const under = selections.find(({ key }) => key === "under")?.winProbability;
   return over === undefined || under === undefined ? null : { source, probabilities: { over, under } };
@@ -58,10 +60,11 @@ export function projectSlipTotal15Forecast(extension: StoredGoalMarketExtension 
 }
 
 export function projectSlipAdditionalGoalForecast(extension: StoredGoalMarketExtension | null, fixtureId: string, kickoffAt: number,
-  reference: SlipForecastReference, asOf: number, keys: readonly AdditionalSlipGoalMarketKey[]): SlipAdditionalGoalForecast | null {
+  reference: SlipForecastReference, asOf: number, keys: readonly AdditionalSlipGoalMarketKey[],
+  { editorial = false }: { editorial?: boolean } = {}): SlipAdditionalGoalForecast | null {
   if (!eligibleExtension(extension, fixtureId, kickoffAt, reference, asOf)) return null;
   const markets = keys.flatMap((key) => {
-    const forecast = goalProbabilities(extension, key);
+    const forecast = goalProbabilities(extension, key, editorial);
     return forecast ? [{ key, ...forecast }] : [];
   });
   const parsed = slipAdditionalGoalForecastSchema.safeParse({ reference, markets });

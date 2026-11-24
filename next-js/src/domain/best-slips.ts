@@ -17,6 +17,7 @@ import type { PeriodPerformance } from "./browse-period.ts";
 import type { ContentAccess } from "./paywall.ts";
 import { bestSlipBand, bestSlipBandLimit, bestSlipExactRange, bestSlipOddsBands, dailyBestSlipBandLimit, defaultBestSlipOddsBand, type BestSlipOddsBand } from "./best-slip-odds-bands.ts";
 import { bestSlipKickoffBufferMs, bestSlipPreferredKickoffWindowMs } from "./best-slip-publication-hour.ts";
+import { slipMarketFamilies } from "./slip-markets.ts";
 import { slipProbabilityLowerBound } from "./slip-probability.ts";
 
 export const bestSlipsRules = Object.freeze({ minimumTotal: bestSlipBand().minimumTotal, maximumTotal: bestSlipBand().maximumTotal,
@@ -112,7 +113,7 @@ export function buildHourlyBestSlips(day: ReportingDate, band: BestSlipOddsBand,
   const compare = (left: BuiltSlip, right: BuiltSlip) => lowerBound(right) - lowerBound(left)
     || right.averageProbability - left.averageProbability || comparePrice(left, right)
     || left.selections.length - right.selections.length || Number(cohesive(right)) - Number(cohesive(left)) || left.id.localeCompare(right.id);
-  const result = buildSlips({ ...bestSlipDailyCriteria(day, band), slips: capacity }, [], asOf, {
+  const result = buildSlips({ ...bestSlipDailyCriteria(day, band), markets: [...slipMarketFamilies], slips: capacity }, [], asOf, {
     // Let a later check consider far-out combinations when at least one leg enters the release window.
     accepts: (slip) => earliestKickoff(slip) - asOf <= preferredKickoffWindowMs && !priorCombinations.has(bestSlipCombinationIdentity(slip.selections)),
     compare,

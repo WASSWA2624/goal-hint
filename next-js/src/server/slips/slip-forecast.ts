@@ -9,6 +9,7 @@ import type { SlipMatchWatch } from "../../domain/slip-match-refresh.ts";
 import { slipCompletedStatuses, type SlipResult } from "../../domain/slip-snapshot.ts";
 import { slipBuilderRules, type BuiltSlip, type SlipSelection } from "../../domain/slip-builder.ts";
 import { additionalSlipGoalSelection, isSlipGoalExtensionSelection, isTotal15SlipSelection, type SlipTotal15Forecast } from "../../domain/slip-markets.ts";
+import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { reconstructCutoff, revisionEligibleForLock } from "../predictions/cutoff-eligibility.ts";
 import type { CutoffSchedule } from "../predictions/cutoff-contract.ts";
@@ -35,7 +36,8 @@ const matchesGoalSource = (source: MarketSource | undefined, goalSource: SlipTot
   source === undefined || source === (goalSource === "local-poisson" ? "local-engine" : "ai");
 
 export function slipRevisionMatches(selection: SlipMatchWatch & { source?: MarketSource }, revision: StoredRevision | null,
-  extension: StoredGoalMarketExtension | null = null, asOf = revision?.publishedAt ?? 0): revision is StoredRevision {
+  extension: StoredGoalMarketExtension | null = null, asOf = revision?.publishedAt ?? 0,
+  { editorial = false }: { editorial?: boolean } = {}): revision is StoredRevision {
   const reference = selection.forecast;
   if (!revision || revision.fixtureId !== selection.fixtureId || reference &&
     (reference.cycleId !== revision.cycleId || reference.revisionId !== revision.id || reference.publishedAt !== revision.publishedAt)) return false;
@@ -48,7 +50,8 @@ export function slipRevisionMatches(selection: SlipMatchWatch & { source?: Marke
   const additional = additionalSlipGoalSelection(selection.selection);
   if (additional) {
     if (selection.family !== additional.family || !reference) return false;
-    const market = projectSlipAdditionalGoalForecast(extension, selection.fixtureId, selection.kickoffAt, reference, asOf, [additional.key])?.markets[0];
+    const market = projectSlipAdditionalGoalForecast(extension, selection.fixtureId, selection.kickoffAt,
+      reference, asOf, [additional.key], { editorial })?.markets[0];
     return !!market && matchesGoalSource(selection.source, market.source) &&
       market.probabilities[selection.selection === additional.over ? "over" : "under"] === selection.probability;
   }
@@ -59,16 +62,25 @@ export function slipRevisionMatches(selection: SlipMatchWatch & { source?: Marke
 }
 
 /** Exact Local Engine authority for editorial slips. The public forecast's provisional label is presentation only. */
-export function qualifiedEditorialSlipRevision(selection: SlipSelection, revision: StoredRevision | null | undefined): boolean {
+export function qualifiedEditorialSlipRevision(selection: SlipSelection, revision: StoredRevision | null | undefined,
+  extension: StoredGoalMarketExtension | null = null, asOf = revision?.publishedAt ?? 0): boolean {
   const reference = selection.forecast;
-  if (!revision || !reference || !isMarketFamily(selection.family) || selection.source !== "local-engine" || revision.fixtureId !== selection.fixtureId
-    || revision.cycleId !== reference.cycleId || revision.id !== reference.revisionId || revision.publishedAt !== reference.publishedAt) return false;
+  if (!revision || !reference || selection.source !== "local-engine" || revision.fixtureId !== selection.fixtureId
+    || revision.cycleId !== reference.cycleId || revision.id !== reference.revisionId
+    || revision.publishedAt !== reference.publishedAt || revision.publishedAt > asOf) return false;
   const context = revision.candidate.context.context;
   if (context.kickoffAt !== selection.kickoffAt || context.home.teamId !== selection.homeTeam.id || context.away.teamId !== selection.awayTeam.id) return false;
-  const market = revision.candidate.markets[selection.family];
-  return market?.available === true && market.provenance.kind === "local-engine" && market.provenance.numericalBasis === "qualified-local-model"
-    && (isTotal15SlipSelection(selection.selection) ? selection.family === "total-goals"
-      : (market.market.probabilities as Readonly<Record<string, number>>)[selection.selection] === selection.probability);
+  const additional = additionalSlipGoalSelection(selection.selection);
+  const family = additional ? "total-goals" : selection.family;
+  if (!isMarketFamily(family)) return false;
+  const market = revision.candidate.markets[family];
+  if (!market?.available || market.provenance.kind !== "local-engine" || market.provenance.numericalBasis !== "qualified-local-model") return false;
+  if (additional) {
+    return !!extension?.localPoisson && evidenceFingerprint(extension.localPoisson) === evidenceFingerprint(market.provenance.rates)
+      && slipRevisionMatches(selection, revision, extension, asOf, { editorial: true });
+  }
+  return isTotal15SlipSelection(selection.selection) ? selection.family === "total-goals"
+    : (market.market.probabilities as Readonly<Record<string, number>>)[selection.selection] === selection.probability;
 }
 
 /** Shared fixture locks block source mutation until commit without requiring canonical UPDATE grants. */
@@ -93,9 +105,10 @@ export async function bindSlipForecasts(tx: Tx, slip: BuiltSlip, at: number): Pr
       if (barrier && (barrier.fixtureId !== fixture.id || barrier.closedAt <= instant)) return null;
     }
     const revision = await storedRevision(tx, cycle.currentSetId);
-    if (!slipRevisionMatches(selection, revision, goalExtensions.get(cycle.currentSetId) ?? null, instant)
+    const extension = goalExtensions.get(cycle.currentSetId);
+    if (!slipRevisionMatches(selection, revision, extension, instant, { editorial: selection.offer !== undefined })
       || revision.cycleId !== cycle.id || revision.publishedAt > instant
-      || selection.offer && !qualifiedEditorialSlipRevision(selection, revision)) return null;
+      || selection.offer && !qualifiedEditorialSlipRevision(selection, revision, extension, instant)) return null;
     selections.push({ ...selection, forecast: { cycleId: cycle.id, revisionId: revision.id, publishedAt: revision.publishedAt } });
   }
   return { ...slip, selections };
@@ -113,7 +126,7 @@ export function projectSlipForecastResult(selection: SlipMatchWatch, input: Read
   goalExtension?: StoredGoalMarketExtension | null;
   result: StoredFixtureResult | null; historical: HistoricalResult | null; asOf: number; editorial?: boolean;
 }>): SlipResult {
-  const { fixture, cycle, revision, asOf, editorial, result } = input;
+  const { fixture, cycle, revision, asOf, editorial = false, result } = input;
   const status = resultStatus.parse(fixture.status);
   const sameOccurrence = fixture.activeCycleId === selection.forecast?.cycleId && fixture.homeTeamId === selection.homeTeam.id
     && fixture.awayTeamId === selection.awayTeam.id;
@@ -128,7 +141,7 @@ export function projectSlipForecastResult(selection: SlipMatchWatch, input: Read
   const base: SlipResult = { ...emptyResult(selection), fixtureCompleted: isCompletedFixtureStatus(status),
     ...(preMatchUnavailable ? { preMatchUnavailable: true } : {}) };
   if (!selection.forecast || !cycle || cycle.id !== selection.forecast.cycleId || cycle.fixtureId !== selection.fixtureId ||
-    cycle.openedAt > asOf || !slipRevisionMatches(selection, revision, input.goalExtension, asOf) || revision.publishedAt > asOf) return base;
+    cycle.openedAt > asOf || !slipRevisionMatches(selection, revision, input.goalExtension, asOf, { editorial }) || revision.publishedAt > asOf) return base;
   if (cycle.state === "void" && cycle.voidedAt !== null && cycle.voidedAt <= asOf) {
     // A sealed original occurrence supplies the match phase, not a bookmaker payout decision.
     const originalStatus = editorial && cycle.voidReason === "fixture-canceled" ? "canceled"

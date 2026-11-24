@@ -10,6 +10,10 @@ account erasure. Personal saved slips retain their separate privacy lifecycle.
 `createDailySlipPublisher` takes one bounded Kampala-day cohort from the stored
 Matches forecast and exact featured-pick reader. Forecast and quote rights,
 original-cycle settlement support, and verified bookmaker offers still apply.
+The automatic publisher accepts exact featured full-time match and team goal
+totals on the lines supported by Builder when the Local Engine forecast and
+the same bookmaker offer can be verified. The original goal line, team and
+selection are retained through settlement.
 New slips require scheduled fixtures at least 30 minutes from kickoff at
 selection and commit. The worker uses prices from one verified
 bookmaker per slip. It considers eligible priced picks without adding a

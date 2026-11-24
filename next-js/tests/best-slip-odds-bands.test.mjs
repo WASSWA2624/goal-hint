@@ -6,7 +6,12 @@ import { parseBestSlipsQuery, serializeBestSlipsQuery, selectSlipSummaryResult, 
 import { bestSlipsRangeKey } from '../src/domain/best-slips-client.ts';
 import { createDailySlipPublisher, runDailySlipPublisher } from '../src/server/slips/daily-slip-publication.ts';
 import { readFeaturedSlipSelections, verifyFeaturedSlipOffers } from '../src/server/slips/best-slip-recommendations.ts';
+import { LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localFirstGoalMarketDefinitions } from '../src/domain/goal-market-definitions.ts';
 import { verifiedLocalFeaturedBinding } from '../src/domain/local-featured-decision.ts';
+import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
+import { readFeaturedGoalMarkets } from '../src/server/predictions/extended-market-read.ts';
+import { prepareGoalMarketExtension } from '../src/server/predictions/goal-market-store.ts';
+import { bindSlipForecasts } from '../src/server/slips/slip-forecast.ts';
 import { liveRecord, now, today } from './helpers/live-refresh-fixtures.mjs';
 import { pricedEditorialSelection } from './helpers/best-slip-publication-fixtures.mjs';
 import { slipForecastFixture } from './helpers/slip-forecast-fixtures.mjs';
@@ -292,4 +297,88 @@ test('the publication recheck locks the occurrence and verifies the chosen non-p
   assert.equal(await recheck({ ...quotes, bookmakers: [{ ...book, offers: [original, original] }] }), false);
   assert.equal(await verifyFeaturedSlipOffers({ $queryRaw: async () => [] }, [selection], now,
     () => { throw new Error('odds must be locked before rereading quotes'); }), false);
+});
+
+test('automatic Best Slips bind exact sealed match and team goal totals with compatible prices', async () => {
+  const cases = [
+    { key: 'goal:full-time:totals:total:4.5:binary', family: 'total-goals', selection: 'under-4.5', odds: '1.80' },
+    { key: 'goal:full-time:totals:home:2.5:binary', family: 'team-goals', selection: 'home-under-2.5', odds: '1.85' },
+  ].map(({ key, family, selection, odds }) => {
+    const source = slipForecastFixture({ localQualification: 'qualified', at: now });
+    const [leg] = source.slip.selections;
+    const fixture = liveRecord();
+    const forecast = { ...fixture.forecast, revisionId: source.row.id, publishedAt: source.row.publishedAt.getTime(),
+      provisional: true, updateDelayed: false, markets: Object.values(source.candidate.markets)
+        .filter(({ available }) => available).map(({ market }) => ({ market, outcome: null })) };
+    const record = { ...fixture, fixtureId: leg.fixtureId, cycleId: source.cycle.id, kickoffAt: leg.kickoffAt,
+      homeTeam: leg.homeTeam, awayTeam: leg.awayTeam, forecast };
+    const prepared = prepareGoalMarketExtension({ definitions: localFirstGoalMarketDefinitions,
+      evaluationProfile: LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localPoisson: source.candidate.markets['total-goals'].provenance.rates });
+    const body = { ...prepared, revisionId: source.row.id, cycleId: record.cycleId, fixtureId: record.fixtureId,
+      recordedAt: forecast.publishedAt, contentHash: evidenceFingerprint(prepared) };
+    const extension = { ...body, body, recordedAt: source.row.publishedAt, validIntegrity: 1 };
+    const { betId, betName, label } = verifiedLocalFeaturedBinding(key, 'under');
+    const offer = { betId, betName, values: [{ label, odd: odds }], checkedAt: now - 1000, observedAt: now - 1000,
+      providerUpdatedAt: null, snapshotId: 'a'.repeat(64), receiptId: 'b'.repeat(64) };
+    const quotes = { fixtureId: record.fixtureId, kickoffAt: record.kickoffAt, checkedAt: offer.checkedAt, primaryBookmakerId: 8,
+      bookmakers: [{ bookmakerId: 8, bookmakerName: 'Synthetic bookmaker', offers: [offer] }] };
+    const goal = prepared.markets.find(({ definition }) => definition.key === key);
+    const probability = goal.derivation.market.selections.find(({ key }) => key === 'under').winProbability;
+    return { source, record, extension, offer, quotes, family, selection, odds, probability };
+  });
+  const tx = {
+    footballFixture: { findMany: async () => cases.map(({ source }) => source.fixture) },
+    predictionCycle: { findUnique: async ({ where: { id } }) => cases.find(({ source }) => source.cycle.id === id).source.cycle },
+    predictionSchedule: { findUnique: async ({ where: { cycleId_version: { cycleId } } }) =>
+      cases.find(({ source }) => source.cycle.id === cycleId).source.schedule },
+    async $queryRaw(query, ...parameters) {
+      const sql = Array.isArray(query) ? query.join('?') : query.sql;
+      const values = Array.isArray(query) ? parameters : query.values;
+      const matching = cases.filter(({ source }) => values.includes(source.row.id));
+      if (sql.includes('FROM PredictionSet')) return matching.map(({ source }) => source.row);
+      if (sql.includes('FROM MarketPrediction')) return matching.flatMap(({ source }) => source.marketRows);
+      if (sql.includes('FROM GoalMarketExtension')) return matching.map(({ extension }) => extension);
+      if (sql.includes('FROM FixtureOddsState')) return values.map(fixtureId => ({ fixtureId }));
+      if (sql.includes('FROM FootballFixture')) return values.map(id => ({ id }));
+      if (sql.includes('FROM PredictionPublicationBarrier')) return [];
+      throw new Error('Unexpected read');
+    },
+  };
+  const records = cases.map(({ record }) => record);
+  const quotes = new Map(cases.map(({ record, quotes }) => [record.fixtureId, quotes]));
+  const goals = await readFeaturedGoalMarkets(tx, records.map(({ forecast }) => forecast.revisionId));
+  const load = (includeAdditionalGoals, prices = quotes) => readFeaturedSlipSelections(tx, records, now,
+    async () => ({ goals, quotes: prices, total15: {} }), includeAdditionalGoals);
+  assert.deepEqual(await load(false), []);
+  const selections = await load(true);
+  assert.deepEqual(selections.map(({ family, selection, odds, probability }) => ({ family, selection, odds, probability })),
+    cases.map(({ family, selection, odds, probability }) => ({ family, selection, odds, probability })));
+  assert.deepEqual(await load(true, new Map()), []);
+
+  const build = (band, at = now) => buildHourlyBestSlips(today, band, 10, at, { selections }, new Set()).slips;
+  const [slip] = build('1.5-5');
+  assert.equal(slip.totalOdds, '3.33');
+  assert.equal(slip.selections.length, 2);
+  assert.deepEqual(build('5-10'), []);
+  assert.deepEqual(build('1.5-5', now + 1_800_001), []);
+  assert.deepEqual(await bindSlipForecasts(tx, slip, now), slip);
+  const [first, second] = slip.selections;
+  assert.equal(await bindSlipForecasts(tx, { ...slip, selections: [{ ...first, probability: 0.5 }, second] }, now), null);
+
+  const recheck = (prices = quotes) => verifyFeaturedSlipOffers(tx, slip.selections, now, async () => prices);
+  assert.equal(await recheck(), true);
+  for (const [index, wrongLabels] of [[0, ['Over 4.5', 'Under 3.5']], [1, ['Over 2.5']]]) {
+    const current = cases[index];
+    for (const label of wrongLabels) {
+      const [book] = current.quotes.bookmakers;
+      const offers = [{ ...current.offer, values: [{ label, odd: current.odds }] }];
+      const changed = { ...current.quotes, bookmakers: [{ ...book, offers }] };
+      assert.equal(await recheck(new Map(quotes).set(current.record.fixtureId, changed)), false);
+    }
+  }
+  const team = cases[1], [book] = team.quotes.bookmakers;
+  const { betId, betName, label } = verifiedLocalFeaturedBinding('goal:full-time:totals:away:2.5:binary', 'under');
+  const offers = [{ ...team.offer, betId, betName, values: [{ label, odd: team.odds }] }];
+  const wrongTeam = { ...team.quotes, bookmakers: [{ ...book, offers }] };
+  assert.equal(await recheck(new Map(quotes).set(team.record.fixtureId, wrongTeam)), false);
 });
