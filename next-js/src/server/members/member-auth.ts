@@ -135,17 +135,16 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
     },
 
     /** Public registration never replaces an existing identity or provisions an administrator. */
-    async register(phoneInput: unknown, password: unknown, binding: AuthBinding, address: string, referralCode?: string | null): Promise<AuthSuccess | AuthFailure> {
+    async register(phoneInput: unknown, password: unknown, binding: AuthBinding, referralCode?: string | null): Promise<AuthSuccess | AuthFailure> {
       const phone = validMobilePhone(phoneInput);
       if (!phone || binding.member || !validMemberPassword(password)) return invalid("Enter a valid mobile number and a password of 8–128 characters.");
-      if (!await limit({ purpose: "register-address", value: safeAddress(address), maximum: 10, windowMs: 3_600_000 })
-        || !await limit({ purpose: "register-phone", value: phone, maximum: 5, windowMs: 3_600_000 })) return busy();
       if (adminPhone(phone)) return reserved();
+      const findRegisteredPhone = (tx: Prisma.TransactionClient) => tx.memberAccount.findUnique({ where: { phone }, select: { id: true } });
+      if (await database.query(findRegisteredPhone)) return conflict();
       const passwordHash = await hashPassword(password);
       try {
         return await accessCodeTransaction<AuthSuccess | AuthFailure>(database, async (tx) => {
-          const existing = await tx.memberAccount.findUnique({ where: { phone }, select: { id: true } });
-          if (existing) return conflict();
+          if (await findRegisteredPhone(tx)) return conflict();
           const at = new Date(now());
           const account = await tx.memberAccount.create({ data: { id: randomUUID(), phone, passwordHash, createdAt: at, lastSignInAt: at, memberAdmittedAt: at } });
           await ensureReferralCode(tx, { id: account.id, referralCode: null });
@@ -154,8 +153,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
           return rotate(tx, account, at, trial);
         });
       } catch (error) {
-        if (error instanceof DatabaseOperationError && error.code === "constraint"
-          && await database.query(tx => tx.memberAccount.findUnique({ where: { phone }, select: { id: true } }))) return conflict();
+        if (error instanceof DatabaseOperationError && error.code === "constraint" && await database.query(findRegisteredPhone)) return conflict();
         throw error;
       }
     },

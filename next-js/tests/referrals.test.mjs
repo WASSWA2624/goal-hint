@@ -147,8 +147,8 @@ test("repeated scheduling, paid extensions/revocations and reward expiry never r
 
 test("self/existing accounts and invalid or unverified inviters cannot earn referral rewards", async () => {
   const f = fixture({ trialDays: 0 }), owner = await inviter(f);
-  assert.equal((await f.service.register(owner.member.phone, password, { member: null }, address, owner.summary.code)).status, "conflict");
-  assert.equal((await f.service.register(friend, password, { member: owner.member }, address, owner.summary.code)).status, "invalid");
+  assert.equal((await f.service.register(owner.member.phone, password, { member: null }, owner.summary.code)).status, "conflict");
+  assert.equal((await f.service.register(friend, password, { member: owner.member }, owner.summary.code)).status, "invalid");
   f.accounts.get(owner.member.accountId).phoneVerifiedAt = null;
   await verify(f, await legacySignup(f, owner.summary.code));
   assert.equal(f.accessCodes.size, 0);
@@ -209,7 +209,7 @@ test("first valid signed attribution wins for 30 days; invalid links/cookies gra
 test("registration HTTP trusts only signed attribution and clears it only on success", async () => {
   let selected, status = "authenticated";
   const handler = createMemberAuthHandler("register", async () => ({ config, sessions: { async verify() { return null; } },
-    auth: { async register(_phone, _password, _binding, _address, value) { selected = value; return { status, token: "t".repeat(43), phone: friend, message: "Synthetic refusal" }; } } }));
+    auth: { async register(_phone, _password, _binding, value) { selected = value; return { status, token: "t".repeat(43), phone: friend, message: "Synthetic refusal" }; } } }));
   const attribution = signReferralAttribution(config, code, Date.now());
   const request = value => new Request("https://goal.test/api/account/register", { method: "POST", headers: {
     "sec-fetch-site": "same-origin", "content-type": "application/json", cookie: `goal-hint-referral=${value}` }, body: JSON.stringify({ phone: friend, password }) });

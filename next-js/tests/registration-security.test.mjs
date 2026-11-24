@@ -29,7 +29,7 @@ test("recovery send/check limits persist by phone when addresses change, without
 
 test("only previously issued verification proofs award referrals, with attribution retained for new registrations", async () => {
   const f = createMemberAuthFixture({ trialDays: 0 }), inviter = await f.account({ referralCode: "a".repeat(32) });
-  const newPhone = "256700000004", registered = await f.service.register(newPhone, password, { member: null }, address, inviter.referralCode);
+  const newPhone = "256700000004", registered = await f.service.register(newPhone, password, { member: null }, inviter.referralCode);
   assert.equal(registered.status, "authenticated"); assert.equal(registered.requiresVerification, undefined);
   assert.equal(f.accounts.get(registered.accountId).phoneVerifiedAt, null);
   assert.equal(f.referralCredits.size, 0); assert.equal(f.messages.length, 0);

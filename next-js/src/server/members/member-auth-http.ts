@@ -64,7 +64,7 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
         return result.status === "requested" ? json(result) : failure(result);
       }
       const result = action === "login" ? await services.auth.login(body.phone, body.password, address, currentToken)
-        : action === "register" ? await services.auth.register(body.phone, body.password, binding, address,
+        : action === "register" ? await services.auth.register(body.phone, body.password, binding,
           readReferralAttribution(services.config, readCookie(request, referralCookieName(services.config.production)), Date.now())?.code)
         : action === "verify" ? await services.auth.verifyAccount(body.code, currentToken, address)
         : action === "reset-code" ? await services.auth.verifyPasswordReset(body.phone, body.code, address)

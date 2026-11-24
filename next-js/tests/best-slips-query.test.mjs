@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseReportingDate } from '../src/domain/calendar.ts';
 import { BestSlipsQueryError, bestSlipsPageSearch, bestSlipsQueryRules, defaultBestSlipsQuery, matchesBestSlipsRanges,
-  parseBestSlipsQuery, resolveBestSlipsDates, selectSlipSummaryResult, serializeBestSlipsQuery } from '../src/domain/best-slips-query.ts';
+  parseBestSlipsQuery, resolveBestSlipsDates, selectBestSlipsDates, selectSlipSummaryResult, serializeBestSlipsQuery } from '../src/domain/best-slips-query.ts';
 
 const today = parseReportingDate('2026-10-29');
 test('slip presets resolve inclusive EAT publication dates across month and year boundaries', () => {
@@ -80,4 +80,17 @@ test('All dates cursors retain within-publication ranks and reject arbitrary cur
     assert.throws(() => parseBestSlipsQuery({ period: 'all', cursor }, today), BestSlipsQueryError);
   }
   assert.throws(() => parseBestSlipsQuery({ period: 'today', cursor: '2026-10-28:1' }, today), BestSlipsQueryError);
+});
+
+test('the date picker keeps the filters, clears the archive cursor and links to absolute publication dates', () => {
+  const archive = parseBestSlipsQuery(new URLSearchParams('period=all&page=3&cursor=2026-10-28:5&oddsBand=5-10&status=lost&probMin=80&matchesMax=4'), today);
+  const from = parseReportingDate('2026-10-28'), to = parseReportingDate('2026-11-01');
+  const single = selectBestSlipsDates(archive, from, from, today);
+  assert.deepEqual(single, { period: 'custom', status: 'lost', oddsBand: '5-10', from, to: from, page: 1, probMin: 80, matchesMax: 4 });
+  const range = selectBestSlipsDates(single, from, to, today);
+  assert.deepEqual(parseBestSlipsQuery(new URLSearchParams(bestSlipsPageSearch(range)), to), range);
+  assert.deepEqual(resolveBestSlipsDates(range, to), { from, to });
+  assert.deepEqual(selectBestSlipsDates(range, today, today, today),
+    { period: 'today', status: 'lost', oddsBand: '5-10', page: 1, probMin: 80, matchesMax: 4 });
+  assert.equal(bestSlipsPageSearch(selectBestSlipsDates(defaultBestSlipsQuery(), today, today, today)), '');
 });

@@ -141,3 +141,13 @@ export function selectSlipSummaryResult(applied: BestSlipsQuery, status: BestSli
   delete scope.cursor;
   return { ...scope, status, oddsBand: applied.oddsBand ?? defaultBestSlipOddsBand, page: 1 };
 }
+
+/** Calendar choices retain active filters and restart at the first page of the chosen publication dates. */
+export function selectBestSlipsDates(applied: BestSlipsQuery, from: ReportingDate, to: ReportingDate, today: ReportingDate): BestSlipsQuery {
+  const scope = { ...applied };
+  delete scope.cursor;
+  delete scope.from;
+  delete scope.to;
+  return from === today && to === today ? { ...scope, period: "today", page: 1 }
+    : { ...scope, period: "custom", from, to, page: 1 };
+}

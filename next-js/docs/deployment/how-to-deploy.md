@@ -3,6 +3,12 @@
 The first sections describe the previous shared host. See [VPS staging and
 release promotion](#vps-staging-and-release-promotion) for the Ubuntu VPS.
 
+The owner confirmed that the public domains moved to `104.207.86.22` on or
+before 24 November 2026. The VPS steps below still describe the former
+`209.74.80.202` installation. Verify the new account, databases, worker
+scheduler and migration credentials before using the hosted deployment steps
+against the new origin.
+
 | | |
 | --- | --- |
 | Site | `https://goalhint.com` (before DNS: `http://goalhint.com.hosspi.com/en`) |

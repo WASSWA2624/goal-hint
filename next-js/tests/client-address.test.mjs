@@ -34,7 +34,7 @@ test("unsigned forwarding/proof/host headers fail closed without transport prove
   assert.equal(isSameOrigin(request), false);
 });
 
-test("real HTTP transport overwrites forged proofs and rotated forwarding headers cannot evade registration limits", async t => {
+test("real HTTP transport overwrites forged proofs while registrations from a shared address can proceed", async t => {
   const previous = process.env.GOAL_HINT_TRUSTED_PROXY_CIDRS;
   delete process.env.GOAL_HINT_TRUSTED_PROXY_CIDRS;
   t.after(() => { if (previous === undefined) delete process.env.GOAL_HINT_TRUSTED_PROXY_CIDRS; else process.env.GOAL_HINT_TRUSTED_PROXY_CIDRS = previous; });
@@ -54,12 +54,16 @@ test("real HTTP transport overwrites forged proofs and rotated forwarding header
   const origin = `http://127.0.0.1:${server.address().port}`;
   const forged = { "x-goal-hint-client-address": `1.1.1.1|${Date.now()}|${"a".repeat(64)}`, "x-real-ip": "1.1.1.1" };
   assert.deepEqual(await (await fetch(origin + "/probe", { headers: forged })).json(), { address: "127.0.0.1" });
+  const submit = (phone, forwarded) => fetch(origin + "/register", { method: "POST", headers: { ...forged,
+    "x-forwarded-for": forwarded, "sec-fetch-site": "same-origin", "content-type": "application/json" },
+    body: JSON.stringify({ phone, password: "correct horse 47" }) });
   for (let index = 0; index < 11; index++) {
-    const result = await fetch(origin + "/register", { method: "POST", headers: { ...forged,
-      "x-forwarded-for": `198.51.100.${index + 1}`, "sec-fetch-site": "same-origin", "content-type": "application/json" },
-      body: JSON.stringify({ phone: `256700000${String(index + 100)}`, password: "correct horse 47" }) });
-    assert.equal(result.status, index < 10 ? 200 : 429);
+    assert.equal((await submit(`256700000${index + 100}`, `198.51.100.${index + 1}`)).status, 200);
   }
-  assert.equal(fixture.accounts.size, 10);
+  for (let index = 0; index < 6; index++) {
+    const duplicate = await submit("256700000100", "198.51.100.1");
+    assert.equal(duplicate.status, 409);
+  }
+  assert.equal(fixture.accounts.size, 11);
   assert.equal(fixture.messages.length, 0);
 });

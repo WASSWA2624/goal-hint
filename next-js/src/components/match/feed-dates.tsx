@@ -82,9 +82,9 @@ export function DatePresets({ query, today, onApply, kinds = ["today", "next-3-d
   </PresetList>;
 }
 
-/** Phones pick a day in one tap from an endless strip; the arrows scroll it and Calendar picks a date or a range. */
-const Strip = styled.nav<{ $draft: boolean }>`
-  display: ${({ $draft }) => $draft ? "flex" : "none"};
+/** A swipeable strip with scroll arrows and a calendar for exact dates or ranges. */
+const Strip = styled.nav<{ $visibleOnDesktop: boolean }>`
+  display: ${({ $visibleOnDesktop }) => $visibleOnDesktop ? "flex" : "none"};
   gap: var(--gh-spacing-1);
   min-inline-size: 0;
   ${media.phone} { display: flex; }
@@ -197,12 +197,14 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
 }
 
 /** Without link targets, dates edit an enclosing Filters draft and the child calendar uses its native dialog layer. */
-export function DateStrip({ locale, today, from: startDate, to: endDate, hrefForDay, onDatesChange }: {
-  locale: FeedQuery["locale"]; today: ReportingDate; from: ReportingDate; to: ReportingDate;
+export function DateStrip({ locale, today, from, to, hrefForDay, onDatesChange, label, showOnDesktop = false }: {
+  locale: string; today: ReportingDate; from: ReportingDate | null; to: ReportingDate | null;
   hrefForDay?: (date: ReportingDate) => string; onDatesChange: (from: ReportingDate, to: ReportingDate) => void;
+  label?: string; showOnDesktop?: boolean;
 }) {
   const messages = createMessages(locale), draft = hrefForDay === undefined;
-  const selected = startDate === endDate ? startDate : null;
+  const startDate = from ?? today, endDate = to ?? startDate;
+  const selected = from === to ? from : null;
   const anchor = today < startDate ? startDate : today > endDate ? endDate : today;
   const list = useRef<HTMLUListElement>(null), calendarButton = useRef<HTMLButtonElement>(null);
   const listId = useId(), calendarId = useId();
@@ -303,7 +305,7 @@ export function DateStrip({ locale, today, from: startDate, to: endDate, hrefFor
     if (!extend()) reveal(next);
   };
   const closeCalendar = () => { setCalendarOpen(false); calendarButton.current?.focus({ preventScroll: true }); };
-  return <Strip $draft={draft} aria-label={messages.text("feed.date.days")}>
+  return <Strip $visibleOnDesktop={draft || showOnDesktop} aria-label={label ?? messages.text("feed.date.days")}>
     <Scroll type="button" aria-controls={listId} aria-label={messages.text("feed.date.earlier")} onClick={() => move(-1)}>
       <ChevronLeftIcon />
     </Scroll>
@@ -327,10 +329,10 @@ export function DateStrip({ locale, today, from: startDate, to: endDate, hrefFor
     <CalendarButton ref={calendarButton} type="button"
       aria-haspopup="dialog" aria-expanded={calendarOpen} aria-controls={calendarOpen ? calendarId : undefined}
       onClick={event => { event.currentTarget.focus({ preventScroll: true }); setCalendarOpen(true); }}
-      aria-label={selected === null ? messages.text("feed.date.rangeCurrent", { range: messages.reportingDateSpan(startDate, endDate) }) : messages.text("feed.date.rangeOpen")}>
+      aria-label={startDate !== endDate ? messages.text("feed.date.rangeCurrent", { range: messages.reportingDateSpan(startDate, endDate) }) : messages.text("feed.date.rangeOpen")}>
       <CalendarIcon />
     </CalendarButton>
-    {calendarOpen && <DateCalendar id={calendarId} presentation={draft ? "dialog" : "sheet"} locale={locale}
+    {calendarOpen && <DateCalendar id={calendarId} presentation={draft ? "dialog" : showOnDesktop ? "responsive" : "sheet"} locale={locale}
       today={today} from={startDate} to={endDate} onClose={closeCalendar}
       onApply={(from, to) => {
         closeCalendar();

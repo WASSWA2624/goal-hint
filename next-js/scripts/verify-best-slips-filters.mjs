@@ -152,3 +152,53 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 1
   assert(errors.length === 0, `Browser errors: ${errors.join("; ")}`);
   return results;
 }
+
+/** The shared Matches calendar follows Best Slips publication dates in both layouts. */
+export async function verifyBestSlipsCalendar(page, origin, widths = [390, 1440]) {
+  const assert = (value, message) => { if (!value) throw new Error(message); };
+  const results = [];
+  for (const mode of ["light", "dark"]) for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${origin}/best-slips/browse?period=today&status=lost&oddsBand=5-10&probMin=80&matchesMin=2`);
+    await page.evaluate(mode => localStorage.setItem("goal-hint-theme", mode), mode);
+    await page.reload();
+    await page.waitForFunction(mode => document.querySelector('meta[name="color-scheme"]')?.content === mode, mode);
+    const strip = page.getByRole("navigation", { name: "Slip date", exact: true });
+    const picker = strip.locator('[aria-haspopup="dialog"]');
+    const calendar = page.getByRole("dialog", { name: "Choose dates", exact: true });
+    const date = day => calendar.locator('button[aria-pressed]').filter({ hasText: new RegExp(`^${day}$`) });
+    const openCalendar = async () => { await picker.click(); await calendar.waitFor(); };
+    const selectDates = async (from, to = from) => {
+      await openCalendar();
+      await date(from).click();
+      if (from !== to) await date(to).click();
+      await calendar.getByRole("button", { name: "Apply dates", exact: true }).click();
+      await page.waitForURL(url => url.searchParams.get("from") === `2026-10-${from}` && url.searchParams.get("to") === `2026-10-${to}`);
+      const query = new URL(page.url()).searchParams;
+      assert(query.get("period") === "custom" && query.get("status") === "lost" && query.get("oddsBand") === "5-10"
+        && query.get("probMin") === "80" && query.get("matchesMin") === "2" && query.get("page") === "1" && !query.has("cursor"),
+      "Selecting dates preserves the active odds, outcome and eligibility filters and starts on page one");
+    };
+    assert(await strip.locator('li[data-date="2026-10-13"] > a[aria-current="date"]').count() === 1, "Today is marked before a date is changed");
+    await openCalendar();
+    const geometry = await calendar.evaluate(element => ({ tag: element.tagName, fits: document.documentElement.scrollWidth <= innerWidth,
+      inside: element.getBoundingClientRect().width <= innerWidth, background: getComputedStyle(element).backgroundColor }));
+    assert(geometry.tag === (width >= 1024 ? "DIALOG" : "DIV") && geometry.fits && geometry.inside, "The shared calendar fits as a desktop dialog and phone sheet");
+    if (mode === "dark") assert(geometry.background !== results.find(result => result.width === width).background, "Calendar surfaces follow the selected theme");
+    await page.screenshot({ path: `output/playwright/best-slips-calendar-${mode}-${width}.png`, animations: "disabled" });
+    const original = page.url();
+    await date(12).click();
+    await calendar.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.waitForFunction(() => document.activeElement?.matches('nav[aria-label="Slip date"] [aria-haspopup="dialog"]'));
+    assert(page.url() === original, "Cancelling restores the picker focus and leaves the active date unchanged");
+    await selectDates(12);
+    await strip.locator('li[data-date="2026-10-12"] > a[aria-current="date"]').waitFor();
+    await selectDates(12, 14);
+    await page.goBack();
+    await strip.locator('li[data-date="2026-10-12"] > a[aria-current="date"]').waitFor();
+    await strip.locator('li[data-date="2026-10-13"] > a').click();
+    await page.waitForURL(url => url.searchParams.get("period") === "today" && !url.searchParams.has("from"));
+    results.push({ mode, width, ...geometry });
+  }
+  return results;
+}

@@ -54,7 +54,7 @@ test("a legacy verify payload may include a boolean preference without enabling 
 
 test("registration admits a normal member without claiming an existing passwordless account or proving the phone", async () => {
   const f = fixture();
-  const result = await f.service.register(phone, password, browser(), address);
+  const result = await f.service.register(phone, password, browser());
   assert.equal(result.status, "authenticated");
   assert.equal(result.requiresVerification, undefined);
   assert.equal((await f.sessionService.verify(result.token)).phoneVerified, false);
@@ -67,14 +67,14 @@ test("registration admits a normal member without claiming an existing passwordl
   assert.equal(+created.memberAdmittedAt, f.now());
   assert.notEqual(created.passwordHash, password);
   assert.ok(await verifyPassword(password, created.passwordHash));
-  assert.deepEqual(await f.service.register(phone, password, browser(), address), { status: "conflict", message: "An account already exists, so please log in." });
+  assert.deepEqual(await f.service.register(phone, password, browser()), { status: "conflict", message: "An account already exists, so please log in." });
   const legacy = fixture(); await legacy.account({ passwordHash: null });
-  assert.equal((await legacy.service.register(phone, password, browser(), address)).status, "conflict");
+  assert.equal((await legacy.service.register(phone, password, browser())).status, "conflict");
 });
 
 test("configured admin numbers require the environment password and land on the dashboard", async () => {
   const adminPassword = "configured admin password", f = fixture({ admins: [phone], adminPassword });
-  assert.equal((await f.service.register(phone, password, browser(), "198.51.100.1")).status, "unauthorized");
+  assert.equal((await f.service.register(phone, password, browser())).status, "unauthorized");
   const account = await f.account();
   assert.equal((await f.service.login(phone, password, "198.51.100.1")).status, "unauthorized");
   const logged = await f.service.login(phone, "configured admin password", "198.51.100.1");
@@ -413,7 +413,7 @@ test("legacy member sessions without admission still require actual phone proof"
 test("changing a phone clears its proof and admission and limits the new session to recovery", async () => {
   for (const admitted of [false, true]) {
     const f = fixture();
-    if (admitted) await f.service.register(phone, password, browser(), address);
+    if (admitted) await f.service.register(phone, password, browser());
     else await f.account();
     const logged = await f.service.login(phone, password, address);
     const changed = await f.service.changePhone(replacement, password, { member: await f.sessionService.verify(logged.token) });
@@ -812,7 +812,7 @@ test("recovery cannot reset administrator environment credentials and requires s
 
 
 test("registration starts the configured trial immediately with the server clock and no message", async () => {
-  const f = fixture({ trialDays: 5 }), registered = await f.service.register(phone, password, browser(), address);
+  const f = fixture({ trialDays: 5 }), registered = await f.service.register(phone, password, browser());
   const codes = createAccessCodes({ database: f.database, now: f.now });
   const handler = createMemberTrialHandler(async () => ({ config: { production: false }, settings: { settings: f.settings }, sessions: f.sessionService, codes }));
   const request = (token, site = "same-origin") => new Request("https://goal.test/api/account/trial", { method: "POST",
@@ -838,7 +838,7 @@ test("a disabled offer permits registration and can never be activated later", a
     settings => { settings.allowUnsubscribedMembers = true; }]) {
     const f = fixture({ trialDays: 7 });
     disable(f.settings);
-    const registered = await f.service.register(phone, password, browser(), address);
+    const registered = await f.service.register(phone, password, browser());
     assert.ok(await f.sessionService.verify(registered.token)); assert.equal(registered.trial, undefined);
     Object.assign(f.settings, { trialDays: 14, paywallMode: "on", allowUnsubscribedMembers: false });
     const codes = createAccessCodes({ database: f.database, now: f.now });
@@ -849,7 +849,7 @@ test("a disabled offer permits registration and can never be activated later", a
 
 test("concurrent duplicate registration creates one account, trial and session", async () => {
   const f = fixture({ trialDays: 3 });
-  const results = await Promise.all([f.service.register(phone, password, browser(), address), f.service.register(phone, password, browser(), address)]);
+  const results = await Promise.all([f.service.register(phone, password, browser()), f.service.register(phone, password, browser())]);
   assert.deepEqual(results.map(result => result.status).sort(), ["authenticated", "conflict"]);
   assert.equal(results.find(result => result.status === "authenticated").trial.days, 3);
   assert.equal(f.accounts.size, 1); assert.equal(f.accessCodes.size, 1); assert.equal(f.sessions.size, 1);
@@ -859,7 +859,7 @@ test("concurrent duplicate registration creates one account, trial and session",
 test("failed registration rolls back its account, trial, session and audit", async () => {
   const f = fixture();
   f.tx.memberSession.create = async () => { throw new Error("Synthetic session failure"); };
-  await assert.rejects(f.service.register(phone, password, browser(), address), /Synthetic session failure/);
+  await assert.rejects(f.service.register(phone, password, browser()), /Synthetic session failure/);
   assert.equal(f.accounts.size, 0); assert.equal(f.accessCodes.size, 0); assert.equal(f.sessions.size, 0); assert.equal(f.sent.length, 0);
 });
 
@@ -870,7 +870,7 @@ test("a rolled-back trial reference collision retries registration without dupli
     if (++attempts === 1) throw new DatabaseOperationError("constraint");
     return create(query);
   };
-  const result = await f.service.register(phone, password, browser(), address);
+  const result = await f.service.register(phone, password, browser());
   assert.equal(result.status, "authenticated"); assert.equal(attempts, 2);
   assert.equal(f.accounts.size, 1); assert.equal(f.accessCodes.size, 1); assert.equal(f.sessions.size, 1);
   assert.equal([...f.accessCodes.values()][0].accountId, result.accountId);
@@ -879,7 +879,7 @@ test("a rolled-back trial reference collision retries registration without dupli
 test("the first paid grant forfeits a legacy unused offer and follows a complete automatic trial", async () => {
   for (const automatic of [false, true]) {
     const f = fixture({ trialDays: 3 });
-    const accountId = automatic ? (await f.service.register(phone, password, browser(), address)).accountId
+    const accountId = automatic ? (await f.service.register(phone, password, browser())).accountId
       : (await f.account({ trialEligibleAt: new Date(f.now()) })).id;
     const trialEnd = f.now() + 3 * DAY;
     if (automatic) await f.database.transaction(async tx => {

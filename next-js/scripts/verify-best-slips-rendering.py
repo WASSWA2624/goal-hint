@@ -14,6 +14,11 @@ def verify(origin):
         html = visible_html(response.text)
         assert html.count("data-best-slips-filter-trigger") == 1
         assert html.count("data-best-slips-applied") == 1
+        date_strip = match(r'<nav\b[^>]*aria-label="Slip date"[^>]*>[\s\S]*?</nav>', html).group()
+        assert date_strip.count('aria-haspopup="dialog"') == 1
+        assert '/en/best-slips?period=custom&amp;' in date_strip
+        assert '&amp;from=2026-10-12&amp;to=2026-10-12' in date_strip
+        assert date_strip.count('aria-current="date"') == (0 if suffix == "?period=all" else 1)
         assert "data-best-slips-publication" not in html
         assert html.count("data-best-slips-summary") == 1
         assert "data-list-divider" not in html
@@ -31,6 +36,7 @@ def verify(origin):
         if not suffix:
             assert "Average pick probability" in html and "Whole-slip win probability" not in html
         elif suffix == archive:
+            assert '&amp;probMin=80&amp;matchesMin=2' in date_strip and 'status=lost&amp;page=1' in date_strip
             assert "12-Oct-2026" in html
             assert html.count("data-slip-key=") == 1
             assert "1 of 1 slip" in html

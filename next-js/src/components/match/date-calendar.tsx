@@ -4,10 +4,11 @@ import { useId, useRef, useState } from "react";
 import styled from "styled-components";
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from "@/components/ui/icons";
 import { addReportingDays, parseReportingDate, type ReportingDate } from "@/domain/calendar";
-import { feedQueryRules, type FeedQuery } from "@/domain/feed-query";
+import { feedQueryRules } from "@/domain/feed-query";
 import { createMessages } from "@/i18n/messages";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { dialogFooterSurface, dialogHeaderSurface } from "@/components/ui/dialog-surfaces";
+import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { media } from "@/styles/theme";
 import { focusRing } from "./filter-parts";
 import { keepFocusInSheet, SheetClose, SheetHeader, SheetScrim, sheetFrame, usePhoneSheet } from "./sheet-parts";
@@ -147,17 +148,19 @@ const Footer = styled.div`
 `;
 
 /**
- * Month calendar in a phone sheet. The first tap picks a day; a later tap within a year ends a
+ * Month calendar shared by the date strip and Filters. The first tap picks a day; a later tap within a year ends a
  * range, and any other tap starts again. Apply with one day picked selects that day.
  */
 export function DateCalendar({ id, presentation = "sheet", locale, today, from, to, onApply, onClose }: {
-  id?: string; presentation?: "sheet" | "dialog"; locale: FeedQuery["locale"]; today: ReportingDate; from: ReportingDate; to: ReportingDate;
+  id?: string; presentation?: "sheet" | "dialog" | "responsive"; locale: string; today: ReportingDate; from: ReportingDate; to: ReportingDate;
   onApply: (from: ReportingDate, to: ReportingDate) => void; onClose: () => void;
 }) {
   const messages = createMessages(locale), sheet = useRef<HTMLDivElement>(null), titleId = useId();
   const [month, setMonth] = useState(() => monthOf(from));
   const [start, setStart] = useState(from), [end, setEnd] = useState<ReportingDate | null>(to);
-  usePhoneSheet(presentation === "sheet", sheet, onClose);
+  const desktop = useDesktopLayout();
+  const nativeDialog = presentation === "dialog" || presentation === "responsive" && desktop;
+  usePhoneSheet(!nativeDialog, sheet, onClose);
   const choose = (date: ReportingDate) => {
     if (end === null && date >= start && spanDays(start, date) <= feedQueryRules.maximumDays) setEnd(date);
     else { setStart(date); setEnd(null); }
@@ -194,7 +197,7 @@ export function DateCalendar({ id, presentation = "sheet", locale, today, from, 
   const title = messages.text("feed.calendar.title"), closeLabel = messages.text("feed.calendar.close");
   const applyLabel = messages.text("feed.calendar.apply"), cancelLabel = messages.text("feed.calendar.cancel");
   const apply = () => onApply(start, end ?? start);
-  if (presentation === "dialog") return <CriteriaDialog id={id ?? titleId} title={title} open onCancel={onClose}
+  if (nativeDialog) return <CriteriaDialog id={id ?? titleId} title={title} open onCancel={onClose}
     closeLabel={closeLabel} cancelLabel={cancelLabel} applyLabel={applyLabel} onApply={apply}>
     <CalendarFields>{fields}</CalendarFields>
   </CriteriaDialog>;

@@ -27,12 +27,12 @@ test("only recovery sends codes and its protections persist on isolated MySQL", 
   const restart = () => createMemberAuth({ database: f.database, config: f.config, now, adminPhone, adminPasswordHash, delivery });
   const auth = restart();
   const sessions = createMemberSessions({ database: f.database, config: f.config, now, adminPhone, adminPasswordHash });
-  const registered = await auth.register(phone, password, { member: null }, address);
+  const registered = await auth.register(phone, password, { member: null });
   assert.equal(registered.status, "authenticated"); assert.equal(registered.requiresVerification, undefined);
   const member = await sessions.verify(registered.token); assert.ok(member);
   assert.equal(await auth.verificationSession(registered.token), null);
   assert.equal((await auth.requestVerification()).status, "invalid");
-  assert.equal((await auth.register(phone, password, { member: null }, address)).status, "conflict");
+  assert.equal((await auth.register(phone, password, { member: null })).status, "conflict");
   assert.equal(messages.length, 0);
   assert.equal(await f.database.query(tx => tx.paymentNotificationOutbox.count()), 0);
   const phoneProof = () => f.database.query(tx => tx.memberAccount.findUniqueOrThrow({ where: { id: member.accountId },
@@ -70,7 +70,7 @@ test("only recovery sends codes and its protections persist on isolated MySQL", 
   assert.equal(await sessions.verify(saved.token), null);
   assert.equal((await restart().login(phone, "replacement password", address)).status, "authenticated");
   const otherPhone = "256700001002";
-  assert.equal((await auth.register(otherPhone, password, { member: null }, "198.51.100.9")).status, "authenticated");
+  assert.equal((await auth.register(otherPhone, password, { member: null })).status, "authenticated");
   const sends = await Promise.all(Array.from({ length: 5 }, (_, i) =>
     auth.requestPasswordReset(otherPhone, `198.51.100.${i + 10}`, i % 2 ? "sms" : "whatsapp")));
   assert.equal(sends.filter(result => result.status === "requested").length, 3); assert.equal(sends.filter(result => result.status === "busy").length, 2);
@@ -124,7 +124,7 @@ test("two active logins and concurrent oldest-session eviction preserve account 
   const viewer = createViewerAccess({ services: async () => ({ config, database: f.database, auth: null }), now,
     settings: async () => ({ settings: { ...defaultSubscriptionSettings, paywallMode: "on" } }) });
   const access = token => viewer(name => name === "goal-hint-member" ? token : undefined);
-  const first = await auth.register(phone, password, { member: null }, address);
+  const first = await auth.register(phone, password, { member: null });
   const original = await sessions.verify(first.token);
   assert.ok(original);
   assert.deepEqual(await access(first.token), { tier: "free", signedIn: true, mode: "on" });
@@ -199,7 +199,7 @@ test("registration grants a single configured trial atomically on MySQL", { time
     settings: async () => ({ settings: { ...defaultSubscriptionSettings, paywallMode: "on" } }) });
   const access = token => viewer(name => name === "goal-hint-member" ? token : undefined);
   const countPeriods = accountId => f.database.query(tx => tx.accessCode.count({ where: { accountId, source: "trial" } }));
-  const registrations = await Promise.all([auth.register(phone, password, binding, address), auth.register("+" + phone, password, binding, address)]);
+  const registrations = await Promise.all([auth.register(phone, password, binding), auth.register("+" + phone, password, binding)]);
   assert.deepEqual(registrations.map(result => result.status).sort(), ["authenticated", "conflict"]);
   const registered = registrations.find(result => result.status === "authenticated");
   const startsAt = new Date(time).toISOString(), endsAt = new Date(time + 4 * DAY).toISOString();
@@ -218,18 +218,18 @@ test("registration grants a single configured trial atomically on MySQL", { time
   assert.equal(+trial.activatedAt, time); assert.equal(+trial.startsAt, time); assert.equal(+trial.endsAt - time, 4 * DAY);
   assert.deepEqual((await codes.subscriptionStatus(identity)).trial, { state: "active", startsAt, endsAt });
   assert.deepEqual(await codes.activateTrial(identity), { state: "forbidden" });
-  assert.equal((await auth.register(phone, password, binding, address)).status, "conflict", "Retry after commit cannot replace the account or grant time");
+  assert.equal((await auth.register(phone, password, binding)).status, "conflict", "Retry after commit cannot replace the account or grant time");
   assert.equal(await countPeriods(account.id), 1);
 
   const failedPhone = "256700001004";
   await f.root.query("CREATE TRIGGER RejectRegistrationTrial BEFORE INSERT ON AccessCode FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'synthetic grant failure'");
   try {
-    await assert.rejects(auth.register(failedPhone, password, binding, address));
+    await assert.rejects(auth.register(failedPhone, password, binding));
   } finally {
     await f.root.query("DROP TRIGGER RejectRegistrationTrial");
   }
   assert.equal(await f.database.query(tx => tx.memberAccount.count({ where: { phone: failedPhone } })), 0);
-  const recovered = await auth.register(failedPhone, password, binding, address);
+  const recovered = await auth.register(failedPhone, password, binding);
   assert.equal(recovered.status, "authenticated");
   assert.equal(await countPeriods(recovered.accountId), 1);
 
@@ -240,7 +240,7 @@ test("registration grants a single configured trial atomically on MySQL", { time
 
   await f.database.query(tx => tx.subscriptionSettings.update({ where: { id: 1 }, data: { trialDays: 0 } }));
   const disabledPhone = "256700001005";
-  const disabled = await auth.register(disabledPhone, password, binding, address);
+  const disabled = await auth.register(disabledPhone, password, binding);
   assert.equal(disabled.status, "authenticated");
   assert.equal(disabled.trial, undefined);
   assert.equal(await countPeriods(disabled.accountId), 0);
