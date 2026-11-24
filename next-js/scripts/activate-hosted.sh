@@ -13,16 +13,23 @@ account=$3
 node=$4
 migration_config=$(realpath -- "$5")
 database=$6
+app_directory=goal-hint
 case "$environment:$account:$database" in
   staging:ghstage:ghstage_*) environment_file=.env.test ;;
+  staging:ghprod:ghprod_test) environment_file=.env.test; app_directory=goal-hint-test ;;
   production:ghprod:ghprod_prod) environment_file=.env.production ;;
   *) echo 'The environment, account and database do not match.' >&2; exit 1 ;;
 esac
 
 home=$(getent passwd "$account" | cut -d: -f6)
-case "$release" in "$home/goal-hint-releases/"*) ;; *) exit 1 ;; esac
-private="$home/goal-hint-private"
-active="$home/goal-hint"
+case "$release" in "$home/$app_directory-releases/"*) ;; *) exit 1 ;; esac
+private="$home/$app_directory-private"
+active="$home/$app_directory"
+ownership=()
+if [[ "$(id -un)" != "$account" ]]; then
+  [[ $EUID == 0 ]]
+  ownership=(-o "$account" -g "$account")
+fi
 [[ -L "$active" && -f "$release/app.js" && -d "$release/standalone" ]]
 [[ "$release" != "$(realpath -- "$active")" ]]
 env_path="$private/$environment_file"
@@ -52,15 +59,16 @@ else
   [[ "$status" == 2 ]] || exit "$status"
   # The database must be backed up and any required writer pause handled before activation.
   : "${GOAL_HINT_MIGRATION_BACKUP:?Set GOAL_HINT_MIGRATION_BACKUP to the verified backup checksum file.}"
-  sha256sum --check --status "$GOAL_HINT_MIGRATION_BACKUP"
+  backup=$(realpath -- "$GOAL_HINT_MIGRATION_BACKUP")
+  (cd -- "$(dirname -- "$backup")" && sha256sum --check --status -- "$(basename -- "$backup")")
   "${migrate[@]}"
 fi
 "${migrate[@]}" --status
 
-install -m 600 -o "$account" -g "$account" "$env_path" "$release/standalone/$environment_file"
-install -d -m 700 -o "$account" -g "$account" "$release/standalone/.goal-hint"
-install -m 600 -o "$account" -g "$account" "$private/.goal-hint/owner-approvals.json" "$release/standalone/.goal-hint/owner-approvals.json"
-install -d -m 755 -o "$account" -g "$account" "$release/tmp"
+install -m 600 "${ownership[@]}" "$env_path" "$release/standalone/$environment_file"
+install -d -m 700 "${ownership[@]}" "$release/standalone/.goal-hint"
+install -m 600 "${ownership[@]}" "$private/.goal-hint/owner-approvals.json" "$release/standalone/.goal-hint/owner-approvals.json"
+install -d -m 755 "${ownership[@]}" "$release/tmp"
 marker=$(mktemp "$release/.goal-hint-migrations.XXXXXX")
 link="$active.next.$$"
 trap 'rm -f -- "$marker" "$link"' EXIT
@@ -74,7 +82,11 @@ JS
 chmod 644 "$marker"
 mv -T "$marker" "$release/.goal-hint-migrations.json"
 ln -s -- "$release" "$link"
-chown -h "$account:$account" "$link"
-runuser -u "$account" -- touch "$release/tmp/restart.txt"
+if [[ ${#ownership[@]} -eq 0 ]]; then
+  touch "$release/tmp/restart.txt"
+else
+  chown -h "$account:$account" "$link"
+  runuser -u "$account" -- touch "$release/tmp/restart.txt"
+fi
 mv -T "$link" "$active"
 printf 'Activated %s on %s with a current database.\n' "${release##*/}" "$environment"

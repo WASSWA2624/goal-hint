@@ -17,7 +17,7 @@ import sys
 
 NAME = re.compile(r"\d{14}_[a-z][a-z0-9_]*\Z")
 DIGEST = re.compile(r"[a-f0-9]{64}\Z")
-TARGETS = {"staging": re.compile(r"ghstage_[a-z0-9_]{1,48}\Z"), "production": re.compile(r"ghprod_prod\Z")}
+TARGETS = {"staging": re.compile(r"(?:ghstage_[a-z0-9_]{1,48}|ghprod_test)\Z"), "production": re.compile(r"ghprod_prod\Z")}
 FOLLOWUP = "20261009123830_durable_jobs"
 FLUTTERWAVE_CHECKOUT = (
     "20261113150000_flutterwave_checkout",

@@ -145,9 +145,11 @@ class DeployMariaDbTests(unittest.TestCase):
         self.assertEqual(db.applied, [first.name])
 
     def test_rejects_cross_environment_schema_before_opening_credentials(self):
-        for environment, database in [("production", "ghstage_localcopy"), ("staging", "ghprod_prod"), ("staging", "ghstage_x;SQL")]:
+        for environment, database in [("production", "ghstage_localcopy"), ("production", "ghprod_test"), ("staging", "ghprod_prod"), ("staging", "ghstage_x;SQL")]:
             with self.subTest(environment=environment, database=database), self.assertRaisesRegex(MigrationError, "selected environment"):
                 HOSTED["target_options"](environment, database, Path("missing.cnf"))
+        with self.assertRaisesRegex(MigrationError, "private MariaDB option file"):
+            HOSTED["target_options"]("staging", "ghprod_test", Path("missing.cnf"))
 
 
 if __name__ == "__main__":

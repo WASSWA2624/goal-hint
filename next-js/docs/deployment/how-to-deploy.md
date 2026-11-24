@@ -4,10 +4,14 @@ The first sections describe the previous shared host. See [VPS staging and
 release promotion](#vps-staging-and-release-promotion) for the Ubuntu VPS.
 
 The owner confirmed that the public domains moved to `104.207.86.22` on or
-before 24 November 2026. The VPS steps below still describe the former
-`209.74.80.202` installation. Verify the new account, databases, worker
-scheduler and migration credentials before using the hosted deployment steps
-against the new origin.
+before 24 November 2026. The new host uses SSH port `21098`. Production runs
+under `ghprod` with `ghprod_prod`, `~/goal-hint`, and
+`~/goal-hint-private`. Staging uses the same system account with `ghprod_test`,
+`~/goal-hint-test`, and `~/goal-hint-test-private`. Release directories follow
+the corresponding `goal-hint-releases` or `goal-hint-test-releases` name.
+`activate-hosted.sh` accepts both verified layouts with their separate
+migration credentials and profiles. The older commands below still describe
+the former `209.74.80.202` VPS where indicated.
 
 | | |
 | --- | --- |
