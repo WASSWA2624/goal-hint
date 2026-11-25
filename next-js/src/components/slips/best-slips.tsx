@@ -10,7 +10,7 @@ import { matchesHref } from "@/domain/navigation";
 import type { SlipsBrowseResult } from "@/domain/best-slips";
 import { bestSlipBand } from "@/domain/best-slip-odds-bands";
 import { createMessages } from "@/i18n/messages";
-import { CriteriaPanel, Note, SlipList, SlipStack } from "./slip-styles";
+import { CriteriaPanel, SlipList, SlipStack } from "./slip-styles";
 import { BestSlipCard } from "./best-slip-card";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { BestSlipsFilters } from "./best-slips-filters";
@@ -55,15 +55,13 @@ export function BestSlips({ result, locale, signedIn = false }: { result: SlipsB
         ? "bestSlips.modelUnavailable" : content.state === "awaiting-publication" ? "bestSlips.awaitingPublication"
         : content.state === "rate-limited" ? "slips.state.rate-limited.description" : "bestSlips.insufficient", { oddsRange })}</p>
       <TextLink href={matchesHref(locale)} prefetch={false}>{m.text("bestSlips.browseMatches")}</TextLink>
-    </Stack></CriteriaPanel> : <>
-      {(content.searchLimited || content.partialCoverage) && <Note role="status">{m.text("bestSlips.partial")}</Note>}
+    </Stack></CriteriaPanel> :
       <SlipMatchRefreshProvider slips={watchedSlips} initialStates={initialStates} enabled={desktop && browse.entitled} editorial onAccessRevoked={browse.revokeAccess}
         {...(content.summary?.asOf !== undefined ? { initialAsOf: content.summary.asOf } : {})}>
-      <div ref={root} tabIndex={-1} aria-busy={browse.updating}><SlipList data-slip-list>{content.slips.map(view => <div key={slipViewKey(view)} data-slip-key={slipViewKey(view)}>
-        <MemoBestSlipCard view={view} day={content.day} locale={locale} signedIn={content.access?.signedIn ?? signedIn} />
-      </div>)}</SlipList></div>
-      </SlipMatchRefreshProvider>
-    </>}
+        <div ref={root} tabIndex={-1} aria-busy={browse.updating}><SlipList data-slip-list>{content.slips.map(view => <div key={slipViewKey(view)} data-slip-key={slipViewKey(view)}>
+          <MemoBestSlipCard view={view} day={content.day} locale={locale} signedIn={content.access?.signedIn ?? signedIn} />
+        </div>)}</SlipList></div>
+      </SlipMatchRefreshProvider>}
     {listWindow && (listWindow.total === null ? <BestSlipsArchivePagination query={listWindow.query} nextCursor={listWindow.nextCursor}
       onFirst={browse.goToFirstPage} onOlder={browse.goToOlder} busy={browse.navigating} locale={locale} />
       : <BestSlipsPagination onPage={browse.goToPage} total={listWindow.total} page={browse.displayQuery.page}

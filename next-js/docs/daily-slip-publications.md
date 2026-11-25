@@ -10,6 +10,10 @@ account erasure. Personal saved slips retain their separate privacy lifecycle.
 `createDailySlipPublisher` takes one bounded Kampala-day cohort from the stored
 Matches forecast and exact featured-pick reader. Forecast and quote rights,
 original-cycle settlement support, and verified bookmaker offers still apply.
+The automatic publisher accepts exact featured full-time match and team goal
+totals on the lines supported by Builder when the Local Engine forecast and
+the same bookmaker offer can be verified. The original goal line, team and
+selection are retained through settlement.
 New slips require scheduled fixtures at least 30 minutes from kickoff at
 selection and commit. The worker uses prices from one verified
 bookmaker per slip. It considers eligible priced picks without adding a
@@ -230,3 +234,12 @@ separate from the hourly publisher.
 Older web builds can still serve the migrated schema before any hourly batch
 exists. Once hourly batches are present, recovery needs an append-aware read
 build so the archived ranks and counts remain readable.
+
+On 24 November 2026, production moved the publisher to the `ghprod` crontab on
+`server2.goalhint.com` and disabled the former production timer. The crontab runs
+`~/goal-hint-slip-publisher/private/run-stored-publisher.sh` at `:00` and `:30`.
+The launcher holds a private lock, reads stored odds through the dedicated TLS
+database role, and writes its run result to `~/goal-hint-slip-publisher/private/publisher.log`.
+The first production run published four slips in the 2.50–5.00 band. The public
+API served all four, and the 14 stored selections satisfied fixture uniqueness
+and the 30-minute kickoff buffer.

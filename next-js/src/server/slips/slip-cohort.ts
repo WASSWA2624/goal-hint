@@ -23,7 +23,7 @@ import { storedSlipGoalForecasts } from "./slip-goal-forecast.ts";
 
 export type SlipCohortReader = (parameters: FeedParameters,
   context: Readonly<{ locale?: string; primaryBookmakerOnly?: boolean; featured?: boolean; total15?: "include" | "only";
-    minimumKickoffLeadMs?: number;
+    minimumKickoffLeadMs?: number; includeAdditionalFeaturedGoals?: boolean;
     additionalGoals?: Readonly<{ keys: readonly AdditionalSlipGoalMarketKey[]; only: boolean }> }>, clock: Clock) => Promise<SlipCohort>;
 
 /** Reuses the production feed's exact filtering, order, record projection and approved price rules.
@@ -89,7 +89,7 @@ export function createStoredSlipCohort(options: Readonly<{
         });
         records.push(...batch);
         if (featured) {
-          featuredSelections.push(...await readFeaturedSlipSelections(tx, batch, asOf));
+          featuredSelections.push(...await readFeaturedSlipSelections(tx, batch, asOf, undefined, context.includeAdditionalFeaturedGoals));
           for (const { fixtureId } of batch) selectionPrices[fixtureId] = [];
         } else if (primaryOnly) Object.assign(selectionPrices, await storedSlipPricePools(tx, batch, asOf, { enabled, primaryBookmakerOnly: true }));
       }

@@ -414,13 +414,16 @@ and settlement in the isolated test database before enabling the production work
 
 ### VPS live football worker
 
-The VPS runs `goalhint-live@ghprod.service` and starts it at boot.
-`goalhint-live@ghstage.service` is disabled. Each unit reads its account's private
-`~/goal-hint-worker/private/worker.env` and the approval register in its active
-worker release. The worker has a dedicated TLS database user with football and
-job permissions. The hosted MariaDB smoke test verified fixture import,
-provisional predictions, score polling, settlement, and public feed reads with
-simulated provider responses.
+On `server2.goalhint.com`, the production account's crontab runs
+`~/goal-hint-worker/private/football-only-cron.sh` every five minutes. The
+launcher starts the worker only when it can take the lock. An active worker
+continues across checks with a 24-hour runtime cap and graceful shutdown.
+It reads the private `worker.env` and the active worker release's
+approval register. The dedicated database user has football and job permissions
+and requires TLS. Before switching hosts, run the launcher with `--check` to
+verify policy and the database connection without calling the provider. Disable
+the former production worker before starting the new one. Staging provider jobs
+remain disabled.
 
 The owner confirmed publication rights and authorized quota use on production.
 `GOAL_HINT_FOOTBALL_EXISTING_PREPAID=true` uses the current direct prepaid term
@@ -430,8 +433,8 @@ authorization and the provider account status. The invoice total is unverified.
 
 Keep the shared provider account's quota use on production. The local live
 worker and `Goal Hint Football Archive` scheduled task are paused. Test worker
-changes on staging with simulated responses. The VPS units share a lock to
-prevent overlap. Check the production journal for `ready` and
+changes on staging with simulated responses. Check the production worker's
+`~/goal-hint-worker/private/football.log` for `ready` and
 `selection-scheduled`, then check the import receipts, result observations,
 and published prediction revisions. Compare fresh quota dispatches in
 production and staging when checking isolation.
@@ -445,8 +448,8 @@ the results poller.
 The production worker keeps a slot for daily selection so pending predictions
 cannot delay fixture imports. With AI off, the provider-first forecast path
 uses stored evidence and skips outbound preparation requests. Live score and
-result polling uses the same quota ledger. Odds, AI, research, and the separate
-statistics and events collector are off.
+result polling uses the same quota ledger. On the current host, pre-match odds
+collection and live details are enabled.
 
 #### Historical import and live detail rollout
 

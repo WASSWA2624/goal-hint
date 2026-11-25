@@ -6,7 +6,8 @@ import { displayMarketOddsPrice } from "../../domain/in-play-odds.ts";
 import { inspectLocalFeaturedQuote, localFeaturedBookmakerBetIds, localFeaturedQuoteScopeReason,
   verifiedLocalFeaturedBinding } from "../../domain/local-featured-decision.ts";
 import type { StoredMatchFeedRecord } from "../../domain/match-feed.ts";
-import { isSlipMarketSelection, isTotal15SlipSelection, total15Direction, type SlipTotal15Forecast } from "../../domain/slip-markets.ts";
+import { additionalSlipGoalMarket, additionalSlipGoalSelection, isSlipMarketSelection, isTotal15SlipSelection,
+  total15Direction, type SlipTotal15Forecast } from "../../domain/slip-markets.ts";
 import { editorialSlipOfferSchema, type EditorialSlipOffer } from "../../domain/slip-quote.ts";
 import type { SlipForecastReference, SlipSelection } from "../../domain/slip-builder.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
@@ -16,7 +17,7 @@ import { storedCurrentBookmakerQuotes, type StoredCurrentBookmakerQuotes } from 
 import { readFeaturedGoalMarkets, type FeaturedGoalMarkets } from "../predictions/extended-market-read.ts";
 import { storedRevisions } from "../predictions/history-read.ts";
 import { qualifiedEditorialSlipRevision } from "./slip-forecast.ts";
-import { storedSlipTotal15Forecasts } from "./slip-goal-forecast.ts";
+import { readSlipGoalExtensions, storedSlipTotal15Forecasts } from "./slip-goal-forecast.ts";
 
 type QuoteOccurrence = Readonly<{ fixtureId: string; kickoffAt: number }>;
 type Bookmaker = StoredCurrentBookmakerQuotes["bookmakers"][number];
@@ -48,27 +49,35 @@ function exactOffers(quotes: StoredCurrentBookmakerQuotes | undefined, occurrenc
 }
 
 function featuredSlipCandidates(record: StoredMatchFeedRecord, goals: FeaturedGoalMarkets | undefined,
-  quotes: StoredCurrentBookmakerQuotes | undefined, total15: SlipTotal15Forecast | undefined, at: number): PricedFeaturedSelection[] {
+  quotes: StoredCurrentBookmakerQuotes | undefined, total15: SlipTotal15Forecast | undefined, at: number,
+  includeAdditionalGoals: boolean): PricedFeaturedSelection[] {
   const { forecast, fixtureId, kickoffAt, cycleId } = record;
   if (!forecast || forecast.updateDelayed || forecast.publishedAt > at || !cycleId || kickoffAt === null ||
     forecast.publishedAt >= getPublicationDeadline(kickoffAt) || record.status !== "scheduled" || record.cycle?.state !== "open" ||
     record.cycle.mode !== "current" || record.update.prediction !== "current") return [];
   const pick = upcomingFeaturedPick(record, goals, quotes, at, true);
   if (!pick?.featuredQuote || !pick.odds || pick.source !== "local-engine") return [];
-  const selection = pick.key === total15MarketKey ? `${pick.selection}-1.5` : pick.selection;
-  if (!isSlipMarketSelection(pick.family, selection) || pick.key !== pick.family && pick.key !== total15MarketKey) return [];
-  // Only use choices that the original-cycle settlement path can revalidate exactly.
-  const market = forecast.markets.find((entry) => entry.market.family === pick.family);
-  const supported = isTotal15SlipSelection(selection) ? total15?.source === "local-poisson" && total15.probabilities[selection] === pick.probability
-    : market?.market.source === pick.source && (!market.outcome || market.outcome.status === "pending") &&
-      (market.market.probabilities as Readonly<Record<string, number>>)[selection] === pick.probability;
-  if (!supported) return [];
+  const additional = includeAdditionalGoals ? additionalSlipGoalMarket(pick.key) : undefined;
+  if (additional && pick.selection !== "over" && pick.selection !== "under") return [];
+  if (!additional && pick.key !== pick.family && pick.key !== total15MarketKey) return [];
+  const family = additional?.family ?? pick.family;
+  const selection = additional ? pick.selection === "over" ? additional.over : additional.under
+    : pick.key === total15MarketKey ? `${pick.selection}-1.5` : pick.selection;
+  if (!isSlipMarketSelection(family, selection)) return [];
+  // Additional totals are checked against the sealed goal extension after exact prices are established.
+  if (!additional) {
+    const market = forecast.markets.find((entry) => entry.market.family === pick.family);
+    const supported = isTotal15SlipSelection(selection) ? total15?.source === "local-poisson" && total15.probabilities[selection] === pick.probability
+      : market?.market.source === pick.source && (!market.outcome || market.outcome.status === "pending") &&
+        (market.market.probabilities as Readonly<Record<string, number>>)[selection] === pick.probability;
+    if (!supported) return [];
+  }
   const offers = exactOffers(quotes, { fixtureId, kickoffAt }, pick.key, pick.selection, at);
   // First prove the site's featured price. Alternatives can only price that same outcome.
   if (offers.get(pick.featuredQuote.bookmakerId)?.decimal !== pick.odds) return [];
   return [...offers.values()].flatMap((offer): PricedFeaturedSelection[] => !offer ? [] : [
     { fixtureId, kickoffAt, homeTeam: record.homeTeam, awayTeam: record.awayTeam, competition: record.competition,
-      family: pick.family, selection, probability: pick.probability, odds: displayMarketOddsPrice(offer.decimal), oddsBasis: "bookmaker",
+      family, selection, probability: pick.probability, odds: displayMarketOddsPrice(offer.decimal), oddsBasis: "bookmaker",
       source: pick.source, bookmaker: { id: offer.bookmakerId, name: offer.bookmakerName }, offer,
       forecast: { cycleId, revisionId: forecast.revisionId, publishedAt: forecast.publishedAt } },
   ]);
@@ -84,14 +93,21 @@ async function readFeaturedSlipInputs(tx: Prisma.TransactionClient, upcoming: re
 }
 
 export async function readFeaturedSlipSelections(tx: Prisma.TransactionClient, records: readonly StoredMatchFeedRecord[], at: number,
-  readInputs = readFeaturedSlipInputs) {
+  readInputs = readFeaturedSlipInputs, includeAdditionalGoals = false) {
   const upcoming = records.filter(({ forecast, kickoffAt }) => forecast && kickoffAt !== null && at < getPublicationDeadline(kickoffAt));
   if (!upcoming.length) return [];
   const { goals, quotes, total15 } = await readInputs(tx, upcoming, at);
   const priced = upcoming.flatMap((record) => featuredSlipCandidates(record, goals.get(record.forecast!.revisionId),
-    quotes.get(record.fixtureId), total15[record.fixtureId], at));
-  const revisions = await storedRevisions(tx, priced.map(({ forecast }) => forecast.revisionId));
-  return priced.filter((selection) => qualifiedEditorialSlipRevision(selection, revisions.get(selection.forecast.revisionId)));
+    quotes.get(record.fixtureId), total15[record.fixtureId], at, includeAdditionalGoals));
+  const additionalRevisions = [...new Set(priced.flatMap(({ selection, forecast }) =>
+    additionalSlipGoalSelection(selection) ? [forecast.revisionId] : []))];
+  const [revisions, extensions] = await Promise.all([
+    storedRevisions(tx, priced.map(({ forecast }) => forecast.revisionId)), readSlipGoalExtensions(tx, additionalRevisions),
+  ]);
+  return priced.filter((selection) => {
+    const { revisionId } = selection.forecast;
+    return qualifiedEditorialSlipRevision(selection, revisions.get(revisionId), extensions.get(revisionId), at);
+  });
 }
 
 export async function lockFeaturedSlipOdds(tx: Prisma.TransactionClient, fixtureIds: readonly string[]) {
@@ -109,8 +125,10 @@ export async function verifyFeaturedSlipOffers(tx: Prisma.TransactionClient, sel
   if (locked.length !== ids.length) return false;
   const quotes = await readQuotes(tx, selections, at, localFeaturedBookmakerBetIds);
   return selections.every(({ fixtureId, kickoffAt, family, selection, offer }) => {
-    if (!offer) return false;
-    const [marketKey, choice] = isTotal15SlipSelection(selection) ? [total15MarketKey, total15Direction(selection)] : [family, selection];
+    const additional = additionalSlipGoalSelection(selection);
+    if (!offer || additional && additional.family !== family) return false;
+    const [marketKey, choice] = additional ? [additional.key, selection === additional.over ? "over" : "under"]
+      : isTotal15SlipSelection(selection) ? [total15MarketKey, total15Direction(selection)] : [family, selection];
     const current = exactOffers(quotes.get(fixtureId), { fixtureId, kickoffAt }, marketKey, choice, at).get(offer.bookmakerId);
     return !!current && evidenceFingerprint(current) === evidenceFingerprint(offer);
   });

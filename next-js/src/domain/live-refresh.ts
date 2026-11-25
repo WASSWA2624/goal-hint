@@ -8,6 +8,7 @@ import { fullDetailSnapshot } from "./detail-snapshot.ts";
 import type { MatchFeedResponse } from "./match-feed.ts";
 import type { LiveMatchSnapshot } from "./live-match.ts";
 import type { PreMatchBookmakerOdds } from "./bookmaker-odds.ts";
+import type { SettlementStatus } from "./market-settlement.ts";
 
 export const liveRefreshRules = Object.freeze({ activeMs: 20_000, quietMs: 60_000, timeoutMs: 30_000, kickoffLeadMs: 30 * 60_000 });
 
@@ -79,6 +80,16 @@ function mergeBookmakerOdds(previous: PreMatchBookmakerOdds | null | undefined, 
 function mergeLiveMatchObservation(previous: LiveMatchSnapshot | null | undefined, next: LiveMatchSnapshot | null | undefined) {
   if (!previous || !next || previous.cycleId !== next.cycleId || previous.kickoffAt !== next.kickoffAt) return next;
   return next.collectedAt < previous.collectedAt ? previous : next;
+}
+
+/** Current statistics and events can expire independently while the stored values stay unchanged. */
+export function liveMatchFreshness(snapshot: LiveMatchSnapshot | null | undefined, asOf: number,
+  fixtureStatus?: SettlementStatus, historical = false) {
+  const retained = (status: SettlementStatus | undefined) => status !== undefined && status !== "live" && status !== "scheduled" && status !== "unknown";
+  if (!snapshot || historical || retained(fixtureStatus) || retained(snapshot.status)) return { statistics: false, events: false };
+  const cutoff = asOf - snapshot.staleAfterMs;
+  const stale = (at: number | null) => at !== null && at < cutoff;
+  return { statistics: stale(snapshot.statistics.retrievedAt), events: stale(snapshot.events.retrievedAt) };
 }
 
 export type RefreshEnvironment = Readonly<{

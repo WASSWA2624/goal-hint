@@ -120,15 +120,15 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
   const matchCountRange = rangeLabel(appliedQuery.matchesMin, appliedQuery.matchesMax, (value) => m.number(value));
   const selectDates = (from: ReportingDate, to: ReportingDate = from) => selectBestSlipsDates(appliedQuery, from, to, today);
   return <FiltersPanel aria-label={m.text("bestSlips.filters.title")} aria-busy={busy} data-best-slips-filters>
+    <DateStrip locale={locale} today={today} {...bounds} label={m.text("bestSlips.filters.slipDate")} showOnDesktop
+      hrefForDay={date => `${bestSlipsHref(locale)}${bestSlipsPageSearch(selectDates(date))}`}
+      onDatesChange={(from, to) => onChange(selectDates(from, to))} />
     <PerformanceSummary locale={locale} kind="slips" title={m.text(todayScope ? "bestSlips.performance.today" : "performance.summary.title")} counts={statistics ?? null} period={desktop ? desktopPerformancePeriod : performancePeriod}
       compactHeader showCoverage={false} activeResult={appliedQuery.status === "all" ? undefined : appliedQuery.status}
       onResult={(result) => onChange(selectSlipSummaryResult(appliedQuery, result ?? "all"))} disabled={busy}
       resultAttributes={(result) => ({ "data-slip-result": result ?? "all" })}
       actions={<BestSlipsFilterTrigger ref={opener} aria-disabled={busy} data-best-slips-filter-trigger
         dialogId={dialogId} open={open} onClick={() => { if (!busy) openFilters(); }}>{m.text("filters.title")}</BestSlipsFilterTrigger>} />
-    <DateStrip locale={locale} today={today} {...bounds} label={m.text("bestSlips.filters.slipDate")} showOnDesktop
-      hrefForDay={date => `${bestSlipsHref(locale)}${bestSlipsPageSearch(selectDates(date))}`}
-      onDatesChange={(from, to) => onChange(selectDates(from, to))} />
     <AppliedSummary data-best-slips-applied aria-live="polite" aria-atomic="true">
       <AppliedSelection data-applied-selection>
         <span data-browse-scope="mobile">{currentRange ?? m.text("bestSlips.filters.allDates")}</span>

@@ -9,7 +9,7 @@ import type { InsightsPreview } from "@/domain/match-insights";
 import { gateInsights } from "@/domain/paywall";
 import { isCompletedFixtureStatus } from "@/domain/market-settlement";
 import type { ReportingDate } from "@/domain/calendar";
-import { liveRefreshRules, mergeLiveDetail } from "@/domain/live-refresh";
+import { feedRefreshInterval, liveMatchFreshness, mergeLiveDetail } from "@/domain/live-refresh";
 import { FeedPaginationError } from "@/domain/feed-pagination-error";
 import type { MatchDetailResponse } from "@/domain/match-detail";
 import { DetailStateProvider } from "@/state/detail-provider";
@@ -31,6 +31,7 @@ function DeferredPreview({ promise, resolve }: { promise: Promise<InsightsPrevie
 
 /** Everything the page shows: the read clock and sync time change on every poll without changing the view. */
 const shown = (detail: MatchDetailResponse) => JSON.stringify({ ...detail, asOf: 0,
+  liveMatchFreshness: liveMatchFreshness(detail.liveMatch, detail.asOf, detail.fixture.status),
   fixture: { ...detail.fixture, syncedAt: 0, marketOdds: detail.fixture.marketOdds && {
     kind: detail.fixture.marketOdds.kind, prices: detail.fixture.marketOdds.prices,
   } },
@@ -41,7 +42,7 @@ const shown = (detail: MatchDetailResponse) => JSON.stringify({ ...detail, asOf:
 });
 
 function LiveDetail({ initial, today, locale, children, preview: initialPreview = null, previewPromise, showAccount = false, offer = null }: LiveDetailProps) {
-  const [data, setData] = useState(initial), [asOf, setAsOf] = useState(initial.asOf);
+  const [data, setData] = useState(initial);
   const [deferredPreview, setDeferredPreview] = useState<{ promise: Promise<InsightsPreview | null> | undefined; value: InsightsPreview | null } | null>(null);
   const resolvePreview = useCallback((value: InsightsPreview | null) => setDeferredPreview({ promise: previewPromise, value }), [previewPromise]);
   const preview = deferredPreview && deferredPreview.promise === previewPromise ? deferredPreview.value : initialPreview;
@@ -54,7 +55,7 @@ function LiveDetail({ initial, today, locale, children, preview: initialPreview 
   }, []);
   const accept = useCallback((next: MatchDetailResponse) => {
     const changed = shown(next) !== shown(accepted.current);
-    accepted.current = next; setAsOf(next.asOf);
+    accepted.current = next;
     if (changed) setData(next);
   }, []);
   useEffect(() => {
@@ -78,11 +79,12 @@ function LiveDetail({ initial, today, locale, children, preview: initialPreview 
       // Keep the accepted snapshot; the next scheduled refresh retries automatically.
     } finally { if (request.current === controller) request.current = null; }
   }, [accept, dispatch, initial.fixture.fixtureId, router]);
-  // A scheduled match polls fast only near kickoff, judged by the last read clock (no render-time Date.now()).
-  const fixture = data.fixture, kickoffAt = fixture.kickoffAt;
-  const active = fixture.status === "live" || data.run?.phase === "updating" ||
-    (fixture.status === "scheduled" && kickoffAt !== null && Math.abs(kickoffAt - asOf) <= liveRefreshRules.kickoffLeadMs);
-  useLiveRefresh({ today, enabled: true, interval: active ? liveRefreshRules.activeMs : liveRefreshRules.quietMs,
+  // The timer reads the accepted result immediately, before React commits the next render.
+  const interval = () => {
+    const current = accepted.current;
+    return feedRefreshInterval(current, [current.fixture], current.asOf);
+  };
+  useLiveRefresh({ today, enabled: true, interval,
     refresh, rollover: () => { void refresh(); } });
   const sections = preview ? gateInsights(preview, data.access, isCompletedFixtureStatus(data.fixture.status)).sections : null;
   const allowed = hasMatchPredictionAccess(data);

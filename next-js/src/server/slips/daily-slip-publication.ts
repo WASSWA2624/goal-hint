@@ -49,7 +49,7 @@ export function createDailySlipPublisher({ database, competitionIds, verifyPubli
 
       const cohort = await storedRead(new URLSearchParams({ from: day, to: day, status: "scheduled", market: publicPolicy.markets.join(","),
         sort: "probability", dir: "desc", pageSize: String(feedQueryRules.maximumPageSize) }),
-      { featured: true, minimumKickoffLeadMs: bestSlipKickoffBufferMs }, { now: () => asOf });
+      { featured: true, includeAdditionalFeaturedGoals: true, minimumKickoffLeadMs: bestSlipKickoffBufferMs }, { now: () => asOf });
       if (cohort.today !== day || cohort.range.from !== day || cohort.range.to !== day || cohort.asOf !== asOf || !cohort.featuredSelections)
         return { day, status: "unavailable" };
       const { featuredSelections } = cohort;

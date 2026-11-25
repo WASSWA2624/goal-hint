@@ -164,6 +164,12 @@ export async function verifyBestSlipsCalendar(page, origin, widths = [390, 1440]
     await page.reload();
     await page.waitForFunction(mode => document.querySelector('meta[name="color-scheme"]')?.content === mode, mode);
     const strip = page.getByRole("navigation", { name: "Slip date", exact: true });
+    const stripAbovePerformance = await strip.evaluate(element => {
+      const stripBounds = element.getBoundingClientRect();
+      const heading = element.parentElement.querySelector("[data-performance-heading]");
+      return stripBounds.height > 0 && stripBounds.bottom <= heading.getBoundingClientRect().top;
+    });
+    assert(stripAbovePerformance, "The date strip appears above the performance heading");
     const picker = strip.locator('[aria-haspopup="dialog"]');
     const calendar = page.getByRole("dialog", { name: "Choose dates", exact: true });
     const date = day => calendar.locator('button[aria-pressed]').filter({ hasText: new RegExp(`^${day}$`) });

@@ -5,9 +5,11 @@ import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { OutcomeBadge } from "@/components/match/prediction-presentation";
 import { CompetitionLogo } from "@/components/match/competition-media";
-import { LiveMatchTime, liveScoreText } from "@/components/match/score-presentation";
+import { LiveMatchTime, ScoreFigures, liveScoreText, matchScoreDescription } from "@/components/match/score-presentation";
+import { matchCardScore } from "@/domain/match-card";
 import { formLetters } from "@/domain/match-details";
 import type { MarketFamily } from "@/domain/markets";
+import { isPlayedFinalStatus } from "@/domain/market-settlement";
 import { toUtcIsoString } from "@/domain/calendar";
 import { matchArchiveHref } from "@/domain/navigation";
 import { media, type AccentName } from "@/styles/theme";
@@ -154,7 +156,7 @@ const Versus = styled.div`
     font-size: ${size("body")};
     font-variant-numeric: tabular-nums;
   }
-  > b[data-score] { block-size: auto; color: ${({ theme }) => theme.color.text}; background: none; font-size: var(--gh-font-displayLarge); font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: var(--gh-leading-dense); white-space: nowrap; }
+  > b[data-score] { display: flex; align-items: baseline; gap: var(--gh-spacing-1); block-size: auto; color: ${({ theme }) => theme.color.text}; background: none; font-size: var(--gh-font-displayLarge); font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: var(--gh-leading-dense); white-space: nowrap; }
   > b[data-live-score] { ${liveScoreText} }
   > span { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("secondary")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   > span[data-live] { display: inline-flex; align-items: center; gap: var(--gh-spacing-1_25); color: ${({ theme }) => theme.color.live.text}; }
@@ -176,14 +178,20 @@ const Versus = styled.div`
 export const MatchBanner = memo(function MatchBanner({ touchline = false }: { touchline?: boolean }) {
   const { data, preview, messages, locale, home, away } = useStableDetails();
   const fixture = data.fixture, context = preview?.sections.context;
-  const played = fixture.score && (fixture.status === "live" || fixture.status.startsWith("finished") || fixture.status === "awarded");
   const currentLiveScore = fixture.status === "live";
+  const final = isPlayedFinalStatus(fixture.status) || fixture.status === "awarded";
+  const display = matchCardScore(fixture, true);
+  const score = currentLiveScore || final ? display.score : null;
+  const shootout = display.shootout && { home: messages.number(display.shootout.home), away: messages.number(display.shootout.away) };
+  const delayed = (fixture.status === "scheduled" || fixture.status === "unknown") && fixture.kickoffAt !== null &&
+    fixture.kickoffAt <= data.asOf && fixture.update?.statusFreshness?.state === "awaiting-update";
   const form = (side: "home" | "away") => {
     const team = side === "home" ? fixture.homeTeam : fixture.awayTeam, records = preview?.sections.form[side] ?? [];
     return records.length ? <FormLetters letters={formLetters(records, team.id, 5)} label={messages.text("details.lastFive", { team: side === "home" ? home : away })} /> : null;
   };
-  const status = fixture.status === "live" && fixture.liveClock && (fixture.liveClock.minute !== null || fixture.liveClock.phase !== "in-play")
-    ? <LiveMatchTime clock={fixture.liveClock} messages={messages} /> : messages.text(`match.status.${fixture.status}`);
+  const status = currentLiveScore && fixture.liveClock && (fixture.liveClock.minute !== null || fixture.liveClock.phase !== "in-play")
+    ? <LiveMatchTime clock={fixture.liveClock} messages={messages} showStoppageSeconds />
+    : delayed ? messages.text("match.result.delayed") : messages.text(`match.status.${fixture.status}`);
   const competition = [fixture.competition.name || messages.text("match.competitionUnknown"), context?.competition.round].filter(Boolean).join("\u00a0· ");
   return <Box $touchline={touchline} id="current-match-summary" aria-labelledby="match-banner-title">
     <Context title={competition}>
@@ -202,8 +210,13 @@ export const MatchBanner = memo(function MatchBanner({ touchline = false }: { to
     <Team $side="home"><Crest name={fixture.homeTeam.name} url={fixture.homeTeam.logoUrl} size={48} eager />
       <TeamText $side="home" $touchline={touchline}>{touchline && <small>{messages.text("touchline.home")}</small>}<strong title={home}>{home}</strong>{!touchline && form("home")}</TeamText></Team>
     <Versus>
-      {played ? <b data-score data-live-score={currentLiveScore || undefined}>{messages.number(fixture.score!.home)} – {messages.number(fixture.score!.away)}</b> : <b>{fixture.status.startsWith("finished") || fixture.status === "awarded" ? "–" : messages.text("details.versus")}</b>}
-      {(played || fixture.status !== "scheduled") && <span data-live={fixture.status === "live" || undefined}>{status}</span>}
+      {score ? <b data-score data-live-score={currentLiveScore || undefined}
+        title={shootout || display.regulationOnly ? matchScoreDescription(display, { home, away }, messages, final, false) : undefined}>
+        {shootout ? <ScoreFigures home={messages.number(score.home)} away={messages.number(score.away)} shootout={shootout} />
+          : <>{messages.number(score.home)} – {messages.number(score.away)}</>}
+      </b> : <b>{final ? "–" : messages.text("details.versus")}</b>}
+      {(fixture.status !== "scheduled" || delayed) && <span data-live={currentLiveScore || undefined}
+        title={delayed ? messages.text("match.result.delayedDetail") : undefined}>{status}</span>}
     </Versus>
     <Team $side="away"><Crest name={fixture.awayTeam.name} url={fixture.awayTeam.logoUrl} size={48} eager />
       <TeamText $side="away" $touchline={touchline}>{touchline && <small>{messages.text("touchline.away")}</small>}<strong title={away}>{away}</strong>{!touchline && form("away")}</TeamText></Team>

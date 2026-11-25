@@ -92,8 +92,8 @@ export function TouchlineTabs({ view }: { view: MatchView }) {
       {!allowed ? <LockedSurface><TouchlineEmpty><UnlockLink locale={locale} signedIn={data.access.signedIn} returnTo={data.route.path} stretch /></TouchlineEmpty></LockedSurface>
       : <TouchlineBody>
         {selected === "stats" && <>
+          {(data.fixture.status === "live" || data.liveMatch != null) && <Observations kind="statistics" />}
           <Section section="stats" view={view} heading={false}><StatsSection /></Section>
-          {Boolean(data.liveMatch?.statistics.items.length) && <Observations kind="statistics" />}
         </>}
         {selected === "form" && <FormAndH2H view={view} />}
         {selected === "standings" && <TouchlineStandings view={view} />}

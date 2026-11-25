@@ -14,7 +14,8 @@ def verify(origin):
         html = visible_html(response.text)
         assert html.count("data-best-slips-filter-trigger") == 1
         assert html.count("data-best-slips-applied") == 1
-        date_strip = match(r'<nav\b[^>]*aria-label="Slip date"[^>]*>[\s\S]*?</nav>', html).group()
+        date_navigation = match(r'<nav\b[^>]*aria-label="Slip date"[^>]*>[\s\S]*?</nav>', html)
+        date_strip = date_navigation.group()
         assert date_strip.count('aria-haspopup="dialog"') == 1
         assert '/en/best-slips?period=custom&amp;' in date_strip
         assert '&amp;from=2026-10-12&amp;to=2026-10-12' in date_strip
@@ -22,7 +23,7 @@ def verify(origin):
         assert "data-best-slips-publication" not in html
         assert html.count("data-best-slips-summary") == 1
         assert "data-list-divider" not in html
-        assert "data-performance-heading" in html
+        assert date_navigation.end() < html.index("data-performance-heading")
         trigger = match(r'<button\b[^>]*data-best-slips-filter-trigger="[^"]*"[^>]*>[\s\S]*?</button>', html).group()
         assert ">Filters</span>" in trigger
         if suffix == "?period=all":
@@ -30,7 +31,7 @@ def verify(origin):
         elif suffix == legacy:
             assert "3 slips published" in html and "of 10 slips published" not in html
         elif suffix == empty:
-            assert "0 of 10 slips published" in html and "at the start of each hour" in html
+            assert "0 of 10 slips published" in html and "every 30 minutes" in html
         else:
             assert "3 of 10 slips published" in html
         if not suffix:
@@ -41,6 +42,11 @@ def verify(origin):
             assert html.count("data-slip-key=") == 1
             assert "1 of 1 slip" in html
             assert "Average pick probability" in html and "Whole-slip win probability" in html
+    limited = request(origin, "/best-slips/limited")
+    assert limited.status == 200
+    limited_html = visible_html(limited.text)
+    assert limited_html.count("data-slip-key=") == 3
+    assert "qualifying slips undiscovered" not in limited_html
     print("Best Slips SSR passed for defaults, dated filters, numeric and result filters, and bounded All dates browsing.", flush=True)
 
 

@@ -4,6 +4,7 @@ import { filledTableRows } from "@/components/ui/filled-surfaces";
 import styled from "styled-components";
 import { utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import type { LiveMatchSnapshot, LiveMatchStatistics, LiveMatchEvents } from "@/domain/live-match";
+import { liveMatchFreshness } from "@/domain/live-refresh";
 import { isPlayedFinalStatus, type SettlementStatus } from "@/domain/market-settlement";
 import type { Messages } from "@/i18n/messages";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
@@ -91,10 +92,7 @@ export function LiveMatchPanel({ snapshot, asOf, home, away, homeLogoUrl = null,
 }) {
   const m = useMessages(locale);
   const status = fixtureStatus ?? snapshot?.status;
-  const recorded = (value: SettlementStatus | undefined) => value !== undefined && value !== "live" && value !== "scheduled" && value !== "unknown";
-  const retained = historical || recorded(status) || recorded(snapshot?.status);
-  const stale = (source: LiveMatchStatistics | LiveMatchEvents) => !retained && source.retrievedAt !== null
-    && asOf - source.retrievedAt > snapshot!.staleAfterMs;
+  const freshness = liveMatchFreshness(snapshot, asOf, status, historical);
   const isLive = !historical && status === "live" && snapshot?.status === "live";
   const finalData = status !== undefined && isPlayedFinalStatus(status) && snapshot !== null && isPlayedFinalStatus(snapshot.status);
   const stateLabel = m.text(historical ? "liveMatch.retained" : isLive ? "liveMatch.live"
@@ -116,7 +114,7 @@ export function LiveMatchPanel({ snapshot, asOf, home, away, homeLogoUrl = null,
         </div>
       </EventToolbar>
       {!snapshot ? <EventsEmpty><HistoryIcon /><MutedText>{m.text("liveMatch.eventsNotCollected")}</MutedText></EventsEmpty> : <>
-        <SourceNotice source={snapshot.events} kind={m.text("liveMatch.events")} stale={stale(snapshot.events)} m={m} />
+        <SourceNotice source={snapshot.events} kind={m.text("liveMatch.events")} stale={freshness.events} m={m} />
         {snapshot.events.state === "available" && snapshot.events.items.length === 0 && <EventsEmpty><HistoryIcon /><MutedText>{m.text("liveMatch.noEvents")}</MutedText></EventsEmpty>}
         {snapshot.events.items.length > 0 && <MatchEventTimeline events={snapshot.events.items} home={home} away={away} homeLogoUrl={homeLogoUrl} awayLogoUrl={awayLogoUrl} context={context} m={m} />}
         <EventSource data-event-source><summary>{m.text("liveMatch.eventSource")}</summary><div>
@@ -133,7 +131,7 @@ export function LiveMatchPanel({ snapshot, asOf, home, away, homeLogoUrl = null,
       <strong>{stateLabel}</strong>
       <section aria-label={embedded ? m.text("liveMatch.statistics") : undefined} aria-labelledby={embedded ? undefined : section === "all" ? "match-statistics-title" : "match-observations-title"}><Stack $gap="sm">
         {section === "all" && <h3 id="match-statistics-title">{m.text("liveMatch.statistics")}</h3>}
-        <SourceStatus source={snapshot.statistics} kind={m.text("liveMatch.statistics")} stale={stale(snapshot.statistics)} m={m} />
+        <SourceStatus source={snapshot.statistics} kind={m.text("liveMatch.statistics")} stale={freshness.statistics} m={m} />
         {snapshot.statistics.items.length > 0 && <Stats>
           <thead><tr><th scope="col">{m.text("liveMatch.statistic")}</th><th scope="col">{home}</th><th scope="col">{away}</th></tr></thead>
           <tbody>{snapshot.statistics.items.map((row) => <tr key={row.metric} data-match-statistic={row.metric}>
@@ -145,7 +143,7 @@ export function LiveMatchPanel({ snapshot, asOf, home, away, homeLogoUrl = null,
       </Stack></section>
       {section !== "statistics" && <section aria-labelledby="match-events-title"><Stack $gap="sm">
         {section === "all" && <h3 id="match-events-title">{m.text("liveMatch.events")}</h3>}
-        <SourceStatus source={snapshot.events} kind={m.text("liveMatch.events")} stale={stale(snapshot.events)} m={m} />
+        <SourceStatus source={snapshot.events} kind={m.text("liveMatch.events")} stale={freshness.events} m={m} />
         {snapshot.events.state === "available" && snapshot.events.items.length === 0 && <MutedText>{m.text("liveMatch.noEvents")}</MutedText>}
         {snapshot.events.items.length > 0 && <details><summary>{m.text("liveMatch.eventCount", { count: m.number(snapshot.events.items.length) })}</summary>
           <MatchEventTimeline events={snapshot.events.items} home={home} away={away} homeLogoUrl={homeLogoUrl} awayLogoUrl={awayLogoUrl} context={context} m={m} />

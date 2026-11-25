@@ -5,7 +5,7 @@ import { storedLiveMatchSnapshot } from '../src/server/live-match/live-match-rea
 import { matchDetailResponseSchema, storedMatchDetailResponseSchema } from '../src/domain/match-detail.ts';
 import { createMatchDetailService } from '../src/server/matches/detail-service.ts';
 import { gateDetailResponse } from '../src/domain/paywall.ts';
-import { mergeLiveDetail } from '../src/domain/live-refresh.ts';
+import { liveMatchFreshness, mergeLiveDetail } from '../src/domain/live-refresh.ts';
 import { liveDetail } from './helpers/live-refresh-fixtures.mjs';
 import { liveMatchViewSnapshot, liveMatchViewIdentity, liveMatchViewNow } from './helpers/live-match-view-fixtures.mjs';
 
@@ -85,4 +85,14 @@ test('live detail accepts independent match updates without revising forecasts a
   const disabled = { ...next }; delete disabled.liveMatch;
   assert.equal(mergeLiveDetail(accepted, disabled).liveMatch, undefined);
   assert.equal(mergeLiveDetail(accepted, { ...next, liveMatch: null }).liveMatch, null);
+});
+
+test('an unchanged live response can age out statistics without aging out events or final observations', () => {
+  const known = liveMatchViewSnapshot();
+  const boundary = known.statistics.retrievedAt + known.staleAfterMs;
+  assert.ok(known.events.retrievedAt > known.statistics.retrievedAt);
+  assert.deepEqual(liveMatchFreshness(known, boundary, 'live'), { statistics: false, events: false });
+  assert.deepEqual(liveMatchFreshness(known, boundary + 1, 'live'), { statistics: true, events: false });
+  assert.deepEqual(liveMatchFreshness(known, boundary + 1, 'finished-regulation'), { statistics: false, events: false });
+  assert.deepEqual(liveMatchFreshness(known, boundary + 1, 'live', true), { statistics: false, events: false });
 });
