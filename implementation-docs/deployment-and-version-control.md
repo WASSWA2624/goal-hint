@@ -64,9 +64,15 @@ The checksummed `21068d1b` ZIP ran in a private staging instance with `ghprod_te
 
 The candidate ZIP SHA-256 is `1e36e69dddcb02ea54e24055fa367a7f7352b85e64c3af314d12bc6da56ebb18`.
 
-The combined release `12b13b9` applies the verified feed changes to `816ffbbc` with the desktop Match Details source intact. Shared staging activated the combined ZIP and verified all 93 migrations. Public HTTPS checks returned HTTP 200 for the 30-day feed from 28 October to 26 November in 2,003 milliseconds, and the one-day feed for 26 November in 1,731 milliseconds. The responses had the expected page size and private caching headers. The staging cohort was empty with unavailable coverage. The Matches page returned HTTP 200 with `noindex`. Feed, Match Details, and MySQL integration checks passed, along with lint, typecheck, and the build. The combined release is pending production review.
+The combined release `12b13b9` applies the verified feed changes to `816ffbbc` with the desktop Match Details source intact. Shared staging activated the combined ZIP and verified all 93 migrations. Public HTTPS checks returned HTTP 200 for the 30-day feed from 28 October to 26 November in 2,003 milliseconds, and the one-day feed for 26 November in 1,731 milliseconds. The responses had the expected page size and private caching headers. The staging cohort was empty with unavailable coverage. The Matches page returned HTTP 200 with `noindex`. Feed, Match Details, and MySQL integration checks passed, along with lint, typecheck, and the build.
 
 The combined ZIP SHA-256 is `b0e0025f699077cd79562f8a028e587ff3339d268ca0abf834595c376d41be9e`.
+
+After owner approval, production activated the same combined ZIP with all 93 migrations verified and zero pending. The served Matches page contained the candidate's build identifier. The one-day production feed returned HTTP 200 in 6.38 seconds, with 50 records on page one and 122 matches among 143 known fixtures. The bare 30-day request returned application HTTP 503 after 31.46 seconds with `Retry-After: 5` and no feed payload. The production timeout remains unresolved.
+
+A bounded diagnostic request also returned HTTP 503 after 32.43 seconds. Read-only database sampling found 13 replay projection statements on the connection that matched the timing. A replay read was still active at 31.22 seconds, and the optimized count and page statements were absent from the sample. These observations point to the replay work before counting. The sampling had no request identifier.
+
+Desktop browser checks on a populated fixture verified the two independently scrolling Match Details panes in light and dark. The checks also covered Markets & Odds, Match Statistics, Back navigation and a direct Pick History link. [Production fixture used for verification](https://goalhint.com/en/matches/fd15442b-526e-8c2e-bf40-ae9c6e7ff4d6/gent-vs-fk-crvena-zvezda).
 
 ## Verification limits
 
