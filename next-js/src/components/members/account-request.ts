@@ -1,4 +1,8 @@
 import { startRequestDeadline } from "../../domain/request-deadline.ts";
+import { logoutUnconfirmedStatus } from "../../domain/member-navigation.ts";
+import { authCopy } from "../../i18n/messages/auth.ts";
+
+export type MemberLogoutAction = "/api/account/sign-out" | `/api/account/sign-out?${string}` | "/api/admin/logout";
 
 const unavailable = "Unable to complete this request. Please try again.";
 const navigationActions = new Set(["login", "register", "verify", "reset-code", "reset", "phone", "password"]);
@@ -37,4 +41,18 @@ export async function accountRequest<T>(path: string, body: Record<string, unkno
   } finally {
     clearDeadline();
   }
+}
+
+/** A handled storage failure clears the browser cookies and leads to the server's warning. */
+export async function requestMemberLogout(action: MemberLogoutAction): Promise<string> {
+  const controller = new AbortController(), clearDeadline = startRequestDeadline(controller);
+  try {
+    const response = await fetch(action, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error",
+      headers: { Accept: "application/json" }, signal: controller.signal });
+    const result: unknown = await response.json();
+    if (!controller.signal.aborted && result && typeof result === "object" && "phone" in result && result.phone === null
+      && "next" in result && localDestination(result.next)
+      && (response.ok || response.status === 503 && "error" in result && result.error === logoutUnconfirmedStatus)) return result.next;
+    throw new Error(authCopy.logoutUnavailable);
+  } finally { clearDeadline(); }
 }

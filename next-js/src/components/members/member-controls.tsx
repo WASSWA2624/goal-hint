@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, type ComponentProps } from "react";
+import { useEffect, useRef, useState, type ComponentProps, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { Surface } from "@/components/ui/layout";
 import { resetReviewAlerts } from "@/components/admin/payment-alert-sound";
+import { AppLoading } from "@/components/navigation/navigation-progress";
 import { nativePaymentAlerts } from "@/domain/native-payment-alerts";
-import { ensureMemberSession, getAdminSessionSnapshot, getMemberSessionSnapshot, getSubscriptionSnapshot, hasConfirmedMemberSession, refreshMemberSession, subscribeMemberSession } from "./member-session";
-import { clearProtectedDrafts } from "./draft-storage";
+import { authCopy } from "@/i18n/messages/auth";
+import { requestMemberLogout, type MemberLogoutAction } from "./account-request";
+import { AccountError } from "./account-styles";
+import { clearMemberSessionAfterLogout, ensureMemberSession, getAdminSessionSnapshot, getMemberSessionSnapshot, getSubscriptionSnapshot, hasConfirmedMemberSession, refreshMemberSession, subscribeMemberSession } from "./member-session";
 
 /** Compact information-page treatment with a readable single column and phone-sized actions. */
 export const MemberPanel = styled(Surface)`
@@ -56,20 +59,47 @@ export function MemberNavigationRecovery({ expectedPhone, expectedAdministrator 
   return null;
 }
 
-export function MemberSignOut({ children, logoutAction = "/api/account/sign-out", ...props }: ComponentProps<typeof Button> & {
-  logoutAction?: "/api/account/sign-out" | `/api/account/sign-out?${string}` | "/api/admin/logout";
+async function clearSignOutAlerts() {
+  resetReviewAlerts();
+  try { navigator.serviceWorker?.controller?.postMessage({ type: "payment-alert-reconcile", events: [] }); }
+  catch { /* The browser may have detached its worker. */ }
+  const alerts = nativePaymentAlerts();
+  if (!alerts) return;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([Promise.resolve().then(() => alerts.clear()),
+      new Promise<void>(resolve => { timeout = setTimeout(resolve, 1500); })]);
+  } catch { window.dispatchEvent(new Event("goal-hint-payment-sign-out")); }
+  finally { clearTimeout(timeout); }
+}
+
+export function MemberSignOut({ children, disabled, logoutAction = "/api/account/sign-out", onSignedOut, ...props }: ComponentProps<typeof Button> & {
+  logoutAction?: MemberLogoutAction;
+  onSignedOut?: () => void;
 }) {
-  return <form method="post" action={logoutAction} onSubmit={event => {
-    resetReviewAlerts();
-    if ("serviceWorker" in navigator) navigator.serviceWorker.controller?.postMessage({ type: "payment-alert-reconcile", events: [] });
-    window.dispatchEvent(new Event("goal-hint-payment-sign-out"));
-    const alerts = nativePaymentAlerts();
-    if (alerts) {
-      event.preventDefault();
-      const form = event.currentTarget;
-      void Promise.race([alerts.clear(), new Promise(resolve => setTimeout(resolve, 1500))])
-        .catch(() => {}).finally(() => form.submit());
+  const submitting = useRef(false);
+  const [busy, setBusy] = useState(false), [failed, setFailed] = useState(false);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (disabled || submitting.current) return;
+    submitting.current = true;
+    setBusy(true); setFailed(false);
+    try {
+      const next = await requestMemberLogout(logoutAction);
+      await clearSignOutAlerts().catch(() => {});
+      onSignedOut?.();
+      clearMemberSessionAfterLogout();
+      // An authentication boundary needs fresh server content and must not keep the old account page in this history slot.
+      location.replace(next);
+    } catch {
+      submitting.current = false;
+      setBusy(false); setFailed(true);
     }
-    clearProtectedDrafts();
-  }} data-analytics-ignore><Button variant="secondary" {...props} type="submit">{children}</Button></form>;
+  }
+
+  return <form method="post" action={logoutAction} onSubmit={submit} aria-busy={busy || undefined} data-analytics-ignore>
+    <Button variant="secondary" {...props} disabled={disabled || busy} type="submit">{children}</Button>
+    <AppLoading active={busy} />
+    {failed && <AccountError role="alert">{authCopy.logoutUnavailable}</AccountError>}
+  </form>;
 }
