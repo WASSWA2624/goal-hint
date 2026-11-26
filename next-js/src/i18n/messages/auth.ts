@@ -28,7 +28,6 @@ export const authCopy = {
   loginAgain: "Log in again to continue.",
   paymentLoginAgain: "Log in again to check this payment.",
   passwordWhileLoggedIn: "Use Change password in Account while logged in.",
-  offlineConnection: "Predictions, login, account changes and payments need an internet connection. Nothing is queued or submitted from this view.",
   lastLogin: "Last login",
   signedInDevices: "Signed-in devices",
   noSignedInDevices: "No signed-in devices.",

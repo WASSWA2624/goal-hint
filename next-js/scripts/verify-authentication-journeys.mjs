@@ -80,21 +80,23 @@ export async function verifyAuthenticationJourneys(page, { origin } = {}) {
     const menu = secondTab.locator("[data-account-menu]:visible").first();
     await menu.locator("summary").click();
     // A pending top-frame navigation suspends locator reevaluation. Observe the
-    // disclosure in the current document before the form can start navigating.
-    const collapsed = secondTab.waitForEvent("console", {
-      predicate: message => message.text() === "Fixture logout menu collapsed",
+    // current header before the form can start navigating.
+    const guestHeader = secondTab.waitForEvent("console", {
+      predicate: message => message.text() === "Fixture logout header is a guest",
     });
     await menu.evaluate(details => {
+      const actions = details.closest("[data-account-actions]");
+      if (!actions) throw new Error("Missing account header actions");
       const observer = new MutationObserver(() => {
-        if (details.open) return;
+        if (details.open || actions.querySelector("[data-account-menu]") || !actions.querySelector('[data-header-auth="login"]')) return;
         observer.disconnect();
-        console.debug("Fixture logout menu collapsed");
+        console.debug("Fixture logout header is a guest");
       });
-      observer.observe(details, { attributes: true, attributeFilter: ["open"] });
+      observer.observe(actions, { childList: true, subtree: true });
     });
     const requestReady = secondTab.waitForRequest(request => request.url() === logoutPath && request.method() === "POST");
     const clicked = menu.getByRole("button", { name: "Log out", exact: true }).click({ noWaitAfter: true });
-    const [request] = await Promise.all([requestReady, collapsed]);
+    const [request] = await Promise.all([requestReady, guestHeader]);
     assert.equal(request.isNavigationRequest(), true);
     assert.equal(request.postData(), "action=logout");
     const responseReady = secondTab.waitForResponse(response => response.request() === request);
@@ -115,7 +117,7 @@ export async function verifyAuthenticationJourneys(page, { origin } = {}) {
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.locator("[data-account-auth]").waitFor();
   } finally { releaseLogout(); await secondTab.close(); }
-  checks.push("Mobile logout closes the menu before the native form response, and other-tab refresh removes revoked account access");
+  checks.push("Mobile logout closes the menu and restores the guest header before the form response, and other-tab refresh removes revoked account access");
 
   await fresh("register");
   await credentials();

@@ -9,6 +9,7 @@ import 'package:goal_hint/web/navigation_policy.dart';
 import 'package:goal_hint/web/web_view_factory.dart';
 import 'package:integration_test/integration_test.dart';
 
+import 'support/connection_page.dart';
 import 'support/native_page.dart';
 
 const _cachePrefix = 'goal-hint-offline-';
@@ -20,7 +21,7 @@ const _cachePrefix = 'goal-hint-offline-';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('durable anonymous web startup', (tester) async {
+  testWidgets('durable connection page startup', (tester) async {
     final configuration = AppConfig.fromBuildEnvironment(
       isAndroid: Platform.isAndroid,
     );
@@ -51,10 +52,8 @@ void main() {
     if (phase == 'first') {
       // Run before this fixture origin has ever initialized an offline cache.
       // No server response succeeds and the native Retry state is honest.
-      await page.untilAdapter(() => adapter.error != null);
-      await tester.pump();
+      await _expectNativeRetry(page);
       expect(adapter.hasDocument, isFalse);
-      expect(find.text('Retry'), findsOneWidget);
     } else if (phase == 'online' || phase == 'diagnostic') {
       await page.until(
         'document.querySelector("[data-offline-fixture]") !== null',
@@ -73,7 +72,7 @@ void main() {
                 installing: value.installing?.state, waiting: value.waiting?.state
               }));
               const registration = await navigator.serviceWorker.register(
-                '/offline-worker.js', { scope: '/', updateViaCache: 'none' });
+                '/offline-worker.js?connection-page=1', { scope: '/', updateViaCache: 'none' });
               const ready = registration.active ? registration : await Promise.race([
                 navigator.serviceWorker.ready,
                 new Promise((_, reject) => setTimeout(() => reject(new Error('Worker activation timeout')), 15000))
@@ -98,6 +97,7 @@ void main() {
         debugPrint('Public offline worker diagnostic: ${jsonEncode(result)}');
         expect(result['registrationError'], isNull);
         expect((result['reply'] as Map)['ok'], isTrue);
+        expect((result['reply'] as Map)['kind'], 'connection-page');
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
         return;
@@ -112,7 +112,7 @@ void main() {
       await _inspectOwnedCaches(page);
       // Verify a real anonymous document, not a retained screenshot or open tab.
       await adapter.load(configuration.origin.resolve('/offline'));
-      await _expectSavedView(page);
+      await expectConnectionPage(page, retryPath: '/en/matches');
       await adapter.suspend();
       await tester.pump(const Duration(seconds: 2));
     } else {
@@ -121,20 +121,25 @@ void main() {
         contains(phase),
         reason: 'Unknown OFFLINE_CHECK_PHASE.',
       );
-      await _expectSavedView(page);
+      await expectConnectionPage(page);
       await _inspectOwnedCaches(page);
       if (phase == 'uncached') {
-        await adapter.load(
-          configuration.origin.resolve('/uncached-native-acceptance'),
-        );
-        await _expectUnavailable(page);
+        const path = '/uncached-native-acceptance?retry=original';
+        await adapter.load(configuration.origin.resolve(path));
+        await expectConnectionPage(page, retryPath: path);
+        expect(await page.read('location.pathname + location.search'), path);
+        await page.execute('window.__connectionAcceptance = true');
+        await retryConnectionPage(page);
+        await page.until('window.__connectionAcceptance === undefined');
+        await expectConnectionPage(page, retryPath: path);
+        expect(await page.read('location.pathname + location.search'), path);
       } else if (phase == 'corrupt') {
         // Corrupt the exact app-owned integrity record in every retained bundle,
         // so a valid previous bundle cannot mask this recovery condition.
         final changed =
             await page.readAsync('''
           caches.keys().then(names => Promise.all(names
-            .filter(name => name.startsWith('${_cachePrefix}bundle-v1-'))
+            .filter(name => name.startsWith('${_cachePrefix}bundle-v2-'))
             .map(async name => {
               const cache = await caches.open(name);
               await cache.put(new URL('/offline-cache/record', location.origin),
@@ -147,7 +152,7 @@ void main() {
                 as List;
         expect(changed, isNotEmpty);
         await adapter.reload();
-        await _expectUnavailable(page);
+        await _expectNativeRetry(page);
       } else if (phase == 'evicted') {
         // Scoped ownership is deliberate: do not clear browser cookies, other
         // application stores, unrelated caches, or the user's normal profile.
@@ -161,42 +166,13 @@ void main() {
         expect(cleared, isNotEmpty);
         expect(cleared.every((result) => result == true), isTrue);
         await adapter.reload();
-        await _expectUnavailable(page);
+        await _expectNativeRetry(page);
       }
     }
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
   }, timeout: const Timeout(Duration(minutes: 3)));
-}
-
-Future<void> _expectSavedView(NativePage page) async {
-  await page.until(
-    'document.querySelector("[data-offline-view]")?.dataset.offlineState === "saved"',
-  );
-  await page.documentReady();
-  expect(page.adapter.error, isNull);
-  expect(page.adapter.hasDocument, isTrue);
-  expect(await page.read('document.title'), contains('Goal Hint'));
-  expect(
-    await page.read('''
-    (() => {
-      const stamp = document.querySelector('[data-offline-saved-at]');
-      return stamp !== null && Number.isFinite(Date.parse(
-        stamp.getAttribute('datetime') ?? stamp.dataset.offlineSavedAt));
-    })()
-  '''),
-    isTrue,
-    reason: 'Cached content must expose its actual saved time.',
-  );
-  expect(
-    await page.read('''
-    document.querySelector('[data-offline-view] form[method="post" i], '
-      + '[data-offline-view] input[type="password"]') === null
-  '''),
-    isTrue,
-    reason: 'Offline reads must not expose server-dependent writes.',
-  );
 }
 
 Future<void> _inspectOwnedCaches(NativePage page) async {
@@ -247,23 +223,19 @@ Future<void> _inspectOwnedCaches(NativePage page) async {
               '/offline',
               '/offline-cache/active',
               '/offline-cache/record',
-              '/offline-cache/snapshot',
-              '/brand/goal-hint-logo-inverse.svg',
-              '/brand/goal-hint-mark-primary.svg',
             }.contains(uri.path) ||
             RegExp(
-              r'^/_next/static/.+\.(?:js|css|woff2?|ttf|otf|png|svg|ico)$',
+              r'^/(?:_next/static/(?:chunks|css|media)/.+\.(?:js|css|woff2?|ttf|otf|svg)|brand/goal-hint-(?:logo|mark|header)-(?:primary|inverse)\.svg)$',
               caseSensitive: false,
             ).hasMatch(uri.path),
         isTrue,
-        reason:
-            'Only approved entry, assets, snapshot and metadata are stored.',
+        reason: 'Only approved connection page assets and metadata are stored.',
       );
     }
   }
 }
 
-Future<void> _expectUnavailable(NativePage page) async {
+Future<void> _expectNativeRetry(NativePage page) async {
   final deadline = DateTime.now().add(const Duration(seconds: 40));
   while (DateTime.now().isBefore(deadline)) {
     if (page.adapter.error != null) {
@@ -271,19 +243,7 @@ Future<void> _expectUnavailable(NativePage page) async {
       expect(find.text('Retry'), findsOneWidget);
       return;
     }
-    try {
-      if (await page.read(
-            'document.querySelector("[data-offline-view]")?.dataset.offlineState === "unavailable"',
-          ) ==
-          true) {
-        return;
-      }
-    } catch (_) {
-      // Native error documents can replace the JavaScript context on failure.
-    }
     await page.tester.pump(const Duration(milliseconds: 200));
   }
-  fail(
-    'Missing cache/uncached navigation did not show an honest recovery state.',
-  );
+  fail('Missing connection page bundle did not show native Retry.');
 }

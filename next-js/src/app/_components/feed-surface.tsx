@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, memo, Suspense, useCallback, useLayoutEffect, useState, useTransition, type ReactNode } from "react";
+import { Fragment, memo, Suspense, useCallback, useEffect, useLayoutEffect, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
 import { FeedAppliedSummary, FeedNote } from "@/components/match/feed-controls";
@@ -15,7 +15,7 @@ import { useLiveFeedSearch } from "@/components/match/use-live-feed-search";
 import { usePublishedFeedMarkets } from "@/components/match/use-published-feed-markets";
 import { MatchCard } from "@/components/match/match-card";
 import { MatchCardList, MatchListDivider } from "@/components/match/match-card-list";
-import { ButtonLink, TextButton } from "@/components/ui/controls";
+import { ButtonLink, TextButton, TextLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
 import { joinedDesktopSections, Stack } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
@@ -37,6 +37,7 @@ import { FeedStateProvider } from "@/state/provider";
 import { media } from "@/styles/theme";
 
 const noLeagues: MatchFeedResponse["leagues"] = [];
+const navigationDeadlineMs = 15_000;
 /** Compact spacing still separates controls and match cards clearly on phones. */
 const FeedStack = styled(Stack)`
   ${joinedDesktopSections}
@@ -141,7 +142,17 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
   query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode; showAccount?: boolean; subscriberOnly?: boolean;
   summary?: Promise<FeedPerformanceSeed>; providerOdds?: boolean;
 }) {
-  const router = useRouter(), [pending, startTransition] = useTransition();
+  const router = useRouter(), [transitionPending, startTransition] = useTransition();
+  const [navigation, setNavigation] = useState<{ href: string; overdue?: true } | null>(null);
+  useEffect(() => {
+    if (!transitionPending || !navigation || navigation.overdue) return;
+    const timer = window.setTimeout(() => {
+      setNavigation(current => current === navigation ? { ...current, overdue: true } : current);
+    }, navigationDeadlineMs);
+    return () => window.clearTimeout(timer);
+  }, [navigation, transitionPending]);
+  const retryHref = transitionPending && navigation?.overdue ? navigation.href : null;
+  const pending = transitionPending && !retryHref;
   const [paginationStatus, setPaginationStatus] = useState<{ href: string; message: string } | null>(null);
   const onPaginationStatus = useCallback((href: string, message: string) => { setPaginationStatus({ href, message }); }, []);
   const [previous, setPrevious] = useState(result.data ? { query, today, data: result.data } : null);
@@ -155,6 +166,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
   const failed = result.error !== null;
   const navigate = useCallback((next: FeedQuery) => {
     const nextHref = feedQueryHref(synchronizeFeedStatusDates(next, today), today);
+    setNavigation({ href: nextHref });
     startTransition(() => {
       // Explicit Clear must supersede Apply even before React exposes pending=true.
       if (nextHref === href && failed && !pending) router.refresh();
@@ -185,7 +197,8 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
   }, [edit, search]);
   const onSearchSubmit = useCallback((value: string) => { setPaginationStatus(null); search(value, true); }, [search]);
   const searchFailure = searchError ? messages.text(searchError === "rate-limited" ? "feed.rateLimited" : "feed.unavailable") : null;
-  const announcement = pending || searchPending ? messages.text("feed.filters.loading") : searchFailure ?? (result.error
+  const navigationFailure = retryHref ? messages.text("feed.filters.slow") : null;
+  const announcement = pending || searchPending ? messages.text("feed.filters.loading") : navigationFailure ?? searchFailure ?? (result.error
     ? messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")
     : paginationStatus?.href === displayedHref ? paginationStatus.message
     : displayed ? searchAnnouncement(displayed.data, displayed.query) : messages.text("feed.state.data-unavailable"));
@@ -203,6 +216,9 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
     {controls}
     <VisuallyHidden role="status" aria-live="polite" aria-atomic="true">{announcement}</VisuallyHidden>
     <Results $gap="md" aria-busy={pending} data-feed-results>
+      {retryHref && <FeedNote data-feed-navigation-retry>{navigationFailure}{" "}
+        <TextLink href={retryHref} prefetch={false} onClick={event => plainClick(event, () => window.location.assign(retryHref))}>
+          {messages.text("feed.retry")}</TextLink></FeedNote>}
       {!visible && <MatchResults><ResultsToolbar query={query} today={today} total={null} first={0} last={0} /></MatchResults>}
       {result.error && <EmptyState title={messages.text(result.error === "rate-limited" ? "feed.rateLimitedTitle" : "feed.unavailableTitle")}
         description={messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")}

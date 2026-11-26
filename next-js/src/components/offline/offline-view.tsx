@@ -1,77 +1,48 @@
 "use client";
 
-import { authCopy } from "@/i18n/messages/auth";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import styled from "styled-components";
+import { Header, HeaderContent, ShellFrame } from "@/components/navigation/shell-styles";
 import { HeaderBrand } from "@/components/ui/brand";
-import { Button } from "@/components/ui/controls";
-import { Container, Inline, PageHeading, PageMain, Stack, Surface } from "@/components/ui/layout";
-import { Header, HeaderContent } from "@/components/navigation/shell-styles";
-import { NavigationProgress } from "@/components/navigation/navigation-progress";
-import { MatchCard } from "@/components/match/match-card";
-import { MatchCardList } from "@/components/match/match-card-list";
-import { offlineFixture, offlineRules, offlineSnapshotSchema, type OfflineSnapshot } from "@/domain/offline";
-import { OfflineUpdateNotice } from "./offline-update-notice";
+import { DocumentButtonLink } from "@/components/ui/controls";
+import { Icon } from "@/components/ui/icons";
+import { Inline, MutedText, PageHeading, PageMain, Stack, Surface } from "@/components/ui/layout";
 
-const Notice = Surface;
-const Heading = styled(HeaderContent)`justify-content: space-between; gap: var(--gh-spacing-3);`;
-const Link = styled.a`color: inherit; text-underline-offset: var(--gh-size-0_75);`;
+const Frame = styled(ShellFrame)`background: ${({ theme }) => theme.color.page};`;
+const Main = styled(PageMain)`
+  display: grid;
+  align-items: start;
+  justify-items: center;
+  padding-block: clamp(var(--gh-spacing-6), 12vh, var(--gh-size-24));
+`;
+const Notice = styled(Surface)`
+  inline-size: min(100%, ${({ theme }) => theme.layout.readingMaxWidth});
+  padding: ${({ theme }) => theme.space.lg};
+  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border-radius: ${({ theme }) => theme.radius.none};
+  svg { color: ${({ theme }) => theme.color.link}; font-size: var(--gh-font-page); }
+`;
+const subscribeDocument = () => () => {};
+const currentDocument = () => "";
+const retryDocument = () => /^\/offline\/?$/u.test(location.pathname) ? "/en/matches" : currentDocument();
 
-/** A shared, read-only web view: no account state, forecasts, remote media, or queued actions. */
+/** This independently served document can be read and retried without a running application. */
 export function OfflineView() {
-  const [snapshot, setSnapshot] = useState<OfflineSnapshot | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [supported, setSupported] = useState(true);
-  useEffect(() => {
-    let disposed = false;
-    const path = location.pathname;
-    const cachedRoute = ["/", "/en", "/en/", "/en/matches", "/en/matches/", "/offline"].includes(path) && !location.search;
-    let abort: AbortController | undefined;
-    const read = () => {
-      abort?.abort();
-      const request = new AbortController();
-      abort = request;
-      const timer = setTimeout(() => request.abort(), 8_000);
-      void fetch("/offline-cache/snapshot", { cache: "no-store", credentials: "omit", signal: request.signal })
-      .then(async (response) => {
-        if (!response.ok) return;
-        const parsed = offlineSnapshotSchema.safeParse(await response.json());
-        if (!disposed && !request.signal.aborted && parsed.success && parsed.data.expiresAt > Date.now()
-          && parsed.data.capturedAt <= Date.now() + offlineRules.clockSkewMs) setSnapshot(parsed.data);
-      }).catch(() => { /* Denied, missing or corrupt storage gets the same honest recovery state. */ })
-      .finally(() => { clearTimeout(timer); if (!disposed) { setSupported(cachedRoute); setLoading(false); } });
-    };
-    read();
-    window.addEventListener("goal-hint-offline-ready", read);
-    return () => { disposed = true; abort?.abort(); window.removeEventListener("goal-hint-offline-ready", read); };
-  }, []);
-  useEffect(() => {
-    if (!snapshot) return;
-    const expire = () => { if (snapshot.expiresAt <= Date.now()) setSnapshot(null); };
-    const timer = setTimeout(expire, Math.max(0, snapshot.expiresAt - Date.now()));
-    document.addEventListener("visibilitychange", expire);
-    return () => { clearTimeout(timer); document.removeEventListener("visibilitychange", expire); };
-  }, [snapshot]);
-  const saved = snapshot && supported;
-  return <div data-offline-view data-offline-state={loading ? "loading" : saved ? "saved" : "unavailable"}>
-    <Header><Heading $wide><HeaderBrand /><span>Saved view</span></Heading><NavigationProgress label="Loading saved view" /></Header>
-    <PageMain id="main-content" $app $compact aria-busy={loading}><Container $wide><Stack>
-      <PageHeading>{supported ? "Saved matches" : "This page needs a connection"}</PageHeading>
-      <Notice aria-live="polite"><Stack $gap="sm">
-        {loading ? null : saved ? <>
-          <p>Showing an anonymous saved view. Scores and match status may have changed.</p>
-          <p>Saved <time data-offline-saved-at dateTime={new Date(snapshot.capturedAt).toISOString()}>{new Date(snapshot.capturedAt).toLocaleString("en-UG", { timeZone: "Africa/Kampala" })} EAT</time>.</p>
-        </> : <p>{supported ? "No usable saved matches are available. Connect to the internet and try again." : "This route was not saved. Open saved matches or reconnect to use it."}</p>}
-        <p>{authCopy.offlineConnection}</p>
-        <OfflineUpdateNotice />
-        <Inline><Button variant="secondary" onClick={() => location.reload()}>Try online again</Button>
-          {!supported && <Link href="/en/matches">Open saved matches</Link>}</Inline>
-      </Stack></Notice>
-      {saved && <>
-        {snapshot.records.length ? <MatchCardList aria-label="Saved matches" rowNumberMaximum={snapshot.records.length}>
-          {snapshot.records.map((record, index) => <li key={record.fixtureId}><MatchCard fixture={offlineFixture(record)} analysisSlug="saved" position={index + 1} offline /></li>)}
-        </MatchCardList> : <p>No matches were available when this view was saved.</p>}
-      </>}
-    </Stack></Container></PageMain>
-  </div>;
+  const retryHref = useSyncExternalStore(subscribeDocument, retryDocument, currentDocument);
+
+  return <Frame data-offline-view>
+    <Header><HeaderContent $wide><HeaderBrand /></HeaderContent></Header>
+    <Main id="main-content">
+      <Notice aria-labelledby="connection-heading">
+        <Stack>
+          <Icon><path d="M3 9a14 14 0 0 1 18 0M6 12a9 9 0 0 1 12 0M9 15a4.5 4.5 0 0 1 6 0M12 19h.01M3 3l18 18" /></Icon>
+          <Stack $gap="sm">
+            <PageHeading id="connection-heading">Couldn’t load this page</PageHeading>
+            <MutedText>Check your internet connection, then try again.</MutedText>
+          </Stack>
+          <Inline><DocumentButtonLink href={retryHref}>Try again</DocumentButtonLink></Inline>
+        </Stack>
+      </Notice>
+    </Main>
+  </Frame>;
 }

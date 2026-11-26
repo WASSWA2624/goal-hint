@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore }
 import { usePathname } from "next/navigation";
 import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
+import { AppLoading } from "@/components/navigation/navigation-progress";
 import { CardIcon, ChevronRightIcon, SignInIcon, SignOutIcon, UserIcon, UserPlusIcon } from "@/components/ui/icons";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { NotificationUnread } from "./notification-unread";
@@ -20,8 +21,8 @@ import { accountSectionIcons } from "./account-navigation";
 import { media } from "@/styles/theme";
 import { MemberSignOut } from "./member-controls";
 import { getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot, subscribePendingPayments } from "@/components/admin/pending-payments";
-import { ensureMemberSession, getAdminSessionSnapshot, getMemberSessionSnapshot, getServerAdminSessionSnapshot, getServerMemberSessionSnapshot,
-  subscribeMemberSession } from "./member-session";
+import { ensureMemberSession, getAdminSessionSnapshot, getMemberSessionSnapshot, getMemberSignOutSnapshot, getServerAdminSessionSnapshot,
+  getServerMemberSessionSnapshot, getServerMemberSignOutSnapshot, subscribeMemberSession } from "./member-session";
 
 const Actions = styled.div`
   display: flex;
@@ -190,11 +191,13 @@ export function AccountLinks({ locale = "en", administratorName }: { locale?: st
   const pathname = usePathname();
   const phone = useSyncExternalStore(subscribeMemberSession, getMemberSessionSnapshot, getServerMemberSessionSnapshot);
   const administrator = useSyncExternalStore(subscribeMemberSession, getAdminSessionSnapshot, getServerAdminSessionSnapshot);
+  const signingOut = useSyncExternalStore(subscribeMemberSession, getMemberSignOutSnapshot, getServerMemberSignOutSnapshot);
   useEffect(() => { void ensureMemberSession(); }, [pathname]);
   const messages = createMessages(locale);
-  const isAdministrator = !!(administratorName || administrator);
+  const isAdministrator = !signingOut && !!(administratorName || administrator);
   const signedIn = !!(phone || isAdministrator);
   return <Actions data-account-actions>
+    <AppLoading active={signingOut} />
     {isAdministrator && <AdminPaymentsLink />}
     <DownloadHeaderLink locale={locale} />
     {!signedIn && <>

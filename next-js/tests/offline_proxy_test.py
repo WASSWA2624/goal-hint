@@ -17,7 +17,7 @@ SPEC.loader.exec_module(proxy)
 
 
 def resources():
-    body, script = b"<html><body data-offline-view>Saved</body></html>", b"void 0;"
+    body, script = b"<html><body data-offline-view>Connection page</body></html>", b"void 0;"
     entry = {"url": "/offline", "sha256": proxy.digest(body), "bytes": len(body)}
     asset = {"url": "/_next/static/chunks/fixture-a.js", "sha256": proxy.digest(script), "bytes": len(script)}
     branding = {
@@ -25,19 +25,14 @@ def resources():
         for kind in ["logo", "mark", "header"] for variant in ["primary", "inverse"]
     }
     brand_assets = [{"url": path, "sha256": proxy.digest(content), "bytes": len(content)} for path, content in branding.items()]
-    manifest = {"schemaVersion": 1, "entry": entry, "assets": [asset, *brand_assets], "createdAt": 1000}
+    manifest = {"schemaVersion": 2, "entry": entry, "assets": [asset, *brand_assets], "createdAt": 1000}
     manifest["version"] = proxy.digest(proxy.json_bytes(proxy.canonical_manifest(manifest)))
-    snapshot = {"schemaVersion": 1, "capturedAt": 1000, "expiresAt": 86401000, "reportingDate": "1970-01-01", "records": [{
-        "fixtureId": "fixture", "dataVersion": "1", "homeTeam": {"id": "home", "name": "Home", "code": None},
-        "awayTeam": {"id": "away", "name": "Away", "code": None}, "competition": {"id": "league", "name": "League", "country": None},
-        "kickoffAt": 1000, "syncedAt": 1000, "status": "finished-regulation", "score": {"home": 2, "away": 1}, "scorePeriod": "regulation"}]}
     return {
         "/en": proxy.Resource(b"<main data-offline-fixture>Isolated fixture</main>", {}),
         "/offline": proxy.Resource(body, {"content-type": "text/html", "cache-control": "public, max-age=0"}),
         asset["url"]: proxy.Resource(script, {"content-type": "application/javascript", "cache-control": "public, max-age=0"}),
         **{path: proxy.Resource(content, {"content-type": "image/svg+xml"}) for path, content in branding.items()},
         "/offline-manifest.json": proxy.Resource(proxy.json_bytes(manifest), {"x-goalhint-offline-manifest": "1"}),
-        "/api/offline/snapshot": proxy.Resource(proxy.json_bytes(snapshot), {"x-goalhint-offline-snapshot": "1"}),
     }
 
 
@@ -56,11 +51,10 @@ class OfflineProxyTest(unittest.TestCase):
             self.assertIsInstance(handler, proxy.UrlProxyHandler)
             self.assertEqual(handler.proxies, {})
 
-    def test_derived_bundle_adds_required_asset_and_advances_only_public_snapshot(self):
+    def test_derived_bundle_adds_required_asset_without_fixture_data(self):
         source = resources()
-        epoch = 1793020000000
         with patch.object(proxy, "fetch_backend", side_effect=lambda origin, path: source[path]):
-            bundles = proxy.derive_bundles("http://127.0.0.1:3189", epoch)
+            bundles = proxy.derive_bundles("http://127.0.0.1:3189")
         a = json.loads(bundles["A"]["/offline-manifest.json"].body)
         b = json.loads(bundles["B"]["/offline-manifest.json"].body)
         self.assertNotEqual(a["version"], b["version"])
@@ -73,28 +67,23 @@ class OfflineProxyTest(unittest.TestCase):
             if path.startswith("/brand/"):
                 for generation in ["A", "B"]:
                     self.assertEqual(bundles[generation][path].body, resource.body)
-        first, second = [json.loads(bundles[g]["/api/offline/snapshot"].body) for g in ["A", "B"]]
-        self.assertEqual(second["capturedAt"], first["capturedAt"] + 1000)
-        self.assertEqual(second["records"][0]["dataVersion"], "2")
-        self.assertEqual(second["expiresAt"] - second["capturedAt"], 86400000)
-        self.assertEqual(second["records"][0]["syncedAt"], second["capturedAt"])
-        for name in ["forecast", "prices", "credentials", "accountId"]:
-            self.assertNotIn(name, second["records"][0])
+        for generation in ["A", "B"]:
+            self.assertFalse(any(path.startswith("/api/") for path in bundles[generation]))
 
     def test_wrong_backend_mismatched_assets_and_unapproved_fields_fail_closed(self):
-        for change in ["backend", "asset", "snapshot"]:
+        for change in ["backend", "asset", "manifest"]:
             source = resources()
             if change == "backend":
                 source["/en"] = proxy.Resource(b"A real app is not an owned fixture.", {})
             elif change == "asset":
                 source["/_next/static/chunks/fixture-a.js"] = proxy.Resource(b"corrupted", {})
             else:
-                data = json.loads(source["/api/offline/snapshot"].body)
-                data["records"][0]["accountId"] = "must-not-be-copied"
-                source["/api/offline/snapshot"] = proxy.Resource(proxy.json_bytes(data), {"x-goalhint-offline-snapshot": "1"})
+                data = json.loads(source["/offline-manifest.json"].body)
+                data["records"] = ["unexpected fixture projection"]
+                source["/offline-manifest.json"] = proxy.Resource(proxy.json_bytes(data), {"x-goalhint-offline-manifest": "1"})
             with self.subTest(change=change), patch.object(proxy, "fetch_backend", side_effect=lambda origin, path: source[path]):
                 with self.assertRaises(ValueError):
-                    proxy.derive_bundles("http://127.0.0.1:3189", 1793020000000)
+                    proxy.derive_bundles("http://127.0.0.1:3189")
 
     def test_control_bounds_and_owned_paths(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -112,16 +101,18 @@ class OfflineProxyTest(unittest.TestCase):
             proxy.owned_path(proxy.ROOT / ".tmp/../.env.local")
 
     def test_counters_survive_restart_without_recording_credentials_or_bodies(self):
-        with tempfile.TemporaryDirectory() as folder, patch.object(proxy, "derive_bundles", return_value={"A": {}, "B": {}}):
+        source = resources()
+        with tempfile.TemporaryDirectory() as folder, patch.object(proxy, "fetch_backend", side_effect=lambda origin, path: source[path]):
             root = Path(folder)
             arguments = ("http://127.0.0.1:3189", root, 3192, root / "control.json", root / "stats.json")
             state = proxy.FixtureState(*arguments)
-            epoch = state.stats["fixtureEpochMs"]
+            versions = state.stats["versions"]
+            self.assertNotEqual(versions["A"], versions["B"])
             first = state.begin("GET", "/en", "document", proxy.load_control(state.control))
             state.finish(first, 200, False, time.monotonic())
             state.begin("POST", "/api/account/fixture", "private", proxy.load_control(state.control))
             restored = proxy.FixtureState(*arguments)
-            self.assertEqual(restored.stats["fixtureEpochMs"], epoch)
+            self.assertEqual(restored.stats["versions"], versions)
             self.assertEqual(restored.stats["boots"], 2)
             self.assertEqual(restored.stats["sequence"], 2)
             self.assertEqual(restored.stats["writes"], 1)

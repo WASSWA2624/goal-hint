@@ -6,7 +6,6 @@ derived acceptance bundle, not a second production build or an auth service.
 import argparse
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -24,7 +23,7 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler as UrlProxyHandler,
 ROOT = Path(__file__).resolve().parents[1]
 NEW_ASSET = "/_next/static/chunks/offline-fixture-b.js"
 MAX_BYTES = 4 * 1024 * 1024
-TARGETS = {"manifest", "snapshot", "asset", "entry", "document", "private"}
+TARGETS = {"manifest", "asset", "entry", "document", "private"}
 MODES = {"503", "401", "captive", "redirect", "missing", "truncate", "delay-headers", "stall-body", "disconnect"}
 PRIVATE_HEADERS = {"cache-control": "private, no-store", "vary": "Cookie", "content-type": "application/json"}
 
@@ -108,12 +107,11 @@ def fetch_backend(origin, path, method="GET", body=None, headers=None):
 
 
 def canonical_manifest(manifest):
-    return {"schemaVersion": 1, "entry": manifest["entry"], "assets": manifest["assets"]}
+    return {"schemaVersion": manifest["schemaVersion"], "entry": manifest["entry"], "assets": manifest["assets"]}
 
 
 def category_for(path, headers):
-    fixed = {"/offline-manifest.json": "manifest", "/api/offline/snapshot": "snapshot",
-             "/offline": "entry", NEW_ASSET: "asset", "/api/account/fixture": "private"}
+    fixed = {"/offline-manifest.json": "manifest", "/offline": "entry", NEW_ASSET: "asset", "/api/account/fixture": "private"}
     if path in fixed:
         return fixed[path]
     if path.startswith(("/_next/static/", "/brand/", "/flags/")):
@@ -123,13 +121,13 @@ def category_for(path, headers):
     return "document" if path in {"/", "/en"} or path.startswith("/en/") else "other"
 
 
-def derive_bundles(origin, epoch):
+def derive_bundles(origin):
     document = fetch_backend(origin, "/en")
     if document.status != 200 or b"data-offline-fixture" not in document.body:
         raise ValueError("Backend is not the isolated synthetic offline fixture.")
     response = fetch_backend(origin, "/offline-manifest.json")
     manifest = json.loads(response.body)
-    if response.status != 200 or response.headers.get("x-goalhint-offline-manifest") != "1" or manifest.get("schemaVersion") != 1:
+    if response.status != 200 or response.headers.get("x-goalhint-offline-manifest") != "1" or manifest.get("schemaVersion") != 2:
         raise ValueError("Missing fixture manifest.")
     if set(manifest) != {"schemaVersion", "version", "createdAt", "entry", "assets"} or manifest["version"] != digest(json_bytes(canonical_manifest(manifest))):
         raise ValueError("Invalid fixture manifest identity.")
@@ -142,18 +140,8 @@ def derive_bundles(origin, epoch):
         if resource.status != 200 or len(resource.body) != entry["bytes"] or digest(resource.body) != entry["sha256"]:
             raise ValueError("Fixture build and served resource disagree.")
         resources[path] = resource
-    source = fetch_backend(origin, "/api/offline/snapshot")
-    snapshot = json.loads(source.body)
-    if source.status != 200 or source.headers.get("x-goalhint-offline-snapshot") != "1" or set(snapshot) != {"schemaVersion", "capturedAt", "expiresAt", "reportingDate", "records"}:
-        raise ValueError("Invalid anonymous fixture snapshot.")
-    if not isinstance(snapshot["records"], list) or len(snapshot["records"]) > 30:
-        raise ValueError("Invalid anonymous fixture record count.")
-    expected = {"fixtureId", "dataVersion", "homeTeam", "awayTeam", "competition", "kickoffAt", "syncedAt", "status", "score", "scorePeriod"}
-    for record in snapshot["records"]:
-        if set(record) != expected or any(set(record[key]) != {"id", "name", "code"} for key in ["homeTeam", "awayTeam"]) or set(record["competition"]) != {"id", "name", "country"}:
-            raise ValueError("Fixture snapshot contains unapproved fields.")
     result = {}
-    for generation, offset in [("A", 0), ("B", 1000)]:
+    for generation in ["A", "B"]:
         current = json.loads(json_bytes(manifest))
         assets = dict(resources)
         if generation == "B":
@@ -164,20 +152,7 @@ def derive_bundles(origin, epoch):
             current["assets"] = sorted([*current["assets"], {"url": NEW_ASSET, "sha256": digest(body), "bytes": len(body)}], key=lambda value: value["url"])
             current["createdAt"] += 1
             current["version"] = digest(json_bytes(canonical_manifest(current)))
-        data = json.loads(json_bytes(snapshot))
-        data["capturedAt"], data["expiresAt"] = epoch + offset, epoch + offset + 86400000
-        data["reportingDate"] = datetime.fromtimestamp((epoch + offset) / 1000, timezone(timedelta(hours=3))).strftime("%Y-%m-%d")
-        for record in data["records"]:
-            version = int(record["dataVersion"]) + (generation == "B")
-            if not 1 <= version <= 18446744073709551615:
-                raise ValueError("Cannot advance fixture version.")
-            record["dataVersion"] = str(version)
-            if record["kickoffAt"] is not None:
-                record["kickoffAt"] = epoch - 3600000
-            if record["syncedAt"] is not None:
-                record["syncedAt"] = epoch + offset
         assets["/offline-manifest.json"] = Resource(json_bytes(current), {"content-type": "application/json", "cache-control": "public, max-age=0, must-revalidate", "x-goalhint-offline-manifest": "1"})
-        assets["/api/offline/snapshot"] = Resource(json_bytes(data), {"content-type": "application/json", "cache-control": "public, max-age=0, must-revalidate", "x-goalhint-offline-snapshot": "1"})
         result[generation] = assets
     return result
 
@@ -191,12 +166,14 @@ class FixtureState:
         if previous and (previous.get("schemaVersion") != 1 or previous.get("backend") != backend or previous.get("port") != port or previous.get("fixture") != str(fixture)):
             raise ValueError("Counters belong to another owned fixture.")
         self.stats = previous or {"schemaVersion": 1, "backend": backend, "port": port, "fixture": str(fixture), "createdAtMs": now,
-            "fixtureEpochMs": now - 2000, "boots": 0, "sequence": 0, "requests": {}, "writes": 0, "active": 0, "peakActive": 0, "events": []}
+            "boots": 0, "sequence": 0, "requests": {}, "writes": 0, "active": 0, "peakActive": 0, "events": []}
         for event in self.stats["events"]:
             if event.get("finishedAtMs") is None:
                 event.update({"finishedAtMs": now, "aborted": True, "restartAborted": True})
         self.stats.update({"startedAtMs": now, "boots": self.stats["boots"] + 1, "active": 0})
-        self.bundles = derive_bundles(backend, self.stats["fixtureEpochMs"])
+        self.bundles = derive_bundles(backend)
+        self.stats["versions"] = {generation: json.loads(resources["/offline-manifest.json"].body)["version"]
+                                  for generation, resources in self.bundles.items()}
         if not control.exists():
             atomic_json(control, {"generation": "A", "fault": None, "authState": "active"})
         load_control(control)

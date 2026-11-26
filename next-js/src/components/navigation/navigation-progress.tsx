@@ -3,13 +3,15 @@
 import styled, { keyframes } from "styled-components";
 
 const travel = keyframes`from { transform: translateX(-100%); } to { transform: translateX(350%); }`;
+const expire = keyframes`from { visibility: visible; } to { visibility: hidden; }`;
+const progressLifetime = "30s";
 const Track = styled.div`
   position: absolute;
   inset-inline: 0;
   inset-block-end: calc(-1 * var(--gh-spacing-0_5));
   block-size: var(--gh-size-0_75);
   overflow: hidden;
-  opacity: 0;
+  visibility: hidden;
   pointer-events: none;
   background: ${({ theme }) => `color-mix(in srgb, ${theme.header.accent} 35%, ${theme.header.background})`};
   > span {
@@ -18,14 +20,14 @@ const Track = styled.div`
     block-size: 100%;
     background: ${({ theme }) => theme.header.accent};
   }
-  body:has([data-navigation-pending], [data-app-loading], main[aria-busy="true"], main [aria-busy="true"]:not([data-navigation-passive])) & {
-    opacity: 1;
-    > span { display: block; animation: ${travel} var(--gh-duration-shimmer) var(--gh-easing-linear) infinite; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    body:has([data-navigation-pending], [data-app-loading], main[aria-busy="true"], main [aria-busy="true"]:not([data-navigation-passive])) & > span {
-      animation: none;
-      transform: translateX(115%);
+  body:has([data-navigation-pending], [data-app-loading], main[aria-busy="true"]:not([data-navigation-passive]), main [aria-busy="true"]:not([data-navigation-passive])) & {
+    /* An intercepted or stalled navigation can leave a marker behind until the old document unloads. */
+    animation: ${expire} ${progressLifetime} step-end both;
+    > span { display: block; animation: ${travel} var(--gh-duration-shimmer) var(--gh-easing-linear) 30; }
+    @media (prefers-reduced-motion: reduce) {
+      /* Keep the full visibility deadline for the static indicator. */
+      animation-duration: ${progressLifetime} !important;
+      > span { animation: none; transform: translateX(115%); }
     }
   }
 `;

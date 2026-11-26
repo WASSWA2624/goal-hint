@@ -8,7 +8,8 @@ import { Surface } from "@/components/ui/layout";
 import { resetReviewAlerts } from "@/components/admin/payment-alert-sound";
 import { AppLoading } from "@/components/navigation/navigation-progress";
 import { nativePaymentAlerts, type NativePaymentAlertBridge } from "@/domain/native-payment-alerts";
-import { ensureMemberSession, getAdminSessionSnapshot, getMemberSessionSnapshot, getSubscriptionSnapshot, hasConfirmedMemberSession, refreshMemberSession, subscribeMemberSession } from "./member-session";
+import { beginMemberSignOut, ensureMemberSession, getAdminSessionSnapshot, getMemberSessionSnapshot, getSubscriptionSnapshot, hasConfirmedMemberSession,
+  refreshMemberSession, subscribeMemberSession } from "./member-session";
 import { clearProtectedDrafts } from "./draft-storage";
 
 /** Compact information-page treatment with a readable single column and phone-sized actions. */
@@ -92,13 +93,22 @@ export function MemberSignOut({ children, disabled, logoutAction = "/api/account
     } catch { /* Alert cleanup must not stop the form submission. */ }
 
     const alerts = nativePaymentAlerts();
-    if (!alerts) return; // The browser follows the server redirect without JavaScript reading the response.
+    if (!alerts) {
+      // Let the browser capture the form before changing the header that owns it.
+      setTimeout(beginMemberSignOut, 0);
+      return;
+    }
     event.preventDefault();
     const form = event.currentTarget;
+    beginMemberSignOut();
     void clearNativeSignOutAlerts(alerts).finally(() => {
-      // An in-app navigation can unmount the menu during the bounded cleanup.
-      const target = form.isConnected ? form : form.cloneNode(true) as HTMLFormElement;
-      if (target !== form) { target.hidden = true; document.body.append(target); }
+      // Updating the header can remove its form during native cleanup.
+      const target = form.isConnected ? form : form.cloneNode(false) as HTMLFormElement;
+      if (target !== form) {
+        target.hidden = true;
+        for (const field of form.querySelectorAll('input[type="hidden"]')) target.append(field.cloneNode(true));
+        form.ownerDocument.body.append(target);
+      }
       HTMLFormElement.prototype.submit.call(target);
     });
   }

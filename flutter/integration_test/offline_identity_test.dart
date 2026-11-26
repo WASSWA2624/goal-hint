@@ -9,6 +9,7 @@ import 'package:goal_hint/web/navigation_policy.dart';
 import 'package:goal_hint/web/windows_web_view.dart';
 import 'package:integration_test/integration_test.dart';
 
+import 'support/connection_page.dart';
 import 'support/native_page.dart';
 
 const _phase = String.fromEnvironment(
@@ -54,12 +55,12 @@ void main() {
         await page.untilAdapter(() => browser.ready || browser.error != null);
         expect(browser.ready, isTrue);
         if (_phase.startsWith('cold-')) {
-          await _saved(page);
+          await _connectionPage(page);
           await _auditCaches(page);
           await _offlineRefusals(page);
           // Revisit the exact URL that held A/B's private HTML online.
           await browser.load(configuration.origin.resolve('/en'));
-          await _saved(page);
+          await _connectionPage(page, retryPath: '/en');
         } else {
           await _online(page);
           if (_phase == 'cleanup' || _phase == 'reset') {
@@ -74,8 +75,11 @@ void main() {
               const owned = (await caches.keys()).filter(name => name.startsWith('$_cachePrefix'));
               for (const name of owned) await caches.delete(name);
               for (const registration of await navigator.serviceWorker.getRegistrations()) {
-                if (registration.scope === location.origin + '/' &&
-                    registration.active?.scriptURL === location.origin + '/offline-worker.js') await registration.unregister();
+                const script = registration.active?.scriptURL;
+                if (registration.scope === location.origin + '/' && [
+                  location.origin + '/offline-worker.js',
+                  location.origin + '/offline-worker.js?connection-page=1'
+                ].includes(script)) await registration.unregister();
               }
               return (await caches.keys()).every(name => !name.startsWith('$_cachePrefix'));
             })()
@@ -98,7 +102,7 @@ void main() {
             }
             await _auditCaches(page);
             await browser.load(configuration.origin.resolve('/offline'));
-            await _saved(page);
+            await _connectionPage(page, retryPath: '/en/matches');
             await browser.suspend();
             await tester.pump(const Duration(seconds: 2));
           }
@@ -182,7 +186,7 @@ Future<void> _signOut(NativePage page) async {
   await page.adapter.load(origin.resolve('/en'));
   await _online(page);
   await _identity(page, null);
-  // Preserve the real logout header; reprepare anonymous content online.
+  // Preserve the real logout header and prepare the public connection page.
   await _readyCache(page);
   final privateRead =
       await page.readAsync('''
@@ -234,11 +238,8 @@ Future<void> _login(NativePage page, String identity) async {
   );
 }
 
-Future<void> _saved(NativePage page) async {
-  await page.until(
-    'document.querySelector("[data-offline-view]")?.dataset.offlineState === "saved"',
-  );
-  await page.documentReady();
+Future<void> _connectionPage(NativePage page, {String? retryPath}) async {
+  await expectConnectionPage(page, retryPath: retryPath);
   expect(
     await page.read(
       'document.querySelector("[data-offline-fixture],[data-private-fixture],[data-offline-identity-fixture]") === null',
@@ -247,7 +248,7 @@ Future<void> _saved(NativePage page) async {
   );
   expect(
     await page.read("document.body.innerText.includes('Saved Home United')"),
-    isTrue,
+    isFalse,
   );
   expect(
     await page.read(
@@ -299,9 +300,8 @@ Future<void> _auditCaches(NativePage page) async {
           const url = new URL(request.url), response = await cache.match(request);
           count++;
           publicOnly &&= url.origin === location.origin && !url.search && (
-            ['/offline','/offline-cache/active','/offline-cache/record','/offline-cache/snapshot',
-              '/brand/goal-hint-logo-inverse.svg','/brand/goal-hint-mark-primary.svg'].includes(url.pathname)
-            || /^\/_next\/static\/.+\.(?:js|css|woff2?|ttf|otf|png|svg|ico)$/i.test(url.pathname));
+            ['/offline','/offline-cache/active','/offline-cache/record'].includes(url.pathname)
+            || /^\/(?:_next\/static\/(?:chunks|css|media)\/.+\.(?:js|css|woff2?|ttf|otf|svg)|brand\/goal-hint-(?:logo|mark|header)-(?:primary|inverse)\.svg)$/i.test(url.pathname));
           noPrivateBytes &&= !forbidden.test(await response.clone().text());
           if (!['/offline-cache/active','/offline-cache/record'].includes(url.pathname))
             noPrivatePolicy &&= !/(?:^|,)\s*(?:no-store|private)\b/i.test(response.headers.get('cache-control') ?? '');

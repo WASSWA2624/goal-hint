@@ -3,7 +3,7 @@ import test from "node:test";
 import { initialOfflineRefreshState, offlineRefreshRules, readOfflineReply, startOfflineRefresh } from "../src/domain/offline-refresh.ts";
 
 const at = Date.parse("2026-10-26T09:00:00Z"), version = "a".repeat(64);
-const ready = (capturedAt = at) => ({ ok: true, version, refreshed: true, capturedAt, expiresAt: capturedAt + 86_400_000, records: 2 });
+const ready = () => ({ ok: true, kind: "connection-page", version, refreshed: true });
 const flush = async () => { for (let count = 0; count < 12; count++) await Promise.resolve(); };
 function deferred() { let resolve; const promise = new Promise((done) => { resolve = done; }); return { promise, resolve }; }
 function harness(prepare, { hint = true, inspected = { ok: false, error: "cache-unavailable" } } = {}) {
@@ -20,7 +20,6 @@ function harness(prepare, { hint = true, inspected = { ok: false, error: "cache-
     hint: (value) => { online = value; listener?.(); },
     visibility: (value) => { visible = value; listener?.(); },
     ping: () => listener?.(),
-    manual: () => listener?.("manual"),
     async advance(milliseconds) {
       const until = now + milliseconds;
       let limit = 0;
@@ -65,20 +64,10 @@ test("retained good cache is a failed refresh with bounded exponential retries a
 
 test("server Retry-After is honored without an unbounded delay", async () => {
   const h = harness(async () => ({ ok: false, refreshed: false, error: "rate-limited", retryAfterSeconds: 120 }));
-  await h.advance(1_000); h.manual();
+  await h.advance(1_000); h.hint(false); h.hint(true);
   await h.advance(118_999); assert.equal(h.starts.length, 1);
   await h.advance(1); assert.equal(h.starts.length, 2);
   assert.equal(readOfflineReply({ ok: false, retryAfterSeconds: 86_400 }).retryAfterSeconds, undefined);
-  h.stop();
-});
-
-test("manual retry is user-controlled, coalesced and still observes the minimum request gap", async () => {
-  const h = harness(async () => ready());
-  await h.advance(0);
-  for (let count = 0; count < 100; count++) h.manual();
-  await h.advance(1_999); assert.equal(h.starts.length, 1);
-  await h.advance(1); assert.equal(h.starts.length, 2);
-  assert.equal(h.timers.size, 1);
   h.stop();
 });
 
@@ -95,7 +84,7 @@ test("repeated hints cannot overlap an in-flight update", async () => {
 
 test("hide cancels its owner, stops timers, and resume retries once without losing cache", async () => {
   const pending = deferred();
-  const h = harness((signal, count) => count > 1 ? Promise.resolve(ready(at + 600_000)) : new Promise((resolve, reject) => {
+  const h = harness((signal, count) => count > 1 ? Promise.resolve(ready()) : new Promise((resolve, reject) => {
     pending.promise.then(resolve); signal.addEventListener("abort", () => reject(new DOMException("Canceled", "AbortError")), { once: true });
   }), { inspected: ready() });
   await h.advance(0); h.visibility(false); await flush();
@@ -135,39 +124,13 @@ test("authentication wall and unusable responses never masquerade as a successfu
   }
 });
 
-test("expiry removes readiness without a tight loop and legacy worker replies remain compatible", async () => {
-  const h = harness(async () => ({ ...ready(), expiresAt: at + 1_000 }));
-  await h.advance(0); assert.ok(h.state().cache);
-  await h.advance(1_000); assert.equal(h.state().cache, null); assert.equal(h.starts.length, 1);
-  h.stop();
-  let reads = 0;
-  const legacy = harness(async () => ({ ok: true, version }), { inspected: () => ++reads === 1 ? { ok: false } : ready() });
-  await legacy.advance(0); assert.equal(legacy.state().connection, "reachable"); assert.equal(legacy.state().cache.capturedAt, at);
-  assert.equal(reads, 2);
-  legacy.stop();
-});
-
-test("legacy preparation preserves known expiry and cannot report freshness if status verification fails", async () => {
-  let reads = 0;
-  const h = harness(async () => ({ ok: true, version }), { inspected: () => {
-    if (++reads > 1) throw new Error("Transient status failure");
-    return { ...ready(), expiresAt: at + 1_000 };
-  } });
-  await h.advance(0);
-  assert.equal(h.state().cache.expiresAt, at + 1_000);
-  assert.equal(h.state().phase, "waiting"); assert.equal(h.state().problem, "cache-unavailable");
-  await h.advance(1_000); assert.equal(h.state().cache, null);
-  h.stop();
-});
-
 test("worker reply decoder rejects invalid metadata and copies no private fields", () => {
   assert.deepEqual(initialOfflineRefreshState.cache, null);
-  assert.throws(() => readOfflineReply({ ok: true, version: "not-a-version" }));
-  assert.throws(() => readOfflineReply({ ...ready(), records: 31 }));
-  assert.throws(() => readOfflineReply({ ...ready(), expiresAt: at + 86_400_001 }));
+  assert.throws(() => readOfflineReply({ ...ready(), version: "not-a-version" }));
+  assert.throws(() => readOfflineReply({ ok: true, version }));
   for (const patch of [{ refreshed: "false" }, { retained: null }, { activated: 1 }, { error: 401 }, { updateError: false }]) {
     assert.throws(() => readOfflineReply({ ...ready(), ...patch }));
   }
-  const checked = readOfflineReply({ ...ready(), phone: "private", token: "private", forecast: "private" });
-  assert.equal("phone" in checked || "token" in checked || "forecast" in checked, false);
+  const checked = readOfflineReply({ ...ready(), phone: "private", token: "private", forecast: "private", records: 30, capturedAt: at });
+  assert.deepEqual(checked, { ok: true, version, refreshed: true });
 });

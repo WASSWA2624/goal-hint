@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
 const digest = (value) => createHash("sha256").update(value).digest("hex");
+const manifestBytes = 64 * 1024;
 const assetsIn = (text) => Array.from(text.matchAll(/(?:\/_next\/)?static\/(?:chunks|css|media)\/[a-zA-Z0-9_./-]+\.(?:js|css|woff2?|ttf|otf|svg)/gu),
   ([value]) => value.startsWith("/_next/") ? value : `/_next/${value}`);
 
@@ -51,12 +52,14 @@ export async function buildOfflineManifest(directory = process.cwd()) {
     if (assets.size > 256) throw new Error("Offline asset count exceeds limit.");
   }
   const entry = { url: "/offline", sha256: digest(entryBody), bytes: entryBody.length };
-  const manifest = { schemaVersion: 1, entry, assets: [...assets.values()].sort((a, b) => a.url < b.url ? -1 : a.url > b.url ? 1 : 0) };
-  if (entry.bytes + manifest.assets.reduce((total, item) => total + item.bytes, 0) > 10 * 1024 * 1024 - (128 + 96) * 1024) {
+  const manifest = { schemaVersion: 2, entry, assets: [...assets.values()].sort((a, b) => a.url < b.url ? -1 : a.url > b.url ? 1 : 0) };
+  if (entry.bytes + manifest.assets.reduce((total, item) => total + item.bytes, 0) > 10 * 1024 * 1024 - manifestBytes) {
     throw new Error("Offline bundle exceeds storage budget.");
   }
   const output = { ...manifest, version: digest(JSON.stringify(manifest)), createdAt: Date.now() };
-  await writeFile(path.join(root, "public/offline-manifest.json"), JSON.stringify(output) + "\n");
+  const body = JSON.stringify(output) + "\n";
+  if (Buffer.byteLength(body) > manifestBytes) throw new Error("Offline manifest exceeds storage budget.");
+  await writeFile(path.join(root, "public/offline-manifest.json"), body);
   return output;
 }
 

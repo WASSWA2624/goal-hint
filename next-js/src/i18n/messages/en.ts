@@ -869,6 +869,7 @@ export const en = {
   "feed.filters.marketsHint": "At least one",
   "feed.filters.applied": "Applied",
   "feed.filters.loading": "Updating matches…",
+  "feed.filters.slow": "The match update is taking too long.",
   "feed.filters.previous": "Showing the previous successful result for the dates and filters below.",
   "feed.pagination.navigation": "Match pages",
   "pagination.numbers": "Page numbers",

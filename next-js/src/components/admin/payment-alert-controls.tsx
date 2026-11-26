@@ -6,6 +6,7 @@ import { Inline } from "@/components/ui/layout";
 import { reviewSoundEnabled, setReviewSound } from "./payment-alert-sound";
 import { nativePaymentAlerts } from "@/domain/native-payment-alerts";
 import { startRequestDeadline } from "@/domain/request-deadline";
+import { offlineWorkerScript } from "@/components/offline/offline-transport";
 
 type Endpoint = { id: string; transport: string; enabled: boolean; deliveries?: { status: string; displayedAt: string | null; openedAt: string | null }[] };
 type Status = { scope: string; enabled: boolean; publicKey: string | null; endpoints: Endpoint[] };
@@ -54,7 +55,7 @@ export function PaymentAlertControls() {
           if (Notification.permission === "denied") throw new Error("Allow notifications in browser settings, then try again.");
           const permission = await Notification.requestPermission();
           if (permission !== "granted") throw new Error("Notifications are not enabled. The payment queue remains available.");
-          const worker = await navigator.serviceWorker.register("/offline-worker.js", { scope: "/", updateViaCache: "none" });
+          const worker = await navigator.serviceWorker.register(offlineWorkerScript, { scope: "/", updateViaCache: "none" });
           await navigator.serviceWorker.ready;
           const key = Uint8Array.from(atob(state.publicKey.replace(/-/gu, "+").replace(/_/gu, "/") + "=".repeat((4 - state.publicKey.length % 4) % 4)), character => character.charCodeAt(0));
           const subscription = await worker.pushManager.getSubscription() ?? await worker.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });

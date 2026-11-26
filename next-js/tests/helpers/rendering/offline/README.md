@@ -1,6 +1,6 @@
 # Owned offline acceptance fixture
 
-`scripts/serve-offline-fixture.py` builds the actual offline entry, client code,
+`scripts/serve-offline-fixture.py` builds the actual connection entry, client code,
 manifest and worker with synthetic public/private HTTP responses. It uses no
 real account, database, payment or message service. Keep its generated directory
 under `.tmp/`; the `.offline-fixture` marker identifies an owned fixture.
@@ -54,7 +54,7 @@ update. Healthy defaults are generation A, no fault and active synthetic auth.
 | Field | Values |
 | --- | --- |
 | `generation` | `A` or `B`. |
-| `fault.target` | `manifest`, `snapshot`, `asset`, `entry`, `document` or `private`. |
+| `fault.target` | `manifest`, `asset`, `entry`, `document` or `private`. |
 | `fault.mode` | `503`, `401`, `captive`, `redirect`, `missing`, `truncate`, `delay-headers`, `stall-body` or `disconnect`. |
 | `fault.delayMs` | Integer 0–30000; defaults to 12000. Used by delayed headers/body. |
 | `authState` | `active` or `expired`; independent of anonymous public content. |
@@ -74,17 +74,13 @@ request. A held B asset is a useful minimize/cancel/resume checkpoint.
 
 ## Generations and privacy
 
-A is the verified built entry/assets. B keeps those actual UI bytes and adds one
-harmless, required manifest asset; it is not executed by the app. The manifest
-hash/creation order and public snapshot versions/times advance together. This is
-an explicitly **derived acceptance bundle**, not a second genuine Next build.
-Plan 004 separately verified a real rebuilt UI transition. No component or
-business logic is duplicated by the proxy.
+A is the verified built entry and assets. B keeps the same UI and adds one
+harmless, required manifest asset outside the app’s execution path. The stats
+file records `versions.A` and `versions.B` for the two manifest hashes. Plan 004
+separately verified a real rebuilt UI transition.
 
-The counter file retains the synthetic fixture epoch across restarts, making
-A/B capture and kickoff/sync times deterministic. Existing public fixture
-identities remain unchanged; B increments their canonical data versions. Snapshot
-expiry remains 24 hours. The proxy retains immutable generation resources in
+The counter file retains the build epoch across restarts, keeping the two
+manifest versions stable. The proxy retains immutable generation resources in
 memory, so stopping only the backend does not model an outage. Stop the owned
 proxy itself, or block the browser/native context's network, for a cold-offline
 check. Preserve the installed profile and host counter/control files.

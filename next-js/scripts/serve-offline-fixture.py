@@ -1,4 +1,4 @@
-"""Serve the real built offline UI/worker with an isolated anonymous projection."""
+"""Serve the built connection page and worker on an isolated fixture."""
 import argparse
 import json
 import os

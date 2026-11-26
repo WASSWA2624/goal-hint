@@ -14,13 +14,6 @@ class ReconnectionPage extends NativePage {
       ''')
           as Map;
 
-  Future<Map> snapshot() async =>
-      await readAsync('''
-        fetch('/offline-cache/snapshot', { cache: 'no-store', credentials: 'omit' })
-          .then(response => response.json())
-      ''')
-          as Map;
-
   Future<void> observeLifecycle() async {
     await execute('''
       (() => {
@@ -54,13 +47,6 @@ class ReconnectionPage extends NativePage {
         })()
       ''')
           as Map;
-
-  /// The same readonly action exposed by the web Saved view's check button.
-  Future<void> requestCheck() async {
-    await execute('''
-      window.dispatchEvent(new Event('goal-hint-offline-check')); true;
-    ''');
-  }
 
   Future<void> floodHints() async {
     await execute('''

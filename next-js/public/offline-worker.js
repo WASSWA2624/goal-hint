@@ -1,30 +1,22 @@
-/* Goal Hint's only durable content store: a complete, anonymous, versioned bundle.
- * Normal documents, RSC, private APIs, credentials and writes never enter it. */
+/* Only the anonymous connection page and its verified build assets are stored.
+ * Normal documents, RSC, API data, credentials and writes never enter this cache. */
 "use strict";
 
 const CACHE_PREFIX = "goal-hint-offline-";
-const META_CACHE = `${CACHE_PREFIX}meta-v1`;
-const BUNDLE_PREFIX = `${CACHE_PREFIX}bundle-v1-`;
+const META_CACHE = `${CACHE_PREFIX}meta-v2`;
+const BUNDLE_PREFIX = `${CACHE_PREFIX}bundle-v2-`;
 const PREPARATION_LOCK = `${CACHE_PREFIX}prepare-v1`;
 const ACTIVE_KEY = "/offline-cache/active";
 const RECORD_KEY = "/offline-cache/record";
-const SNAPSHOT_KEY = "/offline-cache/snapshot";
 const MAX_BUNDLE_BYTES = 10 * 1024 * 1024;
 const MAX_ASSET_BYTES = 4 * 1024 * 1024;
-const MAX_SNAPSHOT_BYTES = 128 * 1024;
 const MAX_MANIFEST_BYTES = 64 * 1024;
-const MAX_RECORD_BYTES = 96 * 1024;
 const MAX_ASSETS = 256;
 const ASSET_CONCURRENCY = 4;
-const RETENTION_MS = 86_400_000;
-const CLOCK_SKEW_MS = 300_000;
 const FETCH_TIMEOUT_MS = 8_000;
 const PREPARATION_TIMEOUT_MS = 45_000;
-const NAVIGATION_TIMEOUT_MS = 4_000;
+const NAVIGATION_RESPONSE_TIMEOUT_MS = 15_000;
 const hashPattern = /^[a-f0-9]{64}$/;
-const identityPattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/;
-const statuses = new Set(["scheduled", "live", "finished-regulation", "finished-extra-time", "finished-penalties",
-  "postponed", "canceled", "abandoned", "awarded", "unknown"]);
 const brandAssets = new Set(["/brand/goal-hint-logo-primary.svg", "/brand/goal-hint-logo-inverse.svg",
   "/brand/goal-hint-mark-primary.svg", "/brand/goal-hint-mark-inverse.svg",
   "/brand/goal-hint-header-primary.svg", "/brand/goal-hint-header-inverse.svg"]);
@@ -37,8 +29,6 @@ const fail = (code = "invalid-bundle") => { throw new CacheFailure(code); };
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const exact = (value, keys) => object(value) && Object.keys(value).sort().join() === [...keys].sort().join();
 const integer = (value, minimum = 0, maximum = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(value) && value >= minimum && value <= maximum;
-const instant = (value) => Number.isSafeInteger(value) && Math.abs(value) <= 8_640_000_000_000_000;
-const text = (value, maximum) => value === null || typeof value === "string" && value.length <= maximum;
 const absolute = (path) => new URL(path, self.location.origin).href;
 const jsonResponse = (body, status = 200) => new Response(JSON.stringify(body), {
   status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-content-type-options": "nosniff" },
@@ -46,8 +36,7 @@ const jsonResponse = (body, status = 200) => new Response(JSON.stringify(body), 
 const errorCode = (error) => error instanceof CacheFailure ? error.code : "storage-unavailable";
 const retryDetails = (error) => error instanceof CacheFailure && integer(error.retryAfterSeconds, 1, 300)
   ? { retryAfterSeconds: error.retryAfterSeconds } : {};
-const bundleDetails = ({ manifest, snapshot }) => ({ version: manifest.version,
-  capturedAt: snapshot.capturedAt, expiresAt: snapshot.expiresAt, records: snapshot.records.length });
+const bundleDetails = ({ manifest }) => ({ kind: "connection-page", version: manifest.version });
 
 async function digest(bytes) {
   return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -141,47 +130,18 @@ function assetPath(path) {
 }
 
 async function validateManifest(value) {
-  if (!exact(value, ["schemaVersion", "version", "createdAt", "entry", "assets"]) || value.schemaVersion !== 1
+  if (!exact(value, ["schemaVersion", "version", "createdAt", "entry", "assets"]) || value.schemaVersion !== 2
     || !hashPattern.test(value.version) || !integer(value.createdAt) || !Array.isArray(value.assets)
     || value.assets.length === 0 || value.assets.length > MAX_ASSETS) fail();
   const entryValid = (entry, document = false) => exact(entry, ["url", "sha256", "bytes"])
     && (document ? entry.url === "/offline" : assetPath(entry.url)) && hashPattern.test(entry.sha256)
-    && integer(entry.bytes, 1, document ? MAX_ASSET_BYTES : MAX_ASSET_BYTES);
+    && integer(entry.bytes, 1, MAX_ASSET_BYTES);
   if (!entryValid(value.entry, true) || value.assets.some((entry) => !entryValid(entry))) fail();
   const paths = value.assets.map(({ url }) => url);
   if (new Set(paths).size !== paths.length || paths.join() !== [...paths].sort().join()
-    || value.entry.bytes + value.assets.reduce((sum, entry) => sum + entry.bytes, 0) + MAX_SNAPSHOT_BYTES + MAX_RECORD_BYTES > MAX_BUNDLE_BYTES) fail("size-limit");
-  const expected = await digest(encode({ schemaVersion: 1, entry: value.entry, assets: value.assets }));
+    || value.entry.bytes + value.assets.reduce((sum, entry) => sum + entry.bytes, 0) + MAX_MANIFEST_BYTES > MAX_BUNDLE_BYTES) fail("size-limit");
+  const expected = await digest(encode({ schemaVersion: value.schemaVersion, entry: value.entry, assets: value.assets }));
   if (value.version !== expected) fail("integrity-failure");
-  return value;
-}
-
-function validateSnapshot(value, now = Date.now()) {
-  if (!exact(value, ["schemaVersion", "capturedAt", "expiresAt", "reportingDate", "records"]) || value.schemaVersion !== 1
-    || !integer(value.capturedAt, 0, 8_640_000_000_000_000) || !integer(value.expiresAt, 0, 8_640_000_000_000_000)
-    || value.expiresAt <= value.capturedAt || value.expiresAt - value.capturedAt > RETENTION_MS
-    // Server and device clocks can differ slightly. This bounded read tolerance
-    // neither extends retention nor changes server-side freshness validation.
-    || value.capturedAt > now + CLOCK_SKEW_MS || !Array.isArray(value.records) || value.records.length > 30) fail("invalid-snapshot");
-  const team = (entry) => exact(entry, ["id", "name", "code"]) && typeof entry.id === "string" && identityPattern.test(entry.id)
-    && text(entry.name, 512) && (entry.code === null || typeof entry.code === "string" && /^[A-Z0-9]{2,5}$/.test(entry.code));
-  const record = (entry) => exact(entry, ["fixtureId", "dataVersion", "homeTeam", "awayTeam", "competition", "kickoffAt", "syncedAt", "status", "score", "scorePeriod"])
-    && typeof entry.fixtureId === "string" && identityPattern.test(entry.fixtureId) && typeof entry.dataVersion === "string" && /^[1-9]\d{0,19}$/.test(entry.dataVersion)
-    && (entry.dataVersion.length < 20 || entry.dataVersion <= "18446744073709551615")
-    && team(entry.homeTeam) && team(entry.awayTeam)
-    && exact(entry.competition, ["id", "name", "country"]) && typeof entry.competition.id === "string" && identityPattern.test(entry.competition.id)
-    && text(entry.competition.name, 512) && text(entry.competition.country, 256)
-    && (entry.kickoffAt === null || instant(entry.kickoffAt)) && (entry.syncedAt === null || instant(entry.syncedAt))
-    && statuses.has(entry.status) && (entry.score === null || exact(entry.score, ["home", "away"])
-      && integer(entry.score.home, 0, 1000) && integer(entry.score.away, 0, 1000))
-    && (entry.scorePeriod === null || entry.scorePeriod === "regulation" || entry.scorePeriod === "live");
-  if (typeof value.reportingDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value.reportingDate)
-    || value.records.some((entry) => !record(entry)) || new Set(value.records.map(({ fixtureId }) => fixtureId)).size !== value.records.length) fail("invalid-snapshot");
-  const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Kampala", year: "numeric", month: "2-digit", day: "2-digit" })
-    .formatToParts(new Date(value.capturedAt));
-  const part = (type) => date.find((entry) => entry.type === type)?.value;
-  if (`${part("year")}-${part("month")}-${part("day")}` !== value.reportingDate) fail("invalid-snapshot");
-  if (value.expiresAt <= now) fail("expired");
   return value;
 }
 
@@ -209,7 +169,7 @@ async function activePointer() {
 const validCacheName = (name) => typeof name === "string" && new RegExp(`^${BUNDLE_PREFIX}[a-f0-9]{64}$`).test(name);
 
 // A page requests many static assets together. Share only pending validation;
-// later reads still detect eviction, corruption and expiry in durable storage.
+// later reads still detect eviction and corruption in durable storage.
 const bundleReads = new Map();
 async function readBundle(cacheName, complete = true) {
   const key = `${complete ? "complete" : "metadata"}:${cacheName}`;
@@ -218,13 +178,7 @@ async function readBundle(cacheName, complete = true) {
     pending = readBundleFromCache(cacheName, complete).finally(() => bundleReads.delete(key));
     bundleReads.set(key, pending);
   }
-  const bundle = await pending;
-  // A slow complete check can cross the retention boundary while callers wait.
-  if (bundle.snapshot.expiresAt <= Date.now()) {
-    await caches.delete(cacheName).catch(() => {});
-    fail("expired");
-  }
-  return bundle;
+  return pending;
 }
 
 async function readBundleFromCache(cacheName, complete) {
@@ -232,21 +186,8 @@ async function readBundleFromCache(cacheName, complete) {
   if (!(await caches.keys()).includes(cacheName)) fail("cache-unavailable");
   const cache = await caches.open(cacheName), response = await cache.match(absolute(RECORD_KEY));
   if (!response) fail("cache-unavailable");
-  const record = readJson(await readBounded(response, MAX_RECORD_BYTES), "corrupt-cache");
-  if (!exact(record, ["manifest", "snapshot"]) || !exact(record.snapshot, ["sha256", "bytes"])
-    || !hashPattern.test(record.snapshot.sha256) || !integer(record.snapshot.bytes, 1, MAX_SNAPSHOT_BYTES)) fail("corrupt-cache");
-  const manifest = await validateManifest(record.manifest);
-  if (cacheName !== BUNDLE_PREFIX + await digest(encode({ version: manifest.version, snapshot: record.snapshot.sha256 }))) fail("corrupt-cache");
-  const saved = await cache.match(absolute(SNAPSHOT_KEY));
-  if (!saved) fail("corrupt-cache");
-  let snapshot;
-  try { snapshot = validateSnapshot(readJson(await checkedBytes(saved, record.snapshot), "invalid-snapshot")); }
-  catch (error) {
-    // Closed apps do not run timers. Enforce retention and remove expired data
-    // at the next attempted read; do not keep serving it as merely stale.
-    if (error instanceof CacheFailure && error.code === "expired") await caches.delete(cacheName).catch(() => {});
-    throw error;
-  }
+  const manifest = await validateManifest(readJson(await readBounded(response, MAX_MANIFEST_BYTES), "corrupt-cache"));
+  if (cacheName !== BUNDLE_PREFIX + manifest.version) fail("corrupt-cache");
   if (complete) {
     const entries = [manifest.entry, ...manifest.assets];
     // Cache reads and integrity checks are independent. Keep their working set
@@ -261,7 +202,7 @@ async function readBundleFromCache(cacheName, complete) {
       if (rejected) throw rejected.reason;
     }
   }
-  return { cache, cacheName, manifest, snapshot };
+  return { cache, cacheName, manifest };
 }
 
 async function readActive(complete = true) { return readBundle((await activePointer()).cacheName, complete); }
@@ -338,27 +279,13 @@ async function prepareBundle(job) {
     publicResponse(manifestResponse, "/offline-manifest.json", "x-goalhint-offline-manifest");
     if (!(manifestResponse.headers.get("content-type") ?? "").toLowerCase().includes("application/json")) fail("unexpected-response");
     const manifest = await validateManifest(readJson(await readNetwork(manifestResponse, MAX_MANIFEST_BYTES, preparationTime(deadline), signal), "invalid-bundle"));
-    await preparationCheckpoint(job, deadline);
-    const response = await boundedFetch(absolute("/api/offline/snapshot"), { credentials: "omit", cache: "no-store", redirect: "manual" }, preparationTime(deadline), signal);
-    publicResponse(response, "/api/offline/snapshot", "x-goalhint-offline-snapshot");
-    if (!(response.headers.get("content-type") ?? "").toLowerCase().includes("application/json")) fail("unexpected-response");
-    const bytes = await readNetwork(response, MAX_SNAPSHOT_BYTES, preparationTime(deadline), signal), snapshot = validateSnapshot(readJson(bytes, "invalid-snapshot"));
-    if (previous && (manifest.createdAt < previous.manifest.createdAt || snapshot.capturedAt < previous.snapshot.capturedAt)) fail("older-version");
-    if (previous) {
-      const prior = new Map(previous.snapshot.records.map((entry) => [entry.fixtureId, entry.dataVersion]));
-      if (snapshot.records.some((entry) => {
-        const version = prior.get(entry.fixtureId);
-        return version && (version.length > entry.dataVersion.length || version.length === entry.dataVersion.length && version > entry.dataVersion);
-      })) fail("older-version");
-    }
-    const snapshotEntry = { sha256: await digest(bytes), bytes: bytes.byteLength };
-    candidateName = BUNDLE_PREFIX + await digest(encode({ version: manifest.version, snapshot: snapshotEntry.sha256 }));
+    if (previous && manifest.createdAt < previous.manifest.createdAt) fail("older-version");
+    candidateName = BUNDLE_PREFIX + manifest.version;
     await preparationCheckpoint(job, deadline);
     if (previous?.cacheName === candidateName) return { ok: true, refreshed: true, activated: false, ...bundleDetails(previous) };
     // Stage at most one candidate beside the active bundle: at most 20 MiB total.
     await removeOtherBundles(protectedName ? [protectedName] : []);
     const candidate = await caches.open(candidateName);
-    await candidate.put(absolute(SNAPSHOT_KEY), storedResponse(bytes, response));
     await downloadEntry(candidate, manifest.entry, true, deadline, previous, signal);
     // Bounded concurrency prevents a large build from opening hundreds of fetches.
     for (let index = 0; index < manifest.assets.length; index += ASSET_CONCURRENCY) {
@@ -368,7 +295,7 @@ async function prepareBundle(job) {
       if (rejected) throw rejected.reason;
     }
     await preparationCheckpoint(job, deadline);
-    await candidate.put(absolute(RECORD_KEY), jsonResponse({ manifest, snapshot: snapshotEntry }));
+    await candidate.put(absolute(RECORD_KEY), jsonResponse(manifest));
     const accepted = await readBundle(candidateName);
     await preparationCheckpoint(job, deadline);
     await (await caches.open(META_CACHE)).put(absolute(ACTIVE_KEY), jsonResponse({ cacheName: candidateName, previousCacheName: previous?.cacheName ?? null }));
@@ -405,10 +332,13 @@ async function offlineDocument() {
 
 async function navigate(request) {
   try {
-    const response = await boundedFetch(request, {}, NAVIGATION_TIMEOUT_MS);
+    // Give slow live documents time to return headers. Once they arrive, the
+    // response body can keep streaming without the offline deadline.
+    const response = await boundedFetch(request, {}, NAVIGATION_RESPONSE_TIMEOUT_MS, request.signal);
     // Authorization and application 4xx responses remain server-owned.
-    return response.status >= 500 ? await offlineDocument() ?? response : response;
+    return response.status >= 500 && !request.signal.aborted ? await offlineDocument() ?? response : response;
   } catch (error) {
+    if (request.signal.aborted) throw error;
     const saved = await offlineDocument();
     if (saved) return saved;
     throw error;
@@ -427,7 +357,7 @@ async function savedAsset(request) {
         if (!response) continue;
         await checkedBytes(response.clone(), entry);
         return response;
-      } catch { /* Never return a corrupt or expired bundle's resource. */ }
+      } catch { /* Never return a corrupt bundle's resource. */ }
     }
   } catch { /* Storage may be denied or evicted; normal network loading still works. */ }
   return fetch(request);
@@ -435,7 +365,16 @@ async function savedAsset(request) {
 
 // Worker-code upgrades wait for existing clients to close. Do not swap the
 // controller beneath an active form or overlap this writer with a legacy one.
-self.addEventListener("activate", (event) => { event.waitUntil(self.clients.claim()); });
+self.addEventListener("activate", (event) => {
+  event.waitUntil((async () => {
+    try {
+      const names = await caches.keys();
+      await Promise.allSettled(names.filter((name) => name === `${CACHE_PREFIX}meta-v1`
+        || /^goal-hint-offline-bundle-v1-[a-f0-9]{64}$/u.test(name)).map((name) => caches.delete(name)));
+    } catch { /* Storage denial must not prevent control of subsequent navigation. */ }
+    await self.clients.claim();
+  })());
+});
 self.addEventListener("message", (event) => {
   if (event.data?.type === "payment-alert-reconcile") { reconcileReviewNotifications(event); return; }
   if (!event.source?.url || new URL(event.source.url).origin !== self.location.origin || event.ports.length !== 1
@@ -470,8 +409,6 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET" || url.origin !== self.location.origin) return;
   if (url.pathname === "/offline-cache/status" && !url.search) {
     event.respondWith(status().then((value) => jsonResponse(value, value.ok ? 200 : 503)));
-  } else if (url.pathname === SNAPSHOT_KEY && !url.search) {
-    event.respondWith(readActive().then(({ snapshot }) => jsonResponse(snapshot)).catch((error) => jsonResponse({ ok: false, error: errorCode(error) }, 503)));
   } else if (request.mode === "navigate") event.respondWith(navigate(request));
   else if (!url.search && assetPath(url.pathname)) event.respondWith(savedAsset(request));
 });

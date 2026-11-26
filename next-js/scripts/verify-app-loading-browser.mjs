@@ -94,9 +94,55 @@ export async function verifyAppLoading(page, origin) {
       assert(summaryRequests === 1, 'A failed server summary retries exactly once through the current endpoint');
       results.push({ screen: 'matches', theme, retry: true, requests: summaryRequests });
     }
+    await page.clock.install();
+    for (const theme of ['light', 'dark']) {
+      await page.emulateMedia({ reducedMotion: theme === 'dark' ? 'reduce' : 'no-preference' });
+      await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
+      await page.goto(`${origin}/en/matches`);
+      await page.waitForFunction(mode => document.querySelector('meta[name="color-scheme"]')?.content === mode, theme);
+      const progress = page.getByRole('progressbar', { name: /loading/i });
+      const track = page.locator('[data-navigation-progress]:visible').first();
+      const busy = page.locator('[data-feed-results]');
+      const rows = page.locator('[data-fixture-id]');
+      const count = await rows.count();
+      await page.evaluate(() => document.querySelector('main').setAttribute('data-app-loading', ''));
+      await progress.waitFor({ state: 'visible' });
+      if (theme === 'dark') assert(await progress.evaluate(element => getComputedStyle(element).animationName) === 'none', 'Reduced motion keeps the loading segment static');
+      // Finish the track deadline while leaving the moving segment alone.
+      await track.evaluate(element => element.getAnimations().forEach(animation => animation.finish()));
+      await progress.waitFor({ state: 'hidden' });
+      await page.evaluate(() => document.querySelector('main').removeAttribute('data-app-loading'));
+
+      let release, intercepted;
+      const held = new Promise(resolve => { release = resolve; });
+      const target = /\/en\/matches\?.*result=won/u;
+      const delay = route => intercepted = held.then(() => route.continue());
+      await page.route(target, delay, { times: 1 });
+      try {
+        const requestReady = page.waitForRequest(request => target.test(request.url()));
+        await page.locator('[data-summary-result="won"]').click();
+        await requestReady;
+        await progress.waitFor({ state: 'visible' });
+        assert(await busy.getAttribute('aria-busy') === 'true', 'A pending filter update marks the current list busy');
+        await page.clock.fastForward(15_100);
+        const retry = page.locator('[data-feed-navigation-retry] a');
+        await retry.waitFor();
+        await progress.waitFor({ state: 'hidden' });
+        assert(await busy.getAttribute('aria-busy') === 'false' && await rows.count() === count, 'A stalled update restores the existing list and its controls');
+        assert(target.test(new URL(await retry.getAttribute('href'), origin).href), 'Retry keeps the exact requested filter');
+      } finally {
+        release();
+        await intercepted;
+        await page.unroute(target, delay);
+      }
+      // A response that eventually arrives can still update the retained list.
+      await page.waitForURL(target);
+      results.push({ screen: 'matches', theme, boundedProgress: true, retainedRows: count });
+    }
     assert(failures.length === 0, failures.join('\n'));
     return { passed: results.length, results, hydrationErrors: failures };
   } finally {
+    await page.emulateMedia({ reducedMotion: null });
     page.off('pageerror', onError); page.off('console', onConsole); page.off('request', onRequest);
   }
 }

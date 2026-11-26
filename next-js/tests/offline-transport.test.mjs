@@ -2,16 +2,16 @@ import assert from "node:assert/strict";
 import { getEventListeners } from "node:events";
 import { MessageChannel } from "node:worker_threads";
 import test from "node:test";
-import { createOfflineTransport, requestOfflineWorker } from "../src/components/offline/offline-transport.ts";
+import { createOfflineTransport, offlineWorkerScript, requestOfflineWorker } from "../src/components/offline/offline-transport.ts";
 
-const reply = { ok: true, version: "a".repeat(64), refreshed: true, capturedAt: 1000, expiresAt: 2000, records: 1 };
+const reply = { ok: true, kind: "connection-page", version: "a".repeat(64), refreshed: true };
 const pause = (milliseconds = 10) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 function fakeWorker(t, handle) {
   const ports = [], messages = [], cancellations = [];
   let canceled;
   const cancellation = new Promise((resolve) => { canceled = resolve; });
   t.after(() => ports.forEach((port) => port.close()));
-  return { scriptURL: "https://example.test/offline-worker.js", messages, cancellations,
+  return { scriptURL: `https://example.test${offlineWorkerScript}`, messages, cancellations,
     async waitForCancellation() {
       let timer;
       try { await Promise.race([cancellation, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Cancellation was not received")), 1_000); })]); }
@@ -118,4 +118,24 @@ test("an unregistered or evicted registration is created again instead of reusin
   current = undefined;
   await transport.prepare(new AbortController().signal);
   assert.equal(registrations, 2); assert.equal(worker.messages.length, 2);
+});
+
+test("a saved-matches worker receives no preparation request while the connection worker waits", async (t) => {
+  const worker = fakeWorker(t, (_, respond) => respond(reply));
+  const oldWorker = { scriptURL: "https://example.test/offline-worker.js", postMessage() { assert.fail("Old worker must receive no preparation requests."); } };
+  let current = { active: oldWorker }, registrations = 0;
+  const transport = createOfflineTransport({ getRegistration: async () => current,
+    register: async (path) => {
+      assert.equal(path, offlineWorkerScript); registrations++;
+      current = { active: oldWorker, waiting: worker };
+      return current;
+    },
+    ready: Promise.resolve({ active: oldWorker }) });
+  assert.equal((await transport.inspect(new AbortController().signal)).ok, false);
+  await assert.rejects(transport.prepare(new AbortController().signal), { code: "worker-unavailable" });
+  await assert.rejects(transport.prepare(new AbortController().signal), { code: "worker-unavailable" });
+  assert.equal(registrations, 1);
+  current = { active: worker, update: async () => {} };
+  assert.equal((await transport.prepare(new AbortController().signal)).version, reply.version);
+  assert.deepEqual(worker.messages, [{ type: "PREPARE" }]);
 });

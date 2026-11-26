@@ -1,6 +1,12 @@
 import { OfflineRefreshError, readOfflineReply, type OfflineReply } from "../../domain/offline-refresh.ts";
 
 type WorkerContainer = Pick<ServiceWorkerContainer, "getRegistration" | "register" | "ready">;
+export const offlineWorkerScript = "/offline-worker.js?connection-page=1";
+function isConnectionWorker(worker: ServiceWorker | null | undefined): worker is ServiceWorker {
+  if (!worker) return false;
+  const url = new URL(worker.scriptURL);
+  return url.pathname + url.search === offlineWorkerScript;
+}
 const abortError = () => new DOMException("Offline request canceled.", "AbortError");
 
 /** Registration cannot be canceled, but no preparation starts after this owner has left. */
@@ -61,13 +67,19 @@ export function createOfflineTransport(container: WorkerContainer = navigator.se
     if (signal.aborted) throw abortError();
     const existing = await bounded(container.getRegistration("/"), signal, 10_000);
     if (signal.aborted) throw abortError();
-    if (existing?.active) {
+    if (existing && isConnectionWorker(existing.active)) {
       if (network) void existing.update().catch(() => {});
       return existing.active;
     }
     if (!network) return null;
+    if (existing && (isConnectionWorker(existing.waiting) || isConnectionWorker(existing.installing))) {
+      // Keep the existing document and registration until its active worker can be replaced normally.
+      if (existing.active) return null;
+      const ready = await bounded(container.ready, signal, 15_000);
+      return isConnectionWorker(ready.active) ? ready.active : null;
+    }
     if (!registration) {
-      const registering = container.register("/offline-worker.js", { scope: "/", updateViaCache: "none" });
+      const registering = container.register(offlineWorkerScript, { scope: "/", updateViaCache: "none" });
       registration = registering;
       const release = () => { if (registration === registering) registration = undefined; };
       void registering.then(release, release);
@@ -77,10 +89,10 @@ export function createOfflineTransport(container: WorkerContainer = navigator.se
     try { selected = await bounded(pending, signal, 15_000); }
     catch (error) { if (registration === pending) registration = undefined; throw error; }
     if (signal.aborted) throw abortError();
+    if (selected.active && !isConnectionWorker(selected.active)) return null;
     const ready = selected.active ? selected : await bounded(container.ready, signal, 15_000);
     if (signal.aborted) throw abortError();
-    if (!ready.active) throw new OfflineRefreshError("worker-unavailable");
-    return ready.active;
+    return isConnectionWorker(ready.active) ? ready.active : null;
   };
   return {
     async inspect(signal: AbortSignal): Promise<OfflineReply> {

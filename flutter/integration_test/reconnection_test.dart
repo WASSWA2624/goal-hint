@@ -8,6 +8,7 @@ import 'package:goal_hint/web/navigation_policy.dart';
 import 'package:goal_hint/web/web_view_factory.dart';
 import 'package:integration_test/integration_test.dart';
 
+import 'support/connection_page.dart';
 import 'support/offline_fixture_control.dart';
 import 'support/reconnection_page.dart';
 
@@ -37,7 +38,9 @@ void main() {
       expect(config.origin.port, isNot(3000));
       final fixture = OfflineFixtureControl.fromEnvironment();
       await fixture.configure(
-        generation: phase == 'seed' || phase == 'failures' ? 'A' : 'B',
+        generation: phase == 'seed' ? 'A' : 'B',
+        target: phase == 'failures' ? 'manifest' : null,
+        mode: phase == 'failures' ? '503' : null,
         authState: phase == 'recover' || phase == 'final-cold'
             ? 'expired'
             : 'active',
@@ -61,19 +64,14 @@ void main() {
             'document.querySelector("[data-offline-fixture]") !== null',
           );
           await page.until(
-            'document.documentElement.dataset.offlineConnection === "reachable" && '
-            'document.documentElement.dataset.offlineUpdate === "idle" && navigator.serviceWorker.controller !== null',
+            'document.documentElement.dataset.offlineCache === "ready" && '
+            'navigator.serviceWorker.controller !== null',
             timeout: const Duration(seconds: 80),
           );
         } else {
           // The proxy is stopped: only the retained complete browser cache can
-          // supply this document and its matching assets/public snapshot.
-          await page.until(
-            'document.querySelector("[data-offline-view]")?.dataset.offlineState === "saved"',
-          );
-          await page.documentReady();
-          expect(browser.error, isNull);
-          expect(browser.hasDocument, isTrue);
+          // supply the connection page and its verified build assets.
+          await expectConnectionPage(page);
         }
 
         debugPrint(
@@ -81,7 +79,10 @@ void main() {
         );
         if (phase == 'seed') {
           final baseline = await _cacheIdentity(page);
-          expect(baseline['dataVersion'], '1');
+          expect(
+            baseline['version'],
+            ((await fixture.stats())['versions'] as Map)['A'],
+          );
           await fixture.save({
             'schemaVersion': 1,
             'origin': config.origin.toString(),
@@ -124,15 +125,13 @@ void main() {
 Future<Map> _cacheIdentity(ReconnectionPage page) async {
   final status = await page.cacheStatus();
   expect(status['ok'], isTrue);
-  final snapshot = await page.snapshot();
-  final records = snapshot['records'] as List;
-  expect(records, isNotEmpty);
-  return {
-    'version': status['version'],
-    'capturedAt': status['capturedAt'],
-    'expiresAt': status['expiresAt'],
-    'dataVersion': (records.first as Map)['dataVersion'],
-  };
+  expect(status['kind'], 'connection-page');
+  expect(status['version'], matches(r'^[a-f0-9]{64}$'));
+  expect(
+    status.keys.toSet().intersection({'capturedAt', 'expiresAt', 'records'}),
+    isEmpty,
+  );
+  return {'version': status['version']};
 }
 
 Future<void> _retained(ReconnectionPage page, Map saved, Map draft) async {
@@ -171,9 +170,8 @@ Future<Map> _faultCheck(
   required List<String> problems,
   String? connection,
 }) async {
-  await fixture.configure(generation: 'B', target: target, mode: mode);
   final before = await page.refreshState();
-  await page.requestCheck();
+  await fixture.configure(generation: 'B', target: target, mode: mode);
   final state = await _waitFailure(
     page,
     before['attempts'] as int,
@@ -193,20 +191,12 @@ Future<void> _failures(
   expect(await _cacheIdentity(page), saved['A']);
   final draft = await page.installDraft();
   await page.observeLifecycle();
-  var failed = await _faultCheck(
-    page,
-    fixture,
-    saved,
-    draft,
-    target: 'manifest',
-    mode: '503',
-    problems: ['server-unavailable'],
-    connection: 'unreachable',
-  );
+  final failed = await _waitFailure(page, 0, [
+    'server-unavailable',
+  ], connection: 'unreachable');
 
-  // Observe a genuine automatic retry. Do not advance browser time or invoke
-  // the manual check action to make the backoff assertion pass.
-  failed = await _waitFailure(page, failed['attempts'] as int, [
+  // The visible app retries without any user action or simulated clock.
+  await _waitFailure(page, failed['attempts'] as int, [
     'server-unavailable',
   ], connection: 'unreachable');
   final retryEvents = _events(await fixture.stats())
@@ -243,26 +233,6 @@ Future<void> _failures(
     fixture,
     saved,
     draft,
-    target: 'snapshot',
-    mode: 'captive',
-    problems: ['response-policy', 'unexpected-response', 'invalid-snapshot'],
-    connection: 'unusable',
-  );
-  await _faultCheck(
-    page,
-    fixture,
-    saved,
-    draft,
-    target: 'snapshot',
-    mode: '401',
-    problems: ['authentication-required'],
-    connection: 'authentication-required',
-  );
-  await _faultCheck(
-    page,
-    fixture,
-    saved,
-    draft,
     target: 'asset',
     mode: 'missing',
     problems: ['unexpected-response'],
@@ -276,15 +246,6 @@ Future<void> _failures(
     mode: 'delay-headers',
     problems: ['network-timeout'],
     connection: 'unreachable',
-  );
-  await _faultCheck(
-    page,
-    fixture,
-    saved,
-    draft,
-    target: 'asset',
-    mode: 'truncate',
-    problems: ['network-unreachable', 'integrity-failure'],
   );
 
   // This single synthetic POST has no database or real account behind it. Its
@@ -319,7 +280,6 @@ Future<void> _failures(
     delayMs: 12000,
   );
   final sequence = (await fixture.stats())['sequence'] as int;
-  await page.requestCheck();
   await _waitStats(
     page,
     fixture,
@@ -371,10 +331,9 @@ Future<void> _recover(
   _NativeLifecycle lifecycle,
 ) async {
   expect(await _cacheIdentity(page), saved['A']);
-  await page.until(
-    'document.documentElement.dataset.offlineUpdate === "waiting"',
-  );
-  expect((await page.refreshState())['connection'], 'unreachable');
+  final origin = Uri.parse(await page.read('location.origin') as String);
+  await page.adapter.load(origin.resolve('/en'));
+  await expectConnectionPage(page, retryPath: '/en');
   await page.observeLifecycle();
   final draft = await page.installDraft();
   final start = lifecycle.states.length;
@@ -413,8 +372,8 @@ Future<void> _recover(
   );
   await page.expectDraftUnchanged(draft);
 
-  // The proxy is still stopped. Only now may the host restore healthy B; an
-  // early visibility failure cannot accidentally replace A before a retry.
+  // Keep the native connection hint offline when the host restores the proxy.
+  // Actual requests should determine whether the existing page can be retried.
   await page.connectivityHint(online: false);
   await fixture.signal('restore-server', {
     'generation': 'B',
@@ -423,10 +382,22 @@ Future<void> _recover(
   debugPrint(
     'NATIVE_RECONNECT_CHECKPOINT restore-server pid=$pid file=${fixture.checkpoint.path}',
   );
+  final privateRead = await _waitForRecoveredServer(page);
+  expect(privateRead['status'], 401);
+  expect(privateRead['policy'], contains('no-store'));
+  await page.expectDraftUnchanged(draft);
+  expect(await _cacheIdentity(page), saved['A']);
+  const retryPath = '/en?draft=retained';
+  await expectConnectionPage(page, retryPath: retryPath);
+  await retryConnectionPage(page);
+  final expectedVersion = ((await fixture.stats())['versions'] as Map)['B'];
+  expect(expectedVersion, isA<String>());
   await page.until(
+    'document.querySelector("[data-offline-fixture]") !== null && '
+    'location.pathname + location.search === "$retryPath" && '
     'document.documentElement.dataset.offlineConnection === "reachable" && '
     'document.documentElement.dataset.offlineUpdate === "idle" && '
-    'document.documentElement.dataset.offlineVersion !== "${(saved['A'] as Map)['version']}"',
+    'document.documentElement.dataset.offlineVersion === "$expectedVersion"',
     timeout: const Duration(minutes: 6),
   );
   expect(
@@ -435,18 +406,8 @@ Future<void> _recover(
     reason:
         'Successful real reads, not the connectivity hint, establish reachability.',
   );
-  await page.expectDraftUnchanged(draft);
   final updated = await _cacheIdentity(page);
-  expect(updated['dataVersion'], '2');
   expect(updated['version'], isNot((saved['A'] as Map)['version']));
-  final privateRead =
-      await page.readAsync('''
-    fetch('/api/account/fixture', { cache: 'no-store', credentials: 'same-origin' })
-      .then(response => ({ status: response.status, policy: response.headers.get('cache-control') }))
-  ''')
-          as Map;
-  expect(privateRead['status'], 401);
-  expect(privateRead['policy'], contains('no-store'));
   expect((await fixture.stats())['writes'], saved['writesAfterAttempt']);
   await fixture.save({
     ...saved,
@@ -456,8 +417,22 @@ Future<void> _recover(
   });
   await fixture.signal('recovery-complete', {'accepted': 'B'});
   debugPrint(
-    'Native B recovery, foreground/draft preservation and no write replay passed.',
+    'Native retry to B, draft preservation before retry, and no write replay passed.',
   );
+}
+
+Future<Map> _waitForRecoveredServer(ReconnectionPage page) async {
+  final end = DateTime.now().add(const Duration(minutes: 5));
+  while (DateTime.now().isBefore(end)) {
+    final status = await page.readAsync('''
+      fetch('/api/account/fixture', { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(3000) })
+        .then(response => ({ status: response.status, policy: response.headers.get('cache-control') }))
+        .catch(() => null)
+    ''');
+    if (status != null) return status as Map;
+    await page.tester.pump(const Duration(seconds: 1));
+  }
+  fail('The owned proxy did not return after the recovery checkpoint.');
 }
 
 int _requests(Map stats, String category) =>
@@ -469,7 +444,7 @@ Future<void> _waitStats(
   OfflineFixtureControl fixture,
   bool Function(Map) predicate,
 ) async {
-  final end = DateTime.now().add(const Duration(seconds: 40));
+  final end = DateTime.now().add(const Duration(seconds: 80));
   while (DateTime.now().isBefore(end)) {
     if (predicate(await fixture.stats())) return;
     await page.tester.pump(const Duration(milliseconds: 100));

@@ -22,6 +22,8 @@ export type ButtonLinkProps = ComponentPropsWithRef<typeof Link> & {
   size?: "normal" | "large";
 };
 
+type DocumentButtonLinkProps = ComponentPropsWithRef<"a"> & Pick<ButtonLinkProps, "variant" | "size">;
+
 export type TextLinkProps = ComponentPropsWithRef<typeof Link>;
 export type TextButtonProps = ComponentPropsWithRef<"button">;
 
@@ -128,6 +130,10 @@ const ButtonControl = styled.button<{ $variant: ButtonVariant; $large?: boolean 
 `;
 
 const ButtonAnchor = styled(Link)<{ $variant: ButtonVariant; $large?: boolean }>`
+  ${buttonTreatment}
+`;
+
+const DocumentButtonAnchor = styled.a<{ $variant: ButtonVariant; $large?: boolean }>`
   ${buttonTreatment}
 `;
 
@@ -300,6 +306,11 @@ export function Button({ variant = "primary", size = "normal", type = "button", 
 /** Navigation retains native link semantics, including Next.js navigation behavior. */
 export function ButtonLink({ variant = "primary", size = "normal", ...props }: ButtonLinkProps) {
   return <ButtonAnchor {...props} $variant={variant} $large={size === "large"} />;
+}
+
+/** Let the browser request a fresh document, even before hydration. */
+export function DocumentButtonLink({ variant = "primary", size = "normal", ...props }: DocumentButtonLinkProps) {
+  return <DocumentButtonAnchor {...props} $variant={variant} $large={size === "large"} />;
 }
 
 export function TextLink(props: TextLinkProps) {

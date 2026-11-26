@@ -271,3 +271,54 @@ test("route mounts reuse confirmed header state while transient subscription fai
   assert.equal(getSubscriptionSnapshot(), null);
   assert.equal(getMemberSessionSnapshot(), null);
 });
+
+test("a pending browser logout retires private header state even if an earlier session read finishes late", async (t) => {
+  const session = await import("../src/components/members/member-session.ts?pending-logout");
+  const previousWindow = globalThis.window, previousFetch = globalThis.fetch;
+  const browser = new EventTarget();
+  globalThis.window = browser;
+  t.after(() => {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+    globalThis.fetch = previousFetch;
+  });
+
+  const identity = { phone: "+256700000001", administrator: true, referralCode: "01234567", freeContentAccess: true,
+    subscription: { activeUntil: null, paymentPending: true, canSubscribe: true } };
+  globalThis.fetch = async () => Response.json(identity);
+  let updates = 0;
+  t.after(session.subscribeMemberSession(() => { updates += 1; }));
+  await session.refreshMemberSession();
+  assert.equal(session.getMemberSessionSnapshot(), identity.phone);
+  assert.equal(session.getAdminSessionSnapshot(), true);
+  assert.equal(session.getSlipSharingSnapshot(), true);
+
+  let resolveBody, requestSignal, requests = 0;
+  globalThis.fetch = async (_url, { signal }) => {
+    requestSignal = signal;
+    requests += 1;
+    return { ok: true, json: () => new Promise(resolve => { resolveBody = resolve; }) };
+  };
+  const oldRead = session.refreshMemberSession();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(typeof resolveBody, "function");
+  session.beginMemberSignOut();
+  assert.equal(requestSignal.aborted, true);
+  assert.equal(session.getMemberSignOutSnapshot(), true);
+  assert.equal(session.hasConfirmedMemberSession(), false);
+  assert.equal(session.getMemberSessionSnapshot(), null);
+  assert.equal(session.getAdminSessionSnapshot(), false);
+  assert.equal(session.getInvitationSessionSnapshot(), null);
+  assert.equal(session.getSubscriptionSnapshot(), null);
+  assert.equal(session.getSlipSharingSnapshot(), false);
+  assert.equal(updates, 2);
+
+  resolveBody(identity);
+  await oldRead;
+  browser.dispatchEvent(new Event("focus"));
+  await session.ensureMemberSession();
+  assert.equal(requests, 1, "the departing document cannot restore stale account details");
+  assert.equal(session.getMemberSessionSnapshot(), null);
+  assert.equal(updates, 2);
+});

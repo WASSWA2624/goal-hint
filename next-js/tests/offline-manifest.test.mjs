@@ -30,6 +30,7 @@ async function fixture(t) {
 test("offline build pins HTML, client/split chunks, CSS and local fonts coherently", async (t) => {
   const { root } = await fixture(t);
   const manifest = await buildOfflineManifest(root);
+  assert.equal(manifest.schemaVersion, 2);
   assert.equal(manifest.entry.url, "/offline");
   assert.equal(manifest.assets.length, 11);
   assert.ok(manifest.assets.some(({ url }) => url.endsWith("/split.js")));

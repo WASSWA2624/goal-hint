@@ -13,6 +13,6 @@ export default async function Page() {
       <p>synthetic-private-member-{identity}</p><p>{member.phone}</p>
       <p>synthetic-protected-prediction-{identity}</p>
     </section>}
-    <Link href="/offline" prefetch={false}>Open saved matches</Link>
+    <Link href="/offline" prefetch={false}>Open connection fallback</Link>
   </main>;
 }

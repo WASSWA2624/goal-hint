@@ -54,28 +54,19 @@ class MemoryStorage {
   }
 }
 
-function snapshot(overrides = {}) {
-  return { schemaVersion: 1, capturedAt: at, expiresAt: at + 86_400_000, reportingDate: "2026-10-26", records: [{
-    fixtureId: "public-fixture", dataVersion: "12", homeTeam: { id: "home", name: "Home", code: "HOM" },
-    awayTeam: { id: "away", name: "Away", code: null }, competition: { id: "league", name: "Public league", country: "Uganda" },
-    kickoffAt: at, syncedAt: at, status: "live", score: { home: 1, away: 0 }, scorePeriod: "live",
-  }], ...overrides };
-}
-
-async function bundle({ name = "one", data = snapshot(), badAsset = false, policy = "public, max-age=0" } = {}) {
-  const entryBody = `<html><body data-offline-view>Saved ${name}</body></html>`;
-  const assetBody = `window.syntheticOffline = ${JSON.stringify(name)};`;
+async function bundle({ name = "one", asset = name, createdAt = at, schemaVersion = 2, badAsset = false, policy = "public, max-age=0" } = {}) {
+  const entryBody = `<html><body data-offline-view>Connection page ${name}</body></html>`;
+  const assetBody = `window.syntheticOffline = ${JSON.stringify(asset)};`;
   const entry = { url: "/offline", sha256: await hash(encode(entryBody)), bytes: encode(entryBody).byteLength };
-  const assets = [{ url: `/_next/static/chunks/${name}.js`, sha256: await hash(encode(assetBody)), bytes: encode(assetBody).byteLength }];
-  const manifest = { schemaVersion: 1, version: await hash(encode({ schemaVersion: 1, entry, assets })), createdAt: data.capturedAt, entry, assets };
+  const assets = [{ url: `/_next/static/chunks/${asset}.js`, sha256: await hash(encode(assetBody)), bytes: encode(assetBody).byteLength }];
+  const manifest = { schemaVersion, version: await hash(encode({ schemaVersion, entry, assets })), createdAt, entry, assets };
   const headers = (type, marker) => ({ "cache-control": policy, "content-type": type, ...(marker ? { [marker]: "1" } : {}) });
   const responses = new Map([
     ["/offline-manifest.json", new Response(JSON.stringify(manifest), { headers: headers("application/json", "x-goalhint-offline-manifest") })],
     ["/offline", new Response(entryBody, { headers: headers("text/html", "x-goalhint-offline-entry") })],
-    ["/api/offline/snapshot", new Response(JSON.stringify(data), { headers: headers("application/json", "x-goalhint-offline-snapshot") })],
     [assets[0].url, new Response(badAsset ? "incomplete" : assetBody, { headers: headers("application/javascript") })],
   ]);
-  return { manifest, data, responses, entryBody, assetBody };
+  return { manifest, responses, entryBody, assetBody };
 }
 
 async function populatedBundle(assetCount) {
@@ -131,32 +122,37 @@ function worker({ storage = new MemoryStorage(), current, now = at + 1000, locks
   }
   return { storage, calls, network, clock,
     beginMessage,
+    async activate() {
+      let pending;
+      events.get("activate")({ waitUntil(result) { pending = result; } });
+      await pending;
+    },
     async message(type = "PREPARE", extra = {}) {
       const request = beginMessage(type, extra);
       await request.settled;
       return request.value();
     },
-    async request(path, { mode = "cors", method = "GET" } = {}) {
+    async request(path, { mode = "cors", method = "GET", signal = new AbortController().signal } = {}) {
       let response;
-      events.get("fetch")({ request: { url: absolute(path), method, mode }, respondWith(value) { response = value; } });
+      events.get("fetch")({ request: { url: absolute(path), method, mode, signal }, respondWith(value) { response = value; } });
       return response === undefined ? undefined : await response;
     },
   };
 }
 
-test("complete anonymous bundle survives a cold worker restart and renders with all network requests failing", async () => {
+test("the anonymous connection page survives a cold offline restart without caching API data", async () => {
   const first = await bundle(), online = worker({ current: first });
-  assert.deepEqual(await online.message(), { ok: true, refreshed: true, activated: true, version: first.manifest.version,
-    capturedAt: first.data.capturedAt, expiresAt: first.data.expiresAt, records: 1 });
+  assert.deepEqual(await online.message(), { ok: true, refreshed: true, activated: true, kind: "connection-page", version: first.manifest.version });
   assert.ok(online.calls.every(({ options }) => options.credentials === "omit"));
-  const cold = worker({ storage: online.storage });
+  assert.deepEqual(online.calls.map(({ url }) => new URL(url).pathname), ["/offline-manifest.json", "/offline", first.manifest.assets[0].url]);
+  const cold = worker({ storage: online.storage, now: at + 3 * 86_400_000 });
   cold.network.offline = true;
   assert.equal(await (await cold.request("/en/matches", { mode: "navigate" })).text(), first.entryBody);
   assert.equal(await (await cold.request(first.manifest.assets[0].url)).text(), first.assetBody);
-  assert.deepEqual(await (await cold.request("/offline-cache/snapshot")).json(), first.data);
+  assert.equal(await cold.request("/offline-cache/snapshot"), undefined);
+  assert.equal(await cold.request("/api/offline/snapshot"), undefined);
   const state = await (await cold.request("/offline-cache/status")).json();
-  assert.equal(state.ok, true);
-  assert.equal(state.records, 1);
+  assert.deepEqual(state, { ok: true, kind: "connection-page", version: first.manifest.version });
   assert.deepEqual(await cold.message("STATUS"), state);
 });
 
@@ -182,10 +178,9 @@ test("concurrent cached assets share only their pending bundle validation and re
   assert.equal((await host.message()).ok, true);
   const cache = await host.storage.open((await host.storage.keys()).find(name => name.includes("bundle")));
   const match = cache.match.bind(cache), started = deferred(), release = deferred();
-  let records = 0, snapshots = 0, assetReads = 0;
+  let records = 0, assetReads = 0;
   cache.match = async key => {
-    if (key.endsWith("/record")) records++;
-    if (key.endsWith("/snapshot")) { snapshots++; started.resolve(); await release.promise; }
+    if (key.endsWith("/record")) { records++; started.resolve(); await release.promise; }
     if (new URL(key).pathname.startsWith("/_next/static/")) assetReads++;
     return match(key);
   };
@@ -195,10 +190,10 @@ test("concurrent cached assets share only their pending bundle validation and re
   await new Promise(setImmediate);
   release.resolve();
   await Promise.all(requests);
-  t.diagnostic(JSON.stringify({ concurrentAssets: bodies.size, bundleRecordReads: records, snapshotReads: snapshots, assetReads, digestCalls: hashes }));
-  assert.deepEqual({ records, snapshots, assetReads, hashes }, { records: 1, snapshots: 1, assetReads: 12, hashes: 15 });
+  t.diagnostic(JSON.stringify({ concurrentAssets: bodies.size, bundleRecordReads: records, assetReads, digestCalls: hashes }));
+  assert.deepEqual({ records, assetReads, hashes }, { records: 1, assetReads: 12, hashes: 13 });
   await host.request(initial.manifest.assets[0].url);
-  assert.equal(snapshots, 2, "A settled validation cannot suppress the next cache read.");
+  assert.equal(records, 2, "A settled validation cannot suppress the next cache read.");
 });
 
 test("cold complete reads bound parallel integrity work and wait for every asset before serving", { timeout: 5_000 }, async t => {
@@ -219,7 +214,7 @@ test("cold complete reads bound parallel integrity work and wait for every asset
     finally { active--; pendingBytes -= bytes.byteLength; }
   } } } });
   cold.network.offline = true;
-  const pending = Promise.all([cold.message("STATUS"), cold.request("/offline-cache/snapshot"),
+  const pending = Promise.all([cold.message("STATUS"), cold.request("/offline-cache/status"),
     cold.request("/en/matches", { mode: "navigate" })]).then(results => { completed = true; return results; });
   try {
     for (const [index, wave] of waves.entries()) {
@@ -228,9 +223,9 @@ test("cold complete reads bound parallel integrity work and wait for every asset
       assert.equal(completed, false, "No caller may receive an incompletely verified bundle.");
       wave.release.resolve();
     }
-    const [status, snapshotResponse, document] = await pending;
+    const [status, statusResponse, document] = await pending;
     assert.equal(status.ok, true);
-    assert.deepEqual(await snapshotResponse.json(), initial.data);
+    assert.deepEqual(await statusResponse.json(), status);
     assert.equal(await document.text(), initial.entryBody);
     assert.equal(checks, entries.length, "Concurrent complete reads share one verification without skipping assets.");
     assert.equal(peak, 4);
@@ -252,9 +247,9 @@ test("complete verification rejects damaged later batches, stops further work an
     cache.match = async key => { if (paths.has(key)) reads.push(key); return match(key); };
     if (missing) await cache.delete(absolute(target.url));
     else await cache.put(absolute(target.url), new Response("damaged"));
-    const [status, snapshotResponse] = await Promise.all([host.message("STATUS"), host.request("/offline-cache/snapshot")]);
+    const [status, statusResponse] = await Promise.all([host.message("STATUS"), host.request("/offline-cache/status")]);
     assert.deepEqual(status, { ok: false, error: missing ? "corrupt-cache" : "integrity-failure" });
-    assert.equal(snapshotResponse.status, 503);
+    assert.equal(statusResponse.status, 503);
     assert.deepEqual(reads, entries.slice(0, 8).map(entry => absolute(entry.url)), "No later batch should begin after failed integrity.");
     await cache.put(absolute(target.url), saved);
     reads.length = 0;
@@ -263,7 +258,7 @@ test("complete verification rejects damaged later batches, stops further work an
   }
 });
 
-test("concurrent asset reads cannot replace a complete status integrity check and recover after snapshot corruption", async () => {
+test("concurrent asset reads cannot replace a complete status check and recover after metadata corruption", async () => {
   const initial = await bundle(), host = worker({ current: initial });
   await host.message();
   host.network.offline = true;
@@ -274,39 +269,21 @@ test("concurrent asset reads cannot replace a complete status integrity check an
   assert.equal(await asset.text(), initial.assetBody);
   assert.deepEqual(status, { ok: false, error: "integrity-failure" }, "Partial validation never satisfies a complete read.");
   await cache.put(absolute("/offline"), originalEntry);
-  const snapshotKey = absolute("/offline-cache/snapshot"), originalSnapshot = await cache.match(snapshotKey);
-  await cache.put(snapshotKey, new Response("corrupt"));
+  const recordKey = absolute("/offline-cache/record"), originalRecord = await cache.match(recordKey);
+  await cache.put(recordKey, new Response("corrupt"));
   const failed = await Promise.allSettled(Array.from({ length: 4 }, () => host.request(initial.manifest.assets[0].url)));
   assert.ok(failed.every(result => result.status === "rejected"), "Later reads must detect corruption after the first validation settled.");
-  await cache.put(snapshotKey, originalSnapshot);
+  await cache.put(recordKey, originalRecord);
   for (const response of await Promise.all(Array.from({ length: 4 }, () => host.request(initial.manifest.assets[0].url)))) {
     assert.equal(await response.text(), initial.assetBody, "Failed shared reads must release their pending entry.");
   }
   assert.equal((await host.message("STATUS")).ok, true);
 });
 
-test("pending complete reads recheck retention before serving a bundle that expires during validation", async () => {
+test("concurrent current and prior version assets keep separate integrity checks", async () => {
   const initial = await bundle(), host = worker({ current: initial });
   await host.message();
-  const name = (await host.storage.keys()).find(value => value.includes("bundle")), cache = await host.storage.open(name);
-  const match = cache.match.bind(cache), started = deferred(), release = deferred();
-  cache.match = async key => {
-    if (key.endsWith("/one.js")) { started.resolve(); await release.promise; }
-    return match(key);
-  };
-  const status = host.message("STATUS"), snapshotRead = host.request("/offline-cache/snapshot");
-  await started.promise;
-  host.clock.now = initial.data.expiresAt;
-  release.resolve();
-  assert.deepEqual(await status, { ok: false, error: "expired" });
-  assert.equal((await snapshotRead).status, 503);
-  assert.equal((await host.storage.keys()).includes(name), false, "Expired data is removed even when expiry occurred during shared work.");
-});
-
-test("concurrent current and prior version assets keep separate validation and enforce each snapshot expiry", async () => {
-  const initial = await bundle(), host = worker({ current: initial });
-  await host.message();
-  const next = await bundle({ name: "two", data: snapshot({ capturedAt: at + 2000, expiresAt: at + 86_402_000 }) });
+  const next = await bundle({ name: "two", createdAt: at + 2000 });
   host.network.current = next;
   host.clock.now = at + 3000;
   assert.equal((await host.message()).version, next.manifest.version);
@@ -314,11 +291,12 @@ test("concurrent current and prior version assets keep separate validation and e
   const [previous, current] = await Promise.all([host.request(initial.manifest.assets[0].url), host.request(next.manifest.assets[0].url)]);
   assert.equal(await previous.text(), initial.assetBody);
   assert.equal(await current.text(), next.assetBody);
-  host.clock.now = initial.data.expiresAt;
-  const [expired, fresh] = await Promise.allSettled([host.request(initial.manifest.assets[0].url), host.request(next.manifest.assets[0].url)]);
-  assert.equal(expired.status, "rejected");
-  assert.equal(fresh.status, "fulfilled");
-  assert.equal(await fresh.value.text(), next.assetBody);
+  const prior = await host.storage.open(`${prefix}bundle-v2-${initial.manifest.version}`);
+  await prior.put(absolute(initial.manifest.assets[0].url), new Response("damaged"));
+  const [rejected, verified] = await Promise.allSettled([host.request(initial.manifest.assets[0].url), host.request(next.manifest.assets[0].url)]);
+  assert.equal(rejected.status, "rejected");
+  assert.equal(verified.status, "fulfilled");
+  assert.equal(await verified.value.text(), next.assetBody);
 });
 
 test("both theme branding variants remain available after an offline restart", async () => {
@@ -346,9 +324,9 @@ test("both theme branding variants remain available after an offline restart", a
 
 test("private/no-store responses, cookies, missing markers and unapproved assets cannot bootstrap", async () => {
   for (const mutate of [
-    (candidate) => candidate.responses.get("/api/offline/snapshot").headers.set("cache-control", "private, no-store"),
-    (candidate) => candidate.responses.get("/api/offline/snapshot").headers.set("vary", "Accept, Cookie"),
-    (candidate) => candidate.responses.get("/api/offline/snapshot").headers.set("set-cookie", "synthetic=not-permitted"),
+    (candidate) => candidate.responses.get("/offline").headers.set("cache-control", "private, no-store"),
+    (candidate) => candidate.responses.get("/offline").headers.set("vary", "Accept, Cookie"),
+    (candidate) => candidate.responses.get("/offline").headers.set("set-cookie", "synthetic=not-permitted"),
     (candidate) => candidate.responses.get("/offline").headers.delete("x-goalhint-offline-entry"),
     (candidate) => candidate.responses.get(candidate.manifest.assets[0].url).headers.set("cache-control", "no-store"),
   ]) {
@@ -360,35 +338,21 @@ test("private/no-store responses, cookies, missing markers and unapproved assets
   }
 });
 
-test("snapshot validation rejects extra secret fields, coercion and invalid retention", async () => {
-  for (const mutate of [
-    (data) => { data.session = "synthetic-secret"; },
-    (data) => { data.records[0].forecast = { subscriber: true }; },
-    (data) => { data.records[0].homeTeam.logoUrl = "https://third-party.test/logo"; },
-    (data) => { data.records[0].fixtureId = 123; },
-    (data) => { data.records[0].homeTeam.id = 123; },
-    (data) => { data.records[0].dataVersion = "18446744073709551616"; },
-    (data) => { data.expiresAt += 1; },
-    (data) => { data.capturedAt = at + 302_000; data.expiresAt = data.capturedAt + 86_400_000; },
-    (data) => { data.reportingDate = "2026-10-25"; },
-  ]) {
-    const data = snapshot(); mutate(data);
-    const host = worker({ current: await bundle({ data }) });
-    assert.equal((await host.message()).ok, false);
-    assert.equal((await host.request("/offline-cache/snapshot")).status, 503);
-  }
-});
-
-test("bounded server/device clock skew permits saved reads without extending snapshot retention", async () => {
-  for (const skew of [1000, 300_000]) {
-    const capturedAt = at + 1000 + skew;
-    const data = snapshot({ capturedAt, expiresAt: capturedAt + 86_400_000 });
-    const host = worker({ current: await bundle({ data }) });
-    assert.equal((await host.message()).ok, true);
-    assert.equal((await (await host.request("/offline-cache/snapshot")).json()).expiresAt, capturedAt + 86_400_000);
-    host.clock.now = data.expiresAt;
-    assert.equal((await host.request("/offline-cache/snapshot")).status, 503);
-  }
+test("activation removes only retired saved-match caches and never installs their older manifest", async () => {
+  const prior = await bundle({ schemaVersion: 1 });
+  const host = worker({ current: prior });
+  const oldMeta = `${prefix}meta-v1`, oldBundle = `${prefix}bundle-v1-${prior.manifest.version}`;
+  const other = [`${prefix}bundle-v1-unrelated`, "other-app-cache"];
+  for (const name of [oldMeta, oldBundle, ...other]) await host.storage.open(name);
+  await (await host.storage.open(oldMeta)).put(absolute("/offline-cache/active"), new Response(JSON.stringify({ cacheName: oldBundle, previousCacheName: null })));
+  await (await host.storage.open(oldBundle)).put(absolute("/offline-cache/snapshot"), new Response("retired saved fixtures"));
+  assert.equal((await host.message()).error, "invalid-bundle");
+  host.network.offline = true;
+  await assert.rejects(host.request("/en/matches", { mode: "navigate" }), /network-unreachable/);
+  await host.activate();
+  const names = await host.storage.keys();
+  assert.ok(other.every(name => names.includes(name)));
+  assert.ok([oldMeta, oldBundle].every(name => !names.includes(name)));
 });
 
 test("unapproved asset URLs, duplicate assets and incompatible manifest hashes cannot activate", async () => {
@@ -398,10 +362,11 @@ test("unapproved asset URLs, duplicate assets and incompatible manifest hashes c
     (manifest) => { manifest.assets.push({ ...manifest.assets[0] }); },
     (manifest) => { manifest.version = "0".repeat(64); },
     (manifest) => { manifest.entry.bytes = 4 * 1024 * 1024 + 1; },
+    (manifest) => { manifest.records = ["unapproved match data"]; },
   ]) {
     const candidate = await bundle(); mutate(candidate.manifest);
     candidate.responses.set("/offline-manifest.json", new Response(JSON.stringify(candidate.manifest), {
-      headers: { "cache-control": "public", "x-goalhint-offline-manifest": "1" },
+      headers: { "cache-control": "public", "content-type": "application/json", "x-goalhint-offline-manifest": "1" },
     }));
     const host = worker({ current: candidate });
     assert.equal((await host.message()).ok, false);
@@ -413,7 +378,7 @@ test("failed asset downloads, integrity checks and activation writes retain the 
   for (const failure of ["asset", "activation", "manifest"]) {
     const initial = await bundle(), host = worker({ current: initial });
     await host.message();
-    const next = await bundle({ name: "two", data: snapshot({ capturedAt: at + 2000, expiresAt: at + 86_400_000 + 2000 }), badAsset: failure === "asset" });
+    const next = await bundle({ name: "two", createdAt: at + 2000, badAsset: failure === "asset" });
     if (failure === "manifest") next.responses.get("/offline-manifest.json").headers.set("cache-control", "private, no-store");
     host.network.current = next;
     host.clock.now = at + 3000;
@@ -433,7 +398,7 @@ test("valid updates activate atomically, retain one prior bundle and never touch
   await host.message();
   for (const [index, name] of ["two", "three", "four"].entries()) {
     host.clock.now = at + (index + 1) * 2000;
-    const current = await bundle({ name, data: snapshot({ capturedAt: host.clock.now, expiresAt: host.clock.now + 86_400_000 }) });
+    const current = await bundle({ name, createdAt: host.clock.now });
     host.network.current = current;
     assert.equal((await host.message()).version, current.manifest.version);
     assert.equal((await host.storage.keys()).filter((key) => key.startsWith(`${prefix}bundle-`)).length, 2);
@@ -441,40 +406,46 @@ test("valid updates activate atomically, retain one prior bundle and never touch
   assert.equal(await (await (await host.storage.open("other-application-cache")).match(absolute("/private"))).text(), "unrelated");
 });
 
-test("projection refresh reuses verified unchanged assets while a changed build downloads its new assets", async () => {
+test("an unchanged build needs only the manifest while changed builds reuse their verified matching assets", async () => {
   const initial = await bundle(), host = worker({ current: initial }); await host.message();
   const firstDownloads = host.calls.length;
   host.clock.now = at + 3000;
-  const refreshed = await bundle({ data: snapshot({ capturedAt: at + 2000, expiresAt: at + 86_402_000 }) });
+  const refreshed = await bundle({ createdAt: at + 2000 });
   host.network.current = refreshed;
-  assert.equal((await host.message()).version, initial.manifest.version);
-  assert.deepEqual(host.calls.slice(firstDownloads).map(({ url }) => new URL(url).pathname), ["/offline-manifest.json", "/api/offline/snapshot"]);
-  assert.equal((await (await host.request("/offline-cache/snapshot")).json()).capturedAt, at + 2000);
+  assert.deepEqual(await host.message(), { ok: true, refreshed: true, activated: false, kind: "connection-page", version: initial.manifest.version });
+  assert.deepEqual(host.calls.slice(firstDownloads).map(({ url }) => new URL(url).pathname), ["/offline-manifest.json"]);
+
+  const partialDownloads = host.calls.length;
+  const partial = await bundle({ name: "two", asset: "one", createdAt: at + 3000 });
+  host.network.current = partial;
+  assert.equal((await host.message()).version, partial.manifest.version);
+  assert.deepEqual(host.calls.slice(partialDownloads).map(({ url }) => new URL(url).pathname), ["/offline-manifest.json", "/offline"]);
 
   const refreshDownloads = host.calls.length;
   host.clock.now = at + 5000;
-  const changed = await bundle({ name: "two", data: snapshot({ capturedAt: at + 4000, expiresAt: at + 86_404_000 }) });
+  const changed = await bundle({ name: "three", createdAt: at + 4000 });
   host.network.current = changed;
   assert.equal((await host.message()).version, changed.manifest.version);
   assert.deepEqual(host.calls.slice(refreshDownloads).map(({ url }) => new URL(url).pathname),
-    ["/offline-manifest.json", "/api/offline/snapshot", "/offline", "/_next/static/chunks/two.js"]);
+    ["/offline-manifest.json", "/offline", "/_next/static/chunks/three.js"]);
 });
 
 test("an unavailable copied asset is fetched and verified without changing the active bundle early", async () => {
   const initial = await bundle(), host = worker({ current: initial }); await host.message();
   host.clock.now = at + 3000;
-  host.network.current = await bundle({ data: snapshot({ capturedAt: at + 2000, expiresAt: at + 86_402_000 }) });
+  const next = await bundle({ name: "two", asset: "one", createdAt: at + 2000 });
+  host.network.current = next;
   let reads = 0;
   host.storage.failMatch = (name, key) => name.includes("bundle") && key.endsWith("/one.js") && ++reads === 2;
   const firstDownloads = host.calls.length;
-  assert.equal((await host.message()).version, initial.manifest.version);
+  assert.equal((await host.message()).version, next.manifest.version);
   assert.deepEqual(host.calls.slice(firstDownloads).map(({ url }) => new URL(url).pathname),
-    ["/offline-manifest.json", "/api/offline/snapshot", "/_next/static/chunks/one.js"]);
+    ["/offline-manifest.json", "/offline", "/_next/static/chunks/one.js"]);
   host.network.offline = true;
-  assert.equal(await (await host.request("/en/matches", { mode: "navigate" })).text(), initial.entryBody);
+  assert.equal(await (await host.request("/en/matches", { mode: "navigate" })).text(), next.entryBody);
 });
 
-test("a copied asset that fails its integrity check cannot activate a refreshed projection", async () => {
+test("a copied asset that fails its integrity check cannot activate a new connection page", async () => {
   const initial = await bundle(), host = worker({ current: initial }); await host.message();
   const cacheName = (await host.storage.keys()).find((name) => name.includes("bundle"));
   const cache = await host.storage.open(cacheName), originalMatch = cache.match.bind(cache);
@@ -484,25 +455,25 @@ test("a copied asset that fails its integrity check cannot activate a refreshed 
     return key.endsWith("/one.js") && ++reads === 2 ? new Response("tampered", { headers: response.headers }) : response;
   };
   host.clock.now = at + 3000;
-  host.network.current = await bundle({ data: snapshot({ capturedAt: at + 2000, expiresAt: at + 86_402_000 }) });
+  host.network.current = await bundle({ name: "two", asset: "one", createdAt: at + 2000 });
   const result = await host.message();
   assert.equal(result.retained, true);
   assert.equal(result.updateError, "integrity-failure");
-  assert.equal((await (await host.request("/offline-cache/snapshot")).json()).capturedAt, at);
+  assert.equal((await host.message("STATUS")).version, initial.manifest.version);
 });
 
 test("a bounded preparation deadline and a transient read failure preserve the active bundle", async () => {
   for (const failure of ["deadline", "read"]) {
     const initial = await bundle(), host = worker({ current: initial }); await host.message();
     host.clock.now = at + 3000;
-    const candidate = await bundle({ name: "two", data: snapshot({ capturedAt: at + 2000, expiresAt: at + 86_402_000 }), badAsset: failure === "read" });
+    const candidate = await bundle({ name: "two", createdAt: at + 2000, badAsset: failure === "read" });
     host.network.current = candidate;
     if (failure === "deadline") host.network.onFetch = ({ url }) => {
       if (url.endsWith("/two.js")) host.clock.now += 46_000;
     };
     let readFailed = false;
     host.storage.failMatch = (name, key) => {
-      if (failure === "read" && !readFailed && name.includes("bundle") && key.endsWith("/snapshot")) {
+      if (failure === "read" && !readFailed && name.includes("bundle") && key.endsWith("/record")) {
         readFailed = true; return true;
       }
       return false;
@@ -522,26 +493,24 @@ test("concurrent preparation requests share a single staged download", async () 
   assert.equal(host.calls.filter(({ url }) => url.endsWith("/offline-manifest.json")).length, 1);
 });
 
-test("a corrupt or evicted required asset and expired content fail honestly after a cold restart", async () => {
-  for (const failure of ["corrupt", "missing", "expired"]) {
+test("a corrupt or evicted required asset fails honestly after a cold restart", async () => {
+  for (const failure of ["corrupt", "missing"]) {
     const initial = await bundle(), warm = worker({ current: initial });
     await warm.message();
     const name = (await warm.storage.keys()).find((key) => key.includes("bundle"));
     const cache = await warm.storage.open(name), key = absolute(initial.manifest.assets[0].url);
     if (failure === "corrupt") await cache.put(key, new Response("corrupt"));
     if (failure === "missing") await cache.delete(key);
-    const cold = worker({ storage: warm.storage, now: failure === "expired" ? at + 86_400_001 : at + 1000 });
+    const cold = worker({ storage: warm.storage });
     cold.network.offline = true;
     assert.equal((await cold.request("/offline-cache/status")).status, 503);
-    assert.equal((await cold.request("/offline-cache/snapshot")).status, 503);
     await assert.rejects(cold.request("/en/matches", { mode: "navigate" }), /network-unreachable/);
-    if (failure === "expired") assert.equal((await cold.storage.keys()).filter((key) => key.includes("bundle")).length, 0);
   }
 });
 
 test("cleanup failure after activation never deletes the newly committed bundle", async () => {
   const initial = await bundle(), host = worker({ current: initial }); await host.message();
-  const candidate = await bundle({ name: "two", data: snapshot({ capturedAt: at + 2000, expiresAt: at + 86_402_000 }) });
+  const candidate = await bundle({ name: "two", createdAt: at + 2000 });
   host.network.current = candidate;
   host.clock.now = at + 3000;
   let activationWritten = false;
@@ -550,7 +519,7 @@ test("cleanup failure after activation never deletes the newly committed bundle"
     return false;
   };
   // Simulate another incomplete candidate becoming visible just after commit.
-  const orphan = `${prefix}bundle-v1-${"a".repeat(64)}`;
+  const orphan = `${prefix}bundle-v2-${"a".repeat(64)}`;
   const originalKeys = host.storage.keys.bind(host.storage);
   host.storage.keys = async () => activationWritten ? [...await originalKeys(), orphan] : originalKeys();
   host.storage.failDelete = (name) => name === orphan;
@@ -560,7 +529,7 @@ test("cleanup failure after activation never deletes the newly committed bundle"
   assert.equal(await (await host.request("/en/matches", { mode: "navigate" })).text(), candidate.entryBody);
 });
 
-test("first-use offline and denied storage do not claim a saved startup", async () => {
+test("first-use offline and denied storage do not claim a prepared connection page", async () => {
   const offline = worker(); offline.network.offline = true;
   assert.equal((await offline.message()).ok, false);
   await assert.rejects(offline.request("/", { mode: "navigate" }), /network-unreachable/);
@@ -592,16 +561,57 @@ test("HTTP authorization errors remain authoritative while an unavailable server
   assert.equal(await (await host.request("/en/matches", { mode: "navigate" })).text(), initial.entryBody);
 });
 
-test("older snapshots or fixture versions cannot replace a newer retained projection", async () => {
-  const initial = await bundle(), host = worker({ current: initial }); await host.message();
-  const older = snapshot({ capturedAt: at + 2000, expiresAt: at + 86_402_000 });
-  older.records[0].dataVersion = "11";
-  host.network.current = await bundle({ name: "old-data", data: older });
+test("slow live documents take precedence over the connection page while a stalled request falls back", async (t) => {
+  const initial = await bundle(), warm = worker({ current: initial }); await warm.message();
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const host = worker({ storage: warm.storage, current: initial });
+  let sendHeaders, streaming, fetchSignal;
+  host.network.respond = ({ options }) => new Promise((resolve, reject) => {
+    fetchSignal = options.signal;
+    fetchSignal.addEventListener("abort", () => reject(fetchSignal.reason), { once: true });
+    sendHeaders = () => resolve(new Response(new ReadableStream({ start(controller) { streaming = controller; } }), {
+      headers: { "cache-control": "private, no-store" },
+    }));
+  });
+  const url = "/en/matches?result=won&when=today&sort=live-first&picks=all";
+  const live = host.request(url, { mode: "navigate" });
+  t.mock.timers.tick(8_000);
+  assert.equal(fetchSignal.aborted, false);
+  sendHeaders();
+  const document = await live;
+  t.mock.timers.tick(15_000);
+  assert.equal(fetchSignal.aborted, false);
+  streaming.enqueue(encode("Live match results"));
+  streaming.close();
+  assert.equal(await document.text(), "Live match results");
+
+  const stalled = host.request(url, { mode: "navigate" });
+  t.mock.timers.tick(15_000);
+  assert.equal(fetchSignal.aborted, true);
+  assert.equal(await (await stalled).text(), initial.entryBody);
+});
+
+test("an abandoned document request cancels its network work without reading saved content", async () => {
+  const host = worker();
+  const navigation = new AbortController();
+  host.storage.open = async () => assert.fail("Canceled navigation must not read the connection page");
+  host.network.respond = ({ options }) => new Promise((_, reject) => {
+    options.signal.addEventListener("abort", () => reject(options.signal.reason), { once: true });
+  });
+  const pending = host.request("/en/matches", { mode: "navigate", signal: navigation.signal });
+  navigation.abort();
+  await assert.rejects(pending, /canceled/);
+  assert.equal(host.calls[0].options.signal.aborted, true);
+});
+
+test("an older manifest cannot replace the current verified connection page", async () => {
+  const initial = await bundle({ createdAt: at + 2000 }), host = worker({ current: initial }); await host.message();
+  host.network.current = await bundle({ name: "older", createdAt: at });
   host.clock.now = at + 3000;
   const result = await host.message();
   assert.equal(result.retained, true);
   assert.equal(result.updateError, "older-version");
-  assert.equal((await host.request("/offline-cache/snapshot")).status, 200);
+  assert.equal((await host.message("STATUS")).version, initial.manifest.version);
 });
 
 test("retained cache availability is distinct from successful server refresh and finite HTTP failure reasons", async () => {
@@ -619,7 +629,7 @@ test("retained cache availability is distinct from successful server refresh and
     assert.equal(result.retained, true);
     assert.equal(result.updateError, reason);
     assert.equal(result.retryAfterSeconds, expectedRetry);
-    assert.equal(result.capturedAt, initial.data.capturedAt);
+    assert.equal(result.version, initial.manifest.version);
     host.network.offline = true;
     assert.equal(await (await host.request("/en/matches", { mode: "navigate" })).text(), initial.entryBody);
   }
@@ -662,10 +672,10 @@ test("network refusal, fetch timeout and stalled-body timeout have distinct boun
   }
 });
 
-test("canceling the sole preparation lease aborts network work, removes its candidate and preserves active data", async () => {
+test("canceling the sole preparation lease aborts network work and preserves the active bundle", async () => {
   const initial = await bundle(), host = worker({ current: initial }); await host.message();
   host.clock.now = at + 3000;
-  const candidate = await bundle({ name: "two", data: snapshot({ capturedAt: at + 2000, expiresAt: at + 86_402_000 }) });
+  const candidate = await bundle({ name: "two", createdAt: at + 2000 });
   host.network.current = candidate;
   const started = deferred();
   let aborted = false;
@@ -682,18 +692,19 @@ test("canceling the sole preparation lease aborts network work, removes its cand
   assert.deepEqual(await request.reply, { ok: false, refreshed: false, error: "canceled" });
   await request.settled;
   assert.equal(aborted, true);
-  assert.equal((await (await host.request("/offline-cache/snapshot")).json()).capturedAt, at);
+  assert.equal((await host.message("STATUS")).version, initial.manifest.version);
   assert.equal((await host.storage.keys()).filter((name) => name.includes("bundle")).length, 1);
 });
 
 test("canceling a stalled response stream consumes no further body and leaves the prior bundle usable", async () => {
   const initial = await bundle(), host = worker({ current: initial }); await host.message();
+  host.network.current = await bundle({ name: "two", createdAt: at + 2000 });
   const started = deferred();
   let canceled = false;
   host.network.respond = ({ url }) => {
-    if (!url.endsWith("/api/offline/snapshot")) return undefined;
+    if (!url.endsWith("/offline")) return undefined;
     const response = new Response(new ReadableStream({ cancel() { canceled = true; } }), {
-      headers: { "cache-control": "public", "content-type": "application/json", "x-goalhint-offline-snapshot": "1" },
+      headers: { "cache-control": "public", "content-type": "text/html", "x-goalhint-offline-entry": "1" },
     });
     started.resolve();
     return response;
@@ -710,7 +721,7 @@ test("canceling a stalled response stream consumes no further body and leaves th
 test("one canceled client cannot interrupt another visible client's shared preparation", async () => {
   const initial = await bundle(), host = worker({ current: initial }); await host.message();
   host.clock.now = at + 3000;
-  const candidate = await bundle({ name: "two", data: snapshot({ capturedAt: at + 2000, expiresAt: at + 86_402_000 }) });
+  const candidate = await bundle({ name: "two", createdAt: at + 2000 });
   host.network.current = candidate;
   const started = deferred(), release = deferred();
   let aborted = false;
@@ -755,7 +766,7 @@ test("closed or hidden clients lose only their own lease before further staged w
 
 test("separate worker writers use one nonqueued origin lock and a busy peer preserves the committed cache", async () => {
   const initial = await bundle(), first = worker({ current: initial }); await first.message();
-  const candidate = await bundle({ name: "two", data: snapshot({ capturedAt: at + 2000, expiresAt: at + 86_402_000 }) });
+  const candidate = await bundle({ name: "two", createdAt: at + 2000 });
   first.clock.now = at + 3000;
   first.network.current = candidate;
   const started = deferred(), release = deferred();
