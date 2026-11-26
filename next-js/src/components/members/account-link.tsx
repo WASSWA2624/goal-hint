@@ -170,7 +170,7 @@ function AccountMenu({ locale, phone, administrator }: { locale: string; phone: 
           </Destination>;
         })}
       </nav>
-      <SignOut logoutAction={administrator ? "/api/admin/logout" : "/api/account/sign-out"} onSignedOut={dismiss}>
+      <SignOut logoutAction={administrator ? "/api/admin/logout" : "/api/account/sign-out"} onLogoutStart={dismiss}>
         <SignOutIcon />{messages.text("auth.signOut")}
       </SignOut>
     </Popup>

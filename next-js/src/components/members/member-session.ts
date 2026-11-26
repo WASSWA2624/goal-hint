@@ -10,7 +10,7 @@ let administrator = false;
 let invitationSession: string | null | undefined;
 let freeContentAccess = false;
 let subscription: SubscriptionSummary | null = null;
-let pending: Readonly<{ result: Promise<void>; controller: AbortController }> | null = null;
+let pending: Promise<void> | null = null;
 let confirmedAt: number | null = null;
 const navigationReuseMs = 5_000;
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
@@ -52,23 +52,6 @@ function readOffer(value: unknown): SubscriptionOffer | null {
 
 function publish() { for (const listener of listeners) listener(); }
 
-/** Forget private state as soon as logout has cleared this browser's cookie. */
-export function clearMemberSessionAfterLogout(): void {
-  pending?.controller.abort();
-  pending = null;
-  clearProtectedDrafts();
-  const changed = phone !== null || administrator || invitationSession !== null || freeContentAccess || subscription !== null;
-  phone = null;
-  administrator = false;
-  invitationSession = null;
-  freeContentAccess = false;
-  subscription = null;
-  // The next visit may have a public subscription offer or sharing permission.
-  confirmedAt = null;
-  scheduleRefresh();
-  if (changed) publish();
-}
-
 /** One timer serves all headers: pending approvals are rechecked, and expiry never waits for navigation. */
 function scheduleRefresh() {
   clearTimeout(refreshTimer);
@@ -89,19 +72,17 @@ function scheduleRefresh() {
 
 /** Desktop and phone headers share one in-flight request, including React's development remounts. */
 export function refreshMemberSession(): Promise<void> {
-  if (pending) return pending.result;
+  if (pending) return pending;
   purgeLegacyDrafts();
-  const controller = new AbortController();
-  const result = Promise.resolve().then(async () => {
-    if (controller.signal.aborted) return;
-    const clearDeadline = startRequestDeadline(controller);
+  pending = Promise.resolve().then(async () => {
+    const controller = new AbortController(), clearDeadline = startRequestDeadline(controller);
     try {
       const response = await fetch("/api/account/session", {
         cache: "no-store", credentials: "same-origin", headers: { Accept: "application/json" }, signal: controller.signal,
       });
-      if (controller.signal.aborted || !response.ok) return;
+      if (!response.ok) return;
       const session: unknown = await response.json();
-      if (controller.signal.aborted || !session || typeof session !== "object" || !("phone" in session) ||
+      if (!session || typeof session !== "object" || !("phone" in session) ||
         session.phone !== null && typeof session.phone !== "string") return;
       if (session.phone === null || phone !== null && phone !== session.phone) clearProtectedDrafts();
       const nextAdministrator = "administrator" in session && session.administrator === true;
@@ -130,13 +111,9 @@ export function refreshMemberSession(): Promise<void> {
       subscription = nextSubscription;
       publish();
     } catch { /* A temporary network failure preserves the last confirmed identity. */ }
-    finally {
-      clearDeadline();
-      if (pending?.controller === controller) { pending = null; scheduleRefresh(); }
-    }
+    finally { clearDeadline(); pending = null; scheduleRefresh(); }
   });
-  pending = { result, controller };
-  return result;
+  return pending;
 }
 
 /** Reuse the confirmed display on route mounts. Focus, expiry and explicit actions still revalidate. */
@@ -144,7 +121,7 @@ export function ensureMemberSession(): Promise<void> {
   const now = Date.now();
   if (confirmedAt === null || now < confirmedAt || now - confirmedAt >= navigationReuseMs
     || subscription?.activeUntil && Date.parse(subscription.activeUntil) <= now) return refreshMemberSession();
-  return pending?.result ?? Promise.resolve();
+  return pending ?? Promise.resolve();
 }
 
 const recheckSession = () => { void refreshMemberSession(); };

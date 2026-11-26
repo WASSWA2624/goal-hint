@@ -5,9 +5,8 @@ import {
   getInvitationSessionSnapshot, getServerInvitationSessionSnapshot,
   ensureMemberSession, getMemberSessionSnapshot, getServerMemberSessionSnapshot, refreshMemberSession, subscribeMemberSession,
   getSubscriptionSnapshot, getServerSubscriptionSnapshot,
-  getSlipSharingSnapshot, clearMemberSessionAfterLogout,
+  getSlipSharingSnapshot,
 } from "../src/components/members/member-session.ts";
-import { readDraftMemory, writeDraftProgress } from "../src/components/members/draft-storage.ts";
 
 test("header identity requests are private, deduplicated and refreshed after another tab signs out", async (t) => {
   const browser = new EventTarget();
@@ -271,65 +270,4 @@ test("route mounts reuse confirmed header state while transient subscription fai
   await refreshMemberSession();
   assert.equal(getSubscriptionSnapshot(), null);
   assert.equal(getMemberSessionSnapshot(), null);
-});
-
-test("acknowledged logout clears both headers and lets only a fresh guest read update them", async (t) => {
-  const previousWindow = globalThis.window, previousFetch = globalThis.fetch;
-  globalThis.window = new EventTarget();
-  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.now() });
-  const requests = [];
-  globalThis.fetch = (_url, { signal }) => new Promise(resolve => requests.push({ signal, resolve }));
-  let updates = 0;
-  const unsubscribe = subscribeMemberSession(() => { updates++; });
-  t.after(() => {
-    unsubscribe();
-    if (previousWindow === undefined) delete globalThis.window;
-    else globalThis.window = previousWindow;
-    globalThis.fetch = previousFetch;
-  });
-  const identity = {
-    phone: "+256700000005", administrator: true, referralCode: "01234567",
-    subscription: { activeUntil: null, paymentPending: true, canSubscribe: true, creditUgx: 4_000 },
-  };
-  const initial = refreshMemberSession();
-  await Promise.resolve();
-  requests[0].resolve(Response.json(identity));
-  await initial;
-  const scope = "logout-session-test";
-  writeDraftProgress(scope, "payment", {}, { private: true });
-  assert.deepEqual(readDraftMemory(scope, "payment"), { private: true });
-  const expiredIdentity = refreshMemberSession();
-  await Promise.resolve();
-  const before = updates;
-
-  clearMemberSessionAfterLogout();
-
-  assert.equal(requests[1].signal.aborted, true);
-  assert.equal(updates, before + 1);
-  assert.equal(getMemberSessionSnapshot(), null);
-  assert.equal(getAdminSessionSnapshot(), false);
-  assert.equal(getInvitationSessionSnapshot(), null);
-  assert.equal(getSubscriptionSnapshot(), null);
-  assert.equal(getSlipSharingSnapshot(), false);
-  assert.equal(readDraftMemory(scope, "payment"), null);
-  t.mock.timers.tick(20_000);
-  await Promise.resolve();
-  assert.equal(requests.length, 2, "logout cancels the previous member's approval polling");
-
-  const guest = ensureMemberSession();
-  await Promise.resolve();
-  assert.equal(requests.length, 3, "next navigation reads the guest state immediately");
-  requests[1].resolve(Response.json(identity));
-  await expiredIdentity;
-  assert.equal(getMemberSessionSnapshot(), null);
-  assert.equal(updates, before + 1, "a delayed private response cannot restore a signed-out header");
-  assert.equal(ensureMemberSession(), guest, "an old read cannot disrupt the new request");
-  const offer = { priceUgx: 1_000, durationDays: 1 };
-  requests[2].resolve(Response.json({
-    phone: null, freeContentAccess: true,
-    subscription: { activeUntil: null, paymentPending: false, canSubscribe: true, offer },
-  }));
-  await guest;
-  assert.deepEqual(getSubscriptionSnapshot()?.offer, offer);
-  assert.equal(getSlipSharingSnapshot(), true);
 });

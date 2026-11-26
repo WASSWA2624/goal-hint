@@ -72,7 +72,25 @@ On 26 November 2026, staging activated `ef1b3663` from a clean, checksummed ZIP.
 
 Hosted HTTPS smoke checks confirmed the new build on Login and Matches. A synthetic account used the visible mobile Chrome menu with a throwing native alert bridge. One logout POST returned HTTP 200, the browser reached Matches and displayed the guest header, and the old cookie no longer resolved to an account.
 
-The release ZIP SHA-256 is `a65829796fd29c05d90d33f73a4d70173cfd5c7f8183e5e3f985e0ab4917c940`. The Matches and Slips release check confirmed that production subsequently activated `ef1b3663`.
+The release ZIP SHA-256 is `a65829796fd29c05d90d33f73a4d70173cfd5c7f8183e5e3f985e0ab4917c940`.
+
+## Mobile account logout production verification
+
+After owner approval on 26 November 2026, production activated `ef1b3663` from the same staging ZIP. The two releases share the same migration inventory. The production MariaDB ledger verified all 94 migrations with zero pending before and after activation. The previous compatible web release is `8d2e3204`.
+
+Production HTTPS served the expected build. Login, Matches, the guest session endpoint, the password reset page and the one-day Matches feed returned HTTP 200. The reset page kept its privacy headers. Read-only touch Chrome checks showed the guest header in light and dark. The signed-in logout and old-cookie revocation were verified with a synthetic account on staging.
+
+## Mobile logout form staging verification
+
+The reported mobile Chrome error appeared while the earlier account menu remained open. Staging recorded HTTP 200 for both logout requests in the reported time window. The browser-side error was unavailable. The updated flow closes the menu on submit and uses the server's form redirect after revoking the session.
+
+On 26 November 2026, staging activated `e43ec537` from a clean, checksummed ZIP based on the active Matches and Slips release `4de9046f`. MariaDB verified all 94 migrations with zero pending. Login, Matches, Best Slips and the guest session endpoint returned HTTP 200 with `noindex`. The pages served build `-uCqH9D4_dXyawOfxyJ-I`. The previous compatible staging release is `4de9046f`. The performance cards rollout preflight subsequently found `e43ec537` active in both environments.
+
+On hosted staging, touch Chrome without a native bridge closed the header menu while the synthetic account's single form POST was held. The server then returned HTTP 303. Matches opened with the guest Login control and the old session cookie resolved to an anonymous session.
+
+The combined release passed 144 focused tests, type checking, lint for the changed files and a production-mode build. All 19 isolated browser journey checks passed, including menu closure before the held response, rejection of the old session, another tab updating to the signed-out state and the restricted Back to Login redirect. Focused touch Chrome checks covered both themes and failing or stalled native alert cleanup.
+
+The release ZIP SHA-256 is `65f52770599f9cb59c30d068d3bd024fca8e335ac813fbbc8035689df6c33eaf`.
 
 ## Authentication rollout
 
