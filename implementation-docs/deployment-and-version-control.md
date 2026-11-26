@@ -52,7 +52,13 @@ Paid Access stayed Off with a two-day trial setting. Guest Matches and Best Slip
 
 Local verification used populated MySQL fixtures in both Paid Access modes for trial, admin grant and wallet subscription boundaries, entitlement changes, and direct API access. The focused candidate suite passed 135 tests, with another 33 Match Card and completion tests after the phone card fix. The development rendering fixture passed 1,069 HTML, Flight and API checks across 13 viewer states. Chromium checks covered desktop and phone in both themes. The production-mode package build, lint, type checks and theme contract passed. A broader member suite still reports an existing managed-support assertion failure.
 
-The release ZIP SHA-256 is `498005ee1864858bc6e82d586455fc6e7173201cf0ffdef4ec8a78fc231f70ac`. Production promotion awaits owner review.
+The release ZIP SHA-256 is `498005ee1864858bc6e82d586455fc6e7173201cf0ffdef4ec8a78fc231f70ac`.
+
+## Access-control production verification
+
+On 26 November 2026, production activated `1afee350` from the same staging ZIP and served Next build `7PguZ4HEuf3vwnGVtSAcY`. Production MariaDB verified all 94 migrations with zero pending before and after activation. The prior compatible release, `67ee51c6`, remains available for rollback. The production settings showed Paid Access Off with seven configured trial days.
+
+Read-only HTTPS smoke checks returned HTTP 200 for Matches, Best Slips, Builder and the guest session API. The protected probability sort and slip match-state requests returned HTTP 403, and the admin settings API returned HTTP 401 for guests. All 10 sampled unfinished Matches withheld forecast fields. Best Slips returned 5 completed slips and 6 unfinished previews with protected picks withheld. The same completed Match retained its score and published forecast, and the completed-feed page rendered public cards. Direct Builder opened its login action with no generated result. Access-sensitive responses used no-store headers and the feeds varied on Cookie. Production smoke used guest requests. Staging covered signed-in access and logout.
 
 ## Manual password recovery prerequisites
 
