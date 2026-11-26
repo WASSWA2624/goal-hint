@@ -48,6 +48,14 @@ Hosted staging and production load distinct private web env files through the Pa
 
 Apply `20261126194240_community_invitations` before activating the Community invitation release. It adds nullable invitation, attempt and confirmation fields to `MemberAccount`. Verify the migration inventory and ledger and check that the staging application account can read and update these columns. Test the guest and signed-in flows with synthetic destinations and accounts. The automatic invitation requires at least one enabled, configured WhatsApp destination. Production promotion follows owner review of staging. [Community behavior](authentication.md#community-invitations), [Migration](../next-js/prisma/migrations/20261126194240_community_invitations/migration.sql).
 
+### Community invitations staging verification
+
+On 26 November 2026, staging activated `a567f8e1` with Next build `BtSbhJ1ircHCIp_qdWPIl`. A full encrypted staging backup passed checksum verification and matched the schema, triggers, migration ledger and table data on an isolated restore. The nullable-column migration passed on that restore before activation. Staging MariaDB verified all 95 required migrations with zero pending. The application account verified read and update access to all four new columns over TLS with zero rows changed. The prior web release `59faf6e1` remains available for rollback.
+
+Public HTTPS smoke checks passed for Matches, staging `noindex`, the released build manifest, the Privacy disclosure, public Community settings, the private guest session response and guest denial from the account Community endpoint. Neither WhatsApp destination was configured on staging. Chromium verified the guest Group and Channel handoffs, return confirmation, and same-day suppression in phone dark and desktop light using intercepted destinations. Local Chromium and isolated MySQL covered the signed-in flow, the exact 24-hour boundary, cross-device confirmation, concurrent claims and reconciliation after actual signup and login. Lint, schema validation, the theme contract and the production-mode build passed. The broader test run was stopped after four failures reproduced on the pre-change branch.
+
+The release ZIP SHA-256 is `822ca3755311f58e1be3399b3f1f013828c7a48c6c8e071fd463f7978d32361a`. Production promotion is awaiting owner review of staging.
+
 ## Subscriber administration staging verification
 
 On 26 November 2026, staging activated clean commit `59faf6e1` over `1afee350`. HTTPS served Next build `EaIreorAnFdT0fwnToEpI` with noindex. MariaDB verified all 94 migrations with zero pending before and after activation. The existing schema and application grants cover this change.
