@@ -58,6 +58,8 @@ For a rate `λ`, `P(G=k) = exp(−λ) × λᵏ/k!`. 1X2 sums independent score c
 
 ### Markets, outcomes and probabilities
 
+The companion guide lists the registered markets, exact selections and availability on each screen, with desktop and mobile examples. [Markets and display](markets-and-display.md).
+
 The base period is regulation including stoppage time. An exact key can distinguish period, team or other subject, line, outcome and payout rule. An odds catalogue entry establishes an offer identity, while forecast availability depends on the relevant model and evidence. [Base markets](../next-js/src/domain/markets.ts), [registry](../next-js/src/domain/market-registry.ts), [outcome labels](../next-js/docs/prediction-outcomes.md).
 
 | Market | Meaning |
@@ -186,6 +188,8 @@ This section separates checked-in configuration, ways to inspect the running sys
 ### Recorded rollout
 
 The November 20 rollout report records the original production Local Engine work and the MariaDB goal-extension repair. The 26 November release record documents staging activation of `a1e61cde` with 93 verified migrations and provider ingestion disabled. The staging database was empty during that verification, and the score-profile worker check used synthetic data. The application uses existing JSON columns for the new profile and lineup receipts. Production promotion was pending owner review at the time. [Football rollout report](../next-js/docs/reports/football-improvement-rollout-2026-11-20.md), [staging verification record](https://github.com/WASSWA2624/goal-hint/commit/8fd09bfb18cae147d8d9729f01f2b10424908c28), [release procedure](deployment-and-version-control.md).
+
+After owner approval on 26 November, production activated the same verified web bundle and selected matching football and Automatic Slips source. Production verified all 93 migrations. The Automatic Slips worker ran against stored production data and found no qualifying additions. The football candidate passed production policy, database and receipt-table checks. Its first run remained pending because the previous process held the lifetime worker lock. Core public routes passed smoke checks. The published-outcomes catalogue request timed out, a follow-up to HTTP 503 responses observed before promotion. [Deployment and version control](deployment-and-version-control.md), [production rollout overview](../APP_OVERVIEW.md).
 
 ## Gaps and limits
 
