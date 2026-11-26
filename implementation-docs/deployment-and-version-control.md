@@ -48,6 +48,16 @@ Hosted staging and production load distinct private web env files through the Pa
 
 Apply `20261126123000_manual_member_password_recovery` and verify the application account can read and write `MemberPasswordResetRequest` before activating the release. Apply the table grant for accounts with table-scoped privileges. Confirm the environment has a working public support contact configuration. Smoke-test the manual request, admin queue, link, and session revocation with a synthetic account. The administrator sends any external message from their own device. An updated Flutter host is required for the in-app browser to hand SMS and WhatsApp draft links to native apps. [Recovery workflow](authentication.md) · [Database grants](../next-js/docs/deployment/manual-account-grants.sql).
 
+## Password recovery staging verification
+
+On 26 November 2026, staging activated `8d2e3204` from a clean, checksummed ZIP, retaining the Matches changes from the previous release. An encrypted staging backup restored successfully in an isolated database. Its schema, triggers, migration ledger and table data matched the source. The recovery migration passed in the restore and was then applied on staging. MariaDB verified all 94 required migrations with zero pending. The staging app account's existing database grants cover the new table. The previous compatible web release is `12b13b9a`.
+
+Hosted smoke checks covered the Matches page and default feed, private reset-page headers, guest denial from the admin API, the pending count, duplicate requests, ownership confirmation, link expiry and retrieval, manual declaration, replacement, repeated opens, completion and revocation of both old sessions. A synthetic member logged in with the new password. The smoke run sent no external messages.
+
+Local verification passed 126 focused tests, isolated MySQL concurrency and exact-expiry checks, member and admin Chrome flows in both themes, and 29 Flutter tests including simulated native handoffs. The repository-wide test command reproduced unrelated baseline failures and one timeout that passed on rerun. The script suite flagged an unchanged historical November replay trigger. The production-mode web build passed.
+
+The release ZIP SHA-256 is `79717c6e01b0a634cd25e9b4c1a0269ea90457c1f1dc5f46bc7e4f11caf5e4e5`. Production promotion awaits staging review and authorization.
+
 ## Authentication rollout
 
 On 26 November 2026, staging and production activated `acb7ce34` from the same checksummed ZIP. Both MariaDB databases verified all 93 migrations with zero pending. Production's previous compatible release, `a1e61cde`, is available for rollback.
