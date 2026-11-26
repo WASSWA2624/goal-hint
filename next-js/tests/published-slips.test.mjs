@@ -62,6 +62,8 @@ function fixture() {
         .map(row => ({ ...row, validIntegrity: corrupted ? 0 : 1 }));
       if (sql.text.includes('FROM PublishedSlip')) {
         let matches = rows.filter(row => sql.values.includes(row.publicationId));
+        if (sql.text.includes('JSON_UNQUOTE')) return matches.filter(row => row.snapshotJson.slip.id === sql.values[1]).slice(0, 1)
+          .map(row => ({ ...row, rank: BigInt(row.rank), validIntegrity: corrupted ? 0 : 1 }));
         if (sql.text.includes('`rank`>?')) matches = matches.filter(row => row.rank > sql.values[1]).sort((a, b) => a.rank - b.rank).slice(0, sql.values[2]);
         if (sql.text.includes('`rank`=?')) matches = matches.filter(row => row.rank === sql.values[1]);
         return matches.map(row => ({ ...row, validIntegrity: corrupted ? 0 : 1 }));
@@ -132,6 +134,13 @@ test('sealed publication identities survive database JSON number normalization',
   const day = await f.store.day(today);
   assert.equal(day.slips.length, 1);
   assert.equal(day.slips[0].estimatedProbability, 0.75 - Number.EPSILON);
+});
+
+test('published share lookup reads the selected slip with an unsigned raw rank', async () => {
+  const f = fixture(), first = slip(), selected = slip(2);
+  await f.publish({ slips: [first, selected] });
+  const result = await f.store.day(today, false, undefined, selected.id);
+  assert.deepEqual(result.slips.map(view => [view.slip.id, view.rank]), [[selected.id, 2]]);
 });
 
 test('daily publication seals verified legs below 75 percent with the original probabilities', async () => {

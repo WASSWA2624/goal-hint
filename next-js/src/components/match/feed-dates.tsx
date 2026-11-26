@@ -3,9 +3,11 @@
 import { DateTimeField } from "@/components/ui/date-time-field";
 import Link from "@/components/navigation/navigation-link";
 import dynamic from "next/dynamic";
-import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
+import { controlRow } from "@/components/ui/control-layout";
+import { FilterDialogTrigger } from "@/components/ui/filter-dialog-trigger";
 import { RangeFields, RangeFieldset, RangeHelp, RangeLegend } from "./feed-range-fields";
 import { addReportingDays, parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { adjacentDays, dayLinkRel, feedDateNavigation } from "@/domain/feed-date-navigation";
@@ -83,11 +85,12 @@ export function DatePresets({ query, today, onApply, kinds = ["today", "next-3-d
 }
 
 /** A swipeable strip with scroll arrows and a calendar for exact dates or ranges. */
-const Strip = styled.nav<{ $visibleOnDesktop: boolean }>`
-  display: ${({ $visibleOnDesktop }) => $visibleOnDesktop ? "flex" : "none"};
+const Strip = styled.nav`
+  display: flex;
+  ${controlRow}
   gap: var(--gh-spacing-1);
   min-inline-size: 0;
-  ${media.phone} { display: flex; }
+  &[data-date-navigation-row] { container: date-navigation / inline-size; }
 `;
 /** Whole cells fill the strip so arrows always reveal a complete set of dates. */
 const Days = styled.ul`
@@ -107,7 +110,7 @@ const Days = styled.ul`
   scrollbar-width: none;
   &::-webkit-scrollbar { display: none; }
   > li { flex: none; inline-size: 100cqi; scroll-snap-align: center; }
-  @container (min-width: ${({ theme }) => theme.viewport[9.5]}) { > li { inline-size: calc((100cqi - var(--gh-size-2)) / 3); } }
+  @container (min-width: ${({ theme }) => theme.size[30]}) { > li { inline-size: calc((100cqi - var(--gh-size-2)) / 3); } }
   @container (min-width: ${({ theme }) => theme.viewport[12]}) { > li { inline-size: calc((100cqi - var(--gh-size-4)) / 5); } }
   @container (min-width: ${({ theme }) => theme.viewport[22.5]}) { > li { inline-size: calc((100cqi - var(--gh-size-6)) / 7); } }
 `;
@@ -171,9 +174,38 @@ const CalendarButton = styled.button`
   ${filterButtonColors}
   font: inherit;
   > svg { font-size: var(--gh-font-title); }
+  [data-date-navigation-row] & {
+    margin-inline-start: 0;
+    > svg, > b { grid-area: 1 / 1; align-self: center; }
+    > svg { font-size: var(--gh-size-7); }
+    > b {
+      font-size: var(--gh-font-caption); font-weight: var(--gh-weight-bold); line-height: var(--gh-leading-tight);
+      transform: translateY(var(--gh-size-1_25));
+    }
+  }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.fieldHover}; } }
   ${focusRing}
 `;
+
+const DateFilterButton = styled(FilterDialogTrigger)`
+  > span > [data-desktop-label] { display: none; }
+  @container date-navigation (max-width: ${({ theme }) => theme.viewport[22.5]}) {
+    && { padding-inline: var(--gh-spacing-1_5); }
+    > svg, > b { display: none; }
+  }
+  ${media.desktop} {
+    > span > [data-desktop-label] { display: inline; }
+    > span > [data-mobile-label] { display: none; }
+  }
+`;
+
+export function DateNavigationFilters({ locale, ...props }: Omit<ComponentProps<typeof FilterDialogTrigger>, "children"> & { locale: string }) {
+  const messages = createMessages(locale);
+  return <DateFilterButton {...props}>
+    <span data-mobile-label>{messages.text("filters.title")}</span>
+    <span data-desktop-label>{messages.text("feed.filters.advanced")}</span>
+  </DateFilterButton>;
+}
 
 /** Days added at a time when the strip nears either end. */
 const block = 30;
@@ -187,20 +219,22 @@ function stripMetrics(strip: HTMLUListElement) {
   return { step, visible: Math.max(1, Math.round((strip.clientWidth + gap) / step)) };
 }
 
-export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: ReportingDate; onApply: (next: FeedQuery) => void }) {
+export function DayStrip({ query, today, onApply, filters }: {
+  query: FeedQuery; today: ReportingDate; onApply: (next: FeedQuery) => void; filters: ReactNode;
+}) {
   const { startDate, endDate } = resolveFeedDates(query, today), [tomorrow] = adjacentDays(today, 1);
   const select = (from: ReportingDate, to: ReportingDate = from) => selectFeedDates(query,
     from !== to ? { kind: "range", from, to } : from === today ? { kind: "today" }
       : query.status !== "finished" && from === tomorrow ? { kind: "tomorrow" } : { kind: "date", date: from }, today);
-  return <DateStrip locale={query.locale} today={today} from={startDate} to={endDate}
+  return <DateStrip locale={query.locale} today={today} from={startDate} to={endDate} filters={filters}
     hrefForDay={date => feedQueryHref(select(date), today)} onDatesChange={(from, to) => onApply(select(from, to))} />;
 }
 
 /** Without link targets, dates edit an enclosing Filters draft and the child calendar uses its native dialog layer. */
-export function DateStrip({ locale, today, from, to, hrefForDay, onDatesChange, label, showOnDesktop = false }: {
+export function DateStrip({ locale, today, from, to, hrefForDay, onDatesChange, label, filters }: {
   locale: string; today: ReportingDate; from: ReportingDate | null; to: ReportingDate | null;
   hrefForDay?: (date: ReportingDate) => string; onDatesChange: (from: ReportingDate, to: ReportingDate) => void;
-  label?: string; showOnDesktop?: boolean;
+  label?: string; filters?: ReactNode;
 }) {
   const messages = createMessages(locale), draft = hrefForDay === undefined;
   const startDate = from ?? today, endDate = to ?? startDate;
@@ -305,11 +339,11 @@ export function DateStrip({ locale, today, from, to, hrefForDay, onDatesChange, 
     if (!extend()) reveal(next);
   };
   const closeCalendar = () => { setCalendarOpen(false); calendarButton.current?.focus({ preventScroll: true }); };
-  return <Strip $visibleOnDesktop={draft || showOnDesktop} aria-label={label ?? messages.text("feed.date.days")}>
+  return <><Strip data-date-navigation-row={filters ? "" : undefined} aria-label={label ?? messages.text("feed.date.days")}>
     <Scroll type="button" aria-controls={listId} aria-label={messages.text("feed.date.earlier")} onClick={() => move(-1)}>
       <ChevronLeftIcon />
     </Scroll>
-    <Days id={listId} ref={list} onScroll={() => { updateVisible(); if (activated.current && !arrowTarget.current) extend(); }}
+    <Days id={listId} ref={list} data-date-strip-days onScroll={() => { updateVisible(); if (activated.current && !arrowTarget.current) extend(); }}
       onPointerDown={activate} onWheel={activate} onFocus={activate}
       onKeyDown={(event) => { if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) activate(); }}>
       {chips.map(({ date, day, month, isToday, href, label }) => {
@@ -326,17 +360,21 @@ export function DateStrip({ locale, today, from, to, hrefForDay, onDatesChange, 
     <Scroll type="button" aria-controls={listId} aria-label={messages.text("feed.date.later")} onClick={() => move(1)}>
       <ChevronRightIcon />
     </Scroll>
-    <CalendarButton ref={calendarButton} type="button"
+    <CalendarButton ref={calendarButton} type="button" data-date-strip-calendar
       aria-haspopup="dialog" aria-expanded={calendarOpen} aria-controls={calendarOpen ? calendarId : undefined}
       onClick={event => { event.currentTarget.focus({ preventScroll: true }); setCalendarOpen(true); }}
+      aria-description={filters && selected ? messages.reportingDate(selected) : undefined}
       aria-label={startDate !== endDate ? messages.text("feed.date.rangeCurrent", { range: messages.reportingDateSpan(startDate, endDate) }) : messages.text("feed.date.rangeOpen")}>
       <CalendarIcon />
+      {filters && <b aria-hidden="true">{messages.reportingDayParts(anchor).day}</b>}
     </CalendarButton>
-    {calendarOpen && <DateCalendar id={calendarId} presentation={draft ? "dialog" : showOnDesktop ? "responsive" : "sheet"} locale={locale}
+    {filters}
+  </Strip>
+    {calendarOpen && <DateCalendar id={calendarId} presentation={draft ? "dialog" : "responsive"} locale={locale}
       today={today} from={startDate} to={endDate} onClose={closeCalendar}
       onApply={(from, to) => {
         closeCalendar();
         onDatesChange(from, to);
       }} />}
-  </Strip>;
+  </>;
 }

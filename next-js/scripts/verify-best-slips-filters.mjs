@@ -1,5 +1,5 @@
 /** Browser acceptance against /best-slips/browse in the synthetic slip rendering fixture. */
-export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 1024, 1440]) {
+export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 768, 1024, 1440]) {
   const assert = (value, message) => { if (!value) throw new Error(message); };
   const results = [], errors = [];
   const recordError = error => errors.push(error.message);
@@ -14,14 +14,34 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 1
       await page.evaluate(() => document.fonts.ready);
       if (width >= 1024) await page.waitForFunction(() => document.querySelector("[data-performance-period]")?.textContent.includes("11:00 EAT"), null, { timeout: 15_000 });
       const trigger = page.locator("[data-best-slips-filter-trigger]"), bar = page.locator("[data-best-slips-applied]");
-      assert((await trigger.innerText()).trim() === "Filters" && await trigger.locator("svg").count() === 1, "The Filters action uses the shared label and icon");
+      assert((await trigger.innerText()).trim() === (width >= 1024 ? "Advanced Filters" : "Filters"), "The trigger uses the breakpoint-specific label");
       const geometry = await trigger.evaluate(button => {
-        const summary = button.closest("[data-performance-summary]"), cards = summary.querySelector("[data-performance-figures]").getBoundingClientRect();
+        const row = button.closest("[data-date-navigation-row]"), days = row.querySelector("[data-date-strip-days]"), calendar = row.querySelector("[data-date-strip-calendar]");
+        const summary = row.parentElement.querySelector("[data-performance-summary]"), figures = summary.querySelector("[data-performance-figures]"), cards = figures.getBoundingClientRect();
         const action = button.getBoundingClientRect(), bar = document.querySelector("[data-best-slips-applied]"), bounds = bar.getBoundingClientRect();
+        const list = days.getBoundingClientRect(), date = calendar.getBoundingClientRect();
+        const visibleTiles = [...days.children].filter(tile => {
+          const box = tile.getBoundingClientRect();
+          return box.left >= list.left - 1 && box.right <= list.right + 1;
+        }).length;
         const selection = bar.querySelector("[data-applied-selection]"), count = bar.querySelector("[data-best-slips-summary]").getBoundingClientRect();
         const heading = summary.querySelector("[data-performance-heading]"), title = heading.querySelector("h2").getBoundingClientRect();
-        return { beside: Math.abs(action.top - cards.top) < 1 && Math.abs(action.height - cards.height) < 1 && action.left > cards.right,
-          below: action.top >= cards.bottom && Math.abs(action.left - cards.left) < 1 && Math.abs(action.right - cards.right) < 1,
+        const fiveDigitsFit = [...figures.children].every(card => {
+          const label = card.querySelector("dt"), values = card.querySelector("dd"), count = values.firstElementChild, percentage = values.lastElementChild;
+          const oldCount = count.textContent, oldPercentage = percentage.textContent;
+          count.textContent = "15,000";
+          if (percentage !== count) percentage.textContent = "(99.9%)";
+          const cardBox = card.getBoundingClientRect(), countBox = count.getBoundingClientRect(), percentBox = percentage.getBoundingClientRect();
+          const metrics = label.getBoundingClientRect().bottom <= countBox.top
+            && Math.abs(countBox.top + countBox.bottom - percentBox.top - percentBox.bottom) < 2
+            && countBox.left >= cardBox.left && percentBox.right <= cardBox.right;
+          count.textContent = oldCount;
+          if (percentage !== count) percentage.textContent = oldPercentage;
+          return metrics;
+        });
+        return { sameRow: Math.abs(action.top - date.top) < 1 && Math.abs(date.top - list.top) < 1 && Math.abs(action.height - date.height) < 1,
+          inOrder: list.right < date.left && date.right < action.left && action.bottom <= heading.getBoundingClientRect().top,
+          visibleTiles, calendarDay: calendar.textContent.trim(), columns: getComputedStyle(figures).gridTemplateColumns.split(" ").length, fiveDigitsFit,
           separation: bounds.top - cards.bottom, countAtEnd: bounds.right - count.right <= 9,
           firstSlipGap: document.querySelector("[data-slip-list]").getBoundingClientRect().top - bounds.bottom,
           summaryPaddingEnd: parseFloat(getComputedStyle(bar).paddingBottom),
@@ -34,7 +54,9 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 1
           labelsAligned: Math.abs(selection.getBoundingClientRect().left - cards.left) < 1,
           title: heading.querySelector("h2").textContent, period: summary.querySelector("[data-performance-period]").textContent };
       });
-      assert(width >= 1024 ? geometry.beside : geometry.below, `${mode}/${width}: responsive filter action ${JSON.stringify(geometry)}`);
+      assert(geometry.sameRow && geometry.inOrder && geometry.calendarDay === "13" && geometry.visibleTiles >= 3
+        && (width !== 320 || geometry.visibleTiles === 3), `${mode}/${width}: date navigation layout ${JSON.stringify(geometry)}`);
+      assert(geometry.columns === (width >= 1024 ? 6 : 3) && geometry.fiveDigitsFit, `${mode}/${width}: performance cards fit two lines`);
       assert(geometry.fits && geometry.countAtEnd && geometry.height >= geometry.controlHeight, "Controls and result counts fit shared metrics");
       assert(geometry.title === "Today’s performance" && geometry.titleAligned && geometry.labelsAligned, "Section labels align with the outer card rail");
       assert(geometry.headingGap <= 1.5 && geometry.headingGap >= 0 && geometry.headingPaddingEnd === 0, "The heading and date sit directly above the performance cards");
@@ -170,7 +192,7 @@ export async function verifyBestSlipsCalendar(page, origin, widths = [390, 1440]
       return stripBounds.height > 0 && stripBounds.bottom <= heading.getBoundingClientRect().top;
     });
     assert(stripAbovePerformance, "The date strip appears above the performance heading");
-    const picker = strip.locator('[aria-haspopup="dialog"]');
+    const picker = strip.locator('[data-date-strip-calendar]');
     const calendar = page.getByRole("dialog", { name: "Choose dates", exact: true });
     const date = day => calendar.locator('button[aria-pressed]').filter({ hasText: new RegExp(`^${day}$`) });
     const openCalendar = async () => { await picker.click(); await calendar.waitFor(); };
@@ -195,15 +217,17 @@ export async function verifyBestSlipsCalendar(page, origin, widths = [390, 1440]
     const original = page.url();
     await date(12).click();
     await calendar.getByRole("button", { name: "Cancel", exact: true }).click();
-    await page.waitForFunction(() => document.activeElement?.matches('nav[aria-label="Slip date"] [aria-haspopup="dialog"]'));
+    await page.waitForFunction(() => document.activeElement?.matches('[data-date-strip-calendar]'));
     assert(page.url() === original, "Cancelling restores the picker focus and leaves the active date unchanged");
     await selectDates(12);
     await strip.locator('li[data-date="2026-10-12"] > a[aria-current="date"]').waitFor();
+    assert(await picker.innerText() === "12", "The calendar button shows the selected day");
     await selectDates(12, 14);
     await page.goBack();
     await strip.locator('li[data-date="2026-10-12"] > a[aria-current="date"]').waitFor();
     await strip.locator('li[data-date="2026-10-13"] > a').click();
     await page.waitForURL(url => url.searchParams.get("period") === "today" && !url.searchParams.has("from"));
+    await page.waitForFunction(() => document.querySelector("[data-date-strip-calendar]")?.textContent.trim() === "13");
     results.push({ mode, width, ...geometry });
   }
   return results;

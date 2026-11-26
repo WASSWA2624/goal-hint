@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState, type ReactNode } from "react";
-import { DateStrip } from "@/components/match/feed-dates";
+import { DateNavigationFilters, DateStrip } from "@/components/match/feed-dates";
 import { PerformanceSummary } from "@/components/performance/performance-summary";
 import { FilterDialogContent, FilterDialogSection, FilterFieldRow, FilterSection, FiltersDialog } from "@/components/ui/advanced-filter-dialog";
 import { SegmentedChoice, SelectInput } from "@/components/ui/controls";
@@ -20,7 +20,7 @@ import { publicPolicy } from "@/domain/public-policy";
 import { commitSlipNumber, type SlipNumericField } from "@/domain/slip-input-guards";
 import { createMessages, type Messages } from "@/i18n/messages";
 import { bestSlipBand, bestSlipOddsBands, defaultBestSlipOddsBand, type BestSlipOddsBand } from "@/domain/best-slip-odds-bands";
-import { BestSlipsFilterTrigger, AppliedSelection, AppliedSummary, FiltersPanel } from "./best-slips-filter-styles";
+import { AppliedSelection, AppliedSummary, FiltersPanel } from "./best-slips-filter-styles";
 import { SlipNumericInput } from "./slip-numeric-input";
 
 const periodLabels = {
@@ -120,15 +120,15 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
   const matchCountRange = rangeLabel(appliedQuery.matchesMin, appliedQuery.matchesMax, (value) => m.number(value));
   const selectDates = (from: ReportingDate, to: ReportingDate = from) => selectBestSlipsDates(appliedQuery, from, to, today);
   return <FiltersPanel aria-label={m.text("bestSlips.filters.title")} aria-busy={busy} data-best-slips-filters>
-    <DateStrip locale={locale} today={today} {...bounds} label={m.text("bestSlips.filters.slipDate")} showOnDesktop
+    <DateStrip locale={locale} today={today} {...bounds} label={m.text("bestSlips.filters.slipDate")}
+      filters={<DateNavigationFilters locale={locale} ref={opener} aria-disabled={busy} data-best-slips-filter-trigger
+        dialogId={dialogId} open={open} onClick={() => { if (!busy) openFilters(); }} />}
       hrefForDay={date => `${bestSlipsHref(locale)}${bestSlipsPageSearch(selectDates(date))}`}
       onDatesChange={(from, to) => onChange(selectDates(from, to))} />
     <PerformanceSummary locale={locale} kind="slips" title={m.text(todayScope ? "bestSlips.performance.today" : "performance.summary.title")} counts={statistics ?? null} period={desktop ? desktopPerformancePeriod : performancePeriod}
       compactHeader showCoverage={false} activeResult={appliedQuery.status === "all" ? undefined : appliedQuery.status}
       onResult={(result) => onChange(selectSlipSummaryResult(appliedQuery, result ?? "all"))} disabled={busy}
-      resultAttributes={(result) => ({ "data-slip-result": result ?? "all" })}
-      actions={<BestSlipsFilterTrigger ref={opener} aria-disabled={busy} data-best-slips-filter-trigger
-        dialogId={dialogId} open={open} onClick={() => { if (!busy) openFilters(); }}>{m.text("filters.title")}</BestSlipsFilterTrigger>} />
+      resultAttributes={(result) => ({ "data-slip-result": result ?? "all" })} />
     <AppliedSummary data-best-slips-applied aria-live="polite" aria-atomic="true">
       <AppliedSelection data-applied-selection>
         <span data-browse-scope="mobile">{currentRange ?? m.text("bestSlips.filters.allDates")}</span>
