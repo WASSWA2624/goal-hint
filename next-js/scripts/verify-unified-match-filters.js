@@ -52,7 +52,7 @@ async function verifyUnifiedMatchFilters(page) {
         return tile.left >= list.left - 1 && tile.right <= list.right + 1;
       }).length;
       return { sameRow: Math.abs(list.top - date.top) < 1 && Math.abs(date.top - button.top) < 1,
-        ordered: list.right < date.left && date.right < button.left && button.bottom <= performance.top && performance.bottom <= field.top,
+        ordered: performance.bottom <= list.top && list.right < date.left && date.right < button.left && button.bottom <= field.top,
         sameDay: calendar.textContent.trim() === selectedDay, fullWidthSearch: Math.abs(field.width - row.clientWidth) < 1,
         visibleTiles, columns: getComputedStyle(summary.querySelector('[data-performance-figures]')).gridTemplateColumns.split(' ').length };
     });

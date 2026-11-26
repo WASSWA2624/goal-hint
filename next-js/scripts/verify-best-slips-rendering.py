@@ -24,7 +24,7 @@ def verify(origin):
         assert "data-best-slips-publication" not in html
         assert html.count("data-best-slips-summary") == 1
         assert "data-list-divider" not in html
-        assert date_navigation.end() < html.index("data-performance-heading")
+        assert html.index("data-performance-heading") < date_navigation.start()
         trigger = match(r'<button\b[^>]*data-best-slips-filter-trigger="[^"]*"[^>]*>[\s\S]*?</button>', html).group()
         assert ">Filters</span>" in trigger and ">Advanced Filters</span>" in trigger
         if suffix == "?period=all":

@@ -84,7 +84,7 @@ Production HTTPS served the expected build. Login, Matches, the guest session en
 
 The reported mobile Chrome error appeared while the earlier account menu remained open. Staging recorded HTTP 200 for both logout requests in the reported time window. The browser-side error was unavailable. The updated flow closes the menu on submit and uses the server's form redirect after revoking the session.
 
-On 26 November 2026, staging activated `e43ec537` from a clean, checksummed ZIP based on the active Matches and Slips release `4de9046f`. MariaDB verified all 94 migrations with zero pending. Login, Matches, Best Slips and the guest session endpoint returned HTTP 200 with `noindex`. The pages served build `-uCqH9D4_dXyawOfxyJ-I`. The previous compatible staging release is `4de9046f`.
+On 26 November 2026, staging activated `e43ec537` from a clean, checksummed ZIP based on the active Matches and Slips release `4de9046f`. MariaDB verified all 94 migrations with zero pending. Login, Matches, Best Slips and the guest session endpoint returned HTTP 200 with `noindex`. The pages served build `-uCqH9D4_dXyawOfxyJ-I`. The previous compatible staging release is `4de9046f`. The performance cards rollout preflight subsequently found `e43ec537` active in both environments.
 
 On hosted staging, touch Chrome without a native bridge closed the header menu while the synthetic account's single form POST was held. The server then returned HTTP 303. Matches opened with the guest Login control and the old session cookie resolved to an anonymous session.
 
@@ -134,7 +134,31 @@ On 26 November 2026, the checksummed `8867ad87` release ran in a private staging
 
 Local Chromium checks verified the responsive controls in both themes, the desktop live clock, and share retry and PNG export. Chromium also verified date selection on private staging in dark mode at mobile and desktop widths. The staging profile lacks public odds approval and its archive offered no shareable slips during verification. Isolated fixtures supplied valid odds and published slips for the Builder and sharing checks. Production activated the mobile logout revision while this candidate was under review, so the combined release includes that revision before its own promotion.
 
-The release ZIP SHA-256 is `246c705750b806b093d4345a6b77e97a1f750905d0541eefdc662e55a1e4daaa`.
+The private candidate ZIP SHA-256 is `246c705750b806b093d4345a6b77e97a1f750905d0541eefdc662e55a1e4daaa`.
+
+Public staging activated the combined release `4de9046f`, which includes the production mobile logout revision. The host verified all 94 required migrations before and after activation. Matches, Slips and Builder returned HTTP 200 with `noindex`. The one-day Matches feed, Slips API and guest session endpoint returned HTTP 200 with JSON. Chromium verified that applying a date updates the Slips calendar numeral and archive URL at 390px and 1440px in dark mode. The combined build, lint and focused account and sharing tests passed.
+
+The public staging release ZIP SHA-256 is `10918c1b83d1ef3cfd6f198b6892d91c6b235a861cb4977ec4b1b073b081c697`.
+
+## Matches and Slips production verification
+
+On 26 November 2026, after owner approval, production activated `4de9046f` from the same checksummed ZIP used on staging. The active build metadata matched across the two environments. Production verified all 94 required MariaDB migrations before and after activation. The previous compatible release `ef1b3663` is retained for rollback.
+
+The public Matches page served the expected build identifier. Matches, Slips and Builder returned HTTP 200, as did the one-day Matches feed, the Slips API and the guest session endpoint. A bounded Builder request returned HTTP 200 and displayed one generated slip.
+
+Production Chromium checks covered both pages at 390px and 1440px in light and dark mode. The date controls, filter labels, performance cards and Matches search placement passed. The browser opened and dismissed the calendar and filter dialogs in light mobile and dark desktop layouts.
+
+Sharing a completed public slip returned HTTP 200 from the production share endpoint. The browser decoded the generated 1080px PNG preview and enabled Download image and Share.
+
+## Performance cards rollout
+
+On 26 November 2026, staging and production activated `1d97a0c7` from the same checksummed ZIP. The earlier layout package `53d846ca` passed isolated staging while the mobile logout follow-up was rolling out. The promoted package includes the already active logout revision `e43ec537`, which remains available for rollback. Both hosts verified all 94 required MariaDB migrations before and after activation.
+
+Both environments served the new build. Matches rendered performance, date controls and search in that order. Slips rendered performance followed by the date controls. Those pages, Builder, the one-day Matches feed, the Slips API and the guest session endpoint returned HTTP 200 in both environments. Staging retained `noindex`.
+
+Sixteen Chromium layout cases passed at 320px, 390px, 768px and 1440px on both pages in both themes. Mobile and desktop keyboard checks passed for control order and dialog focus restoration. Targeted lint, the release build and 101 focused tests passed.
+
+The release ZIP SHA-256 is `d4e210a36379b26eb929ddd47faf1e7d0e2b5c184ba238a2bc0d750309ac415d`.
 
 ## Verification limits
 

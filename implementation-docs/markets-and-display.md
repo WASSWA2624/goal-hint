@@ -58,7 +58,7 @@ An authorized **Market-implied** extension can retain a separately labeled estim
 
 The desktop layout starts at 64rem (1,024 CSS pixels with a 16px root size). Phones and tablets below that threshold share the compact layouts. The Matches feed has further framing, kickoff and score changes below 48rem. Light and dark themes use the same layout rules. [Theme breakpoints](../next-js/src/styles/theme-foundation.ts), [Desktop layout hook](../next-js/src/components/ui/use-desktop-layout.ts), [Match tile styles](../next-js/src/components/match/team-stack-styles.ts).
 
-Matches and Slips place date tiles, a calendar trigger with the selected day number, and the advanced filter trigger in a single row. The date strip shows fewer tiles on narrow screens. Both pages place outcome totals and percentages immediately below the row. Matches puts its fixture search on the next full-width line. [Date navigation](../next-js/src/components/match/feed-dates.tsx), [Matches layout](../next-js/src/app/_components/feed-surface.tsx), [Slips filters](../next-js/src/components/slips/best-slips-filters.tsx).
+Matches and Slips put outcome totals and percentages directly under the page header. The next row contains date tiles, a calendar trigger with the selected day number and the advanced filter trigger. The date strip shows fewer tiles on narrow screens. Matches puts its fixture search on the next full-width line. [Date navigation](../next-js/src/components/match/feed-dates.tsx), [Matches layout](../next-js/src/app/_components/feed-surface.tsx), [Slips filters](../next-js/src/components/slips/best-slips-filters.tsx).
 
 | Surface | Available market rows or filters | Desktop and mobile |
 | --- | --- | --- |
