@@ -312,3 +312,12 @@ queries and performance pages passed smoke checks. The matching worker could
 read the migrated database. The staging catalog had zero fixtures in the
 current operational window. Genuine MySQL acceptance covered a 20-slip append,
 concurrent fixture claims and preservation of original publications.
+
+Production promoted the same `ee5f6a44` web package and matching worker after
+staging approval. An isolated MariaDB restore verified the production archive
+and its dependencies before migration. All 82 existing slips and 398 legs
+retained their archived rows and checksums. Production verified all 93
+migrations after activation. Public Matches, Builder, Best Slips, the band APIs
+and original direct rank links passed HTTPS smoke checks. The manual publisher
+check and the 12:00 Kampala scheduled run each found no qualifying additions.
+The current set retained ten slips across 39 distinct fixtures.
