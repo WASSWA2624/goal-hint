@@ -248,6 +248,20 @@ test('filtered API rejects malformed or reversed criteria before accessing priva
   assert.equal(reads, 0);
 });
 
+test('API requests still default to all results and honor an explicit pending filter', async () => {
+  const statuses = [];
+  const handler = createBestSlipsHandler({ now: () => now, access: async () => full,
+    browse: async (viewer, query) => {
+      statuses.push(query.status);
+      return service()(viewer);
+    } });
+  for (const search of ['period=today', 'period=today&status=pending']) {
+    const response = await handler(new Request(`https://goalhint.com/api/best-slips?${search}`));
+    assert.equal(response.status, 200);
+  }
+  assert.deepEqual(statuses, ['all', 'pending']);
+});
+
 test('filtered API failures return private unavailable responses without internal diagnostics', async () => {
   const handler = createBestSlipsHandler({ now: () => now, access: async () => full,
     browse: async () => { throw new Error('private database diagnostics'); } });

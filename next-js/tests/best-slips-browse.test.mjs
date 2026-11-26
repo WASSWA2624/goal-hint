@@ -89,7 +89,7 @@ function fixture(days = 1, daily = 4, replacementCycles = false, valuesForRank =
   });
   return { store, reads, resultBatches, outcomes, publications, slips, legs, batches, advance(value) { asOf = value; }, corrupt() { corrupt = true; } };
 }
-const query = (input = {}) => parseBestSlipsQuery({ period: 'last30', ...input }, today);
+const query = (input = {}) => parseBestSlipsQuery({ period: 'last30', status: 'all', ...input }, today);
 
 test('publication pages show 20 slips and preserve every original rank across page boundaries', async () => {
   for (const count of [20, 21, 50, 51, 100]) {

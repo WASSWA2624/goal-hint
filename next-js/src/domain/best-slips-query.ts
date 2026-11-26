@@ -23,7 +23,8 @@ export class BestSlipsQueryError extends Error {
   }
 }
 const fail = (code: BestSlipsQueryError["code"]): never => { throw new BestSlipsQueryError(code); };
-export const defaultBestSlipsQuery = (): BestSlipsQuery => ({ period: "today", status: "all", oddsBand: defaultBestSlipOddsBand, page: 1 });
+const defaultBestSlipsStatus = "pending";
+export const defaultBestSlipsQuery = (): BestSlipsQuery => ({ period: "today", status: defaultBestSlipsStatus, oddsBand: defaultBestSlipOddsBand, page: 1 });
 
 function customDates(from: unknown, to: unknown): BestSlipsDates {
   let start: ReportingDate, end: ReportingDate;
@@ -78,7 +79,8 @@ export function matchesBestSlipsRanges(query: BestSlipsQuery, { averageProbabili
     && matchCount >= (query.matchesMin ?? 1) && matchCount <= (query.matchesMax ?? Number.MAX_SAFE_INTEGER);
 }
 
-export function parseBestSlipsQuery(input: URLSearchParams | Readonly<Record<string, string | string[] | undefined>>, today: ReportingDate): BestSlipsQuery {
+export function parseBestSlipsQuery(input: URLSearchParams | Readonly<Record<string, string | string[] | undefined>>,
+  today: ReportingDate, defaultStatus: BestSlipsStatus = defaultBestSlipsStatus): BestSlipsQuery {
   const value = (key: string): string | undefined => {
     const values = input instanceof URLSearchParams ? input.getAll(key) : input[key];
     if (Array.isArray(values)) {
@@ -87,7 +89,7 @@ export function parseBestSlipsQuery(input: URLSearchParams | Readonly<Record<str
     }
     return values;
   };
-  const period = value("period") ?? "today", status = value("status") ?? "all", pageValue = value("page") ?? "1";
+  const period = value("period") ?? "today", status = value("status") ?? defaultStatus, pageValue = value("page") ?? "1";
   if (!bestSlipsPeriods.includes(period as BestSlipsPeriod) || !bestSlipsStatuses.includes(status as BestSlipsStatus)
     || !/^[1-9]\d{0,3}$/u.test(pageValue)) return fail("invalid-query");
   const summary = value("summary");

@@ -1,14 +1,17 @@
 """Verify the Best Slips filter/results shell with isolated, multi-day stored fixtures."""
 from pathlib import Path
+from re import findall
 from lib.rendering import Server, build_fixture, create_fixture, environment, match, parse_args, request, visible_html
 from lib.runtime import ROOT, main_guard
 
 
 def verify(origin):
     archive = "?period=custom&from=2026-10-12&to=2026-10-12&probMin=80&matchesMin=2&status=lost"
-    legacy = "?period=custom&from=2026-10-11&to=2026-10-11"
+    legacy = "?period=custom&from=2026-10-11&to=2026-10-11&status=all"
+    all_results = "?status=all"
+    all_dates = "?period=all&status=all"
     empty = "?oddsBand=100-200"
-    for suffix in ("", "?period=yesterday", "?period=all", archive, legacy, empty):
+    for suffix in ("", "?period=yesterday", all_results, all_dates, archive, legacy, empty):
         response = request(origin, "/best-slips/browse" + suffix)
         assert response.status == 200
         html = visible_html(response.text)
@@ -20,14 +23,14 @@ def verify(origin):
         assert date_strip.index("data-date-strip-days") < date_strip.index("data-date-strip-calendar") < date_strip.index("data-best-slips-filter-trigger")
         assert '/en/best-slips?period=custom&amp;' in date_strip
         assert '&amp;from=2026-10-12&amp;to=2026-10-12' in date_strip
-        assert date_strip.count('aria-current="date"') == (0 if suffix == "?period=all" else 1)
+        assert date_strip.count('aria-current="date"') == (0 if suffix == all_dates else 1)
         assert "data-best-slips-publication" not in html
         assert html.count("data-best-slips-summary") == 1
         assert "data-list-divider" not in html
         assert html.index("data-performance-heading") < date_navigation.start()
         trigger = match(r'<button\b[^>]*data-best-slips-filter-trigger="[^"]*"[^>]*>[\s\S]*?</button>', html).group()
         assert ">Filters</span>" in trigger and ">Advanced Filters</span>" in trigger
-        if suffix == "?period=all":
+        if suffix == all_dates:
             assert "data-best-slips-band-count" not in html
         elif suffix == legacy:
             assert "3 slips published" in html and "of 10 slips published" not in html
@@ -35,8 +38,18 @@ def verify(origin):
             assert "0 of 10 slips published" in html and "every 30 minutes" in html
         else:
             assert "3 of 10 slips published" in html
+        if suffix in ("", "?period=yesterday"):
+            match(r'<span\b[^>]*\bdata-applied-result\b[^>]*>Pending</span>', html)
+            match(r'<span\b[^>]*data-summary-count="all"[^>]*>3</span>', html)
+            assert html.count("data-slip-key=") == 1
+            assert set(findall(r'data-slip-outcome="([^"]+)"', html)) == {"pending"}
+            assert "1 of 1 slip" in html
         if not suffix:
             assert "Average pick probability" in html and "Whole-slip win probability" not in html
+        elif suffix == all_results:
+            match(r'<span\b[^>]*\bdata-applied-result\b[^>]*>All slips</span>', html)
+            assert html.count("data-slip-key=") == 3
+            assert set(findall(r'data-slip-outcome="([^"]+)"', html)) == {"won", "lost", "pending"}
         elif suffix == archive:
             assert '&amp;probMin=80&amp;matchesMin=2' in date_strip and 'status=lost&amp;page=1' in date_strip
             assert "12-Oct-2026" in html

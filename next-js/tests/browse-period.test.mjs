@@ -40,7 +40,7 @@ test('slip summaries reuse selected-period totals independent of result filters 
   const result = await service({ tier: 'free', signedIn: false, mode: 'off' }, { ...defaultBestSlipsQuery(), period: 'last30', page: 3 });
   assert.deepEqual(result.summary, { asOf: Date.parse(`${today}T12:00:00+03:00`), from: '2026-12-03', to: today, statistics: counts });
   assert.equal(result.browse.query.page, 3); assert.equal(result.browse.total, 100);
-  assert.deepEqual(calls, [{ period: 'last30', status: 'all', oddsBand: '1.5-5', page: 3 }]);
+  assert.deepEqual(calls, [{ period: 'last30', status: 'pending', oddsBand: '1.5-5', page: 3 }]);
   calls.length = 0;
   const selected = await service({ tier: 'full', signedIn: true, mode: 'off' }, { period: 'today', status: 'won', page: 1 });
   assert.equal(calls.length, 1); assert.equal(selected.summary.from, today); assert.equal(selected.summary.statistics, selected.statistics);

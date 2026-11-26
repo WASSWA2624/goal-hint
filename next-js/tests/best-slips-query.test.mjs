@@ -12,8 +12,8 @@ test('slip presets resolve inclusive EAT publication dates across month and year
     last3: ['2026-10-27', '2026-10-29'], last7: ['2026-10-23', '2026-10-29'], last30: ['2026-09-30', '2026-10-29'],
     next3: ['2026-10-30', '2026-11-01'], next7: ['2026-10-30', '2026-11-05'], next30: ['2026-10-30', '2026-11-28'], all: [null, null],
   };
-  assert.deepEqual(parseBestSlipsQuery({}, today), { period: "today", status: "all", page: 1, oddsBand: '1.5-5' });
-  assert.deepEqual(defaultBestSlipsQuery(), { period: 'today', status: 'all', page: 1, oddsBand: '1.5-5' });
+  assert.deepEqual(parseBestSlipsQuery({}, today), defaultBestSlipsQuery());
+  assert.deepEqual(defaultBestSlipsQuery(), { period: 'today', status: 'pending', page: 1, oddsBand: '1.5-5' });
   for (const [period, [from, to]] of Object.entries(expected)) {
     assert.deepEqual(resolveBestSlipsDates(parseBestSlipsQuery({ period }, today), today), { from, to });
   }
@@ -33,7 +33,7 @@ test('custom ranges accept same-day and a full leap year, while serialization re
   assert.deepEqual(resolveBestSlipsDates(query, today), { from: '2024-01-01', to: '2024-12-31' });
   assert.deepEqual(parseBestSlipsQuery(serializeBestSlipsQuery(query), today), query);
   assert.deepEqual(parseBestSlipsQuery({ period: 'custom', from: today, to: today }, today),
-    { period: 'custom', status: 'all', page: 1, oddsBand: '1.5-5', from: today, to: today });
+    { period: 'custom', status: 'pending', page: 1, oddsBand: '1.5-5', from: today, to: today });
 });
 
 test('invalid or repeated values fail before reading publications', () => {
@@ -60,6 +60,9 @@ test('void and cancelled result filters survive parsing and serialization', () =
 test('inclusive average probability and match ranges survive deep links and outcome drilldowns', () => {
   const selected = parseBestSlipsQuery(new URLSearchParams('period=yesterday&probMin=75.125&probMax=90&matchesMin=2&matchesMax=5&status=cancelled&page=3'), today);
   assert.equal(bestSlipsPageSearch(defaultBestSlipsQuery()), '');
+  const all = selectSlipSummaryResult(defaultBestSlipsQuery(), 'all');
+  assert.equal(new URLSearchParams(bestSlipsPageSearch(all)).get('status'), 'all');
+  assert.deepEqual(parseBestSlipsQuery(new URLSearchParams(bestSlipsPageSearch(all)), today), all);
   assert.deepEqual(parseBestSlipsQuery(new URLSearchParams(bestSlipsPageSearch(selected)), today), selected);
   assert.deepEqual(selectSlipSummaryResult(selected, 'won'), { ...selected, status: 'won', page: 1 });
   const matches = (averageProbability, matchCount) => matchesBestSlipsRanges(selected, { averageProbability, matchCount });

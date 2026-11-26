@@ -81,8 +81,8 @@ export function createPublishedBestSlipsService({ read = readPublishedDay, provi
   };
 }
 
-/** The entry screen and its API share today's paginated publication cohort. */
+/** The unfiltered API response includes every result for today's paginated publication cohort. */
 export async function readBestSlips(access: ViewerAccess, locale = "en"): Promise<BestSlipsResult> {
   const [{ readBestSlipsBrowse }, { defaultBestSlipsQuery }] = await Promise.all([import("./best-slips-browse.ts"), import("../../domain/best-slips-query.ts")]);
-  return readBestSlipsBrowse(access, defaultBestSlipsQuery(), locale);
+  return readBestSlipsBrowse(access, { ...defaultBestSlipsQuery(), status: "all" }, locale);
 }

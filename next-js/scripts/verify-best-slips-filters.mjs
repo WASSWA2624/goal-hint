@@ -73,7 +73,19 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 7
         if (count === 3) assert(await matching.count() === 0, "The full band count is displayed once");
         else assert((await matching.innerText()).includes(`of ${count} ${count === 1 ? "slip" : "slips"}`), "The result count reflects the applied filters");
       };
-      await checkCount(3);
+      const checkOutcomes = async (...expected) => {
+        const actual = await page.locator("[data-slip-key]").evaluateAll(cards => cards.map(
+          card => card.querySelector("[data-slip-outcome]")?.getAttribute("data-slip-outcome")).sort());
+        assert(actual.join(",") === expected.join(","), `Slip results match the selected filter: ${expected.join(", ")}`);
+      };
+      const checkPending = async () => {
+        assert(await bar.locator("[data-applied-result]").innerText() === "Pending", "The applied results label shows Pending");
+        assert(await page.locator('[data-slip-result="pending"]').getAttribute("aria-pressed") === "true", "The Pending performance control is selected");
+        assert(await page.locator('[data-summary-count="all"]').innerText() === "3", "Today's performance denominator includes every result");
+        await checkCount(1);
+        await checkOutcomes("pending");
+      };
+      await checkPending();
       assert((await bar.innerText()).includes("2.50–5.00"), "The default odds retain two decimal places");
       if (width < 1024) {
         const text = await bar.innerText();
@@ -91,8 +103,10 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 7
         const settled = () => page.waitForFunction(() => document.querySelector("[data-best-slips-filters]")?.getAttribute("aria-busy") === "false", null, { timeout: 15_000 });
         const chooseOdds = label => dialog.getByText(label, { exact: true }).click();
         const selected = label => dialog.getByRole("radio", { name: label, exact: true }).isChecked();
+        const draftStatus = () => dialog.locator('select[name="status"]').inputValue();
         await open();
         assert(await dialog.locator('[name="period"]').count() === 1, "Best Slips Filters includes one publication date control");
+        assert(await draftStatus() === "pending", "The default filter dialog shows Pending");
         {
           const group = dialog.getByRole("group", { name: "Combined odds", exact: true });
           assert(await group.getByRole("radio").count() === 6, "Every odds band is listed");
@@ -107,23 +121,29 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 7
         await page.waitForFunction(() => document.activeElement?.matches("[data-best-slips-filter-trigger]"), null, { timeout: 15_000 });
         await open(); assert(await selected("2.50–5.00"), "Reopening restores the applied odds");
         await chooseOdds("5.00–10.00"); await apply(); await settled();
-        assert(requests.some(url => url.searchParams.get("period") === "today" && url.searchParams.get("oddsBand") === "5-10" && url.searchParams.get("page") === "1"), "Apply keeps today's date and restarts pagination");
+        assert(requests.some(url => url.searchParams.get("period") === "today" && url.searchParams.get("oddsBand") === "5-10"
+          && url.searchParams.get("status") === "pending" && url.searchParams.get("page") === "1"), "Apply keeps today's date and Pending, and restarts pagination");
         assert((await bar.innerText()).includes("5.00–10.00"), "The applied odds show today's selected band");
-        await checkCount(3);
+        await checkPending();
         await page.locator('[data-slip-result="won"]').click(); await settled();
-        await checkCount(1);
+        await checkCount(1); await checkOutcomes("won");
         assert(await page.locator('[data-summary-count="all"]').innerText() === "3", "Today's performance denominator stays independent of the selected result");
         await page.locator('[data-slip-result="all"]').click(); await settled();
+        assert(new URL(page.url()).searchParams.get("status") === "all", "All results is preserved in the shareable URL");
+        await checkCount(3); await checkOutcomes("lost", "pending", "won");
         await open(); await dialog.locator("[data-dialog-reset]").click();
-        assert(await selected("2.50–5.00"), "Reset changes only the draft odds");
+        assert(await selected("2.50–5.00"), "Reset restores the default draft odds");
+        assert(await draftStatus() === "pending", "Reset restores Pending in the draft");
         const beforeReset = requests.length;
         await page.keyboard.press("Escape"); assert(requests.length === beforeReset, "Discarding Reset preserves the applied band");
         await open(); assert(await selected("5.00–10.00"), "Discard restores the selected band");
+        assert(await draftStatus() === "all", "Discard preserves the applied All results filter");
         await dialog.locator("[data-dialog-reset]").click(); await apply(); await settled();
         assert((await bar.innerText()).includes("2.50–5.00"), "Reset applies default odds to today's slips");
-        await checkCount(3);
+        assert(new URL(page.url()).search === "", "Reset applies Pending at the clean page URL");
+        await checkPending();
         assert(await page.locator("[data-whole-slip-probability]").count() === 0
-          && await page.getByText("Average pick probability", { exact: false }).count() >= 3,
+          && await page.getByText("Average pick probability", { exact: false }).count() >= 1,
         "Hourly slips label their average and omit any unavailable whole-slip estimate");
         if (width === 390 || width === 1440) {
           await open();
@@ -147,7 +167,7 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 7
           assert(new URL(page.url()).search === "", "Resetting and applying restores the clean today URL");
           await page.goBack(); await settled(); await checkCount(1);
           assert(new URL(page.url()).searchParams.get("status") === "lost", "Back restores the audited query and its count");
-          await page.goto(`${origin}/best-slips/browse?period=all`);
+          await page.goto(`${origin}/best-slips/browse?period=all&status=all`);
           await page.getByRole("button", { name: "Older slips" }).click(); await settled();
           assert(new URL(page.url()).searchParams.has("cursor"), "Archive continuation is addressable");
           await page.getByRole("button", { name: "First archive page" }).click(); await settled();

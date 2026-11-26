@@ -11,7 +11,7 @@ export function createBestSlipsHandler({ read = readBestSlips, browse = readBest
   return async (request: Request) => {
     try {
       const parameters = new URL(request.url).searchParams;
-      const query = parameters.size ? parseBestSlipsQuery(parameters, getReportingDate(utcInstantFromEpochMilliseconds(now()))) : null;
+      const query = parameters.size ? parseBestSlipsQuery(parameters, getReportingDate(utcInstantFromEpochMilliseconds(now())), "all") : null;
       const viewer = await access(request);
       let result = query ? await browse(viewer, query) : await read(viewer);
       let finalViewer = await access(request);

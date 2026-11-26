@@ -1,7 +1,9 @@
 # Best Slips and personal builds
 
-Best Slips at `/en/best-slips` defaults to today's Kampala date and the
-2.50–5.00 band. The other five bands are 5.00–10.00, 10.00–20.00, 20.00–50.00,
+Best Slips at `/en/best-slips` opens on today's Kampala date with Pending
+selected in the 2.50–5.00 band. Pending includes not-started and in-progress
+slips. Select All slips to see every result in the applied cohort.
+The other five bands are 5.00–10.00, 10.00–20.00, 20.00–50.00,
 50.00–100.00 and 100.00–200.00. The exact price product determines membership.
 An exact shared boundary belongs to the next band. The last band includes
 200.00. Display totals round to two decimal places after band assignment.
