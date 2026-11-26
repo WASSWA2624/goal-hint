@@ -79,15 +79,28 @@ export async function verifyAuthenticationJourneys(page, { origin } = {}) {
     }, { times: 1 });
     const menu = secondTab.locator("[data-account-menu]:visible").first();
     await menu.locator("summary").click();
+    // A pending top-frame navigation suspends locator reevaluation. Observe the
+    // disclosure in the current document before the form can start navigating.
+    const collapsed = secondTab.waitForEvent("console", {
+      predicate: message => message.text() === "Fixture logout menu collapsed",
+    });
+    await menu.evaluate(details => {
+      const observer = new MutationObserver(() => {
+        if (details.open) return;
+        observer.disconnect();
+        console.debug("Fixture logout menu collapsed");
+      });
+      observer.observe(details, { attributes: true, attributeFilter: ["open"] });
+    });
     const requestReady = secondTab.waitForRequest(request => request.url() === logoutPath && request.method() === "POST");
-    await menu.getByRole("button", { name: "Log out", exact: true }).click({ noWaitAfter: true });
-    await secondTab.locator("[data-account-menu][open]:visible").waitFor({ state: "hidden" });
-    const request = await requestReady;
+    const clicked = menu.getByRole("button", { name: "Log out", exact: true }).click({ noWaitAfter: true });
+    const [request] = await Promise.all([requestReady, collapsed]);
     assert.equal(request.isNavigationRequest(), true);
     assert.equal(request.postData(), "action=logout");
     const responseReady = secondTab.waitForResponse(response => response.request() === request);
     releaseLogout();
-    assert.equal((await responseReady).status(), 303);
+    const [response] = await Promise.all([responseReady, clicked]);
+    assert.equal(response.status(), 303);
     await secondTab.waitForURL(origin + "/en/matches");
     await secondTab.locator('[data-header-auth="login"]:visible').waitFor();
     const replay = await secondTab.request.get(origin + "/api/account/session", {
