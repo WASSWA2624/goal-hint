@@ -66,6 +66,14 @@ MariaDB verified all 94 migrations with zero pending in production. The producti
 
 Production HTTPS served the expected build. Login, the reset page, the guest session API, Matches and the one-day Matches API returned HTTP 200. The reset page sent `no-store`, `noindex` and `no-referrer`. Guests were redirected to Login from the admin queue and received HTTP 401 from its API. Chrome verified opening and cancelling the request dialog on desktop light, and the missing-link message and new-request dialog on mobile dark. These production browser checks were read-only. A synthetic account exercised the full password-reset journey on staging. The default 30-day Matches API returned HTTP 503 both before and after promotion.
 
+## Mobile account logout staging verification
+
+On 26 November 2026, staging activated `ef1b3663` from a clean, checksummed ZIP. MariaDB verified all 94 migrations before activation. Chrome fixture tests covered member and administrator logout in light and dark themes, ordinary and failing native alert bridges, network retry, old-token rejection and the native HTTP redirect fallback with JavaScript disabled. The 115 focused tests, type checking, lint for changed files and the production-mode build passed.
+
+Hosted HTTPS smoke checks confirmed the new build on Login and Matches. A synthetic account used the visible mobile Chrome menu with a throwing native alert bridge. One logout POST returned HTTP 200, the browser reached Matches and displayed the guest header, and the old cookie no longer resolved to an account.
+
+The release ZIP SHA-256 is `a65829796fd29c05d90d33f73a4d70173cfd5c7f8183e5e3f985e0ab4917c940`. Production promotion awaits staging review.
+
 ## Authentication rollout
 
 On 26 November 2026, staging and production activated `acb7ce34` from the same checksummed ZIP. Both MariaDB databases verified all 93 migrations with zero pending. Production's previous compatible release, `a1e61cde`, is available for rollback.
