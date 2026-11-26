@@ -54,7 +54,13 @@ On 26 November 2026, staging activated `a567f8e1` with Next build `BtSbhJ1ircHCI
 
 Public HTTPS smoke checks passed for Matches, staging `noindex`, the released build manifest, the Privacy disclosure, public Community settings, the private guest session response and guest denial from the account Community endpoint. Neither WhatsApp destination was configured on staging. Chromium verified the guest Group and Channel handoffs, return confirmation, and same-day suppression in phone dark and desktop light using intercepted destinations. Local Chromium and isolated MySQL covered the signed-in flow, the exact 24-hour boundary, cross-device confirmation, concurrent claims and reconciliation after actual signup and login. Lint, schema validation, the theme contract and the production-mode build passed. The broader test run was stopped after four failures reproduced on the pre-change branch.
 
-The release ZIP SHA-256 is `822ca3755311f58e1be3399b3f1f013828c7a48c6c8e071fd463f7978d32361a`. Production promotion is awaiting owner review of staging.
+The release ZIP SHA-256 is `822ca3755311f58e1be3399b3f1f013828c7a48c6c8e071fd463f7978d32361a`.
+
+### Community invitations production verification
+
+On 26 November 2026, after owner review of staging, production activated `a567f8e1` from the same checksummed ZIP and served Next build `BtSbhJ1ircHCIp_qdWPIl`. The encrypted production backup covered the complete schema and triggers, plus all member account and migration ledger rows. The isolated restore matched those backups, and `20261126194240_community_invitations` passed on the restore before production activation. Production MariaDB applied the migration and verified all 95 required migrations with zero pending. The four nullable columns matched the migration. The application role passed SELECT and a rolled-back zero-row UPDATE over verified TLS. The prior web release `59faf6e1` remains available for rollback.
+
+Production HTTPS returned HTTP 200 for Matches, Best Slips, Builder, Login, the released build manifest, Privacy, public Community settings, the guest session and the one-day Matches API. Privacy included the Community disclosure. The public Community settings matched preflight, with both configured WhatsApp destinations enabled. The private account endpoint denied guest and cross-origin requests with HTTP 403. Chromium verified the configured Channel and Group handoffs in phone dark and desktop light, the confirmation on return, the No and Yes responses, and same-day suppression. The browser intercepted those WhatsApp requests. The default 30-day Matches API returned HTTP 503 before and after promotion.
 
 ## Subscriber administration staging verification
 
