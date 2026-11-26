@@ -17,7 +17,7 @@ import { revisionEligibleForLock } from "../predictions/cutoff-eligibility.ts";
 import { legacyForecastMarketKey } from "../predictions/forecast-market-evaluator.ts";
 import type { StoredCycle } from "../predictions/history-contract.ts";
 import { historyHash, historyId, historyInstant, historyVersion } from "../predictions/history-input.ts";
-import { assertHistorySeal, historyTime, storedCycle, storedRevision, type HistoryRow } from "../predictions/history-read.ts";
+import { assertHistorySeal, historyJson, historyTime, storedCycle, storedRevision, type HistoryRow } from "../predictions/history-read.ts";
 import { storedRefreshResult } from "../predictions/publication-read.ts";
 import { localGoalModelVersion } from "./local-goals-model.ts";
 import { loadNovemberReplayEvidenceInTransaction, readNovemberReplayTrainingMembership, type NovemberReplayTrainingMembership } from "./november-replay-evidence.ts";
@@ -109,16 +109,22 @@ function validateMarkets(input: z.output<typeof stageSchema>, definitions: Reado
   });
 }
 
-function featuredSelectionMatches({ selected, featuredDecision, decisionAt, markets }: Pick<NovemberReplayProjection,
-  "selected" | "featuredDecision" | "decisionAt" | "markets">) {
+type ReplayFeaturedPick = Pick<NovemberReplayProjection, "selected" | "featuredDecision" | "decisionAt">;
+
+function featuredPickMatches({ selected, featuredDecision, decisionAt }: ReplayFeaturedPick) {
   if (!featuredDecision || decisionAt === undefined) return false;
   if (featuredDecision.status === "abstained") return selected === null;
   if (featuredDecision.status === "priced" && (featuredDecision.quote.observedAt > decisionAt ||
     featuredDecision.quote.checkedAt > decisionAt || (featuredDecision.quote.providerUpdatedAt ?? 0) > decisionAt)) return false;
   return Boolean(selected && selected.marketKey === featuredDecision.marketKey && selected.selection === featuredDecision.selection &&
-    selected.probability === featuredDecision.probability &&
+    selected.probability === featuredDecision.probability);
+}
+
+function featuredSelectionMatches({ markets, ...pick }: ReplayFeaturedPick & Pick<NovemberReplayProjection, "markets">) {
+  const { selected, featuredDecision } = pick;
+  return featuredPickMatches(pick) && (featuredDecision?.status === "abstained" || Boolean(selected &&
     markets.some(({ definition, selections }) => definition.key === selected.marketKey &&
-      selections?.some(({ key, outcomes }) => key === selected.selection && outcomes.win === selected.probability)));
+      selections?.some(({ key, outcomes }) => key === selected.selection && outcomes.win === selected.probability))));
 }
 
 function checkedStage(value: unknown) {
@@ -237,32 +243,79 @@ const broadReplayScope = activeNovemberReplayScope(
 export const activeNovemberReplaySql = Prisma.sql`(SELECT p.*,TRUE AS validIntegrity
   FROM NovemberReplayProjection p ${activeNovemberReplayFixture} ${broadReplayScope.joins} WHERE ${broadReplayScope.conditions})`;
 
-const replayFields = Prisma.sql`LEFT JOIN JSON_TABLE(${projectionBody}, '$' COLUMNS (
+function replayFields(extra: Prisma.Sql) { return Prisma.sql`LEFT JOIN JSON_TABLE(${projectionBody}, '$' COLUMNS (
   hasDecisionAt TINYINT EXISTS PATH '$.decisionAt',
   decisionAt VARCHAR(64) PATH '$.decisionAt' NULL ON EMPTY NULL ON ERROR,
   homeTeamId VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PATH '$.teams[0]' NULL ON EMPTY NULL ON ERROR,
-  awayTeamId VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PATH '$.teams[1]' NULL ON EMPTY NULL ON ERROR
-)) AS replayFields ON TRUE`;
+  awayTeamId VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PATH '$.teams[1]' NULL ON EMPTY NULL ON ERROR${extra}
+)) AS replayFields ON TRUE`; }
 // Match the original distinction between a missing key and casting a present JSON null.
 const batchReplayScope = activeNovemberReplayScope(
   Prisma.sql`CAST(CASE WHEN replayFields.hasDecisionAt=1 THEN COALESCE(replayFields.decisionAt,'null') END AS SIGNED)`,
   Prisma.sql`replayFields.homeTeamId`, Prisma.sql`replayFields.awayTeamId`);
 
-/** The public role reads only the compact projection, under the same fixture snapshot as Matches. */
-export async function readNovemberReplayProjections(tx: Tx, fixtureIds: readonly string[]): Promise<ReadonlyMap<string, NovemberReplayProjection>> {
-  const ids = [...new Set(fixtureIds)], values = new Map<string, NovemberReplayProjection>();
+async function readReplayProjectionBatches<T>(tx: Tx, fixtureIds: readonly string[], columns: Prisma.Sql, extraFields: Prisma.Sql,
+  project: (row: HistoryRow) => T): Promise<ReadonlyMap<string, T>> {
+  const ids = [...new Set(fixtureIds)], values = new Map<string, T>();
   if (ids.some((id) => !historyId.safeParse(id).success)) return deny("invalid-input");
   for (let offset = 0; offset < ids.length; offset += 100) {
     // Start each requested batch at the projection primary key before joining the larger fixture archive.
-    const rows = await tx.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT STRAIGHT_JOIN p.*,TRUE AS validIntegrity
-      FROM NovemberReplayProjection p FORCE INDEX (PRIMARY) ${activeNovemberReplayFixture} ${replayFields} ${batchReplayScope.joins}
+    const rows = await tx.$queryRaw<(HistoryRow & { fixtureId: string })[]>(Prisma.sql`SELECT STRAIGHT_JOIN ${columns}
+      FROM NovemberReplayProjection p FORCE INDEX (PRIMARY) ${activeNovemberReplayFixture} ${replayFields(extraFields)} ${batchReplayScope.joins}
       WHERE p.fixtureId IN (${Prisma.join(ids.slice(offset, offset + 100))}) AND ${batchReplayScope.conditions}`);
-    for (const row of rows) {
-      const projection = projectionFromRow(row);
-      values.set(projection.fixtureId, projection);
-    }
+    for (const row of rows) values.set(row.fixtureId, project(row));
   }
   return values;
+}
+
+/** The public role reads only the compact projection, under the same fixture snapshot as Matches. */
+export function readNovemberReplayProjections(tx: Tx, fixtureIds: readonly string[]): Promise<ReadonlyMap<string, NovemberReplayProjection>> {
+  return readReplayProjectionBatches(tx, fixtureIds, Prisma.sql`p.*,TRUE AS validIntegrity`, Prisma.empty, projectionFromRow);
+}
+
+type ReplayProjectionPick = Readonly<{ selected: Pick<NonNullable<NovemberReplayProjection["selected"]>, "marketKey" | "selection"> | null }>;
+
+function replayProjectionPickFromRow(row: HistoryRow): ReplayProjectionPick {
+  if (Number(row.validBinding) !== 1 || Number(row.hasSelected) !== 1) return deny("corrupt-record");
+  const selected = topSchema.nullable().safeParse(historyJson(row.selected));
+  if (!selected.success) return deny("corrupt-record");
+  if (Number(row.hasFeaturedDecision) === 1) {
+    const featuredDecision = localFeaturedDecisionSchema.safeParse(historyJson(row.featuredDecision));
+    const decisionAt = historyInstant.safeParse(row.decisionAt === null ? null : Number(row.decisionAt));
+    if (!featuredDecision.success || !decisionAt.success || decisionAt.data < storedClock(row.evidenceCutoffAt) ||
+        decisionAt.data >= storedClock(row.kickoffAt) || !featuredPickMatches({ selected: selected.data,
+          featuredDecision: featuredDecision.data, decisionAt: decisionAt.data })) return deny("corrupt-record");
+  } else if (!selected.data || row.cycleId === null || row.sourceRevisionId === null || !inNovember(storedClock(row.kickoffAt))) {
+    return deny("corrupt-record");
+  }
+  return { selected: selected.data && { marketKey: selected.data.marketKey, selection: selected.data.selection } };
+}
+
+/** Resolve sealed cohort membership without transferring the market archive for each fixture. */
+export function readNovemberReplayProjectionPicks(tx: Tx, fixtureIds: readonly string[]): Promise<ReadonlyMap<string, ReplayProjectionPick>> {
+  return readReplayProjectionBatches(tx, fixtureIds, Prisma.sql`p.fixtureId,p.cycleId,p.sourceRevisionId,p.kickoffAt,p.evidenceCutoffAt,
+    replayFields.hasSelected,replayFields.selected,replayFields.hasFeaturedDecision,replayFields.featuredDecision,replayFields.decisionAt,
+    (BINARY replayFields.fixtureId=BINARY p.fixtureId AND BINARY replayFields.revisionId=BINARY p.revisionId
+      AND BINARY replayFields.cycleId<=>BINARY p.cycleId AND BINARY replayFields.sourceRevisionId<=>BINARY p.sourceRevisionId
+      AND replayFields.scheduleVersion<=>p.scheduleVersion
+      AND replayFields.kickoffAt=TIMESTAMPDIFF(MICROSECOND,'1970-01-01 00:00:00.000',p.kickoffAt) DIV 1000
+      AND replayFields.evidenceCutoffAt=TIMESTAMPDIFF(MICROSECOND,'1970-01-01 00:00:00.000',p.evidenceCutoffAt) DIV 1000
+      AND replayFields.activatedAt=TIMESTAMPDIFF(MICROSECOND,'1970-01-01 00:00:00.000',p.changedAt) DIV 1000
+      AND replayFields.evidenceCutoffAt<replayFields.kickoffAt
+      AND replayFields.generatedAt BETWEEN replayFields.kickoffAt AND replayFields.activatedAt) AS validBinding`, Prisma.sql`,
+    fixtureId VARCHAR(64) PATH '$.fixtureId' NULL ON EMPTY NULL ON ERROR,
+    revisionId VARCHAR(64) PATH '$.revisionId' NULL ON EMPTY NULL ON ERROR,
+    cycleId VARCHAR(64) PATH '$.cycleId' NULL ON EMPTY NULL ON ERROR,
+    sourceRevisionId VARCHAR(64) PATH '$.sourceRevisionId' NULL ON EMPTY NULL ON ERROR,
+    scheduleVersion BIGINT PATH '$.scheduleVersion' NULL ON EMPTY NULL ON ERROR,
+    kickoffAt BIGINT PATH '$.kickoffAt' NULL ON EMPTY NULL ON ERROR,
+    evidenceCutoffAt BIGINT PATH '$.evidenceCutoffAt' NULL ON EMPTY NULL ON ERROR,
+    activatedAt BIGINT PATH '$.activatedAt' NULL ON EMPTY NULL ON ERROR,
+    generatedAt BIGINT PATH '$.generatedAt' NULL ON EMPTY NULL ON ERROR,
+    hasSelected TINYINT EXISTS PATH '$.selected',
+    selected JSON PATH '$.selected' NULL ON EMPTY NULL ON ERROR,
+    hasFeaturedDecision TINYINT EXISTS PATH '$.featuredDecision',
+    featuredDecision JSON PATH '$.featuredDecision' NULL ON EMPTY NULL ON ERROR`, replayProjectionPickFromRow);
 }
 
 type Rejection = "not-staged" | "abstained" | "missing-locked-source" | "occurrence-changed" | "source-not-api" |

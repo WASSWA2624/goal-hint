@@ -4,7 +4,7 @@ import { isPlayedFinalStatus, playedFinalFixtureStatuses, type SettlementStatus 
 import type { PredictionResult } from "../../domain/performance-summary.ts";
 import type { GoalSettlement } from "../../domain/score-distribution-markets.ts";
 import { Prisma } from "../generated/prisma/client.ts";
-import { readNovemberReplayProjections } from "../intelligence/november-replay-store.ts";
+import { readNovemberReplayProjectionPicks, readNovemberReplayProjections } from "../intelligence/november-replay-store.ts";
 import { readFeaturedSettlements, type FeaturedSettlementPick } from "./featured-settlement.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import { readFeedPerformance, restrictFeedResultSql, type FeedResultOverrides } from "./feed-performance.ts";
@@ -68,7 +68,9 @@ export async function readFeedResultOverrides(tx: Prisma.TransactionClient, sql:
     const played = (status: SettlementStatus) => status === "live" || isPlayedFinalStatus(status);
     const replayIds = defaults ? rows.filter(({ hasReplay, fixtureStatus, publishedRevisionId, cycleState }) =>
       Boolean(hasReplay) && played(fixtureStatus) && (!publishedRevisionId || cycleState === "closed")).map(({ id }) => id) : [];
-    const replay = await readNovemberReplayProjections(tx, replayIds);
+    // List membership needs the sealed replay choice. Page hydration still validates the display markets.
+    const replay = options.includeSettlements === false ? await readNovemberReplayProjectionPicks(tx, replayIds)
+      : await readNovemberReplayProjections(tx, replayIds);
     const frozen = defaults ? await readFrozenLocalFeaturedPicks(tx, rows.filter(
       ({ id, fixtureStatus, cycleState, publishedRevisionId, hasFrozen, occurrenceVoid }) =>
         !replay.has(id) && Boolean(hasFrozen) && publishedRevisionId && (Boolean(occurrenceVoid) ||

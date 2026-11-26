@@ -15,7 +15,7 @@ import { gateDetailResponse, gateFeedResponse } from '../src/domain/paywall.ts';
 import { createMysqlPublicResponseCache } from '../src/server/cache/mysql-public-cache.ts';
 import { LOCAL_FIRST_FORECAST_CASCADE } from '../src/server/fallback/fallback-contract.ts';
 import { resolveFallbackCandidate } from '../src/server/fallback/fallback-resolution.ts';
-import { readNovemberReplayProjections } from '../src/server/intelligence/november-replay-store.ts';
+import { readNovemberReplayProjectionPicks, readNovemberReplayProjections } from '../src/server/intelligence/november-replay-store.ts';
 import { encodeShadowArchive } from '../src/server/intelligence/shadow-store.ts';
 import { createMatchFeedHandler } from '../src/server/matches/feed-http.ts';
 import { createMatchFeedService } from '../src/server/matches/feed-service.ts';
@@ -61,15 +61,18 @@ async function seedFeedReplays(instance, reference, definition, fixtures) {
     const selected = { marketKey: definition.key, selection: 'away', probability: 0.8 };
     const markets = [{ definition, selected: { selection: selected.selection, probability: selected.probability },
       selections: definition.selections.map(({ key }) => ({ key, outcomes: binaryFeaturedSettlement(key === 'away' ? 0.8 : 0.1) })) }];
-    const rows = fixtures.map(({ id, kickoff, status, staleTeams }, index) => {
+    const rows = fixtures.map(({ id, kickoff, status, staleTeams, abstained }, index) => {
       const evidenceCutoffAt = kickoff - 20 * 60_000, generatedAt = kickoff + 15 * 60_000, activatedAt = kickoff + 20 * 60_000;
       const revisionId = resultHash(`feed-replay-batch:${index}`);
+      const featuredDecision = abstained
+        ? { version: localFeaturedDecisionVersion, status: 'abstained', reason: 'no-local-forecast' }
+        : { ...selected, version: localFeaturedDecisionVersion, status: 'forecast-only', reason: 'no-verified-odds' };
       const body = encodeShadowArchive({ fixtureId: id, revisionId, sourceRevisionId: null, cycleId: null,
-        kickoffAt: kickoff, scheduleVersion: null, evidenceCutoffAt, generatedAt, activatedAt, markets, selected,
-        featuredDecision: { ...selected, version: localFeaturedDecisionVersion, status: 'forecast-only', reason: 'no-verified-odds' },
+        kickoffAt: kickoff, scheduleVersion: null, evidenceCutoffAt, generatedAt, activatedAt, markets,
+        selected: abstained ? null : selected, featuredDecision,
         decisionAt: kickoff - 10 * 60_000, teams: staleTeams ? [awayTeamId, homeTeamId] : [homeTeamId, awayTeamId] });
       return { id, revisionId, kickoffAt: utcSqlDateTime(kickoff), evidenceCutoffAt: utcSqlDateTime(evidenceCutoffAt),
-        generatedAt: utcSqlDateTime(generatedAt), activatedAt: utcSqlDateTime(activatedAt), status, body };
+        generatedAt: utcSqlDateTime(generatedAt), activatedAt: utcSqlDateTime(activatedAt), status, revisionStatus: abstained ? 'abstained' : 'estimated', body };
     });
     await database.batch(`INSERT INTO FootballFixture
       (id,provider,externalId,homeTeamId,awayTeamId,seasonId,kickoff,eatDate,status,providerStatus,retrievedAt,updatedAt)
@@ -78,9 +81,9 @@ async function seedFeedReplays(instance, reference, definition, fixtures) {
     // The replay revision supplies the foreign key. The HTTP reader uses the compact projection.
     await database.batch(`INSERT INTO NovemberReplayRevision
       (id,fixtureId,kickoffAt,evidenceCutoffAt,evidenceHash,generatedAt,stagedAt,status,integrity,body)
-      VALUES (?,?,?,?,?,?,?,'estimated',SHA2(CAST(JSON_EXTRACT(?,'$') AS CHAR CHARACTER SET utf8mb4),256),JSON_EXTRACT(?,'$'))`,
+      VALUES (?,?,?,?,?,?,?,?,SHA2(CAST(JSON_EXTRACT(?,'$') AS CHAR CHARACTER SET utf8mb4),256),JSON_EXTRACT(?,'$'))`,
     rows.map((row) => [row.revisionId, row.id, row.kickoffAt, row.evidenceCutoffAt, resultHash(`evidence:${row.revisionId}`),
-      row.generatedAt, row.activatedAt, row.body, row.body]));
+      row.generatedAt, row.activatedAt, row.revisionStatus, row.body, row.body]));
     await database.batch(`INSERT INTO NovemberReplayProjection
       (fixtureId,revisionId,kickoffAt,evidenceCutoffAt,activationOperationId,changedAt,integrity,body)
       VALUES (?,?,?,?,'feed-replay-batch',?,SHA2(CAST(JSON_EXTRACT(?,'$') AS CHAR CHARACTER SET utf8mb4),256),JSON_EXTRACT(?,'$'))`,
@@ -117,6 +120,17 @@ test('replay hydration starts at the requested projection keys in bounded batche
     assert.match(sql, /WHERE p\.fixtureId IN \([^)]*\) AND p\.revisionId IS NOT NULL/u);
     assert.match(sql, /p\.integrity=SHA2\(CAST\(p\.body AS CHAR CHARACTER SET utf8mb4\),256\)/u);
     assert.match(sql, /LEFT JOIN JSON_TABLE\(JSON_UNQUOTE\(JSON_EXTRACT\(p\.body,'\$\.canonicalBody'\)\)/u);
+    assert.equal(sql.match(/JSON_EXTRACT\(p\.body,'\$\.canonicalBody'\)/gu)?.length, 1);
+  }
+  const fullStatements = statements.splice(0);
+  const picks = await readNovemberReplayProjectionPicks(tx, [...ids, ids[0]]);
+  assert.equal(picks.size, 0);
+  for (const [index, { sql, values }] of statements.entries()) {
+    assert.deepEqual(values, fullStatements[index].values);
+    assert.equal(sql.slice(sql.indexOf('WHERE p.fixtureId IN')), fullStatements[index].sql.slice(fullStatements[index].sql.indexOf('WHERE p.fixtureId IN')));
+    assert.match(sql, /SELECT STRAIGHT_JOIN p\.fixtureId,p\.cycleId,p\.sourceRevisionId/u);
+    assert.doesNotMatch(sql, /p\.\*|PATH '\$\.markets/u);
+    assert.match(sql, /selected JSON PATH '\$\.selected'/u);
     assert.equal(sql.match(/JSON_EXTRACT\(p\.body,'\$\.canonicalBody'\)/gu)?.length, 1);
   }
 });
@@ -449,10 +463,26 @@ test('November replay has one display across feed, exact outcome and detail whil
         kickoff: Date.parse('2026-11-17T08:00:00Z') + index * 60_000, status: 'finished-regulation' }));
       const today = [{ id: randomUUID(), kickoff: Date.parse('2026-11-19T08:00:00Z'), status: 'finished-regulation' },
         { id: randomUUID(), kickoff: Date.parse('2026-11-19T10:00:00Z'), status: 'live' }];
-      const excluded = [{ ...history[0], id: randomUUID(), staleTeams: true },
-        { ...history[0], id: randomUUID(), kickoff: Date.parse('2026-10-20T08:00:00Z') }];
+      const stale = { ...history[0], id: randomUUID(), staleTeams: true };
+      const abstention = { ...history[0], id: randomUUID(), abstained: true };
+      const outOfRange = { ...history[0], id: randomUUID(), kickoff: Date.parse('2026-10-20T08:00:00Z') };
+      const fixtures = [...history, ...today, stale, abstention, outOfRange];
       const reference = await p.a.query((tx) => tx.footballFixture.findUniqueOrThrow({ where: { id: fixtureId } }));
-      await seedFeedReplays(p.instance, reference, result, [...history, ...today, ...excluded]);
+      await seedFeedReplays(p.instance, reference, result, fixtures);
+
+      const ids = fixtures.map(({ id }) => id);
+      const { full, picks } = await p.a.transaction(async (tx) => ({
+        full: await readNovemberReplayProjections(tx, ids),
+        picks: await readNovemberReplayProjectionPicks(tx, ids),
+      }));
+      assert.deepEqual(picks, new Map([...full].map(([id, { selected }]) => [id, {
+        selected: selected ? { marketKey: selected.marketKey, selection: selected.selection } : null,
+      }])));
+      assert.equal(picks.size, fixtures.length - 1);
+      assert.equal(picks.has(stale.id), false);
+      assert.deepEqual(picks.get(abstention.id), { selected: null });
+      assert.deepEqual(picks.get(outOfRange.id), { selected: { marketKey: result.key, selection: 'away' } });
+
       const first = await read(), day = await read('?when=today');
       assert.deepEqual([first.range.from, first.range.to], ['2026-10-21', '2026-11-19']);
       assert.deepEqual([day.range.from, day.range.to], ['2026-11-19', '2026-11-19']);
