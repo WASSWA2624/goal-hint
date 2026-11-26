@@ -99,8 +99,8 @@ def verify_filter_form(visible, name):
         match(r'<label\b[^>]*>' + label + r'</label>', filter_form)
     match(r'<legend\b[^>]*>Probability \(%\)</legend>', filter_form)
     filter_button = match(r'<button\b[^>]*data-search-filters="[^"]*"[^>]*>[\s\S]*?</button>', filter_form).group()
-    match(r'<span\b[^>]*data-mobile-label=""[^>]*>Filters</span>', filter_button)
-    match(r'<span\b[^>]*data-desktop-label=""[^>]*>Advanced Filters</span>', filter_button)
+    match(r'<span\b[^>]*data-mobile-label="[^"]*"[^>]*>Filters</span>', filter_button)
+    match(r'<span\b[^>]*data-desktop-label="[^"]*"[^>]*>Advanced Filters</span>', filter_button)
     assert filter_form.index("data-date-strip-days") < filter_form.index("data-date-strip-calendar") < filter_form.index("data-search-filters")
     if "data-feed-performance-section" in filter_form:
         assert filter_form.index("data-feed-performance-section") < filter_form.index("data-date-strip-days")
