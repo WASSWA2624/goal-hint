@@ -96,6 +96,14 @@ A bounded diagnostic request also returned HTTP 503 after 32.43 seconds. Read-on
 
 Desktop browser checks on a populated fixture verified the two independently scrolling Match Details panes in light and dark. The checks also covered Markets & Odds, Match Statistics, Back navigation and a direct Pick History link. [Production fixture used for verification](https://goalhint.com/en/matches/fd15442b-526e-8c2e-bf40-ae9c6e7ff4d6/gent-vs-fk-crvena-zvezda).
 
+## Matches and Slips staging verification
+
+On 26 November 2026, the checksummed `8867ad87` release ran in a private staging instance against `ghprod_test`. The staging activation guard detected the public slot's switch to the separate mobile logout release `ef1b3663` during upload. The private instance used the existing staging profile and verified all 94 required MariaDB migrations. The Matches, Slips and Builder pages returned HTTP 200 with `noindex`. The one-day Matches feed, Slips API and guest session endpoint returned HTTP 200 with JSON responses.
+
+Local Chromium checks verified the responsive controls in both themes, the desktop live clock, and share retry and PNG export. The staging profile lacks public odds approval and its archive offered no shareable slips during verification. Isolated fixtures supplied valid odds and published slips for the Builder and sharing checks. Production promotion awaits owner review and rollout coordination.
+
+The release ZIP SHA-256 is `246c705750b806b093d4345a6b77e97a1f750905d0541eefdc662e55a1e4daaa`.
+
 ## Verification limits
 
 The 26 November 2026 release record documents staging verification of `a1e61cde` with migration status and a synthetic worker check, with production promotion pending at that time. The application overview in this checkout records the earlier production verification of `ee5f6a44`. This audit did not query the hosted deployments, GitHub settings or the actual scheduler. The runbooks document manual approval, upload and activation, with scripts for validation and recurring jobs. Any host-side automation beyond those records needs confirmation from the host operator. [Staging verification record](https://github.com/WASSWA2624/goal-hint/commit/8fd09bfb18cae147d8d9729f01f2b10424908c28), [earlier rollout evidence](../APP_OVERVIEW.md), [release and worker runbooks](../next-js/docs/deployment/how-to-deploy.md).

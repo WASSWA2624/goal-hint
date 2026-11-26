@@ -37,7 +37,7 @@ export default async function FixturePage({ params }: { params: Promise<{ scenar
   const bestMatchStates = matchStates.map((state, index) => index === 1
     ? { ...state, liveClock: { phase: "first-half" as const, minute: 45, stoppageMinutes: 2 } } : state);
   return <PageMain><Container $wide><Stack $gap="sm">
-    {!best && !builder && <h1>Desktop slip acceptance</h1>}
+    {!builder && <h1>Desktop slip acceptance</h1>}
     <nav aria-label="Acceptance cases">
       {scenarios.map((value) => <a key={value} href={`/${value}`}>{value}{" "}</a>)}
     </nav>

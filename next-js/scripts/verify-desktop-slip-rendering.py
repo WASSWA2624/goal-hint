@@ -79,7 +79,8 @@ def verify_frame(document, path, total="21.95", average="72.4%", count=3):
         assert re.fullmatch(r"\d{1,2}-[A-Z][a-z]{2}-\d{4}", date.text.strip()), f"{path}: hyphenated date includes year"
         assert re.fullmatch(r"\d{2}:\d{2} EAT", clock.text.strip()), f"{path}: 24-hour reporting timezone"
         assert date.attrs.get("datetime", "").endswith("Z"), f"{path}: canonical source instant"
-        assert single(row.nodes("img", "data-country-flag"), f"{path}: local country flag").attrs["src"].startswith("/flags/")
+        flag = single(row.nodes(attr="data-country-flag"), f"{path}: country flag slot")
+        assert single(flag.nodes("img"), f"{path}: local country flag").attrs["src"].startswith("/flags/")
         home = single(row.nodes(attr="data-home"), f"{path}: home")
         away = single(row.nodes(attr="data-away"), f"{path}: away")
         assert home.nodes(attr="data-team-logo") and away.nodes(attr="data-team-logo"), f"{path}: tiny team crest slots"
@@ -88,7 +89,7 @@ def verify_frame(document, path, total="21.95", average="72.4%", count=3):
         analysis = single(row.nodes("a", "data-match-analysis-link"), f"{path}: one accessible analysis link")
         assert analysis.attrs.get("aria-label") and urlsplit(analysis.attrs["href"]).path.startswith("/en/matches/"), f"{path}: canonical analysis destination"
         assert not analysis.nodes("button"), f"{path}: analysis never nests tooltip buttons"
-        assert row.nodes(attr="data-centre") and row.nodes(attr="data-score") and row.nodes(attr="data-clock"), f"{path}: dedicated score and clock anchors"
+        assert row.nodes(attr="data-centre") and row.nodes(attr="data-score"), f"{path}: dedicated score anchor"
         assert single(row.nodes(attr="data-row-odds"), f"{path}: original odds").nodes("strong"), f"{path}: numerical price"
         assert single(row.nodes(attr="data-row-probability"), f"{path}: original probability").nodes("strong"), f"{path}: numerical forecast"
         status = single(row.nodes(attr="data-match-status"), f"{path}: one clear match status")
@@ -109,7 +110,7 @@ def verify_desktop(document, path, saved=False):
         assert [row.attrs["data-outcome"] for row in rows] == ["correct", "incorrect", "void"], f"{path}: original saved outcomes"
         scores = [row.nodes(attr="data-score")[0].text for row in rows]
         assert "2–1" in scores[0] and "4–0" in scores[1] and "VS" in scores[2], f"{path}: supplied regulation scores only"
-        assert all(not row.nodes(attr="data-clock")[0].text.strip() for row in rows), f"{path}: saved result does not invent FT or elapsed minutes"
+        assert all(not row.nodes(attr="data-clock") for row in rows), f"{path}: saved result does not invent FT or elapsed minutes"
         assert all(not row.nodes(attr="data-match-label") for row in rows), f"{path}: saved outcomes have no redundant progress label"
         assert [row.nodes(attr="data-outcome-label")[0].text.strip() for row in rows] == ["Won", "Lost", "Void"], f"{path}: explicit saved selection labels"
     else:
@@ -122,8 +123,8 @@ def verify_states(document, scenario):
     best = scenario == "best-states"
     assert [row.attrs["data-match-state"] for row in rows] == ["upcoming", "live", "halftime", "finished", "finished"], "states: supplied fixture phases"
     assert [row.attrs["data-outcome"] for row in rows] == ["pending", "pending", "pending", "correct", "incorrect"], "states: original selection outcomes"
-    score_clocks = ["", "", "", "FT", "FT"] if best else ["", "30′", "HT", "FT", "FT"]
-    assert [row.nodes(attr="data-clock")[0].text.strip() for row in rows] == score_clocks, "states: score clocks appear in the appropriate rows"
+    score_clocks = ["", "", "", "FT", "FT"] if best else ["", "30:00", "HT", "FT", "FT"]
+    assert ["".join(clock.text for clock in row.nodes(attr="data-clock")).strip() for row in rows] == score_clocks, "states: score clocks appear in the appropriate rows"
     for row, score in zip(rows, ["VS", "1–0", "1–1", "2–1", "0–1"]):
         assert score in row.nodes(attr="data-score")[0].text, "states: actual supplied score"
     statuses = ["Upcoming", "45+02:00", "HT", "Won", "Lost"] if best else ["Upcoming", "Live", "Live", "Won", "Lost"]
