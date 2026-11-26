@@ -271,10 +271,27 @@ test("registration grants a single configured trial atomically on MySQL", { time
   const legacyPhone = "256700001006", legacyId = randomUUID(), at = new Date(time), passwordHash = await hashPassword(password);
   await f.database.query(tx => tx.memberAccount.create({ data: { id: legacyId, phone: legacyPhone, passwordHash,
     createdAt: at, lastSignInAt: at, phoneVerifiedAt: at, trialEligibleAt: at } }));
+  time += DAY;
   const legacy = await auth.login(legacyPhone, password, address), legacyIdentity = await sessions.verify(legacy.token);
   assert.deepEqual((await codes.subscriptionStatus(legacyIdentity)).trial, { state: "available" });
   const [first, duplicate] = await Promise.all([codes.activateTrial(legacyIdentity), codes.activateTrial(legacyIdentity)]);
-  assert.deepEqual(first, { state: "active", startsAt: at.toISOString(), endsAt: new Date(time + 3 * DAY).toISOString() });
+  const legacyEnd = new Date(+at + 3 * DAY);
+  assert.deepEqual(first, { state: "active", startsAt: at.toISOString(), endsAt: legacyEnd.toISOString() });
   assert.deepEqual(duplicate, first);
   assert.equal(await countPeriods(legacyId), 1);
+  time = +legacyEnd - 1;
+  assert.equal((await access(legacy.token)).tier, "full");
+  time = +legacyEnd;
+  assert.equal((await access(legacy.token)).tier, "free");
+  assert.deepEqual(await codes.activateTrial(legacyIdentity), { state: "unavailable" });
+
+  const expiredLegacyPhone = "256700001007", expiredLegacyId = randomUUID();
+  await f.database.query(tx => tx.memberAccount.create({ data: { id: expiredLegacyId, phone: expiredLegacyPhone, passwordHash,
+    createdAt: at, lastSignInAt: at, phoneVerifiedAt: at, trialEligibleAt: at } }));
+  const expiredLegacy = await auth.login(expiredLegacyPhone, password, address);
+  const expiredLegacyIdentity = await sessions.verify(expiredLegacy.token);
+  assert.deepEqual((await codes.subscriptionStatus(expiredLegacyIdentity)).trial,
+    { state: "expired", startsAt: at.toISOString(), endsAt: legacyEnd.toISOString() });
+  assert.deepEqual(await codes.activateTrial(expiredLegacyIdentity), { state: "unavailable" });
+  assert.equal(await countPeriods(expiredLegacyId), 0);
 });

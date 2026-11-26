@@ -51,7 +51,7 @@ const sectionOf: Record<EditableSettingField, Section> = {
   mtnEnabled: "payments", mtnNumber: "payments", mtnName: "payments", mtnMenuShortcut: "payments",
   airtelEnabled: "payments", airtelNumber: "payments", airtelName: "payments", airtelMenuShortcut: "payments",
   contactPhone: "support", whatsappPhone: "support", contactPageEmail: "support", contactPageEmailVisible: "support",
-  trialDays: "access", screenshotRetentionDays: "access", allowUnsubscribedMembers: "access",
+  trialDays: "access", screenshotRetentionDays: "access",
   copyFormat: "display", paymentNote: "display", reviewTime: "display",
   supportContacts: "support", messageTemplates: "messages",
   communityLinks: "community", communityVisible: "community", paymentAlertsEnabled: "payments", paymentAlertRepeats: "payments",
@@ -83,7 +83,7 @@ function draftOf(settings: SubscriptionSettings): Draft {
 /** Normalize before comparison; invalid values still reach the server's field validation. */
 function valueOf(field: ScalarSettingField, text: string): SubscriptionSettings[ScalarSettingField] | string {
   if (field === "communityVisible" || field === "contactPageEmailVisible" || field === "paymentAlertsEnabled" || field === "mtnEnabled"
-    || field === "airtelEnabled" || field === "allowUnsubscribedMembers") return text === "true";
+    || field === "airtelEnabled") return text === "true";
   if (phoneFields.has(field)) return text.trim() === "" ? null : normalizePhone(text) ?? text;
   if (shortcutFields.has(field)) return text.replace(/\s+/gu, "") || null;
   if (numberFields.has(field)) return /^\d+$/u.test(text.trim()) ? Number(text.trim()) : text;
@@ -327,14 +327,8 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
               <ActionButton type="button" $variant="primary" disabled={busy} onClick={() => void confirmMode()}>Confirm switch</ActionButton>
             </div></ConfirmBox>}
             <TwoUp>
-              <FieldBlock label="Verified members without a subscription" description={<>{error("allowUnsubscribedMembers")}
-                <Hint id="setting-allowUnsubscribedMembers-hint">{authCopy.freeMemberAccessHelp}</Hint></>}>
-                <select {...field("allowUnsubscribedMembers", true)}>
-                  <option value="false">Require an active access period</option><option value="true">Allow free access</option>
-                </select>
-              </FieldBlock>
               <FieldBlock label="New account free trial (days)" description={<>{error("trialDays")}
-                <Hint id="setting-trialDays-hint">Use 0 to disable trials. Applies when paid access is on and free member access is disabled.</Hint></>}>
+                <Hint id="setting-trialDays-hint">When paid access is on, trials start at account creation. Use 0 to disable new trials.</Hint></>}>
                 <input {...field("trialDays", true)} type="number" inputMode="numeric" min={settingsRules.trialDays.min} max={settingsRules.trialDays.max} step={1} />
               </FieldBlock>
             </TwoUp>

@@ -234,7 +234,7 @@ def trial_visibility(origin):
             html = visible_html(request(origin, f"/en/{route}?state={state}").text)
             if state == "trial-eligible":
                 match(r'data-free-trial="available"', html)
-                match("Get 30 days of full access", html)
+                match("Your one-time trial runs for 30 days from account creation", html)
                 match("Activate free trial", html)
             else:
                 no_match("Activate free trial", html)

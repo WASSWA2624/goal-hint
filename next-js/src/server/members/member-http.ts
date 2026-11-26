@@ -38,14 +38,15 @@ export type MemberServices = Readonly<{ config: AnalyticsConfig; settings: Setti
   offer?: (() => Promise<SubscriptionOffer | null>) | null }>;
 export type MemberServicesSource = () => Promise<MemberServices>;
 
-export async function getMemberServices(): Promise<MemberServices> {
+export async function getMemberServices({ freshSettings = false }: { freshSettings?: boolean } = {}): Promise<MemberServices> {
   const { database, config } = await getAnalyticsServices();
   let keyed = true;
   try { config.key("member-readiness", "ready"); } catch { keyed = false; }
   const { mode, checkoutReady, checkoutOrigin, secretKey } = getRuntimePolicy().flutterwave;
   const flutterwave: Parameters<typeof createCheckout>[0]["flutterwave"] = mode && secretKey
     ? { mode, checkoutReady, hostedOrigin: checkoutOrigin, client: createFlutterwaveClient(secretKey.read(), mode) } : undefined;
-  return { config, settings: database ? await settingsServiceFor(database).current() : { settings: null, source: "unavailable" },
+  const settings = database ? settingsServiceFor(database) : null;
+  return { config, settings: await (freshSettings ? settings?.currentFresh() : settings?.current()) ?? { settings: null, source: "unavailable" },
     sessions: database && keyed ? createMemberSessions({ database, config }) : null,
     payments: database && keyed ? createPayments({ database, config }) : null,
     codes: database && keyed ? createAccessCodes({ database, config }) : null,

@@ -128,7 +128,7 @@ export function createPasswordRecoveryHandler(action: RecoveryAction, source: Me
   };
 }
 
-export function createMemberSessionHandler(source: MemberServicesSource = getMemberServices) {
+export function createMemberSessionHandler(source: MemberServicesSource = () => getMemberServices({ freshSettings: true })) {
   return async (request: Request): Promise<Response> => {
     try {
       const services: MemberServices = await source();
@@ -137,7 +137,7 @@ export function createMemberSessionHandler(source: MemberServicesSource = getMem
       const administrator = !!member && !member.blocked && member.administrator === true && isMemberAdminPhone(member.phone);
       const identity = { phone: member?.phone ?? null, administrator,
         ...(!member?.blocked && member?.referralCode ? { referralCode: member.referralCode } : {}),
-        freeContentAccess: allowsContentWithoutSubscription(services.settings, !!member?.phoneVerified && !member.blocked) };
+        freeContentAccess: allowsContentWithoutSubscription(services.settings, !!member && !member.blocked) };
       const salesOpen = subscriptionCheckoutPublished(services.settings?.settings, services.config.production)
         || !!services.checkout?.flutterwaveReady && flutterwaveCheckoutPublished(services.settings?.settings,
           services.config.production && services.checkout.flutterwaveMode !== "sandbox");
@@ -158,7 +158,7 @@ export function createMemberSessionHandler(source: MemberServicesSource = getMem
       // An unavailable summary cannot grant access or override verified sign-in state.
       if (status === undefined) return json({ ...identity, subscription: null });
       // The verified session may have been removed or blocked while its subscription was being read.
-      if (!status) return json({ phone: null, administrator: false, freeContentAccess: allowsContentWithoutSubscription(services.settings, false),
+      if (!status) return json({ phone: null, administrator: false, freeContentAccess: false,
         subscription: { activeUntil: null, paymentPending: false, canSubscribe: false, ...noCredit } });
       return json({ ...identity, subscription: await withOffer({ ...subscription, ...status }) });
     } catch { return json({ phone: null, error: "unavailable" }, 503); }

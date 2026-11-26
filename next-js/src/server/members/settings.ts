@@ -18,8 +18,7 @@ import type { Prisma, SubscriptionSettings as SettingsRow } from "../generated/p
 
 /**
  * The paid-access settings service (prompts/monetization.md 5.7): one typed row, id = 1. Public reads go through a
- * per-process cache that keeps a value for 30 s, so a mode change reaches every process within 30 s. A failed read serves
- * the last good value; with none, access resolves to free, so a settings outage never opens subscriber content.
+ * per-process cache for display and member pages. Access decisions can read the saved policy directly through currentFresh.
  */
 export const settingsCacheRules = Object.freeze({ freshMs: 30_000, failureRetryMs: 5_000 });
 const settingsId = 1;
@@ -53,7 +52,6 @@ export function settingsFromRow(row: SettingsRow): SubscriptionSettings {
   if (!email.ok || typeof row.contactPageEmailVisible !== "boolean") throw new RangeError("Stored contact-page settings are invalid.");
   return Object.freeze({
     paywallMode: row.paywallMode as PaywallMode,
-    allowUnsubscribedMembers: row.allowUnsubscribedMembers,
     mtnEnabled: row.mtnEnabled, mtnNumber: row.mtnNumber, mtnName: row.mtnName, mtnMenuShortcut: row.mtnMenuShortcut,
     airtelEnabled: row.airtelEnabled, airtelNumber: row.airtelNumber, airtelName: row.airtelName, airtelMenuShortcut: row.airtelMenuShortcut,
     copyFormat: row.copyFormat as CopyFormat,
@@ -195,7 +193,7 @@ export function createSettingsService(database: DatabaseRuntime,
 
   return Object.freeze({
     environmentFields,
-    /** Settings for access decisions and member pages: cached for 30 s, the last good value on failure, else unavailable. */
+    /** Cached settings for display and member pages, with the last good value on failure. */
     current(): Promise<SettingsState> {
       if (cached && now() < cached.until) return Promise.resolve(cached.state);
       if (!loading) {
@@ -206,7 +204,7 @@ export function createSettingsService(database: DatabaseRuntime,
       return loading;
     },
 
-    /** Contact visibility reads bypass process caches, so other servers observe saved changes on the next poll. */
+    /** Access and public visibility reads observe saved changes across serving processes. */
     async currentFresh(): Promise<SettingsState> {
       try { return await stored(); }
       catch { return { settings: null, source: "unavailable" }; }

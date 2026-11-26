@@ -19,6 +19,7 @@ import { feedQueryRules, feedSortLabelKey, matchFeedPageDefaults, panelFilterCou
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { matchesHref } from "@/domain/navigation";
 import { formatOddsHundredths, oddsRules } from "@/domain/odds";
+import { withoutSubscriberFeedOracle } from "@/domain/paywall";
 import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
 import { useDeviceTimeZone } from "@/i18n/use-messages";
@@ -170,12 +171,12 @@ export function FeedFilters({ query, today, dateQuery, dateToday, scope, perform
               const base = status === "live" ? { ...compiled, interval: undefined, time: null, zone: deviceZone } : compiled;
               const day = getDateInTimeZone(utcInstantFromEpochMilliseconds(Date.now()), base.zone ?? deviceZone);
               const next = selectFeedStatus(base, status, day);
-              return feedFilterDraft(subscriberOnly && status !== "finished" ? { ...next, odds: null, marketPicks: undefined } : next, day, deviceZone);
+              return feedFilterDraft(subscriberOnly && status !== "finished" ? withoutSubscriberFeedOracle(next) : next, day, deviceZone);
             }); }} />
           <SelectInput label={messages.text("feed.sort.label")} value={`${draft.query.sort.by}-${draft.query.sort.direction}`} onChange={event => {
             const sort = feedSortOptions.find(value => `${value.by}-${value.direction}` === event.currentTarget.value);
             if (sort) setDraft(current => ({ ...current, query: { ...current.query, sort } }));
-          }}>{feedSortOptions.map(sort => <option key={`${sort.by}-${sort.direction}`} value={`${sort.by}-${sort.direction}`}>
+          }}>{feedSortOptions.map(sort => <option key={`${sort.by}-${sort.direction}`} value={`${sort.by}-${sort.direction}`} disabled={locked && sort.by === "probability"}>
             {messages.text(feedSortLabelKey(sort))}
           </option>)}</SelectInput>
         </FilterFieldRow></FilterDialogSection>

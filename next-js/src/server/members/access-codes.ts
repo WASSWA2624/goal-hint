@@ -62,7 +62,7 @@ export type CodeOutcome = Readonly<{ status: "created"; grant: AccessGrant; noti
 export type PaymentApproval = Readonly<{ network: "mtn" | "airtel"; transactionRef: string; amountReceivedUgx: number; planId?: string }>;
 type Snapshot = Readonly<{ planId?: string | null; planName: string; durationDays: number; priceUgx: number; extensionDays?: number }>;
 type Creation = Snapshot & Readonly<{ source: string; paymentSubmissionId?: string; amountReceivedUgx?: number; note?: string; termsVersion?: string | null }>;
-type AccessAccount = Pick<MemberAccount, "id" | "phone" | "trialEligibleAt" | "trialForfeitedAt">;
+type AccessAccount = Pick<MemberAccount, "id" | "phone" | "createdAt" | "trialEligibleAt" | "trialForfeitedAt">;
 type TrialPeriod = Pick<AccessCode, "startsAt" | "endsAt" | "revokedAt">;
 type TrialActivation = Extract<TrialStatus, { state: "active" }> | Readonly<{ state: "disabled" | "unavailable" | "forbidden" }>;
 const paidSources = ["payment", "credit", "renewal"];
@@ -75,7 +75,7 @@ export async function lockMemberAccount(tx: Prisma.TransactionClient, id: string
 /** The account lock serializes confirmation and renewal. */
 export async function activate(tx: Prisma.TransactionClient, accountId: string, code: Snapshot & { source?: string }, now: Date, termsVersion: string | null,
   appendAfterCurrent = false, prioritizePaid = false) {
-  const latest = code.source === "trial" ? null : await tx.accessCode.findFirst({ where: { accountId, revokedAt: null,
+  const latest = await tx.accessCode.findFirst({ where: { accountId, revokedAt: null,
     ...(code.source !== "referral" && !appendAfterCurrent ? { source: { not: "referral" } } : {}),
     ...(prioritizePaid ? { NOT: { source: "payment", priceUgx: 0 } } : {}),
   }, orderBy: { endsAt: "desc" }, select: { endsAt: true } });
@@ -110,6 +110,8 @@ function trialStatus(account: Pick<AccessAccount, "trialEligibleAt" | "trialForf
 const readTrial = (tx: Prisma.TransactionClient, accountId: string) => tx.accessCode.findFirst({ where: { accountId, source: "trial" },
   orderBy: { startsAt: "asc" }, select: { startsAt: true, endsAt: true, revokedAt: true } });
 
+const trialPeriod = (startsAt: Date, days: number) => ({ startsAt, endsAt: new Date(startsAt.getTime() + days * subscriptionDayMs) });
+
 type AccessPeriodOptions = { appendAfterCurrent?: boolean; exactRewardMs?: number };
 
 async function recordAccessPeriod(tx: Prisma.TransactionClient, account: AccessAccount, fields: Creation, actor: string, at: Date,
@@ -125,7 +127,10 @@ async function recordAccessPeriod(tx: Prisma.TransactionClient, account: AccessA
   // During a trial, keep earned days after paid access so the paid plan follows the trial.
   const prioritizePaid = trial?.state === "active", appendAfterCurrent = append && !prioritizePaid;
   // The code columns stay NOT NULL, so each period keeps a random code's salted hash; the plain code is never kept or shown.
-  const salt = newSalt(), reference = newReference(), period = await activate(tx, account.id, fields, at, fields.termsVersion ?? null, appendAfterCurrent, prioritizePaid);
+  const salt = newSalt(), reference = newReference();
+  const termsVersion = fields.termsVersion ?? null;
+  const period = fields.source === "trial" ? { ...trialPeriod(account.createdAt, fields.durationDays), activatedAt: at, termsVersion }
+    : await activate(tx, account.id, fields, at, termsVersion, appendAfterCurrent, prioritizePaid);
   if (exactRewardMs !== undefined) period.endsAt = new Date(+period.startsAt + exactRewardMs);
   const code = await tx.accessCode.create({ data: { ...fields, ...period, id: randomUUID(), accountId: account.id,
     codeSalt: salt, codeHash: hashCode(salt, generateCode()), reference: reference.slice(2), createdAt: at, createdBy: actor } });
@@ -258,8 +263,9 @@ export function createAccessCodes({ database, now = Date.now, config, notificati
     return account && !account.blockedAt && !account.erasedAt && account.phone && session?.accountId === account.id
       && session.authenticatedAt && !session.passwordResetAt && session.expiresAt > at ? account : null;
   }
-  const salesOpen = async (tx: Prisma.TransactionClient) =>
-    ((await tx.subscriptionSettings.findUnique({ where: { id: 1 }, select: { paywallMode: true } }))?.paywallMode ?? "off") !== "off";
+  const readAccessPolicy = (tx: Prisma.TransactionClient) => tx.subscriptionSettings.findUnique({ where: { id: 1 },
+    select: { paywallMode: true, trialDays: true } });
+  const salesOpen = async (tx: Prisma.TransactionClient) => (await readAccessPolicy(tx))?.paywallMode === "on";
   const grantOf = (code: AccessCode): AccessGrant => ({ id: code.id, accountId: code.accountId, reference: `C-${code.reference}`, planName: code.planName,
     startsAt: code.startsAt, endsAt: code.endsAt, source: code.source, devicesUnlocked: 0 });
 
@@ -300,6 +306,8 @@ export function createAccessCodes({ database, now = Date.now, config, notificati
         const settings = await lockSettings(tx, "member", at);
         const days = offeredTrialDays(settings);
         if (!validDays(days)) return rollback({ state: "disabled" });
+        const window = trialPeriod(account.createdAt, days);
+        if (at < window.startsAt || at >= window.endsAt) return rollback({ state: "unavailable" });
         const trial = await grantTrial(tx, account, days, at);
         return { state: "active", startsAt: trial.startsAt.toISOString(), endsAt: trial.endsAt.toISOString() };
       });
@@ -640,7 +648,7 @@ export function createAccessCodes({ database, now = Date.now, config, notificati
         const at = new Date(now());
         const session = await tx.memberSession.findUnique({ where: { tokenHash: member.tokenHash }, select: {
           accountId: true, authenticatedAt: true, passwordResetAt: true, expiresAt: true,
-          account: { select: { blockedAt: true, erasedAt: true, creditUgx: true, autoRenew: true, trialEligibleAt: true, trialForfeitedAt: true,
+          account: { select: { blockedAt: true, erasedAt: true, createdAt: true, creditUgx: true, autoRenew: true, trialEligibleAt: true, trialForfeitedAt: true,
             autoRenewPlan: { select: { priceUgx: true, active: true } },
             codes: { where: { OR: [{ revokedAt: null, endsAt: { gt: at } }, { source: "trial" }] }, orderBy: { startsAt: "asc" },
               select: { startsAt: true, endsAt: true, revokedAt: true, source: true } },
@@ -662,7 +670,15 @@ export function createAccessCodes({ database, now = Date.now, config, notificati
         // The newest report decides, unless an older report of the other purpose still waits (a plan and a top-up may both).
         const paymentPending = ["pending", "superseded"].includes(session.account.submissions[0]?.status ?? "")
           || !!session.account.submissions[0] && await tx.paymentSubmission.count({ where: { accountId: session.accountId, status: "pending" } }) > 0;
-        const activeUntil = activeSubscriptionUntil(live, at), trial = trialStatus(session.account, codes.find(code => code.source === "trial"), at);
+        const activeUntil = activeSubscriptionUntil(live, at);
+        let trial = trialStatus(session.account, codes.find(code => code.source === "trial"), at);
+        if (trial?.state === "available") {
+          const days = offeredTrialDays(await readAccessPolicy(tx));
+          if (validDays(days)) {
+            const { startsAt, endsAt } = trialPeriod(session.account.createdAt, days);
+            if (at >= endsAt) trial = { state: "expired", startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() };
+          }
+        }
         return { activeUntil, paymentPending, creditUgx, autoRenew, renewsFromCredit,
           ...(trial ? { trial } : {}),
           ...(!activeUntil && session.account._count.codes > 0 ? { expired: true } : {}) };

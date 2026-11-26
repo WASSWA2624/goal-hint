@@ -9,7 +9,10 @@ from lib.rendering import ROOT, Server, build_fixture, create_fixture, environme
 from lib.runtime import main_guard
 
 SENTINELS = r"SENTINEL-|(?<![\d.])7\.73(?!\d)"
-VIEWERS = ["anonymous", "number-only", "entitled", "expired", "revoked", "blocked", "evicted", "verified-free", "off"]
+VIEWERS = ["anonymous", "number-only", "entitled", "expired", "trial-active", "trial-expired", "manual", "revoked", "blocked", "evicted",
+           "verified-free", "off", "off-member"]
+FULL_VIEWERS = {"entitled", "trial-active", "manual", "off-member"}
+SIGNED_OUT_VIEWERS = {"anonymous", "off", "evicted"}
 PUBLIC_SLIP_FIELDS = {"rank", "matchCount", "totalOdds", "estimatedProbability", "averageProbability", "outcome", "status", "completed", "slip", "matchStates"}
 # Slip aggregates and match identities are public previews; individual picks remain private.
 PRIVATE_SLIP_VALUES = SENTINELS + r"|0\.6173|61\.7%|0\.7027|70\.3%|home-win|under-2\.5"
@@ -30,14 +33,15 @@ def verify_private_routes(origin):
 
 def verify_checkout_entry(origin):
     path = "/en/subscribe?checkout=1&return=%2Fen%2Fslips"
-    guest = request(origin, path)
-    assert guest.status == 307
-    auth = urlsplit(guest.headers["Location"])
-    assert auth.path == "/en/account" and parse_qs(auth.query) == {"view": ["login"], "checkout": ["1"], "return": ["/en/slips"]}
-    for viewer in ("test", "expired"):
+    for headers in ({}, {"x-test-viewer": "off"}):
+        guest = request(origin, path, headers=headers)
+        assert guest.status == 307
+        auth = urlsplit(guest.headers["Location"])
+        assert auth.path == "/en/account" and parse_qs(auth.query) == {"view": ["login"], "checkout": ["1"], "return": ["/en/slips"]}
+    for viewer in ("test", "expired", "verified-free"):
         page = request(origin, path, headers={"x-test-viewer": viewer})
         assert page.status == 200 and "Restoring checkout" in page.text, (viewer, "checkout flow missing")
-    for viewer in ("entitled", "verified-free", "off"):
+    for viewer in ("entitled", "off-member"):
         page = request(origin, path, headers={"x-test-viewer": viewer})
         assert page.status == 307 and page.headers["Location"] == "/en/slips", (viewer, "entitled return missing")
     unsafe = request(origin, "/en/subscribe?checkout=1&return=%2F%2Fevil.example")
@@ -48,7 +52,7 @@ def verify_checkout_entry(origin):
     no_method = request(origin, path, headers={"x-test-viewer": "expired", "x-test-sales": "production-no-payment-method"})
     assert no_method.status == 200 and "No payment method is available for this purchase." in no_method.text
     assert "Restoring checkout" not in no_method.text and 'href="/en/slips"' in no_method.text
-    return 9
+    return 10
 
 
 def prepare_fixture(scenarios):
@@ -96,7 +100,7 @@ def main():
         def verify_viewer(viewer):
             checks = 0
             headers = {"x-test-viewer": viewer}
-            full = viewer in {"entitled", "verified-free", "off"}
+            full = viewer in FULL_VIEWERS
             for name, scenario in scenarios.items():
                 detail = scenario["detail"]
                 fixture_id, path = detail["fixture"]["fixtureId"], detail["route"]["path"]
@@ -141,7 +145,7 @@ def main():
                                     assert "return=%2Fen%2Fmatches%2F" in text and "checkout=1" in text and "Unlock predictions" in text
                             if url.startswith("/en/matches?q=") and not full:
                                 assert 'Subscribers only' in text
-                                assert not re.search(r'<option[^>]*value="probability-desc"[^>]*disabled', text) and not re.search(r'<option[^>]*disabled[^>]*value="probability-desc"', text)
+                                assert re.search(r'<option(?=[^>]*value="probability-desc")(?=[^>]*disabled)[^>]*>', text)
                                 # The card element's state, not the stylesheet's selectors.
                                 states = set(re.findall(r'<div\b[^>]*\bdata-pick-state="([a-z]+)"', text))
                                 assert ("subscriber" in states) == (not free_fixture and not forecastless), (viewer, url, "locked preview state")
@@ -168,7 +172,7 @@ def main():
                         if head: assert not re.search(SENTINELS, head.group(1)), (viewer, url, "metadata sentinel leaked")
                         checks += 1
             if not full:
-                for oracle in ["picks=only", "odds=1.50-3.00", "prob=1-100", "prob=0-99"]:
+                for oracle in ["picks=only", "odds=1.50-3.00", "prob=1-100", "prob=0-99", "sort=probability"]:
                     assert request(server.origin, "/api/matches?" + oracle, headers=headers).status == 403
                     page = request(server.origin, "/en/matches?" + oracle, headers=headers)
                     assert page.status == 307, (oracle, page.status)
@@ -184,7 +188,7 @@ def main():
                 assert slips.status == 200 and not re.search(SENTINELS, slips.text)
                 builder = document(slips.text).root
                 actions = builder.nodes(attr="data-criteria-actions")
-                signed_in = viewer not in {"anonymous", "off", "evicted"}
+                signed_in = viewer not in SIGNED_OUT_VIEWERS
                 label = "Unlock slip builder"
                 assert len(actions) == 1, (viewer, "one Slip Builder action group")
                 links = builder.nodes("a", "data-slip-access-action")
@@ -200,6 +204,14 @@ def main():
                     if not signed_in:
                         assert parse_qs(destination.query).get("view") == ["login"], (viewer, "Slip Builder guests open login")
                 checks += 1
+            else:
+                slips = request(server.origin, "/en/slips?build=1", headers=headers)
+                assert slips.status == 200 and 'data-slip-state="generated"' in slips.text and "SENTINEL-BUILDER-RESULT" in slips.text, viewer
+                assert document(slips.text).root.nodes("button", "data-slip-access-action")
+                checks += 1
+            flight_build = request(server.origin, "/en/slips?build=1&_rsc", headers={**headers, "RSC": "1"})
+            assert flight_build.status == 200 and ("SENTINEL-BUILDER-RESULT" in flight_build.text) == full, viewer
+            checks += 1
             for path, extra in [("/en/best-slips", {}), ("/en/best-slips?_rsc", {"RSC": "1"}), ("/api/best-slips", {})]:
                 response = request(server.origin, path, headers={**headers, **extra})
                 assert response.status == 200, (viewer, path, response.status)
@@ -268,7 +280,7 @@ def main():
             print(f"PASS fresh access during read: {viewer} sees safe previews without unfinished predictions.", flush=True)
         checks += verify_private_routes(server.origin)
         checks += verify_checkout_entry(server.origin)
-        print(f"PASS {checks} raw HTML/RSC/API, history, insights, oracle, slips and private-route checks across nine viewer states.", flush=True)
+        print(f"PASS {checks} raw HTML/RSC/API, history, insights, oracle, slips and private-route checks across {len(VIEWERS)} viewer states.", flush=True)
         if args.serve: server.serve()
 
 

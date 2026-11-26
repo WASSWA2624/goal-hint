@@ -119,8 +119,10 @@ test("free content access is independent of subscription status and requires a c
   const member = { phone: "256700000101", blocked: false, phoneVerified: true };
   const request = new Request("http://localhost/api/account/session");
   for (const [mode, allowUnsubscribedMembers, identity, source, expected] of [
-    ["off", false, null, "stored", true], ["off", false, null, "last-good", false],
-    ["on", true, member, "stored", true], ["on", true, member, "last-good", false],
+    ["off", false, null, "stored", false], ["off", false, null, "last-good", false],
+    ["off", false, member, "stored", true], ["off", false, member, "last-good", false],
+    ["off", false, { ...member, phoneVerified: false }, "stored", true], ["off", false, { ...member, blocked: true }, "stored", false],
+    ["on", true, member, "stored", false], ["on", true, member, "last-good", false],
     ["on", true, { ...member, phoneVerified: false }, "stored", false],
     ["on", true, null, "stored", false], ["on", true, { ...member, blocked: true }, "stored", false],
     ["on", false, member, "stored", false],

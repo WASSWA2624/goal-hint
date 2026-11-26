@@ -8,10 +8,11 @@ import { slipsHref } from "@/domain/navigation";
 import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipInputFields, type SlipInputs } from "@/domain/slip-builder";
 import { SlipBuilder, type SlipCriteriaIssue } from "@/components/slips/slip-builder";
 import { createMessages } from "@/i18n/messages";
+import { MatchFeedError } from "@/server/matches/feed-error";
 import { approvedSlipJointModel, boundJointSlipModel } from "@/server/slips/joint-model";
 import { readPublicSlipBuild } from "@/server/slips/public-slips";
 import { createGatedReads, contentAccess } from "@/server/members/gated-reads";
-import { resolveViewerAccess } from "@/server/members/viewer-access";
+import { resolveViewerAccess, resolveViewerAccessFresh } from "@/server/members/viewer-access";
 import { publicOddsEnabled } from "@/server/odds/public-odds-policy";
 import { pageMetadata } from "@/server/seo/metadata";
 import { getShellInstant, PublicShell } from "./public-shell";
@@ -19,7 +20,7 @@ import { slipConfigurationIdSchema } from "@/domain/slip-configurations";
 
 type Props = Readonly<{ params: Promise<{ locale: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }>;
 
-/** Anonymous, read-only GET builds. Invalid drafts remain editable without reading the stored feed.
+/** Entitled, read-only GET builds. Invalid drafts remain editable without reading the stored feed.
  * `jointModel` only decides whether whole-slip limits are offered; the reader applies its own bound model. */
 export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShellInstant,
   completionInstant = () => utcInstantFromEpochMilliseconds(Date.now()), resolveAccess = resolveViewerAccess,
@@ -33,7 +34,7 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
       const { locale } = await params, rawQuery = await searchParams, at = await instant(), today = getReportingDate(at);
       const { configuration, ...query } = rawQuery;
       const configurationId = slipConfigurationIdSchema.safeParse(configuration).success ? configuration as string : null;
-      const access = await contentAccess(resolveAccess), showAccount = true;
+      let access = await contentAccess(resolveAccess);
       const initialInputs: SlipInputs = {};
       for (const field of slipInputFields) {
         const value = query[field];
@@ -75,7 +76,14 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
       }
       let captured = false;
       const clock = { now: () => { if (!captured) { captured = true; return at; } return completionInstant(); } };
-      const result = access.tier === "full" && !error && query.build === "1" ? await createGatedReads({ readSlips: read, resolveAccess }).slips(criteria, clock, locale) : null;
+      let result: Awaited<ReturnType<typeof read>> | null = null;
+      if (access.tier === "full" && !error && query.build === "1") {
+        try { result = await createGatedReads({ readSlips: read, resolveAccess }).slips(criteria, clock, locale); }
+        catch (issue) {
+          if (!(issue instanceof MatchFeedError) || issue.code !== "subscription-required") throw issue;
+          access = await contentAccess(resolveAccess === resolveViewerAccess ? resolveViewerAccessFresh : resolveAccess);
+        }
+      }
       const initialReuse = query.reuse === "0" ? false : query.reuse === "1"
         || Array.isArray(query.reuse) && query.reuse.length === 2 && query.reuse[0] === "0" && query.reuse[1] === "1" ? true : criteria.reuse;
       let jointEstimates = false;
@@ -83,8 +91,8 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
       catch { /* An unavailable estimator offers no whole-slip limits. */ }
       // A criteria change or browser history navigation resets uncontrolled inputs to this server-owned draft.
       const key = `${Object.keys(query).length ? "draft" : "defaults"}|${serializeSlipCriteria(criteria)}|${JSON.stringify(initialInputs)}|${initialTimeZone ?? ""}|${initialMarkets?.join(",") ?? ""}|${JSON.stringify(initialOutcomes)}|${initialReuse}|${error?.code ?? ""}|${jointEstimates}|${configurationId ?? ""}`;
-      return <PublicShell showAccount={showAccount} locale={locale} today={today} current="slips" app compact>
-        <SlipBuilder subscriberOnly={access.tier === "free"} signedIn={access.signedIn} showAccount={showAccount} key={key} locale={locale} today={today} criteria={criteria} result={result}
+      return <PublicShell showAccount locale={locale} today={today} current="slips" app compact>
+        <SlipBuilder subscriberOnly={access.tier === "free"} signedIn={access.signedIn} showAccount key={key} locale={locale} today={today} criteria={criteria} result={result}
           providerOdds={publicOddsEnabled()}
           error={error} initialInputs={initialInputs} {...(initialTimeZone ? { initialTimeZone } : {})}
           initialOutcomes={initialOutcomes} initialReuse={initialReuse} jointEstimates={jointEstimates}

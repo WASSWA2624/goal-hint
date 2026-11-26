@@ -16,7 +16,7 @@ export const parseSupportContacts = (input: unknown) => parseContacts(input, val
  * the dashboard form and the server; the migration's CHECK constraints repeat them.
  */
 export const paywallModes = Object.freeze(["off", "on"] as const);
-/** Off opens public content. On restricts subscriber features to eligible accounts. */
+/** Off opens protected features to signed-in members. On requires current access. */
 export type PaywallMode = (typeof paywallModes)[number];
 /** What the Copy number button copies; numbers are always shown as `256 772 123 456`. */
 export const copyFormats = Object.freeze(["international", "local"] as const);
@@ -38,7 +38,6 @@ export const menuShortcutPattern = /^(?:[0-9*#]|\{amount\})+$/u;
 /** Timestamps are ISO strings, so the same value serves the server, the API and the dashboard form. */
 export type SubscriptionSettings = Readonly<{
   paywallMode: PaywallMode;
-  allowUnsubscribedMembers: boolean;
   mtnEnabled: boolean;
   mtnNumber: string | null;
   mtnName: string | null;
@@ -69,10 +68,9 @@ export type SubscriptionSettings = Readonly<{
   updatedBy: string | null;
 }>;
 
-/** A missing row defaults to public access with a two-day trial configured for when paid access is on. */
+/** A missing row defaults to free member access with a two-day trial configured for Paid Access On. */
 export const defaultSubscriptionSettings: SubscriptionSettings = Object.freeze({
   paywallMode: "off",
-  allowUnsubscribedMembers: false,
   mtnEnabled: false, mtnNumber: null, mtnName: null, mtnMenuShortcut: null,
   airtelEnabled: false, airtelNumber: null, airtelName: null, airtelMenuShortcut: null,
   copyFormat: "international",
@@ -88,7 +86,7 @@ export const defaultSubscriptionSettings: SubscriptionSettings = Object.freeze({
 
 /** The fields the Settings form saves; the mode has its own two-tap control. */
 export const editableSettingFields = Object.freeze(["mtnEnabled", "mtnNumber", "mtnName", "mtnMenuShortcut", "airtelEnabled", "airtelNumber", "airtelName",
-  "airtelMenuShortcut", "copyFormat", "contactPhone", "whatsappPhone", "paymentNote", "reviewTime", "allowUnsubscribedMembers", "trialDays",
+  "airtelMenuShortcut", "copyFormat", "contactPhone", "whatsappPhone", "paymentNote", "reviewTime", "trialDays",
   "screenshotRetentionDays", "supportContacts", "messageTemplates", "communityVisible", "communityLinks", "paymentAlertsEnabled", "paymentAlertRepeats", "contactPageEmail", "contactPageEmailVisible"] as const);
 export type EditableSettingField = (typeof editableSettingFields)[number];
 export type SettingsChanges = Partial<Pick<SubscriptionSettings, EditableSettingField>>;
@@ -126,7 +124,6 @@ export const settingLabels: Readonly<Record<EditableSettingField, string>> = Obj
   paymentAlertRepeats: "Foreground sound repeats",
   paymentNote: "Extra payment note",
   reviewTime: "Typical review time",
-  allowUnsubscribedMembers: "Allow access for verified members without a subscription",
   trialDays: authCopy.trialRegistrationDays,
   screenshotRetentionDays: "Keep screenshots after approval (days)",
 });
@@ -200,9 +197,6 @@ export function parseSettingsChanges(input: unknown): ParsedChanges {
     } else if (key === "communityVisible") {
       if (typeof value === "boolean") changes[key] = value;
       else errors[key] = "Choose whether Community is visible to everyone.";
-    } else if (key === "allowUnsubscribedMembers") {
-      if (typeof value === "boolean") changes[key] = value;
-      else errors[key] = "Choose whether verified members can access subscriber features without a subscription.";
     } else if (key === "paymentAlertsEnabled" || key === "mtnEnabled" || key === "airtelEnabled") {
       if (typeof value === "boolean") changes[key] = value;
       else errors[key] = key === "paymentAlertsEnabled" ? "Choose whether to enable payment alerts." : "Choose whether to enable this payment method.";

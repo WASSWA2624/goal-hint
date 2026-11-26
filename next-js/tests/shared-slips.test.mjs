@@ -15,7 +15,7 @@ const slip = { id: 'original', totalOdds: '2.00', averageProbability: 0.7, estim
 const source = { source: 'best', day: today, slipId: slip.id };
 const request = (body, origin = 'https://goalhint.com') => new Request('https://goalhint.com/api/slips/share', {
   method: 'POST', headers: { origin, host: 'goalhint.com', 'content-type': 'application/json' }, body: JSON.stringify(body) });
-function fixture(access = async () => ({ tier: 'full' }), count = 1) {
+function fixture(access = async () => ({ tier: 'full', signedIn: true }), count = 1, completed = false) {
   let reads = 0;
   const keys = [], members = async () => ({ settings: { settings: null } });
   const services = async () => ({ config: { key: (purpose, value) => `${purpose}:${value}` }, database: { transaction: async run => run({
@@ -23,9 +23,9 @@ function fixture(access = async () => ({ tier: 'full' }), count = 1) {
     rateLimitBucket: { findUniqueOrThrow: async () => ({ count }) },
   }) } });
   const handle = createShareSlipHandler({ access, members, services, published: () => ({ day: async (day, completedOnly, band, id) => {
-    assert.deepEqual([day, completedOnly, band, id], [today, false, undefined, slip.id]);
+    assert.deepEqual([day, band, id], [today, undefined, slip.id]);
     reads++; return {
-      slips: [{ id: 'a'.repeat(64), rank: 21, publicationDay: today, publishedAt: now, slip }] }; } }) });
+      slips: completedOnly && !completed ? [] : [{ id: 'a'.repeat(64), rank: 21, publicationDay: today, publishedAt: now, slip, completed }] }; } }) });
   const number = createSlipNumberHandler({ access, members, services, now: () => now });
   return { handle, number, keys, reads: () => reads };
 }
@@ -52,22 +52,24 @@ test('published sharing resolves an existing canonical link with only a minimal 
   assert.equal(sharedSlipSchema.parse({ ...shared, url: extended }).url, extended);
   assert.equal(sharedSlipSchema.safeParse({ ...shared, url: extended + '1' }).success, false);
 });
-test('public access permits anonymous published sharing and custom image numbering under address budgets', async () => {
-  const off = async () => ({ tier: 'full', signedIn: false, mode: 'off' });
+test('guests can share completed slips and cannot export unfinished or custom slips in either mode', async () => {
   const fingerprint = { fingerprint: 'a'.repeat(64) };
-  const open = fixture(off);
-  assert.equal((await open.handle(request(source))).status, 200);
-  assert.equal((await open.number(request(fingerprint))).status, 200);
-  assert.match(open.keys[0], /^member-slip-share-address:/u);
-  assert.match(open.keys[1], /^member-slip-number-address:/u);
-  const limited = fixture(off, 121);
-  assert.equal((await limited.handle(request(source))).status, 429);
-  assert.equal(limited.reads(), 0);
-  assert.equal((await limited.number(request(fingerprint))).status, 429);
-  const closed = fixture(async () => ({ tier: 'free', signedIn: false, mode: 'on' }));
-  assert.equal((await closed.handle(request(source))).status, 403);
-  assert.equal((await closed.number(request(fingerprint))).status, 403);
-  assert.equal(closed.keys.length, 0);
+  for (const mode of ['off', 'on']) {
+    const access = async () => ({ tier: 'free', signedIn: false, mode });
+    const unfinished = fixture(access);
+    const denied = await unfinished.handle(request(source));
+    assert.equal(denied.status, 403);
+    assert.deepEqual(await denied.json(), { error: 'subscription-required' });
+    assert.equal((await unfinished.number(request(fingerprint))).status, 403);
+    assert.equal(unfinished.keys.length, 1);
+    assert.match(unfinished.keys[0], /^member-slip-share-address:/u);
+
+    const completed = fixture(access, 1, true);
+    assert.equal((await completed.handle(request(source))).status, 200);
+    const limited = fixture(access, 121, true);
+    assert.equal((await limited.handle(request(source))).status, 429);
+    assert.equal(limited.reads(), 0);
+  }
 });
 test('personal sources, foreign origins and expired access cannot export a public snapshot', async () => {
   const f = fixture();

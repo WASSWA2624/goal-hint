@@ -145,17 +145,17 @@ test("a subscription code cannot bypass password authentication or call legacy r
 test("settings fields parse to canonical numbers, tested shortcuts, trimmed text and in-range whole numbers", () => {
   const parsed = parseSettingsChanges({ mtnNumber: "0700 000 901", airtelNumber: "+256 700-000-903", contactPhone: "2560700000902",
     whatsappPhone: "447946000001", mtnName: "  TEST PAYEE  ", mtnMenuShortcut: " *165*3* {amount} # ", airtelName: "", copyFormat: "local",
-    paymentNote: "Line one\r\nLine two ", reviewTime: "Usually within 30 minutes", allowUnsubscribedMembers: true, trialDays: 0, screenshotRetentionDays: 7 });
+    paymentNote: "Line one\r\nLine two ", reviewTime: "Usually within 30 minutes", trialDays: 0, screenshotRetentionDays: 7 });
   assert.deepEqual(parsed, { ok: true, changes: { mtnNumber: OWNER_MTN, airtelNumber: "256700000903", contactPhone: OWNER_CONTACT,
     whatsappPhone: "447946000001", mtnName: "TEST PAYEE", mtnMenuShortcut: "*165*3*{amount}#", airtelName: null, copyFormat: "local",
-    paymentNote: "Line one\nLine two", reviewTime: "Usually within 30 minutes", allowUnsubscribedMembers: true, trialDays: 0, screenshotRetentionDays: 7 } });
+    paymentNote: "Line one\nLine two", reviewTime: "Usually within 30 minutes", trialDays: 0, screenshotRetentionDays: 7 } });
   assert.deepEqual(parseSettingsChanges({ mtnNumber: "", contactPhone: null }), { ok: true, changes: { mtnNumber: null, contactPhone: null } },
     "An empty number clears it.");
   const refused = parseSettingsChanges({ mtnNumber: "256254712345678", airtelNumber: "0201234567", mtnMenuShortcut: "*165*{price}#",
-    airtelMenuShortcut: "#".repeat(61), mtnName: "x".repeat(65), reviewTime: "two\nlines", copyFormat: "national", allowUnsubscribedMembers: "true",
+    airtelMenuShortcut: "#".repeat(61), mtnName: "x".repeat(65), reviewTime: "two\nlines", copyFormat: "national",
     trialDays: 367, screenshotRetentionDays: 6, paymentNote: "bell\u0007" });
   assert.equal(refused.ok, false);
-  assert.deepEqual(Object.keys(refused.errors).sort(), ["airtelMenuShortcut", "airtelNumber", "copyFormat", "allowUnsubscribedMembers", "mtnMenuShortcut",
+  assert.deepEqual(Object.keys(refused.errors).sort(), ["airtelMenuShortcut", "airtelNumber", "copyFormat", "mtnMenuShortcut",
     "mtnName", "mtnNumber", "paymentNote", "reviewTime", "screenshotRetentionDays", "trialDays"].sort());
   assert.match(refused.errors.mtnNumber, /^For a number outside Uganda, delete 256/);
   assert.deepEqual(parseSettingsChanges({ whatsappPhone: "447700900001" }), { ok: false, errors: { whatsappPhone: "Enter a mobile number that is valid for its country." } },
@@ -163,10 +163,11 @@ test("settings fields parse to canonical numbers, tested shortcuts, trimmed text
   for (const [field, values] of [["trialDays", [-1, 1.5, "2", 367]], ["screenshotRetentionDays", [366]]]) {
     for (const value of values) assert.equal(parseSettingsChanges({ [field]: value }).ok, false, `${field} = ${value}`);
   }
-  for (const [field, value] of [["allowUnsubscribedMembers", false], ["trialDays", 366], ["screenshotRetentionDays", 365]]) {
+  for (const [field, value] of [["trialDays", 366], ["screenshotRetentionDays", 365]]) {
     assert.equal(parseSettingsChanges({ [field]: value }).ok, true, `${field} = ${value}`);
   }
   assert.match(parseSettingsChanges({ paywallMode: "on" }).errors.changes, /Unknown setting: paywallMode/, "The mode is never saved with the form.");
+  assert.match(parseSettingsChanges({ allowUnsubscribedMembers: true }).errors.changes, /Unknown setting: allowUnsubscribedMembers/);
   assert.equal(parseSettingsChanges([]).ok, false);
 });
 

@@ -560,7 +560,8 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       const access = token => resolve(name => name === "goal-hint-member" ? token : undefined);
       assert.equal((await access(first.token)).tier, "free");
       mode = "off";
-      assert.equal((await access()).tier, "full");
+      assert.equal((await access()).tier, "free");
+      assert.equal((await access(first.token)).tier, "full");
       mode = "on";
       const grant = durationDays => codes.manual({ phone, durationDays, amountReceivedUgx: 0, note: "Synthetic access" }, "owner");
       assert.equal((await grant(1)).status, "created");
