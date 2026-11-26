@@ -108,6 +108,14 @@ Local verification passed 164 focused web tests, six proxy checks, 19 Chrome aut
 
 The ZIP SHA-256 is `29df4039f8f4bf36c0f942df2d09a4031d9a251f59ab7a85eddd48fa68327177`.
 
+## Connection recovery production verification
+
+On 26 November 2026, the owner confirmed the connection message, retry and logout on staging. Production activated `67ee51c6` directly from the same verified ZIP. The migration inventory matched `1d97a0c7`, which remains the previous compatible release. MariaDB verified all 94 migrations with zero pending.
+
+Production HTTPS served the expected build on Matches, Login, Best Slips, password reset and the connection page. The guest session and one-day Matches feed returned HTTP 200. The connection page, worker and V2 manifest matched staging. A guest logout form POST returned HTTP 303 to Matches with expired session cookies. Signed-in mobile logout and old-session revocation were verified on staging.
+
+Production touch Chrome verified all 27 cached entry and asset digests in a fresh dark-theme guest profile. Filtered Matches showed the connection message offline. After reconnecting, **Try again** reopened the live page at the exact original URL. The worker made no fixture snapshot request and cached no API data.
+
 ## Authentication rollout
 
 On 26 November 2026, staging and production activated `acb7ce34` from the same checksummed ZIP. Both MariaDB databases verified all 93 migrations with zero pending. Production's previous compatible release, `a1e61cde`, is available for rollback.
