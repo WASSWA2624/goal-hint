@@ -180,13 +180,14 @@ test("signed-in password changes need no current password and retain only the cu
   const f = fixture(), binding = await f.authenticate();
   const other = await f.service.login(phone, password, "198.51.100.2");
   assert.ok(await f.sessionService.verify(other.token));
-  const changed = await f.service.changePassword("new secret password", binding);
+  const changed = await f.service.changePassword("aaa", binding);
   assert.equal(changed.status, "authenticated"); assert.equal(await f.sessionService.verify(binding.token), null);
   assert.equal(await f.sessionService.verify(other.token), null, "A password change still revokes every old session");
   assert.ok(await f.sessionService.verify(changed.token));
   assert.equal(f.messages.length, 0, "A signed-in password change sends no verification code");
-  assert.equal((await f.service.login(phone, password, address)).status, "unauthorized");
-  assert.equal((await f.service.login(phone, "new secret password", address, changed.token)).status, "authenticated");
+  assert.deepEqual(await f.service.login(phone, password, address), { status: "unauthorized", message: "The phone number or password is incorrect." });
+  assert.deepEqual(await f.service.login(replacement, password, address), { status: "unauthorized", message: "The phone number or password is incorrect." });
+  assert.equal((await f.service.login(phone, "aaa", address, changed.token)).status, "authenticated");
 });
 
 test("concurrent password changes authorize one new password and revoke both old device sessions", async () => {
@@ -225,7 +226,7 @@ test("a third login signs out only the oldest session and denies its profile wri
   assert.equal((await f.service.changePassword("stale device password", first)).status, "unauthorized");
   assert.equal((await f.service.changePhone("256700000003", password, first)).status, "unauthorized");
   const response = await createMemberAuthHandler("password", async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, auth: f.service, sessions: f.sessionService }))(
-    authRequest("password", { password: "stale HTTP password", currentPassword: password }, first.token));
+    authRequest("password", { password: "stale HTTP password", confirm: "stale HTTP password" }, first.token));
   assert.equal(response.status, 401); assert.equal(response.headers.get("set-cookie"), null);
   await f.sessionService.signOut(first.token);
   assert.ok(await f.sessionService.verify(second.token), "Signing out an old cookie cannot sign out the replacement device");
@@ -572,13 +573,33 @@ test("password changes are limited across profile and code recovery for exactly 
   f.advance(DAY - 1);
   assert.equal((await f.service.changePassword("second new password", active)).status, "busy");
   f.advance(1);
-  assert.equal((await f.service.changePassword("second new password", active)).status, "authenticated");
+  const reused = await f.service.changePassword(password, active);
+  assert.equal(reused.status, "authenticated");
+  assert.equal((await f.service.login(phone, password, address, reused.token)).status, "authenticated");
 });
 
 const authRequest = (action, body, token, headers = {}) => new Request(`https://goal.test/api/account/${action}`, { method: "POST",
   headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json", ...(token ? { Cookie: `goal-hint-member=${token}` } : {}), ...headers },
   body: JSON.stringify(body) });
 const responseToken = response => /^goal-hint-member=([^;]+)/u.exec(response.headers.getSetCookie()[0] ?? "")?.[1];
+
+test("HTTP password change requires a matching nonempty confirmation and stores a one-character password securely", async () => {
+  const f = fixture(), logged = await f.authenticate();
+  const source = async () => ({ config: { production: false, cookies: { secure: false } }, auth: f.service, sessions: f.sessionService });
+  const change = createMemberAuthHandler("password", source);
+  for (const body of [{ password: "x" }, { password: "x", confirm: "y" }, { password: "", confirm: "" }]) {
+    const response = await change(authRequest("password", body, logged.token));
+    assert.equal(response.status, 400);
+    assert.equal(response.headers.get("set-cookie"), null);
+    assert.ok(await f.sessionService.verify(logged.token));
+  }
+  const response = await change(authRequest("password", { password: "x", confirm: "x" }, logged.token));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).next, "/en/account?status=password-changed");
+  assert.ok(await f.sessionService.verify(responseToken(response)));
+  assert.equal(await f.sessionService.verify(logged.token), null);
+  assert.ok(await verifyPassword("x", f.accounts.get(logged.member.accountId).passwordHash));
+});
 
 test("signed-in users change passwords in Account and cannot request or confirm recovery codes", async () => {
   const f = fixture(), logged = await f.authenticate();
@@ -658,7 +679,7 @@ test("failed login never returns a completion destination or session cookie", as
   }
 });
 
-test("explicit checkout journeys survive sign-in, signup, verification and password recovery", async () => {
+test("explicit checkout journeys survive sign-in, verification and recovery while signup opens Matches", async () => {
   const target = "/en/matches/example/home-away", token = "l".repeat(43);
   for (const [action, method, body] of [["login", "login", { phone, password }], ["register", "register", { phone, password }],
     ["verify", "verifyAccount", { code: "123456" }], ["reset-code", "verifyPasswordReset", { phone, code: "123456" }], ["reset", "resetPassword", { password }]]) {
@@ -669,15 +690,16 @@ test("explicit checkout journeys survive sign-in, signup, verification and passw
       const response = await createMemberAuthHandler(action, source)(authRequest(action, { ...body, checkout: "1", return: returnTo }));
       assert.equal(response.status, 200);
       const redirect = new URL((await response.json()).next, "https://goal-hint.test");
-      assert.equal(redirect.pathname, restricted ? "/en/account" : returnTo === target ? "/en/subscribe" : "/en/matches");
+      const keepsCheckout = action !== "register" && returnTo === target;
+      assert.equal(redirect.pathname, restricted ? "/en/account" : keepsCheckout ? "/en/subscribe" : "/en/matches");
       assert.equal(redirect.searchParams.get("view"), restricted ? "new-password" : null);
-      assert.equal(redirect.searchParams.get("checkout"), returnTo === target ? "1" : null);
-      assert.equal(redirect.searchParams.get("return"), returnTo === target ? target : null);
+      assert.equal(redirect.searchParams.get("checkout"), keepsCheckout ? "1" : null);
+      assert.equal(redirect.searchParams.get("return"), keepsCheckout ? target : null);
     }
   }
 });
 
-test("authentication preserves shared-slip journeys through restricted steps and limits payment review returns to administrators", async () => {
+test("established sign-in journeys preserve allowed returns and completed signup opens Matches", async () => {
   const shared = `/s/${"a".repeat(32)}`, review = "/admin/payments?paymentId=7d444840-9dc0-4f60-9b18-050fc43b8813";
   const token = "j".repeat(43);
   for (const action of ["login", "register", "verify", "reset"]) {
@@ -696,7 +718,7 @@ test("authentication preserves shared-slip journeys through restricted steps and
         assert.equal(url.pathname, "/en/account");
         assert.equal(url.searchParams.get("view"), flags.requiresVerification ? "verify" : "new-password");
         assert.equal(url.searchParams.get("return"), shared);
-      } else assert.equal(next, shared);
+      } else assert.equal(next, action === "register" ? "/en/matches" : shared);
     }
   }
   for (const administrator of [false, true]) for (const destination of [review, `${review}&action=approve`, "https://other.test"]) {
@@ -710,7 +732,7 @@ test("authentication preserves shared-slip journeys through restricted steps and
 test("HTTP registers a usable member immediately and preserves a restricted HttpOnly reset cookie", async () => {
   const f = fixture(), source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, auth: f.service, sessions: f.sessionService });
   const handle = (action, body, token) => createMemberAuthHandler(action, source)(authRequest(action, body, token));
-  const registration = await handle("register", { phone, password, return: "/en/matches/example/home-away" });
+  const registration = await handle("register", { phone, password, return: "/en/matches/example/home-away", checkout: "1" });
   assert.equal(registration.status, 200);
   const result = await registration.json();
   assert.equal(result.next, "/en/matches"); assert.equal(result.requiresVerification, undefined); assert.equal(result.trial.active, true);

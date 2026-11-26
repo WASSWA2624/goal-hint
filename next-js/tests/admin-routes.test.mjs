@@ -217,10 +217,11 @@ test("retired login routes redirect without credential checks or audits; logout 
   assert.equal(calls.login.length, attempts);
   assert.equal(calls.audit.length, audited, "Retired credential endpoints do not create sign-in audit records.");
   const { POST: logout } = await import(pathToFileURL(path.join(root, signOutRoute)).href);
-  for (const [label, value] of [["a live legacy session", token], ["legacy storage cannot respond", unreachable]]) {
+  for (const [label, value, next] of [["a live legacy session", token, "/en/matches"],
+    ["legacy storage cannot respond", unreachable, "/en/account?view=login&status=logout-unconfirmed"]]) {
     const before = calls.logout.length;
     const out = await logout(request(signOutRoute, "POST", { ...sameOrigin, cookie: `goal-hint-analytics=${value}` }));
-    assert.equal(out.status, 303, label); assert.equal(out.headers.get("location"), "/en/matches", label);
+    assert.equal(out.status, 303, label); assert.equal(out.headers.get("location"), next, label);
     for (const name of ["goal-hint-member", "goal-hint-analytics"]) assert.ok(out.headers.getSetCookie().some(value => value.startsWith(`${name}=;`) && value.includes("Max-Age=0")), name);
     assert.deepEqual(calls.logout.slice(before), [value]);
   }

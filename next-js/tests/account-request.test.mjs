@@ -26,6 +26,7 @@ test("account errors tolerate proxy HTML and malformed JSON while retaining serv
   }
   globalThis.fetch = async () => { throw new TypeError("Failed to fetch"); };
   await assert.rejects(accountRequest("verify", {}), /Unable to complete/);
+  await assert.rejects(accountRequest("login", {}), /Check your internet connection/);
 });
 
 test("a stalled account write times out and is never automatically retried", async t => {

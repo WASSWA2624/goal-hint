@@ -18,6 +18,8 @@ export async function verifyAuthenticationJourneys(page, { origin } = {}) {
     await page.locator('input[name="password"]').fill(password);
   };
   const submit = () => page.locator('[data-account-auth] form').first().locator('button[type="submit"]').click();
+  const confirmation = page.getByRole("dialog", { name: "Confirm your phone number" });
+  const confirmSignup = () => confirmation.getByRole("button", { name: "Confirm", exact: true }).click();
   const home = async () => {
     await page.waitForURL(origin + "/en/matches");
     await page.locator("[data-fixture-feed]").waitFor();
@@ -39,7 +41,8 @@ export async function verifyAuthenticationJourneys(page, { origin } = {}) {
     await scenario(outcome);
     await credentials();
     await submit();
-    await page.locator('[data-account-auth] [role="alert"]').waitFor();
+    const alert = page.locator('[data-account-auth] [role="alert"]');
+    await (outcome === "denied" ? alert.filter({ hasText: "The phone number or password is incorrect." }) : alert).waitFor();
     assert.equal(new URL(page.url()).pathname, "/en/account");
     assert.equal(await page.locator('[data-account-auth] button[type="submit"]').isEnabled(), true);
   }
@@ -75,8 +78,31 @@ export async function verifyAuthenticationJourneys(page, { origin } = {}) {
 
   await fresh("register");
   await credentials();
-  await submit();
-  await home();
+  const registrationPosts = [];
+  const recordRegistration = request => {
+    if (request.method() === "POST" && new URL(request.url()).pathname === "/api/account/register") registrationPosts.push(request);
+  };
+  page.on("request", recordRegistration);
+  try {
+    await submit();
+    await confirmation.getByText("+256 700 000 101", { exact: true }).waitFor();
+    await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+    await confirmation.waitFor({ state: "hidden" });
+    assert.equal(registrationPosts.length, 0);
+    await submit();
+    await confirmation.getByRole("button", { name: "Edit number", exact: true }).click();
+    await confirmation.waitFor({ state: "hidden" });
+    assert.equal(await page.locator('input[name="password"]').inputValue(), "Synthetic password");
+    await page.locator("[data-phone-input]").fill("700000102");
+    await submit();
+    await confirmation.getByText("+256 700 000 102", { exact: true }).waitFor();
+    assert.equal(registrationPosts.length, 0);
+    await confirmSignup();
+    await home();
+    assert.equal(registrationPosts.length, 1);
+    assert.equal(registrationPosts[0].postDataJSON().phone, "256700000102");
+  } finally { page.off("request", recordRegistration); }
+  checks.push("Signup confirms the normalized number and allows Cancel and Edit before its only write");
   assert.equal(await page.locator('[data-account-verification="account"]').count(), 0);
   assert.equal((await context.cookies()).find(value => value.name === "goal-hint-member")?.value, "n".repeat(43));
   await open("/en/account");
@@ -84,18 +110,24 @@ export async function verifyAuthenticationJourneys(page, { origin } = {}) {
   checks.push("Regular signup opens Matches and Account with a full session");
 
   await fresh("register");
+  await scenario("duplicate-phone");
+  await credentials();
+  await submit();
+  await confirmSignup();
+  await page.getByRole("alert").filter({ hasText: "This phone number already has an account." }).waitFor();
+  await confirmation.waitFor({ state: "hidden" });
+  assert.equal((await context.cookies()).some(value => value.name === "goal-hint-member"), false);
+  checks.push("A duplicate signup reports the conflict without creating a session");
+
+  await fresh("register");
   await scenario("automatic-trial");
   await credentials();
   await submit();
-  const trial = page.locator('[data-free-trial="active"]');
-  await trial.getByText("2 days", { exact: false }).first().waitFor();
-  assert.equal(await page.locator('[data-account-verification="account"]').count(), 0);
-  assert.equal(await page.getByRole("button", { name: "Activate free trial", exact: true }).count(), 0);
-  await trial.getByRole("link", { name: "Browse app", exact: true }).click();
+  await confirmSignup();
   await home();
   await open("/en/account?section=subscription");
   await page.locator('[data-free-trial="active"]').waitFor();
-  checks.push("Eligible signup shows its already active trial and preserves access after browsing");
+  checks.push("Eligible signup goes directly to Matches and keeps its automatically activated trial");
 
   const legacyVerification = page.locator('[data-account-verification="account"][data-verification-step="code"]');
   const startLegacyVerification = async () => {
@@ -148,6 +180,19 @@ export async function verifyAuthenticationJourneys(page, { origin } = {}) {
   await home();
   checks.push("Recovery code and replacement password finish at Matches");
 
+  await open("/en/account?section=password");
+  const passwordChange = page.locator('form[action="/api/account/password"]');
+  await passwordChange.getByLabel("New password", { exact: true }).fill("x");
+  await passwordChange.getByLabel("Confirm password", { exact: true }).fill("y");
+  const savePassword = passwordChange.getByRole("button", { name: "Save password" });
+  await savePassword.click();
+  await passwordChange.getByRole("alert").filter({ hasText: "The passwords do not match." }).waitFor();
+  await passwordChange.getByLabel("Confirm password", { exact: true }).fill("x");
+  await savePassword.click();
+  await page.waitForURL(origin + "/en/account?status=password-changed");
+  await page.locator("[data-account-details]").waitFor();
+  checks.push("Signed-in changes reject mismatches and accept a one-character password");
+
   for (const [token, selector] of [["v", '[data-account-verification="account"]'], ["r", "[data-account-reset]"]]) {
     await context.clearCookies();
     await cookie("goal-hint-member", token.repeat(43));
@@ -169,13 +214,22 @@ export async function verifyAuthenticationJourneys(page, { origin } = {}) {
       : route.abort("failed"));
     await credentials();
     await submit();
-    await page.locator('[data-account-auth] [role="alert"]').waitFor();
+    await page.locator('[data-account-auth] [role="alert"]').filter({ hasText: failure === "html"
+      ? "Unable to complete this request." : "Check your internet connection and try again." }).waitFor();
     assert.equal(await page.locator('[data-account-auth] button[type="submit"]').isEnabled(), true);
     await page.unroute(loginApi);
   }
-  await submit();
+  let loginWrites = 0;
+  await page.route(loginApi, route => { loginWrites++; return route.continue(); });
+  await page.locator('form[action="/api/account/login"]').evaluate(form => {
+    form.requestSubmit();
+    form.requestSubmit();
+  });
   await home();
+  assert.equal(loginWrites, 1);
+  await page.unroute(loginApi);
   checks.push("Malformed and interrupted responses allow an explicit successful retry");
+  checks.push("Consecutive submissions send exactly one login request");
 
   await fresh();
   await credentials("700000991", "Synthetic admin password");

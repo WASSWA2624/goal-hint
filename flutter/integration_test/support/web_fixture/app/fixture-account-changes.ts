@@ -17,7 +17,7 @@ export function fixtureAccountChange(action: "phone" | "password") {
     sessions: fixtureMemberSessions,
     auth: {
       async changePhone(phone: unknown, _password: unknown, binding: AuthBinding) { return authenticated(binding, phone); },
-      async changePassword(_password: unknown, _current: unknown, binding: AuthBinding) { return authenticated(binding); },
+      async changePassword(_password: unknown, binding: AuthBinding) { return authenticated(binding); },
     },
   }) as unknown as MemberServices;
   return createMemberAuthHandler(action, services);

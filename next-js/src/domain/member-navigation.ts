@@ -7,6 +7,7 @@ export const memberLoginPath = "/en/account?view=login";
 export const memberHomePath = "/en/matches";
 /** Ordinary logout keeps members and administrators browsing Matches with visitor access. */
 export const signedOutPath = memberHomePath;
+export const logoutUnconfirmedStatus = "logout-unconfirmed";
 
 export type MemberAuthView = "login" | "register" | "forgot" | "verify" | "new-password";
 

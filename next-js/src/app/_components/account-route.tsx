@@ -18,7 +18,7 @@ import { AccountVerificationForm, ForgotPasswordForm } from "@/components/member
 import { ApprovalRefresh } from "@/components/members/payment-status";
 import { Stack } from "@/components/ui/layout";
 import { SignOutIcon } from "@/components/ui/icons";
-import { memberLandingPath, memberNextPath, memberReturnPath, subscriptionReturnPath } from "@/domain/member-navigation";
+import { logoutUnconfirmedStatus, memberLandingPath, memberNextPath, memberReturnPath, subscriptionReturnPath } from "@/domain/member-navigation";
 import { publicSupportContactSettings } from "@/domain/public-subscription-settings";
 import { hasManualPaymentProvider } from "@/domain/subscription-settings";
 import { checkoutOpenStatuses } from "@/domain/checkout";
@@ -51,9 +51,11 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     locale: string; searchParams: Promise<Record<string, string | string[] | undefined>>;
   }) {
     const messages = createMessages(locale), parameters = await searchParams;
+    const logoutWarning = parameters.status === logoutUnconfirmedStatus
+      ? <AccountFlash role="alert">{messages.text("account.logoutUnconfirmed")}</AccountFlash> : null;
     const resolved = await services().catch(() => null);
     if (!resolved) return <PublicShell locale={locale} showAccount><Stack $gap="md">
-      <MemberNavigationRecovery /><p role="status">{messages.text("account.unavailable")}</p>
+      <MemberNavigationRecovery />{logoutWarning}<p role="status">{messages.text("account.unavailable")}</p>
     </Stack></PublicShell>;
     const settings = resolved.settings.settings;
     const token = (await cookies()).get(memberCookieName(resolved.config.production))?.value;
@@ -67,7 +69,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const mode = settings?.paywallMode;
     const session = await readMemberPageSession(resolved, token);
     if (session.kind === "unavailable") return <PublicShell locale={locale} showAccount><Stack $gap="md">
-      <MemberNavigationRecovery /><p role="status">{messages.text("account.unavailable")}</p>
+      <MemberNavigationRecovery />{logoutWarning}<p role="status">{messages.text("account.unavailable")}</p>
     </Stack></PublicShell>;
     const member = session.kind === "member" ? session.member : null;
     const canReadReferrals = member?.phoneVerified === true;
@@ -179,6 +181,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     return <PublicShell locale={locale} showAccount><Stack $gap="md">
       <MemberNavigationRecovery expectedPhone={null} />
       {!member ? <>
+        {logoutWarning}
         {parameters.status === "signed-out" && <p role="status">{messages.text("account.signedOut")}</p>}
         <AccountAuthForm key={authView} locale={locale} view={authView} returnTo={returnTo} checkout={checkout} contact={contact} />
       </> : <MemberPanel><p role="status">{messages.text("account.refused")}</p><MemberSignOut><SignOutIcon />{messages.text("auth.signOut")}</MemberSignOut></MemberPanel>}

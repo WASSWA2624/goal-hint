@@ -2,7 +2,7 @@ import { authCopy } from "../../i18n/messages/auth.ts";
 import "server-only";
 import { readReferralAttribution, referralCookieName } from "./referral-attribution.ts";
 
-import { memberAuthPath, memberLandingPath, memberReturnPath, subscriptionReturnPath } from "../../domain/member-navigation.ts";
+import { memberAuthPath, memberHomePath, memberLandingPath, memberReturnPath, subscriptionReturnPath } from "../../domain/member-navigation.ts";
 import { noCredit, type SubscriptionSummary } from "../../domain/subscription-summary.ts";
 import { clientAddress, cookie, isSameOrigin, json, readCookie, readLimitedBody } from "../http/private-http.ts";
 import { getMemberServices, type MemberServices, type MemberServicesSource } from "./member-http.ts";
@@ -16,7 +16,7 @@ import { allowsContentWithoutSubscription } from "./viewer-access.ts";
 type AuthAction = "register" | "login" | "phone" | "password" | "forgot" | "reset" | "verification" | "verify" | "reset-code";
 const fields: Readonly<Record<AuthAction, readonly string[]>> = {
   register: ["phone", "password", "return", "checkout"], login: ["phone", "password", "return", "checkout", "destination"],
-  phone: ["phone", "currentPassword"], password: ["password", "currentPassword"],
+  phone: ["phone", "currentPassword"], password: ["password", "confirm"],
   forgot: ["phone", "channel", "return", "checkout"], reset: ["password", "return", "checkout"],
   verification: ["channel", "return"], verify: ["code", "return", "checkout", "whatsappNotifications"], "reset-code": ["phone", "code", "return", "checkout"],
 };
@@ -50,6 +50,8 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
       let body;
       try { body = await bodyOf(request, fields[action]); } catch { body = null; }
       if (!body) return json({ error: "invalid-request", message: "Check the form and try again." }, 400);
+      if (action === "password" && (typeof body.confirm !== "string" || body.password !== body.confirm))
+        return failure({ status: "invalid", message: authCopy.passwordMismatch });
       if (action === "verify" && body.whatsappNotifications !== undefined && typeof body.whatsappNotifications !== "boolean")
         return json({ error: "invalid-request", message: "Choose a valid WhatsApp update preference." }, 400);
       const services = await source();
@@ -78,6 +80,7 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
       const stepReturn = checkout ? returnTo : completesSignIn ? memberLandingPath(false, returnTo) : memberReturnPath(returnTo);
       const next = result.requiresPasswordChange ? memberAuthPath("new-password", stepReturn, checkout)
         : result.requiresVerification ? memberAuthPath(action === "phone" ? "forgot" : "verify", stepReturn, checkout)
+        : action === "register" ? memberHomePath
         : completesSignIn || result.administrator ? memberLandingPath(result.administrator, returnTo, checkout)
         : memberReturnPath(returnTo) ?? (action === "phone" ? "/en/account?status=phone-changed"
         : action === "password" ? "/en/account?status=password-changed" : "/en/account");

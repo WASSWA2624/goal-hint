@@ -9,7 +9,7 @@ import { parseSubscriberDirectoryQuery } from "../../domain/subscriber-directory
 import { readSubscriberDirectory } from "./subscriber-directory.ts";
 import { codeAnswer, invalidAction, storageUnavailable, uuid } from "./codes-http.ts";
 
-const subscriberActions = new Set(["change-number", "credit-adjust", "note", "sign-out-all", "auto-renew-off", "block", "unblock", "erase", "delete"]);
+const subscriberActions = new Set(["change-number", "credit-adjust", "note", "sign-out-selected", "sign-out-all", "auto-renew-off", "block", "unblock", "erase", "delete"]);
 
 export function createSubscriberHandlers() {
   return {

@@ -62,6 +62,7 @@ const descriptions: Readonly<Record<string, ActionDescription>> = Object.freeze(
   trial_forfeited: { label: "Unused trial forfeited", category: "access" },
   trial_converted: { label: "Trial converted to paid access", category: "access" },
   member_note_changed: { label: "Account note updated", category: "accounts" },
+  member_signed_out_devices: { label: authCopy.selectedDevicesLoggedOutEvent, category: "security" },
   member_signed_out_all: { label: authCopy.allDevicesLoggedOutEvent, category: "security" },
   member_blocked: { label: "Account blocked", category: "accounts" },
   member_unblocked: { label: "Account unblocked", category: "accounts" },

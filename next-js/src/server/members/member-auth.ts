@@ -29,6 +29,7 @@ type AuthSuccess = Readonly<{ status: "authenticated"; token: string; accountId:
 type Requested = Readonly<{ status: "requested"; message: string }>;
 const invalid = (message: string): AuthFailure => ({ status: "invalid", message });
 const refused = (): AuthFailure => ({ status: "unauthorized", message: "We couldn't verify these details. Please try again." });
+const invalidCredentials = (): AuthFailure => ({ status: "unauthorized", message: authCopy.loginInvalidCredentials });
 const reserved = (): AuthFailure => ({ status: "unauthorized", message: "This number is reserved." });
 const wrongPassword = (): AuthFailure => ({ status: "unauthorized", message: "Your current password is incorrect." });
 const busy = (): AuthFailure => ({ status: "busy", message: "Too many attempts. Please wait before trying again." });
@@ -105,7 +106,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
   return Object.freeze({
     async login(phoneInput: unknown, password: unknown, address: string, previous?: string): Promise<AuthSuccess | AuthFailure> {
       const phone = normalizePhone(phoneInput);
-      if (!phone || typeof password !== "string" || password.length > memberAuthRules.passwordMax) return refused();
+      if (!phone || typeof password !== "string" || !password || password.length > memberAuthRules.passwordMax) return invalidCredentials();
       if (!await limit({ purpose: "password-login-address", value: safeAddress(address), maximum: 30, windowMs: 15 * 60_000 })
         || !await limit({ purpose: "password-login-phone", value: phone, maximum: 10, windowMs: 15 * 60_000 })) return busy();
       const administrator = adminPhone(phone), credential = administrator ? adminPasswordHash() : null;
@@ -114,16 +115,16 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
       // Retired credentials and missing accounts still perform the normal password work.
       const matches = administrator && stored ? verifyMemberAdminCredential(password, stored)
         : await verifyPassword(password, stored && isPasswordHash(stored) ? stored : await dummyHash());
-      if (!matches || !stored || !administrator && !isPasswordHash(stored) || account?.erasedAt || account?.blockedAt) return refused();
-      if (!administrator && !account) return refused();
+      if (!matches || !stored || !administrator && !isPasswordHash(stored) || account?.erasedAt || account?.blockedAt) return invalidCredentials();
+      if (!administrator && !account) return invalidCredentials();
       return decide<AuthSuccess | AuthFailure>(database, async (tx) => {
         const at = new Date(now());
         // Administrator accounts are provisioned by the configured credential, never through public registration.
         if (administrator && !account) await tx.memberAccount.upsert({ where: { phone }, create: { id: randomUUID(), phone, createdAt: at, lastSignInAt: at }, update: {} });
         const found = account ?? await tx.memberAccount.findUnique({ where: { phone } });
         const current = found ? await lockMemberAccount(tx, found.id) : null;
-        if (!current || current.phone !== phone || current.blockedAt || current.erasedAt) return refused();
-        if (administrator ? !adminPhone(phone) || adminPasswordHash() !== stored : current.passwordHash !== stored) return refused();
+        if (!current || current.phone !== phone || current.blockedAt || current.erasedAt) return invalidCredentials();
+        if (administrator ? !adminPhone(phone) || adminPasswordHash() !== stored : current.passwordHash !== stored) return invalidCredentials();
         const admitted = administrator || hasMemberAdmission(current);
         const { token, session, otherDeviceSignedOut } = await issueMemberSession(tx, current.id, at, previous, admitted);
         if (administrator) await tx.memberSession.update({ where: { tokenHash: session.tokenHash },
@@ -277,7 +278,8 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
     async changePassword(password: unknown, binding: AuthBinding): Promise<AuthSuccess | AuthFailure> {
       if (!binding.member) return refused();
       if (adminPhone(binding.member.phone)) return invalid("Administrator credentials are managed in the environment.");
-      if (!validMemberPassword(password)) return invalid("Use a password of 8–128 characters.");
+      if (typeof password !== "string" || !password || password.length > memberAuthRules.passwordMax)
+        return invalid(`Enter a new password of up to ${memberAuthRules.passwordMax} characters.`);
       // Check authorization/cooldown and reserve a bounded hash attempt before doing password work outside the lock.
       const permission = await database.transaction(async tx => {
         const at = new Date(now()), account = await currentAccount(tx, binding, at);

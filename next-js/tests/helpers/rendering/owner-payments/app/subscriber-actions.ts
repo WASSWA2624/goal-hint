@@ -1,7 +1,9 @@
 import { readJsonBody } from "@/server/admin/admin-http";
+import { subscriberDeviceId } from "@/server/admin/subscribers";
 import { json } from "@/server/http/private-http";
 import { normalizePhone } from "@/domain/phone";
 import { remainingDays } from "@/domain/subscription-period";
+import { authCopy } from "@/i18n/messages/auth";
 import { fixtureAccountForPhone, fixtureState, grantFixtureAccess, recordFixtureAudit } from "./fixture";
 
 /** Script the real admin response shapes while modifying only this acceptance process's synthetic records. */
@@ -23,6 +25,15 @@ export async function subscriberAction(request: Request) {
       recordFixtureAudit(action === "block" ? "member_blocked" : "member_unblocked", account.id);break;
     case "sign-out-all":
       state.devices = state.devices.filter(row => row.accountId !== account.id);recordFixtureAudit("member_signed_out_all", account.id);break;
+    case "sign-out-selected": {
+      if (!Array.isArray(body.value) || !body.value.length) return json({ message: authCopy.selectLoggedInDevices }, 400);
+      const ids = new Set(body.value);
+      const selected = state.devices.filter(row => row.accountId === account.id && row.expiresAt > new Date() && ids.has(subscriberDeviceId(row.tokenHash)));
+      if (selected.length !== ids.size) return json({ message: authCopy.deviceSelectionChanged }, 409);
+      state.devices = state.devices.filter(row => !selected.includes(row));
+      recordFixtureAudit("member_signed_out_devices", account.id);
+      break;
+    }
     case "change-number": {
       const phone = normalizePhone(body.newPhone);
       if (!phone || phone === account.phone || !["old-number", "payment-details"].includes(String(body.verifiedBy))) return json({ message: "Choose another number and verify the request." }, 400);

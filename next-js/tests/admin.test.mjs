@@ -114,7 +114,7 @@ test("bounded body reads stop at the limit and abandon a body that misses its de
   assert.equal((await readLimitedBody(request("/"), 10)).byteLength, 0, "No body reads as empty.");
 });
 
-test("owner sign-out deletes the session, clears the cookie, returns to the shared login and audits the member identity", async () => {
+test("owner sign-out revokes the session or reports failure, clears the cookies and audits successful revocation", async () => {
   const { resolve, calls } = fakeServices();
   const events = [];
   const logout = createOwnerLogoutHandler({ services: resolve, audit: (event) => { events.push(event); } });
@@ -126,11 +126,14 @@ test("owner sign-out deletes the session, clears the cookie, returns to the shar
   assert.deepEqual(calls.logout, [token]);
   assert.deepEqual(calls.verify, [], "The legacy owner session cannot authorize a sign-out audit.");
   assert.deepEqual(events, [{ action: "sign-out", username: "member-admin:00000000-0000-4000-8000-000000000991" }]);
-  for (const [label, scripted, cookieValue] of [["a lapsed session", fakeServices(), "s".repeat(43)], ["no session cookie", fakeServices(), null],
-    ["failing storage", fakeServices({ storageDown: true }), token], ["no owner sign-in", fakeServices({ auth: false }), token]]) {
+  for (const [label, scripted, cookieValue, next] of [
+    ["a lapsed session", fakeServices(), "s".repeat(43), "/en/matches"], ["no session cookie", fakeServices(), null, "/en/matches"],
+    ["failing storage", fakeServices({ storageDown: true }), token, "/en/account?view=login&status=logout-unconfirmed"],
+    ["no owner sign-in", fakeServices({ auth: false }), token, "/en/account?view=login&status=logout-unconfirmed"],
+  ]) {
     const ended = await createOwnerLogoutHandler({ services: scripted.resolve, audit: (event) => { events.push(event); } })(request(ownerRoutes.logout,
       { method: "POST", headers: { ...sameSite, ...(cookieValue === null ? {} : { cookie: `goal-hint-analytics=${cookieValue}` }) } }));
-    assert.equal(ended.headers.get("location"), "/en/matches", label);
+    assert.equal(ended.headers.get("location"), next, label);
     assert.match(ended.headers.getSetCookie().find(value => value.startsWith("goal-hint-analytics=")), /^goal-hint-analytics=; .*Max-Age=0$/, `${label}: the cookie is cleared regardless`);
   }
   assert.equal(events.length, 1, "Only a verified session is audited as a sign-out.");

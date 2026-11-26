@@ -1,20 +1,20 @@
 # Member account authentication
 
-Registration requires a valid mobile number and a password of 8–128 characters. Numbers are canonicalized with their country code. Passwords use salted scrypt hashes. Duplicate registration returns HTTP 409, including concurrent submissions. Registration has no address or phone attempt quota. Login, password recovery and protected account actions retain their existing limits. New regular members get a normal authenticated session immediately, without a message or administrator approval. Eligible new registrations receive the configured one-time trial in the account creation transaction. Disabled offers do not create an entitlement, and only verified members with pre-existing unused trial eligibility retain manual activation.
+Registration requires a valid mobile number and a password of 8–128 characters. The signup form shows the canonical phone number with its country code for confirmation before posting. Edit or Cancel returns to the form with the entered values. Passwords use salted scrypt hashes. Duplicate registration returns HTTP 409, including concurrent submissions. Registration has no address or phone attempt quota. Login, password recovery and protected account actions retain their existing limits. New regular members get a normal authenticated session and open Matches immediately. Eligible new registrations receive the configured one-time trial in the account creation transaction. Disabled offers do not create an entitlement, and only verified members with pre-existing unused trial eligibility retain manual activation.
 
 Phone fields throughout the app share a country selector with flags and a separate national-number input. Countries can be searched by name, abbreviation or calling code; requests still submit the canonical full number, including the selected country code.
 
-Completing signup, member login, legacy account verification or password reset redirects to Matches (`/en/matches`). Canonical shared-slip journeys return to that slip. A legacy restricted session can enter an already-delivered six-digit code, choose Forgot password for the registered number, or return to Login. Restricted cookies cannot access private member content, payment submissions, profile changes, or administrator pages.
+Successful signup opens Matches (`/en/matches`) for every entry point. Existing-member login, legacy account verification and password reset default to Matches and preserve eligible checkout and shared-slip return paths. A legacy restricted session can enter an already-delivered six-digit code, choose Forgot password for the registered number, or return to Login. Restricted cookies cannot access private member content, payment submissions, profile changes, or administrator pages.
 
 Login and Register use the canonical Account URLs. A signed-out Subscribe visit redirects to Login; verification-only and reset-only sessions resume their required Account form. Pricing and subscription availability do not decide whether someone is signed in. Failed session reads show the existing unavailable message instead of treating the visitor as signed out. An authenticated member opening Login/Register goes to Matches (or their shared slip); the plain Account URL still opens their account workspace. Verification's Back to login clears the restricted session and returns to Login, while ordinary logout returns to Matches.
 
-Account writes have a bounded request deadline, retain inline server errors, and handle non-JSON proxy failures without navigating to a malformed URL. They are never automatically retried. Identity changes observed on tab focus or page restoration refresh private page content as well as the header.
+Account writes have a bounded request deadline, retain inline server errors, and handle non-JSON proxy failures without navigating to a malformed URL. The login form allows one in-flight submission and shows connection-specific feedback on transport failures. Identity changes observed on tab focus or page restoration refresh private page content as well as the header.
 
 ## Password changes and recovery
 
 Forgot password is available only while signed out. A signed-in recovery link
 opens Account → Change password, which uses the authenticated session and asks
-only for a new password and confirmation, without a current password or code. Recovery request/code-confirmation APIs reject authenticated
+for a matching new password and confirmation. The form and endpoint accept nonempty passwords up to 128 characters, including repeated characters and previously used passwords. Recovery request/code-confirmation APIs reject authenticated
 cookies before sending or consuming a code. Signed-out and reset-only sessions
 retain the existing delivered-code recovery flow. Saving a password rotates the
 current cookie, keeps that device signed in and revokes every other session.
@@ -27,6 +27,8 @@ A phone-number account can have two authenticated, unexpired sessions. A success
 Incorrect credentials, blocked/throttled attempts and rolled-back login transactions preserve existing sessions. Restricted verification and reset-only sessions cannot evict authenticated sessions. Completing phone verification, changing a password/phone or completing password recovery still rotates authorization and revokes prior sessions for security. Separate browser profiles and in-app browsers count as separate sessions; tabs sharing a cookie share one session.
 
 Both signed-in devices inherit the account’s active subscription and share its expiry. Administrators and normal users use the same phone-and-password login form and the same two-session policy. Token hashing, 90-day rolling server expiry, daily touch and existing expired-row maintenance remain unchanged.
+
+Admin → Subscribers → Log out devices revokes selected active sessions for that subscriber. The all-devices action also remains available. Protected pages and APIs check the current stored session.
 
 ## Legacy account verification
 
@@ -51,7 +53,7 @@ Everyone signs in at `/en/account?view=login`. The server determines the role af
 
 Configure server-only `GOAL_HINT_ADMIN_PHONES` as a JSON array of canonical numbers and `GOAL_HINT_ADMIN_PASSWORD` as their shared private password of 8–128 characters. `GOAL_HINT_ANALYTICS_SECRET` must be a strong private secret in production. Public registration and member recovery cannot provision or reset an administrator. Removing a configured number or rotating the password withdraws its existing administrator sessions.
 
-The separate admin/analytics username login is retired. Legacy login POST endpoints issue a fixed HTTP 303 to the shared form without accepting or forwarding credentials. Old owner cookies cannot authorize any dashboard or change an account's role. A successful account login clears the old cookie; sign-out clears both account and legacy owner cookies even during storage failures. Existing legacy session tables remain available for cleanup, with no schema migration required. Administrator login retains the analytics browser-exclusion cookie.
+The separate admin/analytics username login is retired. Legacy login POST endpoints issue a fixed HTTP 303 to the shared form without accepting or forwarding credentials. Old owner cookies cannot authorize any dashboard or change an account's role. A successful account login clears the old cookie. Sign-out clears both cookies during storage failures and reports unconfirmed server revocation. Existing legacy session tables remain available for cleanup. Administrator login retains the analytics browser-exclusion cookie.
 
 ## API
 
@@ -59,14 +61,14 @@ All writes require same-origin requests. Responses are private and not cached; c
 
 | Endpoint | Request | Success |
 | --- | --- | --- |
-| `POST /api/account/register` | `{phone,password,return?}` | `{next,phone,trial?}` plus normal member cookie |
+| `POST /api/account/register` | `{phone,password}` | `{next,phone,trial?}` plus normal member cookie. `next` is Matches. |
 | `POST /api/account/login` | `{phone,password,return?}` | `{next,phone,...}` plus appropriate cookie |
 | `POST /api/account/verification` | Legacy delivery request | Retired with recovery guidance |
 | `POST /api/account/verify` | `{code,return?}` with pending cookie | Normal member cookie and optional active-trial metadata |
 | `POST /api/account/forgot` | `{phone,channel,return?}` | Generic recovery acknowledgement |
 | `POST /api/account/reset-code` | `{phone,code,return?}` | Reset-only cookie |
 | `POST /api/account/reset` | `{password,return?}` with reset-only cookie | New member cookie |
-| `POST /api/account/password` | `{password}` with authenticated member cookie | Fresh current-device cookie; all previous sessions revoked |
+| `POST /api/account/password` | `{password,confirm}` with authenticated member cookie | Fresh current-device cookie and revocation of all previous sessions |
 | `POST /api/account/phone` | `{phone,currentPassword}` | Restricted cookie for a changed phone |
 | `GET /api/account/session` | — | Admitted account phone and role, plus a subscription summary when available. An unavailable summary is `null`. An expired or revoked session has no account identity. |
 | `POST /api/account/sign-out` | Optional fixed `?destination=login` for leaving verification | Clear cookies and end session; Matches by default, Login for that fixed intent |

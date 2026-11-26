@@ -18,6 +18,7 @@ import { memberLoginPath, signedOutPath } from "../../domain/member-navigation.t
 import { clientAddress, cookie, empty, isSameOrigin, json, privateHeaders, readCookie, readLimitedBody, redirect } from "../http/private-http.ts";
 import { verifyMemberAdminSession } from "../members/member-admin-access.ts";
 import { createMemberSessions, memberCookieName } from "../members/member-sessions.ts";
+import { memberLogoutResponse, revokeLogoutSession } from "../members/member-logout.ts";
 
 // Moved to the shared private helpers; re-exported so analytics callers are unchanged.
 export { clientAddress, cookie, empty, isSameOrigin, json, privateHeaders, readCookie, readLimitedBody, redirect };
@@ -141,20 +142,18 @@ export function createLogoutHandler(services: () => Promise<AnalyticsServices> =
   { audit }: SignInOptions = {}) {
   return async function POST(request: Request): Promise<Response> {
     if (!isSameOrigin(request)) return empty(403);
-    const resolved = await services(), { config, auth } = resolved;
+    const resolved = await services().catch(() => null);
+    const config = resolved?.config ?? await getAnalyticsConfig();
     const token = readCookie(request, config.cookies.session);
     // The audit names whose session ended; reading it must not extend the session about to be deleted.
     const memberName = memberCookieName(config.production), memberToken = readCookie(request, memberName);
-    const admin = audit ? await verifyAdminSession(resolved, memberToken) : null;
-    try {
-      await auth?.logout(token);
-      if (admin) await report(audit, { action: "sign-out", username: admin.username });
-    } catch { /* The cookie is cleared regardless. */ }
-    if (memberToken && resolved.database) {
-      try { await createMemberSessions({ database: resolved.database, config }).signOut(memberToken); } catch { /* Clear the cookie during an outage too. */ }
-    }
-    return redirect(signedOutPath, [cookie(config, config.cookies.session, "", 0),
-      cookie(config, memberName, "", 0, "Lax")]);
+    const admin = audit && resolved ? await verifyAdminSession(resolved, memberToken) : null;
+    const sessions = resolved?.database ? createMemberSessions({ database: resolved.database, config }) : null;
+    const legacyRevoked = await revokeLogoutSession(token, resolved?.auth?.logout);
+    const memberRevoked = await revokeLogoutSession(memberToken, sessions?.signOut);
+    if (admin && memberRevoked) await report(audit, { action: "sign-out", username: admin.username });
+    return memberLogoutResponse(request, signedOutPath, [cookie(config, config.cookies.session, "", 0),
+      cookie(config, memberName, "", 0, "Lax")], memberRevoked && legacyRevoked);
   };
 }
 

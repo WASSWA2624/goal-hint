@@ -6,6 +6,7 @@ import { normalizePhone, type MobileNetwork } from "@/domain/phone";
 import { chainPeriods, codeStatus, remainingDays, subscriptionDayMs } from "@/domain/subscription-period";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { walletRules } from "@/domain/wallet";
+import { authCopy } from "@/i18n/messages/auth";
 import type { AdminReply, postAdmin } from "../admin-form";
 
 export type SubscriberReviewRecord = OwnerAccount & Readonly<{ network: MobileNetwork | null; detail: OwnerSubscriber }>;
@@ -60,7 +61,7 @@ function seedSubscribers(): SubscriberReviewRecord[] {
       submissions: index % 4 !== 3 ? [{ id: id(500 + index), reference: `P-SAMPLE${String(index + 1).padStart(2, "0")}`,
         status: state === 4 ? "pending" : "approved", purpose: "plan", planName: plan.name, claimedAmountUgx: plan.priceUgx,
         amountReceivedUgx: state === 4 ? null : plan.priceUgx, submittedAt: instant(-2 * subscriptionDayMs) }] : [],
-      devices: Array.from({ length: deviceCount }, (_, device) => ({ createdAt: instant(-(device + 3) * subscriptionDayMs),
+      devices: Array.from({ length: deviceCount }, (_, device) => ({ id: `${accountId}-${device}`, createdAt: instant(-(device + 3) * subscriptionDayMs),
         lastSeenAt: lastSignInAt, expiresAt: instant(60 * subscriptionDayMs) })),
       creditUgx, autoRenew: !erased && !blocked && index % 4 === 0, autoRenewPlanName: !erased && !blocked && index % 4 === 0 ? plan.name : null,
       wallet: creditUgx ? [{ id: id(700 + index), kind: creditUgx < 0 ? "reversal" : "topup", amountUgx: creditUgx, balanceAfter: creditUgx,
@@ -181,6 +182,12 @@ export function useSubscriberDemo() {
     }
     if (body.action === "sign-out-all") {
       update(account.id, { ...detail, devices: [] }); return answer({ status: "saved", sessionsDeleted: detail.devices.length });
+    }
+    if (body.action === "sign-out-selected") {
+      if (!Array.isArray(body.value) || !body.value.length) return invalid(authCopy.selectLoggedInDevices);
+      const selected = new Set(body.value), devices = detail.devices.filter(device => !selected.has(device.id));
+      if (detail.devices.length - devices.length !== selected.size) return refused(authCopy.deviceSelectionChanged);
+      update(account.id, { ...detail, devices }); return answer({ status: "saved" });
     }
     if (body.action === "auto-renew-off") {
       update(account.id, { ...detail, autoRenew: false, autoRenewPlanName: null }); return answer({ status: "saved" });

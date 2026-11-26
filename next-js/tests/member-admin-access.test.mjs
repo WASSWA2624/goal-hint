@@ -145,6 +145,15 @@ test("logout from either dashboard revokes the member session so a copied cookie
   }
 }));
 
+test("dashboard logout clears the cookies and reports when session storage is unavailable", () => allowlist(async () => {
+  const f = fixture(), handler = createLogoutHandler(async () => ({ ...f.services, database: null }));
+  const response = await handler(request("POST", { ...sameOrigin, accept: "application/json" }));
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "logout-unconfirmed");
+  assert.ok(response.headers.getSetCookie().some(value => /^goal-hint-member=; .*Max-Age=0/u.test(value)));
+  assert.equal(response.headers.get("clear-site-data"), '"cache"');
+}));
+
 test("allowlisted authenticated members receive full content without a subscription while ordinary no-password rows remain invalid", () => allowlist(async () => {
   const at = new Date(), row = { accountId: randomUUID(), phone, passwordHash: null, adminPasswordVersion: key("admin-password-version", credential), blockedAt: null, lastSeenAt: at, entitled: 0 };
   let legacy = false, erased = false, expired = false, unavailableSettings = false, reads = 0;

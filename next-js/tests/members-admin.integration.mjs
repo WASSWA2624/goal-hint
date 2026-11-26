@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
 import { randomUUID,createHash } from "node:crypto";
 import test from "node:test";
-import {createSubscribers,revenueBounds} from "../src/server/admin/subscribers.ts";
+import {createSubscribers,revenueBounds,subscriberDeviceId} from "../src/server/admin/subscribers.ts";
+import { createSubscriberHandlers } from "../src/server/admin/subscribers-http.ts";
 import {createMembersPurge} from "../src/server/members/purge.ts";
 import {createAccessCodes,newReference,newSalt,hashCode,generateCode} from "../src/server/members/access-codes.ts";
 import {createAuthenticatedTestSessions as createMemberSessions} from "./helpers/member-fixtures.mjs";
 import {createPayments} from "../src/server/members/payments.ts";
 import {createPaymentReview} from "../src/server/admin/payment-review.ts";
 import {takeMemberLimit} from "../src/server/members/rate-limit.ts";
+import { createMemberSessionHandler } from "../src/server/members/member-auth-http.ts";
+import { memberTokenHash } from "../src/server/members/member-sessions.ts";
 import {paidDatabase} from "./helpers/paid-database.mjs";
 import {jpeg} from "./helpers/payment-fixtures.mjs";
 import {silentPaymentNotifications} from "./helpers/payment-notification-fixtures.mjs";
@@ -53,6 +56,55 @@ test("subscriber management, accounting and retention on restricted MySQL",{time
   const kept=await db.query(tx=>tx.paymentSubmission.findUniqueOrThrow({where:{id:p.id}}));assert.equal(kept.payerPhone,null);assert.equal(kept.rejectText,null);assert.equal(kept.amountReceivedUgx,5000);assert.equal(kept.transactionRef,"ERASEMETADATA");assert.equal(kept.planName,"Weekly");assert.equal(await db.query(tx=>tx.accessCode.count({where:{accountId:who.accountId,note:{not:null}}})),0);
   const audit=await members.audit();for(const action of ["member_note_changed","member_blocked","member_unblocked","member_erased"])assert.ok(audit.some(r=>r.action===action));assert.ok(!JSON.stringify(audit).includes(who.phone));assert.doesNotMatch(JSON.stringify(audit),/codeHash|codeSalt/);assert.equal((await members.audit("member_erased")).length,1);
  });
+ await t.test("administrator device selection revokes only current sessions of the chosen account", async subtest => {
+  const previousClock = clock;
+  subtest.after(() => { clock = previousClock; });
+  clock = Date.now();
+  const phone = `25670000${++n}`;
+  const kept = await sessions.signIn(phone, "unknown");
+  clock += 1000;
+  const selected = await sessions.signIn(phone, "unknown");
+  const other = await sessions.signIn(`25670000${++n}`, "unknown");
+  const { accountId } = await sessions.verify(selected.token);
+  const otherMember = await sessions.verify(other.token);
+  const restrictedHash = memberTokenHash("synthetic restricted signup session"), expiredHash = memberTokenHash("synthetic expired session");
+  const sessionTimes = { accountId, createdAt: new Date(clock - 2 * DAY), lastSeenAt: new Date(clock - 2 * DAY) };
+  await db.query(tx => tx.memberSession.createMany({ data: [
+    { ...sessionTimes, tokenHash: restrictedHash, expiresAt: new Date(clock + DAY) },
+    { ...sessionTimes, tokenHash: expiredHash, authenticatedAt: sessionTimes.createdAt, expiresAt: new Date(clock - DAY) },
+  ] }));
+  const devices = (await members.detail(accountId)).devices;
+  assert.equal(devices.length, 2);
+  const selectedId = devices[0].id, otherId = (await members.detail(otherMember.accountId)).devices[0].id;
+  assert.notEqual(selectedId, selected.token);
+  assert.notEqual(selectedId, memberTokenHash(selected.token));
+
+  const handler = createSubscriberHandlers().POST;
+  const post = body => handler({ services: { database: db, config }, owner: { username: "owner" },
+    request: new Request(`http://synthetic.local/api/admin/subscribers/${accountId}`, { method: "POST",
+      headers: { "content-type": "application/json" }, body: JSON.stringify(body) }) });
+  assert.equal((await post({ action: "sign-out-selected", value: [] })).status, 400);
+  for (const outsideSelection of [otherId, subscriberDeviceId(restrictedHash), subscriberDeviceId(expiredHash), memberTokenHash(selected.token)]) {
+    assert.equal((await post({ action: "sign-out-selected", value: [selectedId, outsideSelection] })).status, 409);
+    assert.ok(await sessions.verify(selected.token));
+  }
+  assert.equal((await post({ action: "sign-out-selected", value: [selectedId] })).status, 200);
+  assert.equal((await post({ action: "sign-out-selected", value: [selectedId] })).status, 409);
+  const readSession = createMemberSessionHandler(async () => ({ config: { production: false }, settings: { settings: null }, sessions }));
+  const publicIdentity = async token => (await (await readSession(new Request("http://synthetic.local/api/account/session", {
+    headers: { cookie: `goal-hint-member=${token}` },
+  }))).json()).phone;
+  assert.equal(await publicIdentity(selected.token), null);
+  assert.equal(await publicIdentity(kept.token), phone);
+  assert.equal(await publicIdentity(other.token), otherMember.phone);
+  assert.equal(await db.query(tx => tx.memberSession.count({ where: { tokenHash: { in: [restrictedHash, expiredHash] } } })), 2);
+  const audit = await db.query(tx => tx.ownerAuditEvent.findMany({ where: { accountId, action: "member_signed_out_devices" } }));
+  assert.equal(audit.length, 1);
+  assert.deepEqual(audit[0].details, { sessionsDeleted: 1 });
+  assert.equal((await post({ action: "sign-out-all" })).status, 200);
+  assert.equal(await db.query(tx => tx.memberSession.count({ where: { accountId } })), 0);
+  assert.equal(await publicIdentity(other.token), otherMember.phone);
+ });
  await t.test("number changes require verification, revoke every old period and transfer account access without returning a credential",async()=>{
   const who=await member();const first=await manual(who),second=await manual(who);const target=`25670000${++n}`;
   assert.equal((await codes.changeNumber(who.accountId,{newPhone:target},"owner")).status,"invalid");const moved=await codes.changeNumber(who.accountId,{newPhone:target,verifiedBy:"old-number"},"owner");assert.equal(moved.status,"created");assert.equal((await db.query(tx=>tx.memberAccount.findUniqueOrThrow({where:{id:moved.grant.accountId}}))).phone,target);
@@ -94,8 +146,9 @@ test("subscriber management, accounting and retention on restricted MySQL",{time
   const address="198.51.100.51";await db.transaction(tx=>takeMemberLimit(tx,config,{purpose:"synthetic-hour",value:address,maximum:10,windowMs:HOUR},new Date(base)));
   const row=await db.query(tx=>tx.rateLimitBucket.findUniqueOrThrow({where:{key:config.key("member-synthetic-hour",address)}}));assert.equal(+row.lockedUntil,Math.floor(base/HOUR)*HOUR+HOUR);assert.ok(!JSON.stringify(row).includes(address));
  });
- await t.test("subscriber HTTP requires explicit verification and confirmation, keeps searches in bodies and returns access without code delivery",async()=>{
-  const {createSubscriberHandlers}=await import("../src/server/admin/subscribers-http.ts");const who=await member();await manual(who);const handler=createSubscriberHandlers().POST;
+ await t.test("subscriber HTTP requires explicit verification and confirmation, keeps searches in bodies and returns access without code delivery",async subtest=>{
+  const previousClock=clock; subtest.after(()=>{ clock=previousClock; }); clock=Date.now();
+  const who=await member();await manual(who);const handler=createSubscriberHandlers().POST;
   const context=(path,body)=>({services:{database:db,config:{...config,production:false}},owner:{username:"owner"},request:new Request(`http://synthetic.local/api/admin/subscribers${path}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)})});
   const searched=await handler(context("",{search:who.phone}));assert.equal(searched.status,200);assert.equal((await searched.json()).accounts[0].id,who.accountId);
   const newPhone=`25670000${++n}`;for(const invalid of [{action:"change-number",newPhone,confirmed:true},{action:"change-number",newPhone,verifiedBy:"old-number",confirmed:false},{action:"erase",confirmed:false}])assert.equal((await handler(context(`/${who.accountId}`,invalid))).status,400);

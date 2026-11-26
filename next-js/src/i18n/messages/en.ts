@@ -1,7 +1,7 @@
 import { performanceMessages } from "./performance.ts";
 import { liveMatchMessages } from "./live-match.ts";
 import { freeTrialMessages } from "./free-trial.ts";
-import { authLabels, authMessages } from "./auth.ts";
+import { authCopy, authLabels, authMessages } from "./auth.ts";
 import { fieldShortForms, predictionShortForms } from "../../domain/betting-short-forms.ts";
 
 // Shared by every client component. Information-page prose lives in ../content-messages.ts (server-only);
@@ -316,7 +316,7 @@ export const en = {
   "account.confirmPassword": "Confirm new password",
   "account.repeatPassword": "Confirm password",
   "account.passwordHint": "Use 8–128 characters.",
-  "account.passwordMismatch": "The passwords do not match.",
+  "account.passwordMismatch": authCopy.passwordMismatch,
   "account.savePhone": "Save new phone",
   "account.savePassword": "Save password",
   "account.phoneChanged": "Phone number changed.",
@@ -335,6 +335,9 @@ export const en = {
   "account.resetMessage": "Hello, please reset my Goal Hint password.",
   "account.contactAdmin": "Contact the admin for help",
   "account.registerHelp": "Create your account with your phone number and a password.",
+  "account.confirmSignupPhone": "Confirm your phone number",
+  "account.editSignupPhone": "Edit number",
+  "account.confirmSignup": "Confirm",
   "account.verifyAccount": "Verify phone",
   "account.verifyCode": "Verify",
   "account.verificationSteps": "Verification steps",
@@ -373,6 +376,7 @@ export const en = {
   "account.phoneHint": "Use your phone number with its country code.",
   "account.signedInAs": "Logged in as {phone}",
   "account.signedOut": "Logged out.",
+  "account.logoutUnconfirmed": authCopy.logoutUnconfirmed,
   "account.signedOutBrowsing": "Logged out. You can keep browsing matches.",
   "account.getAccess": "Get access",
   "account.terms": "Terms",

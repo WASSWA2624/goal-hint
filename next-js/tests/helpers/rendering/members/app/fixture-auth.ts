@@ -8,7 +8,7 @@ import { fixtureRegistrationTrial } from "./fixture-subscription";
 export { fixtureTokens } from "./fixture-identity";
 
 type FixtureAction = "register" | "login" | "verification" | "verify" | "forgot" | "reset-code" | "reset" | "phone" | "password";
-export const fixtureScenarios = ["success", "send-failed", "rate-limited", "invalid-code", "unavailable", "denied", "missing", "blocked", "pending-verification", "password-reset", "automatic-trial"] as const;
+export const fixtureScenarios = ["success", "send-failed", "rate-limited", "invalid-code", "unavailable", "denied", "missing", "blocked", "pending-verification", "password-reset", "automatic-trial", "duplicate-phone"] as const;
 
 /** Only the isolated rendering app imports this adapter. It never creates accounts, writes a database or sends messages. */
 export function fixtureAuthHandler(action: FixtureAction) {
@@ -37,7 +37,9 @@ export function fixtureAuthHandler(action: FixtureAction) {
     const source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } },
       sessions: fixtureMemberSessions,
       auth: {
-        async register() { return scenario === "unavailable" ? unavailable() : authenticated({ token: fixtureTokens.registered,
+        async register() { return scenario === "unavailable" ? unavailable()
+          : scenario === "duplicate-phone" ? { status: "conflict", message: "This phone number already has an account. Log in to continue." }
+          : authenticated({ token: fixtureTokens.registered,
           ...(scenario === "automatic-trial" ? { trial: { ...fixtureRegistrationTrial, active: true } } : {}) }); },
         async login(phone: unknown, password: unknown) {
           if (scenario === "unavailable") return unavailable();

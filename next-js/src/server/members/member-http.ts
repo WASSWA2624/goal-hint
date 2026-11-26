@@ -6,6 +6,7 @@ import { getAnalyticsConfig, type AnalyticsConfig } from "../analytics/analytics
 import { memberAuthPath, memberLoginPath, signedOutPath } from "../../domain/member-navigation.ts";
 import { cookie, isSameOrigin, json, privateHeaders, readCookie, redirect } from "../http/private-http.ts";
 import { createMemberSessions, memberCookieName, type MemberIdentity, type MemberSessions } from "./member-sessions.ts";
+import { memberLogoutResponse, revokeLogoutSession } from "./member-logout.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { settingsServiceFor, type SettingsState } from "./settings.ts";
 import { createAccessCodes, type AccessCodes } from "./access-codes.ts";
@@ -88,8 +89,6 @@ export function memberRoute(handler: (context: MemberContext) => Promise<Respons
   };
 }
 
-const wantsJson = (request: Request) => (request.headers.get("accept") ?? "").includes("application/json") || /^application\/json(?:;|$)/iu.test(request.headers.get("content-type") ?? "");
-
 export function createMemberSignInHandler(services: MemberServicesSource = getMemberServices) {
   // Keep the legacy endpoint as an alias, without retaining number-only or subscription-code authentication.
   return async (request: Request) => (await import("./member-auth-http.ts")).createMemberAuthHandler("login", services)(request);
@@ -104,11 +103,14 @@ export function createMemberSignOutHandler(services: MemberServicesSource = getM
     let resolved: MemberServices | null = null;
     try { resolved = await services(); } catch { /* Configuration alone is enough to clear both cookies. */ }
     const config = resolved?.config ?? await configSource(), name = memberCookieName(config.production);
-    try { await resolved?.sessions?.signOut(readCookie(request, name)); } catch { /* Cookie clearing survives a member storage outage. */ }
+    const sessions = resolved?.sessions;
+    const memberRevoked = await revokeLogoutSession(readCookie(request, name), sessions?.signOut);
     const legacyToken = readCookie(request, config.cookies.session);
-    if (legacyToken !== undefined) {
-      try { await (await legacySource()).auth?.logout(legacyToken); } catch { /* Cookie clearing survives a legacy storage outage. */ }
-    }
+    const legacyRevoked = await revokeLogoutSession(legacyToken, async (token) => {
+      const { auth } = await legacySource();
+      if (!auth) throw new Error("Legacy session storage is unavailable.");
+      await auth.logout(token);
+    });
     // Preserve an explicit anonymous choice in demo mode, where the first cookie-free
     // visit otherwise selects the seeded member. A normal login replaces this cookie.
     const demo = isDevelopmentDemo();
@@ -118,10 +120,7 @@ export function createMemberSignOutHandler(services: MemberServicesSource = getM
       ? query.get("checkout") === "1" ? memberAuthPath("login", query.get("return"), true) : memberLoginPath
       : signedOutPath;
     const cleared = [cookie(config, name, demo ? "signed-out" : "", demo ? 34_560_000 : 0, "Lax"), cookie(config, config.cookies.session, "", 0)];
-    const response = wantsJson(request) ? json({ next, phone: null }) : redirect(next);
-    for (const value of cleared) response.headers.append("Set-Cookie", value);
-    response.headers.set("Clear-Site-Data", '"cache"');
-    return response;
+    return memberLogoutResponse(request, next, cleared, memberRevoked && legacyRevoked);
   };
 }
 

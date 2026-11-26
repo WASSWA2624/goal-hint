@@ -287,7 +287,7 @@ void main() {
           '/api/account/password',
           body: {
             'password': 'Another synthetic password',
-            'currentPassword': 'Synthetic password',
+            'confirm': 'Another synthetic password',
           },
         ))['status'],
         200,

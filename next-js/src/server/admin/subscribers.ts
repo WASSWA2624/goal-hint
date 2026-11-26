@@ -1,13 +1,15 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { auditDateBounds, type AuditFilters } from "../../domain/admin-audit.ts";
 import { getReportingDate, getReportingDayBounds, addReportingDays, parseReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { OwnerOverview, OwnerAccount, OwnerSubscriber, OwnerAuditRow, OwnerPaymentSummary } from "../../domain/owner-members.ts";
 import { normalizePhone } from "../../domain/phone.ts";
 import { formatPaymentReference } from "../../domain/payment.ts";
+import { authCopy } from "../../i18n/messages/auth.ts";
 import { getAnalyticsConfig, type AnalyticsConfig } from "../analytics/analytics-config.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { lockMemberAccount, type CodeOutcome } from "../members/access-codes.ts";
-import { activeMemberSessionsWhere } from "../members/member-sessions.ts";
+import { activeMemberSessionsWhere, memberSessionRules } from "../members/member-sessions.ts";
 import { decide } from "../members/settings.ts";
 import { appendWalletEntry, lockedCredit, walletHistory } from "../members/wallet.ts";
 import { createPaymentReview } from "./payment-review.ts";
@@ -83,14 +85,15 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
         const [codes, submissions, devices, wallet] = await Promise.all([
           createPaymentReview(database, now).codes("", "all", id),
           tx.paymentSubmission.findMany({ where: { accountId: id }, orderBy: { submittedAt: "desc" }, take: 100, select: { id: true, reference: true, status: true, purpose: true, planName: true, claimedAmountUgx: true, amountReceivedUgx: true, submittedAt: true } }),
-          tx.memberSession.findMany({ where: activeMemberSessionsWhere(id, at), select: { createdAt: true, lastSeenAt: true, expiresAt: true }, orderBy: { lastSeenAt: "desc" } }),
+          tx.memberSession.findMany({ where: activeMemberSessionsWhere(id, at),
+            select: { tokenHash: true, createdAt: true, lastSeenAt: true, expiresAt: true }, orderBy: [{ lastSeenAt: "desc" }, { tokenHash: "asc" }] }),
           walletHistory(tx, id, 100),
         ]);
         const { autoRenewPlan, ...rest } = account;
         return { ...rest, autoRenewPlanName: autoRenewPlan?.name ?? null, wallet,
           blockedAt: account.blockedAt?.toISOString() ?? null, erasedAt: account.erasedAt?.toISOString() ?? null, lastSignInAt: account.lastSignInAt.toISOString(), codes,
           submissions: submissions.map(r => ({ ...r, purpose: r.purpose === "topup" ? "topup" as const : "plan" as const, reference: formatPaymentReference(r.reference), submittedAt: r.submittedAt.toISOString() })),
-          devices: devices.map(r => ({ createdAt: r.createdAt.toISOString(), lastSeenAt: r.lastSeenAt.toISOString(), expiresAt: r.expiresAt.toISOString() })) };
+          devices: devices.map(r => ({ id: subscriberDeviceId(r.tokenHash), createdAt: r.createdAt.toISOString(), lastSeenAt: r.lastSeenAt.toISOString(), expiresAt: r.expiresAt.toISOString() })) };
       });
     },
     async action(id: string, action: string, value: unknown, actor: string): Promise<CodeOutcome> {
@@ -103,6 +106,19 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
         const at = new Date(now()); let deleted = 0;
         switch (action) {
           case "note": await tx.memberAccount.update({ where: { id }, data: { ownerNote: (value as string).trim() || null } }); break;
+          case "sign-out-selected": {
+            if (!Array.isArray(value) || value.length < 1 || value.length > memberSessionRules.maximumSessions
+              || !value.every((deviceId: unknown) => typeof deviceId === "string" && /^[0-9a-f]{64}$/u.test(deviceId))) {
+              return rollback({ status: "invalid", message: authCopy.selectLoggedInDevices });
+            }
+            const selected = new Set<string>(value);
+            const active = activeMemberSessionsWhere(id, at);
+            const devices = await tx.memberSession.findMany({ where: active, select: { tokenHash: true } });
+            const tokenHashes = devices.map(row => row.tokenHash).filter(hash => selected.has(subscriberDeviceId(hash)));
+            if (tokenHashes.length !== selected.size) return rollback({ status: "refused", message: authCopy.deviceSelectionChanged });
+            deleted = (await tx.memberSession.deleteMany({ where: { ...active, tokenHash: { in: tokenHashes } } })).count;
+            break;
+          }
           case "sign-out-all": deleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count; break;
           case "auto-renew-off":
             if (!account.autoRenew) return rollback({ status: "invalid", message: "Auto-renewal is already off." });
@@ -143,9 +159,9 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
           }
           default: return rollback({ status: "invalid", message: "Unknown subscriber action." });
         }
-        const auditAction = { note: "member_note_changed", "sign-out-all": "member_signed_out_all", block: "member_blocked", unblock: "member_unblocked", erase: "member_erased",
-          "auto-renew-off": "auto_renew_changed" }[action] as "member_note_changed" | "member_signed_out_all" | "member_blocked" | "member_unblocked" | "member_erased" | "auto_renew_changed";
-        await writeOwnerAudit(tx, { at, actor, action: auditAction, accountId: id, targetType: "member", targetId: id, details: { sessionsDeleted: deleted, ...(action === "note" ? { length: (value as string).length } : {}), ...(["block", "unblock"].includes(action) ? { reason: value } : {}) } });
+        const auditAction = { note: "member_note_changed", "sign-out-selected": "member_signed_out_devices", "sign-out-all": "member_signed_out_all",
+          block: "member_blocked", unblock: "member_unblocked", erase: "member_erased", "auto-renew-off": "auto_renew_changed" } as const;
+        await writeOwnerAudit(tx, { at, actor, action: auditAction[action], accountId: id, targetType: "member", targetId: id, details: { sessionsDeleted: deleted, ...(action === "note" ? { length: (value as string).length } : {}), ...(["block", "unblock"].includes(action) ? { reason: value } : {}) } });
         return { status: "saved" };
       });
     },
@@ -157,4 +173,9 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
         select: { id: true, at: true, actor: true, action: true, accountId: true, targetType: true, targetId: true } })).map(r => ({ ...r, id: String(r.id), at: r.at.toISOString() })));
     },
   };
+}
+
+/** A reference for the administrator device picker that never exposes the stored token hash. */
+export function subscriberDeviceId(tokenHash: string): string {
+  return createHash("sha256").update("subscriber-device:").update(tokenHash).digest("hex");
 }

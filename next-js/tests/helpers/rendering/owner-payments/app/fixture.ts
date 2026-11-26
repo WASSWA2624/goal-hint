@@ -27,7 +27,7 @@ export type FixtureAccount = { id: string; phone: string | null; blockedAt: Date
   trialDismissedAt: Date | null; autoRenewPlanId?: string | null };
 export type FixtureCode = { id: string; accountId: string; reference: string; planName: string; durationDays: number;
   extensionDays: number; startsAt: Date; endsAt: Date; revokedAt: Date | null; source: string; createdAt: Date; paymentSubmissionId?: string; planId?: string | null };
-type FixtureDevice = { accountId: string; createdAt: Date; lastSeenAt: Date; expiresAt: Date; unlocked: boolean };
+type FixtureDevice = { tokenHash: string; accountId: string; createdAt: Date; lastSeenAt: Date; expiresAt: Date; unlocked: boolean };
 type FixtureReceiptClaim = { amountUgx: number; payerPhone: string; paidAt: Date; original: null;
   receipt: { amountUgx: number | null; senderPhone: string | null; receivedAt: Date | null; verifiedAt: Date | null; allocatedSubmissionId: string | null } };
 type FixturePayment = { id: string; reference: string; accountId: string; payerPhone: string | null; claimedNetwork: string;
@@ -84,7 +84,7 @@ function initialState(): FixtureState {
     { ...other, id: "00000000-0000-4000-8000-000000000104", phone: null, lastSignInAt: new Date("2026-10-20T14:05:00Z"), erasedAt: new Date("2026-10-21T08:00:00Z") },
     { ...other, id: "00000000-0000-4000-8000-000000000105", phone: "447700900123", lastSignInAt: new Date("2026-10-18T11:20:00Z") },
     { ...other, id: "00000000-0000-4000-8000-000000000106", phone: "254700000105", lastSignInAt: new Date("2026-10-16T06:10:00Z") },
-  ], codes, devices: [0, 1].map(index => ({ accountId, createdAt: at, lastSeenAt: new Date(+at + index * 3600000),
+  ], codes, devices: [0, 1].map(index => ({ tokenHash: memberTokenHash(`synthetic-owner-device-${index}`), accountId, createdAt: at, lastSeenAt: new Date(+at + index * 3600000),
     expiresAt: new Date(Date.now() + 90 * 86400000), unlocked: true })),
   payments: [{ id: paymentId, reference: "TEST", accountId, payerPhone: "256700000102", claimedNetwork: "mtn",
     claimedTxnRef: "TEST1234", claimedTxnKey: "TEST1234", claimedAmountUgx: 5000, amountReceivedUgx: null,

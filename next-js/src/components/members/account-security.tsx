@@ -18,21 +18,25 @@ import { media } from "@/styles/theme";
 
 export { accountRequest } from "./account-request";
 
-export function PasswordInput({ label, name = "password", value, onChange, current = false, hint, disabled = false, placeholder }: {
-  label: string; name?: string; value: string; onChange: (value: string) => void; current?: boolean; hint?: string; disabled?: boolean; placeholder?: string;
+export function PasswordInput({ label, name = "password", value, onChange, current = false, requireMinimumLength = !current, hint, disabled = false, placeholder }: {
+  label: string; name?: string; value: string; onChange: (value: string) => void; current?: boolean; requireMinimumLength?: boolean;
+  hint?: string; disabled?: boolean; placeholder?: string;
 }) {
-  return <div><TextInput label={label} name={name} value={value} required minLength={current ? undefined : 8} maxLength={128}
+  return <div><TextInput label={label} name={name} value={value} required minLength={requireMinimumLength ? 8 : undefined} maxLength={128}
     type="password" autoComplete={current ? "current-password" : "new-password"} disabled={disabled} placeholder={placeholder}
     onChange={event => onChange(event.currentTarget.value)} data-analytics-ignore />
     {hint && <AccountNote>{hint}</AccountNote>}</div>;
 }
 
-export function NewPasswordFields({ locale, password, setPassword, confirm, setConfirm }: {
+function NewPasswordFields({ locale, password, setPassword, confirm, setConfirm, reset = false, disabled = false }: {
   locale: string; password: string; setPassword: (value: string) => void; confirm: string; setConfirm: (value: string) => void;
+  reset?: boolean; disabled?: boolean;
 }) {
   const m = createMessages(locale);
-  return <><PasswordInput label={m.text("account.newPassword")} value={password} onChange={setPassword} hint={m.text("account.passwordHint")} />
-    <PasswordInput name="confirm" label={m.text("account.confirmPassword")} value={confirm} onChange={setConfirm} /></>;
+  return <><PasswordInput label={m.text("account.newPassword")} value={password} onChange={setPassword} disabled={disabled}
+    requireMinimumLength={reset} {...(reset ? { hint: m.text("account.passwordHint") } : {})} />
+    <PasswordInput name="confirm" label={m.text(reset ? "account.confirmPassword" : "account.repeatPassword")} value={confirm} onChange={setConfirm}
+      disabled={disabled} requireMinimumLength={reset} /></>;
 }
 
 export function PasswordChangeNote({ locale }: { locale: string }) {
@@ -58,7 +62,7 @@ export function ResetPasswordForm({ locale, phone, returnTo = null, checkout = f
     <AccountCardBody>
       <PasswordChangeNote locale={locale} />
       <MemberForm method="post" action="/api/account/reset" onSubmit={submit} aria-busy={busy}>
-        <NewPasswordFields locale={locale} password={password} setPassword={setPassword} confirm={confirm} setConfirm={setConfirm} />
+        <NewPasswordFields locale={locale} password={password} setPassword={setPassword} confirm={confirm} setConfirm={setConfirm} reset />
         {error && <AccountError role="alert">{error}</AccountError>}
         <AccountPrimary type="submit" disabled={busy}>{m.text("account.savePassword")}</AccountPrimary>
       </MemberForm><AccountFormSupport locale={locale} contact={contact} />
@@ -88,7 +92,7 @@ export function AccountSecurityForm({ task, locale, contact, cancelHref }: {
     if (task === "password" && password !== confirm) { setError(m.text("account.passwordMismatch")); return; }
     setBusy(true); setError("");
     try {
-      const result = await accountRequest<{ next: string }>(task, task === "phone" ? { currentPassword: current, phone: newPhone } : { password });
+      const result = await accountRequest<{ next: string }>(task, task === "phone" ? { currentPassword: current, phone: newPhone } : { password, confirm });
       location.replace(result.next);
     } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); setBusy(false); }
   }
@@ -96,7 +100,7 @@ export function AccountSecurityForm({ task, locale, contact, cancelHref }: {
   return <TaskForm data-account-sign-in>
     <MemberForm method="post" action={`/api/account/${task}`} onSubmit={save} data-analytics-ignore aria-busy={busy}>
       {task === "phone" ? <><PhoneInput name="phone" label={m.text("account.newPhone")} value={newPhone} onValueChange={setNewPhone} required />{currentField}</>
-        : <NewPasswordFields locale={locale} password={password} setPassword={setPassword} confirm={confirm} setConfirm={setConfirm} />}
+        : <NewPasswordFields locale={locale} password={password} setPassword={setPassword} confirm={confirm} setConfirm={setConfirm} disabled={busy} />}
       {task === "password" ? <PasswordChangeNote locale={locale} /> : <AccountNote>{m.text("account.newPhoneHelp")}</AccountNote>}
       {error && <AccountError role="alert">{error}</AccountError>}
       <FormActions>
