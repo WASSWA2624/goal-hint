@@ -7,7 +7,7 @@ Goal Hint uses one phone-and-password sign-in for members and configured adminis
 ## Current implementation
 
 - Public registration takes a mobile number and an 8–128 character password. The form shows the full country-coded number for confirmation before submitting the registration. The server normalizes and validates the number, rejects duplicates and reserved administrator numbers, and stores a salted scrypt hash. A registration transaction creates the account, records admission and eligible referral attribution, optionally grants a trial, and issues the session.
-- New registrations receive ordinary account access immediately. `memberAdmittedAt` records admission, while `phoneVerifiedAt` records proof of number ownership. Either gives ordinary account admission. Ownership-only features, including referral-code exposure and the optional unsubscribed-member content policy, still require phone verification. Signup sends no activation message.
+- New registrations receive ordinary account access immediately. `memberAdmittedAt` records admission, while `phoneVerifiedAt` records proof of number ownership. Either gives ordinary account admission. Referral-code exposure still requires phone verification. An admitted, unblocked member session gets full content access while Paid Access is off. When it is on, the server checks issued entitlement, including any eligible trial dated from original account creation. Signup sends no activation message.
 - The signed-out account form handles login, registration, existing-code verification, recovery and reset. Account pages distinguish guest, member, restricted verification, restricted reset and storage-unavailable states. Authentication stays available when subscription sales are off.
 
 ## End-to-end flows

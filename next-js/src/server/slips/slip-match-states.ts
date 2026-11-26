@@ -5,12 +5,12 @@ import { slipMatchRefreshRequestSchema, slipMatchRefreshResponseSchema, slipMatc
 import { slipMatchStateForSelection, slipMatchStatesFromResults, type SlipMatchState } from "../../domain/slip-match-state.ts";
 import { getAnalyticsServices, type AnalyticsServices } from "../analytics/analytics-http.ts";
 import { developmentMemberToken } from "../demo/member.ts";
-import { clientAddress, isSameOrigin, privateHeaders, readCookie, readLimitedBody } from "../http/private-http.ts";
+import { isSameOrigin, privateHeaders, readCookie, readLimitedBody } from "../http/private-http.ts";
 import { MatchFeedError } from "../matches/feed-error.ts";
 import { privateMatchHeaders } from "../matches/public-http.ts";
 import { memberCookieName } from "../members/member-sessions.ts";
 import { takeMemberLimit } from "../members/rate-limit.ts";
-import { viewerAccessFromRequest, type ViewerAccess } from "../members/viewer-access.ts";
+import { viewerAccessFromRequest } from "../members/viewer-access.ts";
 import { readSlipForecastResults } from "./slip-forecast.ts";
 
 const json = (body: unknown, status: number, headers: Readonly<Record<string, string>>) => {
@@ -28,16 +28,14 @@ const unknownState = (watch: SlipMatchWatch): SlipMatchState => ({
 export function createStoredSlipMatchStates({ services = getAnalyticsServices, resolveResults = readSlipForecastResults }: {
   services?: () => Promise<Pick<AnalyticsServices, "database" | "config">>; resolveResults?: typeof readSlipForecastResults;
 } = {}) {
-  return async (input: readonly SlipMatchWatch[], request: Request, access?: ViewerAccess, editorial = false): Promise<SlipMatchRefreshResponse> => {
+  return async (input: readonly SlipMatchWatch[], request: Request, editorial = false): Promise<SlipMatchRefreshResponse> => {
     const watches = uniqueSlipMatchWatches(slipMatchRefreshRequestSchema.parse({ selections: input }).selections as readonly SlipMatchWatch[]);
     const { database, config } = await services();
     if (!database) throw new MatchFeedError("unavailable");
     const memberCookie = readCookie(request, memberCookieName(config.production));
     const memberSession = config.production ? memberCookie : developmentMemberToken(memberCookie);
-    const publicVisitor = access?.tier === "full" && access.mode === "off" && !access.signedIn;
-    const budgets = publicVisitor ? [clientAddress(request.headers)]
-      : [...new Set([readCookie(request, config.cookies.session), memberSession]
-        .filter((value): value is string => value !== undefined && value.length > 0))];
+    const budgets = [...new Set([readCookie(request, config.cookies.session), memberSession]
+      .filter((value): value is string => value !== undefined && value.length > 0))];
     if (!budgets.length) throw new MatchFeedError("subscription-required");
     return database.transaction(async (tx) => {
       const [clock] = await tx.$queryRaw<{ at: Date }[]>`SELECT UTC_TIMESTAMP(3) AS at`;
@@ -45,7 +43,7 @@ export function createStoredSlipMatchStates({ services = getAnalyticsServices, r
       const asOf = clock.at.getTime();
       // Count both recognized cookies when present: rotating an invalid second cookie cannot bypass the valid session's budget.
       for (const value of budgets) {
-        if (!await takeMemberLimit(tx, config, { purpose: publicVisitor ? "slip-match-refresh-address" : "slip-match-refresh", value,
+        if (!await takeMemberLimit(tx, config, { purpose: "slip-match-refresh", value,
           maximum: slipMatchRefreshRules.requestsPerMinute, windowMs: 60_000 }, clock.at)) {
           throw new MatchFeedError("rate-limited", 20);
         }
@@ -59,7 +57,7 @@ export function createStoredSlipMatchStates({ services = getAnalyticsServices, r
   };
 }
 
-type StateReader = (selections: readonly SlipMatchWatch[], request: Request, access: ViewerAccess, editorial?: boolean) => Promise<SlipMatchRefreshResponse>;
+type StateReader = ReturnType<typeof createStoredSlipMatchStates>;
 
 /** Access is checked before storage and again before releasing any original-selection observation. */
 export function createSlipMatchStatesHandler({ access = viewerAccessFromRequest, read = createStoredSlipMatchStates() }: {
@@ -82,7 +80,7 @@ export function createSlipMatchStatesHandler({ access = viewerAccessFromRequest,
       const parsed = slipMatchRefreshRequestSchema.safeParse(body);
       if (!parsed.success) return json({ error: "invalid-request" }, 400, privateMatchHeaders);
       const selections = uniqueSlipMatchWatches(parsed.data.selections as readonly SlipMatchWatch[]);
-      const response = await read(selections, request, viewer, parsed.data.editorial);
+      const response = await read(selections, request, parsed.data.editorial);
       if ((await access(request)).tier !== "full") return json({ error: "subscription-required" }, 403, privateMatchHeaders);
       const validated = slipMatchRefreshResponseSchema.parse(response);
       // A reader can only release observations for exactly the submitted original identities.

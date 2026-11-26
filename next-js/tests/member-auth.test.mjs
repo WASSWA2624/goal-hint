@@ -838,16 +838,37 @@ test("registration starts the configured trial immediately with the server clock
 });
 
 test("a disabled offer permits registration and can never be activated later", async () => {
-  for (const disable of [settings => { settings.trialDays = 0; }, settings => { settings.paywallMode = "off"; },
-    settings => { settings.allowUnsubscribedMembers = true; }]) {
+  for (const disable of [settings => { settings.trialDays = 0; }, settings => { settings.paywallMode = "off"; }]) {
     const f = fixture({ trialDays: 7 });
     disable(f.settings);
     const registered = await f.service.register(phone, password, browser());
     assert.ok(await f.sessionService.verify(registered.token)); assert.equal(registered.trial, undefined);
-    Object.assign(f.settings, { trialDays: 14, paywallMode: "on", allowUnsubscribedMembers: false });
+    Object.assign(f.settings, { trialDays: 14, paywallMode: "on" });
     const codes = createAccessCodes({ database: f.database, now: f.now });
     assert.deepEqual(await codes.activateTrial(await f.sessionService.verify(registered.token)), { state: "forbidden" });
     assert.equal(f.accessCodes.size, 0);
+  }
+});
+
+test("a legacy signup claim uses the original creation date and refuses an elapsed trial", async () => {
+  for (const elapsed of [DAY, 3 * DAY]) {
+    const f = fixture({ trialDays: 3 });
+    const createdAt = new Date(f.now());
+    const account = await f.account({ trialEligibleAt: createdAt });
+    f.advance(elapsed);
+    const signedIn = await f.service.login(account.phone, password, address);
+    const member = await f.sessionService.verify(signedIn.token);
+    const codes = createAccessCodes({ database: f.database, now: f.now });
+    const claim = await codes.activateTrial(member);
+    if (elapsed === 3 * DAY) {
+      assert.deepEqual(claim, { state: "unavailable" });
+      assert.equal(f.accessCodes.size, 0);
+    } else {
+      assert.deepEqual(claim, { state: "active", startsAt: createdAt.toISOString(), endsAt: new Date(+createdAt + 3 * DAY).toISOString() });
+      assert.equal(+[...f.accessCodes.values()][0].activatedAt, f.now());
+      assert.deepEqual(await codes.activateTrial(member), claim);
+      assert.equal(f.accessCodes.size, 1);
+    }
   }
 });
 

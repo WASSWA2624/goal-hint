@@ -23,7 +23,7 @@ export function fixtureServices(state: string) {
     return { config: { production: false },
     settings: { settings: state === "unavailable" ? null : { ...defaultSubscriptionSettings,
       ...(scenario === "no-payment-method" || scenario === "wallet-only" ? {} : fixtureManualMethods), paywallMode: scenario.startsWith("off") ? "off" : "on",
-      allowUnsubscribedMembers: scenario === "member-free", trialDays: scenario === "trial-disabled" ? 0 : 30,
+      allowUnsubscribedMembers: scenario === "legacy-free-flag", trialDays: scenario === "trial-disabled" ? 0 : 30,
       ...(state === "support" ? { supportContacts: [
         { id: "synthetic-support", label: "Account support", network: "other", phone: "256700000101", calls: true, whatsapp: true, enabled: true, primary: true },
         { id: "synthetic-secondary", label: "Registration and verification support", network: "other", phone: "256700000102", calls: true, whatsapp: false, enabled: true, primary: false },

@@ -709,7 +709,7 @@ export const en = {
   "feed.sort.compact.probability-desc": "Highest chance",
   "feed.sort.compact.probability-asc": "Lowest chance",
   "feed.filters.oddsUnavailable": "Odds filters require published bookmaker odds.",
-  "feed.filters.oddsLocked": "Subscribe to filter odds on matches that haven’t finished.",
+  "feed.filters.oddsLocked": "Unlock predictions to filter odds on matches that haven’t finished.",
   "feed.date.previous": "Previous day",
   "feed.date.next": "Next day",
   "feed.state.no-fixtures": "No fixtures confirmed",

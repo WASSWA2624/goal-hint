@@ -4,9 +4,9 @@ import type { MemberServices } from "@/server/members/member-http";
 import { fixtureMemberSessions } from "./fixture-admin";
 import { fixtureManualMethods } from "./fixture-checkout";
 
-const eligibleTrialScenarios: readonly string[] = ["trial-eligible", "trial-disabled", "off-trial-eligible", "member-free"];
+const eligibleTrialScenarios: readonly string[] = ["trial-eligible", "trial-disabled", "off-trial-eligible", "legacy-free-flag"];
 export const subscriptionScenarios = ["free", "active", "manual", "trial", "pending", "pending-renewal", "expired", "off", "off-active", "registration-trial", "registration-no-trial",
-  "trial-eligible", "trial-disabled", "off-trial-eligible", "member-free", "off-trial-active", "off-inactive", "no-payment-method", "wallet-only", "no-plan"] as const;
+  "trial-eligible", "trial-disabled", "off-trial-eligible", "legacy-free-flag", "off-trial-active", "off-inactive", "no-payment-method", "wallet-only", "no-plan"] as const;
 export type SubscriptionScenario = (typeof subscriptionScenarios)[number];
 // Route modules can compile independently; anchor API and HTML expiry to the same UTC day.
 // The seven-day period starts yesterday, so it is active even before 10:00 UTC today.

@@ -33,7 +33,7 @@ async function readPlans() {
   const { database } = await getAnalyticsServices();
   return database ? (await createPlansService(database).list()).filter((plan) => plan.active) : [];
 }
-export function createSubscribeRoute({ services = getMemberServices, plans = readPlans }: {
+export function createSubscribeRoute({ services = () => getMemberServices({ freshSettings: true }), plans = readPlans }: {
   services?: MemberServicesSource; plans?: () => Promise<readonly SubscriptionPlanView[]>;
 } = {}) {
   return async function SubscribeRoute({ locale, searchParams }: {
@@ -60,7 +60,6 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
     const hostedSalesOpen = !topUp && !!resolved.checkout?.flutterwaveReady
       && flutterwaveCheckoutPublished(settings, resolved.config.production && resolved.checkout.flutterwaveMode !== "sandbox");
     const checkoutPublished = salesOpen || hostedSalesOpen;
-    if (checkoutReturn && !paymentId && allowsContentWithoutSubscription(resolved.settings, false)) redirect(checkoutReturn);
     const session = await readMemberPageSession(resolved, (await cookies()).get(memberCookieName(resolved.config.production))?.value);
     // Authentication always has its own URL, before pricing or checkout reads can fail.
     if (session.kind === "guest") redirect(memberAuthPath("login", returnTo, !!checkoutReturn));
@@ -69,7 +68,7 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
     const member = session.kind === "member" ? session.member : null;
     const administrator = !!member && !member.blocked && member.administrator;
     const eligible = member && !member.blocked && !member.administrator ? member : null;
-    const alreadyAllowed = administrator || eligible && allowsContentWithoutSubscription(resolved.settings, eligible.phoneVerified === true);
+    const alreadyAllowed = administrator || allowsContentWithoutSubscription(resolved.settings, !!eligible);
     if (checkoutReturn && !paymentId && alreadyAllowed) redirect(checkoutReturn);
     const status = eligible ? resolved.codes?.subscriptionStatus(eligible).catch(() => null) ?? null : null;
     if (checkoutReturn && !paymentId && settings) {

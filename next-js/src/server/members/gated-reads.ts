@@ -12,7 +12,7 @@ import { readPublicMatchDetail } from "../matches/public-detail.ts";
 import { readPublicMatchFeed } from "../matches/public-feed.ts";
 import { readPublicMatchInsights } from "../matches/public-insights.ts";
 import { readPublicSlipBuild } from "../slips/public-slips.ts";
-import { resolveViewerAccess, ViewerAccessUnavailable, type ViewerAccess } from "./viewer-access.ts";
+import { resolveViewerAccess, resolveViewerAccessFresh, ViewerAccessUnavailable, type ViewerAccess } from "./viewer-access.ts";
 import { readPublicMatchStatus } from "../matches/public-insights.ts";
 
 export type AccessResolver = () => Promise<ViewerAccess>;
@@ -31,6 +31,7 @@ export function createGatedReads({ resolveAccess = resolveViewerAccess, readFeed
   readInsights?: typeof readPublicMatchInsights; readSlips?: typeof readPublicSlipBuild;
   readStatus?: (id: string) => Promise<SettlementStatus>;
 } = {}) {
+  const recheckAccess = resolveAccess === resolveViewerAccess ? resolveViewerAccessFresh : resolveAccess;
   return {
     async feed(...[parameters, context = {}, clock]: Parameters<typeof readPublicMatchFeed>) {
       let access = await contentAccess(resolveAccess);
@@ -39,14 +40,14 @@ export function createGatedReads({ resolveAccess = resolveViewerAccess, readFeed
         ...(access.tier === "free" ? { providerOdds: true } : {}), asOf: at });
       if (access.tier === "free" && usesSubscriberFeedOracle(query)) throw new MatchFeedError("subscription-required");
       const response = await readFeed(parameters, { ...context, completedOnly: false }, clock ?? { now: () => at });
-      access = await contentAccess(resolveAccess);
+      access = await contentAccess(recheckAccess);
       if (access.tier === "free" && usesSubscriberFeedOracle(query)) throw new MatchFeedError("subscription-required");
       const result = gateFeedResponse(response, access);
       try { return access.tier === "free" ? matchFeedResponseSchema.parse(result) : result; }
       catch { throw new MatchFeedError("unavailable"); }
     },
     async detail(...args: Parameters<typeof readPublicMatchDetail>) {
-      const response = await readDetail(...args), access = await contentAccess(resolveAccess), result = gateDetailResponse(response, access);
+      const response = await readDetail(...args), access = await contentAccess(recheckAccess), result = gateDetailResponse(response, access);
       try { return access.tier === "free" ? matchDetailResponseSchema.parse(result) : result; }
       catch { throw new MatchFeedError("unavailable"); }
     },
@@ -57,7 +58,7 @@ export function createGatedReads({ resolveAccess = resolveViewerAccess, readFeed
         if (!finished) throw new MatchFeedError("subscription-required");
       }
       const response = await readInsights(id, clock);
-      const access = await contentAccess(resolveAccess);
+      const access = await contentAccess(recheckAccess);
       // Status comes from the current canonical fixture, never from a selected historical revision.
       let finished = false;
       if (access.tier === "free") {
@@ -71,7 +72,7 @@ export function createGatedReads({ resolveAccess = resolveViewerAccess, readFeed
     async slips(...args: Parameters<typeof readPublicSlipBuild>) {
       if ((await contentAccess(resolveAccess)).tier === "free") throw new MatchFeedError("subscription-required");
       const response = await readSlips(...args);
-      if ((await contentAccess(resolveAccess)).tier === "free") throw new MatchFeedError("subscription-required");
+      if ((await contentAccess(recheckAccess)).tier === "free") throw new MatchFeedError("subscription-required");
       return response;
     },
   };

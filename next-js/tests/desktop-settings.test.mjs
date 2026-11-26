@@ -96,10 +96,11 @@ test("paid access switches independently of checkout readiness and settings are 
   assert.equal(result.status, "saved");
   assert.deepEqual(state.row.supportContacts, []);
   assert.deepEqual((await service.overview()).checkoutReadiness.map(item => item.key), ["payment-number", "contact"]);
-  const memberAccess = await service.save("owner", { allowUnsubscribedMembers: true, trialDays: 366 }, authorized);
-  assert.equal(memberAccess.settings.allowUnsubscribedMembers, true);
+  const retired = await service.save("owner", { allowUnsubscribedMembers: true }, authorized);
+  assert.equal(retired.status, "invalid");
+  const memberAccess = await service.save("owner", { trialDays: 366 }, authorized);
   assert.equal(memberAccess.settings.trialDays, 366);
-  assert.deepEqual(state.audits[2].details.changes.allowUnsubscribedMembers, { from: false, to: true });
+  assert.deepEqual(state.audits[2].details.changes.trialDays, { from: 2, to: 366 });
   assert.equal((await service.setMode("owner", "off")).status, "saved");
   assert.deepEqual(state.audits.filter(event => event.action === "paywall_mode_changed").map(event => event.details),
     [{ from: "off", to: "on" }, { from: "on", to: "off" }]);

@@ -98,7 +98,8 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
       return <>
         {discovery.home && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(homeStructuredData()) }} />}
         {structured && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(structured) }} />}
-        <MatchFeedPage query={query} today={today} result={result} showAccount subscriberOnly={access.tier === "free"} providerOdds={providerOdds}
+        <MatchFeedPage query={query} today={today} result={result} showAccount
+          subscriberOnly={(result.data?.access ?? access).tier === "free"} providerOdds={providerOdds}
           {...(summary ? { summary } : {})} />
       </>;
     },

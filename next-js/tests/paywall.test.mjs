@@ -74,13 +74,13 @@ test('all played final statuses expose the original result and revision to guest
   }
 });
 test('finished filters are public; active probability, selection and price oracles stay locked', () => {
-  for (const query of ['', 'prob=0-100', 'status=finished', 'market=total-goals', 'sort=kickoff&dir=asc', 'sort=probability', 'status=finished&picks=only', 'status=finished&odds=1.50-3.00', 'status=finished&marketPick=total-goals:over-1.5']) assert.equal(usesSubscriberFeedOracle(parseFeedQuery(new URLSearchParams(query), { today, providerOdds: true })), false);
-  for (const query of ['picks=only', 'odds=1.50-3.00', 'prob=1-100', 'prob=0-99', 'marketPick=match-result:home-win', 'status=scheduled&marketPick=total-goals:over-1.5']) {
+  for (const query of ['', 'prob=0-100', 'status=finished', 'market=total-goals', 'sort=kickoff&dir=asc', 'status=finished&sort=probability', 'status=finished&picks=only', 'status=finished&odds=1.50-3.00', 'status=finished&marketPick=total-goals:over-1.5']) assert.equal(usesSubscriberFeedOracle(parseFeedQuery(new URLSearchParams(query), { today, providerOdds: true })), false);
+  for (const query of ['picks=only', 'odds=1.50-3.00', 'prob=1-100', 'prob=0-99', 'sort=probability', 'marketPick=match-result:home-win', 'status=scheduled&marketPick=total-goals:over-1.5']) {
     assert.equal(usesSubscriberFeedOracle(parseFeedQuery(new URLSearchParams(query), { today, providerOdds: true })), true);
   }
 });
 test('oracle requests return nonrecoverable private 403 before any raw read', async () => {
-  for (const query of ['picks=only', 'odds=1.50-3.00', 'prob=1-100', 'prob=0-99', 'marketPick=match-result:home-win', 'status=scheduled&marketPick=total-goals:over-1.5']) {
+  for (const query of ['picks=only', 'odds=1.50-3.00', 'prob=1-100', 'prob=0-99', 'sort=probability', 'marketPick=match-result:home-win', 'status=scheduled&marketPick=total-goals:over-1.5']) {
     const response = await createMatchFeedHandler(async () => { assert.fail('oracle read'); }, { now: () => now }, async () => free)(new Request(`https://example.test/api/matches?${query}`));
     assert.equal(response.status, 403); assert.equal(response.headers.get('cache-control'), 'private, no-store'); assert.equal(response.headers.get('vary'), 'Cookie');
     assert.equal(response.headers.get('set-cookie'), null);
@@ -109,7 +109,7 @@ test('an unavailable member lookup returns a quiet, recoverable 503 instead of a
   assert.equal(signedOut.status, 403);
   assert.equal((await signedOut.json()).error.code, 'subscription-required');
 });
-test('the same guest feed switches between full and redacted projections with the current policy', async () => {
+test('the guest feed retains public projections in every mode including a policy outage', async () => {
   let paywallMode = 'off', source = 'stored';
   const resolve = createViewerAccess({
     settings: async () => ({ settings: { ...defaultSubscriptionSettings, paywallMode }, source }),
@@ -118,25 +118,23 @@ test('the same guest feed switches between full and redacted projections with th
   });
   const handler = createMatchFeedHandler(async () => scenarios.scheduled.feed, { now: () => now }, () => resolve(() => undefined));
   const request = new Request('https://example.test/api/matches');
-  const open = await handler(request);
-  assert.equal(open.status, 200);
-  assert.equal(open.headers.get('cache-control'), 'private, no-store');
-  assert.deepEqual((await open.json()).access, { tier: 'full', signedIn: false });
-  for (const policy of [{ paywallMode: 'on', source: 'stored' }, { paywallMode: 'off', source: 'last-good' }]) {
+  for (const policy of [{ paywallMode: 'off', source: 'stored' }, { paywallMode: 'on', source: 'stored' }, { paywallMode: 'off', source: 'last-good' }]) {
     ({ paywallMode, source } = policy);
     const restricted = await handler(request);
     assert.equal(restricted.status, 200);
+    assert.equal(restricted.headers.get('cache-control'), 'private, no-store');
     const body = await restricted.json();
     assert.deepEqual(body.access, { tier: 'free', signedIn: false });
     assert.doesNotMatch(JSON.stringify(body), /SENTINEL-|7\.73|home-win/);
   }
 });
-test('admission permits a normal session and active trial without conferring verified-member access', async () => {
+test('admission permits confirmed Off access and verified ownership does not bypass On entitlement', async () => {
   const at = new Date(now);
   const account = { accountId: 'admitted-member', phone: '256700000187', passwordHash: 'registered', blockedAt: null,
     memberAdmittedAt: at, phoneVerifiedAt: null, lastSeenAt: at, entitled: 0 };
+  let paywallMode = 'on';
   const resolve = createViewerAccess({ now: () => +at,
-    settings: async () => ({ settings: { ...defaultSubscriptionSettings, paywallMode: 'on', allowUnsubscribedMembers: true }, source: 'stored' }),
+    settings: async () => ({ settings: { ...defaultSubscriptionSettings, paywallMode, allowUnsubscribedMembers: true }, source: 'stored' }),
     services: async () => ({ config: { production: false, cookies: { session: 'owner' } }, auth: null,
       database: { query: run => run({ $queryRaw: async (sql) => {
         assert.match(sql.join(''), /a\.memberAdmittedAt/u);
@@ -146,6 +144,9 @@ test('admission permits a normal session and active trial without conferring ver
   });
   const read = () => resolve(name => name === 'goal-hint-member' ? 'a'.repeat(43) : undefined);
   assert.deepEqual(await read(), { ...free, signedIn: true });
+  paywallMode = 'off';
+  assert.deepEqual(await read(), { ...full, signedIn: true, mode: 'off' });
+  paywallMode = 'on';
   account.entitled = 1;
   assert.deepEqual(await read(), { ...full, signedIn: true });
   account.blockedAt = at;
@@ -153,7 +154,7 @@ test('admission permits a normal session and active trial without conferring ver
   Object.assign(account, { blockedAt: null, entitled: 0, memberAdmittedAt: null });
   assert.deepEqual(await read(), free);
   account.phoneVerifiedAt = at;
-  assert.deepEqual(await read(), { ...full, signedIn: true });
+  assert.deepEqual(await read(), { ...free, signedIn: true });
 });
 
 test('free and failing resolvers never read slips and malformed gated bodies fail closed', async () => {

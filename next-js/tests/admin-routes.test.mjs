@@ -252,7 +252,7 @@ test("Plans and Settings: reads expose managed support settings, writes are JSON
   assert.equal(shown.source, "defaults");
   assert.equal(shown.settings.paywallMode, "off", "A missing row reads off.");
   assert.equal(shown.settings.trialDays, 2, "A missing row configures a 2-day trial for paid access.");
-  assert.equal(shown.settings.allowUnsubscribedMembers, false);
+  assert.equal("allowUnsubscribedMembers" in shown.settings, false);
   assert.deepEqual(shown.environmentFields, ["contactPhone"]);
   assert.deepEqual(shown.checkoutReadiness.map(({ key }) => key), ["plan", "payment-number",
     ...(!privacyNotice.releaseReady ? ["privacy"] : []), ...(!termsNotice.releaseReady ? ["terms"] : [])]);

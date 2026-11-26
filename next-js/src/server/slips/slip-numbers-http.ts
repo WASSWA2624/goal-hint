@@ -7,7 +7,7 @@ import { memberCookieName } from "../members/member-sessions.ts";
 import { viewerAccessFromRequest } from "../members/viewer-access.ts";
 import { memberRateRules, takeMemberLimit } from "../members/rate-limit.ts";
 import { lockMemberAccount } from "../members/access-codes.ts";
-import { clientAddress, isSameOrigin, json, readCookie, readLimitedBody } from "../http/private-http.ts";
+import { isSameOrigin, json, readCookie, readLimitedBody } from "../http/private-http.ts";
 import { ensureSlipNumber } from "./slip-numbers.ts";
 import { supportContactsOf } from "../../domain/support-contacts.ts";
 import { readSharedSlip } from "./shared-slips.ts";
@@ -21,15 +21,16 @@ export function createSlipNumberHandler({ services = getAnalyticsServices, membe
     if (!isSameOrigin(request)) return json({ error: "forbidden" }, 403);
     try {
       const viewer = await access(request);
-      const resolved = await members();
       let input;
       try {
         if (!/^application\/json(?:;|$)/iu.test(request.headers.get("content-type") ?? "")) return json({ error: "invalid-request" }, 400);
         const bytes = await readLimitedBody(request, 256, { deadlineMs: 15_000 });
         input = inputSchema.parse(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes ?? new Uint8Array())));
       } catch { return json({ error: "invalid-request" }, 400); }
+      if ("fingerprint" in input && viewer.tier !== "full") return json({ error: "subscription-required" }, 403);
       const { database, config } = await services();
       if (!database) return json({ error: "unavailable" }, 503);
+      const resolved = await members();
       const contacts = resolved.settings.settings ? supportContactsOf(resolved.settings.settings).slice(0, 2)
         .map(contact => `${contact.label}: +${contact.phone}`) : [];
       if ("token" in input) {
@@ -38,24 +39,17 @@ export function createSlipNumberHandler({ services = getAnalyticsServices, membe
         const number = await database.transaction(async tx => ensureSlipNumber(tx, await slipNumberFingerprint(shared.slip)));
         return json({ number, contacts });
       }
-      if (viewer.tier !== "full") return json({ error: "subscription-required" }, 403);
       const member = viewer.signedIn ? await resolved.sessions?.verify(readCookie(request, memberCookieName(resolved.config.production))) : null;
-      const publicVisitor = viewer.mode === "off" && (!member || member.blocked);
-      if (!publicVisitor && !member) return json({ error: "sign-in-required" }, 401);
+      if (!member) return json({ error: "sign-in-required" }, 401);
+      if (member.blocked) return json({ error: "forbidden" }, 403);
       const fingerprint = input.fingerprint;
       const result = await database.transaction(async tx => {
         const at = new Date(now());
-        let value: string;
-        if (publicVisitor) value = clientAddress(request.headers);
-        else {
-          if (!member) return null;
-          const account = await lockMemberAccount(tx, member.accountId);
-          const session = await tx.memberSession.findUnique({ where: { tokenHash: member.tokenHash } });
-          if (!account?.phone || account.blockedAt || account.erasedAt || session?.accountId !== account.id
-            || !session.authenticatedAt || session.passwordResetAt || session.expiresAt <= at) return null;
-          value = account.id;
-        }
-        if (!await takeMemberLimit(tx, config, { purpose: publicVisitor ? "slip-number-address" : "slip-number", value,
+        const account = await lockMemberAccount(tx, member.accountId);
+        const session = await tx.memberSession.findUnique({ where: { tokenHash: member.tokenHash } });
+        if (!account?.phone || account.blockedAt || account.erasedAt || session?.accountId !== account.id
+          || !session.authenticatedAt || session.passwordResetAt || session.expiresAt <= at) return null;
+        if (!await takeMemberLimit(tx, config, { purpose: "slip-number", value: account.id,
           maximum: 120, windowMs: memberRateRules.hourMs }, at)) return "limited";
         return ensureSlipNumber(tx, fingerprint);
       }, { isolationLevel: "ReadCommitted", timeout: 30_000 });

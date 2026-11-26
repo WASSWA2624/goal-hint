@@ -21,11 +21,9 @@ type AccessRow = { accountId: string; phone: string; passwordHash: string | null
   phoneVerifiedAt: Date | null; memberAdmittedAt: Date | null; adminPasswordVersion: string | null; lastSeenAt: Date; entitled: number | bigint;
   canRenew: number | bigint | null; chainEnd: Date | null };
 
-/** Only a confirmed policy can grant access independently of a current subscription or administrator role. */
-export function allowsContentWithoutSubscription(state: SettingsState | undefined, verifiedMember: boolean): boolean {
-  const settings = state?.settings;
-  return !!settings && state?.source !== "last-good" && (settings.paywallMode === "off" ||
-    settings.paywallMode === "on" && settings.allowUnsubscribedMembers === true && verifiedMember);
+/** Confirmed Off mode opens protected features to eligible signed-in members. */
+export function allowsContentWithoutSubscription(state: SettingsState | undefined, eligibleMember: boolean): boolean {
+  return eligibleMember && state?.source !== "last-good" && state?.settings?.paywallMode === "off";
 }
 
 export function createViewerAccess({ services = getAnalyticsServices, settings, now = Date.now, failOnUnavailable = false }: {
@@ -35,19 +33,22 @@ export function createViewerAccess({ services = getAnalyticsServices, settings, 
     let mode: ViewerAccess["mode"] = "free";
     try {
       const resolved = await services();
-      const state = settings ? await settings() : resolved.database ? await settingsServiceFor(resolved.database).current() : { settings: null, source: "unavailable" } as const;
+      const token = developmentMemberToken(cookieValue(memberCookieName(resolved.config.production)));
+      const memberToken = validMemberToken(token) ? token : null;
+      const policy = !settings && resolved.database ? settingsServiceFor(resolved.database) : null;
+      // Guest visibility is independent of the switch. Only member decisions need a fresh policy read.
+      const state = settings ? await settings() : await (memberToken ? policy?.currentFresh() : policy?.current())
+        ?? { settings: null, source: "unavailable" } as const;
       mode = state.source === "last-good" && state.settings.paywallMode === "off" ? "free" : accessMode(state);
       const owner = cookieValue(resolved.config.cookies.session);
       if (owner && await resolved.auth?.verify(owner, { touch: false })) return { tier: "full", signedIn: false, mode };
-      const token = developmentMemberToken(cookieValue(memberCookieName(resolved.config.production))), at = new Date(now());
       if (!resolved.database) {
-        if (mode === "off") return { tier: "full", signedIn: false, mode };
-        if (failOnUnavailable && validMemberToken(token)) throw new ViewerAccessUnavailable();
+        if (failOnUnavailable && memberToken) throw new ViewerAccessUnavailable();
         return { tier: "free", signedIn: false, mode };
       }
       let row: AccessRow | undefined;
-      if (validMemberToken(token)) {
-        const hash = memberTokenHash(token), database = resolved.database;
+      if (memberToken) {
+        const hash = memberTokenHash(memberToken), database = resolved.database, at = new Date(now());
         const read = async (when: Date) => (await database.query((tx) => tx.$queryRaw<AccessRow[]>`
           SELECT s.accountId, s.lastSeenAt, s.adminPasswordVersion, a.phone, a.passwordHash, a.phoneVerifiedAt, a.memberAdmittedAt, a.blockedAt,
             (a.autoRenew AND a.creditUgx >= (SELECT p.priceUgx FROM SubscriptionPlan p WHERE p.id = a.autoRenewPlanId AND p.active)) AS canRenew,
@@ -78,11 +79,10 @@ export function createViewerAccess({ services = getAnalyticsServices, settings, 
       const activeMember = row && !row.blockedAt ? row : null;
       const administrator = !!activeMember && isMemberAdminPhone(activeMember.phone);
       const entitled = Boolean(Number(activeMember?.entitled));
-      if (failOnUnavailable && entitled && !administrator && !state.settings) throw new ViewerAccessUnavailable();
-      return { tier: administrator || allowsContentWithoutSubscription(state, !!activeMember?.phoneVerifiedAt) || state.settings && entitled ? "full" : "free",
+      if (failOnUnavailable && activeMember && !administrator && !state.settings) throw new ViewerAccessUnavailable();
+      return { tier: administrator || allowsContentWithoutSubscription(state, !!activeMember) || state.settings && entitled ? "full" : "free",
         signedIn: !!row, mode };
     } catch {
-      if (mode === "off") return { tier: "full", signedIn: false, mode };
       if (failOnUnavailable) throw new ViewerAccessUnavailable();
       return { tier: "free", signedIn: false, mode };
     }

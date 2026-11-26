@@ -36,11 +36,12 @@ export function createShareSlipHandler({ members = getMemberServices, services =
       if (!database) return json({ error: "unavailable" }, 503);
       let day;
       try { day = parseReportingDate(input.day); } catch { return json({ error: "invalid-request" }, 400); }
-      if (viewer.mode === "off" && !viewer.signedIn && !await createMemberRateLimit(database, config)({ purpose: "slip-share-address",
+      if (viewer.tier === "free" && !viewer.signedIn && !await createMemberRateLimit(database, config)({ purpose: "slip-share-address",
         value: clientAddress(request.headers), maximum: 120, windowMs: memberRateRules.hourMs })) return json({ error: "limited" }, 429);
-      const result = await published(database).day(day, false, undefined, input.slipId);
+      const result = await published(database).day(day, viewer.tier === "free", undefined, input.slipId);
       const view = result?.slips.find(candidate => candidate.slip?.id === input.slipId);
-      if (!view?.slip || !view.id || !view.publishedAt) return json({ error: "changed" }, 409);
+      if (!view?.slip || !view.id || !view.publishedAt) return viewer.tier === "full"
+        ? json({ error: "changed" }, 409) : json({ error: "subscription-required" }, 403);
       if (!view.completed && (viewer.tier !== "full" || (await access(request)).tier !== "full")) return json({ error: "subscription-required" }, 403);
       const number = await database.transaction(async tx => ensureSlipNumber(tx, await slipNumberFingerprint(view.slip!)));
       const resolved = await members();
