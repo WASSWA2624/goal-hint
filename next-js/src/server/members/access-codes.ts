@@ -60,6 +60,9 @@ export type CodeOutcome = Readonly<{ status: "created"; grant: AccessGrant; noti
   | Readonly<{ status: "saved"; notification?: PaymentNotificationStatus }> | CodeFailure;
 /** planId names the plan of a plan payment; a top-up report's approval takes none, since the report decides its purpose. */
 export type PaymentApproval = Readonly<{ network: "mtn" | "airtel"; transactionRef: string; amountReceivedUgx: number; planId?: string }>;
+export type ManualGrant = Readonly<{ planId?: string; durationDays?: number; amountReceivedUgx: number; note: string;
+  network?: "mtn" | "airtel"; transactionRef?: string }>;
+type ManualGrantTarget = Readonly<{ phone: string }> | Readonly<{ accountId: string; requestId?: string }>;
 type Snapshot = Readonly<{ planId?: string | null; planName: string; durationDays: number; priceUgx: number; extensionDays?: number }>;
 type Creation = Snapshot & Readonly<{ source: string; paymentSubmissionId?: string; amountReceivedUgx?: number; note?: string; termsVersion?: string | null }>;
 type AccessAccount = Pick<MemberAccount, "id" | "phone" | "createdAt" | "trialEligibleAt" | "trialForfeitedAt">;
@@ -313,17 +316,30 @@ export function createAccessCodes({ database, now = Date.now, config, notificati
       });
     },
 
-    async manual(input: { phone: string; planId?: string; durationDays?: number; amountReceivedUgx: number; note: string;
-      network?: "mtn" | "airtel"; transactionRef?: string }, actor: string): Promise<CodeOutcome> {
-      const phone = normalizePhone(input.phone), note = input.note.trim();
-      if (!phone || !note || note.length > 200 || !validAmount(input.amountReceivedUgx)
+    async manual(input: ManualGrant & ManualGrantTarget, actor: string): Promise<CodeOutcome> {
+      const note = input.note.trim();
+      const phone = "phone" in input ? normalizePhone(input.phone) : null;
+      if ("phone" in input && !phone || !note || note.length > 200 || !validAmount(input.amountReceivedUgx)
         || (!!input.network !== !!input.transactionRef) || input.transactionRef && !input.planId) return invalid();
+      const batch = "accountId" in input && input.requestId ? { accountId: input.accountId, requestId: input.requestId } : null;
+      // Bind a retry without copying the private note into the audit.
+      const fingerprint = batch ? config?.key?.("subscriber-bulk-grant",
+        JSON.stringify([batch.accountId, batch.requestId, input.planId ?? null, input.durationDays ?? null, note])) : null;
+      if (batch && (!fingerprint || input.amountReceivedUgx !== 0 || input.network || input.transactionRef)) return invalid();
+      let recipient: string | null = null;
       const outcome = await codeTransaction<CodeOutcome>(database, async (tx, rollback) => {
-        // A grant may create the account, which then needs a valid mobile number; an existing account keeps its number.
-        if (!validMobilePhone(phone) && !await tx.memberAccount.findUnique({ where: { phone } })) return rollback(invalid(newNumberInvalid));
-        const account = await accountForPhone(tx, phone, new Date(now()));
+        if (phone && !validMobilePhone(phone) && !await tx.memberAccount.findUnique({ where: { phone } })) return rollback(invalid(newNumberInvalid));
+        const account = "accountId" in input ? await lockMemberAccount(tx, input.accountId)
+          : phone ? await accountForPhone(tx, phone, new Date(now())) : null;
         const at = new Date(now());
-        if (account.blockedAt || account.erasedAt) return rollback(refused());
+        if (!account?.phone || account.blockedAt || account.erasedAt) return rollback(refused());
+        recipient = account.phone;
+        if (batch) {
+          const prior = await tx.ownerAuditEvent.findFirst({ where: { accountId: account.id, actor, action: "member_bulk_grant", targetId: batch.requestId },
+            select: { details: true } });
+          if (prior) return prior.details && typeof prior.details === "object" && "fingerprint" in prior.details && prior.details.fingerprint === fingerprint
+            ? { status: "saved" } : rollback({ status: "refused", message: "This request ID was already used for a different grant." });
+        }
         if (input.network && input.transactionRef && input.planId) {
           const outcome = await approval(tx, account, { network: input.network, transactionRef: input.transactionRef,
             planId: input.planId, amountReceivedUgx: input.amountReceivedUgx }, actor, at, undefined, note);
@@ -332,10 +348,13 @@ export function createAccessCodes({ database, now = Date.now, config, notificati
         const plan = input.planId ? await tx.subscriptionPlan.findUnique({ where: { id: input.planId } }) : null;
         const days = plan?.durationDays ?? input.durationDays ?? 0;
         if (!validDays(days) || input.planId && !plan) return rollback(invalid());
-        return { status: "created", grant: await create(tx, account, { source: "manual", planId: plan?.id ?? null,
-          planName: plan?.name ?? "Manual", durationDays: days, priceUgx: plan?.priceUgx ?? 0, amountReceivedUgx: input.amountReceivedUgx, note }, actor, at) };
+        const grant = await create(tx, account, { source: "manual", planId: plan?.id ?? null,
+          planName: plan?.name ?? "Manual", durationDays: days, priceUgx: plan?.priceUgx ?? 0, amountReceivedUgx: input.amountReceivedUgx, note }, actor, at);
+        if (batch) await writeOwnerAudit(tx, { at, actor, action: "member_bulk_grant", accountId: account.id,
+          targetType: "member", targetId: batch.requestId, details: { fingerprint } });
+        return { status: "created", grant };
       });
-      return notifyApproval(outcome, phone);
+      return notifyApproval(outcome, recipient);
     },
 
     async approvePayment(id: string, fields: PaymentApproval, actor: string): Promise<CodeOutcome> {

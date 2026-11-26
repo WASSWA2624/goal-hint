@@ -8,7 +8,7 @@ import type { AnalyticsServices } from "@/server/analytics/analytics-http";
 import type { MemberPasswordResetRequest } from "@/server/generated/prisma/client";
 import { memberTokenHash } from "@/server/members/member-sessions";
 import { fixturePaymentProof } from "./payment-proof";
-import { fixtureSubscriberDirectory, type SubscriberDirectoryFixtureQuery } from "./subscriber-directory-query";
+import { fixtureSubscriberDirectory, fixtureSubscriberDirectoryCount, type SubscriberDirectoryFixtureQuery } from "./subscriber-directory-query";
 
 export const fixtureAdminToken = "z".repeat(43), fixtureAdminPassword = "Synthetic owner fixture password", fixtureAdminPhone = "256700000991";
 const fixtureKey = (purpose: string, value: string) => createHmac("sha256", "synthetic-owner-fixture-key").update(`${purpose}\0${value}`).digest("hex");
@@ -304,6 +304,14 @@ function createClient(emptySubscribers: boolean) {
       findMany: async () => state.passwordRequests,
       count: async ({ where }: { where: { status: string } }) => state.passwordRequests.filter(row => row.status === where.status).length,
       findFirst: async ({ where }: { where: { accountId: string } }) => state.passwordRequests.find(row => row.accountId === where.accountId) ?? null,
+      updateMany: async () => ({ count: 0 }),
+      create: async ({ data }: { data: Pick<MemberPasswordResetRequest, "id" | "accountId" | "phone" | "status" | "requestedAt"> }) => {
+        const row = { ...data, ownershipVerifiedAt: null, ownershipVerifiedBy: null, ownershipMethod: null, generatedAt: null, generatedBy: null,
+          expiresAt: null, generation: 0, tokenHash: null, tokenCiphertext: null, markedSentAt: null, markedSentBy: null, markedSentChannel: null,
+          completedAt: null, cancelledAt: null };
+        state.passwordRequests.push(row);
+        return row;
+      },
       findUnique: async ({ where, include }: { where: { id: string }; include?: { account: true } }) => {
         const row = resetRequest(where.id);
         return row ? { ...row, ...(include ? { account: recoveryAccount(row.accountId) } : {}) } : null;
@@ -345,7 +353,7 @@ function createClient(emptySubscribers: boolean) {
     memberAccount: { findUnique: async (query: { where: { id: string } }) => { const row = recoveryAccount(query.where.id);
       return row ? { creditUgx: 0, autoRenew: false, autoRenewPlan: null, ...row } : null; },
       aggregate: async () => ({ _sum: { creditUgx: null } }),
-      count: async (query: AccountQuery = {}) => state.accounts.filter(row => !query.where?.autoRenewPlanId || row.autoRenewPlanId === query.where.autoRenewPlanId).length,
+      count: async (query: SubscriberDirectoryFixtureQuery = {}) => emptySubscribers ? 0 : fixtureSubscriberDirectoryCount(state, query.where),
       findMany: async (query: AccountQuery | SubscriberDirectoryFixtureQuery = {}) => {
         if ("select" in query && query.select?.codes) return emptySubscribers ? [] : fixtureSubscriberDirectory(state, query);
         const where = query.where as AccountQuery["where"];

@@ -1,29 +1,37 @@
 import "server-only";
 
+import { checkoutOpenStatuses } from "../../domain/checkout.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import { formatPaymentReference } from "../../domain/payment.ts";
 import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { lockMemberAccount, type CodeOutcome } from "../members/access-codes.ts";
+import { isMemberAdminPhone } from "../members/member-admin.ts";
 import { decide } from "../members/settings.ts";
 import { rememberRegistrationPhone } from "../members/referrals.ts";
 import { scrubReferralReviewEvidence } from "../members/referral-reviews.ts";
+import { writeOwnerAudit } from "./audit.ts";
 
 const unavailable = (): CodeOutcome => ({ status: "refused", message: "This account is unavailable." });
+const unresolvedPaymentStatuses: ReadonlySet<string> = new Set([...checkoutOpenStatuses, "provider-pending"]);
+const accountedPaymentStatuses: ReadonlySet<string> = new Set(["approved", "reversed"]);
+const accountedAccessSources: ReadonlySet<string> = new Set(["payment", "credit", "renewal"]);
 const unique = (values: readonly (string | null)[]) => [...new Set(values.filter((value): value is string => value !== null))];
 type Client = Prisma.TransactionClient;
 
 /** Read identifiers before deleting their only remaining owners, including old phones and expired sessions. */
 async function deletionScope(tx: Client, id: string) {
-  const account = await tx.memberAccount.findUnique({ where: { id }, select: { phone: true } });
+  const account = await tx.memberAccount.findUnique({ where: { id }, select: { phone: true, creditUgx: true } });
   if (!account) return null;
   const [codes, payments, sessions, verifications, wallet] = await Promise.all([
-    tx.accessCode.findMany({ where: { accountId: id }, select: { id: true, reference: true } }),
-    tx.paymentSubmission.findMany({ where: { accountId: id }, select: { id: true, reference: true, submittedSessionHash: true } }),
+    tx.accessCode.findMany({ where: { accountId: id }, select: { id: true, reference: true, amountReceivedUgx: true, source: true } }),
+    tx.paymentSubmission.findMany({ where: { accountId: id }, select: {
+      id: true, reference: true, submittedSessionHash: true, status: true, method: true,
+      reservationActive: true, amountReceivedUgx: true, approvedTxnKey: true, reversedAt: true,
+    } }),
     tx.memberSession.findMany({ where: { accountId: id }, select: { tokenHash: true } }),
     tx.memberVerification.findMany({ where: { accountId: id }, select: { id: true, phone: true } }),
-    // Ledger rows go with the account by cascade (no trigger fires); their ids are scrubbed from audit details like the rest.
-    tx.walletEntry.findMany({ where: { accountId: id }, select: { id: true } }),
+    tx.walletEntry.findFirst({ where: { accountId: id }, select: { id: true } }),
   ]);
   const phones = unique([account.phone, ...verifications.map(row => row.phone)]);
   const phoneAccounts = phones.length ? await tx.memberAccount.findMany({
@@ -39,9 +47,15 @@ async function deletionScope(tx: Client, id: string) {
   const actors = [id, `member-admin:${id}`];
   const identifiers = unique([id, ...actors, ...codes.flatMap(row => [row.id, `C-${row.reference}`]),
     ...payments.flatMap(row => [row.id, formatPaymentReference(row.reference), `P-${row.reference}`]), ...sessionHashes,
-    ...verifications.map(row => row.id), ...unbound.map(row => row.id), ...wallet.map(row => row.id)]);
-  return { id, actors, exclusivePhones, phoneAccountIds: phoneAccounts.map(row => row.id),
-    sessionHashes, identifiers, codeIds: codes.map(row => row.id), paymentIds: payments.map(row => row.id) };
+    ...verifications.map(row => row.id), ...unbound.map(row => row.id)]);
+  return { id, phone: account.phone, actors, exclusivePhones, phoneAccountIds: phoneAccounts.map(row => row.id),
+    sessionHashes, identifiers, codeIds: codes.map(row => row.id), paymentIds: payments.map(row => row.id),
+    // A late verified Flutterwave outcome can still reconcile after a failed or cancelled attempt.
+    hasUnresolvedPayment: payments.some(row => row.method === "flw" || row.reservationActive || unresolvedPaymentStatuses.has(row.status)),
+    // Tax period end dates and legal holds are not recorded here. An old transaction date alone cannot release these rows.
+    hasAccountingHistory: account.creditUgx !== 0 || wallet !== null || codes.some(row => (row.amountReceivedUgx ?? 0) > 0 || accountedAccessSources.has(row.source))
+      || payments.some(row => accountedPaymentStatuses.has(row.status) || (row.amountReceivedUgx ?? 0) > 0
+        || row.approvedTxnKey !== null || row.reversedAt !== null) };
 }
 type Scope = NonNullable<Awaited<ReturnType<typeof deletionScope>>>;
 
@@ -104,7 +118,8 @@ function rateLimitKeys(scope: Scope, config: Pick<AnalyticsConfig, "key">) {
 }
 
 /** Permanent deletion is one transaction. Shared catalog, plans and site/address throttles have no member owner. */
-export async function deleteSubscriber(database: DatabaseRuntime, id: string, config: Pick<AnalyticsConfig, "key">): Promise<CodeOutcome> {
+export async function deleteSubscriber(database: DatabaseRuntime, id: string, config: Pick<AnalyticsConfig, "key">,
+  { actor, now, administratorId }: { actor: string; now: () => number; administratorId?: string }): Promise<CodeOutcome> {
   for (let attempt = 0; attempt < 4; attempt++) {
     const discovered = await database.query(async tx => {
       const scope = await deletionScope(tx, id);
@@ -117,6 +132,9 @@ export async function deleteSubscriber(database: DatabaseRuntime, id: string, co
         for (const accountId of discovered.accountIds) await lockMemberAccount(tx, accountId);
         const scope = await deletionScope(tx, id);
         if (!scope) return rollback(unavailable());
+        if (administratorId && (id === administratorId || isMemberAdminPhone(scope.phone))) {
+          return rollback({ status: "refused", message: "Administrator accounts cannot be changed through bulk actions." });
+        }
         const related = await relatedRows(tx, scope);
         if (related.accountIds.some(accountId => !discovered.accountIds.includes(accountId))) return rollback({ status: "retry" });
         // Number changes are history that other accounts' credit is traced by, so such an account is erased, never deleted.
@@ -127,9 +145,20 @@ export async function deleteSubscriber(database: DatabaseRuntime, id: string, co
             : "This account's access or credit moved between numbers, so it can't be deleted. Erase its personal data instead." });
         }
 
-        for (const phone of scope.exclusivePhones) await rememberRegistrationPhone(tx, config, phone, new Date());
-        if (await tx.paymentReceiptClaim.count({ where: { submissionId: { in: scope.paymentIds } } }))
-          return rollback({ status: "refused", message: "This account has payment receipt accounting. Erase its personal data instead of deleting its records." });
+        const paymentIds = { in: scope.paymentIds };
+        if (scope.paymentIds.length && (await tx.paymentReceiptClaim.findFirst({
+          where: { submissionId: paymentIds }, select: { id: true },
+        }) || await tx.paymentReceipt.findFirst({
+          where: { OR: [{ intendedSubmissionId: paymentIds }, { allocatedSubmissionId: paymentIds }] }, select: { id: true },
+        })))
+          return rollback({ status: "refused", message: "This account has payment receipt accounting. Its financial records must be retained." });
+        if (scope.hasUnresolvedPayment)
+          return rollback({ status: "refused", message: "This account has an open payment or payment-provider record that must be kept for reconciliation." });
+        if (scope.hasAccountingHistory)
+          return rollback({ status: "refused", message: "This account has accounting records that must be kept. Erase its personal data instead." });
+
+        const at = new Date(now());
+        for (const phone of scope.exclusivePhones) await rememberRegistrationPhone(tx, config, phone, at);
         await tx.memberReferral.updateMany({ where: { accountId: id, status: "pending" }, data: { status: "ineligible" } });
         await tx.memberSession.deleteMany({ where: { accountId: id } });
         await tx.memberVerification.deleteMany({ where: { OR: [
@@ -161,7 +190,8 @@ export async function deleteSubscriber(database: DatabaseRuntime, id: string, co
         await tx.accessCode.deleteMany({ where: { accountId: id } });
         await tx.paymentSubmission.deleteMany({ where: { accountId: id } });
         await tx.memberAccount.delete({ where: { id } });
-        // Do not recreate an account-linked audit record after removing all of this account's information.
+        await writeOwnerAudit(tx, { at, actor: actors.has(actor) ? "deleted-admin" : actor,
+          action: "member_deleted", targetType: "member", targetId: "deleted", details: {} });
         return { status: "saved" };
       });
       if (outcome.status !== "retry") return outcome;

@@ -1,7 +1,7 @@
 import "server-only";
 import { reviewAlertFeed, reviewSessionHash } from "./payment-alerts.ts";
 import { normalizeTransactionId } from "../../domain/payment.ts";
-import { createAccessCodes, type CodeOutcome } from "../members/access-codes.ts";
+import { createAccessCodes, type CodeOutcome, type ManualGrant } from "../members/access-codes.ts";
 import { json, privateHeaders } from "../http/private-http.ts";
 import { readJsonBody, type AdminContext } from "./admin-http.ts";
 import { createPaymentReview } from "./payment-review.ts";
@@ -14,6 +14,15 @@ import { auditTextErrors } from "./audit.ts";
 export const storageUnavailable = () => json({ message: "Member storage is unavailable. Try again shortly." }, 503);
 export const invalidAction = () => json({ message: "Check the action and values." }, 400);
 export const uuid = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/iu.test(value);
+export function readManualGrant(body: Record<string, unknown>): ManualGrant | null {
+  const { note, amount, planId, days, network, transactionId } = body;
+  if (typeof note !== "string" || typeof amount !== "number" || planId !== undefined && !uuid(planId)
+    || days !== undefined && typeof days !== "number" || network !== undefined && network !== "mtn" && network !== "airtel"
+    || transactionId !== undefined && typeof transactionId !== "string") return null;
+  return { note, amountReceivedUgx: amount, ...(typeof planId === "string" ? { planId } : {}),
+    ...(typeof days === "number" ? { durationDays: days } : {}),
+    ...(network ? { network } : {}), ...(transactionId ? { transactionRef: transactionId } : {}) };
+}
 /**
  * A new period answers 201 with access and payment SMS status, plus any credit the payment added; an approved top-up answers
  * 201 `credited` with the credit added and the new balance. Credentials and message bodies stay server-side.
@@ -43,11 +52,9 @@ export function createCodesHandlers({ notifications }: { notifications?: Payment
         if (b.action === "search") return typeof b.search === "string" && b.search.length <= 40 && typeof b.status === "string"
           ? json({ codes: await createPaymentReview(services.database).codes(b.search, b.status) }) : invalidAction();
         if (b.action === "manual") {
-          if (typeof b.phone !== "string" || typeof b.note !== "string" || typeof b.amount !== "number" || b.planId !== undefined && !uuid(b.planId)
-            || b.days !== undefined && typeof b.days !== "number" || b.network !== undefined && !["mtn", "airtel"].includes(String(b.network))
-            || b.transactionId !== undefined && typeof b.transactionId !== "string") return invalidAction();
-          return codeAnswer(await codes.manual({ phone: b.phone, note: b.note, amountReceivedUgx: b.amount, ...(b.planId ? { planId: b.planId as string } : {}),
-            ...(typeof b.days === "number" ? { durationDays: b.days } : {}), ...(b.network ? { network: b.network as "mtn" | "airtel" } : {}), ...(b.transactionId ? { transactionRef: b.transactionId as string } : {}) }, owner.username));
+          const grant = readManualGrant(b);
+          if (typeof b.phone !== "string" || !grant) return invalidAction();
+          return codeAnswer(await codes.manual({ phone: b.phone, ...grant }, owner.username));
         }
         if (!uuid(b.id)) return invalidAction();
         switch (b.action) {

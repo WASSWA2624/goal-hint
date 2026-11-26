@@ -1,4 +1,5 @@
 import { readJsonBody } from "@/server/admin/admin-http";
+import { readManualGrant } from "@/server/admin/codes-http";
 import { subscriberDeviceId } from "@/server/admin/subscribers";
 import { json } from "@/server/http/private-http";
 import { normalizePhone } from "@/domain/phone";
@@ -15,6 +16,13 @@ export async function subscriberAction(request: Request) {
   if (["change-number", "erase", "delete"].includes(String(action)) && body.confirmed !== true)
     return json({ message: "Confirm the account action first." }, 400);
   switch (action) {
+    case "grant": {
+      const input = readManualGrant(body);
+      const plan = input?.planId ? state.plans.find(row => row.id === input.planId) : null;
+      const days = plan?.durationDays ?? input?.durationDays;
+      if (!input || !days || input.planId && !plan) return json({ message: "Choose a valid grant period." }, 400);
+      return json(grantFixtureAccess(account, days, "manual", plan?.name ?? "Manual"), 201);
+    }
     case "note":
       if (typeof body.value !== "string" || body.value.length > 500) return json({ message: "Keep the note within 500 characters." }, 400);
       account.ownerNote = body.value.trim() || null;recordFixtureAudit("member_note_changed", account.id);break;
@@ -57,10 +65,31 @@ export async function subscriberAction(request: Request) {
       if (state.movedAccountIds?.includes(account.id)) return json({ status: "refused", message: account.erasedAt
         ? "This account's access or credit moved between numbers, so its records stay for accounting and it can't be deleted."
         : "This account's access or credit moved between numbers, so it can't be deleted. Erase its personal data instead." }, 409);
+      if (state.payments.some(row => row.accountId === account.id)) return json({ status: "refused", message: "Payment records must be retained for this account." }, 409);
       state.accounts = state.accounts.filter(row => row.id !== account.id);state.devices = state.devices.filter(row => row.accountId !== account.id);
       state.codes = state.codes.filter(row => row.accountId !== account.id);state.payments = state.payments.filter(row => row.accountId !== account.id);
       state.audits = state.audits.filter(row => row.accountId !== account.id);break;
     default: return json({ message: "Unknown subscriber action." }, 400);
   }
   return json({ status: "saved" });
+}
+
+export async function subscriberBulkAction(request: Request) {
+  const read = await readJsonBody(request);
+  if ("refusal" in read) return read.refusal;
+  const { action, accountIds, confirmed, count, value, planId, days, note } = read.body;
+  if (!Array.isArray(accountIds) || !accountIds.length || accountIds.length > 25 || accountIds.length !== count
+    || accountIds.some(id => typeof id !== "string") || new Set(accountIds).size !== count || confirmed !== true
+    || !["grant", "block", "unblock", "sign-out-all", "erase", "delete"].includes(String(action))) return json({ message: "Check the account selection." }, 400);
+  const results = [];
+  for (const accountId of accountIds) {
+    const response = await subscriberAction(new Request(new URL(`/api/admin/subscribers/${accountId}`, request.url), {
+      method: "POST", headers: request.headers,
+      body: JSON.stringify({ action, confirmed, value, planId, days, note, amount: 0 }),
+    }));
+    const reply: { message?: string } = await response.json();
+    results.push(response.ok ? { accountId, status: "saved" } : { accountId, status: "failed", message: reply.message });
+  }
+  const succeeded = results.filter(row => row.status === "saved").length;
+  return json({ status: "completed", results, succeeded, failed: results.length - succeeded });
 }

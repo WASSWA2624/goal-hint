@@ -1,13 +1,14 @@
 import "server-only";
 
-import { emptySubscriberDirectoryQuery, subscriberSearchTerms, type SubscriberDirectoryAccount, type SubscriberDirectoryQuery } from "../../domain/subscriber-directory.ts";
+import { emptySubscriberDirectoryQuery, subscriberDirectoryPageSize, subscriberSearchTerms, type SubscriberDirectoryAccount,
+  type SubscriberDirectoryPage, type SubscriberDirectoryQuery } from "../../domain/subscriber-directory.ts";
 import { networkForPrefix } from "../../domain/phone.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 
-export const subscriberDirectoryLimit = 100;
+const currentCodeLimit = 100;
 
-/** SQL predicates compose before the result cap; one bounded relation selection enriches the list. */
+/** SQL predicates compose before counting and paging; one bounded relation selection enriches each page. */
 export function subscriberDirectoryWhere(query: SubscriberDirectoryQuery, at: Date): Prisma.MemberAccountWhereInput {
   const current: Prisma.AccessCodeWhereInput = { revokedAt: null, endsAt: { gt: at } };
   const active: Prisma.AccessCodeWhereInput = { ...current, startsAt: { lte: at } };
@@ -43,16 +44,20 @@ export function subscriberDirectoryWhere(query: SubscriberDirectoryQuery, at: Da
 
 /** Carrier artwork is used only when an explicitly configured prefix table identifies it. */
 export async function readSubscriberDirectory(database: DatabaseRuntime, query: SubscriberDirectoryQuery = emptySubscriberDirectoryQuery,
-  now: (() => number) | number = Date.now): Promise<readonly SubscriberDirectoryAccount[]> {
-  const at = new Date(typeof now === "function" ? now() : now);
-  return database.query(async client => {
-    const rows = await client.memberAccount.findMany({ where: subscriberDirectoryWhere(query, at),
-      orderBy: [{ lastSignInAt: "desc" }, { id: "asc" }], take: subscriberDirectoryLimit,
+  requestedPage = 1, now: (() => number) | number = Date.now): Promise<SubscriberDirectoryPage> {
+  const at = new Date(typeof now === "function" ? now() : now), where = subscriberDirectoryWhere(query, at);
+  return database.transaction(async client => {
+    const total = await client.memberAccount.count({ where });
+    const pages = Math.max(1, Math.ceil(total / subscriberDirectoryPageSize));
+    const page = Math.min(requestedPage, pages);
+    const rows = total === 0 ? [] : await client.memberAccount.findMany({ where,
+      orderBy: [{ lastSignInAt: "desc" }, { id: "asc" }], skip: (page - 1) * subscriberDirectoryPageSize, take: subscriberDirectoryPageSize,
       select: { id: true, phone: true, blockedAt: true, erasedAt: true, lastSignInAt: true,
-        codes: { where: { revokedAt: null, endsAt: { gt: at } }, orderBy: [{ startsAt: "asc" }, { id: "asc" }], take: subscriberDirectoryLimit,
+        codes: { where: { revokedAt: null, endsAt: { gt: at } }, orderBy: [{ startsAt: "asc" }, { id: "asc" }], take: currentCodeLimit,
           select: { planName: true, startsAt: true } } } });
-    return rows.map<SubscriberDirectoryAccount>(row => ({ id: row.id, phone: row.phone, status: row.erasedAt ? "erased" : row.blockedAt ? "blocked" : "open",
+    const accounts = rows.map<SubscriberDirectoryAccount>(row => ({ id: row.id, phone: row.phone, status: row.erasedAt ? "erased" : row.blockedAt ? "blocked" : "open",
       lastSignInAt: row.lastSignInAt.toISOString(), access: row.codes.some(code => code.startsAt <= at) ? "active" : row.codes.length ? "queued" : "none",
       planNames: [...new Set(row.codes.map(code => code.planName))], network: row.phone ? networkForPrefix(row.phone) : null }));
-  });
+    return { accounts, page, pages, total };
+  }, { isolationLevel: "RepeatableRead" });
 }

@@ -110,17 +110,18 @@ test('subscriber details load as soon as their identity is known without waiting
       const rendering = Page({ searchParams: Promise.resolve(explicit ? { accountId: selected } : {}) });
       await new Promise(setImmediate);
       assert.deepEqual(reads, explicit ? [selected] : []);
-      finishDirectory([{ id: selected }]);
+      finishDirectory({ accounts: [{ id: selected }], page: 2, pages: 3, total: 73 });
       await new Promise(setImmediate);
       assert.deepEqual(reads, [selected], 'Default details should start when the directory arrives, while plans are pending.');
       finishPlans(plans);
       const editor = await rendering;
       assert.equal(editor.props.detail.id, selected);
       assert.deepEqual(editor.props.accounts, [{ id: selected }]);
+      assert.deepEqual(editor.props.initialPaging, { page: 2, pages: 3, total: 73 });
       assert.deepEqual(editor.props.plans, plans);
       assert.equal(editor.props.selectedExplicitly, explicit);
     } finally {
-      finishDirectory([]); finishPlans([]);
+      finishDirectory({ accounts: [], page: 1, pages: 1, total: 0 }); finishPlans([]);
       delete globalThis.performanceDirectory; delete globalThis.performancePlans; delete globalThis.performanceSubscriber;
     }
   }

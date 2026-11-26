@@ -51,7 +51,7 @@ const isRequestId = (value: string) => /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12
 const isToken = (value: unknown): value is string => typeof value === "string" && /^[\w-]{43}$/u.test(value);
 const instant = (date: Date | null) => date?.toISOString() ?? null;
 
-function auditChange(tx: Prisma.TransactionClient, request: MemberPasswordResetRequest, actor: string, at: Date,
+function auditChange(tx: Prisma.TransactionClient, request: Pick<MemberPasswordResetRequest, "id" | "accountId">, actor: string, at: Date,
   action: OwnerAuditAction, details: Record<string, string | number>) {
   return writeOwnerAudit(tx, { at, actor: `member-admin:${actor}`, action, accountId: request.accountId, targetType: "password-request", targetId: request.id, details });
 }
@@ -127,6 +127,23 @@ export function createPasswordRecovery({ database, config, now = Date.now, admin
     });
   }
 
+  /** The caller holds the account lock and has checked the current password-reset eligibility. */
+  async function openRequest(tx: Prisma.TransactionClient, accountId: string, phone: string, at: Date) {
+    const live = await tx.memberPasswordResetRequest.findFirst({ where: { accountId, phone,
+      OR: [{ status: "pending" }, { status: "link-generated", expiresAt: { gt: at } }],
+    }, select: { id: true } });
+    if (live) return { id: live.id, created: false };
+    await tx.memberPasswordResetRequest.updateMany({
+      where: { accountId, status: "link-generated", expiresAt: { lte: at }, tokenCiphertext: { not: null } },
+      data: { tokenHash: null, tokenCiphertext: null },
+    });
+    const request = await tx.memberPasswordResetRequest.create({
+      data: { id: randomUUID(), accountId, phone, requestedAt: at, status: "pending" },
+      select: { id: true },
+    });
+    return { id: request.id, created: true };
+  }
+
   return Object.freeze({
     /** Unknown and ineligible numbers receive matching first/repeat acknowledgements without populating the admin queue. */
     async request(phoneInput: unknown, address: string) {
@@ -138,21 +155,23 @@ export function createPasswordRecovery({ database, config, now = Date.now, admin
         const found = await tx.memberAccount.findUnique({ where: { phone }, select: { id: true } });
         const account = found ? await lockMemberAccount(tx, found.id) : null;
         if (!eligible(account, phone)) return null;
-        const at = new Date(now());
-        const live = await tx.memberPasswordResetRequest.findFirst({ where: { accountId: account.id, phone,
-          OR: [{ status: "pending" }, { status: "link-generated", expiresAt: { gt: at } }],
-        }, select: { id: true } });
-        if (live) return existing;
-        await tx.memberPasswordResetRequest.updateMany({
-          where: { accountId: account.id, status: "link-generated", expiresAt: { lte: at }, tokenCiphertext: { not: null } },
-          data: { tokenHash: null, tokenCiphertext: null },
-        });
-        await tx.memberPasswordResetRequest.create({ data: { id: randomUUID(), accountId: account.id, phone, requestedAt: at, status: "pending" } });
-        return requested;
+        return (await openRequest(tx, account.id, phone, new Date(now()))).created ? requested : existing;
       });
       if (outcome) return outcome;
       return await limit({ purpose: "manual-reset-request-acknowledgement", value: phone, maximum: 1, windowMs: passwordRecoveryRules.linkLifetimeMs })
         ? requested : existing;
+    },
+
+    /** Open the same pending workflow from a verified admin action, without verifying ownership or issuing a token. */
+    async openForSubscriber(accountId: string, actorId: string) {
+      if (!isRequestId(accountId) || !isRequestId(actorId)) return missing;
+      return decide(database, async tx => {
+        const account = await lockMemberAccount(tx, accountId);
+        if (!account?.phone || !eligible(account, account.phone)) return missing;
+        const at = new Date(now()), open = await openRequest(tx, account.id, account.phone, at);
+        if (open.created) await auditChange(tx, { id: open.id, accountId }, actorId, at, "password_request_opened", {});
+        return { status: "ok", requestId: open.id } as const;
+      });
     },
 
     /** A page open does not advance a request or return account data. */

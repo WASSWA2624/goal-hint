@@ -47,14 +47,14 @@ class RequestReadError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
 }
 
-export function PasswordRequestsEditor({ initial }: { initial: readonly PasswordRequestRow[] | null }) {
+export function PasswordRequestsEditor({ initial, initialRequestId }: { initial: readonly PasswordRequestRow[] | null; initialRequestId?: string }) {
   const id = useId();
-  const { detailOpen, openDetail, closeDetail } = useRecordView();
+  const { detailOpen, openDetail, closeDetail } = useRecordView({ initiallyOpen: !!initialRequestId });
   const [rows, setRows] = useState(initial ?? []);
   const [available, setAvailable] = useState(initial !== null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialRequestId ?? null);
   const [detail, setDetail] = useState<PasswordRequestDetails | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!!initialRequestId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -118,6 +118,10 @@ export function PasswordRequestsEditor({ initial }: { initial: readonly Password
   const recheckDetail = useEffectEvent(() => {
     if (detailOpen && selectedId && document.visibilityState === "visible") void read(selectedId, true);
   });
+  const readInitialRequest = useEffectEvent((requestId: string) => { void read(requestId); });
+  useEffect(() => {
+    if (initialRequestId) readInitialRequest(initialRequestId);
+  }, [initialRequestId]);
   useEffect(() => {
     const recheck = () => recheckDetail();
     window.addEventListener("focus", recheck);

@@ -111,8 +111,17 @@ def directory_rendering(origin: str) -> None:
         assert any(label.attributes.get("for") == control.attributes.get("id") for label in filters.all("label"))
     results = directory.one(attribute="data-subscriber-results")
     assert results.attributes.get("aria-busy") == "false" and results.attributes.get("tabindex") == "0"
+    tools = directory.one(attribute="data-record-list-tools")
+    toolbar = tools.one(attribute="data-subscriber-selection")
+    assert directory.children.index(tools) < directory.children.index(results)
+    assert toolbar.one(tag="label").text() == "Select all on this page"
+    select_all = toolbar.one(tag="input")
+    assert select_all.attributes.get("type") == "checkbox" and "checked" not in select_all.attributes
+    assert toolbar.one(attribute="data-subscriber-selected-count").text() == "0 selected"
+    manage = toolbar.one(tag="button")
+    assert manage.text() == "Manage" and "disabled" in manage.attributes
     rows = results.all(attribute="data-subscriber-row")
-    assert len(rows) == 6 and all(row.tag == "a" for row in rows)
+    assert len(rows) == 6 and all(row.tag == "div" for row in rows)
     assert sorted(row.one(attribute="data-subscriber-status").attributes["data-subscriber-status"] for row in rows) == ["blocked", "erased", "open", "open", "open", "open"]
     for row in rows:
         assert row.attributes["data-review-subscriber-row"] == row.attributes["data-subscriber-row"]
@@ -120,8 +129,15 @@ def directory_rendering(origin: str) -> None:
         assert not row.all(attribute="data-payment-logo"), "Unknown carriers must not borrow a payment network logo."
         row.one(attribute="data-review-phone")
         row.one(attribute="data-review-row-meta").one(tag="time")
+        assert row.one(tag="input").attributes.get("type") == "checkbox"
+        open_account = row.one(tag="a", attribute="data-subscriber-open")
+        assert open_account.text() == "Open" and row.attributes["data-subscriber-row"] in open_account.attributes["href"]
+        assert not open_account.all("button") and not open_account.all("input"), "Account tools are sibling controls."
+        more = row.one(tag="button")
+        assert more.attributes.get("aria-expanded") == "false" and more.attributes.get("aria-label", "").startswith("More actions for")
+        assert more.one(tag="svg")
     selected = next(row for row in rows if row.attributes["data-subscriber-row"] == PRIMARY)
-    assert selected.attributes.get("aria-current") == "page"
+    assert selected.one(attribute="data-subscriber-open").attributes.get("aria-current") == "page"
     count = directory.one(attribute="data-subscriber-count")
     assert count.attributes.get("aria-live") == "polite" and count.text() == "6 accounts"
     detail = workspace.one(attribute="data-subscriber-detail")
@@ -131,14 +147,14 @@ def directory_rendering(origin: str) -> None:
     assert [term.text() for term in stats.all("dt")] == ["Signed-in devices", "Access periods", "Credit"]
     actions = detail.one(attribute="data-record-footer").one(attribute="data-subscriber-actions").all("button")
     assert not summary.all(attribute="data-subscriber-actions")
-    assert [button.text() for button in actions] == ["Grant access", "Change number", "Block account", "Log out devices"]
+    assert [button.text() for button in actions] == ["Grant access", "Change number", "Block account", "Log out devices", "Reset password"]
     assert all(button.attributes.get("aria-haspopup") == "dialog" and button.attributes.get("aria-expanded") == "false" for button in actions)
     tabs = detail.one(attribute="data-subscriber-tabs")
     assert [re.sub(r" \(\d+\)$", "", button.text()) for button in tabs.all("button")] == ["Overview", "Access", "Payments", "Credit", "Devices"]
     assert sum(button.attributes.get("aria-selected") == "true" for button in tabs.all("button")) == 1
     assert not detail.all(attribute="data-subscriber-action-panel") and not detail.all(attribute="data-subscriber-action-dialog")
     assert not document.all(attribute="data-subscriber-dialog"), "Action dialogs start closed."
-    assert not re.search(r"Reset password|Set temporary password|temporary-password", detail.text(), re.I)
+    assert not re.search(r"Set temporary password|temporary-password", detail.text(), re.I)
     assert not any(control.attributes.get("name") in {"reason", "newPhone", "verifiedBy", "planId", "days"} for control in detail.all("input") + detail.all("select"))
     filtered = page(origin, {"status": "blocked"}).one(attribute="data-subscriber-workspace")
     assert [row.attributes["data-subscriber-row"] for row in filtered.all(attribute="data-subscriber-row")] == [BLOCKED]
@@ -147,12 +163,19 @@ def directory_rendering(origin: str) -> None:
     empty = page(origin, {"search": "NoMatchingSubscriberFixture"}).one(attribute="data-subscriber-directory")
     assert empty.one(attribute="data-subscriber-empty").text() == "No matching subscribers."
     assert not empty.all(attribute="data-subscriber-row")
+    reset = page(origin, {"accountId": PRIMARY, "action": "password-reset"}).one(attribute="data-subscriber-action-dialog")
+    assert reset.attributes.get("data-subscriber-action-dialog") == "password-reset" and "one-time reset link" in reset.text()
+    assert not reset.all(tag="input")
+    for value in ("erase", "delete"):
+        removal = page(origin, {"accountId": PRIMARY, "action": value}).one(attribute="data-subscriber-removal")
+        assert removal.attributes.get("data-subscriber-removal") == value and removal.one(tag="input").attributes.get("type") == "checkbox"
 
 
 def directory_api(origin: str) -> None:
     def accounts(**query):
         status, reply = fixture_json(origin, "/api/admin/subscribers", {**BASE_QUERY, **query})
         assert status == 200 and isinstance(reply.get("accounts"), list), (query, status, reply)
+        assert reply["page"] == reply["pages"] == 1 and reply["total"] == len(reply["accounts"])
         for account in reply["accounts"]:
             assert set(account) == {"id", "phone", "status", "lastSignInAt", "access", "planNames", "network"}
             assert account["status"] in {"open", "blocked", "erased"} and account["access"] in {"active", "queued", "none"}
@@ -189,11 +212,41 @@ def directory_api(origin: str) -> None:
     assert not ids(access="queued"), "A queued renewal does not override an active period."
     assert ids(search="active", status="open", access="active", plan="Monthly") == {PRIMARY}
     assert not ids(search="active", status="blocked")
-    for invalid in [{"status": "online"}, {"access": "online"}, {"recent": "3"}, {"search": "x" * 121}, {"query": BASE_QUERY}]:
+    for invalid in [{"status": "online"}, {"access": "online"}, {"recent": "3"}, {"search": "x" * 121}, {"query": BASE_QUERY}, {"page": 0}]:
         status, _ = fixture_json(origin, "/api/admin/subscribers", {**BASE_QUERY, **invalid})
         assert status == 400, invalid
     assert fixture_json(origin, "/api/admin/subscribers", BASE_QUERY, headers={"Sec-Fetch-Site": "cross-site"})[0] == 403
     assert fixture_json(origin, "/api/admin/subscribers", BASE_QUERY, headers={"Cookie": ""})[0] == 401
+
+
+def page_and_action_api(origin: str) -> None:
+    state = "/api/fixture/subscribers"
+    assert fixture_json(origin, state, {"pagination": True})[0] == 200
+    ids = []
+    for page_number, expected in [(1, 25), (2, 1)]:
+        status, reply = fixture_json(origin, "/api/admin/subscribers", {**BASE_QUERY, "search": "Synthetic paging fixture", "page": page_number})
+        assert status == 200 and reply["page"] == page_number and reply["pages"] == 2 and reply["total"] == 26
+        assert len(reply["accounts"]) == expected
+        ids.extend(row["id"] for row in reply["accounts"])
+        rendered = page(origin, {"search": "Synthetic paging fixture", "page": page_number})
+        assert len(rendered.all(attribute="data-subscriber-row")) == expected
+        assert rendered.one(attribute="data-subscriber-selected-count").text() == "0 selected"
+    assert len(ids) == len(set(ids)) == 26
+    route = "/api/admin/subscribers/bulk"
+    mutation = {"action": "delete", "accountIds": [PRIMARY, ids[0]], "count": 2}
+    assert fixture_json(origin, route, {**mutation, "confirmed": False})[0] == 400
+    status, reply = fixture_json(origin, route, {**mutation, "confirmed": True})
+    assert status == 200 and reply["succeeded"] == reply["failed"] == 1
+    assert reply["results"] == [{"accountId": PRIMARY, "status": "failed", "message": "Payment records must be retained for this account."},
+                                {"accountId": ids[0], "status": "saved"}]
+    assert fixture_json(origin, route, {**mutation, "confirmed": True}, headers={"Cookie": ""})[0] == 401
+    status, reply = fixture_json(origin, f"/api/admin/subscribers/{PRIMARY}", {"action": "password-reset"})
+    assert status == 200 and set(reply) == {"status", "requestId"}
+    request_id = reply["requestId"]
+    status, details = fixture_json(origin, f"/api/admin/password-requests?id={request_id}")
+    assert status == 200 and details["request"]["accountId"] == PRIMARY and details["request"]["link"] is None
+    opened = request(origin, f"/admin/password-requests?requestId={request_id}", headers={"Cookie": COOKIE}, timeout=30)
+    assert opened.status == 200 and "no-store" in opened.headers.get("Cache-Control", "") and 'data-password-requests' in opened.text
 
 
 def verify(origin: str) -> None:
@@ -203,9 +256,10 @@ def verify(origin: str) -> None:
     try:
         directory_rendering(origin)
         directory_api(origin)
+        page_and_action_api(origin)
     finally:
         assert fixture_json(origin, "/api/fixture/subscribers", {})[0] == 200
-    print("PASS Balanced compact Subscribers: shared floating search and filters, native account rows, live count, compact stats and dialog triggers; enriched API search/filter combinations and administrator/cross-site guards.", flush=True)
+    print("PASS Subscribers rows, selection toolbar, paging, secure reset entry, removal confirmation, partial bulk results, filtered directory and administrator guards.", flush=True)
 
 
 def main():

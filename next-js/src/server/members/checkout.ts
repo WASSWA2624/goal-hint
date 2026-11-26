@@ -44,6 +44,11 @@ function hostedExpired(row: PaymentSubmission, at: Date): boolean {
   return row.method === "flw" && row.status === hostedPending && !hostedLink(row, at) && !(row.checkoutLeaseUntil && row.checkoutLeaseUntil > at);
 }
 
+export function activeHostedCheckoutWhere(accountId: string, at: Date): Prisma.PaymentSubmissionWhereInput {
+  return { accountId, method: "flw", status: { in: [hostedPending, "cancelled", "rejected"] },
+    OR: [{ checkoutUrlExpiresAt: { gt: at } }, { checkoutLeaseUntil: { gt: at } }] };
+}
+
 export async function paymentEvent(tx: Tx, submissionId: string, action: string, actor: string, at: Date,
   reason?: string, receiptId?: string, details?: Prisma.InputJsonObject) {
   await tx.paymentEvent.create({ data: { id: randomUUID(), submissionId, action, actor, createdAt: at,
@@ -293,8 +298,7 @@ export function createCheckout({ database, config, flutterwave, now = Date.now }
             ? fail("Flutterwave is preparing this checkout. Check its status before trying again.", "provider-pending")
             : fail("This checkout is closed. Check payment status or start a new purchase.", "provider-closed");
         }
-        const active = await tx.paymentSubmission.findFirst({ where: { accountId: account.id, method: "flw", status: { in: [hostedPending, "cancelled", "rejected"] },
-          OR: [{ checkoutUrlExpiresAt: { gt: at } }, { checkoutLeaseUntil: { gt: at } }] }, select: { id: true } });
+        const active = await tx.paymentSubmission.findFirst({ where: activeHostedCheckoutWhere(account.id, at), select: { id: true } });
         if (active) return fail("Use the existing Flutterwave checkout or check its status.", "provider-pending");
         await expire(tx, account.id, at);
         const quoted = await quote(tx, selection, at, account.id);

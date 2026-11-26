@@ -9,6 +9,8 @@ import { authCopy } from "../../i18n/messages/auth.ts";
 import { getAnalyticsConfig, type AnalyticsConfig } from "../analytics/analytics-config.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { lockMemberAccount, type CodeOutcome } from "../members/access-codes.ts";
+import { activeHostedCheckoutWhere } from "../members/checkout.ts";
+import { isMemberAdminPhone } from "../members/member-admin.ts";
 import { activeMemberSessionsWhere, memberSessionRules } from "../members/member-sessions.ts";
 import { invalidatePasswordResetRequests } from "../members/password-reset-state.ts";
 import { decide } from "../members/settings.ts";
@@ -97,13 +99,17 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
           devices: devices.map(r => ({ id: subscriberDeviceId(r.tokenHash), createdAt: r.createdAt.toISOString(), lastSeenAt: r.lastSeenAt.toISOString(), expiresAt: r.expiresAt.toISOString() })) };
       });
     },
-    async action(id: string, action: string, value: unknown, actor: string): Promise<CodeOutcome> {
-      if (action === "delete") return deleteSubscriber(database, id, config ?? await getAnalyticsConfig());
+    async action(id: string, action: string, value: unknown, actor: string, administratorId?: string): Promise<CodeOutcome> {
+      if (action === "delete") return deleteSubscriber(database, id, config ?? await getAnalyticsConfig(), { actor, now, ...(administratorId ? { administratorId } : {}) });
       if (action === "note" && (typeof value !== "string" || value.length > 500) || ["block", "unblock"].includes(action) && (typeof value !== "string" || !value.trim() || value.length > 200)) return { status: "invalid", message: "Provide a reason (up to 200 characters) or a note (up to 500 characters)." };
       if (["block", "unblock"].includes(action) && auditTextErrors({ reason: value })) return { status: "invalid", message: "Use a reason without phone numbers or access codes." };
       return decide<CodeOutcome>(database, async (tx, rollback) => {
         const account = await lockMemberAccount(tx, id);
         if (!account || account.erasedAt) return rollback({ status: "refused", message: "This account is unavailable." });
+        if (administratorId && (action === "block" || action === "erase")
+          && (account.id === administratorId || isMemberAdminPhone(account.phone))) {
+          return rollback({ status: "refused", message: "Administrator accounts cannot be changed by this bulk action." });
+        }
         const at = new Date(now()); let deleted = 0;
         switch (action) {
           case "note": await tx.memberAccount.update({ where: { id }, data: { ownerNote: (value as string).trim() || null } }); break;
@@ -126,6 +132,9 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
             await tx.memberAccount.update({ where: { id }, data: { autoRenew: false } });
             break;
           case "block": case "unblock":
+            if (administratorId && (action === "block") === !!account.blockedAt) {
+              return rollback({ status: "refused", message: action === "block" ? "This account is already blocked." : "This account is already open." });
+            }
             await tx.memberAccount.update({ where: { id }, data: { blockedAt: action === "block" ? at : null, blockedReason: action === "block" ? (value as string).trim() : null } });
             if (action === "block") {
               deleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count;
@@ -133,6 +142,8 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
             }
             break;
           case "erase": {
+            const pendingCheckout = await tx.paymentSubmission.findFirst({ where: activeHostedCheckoutWhere(id, at), select: { id: true } });
+            if (pendingCheckout) return rollback({ status: "refused", message: "Resolve the pending provider payment before erasing this account." });
             await tx.paymentSubmission.updateMany({ where: { accountId: id, reservationActive: true }, data: { reservationActive: false, status: "cancelled" } });
             await tx.paymentReceiptEvidence.updateMany({ where: { claim: { submission: { accountId: id } } }, data: { image: null } });
             await tx.paymentReceiptClaim.updateMany({ where: { submission: { accountId: id } }, data: { payerPhone: null, image: null, imageSha256: null, original: Prisma.DbNull, corrections: Prisma.DbNull, purgedAt: at } });
@@ -141,8 +152,16 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
             await tx.slipConfiguration.deleteMany({ where: { accountId: id } });
             const rows = await tx.paymentSubmission.findMany({ where: { accountId: id }, select: { id: true } });
             await tx.paymentScreenshot.deleteMany({ where: { submissionId: { in: rows.map(r => r.id) } } });
-            await tx.paymentSubmission.updateMany({ where: { accountId: id }, data: { payerPhone: null, rejectText: null, imagePurgedAt: at } });
-            if (account.phone) await tx.paymentSubmission.updateMany({ where: { payerPhone: account.phone }, data: { payerPhone: null } });
+            await tx.paymentSubmission.updateMany({ where: { accountId: id }, data: { payerPhone: null, submittedSessionHash: null, rejectText: null, imagePurgedAt: at } });
+            if (account.phone) {
+              await tx.paymentSubmission.updateMany({ where: { payerPhone: account.phone }, data: { payerPhone: null } });
+              // Keep the payer channel on disputed or unallocated receipts while ownership is being resolved.
+              await tx.paymentReceipt.updateMany({
+                where: { senderPhone: account.phone, disputed: false, allocatedSubmissionId: { not: null },
+                  claims: { some: { submission: { accountId: id } } } },
+                data: { senderPhone: null },
+              });
+            }
             await tx.accessCode.updateMany({ where: { accountId: id }, data: { note: null } });
             deleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count;
             // Credit is non-refundable and an erased account can never sign in to spend it, so a positive balance is forfeited;
@@ -153,7 +172,7 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
               await writeOwnerAudit(tx, { at, actor, action: "credit_forfeited", accountId: id, targetType: "member", targetId: id, details: { amountUgx: credit, walletEntryId: entry.id } });
             }
             await tx.memberAccount.update({ where: { id }, data: { phone: null, passwordHash: null, phoneVerifiedAt: null, memberAdmittedAt: null, passwordChangedAt: null, whatsappNotificationsAt: null,
-              ownerNote: null, blockedReason: null, erasedAt: at, autoRenew: false, referralCode: null } });
+              ownerNote: null, blockedReason: null, erasedAt: at, autoRenew: false, referralCode: null, legacyReferralCode: null } });
             await tx.memberVerification.deleteMany({ where: { accountId: id } });
             await tx.memberPasswordResetRequest.deleteMany({ where: { accountId: id } });
             // Outbox rows hold no number, but an erased account is never notified again and keeps no delivery history.

@@ -14,11 +14,20 @@ export type SubscriberDirectoryQuery = Readonly<{
   plan: string;
   recent: "all" | "1" | "7" | "30";
 }>;
+export type SubscriberDirectoryPaging = Readonly<{ page: number; pages: number; total: number }>;
+export type SubscriberDirectoryPage = SubscriberDirectoryPaging & Readonly<{ accounts: readonly SubscriberDirectoryAccount[] }>;
+export const subscriberDirectoryPageSize = 25;
 
 export const emptySubscriberDirectoryQuery: SubscriberDirectoryQuery = Object.freeze({
   search: "", status: "all", access: "all", plan: "all", recent: "all",
 });
 const fields = new Set(["search", "status", "access", "plan", "recent"]);
+
+export function parseSubscriberDirectoryPage(value: unknown): number | null {
+  if (value === undefined) return 1;
+  const page = typeof value === "string" && /^[1-9]\d*$/u.test(value) ? Number(value) : value;
+  return typeof page === "number" && Number.isSafeInteger(page) && page >= 1 ? page : null;
+}
 
 /** Validate the request once; legacy phone-only searches inherit the unfiltered defaults. */
 export function parseSubscriberDirectoryQuery(value: unknown): SubscriberDirectoryQuery | null {

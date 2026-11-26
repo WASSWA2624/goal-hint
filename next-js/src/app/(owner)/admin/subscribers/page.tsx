@@ -5,7 +5,8 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { adminPageGate } from "@/server/admin/admin-http";
 import { createSubscribers } from "@/server/admin/subscribers";
 import { readSubscriberDirectory } from "@/server/admin/subscriber-directory";
-import { emptySubscriberDirectoryQuery, parseSubscriberDirectoryQuery } from "@/domain/subscriber-directory";
+import { emptySubscriberDirectoryQuery, parseSubscriberDirectoryPage, parseSubscriberDirectoryQuery } from "@/domain/subscriber-directory";
+import { parseSubscriberIndividualAction } from "@/domain/subscriber-actions";
 import { SubscribersEditor } from "@/components/admin/subscribers-editor";
 import { plansServiceFor } from "@/server/members/plans";
 import { uuid } from "@/server/admin/codes-http";
@@ -15,13 +16,17 @@ export default async function AdminSubscribersPage({ searchParams }: { searchPar
   const page = await adminPageGate(searchParams);
   if (!page.owner) redirectToAccountLogin();
   const params = await searchParams, db = page.services.database;
-  const id = uuid(params.accountId) ? params.accountId : null;
+  const id = uuid(params.accountId) ? params.accountId : null, initialAction = id ? parseSubscriberIndividualAction(params.action) : null;
   const query = parseSubscriberDirectoryQuery(Object.fromEntries(["search", "status", "access", "plan", "recent"].map(key => [key, params[key] ?? emptySubscriberDirectoryQuery[key as keyof typeof emptySubscriberDirectoryQuery]]))) ?? emptySubscriberDirectoryQuery;
-  const accounts = db ? readSubscriberDirectory(db, query) : null;
-  const detail = db && accounts ? (id ? Promise.resolve(id) : accounts.then((rows) => rows[0]?.id))
+  const directory = db ? readSubscriberDirectory(db, query, parseSubscriberDirectoryPage(params.page) ?? 1) : null;
+  const detail = db && directory ? (id ? Promise.resolve(id) : directory.then((list) => list.accounts[0]?.id))
     .then((selectedId) => selectedId ? createSubscribers(db).detail(selectedId) : null).catch(() => null) : null;
-  const data = db && accounts ? await Promise.all([accounts, plansServiceFor(db).list(), detail])
-    .then(([accounts, plans, detail]) => ({ accounts, plans, detail })).catch(() => null) : null;
-  return data ? <SubscribersEditor accounts={data.accounts} detail={data.detail} plans={data.plans} initialQuery={query} selectedExplicitly={!!id} />
-    : <><VisuallyHidden as="h1">Subscribers</VisuallyHidden><Notice $tone="error">Member storage is unavailable.</Notice></>;
+  const data = db && directory ? await Promise.all([directory, plansServiceFor(db).list(), detail])
+    .then(([directory, plans, detail]) => ({ directory, plans, detail })).catch(() => null) : null;
+  if (data) {
+    const { accounts, ...initialPaging } = data.directory;
+    return <SubscribersEditor accounts={accounts} detail={data.detail} plans={data.plans} initialQuery={query} initialPaging={initialPaging}
+      selectedExplicitly={!!id} canManagePasswords={!!page.owner?.memberAccountId} {...(initialAction ? { initialAction } : {})} />;
+  }
+  return <><VisuallyHidden as="h1">Subscribers</VisuallyHidden><Notice $tone="error">Member storage is unavailable.</Notice></>;
 }

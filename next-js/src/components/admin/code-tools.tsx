@@ -88,23 +88,25 @@ export type CodeAction = ReturnType<typeof useCodeAction>;
 export function ActionNotices({ action }: { action: CodeAction }) {
   return <>{action.notice && <Notice role="status">{action.notice}</Notice>}{action.message && <Notice role="alert" $tone="error">{action.message}{action.duplicateId && <> <Link href={`/admin/payments?paymentId=${encodeURIComponent(action.duplicateId)}`} prefetch={false}>Earlier payment</Link></>}</Notice>}</>;
 }
-export function PlanField({ plans, value, allowCustom = true, onValueChange, disabled }: { plans: readonly SubscriptionPlanView[]; value?: string; allowCustom?: boolean; onValueChange?: (value: string) => void; disabled?: boolean }) {
+export function PlanField({ plans, value, allowCustom = true, showPrice = true, onValueChange, disabled }: { plans: readonly SubscriptionPlanView[]; value?: string; allowCustom?: boolean; showPrice?: boolean; onValueChange?: (value: string) => void; disabled?: boolean }) {
   return <FieldBlock label={"Plan"}><select name="planId" defaultValue={value ?? plans[0]?.id ?? ""} disabled={disabled} onChange={event => onValueChange?.(event.currentTarget.value)}>{allowCustom && <option value="">Custom days</option>}
-    {plans.map(p => <option key={p.id} value={p.id}>{p.name} · UGX {p.priceUgx.toLocaleString("en-UG")}{p.active ? "" : " · inactive"}</option>)}</select></FieldBlock>;
+    {plans.map(p => <option key={p.id} value={p.id}>{p.name}{showPrice ? ` · UGX ${p.priceUgx.toLocaleString("en-UG")}` : ` · ${p.durationDays} days`}{p.active ? "" : " · inactive"}</option>)}</select></FieldBlock>;
 }
 /**
  * One grant form for the Codes side panel, the add-subscriber drawer, the subscriber detail (`fixedPhone`) and payment
  * recovery (`withoutTransaction`). Custom days only counts when the plan is "Custom days", so it is disabled otherwise.
  */
-export function ManualCodeForm({ plans, action, phone = "", amount = 0, note = "", compact = false, fixedPhone = false, withoutTransaction = false, onStart, onSaved, formId, externalActions = false }: { plans: readonly SubscriptionPlanView[]; action: CodeAction; phone?: string; amount?: number; note?: string; compact?: boolean; fixedPhone?: boolean; withoutTransaction?: boolean; onStart?: () => void; onSaved?: () => void; formId?: string; externalActions?: boolean }) {
+export function ManualCodeForm({ plans, action, phone = "", accountId, amount = 0, note = "", compact = false, fixedPhone = false, withoutTransaction = false, onStart, onSaved, formId, externalActions = false }: { plans: readonly SubscriptionPlanView[]; action: CodeAction; phone?: string; accountId?: string; amount?: number; note?: string; compact?: boolean; fixedPhone?: boolean; withoutTransaction?: boolean; onStart?: () => void; onSaved?: () => void; formId?: string; externalActions?: boolean }) {
   const reasonId = useId();
   const [selectedPlan, setSelectedPlan] = useState(plans[0]?.id ?? "");
+  const path = accountId ? `/api/admin/subscribers/${accountId}` : "/api/admin/codes";
   async function submit(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const f = new FormData(e.currentTarget); const planId = String(f.get("planId") ?? ""), network = String(f.get("network") ?? ""), transactionId = String(f.get("transactionId") ?? "").trim();
     if (action.busy) return;
     onStart?.();
-    const reply = await action.send("/api/admin/codes", { action: "manual", phone: f.get("phone"), note: f.get("note"), amount: Number(f.get("amount")), ...(planId ? { planId } : { days: Number(f.get("days")) }), ...(network ? { network } : {}), ...(transactionId ? { transactionId } : {}) });
+    const reply = await action.send(path, { ...(accountId ? { action: "grant" } : { action: "manual", phone: f.get("phone") }),
+      note: f.get("note"), amount: Number(f.get("amount")), ...(planId ? { planId } : { days: Number(f.get("days")) }), ...(network ? { network } : {}), ...(transactionId ? { transactionId } : {}) });
     if (reply.ok) onSaved?.(); }
-  return <form id={formId} method="post" action={action.localOnly ? "#" : "/api/admin/codes"} onSubmit={submit} data-analytics-ignore data-manual-code-form><FormStack data-code-form-stack>
+  return <form id={formId} method="post" action={action.localOnly ? "#" : path} onSubmit={submit} data-analytics-ignore data-manual-code-form><FormStack data-code-form-stack>
     <GrantSection data-grant-section="account">
       {fixedPhone ? <input type="hidden" name="phone" value={phone} /> : <PhoneInput label="Account number" name="phone" defaultValue={phone || "256"} lookup required disabled={action.busy} />}
       <PlanField plans={plans} disabled={action.busy} onValueChange={setSelectedPlan} />

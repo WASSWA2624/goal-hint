@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import styled, { css } from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { authCopy } from "@/i18n/messages/auth";
 import type { OwnerSubscriber } from "@/domain/owner-members";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
+import { subscriberActionLabel, type SubscriberIndividualAction } from "@/domain/subscriber-actions";
 import { formatPhone, type MobileNetwork } from "@/domain/phone";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import { formatCredit, formatCreditChange, walletKindLabels, walletRules } from "@/domain/wallet";
@@ -13,7 +15,7 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { MobileMoneyLogo } from "@/components/members/mobile-money-logo";
 import { media } from "@/styles/theme";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
-import { ChevronDownIcon, GiftIcon, Icon, ShieldIcon, SignOutIcon, TrashIcon, type IconProps } from "@/components/ui/icons";
+import { ChevronDownIcon, GiftIcon, Icon, KeyIcon, ShieldIcon, SignOutIcon, TrashIcon, type IconProps } from "@/components/ui/icons";
 import { ActionButton, Badge, ButtonRow, CheckField, DangerButton, FieldBlock, FieldRow } from "./admin-form";
 import { ActionNotices, CodeActions, ManualCodeForm, type CodeAction } from "./code-tools";
 import { Drawer, MetaLine, Panel, PanelHead, RowList, RowMeta, RowTitle, TextAction, ZoneLabel } from "./desk-styles";
@@ -25,31 +27,35 @@ import { AccountStats, AccountTop, ActionBody, ActionPanel, Badges, BlockedNote,
 const SwapIcon = (props: IconProps) => <Icon {...props}><path d="M7 7h12l-3-3M17 17H5l3 3" /></Icon>;
 const BanIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="12" r="8" /><path d="m6.5 6.5 11 11" /></Icon>;
 
-type AccountAction = "grant" | "number" | "block" | "devices";
 type Removal = "delete" | "erase";
+type AccountAction = Exclude<SubscriberIndividualAction, Removal>;
 type Tab = "overview" | "access" | "payments" | "credit" | "devices";
 const tabs: readonly Tab[] = ["overview", "access", "payments", "credit", "devices"];
 const tabLabels = { overview: "Overview", access: "Access", payments: "Payments", credit: "Credit", devices: "Devices" };
-const actionTitles: Record<AccountAction, string> = { grant: "Grant access", number: "Change number",
-  block: "Account restriction", devices: authCopy.logoutDevices };
 const codeTones = { active: "good", queued: "warning" } as const;
 const paymentTones = { approved: "good", pending: "warning" } as const;
 
 /**
  * The summary identifies the account, tabs show its records, and account actions return focus to their trigger.
  */
-export function SubscriberDetail({ account, plans, action, onDeleted, back, presentation, network }: {
+export function SubscriberDetail({ account, plans, action, onDeleted, back, presentation, network, initialAction, onInitialActionDismissed, canManagePasswords = false }: {
   account: OwnerSubscriber; plans: readonly SubscriptionPlanView[]; action: CodeAction; onDeleted: () => void;
   back?: ReactNode;
   presentation?: "compact-dialog"; network?: MobileNetwork | null;
+  initialAction?: SubscriberIndividualAction; onInitialActionDismissed?: () => void; canManagePasswords?: boolean;
 }) {
-  const desktop = useDesktopLayout();
+  const desktop = useDesktopLayout(), router = useRouter();
   const dialogMode = presentation === "compact-dialog", externalActionControls = desktop || dialogMode;
-  const [tab, setTab] = useState<Tab>("overview"), [active, setActive] = useState<AccountAction | null>(null), [removal, setRemoval] = useState<Removal | null>(null);
+  const erased = !!account.erasedAt;
+  const canReset = canManagePasswords && !account.blockedAt && !erased && account.phone !== null;
+  const [tab, setTab] = useState<Tab>("overview");
+  const [active, setActive] = useState<AccountAction | null>(() =>
+    !initialAction || erased || initialAction === "erase" || initialAction === "delete" || initialAction === "password-reset" && !canReset ? null : initialAction);
+  const [removal, setRemoval] = useState<Removal | null>(() => initialAction === "delete" || initialAction === "erase" && !erased ? initialAction : null);
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<readonly string[]>([]);
   const [noteDirty, setNoteDirty] = useState(false), [creditOpen, setCreditOpen] = useState(false), [creditReady, setCreditReady] = useState(false), [removalConfirmed, setRemovalConfirmed] = useState(false);
   const id = useId(), heading = useRef<HTMLHeadingElement>(null), removalSummary = useRef<HTMLElement>(null), removalBody = useRef<HTMLDivElement>(null);
-  const path = `/api/admin/subscribers/${account.id}`, erased = !!account.erasedAt;
+  const path = `/api/admin/subscribers/${account.id}`;
   const selectedDevices = account.devices.filter(device => selectedDeviceIds.includes(device.id));
   const access = account.codes.some(code => code.status === "active") ? "Active access" : account.codes.some(code => code.status === "queued") ? "Queued access" : "No current access";
   useEffect(() => { if (active) heading.current?.focus(); }, [active]);
@@ -58,10 +64,12 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
     if (action.busy) return;
     const previous = active;
     setActive(null); requestAnimationFrame(() => document.getElementById(`${id}-action-${previous}`)?.focus());
+    if (previous === initialAction) onInitialActionDismissed?.();
   }
   function closeRemoval() {
     if (action.busy) return;
     setRemoval(null); setRemovalConfirmed(false); requestAnimationFrame(() => removalSummary.current?.focus());
+    if (initialAction === "erase" || initialAction === "delete") onInitialActionDismissed?.();
   }
   function chooseRemoval(value: Removal | null) {
     if (value) { setActive(null); setCreditOpen(false); }
@@ -98,8 +106,20 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
       onClick={() => void signOutDevices(false)}>{authCopy.logoutSelectedDevices}</ActionButton>}
   </>;
   const actionFields = <>
-    {active === "grant" && <ManualCodeForm formId={`${id}-form-grant`} externalActions={externalActionControls} plans={plans} action={action} phone={account.phone ?? ""} compact fixedPhone onSaved={closeAction} />}
+    {active === "grant" && <ManualCodeForm formId={`${id}-form-grant`} externalActions={externalActionControls} plans={plans} action={action}
+      {...(action.localOnly ? {} : { accountId: account.id })} phone={account.phone ?? ""} compact fixedPhone onSaved={closeAction} />}
     {active === "number" && <ChangeNumber formId={`${id}-form-number`} externalActions={externalActionControls} path={path} action={action} onSaved={closeAction} />}
+    {active === "password-reset" && <CompactForm id={`${id}-form-password-reset`} method="post" action={action.localOnly ? "#" : path} onSubmit={async event => {
+      event.preventDefault();
+      if (!canReset || action.busy) return;
+      const reply = await action.send(path, { action: "password-reset" }, "", false);
+      if (reply.ok && typeof reply.body.requestId === "string") {
+        router.push(`/admin/password-requests?${new URLSearchParams({ requestId: reply.body.requestId })}`);
+      }
+    }}>
+      <MutedText>Continue to Password Requests to verify the registered number and create a one-time reset link.</MutedText>
+      {!externalActionControls && <ActionButton type="submit" $variant="primary" disabled={action.busy || !canReset}>Open password request</ActionButton>}
+    </CompactForm>}
     {active === "block" && <CompactForm id={`${id}-form-block`} method="post" action={action.localOnly ? "#" : path} onSubmit={async event => {
       event.preventDefault(); if (action.busy) return;
       const reply = await action.send(path, { action: account.blockedAt ? "unblock" : "block", value: new FormData(event.currentTarget).get("reason") }, account.blockedAt ? "Account unblocked." : authCopy.blockedDevicesLoggedOut);
@@ -121,10 +141,13 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
       {!externalActionControls && <ButtonRow>{deviceButtons}</ButtonRow>}
     </>}
   </>;
-  const footer = removal ? <><ActionButton type="button" disabled={action.busy} onClick={closeRemoval}>Cancel</ActionButton><DangerButton type="submit" form={`${id}-remove`} disabled={action.busy || !removalConfirmed}>{removal === "delete" ? "Permanently delete account" : "Erase personal data"}</DangerButton></>
+  const activeTitle = active ? subscriberActionLabel(active, !!account.blockedAt) : "";
+  const submitTitle = active === "grant" ? "Grant access manually" : active === "number" ? "Change number and move access"
+    : active === "password-reset" ? "Open password request" : activeTitle;
+  const footer = removal ? <><ActionButton type="button" disabled={action.busy} onClick={closeRemoval}>Cancel</ActionButton><DangerButton type="submit" form={`${id}-remove`} disabled={action.busy || !removalConfirmed}>{subscriberActionLabel(removal)}</DangerButton></>
       : active ? <><ActionButton type="button" disabled={action.busy} onClick={closeAction}>Cancel</ActionButton>{active === "devices"
         ? deviceButtons
-        : <ActionButton type="submit" form={`${id}-form-${active}`} $variant="primary" disabled={action.busy}>{active === "grant" ? "Grant access manually" : active === "number" ? "Change number and move access" : account.blockedAt ? "Unblock account" : "Block account"}</ActionButton>}</>
+        : <ActionButton type="submit" form={`${id}-form-${active}`} $variant="primary" disabled={action.busy}>{submitTitle}</ActionButton>}</>
         : !erased && tab === "overview" ? <ActionButton type="submit" form={`${id}-note`} disabled={action.busy || !noteDirty}>Save note</ActionButton>
           : !erased && tab === "credit" && creditOpen ? <><ActionButton type="button" disabled={action.busy} onClick={() => setCreditOpen(false)}>Cancel</ActionButton><ActionButton type="submit" form={`${id}-credit`} $variant="primary" disabled={action.busy || !creditReady}>Save correction</ActionButton></> : null;
   const accountActions = !erased && <QuickActions role="group" aria-label="Account actions" data-subscriber-actions>
@@ -132,7 +155,14 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
     {task("number", "Change number", <SwapIcon />)}
     {task("block", account.blockedAt ? "Unblock account" : "Block account", account.blockedAt ? <ShieldIcon /> : <BanIcon />)}
     {task("devices", authCopy.logoutDevices, <SignOutIcon />)}
+    {canReset && task("password-reset", subscriberActionLabel("password-reset"), <KeyIcon />)}
   </QuickActions>;
+  const removalFields = removal && <div ref={removalBody} tabIndex={-1}>
+    <ConfirmedRemoval formId={`${id}-remove`} externalActions={externalActionControls} confirmed={removalConfirmed} onConfirmedChange={setRemovalConfirmed}
+      key={removal} kind={removal} account={account} action={action} onSaved={removal === "delete" ? onDeleted : closeRemoval} />
+    {removal === "delete" && !erased && <SensitiveOptions><MutedText>Keep payment amounts and access history for accounting?</MutedText>
+      <ActionButton type="button" disabled={action.busy} onClick={() => chooseRemoval("erase")}>Erase personal data instead</ActionButton></SensitiveOptions>}
+  </div>;
   const summary = <Panel aria-label="Subscriber account" data-subscriber-summary>
     <AccountTop>
       <div>
@@ -160,7 +190,7 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
     {action.localOnly && summary}
     {active && !dialogMode && <ActionPanel id={`${id}-action-panel`} role="region" aria-labelledby={`${id}-action-title`} aria-busy={action.busy} data-subscriber-action-panel={active}
       onKeyDown={event => { if (event.key === "Escape" && !action.busy && !event.defaultPrevented) { event.preventDefault(); closeAction(); } }}>
-      <PanelHead><h2 id={`${id}-action-title`} tabIndex={-1} ref={heading}>{active === "block" ? account.blockedAt ? "Unblock account" : "Block account" : actionTitles[active]}</h2>
+      <PanelHead><h2 id={`${id}-action-title`} tabIndex={-1} ref={heading}>{activeTitle}</h2>
         <TextAction type="button" disabled={action.busy} onClick={closeAction}>Cancel</TextAction></PanelHead>
       <ActionBody>{actionFields}</ActionBody>
     </ActionPanel>}
@@ -202,23 +232,26 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
     </Panel>
     {tabs.filter(value => value !== tab).map(value => <div key={value} role="tabpanel" hidden id={`${id}-view-${value}`} aria-labelledby={`${id}-tab-${value}`} />)}
     <DrawerPanel as="div">
-      <Drawer $tone="danger" open={!!removal} onToggle={event => { const open = event.currentTarget.open; if (open !== !!removal) chooseRemoval(open ? "delete" : null); }}
+      <Drawer $tone="danger" open={!dialogMode && !!removal} onToggle={event => { const open = event.currentTarget.open; if (!dialogMode && open !== !!removal) chooseRemoval(open ? "delete" : null); }}
         onKeyDown={event => { if (event.key === "Escape" && removal && !event.defaultPrevented) { event.preventDefault(); closeRemoval(); } }}>
-        <summary ref={removalSummary} onClick={event => { if (action.busy) event.preventDefault(); }}><TrashIcon />{erased ? "Delete account" : "Delete or erase"}<ChevronDownIcon /></summary>
-        {removal && <div ref={removalBody} tabIndex={-1}>
-          {removal === "delete" ? <><ConfirmedRemoval formId={`${id}-remove`} externalActions={desktop && !dialogMode} confirmed={removalConfirmed} onConfirmedChange={setRemovalConfirmed} key="delete" kind="delete" account={account} action={action} onSaved={onDeleted} />
-            {!erased && <SensitiveOptions><MutedText>Keep payment amounts and access history for accounting?</MutedText>
-              <ActionButton type="button" disabled={action.busy} onClick={() => chooseRemoval("erase")}>Erase personal data instead</ActionButton></SensitiveOptions>}</>
-            : <ConfirmedRemoval formId={`${id}-remove`} externalActions={desktop && !dialogMode} confirmed={removalConfirmed} onConfirmedChange={setRemovalConfirmed} key="erase" kind="erase" account={account} action={action} onSaved={closeRemoval} />}
-        </div>}
+        <summary ref={removalSummary} aria-haspopup={dialogMode ? "dialog" : undefined} onClick={event => {
+          if (!dialogMode && !action.busy) return;
+          event.preventDefault();
+          if (!action.busy) { action.clearFeedback(); chooseRemoval("delete"); }
+        }}><TrashIcon />{erased ? "Delete account" : "Delete or erase"}<ChevronDownIcon /></summary>
+        {!dialogMode && removalFields}
       </Drawer>
     </DrawerPanel>
     </RecordBody>
     </RecordScroll>
     {dialogMode && accountActions && <AccountActionsFooter>{accountActions}</AccountActionsFooter>}
     {desktop && footer && !dialogMode && <RecordFooter data-subscriber-footer-action={removal ?? active ?? tab}><span data-record-summary>{account.phone ? `+${formatPhone(account.phone)}` : "Erased account"}</span>{footer}</RecordFooter>}
-    {dialogMode && active && <SubscriberReviewDialog id={`${id}-action-panel`} open title={active === "block" ? account.blockedAt ? "Unblock account" : "Block account" : actionTitles[active]} busy={action.busy} onClose={closeAction} footer={footer}>
-      <div data-subscriber-action-dialog={active}>{action.message && <ActionNotices action={action} />}{actionFields}</div>
+    {dialogMode && (active || removal) && <SubscriberReviewDialog id={`${id}-action-panel`} open title={removal ? subscriberActionLabel(removal) : activeTitle}
+      busy={action.busy} onClose={removal ? closeRemoval : closeAction} footer={footer}>
+      <div data-subscriber-action-dialog={removal ?? active}>
+        <MutedText>{account.phone ? `Account +${formatPhone(account.phone)}` : `Erased account ${account.id}`}</MutedText>
+        {action.message && <ActionNotices action={action} />}{removal ? removalFields : actionFields}
+      </div>
     </SubscriberReviewDialog>}
   </DetailCard>;
 }
@@ -281,11 +314,11 @@ function ConfirmedRemoval({ kind, account, action, onSaved, formId, externalActi
   const deleting = kind === "delete";
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!confirmed || action.busy) return;
-    const reply = await action.send(`/api/admin/subscribers/${account.id}`, { action: kind, confirmed }, deleting ? "Account and all related information permanently deleted." : "Personal data erased. Accounting history retained.");
+    const reply = await action.send(`/api/admin/subscribers/${account.id}`, { action: kind, confirmed }, deleting ? "Account and eligible linked records permanently deleted." : "Personal data erased. Accounting history retained.");
     if (reply.ok) onSaved();
   }
   return <CompactForm id={formId} method="post" action={action.localOnly ? "#" : `/api/admin/subscribers/${account.id}`} onSubmit={submit} data-subscriber-removal={kind}>
-    <MutedText>{deleting ? "Permanently removes the account and all related information, including payments, screenshots, access, saved filters and audit records. Payment totals will change. This cannot be undone."
+    <MutedText>{deleting ? "Permanently removes the account and eligible linked records. Receipts and other records that must be retained can prevent deletion. Removing eligible payments changes their dashboard totals. This cannot be undone."
       : `Clears numbers, passwords, notes, sessions and screenshots.${account.creditUgx > 0 ? ` The ${formatCredit(account.creditUgx)} credit is forfeited.` : ""} Payment amounts, IDs and access history remain for accounting. This cannot be undone.`}</MutedText>
     <label><input type="checkbox" name="confirmed" required checked={confirmed} disabled={action.busy} onChange={event => onConfirmedChange(event.target.checked)} /> I verified this account and understand this cannot be undone.</label>
     {!externalActions && <DangerButton type="submit" disabled={action.busy || !confirmed}>{deleting ? "Permanently delete account" : "Erase personal data"}</DangerButton>}

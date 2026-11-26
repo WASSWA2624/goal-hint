@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { emptySubscriberDirectoryQuery, parseSubscriberDirectoryQuery, subscriberDirectoryFiltered, subscriberSearchTerms } from "../src/domain/subscriber-directory.ts";
+import { emptySubscriberDirectoryQuery, parseSubscriberDirectoryPage, parseSubscriberDirectoryQuery, subscriberDirectoryFiltered, subscriberSearchTerms } from "../src/domain/subscriber-directory.ts";
 import { readSubscriberDirectory } from "../src/server/admin/subscriber-directory.ts";
 import { createSubscriberHandlers } from "../src/server/admin/subscribers-http.ts";
-import { fixtureSubscriberDirectory } from "./helpers/rendering/owner-payments/app/subscriber-directory-query.ts";
+import { fixtureSubscriberDirectory, fixtureSubscriberDirectoryCount } from "./helpers/rendering/owner-payments/app/subscriber-directory-query.ts";
 
 const now = Date.parse("2026-10-29T09:00:00.000Z"), hour = 3_600_000;
 const query = values => ({ ...emptySubscriberDirectoryQuery, ...values });
@@ -18,13 +18,17 @@ function fixture() {
       startsAt: new Date(now - hour), endsAt: new Date(now + hour), revokedAt: null }],
     submissions: [{ reference: `P${index}` }],
   }));
-  const database = { query: operation => operation({ memberAccount: { findMany: async args => {
-    calls.push(args);
-    return fixtureSubscriberDirectory({ accounts: rows,
-      codes: rows.flatMap(row => row.codes.map(code => ({ ...code, accountId: row.id }))),
-      payments: rows.flatMap(row => row.submissions.map(payment => ({ ...payment, accountId: row.id }))) }, args);
-  } } }) };
-  return { rows, calls, database, read: values => readSubscriberDirectory(database, query(values), now) };
+  const data = () => ({ accounts: rows, codes: rows.flatMap(row => row.codes.map(code => ({ ...code, accountId: row.id }))),
+    payments: rows.flatMap(row => row.submissions.map(payment => ({ ...payment, accountId: row.id }))) });
+  const database = { transaction: (operation, options) => {
+    assert.equal(options.isolationLevel, "RepeatableRead");
+    return operation({ memberAccount: { count: async ({ where }) => fixtureSubscriberDirectoryCount(data(), where), findMany: async args => {
+      calls.push(args);
+      return fixtureSubscriberDirectory(data(), args);
+    } } });
+  } };
+  const page = (values, number = 1) => readSubscriberDirectory(database, query(values), number, now);
+  return { rows, calls, database, page, read: async values => (await page(values)).accounts };
 }
 
 test("directory requests validate known filters and bounded search without requiring a complete phone", () => {
@@ -40,11 +44,17 @@ test("directory requests validate known filters and bounded search without requi
   assert.deepEqual(subscriberSearchTerms("+256 700 000 205"), ["256700000205"]);
   assert.deepEqual(subscriberSearchTerms("07000002"), ["2567000002"]);
   assert.deepEqual(subscriberSearchTerms("Priority Monthly"), ["Priority", "Monthly"]);
+  assert.equal(parseSubscriberDirectoryPage(undefined), 1);
+  assert.equal(parseSubscriberDirectoryPage("2"), 2);
+  assert.equal(parseSubscriberDirectoryPage(3), 3);
+  for (const value of [0, -1, 1.5, "", " 2", "02", ["2"], null, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.equal(parseSubscriberDirectoryPage(value), null);
+  }
 });
 
-test("filters and text search select matching older accounts before the 100-account cap", async () => {
+test("filters and text search select matching older accounts before paging", async () => {
   const store = fixture();
-  assert.equal((await store.read({})).length, 100);
+  assert.equal((await store.read({})).length, 25);
   const result = await store.read({ status: "blocked", access: "active", plan: "Monthly", search: "Priority Monthly" });
   assert.deepEqual(result.map(account => account.id), [id(105)]);
   assert.equal(result[0].access, "active");
@@ -52,9 +62,24 @@ test("filters and text search select matching older accounts before the 100-acco
   assert.equal(result[0].network, null, "an unconfigured prefix cannot invent a carrier");
   assert.equal("ownerNote" in result[0], false, "searching a private note does not add it to the directory response");
   assert.equal(store.calls.length, 2, "one directory query per request, never an account-by-account query");
-  assert.equal(store.calls[1].take, 100);
+  assert.equal(store.calls[1].take, 25);
   assert.equal(store.calls[1].select.codes.take, 100);
   assert.deepEqual((await store.read({ search: "blocked Monthly" })).map(account => account.id), [id(105)]);
+});
+
+test("stable filtered pages bound selection and clamp the last page after removals", async () => {
+  const store = fixture();
+  store.rows[25].lastSignInAt = store.rows[24].lastSignInAt;
+  const first = await store.page({ status: "open" });
+  const second = await store.page({ status: "open" }, 2);
+  const final = await store.page({ status: "open" }, 999);
+  assert.deepEqual([first.page, first.pages, first.total, first.accounts.length], [1, 5, 108, 25]);
+  assert.deepEqual([second.accounts[0].id, store.calls[1].skip], [id(26), 25]);
+  assert.equal(first.accounts.some(account => second.accounts.some(next => next.id === account.id)), false);
+  assert.deepEqual([final.page, final.accounts.length], [5, 8]);
+  store.rows.splice(100);
+  assert.deepEqual([...(await store.page({ status: "open" }, 5)).accounts].map(row => row.id), store.rows.slice(75).map(row => row.id));
+  assert.deepEqual(await store.page({ search: "unknown record" }, 7), { accounts: [], page: 1, pages: 1, total: 0 });
 });
 
 test("directory POST accepts live filters and legacy search while refusing invalid queries before storage", async () => {
@@ -62,7 +87,7 @@ test("directory POST accepts live filters and legacy search while refusing inval
   const post = body => POST({ services: { database: store.database, config: { production: false } }, owner: { username: "owner" },
     request: new Request("http://localhost:3000/api/admin/subscribers", { method: "POST",
       headers: { "content-type": "application/json" }, body: JSON.stringify(body) }) });
-  for (const body of [{ search: "", status: "online" }, { search: "x".repeat(121) }, { search: "", action: "delete" }]) {
+  for (const body of [{ search: "", status: "online" }, { search: "x".repeat(121) }, { search: "", action: "delete" }, { search: "", page: 0 }]) {
     assert.equal((await post(body)).status, 400);
   }
   assert.equal(store.calls.length, 0);
@@ -70,7 +95,9 @@ test("directory POST accepts live filters and legacy search while refusing inval
     const response = await post(body);
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("cache-control"), "no-store");
-    assert.deepEqual((await response.json()).accounts.map(account => account.id), [id(105)]);
+    const { accounts, page, pages, total } = await response.json();
+    assert.deepEqual(accounts.map(account => account.id), [id(105)]);
+    assert.deepEqual([page, pages, total], [1, 1, 1]);
   }
   assert.equal(store.calls.length, 2);
 });
