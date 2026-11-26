@@ -264,5 +264,14 @@ session check returned HTTP 200. The staging Matches response includes
 The staging web role could read the existing lifecycle and publication barrier
 tables. The staging snapshot had no current fixture cohort for a live
 publication run. The isolated MySQL suite passed all 66 publication tests,
-including concurrent writers and immutable archive checks. Production
-promotion remained pending at this verification point.
+including concurrent writers and immutable archive checks.
+
+Production promoted the same verified web package and matching `41a1cdf6`
+publisher after the owner approved the staging release. The existing
+half-hour cron schedule remained active. The deployed launcher evaluated the
+10:30 Kampala slot and appended two 2.50–5.00 slips. The public API returned
+all nine of the day's slips, including the two new direct rank links. The 32
+published legs used distinct fixtures, and all ten new legs met the 30-minute
+kickoff buffer. Pre-cutover archive checksums matched. Matches, Builder, Best
+Slips, public APIs and the apex redirect passed production HTTPS smoke checks.
+The production ledger verified all 92 migrations after promotion.
