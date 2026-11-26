@@ -37,16 +37,17 @@ left and the actual reporting day or range on the right
 (for example `MON 02-Nov-2026` or `FRI 30-Oct-2026 – TUE 03-Nov-2026` on Matches).
 Matches defaults to “Today’s performance” and uses a status-specific title for
 Live, Upcoming and Completed. The date describes the applied reporting period.
-There is one date label, with no second date row. Callers own the outer gutter;
-the heading and outer status cards share the same left/right rails. All, Won,
+The compact heading has one reporting-period label. Callers own the outer gutter,
+and the heading and outer status cards share the same left/right rails. All, Won,
 Lost, Pending, Void and Cancelled use theme colours in three mobile columns
 and up to six desktop columns.
-Container queries retain three columns inside narrow report panels; large
-counts wrap within their cards. Outcome definitions are shared once at module
+Container queries retain three columns inside narrow report panels. On Matches
+and Slips each card keeps its label above one line for the count and percentage,
+including five-digit counts. Outcome definitions are shared once at module
 level and streamed match counts are normalized only when those counts change.
-Mobile cards have no icons. Result actions retain each screen's date/filter navigation;
-unknown counts show dashes and cannot be selected. Outcome percentages appear
-on mobile and in wide desktop summaries. Reporting dates come
+Mobile cards have no icons. Result actions retain each screen's date and filter navigation.
+Unknown counts show disabled dashes. Outcome percentages appear at all supported
+widths on Matches and Slips. Reporting dates come
 from the actual cohort; unbounded collections use their
 “All dates” label. Desktop icons sit beside labels, and selection uses a thin,
 muted inset rule while keyboard focus keeps its stronger outline.
@@ -68,8 +69,10 @@ direct partial matches precede football aliases and spelling suggestions.
 Selection takes one activation and persists when searching. Missing applied
 choices remain selectable, and countries use bundled flags.
 
-Search and its adjacent Filters button sit above the results. Typing schedules a
-short-debounced request through the same feed endpoint as pagination. Enter and
+Matches and Slips place the performance cards directly below the header, followed
+by the shared date, calendar and Filters row. Matches search spans the full width
+below these controls. Typing schedules a short-debounced request through the same
+feed endpoint as pagination. Enter and
 the inset Search button run the current text immediately. The current list stays
 visible during the request. The latest response updates the list, count and
 pagination. Clearing the search restores results for the applied filters. The

@@ -147,12 +147,12 @@ export function FeedFilters({ query, today, dateQuery, dateToday, scope, perform
     }}>
     {native.map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
     <input type="hidden" name="tz" value={draft.zone} />
+    {performance}
     <DayStrip query={dateQuery} today={dateToday} onApply={onApply} filters={
       <DateNavigationFilters locale={query.locale} dialogId={`${prefix}-filters`} open={open}
         aria-description={count ? messages.plural("feed.filters.activeCount", count) : undefined}
         count={count} onClick={openFilters} data-search-filters />
     } />
-    {performance}
     <SearchBar name="q" maxLength={feedQueryRules.maximumSearchLength} value={searchText} autoComplete="off"
       label={messages.text("feed.filters.search")} submitLabel={messages.text("feed.search.submit")}
       onCompositionStart={() => { composing.current = true; }}

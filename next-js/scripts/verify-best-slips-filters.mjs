@@ -40,7 +40,7 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 7
           return metrics;
         });
         return { sameRow: Math.abs(action.top - date.top) < 1 && Math.abs(date.top - list.top) < 1 && Math.abs(action.height - date.height) < 1,
-          inOrder: list.right < date.left && date.right < action.left && action.bottom <= heading.getBoundingClientRect().top,
+          inOrder: summary.getBoundingClientRect().bottom <= list.top && list.right < date.left && date.right < action.left,
           visibleTiles, calendarDay: calendar.textContent.trim(), columns: getComputedStyle(figures).gridTemplateColumns.split(" ").length, fiveDigitsFit,
           separation: bounds.top - cards.bottom, countAtEnd: bounds.right - count.right <= 9,
           firstSlipGap: document.querySelector("[data-slip-list]").getBoundingClientRect().top - bounds.bottom,
@@ -186,12 +186,12 @@ export async function verifyBestSlipsCalendar(page, origin, widths = [390, 1440]
     await page.reload();
     await page.waitForFunction(mode => document.querySelector('meta[name="color-scheme"]')?.content === mode, mode);
     const strip = page.getByRole("navigation", { name: "Slip date", exact: true });
-    const stripAbovePerformance = await strip.evaluate(element => {
+    const performanceAboveStrip = await strip.evaluate(element => {
       const stripBounds = element.getBoundingClientRect();
-      const heading = element.parentElement.querySelector("[data-performance-heading]");
-      return stripBounds.height > 0 && stripBounds.bottom <= heading.getBoundingClientRect().top;
+      const performance = element.parentElement.querySelector("[data-performance-summary]");
+      return stripBounds.height > 0 && performance.getBoundingClientRect().bottom <= stripBounds.top;
     });
-    assert(stripAbovePerformance, "The date strip appears above the performance heading");
+    assert(performanceAboveStrip, "The performance summary appears above the date strip");
     const picker = strip.locator('[data-date-strip-calendar]');
     const calendar = page.getByRole("dialog", { name: "Choose dates", exact: true });
     const date = day => calendar.locator('button[aria-pressed]').filter({ hasText: new RegExp(`^${day}$`) });
