@@ -27,3 +27,17 @@
 - Keep the overview concise, complete, and accurate: cover critical implemented
   behavior and remaining limitations, replace outdated descriptions, and
   distinguish source implementation from deployment status.
+
+## Implementation documentation
+
+- Before completing a code change, check whether it affects behavior, APIs,
+  schema, jobs, configuration, deployment, access control, or user flows covered
+  by `implementation-docs/`.
+- Update each affected topic file in the same change. Add newly implemented
+  behavior to its existing topic, correct removed or changed behavior, and leave
+  unrelated topics alone.
+- Use the current implementation and its verification evidence as the source of
+  truth. Clearly label proposals and unverified behavior.
+- Verify the affected documentation against the post-change code before marking
+  the task complete. If no topic needs an update, briefly explain why in the
+  change summary.
