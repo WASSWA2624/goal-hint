@@ -8,7 +8,7 @@ export const metadata = pageMetadata({ title: "Get access", description: "Synthe
 export const dynamic = "force-dynamic";
 
 const viewerStates: Record<string, string> = {
-  entitled: "active", expired: "expired", test: "free", revoked: "free", "verified-free": "member-free", off: "off", "off-member": "off-inactive",
+  entitled: "active", expired: "expired", test: "free", revoked: "free", "verified-free": "legacy-free-flag", off: "off", "off-member": "off-inactive",
 };
 const routes = Object.fromEntries(fixtureStates.map(state => [state, createSubscribeRoute({
   services: async () => {
