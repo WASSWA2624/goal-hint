@@ -228,6 +228,14 @@ function grade(state: ScoreState, period: GoalMarketPeriod, rule: GoalRule): Goa
   return won === null ? null : won ? "win" : "loss";
 }
 
+/** Grade a reviewed selection against the score as it stands, without settling the prediction. */
+export function goalSelectionGradeAtScore(definition: GoalMarketDefinition, selection: string,
+  score: Readonly<{ home: number; away: number }>, halfTime: Readonly<{ home: number; away: number }> | null = null): GoalGrade | null {
+  const pick = definition.selections.find(({ key }) => key === selection);
+  return pick ? grade({ ...score, halfHome: halfTime?.home ?? null, halfAway: halfTime?.away ?? null, probability: 1 },
+    definition.period, pick.rule) : null;
+}
+
 function scoreSelectionMass(definition: GoalMarketDefinition, states: readonly ScoreState[], unrepresentedProbability: number): BoundedGoalDerivationResult {
   const selections: GoalSelectionMass[] = [];
   // Partition validity is per score. Overlaps cannot cancel gaps in the aggregate.

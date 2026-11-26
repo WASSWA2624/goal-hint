@@ -1,7 +1,121 @@
 /** Browser acceptance for the native match page using explicitly synthetic stored fixtures. */
+const matchPath = "/en/matches/10000000-0000-4000-8000-000000000005/finished-regulation";
+const desktopTabs = ["details", "stats", "events", "lineups", "form", "standings", "players", "markets", "analysis", "news", "venue", "referee", "history"];
+
+export async function verifyDesktopMatchWorkspace(page, { origin = "http://127.0.0.1:3118", captureDirectory } = {}) {
+  const failures = [], checks = [];
+  const check = (value, label) => { checks.push(label); if (!value) failures.push(label); };
+  const workspace = page.locator("[data-match-workspace]");
+  const sidebar = workspace.getByRole("navigation", { name: "Match sections", exact: true });
+  const content = workspace.locator("[data-match-content]");
+  const header = page.locator("[data-app-header]:visible");
+  const progress = header.locator("[data-navigation-progress]");
+  const switchTheme = mode => header.getByRole("button", { name: `Switch to ${mode} theme`, exact: true });
+  const link = id => sidebar.locator(`[data-match-section="${id}"]`);
+  async function select(id) {
+    await link(id).click();
+    await content.and(page.locator(`[data-active-match-tab="${id}"]`)).waitFor();
+  }
+  const positions = () => page.evaluate(() => {
+    const side = document.querySelector("[data-match-sidebar]"), pane = document.querySelector("[data-match-content]");
+    return { left: side.scrollTop, right: pane.scrollTop, page: window.scrollY,
+      documentOverflow: document.documentElement.scrollHeight - innerHeight,
+      paneTop: pane.getBoundingClientRect().top, paneBottom: pane.getBoundingClientRect().bottom,
+      header: document.querySelector("[data-app-header]").getBoundingClientRect().bottom,
+      progress: document.querySelector("[data-app-header] [data-navigation-progress]").getBoundingClientRect().top, viewport: innerHeight };
+  });
+  try {
+    await page.setViewportSize({ width: 1024, height: 485 });
+    await page.goto(origin + matchPath, { waitUntil: "domcontentloaded" });
+    await page.locator('meta[name="goal-hint-appearance"]').waitFor({ state: "attached" });
+    await workspace.waitFor();
+    if (await switchTheme("light").isVisible()) await switchTheme("light").click();
+    check(await sidebar.locator("[data-match-section]").evaluateAll(elements => elements.map(element => element.dataset.matchSection).join(",")) === desktopTabs.join(","), "desktop sidebar follows the approved section order");
+    check(await content.getAttribute("data-active-match-tab") === "details" && await link("details").getAttribute("aria-current") === "page", "desktop opens Match Details by default");
+    check(!await page.locator("[data-match-tab-navigation]").isVisible() && !await page.getByRole("link", { name: "Back", exact: true }).isVisible(), "desktop has no horizontal match tabs or Back row");
+    check(await content.getByRole("heading", { name: "Top Predictions", exact: true }).count() === 1, "desktop default pane contains the predictions summary");
+    check(await content.getByRole("heading", { name: "Match Details", exact: true }).count() === 0, "desktop default pane has no repeated section heading");
+    check(await header.count() === 1 && await progress.count() === 1, "one production header and its shared progress bar");
+    const stableNodes = await Promise.all([header, progress, sidebar, content, content.locator("footer")].map(locator => locator.elementHandle()));
+    const colors = [];
+    for (const mode of ["light", "dark"]) {
+      if (mode === "dark") await switchTheme("dark").click();
+      await page.waitForFunction(mode => getComputedStyle(document.documentElement).colorScheme === mode, mode);
+      const overview = await content.getByRole("heading", { name: "Top Predictions", exact: true }).isVisible();
+      check(overview, `${mode}: production theme control leaves the active pane in place`);
+      colors.push(await sidebar.evaluate(element => getComputedStyle(element.parentElement).backgroundColor));
+      if (captureDirectory) await page.screenshot({ path: `${captureDirectory}/match-workspace-${mode}.png` });
+      await select("lineups");
+      await content.locator("[data-touchline-pitch]").waitFor();
+      check(await sidebar.locator('a[aria-current="page"]').count() === 1
+        && await link("lineups").getAttribute("aria-current") === "page", `${mode}: exactly one current section link`);
+      check(await content.getByRole("heading", { name: "Lineups", exact: true }).count() === 0
+        && await content.getByRole("heading", { name: "Top Predictions", exact: true }).count() === 0, `${mode}: section title and overview are absent from the lineups pane`);
+      check(await sidebar.evaluate(element => element.scrollHeight > element.clientHeight)
+        && await content.evaluate(element => element.scrollHeight > element.clientHeight), `${mode}: both panes overflow with existing match content`);
+      const before = await positions();
+      check(Math.abs(before.paneTop - before.header) <= 1 && Math.abs(before.paneBottom - before.viewport) <= 1
+        && before.documentOverflow === 0, `${mode}: the workspace fills the viewport below the header`);
+      await sidebar.hover();
+      await page.mouse.wheel(0, 180);
+      await page.waitForFunction(left => document.querySelector("[data-match-sidebar]").scrollTop > left, before.left);
+      const left = await positions();
+      check(left.right === before.right && left.page === before.page && left.header === before.header && left.progress === before.progress,
+        `${mode}: sidebar scrolling leaves content, document, header and progress stationary`);
+      await content.hover({ position: { x: 10, y: 25 } });
+      await page.mouse.wheel(0, 250);
+      await page.waitForFunction(right => document.querySelector("[data-match-content]").scrollTop > right, left.right);
+      const right = await positions();
+      check(right.left === left.left && right.page === 0 && right.header === left.header && right.progress === left.progress,
+        `${mode}: content scrolling leaves sidebar, document, header and progress stationary`);
+      const sectionLabel = await link("events").locator("[data-sidebar-label]").textContent();
+      await select("events");
+      check((await positions()).right === 0 && new URL(page.url()).searchParams.get("panel") === "events"
+        && await content.getByRole("heading", { name: sectionLabel, exact: true }).count() === 0, `${mode}: section navigation resets content scroll and keeps an addressable pane without a repeated heading`);
+      await select("details");
+    }
+    check(colors[0] !== colors[1], "both themes apply distinct sidebar surfaces");
+    check((await Promise.all(stableNodes.map(handle => handle.evaluate(element => element.isConnected)))).every(Boolean),
+      "header, progress, both panes and production footer stay mounted through theme and section changes");
+    const pickAction = content.getByRole("button", { name: /^(Why this pick\?|Original publication)$/u });
+    const target = await pickAction.textContent() === "Original publication" ? "history" : "analysis";
+    await pickAction.press("Enter");
+    await content.and(page.locator(`[data-active-match-tab="${target}"]`)).waitFor();
+    check(await content.evaluate(element => element.contains(document.activeElement)), "keyboard pick action moves focus into its destination pane");
+    await page.goBack();
+    await content.and(page.locator('[data-active-match-tab="details"]')).waitFor();
+    await page.goForward();
+    await content.and(page.locator(`[data-active-match-tab="${target}"]`)).waitFor();
+    check(await link(target).getAttribute("aria-current") === "page", "browser Back and Forward restore the addressed desktop section");
+    await page.goto(origin + matchPath + "?panel=history", { waitUntil: "domcontentloaded" });
+    await content.and(page.locator('[data-active-match-tab="history"]')).waitFor();
+    await page.waitForFunction(() => document.querySelector("[data-match-sidebar]").scrollTop > 0);
+    check(await link("history").evaluate(element => {
+      const item = element.getBoundingClientRect(), sidebar = element.closest("nav"), bounds = sidebar.getBoundingClientRect();
+      return element.getAttribute("aria-current") === "page" && sidebar.scrollTop > 0 && item.bottom <= bounds.bottom + 1;
+    }), "direct desktop Pick History links reveal the selected item in the sidebar");
+    const summaryLink = content.getByRole("link", { name: "Back to current match summary", exact: true });
+    if (await summaryLink.count()) {
+      await summaryLink.click();
+      await content.and(page.locator('[data-active-match-tab="details"]')).waitFor();
+      await page.goBack();
+      await content.and(page.locator('[data-active-match-tab="history"]')).waitFor();
+      check(await link("history").getAttribute("aria-current") === "page", "History’s summary link opens Details and browser Back restores History");
+    }
+    await switchTheme("light").click();
+  } catch (error) {
+    failures.push(error instanceof Error ? error.message : String(error));
+  }
+  return { checks: checks.length, failures };
+}
+
 export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", captureDirectory } = {}) {
   const failures = [], errors = [], checks = [], navigations = [];
-  const onRequest = request => { if (request.resourceType() === "document" || new URL(request.url()).searchParams.has("_rsc")) navigations.push(request.url()); };
+  let desktopChecks = 0;
+  const onRequest = request => {
+    const url = new URL(request.url());
+    if (url.pathname === matchPath && (request.resourceType() === "document" || url.searchParams.has("_rsc"))) navigations.push(request.url());
+  };
   const check = (value, label) => { checks.push(label); if (!value) failures.push(label); };
   const onError = error => errors.push(String(error));
   const onConsole = message => { if (message.type() === "error") errors.push(message.text()); };
@@ -13,14 +127,12 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
   });
   await page.setExtraHTTPHeaders({ "x-test-viewer": "anonymous" });
   await page.route("**/api/account/session", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ phone: null, administrator: false, subscription: null }) }));
-  const path = "/en/matches/10000000-0000-4000-8000-000000000005/finished-regulation";
+  const path = matchPath;
   const tabs = ["stats", "markets", "lineups", "form", "analysis", "events", "standings", "players", "news", "venue", "referee", "history"];
   const nav = page.getByRole("tablist", { name: "Match information", exact: true });
-  const panel = page.locator("#match-information-panel");
+  const panel = page.locator("#match-information-panel:visible, [data-match-content]:visible");
   async function select(id) {
-    const button = page.locator(`[data-match-tab-navigation] [data-match-tab="${id}"]`);
-    if (!await button.isVisible()) await page.locator("[data-match-tabs-more] summary").click();
-    await button.click();
+    await page.locator(`[data-match-tab="${id}"]:visible, [data-match-section="${id}"]:visible`).click();
     await page.locator(`[data-active-match-tab="${id}"]`).waitFor();
   }
   async function choose(radio) {
@@ -32,7 +144,7 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
     const viewport = page.viewportSize();
     await page.setViewportSize({ width: viewport.width, height: 3000 });
     await page.evaluate(() => window.scrollTo(0, 0));
-    const article = await page.locator("[data-match-detail]").boundingBox();
+    const article = await page.locator("[data-match-detail]:visible").boundingBox();
     await page.screenshot({ path: `${captureDirectory}/${name}.png`, clip: { x: 0, y: 0, width: viewport.width,
       height: Math.ceil(Math.min(article.y + article.height, 3000)) } });
     await page.setViewportSize(viewport);
@@ -41,10 +153,11 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(origin + path, { waitUntil: "networkidle" });
     await page.locator('[data-match-design="phone"]').waitFor();
+    await nav.locator('[data-match-tab="history"]').waitFor({ state: "attached" });
     check(await nav.locator("[data-match-tab]").evaluateAll(elements => elements.map(element => element.dataset.matchTab).join(",")) === tabs.join(","), "prioritized shared tab order");
     check(await nav.evaluate(element => element.scrollWidth > element.clientWidth), "mobile navigation scrolls horizontally");
     check(await page.locator('[data-active-match-tab="stats"]').count() === 1, "Team Stats is the initial tab");
-    const hero = await page.locator("[data-verdict]").elementHandle();
+    const hero = await page.locator("[data-verdict]:visible").elementHandle();
     const navigationCount = navigations.length;
     const right = page.getByRole("button", { name: "Scroll tabs right", exact: true });
     await right.click();
@@ -86,15 +199,15 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
       }, before);
       check(result.stable && result.visible, label);
     }
-    for (const width of [320, 390, 1024, 1440]) {
+    for (const width of [320, 390]) {
       await page.setViewportSize({ width, height: 844 });
-      await page.locator(`[data-match-design="${width < 1024 ? "phone" : "touchline"}"]`).waitFor();
+      await page.locator('[data-match-design="phone"]').waitFor();
       for (const depth of [0, 200, 650, "bottom"]) {
         for (const id of ["referee", "markets", "lineups", "history", "form"]) {
           await select(id === "lineups" ? "form" : "lineups");
           await page.evaluate(depth => window.scrollTo(0, depth === "bottom" ? document.documentElement.scrollHeight - innerHeight : depth), depth);
           await contentSwitch(id, `${width}/${depth}/${id}: new content starts below stable tabs and the prediction stays unchanged`);
-          if (width < 1024) check(await nav.evaluate(element => {
+          check(await nav.evaluate(element => {
             const selected = element.querySelector('[aria-selected="true"]'), box = selected.getBoundingClientRect(), strip = element.getBoundingClientRect();
             const desired = Math.max(0, Math.min(element.scrollWidth - element.clientWidth,
               element.scrollLeft + box.left + box.width / 2 - strip.left - strip.width / 2));
@@ -108,16 +221,14 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
           Math.min(label.right, other.right) - Math.max(label.left, other.left) <= 1
           || Math.min(label.bottom, other.bottom) - Math.max(label.top, other.top) <= 1));
       })), `${width}: all filter radio choices stay distinct and readable`);
-      check(await panel.locator('[data-results-filters] > section').evaluateAll((groups, width) => {
+      check(await panel.locator('[data-results-filters] > section').evaluateAll(groups => {
         const boxes = groups.map(group => group.getBoundingClientRect());
-        return width >= 1024 ? boxes.every(box => box.top === boxes[0].top)
-          && groups.slice(1).every(group => getComputedStyle(group).borderInlineStartWidth === '1px')
-          : boxes.every((box, index) => index === 0 || box.top >= boxes[index - 1].bottom);
-      }, width), `${width}: labelled filter groups use divided desktop columns and stacked mobile rows`);
+        return boxes.every((box, index) => index === 0 || box.top >= boxes[index - 1].bottom);
+      }), `${width}: labelled filter groups use stacked mobile rows`);
     }
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator('[data-match-design="phone"]').waitFor();
-    const rolloverHero = await page.locator("[data-verdict]").elementHandle();
+    const rolloverHero = await page.locator("[data-verdict]:visible").elementHandle();
     const rolloverResponse = page.waitForResponse(response => new URL(response.url()).pathname === "/api/matches/10000000-0000-4000-8000-000000000005");
     await page.evaluate(() => { window.__matchTestNow += 86400000; document.dispatchEvent(new Event("visibilitychange")); });
     await rolloverResponse;
@@ -148,19 +259,41 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}: market containment`);
     }
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('[data-match-design="phone"]').waitFor();
     const marketRows = panel.locator("[data-detail-market]");
     const marketCount = await marketRows.count(), firstMarket = marketRows.first();
+    const inlineMarket = panel.locator("[data-inline-market]");
     const beforeY = await page.evaluate(() => scrollY);
     await firstMarket.click();
-    check(await firstMarket.getAttribute("aria-expanded") === "true" && await panel.locator("[data-inline-market]").count() === 1, "market details expand beneath their row");
+    await inlineMarket.waitFor();
+    check(await firstMarket.getAttribute("aria-expanded") === "true" && await inlineMarket.count() === 1, "market details expand beneath their row");
     check(await marketRows.count() === marketCount && await panel.locator('[data-inline-market] nav').count() === 0, "expanding a market keeps all rows and adds no page breadcrumbs");
     check(Math.abs(await page.evaluate(() => scrollY) - beforeY) < 2, "market expansion does not move the page");
     await capture("shared-tabs-markets-mobile");
     await firstMarket.click();
-    check(await firstMarket.getAttribute("aria-expanded") === "false" && await panel.locator("[data-inline-market]").count() === 0, "market row collapses in place");
-    await page.locator('[data-verdict] button').click();
-    await panel.locator('[data-market-panel="both-teams-to-score"]').waitFor();
-    check(await panel.getByRole("heading", { name: "Source and timing", exact: true }).count() === 1, "featured pick opens its full market details");
+    await inlineMarket.waitFor({ state: "detached" });
+    check(await firstMarket.getAttribute("aria-expanded") === "false", "market row collapses in place");
+    const verdict = page.locator("[data-verdict]:visible");
+    const featuredMarket = await verdict.getAttribute("data-verdict");
+    const featuredAction = verdict.locator("button");
+    const actionText = (await featuredAction.textContent()).trim();
+    await featuredAction.click();
+    if (actionText === "Original publication" || actionText === "Why this pick?") {
+      const active = actionText === "Original publication" ? "history" : "analysis";
+      await panel.and(page.locator(`[data-active-match-tab="${active}"]`)).waitFor();
+      check(new URL(page.url()).searchParams.get("panel") === active, "retrospective featured action opens its source section");
+    } else {
+      await page.waitForFunction(family => {
+        const parameters = new URL(location.href).searchParams;
+        return parameters.get("market") === family || parameters.get("mcat") === "goals";
+      }, featuredMarket);
+      if (new URL(page.url()).searchParams.get("market") === featuredMarket) {
+        await panel.locator(`[data-market-panel="${featuredMarket}"]`).waitFor();
+        check(await panel.getByRole("heading", { name: "Source and timing", exact: true }).count() === 1, "featured pick opens its full market details");
+      } else {
+        check(await panel.locator("[data-retrospective-market], [data-detail-market]").count() > 0, "exact featured pick opens its filtered market group");
+      }
+    }
     await select("form");
     const results = panel.getByRole("group", { name: "Teams", exact: true });
     check(await results.getByRole("radio", { name: "Both teams", exact: true }).isChecked(), "results default to both clubs");
@@ -192,12 +325,14 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
     await choose(samples.getByRole('radio', {name:'All stored',exact:true}));
     await panel.getByRole('button', {name:'Page 2',exact:true}).click();
     await page.waitForFunction(() => new URL(location.href).searchParams.get('page') === '2');
-    check(JSON.stringify(await rowIds()) === JSON.stringify(combined('all').slice(10).map(record => record.fixtureId)), "shared fixture appears only once across combined pagination");
+    const secondPage = combined('all').slice(10, 20).map(record => record.fixtureId);
+    await panel.locator(`[data-result-list] a[data-item-key="${secondPage[0]}"]`).waitFor();
+    check(JSON.stringify(await rowIds()) === JSON.stringify(secondPage), "shared fixture appears only once across combined pagination");
     await page.reload({waitUntil:'networkidle'});
     await page.locator('[data-match-design="phone"]').waitFor();
     check(await results.getByRole('radio', {name:'Both teams',exact:true}).isChecked()
       && await samples.getByRole('radio', {name:'All stored',exact:true}).isChecked()
-      && JSON.stringify(await rowIds()) === JSON.stringify(combined('all').slice(10).map(record => record.fixtureId)), "combined team, sample and page survive refresh");
+      && JSON.stringify(await rowIds()) === JSON.stringify(secondPage), "combined team, sample and page survive refresh");
     await choose(samples.getByRole('radio', {name:'Last 10',exact:true}));
     await results.getByRole("radio", { name: "Arsenal", exact: true }).focus();
     await page.keyboard.press("ArrowRight");
@@ -265,13 +400,15 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
     await page.goto(origin + path + "?panel=h2h&venue=away", { waitUntil: "networkidle" });
     check(await page.locator('[data-active-match-tab="form"]').count() === 1 && await results.getByRole("radio", { name: "Head-to-Head", exact: true }).isChecked(), "legacy H2H link opens the combined results tab");
     await page.setViewportSize({ width: 1024, height: 1000 });
-    await page.locator('[data-match-design="touchline"]').waitFor();
-    await page.locator("[data-match-tabs-more] summary").waitFor();
-    check(await page.locator("[data-match-tabs-more]").count() === 1, "desktop overflow uses the shared More menu");
+    await page.locator("[data-match-workspace]").waitFor();
     await select("history");
-    check(await page.locator('[data-active-match-tab="history"]').count() === 1, "desktop More items select their content");
+    check(await page.locator('[data-active-match-tab="history"]').count() === 1, "desktop sidebar items select their content");
     await page.setViewportSize({ width: 1440, height: 1000 });
     await select('form');
+    check(await panel.locator('[data-results-filters] > section').evaluateAll(groups => {
+      const boxes = groups.map(group => group.getBoundingClientRect());
+      return boxes.length === 3 && boxes.every((box, index) => box.top === boxes[0].top && (index === 0 || box.left >= boxes[index - 1].right));
+    }), "desktop result filter groups keep distinct columns on the same row");
     await capture('shared-tabs-results-desktop');
     await select('lineups');
     check(await detail.getByRole('radio').count() === 5, "desktop lineup player details also use radio choices");
@@ -281,22 +418,25 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
     await select("stats");
     check(await panel.getByRole('group', { name:'Venue', exact:true }).getByRole('button').count() === 3
       && await panel.getByRole('radio').count() === 0, "desktop statistics keep their existing controls");
-    check(await nav.evaluate(element => element.scrollWidth <= element.clientWidth + 1), "desktop tabs fit as a normal row");
-    check(await nav.locator('[data-match-tab]').evaluateAll(elements => elements.every(element => {
-      const style = getComputedStyle(element); return parseFloat(style.fontSize) >= 13 && Number(style.fontWeight) >= 600;
-    })), "desktop tab labels use readable size and stronger weight");
     await capture("shared-tabs-desktop");
+    const desktop = await verifyDesktopMatchWorkspace(page, { origin, captureDirectory });
+    desktopChecks = desktop.checks;
+    failures.push(...desktop.failures);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await select("stats");
     await page.getByRole("button", { name: "Switch to dark theme", exact: true }).click();
-    await page.setViewportSize({ width: 390, height: 844 }); await select("stats");
     await capture("shared-tabs-dark-mobile");
     await page.getByRole("button", { name: "Switch to light theme", exact: true }).click();
     await page.goto(origin + "/en/matches/10000000-0000-4000-8000-000000000001/scheduled", { waitUntil: "networkidle" });
-    check(await page.getByRole("heading", { name: "Completed matches are public", exact: true }).count() === 1 && await page.locator("[data-detail-market]").count() === 0, "unfinished guest access stays restricted");
+    const access = page.getByRole("link", { name: "Unlock predictions", exact: true }).first();
+    await access.waitFor();
+    check(await access.isVisible()
+      && await page.locator("[data-detail-market]:visible").count() === 0, "unfinished guest access stays restricted");
     check(errors.length === 0, "no browser errors");
-    return { checks: checks.length, failures, errors };
+    return { checks: checks.length + desktopChecks, failures, errors };
   } catch (error) {
     failures.push(error instanceof Error ? error.message : String(error));
-    return { checks: checks.length, failures, errors };
+    return { checks: checks.length + desktopChecks, failures, errors };
   } finally {
     await page.unroute("**/api/account/session"); page.off("pageerror", onError); page.off("console", onConsole); page.off("request", onRequest);
   }

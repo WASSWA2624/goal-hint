@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { matchDetailTabs, detailTabForView, openDetailTab, hasMatchPredictionAccess } from "../src/domain/match-detail-tabs.ts";
-import { parseMatchView, parseMatchDetailsView, serializeMatchView, splitMatchViewParameters, openItem } from "../src/domain/match-view.ts";
+import { desktopMatchDetailTabs, parseMatchView, parseMatchDetailsView, serializeMatchView, splitMatchViewParameters, openItem } from "../src/domain/match-view.ts";
 import { horizontalPitchPositions } from "../src/domain/match-details.ts";
 import { pitchCanvasPosition, referencePitch, pitchCanvas } from "../src/domain/football-pitch.ts";
 import { playerSchema } from "../src/domain/match-insights.ts";
@@ -46,6 +46,22 @@ test("archive URL opens Pick History without replacing explicit tabs or the ordi
   assert.equal(visibleTab(stats), "stats");
   assert.equal(visibleTab(current), "history", "returning to the previous URL restores its tab");
   assert.equal(visibleTab({ revision: archive.get("revision"), section: "players" }), "players");
+});
+
+test("desktop Details is the default and can be opened over an archived revision without changing the phone default", () => {
+  assert.deepEqual(desktopMatchDetailTabs, ["details", "stats", "events", "lineups", "form", "standings", "players", "markets",
+    "analysis", "news", "venue", "referee", "history"]);
+  assert.equal(detailTabForView(parseMatchDetailsView({}), true), "details");
+  assert.equal(detailTabForView(parseMatchDetailsView({})), "stats");
+  for (const [parameters, panel] of [[{ panel: "stats" }, "stats"], [{ market: "total-goals" }, "markets"],
+    [{ panel: "h2h", venue: "away" }, "form"], [{ revision: "archive" }, "history"]]) {
+    assert.equal(detailTabForView(parseMatchDetailsView(parameters), true), panel);
+  }
+  const archive = new URLSearchParams("revision=archive&panel=history&section=history&item=old");
+  const details = serializeMatchView(openDetailTab(parseMatchDetailsView(archive), "details"), archive);
+  assert.equal(details.toString(), "revision=archive&panel=details");
+  assert.equal(detailTabForView(parseMatchDetailsView(details), true), "details");
+  assert.equal(detailTabForView(parseMatchDetailsView(details)), "stats");
 });
 
 test("the shared tab list has one combined results tab and old H2H links retain their controls", () => {

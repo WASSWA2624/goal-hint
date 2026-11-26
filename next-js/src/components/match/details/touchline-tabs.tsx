@@ -2,8 +2,8 @@
 
 import { useCallback, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import styled from "styled-components";
-import { detailTabForView, hasMatchPredictionAccess, openDetailTab, type MatchDetailTab } from "@/domain/match-detail-tabs";
-import { formWindows, openSection, type FormWindow, type TeamFocus, type VenueFocus, type MatchSection, type MatchView } from "@/domain/match-view";
+import { detailTabForView, hasMatchPredictionAccess, openDetailTab } from "@/domain/match-detail-tabs";
+import { formWindows, openSection, type FormWindow, type MatchInformationTab, type TeamFocus, type VenueFocus, type MatchSection, type MatchView } from "@/domain/match-view";
 import { media } from "@/styles/theme";
 import { contentGutter } from "@/components/ui/layout";
 import { LockedSurface, UnlockLink } from "@/components/members/prediction-unlock";
@@ -23,15 +23,12 @@ import { BookmakerOddsPanel, MarketOddsPanel } from "./in-play-odds";
 const embeddedDisclosure = { open: true, byDefault: false, reveal: 0, embedded: true, toggle: () => {} };
 const untitledDisclosure = { ...embeddedDisclosure, hideHeading: true };
 const Surface = styled(TouchlineSurface)`
-  align-self: start; overflow-anchor: none;
-  ${media.belowDesktop} { margin-inline: calc(-1 * ${contentGutter}); border-inline: 0; }
+  align-self: start; overflow-anchor: none; margin-inline: calc(-1 * ${contentGutter});
 `;
 const Panel = styled.div`
-  padding: var(--gh-spacing-4) ${({ theme }) => theme.layout.gutter}; min-inline-size: 0;
+  padding: var(--gh-spacing-3); min-inline-size: 0;
   min-block-size: min(var(--gh-size-70), 40dvh);
-  scroll-margin-block-start: calc(var(--review-height, 0px) + var(--app-header-height, var(--gh-size-12)) + var(--gh-spacing-16));
-  ${media.belowDesktop} { padding: var(--gh-spacing-3); scroll-margin-block-start: calc(var(--review-height, 0px) + var(--gh-spacing-12_5));
-  }
+  scroll-margin-block-start: calc(var(--review-height, 0px) + var(--gh-spacing-12_5));
   ${focusRing}
 `;
 const ResultFilters = styled(RadioGroups)`
@@ -39,7 +36,7 @@ const ResultFilters = styled(RadioGroups)`
 `;
 
 /** Reuse the existing section bodies with independent item state and shared group filters. */
-function Section({ section, view, children, heading = true }: { section: MatchSection; view: MatchView; children: ReactNode; heading?: boolean }) {
+function Section({ section, view, children }: { section: MatchSection; view: MatchView; children: ReactNode }) {
   const details = useStableDetails();
   const scopedView = useMemo(() => ({ ...view, section, item: view.section === section ? view.item : null,
     tab: view.section === section ? view.tab : null }), [section, view]);
@@ -49,12 +46,12 @@ function Section({ section, view, children, heading = true }: { section: MatchSe
     return { ...next, panel: current.panel };
   }, mode)) satisfies typeof details.update }), [details, section]);
   return <DetailsProvider value={scoped}><ViewProvider value={scopedView}>
-    <DisclosureProvider value={heading ? embeddedDisclosure : untitledDisclosure}>{children}</DisclosureProvider>
+    <DisclosureProvider value={untitledDisclosure}>{children}</DisclosureProvider>
   </ViewProvider></DetailsProvider>;
 }
 
 export function TouchlineTabs({ view }: { view: MatchView }) {
-  const { data, locale, messages, update } = useStableDetails();
+  const { data, update } = useStableDetails();
   const panel = useRef<HTMLDivElement>(null);
   const selected = detailTabForView(view), allowed = hasMatchPredictionAccess(data);
   const previousTab = useRef(selected);
@@ -84,39 +81,48 @@ export function TouchlineTabs({ view }: { view: MatchView }) {
     }
     preserveViewport();
   }, [selected, preserveViewport]);
-  function select(tab: MatchDetailTab) { preserveViewport(); update(current => openDetailTab(current, tab)); }
+  function select(tab: MatchInformationTab) { preserveViewport(); update(current => openDetailTab(current, tab)); }
   return <Surface data-touchline-tabs onClickCapture={preserveViewport} onChangeCapture={preserveViewport}
     onKeyDownCapture={event => { if (["Enter", " ", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) preserveViewport(); }}>
     <MatchTabNavigation selected={selected} allowed={allowed} onSelect={select} />
     <Panel ref={panel} role="tabpanel" id="match-information-panel" aria-labelledby={`match-tab-${selected}`} tabIndex={0} data-active-match-tab={selected}>
-      {!allowed ? <LockedSurface><TouchlineEmpty><UnlockLink locale={locale} signedIn={data.access.signedIn} returnTo={data.route.path} stretch /></TouchlineEmpty></LockedSurface>
-      : <TouchlineBody>
-        {selected === "stats" && <>
-          {(data.fixture.status === "live" || data.liveMatch != null) && <Observations kind="statistics" />}
-          <Section section="stats" view={view} heading={false}><StatsSection /></Section>
-        </>}
-        {selected === "form" && <FormAndH2H view={view} />}
-        {selected === "standings" && <TouchlineStandings view={view} />}
-        {selected === "lineups" && <Section section="lineups" view={view} heading={false}><LineupsSection /></Section>}
-        {selected === "players" && <Section section="players" view={view} heading={false}><PlayersSection /></Section>}
-        {selected === "markets" && <>
-          <ViewProvider value={{ ...view, marketsOpen: true }}><DisclosureProvider value={embeddedDisclosure}><MarketsCard embedded /></DisclosureProvider></ViewProvider>
-          {data.selection === "applicable" && <>
-            <MarketOddsPanel kind="in-play" observation={data.inPlayOdds} messages={messages} search={view.marketSearch} />
-            {data.bookmakerOdds ? <BookmakerOddsPanel observation={data.bookmakerOdds} messages={messages} search={view.marketSearch} />
-              : <MarketOddsPanel kind="pre-match" observation={data.fixture.marketOdds} messages={messages} />}
-            {data.recoveredBookmakerOdds && <BookmakerOddsPanel observation={data.recoveredBookmakerOdds} messages={messages} search={view.marketSearch} />}
-          </>}
-        </>}
-        {selected === "events" && <Observations kind="events" />}
-        {selected === "venue" && <Section section="context" view={view} heading={false}><ContextSection /></Section>}
-        {selected === "referee" && <Section section="referee" view={view} heading={false}><RefereeSection /></Section>}
-        {selected === "news" && <Section section="news" view={view} heading={false}><NewsSection omitPredictionAnalysis /></Section>}
-        {selected === "analysis" && <><Explanation /><Note>{messages.text("detail.probabilityDisclosure")}</Note></>}
-        {selected === "history" && <Section section="history" view={view} heading={false}><HistorySection /></Section>}
-      </TouchlineBody>}
+      <MatchSectionContent selected={selected} view={view} />
     </Panel>
   </Surface>;
+}
+
+/** One copy of the match information panels for the desktop workspace and the phone tabs. */
+export function MatchSectionContent({ selected, view, desktop = false }: { selected: MatchInformationTab; view: MatchView; desktop?: boolean }) {
+  const { data, locale, messages } = useStableDetails();
+  return !hasMatchPredictionAccess(data)
+    ? <LockedSurface><TouchlineEmpty><UnlockLink locale={locale} signedIn={data.access.signedIn} returnTo={data.route.path} stretch /></TouchlineEmpty></LockedSurface>
+    : <TouchlineBody>
+      {selected === "stats" && <>
+        {(data.fixture.status === "live" || data.liveMatch != null) && <Observations kind="statistics" />}
+        <Section section="stats" view={view}><StatsSection /></Section>
+      </>}
+      {selected === "form" && <FormAndH2H view={view} />}
+      {selected === "standings" && <TouchlineStandings view={view} />}
+      {selected === "lineups" && <Section section="lineups" view={view}><LineupsSection /></Section>}
+      {selected === "players" && <Section section="players" view={view}><PlayersSection /></Section>}
+      {selected === "markets" && <>
+        <ViewProvider value={{ ...view, marketsOpen: true }}>
+          <DisclosureProvider value={embeddedDisclosure}><MarketsCard embedded includeFeatured={desktop} /></DisclosureProvider>
+        </ViewProvider>
+        {data.selection === "applicable" && <>
+          <MarketOddsPanel kind="in-play" observation={data.inPlayOdds} messages={messages} search={view.marketSearch} />
+          {data.bookmakerOdds ? <BookmakerOddsPanel observation={data.bookmakerOdds} messages={messages} search={view.marketSearch} />
+            : <MarketOddsPanel kind="pre-match" observation={data.fixture.marketOdds} messages={messages} />}
+          {data.recoveredBookmakerOdds && <BookmakerOddsPanel observation={data.recoveredBookmakerOdds} messages={messages} search={view.marketSearch} />}
+        </>}
+      </>}
+      {selected === "events" && <Observations kind="events" />}
+      {selected === "venue" && <Section section="context" view={view}><ContextSection /></Section>}
+      {selected === "referee" && <Section section="referee" view={view}><RefereeSection /></Section>}
+      {selected === "news" && <Section section="news" view={view}><NewsSection omitPredictionAnalysis /></Section>}
+      {selected === "analysis" && <><Explanation /><Note>{messages.text("detail.probabilityDisclosure")}</Note></>}
+      {selected === "history" && <Section section="history" view={view}><HistorySection /></Section>}
+    </TouchlineBody>;
 }
 
 function FormAndH2H({ view }: { view: MatchView }) {
@@ -146,7 +152,7 @@ function FormAndH2H({ view }: { view: MatchView }) {
           options={formWindows.map(value => ({ value, label: value === 0 ? messages.text("details.allStored") : messages.text("details.lastN", { count: String(value) }) }))} />
       </section>
     </ResultFilters>
-    <Section section={section} view={view} heading={false}>{section === "h2h" ? <H2HSection filters={false} /> : <FormSection sharedFilters />}</Section>
+    <Section section={section} view={view}>{section === "h2h" ? <H2HSection filters={false} /> : <FormSection sharedFilters />}</Section>
   </>;
 
 }

@@ -1,9 +1,9 @@
 # Read-only revision history
 
 Prompt 036 expands history within `/en/matches/{fixtureId}/{slug}`. The primary
-match content always uses an independent applicable-current/locked read. A
-selected historical snapshot appears below it, inside an open native disclosure,
-without another fixture card, score headline or performance entry.
+match content uses an independent applicable-current/locked read. A selected
+historical snapshot opens within Pick History in a native disclosure. The
+desktop scoreboard remains in Match Details.
 
 The page accepts the detail API's existing `revision`, `cycle`, `limit`,
 `revisionAnchor`, `revisionBefore`, `cycleAnchor` and `cycleBefore` parameters.
@@ -17,7 +17,8 @@ History uses ordinary server-rendered links, with no new client fetcher or state
 store. This keeps complete snapshot and source-permission handling on the server
 and works with JavaScript disabled. Reusable square `Disclosure` controls use
 native expanded state, Enter/Space behavior and visible focus. Links target the
-open history region; a summary link returns to the primary content. Next.js
+open history region. The summary link opens Match Details on desktop and
+returns to the scoreboard above the tabs on phones. Next.js
 prefetch is disabled for history selection/pagination/retry.
 
 Each list is bounded to ten entries by default and twenty at most. Publication

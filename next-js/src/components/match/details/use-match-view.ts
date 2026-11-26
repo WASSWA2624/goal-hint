@@ -15,7 +15,7 @@ export type ViewUpdate = (change: (current: MatchView) => MatchView, mode?: View
 
 /**
  * The details view lives in the URL: opening sections and items adds history entries (Back and
- * Forward step through them), while tabs, filters and pages replace the current entry. Other
+ * Forward step through them), while local filters and pages can replace the current entry. Other
  * query parameters, such as revision history, are preserved. `update` derives the next view from
  * the URL at call time, so handlers need no rendered view and closed cards can skip view changes.
  */
@@ -30,7 +30,7 @@ export function useMatchView() {
   }, []);
   const update = useCallback<ViewUpdate>((change, mode = "push") =>
     go(change(parseMatchDetailsView(new URLSearchParams(window.location.search))), mode), [go]);
-  return { view, go, update };
+  return { view, go, update, parameters };
 }
 
 const desktopQuery = media.desktop.replace(/^@media\s+/u, "");
@@ -39,12 +39,18 @@ function subscribeDesktop(change: () => void) {
   list.addEventListener("change", change);
   return () => list.removeEventListener("change", change);
 }
+const desktopViewport = () => window.matchMedia(desktopQuery).matches;
+
+/** The server has no viewport size. The match route supplies a compact first paint for phones. */
+export function useMatchDesktopViewport(): boolean | null {
+  return useSyncExternalStore(subscribeDesktop, desktopViewport, () => null);
+}
 /**
  * Share one responsive boundary for the featured prediction and lineup layouts. The server renders
  * the desktop layout; phones switch to their compact presentation when they hydrate.
  */
 export function useOpenByDefault(): boolean {
-  return useSyncExternalStore(subscribeDesktop, () => window.matchMedia(desktopQuery).matches, () => true);
+  return useMatchDesktopViewport() ?? true;
 }
 const subscribeNothing = () => () => {};
 

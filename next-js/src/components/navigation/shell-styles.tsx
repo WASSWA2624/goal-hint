@@ -342,14 +342,17 @@ export const TabButton = styled.button<{ $tone: AccentName }>`
 `;
 
 /** Footer clearance matches the phone tab targets, border and safe area. */
-export const Footer = styled.footer.attrs<{ "data-app-footer"?: string }>({ "data-app-footer": "" })`
+export const Footer = styled.footer.attrs<{ "data-app-footer"?: string; $belowDesktop?: boolean }>({ "data-app-footer": "" })`
   padding-block: var(--gh-spacing-2_5) calc(var(--gh-spacing-2_5) + ${mobileTabHeight} + var(--gh-size-0_25) + env(safe-area-inset-bottom));
   color: ${({ theme }) => theme.footer.mutedText};
   background: ${({ theme }) => theme.footer.background};
   border-block-start: 0;
   font-size: var(--gh-font-secondary);
   line-height: var(--gh-leading-compact);
-  ${desktop} { padding-block: var(--gh-spacing-3_5); font-size: var(--gh-font-body); }
+  ${desktop} {
+    padding-block: var(--gh-spacing-3_5); font-size: var(--gh-font-body);
+    ${({ $belowDesktop }) => $belowDesktop && css`display: none;`}
+  }
 `;
 
 /** Public and member bands fill the browser gutter or form the window's content edge. */
