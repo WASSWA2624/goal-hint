@@ -9,11 +9,13 @@ import { darkTheme, lightTheme, media } from "@/styles/theme";
 import { themeColorVariables } from "@/styles/theme-css";
 import { themePreferenceAttribute } from "@/styles/theme-preference";
 
-/** Transparent search row, separated from the app header and performance by shared spacing. */
+/** Date, performance and search controls share the page rails. */
 const darkFilterColors = themeColorVariables(darkTheme).join("\n");
 const lightFilterColors = themeColorVariables(lightTheme).join("\n");
 
 export const Panel = styled.form`
+  display: grid;
+  gap: var(--gh-spacing-2);
   min-inline-size: 0;
   padding: var(--gh-spacing-0_5) ${contentGutter};
   color: ${({ theme }) => theme.color.text};

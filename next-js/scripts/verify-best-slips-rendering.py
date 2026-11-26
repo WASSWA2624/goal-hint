@@ -16,7 +16,8 @@ def verify(origin):
         assert html.count("data-best-slips-applied") == 1
         date_navigation = match(r'<nav\b[^>]*aria-label="Slip date"[^>]*>[\s\S]*?</nav>', html)
         date_strip = date_navigation.group()
-        assert date_strip.count('aria-haspopup="dialog"') == 1
+        assert date_strip.count('aria-haspopup="dialog"') == 2
+        assert date_strip.index("data-date-strip-days") < date_strip.index("data-date-strip-calendar") < date_strip.index("data-best-slips-filter-trigger")
         assert '/en/best-slips?period=custom&amp;' in date_strip
         assert '&amp;from=2026-10-12&amp;to=2026-10-12' in date_strip
         assert date_strip.count('aria-current="date"') == (0 if suffix == "?period=all" else 1)
@@ -25,7 +26,7 @@ def verify(origin):
         assert "data-list-divider" not in html
         assert date_navigation.end() < html.index("data-performance-heading")
         trigger = match(r'<button\b[^>]*data-best-slips-filter-trigger="[^"]*"[^>]*>[\s\S]*?</button>', html).group()
-        assert ">Filters</span>" in trigger
+        assert ">Filters</span>" in trigger and ">Advanced Filters</span>" in trigger
         if suffix == "?period=all":
             assert "data-best-slips-band-count" not in html
         elif suffix == legacy:

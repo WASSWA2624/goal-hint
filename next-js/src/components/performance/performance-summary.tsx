@@ -1,7 +1,6 @@
 "use client";
 
 import styled, { css } from "styled-components";
-import type { ReactNode } from "react";
 import { desktopSectionFrame } from "@/components/ui/layout";
 import { controlHeight } from "@/components/ui/control-layout";
 import { SectionHeader, sectionHeaderMetadata } from "@/components/ui/section-header";
@@ -26,27 +25,19 @@ const Header = styled(SectionHeader)<{ $compactHeader: boolean }>`
   ${({ $compactHeader }) => $compactHeader && css`padding-block-end: 0; padding-inline: 0;`}
   > p { ${sectionHeaderMetadata} margin-inline-start: auto; text-align: end; }
 `;
-const Counts = styled.dl`
+const Counts = styled.dl<{ $compact: boolean }>`
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--gh-spacing-1); min-inline-size: 0; margin: 0;
   ${media.desktop} {
     gap: var(--gh-spacing-1_5);
-    @container performance-summary (min-width: ${({ theme }) => theme.size[144]}) { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    ${({ $compact, theme }) => $compact ? "grid-template-columns: repeat(6, minmax(0, 1fr));" : css`
+      @container performance-summary (min-width: ${theme.size[144]}) { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    `}
   }
-`;
-const Figures = styled.div`
-  display: grid; gap: var(--gh-spacing-1_5); min-inline-size: 0;
-  ${media.desktop} {
-    &:has(> [data-performance-actions]) { grid-template-columns: minmax(0, 1fr) auto; }
-  }
-`;
-const Actions = styled.div`
-  display: flex; min-inline-size: 0;
-  > button { flex: 1; }
 `;
 
 type Status = PredictionResult | "all";
-const Count = styled.div<{ $status: Status }>`
+const Count = styled.div<{ $status: Status; $compact: boolean }>`
   ${({ theme, $status }) => {
     const tone = performanceResultColors(theme, $status);
     return `--summary-text: ${tone.text}; --summary-background: ${tone.background};`;
@@ -61,13 +52,28 @@ const Count = styled.div<{ $status: Status }>`
   dt, [data-summary-count] { max-inline-size: 100%; overflow-wrap: anywhere; text-align: center; }
   dt > svg { display: none; }
   ${media.desktop} { dt > svg { display: block; flex: none; font-size: var(--gh-font-secondary); } }
+  ${({ $compact, theme }) => $compact && css`
+    dt { font-size: var(--gh-font-body); }
+    dd { flex-wrap: nowrap; line-height: var(--gh-leading-label); }
+    dt, [data-summary-count] { white-space: nowrap; overflow-wrap: normal; }
+    @container performance-summary (max-width: ${theme.viewport[22.5]}) {
+      padding-inline: var(--gh-spacing-0_5);
+      dd { gap: var(--gh-spacing-0_5); font-size: var(--gh-font-body); }
+    }
+    ${media.desktop} {
+      dd { font-size: var(--gh-font-reading); }
+    }
+  `}
 `;
-const Percentage = styled.span`
+const Percentage = styled.span<{ $compact: boolean }>`
   font-size: var(--gh-font-caption); font-weight: var(--gh-weight-body); white-space: nowrap;
-  ${media.desktop} {
+  ${({ $compact, theme }) => $compact ? css`
+    font-size: var(--gh-font-secondary);
+    @container performance-summary (max-width: ${theme.viewport[22.5]}) { font-size: var(--gh-font-caption); }
+  ` : css`${media.desktop} {
     display: none; margin-inline-start: var(--gh-spacing-1);
-    @container performance-summary (min-width: ${({ theme }) => theme.size[144]}) { display: inline; }
-  }
+    @container performance-summary (min-width: ${theme.size[144]}) { display: inline; }
+  }`}
 `;
 const Coverage = styled.dl`
   display: flex; flex-wrap: wrap; gap: var(--gh-spacing-1) var(--gh-spacing-3); margin: 0;
@@ -96,11 +102,10 @@ const outcomes = [
 ] as const;
 
 /** Shared period outcomes; null counts remain unknown and all six statuses stay visible. */
-export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title, period, actions, headingLevel = 2,
+export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title, period, headingLevel = 2,
   showCoverage = true, showAll = true, activeResult, onResult, disabled = false, loading = false, resultAttributes, compactHeader = false }: {
   counts: PerformanceSummaryCounts | null; locale: string; kind: "matches" | "slips" | "predictions";
   title?: string | undefined; period?: string | undefined; headingLevel?: 2 | 3 | undefined;
-  actions?: ReactNode;
   compactHeader?: boolean;
   loading?: boolean | "background";
   showCoverage?: boolean | undefined; showAll?: boolean;
@@ -118,7 +123,7 @@ export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title
       <Header $compactHeader={compactHeader} data-performance-heading>{headingLevel === 3 ? <h3>{label}</h3> : <h2>{label}</h2>}
         {period && <p data-performance-period>{period}</p>}
       </Header>
-      <Figures><Counts data-performance-figures>
+      <Counts $compact={compactHeader} data-performance-figures>
         {outcomes.map((outcome) => {
           const { key } = outcome, result = key === "all" ? undefined : key;
           const label = m.text(key === "all" && !showAll ? `performance.summary.${kind}` : outcome.message);
@@ -128,15 +133,15 @@ export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title
           const percentage = !unknown && fraction !== null && fraction !== undefined
             ? m.number(fraction, { style: "percent", maximumFractionDigits: 1 }) : null;
           const Icon = "icon" in outcome ? outcome.icon : null;
-          return <Count key={key} $status={key} data-summary-card={key} data-summary-outcome={"tone" in outcome ? outcome.tone : undefined}>
+          return <Count key={key} $status={key} $compact={compactHeader} data-summary-card={key} data-summary-outcome={"tone" in outcome ? outcome.tone : undefined}>
             <dt>{Icon && <Icon aria-hidden="true" />}{label}</dt><dd><span data-summary-count={key}>{number(count)}</span>
-              {key !== "all" && <Percentage data-summary-percentage={"tone" in outcome ? outcome.tone : key}>{percentage ? `(${percentage})` : "—"}</Percentage>}
+              {key !== "all" && <Percentage $compact={compactHeader} data-summary-percentage={"tone" in outcome ? outcome.tone : key}>{percentage ? `(${percentage})` : "—"}</Percentage>}
             </dd>
             {onResult && <Action type="button" aria-label={`${label}: ${number(count)}`} aria-pressed={activeResult === result}
               disabled={disabled || unknown} data-summary-result={key} {...resultAttributes?.(result)} onClick={() => onResult(result)} />}
           </Count>;
         })}
-      </Counts>{actions && <Actions data-performance-actions>{actions}</Actions>}</Figures>
+      </Counts>
       {showCoverage && (showPredicted || (counts.unavailable ?? 0) > 0 || (counts.filteredOut ?? 0) > 0) && <Coverage>
         {showPredicted && <div data-summary-predicted>
           <dt>{m.text("performance.summary.predicted")}</dt>

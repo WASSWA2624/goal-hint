@@ -30,6 +30,8 @@ Markets include 1X2, double chance, BTTS, full-time match totals at 1.5/2.5/3.5/
 
 Missing odds, absent qualifying fixtures, feasible fixtures without matching combinations, exhausted rate limits and unavailable data have separate result states. The UI reports a smaller result set and indicates bounded search or partial fixture coverage. These states can depend on current stored evidence, odds rights or configuration. [Result states](../next-js/src/domain/slip-page.ts), [Service tests](../next-js/tests/slip-service.test.mjs), [Search tests](../next-js/tests/slip-builder.test.mjs).
 
+On 26 November 2026, staging accepted valid desktop and mobile submissions and displayed **Odds unavailable**. Its configured profile had neither a public odds rights reference nor the corresponding approval. The service returned before reading fixtures. An isolated fixture with qualifying prices generated two slips on desktop and mobile, and a production diagnostic request also generated results. [Odds policy](../next-js/src/server/odds/public-odds-policy.ts), [Build service](../next-js/src/server/slips/slip-service.ts).
+
 ## State, saved filters and sharing
 
 - Generated selections are transient page results. The build URL retains criteria, so submitting or reloading it can recalculate against current stored data. Live match-state polling uses the original cycle/revision identities for visible slips. It updates scores, phase and results. [Builder route](../next-js/src/app/_components/slips-route.tsx), [Match-state endpoint](../next-js/src/server/slips/slip-match-states.ts).

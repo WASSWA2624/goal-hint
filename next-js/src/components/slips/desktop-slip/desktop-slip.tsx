@@ -48,7 +48,8 @@ export function DesktopSlip({ slip, index, locale, estimatedProbability, results
       {...(publicShareHref ? { publicHref: publicShareHref } : {})} /> : undefined}>
     <ul data-slip-selections aria-labelledby={headingId}>{slip.selections.map((selection, selectionIndex) => {
       const result = results?.find((item) => item.fixtureId === selection.fixtureId);
-      return <DesktopSlipRow key={selection.fixtureId} selection={selection} position={selectionIndex + 1} locale={locale} analysisLinks {...(result ? { result } : {})}
+      return <DesktopSlipRow key={selection.fixtureId} selection={selection} position={selectionIndex + 1} locale={locale} analysisLinks
+        clockInBadge={shareSource?.source === "best"} {...(result ? { result } : {})}
         {...(currentStates ? { matchStates: currentStates } : {})} />;
     })}</ul>
   </DesktopSlipDisclosure>;

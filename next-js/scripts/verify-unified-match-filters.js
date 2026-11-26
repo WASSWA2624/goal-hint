@@ -32,7 +32,7 @@ async function verifyUnifiedMatchFilters(page) {
     await page.locator('[data-feed-performance-state="ready"]').waitFor({ state: "attached" });
     await page.evaluate(() => document.fonts.ready);
   }
-  for (const mode of ["light", "dark"]) for (const width of [320, 390, 1024, 1440]) {
+  for (const mode of ["light", "dark"]) for (const width of [320, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${origin}/en/matches?when=today&picks=all`);
     await page.evaluate(value => localStorage.setItem("goal-hint-theme", value), mode);
@@ -40,8 +40,25 @@ async function verifyUnifiedMatchFilters(page) {
     await page.waitForFunction(mode => document.querySelector('meta[name="color-scheme"]')?.content === mode, mode);
     const form = page.locator('[data-feed-filters]'), opener = form.locator('[data-search-filters]');
     const dialog = page.getByRole('dialog', { name: 'Filters', exact: true });
-    assert(await opener.locator('span').isVisible() && await opener.locator('span').innerText() === 'Filters'
-      && await opener.locator('svg').count() === 1, 'Filters always shows its label and icon');
+    assert((await opener.innerText()).trim() === (width >= 1024 ? 'Advanced Filters' : 'Filters'), 'The filter label follows the viewport');
+    const toolbar = await form.evaluate(element => {
+      const row = element.querySelector('[data-date-navigation-row]'), days = row.querySelector('[data-date-strip-days]');
+      const calendar = row.querySelector('[data-date-strip-calendar]'), filter = row.querySelector('[data-search-filters]');
+      const summary = element.querySelector('[data-performance-summary="matches"]'), search = element.querySelector('[data-feed-search]');
+      const [list, date, button, performance, field] = [days, calendar, filter, summary, search].map(node => node.getBoundingClientRect());
+      const selectedDay = days.querySelector('[aria-current="date"] > b').textContent;
+      const visibleTiles = [...days.children].filter(node => {
+        const tile = node.getBoundingClientRect();
+        return tile.left >= list.left - 1 && tile.right <= list.right + 1;
+      }).length;
+      return { sameRow: Math.abs(list.top - date.top) < 1 && Math.abs(date.top - button.top) < 1,
+        ordered: list.right < date.left && date.right < button.left && button.bottom <= performance.top && performance.bottom <= field.top,
+        sameDay: calendar.textContent.trim() === selectedDay, fullWidthSearch: Math.abs(field.width - row.clientWidth) < 1,
+        visibleTiles, columns: getComputedStyle(summary.querySelector('[data-performance-figures]')).gridTemplateColumns.split(' ').length };
+    });
+    assert(toolbar.sameRow && toolbar.ordered && toolbar.sameDay && toolbar.fullWidthSearch && toolbar.visibleTiles >= 3
+      && (width !== 320 || toolbar.visibleTiles === 3) && toolbar.columns === (width >= 1024 ? 6 : 3),
+    `${mode}/${width}: Date controls, performance and search ${JSON.stringify(toolbar)}`);
     assert(await page.locator('[data-fixture-id]').count() === 50, 'First page shows fifty available matches');
     assert(/1–50 of 55/u.test(await page.locator('[data-match-count]').innerText()), 'Count reflects fifty of fifty-five');
     assert(/^[A-Z]{3} \d{2}-[A-Z][a-z]{2}-\d{4}$/u.test(await page.locator('[data-feed-performance-section] [data-performance-period]').innerText()),

@@ -679,10 +679,9 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const valueLabel = <FeaturedPriceValue description={valueDescription} messages={messages} />;
   const family = featured?.label ?? messages.text(`market.family.${shownFamily}`);
   const [, totalPeriod, totalScope] = /^goal:([^:]+):totals:(total|home|away):/u.exec(featured?.key ?? "") ?? [];
-  const shortFamily = totalScope === "home" || totalScope === "away" ? messages.text(`match.teamTotal.${totalScope}`)
+  const shortFamily = totalScope ? formatMarketShortLabel({ market: "total-goals", scope: totalScope,
+    ...(totalPeriod && totalPeriod !== "full-time" ? { period: totalPeriod } : {}) })
     : featured?.code ?? (shownFamily === "team-goals" ? family : compactMarketName(coreFamily));
-  const mobileFamily = phoneFeed && totalScope ? formatMarketShortLabel({ market: "total-goals", scope: totalScope,
-    ...(totalPeriod && totalPeriod !== "full-time" ? { period: totalPeriod } : {}) }) : shortFamily;
   const selectionContext = featured?.code ? { marketKey: featured.key, label: featured.selectionLabel } : undefined;
   const mobileSelection = selection && predictionLabel(messages, selection, selectionContext);
   const selectionDescription = selection ? predictionDescription(messages, selection, selectionContext) : null;
@@ -691,7 +690,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     ? messages.text("probability.percent", { percent: messages.number(prediction.probability.roundedPercent, snapshotPick
       ? { minimumFractionDigits: 1, maximumFractionDigits: 1 } : undefined) })
     : messages.text(prediction.probability.labelKey === "probability.less-than-one" ? "probability.compact.less-than-one" : "probability.compact.more-than-ninety-nine"));
-  const feedMarket = <FittedCardText full={family} short={mobileFamily} />;
+  const feedMarket = <FittedCardText full={family} short={shortFamily} />;
   const feedPick = selection && <FeedPickLine data-pick-line data-pick-label>
     {sourceMarker}
     <FittedCardText full={predictionText(messages, selection, selectionContext)}
@@ -802,7 +801,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       <span data-ledger-field="prediction" data-no-pick={missing ?? undefined} title={absenceTitle ?? undefined}>{feedPick ?? noPickLabel}</span>
     </FeedFacts> : <Pick $family={coreFamily} data-ledger-facts data-pick-state={pickState} data-result={result}>
       <MarketName $family={coreFamily} data-ledger-field="market" aria-hidden={gated ? undefined : true} title={family}>
-        <span data-pick-value="" data-mobile-only="">{gated ? null : mobileFamily}</span>
+        <span data-pick-value="" data-mobile-only="">{gated ? null : shortFamily}</span>
         <span data-pick-value="" data-desktop-only="">{gated ? null : family}</span>
       </MarketName>
       {offline ? <PredictionCell prediction={null} price={null} reason="Predictions are unavailable in the saved view." locale={locale}>

@@ -79,7 +79,8 @@ def verify_frame(document, path, total="21.95", average="72.4%", count=3):
         assert re.fullmatch(r"\d{1,2}-[A-Z][a-z]{2}-\d{4}", date.text.strip()), f"{path}: hyphenated date includes year"
         assert re.fullmatch(r"\d{2}:\d{2} EAT", clock.text.strip()), f"{path}: 24-hour reporting timezone"
         assert date.attrs.get("datetime", "").endswith("Z"), f"{path}: canonical source instant"
-        assert single(row.nodes("img", "data-country-flag"), f"{path}: local country flag").attrs["src"].startswith("/flags/")
+        flag = single(row.nodes(attr="data-country-flag"), f"{path}: country flag slot")
+        assert single(flag.nodes("img"), f"{path}: local country flag").attrs["src"].startswith("/flags/")
         home = single(row.nodes(attr="data-home"), f"{path}: home")
         away = single(row.nodes(attr="data-away"), f"{path}: away")
         assert home.nodes(attr="data-team-logo") and away.nodes(attr="data-team-logo"), f"{path}: tiny team crest slots"
@@ -88,7 +89,7 @@ def verify_frame(document, path, total="21.95", average="72.4%", count=3):
         analysis = single(row.nodes("a", "data-match-analysis-link"), f"{path}: one accessible analysis link")
         assert analysis.attrs.get("aria-label") and urlsplit(analysis.attrs["href"]).path.startswith("/en/matches/"), f"{path}: canonical analysis destination"
         assert not analysis.nodes("button"), f"{path}: analysis never nests tooltip buttons"
-        assert row.nodes(attr="data-centre") and row.nodes(attr="data-score") and row.nodes(attr="data-clock"), f"{path}: dedicated score and clock anchors"
+        assert row.nodes(attr="data-centre") and row.nodes(attr="data-score"), f"{path}: dedicated score anchor"
         assert single(row.nodes(attr="data-row-odds"), f"{path}: original odds").nodes("strong"), f"{path}: numerical price"
         assert single(row.nodes(attr="data-row-probability"), f"{path}: original probability").nodes("strong"), f"{path}: numerical forecast"
         status = single(row.nodes(attr="data-match-status"), f"{path}: one clear match status")
@@ -109,7 +110,7 @@ def verify_desktop(document, path, saved=False):
         assert [row.attrs["data-outcome"] for row in rows] == ["correct", "incorrect", "void"], f"{path}: original saved outcomes"
         scores = [row.nodes(attr="data-score")[0].text for row in rows]
         assert "2–1" in scores[0] and "4–0" in scores[1] and "VS" in scores[2], f"{path}: supplied regulation scores only"
-        assert all(not row.nodes(attr="data-clock")[0].text.strip() for row in rows), f"{path}: saved result does not invent FT or elapsed minutes"
+        assert all(not row.nodes(attr="data-clock") for row in rows), f"{path}: saved result does not invent FT or elapsed minutes"
         assert all(not row.nodes(attr="data-match-label") for row in rows), f"{path}: saved outcomes have no redundant progress label"
         assert [row.nodes(attr="data-outcome-label")[0].text.strip() for row in rows] == ["Won", "Lost", "Void"], f"{path}: explicit saved selection labels"
     else:
@@ -117,19 +118,25 @@ def verify_desktop(document, path, saved=False):
         assert all(not row.nodes(attr="data-outcome-label") for row in rows), f"{path}: unknown matches do not show prediction Pending"
 
 
-def verify_states(document):
-    rows = verify_frame(document, "states", total="62.35", average="74.5%", count=5)
+def verify_states(document, scenario):
+    rows = verify_frame(document, scenario, total="62.35", average="74.5%", count=5)
+    best = scenario == "best-states"
     assert [row.attrs["data-match-state"] for row in rows] == ["upcoming", "live", "halftime", "finished", "finished"], "states: supplied fixture phases"
     assert [row.attrs["data-outcome"] for row in rows] == ["pending", "pending", "pending", "correct", "incorrect"], "states: original selection outcomes"
-    assert [row.nodes(attr="data-clock")[0].text.strip() for row in rows] == ["", "30′", "HT", "FT", "FT"], "states: supplied minute, halftime and final labels"
+    score_clocks = ["", "", "", "FT", "FT"] if best else ["", "30:00", "HT", "FT", "FT"]
+    assert ["".join(clock.text for clock in row.nodes(attr="data-clock")).strip() for row in rows] == score_clocks, "states: score clocks appear in the appropriate rows"
     for row, score in zip(rows, ["VS", "1–0", "1–1", "2–1", "0–1"]):
         assert score in row.nodes(attr="data-score")[0].text, "states: actual supplied score"
-    assert [row.nodes(attr="data-match-status")[0].text.strip() for row in rows] == ["Upcoming", "Live", "Live", "Won", "Lost"], "states: progress takes precedence until the final outcome"
-    assert [bool(row.nodes(attr="data-match-live-dot")) for row in rows] == [False, True, True, False, False], "states: only live fixtures have a glowing dot, including halftime"
+    statuses = ["Upcoming", "45+02:00", "HT", "Won", "Lost"] if best else ["Upcoming", "Live", "Live", "Won", "Lost"]
+    for index, (row, label) in enumerate(zip(rows, statuses)):
+        badge = single(row.nodes(attr="data-match-status"), "states: one fixture status badge")
+        visible = single(badge.nodes(attr="data-status-clock"), "states: live clock in the badge") if best and index in (1, 2) else badge
+        assert visible.text.strip() == label, "states: progress takes precedence until the final outcome"
+    assert [bool(row.nodes(attr="data-match-live-dot")) for row in rows] == [False, not best, not best, False, False], "states: Best Slips uses the Matches clock presentation"
 
 
 def verify(origin, directory):
-    scenarios = ["desktop", "saved", "states", "locked", "locked-member", "responsive", "best-locked", "best-locked-member", "best-full", "builder", "best-auto", "builder-auto"]
+    scenarios = ["desktop", "saved", "states", "best-states", "locked", "locked-member", "responsive", "best-locked", "best-locked-member", "best-full", "builder", "best-auto", "builder-auto"]
     for scenario in scenarios:
         response = request(origin, f"/{scenario}")
         assert response.status == 200, f"{scenario}: HTTP 200"
@@ -138,8 +145,8 @@ def verify(origin, directory):
         assert len(document.nodes("h1")) == 1 and len(document.nodes("main")) == 1, f"{scenario}: one page heading/landmark"
         if scenario in {"desktop", "saved"}:
             verify_desktop(document, scenario, saved=scenario == "saved")
-        elif scenario == "states":
-            verify_states(document)
+        elif scenario in {"states", "best-states"}:
+            verify_states(document, scenario)
         elif scenario in {"locked", "locked-member", "best-locked", "best-locked-member"}:
             if scenario.startswith("best-locked"):
                 assert not document.nodes("details", "data-slip-disclosure"), f"{scenario}: free viewers only see completed public slips"
@@ -181,7 +188,7 @@ def main():
     with Server(directory) as server:
         verify(server.origin, directory)
         print(f"Fixture artifacts: {directory}", flush=True)
-        print(f"Browser routes: {server.origin}/desktop, /saved, /states, /locked, /locked-member, /responsive, /best-locked, /best-locked-member, /best-full, /builder, /best-auto, /builder-auto", flush=True)
+        print(f"Browser routes: {server.origin}/desktop, /saved, /states, /best-states, /locked, /locked-member, /responsive, /best-locked, /best-locked-member, /best-full, /builder, /best-auto, /builder-auto", flush=True)
         if args.serve:
             server.serve()
 
