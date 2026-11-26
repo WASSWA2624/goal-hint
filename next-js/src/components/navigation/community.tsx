@@ -7,6 +7,7 @@ import { ChevronRightIcon, GroupIcon } from "@/components/ui/icons";
 import { CommunityIcon } from "@/components/ui/community-icon";
 import { communityDestinations, communityLinksSchema, type CommunityLink } from "@/domain/community";
 import { startRequestDeadline } from "@/domain/request-deadline";
+import { createMessages } from "@/i18n/messages";
 
 type CommunitySnapshot = Readonly<{ visible: boolean; links: readonly CommunityLink[] }>;
 // Resolve public visibility before showing channels, including those awaiting a link.
@@ -56,10 +57,14 @@ function subscribe(listener: () => void) {
 }
 export function useCommunitySettings() { return useSyncExternalStore(subscribe, () => snapshot, () => initial); }
 
-export function CommunityDialog({ open, links, onClose }: { open: boolean; links: readonly CommunityLink[]; onClose: () => void }) {
-  const id = useId();
+export function CommunityDialog({ open, links, onClose, onVisit, locale }: {
+  open: boolean; links: readonly CommunityLink[]; onClose: () => void; onVisit?: () => void; locale?: string;
+}) {
+  const id = useId(), messages = createMessages(locale);
   if (!open) return null;
-  return <CriteriaDialog id={id} open title={<CommunityHeading><GroupIcon />Join our community</CommunityHeading>} onCancel={onClose} closeLabel="Close community" footer={null} hideFooter>
+  return <CriteriaDialog id={id} open title={<CommunityHeading><GroupIcon />{messages.text("community.invitation")}</CommunityHeading>}
+    onCancel={onClose} closeLabel={messages.text(onVisit ? "community.close" : "community.closeMenu")} footer={null} hideFooter
+    {...(onVisit ? { dataAttributes: { "data-community-invitation": "" } } : {})}>
     <Destinations data-community-destinations>
       {links.length === 0 && <p>No community links are available right now.</p>}
       {communityDestinations.map(destination => {
@@ -72,7 +77,8 @@ export function CommunityDialog({ open, links, onClose }: { open: boolean; links
           {configured && <span data-community-action>{destination.action}<ChevronRightIcon /></span>}
         </>;
         return configured
-          ? <a key={link.type} data-community-type={link.type} href={link.url} target="_blank" rel="noopener noreferrer">{content}</a>
+          ? <a key={link.type} data-community-type={link.type} href={link.url} target="_blank" rel="noopener noreferrer"
+            onClick={onVisit} onAuxClick={onVisit ? event => { if (event.button === 1) onVisit(); } : undefined}>{content}</a>
           : <div key={link.type} data-community-type={link.type}>{content}</div>;
       })}
     </Destinations>

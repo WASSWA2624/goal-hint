@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { appDownloadsHref, appReleaseKey, detectAppPlatform, nativeAppIdentity, shouldOfferAppDownload,
   type AppDownload, type AppDownloads, type AppPlatform, type AppPromptMemory, type NativeAppIdentity } from "@/domain/app-download-presentation";
 import { createMessages } from "@/i18n/messages";
+import { DeferredAutomaticModal } from "@/components/ui/automatic-modal";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { Button, ButtonLink } from "@/components/ui/controls";
 import { DownloadIcon } from "@/components/ui/icons";
@@ -87,7 +88,7 @@ export function AppDownloadsProvider({ initial, initialAgent = "", locale, child
 
   return <Context.Provider value={{ catalog, platform, native, acknowledge }}>
     {children}
-    {show && release && <CriteriaDialog id="app-download-invitation" title={messages.text(update ? "downloads.update" : "downloads.promptTitle")}
+    {show && release && <DeferredAutomaticModal><CriteriaDialog id="app-download-invitation" title={messages.text(update ? "downloads.update" : "downloads.promptTitle")}
       open onCancel={() => remember(release, false)} closeLabel={messages.text("downloads.close")}
       footer={<>
         <Button type="button" variant="quiet" onClick={() => remember(release, false)}>{messages.text("downloads.later")}</Button>
@@ -96,6 +97,6 @@ export function AppDownloadsProvider({ initial, initialAgent = "", locale, child
       </>}>
       <p>{messages.text(update ? "downloads.updateDescription" : "downloads.promptDescription")}</p>
       {release.version && <p>{messages.text("downloads.version", { version: release.version, build: String(release.build) })}</p>}
-    </CriteriaDialog>}
+    </CriteriaDialog></DeferredAutomaticModal>}
   </Context.Provider>;
 }

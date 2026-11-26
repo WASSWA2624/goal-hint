@@ -67,6 +67,153 @@ async function noOverflow(page, scope = "body") {
   assert.deepEqual(failures, [], "controls must fit the viewport");
 }
 
+const invitationSelector = "dialog[data-community-invitation]";
+const confirmationSelector = "dialog[data-community-confirmation]";
+const reminderInterval = 86_400_000;
+const fixtureTime = Date.parse("2026-11-26T09:00:00Z");
+
+async function noAutomaticDialog(page) {
+  await assert.rejects(page.locator(`${invitationSelector}, ${confirmationSelector}`).waitFor({ state: "visible", timeout: 600 }),
+    { name: "TimeoutError" }, "the page should stay free of automatic Community dialogs");
+}
+
+async function returnToApp(page) {
+  await page.bringToFront();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+}
+
+async function openFromInvitation(page, type, { reload = false } = {}) {
+  const invite = page.locator(invitationSelector);
+  const confirmation = page.locator(confirmationSelector);
+  const link = invite.locator(`a[data-community-type="${type}"]`);
+  const href = await link.getAttribute("href");
+  const popupPromise = page.waitForEvent("popup");
+  await link.click();
+  const popup = await popupPromise;
+  await popup.waitForLoadState("domcontentloaded");
+  assert.equal(popup.url(), href, `${type} opens the configured link`);
+  await invite.waitFor({ state: "hidden" });
+  assert.equal(await confirmation.isVisible(), false, "confirmation waits until returning to GoalHint");
+  if (!reload) await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  await popup.close();
+  if (reload) await page.reload({ waitUntil: "domcontentloaded" });
+  else await returnToApp(page);
+  await confirmation.waitFor({ state: "visible" });
+  assert.equal(await confirmation.getByRole("heading", { name: "Did you join our community?" }).count(), 1);
+  await noOverflow(page, confirmationSelector);
+  return confirmation;
+}
+
+async function accountAction(page, origin, action) {
+  const response = await page.request.post(`${origin}/api/account/community`, { data: action });
+  assert.equal(response.ok(), true, `synthetic account ${action.action} succeeds`);
+  return response.json();
+}
+
+async function verifyInvitations(page, origin, intercept, { screenshotDirectory } = {}) {
+  const browser = page.context().browser();
+  assert.ok(browser, "a second browser context is needed to check cross-device behavior");
+  const devices = await Promise.all([browser.newContext(), browser.newContext()]);
+  await Promise.all(devices.map(device => device.route(url => url.protocol === "https:" && externalHosts.has(url.hostname), intercept)));
+  const [guestDevice, otherDevice] = devices;
+  const [primary, other] = await Promise.all(devices.map(device => device.newPage()));
+  for (const devicePage of [primary, other]) devicePage.setDefaultTimeout(12_000);
+
+  try {
+    const guest = { invitationAccount: "guest" };
+    await scenario(primary, origin, { ...guest, resetInvitations: "1", scenario: "configured", invitationTime: fixtureTime });
+    await primary.setViewportSize({ width: 320, height: 780 });
+    await primary.clock.setFixedTime(fixtureTime);
+    await primary.goto(origin, { waitUntil: "domcontentloaded" });
+    await theme(primary, "dark");
+    const invite = primary.locator(invitationSelector);
+    await invite.waitFor({ state: "visible" });
+    assert.deepEqual(await invite.locator("a[data-community-type]").evaluateAll(links => links.map(link => link.dataset.communityType)),
+      ["whatsapp-group", "whatsapp-channel"], "only the WhatsApp invitation destinations appear");
+    await noOverflow(primary, invitationSelector);
+    if (screenshotDirectory) await primary.screenshot({ path: resolve(screenshotDirectory, "community-invitation-dark-320.png") });
+    await invite.getByRole("button", { name: "Close", exact: true }).click();
+    const secondTab = await guestDevice.newPage();
+    await secondTab.clock.setFixedTime(fixtureTime);
+    await secondTab.goto(origin, { waitUntil: "domcontentloaded" });
+    await noAutomaticDialog(secondTab);
+    await secondTab.close();
+    await primary.clock.setFixedTime(fixtureTime + reminderInterval - 1);
+    await primary.reload({ waitUntil: "domcontentloaded" });
+    await noAutomaticDialog(primary);
+    await primary.clock.setFixedTime(fixtureTime + reminderInterval);
+    await primary.reload({ waitUntil: "domcontentloaded" });
+    const declined = await openFromInvitation(primary, "whatsapp-group");
+    await declined.getByRole("button", { name: "No", exact: true }).click();
+    await primary.reload({ waitUntil: "domcontentloaded" });
+    await noAutomaticDialog(primary);
+    await primary.clock.setFixedTime(fixtureTime + 2 * reminderInterval);
+    await primary.reload({ waitUntil: "domcontentloaded" });
+    const accepted = await openFromInvitation(primary, "whatsapp-channel", { reload: true });
+    if (screenshotDirectory) await primary.screenshot({ path: resolve(screenshotDirectory, "community-confirmation-dark-320.png") });
+    await accepted.getByRole("button", { name: "Yes", exact: true }).click();
+    await accepted.waitFor({ state: "hidden" });
+    await primary.clock.setFixedTime(fixtureTime + 3 * reminderInterval);
+    await primary.reload({ waitUntil: "domcontentloaded" });
+    await noAutomaticDialog(primary);
+
+    await scenario(primary, origin, { invitationAccount: "member-201" });
+    const reconciled = primary.waitForResponse(response => new URL(response.url()).pathname === "/api/account/community"
+      && response.request().postDataJSON().action === "reconcile");
+    await returnToApp(primary);
+    assert.equal((await reconciled).ok(), true);
+    assert.equal((await accountAction(primary, origin, { action: "status" })).joined, true);
+
+    await scenario(other, origin, { invitationAccount: "member-201" });
+    await other.goto(origin, { waitUntil: "domcontentloaded" });
+    await noAutomaticDialog(other);
+    await scenario(primary, origin, guest);
+    await primary.reload({ waitUntil: "domcontentloaded" });
+    await noAutomaticDialog(primary);
+    await scenario(primary, origin, { invitationAccount: "member-203" });
+    await primary.reload({ waitUntil: "domcontentloaded" });
+    await invite.getByRole("button", { name: "Close", exact: true }).click();
+    assert.equal((await accountAction(primary, origin, { action: "status" })).joined, false, "the guest confirmation transfers once");
+    await scenario(primary, origin, guest);
+    await primary.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
+    await primary.reload({ waitUntil: "domcontentloaded" });
+    await invite.getByRole("button", { name: "Close", exact: true }).click();
+
+    await scenario(primary, origin, { invitationAccount: "member-202", invitationTime: fixtureTime });
+    await primary.setViewportSize({ width: 1440, height: 980 });
+    await primary.clock.setFixedTime(fixtureTime);
+    await primary.reload({ waitUntil: "domcontentloaded" });
+    await theme(primary, "light");
+    await invite.waitFor({ state: "visible" });
+    await noOverflow(primary, invitationSelector);
+    if (screenshotDirectory) await primary.screenshot({ path: resolve(screenshotDirectory, "community-invitation-light-1440.png") });
+    await scenario(other, origin, { invitationAccount: "member-202" });
+    await other.reload({ waitUntil: "domcontentloaded" });
+    await noAutomaticDialog(other);
+    const no = await openFromInvitation(primary, "whatsapp-channel");
+    if (screenshotDirectory) await primary.screenshot({ path: resolve(screenshotDirectory, "community-confirmation-light-1440.png") });
+    await no.getByRole("button", { name: "No", exact: true }).click();
+    await no.waitFor({ state: "hidden" });
+    await primary.reload({ waitUntil: "domcontentloaded" });
+    await noAutomaticDialog(primary);
+    await scenario(primary, origin, { invitationTime: fixtureTime + reminderInterval });
+    await primary.clock.setFixedTime(fixtureTime + reminderInterval);
+    await primary.reload({ waitUntil: "domcontentloaded" });
+    const yes = await openFromInvitation(primary, "whatsapp-group", { reload: true });
+    await other.reload({ waitUntil: "domcontentloaded" });
+    await noAutomaticDialog(other);
+    await yes.getByRole("button", { name: "Yes", exact: true }).click();
+    await yes.waitFor({ state: "hidden" });
+    await scenario(primary, origin, { invitationTime: fixtureTime + 2 * reminderInterval });
+    await other.reload({ waitUntil: "domcontentloaded" });
+    await noAutomaticDialog(other);
+    assert.equal((await accountAction(other, origin, { action: "status" })).joined, true);
+    return { guest: true, account: true, exactCooldown: true, returnAfterReload: true, crossDevice: true, guestReconciled: true };
+  } finally {
+    await Promise.all(devices.map(device => device.close()));
+  }
+}
+
 /** Run against verify-community-alerts-rendering.py --serve. External links are intercepted, never joined. */
 export async function verifyCommunity(page, origin, { widths = [320, 390, 1440], screenshotDirectory } = {}) {
   assert.ok(["127.0.0.1", "localhost", "[::1]"].includes(new URL(origin).hostname), "Use the local fixture.");
@@ -181,6 +328,8 @@ export async function verifyCommunity(page, origin, { widths = [320, 390, 1440],
     }
 
     await scenario(page, origin, { reset: "1", scenario: "configured", role: "active" });
+    const defaultAccount = await accountAction(page, origin, { action: "status" });
+    await accountAction(page, origin, { action: "reconcile", accountKey: defaultAccount.accountKey });
     await page.goto(origin, { waitUntil: "domcontentloaded" });
     const configuredDialog = await openCommunity(page, widths.at(-1));
     const configuredLinks = await configuredDialog.locator("a[data-community-type]").evaluateAll(elements => elements.map(element => ({ href: element.href, text: element.textContent })));
@@ -208,7 +357,8 @@ export async function verifyCommunity(page, origin, { widths = [320, 390, 1440],
     assert.equal(await page.getByRole("dialog", { name: "Join our community" }).locator("div[data-community-type]").count(), 6,
       "Community remains available when every normal navigation item fits");
     assert.ok(intercepted.length >= widths.length * 2, "platform navigation was exercised");
-    return { passed: true, checks, configuredAccess: true, allHidden: true, noOverflowMenu: true, externalOpens: intercepted.length };
+    const invitations = await verifyInvitations(page, origin, intercept, { screenshotDirectory });
+    return { passed: true, checks, configuredAccess: true, allHidden: true, noOverflowMenu: true, invitations, externalOpens: intercepted.length };
   } finally {
     await page.context().unroute(externalRoute, intercept);
   }

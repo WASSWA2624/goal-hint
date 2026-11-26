@@ -34,6 +34,7 @@ export function PrivacyContent({ locale }: { locale: string }) {
         <Stack $gap="sm"><h3>{messages.text("privacy.storage.preferences.title")}</h3><BodyText>{messages.text("privacy.storage.preferences.body")}</BodyText></Stack>
         <Stack $gap="sm"><h3>{messages.text("privacy.storage.navigation.title")}</h3><BodyText>{messages.text("privacy.storage.navigation.body")}</BodyText>
           <BodyText>{messages.text("privacy.storage.navigation.retention", values)}</BodyText></Stack>
+        <Stack $gap="sm"><h3>{messages.text("privacy.storage.community.title")}</h3><BodyText>{messages.text("privacy.storage.community.body")}</BodyText></Stack>
         <BodyText>{messages.text("privacy.storage.memory")}</BodyText>
       </>}
       {id === "release" && <ul>{privacyNotice.blockers.map((blocker) => <li key={blocker}><BodyText>{messages.text(`privacy.blocker.${blocker}`)}</BodyText></li>)}</ul>}

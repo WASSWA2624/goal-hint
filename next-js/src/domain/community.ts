@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const communityReminderIntervalMs = 86_400_000;
+
 export const communityDestinations = [
   { type: "whatsapp-group", label: "WhatsApp Group", description: "Join the conversation", action: "Join", placeholder: "https://chat.whatsapp.com/…" },
   { type: "whatsapp-channel", label: "WhatsApp Channel", description: "Follow our updates", action: "Follow", placeholder: "https://www.whatsapp.com/channel/…" },
@@ -62,4 +64,8 @@ export const communityLinksSchema = z.array(z.object({
 export function publicCommunityLinks(value: unknown): readonly CommunityLink[] {
   const parsed = communityLinksSchema.safeParse(value ?? []);
   return parsed.success ? communityLinksWithDefaults(parsed.data).filter(link => link.enabled) : [];
+}
+
+export function communityInvitationLinks(links: readonly CommunityLink[]): readonly CommunityLink[] {
+  return links.filter(link => link.enabled && link.url !== "" && (link.type === "whatsapp-group" || link.type === "whatsapp-channel"));
 }

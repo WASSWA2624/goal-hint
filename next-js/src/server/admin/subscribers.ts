@@ -172,6 +172,7 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
               await writeOwnerAudit(tx, { at, actor, action: "credit_forfeited", accountId: id, targetType: "member", targetId: id, details: { amountUgx: credit, walletEntryId: entry.id } });
             }
             await tx.memberAccount.update({ where: { id }, data: { phone: null, passwordHash: null, phoneVerifiedAt: null, memberAdmittedAt: null, passwordChangedAt: null, whatsappNotificationsAt: null,
+              communityJoinedAt: null, communityInvitedAt: null, communityInvitationId: null, communityAttemptId: null,
               ownerNote: null, blockedReason: null, erasedAt: at, autoRenew: false, referralCode: null, legacyReferralCode: null } });
             await tx.memberVerification.deleteMany({ where: { accountId: id } });
             await tx.memberPasswordResetRequest.deleteMany({ where: { accountId: id } });

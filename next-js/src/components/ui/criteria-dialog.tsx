@@ -133,14 +133,16 @@ export type CriteriaDialogProps = Readonly<{
   closeButtonRef?: Ref<HTMLButtonElement>;
   children: ReactNode;
   className?: string;
+  dataAttributes?: Readonly<Record<`data-${string}`, string>>;
   busy?: boolean;
   dismissOnEscape?: boolean;
+  hideClose?: boolean;
   hideFooter?: boolean;
   applyDisabled?: boolean;
 } & ResetAction & DialogActions>;
 
 /** Native modality and focus handling, retaining inline GET-form fields without JavaScript. */
-export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onReset, applyLabel, cancelLabel, closeLabel, closeButtonRef, resetLabel, children, className, busy = false, dismissOnEscape = true, hideFooter = false, applyDisabled = false, footer }: CriteriaDialogProps) {
+export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onReset, applyLabel, cancelLabel, closeLabel, closeButtonRef, resetLabel, children, className, dataAttributes, busy = false, dismissOnEscape = true, hideClose = false, hideFooter = false, applyDisabled = false, footer }: CriteriaDialogProps) {
   const root = useRef<HTMLDialogElement>(null);
   const enhanced = useSyncExternalStore(subscribe, supportsModalDialog, serverSnapshot);
   const titleId = `${id}-title`;
@@ -160,7 +162,7 @@ export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onRe
     };
   }, [enhanced, open]);
 
-  return <Dialog id={id} ref={root} className={className} open={enhanced ? undefined : true}
+  return <Dialog {...dataAttributes} id={id} ref={root} className={className} open={enhanced ? undefined : true}
     aria-labelledby={titleId} aria-busy={busy} data-criteria-dialog="" data-slip-criteria-group={group} data-enhanced={enhanced ? "true" : "false"}
     onCancel={(event) => {
       if (event.target !== event.currentTarget) return;
@@ -174,8 +176,8 @@ export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onRe
       if (!(target instanceof HTMLInputElement) || ["button", "submit", "reset"].includes(target.type)) return;
       event.preventDefault(); onApply();
     }}>
-    <Header><h2 id={titleId}>{title}</h2><CloseButton ref={closeButtonRef} type="button" variant="quiet" aria-label={closeLabel} disabled={busy} onClick={onCancel}><CloseIcon /></CloseButton></Header>
-    <Body>{children}</Body>
+    <Header><h2 id={titleId}>{title}</h2>{!hideClose && <CloseButton ref={closeButtonRef} type="button" variant="quiet" aria-label={closeLabel} disabled={busy} onClick={onCancel}><CloseIcon /></CloseButton>}</Header>
+    {children != null && <Body>{children}</Body>}
     {!hideFooter && <Actions>
       {footer ?? <>
         {onReset && <CriteriaDialogButton type="button" variant="secondary" data-dialog-reset disabled={busy} onClick={onReset}><ResetIcon />{resetLabel}</CriteriaDialogButton>}

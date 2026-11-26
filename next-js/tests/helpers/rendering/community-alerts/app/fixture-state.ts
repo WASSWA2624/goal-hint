@@ -1,8 +1,23 @@
 import { defaultSubscriptionSettings, protectedSettingFields, type SettingsPageData } from "@/domain/subscription-settings";
 import { defaultCommunityLinks, type CommunityLink } from "@/domain/community";
 
-const globalState = globalThis as typeof globalThis & { communityAlertFixture?: { role: string; settings: SettingsPageData["settings"] } };
-export const fixture = globalState.communityAlertFixture ??= { role: "visitor", settings: { ...defaultSubscriptionSettings } };
+type InvitationAccount = { joined: boolean; invitedAt: number | null; claimId: string | null; pending: boolean };
+type FixtureState = {
+  role: string;
+  settings: SettingsPageData["settings"];
+  invitationTime: number | null;
+  invitationAccounts: Map<string, InvitationAccount>;
+};
+const globalState = globalThis as typeof globalThis & { communityAlertFixture?: FixtureState };
+export const fixture = globalState.communityAlertFixture ??= {
+  role: "visitor", settings: { ...defaultSubscriptionSettings }, invitationTime: null, invitationAccounts: new Map(),
+};
+
+export function fixtureAccount(request: Request): string | null {
+  const account = request.headers.get("cookie")?.match(/(?:^|; )fixture-community-account=([a-z0-9-]+)/u)?.[1];
+  if (account === "guest") return null;
+  return account ?? (fixture.role === "visitor" ? null : "default");
+}
 export const links: CommunityLink[] = [
   { type: "whatsapp-channel", url: "https://whatsapp.com/channel/TEST_ONLY_FIXTURE", enabled: true },
   { type: "telegram-channel", url: "https://t.me/TEST_ONLY_FIXTURE", enabled: true },

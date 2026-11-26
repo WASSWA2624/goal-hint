@@ -9,5 +9,11 @@ export function POST(request: Request) {
   if (query.get("reset") === "1") fixture.settings = { ...defaultSubscriptionSettings };
   if (query.has("role")) fixture.role = query.get("role")!;
   if (scenario) setCommunityScenario(scenario as CommunityScenario);
-  return Response.json({ role: fixture.role, settings: fixture.settings });
+  if (query.get("resetInvitations") === "1") fixture.invitationAccounts.clear();
+  if (query.has("invitationTime")) fixture.invitationTime = Number(query.get("invitationTime"));
+  const account = query.get("invitationAccount");
+  return Response.json({ role: fixture.role, settings: fixture.settings }, {
+    headers: account && /^[a-z0-9-]+$/u.test(account)
+      ? { "Set-Cookie": `fixture-community-account=${account}; HttpOnly; SameSite=Lax; Path=/` } : {},
+  });
 }

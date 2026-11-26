@@ -11,6 +11,7 @@ import { homeHref, type NavigationLocation } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import { FallbackStyleProvider } from "@/styles/provider";
 import { AppBrandBar } from "./app-brand-bar";
+import { CommunityInvitation } from "./community-invitation";
 import { navigationDestinations } from "./navigation-destinations";
 import { NavigationProgress } from "./navigation-progress";
 import { PersistentShellContext } from "./persistent-shell-context";
@@ -71,6 +72,7 @@ export function PublicShellBoundary({ children, header, tabs, app, locale, works
     {app && <MemberNavigationRecovery />}
     <SkipLink href="#main-content">{createMessages(locale).text("navigation.skip")}</SkipLink>
     {header}{children}{tabs}
+    <CommunityInvitation locale={locale} />
   </PublicShellFrame></FallbackStyleProvider>;
 }
 
@@ -92,6 +94,7 @@ export function PersistentAppShell({ children, locale, asOf }: { children: React
       <AppBrandBar locale={locale} persistent />
       {children}
       <PublicTabs {...navigation} />
+      <CommunityInvitation locale={locale} />
     </PersistentShellContext.Provider>
   </PublicShellFrame></FallbackStyleProvider>;
 }
