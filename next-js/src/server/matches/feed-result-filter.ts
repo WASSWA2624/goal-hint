@@ -15,7 +15,8 @@ export { adjustPerformanceAvailability } from "./feed-performance.ts";
 
 type Result = PredictionResult | "unavailable";
 type OutcomeRow = { id: string; kickoff: Date; cycleState: string | null; fixtureStatus: SettlementStatus; legacyAvailable: unknown;
-  hasLocal: unknown; hasFrozen: unknown; occurrenceVoid: unknown; marketKey: string | null; selection: string | null; publishedRevisionId: string | null };
+  hasLocal: unknown; hasFrozen: unknown; hasReplay: unknown; occurrenceVoid: unknown;
+  marketKey: string | null; selection: string | null; publishedRevisionId: string | null };
 
 export function displayedFeedResult(settlement: GoalSettlement | undefined, canceled: boolean): Result {
   switch (settlement?.status) {
@@ -45,26 +46,28 @@ export async function readFeedResultOverrides(tx: Prisma.TransactionClient, sql:
     WHERE localMarket.setId=rp.id AND localMarket.available=TRUE AND localMarket.source='local-engine')`;
   const sidecar = Prisma.sql`EXISTS (SELECT 1 FROM PredictionCycleOperation closeOp WHERE closeOp.cycleId=c.id
     AND closeOp.fixtureId=f.id AND closeOp.kind='close' AND closeOp.revisionId=rp.id AND closeOp.featuredDecisionJson IS NOT NULL)`;
+  const replayPointer = Prisma.sql`EXISTS (SELECT 1 FROM NovemberReplayProjection pointer WHERE pointer.fixtureId=f.id
+    AND pointer.revisionId IS NOT NULL AND pointer.kickoffAt=f.kickoff)`;
   const occurrenceVoid = Prisma.sql`(c.state='void' AND f.status IN ('canceled','abandoned','awarded')
     AND c.voidReason=CONCAT('fixture-', f.status))`;
   const eligible = defaults ? Prisma.sql`((f.status IN ('live',${Prisma.join(playedFinalFixtureStatuses)}) AND
-      (${local} OR ${sidecar} OR EXISTS (SELECT 1 FROM NovemberReplayProjection pointer WHERE pointer.fixtureId=f.id AND pointer.revisionId IS NOT NULL
-        AND pointer.kickoffAt=f.kickoff)))
+      (${local} OR ${sidecar} OR ${replayPointer}))
     OR (${sidecar} AND (f.status='scheduled' AND c.state='closed' OR ${occurrenceVoid})))` : sql.displayUsesProjection;
   let after: Pick<OutcomeRow, "id" | "kickoff"> | null = null;
   for (;;) {
     const rows: OutcomeRow[] = await tx.$queryRaw(Prisma.sql`SELECT STRAIGHT_JOIN f.id,f.kickoff,c.state AS cycleState,f.status AS fixtureStatus,
       rp.id AS publishedRevisionId,IF(${sql.pickAvailable},TRUE,FALSE) AS legacyAvailable,
       ${defaults ? local : Prisma.sql`FALSE`} AS hasLocal, ${defaults ? sidecar : Prisma.sql`FALSE`} AS hasFrozen,
+      ${defaults ? replayPointer : Prisma.sql`FALSE`} AS hasReplay,
       ${defaults ? occurrenceVoid : Prisma.sql`FALSE`} AS occurrenceVoid,
       ${defaults ? Prisma.sql`NULL AS marketKey,NULL AS selection` : Prisma.sql`feedPick.marketKey,feedPick.selection`}
       ${sql.countJoins} ${sql.searchJoin} WHERE ${sql.where} AND f.kickoff IS NOT NULL AND ${eligible}
-      ${after ? Prisma.sql`AND (f.kickoff>${after.kickoff} OR (f.kickoff=${after.kickoff} AND f.id>${after.id}))` : Prisma.empty}
+      ${after ? Prisma.sql`AND f.kickoff>=${after.kickoff} AND (f.kickoff>${after.kickoff} OR f.id>${after.id})` : Prisma.empty}
       ORDER BY f.kickoff,f.id LIMIT 500`);
     if (!rows.length) break;
     const played = (status: SettlementStatus) => status === "live" || isPlayedFinalStatus(status);
-    const replayIds = defaults ? rows.filter(({ fixtureStatus, publishedRevisionId, cycleState }) =>
-      played(fixtureStatus) && (!publishedRevisionId || cycleState === "closed")).map(({ id }) => id) : [];
+    const replayIds = defaults ? rows.filter(({ hasReplay, fixtureStatus, publishedRevisionId, cycleState }) =>
+      Boolean(hasReplay) && played(fixtureStatus) && (!publishedRevisionId || cycleState === "closed")).map(({ id }) => id) : [];
     const replay = await readNovemberReplayProjections(tx, replayIds);
     const frozen = defaults ? await readFrozenLocalFeaturedPicks(tx, rows.filter(
       ({ id, fixtureStatus, cycleState, publishedRevisionId, hasFrozen, occurrenceVoid }) =>

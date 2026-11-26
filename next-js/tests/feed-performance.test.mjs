@@ -20,8 +20,8 @@ test('the predicted feed keeps replay picks and excludes featured abstentions be
     ['abstention', { baseline: 'pending', result: 'unavailable', hasPrediction: false }],
   ]));
   assert.equal(predicted.pageJoins, sql.countJoins);
-  assert.match(predicted.where.sql, /m.available=TRUE OR f.id\s+IN/u);
-  assert.match(predicted.where.sql, /f.id\s+NOT IN/u);
+  assert.match(predicted.where.sql, /m.available=TRUE OR CAST\(f\.id AS BINARY\)\s+IN/u);
+  assert.match(predicted.where.sql, /CAST\(f\.id AS BINARY\)\s+NOT IN/u);
   assert.ok(predicted.where.values.includes('["replay"]'));
   assert.ok(predicted.where.values.includes('["abstention"]'));
 });
@@ -112,8 +112,8 @@ test('displayed outcomes replace only their own original audit rows and adjust t
     (id, result) => seen.push([id, result]), overrides);
   assert.deepEqual(summary, { total: 6, won: 2, lost: 1, pending: 1, void: 1, cancelled: 0, unavailable: 1 });
   assert.deepEqual(seen, [[legacy.row.fixtureId, 'won'], ['replay-loss', 'lost'], ['no-original', 'won'], ['archived-cancel', 'void']]);
-  assert.match(tx.calls[0].sql, /NOT IN\s*\(\s*SELECT matched.id FROM JSON_TABLE/u);
-  assert.match(tx.calls[1].sql, /NOT IN\s*\(\s*SELECT matched.id FROM JSON_TABLE/u);
+  assert.match(tx.calls[0].sql, /NOT IN\s*\(\s*SELECT CAST\(matched\.id AS BINARY\) FROM JSON_TABLE/u);
+  assert.match(tx.calls[1].sql, /NOT IN\s*\(\s*SELECT CAST\(matched\.id AS BINARY\) FROM JSON_TABLE/u);
 });
 
 test('result observers receive audited fixture membership even when aggregate counts are cached', async () => {

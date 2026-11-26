@@ -13,17 +13,20 @@ The anonymous aggregate search counter is separate from optional member-session 
 Anonymous reads need no account or signature. Final routes resolve optional member cookies through gated reads; responses are private/no-store and vary on Cookie. Shared raw caches stay server-side. Unfinished-fixture subscriber fields and probability-dependent filters require entitlement when paid mode is on. English is the launch HTTP locale; server callers can supply the shared
 locale context without changing the URL contract.
 
+Historical inclusion and exclusion compare stored fixture IDs as bytes so
+JSON membership can use a consistent comparison across database collations.
+Replay validation only reads fixtures with a matching stored replay pointer.
+Counts and pagination use the same eligible fixtures in the same snapshot.
+
 ## Parameters and pagination
 
 The established `src/domain/feed-query.ts` contract is reused. Unknown or
 duplicate parameters and incompatible combinations are rejected before database
 access. All SQL values, limits and offsets are bound parameters.
 
-These are API defaults. The Matches page supplies Today and probability
-descending (Highest chance) when those choices are absent, and selects
-Predictions only where the existing access rules allow it. Dated archive routes
-retain their named dates and kickoff default; explicit page choices remain
-authoritative.
+These are API defaults. The Matches page supplies Today and Live first when
+those choices are absent. Dated archive routes retain their named dates and
+kickoff default. Explicit page choices remain authoritative.
 
 | Parameter | Contract |
 | --- | --- |
@@ -38,7 +41,7 @@ authoritative.
 | `odds` | Prompt 052, **currently rejected**. `MIN-MAX` decimal prices with exactly two places, 1.01 ≤ MIN ≤ MAX ≤ 1000.00, no leading zeros, applied inclusively to the shown pick's own stored price (below). `1.01-1000.00` (both slider extremes; the top stop reads "20.00+") applies no filter and is omitted from canonical URLs. Accepted only while `publicPolicy.features.providerOdds` is on; it is off until the owner records odds display rights (OP-36), so today any `odds` value is an unknown key (400). |
 | `picks` | `all` (default) or `only`, which keeps fixtures that have a shown pick. |
 | `status` | `all` (default), `scheduled`, `live`, `finished`, `postponed`, `canceled`, `abandoned`, `awarded`, `unknown`. `finished` includes regulation, extra-time and penalty finals. |
-| `sort` | `kickoff` (default) or `probability`. |
+| `sort` | `kickoff` (default), `probability` or `live-first`. |
 | `dir` | `asc` or `desc`. The default is `desc` for kickoff (Latest first) and probability; a default direction is omitted from canonical URLs. |
 | `page` | Integer 1–10,000, default 1. |
 | `pageSize` | Integer 1–100, default 50. |

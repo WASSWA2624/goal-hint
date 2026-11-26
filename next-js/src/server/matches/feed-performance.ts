@@ -44,8 +44,10 @@ type Sample = HistoryRow & Readonly<{
 }>;
 
 function feedFixtureMembership(ids: readonly string[], include: boolean) {
-  return ids.length ? Prisma.sql`f.id ${include ? Prisma.empty : Prisma.sql`NOT`} IN (
-    SELECT matched.id FROM JSON_TABLE(${JSON.stringify(ids)}, '$[*]' COLUMNS (id VARCHAR(128) PATH '$')) AS matched)` : Prisma.sql`FALSE`;
+  // These are opaque stored IDs. Compare bytes so table and connection
+  // collations do not change membership or reject a historical range.
+  return ids.length ? Prisma.sql`CAST(f.id AS BINARY) ${include ? Prisma.empty : Prisma.sql`NOT`} IN (
+    SELECT CAST(matched.id AS BINARY) FROM JSON_TABLE(${JSON.stringify(ids)}, '$[*]' COLUMNS (id VARCHAR(128) PATH '$')) AS matched)` : Prisma.sql`FALSE`;
 }
 
 export function restrictFeedResultSql(sql: ReturnType<typeof feedSql>, ids: readonly string[], include: boolean) {
