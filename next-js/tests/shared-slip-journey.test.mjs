@@ -11,7 +11,7 @@ test("shared-slip returns accept only opaque canonical paths", () => {
     assert.equal(sharedSlipReturnPath(value), null); assert.equal(memberReturnPath(value), null);
   }
 });
-test("shared-slip authentication returns survive required steps without changing ordinary or administrator destinations", async () => {
+test("shared-slip authentication preserves eligible returns and opens Matches after signup", async () => {
   const result = { status: "authenticated", phone: "256700001101", token: "a".repeat(43) };
   const source = async () => ({ config: { production: false, cookies: { session: "owner", exclude: "exclude" } }, sessions: { verify: async () => null }, auth: {
     login: async () => result, register: async () => result, verifyAccount: async () => result, resetPassword: async () => result,
@@ -19,7 +19,7 @@ test("shared-slip authentication returns survive required steps without changing
   const send = (action, target) => createMemberAuthHandler(action, source)(new Request("https://goalhint.com/api/account/" + action, { method: "POST",
     headers: { "Sec-Fetch-Site": "same-origin", Origin: "https://goalhint.com", "Content-Type": "application/json" }, body: JSON.stringify({ return: target }) }));
   for (const action of ["login", "register", "verify", "reset"]) {
-    assert.equal((await (await send(action, path)).json()).next, path);
+    assert.equal((await (await send(action, path)).json()).next, action === "register" ? "/en/matches" : path);
     for (const target of ["/en/slips", "//evil.test", path + "?x=1"]) assert.equal((await (await send(action, target)).json()).next, "/en/matches");
   }
   result.requiresVerification = true;
