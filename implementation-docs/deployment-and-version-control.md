@@ -144,6 +144,16 @@ Production Chromium checks covered both pages at 390px and 1440px in light and d
 
 Sharing a completed public slip returned HTTP 200 from the production share endpoint. The browser decoded the generated 1080px PNG preview and enabled Download image and Share.
 
+## Performance cards rollout
+
+On 26 November 2026, staging and production activated `1d97a0c7` from the same checksummed ZIP. The earlier layout package `53d846ca` passed isolated staging while the mobile logout follow-up was rolling out. The promoted package includes the already active logout revision `e43ec537`, which remains available for rollback. Both hosts verified all 94 required MariaDB migrations before and after activation.
+
+Both environments served the new build. Matches rendered performance, date controls and search in that order. Slips rendered performance followed by the date controls. Those pages, Builder, the one-day Matches feed, the Slips API and the guest session endpoint returned HTTP 200 in both environments. Staging retained `noindex`.
+
+Sixteen Chromium layout cases passed at 320px, 390px, 768px and 1440px on both pages in both themes. Mobile and desktop keyboard checks passed for control order and dialog focus restoration. Targeted lint, the release build and 101 focused tests passed.
+
+The release ZIP SHA-256 is `d4e210a36379b26eb929ddd47faf1e7d0e2b5c184ba238a2bc0d750309ac415d`.
+
 ## Verification limits
 
 The 26 November 2026 release record documents staging verification of `a1e61cde` with migration status and a synthetic worker check, with production promotion pending at that time. The application overview in this checkout records the earlier production verification of `ee5f6a44`. This audit did not query the hosted deployments, GitHub settings or the actual scheduler. The runbooks document manual approval, upload and activation, with scripts for validation and recurring jobs. Any host-side automation beyond those records needs confirmation from the host operator. [Staging verification record](https://github.com/WASSWA2624/goal-hint/commit/8fd09bfb18cae147d8d9729f01f2b10424908c28), [earlier rollout evidence](../APP_OVERVIEW.md), [release and worker runbooks](../next-js/docs/deployment/how-to-deploy.md).
