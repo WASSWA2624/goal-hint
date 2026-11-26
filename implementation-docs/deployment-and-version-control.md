@@ -52,7 +52,7 @@ Hosted smoke used synthetic accounts to verify current-admin authorization, reje
 
 The local checks passed 85 focused tests, 18 restricted-MySQL admin tests, and seven bulk and reset integration tests. The final focused MySQL deletion run passed eight cases. The Subscriber HTML/API fixture and Playwright passed on desktop and phone in light and dark, including page-local selection, cancel, exact confirmation count and partial failures. Schema validation, lint, TypeScript, the theme contract and the production-mode build passed. The unchanged Subscribe suite has two pre-existing loading fixture failures reproduced with the baseline tests.
 
-The release ZIP SHA-256 is `a1ff833a20cb3e427b64ec08cf3a47d809ce387bbfee0e31900686219f729ba2`. Production promotion awaits owner review.
+The release ZIP SHA-256 is `a1ff833a20cb3e427b64ec08cf3a47d809ce387bbfee0e31900686219f729ba2`.
 
 <details>
 <summary>Changed files</summary>
@@ -100,6 +100,12 @@ The release ZIP SHA-256 is `a1ff833a20cb3e427b64ec08cf3a47d809ce387bbfee0e319006
 - `next-js/tests/subscriber-directory.test.mjs`
 
 </details>
+
+## Subscriber administration production verification
+
+On 26 November 2026, production promoted `59faf6e1` from the same SHA-256-verified ZIP used on staging. HTTPS served Next build `EaIreorAnFdT0fwnToEpI` and its static build manifest. MariaDB verified all 94 migrations with zero pending before and after activation. The application’s existing permissions for the financial-retention reads were verified over TLS. The prior release `1afee350` remains available for rollback.
+
+Read-only HTTPS smoke returned HTTP 200 for Matches, Best Slips and Builder. Guest requests for Subscriber list, selected-account and Password Requests pages redirected to login. Subscriber search, detail, bulk and password request APIs returned HTTP 401 for guests. A cross-origin bulk request returned HTTP 403. Administrative responses were private and no-store. Staging covered signed-in account changes, secure reset, erasure and eligible deletion. Isolated MySQL covered the financial and pending-checkout retention cases.
 
 ## Access-control staging verification
 
