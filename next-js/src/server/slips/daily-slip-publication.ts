@@ -10,6 +10,7 @@ import { feedQueryRules } from "../../domain/feed-query.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import type { SlipSelection } from "../../domain/slip-builder.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
+import type { SlipOddsRefreshStatus } from "../odds/slip-odds-refresh-slot.ts";
 import { provenTrue } from "../shared/authority-proof.ts";
 import { createPublishedSlips } from "./published-slips.ts";
 import { createStoredSlipCohort, type FeaturedSlipCursor, type SlipCohortReader } from "./slip-cohort.ts";
@@ -17,6 +18,7 @@ import { createStoredSlipCohort, type FeaturedSlipCursor, type SlipCohortReader 
 export type DailySlipPublicationResult = Readonly<{ day: string; status:
   "published" | "already-published" | "odds-unavailable" | "no-qualifying" | "unavailable";
   eligibleSelections?: number; newBands?: number; newSlips?: number; dayComplete?: boolean; searchLimited?: boolean;
+  oddsRefresh?: Readonly<{ publicationSlot: string; status: SlipOddsRefreshStatus }>;
 }>;
 
 const automaticCohortPagesPerSlot = 4;

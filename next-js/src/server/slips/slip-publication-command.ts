@@ -2,10 +2,12 @@ import "server-only";
 
 import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
+import { bestSlipPublicationHour } from "../../domain/best-slip-publication-hour.ts";
 import { assertOperationAllowed, getRuntimePolicy, type EvidenceVerifier, type RuntimePolicy } from "../config/runtime-policy.ts";
 import { createDatabase, type DatabaseRuntime } from "../database/client.ts";
 import { loadOwnerApprovals, ownerEvidenceVerifier } from "../live/live-approvals.ts";
 import { approvedOddsDisplay } from "../odds/public-odds-policy.ts";
+import { waitForSlipOddsRefresh } from "../odds/slip-odds-refresh-slot.ts";
 import { createDailySlipPublisher, runDailySlipPublisher } from "./daily-slip-publication.ts";
 import { SlipPublicationError } from "./published-slips.ts";
 
@@ -56,7 +58,16 @@ export async function runSlipPublicationCommand(args: readonly string[], signal:
     const publisher = binding.createPublisher(database);
     await runDailySlipPublisher({ publish: async (hourAt) => {
       await authorize();
-      return publisher.publish(hourAt);
+      if (!stored || !policy.choices.odds.slipRefreshEnabled) return publisher.publish(hourAt);
+      const slot = bestSlipPublicationHour(hourAt ?? Date.now());
+      const status = await waitForSlipOddsRefresh(slot.hourAt, async (id) => {
+        const job = await database.query(db => db.durableJob.findUnique({ where: { id }, select: { state: true } }));
+        return job?.state ?? null;
+      }, signal);
+      const oddsRefresh = { publicationSlot: new Date(slot.hourAt).toISOString(), status };
+      if (status !== "succeeded") return { day: slot.day, status: "unavailable", oddsRefresh };
+      await authorize();
+      return { ...await publisher.publish(slot.hourAt), oddsRefresh };
     } }, signal, (result) => process.stdout.write(JSON.stringify(result) + "\n"), once);
   } finally { await database.disconnect(); }
 }

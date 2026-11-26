@@ -558,6 +558,31 @@ test('odds import persistence on isolated genuine MySQL', { timeout: 300_000 }, 
         assert.deepEqual(await untouched(), before);
       });
 
+      await t.test('fixture refreshes make fresh quotes available and cannot withdraw a reporting date', async () => {
+        p.setTime(Date.parse('2026-10-16T13:00:00Z'));
+        const date = '2026-10-16', multiPolicy = oddsPolicy({ bookmakerScope: 'all' });
+        const request = { ...oddsRequest('prices', p.now() + 5 * MINUTE, { date, policy: multiPolicy, id: oddsHash('targeted-prices') }), fixtureId: ids.G };
+        const targeted = createOddsImportService({ adapter: odds.adapter.odds, store, authority: oddsAuthority(display, multiPolicy),
+          accountId: () => accountId, bounds: () => oddsBounds(p.now(), { maxRequests: 1, maxPages: 1, maxRows: 1 }), clock });
+        odds.state.rows = [row('G', { bets: launchBets({ home: '2.15' }) })];
+        const result = await targeted.importFixture(request);
+        assert.equal(result.status, 'complete');
+        assert.equal(result.outcomes.changed, 1);
+        const target = { fixtureId: F.G.id, kickoffAt: kickoffs.G };
+        const [offers] = (await a.query((tx) => storedCurrentBookmakerQuotes(tx, [target], p.now()))).get(F.G.id).bookmakers;
+        assert.equal(offers.offers.find(({ betId }) => betId === 1).values.find(({ label }) => label === 'Home').odd, '2.15');
+        await assert.rejects(store.markWithdrawn({ batchId: result.batchId, date, seenFixtureIds: [] }), denied('invalid-request'));
+
+        const before = await state('G');
+        odds.state.respond = (url) => oddsResponse(url, [], { total: 0 });
+        try {
+          const empty = await targeted.importFixture({ ...request, id: oddsHash('empty-targeted-prices') });
+          assert.equal(empty.status, 'complete');
+          assert.equal((await store.batch(empty.batchId)).pages[0].totalPages, 0);
+          assert.deepEqual(await state('G'), before);
+        } finally { odds.state.respond = null; }
+      });
+
       await t.test('historical pre-match pages preserve exact bookmaker, line and recovery clocks without rewriting closing prices', async () => {
         p.setTime(kickoffs.G + HOUR);
         await a.query((tx) => tx.footballFixture.update({ where: { id: F.G.id }, data: { status: 'finished-regulation', providerStatus: 'FT' } }));

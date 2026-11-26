@@ -43,9 +43,10 @@ const batchSchema = z.strictObject({
 }).refine(({ checkpoint, kind, requestId, scopeKey, pages }) => !checkpoint || kind === "prices" &&
   scopeKey === oddsPricePageScopeKey(requestId) && pages.length === 1 && checkpoint.page <= checkpoint.totalPages &&
   pages[0]?.currentPage === checkpoint.page && pages[0].totalPages === checkpoint.totalPages)
-  .refine(({ kind, recovery, fixtures, checkpoint, pages }) => (!recovery || kind === "prices" && fixtures.every(({ outcome }) => outcome !== "apply")) &&
+  .refine(({ kind, recovery, fixtures, checkpoint, pages, scopeKey }) => (!recovery || kind === "prices" && fixtures.every(({ outcome }) => outcome !== "apply")) &&
     fixtures.every(({ outcome, quoteManifest }) => outcome !== "recover" || kind === "prices" && (!checkpoint || quoteManifest !== undefined)) &&
-    pages.every((page) => page.totalPages !== 0 || recovery && !checkpoint && !fixtures.length && page.currentPage === 1));
+    pages.every((page) => page.totalPages !== 0 || kind === "prices" && !checkpoint && !fixtures.length && page.currentPage === 1 &&
+      (recovery || scopeKey.startsWith(`fixture:${page.requestParameters.fixture}:date:`) && /^[1-9]\d*$/u.test(page.requestParameters.fixture ?? ""))));
 export const storedOddsBatchSchema = batchSchema;
 const snapshotValues = z.array(z.strictObject({ label: z.string().min(1).max(64), odd: z.string().min(1).max(12) })).min(1).max(1_000);
 export const storedOddsSnapshotSchema = z.strictObject({ id: hash, fixtureId: z.uuid(), previousId: hash.nullable(), bookmakerId: z.number().int().positive(),
@@ -267,7 +268,10 @@ async function readReplayAvailability(tx: Tx, encounters: ReadonlyMap<number, Re
     const batch = parsedBatch(row);
     const captures = batch.pages.filter(({ endpoint, fromCache }) => endpoint === "odds" && !fromCache);
     const first = captures[0];
-    if (batch.recovery || !first || captures.some(({ requestParameters, retrievedAt }) => requestParameters.date !== batch.date ||
+    const fixtureSelector = first?.requestParameters.fixture;
+    if (batch.recovery || !first || captures.some(({ requestParameters, retrievedAt }) =>
+      (fixtureSelector === undefined ? requestParameters.date !== batch.date || requestParameters.fixture !== undefined :
+        requestParameters.fixture !== fixtureSelector || requestParameters.date !== undefined) ||
       requestParameters.bookmaker !== first.requestParameters.bookmaker || retrievedAt > batch.receivedAt)) continue;
     const selectedBookmaker = first.requestParameters.bookmaker;
     if (selectedBookmaker !== undefined && !/^[1-9]\d*$/u.test(selectedBookmaker)) continue;
@@ -276,6 +280,7 @@ async function readReplayAvailability(tx: Tx, encounters: ReadonlyMap<number, Re
     for (const { externalId, outcome, quoteManifest, additionalQuoteManifests } of batch.fixtures) {
       const encounter = encounters.get(externalId);
       if (!encounter || outcome !== "apply" || quoteManifest?.kickoffAt !== encounter.kickoffAt ||
+        fixtureSelector !== undefined && fixtureSelector !== String(externalId) ||
         batch.date !== encounter.reportingDate ||
         batch.receivedAt > encounter.decisionAt || batch.receivedAt >= encounter.preMatchUntil) continue;
       const books = new Map([quoteManifest, ...(additionalQuoteManifests ?? [])].map((book) => [book.bookmakerId, book]));
@@ -964,7 +969,8 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
       // Candidate reads use the same transactional clock as the per-fixture re-check below.
       const { batch, candidates } = await write(async (tx) => {
         const batch = await sealedBatch(tx, input.batchId);
-        if (!batch || batch.recovery || batch.checkpoint || batch.kind !== "prices" || batch.status !== "complete" || batch.date !== input.date) return oddsFail("invalid-request");
+        if (!batch || batch.recovery || batch.checkpoint || batch.kind !== "prices" || batch.status !== "complete" || batch.date !== input.date ||
+          !batch.scopeKey.startsWith(`date:${input.date}:`)) return oddsFail("invalid-request");
         return { batch, candidates: await tx.$queryRaw<{ fixtureId: string }[]>`SELECT s.fixtureId FROM FixtureOddsState s
           JOIN FootballFixture f ON f.id = s.fixtureId
           WHERE f.eatDate = ${input.date} AND s.withdrawnAt IS NULL AND f.kickoff > UTC_TIMESTAMP(3) ORDER BY s.fixtureId` };

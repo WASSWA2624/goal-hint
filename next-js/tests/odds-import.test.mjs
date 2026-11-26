@@ -7,7 +7,7 @@ import { assertValidatedOdds, authorizeOddsRequest, oddsPolicyHash, oddsRequestP
 import { createOddsJobDefinitions, latestOddsSlot, ODDS_CATALOG_TYPE, ODDS_HISTORY_TYPE, ODDS_IMPORT_TYPE, ODDS_JOB_TIMEOUT_MS, ODDS_PROVIDER_WINDOW_MS, ODDS_SWEEP_MS,
   oddsCatalogEnvelope, oddsHistoryScheduleEnvelopes, oddsHistoryScopeId, oddsImportEnvelope, oddsJobOutcome, oddsQuotaAllows, oddsScheduleEnvelopes, oddsSlotDates,
   oddsSlotEnvelopes } from '../src/server/odds/odds-jobs.ts';
-import { canonicalOddsValues, oddsValuesHash } from '../src/server/odds/odds-mysql-store.ts';
+import { canonicalOddsValues, oddsValuesHash, storedOddsBatchSchema } from '../src/server/odds/odds-mysql-store.ts';
 import { classifyHistoricalOddsRow, classifyOddsRow, createOddsImportService } from '../src/server/odds/odds-service.ts';
 import { createSyntheticOddsAdapter, launchBetCatalog, oddsAuthority, oddsBounds, oddsHash, oddsPolicy, oddsRequest, oddsResponse, offsetTime,
   rawOddsRow } from './helpers/odds-fixtures.mjs';
@@ -152,6 +152,47 @@ test('an unrestricted price sweep resumes sealed pages and withdraws only after 
   assert.equal((await service(2).importDate(request)).batchId, complete.batchId, 'successful retry reuses the exact terminal receipt');
   assert.equal(h.odds.network.length, 3);
   assert.equal(receipts.size, 2);
+});
+
+test('targeted refreshes apply only the selected fixture and never withdraw a date', async () => {
+  const h = harness(), policy = oddsPolicy({ bookmakerScope: 'all' });
+  const request = (fixtureId) => ({ ...oddsRequest('prices', NOW + 5 * 60_000, { date: DATE, policy, id: oddsHash(`target:${fixtureId}`) }), fixtureId });
+  const receipts = [], writes = [];
+  const store = {
+    async pricePageBatches() { return []; },
+    async latestBetCatalog() { return null; },
+    async resolveFixtures(ids) {
+      return new Map(ids.map((externalId) => [externalId, { fixtureId: String(externalId), externalId, kickoff: KICKOFF, status: 'scheduled' }]));
+    },
+    async saveAndApplyPricePage(batch, applications) {
+      storedOddsBatchSchema.parse(batch);
+      writes.push(...applications.map(({ row: offer }) => offer.fixtureId));
+      return { batch, outcomes: applications.map(() => 'changed') };
+    },
+    async saveBatch(batch) { storedOddsBatchSchema.parse(batch); receipts.push(batch); return batch; },
+    async markWithdrawn() { assert.fail('fixture observations cannot withdraw odds for a date'); },
+  };
+  h.odds.state.rows = [row(101), row(102)];
+  const service = createOddsImportService({ adapter: h.odds.adapter.odds, store,
+    accountId: () => oddsHash('target-account'), authority: oddsAuthority({ publicDisplay: true }, policy),
+    bounds: () => oddsBounds(h.clock.now(), { maxRequests: 1, maxPages: 1, maxRows: 1 }), clock: h.clock, recoverFromCurrentPages: true });
+  await assert.rejects(service.importDate(request(101)), denied('invalid-request'));
+  const result = await service.importFixture(request(101));
+  assert.deepEqual(writes, [101]);
+  assert.equal(result.status, 'complete');
+  assert.equal(result.requestsDispatched, 1);
+  assert.equal(receipts[0].scopeKey, `fixture:101:date:${DATE}:bookmakers:all`);
+  assert.equal(h.odds.network[0].searchParams.get('fixture'), '101');
+  assert.equal(h.odds.network[0].searchParams.has('date'), false);
+
+  h.odds.state.respond = (url) => oddsResponse(url, [], { total: 0 });
+  assert.equal((await service.importFixture(request(103))).status, 'complete');
+  assert.deepEqual(receipts[1].fixtures, []);
+  assert.equal(receipts[1].pages[0].totalPages, 0);
+
+  h.odds.state.respond = (url) => oddsResponse(url, [row(104), row(102)]);
+  assert.equal((await service.importFixture(request(104))).status, 'failed');
+  assert.deepEqual(writes, [101]);
 });
 
 test('bet catalogs validate as sorted unique names without prices', async () => {

@@ -62,7 +62,7 @@ export function slipRevisionMatches(selection: SlipMatchWatch & { source?: Marke
 }
 
 /** Exact Local Engine authority for editorial slips. The public forecast's provisional label is presentation only. */
-export function qualifiedEditorialSlipRevision(selection: SlipSelection, revision: StoredRevision | null | undefined,
+export function qualifiedEditorialSlipRevision(selection: SlipMatchWatch & Pick<SlipSelection, "source">, revision: StoredRevision | null | undefined,
   extension: StoredGoalMarketExtension | null = null, asOf = revision?.publishedAt ?? 0): boolean {
   const reference = selection.forecast;
   if (!revision || !reference || selection.source !== "local-engine" || revision.fixtureId !== selection.fixtureId

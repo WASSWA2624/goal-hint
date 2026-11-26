@@ -56,8 +56,10 @@ export function createOddsImportService(options: Readonly<{
   clock?: Clock;
 }>) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
-  function dateQuery(request: OddsImportRequest): OddsSweepQuery {
+  function priceQuery(request: OddsImportRequest): OddsSweepQuery {
     if (request.date === null) return oddsFail("invalid-request");
+    if (request.fixtureId !== undefined) return request.policy.bookmakerScope === "all"
+      ? { fixtureId: request.fixtureId, allBookmakers: true } : { fixtureId: request.fixtureId, bookmakerId: request.policy.bookmakerId };
     return request.recovery || request.policy.bookmakerScope === "all"
       ? { date: request.date, allBookmakers: true } : { date: request.date, bookmakerId: request.policy.bookmakerId };
   }
@@ -106,6 +108,7 @@ export function createOddsImportService(options: Readonly<{
     for (const [index, batch] of committed.entries()) {
       if (batch.checkpoint?.page !== index + 1 || batch.checkpoint.totalPages !== expected || !request.recovery && batch.accountId !== accountId ||
         batch.requestId !== request.id || batch.date !== request.date || batch.slot !== request.slot || batch.status === "failed" || batch.recovery !== request.recovery ||
+        batch.pages.some(({ requestParameters }) => requestParameters.fixture !== (request.fixtureId === undefined ? undefined : String(request.fixtureId))) ||
         !request.recovery && batch.fixtures.some(({ externalId }) => known.has(externalId))) return oddsFail("invalid-state");
       if (request.recovery && batch.fixtures.some(({ externalId }) => known.has(externalId))) repeatedHistoryFixture = true;
       for (const { externalId } of batch.fixtures) known.add(externalId);
@@ -131,8 +134,11 @@ export function createOddsImportService(options: Readonly<{
       requestsDispatched += result.requestsDispatched;
       const observation = validateOddsObservation(request, result, pageBounds, options.authority, clock, page);
       const pages = observation.provenance[0]?.totalPages;
-      if (observation.status === "failed" || pages == null) { error = providerError(result) ?? { reason: "schema-error", retryable: false }; break; }
-      if (pages === 0 && request.recovery && page === 1 && observation.status === "complete") {
+      if (observation.status === "failed" || pages == null || request.fixtureId !== undefined && observation.status !== "complete") {
+        error = providerError(result) ?? { reason: "schema-error", retryable: false };
+        break;
+      }
+      if (pages === 0 && (request.recovery || request.fixtureId !== undefined) && page === 1 && observation.status === "complete") {
         verifiedEmpty = observation; totalPages = 0; break;
       }
       const repeated = observation.rows.some(({ fixtureId }) => known.has(fixtureId));
@@ -142,7 +148,7 @@ export function createOddsImportService(options: Readonly<{
       }
       if (request.recovery && repeated) repeatedHistoryFixture = true;
       totalPages = pages;
-      const classified = await classify(observation, options.recoverFromCurrentPages);
+      const classified = await classify(observation, options.recoverFromCurrentPages && request.fixtureId === undefined);
       const batch = receiptBody(observation, fixturesOf(classified, request.policy.bookmakerId), { page, totalPages });
       await checkpoint?.();
       if (signal?.aborted || batch.accountId !== accountId) return oddsFail("unavailable");
@@ -175,7 +181,7 @@ export function createOddsImportService(options: Readonly<{
     if (signal?.aborted) return oddsFail("unavailable");
     const batch = await options.store.saveBatch({ id: evidenceFingerprint(content), ...content });
     for (const { outcome } of fixtures) outcomes[outcome]++;
-    if (complete && !request.recovery) {
+    if (complete && !request.recovery && request.fixtureId === undefined) {
       const targets = await options.store.resolveFixtures([...known]);
       outcomes.withdrawn = await options.store.markWithdrawn({ batchId: batch.id, date: request.date!,
         seenFixtureIds: [...targets.values()].map((target) => target.fixtureId) });
@@ -187,9 +193,9 @@ export function createOddsImportService(options: Readonly<{
     /** One bounded EAT date sweep. Returns counts only; prices stay in the store. */
     async importDate(input: OddsImportRequest, signal?: AbortSignal, checkpoint?: () => Promise<void>): Promise<OddsImportSummary> {
       const request = authorizeOddsRequest(input, options.authority);
-      if (request.kind !== "prices" || request.date === null || request.recovery) return oddsFail("invalid-request");
+      if (request.kind !== "prices" || request.date === null || request.recovery || request.fixtureId !== undefined) return oddsFail("invalid-request");
       const bounds = options.bounds(request);
-      const query = dateQuery(request);
+      const query = priceQuery(request);
       if (options.resumePricePages) return importPages(request, query, bounds, signal, checkpoint);
       const result = await options.adapter.prices(query, bounds, signal && workflow(bounds, signal));
       // Authorization, policy and retention are re-verified after I/O, inside validation.
@@ -215,6 +221,12 @@ export function createOddsImportService(options: Readonly<{
       return Object.freeze({ batchId: batch.id, status: batch.status, requestsDispatched: batch.requestsDispatched, outcomes: Object.freeze(outcomes),
         error: providerError(result) });
     },
+    /** One scheduled fixture. Atomic page receipts never imply that another fixture's odds were withdrawn. */
+    async importFixture(input: OddsImportRequest, signal?: AbortSignal, checkpoint?: () => Promise<void>): Promise<OddsImportSummary> {
+      const request = authorizeOddsRequest(input, options.authority);
+      if (request.kind !== "prices" || request.fixtureId === undefined) return oddsFail("invalid-request");
+      return importPages(request, priceQuery(request), options.bounds(request), signal, checkpoint);
+    },
     /** Backfill pages use the same structured provider endpoint and keep a separate receipt chain across provider days. */
     async historicalComplete(input: OddsImportRequest): Promise<OddsBatchBody | null> {
       const request = authorizeOddsRequest(input, options.authority);
@@ -230,7 +242,7 @@ export function createOddsImportService(options: Readonly<{
         for (const { outcome } of previous.fixtures) outcomes[outcome]++;
         return { batchId: previous.id, status: previous.status, requestsDispatched: 0, outcomes, error: null };
       }
-      return importPages(request, dateQuery(request), options.bounds(request), signal, checkpoint);
+      return importPages(request, priceQuery(request), options.bounds(request), signal, checkpoint);
     },
     /** /odds/bets (every observed name is retained for 053/054 mapping) or /odds/bookmakers. */
     async importCatalog(input: OddsImportRequest): Promise<OddsImportSummary> {

@@ -190,6 +190,7 @@ const environmentSchema = z.object({
   GOAL_HINT_FOOTBALL_TRIAL_REQUEST_LIMIT: count.describe("Use a positive counted trial request allowance within the shared ceiling (008)."),
   GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF: text.describe("Record verified rights to display bookmaker odds publicly; without it odds stay private (052)."),
   GOAL_HINT_ODDS_IMPORT_ENABLED: enabled.describe("Use true or false; the live runner imports odds only when its plan has spare quota (052)."),
+  GOAL_HINT_SLIP_ODDS_REFRESH_ENABLED: enabled.describe("Use true on the football and Best Slips workers to refresh targeted odds before each publication slot."),
   GOAL_HINT_ODDS_BOOKMAKER_ID: count.describe("Use the positive API-Football id of the verified primary bookmaker; required when odds imports are enabled (052)."),
   GOAL_HINT_ODDS_BOOKMAKER_FALLBACK_IDS: optional(z.string().regex(/^[1-9]\d*(,[1-9]\d*)*$/u)
     .transform(value => value.split(",").map(Number)).pipe(z.array(z.int().positive().max(4_294_967_295)).max(64))
@@ -360,6 +361,7 @@ function assemble(settings: z.output<typeof environmentSchema>) {
       },
       odds: {
         enabled: settings.GOAL_HINT_ODDS_IMPORT_ENABLED,
+        slipRefreshEnabled: settings.GOAL_HINT_SLIP_ODDS_REFRESH_ENABLED,
         bookmakerId: settings.GOAL_HINT_ODDS_BOOKMAKER_ID,
         fallbackBookmakerIds: settings.GOAL_HINT_ODDS_BOOKMAKER_FALLBACK_IDS ?? [],
         bookmakerScope: settings.GOAL_HINT_ODDS_BOOKMAKER_SCOPE,

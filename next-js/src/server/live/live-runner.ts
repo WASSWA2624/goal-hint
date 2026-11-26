@@ -14,6 +14,7 @@ import { createJobWorker } from "../jobs/job-worker.ts";
 import { resultCadence } from "../results/result-sync-policy.ts";
 import { DAILY_SELECTION_TYPE, dailySelectionEnvelope, HOURLY_SELECTION_TYPE, hourlySelectionEnvelope, latestHourlySelectionOccurrence } from "../selection/selection-trigger.ts";
 import { latestOddsSlot, oddsHistoryScheduleEnvelopes, oddsScheduleEnvelopes, ODDS_SWEEP_MS } from "../odds/odds-jobs.ts";
+import { dueSlipOddsRefreshSlot, slipOddsRefreshEnvelope } from "../odds/slip-odds-refresh-slot.ts";
 import { latestTeamCodesSlot, teamCodesEnvelope, TEAM_CODES_SLOT_MS } from "../teams/team-code-jobs.ts";
 import { LiveAccountError } from "./live-account.ts";
 import { FORECAST_RECOVERY_INTERVAL_MS } from "../refresh/forecast-orchestration.ts";
@@ -33,10 +34,23 @@ const reason = (error: unknown) => error instanceof LiveAccountError ? error.rea
   : error instanceof Error && "reason" in error && typeof error.reason === "string" ? error.reason : "unavailable";
 async function pause(ms: number, signal: AbortSignal) { await sleep(ms, undefined, { signal }).catch(() => {}); }
 
+async function scheduleSlipOddsRefresh(runtime: LiveRuntime, now: number, previous: number | null, log: (event: LiveEvent) => void) {
+  const slot = runtime.odds.slipRefreshEnabled ? dueSlipOddsRefreshSlot(now) : null;
+  if (slot === null || slot === previous) return previous;
+  try {
+    const job = await runtime.enrichment.registry.enqueue(runtime.queue, slipOddsRefreshEnvelope(slot));
+    log({ event: "slip-odds-refresh-scheduled", publicationSlot: new Date(slot).toISOString(), state: job.state });
+    return slot;
+  } catch (error) {
+    log({ event: "slip-odds-refresh-schedule-failed", reason: reason(error) });
+    return previous;
+  }
+}
+
 /** Maintenance cadence: provider-day rollover, fixture selection schedules, result
  * polling ownership, settlement and cache recovery. Visitor requests trigger none of it. */
 async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () => void, log: (event: LiveEvent) => void,
-  localFootball: boolean) {
+  localFootball: boolean, slipOddsRefreshScheduled: number | null) {
   let accountCheckedAt = Date.now(), scheduled = 0, pollerCheckedAt = 0, oddsScheduled = 0, teamCodesScheduled = 0;
   let heartbeatAt = 0;
   let quotaObservation: Readonly<{ periodId: string; at: number; remaining: number; used: number }> | null = null;
@@ -55,6 +69,7 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
         accountNotificationsFor(runtime.database).maybeSweep();
       }
       const now = Date.now(), day = runtime.quota.current();
+      slipOddsRefreshScheduled = await scheduleSlipOddsRefresh(runtime, now, slipOddsRefreshScheduled, log);
       if (!day || now - accountCheckedAt >= 10 * MINUTE) {
         try {
           const next = await runtime.quota.refresh(); accountCheckedAt = now;
@@ -291,6 +306,7 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
       // `oddsSwitch` true with `odds` false means the owner enabled imports but this plan is not eligible; the same
       // holds for `teamCodesSwitch` and `teamCodes`, which share the odds spare.
       odds: runtime.odds.enabled, oddsSwitch: policy.choices.odds.enabled, oddsSpare: workload.odds.spare,
+      slipOddsRefresh: runtime.odds.slipRefreshEnabled,
       teamCodes: runtime.teamCodes.enabled, teamCodesSwitch: policy.choices.teamCodes.enabled,
       liveDetails: workload.liveDetails.eligible, liveDetailsSwitch: policy.choices.liveDetails.enabled,
       liveDetailsRequests: workload.liveDetails.requests, historyImport: runtime.enrichment.historyEnabled });
@@ -317,8 +333,9 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
         if (event.kind !== "claimed") log({ event: `job-${event.kind}`, jobId: event.jobId?.slice(0, 12) ?? null, reason: event.reason });
       } }).run(stop));
     // One dedicated enrichment worker for odds, team codes and history. It runs even while imports are off so queued jobs drain
-    // or expire, one at a time, so the shared spare-quota gate is never checked by two jobs at once. Sweeps are hourly
-    // at most, so it polls every 10 seconds when idle instead of every second.
+    // or expire, one at a time, so the shared spare-quota gate is never checked by two jobs at once.
+    // A cron start at :25 or :55 queues the refresh before the enrichment worker can claim older work.
+    const slipOddsRefreshScheduled = await scheduleSlipOddsRefresh(runtime, Date.now(), null, log);
     const enrichmentWorker = createJobWorker({ queue: runtime.queue, registry: runtime.enrichment.registry, ownerId: randomBytes(32).toString("hex"),
       pollMs: 10_000, onEvent: (event) => {
         if (event.kind !== "claimed") log({ event: `enrichment-job-${event.kind}`, jobId: event.jobId?.slice(0, 12) ?? null, reason: event.reason });
@@ -328,7 +345,7 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
     }, (error) => log({ event: "odds-retained-projection-failed", reason: reason(error) }));
     try {
       await Promise.all([...workers, enrichmentWorker, storedOdds,
-        maintain(runtime, stop, () => epoch.abort(), log, localFootball).finally(() => epoch.abort())]);
+        maintain(runtime, stop, () => epoch.abort(), log, localFootball, slipOddsRefreshScheduled).finally(() => epoch.abort())]);
     } finally { await runtime.close().catch(() => {}); }
   }
 }

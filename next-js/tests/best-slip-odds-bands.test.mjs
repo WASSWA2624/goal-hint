@@ -9,6 +9,8 @@ import { readFeaturedSlipSelections, verifyFeaturedSlipOffers } from '../src/ser
 import { LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localFirstGoalMarketDefinitions } from '../src/domain/goal-market-definitions.ts';
 import { verifiedLocalFeaturedBinding } from '../src/domain/local-featured-decision.ts';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
+import { durableJobId } from '../src/server/jobs/job-input.ts';
+import { dueSlipOddsRefreshSlot, slipOddsRefreshEnvelope, waitForSlipOddsRefresh } from '../src/server/odds/slip-odds-refresh-slot.ts';
 import { readFeaturedGoalMarkets } from '../src/server/predictions/extended-market-read.ts';
 import { prepareGoalMarketExtension } from '../src/server/predictions/goal-market-store.ts';
 import { bindSlipForecasts } from '../src/server/slips/slip-forecast.ts';
@@ -18,6 +20,62 @@ import { slipForecastFixture } from './helpers/slip-forecast-fixtures.mjs';
 import { addReportingDays, getPublicationDeadline, getReportingDate, getReportingDayBounds } from '../src/domain/calendar.ts';
 
 import { bestSlipActivePublicationDays, bestSlipFixtureWindow } from '../src/domain/best-slip-publication-hour.ts';
+
+test('the targeted odds refresh starts five minutes before each Kampala publisher slot', () => {
+  for (const publication of ['2026-11-27T00:00:00+03:00', '2026-11-27T00:30:00+03:00']) {
+    const slot = Date.parse(publication);
+    const job = slipOddsRefreshEnvelope(slot);
+    assert.deepEqual(job.payload, { publicationSlot: slot });
+    assert.equal(job.notBefore, slot - 300_000);
+    assert.equal(job.expiresAt, slot + 300_000);
+    assert.equal(job.maxAttempts, 1);
+    assert.equal(dueSlipOddsRefreshSlot(job.notBefore - 1), null);
+    assert.equal(dueSlipOddsRefreshSlot(job.notBefore), slot);
+    assert.equal(dueSlipOddsRefreshSlot(slot), slot);
+    assert.equal(dueSlipOddsRefreshSlot(job.expiresAt - 1), slot);
+    assert.equal(dueSlipOddsRefreshSlot(job.expiresAt), null);
+    assert.notEqual(durableJobId(job), durableJobId(slipOddsRefreshEnvelope(slot - 1_800_000)));
+    assert.throws(() => slipOddsRefreshEnvelope(slot + 1));
+  }
+});
+
+test('the publisher waits for success on its exact refresh after any earlier slots have finished', async () => {
+  const slot = Date.parse('2026-11-27T00:30:00+03:00');
+  const current = durableJobId(slipOddsRefreshEnvelope(slot));
+  const previous = durableJobId(slipOddsRefreshEnvelope(slot - 1_800_000));
+  const states = new Map([[previous, 'succeeded']]);
+  let at = slot, polls = 0;
+  const status = await waitForSlipOddsRefresh(slot, async (id) => {
+    assert.equal(id, current);
+    polls++;
+    return states.get(id) ?? null;
+  }, new AbortController().signal, { now: () => at, wait: async (ms) => {
+    at += ms;
+    states.set(current, polls === 1 ? 'running' : 'succeeded');
+  } });
+  assert.equal(status, 'succeeded');
+  assert.equal(polls, 3);
+});
+
+test('failed, expired, missing and interrupted targeted refreshes cannot release the publisher', async () => {
+  const slot = Date.parse('2026-11-27T00:30:00+03:00');
+  const signal = new AbortController().signal;
+  for (const state of ['failed', 'expired']) {
+    assert.equal(await waitForSlipOddsRefresh(slot, async () => state, signal, { now: () => slot }), state);
+  }
+
+  let at = slot + 299_999;
+  assert.equal(await waitForSlipOddsRefresh(slot, async () => null, signal, {
+    now: () => at, wait: async (ms) => { assert.equal(ms, 1); at += ms; },
+  }), 'timed-out');
+  assert.equal(await waitForSlipOddsRefresh(slot, async () => 'succeeded', signal, { now: () => at }), 'timed-out');
+  assert.equal(await waitForSlipOddsRefresh(slot, async () => { throw new Error('database gone'); }, signal, { now: () => slot }), 'unavailable');
+
+  const controller = new AbortController();
+  const pending = waitForSlipOddsRefresh(slot, () => new Promise(() => {}), controller.signal, { now: () => slot });
+  controller.abort();
+  assert.equal(await pending, 'aborted');
+});
 
 test('odds bands have unambiguous boundaries and preserve their scope through dates, summary and pagination', () => {
   const quotes = ['2.49','2.50','4.99','5.00','9.99','10.00','19.99','20.00','49.99','50.00','99.99','100.00','200.00','200.01'];

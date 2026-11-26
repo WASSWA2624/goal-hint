@@ -139,6 +139,25 @@ replaces that check with a `_v2`.
    current importer retains its per-fixture write path. Either path keeps
    provider I/O outside the transaction and leaves the catalog lock free.
 
+### Targeted refresh for Best Slips
+
+With `GOAL_HINT_SLIP_ODDS_REFRESH_ENABLED=true`, the football worker schedules
+`odds.slips-refresh` at `:25` and `:55` Kampala time for the next half-hour
+publication slot. The job checks upcoming fixtures within the six-hour release
+window. It looks for eligible fixtures with qualified featured forecasts and
+missing or stale exact prices. The publisher checks prior fixture allocations
+when forming slips. Each slot can issue up to 12
+fixture-scoped `/odds` requests, one per selected fixture, under the shared
+spare-quota gate. It prioritizes fixtures without a completed check in the past
+three hours, then checks the least recently checked fixtures if capacity remains.
+The provider publishes pre-match updates on its own three-hour cadence.
+
+Fixture-scoped receipts verify the provider fixture selector and the occurrence.
+They apply the existing atomic price storage and authority checks. An empty
+result confirms the check without withdrawing prices for the date. The broad
+date sweeps, catalogs and historical imports follow their existing schedules.
+The matching publication slot waits for the targeted job's durable success.
+
 ### Append-only chain
 
 For each bet, the store compares the new canonical values **and** the recorded

@@ -90,6 +90,9 @@ import { createMysqlOddsStore } from "../odds/odds-mysql-store.ts";
 import { storedPreMatchCatalogCoverage } from "../odds/bookmaker-odds-read.ts";
 import { oddsPolicyHash } from "../odds/odds-input.ts";
 import { createOddsImportService } from "../odds/odds-service.ts";
+import { createSlipOddsRefreshCandidates } from "../odds/slip-odds-refresh-candidates.ts";
+import { createSlipOddsRefreshJob, slipOddsRefreshRequestTimeoutMs } from "../odds/slip-odds-refresh-job.ts";
+import { SLIP_ODDS_REFRESH_WAIT_MS } from "../odds/slip-odds-refresh-slot.ts";
 import { createInPlayOddsPoller } from "../odds/in-play-odds-service.ts";
 import { createTeamCodeJobDefinitions } from "../teams/team-code-jobs.ts";
 import { createMysqlTeamCodeStore } from "../teams/team-code-mysql-store.ts";
@@ -602,6 +605,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     // Odds (052): imported only when the owner enables them AND the verified plan leaves spare ordinary quota.
     // A separate registry runs on its own worker, so odds never occupy refresh or cutoff workers.
     const oddsEnabled = policy.choices.odds.enabled && workload.odds.eligible && odds !== null;
+    const slipOddsRefreshEnabled = oddsEnabled && policy.choices.odds.slipRefreshEnabled;
     const hostedOddsArchive = oddsEnabled && privateRetention && (productionTarget || syntheticArchive);
     const resumePricePages = coordinated || hostedOddsArchive;
     const oddsRecoveryCapable = privateRetention && (productionTarget || syntheticArchive || coordinated);
@@ -611,6 +615,13 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       resumePricePages, recoverFromCurrentPages: oddsRecoveryEnabled,
       accountId: () => quota.current()?.accountId ?? oddsFail("unavailable"),
       bounds: (request) => {
+        if (request.fixtureId !== undefined) {
+          const providerDay = quota.current() ?? oddsFail("unavailable");
+          const deadline = utcInstantFromEpochMilliseconds(Math.min(request.slot + SLIP_ODDS_REFRESH_WAIT_MS,
+            Date.now() + slipOddsRefreshRequestTimeoutMs, providerDay.endsAt));
+          return { ...oddsImportBounds(deadline, 1), timeoutMs: slipOddsRefreshRequestTimeoutMs, maxRequests: 1, maxRows: 1,
+            retry: { maxAttempts: 1, baseDelayMs: 0, maxDelayMs: 0 } };
+        }
         const end = request.recovery ? oddsHistoryDeadline(request.slot, quota.current()?.startsAt ?? oddsFail("unavailable")) :
           request.kind === "prices" ? request.slot + ODDS_SWEEP_MS : request.slot + DAY_MS;
         // The provider walk ends early enough that the receipt and per-fixture writes keep their own part of the job timeout.
@@ -672,6 +683,13 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         ...(overrides.onHistoricalOdds ? { report: overrides.onHistoricalOdds } : {}) } } : {}),
       maxRequests: (kind) => oddsMaxRequests(kind, workload.odds.maxPages) });
     const oddsRegistry = createJobRegistry(oddsDefinitions);
+    const slipOddsRefresh = createSlipOddsRefreshJob({
+      enabled: () => slipOddsRefreshEnabled && authorities.odds.verifyPublicDisplay(),
+      policy: () => odds ?? oddsFail("unverified-policy"),
+      candidates: odds ? createSlipOddsRefreshCandidates({ database, competitionIds: policy.choices.competitionIds ?? [], policy: odds })
+        : async () => [],
+      usage: oddsUsage, allowance: enrichmentAllowance, service: oddsService,
+    });
 
     // Team codes: on unless the owner turns them off, but only on plans with the odds spare (never Free or slow). Each
     // hourly slot imports /teams for a few nearest-kickoff competition-seasons with codeless teams through the ordinary
@@ -756,7 +774,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       } : {},
     });
     // The same worker serializes these gates. Odds and team codes claim before the archive.
-    const enrichmentRegistry = createJobRegistry([...oddsDefinitions, ...teamCodeDefinitions, historyJob, ...(currentDayContext ? [currentDayContext] : [])]);
+    const enrichmentRegistry = createJobRegistry([...oddsDefinitions, slipOddsRefresh, ...teamCodeDefinitions, historyJob,
+      ...(currentDayContext ? [currentDayContext] : [])]);
     const retainInPlayOdds = coordinated || hostedOddsArchive;
     const inPlayOdds = localFootball || retainInPlayOdds ? createInPlayOddsPoller({
       database, adapter: adapter.odds, now: Date.now, enabled: () => oddsEnabled && quota.current() !== null,
@@ -830,7 +849,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     return Object.freeze({ policy, database, queue, quota, workload, registry, hourlySelectionEnabled, settlement, cache, catalog: importer,
       historyBackfill, historyDetails, historyReference, resultPoller, liveMatchPoller, inPlayOdds, day,
       coordinated, forecastConcurrency, forecastRecovery, localFirstForecasts, apiFallbackEnabled, currentDayContextEnabled: currentDayContext !== null,
-      odds: Object.freeze({ enabled: oddsEnabled, recoveryEnabled: oddsRecoveryEnabled, registry: oddsRegistry, horizonDays: workload.odds.dates,
+      odds: Object.freeze({ enabled: oddsEnabled, slipRefreshEnabled: slipOddsRefreshEnabled, recoveryEnabled: oddsRecoveryEnabled,
+        registry: oddsRegistry, horizonDays: workload.odds.dates,
         bookmakerScope: odds?.bookmakerScope,
         requalifyLocal: requalifyLocalOdds, projectAuthorizedStored: projectAuthorizedStoredOdds,
         catalogCoverage: (asOf: number) => database.query((tx) => storedPreMatchCatalogCoverage(tx, asOf)),

@@ -26,7 +26,7 @@ export type FeaturedSlipCursor = Readonly<{ kickoffAt: number; fixtureId: string
 
 export type SlipCohortReader = (parameters: FeedParameters,
   context: Readonly<{ locale?: string; primaryBookmakerOnly?: boolean; featured?: boolean; total15?: "include" | "only";
-    minimumKickoffLeadMs?: number; includeAdditionalFeaturedGoals?: boolean;
+    minimumKickoffLeadMs?: number; includeAdditionalFeaturedGoals?: boolean; currentForecastsOnly?: true;
     automaticPage?: Readonly<{ day: ReportingDate; after?: FeaturedSlipCursor }>;
     additionalGoals?: Readonly<{ keys: readonly AdditionalSlipGoalMarketKey[]; only: boolean }> }>, clock: Clock) => Promise<SlipCohort>;
 
@@ -81,7 +81,8 @@ export function createStoredSlipCohort(options: Readonly<{
       const featured = context.featured === true;
       const primaryOnly = !featured && context.primaryBookmakerOnly === true;
       const manualPrices = !featured && !primaryOnly;
-      const sql = feedSql(query, range, configured, primaryOnly && enabled, search, false, !primaryOnly);
+      const sql = feedSql(query, range, configured, primaryOnly && enabled, search, false, !primaryOnly,
+        null, !primaryOnly && !context.currentForecastsOnly);
       const total15 = manualPrices ? context.total15 : undefined;
       const additionalGoals = manualPrices ? context.additionalGoals : undefined;
       const hasExtendedGoals = !!(total15 || additionalGoals?.keys.length);
@@ -109,9 +110,8 @@ export function createStoredSlipCohort(options: Readonly<{
         throw new MatchFeedError("unavailable");
       }
       const dates = await storedFeedCoverage(tx, sourceRange), partialCoverage = dates.some((entry) => !entry.authoritative);
-      // The ordinary feed rejects an unknown empty catalog, but permits an ordinary
-      // empty filtered cohort. A one-row existence probe preserves that distinction.
-      if (!rows.length && partialCoverage) {
+      // A targeted refresh can only price stored fixtures. Public reads still distinguish unknown coverage from an empty filter.
+      if (!rows.length && partialCoverage && !context.currentForecastsOnly) {
         const known = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT f.id ${sql.cohortJoins} WHERE ${sql.scope} LIMIT 1`);
         if (!known.length) throw new MatchFeedError("unavailable");
       }

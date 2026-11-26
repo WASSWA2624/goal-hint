@@ -48,6 +48,8 @@ export type OddsImportRequest = Readonly<{
   /** EAT reporting date for price sweeps; null for catalogs. */
   date: string | null;
   policy: OddsPolicy;
+  /** API-Football fixture selector for a targeted pre-match import. */
+  fixtureId?: number;
   /** Backfill of provider pre-match quotes retrieved after the fixture began. */
   recovery?: true;
 }>;

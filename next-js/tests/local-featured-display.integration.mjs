@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { getReportingDate } from '../src/domain/calendar.ts';
+import { bestSlipPublicationHour } from '../src/domain/best-slip-publication-hour.ts';
 import { LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localFirstGoalMarketDefinitions } from '../src/domain/goal-market-definitions.ts';
 import { currentFeaturedOutcome, featuredFamily } from '../src/domain/match-details.ts';
 import { matchDetailResponseSchema } from '../src/domain/match-detail.ts';
@@ -15,6 +16,7 @@ import { createMatchFeedService } from '../src/server/matches/feed-service.ts';
 import { readFrozenLocalFeaturedPicks } from '../src/server/matches/frozen-featured-picks.ts';
 import { createMysqlOddsStore } from '../src/server/odds/odds-mysql-store.ts';
 import { createOddsImportService } from '../src/server/odds/odds-service.ts';
+import { createSlipOddsRefreshCandidates } from '../src/server/odds/slip-odds-refresh-candidates.ts';
 import { createCutoffLockingService } from '../src/server/predictions/cutoff-service.ts';
 import { parseLifecycleInput } from '../src/server/predictions/lifecycle-input.ts';
 import { createScheduleLifecycleService } from '../src/server/predictions/lifecycle-service.ts';
@@ -93,7 +95,18 @@ test('Matches and Match Details preserve one exact Local Engine featured quote a
       book(6, 'Other synthetic book', 16, 'Total - Home', 'Under 4.5', '1.1543'),
       book(7, 'Different side synthetic book', 17, 'Total - Away', 'Under 0.5', '7.00'),
     ];
+    const { hourAt: publicationSlot } = bestSlipPublicationHour(kickoffAt - 3_600_000);
+    p.setTime(publicationSlot - 300_000);
+    const candidates = createSlipOddsRefreshCandidates({ database: p.a, competitionIds: [39], policy, now: p.now });
+    assert.deepEqual(await candidates(publicationSlot + 86_400_000, 12), []);
+    assert.deepEqual((await candidates(publicationSlot, 12)).map(({ fixtureId }) => fixtureId).sort(), [3005, 3006]);
+    const empty = await importer.importFixture({ ...oddsRequest('prices', publicationSlot,
+      { date, policy, id: oddsHash('empty-targeted-featured-odds') }), fixtureId: 3006 });
+    assert.equal(empty.status, 'complete');
+    assert.deepEqual(await candidates(publicationSlot, 1), [{ fixtureId: providerId, date }]);
+    assert.deepEqual(await candidates(publicationSlot, 12), [{ fixtureId: providerId, date }, { fixtureId: 3006, date }]);
     const observedAt = await store(preferredBooks);
+    assert.deepEqual(await candidates(publicationSlot, 12), [{ fixtureId: 3006, date }]);
     const readFeed = (providerOdds = true, database = p.a, filters = {}) => createMatchFeedService({ database, competitionIds: [39], clock, providerOdds })
       .query({ date, ...filters }, { publishedForecasts: true });
     const readDetail = (providerOdds = true, database = p.a, parameters) => createMatchDetailService({ database, clock, providerOdds }).query(id, parameters);

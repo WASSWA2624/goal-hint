@@ -113,6 +113,24 @@ For the early-start eligibility release, the previous append-aware web and
 publisher releases can also be restored using their existing release link and
 launcher. The change adds no migration and writes no historical records.
 
+## Targeted odds refresh
+
+Set `GOAL_HINT_SLIP_ODDS_REFRESH_ENABLED=true` in the football worker and stored
+slip publisher profiles. The football worker schedules one durable targeted
+refresh at `:25` and `:55` Kampala time. It uses the shared odds quota and
+existing odds-write permissions. The publisher stays on its `:00` and `:30`
+schedule and reads the exact slot's job ID and state in `DurableJob`. It starts
+publication after the job succeeds and skips with a logged outcome if the
+refresh fails or remains incomplete five minutes into the slot. A successful
+refresh can return zero candidates. The job's requests use existing odds rights.
+
+For rollout, prepare matching football and publisher source releases. Verify
+the publisher role can read `DurableJob.id` and `DurableJob.state`. Enable the
+football worker first and check `slip-odds-refresh-scheduled`. Enable the
+publisher check and confirm its log records `oddsRefresh.status` for the same
+slot. Roll back by disabling the publisher check before disabling the refresh.
+The database schema and both cron schedules are compatible with either setting.
+
 ## Original-cycle results and public access
 
 New personal saves and editorial publications carry original forecast identity.

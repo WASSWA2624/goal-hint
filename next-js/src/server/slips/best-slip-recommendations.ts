@@ -1,9 +1,9 @@
 import "server-only";
 
 import { getPublicationDeadline } from "../../domain/calendar.ts";
-import { total15MarketKey } from "../../domain/extended-markets.ts";
+import { total15MarketKey, type FeaturedPrediction } from "../../domain/extended-markets.ts";
 import { displayMarketOddsPrice } from "../../domain/in-play-odds.ts";
-import { inspectExactLocalFeaturedQuote, localFeaturedBookmakerBetIds, localFeaturedQuoteScopeReason,
+import { decideLocalFeaturedPick, inspectExactLocalFeaturedQuote, localFeaturedBookmakerBetIds, localFeaturedQuoteScopeReason,
   verifiedLocalFeaturedBinding } from "../../domain/local-featured-decision.ts";
 import type { StoredMatchFeedRecord } from "../../domain/match-feed.ts";
 import { additionalSlipGoalMarket, additionalSlipGoalSelection, isSlipMarketSelection, isTotal15SlipSelection,
@@ -12,12 +12,12 @@ import { editorialSlipOfferSchema, type EditorialSlipOffer } from "../../domain/
 import type { SlipForecastReference, SlipSelection } from "../../domain/slip-builder.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
-import { upcomingFeaturedPick } from "../matches/upcoming-featured-pick.ts";
+import { collectUpcomingLocalFeaturedCandidates, upcomingFeaturedPick } from "../matches/upcoming-featured-pick.ts";
 import { storedCurrentBookmakerQuotes, type StoredCurrentBookmakerQuotes } from "../odds/odds-mysql-store.ts";
-import { readFeaturedGoalMarkets, type FeaturedGoalMarkets } from "../predictions/extended-market-read.ts";
+import { projectFeaturedGoalMarkets, readFeaturedGoalMarkets, type FeaturedGoalMarkets } from "../predictions/extended-market-read.ts";
 import { storedRevisions } from "../predictions/history-read.ts";
 import { qualifiedEditorialSlipRevision } from "./slip-forecast.ts";
-import { readSlipGoalExtensions, storedSlipTotal15Forecasts } from "./slip-goal-forecast.ts";
+import { projectSlipTotal15Forecast, readSlipGoalExtensions, storedSlipTotal15Forecasts } from "./slip-goal-forecast.ts";
 
 type QuoteOccurrence = Readonly<{ fixtureId: string; kickoffAt: number }>;
 type Bookmaker = StoredCurrentBookmakerQuotes["bookmakers"][number];
@@ -43,31 +43,48 @@ function exactOffers(quotes: StoredCurrentBookmakerQuotes | undefined, occurrenc
   return offers;
 }
 
-function featuredSlipCandidates(record: StoredMatchFeedRecord, goals: FeaturedGoalMarkets | undefined,
-  quotes: StoredCurrentBookmakerQuotes | undefined, total15: SlipTotal15Forecast | undefined, at: number,
-  includeAdditionalGoals: boolean): PricedFeaturedSelection[] {
+function currentFeaturedSlipForecast(record: StoredMatchFeedRecord, at: number) {
   const { forecast, fixtureId, kickoffAt, cycleId } = record;
   if (!forecast || forecast.updateDelayed || forecast.publishedAt > at || !cycleId || kickoffAt === null ||
     forecast.publishedAt >= getPublicationDeadline(kickoffAt) || record.status !== "scheduled" || record.cycle?.state !== "open" ||
-    record.cycle.mode !== "current" || record.update.prediction !== "current") return [];
-  const pick = upcomingFeaturedPick(record, goals, quotes, at, true);
-  if (!pick?.featuredQuote || !pick.odds || pick.source !== "local-engine") return [];
+    record.cycle.mode !== "current" || record.update.prediction !== "current" || at >= getPublicationDeadline(kickoffAt)) return null;
+  return { fixtureId, kickoffAt, homeTeam: record.homeTeam, awayTeam: record.awayTeam,
+    forecast: { cycleId, revisionId: forecast.revisionId, publishedAt: forecast.publishedAt } };
+}
+
+type SlipFeaturedPick = Pick<FeaturedPrediction, "key" | "family" | "selection" | "probability" | "source">;
+
+function supportedFeaturedSlipPick(forecast: NonNullable<StoredMatchFeedRecord["forecast"]>, pick: SlipFeaturedPick,
+  total15: SlipTotal15Forecast | undefined, includeAdditionalGoals: boolean) {
+  if (pick.source !== "local-engine") return null;
   const additional = includeAdditionalGoals ? additionalSlipGoalMarket(pick.key) : undefined;
-  if (additional && pick.selection !== "over" && pick.selection !== "under") return [];
-  if (!additional && pick.key !== pick.family && pick.key !== total15MarketKey) return [];
+  if (additional && pick.selection !== "over" && pick.selection !== "under") return null;
+  if (!additional && pick.key !== pick.family && pick.key !== total15MarketKey) return null;
   const family = additional?.family ?? pick.family;
   const selection = additional ? pick.selection === "over" ? additional.over : additional.under
     : pick.key === total15MarketKey ? `${pick.selection}-1.5` : pick.selection;
-  if (!isSlipMarketSelection(family, selection)) return [];
+  if (!isSlipMarketSelection(family, selection)) return null;
   // Additional totals are checked against the sealed goal extension after exact prices are established.
   if (!additional) {
     const market = forecast.markets.find((entry) => entry.market.family === pick.family);
     const supported = isTotal15SlipSelection(selection) ? total15?.source === "local-poisson" && total15.probabilities[selection] === pick.probability
       : market?.market.source === pick.source && (!market.outcome || market.outcome.status === "pending") &&
         (market.market.probabilities as Readonly<Record<string, number>>)[selection] === pick.probability;
-    if (!supported) return [];
+    if (!supported) return null;
   }
-  const offers = exactOffers(quotes, { fixtureId, kickoffAt }, pick.key, pick.selection, at);
+  return { family, selection, probability: pick.probability, source: pick.source };
+}
+
+function featuredSlipCandidates(record: StoredMatchFeedRecord, goals: FeaturedGoalMarkets | undefined,
+  quotes: StoredCurrentBookmakerQuotes | undefined, total15: SlipTotal15Forecast | undefined, at: number,
+  includeAdditionalGoals: boolean): PricedFeaturedSelection[] {
+  const reference = currentFeaturedSlipForecast(record, at);
+  if (!reference) return [];
+  const pick = upcomingFeaturedPick(record, goals, quotes, at, true);
+  if (!pick?.featuredQuote || !pick.odds) return [];
+  const supported = supportedFeaturedSlipPick(record.forecast!, pick, total15, includeAdditionalGoals);
+  if (!supported) return [];
+  const offers = exactOffers(quotes, reference, pick.key, pick.selection, at);
   // First prove the site's featured price. Alternatives can only price that same outcome.
   const chosen = offers.get(pick.featuredQuote.bookmakerId);
   if (!chosen) return [];
@@ -75,10 +92,8 @@ function featuredSlipCandidates(record: StoredMatchFeedRecord, goals: FeaturedGo
   void _snapshotId; void _receiptId;
   if (evidenceFingerprint(featuredQuote) !== evidenceFingerprint(pick.featuredQuote)) return [];
   return [...offers.values()].flatMap((offer): PricedFeaturedSelection[] => !offer ? [] : [
-    { fixtureId, kickoffAt, homeTeam: record.homeTeam, awayTeam: record.awayTeam, competition: record.competition,
-      family, selection, probability: pick.probability, odds: displayMarketOddsPrice(offer.decimal), oddsBasis: "bookmaker",
-      source: pick.source, bookmaker: { id: offer.bookmakerId, name: offer.bookmakerName }, offer,
-      forecast: { cycleId, revisionId: forecast.revisionId, publishedAt: forecast.publishedAt } },
+    { ...reference, ...supported, competition: record.competition, odds: displayMarketOddsPrice(offer.decimal), oddsBasis: "bookmaker",
+      bookmaker: { id: offer.bookmakerId, name: offer.bookmakerName }, offer },
   ]);
 }
 
@@ -106,6 +121,32 @@ export async function readFeaturedSlipSelections(tx: Prisma.TransactionClient, r
   return priced.filter((selection) => {
     const { revisionId } = selection.forecast;
     return qualifiedEditorialSlipRevision(selection, revisions.get(revisionId), extensions.get(revisionId), at);
+  });
+}
+
+/** Find forecast-qualified fixtures that could supply a supported featured pick if a suitable quote arrives. */
+export async function readPotentialFeaturedSlipFixtures(tx: Prisma.TransactionClient, records: readonly StoredMatchFeedRecord[], at: number) {
+  const current = records.flatMap((record) => {
+    const reference = currentFeaturedSlipForecast(record, at);
+    return reference ? [{ record, reference }] : [];
+  });
+  if (!current.length) return [];
+  const revisionIds = current.map(({ reference }) => reference.forecast.revisionId);
+  const [revisions, extensions] = await Promise.all([storedRevisions(tx, revisionIds), readSlipGoalExtensions(tx, revisionIds)]);
+  return current.flatMap(({ record, reference }) => {
+    const { revisionId } = reference.forecast;
+    const extension = extensions.get(revisionId) ?? null;
+    const total15 = projectSlipTotal15Forecast(extension, reference.fixtureId, reference.kickoffAt, reference.forecast, at) ?? undefined;
+    const goals = extension ? projectFeaturedGoalMarkets(extension.markets) : undefined;
+    const outcomes = collectUpcomingLocalFeaturedCandidates(record.forecast, goals)?.flatMap(({ outcome, pick }) => {
+      if (!verifiedLocalFeaturedBinding(outcome.marketKey, outcome.selection)) return [];
+      const supported = supportedFeaturedSlipPick(record.forecast!, { ...pick, probability: outcome.settlementProbabilities.win },
+        total15, true);
+      return supported && qualifiedEditorialSlipRevision({ ...reference, ...supported }, revisions.get(revisionId), extension, at)
+        ? [outcome] : [];
+    });
+    const decision = decideLocalFeaturedPick({ ...reference, decisionAt: at, outcomes: outcomes ?? [], quotes: null, quotesPermitted: true });
+    return decision.status === "forecast-only" ? [record.fixtureId] : [];
   });
 }
 

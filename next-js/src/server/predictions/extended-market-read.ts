@@ -24,7 +24,7 @@ const rankingDerivation = z.discriminatedUnion("available", [z.object({ availabl
     label: rankingMarket.label, code: rankingMarket.code }), source: z.enum(["local-poisson", "ai-score-distribution"]),
     unrepresentedProbability: rankingMarket.selectedProbability.optional(),
     selections: z.array(z.object({ key: rankingMarket.selection, label: rankingMarket.selectionLabel,
-      winProbability: rankingMarket.selectedProbability, outcomes: rankingSelection.settlementProbabilities.unwrap() })).min(2).max(1000),
+      winProbability: rankingMarket.selectedProbability, outcomes: rankingSelection.settlementProbabilities.unwrap() })).min(2).max(1000).readonly(),
   }) }),
 ]);
 const rankingExtension = z.object({ revisionId: historyId, contentHash: z.string(),
@@ -34,9 +34,20 @@ export type FeaturedGoalMarkets = Readonly<{ published: readonly FeaturedRanking
 
 function rankingGoalMarket(derivation: z.infer<typeof rankingDerivation>): FeaturedRankingMarket | null {
   if (!derivation.available) return null;
-  const { definition, source, selections, unrepresentedProbability } = derivation.market;
-  return { ...definition, source, ...(unrepresentedProbability === undefined ? {} : { unrepresentedProbability }),
+  const { definition: { key, label, code }, source, selections, unrepresentedProbability } = derivation.market;
+  return { key, label, code, source, ...(unrepresentedProbability === undefined ? {} : { unrepresentedProbability }),
     selections: selections.map(({ key, label, winProbability, outcomes }) => ({ key, label, probability: winProbability, settlementProbabilities: outcomes })) };
+}
+
+export function projectFeaturedGoalMarkets(markets: readonly z.infer<typeof rankingExtension>["markets"][number][]): FeaturedGoalMarkets {
+  const published: FeaturedRankingMarket[] = [], local: FeaturedRankingMarket[] = [];
+  for (const { derivation, localDerivation } of markets) {
+    const primary = rankingGoalMarket(derivation);
+    const candidate = rankingGoalMarket(localDerivation ?? derivation);
+    if (primary) published.push(primary);
+    if (candidate?.source === "local-poisson") local.push(candidate);
+  }
+  return { published, local };
 }
 
 /** Read the sealed goal sets for one bounded upcoming page and return only ranking inputs. */
@@ -48,14 +59,7 @@ export async function readFeaturedGoalMarkets(tx: Tx, revisionIds: readonly stri
     assertHistorySeal(row.validIntegrity);
     const extension = rankingExtension.parse(historyJson(row.body));
     if (extension.revisionId !== row.revisionId || extension.contentHash !== row.contentHash) return historyFail("invalid-state");
-    const published: FeaturedRankingMarket[] = [], local: FeaturedRankingMarket[] = [];
-    for (const { derivation, localDerivation } of extension.markets) {
-      const primary = rankingGoalMarket(derivation);
-      const candidate = rankingGoalMarket(localDerivation ?? derivation);
-      if (primary) published.push(primary);
-      if (candidate?.source === "local-poisson") local.push(candidate);
-    }
-    return [extension.revisionId, { published, local }];
+    return [extension.revisionId, projectFeaturedGoalMarkets(extension.markets)];
   }));
 }
 

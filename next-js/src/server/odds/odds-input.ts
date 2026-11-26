@@ -30,8 +30,9 @@ const policySchema = z.strictObject({
   !fallbackBookmakerIds.includes(bookmakerId) && new Set(fallbackBookmakerIds).size === fallbackBookmakerIds.length);
 const requestSchema = z.strictObject({
   id: hash, kind: z.enum(["prices", "bets", "bookmakers"]), slot: instant, date: z.iso.date().nullable(), policy: policySchema,
-  recovery: z.literal(true).optional(),
-}).refine((value) => (value.kind === "prices") === (value.date !== null) && (value.recovery === undefined || value.kind === "prices"));
+  recovery: z.literal(true).optional(), fixtureId: providerIdentity.optional(),
+}).refine((value) => (value.kind === "prices") === (value.date !== null) && (value.recovery === undefined || value.kind === "prices") &&
+  (value.fixtureId === undefined || value.kind === "prices" && value.recovery === undefined));
 const providerTimes = z.strictObject({ provider: z.literal("api-football"), endpoint: z.string(), retrievedAt: instant,
   providerUpdatedAt: instant.nullable() });
 const oddsRowSchema = z.strictObject({
@@ -76,23 +77,26 @@ export function parseOddsPolicy(value: unknown): OddsPolicy {
 export function parseOddsRequest(value: unknown): OddsImportRequest {
   const parsed = requestSchema.safeParse(value);
   if (!parsed.success) return oddsFail("invalid-request");
-  const { date, policy, slot, recovery, ...request } = parsed.data;
+  const { date, policy, slot, recovery, fixtureId, ...request } = parsed.data;
   try {
     return freezeEvidence({ ...request, date: date === null ? null : parseReportingDate(date),
-      policy: parseOddsPolicy(policy), slot: utcInstantFromEpochMilliseconds(slot), ...(recovery && { recovery }) });
+      policy: parseOddsPolicy(policy), slot: utcInstantFromEpochMilliseconds(slot), ...(recovery && { recovery }),
+      ...(fixtureId === undefined ? {} : { fixtureId }) });
   } catch { return oddsFail("invalid-request"); }
 }
 export const oddsPolicyHash = (policy: OddsPolicy) => evidenceFingerprint(parseOddsPolicy(policy));
 export const oddsPricePageScopeKey = (requestId: string) => `price-pages:${requestId}`;
-export function oddsScopeKey(request: Pick<OddsImportRequest, "kind" | "date" | "policy" | "recovery">): string {
+export function oddsScopeKey(request: Pick<OddsImportRequest, "kind" | "date" | "policy" | "recovery" | "fixtureId">): string {
   if (request.kind !== "prices") return request.kind;
-  const dateScope = `${request.recovery ? "recovery:" : ""}date:${request.date}`;
-  return request.recovery || request.policy.bookmakerScope === "all" ? `${dateScope}:bookmakers:all` : `${dateScope}:bookmaker:${request.policy.bookmakerId}`;
+  const scope = request.fixtureId === undefined ? `${request.recovery ? "recovery:" : ""}date:${request.date}` :
+    `fixture:${request.fixtureId}:date:${request.date}`;
+  return request.recovery || request.policy.bookmakerScope === "all" ? `${scope}:bookmakers:all` : `${scope}:bookmaker:${request.policy.bookmakerId}`;
 }
 /** Exact provider selectors for one request; every non-timezone selector is echoed by the provider. */
 export function oddsRequestParameters(request: OddsImportRequest): Readonly<Record<string, string>> {
   if (request.kind !== "prices") return Object.freeze({});
-  const selectors: Record<string, string> = { date: request.date!, timezone: "Africa/Kampala" };
+  const selectors: Record<string, string> = { timezone: "Africa/Kampala", ...(request.fixtureId === undefined ? { date: request.date! } :
+    { fixture: String(request.fixtureId) }) };
   if (!request.recovery && request.policy.bookmakerScope !== "all") selectors.bookmaker = String(request.policy.bookmakerId);
   return Object.freeze(selectors);
 }
@@ -125,7 +129,7 @@ export function validateOddsObservation(input: OddsImportRequest, result: ApiFoo
     // Failed attempts carry provenance too; only successful pages establish retrieval.
     if (page.success && page.data.quota.kind !== "success") continue;
     const { page: pageNumber, ...selectors } = page.success ? page.data.requestParameters : {};
-    const verifiedEmpty = page.success && request.recovery && requestedPage === 1 && pageNumber === "1" &&
+    const verifiedEmpty = page.success && (request.recovery || request.fixtureId !== undefined) && requestedPage === 1 && pageNumber === "1" &&
       page.data.currentPage === 1 && page.data.totalPages === 0 && observation.data.length === 0 && observation.completeness.complete;
     if (!page.success || page.data.endpoint !== endpoint || page.data.retrievedAt > now || page.data.providerUpdatedAt !== null ||
       page.data.fromCache || evidenceFingerprint(selectors) !== evidenceFingerprint(expected) ||
@@ -150,6 +154,7 @@ export function validateOddsObservation(input: OddsImportRequest, result: ApiFoo
       const row = oddsRowSchema.safeParse(raw);
       if (!row.success || seen.has(row.data.fixtureId) || !sourceValid(row.data.source, "/odds") || row.data.kickoff === null ||
         getReportingDate(utcInstantFromEpochMilliseconds(row.data.kickoff)) !== request.date ||
+        request.fixtureId !== undefined && row.data.fixtureId !== request.fixtureId ||
         !request.recovery && request.policy.bookmakerScope !== "all" && !row.data.bookmakers.every((bookmaker) => bookmaker.id === request.policy.bookmakerId) ||
         new Set(row.data.bookmakers.map((bookmaker) => bookmaker.id)).size !== row.data.bookmakers.length ||
         row.data.bookmakers.some((bookmaker) => new Set(bookmaker.bets.map((bet) => bet.id)).size !== bookmaker.bets.length ||

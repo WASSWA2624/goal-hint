@@ -172,12 +172,16 @@ independently; failed Vercel Cron invocations are not assumed to retry.
 
 ### Odds jobs (052)
 
-The live runner (`npm run live`) registers two odds types on a **separate**
+The live runner (`npm run live`) registers odds types on a **separate**
 registry served by one dedicated enrichment worker (shared with team codes,
 below):
 
 - `odds.import` v1 has the payload `{ slot, date }`.
 - `odds.catalog` v1 has the payload `{ utcDay }`.
+- `odds.history` v1 has the payload `{ date, providerDay }` where historical recovery is supported.
+- `odds.slips-refresh` v1 has the payload `{ publicationSlot }`. Its idempotency key uses the type and slot.
+  It starts five minutes before a Kampala publication slot, expires five minutes after that slot starts and has priority 9.
+  It makes one attempt with a 540-second timeout and a 30-second lease. The publisher waits for success for this exact job.
 
 Because a worker claims only its registry's type and version pairs, refresh and
 cutoff workers never claim odds jobs, and the enrichment worker never claims theirs.
@@ -194,7 +198,7 @@ causing `conflicting-request`.
 | `expiresAt` | Slot end (+3 hours) | UTC day end |
 | Priority | 7 − date offset (nearest EAT date first) | 8 (claimed before that day's sweeps) |
 
-Both types share these bounds: 8 attempts, a 300-second timeout, a 30-second
+The date and catalog types share these bounds: 8 attempts, a 300-second timeout, a 30-second
 lease, no fallback reserve, and backoff from 60 seconds to 15 minutes.
 
 When a job cannot do useful work, it ends `expired` (`eligibility-expired`), not
