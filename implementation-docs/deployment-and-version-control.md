@@ -47,6 +47,14 @@ Hosted staging and production load distinct private web env files through the Pa
 
 The targeted odds refresh is a worker-only rollout. The football worker needs its existing durable-job and odds permissions. The publisher needs read access to the durable job ID and state. Deploy and enable the football worker first, then enable the publisher check once the targeted schedule is active. To roll back, disable the publisher check first and then disable the targeted job. [Worker rollout and verification](../next-js/docs/daily-slip-publications.md#targeted-odds-refresh).
 
+## Priced-only featured picks rollout
+
+On 27 November 2026, staging and production activated the same checksummed web package for `32613d5f` with Next build `bKFSD5C4otx_JULR_W-CO`. Both verified all 95 migrations before and after activation. Matches and the one-day API passed HTTPS checks in both environments, and the production Match Details API passed. Staging retained `noindex`. TypeScript, focused tests including disposable MySQL, and mobile and desktop rendering in light and dark themes passed. The previous web release `0c6824d2` remains available. The ZIP SHA-256 is `593ba1de3c75adc89845a5bb784491906eb20fe7efccba2af3109984d46f9b41`.
+
+The fixture-scoped odds refresh completed all 244 targeted checks for 27 November. API-Football returned odds for 133 fixtures and empty results for 111. At 02:32 Kampala time, the production audit applied v5 to 325 upcoming fixtures. It found 209 priced featured picks, 104 fixtures without stored odds and 12 without a current accepted forecast. The audit used the shared upcoming selector and exposed no unpriced featured picks.
+
+The v5 football and Best Slips releases passed their production preflights. The football release selector points to `32613d5f` for the next natural worker start. The existing worker still holds the lock, and the first v5 cutoff and paired publisher readiness remain pending. The current publisher continues serving during the handoff. The production crontab checksum matched before and after selection.
+
 ## Targeted Best Slips odds refresh rollout
 
 On 27 November 2026 at 01:58 Kampala time, production selected worker release `af233216` for the next natural football-worker restart. Both versioned worker releases passed checksum and read-only production preflight. The live role read the targeted fixture cohort, and the publisher role read the durable job state with its existing grants. Isolated MySQL covered pricing, scoped empty imports and candidate selection. The production crontab checksum matched before and after the handoff.
