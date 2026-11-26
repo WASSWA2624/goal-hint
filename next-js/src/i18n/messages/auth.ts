@@ -44,7 +44,6 @@ export const authCopy = {
   deviceSelectionChanged: "The device list has changed. Refresh this account and try again.",
   allDevicesLoggedOut: "All devices logged out.",
   logoutUnconfirmed: "You were logged out of this browser, but we couldn’t confirm your session ended on the server.",
-  logoutUnavailable: "Couldn’t log out. Check your connection and try again.",
   allDevicesLoggedOutEvent: "All devices logged out",
   blockedDevicesLoggedOut: "Account blocked and devices logged out.",
   unblockHelp: `Allow this member to ${authVerbs.signIn} again.`,

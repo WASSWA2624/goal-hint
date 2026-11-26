@@ -7,11 +7,9 @@ import { Button } from "@/components/ui/controls";
 import { Surface } from "@/components/ui/layout";
 import { resetReviewAlerts } from "@/components/admin/payment-alert-sound";
 import { AppLoading } from "@/components/navigation/navigation-progress";
-import { nativePaymentAlerts } from "@/domain/native-payment-alerts";
-import { authCopy } from "@/i18n/messages/auth";
-import { requestMemberLogout, type MemberLogoutAction } from "./account-request";
-import { AccountError } from "./account-styles";
-import { clearMemberSessionAfterLogout, ensureMemberSession, getAdminSessionSnapshot, getMemberSessionSnapshot, getSubscriptionSnapshot, hasConfirmedMemberSession, refreshMemberSession, subscribeMemberSession } from "./member-session";
+import { nativePaymentAlerts, type NativePaymentAlertBridge } from "@/domain/native-payment-alerts";
+import { ensureMemberSession, getAdminSessionSnapshot, getMemberSessionSnapshot, getSubscriptionSnapshot, hasConfirmedMemberSession, refreshMemberSession, subscribeMemberSession } from "./member-session";
+import { clearProtectedDrafts } from "./draft-storage";
 
 /** Compact information-page treatment with a readable single column and phone-sized actions. */
 export const MemberPanel = styled(Surface)`
@@ -59,12 +57,7 @@ export function MemberNavigationRecovery({ expectedPhone, expectedAdministrator 
   return null;
 }
 
-async function clearSignOutAlerts() {
-  resetReviewAlerts();
-  try { navigator.serviceWorker?.controller?.postMessage({ type: "payment-alert-reconcile", events: [] }); }
-  catch { /* The browser may have detached its worker. */ }
-  const alerts = nativePaymentAlerts();
-  if (!alerts) return;
+async function clearNativeSignOutAlerts(alerts: NativePaymentAlertBridge) {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([Promise.resolve().then(() => alerts.clear()),
@@ -73,33 +66,46 @@ async function clearSignOutAlerts() {
   finally { clearTimeout(timeout); }
 }
 
-export function MemberSignOut({ children, disabled, logoutAction = "/api/account/sign-out", onSignedOut, ...props }: ComponentProps<typeof Button> & {
-  logoutAction?: MemberLogoutAction;
-  onSignedOut?: () => void;
+export function MemberSignOut({ children, disabled, logoutAction = "/api/account/sign-out", onLogoutStart, ...props }: ComponentProps<typeof Button> & {
+  logoutAction?: "/api/account/sign-out" | `/api/account/sign-out?${string}` | "/api/admin/logout";
+  onLogoutStart?: () => void;
 }) {
   const submitting = useRef(false);
-  const [busy, setBusy] = useState(false), [failed, setFailed] = useState(false);
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (disabled || submitting.current) return;
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const restore = (event: PageTransitionEvent) => {
+      if (event.persisted) { submitting.current = false; setBusy(false); }
+    };
+    window.addEventListener("pageshow", restore);
+    return () => window.removeEventListener("pageshow", restore);
+  }, []);
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    if (disabled || submitting.current) { event.preventDefault(); return; }
     submitting.current = true;
-    setBusy(true); setFailed(false);
+    setBusy(true);
+    onLogoutStart?.();
+    clearProtectedDrafts();
     try {
-      const next = await requestMemberLogout(logoutAction);
-      await clearSignOutAlerts().catch(() => {});
-      onSignedOut?.();
-      clearMemberSessionAfterLogout();
-      // An authentication boundary needs fresh server content and must not keep the old account page in this history slot.
-      location.replace(next);
-    } catch {
-      submitting.current = false;
-      setBusy(false); setFailed(true);
-    }
+      resetReviewAlerts();
+      navigator.serviceWorker?.controller?.postMessage({ type: "payment-alert-reconcile", events: [] });
+    } catch { /* Alert cleanup must not stop the form submission. */ }
+
+    const alerts = nativePaymentAlerts();
+    if (!alerts) return; // The browser follows the server redirect without JavaScript reading the response.
+    event.preventDefault();
+    const form = event.currentTarget;
+    void clearNativeSignOutAlerts(alerts).finally(() => {
+      // An in-app navigation can unmount the menu during the bounded cleanup.
+      const target = form.isConnected ? form : form.cloneNode(true) as HTMLFormElement;
+      if (target !== form) { target.hidden = true; document.body.append(target); }
+      HTMLFormElement.prototype.submit.call(target);
+    });
   }
 
   return <form method="post" action={logoutAction} onSubmit={submit} aria-busy={busy || undefined} data-analytics-ignore>
+    <input type="hidden" name="action" value="logout" />
     <Button variant="secondary" {...props} disabled={disabled || busy} type="submit">{children}</Button>
     <AppLoading active={busy} />
-    {failed && <AccountError role="alert">{authCopy.logoutUnavailable}</AccountError>}
   </form>;
 }

@@ -62,19 +62,47 @@ export async function verifyAuthenticationJourneys(page, { origin } = {}) {
   await open("/en/account");
   await page.locator("[data-account-details]").waitFor();
   const secondTab = await context.newPage();
+  const logoutPath = origin + "/api/account/sign-out";
+  const originalSession = (await context.cookies(origin)).find(cookie => cookie.name === "goal-hint-member");
+  assert.ok(originalSession, "The authenticated fixture browser must have a session cookie.");
+  let releaseLogout;
+  const logoutHeld = new Promise(resolve => { releaseLogout = resolve; });
   try {
+    await secondTab.setViewportSize({ width: 390, height: 844 });
     await secondTab.goto(origin + "/en/account", { waitUntil: "domcontentloaded" });
-    await secondTab.locator("[data-account-menu]:visible summary").first().click();
-    await secondTab.locator('[data-account-menu] button[type="submit"]:visible').first().click();
+    await secondTab.evaluate(() => {
+      window.goalHintPaymentAlerts = { clear() { throw new Error("Synthetic native cleanup failure"); } };
+    });
+    await secondTab.route(logoutPath, async route => {
+      await logoutHeld;
+      await route.continue();
+    }, { times: 1 });
+    const menu = secondTab.locator("[data-account-menu]:visible").first();
+    await menu.locator("summary").click();
+    const requestReady = secondTab.waitForRequest(request => request.url() === logoutPath && request.method() === "POST");
+    await menu.getByRole("button", { name: "Log out", exact: true }).click({ noWaitAfter: true });
+    await secondTab.locator("[data-account-menu][open]:visible").waitFor({ state: "hidden" });
+    const request = await requestReady;
+    assert.equal(request.isNavigationRequest(), true);
+    assert.equal(request.postData(), "action=logout");
+    const responseReady = secondTab.waitForResponse(response => response.request() === request);
+    releaseLogout();
+    assert.equal((await responseReady).status(), 303);
     await secondTab.waitForURL(origin + "/en/matches");
+    await secondTab.locator('[data-header-auth="login"]:visible').waitFor();
+    const replay = await secondTab.request.get(origin + "/api/account/session", {
+      headers: { Cookie: `${originalSession.name}=${originalSession.value}` },
+    });
+    assert.equal(replay.status(), 200);
+    assert.equal((await replay.json()).phone, null);
     await page.bringToFront();
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await page.locator("[data-account-auth]").waitFor();
     assert.equal(await page.locator("[data-account-details]").count(), 0);
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.locator("[data-account-auth]").waitFor();
-  } finally { await secondTab.close(); }
-  checks.push("Other-tab logout and refresh remove the protected account workspace");
+  } finally { releaseLogout(); await secondTab.close(); }
+  checks.push("Mobile logout closes the menu before the native form response, and other-tab refresh removes revoked account access");
 
   await fresh("register");
   await credentials();

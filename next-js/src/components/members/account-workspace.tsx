@@ -135,7 +135,7 @@ export function AccountWorkspace({ locale, current, phone, returnTo, children }:
     <SectionMenu ref={menu} data-account-section-menu onToggle={event => setOpen(event.currentTarget.open)} onKeyDown={event => {
       if (event.key === "Escape" && menu.current?.open) { event.preventDefault(); dismiss(); menu.current.querySelector("summary")?.focus(); }
     }}><summary aria-expanded={open} data-analytics-ignore><ListIcon /><span><strong>{section}</strong><small data-account-mobile-identity>{identity}</small></span><ChevronDownIcon /></summary>
-      <nav aria-label={m.text("account.sections")}>{links(true)}<LogOut onSignedOut={dismiss}><SignOutIcon />{m.text("auth.signOut")}</LogOut></nav>
+      <nav aria-label={m.text("account.sections")}>{links(true)}<LogOut onLogoutStart={dismiss}><SignOutIcon />{m.text("auth.signOut")}</LogOut></nav>
     </SectionMenu>
     <Content aria-labelledby={heading} data-account-details data-account-section={current} data-analytics-ignore>
       <VisuallyHidden as="h1" id={heading} data-account-page-heading>{section}</VisuallyHidden>{children}
