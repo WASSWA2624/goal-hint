@@ -56,7 +56,15 @@ Hosted smoke checks covered the Matches page and default feed, private reset-pag
 
 Local verification passed 126 focused tests, isolated MySQL concurrency and exact-expiry checks, member and admin Chrome flows in both themes, and 29 Flutter tests including simulated native handoffs. The repository-wide test command reproduced unrelated baseline failures and one timeout that passed on rerun. The script suite flagged an unchanged historical November replay trigger. The production-mode web build passed.
 
-The release ZIP SHA-256 is `79717c6e01b0a634cd25e9b4c1a0269ea90457c1f1dc5f46bc7e4f11caf5e4e5`. Production promotion awaits staging review and authorization.
+The release ZIP SHA-256 is `79717c6e01b0a634cd25e9b4c1a0269ea90457c1f1dc5f46bc7e4f11caf5e4e5`.
+
+## Password recovery production verification
+
+On 26 November 2026, after the owner reviewed staging, production activated `8d2e3204` from the same ZIP. The encrypted production backup covered the schema and triggers plus data from the migration ledger, member accounts, member sessions and verification codes. An isolated restore matched the production inventory and the backed-up data. The new recovery table migration also passed on that restore before production activation.
+
+MariaDB verified all 94 migrations with zero pending in production. The production app account accessed `MemberPasswordResetRequest` over verified TLS. The table has the expected indexes and its foreign key to `MemberAccount`. The previous compatible web release is `12b13b9a`.
+
+Production HTTPS served the expected build. Login, the reset page, the guest session API, Matches and the one-day Matches API returned HTTP 200. The reset page sent `no-store`, `noindex` and `no-referrer`. Guests were redirected to Login from the admin queue and received HTTP 401 from its API. Chrome verified opening and cancelling the request dialog on desktop light, and the missing-link message and new-request dialog on mobile dark. These production browser checks were read-only. A synthetic account exercised the full password-reset journey on staging. The default 30-day Matches API returned HTTP 503 both before and after promotion.
 
 ## Authentication rollout
 
