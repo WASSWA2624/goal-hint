@@ -44,6 +44,63 @@ Hosted staging and production load distinct private web env files through the Pa
 4. Smoke-test the staging HTTPS pages and APIs, check `noindex`, and verify release-specific behavior and worker readiness with the appropriate isolated or stored data. After owner review, promote the same package with production's own database and configuration. Repeat migration and smoke checks for production. Worker deployment and activation are separate operator steps. The documented production cadence is five minutes for football refresh and half-hourly for Best Slips publication using stored inputs. [Promotion and smoke-test runbook](../next-js/docs/deployment/how-to-deploy.md#vps-staging-and-release-promotion), [football worker runbook](../next-js/docs/deployment/how-to-deploy.md#vps-live-football-worker), [worker deployment helper](../next-js/scripts/deploy-worker-cpanel.py), [Best Slips worker runbook](../next-js/docs/daily-slip-publications.md).
 5. Keep the previous compatible release. The VPS rollback procedure restores the earlier app release and restarts Passenger while keeping the current schema and data. The `deploy-cpanel.py --rollback` helper is documented for the former shared host. Recovering database state requires a separately verified backup restore procedure. After a partial migration or ledger error, evaluate the actual schema and ledger before resuming writes. [VPS promotion and rollback](../next-js/docs/deployment/how-to-deploy.md#vps-staging-and-release-promotion), [migration recovery](../next-js/docs/deployment/how-to-deploy.md#database-updates-on-mariadb), [legacy deploy helper](../next-js/scripts/deploy-cpanel.py), [separate worker recovery](../next-js/docs/deployment/how-to-deploy.md#vps-live-football-worker).
 
+## Subscriber administration staging verification
+
+On 26 November 2026, staging activated clean commit `59faf6e1` over `1afee350`. HTTPS served Next build `EaIreorAnFdT0fwnToEpI` with noindex. MariaDB verified all 94 migrations with zero pending before and after activation. The existing schema and application grants cover this change.
+
+Hosted smoke used synthetic accounts to verify current-admin authorization, rejection of cross-site calls, count confirmation, partial results, grant replay, blocking and unblocking, device revocation, secure password reset, personal-data erasure and eligible permanent deletion. The reset used the ownership-verification and single-use link flow, with no external message. The erased fixture lost identifying data and retained its access record. Bulk and individual deletion removed eligible fixtures and wrote unlinked operation audits. Replaying the synthetic credentials after sign-out failed. Financial and provider-retention cases were verified in isolated MySQL with populated records.
+
+The local checks passed 85 focused tests, 18 restricted-MySQL admin tests, and seven bulk and reset integration tests. The final focused MySQL deletion run passed eight cases. The Subscriber HTML/API fixture and Playwright passed on desktop and phone in light and dark, including page-local selection, cancel, exact confirmation count and partial failures. Schema validation, lint, TypeScript, the theme contract and the production-mode build passed. The unchanged Subscribe suite has two pre-existing loading fixture failures reproduced with the baseline tests.
+
+The release ZIP SHA-256 is `a1ff833a20cb3e427b64ec08cf3a47d809ce387bbfee0e31900686219f729ba2`. Production promotion awaits owner review.
+
+<details>
+<summary>Changed files</summary>
+
+- `APP_OVERVIEW.md`
+- `implementation-docs/authentication.md`
+- `implementation-docs/deployment-and-version-control.md`
+- `implementation-docs/payments.md`
+- `implementation-docs/subscriptions.md`
+- `next-js/docs/subscriptions.md`
+- `next-js/scripts/verify-subscriber-directory-rendering.py`
+- `next-js/src/app/(owner)/admin/password-requests/page.tsx`
+- `next-js/src/app/(owner)/admin/subscribers/page.tsx`
+- `next-js/src/app/api/admin/subscribers/bulk/route.ts`
+- `next-js/src/components/admin/code-tools.tsx`
+- `next-js/src/components/admin/password-requests-editor.tsx`
+- `next-js/src/components/admin/subscriber-action-menu.tsx`
+- `next-js/src/components/admin/subscriber-bulk-actions.tsx`
+- `next-js/src/components/admin/subscriber-detail.tsx`
+- `next-js/src/components/admin/subscriber-directory-parts.tsx`
+- `next-js/src/components/admin/subscriber-directory.tsx`
+- `next-js/src/components/admin/subscriber-workspace.tsx`
+- `next-js/src/domain/admin-audit.ts`
+- `next-js/src/domain/subscriber-actions.ts`
+- `next-js/src/domain/subscriber-directory.ts`
+- `next-js/src/server/admin/audit.ts`
+- `next-js/src/server/admin/codes-http.ts`
+- `next-js/src/server/admin/delete-subscriber.ts`
+- `next-js/src/server/admin/subscriber-directory.ts`
+- `next-js/src/server/admin/subscribers-http.ts`
+- `next-js/src/server/admin/subscribers.ts`
+- `next-js/src/server/members/access-codes.ts`
+- `next-js/src/server/members/checkout.ts`
+- `next-js/src/server/members/password-recovery.ts`
+- `next-js/tests/helpers/rendering/owner-payments/app/(owner)/admin/password-requests/page.tsx`
+- `next-js/tests/helpers/rendering/owner-payments/app/api/admin/subscribers/[id]/route.ts`
+- `next-js/tests/helpers/rendering/owner-payments/app/api/admin/subscribers/bulk/route.ts`
+- `next-js/tests/helpers/rendering/owner-payments/app/api/fixture/subscribers/route.ts`
+- `next-js/tests/helpers/rendering/owner-payments/app/fixture.ts`
+- `next-js/tests/helpers/rendering/owner-payments/app/subscriber-actions.ts`
+- `next-js/tests/helpers/rendering/owner-payments/app/subscriber-directory-query.ts`
+- `next-js/tests/members-admin.integration.mjs`
+- `next-js/tests/page-loading-performance.test.mjs`
+- `next-js/tests/subscriber-bulk.integration.mjs`
+- `next-js/tests/subscriber-directory.test.mjs`
+
+</details>
+
 ## Access-control staging verification
 
 On 26 November 2026, staging activated `1afee350` from a clean, checksummed ZIP based on the previous staging release `67ee51c6`. HTTPS served Next build `7PguZ4HEuf3vwnGVtSAcY` with staging noindex headers. MariaDB verified all 94 migrations with zero pending before and after activation. This change uses the existing schema.
