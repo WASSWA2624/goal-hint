@@ -7,6 +7,7 @@ export const adminSections = [
   { key: "payments", href: "/admin/payments", label: "Payments", layout: "record" },
   { key: "codes", href: "/admin/codes", label: "Codes", layout: "record" },
   { key: "subscribers", href: "/admin/subscribers", label: "Subscribers", layout: "record" },
+  { key: "password-requests", href: "/admin/password-requests", label: "Password Requests", layout: "record" },
   { key: "referrals", href: "/admin/referrals", label: "Referral review", layout: "record" },
   { key: "plans", href: "/admin/plans", label: "Plans", layout: "record" },
   { key: "audit", href: "/admin/audit", label: "Audit", layout: "record" },

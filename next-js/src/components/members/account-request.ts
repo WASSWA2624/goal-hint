@@ -3,6 +3,14 @@ import { startRequestDeadline } from "../../domain/request-deadline.ts";
 const unavailable = "Unable to complete this request. Please try again.";
 const navigationActions = new Set(["login", "register", "verify", "reset-code", "reset", "phone", "password"]);
 
+export class AccountRequestError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 function localDestination(value: unknown): value is string {
   return typeof value === "string" && /^\/(?!\/)[^\\\s\p{Cc}]*$/u.test(value);
 }
@@ -19,7 +27,7 @@ export async function accountRequest<T>(path: string, body: Record<string, unkno
     });
     if (controller.signal.aborted) throw controller.signal.reason;
     if (!result || typeof result !== "object" || Array.isArray(result)) throw new Error(unavailable);
-    if (!response.ok) throw new Error("message" in result && typeof result.message === "string" ? result.message : unavailable);
+    if (!response.ok) throw new AccountRequestError("message" in result && typeof result.message === "string" ? result.message : unavailable, response.status);
     if (navigationActions.has(path) && !("next" in result && localDestination(result.next))) throw new Error(unavailable);
     return result as T;
   } catch (failure) {

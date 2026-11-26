@@ -280,8 +280,8 @@ production load copied 240,229 fixtures and related browsing and historical data
 from staging. Accounts, wallets, and payments start fresh. AutoSSL covers both
 production hostnames, and `www.goalhint.com` redirects to `goalhint.com`.
 The production football worker uses the existing direct API-Football account.
-Paid checkout is off. Phone verification and password-reset delivery require
-messaging setup.
+Paid checkout is off. Password recovery uses the configured public support
+directory and the Password Requests workspace for manual delivery.
 
 Develop on `localhost` with the private `.env.development`, then verify the
 release on `test.goalhint.com`. Promote the same tested release to `goalhint.com`
@@ -305,6 +305,13 @@ code and reviewed schema migrations.
    backup and set `GOAL_HINT_MIGRATION_BACKUP` to its SHA-256 manifest. The
    script verifies zero pending migrations before switching the release and
    restarting Passenger. A migration failure leaves the current release active.
+
+   For the manual recovery rollout, create `MemberPasswordResetRequest` through
+   the reviewed migration and verify the application account has the required
+   privileges before switching the release. Apply the table grant for accounts
+   with table-scoped privileges. Use the same existing private keying secret
+   across app processes in each environment, and keep staging and production
+   secrets separate. See [table grants](manual-account-grants.sql).
 
    ```sh
    bash "$release/scripts/activate-hosted.sh" staging "$release" ghstage \

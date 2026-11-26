@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-const scenarios = ["success", "send-failed", "rate-limited", "invalid-code", "unavailable", "denied", "missing", "blocked", "pending-verification", "password-reset", "automatic-trial"];
+const scenarios = ["success", "send-failed", "rate-limited", "invalid-code", "unavailable", "denied", "missing", "blocked", "pending-verification", "password-reset", "automatic-trial", "existing-request"];
 export function RefreshProbe({ initialScenario = "success" }: { initialScenario?: string }) {
   const router = useRouter();
   const [probe, setProbe] = useState("");

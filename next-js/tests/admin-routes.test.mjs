@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import test, { after } from "node:test";
+import { privacyNotice } from "../src/domain/privacy-notice.ts";
+import { termsNotice } from "../src/domain/terms-notice.ts";
 import { fixtureAdminSessions, installAdminFixtureEnvironment } from "./helpers/admin-fixtures.mjs";
 after(installAdminFixtureEnvironment());
 const previousSupport = process.env.GOAL_HINT_CUSTOMER_SUPPORT_NUMBER;
@@ -67,10 +69,15 @@ test("account verification, recovery and trial activation use their protected me
   const trial = "src/app/api/account/trial/route.ts";
   assert.ok(memberRoutes.includes(trial));
   assert.match(await source(trial), /export const POST = createMemberTrialHandler\(\);/);
-  for (const action of ["verification", "verify", "forgot", "reset-code", "reset"]) {
+  for (const action of ["verification", "verify", "reset-code", "reset"]) {
     const route = `src/app/api/account/${action}/route.ts`;
     assert.ok(memberRoutes.includes(route));
     assert.match(await source(route), new RegExp(`export const POST = createMemberAuthHandler\\("${action}"\\);`));
+  }
+  for (const [path, action] of [["forgot", "request"], ["password-reset/validate", "validate"], ["password-reset/redeem", "redeem"]]) {
+    const route = `src/app/api/account/${path}/route.ts`;
+    assert.ok(memberRoutes.includes(route));
+    assert.match(await source(route), new RegExp(`export const POST = createPasswordRecoveryHandler\\("${action}"\\);`));
   }
 });
 
@@ -247,7 +254,8 @@ test("Plans and Settings: reads expose managed support settings, writes are JSON
   assert.equal(shown.settings.trialDays, 2, "A missing row configures a 2-day trial for paid access.");
   assert.equal(shown.settings.allowUnsubscribedMembers, false);
   assert.deepEqual(shown.environmentFields, ["contactPhone"]);
-  assert.deepEqual(shown.checkoutReadiness.map(({ key }) => key), ["plan", "payment-number", "privacy", "terms"]);
+  assert.deepEqual(shown.checkoutReadiness.map(({ key }) => key), ["plan", "payment-number",
+    ...(!privacyNotice.releaseReady ? ["privacy"] : []), ...(!termsNotice.releaseReady ? ["terms"] : [])]);
   assert.equal(shown.diagnostics.address, "unknown", "Raw forwarded headers cannot establish a trusted transport address.");
   assert.deepEqual(shown.diagnostics.headers.filter(({ value }) => value !== null), [{ name: "x-forwarded-for", value: "198.51.100.4, 203.0.113.8" },
     { name: "x-real-ip", value: "203.0.113.8" }]);

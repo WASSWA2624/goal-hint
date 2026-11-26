@@ -11,19 +11,24 @@ import { adminSections, isRecordAdminSection, type AdminSection } from "@/domain
 import { media } from "@/styles/theme";
 import { WorkspaceNavigationLink } from "@/components/ui/workspace-navigation";
 import { adminSectionIcons } from "./admin-section-icons";
+import { getPendingPasswordRequestsSnapshot, getServerPendingPasswordRequestsSnapshot, subscribePendingPasswordRequests } from "./pending-password-requests";
 import { getPendingPaymentsSnapshot, seedPendingPayments, subscribePendingPayments } from "./pending-payments";
 import { watchPendingPaymentTitle } from "./pending-title";
 import { adminSidebarSize, getServerSidebarSnapshot, getSidebarSnapshot, saveSidebarPreference, setSidebarPreference, subscribeSidebarPreference } from "./admin-sidebar-state";
 import { useHorizontalResize, workspaceResizeRail } from "./workspace-resize";
 
 function SectionLinks({ current, onNavigate, collapsed = false }: { current: AdminSection; onNavigate?: () => void; collapsed?: boolean }) {
+  const passwordRequests = useSyncExternalStore(subscribePendingPasswordRequests, getPendingPasswordRequestsSnapshot, getServerPendingPasswordRequestsSnapshot);
   return <SectionList>
     {adminSections.map(({ key, href, label }) => {
       const Icon = adminSectionIcons[key];
+      const count = key === "password-requests" ? passwordRequests : null;
+      const accessibleLabel = count === null ? label : `${label}, ${count} pending`;
       return <li key={key}>
-        <SectionLink href={href} prefetch={false} title={label} aria-label={collapsed ? label : undefined}
+        <SectionLink href={href} prefetch={false} title={accessibleLabel} aria-label={collapsed || count !== null ? accessibleLabel : undefined}
           aria-current={key === current ? "page" : undefined} {...(onNavigate ? { onClick: onNavigate } : {})}>
           <Icon /><span data-sidebar-label>{label}</span>
+          {count !== null && <SectionCount $pending={count > 0} aria-hidden="true" data-password-requests-count>{count > 99 ? "99+" : count}</SectionCount>}
         </SectionLink>
       </li>;
     })}
@@ -228,6 +233,22 @@ const SectionList = styled.ul`
 `;
 const SectionLink = styled(WorkspaceNavigationLink)`
   border-radius: ${({ theme }) => theme.radius.none};
+`;
+const SectionCount = styled.span<{ $pending: boolean }>`
+  flex: none;
+  margin-inline-start: auto;
+  padding-inline: var(--gh-spacing-1);
+  border-radius: ${({ theme }) => theme.radius.small};
+  color: ${({ theme, $pending }) => ($pending ? theme.color.outcome.pending : theme.color.outcome.void).text};
+  background: ${({ theme, $pending }) => ($pending ? theme.color.outcome.pending : theme.color.outcome.void).background};
+  font-size: var(--gh-font-secondary);
+  font-variant-numeric: tabular-nums;
+  [data-collapsed="true"] & {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-end: var(--gh-spacing-0_5);
+    ${({ $pending }) => !$pending && css`display: none;`}
+  }
 `;
 const MenuBar = styled.details`
   position: relative;

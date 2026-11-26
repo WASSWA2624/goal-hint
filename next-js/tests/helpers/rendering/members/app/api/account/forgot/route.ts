@@ -1,2 +1,2 @@
-import { fixtureAuthHandler } from "../../../fixture-auth";
-export const POST = fixtureAuthHandler("forgot");
+import { fixturePasswordRecoveryHandler } from "../../../fixture-auth";
+export const POST = fixturePasswordRecoveryHandler("request");

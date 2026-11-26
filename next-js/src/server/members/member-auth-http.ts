@@ -13,11 +13,11 @@ import { isMemberAdminPhone } from "./member-admin.ts";
 import { flutterwaveCheckoutPublished, subscriptionCheckoutPublished } from "./sales-readiness.ts";
 import { allowsContentWithoutSubscription } from "./viewer-access.ts";
 
-type AuthAction = "register" | "login" | "phone" | "password" | "forgot" | "reset" | "verification" | "verify" | "reset-code";
+type AuthAction = "register" | "login" | "phone" | "password" | "reset" | "verification" | "verify" | "reset-code";
 const fields: Readonly<Record<AuthAction, readonly string[]>> = {
   register: ["phone", "password", "return", "checkout"], login: ["phone", "password", "return", "checkout", "destination"],
   phone: ["phone", "currentPassword"], password: ["password", "confirm"],
-  forgot: ["phone", "channel", "return", "checkout"], reset: ["password", "return", "checkout"],
+  reset: ["password", "return", "checkout"],
   verification: ["channel", "return"], verify: ["code", "return", "checkout", "whatsappNotifications"], "reset-code": ["phone", "code", "return", "checkout"],
 };
 
@@ -58,13 +58,9 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
       if (!services.auth || !services.sessions) return json({ error: "unavailable", message: "Account access is unavailable. Try again later." }, 503);
       const memberName = memberCookieName(services.config.production), currentToken = readCookie(request, memberName);
       const binding: AuthBinding = { member: await services.sessions.verify(currentToken) }, address = clientAddress(request.headers);
-      if ((action === "forgot" || action === "reset-code") && binding.member)
+      if (action === "reset-code" && binding.member)
         return json({ error: "signed-in", message: authCopy.passwordWhileLoggedIn }, 409);
       if (action === "verification") return failure(await services.auth.requestVerification());
-      if (action === "forgot") {
-        const result = await services.auth.requestPasswordReset(body.phone, address, body.channel);
-        return result.status === "requested" ? json(result) : failure(result);
-      }
       const result = action === "login" ? await services.auth.login(body.phone, body.password, address, currentToken)
         : action === "register" ? await services.auth.register(body.phone, body.password, binding,
           readReferralAttribution(services.config, readCookie(request, referralCookieName(services.config.production)), Date.now())?.code)
@@ -94,6 +90,39 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
       response.headers.append("Set-Cookie", cookie(services.config, services.config.cookies.session, "", 0));
       if (result.administrator && !result.requiresPasswordChange && !result.requiresVerification)
         response.headers.append("Set-Cookie", cookie(services.config, services.config.cookies.exclude, "1", adminSessionRules.excludeMaxAgeSeconds));
+      return response;
+    } catch { return json({ error: "unavailable", message: "Account access is unavailable. Try again later." }, 503); }
+  };
+}
+
+type RecoveryAction = "request" | "validate" | "redeem";
+const recoveryFields = { request: ["phone"], validate: ["token"], redeem: ["token", "password", "confirm"] } as const;
+
+/** A reset link is presented in the request body, so its token never enters URLs or response bodies. */
+export function createPasswordRecoveryHandler(action: RecoveryAction, source: MemberServicesSource = getMemberServices) {
+  return async (request: Request): Promise<Response> => {
+    if (!isSameOrigin(request)) return json({ error: "forbidden", message: "This request must come from Goal Hint." }, 403);
+    try {
+      let body;
+      try { body = await bodyOf(request, recoveryFields[action]); } catch { body = null; }
+      if (!body) return json({ error: "invalid-request", message: "Check the form and try again." }, 400);
+      const services = await source(), recovery = services.passwordRecovery;
+      if (!recovery || !services.sessions) return json({ error: "unavailable", message: "Account access is unavailable. Try again later." }, 503);
+      const memberName = memberCookieName(services.config.production);
+      if (action === "request" && await services.sessions.verify(readCookie(request, memberName))) {
+        return json({ error: "signed-in", message: authCopy.passwordWhileLoggedIn }, 409);
+      }
+      const address = clientAddress(request.headers);
+      const result = action === "request" ? await recovery.request(body.phone, address)
+        : action === "validate" ? await recovery.validate(body.token, address)
+        : await recovery.redeem(body.token, body.password, body.confirm, address);
+      if (result.status === "invalid" || result.status === "busy") return failure(result);
+      if (result.status === "unusable") return json(result, 410);
+      const response = json(result);
+      if (result.status === "completed") {
+        response.headers.append("Set-Cookie", cookie(services.config, memberName, "", 0, "Lax"));
+        response.headers.append("Set-Cookie", cookie(services.config, services.config.cookies.session, "", 0));
+      }
       return response;
     } catch { return json({ error: "unavailable", message: "Account access is unavailable. Try again later." }, 503); }
   };

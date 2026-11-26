@@ -15,7 +15,7 @@ import { MemberForm } from "./member-controls";
 import { AccountCard, AccountCardBody, AccountError, AccountFormFooter, AccountLink, AccountNote, AccountPrimary, AccountSecondaryActions, AccountSessionInfo } from "./account-styles";
 import { AccountFormHeader } from "./account-form-header";
 import { accountRequest, PasswordInput } from "./account-security";
-import { ForgotPasswordForm } from "./account-verification";
+import { PasswordRecoveryDialog } from "./password-recovery-dialog";
 
 export type AccountAuthView = "login" | "register" | "forgot";
 const subscribe = () => () => {};
@@ -30,10 +30,16 @@ export function AccountAuthForm({ locale, view = "login", returnTo, checkout = f
   const [password, setPassword] = useState("");
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<{ phone: string; password: string } | null>(null);
+  const [recoveryOpen, setRecoveryOpen] = useState(view === "forgot");
   const inFlight = useRef(false), phoneInput = useRef<HTMLInputElement>(null), dialogId = useId();
   const hydrated = useSyncExternalStore(subscribe, clientReady, serverReady);
   const base = `/${resolveLocale(locale)}`;
   const href = (next: AccountAuthView) => memberAuthPath(next, returnTo, checkout);
+  const action = view === "register" ? "register" : "login";
+  function closeRecovery() {
+    setRecoveryOpen(false);
+    if (view === "forgot") history.replaceState(history.state, "", href("login"));
+  }
   async function authenticate(action: "login" | "register", credentials: { phone: string; password: string }) {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -52,9 +58,9 @@ export function AccountAuthForm({ locale, view = "login", returnTo, checkout = f
   }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (inFlight.current || confirmation || view === "forgot") return;
-    if (view === "login") {
-      void authenticate(view, { phone, password });
+    if (inFlight.current || confirmation || recoveryOpen) return;
+    if (action === "login") {
+      void authenticate(action, { phone, password });
       return;
     }
     const canonical = validMobilePhone(phone);
@@ -62,20 +68,19 @@ export function AccountAuthForm({ locale, view = "login", returnTo, checkout = f
     setError("");
     setConfirmation({ phone: canonical, password });
   }
-  if (view === "forgot") return <ForgotPasswordForm locale={locale} returnTo={returnTo} checkout={checkout} contact={contact} />;
   return <AccountCard data-account-auth data-analytics-ignore>
-    <AccountFormHeader icon={UserIcon} title={m.text(view === "register" ? "auth.signUp" : "auth.signIn")}
-      description={m.text(view === "register" ? "account.registerHelp" : "account.description")}
-      actions={view === "login" && <AccountSessionInfo><summary aria-label={m.text("account.sessionLimitNotice")} title={m.text("account.sessionLimitNotice")}><InfoIcon /></summary>
+    <AccountFormHeader icon={UserIcon} title={m.text(action === "register" ? "auth.signUp" : "auth.signIn")}
+      description={m.text(action === "register" ? "account.registerHelp" : "account.description")}
+      actions={action === "login" && <AccountSessionInfo><summary aria-label={m.text("account.sessionLimitNotice")} title={m.text("account.sessionLimitNotice")}><InfoIcon /></summary>
         <p role="note">{m.text("account.sessionLimitNotice")}</p></AccountSessionInfo>} />
     <AccountCardBody>
-      <MemberForm method="post" action={`/api/account/${view}`} onSubmit={submit} data-analytics-ignore aria-busy={busy}>
-        <PhoneInput ref={phoneInput} name="phone" label={m.text("account.phoneNumber")} value={phone} onValueChange={setPhone} lookup={view === "login"} required disabled={busy} hint="" />
-        <PasswordInput label={m.text("account.password")} value={password} onChange={setPassword} current={view === "login"}
+      <MemberForm method="post" action={`/api/account/${action}`} onSubmit={submit} data-analytics-ignore aria-busy={busy}>
+        <PhoneInput ref={phoneInput} name="phone" label={m.text("account.phoneNumber")} value={phone} onValueChange={setPhone} lookup={action === "login"} required disabled={busy} hint="" />
+        <PasswordInput label={m.text("account.password")} value={password} onChange={setPassword} current={action === "login"}
           placeholder={m.text("account.passwordPlaceholder")} disabled={busy} />
         {error && <AccountError role="alert">{error}</AccountError>}
-        <AccountPrimary type="submit" disabled={busy || (view === "register" && !hydrated)} aria-haspopup={view === "register" ? "dialog" : undefined}>
-          {m.text(view === "login" ? "auth.signIn" : "auth.signUp")}
+        <AccountPrimary type="submit" disabled={busy || (action === "register" && !hydrated)} aria-haspopup={action === "register" ? "dialog" : undefined}>
+          {m.text(action === "login" ? "auth.signIn" : "auth.signUp")}
         </AccountPrimary>
       </MemberForm>
       {confirmation && <CriteriaDialog id={dialogId} title={m.text("account.confirmSignupPhone")} open
@@ -88,10 +93,14 @@ export function AccountAuthForm({ locale, view = "login", returnTo, checkout = f
         </>}>
         <bdi dir="ltr">+{formatPhone(confirmation.phone)}</bdi>
       </CriteriaDialog>}
+      {recoveryOpen && <PasswordRecoveryDialog locale={locale} contact={contact} phone={phone} returnTo={returnTo} checkout={checkout} onClose={closeRecovery} />}
       <AccountFormFooter>
         <AccountSecondaryActions aria-label={m.text("account.formActions")} data-account-secondary-actions>
-          {view === "login" && <AccountLink href={href("forgot")} prefetch={false}>{m.text("account.forgotPassword")}</AccountLink>}
-          <AccountLink href={href(view === "login" ? "register" : "login")} prefetch={false}>{m.text(view === "login" ? "auth.signUp" : "auth.signIn")}</AccountLink>
+          {action === "login" && <AccountLink href={href("forgot")} prefetch={false} aria-haspopup="dialog" onClick={event => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault(); setRecoveryOpen(true);
+          }}>{m.text("account.forgotPassword")}</AccountLink>}
+          <AccountLink href={href(action === "login" ? "register" : "login")} prefetch={false}>{m.text(action === "login" ? "auth.signUp" : "auth.signIn")}</AccountLink>
         </AccountSecondaryActions>
         <AccountNote>{m.text("account.ageAssent")} · <TextLink href={`${base}/terms`} prefetch={false}>{m.text("account.terms")}</TextLink></AccountNote>
       </AccountFormFooter>

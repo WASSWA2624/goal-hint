@@ -88,14 +88,6 @@ export const AccountSupport = styled.nav`
 export const AccountCodeField = styled.div`
   input { text-align: center; font-size: var(--gh-font-page); letter-spacing: var(--gh-tracking-display); min-block-size: var(--form-control-height); }
 `;
-export const AccountSteps = styled.ol`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-2);
-  list-style: none; margin: 0; padding: 0; font-size: var(--gh-font-secondary);
-  li { display: flex; align-items: center; gap: var(--gh-spacing-1_5); min-inline-size: 0; padding-block: var(--gh-spacing-2);
-    border-block-end: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border}; color: ${({ theme }) => theme.color.mutedText}; }
-  li svg { inline-size: var(--gh-size-4); block-size: var(--gh-size-4); flex: none; }
-  li[aria-current="step"] { color: ${({ theme }) => theme.color.link}; border-color: currentColor; font-weight: var(--gh-weight-medium); }
-`;
 export const AccountPrimary = styled(Button)`
   width: 100%; font-weight: var(--gh-weight-medium);
   &&:disabled { background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.disabledText}; }

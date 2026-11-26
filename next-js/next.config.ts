@@ -1,5 +1,6 @@
 import { networkInterfaces } from "node:os";
 import type { NextConfig } from "next";
+import { passwordResetPagePath } from "./src/domain/password-reset-links.ts";
 
 const nextConfig: NextConfig = {
   agentRules: false,
@@ -37,7 +38,7 @@ const nextConfig: NextConfig = {
     ];
     const privateSources = ["/analytics", "/api/analytics/:path*", "/admin", "/admin/:path*", "/api/admin/:path*",
       "/en/account", "/en/subscribe", "/en/best-slips/:date/:number", "/api/account/:path*", "/api/slips/:path*", "/api/payments/flutterwave/:path*",
-      "/r/:path*", "/s/:path*", "/payment-review/:path*"];
+      "/r/:path*", "/s/:path*", "/payment-review/:path*", passwordResetPagePath];
     const publicCache = [["/flags/:file*", "public, max-age=2592000, stale-while-revalidate=86400"],
       ["/brand/:file*", "public, max-age=86400, stale-while-revalidate=604800"],
       ["/sounds/:file*", "public, max-age=31536000, immutable"]] as const;
@@ -51,7 +52,9 @@ const nextConfig: NextConfig = {
         { key: "Content-Type", value: "application/javascript; charset=utf-8" },
         { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self'; connect-src 'self'" }] },
       ...publicCache.map(([source, value]) => ({ source, headers: [{ key: "Cache-Control", value }] })),
-      ...privateSources.map((source) => ({ source, headers: privateHeaders }))];
+      ...privateSources.map(source => ({ source, headers: source === passwordResetPagePath
+        ? privateHeaders.map(header => header.key === "Referrer-Policy" ? { ...header, value: "no-referrer" } : header)
+        : privateHeaders }))];
   },
   async redirects() {
     return [

@@ -5,16 +5,18 @@ import { hashPassword } from "../../src/server/analytics/analytics-password.ts";
 import { memberAdminCredential } from "../../src/server/members/member-admin.ts";
 import { createMemberAuth } from "../../src/server/members/member-auth.ts";
 import { createMemberSessions } from "../../src/server/members/member-sessions.ts";
+import { createPasswordRecovery } from "../../src/server/members/password-recovery.ts";
 
 const phone = "256700000001", password = "correct horse 47";
 const key = (purpose, value) => createHmac("sha256", "synthetic-test-secret").update(`${purpose}\0${value}`).digest("hex");
 
 /** Small transactional store: assertions exercise the production auth service, not a second implementation of it. */
-export function createMemberAuthFixture({ admins = [], adminPassword, send, recoveryAvailable, trialDays = 2 } = {}) {
+export function createMemberAuthFixture({ admins = [], adminPassword, trialDays = 2 } = {}) {
   let time = Date.parse("2026-10-20T18:00:00Z"), queue = Promise.resolve();
   const accounts = new Map(), sessions = new Map(), challenges = new Map(), buckets = new Map(), accessCodes = new Map(), referrals = new Map(), notifications = new Map(), payments = new Map(), sent = [], messages = [];
   const reviewCases = new Map(), reviewEvidence = new Map(), reviewEvents = new Map(), reversals = new Map();
   const referralCredits = new Map();
+  const passwordRequests = new Map();
   function matches(row, where = {}) {
     return Object.entries(where).every(([name, value]) => {
       if (name === "OR") return value.some((part) => matches(row, part));
@@ -68,6 +70,9 @@ export function createMemberAuthFixture({ admins = [], adminPassword, send, reco
     referralReviewEvent: table(reviewEvents, "id", { beforeMs: null, afterMs: null }),
     referralGrantReversal: table(reversals, "grantId", { restoredGrantId: null, restoredAt: null }),
     memberVerification: table(challenges, "id", { sentAt: null, confirmedAt: null, consumedAt: null, proofHash: null, attempts: 0 }),
+    memberPasswordResetRequest: table(passwordRequests, "id", { generation: 0, ownershipVerifiedAt: null, ownershipVerifiedBy: null, ownershipMethod: null,
+      generatedAt: null, generatedBy: null, expiresAt: null, tokenHash: null, tokenCiphertext: null, markedSentAt: null,
+      markedSentBy: null, markedSentChannel: null, completedAt: null, cancelledAt: null }),
     paymentSubmission: table(payments, "id", { decidedAt: null }),
     accessCode: table(accessCodes, "id", { revokedAt: null, extensionDays: 0 }),
     subscriptionSettings: { async findUnique() { return settings; }, async findUniqueOrThrow() { return settings; } },
@@ -84,7 +89,7 @@ export function createMemberAuthFixture({ admins = [], adminPassword, send, reco
   };
   const database = { async query(run) { return run(tx); }, transaction(run) {
     const result = queue.then(async () => {
-      const stores = [accounts, sessions, challenges, buckets, accessCodes, referrals, referralCredits, notifications, reviewCases, reviewEvidence, reviewEvents, reversals];
+      const stores = [accounts, sessions, challenges, buckets, accessCodes, referrals, referralCredits, notifications, reviewCases, reviewEvidence, reviewEvents, reversals, passwordRequests];
       const snapshots = stores.map((rows) => structuredClone(rows));
       const auditCount = sent.length;
       try { return await run(tx); } catch (error) { sent.length = auditCount; stores.forEach((rows, i) => { rows.clear(); for (const entry of snapshots[i]) rows.set(...entry); }); throw error; }
@@ -92,9 +97,8 @@ export function createMemberAuthFixture({ admins = [], adminPassword, send, reco
     queue = result.catch(() => {}); return result;
   } };
   const adminPhones = new Set(admins), adminPhone = (phone) => adminPhones.has(phone);
-  const delivery = { async send(message) { messages.push(message); await send?.(message); }, recoveryAvailable };
   const adminPasswordHash = () => memberAdminCredential({ GOAL_HINT_ADMIN_PASSWORD: adminPassword });
-  const restart = () => createMemberAuth({ database, config: { key }, now: () => time, adminPhone, adminPasswordHash, delivery });
+  const restart = () => createMemberAuth({ database, config: { key }, now: () => time, adminPhone, adminPasswordHash });
   const service = restart();
   const sessionService = createMemberSessions({ database, config: { key }, now: () => time, adminPhone, adminPasswordHash });
   async function account(fields = {}) {
@@ -106,16 +110,19 @@ export function createMemberAuthFixture({ admins = [], adminPassword, send, reco
     const member = await sessionService.verify(logged.token); assert.ok(member);
     return { member, token: logged.token };
   }
-  async function legacyCode(accountId, code = "123456", channel = "sms") {
+  const restartRecovery = () => createPasswordRecovery({ database, config: { key }, now: () => time, adminPhone });
+  async function legacyCode(accountId, code = "123456", channel = "sms", purpose = "account") {
     const owner = accounts.get(accountId), at = new Date(time);
-    await tx.memberVerification.updateMany({ where: { accountId, purpose: "account", consumedAt: null }, data: { consumedAt: at } });
-    await tx.memberVerification.create({ data: { id: randomUUID(), accountId, phone: owner.phone, purpose: "account", channel,
+    await tx.memberVerification.updateMany({ where: { accountId, purpose, consumedAt: null }, data: { consumedAt: at } });
+    await tx.memberVerification.create({ data: { id: randomUUID(), accountId, phone: owner.phone, purpose, channel,
       bindingHash: key("member-verification-binding", accountId),
-      codeHash: key("member-verification-code", `${accountId}:${owner.phone}:account:${code}`),
+      codeHash: key("member-verification-code", `${accountId}:${owner.phone}:${purpose}:${code}`),
       createdAt: at, sentAt: at, expiresAt: new Date(time + 86_400_000) } });
     return code;
   }
   return { service, database, tx, settings, accounts, sessions, challenges, buckets, accessCodes, sent, messages, referrals, notifications, payments, sessionService, account, authenticate, legacyCode, adminPhones, restart,
-    reviewCases, reviewEvidence, reviewEvents, reversals, referralCredits, config: { key },
+    reviewCases, reviewEvidence, reviewEvents, reversals, referralCredits, config: { key }, passwordRequests,
+    recovery: restartRecovery(), restartRecovery,
+    legacyResetCode: (accountId, code, channel) => legacyCode(accountId, code, channel, "reset"),
     now: () => time, advance: (ms) => { time += ms; } };
 }

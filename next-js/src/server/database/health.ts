@@ -9,6 +9,7 @@ const accountTables = {
   MemberAccount: Prisma.MemberAccountScalarFieldEnum,
   MemberSession: Prisma.MemberSessionScalarFieldEnum,
   MemberVerification: Prisma.MemberVerificationScalarFieldEnum,
+  MemberPasswordResetRequest: Prisma.MemberPasswordResetRequestScalarFieldEnum,
   MemberReferral: Prisma.MemberReferralScalarFieldEnum,
   MemberNotification: Prisma.MemberNotificationScalarFieldEnum,
   ReferralReviewCase: Prisma.ReferralReviewCaseScalarFieldEnum,

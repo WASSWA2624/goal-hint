@@ -5,6 +5,7 @@ import { codeStatus } from "@/domain/subscription-period";
 import { defaultSubscriptionSettings } from "@/domain/subscription-settings";
 import type { OwnerAccount, OwnerCode } from "@/domain/owner-members";
 import type { AnalyticsServices } from "@/server/analytics/analytics-http";
+import type { MemberPasswordResetRequest } from "@/server/generated/prisma/client";
 import { memberTokenHash } from "@/server/members/member-sessions";
 import { fixturePaymentProof } from "./payment-proof";
 import { fixtureSubscriberDirectory, type SubscriberDirectoryFixtureQuery } from "./subscriber-directory-query";
@@ -15,6 +16,7 @@ const fixtureKey = (purpose: string, value: string) => createHmac("sha256", "syn
 export const planId = "00000000-0000-4000-8000-000000000001";
 export const accountId = "00000000-0000-4000-8000-000000000100";
 export const paymentId = "00000000-0000-4000-8000-000000000200";
+export const passwordRequestId = "00000000-0000-4000-8000-000000000601";
 export const fixtureAuditSessionHash = "f".repeat(64);
 const at = new Date("2026-10-19T09:00:00Z"), end = new Date("2026-10-26T09:00:00Z");
 export const fixturePlan = { id: planId, name: "Weekly", durationDays: 7, priceUgx: 5000, active: true, sortOrder: 0, createdAt: at, updatedAt: at };
@@ -42,7 +44,7 @@ type FixtureNotice = { id: string; accountId: string; targetType: string; decisi
   createdAt: Date; startedAt: Date | null; finishedAt: Date | null };
 export type FixtureState = { accounts: FixtureAccount[]; codes: FixtureCode[]; devices: FixtureDevice[];
   plans: FixturePlan[]; payments: FixturePayment[]; audits: FixtureAudit[]; counter: number; paymentsExpanded?: boolean; paymentsQueueExpanded?: boolean;
-  movedAccountIds?: string[]; notices?: FixtureNotice[] };
+  passwordRequests: MemberPasswordResetRequest[]; movedAccountIds?: string[]; notices?: FixtureNotice[] };
 const fixtureGlobal = globalThis as typeof globalThis & { goalHintOwnerFixture?: FixtureState; goalHintAnalytics?: Promise<AnalyticsServices>;
   goalHintOwnerServices?: Map<boolean, AnalyticsServices> };
 
@@ -89,6 +91,9 @@ function initialState(): FixtureState {
   payments: [{ id: paymentId, reference: "TEST", accountId, payerPhone: "256700000102", claimedNetwork: "mtn",
     claimedTxnRef: "TEST1234", claimedTxnKey: "TEST1234", claimedAmountUgx: 5000, amountReceivedUgx: null,
     planId, planName: "Weekly", durationDays: 7, priceUgx: 5000, submittedAt: at, status: "pending", imageSha256: null, screenshot: null, transactionRef: null }],
+  passwordRequests: [{ id: passwordRequestId, accountId, phone: "256700000101", status: "pending", requestedAt: at,
+    ownershipVerifiedAt: null, ownershipVerifiedBy: null, ownershipMethod: null, generatedAt: null, generatedBy: null, expiresAt: null,
+    generation: 0, tokenHash: null, tokenCiphertext: null, markedSentAt: null, markedSentBy: null, markedSentChannel: null, completedAt: null, cancelledAt: null }],
   plans: [fixturePlan], audits: initialAudits(codes[0]!.id), counter: 400 });
 }
 
@@ -271,6 +276,11 @@ function planRows(rows: FixturePlan[], query: PlanQuery = {}) {
 }
 function createClient(emptySubscribers: boolean) {
   const state = fixtureState(), phoneFor = (id: string) => state.accounts.find(row => row.id === id)?.phone ?? null;
+  const recoveryAccount = (id: string) => {
+    const row = state.accounts.find(item => item.id === id);
+    return row ? { ...row, createdAt: at, passwordHash: "synthetic fixture hash", phoneVerifiedAt: null, passwordChangedAt: null } : null;
+  };
+  const resetRequest = (id: string) => state.passwordRequests.find(item => item.id === id);
   const settings = { ...defaultSubscriptionSettings, id: 1, updatedAt: at, paymentNumbersChangedAt: at };
   return {
     $executeRaw: async () => 0,
@@ -290,6 +300,20 @@ function createClient(emptySubscribers: boolean) {
           adminPasswordVersion: fixtureKey("admin-password-version", `plain:${fixtureAdminPassword}`),
           account: { phone: fixtureAdminPhone, passwordHash: null, phoneVerifiedAt: now, blockedAt: null, erasedAt: null } };
       }, updateMany: async () => ({ count: 0 }) },
+    memberPasswordResetRequest: {
+      findMany: async () => state.passwordRequests,
+      count: async ({ where }: { where: { status: string } }) => state.passwordRequests.filter(row => row.status === where.status).length,
+      findFirst: async ({ where }: { where: { accountId: string } }) => state.passwordRequests.find(row => row.accountId === where.accountId) ?? null,
+      findUnique: async ({ where, include }: { where: { id: string }; include?: { account: true } }) => {
+        const row = resetRequest(where.id);
+        return row ? { ...row, ...(include ? { account: recoveryAccount(row.accountId) } : {}) } : null;
+      },
+      update: async ({ where, data }: { where: { id: string }; data: Partial<MemberPasswordResetRequest> }) => {
+        const row = resetRequest(where.id);
+        if (!row) throw new Error("Synthetic reset request is missing.");
+        return Object.assign(row, data);
+      },
+    },
     subscriptionPlan: { findMany: async (query?: PlanQuery) => planRows(state.plans, query),
       findUnique: async ({ where }: { where: { id: string } }) => state.plans.find(plan => plan.id === where.id) ?? null,
       findUniqueOrThrow: async ({ where }: { where: { id: string } }) => {
@@ -318,7 +342,7 @@ function createClient(emptySubscribers: boolean) {
     paymentAlertEndpoint: { findMany: async () => [] },
     paymentReviewEvent: { findMany: async () => [] },
     // No fixture account holds credit; the wallet columns read as a new account's.
-    memberAccount: { findUnique: async (query: { where: { id: string } }) => { const row = state.accounts.find(item => item.id === query.where.id);
+    memberAccount: { findUnique: async (query: { where: { id: string } }) => { const row = recoveryAccount(query.where.id);
       return row ? { creditUgx: 0, autoRenew: false, autoRenewPlan: null, ...row } : null; },
       aggregate: async () => ({ _sum: { creditUgx: null } }),
       count: async (query: AccountQuery = {}) => state.accounts.filter(row => !query.where?.autoRenewPlanId || row.autoRenewPlanId === query.where.autoRenewPlanId).length,

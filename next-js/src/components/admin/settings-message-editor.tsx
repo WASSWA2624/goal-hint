@@ -42,7 +42,7 @@ export function SettingsMessageEditor({ value, disabled, error, onChange }: {
   return <FeatureBody id="setting-messageTemplates" tabIndex={-1} aria-describedby={error ? "setting-messageTemplates-error" : undefined}>
     <FeatureHeading><div><h2>{event.label}</h2><p>{event.description}</p></div></FeatureHeading>
     {error && <FieldError id="setting-messageTemplates-error" role="alert">{error}</FieldError>}
-    <Hint>Members choose an available delivery channel when they reset a forgotten password.</Hint>
+    <Hint>This template is kept for reference. Use Password Requests to prepare and share a reset link.</Hint>
     <MessageTabs role="group" aria-label="Password reset delivery channel">{channels.map(({ key, label }) => <button type="button" key={key} aria-pressed={channel === key}
       onClick={() => setChannel(key)}>{label}</button>)}</MessageTabs>
     {channel === "sms" ? <>

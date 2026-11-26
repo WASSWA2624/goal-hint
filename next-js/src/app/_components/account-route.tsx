@@ -14,11 +14,11 @@ import { AccountNotifications } from "@/components/members/account-notifications
 import { AccountActivity } from "@/components/members/account-activity";
 import { AccountReferrals, AccountReferralSummary } from "@/components/members/account-referrals";
 import { AccountReferralReviews } from "@/components/members/account-referral-reviews";
-import { AccountVerificationForm, ForgotPasswordForm } from "@/components/members/account-verification";
+import { AccountVerificationForm, LegacyPasswordCodeForm } from "@/components/members/account-verification";
 import { ApprovalRefresh } from "@/components/members/payment-status";
 import { Stack } from "@/components/ui/layout";
 import { SignOutIcon } from "@/components/ui/icons";
-import { logoutUnconfirmedStatus, memberLandingPath, memberNextPath, memberReturnPath, subscriptionReturnPath } from "@/domain/member-navigation";
+import { logoutUnconfirmedStatus, memberLandingPath, memberNextPath, memberReturnPath, passwordResetSuccessStatus, subscriptionReturnPath } from "@/domain/member-navigation";
 import { publicSupportContactSettings } from "@/domain/public-subscription-settings";
 import { hasManualPaymentProvider } from "@/domain/subscription-settings";
 import { checkoutOpenStatuses } from "@/domain/checkout";
@@ -64,7 +64,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const section = accountSection(parameters.section), summarySection = section === "overview" || section === "subscription";
     const walletSection = section === "wallet";
     const contact = { ...publicSupportContactSettings(settings), reviewTime: settings?.reviewTime ?? null };
-    // Old reset links enter the same code-based recovery flow.
+    // Older Forgot password URLs still open the recovery dialog.
     const authView: AccountAuthView = parameters.view === "register" ? "register" : parameters.view === "forgot" || parameters.view === "reset" ? "forgot" : "login";
     const mode = settings?.paywallMode;
     const session = await readMemberPageSession(resolved, token);
@@ -77,14 +77,19 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     // Administrator sign-in is independent of subscription settings and every account subview.
     if (member && !member.blocked && member.administrator) redirect(memberLandingPath(true, returnTo, checkout));
     if (session.kind === "reset") return <PublicShell locale={locale} showAccount><MemberNavigationRecovery expectedPhone={null} /><ResetPasswordForm locale={locale} phone={session.phone} returnTo={returnTo} checkout={checkout} contact={contact} /></PublicShell>;
+    if (parameters.view === "reset-code" && !member) return <PublicShell locale={locale} showAccount>
+      <MemberNavigationRecovery expectedPhone={null} />
+      <LegacyPasswordCodeForm locale={locale} {...(session.kind === "verification" ? { phone: session.phone } : {})}
+        returnTo={returnTo} checkout={checkout} contact={contact} />
+    </PublicShell>;
     if (session.kind === "verification") return <PublicShell locale={locale} showAccount>
       <MemberNavigationRecovery expectedPhone={null} />
-      {authView === "forgot" ? <ForgotPasswordForm locale={locale} phone={session.phone} returnTo={returnTo} checkout={checkout} contact={contact} />
-        : <AccountVerificationForm locale={locale} phone={session.phone} returnTo={returnTo} checkout={checkout} contact={contact} />}
+      <AccountVerificationForm key={authView} locale={locale} phone={session.phone} returnTo={returnTo} checkout={checkout} contact={contact}
+        openRecovery={authView === "forgot"} />
     </PublicShell>;
     if (authView === "forgot" && member && !member.blocked) redirect(accountSectionHref(locale, "password", returnTo));
     if (authView === "forgot" && !member) return <PublicShell locale={locale} showAccount><MemberNavigationRecovery expectedPhone={null} /><AccountAuthForm locale={locale} view="forgot" returnTo={returnTo} checkout={checkout} contact={contact} /></PublicShell>;
-    if (member && !member.blocked && typeof parameters.view === "string" && ["login", "register", "verify", "new-password"].includes(parameters.view))
+    if (member && !member.blocked && typeof parameters.view === "string" && ["login", "register", "verify", "new-password", "reset-code"].includes(parameters.view))
       redirect(memberLandingPath(false, returnTo, checkout));
     const now = new Date();
     const [view, paymentView, subscription, dashboard, referrals, notifications, referralReviews] = member && !member.blocked ? await Promise.all([
@@ -183,6 +188,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
       {!member ? <>
         {logoutWarning}
         {parameters.status === "signed-out" && <p role="status">{messages.text("account.signedOut")}</p>}
+        {parameters.status === passwordResetSuccessStatus && <AccountFlash role="status">{messages.text("account.recoveryCompleted")}</AccountFlash>}
         <AccountAuthForm key={authView} locale={locale} view={authView} returnTo={returnTo} checkout={checkout} contact={contact} />
       </> : <MemberPanel><p role="status">{messages.text("account.refused")}</p><MemberSignOut><SignOutIcon />{messages.text("auth.signOut")}</MemberSignOut></MemberPanel>}
     </Stack></PublicShell>;

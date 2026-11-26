@@ -28,15 +28,15 @@ export function PasswordInput({ label, name = "password", value, onChange, curre
     {hint && <AccountNote>{hint}</AccountNote>}</div>;
 }
 
-function NewPasswordFields({ locale, password, setPassword, confirm, setConfirm, reset = false, disabled = false }: {
+export function NewPasswordFields({ locale, password, setPassword, confirm, setConfirm, reset = false, requireMinimumLength = reset, disabled = false }: {
   locale: string; password: string; setPassword: (value: string) => void; confirm: string; setConfirm: (value: string) => void;
-  reset?: boolean; disabled?: boolean;
+  reset?: boolean; requireMinimumLength?: boolean; disabled?: boolean;
 }) {
   const m = createMessages(locale);
   return <><PasswordInput label={m.text("account.newPassword")} value={password} onChange={setPassword} disabled={disabled}
-    requireMinimumLength={reset} {...(reset ? { hint: m.text("account.passwordHint") } : {})} />
+    requireMinimumLength={requireMinimumLength} {...(requireMinimumLength ? { hint: m.text("account.passwordHint") } : {})} />
     <PasswordInput name="confirm" label={m.text(reset ? "account.confirmPassword" : "account.repeatPassword")} value={confirm} onChange={setConfirm}
-      disabled={disabled} requireMinimumLength={reset} /></>;
+      disabled={disabled} requireMinimumLength={requireMinimumLength} /></>;
 }
 
 export function PasswordChangeNote({ locale }: { locale: string }) {

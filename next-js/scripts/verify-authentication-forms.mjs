@@ -20,19 +20,15 @@ export async function verifyAuthenticationForms(page, { origin, widths = [320, 3
   const checks = [];
   const cases = [
     ["login", "state=signed-out&view=login"], ["register", "state=signed-out&view=register"],
-    ["recovery", "state=support&view=forgot"], ["recovery-code", "state=support&view=forgot", true],
+    ["recovery", "state=support&view=forgot"], ["recovery-code", "state=support&view=reset-code"],
     ["legacy-verification-code", "state=unverified"],
     ["new-password", "state=password-reset"],
     ["change-password", "state=active&section=password"], ["change-phone", "state=active&section=phone"],
   ];
-  for (const [name, query, codeStep] of cases) {
+  for (const [name, query] of cases) {
     await open(query);
-    if (codeStep) {
-      const phone = page.locator("[data-phone-input]");
-      if (await phone.count()) await phone.fill("700000101");
-      await page.getByRole("button", { name: "Have a code?", exact: true }).click();
-      await page.locator('[data-verification-step="code"]').waitFor();
-    }
+    const recoveryDialog = page.getByRole("dialog", { name: "Do you want to request a password reset?" });
+    if (name === "recovery") await recoveryDialog.waitFor();
     for (const width of widths) {
       await page.setViewportSize({ width, height: 1000 });
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -80,21 +76,41 @@ export async function verifyAuthenticationForms(page, { origin, widths = [320, 3
       }
       const audit = await inspectAppLayout(page, "[data-account-auth], [data-account-sign-in]");
       assert.deepEqual(audit.failures, [], `${name}/${width}: controls fit and keep their shared height`);
+      if (name === "recovery") {
+        const box = await recoveryDialog.boundingBox();
+        assert.ok(box && box.x >= 0 && box.x + box.width <= width + 1, `${name}/${width}: dialog fits`);
+      }
       checks.push({ name, viewportWidth: width, ...geometry });
       if (captureDirectory && [390, 1440].includes(width)) await page.screenshot({ path: `${captureDirectory}/${name}-${geometry.mode}-${width}.png` });
     }
   }
 
-  await open("state=support&view=forgot");
+  await open("state=support&view=login");
   await page.locator("[data-phone-input]").fill("700000101");
-  const sms = page.getByRole("radio", { name: "SMS", exact: true });
-  const whatsapp = page.getByRole("radio", { name: "WhatsApp", exact: true });
-  assert.equal(await sms.isChecked(), true);
-  await whatsapp.check();
-  assert.equal(await sms.isChecked(), false);
-  await sms.check();
-  await page.getByRole("button", { name: "Send by SMS", exact: true }).click();
-  await page.locator('[data-verification-step="code"]').waitFor();
+  const openDialog = () => page.getByRole("link", { name: "Forgot password?", exact: true }).click();
+  await openDialog();
+  const dialog = page.locator("dialog[data-criteria-dialog]");
+  assert.equal(await dialog.locator("[data-phone-input]").inputValue(), "700000101");
+  await dialog.getByRole("button", { name: "No", exact: true }).click();
+  await dialog.waitFor({ state: "detached" });
+  for (const [scenario, message] of [["send-failed", "Synthetic account access is unavailable"],
+    ["success", "Your password reset request has been sent to our support team"],
+    ["existing-request", "You already have a password reset request."]]) {
+    await page.context().addCookies([{ name: "member-fixture-scenario", value: scenario, url: origin }]);
+    await openDialog();
+    await dialog.getByRole("button", { name: "Yes, continue", exact: true }).click();
+    await dialog.getByRole(scenario === "send-failed" ? "alert" : "status").filter({ hasText: message }).waitFor();
+    if (scenario !== "send-failed") {
+      for (const [name, prefix] of [["Call admin", "tel:+"], ["WhatsApp admin", "https://wa.me/"], ["SMS Admin", "sms:+"]]) {
+        assert.ok((await dialog.getByRole("link", { name, exact: true }).getAttribute("href")).startsWith(prefix));
+      }
+    }
+    await dialog.getByRole("button", { name: "Close", exact: true }).first().click();
+    await dialog.waitFor({ state: "detached" });
+  }
+
+  await open("state=support&view=reset-code");
+  await page.locator("[data-phone-input]").fill("700000101");
   const code = page.getByRole("textbox", { name: "6-digit code", exact: true });
   await code.fill("111111");
   await page.locator('[data-account-step-form="code"] button[type="submit"]').click();
@@ -119,5 +135,5 @@ export async function verifyAuthenticationForms(page, { origin, widths = [320, 3
   await page.locator("[data-phone-country-picker]").waitFor();
   await page.keyboard.press("Escape");
   assert.equal(await page.locator("[data-phone-country-trigger]").evaluate(element => element === document.activeElement), true);
-  return { passed: true, checks, flows: ["SMS/WhatsApp choice", "delivery", "invalid code", "accepted code", "password mismatch", "country search", "canonical phone", "keyboard dismissal"] };
+  return { passed: true, checks, flows: ["recovery cancellation", "request error", "request created", "duplicate request", "call, WhatsApp and SMS links", "invalid legacy code", "accepted legacy code", "password mismatch", "country search", "canonical phone", "keyboard dismissal"] };
 }

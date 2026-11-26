@@ -8,8 +8,9 @@ export const memberHomePath = "/en/matches";
 /** Ordinary logout keeps members and administrators browsing Matches with visitor access. */
 export const signedOutPath = memberHomePath;
 export const logoutUnconfirmedStatus = "logout-unconfirmed";
+export const passwordResetSuccessStatus = "password-reset";
 
-export type MemberAuthView = "login" | "register" | "forgot" | "verify" | "new-password";
+export type MemberAuthView = "login" | "register" | "forgot" | "verify" | "new-password" | "reset-code";
 
 /** Use one canonical authentication URL and carry only a validated local journey. */
 export function memberAuthPath(view: MemberAuthView = "login", returnTo?: unknown, checkout = false): string {

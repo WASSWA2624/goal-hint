@@ -6,7 +6,7 @@ import { memberStore } from "./helpers/member-store.mjs";
 import { hashPassword, verifyPassword } from "../src/server/analytics/analytics-password.ts";
 import { createAccessCodes, createAccessPeriod, lockMemberAccount } from "../src/server/members/access-codes.ts";
 import { DatabaseOperationError } from "../src/server/database/client.ts";
-import { createMemberAuthHandler } from "../src/server/members/member-auth-http.ts";
+import { createMemberAuthHandler, createPasswordRecoveryHandler } from "../src/server/members/member-auth-http.ts";
 import { createMemberTrialHandler } from "../src/server/members/member-trial-http.ts";
 import { issueMemberSession, memberTokenHash } from "../src/server/members/member-sessions.ts";
 import { isMemberAdminPhone, memberAdminCredential, parseMemberAdminPhones, verifyMemberAdminCredential } from "../src/server/members/member-admin.ts";
@@ -138,42 +138,21 @@ test("administrator password logins allow two sessions and evict the oldest on t
   assert.equal((await f.sessionService.verify(third.token)).administrator, true); assert.equal(f.sessions.size, 2);
 });
 
-test("forgot password sends to a registered number and gives unknown/admin numbers the same generic response", async () => {
-  const f = fixture(); await f.account();
-  const result = await f.service.requestPasswordReset(phone, address, "sms");
-  assert.equal(result.status, "requested");
-  assert.deepEqual(await f.service.requestPasswordReset(replacement, address, "whatsapp"), result);
-  assert.equal(f.messages.length, 1);
-  assert.equal(f.messages[0].phone, phone); assert.equal(f.messages[0].channel, "sms"); assert.equal(f.messages[0].purpose, "password-reset");
-  const admin = fixture({ admins: [phone] }); await admin.account();
-  assert.deepEqual(await admin.service.requestPasswordReset(phone, address, "sms"), result);
-  assert.equal(admin.messages.length, 0); assert.equal(admin.challenges.size, 0);
-  assert.ok(!JSON.stringify(result).includes(f.messages[0].code));
-  assert.equal(f.sent.length, 0);
-  assert.equal((await f.service.login(phone, password, "198.51.100.1")).status, "authenticated", "A request alone does not change the password");
-});
-
 test("self-service reset authorization expires at its exact deadline", async () => {
-  const f = fixture(); await f.account();
-  await f.service.requestPasswordReset(phone, address, "sms");
-  const authorized = await f.service.verifyPasswordReset(phone, f.messages.at(-1).code, address);
+  const f = fixture(), account = await f.account();
+  const code = await f.legacyResetCode(account.id);
+  const authorized = await f.service.verifyPasswordReset(phone, code, address);
   assert.equal(authorized.requiresPasswordChange, true);
   f.advance(passwordRecoveryRules.resetSessionMs);
   assert.equal(await f.service.passwordResetSession(authorized.token), null);
   assert.equal((await f.service.resetPassword("replacement secret", authorized.token, address)).status, "unauthorized");
 });
 
-test("registered accounts marked for recovery reject login and retain verified self-service recovery", async () => {
+test("registered accounts marked for recovery reject login and remain eligible for admin-assisted recovery", async () => {
   const f = fixture(); await f.account({ passwordHash: "!self-service-recovery-required" });
   assert.equal((await f.service.login(phone, password, address)).status, "unauthorized");
-  assert.equal((await f.service.requestPasswordReset(phone, address, "sms")).status, "requested");
-  assert.equal(f.messages.length, 1);
-  const authorized = await f.service.verifyPasswordReset(phone, f.messages.at(-1).code, address);
-  assert.equal(authorized.requiresPasswordChange, true);
-  const saved = await f.service.resetPassword("restored member password", authorized.token, address);
-  assert.equal(saved.status, "authenticated");
-  assert.ok(await f.sessionService.verify(saved.token));
-  assert.equal((await f.service.login(phone, "restored member password", address)).status, "authenticated");
+  assert.equal((await f.recovery.request(phone, address)).status, "requested");
+  assert.equal(await f.recovery.pendingCount(), 1);
 });
 
 test("signed-in password changes need no current password and retain only the current device", async () => {
@@ -395,7 +374,6 @@ test("unverified passwords only reopen verification and cannot access authentica
   assert.equal((await f.service.changePhone(replacement, password, browser())).status, "unauthorized");
   assert.equal((await f.service.requestVerification("email", logged.token, address)).status, "invalid");
   assert.equal((await f.service.requestVerification()).status, "invalid");
-  assert.equal((await f.service.requestPasswordReset(phone, address, "email")).status, "invalid");
   assert.equal(f.messages.length, 0);
 });
 
@@ -438,14 +416,6 @@ test("phone change during the recovery cooldown leaves the original number and s
   assert.equal(f.messages.length, 0);
 });
 
-test("phone change leaves the current account usable when configured recovery is unavailable", async () => {
-  const f = fixture({ async recoveryAvailable(value) { assert.equal(value, replacement); return false; } });
-  const binding = await f.authenticate();
-  assert.equal((await f.service.changePhone(replacement, password, binding)).status, "unavailable");
-  assert.equal((await f.sessionService.verify(binding.token)).phone, phone);
-  assert.equal(f.messages.length, 0);
-});
-
 test("only the newest previously delivered account code works after a restart", async () => {
   const f = fixture(), restricted = await pending(f);
   const first = await f.legacyCode(restricted.accountId);
@@ -455,15 +425,13 @@ test("only the newest previously delivered account code works after a restart", 
   assert.equal((await f.restart().verifyAccount(latest, restricted.token, address)).status, "authenticated");
 });
 
-test("legacy and reset codes expire at exactly 24 hours and fail closed after five wrong guesses", async () => {
+test("legacy account and reset codes expire at exactly 24 hours and fail closed after five wrong guesses", async () => {
   for (const purpose of ["account", "reset"]) {
-    const f = fixture(), legacy = purpose === "account" ? await pending(f) : (await f.account(), null);
-    const issue = async () => {
-      if (legacy) return f.legacyCode(legacy.accountId);
-      await f.service.requestPasswordReset(phone, address, "sms");
-      return f.messages.at(-1).code;
-    };
-    const verify = (code) => legacy ? f.service.verifyAccount(code, legacy.token, address) : f.service.verifyPasswordReset(phone, code, address);
+    const f = fixture();
+    const account = purpose === "account" ? await pending(f) : await f.account();
+    const issue = () => f.legacyCode(account.accountId ?? account.id, "123456", "sms", purpose);
+    const verify = (code) => purpose === "account" ? f.service.verifyAccount(code, account.token, address)
+      : f.service.verifyPasswordReset(phone, code, address);
     const expired = await issue();
     f.advance(DAY);
     assert.equal((await verify(expired)).status, "unauthorized");
@@ -473,59 +441,11 @@ test("legacy and reset codes expire at exactly 24 hours and fail closed after fi
   }
 });
 
-test("recovery allows three messages across channels in a rolling window that persists after a phone change", async () => {
-  const f = fixture(), binding = await f.authenticate();
-  for (const channel of ["sms", "whatsapp", "sms"]) assert.equal((await f.service.requestPasswordReset(phone, address, channel)).status, "requested");
-  const changed = await f.service.changePhone(replacement, password, binding);
-  assert.equal(changed.requiresVerification, true);
-  f.advance(12 * 3_600_000);
-  assert.equal((await f.restart().requestPasswordReset(replacement, address, "whatsapp")).status, "busy");
-  f.advance(12 * 3_600_000);
-  assert.equal((await f.service.requestPasswordReset(replacement, address, "whatsapp")).status, "requested");
-  assert.equal(f.messages.length, 4);
-});
-
-test("parallel recovery requests cannot exceed the shared three-message allowance", async () => {
-  const f = fixture(); await f.account();
-  const reset = await Promise.all(Array.from({ length: 5 }, (_, i) => f.service.requestPasswordReset(phone, "198.51.100." + (i + 1), i % 2 ? "sms" : "whatsapp")));
-  assert.equal(reset.filter(result => result.status === "requested").length, 3);
-  assert.equal(reset.filter(result => result.status === "busy").length, 2);
-  assert.equal(f.messages.length, 3);
-});
-
-test("recovery delivery runs outside the transaction and cannot revive a superseded code", { timeout: 30_000 }, async () => {
-  let f, release, entered;
-  const firstSend = new Promise(resolve => { entered = resolve; }), held = new Promise(resolve => { release = resolve; });
-  f = fixture({ async send() { await f.database.transaction(async () => {}); if (f.messages.length === 1) { entered(); await held; } } });
-  await f.account();
-  const first = f.service.requestPasswordReset(phone, address, "sms");
-  await firstSend; const old = f.messages[0].code;
-  const second = await f.service.requestPasswordReset(phone, address, "whatsapp");
-  assert.equal(second.status, "requested");
-  assert.equal((await f.service.verifyPasswordReset(phone, old, address)).status, "unauthorized");
-  release(); await first;
-  assert.equal((await f.service.verifyPasswordReset(phone, old, address)).status, "unauthorized");
-  assert.equal((await f.service.verifyPasswordReset(phone, f.messages.at(-1).code, address)).requiresPasswordChange, true);
-});
-
-test("failed recovery delivery consumes allowance and exposes no provider details", async () => {
-  let fail = false;
-  const f = fixture({ async send() { if (fail) throw new Error("synthetic provider error"); } });
-  await f.account();
-  await f.service.requestPasswordReset(phone, address, "sms"); const old = f.messages[0].code; fail = true;
-  for (let i = 0; i < 2; i++) {
-    const result = await f.service.requestPasswordReset(phone, address, "whatsapp");
-    assert.equal(result.status, "unavailable");
-    assert.doesNotMatch(JSON.stringify(result), /synthetic provider error|\d{6}/u);
-  }
-  assert.equal((await f.service.verifyPasswordReset(phone, old, address)).status, "unauthorized");
-  assert.equal((await f.service.verifyPasswordReset(phone, f.messages.at(-1).code, address)).status, "unauthorized");
-  assert.equal((await f.restart().requestPasswordReset(phone, address, "sms")).status, "busy");
-});
-
 test("a password reset code grants only a short reset session and is single-use under concurrency", async () => {
   const f = fixture(), original = await f.authenticate();
-  await f.service.requestPasswordReset(phone, address, "sms"); const code = f.messages[0].code;
+  const accountCode = await f.legacyCode(original.member.accountId);
+  assert.equal((await f.service.verifyPasswordReset(phone, accountCode, address)).status, "unauthorized");
+  const code = await f.legacyResetCode(original.member.accountId);
   const attempts = await Promise.all([f.service.verifyPasswordReset(phone, code, address), f.service.verifyPasswordReset(phone, code, "198.51.100.2")]);
   assert.deepEqual(attempts.map(result => result.status).sort(), ["authenticated", "unauthorized"]);
   const authorized = attempts.find(result => result.status === "authenticated");
@@ -542,31 +462,14 @@ test("a password reset code grants only a short reset session and is single-use 
   assert.ok(f.accounts.get(saved.accountId).passwordChangedAt);
 });
 
-test("requesting a newer reset code revokes earlier reset authorization and never accepts account codes", async () => {
-  const f = fixture(), registered = await pending(f);
-  const accountCode = await f.legacyCode(registered.accountId);
-  assert.equal((await f.service.verifyPasswordReset(phone, accountCode, address)).status, "unauthorized");
-  await f.service.requestPasswordReset(phone, address, "sms"); const first = f.messages.at(-1).code;
-  const session = await f.service.verifyPasswordReset(phone, first, address);
-  assert.equal(session.requiresPasswordChange, true); f.advance(1);
-  await f.service.requestPasswordReset(phone, address, "whatsapp");
-  assert.equal(await f.service.passwordResetSession(session.token), null);
-  assert.equal((await f.service.resetPassword("another password", session.token, address)).status, "unauthorized");
-  assert.equal((await f.service.verifyPasswordReset(phone, first, address)).status, "unauthorized");
-  const latest = await f.service.verifyPasswordReset(phone, f.messages.at(-1).code, address);
-  assert.equal(latest.requiresPasswordChange, true);
-  const saved = await f.service.resetPassword("another password", latest.token, address);
-  assert.equal(saved.status, "authenticated"); assert.ok(f.accounts.get(saved.accountId).phoneVerifiedAt, "Recovery proves control of an unverified phone");
-});
-
 test("password changes are limited across profile and code recovery for exactly 24 hours", async () => {
   const f = fixture(), binding = await f.authenticate();
   const first = await f.service.changePassword("first new password", binding);
   let active = { member: await f.sessionService.verify(first.token), token: first.token };
   const second = await f.service.changePassword("second new password", active);
   assert.equal(second.status, "busy"); assert.match(second.message, /24 hours/iu);
-  await f.service.requestPasswordReset(phone, address, "sms");
-  const reset = await f.service.verifyPasswordReset(phone, f.messages.at(-1).code, address);
+  const code = await f.legacyResetCode(binding.member.accountId);
+  const reset = await f.service.verifyPasswordReset(phone, code, address);
   assert.equal((await f.service.resetPassword("second new password", reset.token, address)).status, "busy");
   const login = await f.service.login(phone, "first new password", address);
   assert.equal(login.status, "authenticated"); active = { member: await f.sessionService.verify(login.token), token: login.token };
@@ -582,6 +485,91 @@ const authRequest = (action, body, token, headers = {}) => new Request(`https://
   headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json", ...(token ? { Cookie: `goal-hint-member=${token}` } : {}), ...headers },
   body: JSON.stringify(body) });
 const responseToken = response => /^goal-hint-member=([^;]+)/u.exec(response.headers.getSetCookie()[0] ?? "")?.[1];
+
+test("admin recovery expires exactly 24 hours after generation and preserves the newest request", async () => {
+  const f = fixture(), account = await f.account(), admin = randomUUID();
+  const created = await f.recovery.request(phone, address);
+  assert.equal(created.message, "Your password reset request has been sent to our support team");
+  assert.equal((await f.recovery.request(phone, address)).message, "You already have a password reset request. If support is delayed, contact the admin.");
+  assert.equal((await f.recovery.request(replacement, address)).status, "requested");
+  const [pending] = await f.recovery.listRequests();
+  assert.equal(pending.status, "pending");
+  assert.equal((await f.recovery.verifyOwnership(pending.id, admin, "payment")).status, "invalid");
+  assert.equal((await f.recovery.verifyOwnership(pending.id, admin, "whatsapp")).request.ownershipVerifiedBy, admin);
+  const first = (await f.recovery.generateLink(pending.id, admin, 0)).request;
+  assert.equal(Date.parse(first.expiresAt) - Date.parse(first.generatedAt), DAY);
+  assert.equal((await f.recovery.request(phone, address)).status, "existing");
+  f.advance(DAY - 1);
+  assert.equal((await f.recovery.validate(first.token, address)).status, "valid");
+  assert.equal((await f.restartRecovery().requestDetail(pending.id)).token, first.token);
+  f.advance(1);
+  assert.equal((await f.recovery.validate(first.token, address)).status, "unusable");
+  assert.equal((await f.recovery.requestDetail(pending.id)).status, "expired");
+  assert.equal((await f.recovery.requestDetail(pending.id)).token, null);
+  const second = (await f.recovery.generateLink(pending.id, admin, 1)).request;
+  assert.notEqual(second.token, first.token);
+  assert.equal((await f.recovery.validate(second.token, address)).status, "valid");
+  assert.equal((await f.recovery.generateLink(pending.id, admin, 1)).status, "conflict");
+  f.advance(DAY);
+  assert.equal((await f.recovery.request(phone, address)).status, "requested");
+  assert.equal((await f.recovery.generateLink(pending.id, admin, 2)).status, "conflict");
+  assert.equal(f.passwordRequests.get(pending.id).tokenCiphertext, null);
+  assert.equal((await f.recovery.listRequests()).filter(row => row.status === "pending").length, 1);
+  assert.equal((await f.service.login(account.phone, password, address)).status, "authenticated");
+});
+
+test("manual recovery HTTP keeps secrets out of responses and leaves a failed reset link usable", async () => {
+  const f = fixture(), active = await f.authenticate(), admin = randomUUID();
+  const source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics" } },
+    sessions: f.sessionService, passwordRecovery: f.recovery });
+  const makeRequest = createPasswordRecoveryHandler("request", source);
+  assert.equal((await makeRequest(authRequest("forgot", { phone, channel: "sms" }))).status, 400);
+  assert.equal((await makeRequest(authRequest("forgot", { phone }))).status, 200);
+  const [pending] = await f.recovery.listRequests();
+  await f.recovery.verifyOwnership(pending.id, admin, "call");
+  const { request: { token } } = await f.recovery.generateLink(pending.id, admin, 0);
+  const validate = createPasswordRecoveryHandler("validate", source), redeem = createPasswordRecoveryHandler("redeem", source);
+  const validateRequest = authRequest("password-reset/validate", { token });
+  assert.ok(!validateRequest.url.includes(token));
+  const valid = await validate(validateRequest);
+  assert.equal(valid.status, 200);
+  assert.equal(valid.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await valid.json(), { status: "valid" });
+  const mismatch = await redeem(authRequest("password-reset/redeem", { token, password: "x", confirm: "y" }));
+  assert.equal(mismatch.status, 400);
+  assert.ok(await f.sessionService.verify(active.token));
+  assert.equal((await f.recovery.validate(token, address)).status, "valid");
+  assert.equal((await redeem(authRequest("password-reset/redeem", { token, password: "x", confirm: "x" }, undefined,
+    { "Sec-Fetch-Site": "cross-site" }))).status, 403);
+  const completed = await redeem(authRequest("password-reset/redeem", { token, password: "x", confirm: "x" }, active.token));
+  assert.equal(completed.status, 200);
+  assert.deepEqual(await completed.json(), { status: "completed", message: "Password changed successfully" });
+  assert.ok(completed.headers.getSetCookie().every(value => value.includes("Max-Age=0")));
+  assert.equal(await f.sessionService.verify(active.token), null);
+  assert.equal((await validate(authRequest("password-reset/validate", { token }))).status, 410);
+  assert.ok(await verifyPassword("x", f.accounts.get(active.member.accountId).passwordHash));
+});
+
+test("changing a registered phone invalidates its reset token and manual recovery proves the replacement", async () => {
+  const f = fixture(), active = await f.authenticate(), admin = randomUUID();
+  await f.recovery.request(phone, address);
+  const [pending] = await f.recovery.listRequests();
+  await f.recovery.verifyOwnership(pending.id, admin, "call");
+  const { request: { token } } = await f.recovery.generateLink(pending.id, admin, 0);
+  const changed = await f.service.changePhone(replacement, password, active);
+  assert.equal(changed.requiresVerification, true);
+  assert.equal((await f.recovery.validate(token, address)).status, "unusable");
+  assert.equal((await f.recovery.requestDetail(pending.id)).status, "cancelled");
+  assert.equal((await f.recovery.request(replacement, address)).status, "requested");
+  const next = (await f.recovery.listRequests()).find(request => request.status === "pending");
+  assert.equal(next.phone, replacement);
+  await f.recovery.verifyOwnership(next.id, admin, "sms");
+  const { request: current } = await f.recovery.generateLink(next.id, admin, 0);
+  assert.equal((await f.recovery.redeem(current.token, password, password, address)).status, "completed");
+  assert.equal(await f.service.verificationSession(changed.token), null);
+  const login = await f.service.login(replacement, password, address);
+  assert.equal((await f.sessionService.verify(login.token)).phoneVerified, true);
+});
 
 test("HTTP password change requires a matching nonempty confirmation and stores a one-character password securely", async () => {
   const f = fixture(), logged = await f.authenticate();
@@ -601,21 +589,24 @@ test("HTTP password change requires a matching nonempty confirmation and stores 
   assert.ok(await verifyPassword("x", f.accounts.get(logged.member.accountId).passwordHash));
 });
 
-test("signed-in users change passwords in Account and cannot request or confirm recovery codes", async () => {
+test("signed-in users change passwords in Account and cannot submit recovery requests or confirm old codes", async () => {
   const f = fixture(), logged = await f.authenticate();
-  const source = async () => ({ config: { production: false, cookies: { secure: false } }, auth: f.service, sessions: f.sessionService });
-  for (const [action, body] of [["forgot", { phone, channel: "sms" }], ["reset-code", { phone, code: "123456" }]]) {
-    const response = await createMemberAuthHandler(action, source)(authRequest(action, body, logged.token));
+  const source = async () => ({ config: { production: false, cookies: { secure: false } }, auth: f.service, sessions: f.sessionService,
+    passwordRecovery: f.recovery });
+  const forgot = createPasswordRecoveryHandler("request", source), legacy = createMemberAuthHandler("reset-code", source);
+  for (const response of [await forgot(authRequest("forgot", { phone }, logged.token)),
+    await legacy(authRequest("reset-code", { phone, code: "123456" }, logged.token))]) {
     assert.equal(response.status, 409); assert.equal(response.headers.get("set-cookie"), null);
     assert.match((await response.json()).message, /Change password in Account/);
   }
-  assert.equal(f.messages.length, 0); assert.equal(f.challenges.size, 0);
+  assert.equal(f.passwordRequests.size, 0); assert.equal(f.challenges.size, 0);
   assert.ok(await f.sessionService.verify(logged.token));
   const changed = await f.service.changePassword("another strong password", { member: logged.member });
-  assert.equal(changed.status, "authenticated"); assert.equal(f.messages.length, 0);
+  assert.equal(changed.status, "authenticated");
   await f.sessionService.signOut(changed.token);
-  assert.equal((await createMemberAuthHandler("forgot", source)(authRequest("forgot", { phone, channel: "sms" }))).status, 200);
-  assert.equal(f.messages.length, 1, "Signed-out recovery retains phone verification");
+  assert.equal((await forgot(authRequest("forgot", { phone }))).status, 200);
+  assert.equal(f.passwordRequests.size, 1);
+  assert.equal(f.challenges.size, 0, "Recovery makes no outbound code request");
 });
 
 test("HTTP login reports when another device was signed out and rejects its stale cookie", async () => {
@@ -741,9 +732,9 @@ test("HTTP registers a usable member immediately and preserves a restricted Http
   assert.match(registration.headers.getSetCookie()[0], /HttpOnly; SameSite=Lax/u);
   const retired = await handle("verification", { channel: "whatsapp" }, memberToken);
   assert.equal(retired.status, 400); assert.equal(retired.headers.get("set-cookie"), null); assert.equal(f.messages.length, 0);
-  const forgot = await handle("forgot", { phone, channel: "sms" });
-  assert.equal(forgot.status, 200); assert.equal(forgot.headers.get("set-cookie"), null);
-  const reset = await handle("reset-code", { phone, code: f.messages.at(-1).code });
+  const memberAccount = await f.sessionService.verify(memberToken);
+  const code = await f.legacyResetCode(memberAccount.accountId);
+  const reset = await handle("reset-code", { phone, code });
   assert.equal(reset.status, 200); assert.equal((await reset.json()).requiresPasswordChange, true);
   const resetToken = responseToken(reset); assert.equal(await f.sessionService.verify(resetToken), null);
   assert.match(reset.headers.getSetCookie()[0], /HttpOnly; SameSite=Lax; Max-Age=900/u);
@@ -801,7 +792,7 @@ test("successful password reset goes home regardless of the supplied return dest
 });
 
 test("all verification writes reject cross-site requests before storage and whitelist request fields", async () => {
-  for (const [action, body] of [["verification", { channel: "sms" }], ["verify", { code: "123456" }], ["forgot", { phone, channel: "sms" }], ["reset-code", { phone, code: "123456" }]]) {
+  for (const [action, body] of [["verification", { channel: "sms" }], ["verify", { code: "123456" }], ["reset-code", { phone, code: "123456" }]]) {
     const response = await createMemberAuthHandler(action, async () => { assert.fail("Cross-site writes cannot reach storage"); })(
       authRequest(action, body, undefined, { Origin: "https://evil.test", "Sec-Fetch-Site": "cross-site" }));
     assert.equal(response.status, 403); assert.equal(response.headers.get("set-cookie"), null);
@@ -809,23 +800,14 @@ test("all verification writes reject cross-site requests before storage and whit
     assert.equal(extra.status, 400);
   }
   const f = fixture(), source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, auth: f.service, sessions: f.sessionService });
-  assert.equal((await createMemberAuthHandler("forgot", source)(authRequest("forgot", { phone }))).status, 400);
   assert.equal((await createMemberAuthHandler("verification", source)(authRequest("verification", { channel: "sms" }))).status, 400);
-});
-
-test("HTTP delivery failure returns a generic 503 without provider errors or a credential", async () => {
-  const f = fixture({ async send() { throw new Error("private-yoola-token: provider rejected request"); } }); await f.account();
-  const response = await createMemberAuthHandler("forgot", async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, auth: f.service, sessions: f.sessionService }))(
-    authRequest("forgot", { phone, channel: "sms" }));
-  assert.equal(response.status, 503); assert.equal(response.headers.get("set-cookie"), null);
-  assert.doesNotMatch(JSON.stringify(await response.json()), /private-yoola-token|provider rejected|\d{6}/u);
 });
 
 test("recovery cannot reset administrator environment credentials and requires same-origin HTTP", async () => {
   const f = fixture({ admins: [phone] }); await f.account();
-  assert.equal((await f.service.requestPasswordReset(phone, address, "sms")).status, "requested");
-  assert.equal(f.messages.length, 0);
-  const response = await createMemberAuthHandler("forgot", async () => { assert.fail("Cross-site requests cannot reach storage"); })(
+  assert.equal((await f.recovery.request(phone, address)).status, "requested");
+  assert.equal(f.passwordRequests.size, 0);
+  const response = await createPasswordRecoveryHandler("request", async () => { assert.fail("Cross-site requests cannot reach storage"); })(
     new Request("https://goal.test/api/account/forgot", { method: "POST", headers: { Origin: "https://evil.test", "Content-Type": "application/json" }, body: JSON.stringify({ phone }) }));
   assert.equal(response.status, 403);
   assert.deepEqual(parseMemberAdminPhones(JSON.stringify([phone, phone])), [phone]);

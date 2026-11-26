@@ -163,14 +163,13 @@ export async function verifyAuthenticationJourneys(page, { origin } = {}) {
   await phoneChange.locator('input[name="currentPassword"]').fill("Synthetic current password");
   await phoneChange.locator('button[type="submit"]').click();
   await page.waitForURL(url => url.pathname === "/en/account" && url.searchParams.get("view") === "forgot");
-  const phoneRecovery = page.locator('[data-account-verification="password-reset"][data-verification-step="delivery"]');
+  const phoneRecovery = page.getByRole("dialog", { name: "Do you want to request a password reset?" });
   await phoneRecovery.waitFor();
   assert.equal(await page.locator("[data-account-details]").count(), 0);
   checks.push("Changing a phone with the current password enters restricted Forgot password recovery");
 
-  await fresh("forgot");
+  await fresh("reset-code");
   await page.locator("[data-phone-input]").fill("700000101");
-  await page.getByRole("button", { name: "Have a code?", exact: true }).click();
   await page.locator('input[name="code"]').fill("123456");
   await submit();
   await page.locator("[data-account-reset]").waitFor();
@@ -178,7 +177,34 @@ export async function verifyAuthenticationJourneys(page, { origin } = {}) {
   await page.getByLabel("Confirm new password", { exact: true }).fill("Synthetic new password");
   await submit();
   await home();
-  checks.push("Recovery code and replacement password finish at Matches");
+  checks.push("Previously issued recovery codes and replacement passwords still finish at Matches");
+
+  await fresh();
+  const resetLink = `/en/account/reset-password#${"p".repeat(43)}`;
+  const saveReset = page.getByRole("button", { name: "Save New Password", exact: true });
+  for (let visit = 0; visit < 2; visit++) {
+    await open(resetLink);
+    await page.waitForFunction(() => location.hash === "");
+    await saveReset.waitFor();
+  }
+  await page.getByLabel("New password", { exact: true }).fill("x");
+  await page.getByLabel("Confirm new password", { exact: true }).fill("y");
+  await saveReset.click();
+  await page.getByRole("alert").filter({ hasText: "The passwords do not match." }).waitFor();
+  await page.getByLabel("Confirm new password", { exact: true }).fill("x");
+  await saveReset.click();
+  await page.waitForURL(origin + "/en/account?view=login&status=password-reset");
+  await page.getByRole("status").filter({ hasText: "Password changed successfully" }).waitFor();
+  await open(resetLink);
+  await page.getByRole("status").filter({ hasText: "has already been used" }).waitFor();
+  await page.getByRole("link", { name: "Request a new link", exact: true }).click();
+  await page.getByRole("dialog", { name: "Do you want to request a password reset?" }).waitFor();
+  checks.push("Reset links can reopen until a successful change and then direct to a new request");
+
+  await fresh();
+  await credentials();
+  await submit();
+  await home();
 
   await open("/en/account?section=password");
   const passwordChange = page.locator('form[action="/api/account/password"]');

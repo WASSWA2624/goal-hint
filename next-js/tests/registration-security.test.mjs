@@ -14,17 +14,16 @@ test("unresolved addresses retain a durable bounded budget", async () => {
   f.advance(60_000); assert.equal(await limit(input), true);
 });
 
-test("recovery send/check limits persist by phone when addresses change, without charging another phone", async () => {
+test("recovery request and legacy code check limits persist by phone when addresses change", async () => {
   const f = createMemberAuthFixture();
-  // Missing accounts retain the same generic answer, but no longer allow unlimited distributed lookups.
-  for (let index = 0; index < 11; index++) assert.equal((await f.restart().requestPasswordReset("256700000008", `198.51.100.${index}`, "sms")).status,
-    index < 10 ? "requested" : "busy");
-  assert.equal((await f.service.requestPasswordReset("256700000009", address, "sms")).status, "requested");
+  for (let index = 0; index < 11; index++) assert.equal((await f.restartRecovery().request("256700000008", `198.51.100.${index}`)).status,
+    index === 0 ? "requested" : index < 10 ? "existing" : "busy");
+  assert.equal((await f.recovery.request("256700000009", address)).status, "requested");
   for (let index = 0; index < 16; index++) assert.equal((await f.restart().verifyPasswordReset("256700000008", "123456", `203.0.113.${index}`)).status,
     index < 15 ? "unauthorized" : "busy");
-  assert.equal(f.messages.length, 0);
+  assert.equal(f.passwordRequests.size, 0);
   f.advance(3_600_000);
-  assert.equal((await f.service.requestPasswordReset("256700000008", address, "sms")).status, "requested");
+  assert.notEqual((await f.recovery.request("256700000008", address)).status, "busy");
 });
 
 test("only previously issued verification proofs award referrals, with attribution retained for new registrations", async () => {
@@ -33,9 +32,11 @@ test("only previously issued verification proofs award referrals, with attributi
   assert.equal(registered.status, "authenticated"); assert.equal(registered.requiresVerification, undefined);
   assert.equal(f.accounts.get(registered.accountId).phoneVerifiedAt, null);
   assert.equal(f.referralCredits.size, 0); assert.equal(f.messages.length, 0);
-  await f.service.requestPasswordReset(newPhone, address, "sms");
-  const recovered = await f.service.verifyPasswordReset(newPhone, f.messages[0].code, address);
-  assert.equal((await f.service.resetPassword("registered recovery password", recovered.token, address)).status, "authenticated");
+  assert.equal((await f.recovery.request(newPhone, address)).status, "requested");
+  const [request] = await f.recovery.listRequests();
+  await f.recovery.verifyOwnership(request.id, inviter.id, "call");
+  const { request: { token } } = await f.recovery.generateLink(request.id, inviter.id, 0);
+  assert.equal((await f.recovery.redeem(token, "x", "x", address)).status, "completed");
   assert.ok(f.accounts.get(registered.accountId).phoneVerifiedAt);
   assert.equal(f.referralCredits.size, 0, "A recovery proof does not change referral policy");
   assert.deepEqual([...f.referrals.values()].map(row => row.status), ["pending"]);

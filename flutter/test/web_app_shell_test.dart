@@ -75,6 +75,65 @@ void main() {
   }
 
   testWidgets(
+    'messaging drafts use the launcher and a missing app keeps the page visible',
+    (tester) async {
+      const browser = MethodChannel('com.goalhint.goal_hint/linux_web_view');
+      const launcher = MethodChannel('plugins.flutter.io/url_launcher');
+      const sms = 'sms:+256700000000?&body=Recovery%20draft';
+      const whatsapp =
+          'whatsapp://send?phone=256700000000&text=Recovery%20draft';
+      final messenger = tester.binding.defaultBinaryMessenger;
+      final attemptedUrls = <String>[];
+      PackageInfo.setMockInitialValues(
+        appName: 'Goal Hint',
+        packageName: 'goal_hint',
+        version: '1.0.0',
+        buildNumber: '8',
+        buildSignature: '',
+      );
+      messenger.setMockMethodCallHandler(browser, (_) async => null);
+      messenger.setMockMethodCallHandler(launcher, (call) async {
+        expect(call.method, 'launch');
+        final url = call.arguments['url'] as String;
+        attemptedUrls.add(url);
+        return url == sms;
+      });
+      addTearDown(() {
+        messenger.setMockMethodCallHandler(browser, null);
+        messenger.setMockMethodCallHandler(launcher, null);
+      });
+
+      await tester.pumpWidget(GoalHintApp(configuration: configuration));
+      await tester.pump();
+      await messenger.handlePlatformMessage(
+        browser.name,
+        browser.codec.encodeMethodCall(
+          const MethodCall('state', {'hasDocument': true, 'loading': false}),
+        ),
+        (_) {},
+      );
+      await tester.pumpAndSettle();
+      final unavailable = find.text('Unable to open this link on this device.');
+      for (final draft in [sms, whatsapp]) {
+        await messenger.handlePlatformMessage(
+          browser.name,
+          browser.codec.encodeMethodCall(
+            MethodCall('navigation', {'address': draft, 'userGesture': true}),
+          ),
+          (reply) => expect(browser.codec.decodeEnvelope(reply!), isFalse),
+        );
+        await tester.pumpAndSettle();
+        expect(unavailable, draft == sms ? findsNothing : findsOneWidget);
+      }
+
+      expect(attemptedUrls, [sms, whatsapp]);
+      expect(find.byType(StartupLoading), findsNothing);
+      expect(find.byType(NativeRecoveryView), findsNothing);
+    },
+    variant: const TargetPlatformVariant({TargetPlatform.linux}),
+  );
+
+  testWidgets(
     'a supported top pull reloads the existing browser without replacing it',
     (tester) async {
       final browser = FakeWebViewAdapter()..supportsPullToRefresh = true;

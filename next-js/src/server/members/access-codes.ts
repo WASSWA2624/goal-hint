@@ -24,6 +24,7 @@ import { appendWalletEntry, creditPath, InsufficientCredit, lastEntryNumber, loc
 import { rechainRewardPeriods } from "./referral-periods.ts";
 import { transferReferralReviewClaims } from "./referral-review-transfer.ts";
 import { checkoutOpenStatuses } from "../../domain/checkout.ts";
+import { invalidatePasswordResetRequests } from "./password-reset-state.ts";
 
 export const generateCode = () => Array.from({ length: 12 }, () => accessCodeAlphabet[randomInt(32)]).join("");
 export const newSalt = () => randomBytes(16);
@@ -420,6 +421,8 @@ export function createAccessCodes({ database, now = Date.now, config, notificati
         // person, which is how a later reversal finds who holds it.
         await tx.accountMove.create({ data: { fromAccountId: accountId, toAccountId: destination.id, fromEntryNumber: await lastEntryNumber(tx, accountId),
           movedAt: new Date(now()) } });
+        await invalidatePasswordResetRequests(tx, accountId, at);
+        await invalidatePasswordResetRequests(tx, destination.id, at);
         await transferReferralReviewClaims(tx, accountId, destination.id);
         if (referralBalance > 0) {
           const moveKey = randomUUID();

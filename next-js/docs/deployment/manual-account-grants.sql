@@ -10,6 +10,10 @@ GRANT SELECT, INSERT ON `goal_hint_db`.`SavedSlipFixture` TO 'goal_hint_app'@'ap
 -- Review after deploying 20261023090000_member_message_verification. No credentials are stored in this table.
 GRANT SELECT, INSERT, UPDATE, DELETE ON `goal_hint_db`.`MemberVerification` TO 'goal_hint_app'@'application-host';
 
+-- Admin-assisted password recovery stores requests and encrypted current links. Apply after migrating and before app activation.
+-- DELETE supports explicit account erasure. The existing RateLimitBucket grants cover recovery throttling.
+GRANT SELECT, INSERT, UPDATE, DELETE ON `goal_hint_db`.`MemberPasswordResetRequest` TO 'goal_hint_app'@'application-host';
+
 -- Admin-confirmed permanent account deletion removes the account's financial, access and audit records atomically.
 -- Apply these additional grants before deploying the permanent deletion flow; plans and settings remain retained.
 GRANT DELETE ON `goal_hint_db`.`PaymentSubmission` TO 'goal_hint_app'@'application-host';

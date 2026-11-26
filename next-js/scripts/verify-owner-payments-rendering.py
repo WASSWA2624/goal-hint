@@ -1,6 +1,7 @@
 """Manual owner payments and access in the production chrome with synthetic services only."""
 import json
 import re
+from datetime import datetime, timedelta
 from html import unescape
 from pathlib import Path
 from runpy import run_path
@@ -286,12 +287,48 @@ def plans_api(origin):
 
 def record_workspaces_rendering(origin):
     """Shared desktop geometry is identified server-side; panes are checked after browser hydration."""
-    for path in ["/admin/payments", "/admin/codes", "/admin/subscribers", "/admin/plans", "/admin/audit"]:
+    for path in ["/admin/payments", "/admin/codes", "/admin/subscribers", "/admin/password-requests", "/admin/plans", "/admin/audit"]:
         html = visible_html(request(origin, path).text)
         assert len(re.findall(r'data-record-workspace=', html)) == 1, path
     sidebar = match(r'<(?:nav|aside)\b(?=[^>]*data-admin-sidebar)[^>]*>([\s\S]*?)</(?:nav|aside)>', visible_html(request(origin, "/admin/payments").text)).group(1)
-    expected = ["/admin", "/admin/payments", "/admin/codes", "/admin/subscribers", "/admin/referrals", "/admin/plans", "/admin/audit", "/admin/settings", "/analytics"]
+    expected = ["/admin", "/admin/payments", "/admin/codes", "/admin/subscribers", "/admin/password-requests", "/admin/referrals", "/admin/plans", "/admin/audit", "/admin/settings", "/analytics"]
     assert re.findall(r'href="([^"]+)"', sidebar) == expected
+
+
+def password_requests_api(origin):
+    endpoint = "/api/admin/password-requests"
+    request_id = "00000000-0000-4000-8000-000000000601"
+    detail_url = endpoint + "?id=" + request_id
+
+    def act(action, **data):
+        return fixture_json(origin, endpoint, {"id": request_id, "action": action, **data})
+
+    try:
+        assert fixture_json(origin, endpoint + "?count=1") == (200, {"pendingCount": 1})
+        assert fixture_json(origin, detail_url, headers={"Cookie": ""})[0] == 401
+        assert fixture_json(origin, endpoint, {"id": request_id, "action": "generate-link", "generation": 0}, headers={"Sec-Fetch-Site": "cross-site"})[0] == 403
+        assert act("generate-link", generation=0)[0] == 409
+        assert act("verify-ownership", method="call", confirmed=False)[0] == 400
+        status, result = act("verify-ownership", method="call", confirmed=True)
+        assert status == 200 and result["request"]["ownershipMethod"] == "call"
+        status, result = act("generate-link", generation=0)
+        assert status == 200, result
+        first = result["request"]
+        assert first["status"] == "link-generated" and re.fullmatch(r"https?://[^/]+/en/account/reset-password#[A-Za-z0-9_-]{43}", first["link"])
+        assert datetime.fromisoformat(first["expiresAt"]) - datetime.fromisoformat(first["generatedAt"]) == timedelta(hours=24)
+        assert fixture_json(origin, endpoint + "?count=1") == (200, {"pendingCount": 0})
+        assert fixture_json(origin, detail_url)[1]["request"]["link"] == first["link"]
+        assert set(fixture_json(origin, endpoint)[1]["requests"][0]) == {"id", "phone", "requestedAt", "status"}
+        assert act("mark-sent", generation=1, channel="sms", confirmed=False)[0] == 400
+        status, result = act("mark-sent", generation=1, channel="whatsapp", confirmed=True)
+        assert status == 200 and result["request"]["markedSentChannel"] == "whatsapp" and result["request"]["markedSentAt"]
+        assert result["request"]["status"] == "link-generated"
+        assert act("generate-link", generation=0)[0] == 409
+        status, result = act("generate-link", generation=1)
+        assert status == 200 and result["request"]["link"] != first["link"] and result["request"]["markedSentAt"] is None
+        assert act("mark-sent", generation=1, channel="whatsapp", confirmed=True)[0] == 409
+    finally:
+        fixture_json(origin, "/api/fixture/payments", {"scenario": "baseline"})
 
 
 def payments_api(origin):
@@ -543,13 +580,13 @@ def overview_notices(origin):
 
 def owner_navigation(origin):
     """All owner routes share regular navigation and preserve the production private gate."""
-    routes = ["/admin", "/admin/payments", "/admin/codes", "/admin/subscribers",
+    routes = ["/admin", "/admin/payments", "/admin/codes", "/admin/subscribers", "/admin/password-requests",
         "/admin/plans", "/admin/settings", "/admin/audit", "/analytics"]
     for path in routes:
         response = request(origin, path)
         assert response.status == 200, (path, response.status)
         html = visible_html(response.text)
-        no_match(r"Password requests|/admin/password-resets|Set temporary password", html)
+        no_match(r"/admin/password-resets|Set temporary password", html)
         assert html.count('href="#main-content"') == 1, f"{path}: one shared shell"
         assert len(re.findall(r"<main(?:\s|>)", html)) == 1, path
         assert len(re.findall(r"<h1(?:\s|>)", html)) == 1, path
@@ -588,6 +625,7 @@ def main():
     with Server(directory,env,ready="/api/fixture/health") as server:
         owner_navigation(server.origin)
         record_workspaces_rendering(server.origin)
+        password_requests_api(server.origin)
         overview_notices(server.origin)
         subscriber_directory(server.origin)
         for path,labels in [("/admin/payments",["Payments"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or reference"]),("/admin",["Active paid subscribers","Revenue this week","Revenue this month","Pending payments","Trials this week",
@@ -633,6 +671,7 @@ def main():
             print(f"Audit browser entry: {server.origin}/api/fixture/session?page=audit", flush=True)
             print(f"Plans browser entry: {server.origin}/api/fixture/session?page=plans", flush=True)
             print(f"Payments browser entry: {server.origin}/api/fixture/session?page=payments", flush=True)
+            print(f"Password Requests browser entry: {server.origin}/api/fixture/session?page=password-requests", flush=True)
             print(f"Long payment queue browser entry: {server.origin}/api/fixture/session?page=payments&scenario=queue", flush=True)
             server.serve()
 if __name__=="__main__":main_guard(main)

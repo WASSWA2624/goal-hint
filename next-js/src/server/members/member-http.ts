@@ -23,6 +23,7 @@ import { createReferralReviews, type ReferralReviews } from "./referral-reviews.
 import { createCheckout, type Checkout } from "./checkout.ts";
 import { createFlutterwaveClient } from "./flutterwave.ts";
 import { getRuntimePolicy } from "../config/runtime-policy.ts";
+import { createPasswordRecovery, type PasswordRecovery } from "./password-recovery.ts";
 
 export const memberRefusal = "We couldn't complete this. Please contact us.";
 export type MemberServices = Readonly<{ config: AnalyticsConfig; settings: SettingsState; sessions: MemberSessions | null; payments?: Payments | null; codes?: AccessCodes | null; auth?: MemberAuth | null;
@@ -32,6 +33,7 @@ export type MemberServices = Readonly<{ config: AnalyticsConfig; settings: Setti
   referrals?: ReferralsService | null;
   notifications?: AccountNotificationsService | null;
   referralReviews?: ReferralReviews | null;
+  passwordRecovery?: PasswordRecovery | null;
   checkout?: Checkout | null;
   offer?: (() => Promise<SubscriptionOffer | null>) | null }>;
 export type MemberServicesSource = () => Promise<MemberServices>;
@@ -54,6 +56,7 @@ export async function getMemberServices(): Promise<MemberServices> {
     referrals: database && keyed ? createReferrals({ database }) : null,
     notifications: database && keyed ? createAccountNotifications({ database }) : null,
     referralReviews: database && keyed ? createReferralReviews({ database, config }) : null,
+    passwordRecovery: database && keyed ? createPasswordRecovery({ database, config }) : null,
     checkout: database && keyed ? createCheckout({ database, config, ...(flutterwave ? { flutterwave } : {}) }) : null,
     offer: database ? () => readOffer(database) : null };
 }

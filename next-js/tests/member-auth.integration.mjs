@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { hashPassword } from "../src/server/analytics/analytics-password.ts";
 import { createMemberAuth } from "../src/server/members/member-auth.ts";
+import { createPasswordRecovery } from "../src/server/members/password-recovery.ts";
 import { createMemberSessions } from "../src/server/members/member-sessions.ts";
 import { memberAdminCredential } from "../src/server/members/member-admin.ts";
 import { createAccessCodes } from "../src/server/members/access-codes.ts";
@@ -15,17 +16,19 @@ import { silentPaymentNotifications } from "./helpers/payment-notification-fixtu
 
 const phone = "256700001001", password = "correct horse 47", address = "198.51.100.8", DAY = 86_400_000;
 
-test("only recovery sends codes and its protections persist on isolated MySQL", { timeout: 180_000 }, async t => {
+test("manual recovery is deduplicated, account-bound and atomically redeemed on MySQL", { timeout: 180_000 }, async t => {
   let f;
   try { f = await paidDatabase(); }
   catch (error) { if (!(error instanceof MysqlServerUnavailableError)) throw error; t.skip(error.message); return; }
   t.after(() => f.close());
   let time = Date.parse("2026-10-23T09:00:00Z");
-  const now = () => time, adminPhone = number => number === "256700001099", messages = [];
-  const delivery = { async send(message) { messages.push(message); } };
+  const now = () => time, adminPhone = number => number === "256700001099";
+  const ownerId = randomUUID();
   const adminPasswordHash = () => memberAdminCredential({ GOAL_HINT_ADMIN_PASSWORD: "configured administrator secret" });
-  const restart = () => createMemberAuth({ database: f.database, config: f.config, now, adminPhone, adminPasswordHash, delivery });
+  const restart = () => createMemberAuth({ database: f.database, config: f.config, now, adminPhone, adminPasswordHash });
   const auth = restart();
+  const restartRecovery = () => createPasswordRecovery({ database: f.database, config: f.config, now, adminPhone });
+  const recovery = restartRecovery();
   const sessions = createMemberSessions({ database: f.database, config: f.config, now, adminPhone, adminPasswordHash });
   const registered = await auth.register(phone, password, { member: null });
   assert.equal(registered.status, "authenticated"); assert.equal(registered.requiresVerification, undefined);
@@ -33,35 +36,54 @@ test("only recovery sends codes and its protections persist on isolated MySQL", 
   assert.equal(await auth.verificationSession(registered.token), null);
   assert.equal((await auth.requestVerification()).status, "invalid");
   assert.equal((await auth.register(phone, password, { member: null })).status, "conflict");
-  assert.equal(messages.length, 0);
   assert.equal(await f.database.query(tx => tx.paymentNotificationOutbox.count()), 0);
   const phoneProof = () => f.database.query(tx => tx.memberAccount.findUniqueOrThrow({ where: { id: member.accountId },
     select: { phoneVerifiedAt: true } })).then(account => account.phoneVerifiedAt);
   assert.equal(await phoneProof(), null);
   const logged = await auth.login(phone, password, address);
   assert.equal(logged.status, "authenticated"); assert.ok(await sessions.verify(registered.token), "Two logins can coexist before recovery revokes both");
-  assert.equal((await auth.requestPasswordReset(phone, address, "sms")).status, "requested");
-  const obsolete = messages.at(-1).code; time++;
-  assert.equal((await restart().requestPasswordReset(phone, address, "whatsapp")).status, "requested");
-  const resetCode = messages.at(-1).code;
-  assert.equal(messages.at(-1).purpose, "password-reset");
-  assert.equal((await restart().verifyPasswordReset(phone, obsolete, address)).status, "unauthorized");
-  assert.equal((await auth.verifyAccount(resetCode, registered.token, address)).status, "unauthorized");
-  const proof = await f.database.query(tx => tx.memberVerification.findFirst({ where: { accountId: member.accountId, purpose: "reset", channel: "whatsapp" } }));
-  assert.notEqual(proof.codeHash, resetCode); assert.match(proof.codeHash, /^[a-f0-9]{64}$/u);
-  assert.equal(+proof.expiresAt - +proof.createdAt, DAY);
-  const claims = await Promise.all([auth.verifyPasswordReset(phone, resetCode, address), auth.verifyPasswordReset(phone, resetCode, address)]);
-  assert.deepEqual(claims.map(result => result.status).sort(), ["authenticated", "unauthorized"]);
-  const recovery = claims.find(result => result.status === "authenticated");
-  assert.equal(recovery.requiresPasswordChange, true); assert.equal(await sessions.verify(recovery.token), null);
-  assert.ok(await sessions.verify(logged.token), "Reset proof does not prematurely sign out the active device");
+  const requests = await Promise.all(Array.from({ length: 5 }, (_, index) =>
+    restartRecovery().request(phone, "198.51.100." + (index + 10))));
+  assert.deepEqual(requests.map(result => result.status).sort(), ["existing", "existing", "existing", "existing", "requested"]);
+  assert.equal(await recovery.pendingCount(), 1);
+  const [queued] = await recovery.listRequests();
+  assert.equal(queued.phone, phone);
+  assert.equal((await recovery.generateLink(queued.id, ownerId, 0)).status, "conflict");
+  assert.equal((await recovery.verifyOwnership(queued.id, ownerId, "call")).status, "ok");
+  const first = (await recovery.generateLink(queued.id, ownerId, 0)).request;
+  assert.equal(Date.parse(first.expiresAt) - Date.parse(first.generatedAt), DAY);
+  assert.equal(await recovery.pendingCount(), 0);
+  assert.equal((await restartRecovery().requestDetail(queued.id)).token, first.token);
+  assert.equal((await recovery.validate(first.token, address)).status, "valid");
+  assert.equal((await recovery.validate(first.token, address)).status, "valid");
+  time++;
+  const current = (await recovery.generateLink(queued.id, ownerId, 1)).request;
+  assert.equal((await recovery.validate(first.token, address)).status, "unusable");
+  assert.equal((await recovery.markSent(queued.id, ownerId, "sms", 1)).status, "conflict");
+  const sent = (await recovery.markSent(queued.id, ownerId, "sms", 2)).request;
+  assert.equal(sent.status, "link-generated");
+  assert.equal(sent.markedSentChannel, "sms");
+  const proof = await f.database.query(tx => tx.memberPasswordResetRequest.findUniqueOrThrow({ where: { id: queued.id } }));
+  assert.match(proof.tokenHash, /^[a-f0-9]{64}$/u);
+  assert.notEqual(proof.tokenHash, current.token);
+  assert.ok(!proof.tokenCiphertext.includes(current.token));
+  assert.equal(await f.database.query(tx => tx.memberVerification.count()), 0);
+  assert.ok(await sessions.verify(logged.token), "Opening a link does not revoke an active session");
   assert.equal(await phoneProof(), null);
-  const saved = await auth.resetPassword("self service password", recovery.token, address);
-  assert.equal(saved.status, "authenticated"); assert.ok(await sessions.verify(saved.token));
+  const reset = await Promise.all([
+    recovery.redeem(current.token, "x", "x", address),
+    restartRecovery().redeem(current.token, "x", "x", "198.51.100.50"),
+  ]);
+  assert.deepEqual(reset.map(result => result.status).sort(), ["completed", "unusable"]);
   assert.equal(await sessions.verify(logged.token), null);
   assert.equal(await sessions.verify(registered.token), null);
   assert.equal(+(await phoneProof()), time);
-  assert.equal((await auth.resetPassword("another password", recovery.token, address)).status, "unauthorized");
+  assert.equal((await recovery.requestDetail(queued.id)).status, "completed");
+  assert.equal((await recovery.requestDetail(queued.id)).token, null);
+  assert.equal((await recovery.redeem(current.token, "z", "z", address)).status, "unusable");
+  assert.equal((await auth.login(phone, password, address)).status, "unauthorized");
+  const saved = await auth.login(phone, "x", address);
+  assert.equal(saved.status, "authenticated");
   const limited = await auth.changePassword("another password", { member: await sessions.verify(saved.token) });
   assert.equal(limited.status, "busy"); assert.match(limited.message, /24 hours/iu);
   time += DAY;
@@ -69,23 +91,14 @@ test("only recovery sends codes and its protections persist on isolated MySQL", 
   assert.equal(changed.status, "authenticated"); assert.ok(await sessions.verify(changed.token));
   assert.equal(await sessions.verify(saved.token), null);
   assert.equal((await restart().login(phone, "replacement password", address)).status, "authenticated");
-  const otherPhone = "256700001002";
-  assert.equal((await auth.register(otherPhone, password, { member: null })).status, "authenticated");
-  const sends = await Promise.all(Array.from({ length: 5 }, (_, i) =>
-    auth.requestPasswordReset(otherPhone, `198.51.100.${i + 10}`, i % 2 ? "sms" : "whatsapp")));
-  assert.equal(sends.filter(result => result.status === "requested").length, 3); assert.equal(sends.filter(result => result.status === "busy").length, 2);
-  time += 12 * 3_600_000;
-  assert.equal((await restart().requestPasswordReset(otherPhone, address, "sms")).status, "busy");
-  time += 12 * 3_600_000;
-  assert.equal((await restart().requestPasswordReset(otherPhone, address, "whatsapp")).status, "requested");
-  const before = messages.length;
+
   const admin = await auth.login("256700001099", "configured administrator secret", address);
   assert.equal(admin.administrator, true); assert.equal((await sessions.verify(admin.token)).administrator, true);
-  assert.equal((await auth.requestPasswordReset("256700001099", address, "sms")).status, "requested");
-  assert.equal((await auth.requestPasswordReset("256700001098", address, "whatsapp")).status, "requested");
-  assert.equal(messages.length, before);
-  const audits = await f.database.query(tx => tx.ownerAuditEvent.findMany({ where: { action: "password_reset" } }));
-  assert.equal(audits.length, 0, "Self-service recovery never issues an administrator temporary password.");
+  for (const ineligible of ["256700001099", "256700001098"]) {
+    assert.equal((await recovery.request(ineligible, address)).status, "requested");
+    assert.equal((await recovery.request(ineligible, address)).status, "existing");
+  }
+  assert.equal((await recovery.listRequests()).length, 1, "Ineligible numbers do not create persisted admin requests.");
 
   const legacyPhone = "256700001003", id = randomUUID(), at = new Date(time), legacyCode = "914385";
   const passwordHash = await hashPassword(password);
@@ -104,7 +117,6 @@ test("only recovery sends codes and its protections persist on isolated MySQL", 
   const legacy = await auth.verifyAccount(legacyCode, pending.token, address);
   assert.equal(legacy.status, "authenticated"); assert.ok(await sessions.verify(legacy.token));
   assert.equal((await auth.verifyAccount(legacyCode, pending.token, address)).status, "unauthorized");
-  assert.equal(messages.length, before);
 });
 
 test("two active logins and concurrent oldest-session eviction preserve account access on MySQL", { timeout: 180_000 }, async t => {
@@ -116,8 +128,7 @@ test("two active logins and concurrent oldest-session eviction preserve account 
   let time = +at;
   const now = () => time;
   const config = { ...f.config, production: false, cookies: { session: "synthetic-owner" } };
-  const auth = createMemberAuth({ database: f.database, config, now, adminPhone: () => false, adminPasswordHash: () => null,
-    delivery: { send: async () => assert.fail("Sign-up must never deliver a message") } });
+  const auth = createMemberAuth({ database: f.database, config, now, adminPhone: () => false, adminPasswordHash: () => null });
   const sessions = createMemberSessions({ database: f.database, config, now, adminPhone: () => false, adminPasswordHash: () => null });
   const codes = createAccessCodes({ database: f.database, config, now, notifications: silentPaymentNotifications });
   await f.database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "on", trialDays: 0, updatedAt: at, updatedBy: "synthetic-owner" } }));
@@ -191,8 +202,7 @@ test("registration grants a single configured trial atomically on MySQL", { time
   const now = () => time, binding = { member: null }, config = { ...f.config, production: false, cookies: { session: "synthetic-owner" } };
   await f.database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "on", trialDays: 4,
     updatedAt: new Date(time), updatedBy: "synthetic-owner" } }));
-  const auth = createMemberAuth({ database: f.database, config, now, adminPhone: () => false, adminPasswordHash: () => null,
-    delivery: { send: async () => assert.fail("Sign-up must never deliver a message") } });
+  const auth = createMemberAuth({ database: f.database, config, now, adminPhone: () => false, adminPasswordHash: () => null });
   const sessions = createMemberSessions({ database: f.database, config, now, adminPhone: () => false, adminPasswordHash: () => null });
   const codes = createAccessCodes({ database: f.database, config, now, notifications: silentPaymentNotifications });
   const viewer = createViewerAccess({ services: async () => ({ config, database: f.database, auth: null }), now,

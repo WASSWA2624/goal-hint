@@ -1,5 +1,7 @@
 # YoolaSMS member messages
 
+This reference documents the earlier Yoola integration. The current application uses [admin-managed reset links](member-authentication.md#password-recovery) and keeps payment updates in the private inbox. Previously issued verification codes can still be used within their original validity window.
+
 Goal Hint generates and checks six-digit codes. Both account verification and password recovery use a rolling 24-hour lifetime, a maximum of three message requests per account and purpose within 24 hours across both channels, and only the newest issued code. Changing numbers does not reset the account allowance; a reused number also retains its recent requests. A code stops working after successful use or expiry. Password changes share a rolling 24-hour restriction; the administrator can assist a member who needs further help.
 
 The delivery adapter uses Yoola's documented [SMS endpoint](https://yoolasms.com/api-integration) (`POST https://yoolasms.com/api/v1/send`) and [WhatsApp endpoint](https://yoolasms.com/api-integration-whatsapp) (`POST https://yoolasms.com/api/v1/send-whatsapp`). It does not call Yoola Verify: its [documented ten-minute expiry](https://yoolasms.com/sms-otp-verification-api) does not meet Goal Hint's 24-hour requirement. Code hashes, limits, expiry and consumption are enforced by the account service.

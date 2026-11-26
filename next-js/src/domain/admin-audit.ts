@@ -69,6 +69,9 @@ const descriptions: Readonly<Record<string, ActionDescription>> = Object.freeze(
   member_erased: { label: "Account erased", category: "accounts" },
   members_purged: { label: "Account data cleanup completed", category: "system" },
   password_reset: { label: "Temporary password set", category: "security" },
+  password_request_verified: { label: "Password request ownership verified", category: "security" },
+  password_request_link_generated: { label: "Password reset link generated", category: "security" },
+  password_request_marked_sent: { label: "Password reset message marked as sent", category: "security" },
   payment_submitted: { label: "Payment submitted", category: "payments" },
   payment_rejected: { label: "Payment rejected", category: "payments" },
   payment_sms_attempted: { label: "Payment notification attempted", category: "payments" },
@@ -86,7 +89,7 @@ const descriptions: Readonly<Record<string, ActionDescription>> = Object.freeze(
 const targetLabels: Readonly<Record<string, string>> = Object.freeze({
   "owner-session": "Administrator session", settings: "Settings", plan: "Plan", "access-code": "Access period",
   member: "Subscriber", "member-session": "Device", device: "Device", payment: "Payment",
-  "member-verification": "Verification", "saved-slip": "Saved slip",
+  "member-verification": "Verification", "saved-slip": "Saved slip", "password-request": "Password request",
 });
 const opaqueIdentity = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32,}|[A-Za-z0-9_-]{43})$/iu;
 

@@ -1916,6 +1916,7 @@ model MemberAccount {
   submissions      PaymentSubmission[]
   codes            AccessCode[]
   verifications    MemberVerification[]
+  passwordResetRequests MemberPasswordResetRequest[]
   walletEntries    WalletEntry[]
   movesFrom        AccountMove[]       @relation("MovesFrom")
   movesTo          AccountMove[]       @relation("MovesTo")
@@ -2098,8 +2099,7 @@ model MemberSession {
   @@index([accessCodeId, accountId])
 }
 
-// Single-use account/reset codes. Requests are reserved under the account lock before delivery; HMACs only, never
-// plaintext codes. Retain consumed/failed requests until expiry to enforce the rolling 24-hour send allowance.
+// Previously delivered account/reset codes remain usable until consumed or expired. Only keyed hashes are stored.
 model MemberVerification {
   id           String         @id @db.Char(36)
   accountId    String?        @db.Char(36)
@@ -2121,6 +2121,34 @@ model MemberVerification {
   @@index([accountId])
   @@index([bindingHash, purpose])
   @@index([expiresAt])
+}
+
+// Administrator-assisted password recovery. Redeem with the keyed digest and reveal only the current encrypted link.
+model MemberPasswordResetRequest {
+  id                  String        @id @db.Char(36)
+  accountId           String        @db.Char(36)
+  phone               String        @db.VarChar(15)
+  status              String        @db.VarChar(16)
+  requestedAt         DateTime      @db.DateTime(3)
+  ownershipVerifiedAt DateTime?     @db.DateTime(3)
+  ownershipVerifiedBy String?       @db.Char(36)
+  ownershipMethod     String?       @db.VarChar(8)
+  generatedAt         DateTime?     @db.DateTime(3)
+  generatedBy         String?       @db.Char(36)
+  expiresAt           DateTime?     @db.DateTime(3)
+  generation          Int           @default(0) @db.UnsignedInt
+  tokenHash           String?       @unique @db.Char(64)
+  tokenCiphertext     String?       @db.VarChar(128)
+  markedSentAt        DateTime?     @db.DateTime(3)
+  markedSentBy        String?       @db.Char(36)
+  markedSentChannel   String?       @db.VarChar(8)
+  completedAt         DateTime?     @db.DateTime(3)
+  cancelledAt         DateTime?     @db.DateTime(3)
+  account             MemberAccount @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@index([accountId, requestedAt, id])
+  @@index([status, expiresAt])
+  @@index([requestedAt, id])
 }
 
 // Owner-defined plans, no personal data. Every plan unlocks every feature; plans differ only in length (24-hour blocks

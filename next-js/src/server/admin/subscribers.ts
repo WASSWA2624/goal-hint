@@ -10,6 +10,7 @@ import { getAnalyticsConfig, type AnalyticsConfig } from "../analytics/analytics
 import type { DatabaseRuntime } from "../database/client.ts";
 import { lockMemberAccount, type CodeOutcome } from "../members/access-codes.ts";
 import { activeMemberSessionsWhere, memberSessionRules } from "../members/member-sessions.ts";
+import { invalidatePasswordResetRequests } from "../members/password-reset-state.ts";
 import { decide } from "../members/settings.ts";
 import { appendWalletEntry, lockedCredit, walletHistory } from "../members/wallet.ts";
 import { createPaymentReview } from "./payment-review.ts";
@@ -126,7 +127,10 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
             break;
           case "block": case "unblock":
             await tx.memberAccount.update({ where: { id }, data: { blockedAt: action === "block" ? at : null, blockedReason: action === "block" ? (value as string).trim() : null } });
-            if (action === "block") deleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count;
+            if (action === "block") {
+              deleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count;
+              await invalidatePasswordResetRequests(tx, id, at);
+            }
             break;
           case "erase": {
             await tx.paymentSubmission.updateMany({ where: { accountId: id, reservationActive: true }, data: { reservationActive: false, status: "cancelled" } });
@@ -151,6 +155,7 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
             await tx.memberAccount.update({ where: { id }, data: { phone: null, passwordHash: null, phoneVerifiedAt: null, memberAdmittedAt: null, passwordChangedAt: null, whatsappNotificationsAt: null,
               ownerNote: null, blockedReason: null, erasedAt: at, autoRenew: false, referralCode: null } });
             await tx.memberVerification.deleteMany({ where: { accountId: id } });
+            await tx.memberPasswordResetRequest.deleteMany({ where: { accountId: id } });
             // Outbox rows hold no number, but an erased account is never notified again and keeps no delivery history.
             await tx.paymentNotificationOutbox.deleteMany({ where: { accountId: id } });
             await tx.memberNotification.deleteMany({ where: { accountId: id } });

@@ -45,12 +45,13 @@ export async function paidDatabase({ seedPlans = false, beforeCheckout, database
     await root.query(await readFile(new URL("../../prisma/migrations/20261113150000_flutterwave_checkout/migration.sql", import.meta.url), "utf8"));
     await root.query(await readFile(new URL("../../prisma/migrations/20261122200000_member_admission/migration.sql", import.meta.url), "utf8"));
     await root.query(await readFile(new URL("../../prisma/migrations/20261122210000_flutterwave_outcomes/migration.sql", import.meta.url), "utf8"));
+    await root.query(await readFile(new URL("../../prisma/migrations/20261126123000_manual_member_password_recovery/migration.sql", import.meta.url), "utf8"));
     const password = randomBytes(24).toString("hex");
     await root.query(`CREATE USER 'paid_application'@'127.0.0.1' IDENTIFIED BY '${password}'`);
-    const deletable = new Set(["MemberAccount", "MemberSession", "MemberVerification", "SubscriptionPlan", "PaymentSubmission", "PaymentScreenshot", "AccessCode", "OwnerAuditEvent", "RateLimitBucket", "PaymentNotificationOutbox", "SlipConfiguration", "MemberNotification"]);
+    const deletable = new Set(["MemberAccount", "MemberSession", "MemberVerification", "MemberPasswordResetRequest", "SubscriptionPlan", "PaymentSubmission", "PaymentScreenshot", "AccessCode", "OwnerAuditEvent", "RateLimitBucket", "PaymentNotificationOutbox", "SlipConfiguration", "MemberNotification"]);
     // The credit ledger is append-only: SELECT and INSERT only; permanent deletion removes its rows by cascade.
     const appendOnly = new Set(["WalletEntry", "AccountMove", "ReferralReviewEvent", "ReferralCredit", "PaymentEvent"]);
-    for (const table of ["MemberAccount", "MemberSession", "MemberVerification", "SubscriptionPlan", "PaymentSubmission", "PaymentScreenshot", "AccessCode", "SubscriptionSettings", "RateLimitBucket", "OwnerAuditEvent", "WalletEntry", "AccountMove", "PaymentNotificationOutbox", "SlipConfiguration", "MemberReferral", "MemberNotification", "ReferralReviewCase", "ReferralReviewEvidence", "ReferralReviewEvent", "ReferralGrantReversal"])
+    for (const table of ["MemberAccount", "MemberSession", "MemberVerification", "MemberPasswordResetRequest", "SubscriptionPlan", "PaymentSubmission", "PaymentScreenshot", "AccessCode", "SubscriptionSettings", "RateLimitBucket", "OwnerAuditEvent", "WalletEntry", "AccountMove", "PaymentNotificationOutbox", "SlipConfiguration", "MemberReferral", "MemberNotification", "ReferralReviewCase", "ReferralReviewEvidence", "ReferralReviewEvent", "ReferralGrantReversal"])
       await root.query(`GRANT SELECT, INSERT${appendOnly.has(table) ? "" : ", UPDATE"}${deletable.has(table) ? ", DELETE" : ""} ON ${instance.databaseName}.${table} TO 'paid_application'@'127.0.0.1'`);
     for (const table of ["PaymentReceipt", "PaymentReceiptClaim", "PaymentReceiptEvidence", "ReferralCredit", "PaymentEvent"])
       await root.query(`GRANT SELECT, INSERT${appendOnly.has(table) ? "" : ", UPDATE"} ON ${instance.databaseName}.${table} TO 'paid_application'@'127.0.0.1'`);

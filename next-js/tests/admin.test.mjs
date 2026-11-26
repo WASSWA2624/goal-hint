@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test, { after } from "node:test";
-import { privateResponseSources } from "./helpers/private-response.mjs";
+import { expectedPrivateResponseHeaders, privateResponseSources } from "./helpers/private-response.mjs";
 import { fixtureAdminSessions, installAdminFixtureEnvironment } from "./helpers/admin-fixtures.mjs";
 after(installAdminFixtureEnvironment());
 import { NextRequest } from "next/server.js";
@@ -316,7 +316,7 @@ test("every private exclusion point covers /admin; member pages stay crawlable b
   assert.deepEqual(rules.slice(-sources.length).map((rule) => rule.source), sources);
   for (const rule of rules.slice(-sources.length)) {
     assert.deepEqual(Object.fromEntries(rule.headers.map(({ key, value }) => [key, value])),
-      Object.fromEntries(Object.entries(privateHeaders).filter(([key]) => key !== "X-Content-Type-Options")), rule.source);
+      expectedPrivateResponseHeaders(rule.source, privateHeaders), rule.source);
   }
   const proxy = createDiscoveryProxy(() => ({ deployment: "production", index: true }));
   for (const path of privatePagePaths) assert.equal(proxy(new NextRequest(`https://goalhint.com${path}`)).headers.get("x-robots-tag"), "noindex, nofollow", path);
@@ -327,7 +327,8 @@ test("every private exclusion point covers /admin; member pages stay crawlable b
   for (const path of ["/administrator", "/en", "/en/account", "/en/subscribe"]) assert.equal(isOwnerPage(path), false, `${path} is tracked with consent`);
   assert.equal(isPrivatePage("/en/account"), true); assert.equal(isPrivatePage("/en/accounts"), false);
   const tracker = await readFile(new URL("../src/components/analytics/analytics-tracker.tsx", import.meta.url), "utf8");
-  assert.match(tracker, /const excluded = isOwnerPage\(pathname\);/, "The tracker excludes every owner page.");
+  assert.match(tracker, /const excluded = isOwnerPage\(pathname\) \|\| pathname === passwordResetPagePath;/,
+    "The tracker excludes owner pages and the reset link landing page.");
   const layout = await readFile(new URL("../src/app/(owner)/admin/layout.tsx", import.meta.url), "utf8");
   assert.match(layout, /robots: \{ index: false, follow: false, nocache: true \}/, "Every /admin page answers noindex in its metadata.");
 });

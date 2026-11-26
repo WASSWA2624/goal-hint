@@ -38,9 +38,13 @@ release removes the native guard.
 Only the exact configured origin is trusted for embedded application documents.
 Routes, query strings, and fragments remain with the website. A different host,
 scheme, or port is outside that trust boundary. HTTP(S), `mailto`, and `tel`
-external links use the operating system's handler; malformed/credential-bearing
-addresses and other schemes are rejected by the shell's navigation policy.
-The native website has no Dart JavaScript channel or broadly privileged bridge.
+external links use the operating system's handler. The shell also hands off
+`sms:` links with one international recipient and `whatsapp://send` links with
+one recipient and a prepared message. The policy rejects malformed links and
+unsupported schemes. If the device cannot open a link, the shell keeps the web
+page visible and shows an error. Password recovery's admin page also provides
+Copy Message. The native website has no Dart JavaScript channel or broadly
+privileged bridge.
 
 ### Web-controlled native appearance
 

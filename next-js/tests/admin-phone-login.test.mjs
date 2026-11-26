@@ -41,6 +41,6 @@ test("private pages use the common phone/password screen without rendering a sec
   }
   const form = await readFile(new URL("../src/components/members/account-auth-form.tsx", import.meta.url), "utf8");
   assert.match(form, /<PhoneInput\b[^>]*name="phone"/u);
-  assert.match(form, /<PasswordInput\b[\s\S]*?current=\{view === "login"\}/u);
+  assert.match(form, /<PasswordInput\b[\s\S]*?current=\{action === "login"\}/u);
   assert.doesNotMatch(form, /\/api\/(?:admin|analytics)\/login|Owner username/u);
 });

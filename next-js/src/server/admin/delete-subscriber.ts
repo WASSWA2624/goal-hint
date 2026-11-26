@@ -95,8 +95,9 @@ function scrubReferences(value: Prisma.JsonValue, identifiers: ReadonlySet<strin
 
 function rateLimitKeys(scope: Scope, config: Pick<AnalyticsConfig, "key">) {
   return unique([
-    ...["current-password-account", "save-slip"].map(purpose => config.key(`member-${purpose}`, scope.id)),
-    ...scope.exclusivePhones.flatMap(phone => ["password-login-phone", "register-phone"].map(purpose => config.key(`member-${purpose}`, phone))),
+    ...["current-password-account", "save-slip", "manual-reset-redeem-account"].map(purpose => config.key(`member-${purpose}`, scope.id)),
+    ...scope.exclusivePhones.flatMap(phone => ["password-login-phone", "register-phone", "manual-reset-request-phone", "manual-reset-request-acknowledgement"]
+      .map(purpose => config.key(`member-${purpose}`, phone))),
     ...scope.sessionHashes.flatMap(hash => ["upload-attempts", "upload-stored", "trial-session"]
       .map(purpose => config.key(`member-${purpose}`, hash))),
   ]);

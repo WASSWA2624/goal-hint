@@ -32,7 +32,7 @@ export const messageEvents: readonly Readonly<{ key: MessageEvent; label: string
   placeholders: readonly MessagePlaceholder[]; verification: boolean }>[] = Object.freeze([
   { key: "welcome", label: "Account welcome", description: "Sent once after the member verifies their account.", placeholders: [...shared, "trial_days"], verification: false },
   { key: "account-verification", label: "Account verification", description: "Sent when a member requests their account verification code.", placeholders: [...shared, "verification_code", "expiry_hours"], verification: true },
-  { key: "password-reset", label: "Password reset", description: "Sent when a member requests a password reset code.", placeholders: [...shared, "verification_code", "expiry_hours"], verification: true },
+  { key: "password-reset", label: "Password reset", description: "Template from the earlier password recovery flow.", placeholders: [...shared, "verification_code", "expiry_hours"], verification: true },
   { key: "payment-received", label: "Payment report received", description: "Confirms a payment report was submitted; it does not confirm money was received.", placeholders: [...shared, "plan_name", "amount", "payment_reference"], verification: false },
   { key: "payment-approved", label: "Payment approved", description: "Sent after the administrator approves a payment.", placeholders: [...shared, "plan_name", "amount", "payment_reference", "expiry_date", "balance"], verification: false },
   { key: "payment-rejected", label: "Payment rejected", description: "Sent after the administrator rejects a payment report.", placeholders: [...shared, "plan_name", "amount", "payment_reference", "rejection_reason"], verification: false },

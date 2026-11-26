@@ -70,6 +70,45 @@ void main() {
     },
   );
 
+  test('SMS and WhatsApp drafts open in the external messaging app', () {
+    const draft =
+        'Please%20open%20https%3A%2F%2Fgoalhint.com%2Freset%23example';
+    for (final address in [
+      'sms:+256700000000',
+      'sms:+256700000000?body=$draft',
+      'sms:+256700000000?&body=$draft',
+      'whatsapp://send?phone=256700000000&text=$draft',
+    ]) {
+      expect(production.evaluate(address), NavigationAction.external);
+    }
+  });
+
+  test('malformed messaging links cannot trigger an external app', () {
+    for (final address in [
+      'sms:',
+      'sms:1234',
+      'sms:+256700000000,+256711111111?body=Hello',
+      'sms://+256700000000?body=Hello',
+      'sms:+256700000000?body=Hello&body=Again',
+      'sms:+256700000000?body=Hello&to=1234',
+      'sms:+256700000000?body=%FF',
+      'whatsapp://settings?phone=256700000000&text=Hello',
+      'whatsapp://send/path?phone=256700000000&text=Hello',
+      'whatsapp://account@send?phone=256700000000&text=Hello',
+      'whatsapp://send:33?phone=256700000000&text=Hello',
+      'whatsapp://send?phone=256700000000&text=Hello#fragment',
+      'whatsapp://send?phone=256700000000&phone=1234&text=Hello',
+      'whatsapp://send?phone=256700000000&text=',
+      'whatsapp://send?phone=256700000000&text=%FF',
+    ]) {
+      expect(
+        production.evaluate(address),
+        NavigationAction.block,
+        reason: address,
+      );
+    }
+  });
+
   test(
     'unsafe schemes and malformed or credential-bearing addresses fail closed',
     () {

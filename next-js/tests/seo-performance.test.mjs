@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import test from "node:test";
-import { privateResponseSources } from "./helpers/private-response.mjs";
+import { expectedPrivateResponseHeaders, privateResponseSources } from "./helpers/private-response.mjs";
 import { fileURLToPath } from "node:url";
 import nextConfig from "../next.config.ts";
 import { privateHeaders } from "../src/server/http/private-http.ts";
@@ -19,8 +19,8 @@ test("flags and brand files are browser-cached while the private rules stay last
   ]);
   const privateRules = rules.slice(-privateSources.length);
   assert.deepEqual(privateRules.map((rule) => rule.source), privateSources, "The private rules come last, so a repeated key still resolves to theirs.");
-  const expected = Object.fromEntries(Object.entries(privateHeaders).filter(([key]) => key !== "X-Content-Type-Options"));
-  for (const rule of privateRules) assert.deepEqual(Object.fromEntries(rule.headers.map(({ key, value }) => [key, value])), expected, rule.source);
+  for (const rule of privateRules) assert.deepEqual(Object.fromEntries(rule.headers.map(({ key, value }) => [key, value])),
+    expectedPrivateResponseHeaders(rule.source, privateHeaders), rule.source);
   for (const dir of ["flags", "brand"]) assert.ok(readdirSync(join(root, "public", dir)).length > 0, `public/${dir} exists`);
 });
 

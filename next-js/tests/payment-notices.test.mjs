@@ -74,8 +74,11 @@ test("terminal retention removes closed rows after 7/30 days and retains every o
 
 test("erasure removes delivery history and intents atomically while keeping financial decisions", async () => {
   const s = setup(); s.report(); await s.enqueue();
+  const otherAccountId = randomUUID();
+  s.state.memberPasswordResetRequest.push({ id: randomUUID(), accountId: s.account.id }, { id: randomUUID(), accountId: otherAccountId });
   assert.equal((await createSubscribers(s.database, s.now).action(s.account.id, "erase", null, owner)).status, "saved");
   assert.equal(s.state.paymentNotificationOutbox.length, 0); assert.equal(s.state.paymentSubmission.length, 1);
+  assert.deepEqual(s.state.memberPasswordResetRequest.map(row => row.accountId), [otherAccountId]);
 });
 
 test("the private notices route validates actions and identifiers and never returns recipient details", async () => {

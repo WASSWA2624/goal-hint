@@ -8,7 +8,7 @@ test("database health checks current account fields with zero-row reads after co
     return run({ async $queryRaw(statement) { statements.push(statement); return []; } });
   } });
   assert.equal(status, "ready");
-  assert.equal(statements.length, 15);
+  assert.equal(statements.length, 16);
   for (const statement of statements) {
     assert.match(statement.sql, /^SELECT .*\s+FROM `(?:Member\w+|Referral\w+|Payment\w+|SlipNumber)` WHERE 1 = 0$/u);
     assert.deepEqual(statement.values, []);
@@ -22,10 +22,12 @@ test("database health checks current account fields with zero-row reads after co
   assert.match(numbering.sql, /`fingerprint`/u);
   const verification = statements.find(statement => statement.sql.includes("FROM `MemberVerification`"));
   assert.match(verification.sql, /`channel`/u);
+  const recovery = statements.find(statement => statement.sql.includes("FROM `MemberPasswordResetRequest`"));
+  assert.match(recovery.sql, /`tokenCiphertext`/u);
 });
 
 test("a live connection with missing account schema or SELECT grants fails health without leaking diagnostics", async () => {
-  for (const table of ["MemberAccount", "MemberSession", "MemberVerification", "MemberReferral", "MemberNotification", "SlipNumber"]) {
+  for (const table of ["MemberAccount", "MemberSession", "MemberVerification", "MemberPasswordResetRequest", "MemberReferral", "MemberNotification", "SlipNumber"]) {
     const status = await databaseHealth({ async readiness() { return "ready"; }, async query(run) {
       return run({ async $queryRaw(statement) {
         if (statement.sql.includes(`FROM \`${table}\``)) throw new Error("Synthetic private SQL and credential diagnostics");

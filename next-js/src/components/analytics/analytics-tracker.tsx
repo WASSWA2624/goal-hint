@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { informationHref } from "@/domain/navigation-paths";
+import { passwordResetPagePath } from "@/domain/password-reset-links";
 import { isOwnerPage } from "@/domain/private-paths";
 import { ServerThemeUntilHydrated } from "@/styles/provider";
 import { media } from "@/styles/theme";
@@ -15,15 +16,15 @@ export function useConsentState() {
   return useSyncExternalStore(subscribeConsent, getConsentState, getServerConsentState);
 }
 
-/** Root-level page-view tracking plus the first-visit consent banner. The owner dashboards are never tracked. */
+/** Root-level page-view tracking and the first-visit consent banner for eligible pages. */
 export function AnalyticsTracker({ available }: { available: boolean }) {
   const pathname = usePathname();
   const query = useSearchParams().get("q") ?? "";
   const consent = useConsentState();
-  const excluded = isOwnerPage(pathname);
+  const excluded = isOwnerPage(pathname) || pathname === passwordResetPagePath;
   const last = useRef<string | null>(null);
 
-  useEffect(() => { rememberLanding(); }, []);
+  useEffect(() => { if (!excluded) rememberLanding(); }, [excluded]);
   useEffect(() => {
     if (!available || consent !== "granted" || excluded) return;
     startTracker();

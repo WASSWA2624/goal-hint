@@ -50,46 +50,13 @@ def phone_field(html, name="phone"):
     no_match(r'data-phone-country-picker|data-phone-country-search', html)
 
 
-def default_sms(html):
-    channels = [tag for tag in re.findall(r'<input\b[^>]*>', html) if 'name="channel"' in tag]
-    assert channels
-    checked = [tag for tag in channels if re.search(r'\bchecked(?:=|\s|>)', tag)]
-    assert len(checked) == 1 and 'value="sms"' in checked[0], "SMS starts selected and exactly one available delivery choice is active."
-    assert all('type="radio"' in tag for tag in channels), "Delivery choices must remain mutually exclusive native radios."
-
-
-def send_button(html):
-    form = match(r'<form\b[^>]*data-account-step-form="delivery"[^>]*>([\s\S]*?)</form>', html).group(1)
-    button = match(r'<button\b(?=[^>]*\btype="submit")([^>]*)>([\s\S]*?)</button>', form)
-    checked = [tag for tag in re.findall(r'<input\b[^>]*>', form)
-        if 'name="channel"' in tag and re.search(r'\bchecked(?:=|\s|>)', tag)]
-    selected = match(r'\bvalue="(sms|whatsapp)"', checked[0]).group(1) if checked else None
-    expected = "Send by SMS" if selected == "sms" else "Send by WhatsApp" if selected == "whatsapp" else "Send code"
-    label = re.sub(r'<svg\b[\s\S]*?</svg>|<!--[\s\S]*?-->|<[^>]+>', "", button.group(2)).strip()
-    assert label == expected, "The request button must name the selected delivery channel."
-    return button
-
-
-def disabled_send(html):
-    button = send_button(html)
-    match(r'\bdisabled(?:=|\s|$)', button.group(1))
-
-
-def delivery_step(html):
-    match(r'data-verification-step="delivery"', html)
-    match(r'data-account-step-form="delivery"', html)
-    no_match(r'data-account-step-form="code"|name="code"|autoComplete="one-time-code"', html)
-    support = match(r'<nav\b[^>]*data-account-support[^>]*>([\s\S]*?)</nav>', html).group(1)
-    match("Contact support", support)
-    secondary = match(r'<nav\b[^>]*data-account-secondary-actions[^>]*>([\s\S]*?)</nav>', html).group(1)
-    for label in ["Have a code?", "Back to login"]:
-        match(re.escape(label), secondary)
-    no_match(r'data-verification-help|data-verification-tracker|<ol\b|up to 3 messages|Codes expire after', auth_card(html))
-    no_match(r'256 700 000 101', auth_card(html))
-    no_match(r'only the latest code works', html, flags=re.IGNORECASE)
-    send_button(html)
-    match(r'Have a code\?', html)
-    default_sms(html)
+def recovery_dialog(html):
+    dialog = match(r'<dialog\b[^>]*data-criteria-dialog[^>]*>([\s\S]*?)</dialog>', html).group(1)
+    for text in [r'Do you want to request a password reset\?', "Registered number", "Yes, continue", "Use a previously received code"]:
+        match(text, dialog)
+    match(r'action="/api/account/forgot"', dialog)
+    no_match(r'name="channel"|name="code"', dialog)
+    phone_field(dialog)
 
 
 def post_fixture(origin, action, body, scenario="success", cookie=""):
@@ -109,22 +76,27 @@ def verify_synthetic_api(origin):
     legacy = "goal-hint-member=" + "v" * 43
     status, retired, headers = post_fixture(origin, "verification", {"channel": "sms"}, cookie=legacy)
     assert status == 400 and "Forgot password" in retired["message"] and not headers.get("Set-Cookie")
-    body = {"phone": "256700000101", "channel": "whatsapp"}
-    for scenario, expected in [("success", 200), ("send-failed", 503), ("rate-limited", 429), ("unavailable", 503)]:
+    body = {"phone": "256700000101"}
+    for scenario, expected in [("success", 200), ("existing-request", 200), ("send-failed", 503), ("rate-limited", 429), ("unavailable", 503)]:
         status, reply, headers = post_fixture(origin, "forgot", body, scenario)
         assert status == expected, (scenario, status, reply)
         if scenario == "success":
             assert reply["status"] == "requested"
-            assert "123456" not in json.dumps(reply), "Delivery never returns a verification code."
+            assert "token" not in reply, "A request never returns a reset link."
+        if scenario == "existing-request":
+            assert reply["status"] == "existing"
         if scenario == "rate-limited":
             assert headers.get("Retry-After") == "60"
     for action, fields, cookie in [("verify", {}, legacy), ("reset-code", {"phone": "256700000101"}, "")]:
         for scenario, code in [("success", "000000"), ("invalid-code", "123456")]:
             status, reply, _ = post_fixture(origin, action, {**fields, "code": code}, scenario, cookie)
             assert status == 400 and "invalid" in reply["message"], (action, scenario, reply)
-    for phone, channel, expected in [("447700900123", "sms", 200), ("447700900123", "whatsapp", 400), ("5511999999999", "sms", 400)]:
-        status, _, _ = post_fixture(origin, "forgot", {"phone": phone, "channel": channel})
-        assert status == expected, (phone, channel, status)
+    status, _, _ = post_fixture(origin, "forgot", {"phone": "447700900123", "channel": "sms"})
+    assert status == 400
+    status, valid, _ = post_fixture(origin, "password-reset/validate", {"token": "p" * 43})
+    assert status == 200 and valid == {"status": "valid"}
+    status, unusable, _ = post_fixture(origin, "password-reset/validate", {"token": "x" * 43})
+    assert status == 410 and unusable["status"] == "unusable"
     status, logged_in, _ = post_fixture(origin, "login", {"phone": "256700000101", "password": "Synthetic password", "return": "/en/matches"})
     assert status == 200 and logged_in["next"] == "/en/matches"
     for scenario in ("success", "automatic-trial"):
@@ -446,9 +418,7 @@ def authentication_routes(origin):
         response = request(origin, f"/en/account?state=active&view={view}")
         assert response.status == 307 and response.headers.get("Location") == "/en/matches"
     pending = visible_html(request(origin, "/en/account?state=unverified&view=forgot").text)
-    match('data-account-verification="password-reset"', pending)
-    match('action="/api/account/forgot"', pending)
-    no_match('action="/api/account/verify"', pending)
+    recovery_dialog(pending)
     reset_only = visible_html(request(origin, "/en/account?state=password-reset&view=forgot").text)
     match('action="/api/account/reset"', reset_only)
     no_match('action="/api/account/forgot"', reset_only)
@@ -527,17 +497,9 @@ def main():
         no_match(r'Use 8–128 characters|By logging in|You can stay logged in on two devices|name="code"|name="channel"|name="whatsappNotifications"', register_html)
         login = visible_html(request(server.origin, "/en/account?return=%2Fen%2Fmatches").text)
         match(r'href="/en/account\?view=forgot&amp;return=%2Fen%2Fmatches"', login)
-        for state in ["signed-out"]:
-            forgot = visible_html(request(server.origin, f"/en/account?state={state}&view=forgot&return=%2Fen%2Fmatches").text)
-            delivery_step(forgot)
-            for text in ["Reset password", "Registered number", "SMS", "WhatsApp"]:
-                match(text, forgot)
-            match(r'action="/api/account/forgot"', forgot)
-            match(r'name="channel"', forgot)
-            disabled_send(forgot)
-            no_match(r'name="code"|temporary password|request to the admin', forgot)
-            phone_field(auth_card(forgot))
-            match(r'href="/en/account\?view=login&amp;return=%2Fen%2Fmatches"', forgot)
+        forgot = visible_html(request(server.origin, "/en/account?state=signed-out&view=forgot&return=%2Fen%2Fmatches").text)
+        recovery_dialog(forgot)
+        match(r'href="/en/account\?view=reset-code&amp;return=%2Fen%2Fmatches"', forgot)
         verify = visible_html(request(server.origin, "/en/account?state=unverified&view=verify&return=%2Fen%2Fmatches").text)
         match('data-verification-step="code"', verify)
         match("Verify phone", verify)
@@ -547,14 +509,9 @@ def main():
         match(r'href="/en/account\?view=forgot&amp;return=%2Fen%2Fmatches"', verify)
         match(r'action="/api/account/sign-out\?destination=login"', verify)
         no_match(r'action="/api/account/verification"|name="channel"|name="whatsappNotifications"|value="[0-9]{6}"', verify)
-        sms_only = visible_html(request(server.origin, "/en/account?state=sms-only&view=forgot").text)
-        default_sms(sms_only)
-        match(r'value="sms"', sms_only)
-        no_match(r'value="whatsapp"', sms_only)
-        unsupported = visible_html(request(server.origin, "/en/account?state=unsupported&view=forgot").text)
-        match("Messaging is unavailable for this country", unsupported)
-        no_match(r'name="channel"', unsupported)
-        disabled_send(unsupported)
+        reset_link = request(server.origin, "/en/account/reset-password")
+        match(r'<meta name="referrer" content="no-referrer"', reset_link.text)
+        match("Checking the password reset link", visible_html(reset_link.text))
         reset = visible_html(request(server.origin, "/en/account?state=password-reset&view=new-password").text)
         for text in ["Choose a new password", "Verification accepted", "once every 24 hours", "Contact the admin"]:
             match(text, reset)

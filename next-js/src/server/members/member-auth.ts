@@ -3,7 +3,6 @@ import "server-only";
 import { randomBytes, randomUUID } from "node:crypto";
 import { normalizePhone } from "../../domain/phone.ts";
 import { validMobilePhone } from "../../domain/phone-mobile.ts";
-import { passwordChangeWindowMs, supportedMessageChannels, type MessageChannel } from "../../domain/member-verification.ts";
 import { authCopy } from "../../i18n/messages/auth.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import { hashPassword, isPasswordHash, verifyPassword } from "../analytics/analytics-password.ts";
@@ -15,18 +14,17 @@ import { issueMemberSession, memberTokenHash, validMemberToken, type MemberIdent
 import { isMemberAdminPhone, memberAdminCredential, verifyMemberAdminCredential } from "./member-admin.ts";
 import { passwordRecoveryRules } from "./password-recovery.ts";
 import { createMemberRateLimit, takeMemberLimit } from "./rate-limit.ts";
-import { decide, settingsServiceFor } from "./settings.ts";
+import { decide } from "./settings.ts";
 import { createVerificationCodes } from "./verification-codes.ts";
-import { createYoolaMessaging, type MemberMessaging } from "./yoola-messaging.ts";
+import { canChangeMemberPassword, invalidatePasswordResetRequests, memberPasswordCooldownMessage, memberPasswordMaximum, validReplacementPassword } from "./password-reset-state.ts";
 import { awardReferralRegistration, ensureReferralCode, recordReferralRegistration, rememberRegistrationPhone } from "./referrals.ts";
 
-export const memberAuthRules = Object.freeze({ passwordMin: 8, passwordMax: 128 });
+export const memberAuthRules = Object.freeze({ passwordMin: 8, passwordMax: memberPasswordMaximum });
 export type AuthBinding = Readonly<{ member: MemberIdentity | null }>;
 export type AuthFailure = Readonly<{ status: "invalid" | "unauthorized" | "busy" | "conflict" | "unavailable"; message: string }>;
 export type RegistrationTrial = Readonly<{ days: number; startsAt: string; endsAt: string; active: boolean }>;
 
 type AuthSuccess = Readonly<{ status: "authenticated"; token: string; accountId: string; phone: string; administrator?: boolean; requiresPasswordChange?: boolean; requiresVerification?: boolean; otherDeviceSignedOut?: boolean; trial?: RegistrationTrial }>;
-type Requested = Readonly<{ status: "requested"; message: string }>;
 const invalid = (message: string): AuthFailure => ({ status: "invalid", message });
 const refused = (): AuthFailure => ({ status: "unauthorized", message: "We couldn't verify these details. Please try again." });
 const invalidCredentials = (): AuthFailure => ({ status: "unauthorized", message: authCopy.loginInvalidCredentials });
@@ -34,15 +32,9 @@ const reserved = (): AuthFailure => ({ status: "unauthorized", message: "This nu
 const wrongPassword = (): AuthFailure => ({ status: "unauthorized", message: "Your current password is incorrect." });
 const busy = (): AuthFailure => ({ status: "busy", message: "Too many attempts. Please wait before trying again." });
 const conflict = (): AuthFailure => ({ status: "conflict", message: authCopy.accountExists });
-const messageLimit = (): AuthFailure => ({ status: "busy", message: "You can request up to three messages within 24 hours. Please wait or contact the admin for assistance." });
-const passwordLimit = (): AuthFailure => ({ status: "busy", message: "You can change your password only once within 24 hours. Please try again after the limit resets." });
+const passwordLimit = (): AuthFailure => ({ status: "busy", message: memberPasswordCooldownMessage });
 const phoneChangeLimit = (): AuthFailure => ({ status: "busy",
   message: "You recently changed your password. Wait until the 24-hour recovery limit resets before changing your phone number." });
-const deliveryFailure = (): AuthFailure => ({ status: "unavailable", message: "We couldn't send your code. Please try again later or contact the admin." });
-const resetRequested = (): Requested => ({ status: "requested", message: "If this number has an eligible account, a password reset code has been sent through your selected channel." });
-const canChangePassword = (account: MemberAccount, at: Date) => !account.passwordChangedAt || +at - +account.passwordChangedAt >= passwordChangeWindowMs;
-const channelFor = (phone: string, channel: unknown): channel is MessageChannel =>
-  (channel === "sms" || channel === "whatsapp") && supportedMessageChannels(phone).includes(channel);
 export const validMemberPassword = (value: unknown): value is string => typeof value === "string"
   && value.length >= memberAuthRules.passwordMin && value.length <= memberAuthRules.passwordMax;
 let dummyPasswordHash: Promise<string> | undefined;
@@ -52,12 +44,11 @@ const dummyHash = () => dummyPasswordHash ??= hashPassword(randomBytes(32).toStr
  * Admission and actual phone ownership are separate. Legacy pending accounts can use an existing code or recover the
  * password. Recovery and code checks share account locks, and administrator credentials remain separate.
  */
-export function createMemberAuth({ database, config, now = Date.now, adminPhone = isMemberAdminPhone, adminPasswordHash = memberAdminCredential,
-  delivery = createYoolaMessaging({ settings: () => settingsServiceFor(database).current().then(state => state.settings) }) }: {
-  database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key">; now?: () => number; adminPhone?: (phone: string) => boolean; adminPasswordHash?: () => string | null; delivery?: MemberMessaging;
+export function createMemberAuth({ database, config, now = Date.now, adminPhone = isMemberAdminPhone, adminPasswordHash = memberAdminCredential }: {
+  database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key">; now?: () => number; adminPhone?: (phone: string) => boolean; adminPasswordHash?: () => string | null;
 }) {
   const limit = createMemberRateLimit(database, config, now);
-  const codes = createVerificationCodes({ database, config, now, delivery });
+  const codes = createVerificationCodes(config);
   const safeAddress = (address: string) => address === "unknown" ? "unresolved-address" : address;
 
   async function currentAccount(tx: Prisma.TransactionClient, binding: AuthBinding, at: Date): Promise<MemberAccount | null> {
@@ -183,25 +174,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
       });
     },
 
-    /** Public recovery never returns a credential or discloses a missing/reserved account. */
-    async requestPasswordReset(phoneInput: unknown, address: string, channel: unknown): Promise<Requested | AuthFailure> {
-      const phone = normalizePhone(phoneInput);
-      if (!phone) return invalid("Enter a valid phone number with its country code.");
-      if (!channelFor(phone, channel)) return invalid("Choose an available SMS or WhatsApp delivery channel.");
-      if (!await limit({ purpose: "password-reset-address", value: safeAddress(address), maximum: 30, windowMs: 3_600_000 })) return busy();
-      if (!await limit({ purpose: "password-reset-phone", value: phone, maximum: 10, windowMs: 3_600_000 })) return busy();
-      const reserved = await decide(database, async tx => {
-        const found = await tx.memberAccount.findUnique({ where: { phone } });
-        const account = found ? await lockMemberAccount(tx, found.id) : null, at = new Date(now());
-        if (!account || account.phone !== phone || account.blockedAt || account.erasedAt || adminPhone(phone) || !account.passwordHash) return resetRequested();
-        const reservation = await codes.reservePasswordReset(tx, account, channel, at);
-        if (!reservation) return messageLimit();
-        return reservation;
-      });
-      if (!("id" in reserved)) return reserved;
-      return await codes.deliver(reserved) ? resetRequested() : deliveryFailure();
-    },
-
+    /** Transition support for codes sent before administrator-managed recovery was enabled. */
     async verifyPasswordReset(phoneInput: unknown, code: unknown, address: string): Promise<AuthSuccess | AuthFailure> {
       const phone = normalizePhone(phoneInput);
       if (!phone) return refused();
@@ -237,10 +210,11 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
         const account = await lockMemberAccount(tx, initial.accountId), at = new Date(now());
         const session = await tx.memberSession.findUnique({ where: { tokenHash } });
         if (!account?.phone || account.blockedAt || account.erasedAt || adminPhone(account.phone) || !session?.passwordResetAt || session.authenticatedAt || session.expiresAt <= at) return refused();
-        if (!canChangePassword(account, at)) return passwordLimit();
+        if (!canChangeMemberPassword(account, at)) return passwordLimit();
         const updated = await tx.memberAccount.update({ where: { id: account.id }, data: { passwordHash, phoneVerifiedAt: account.phoneVerifiedAt ?? at,
           passwordChangedAt: at, lastSignInAt: at } });
         await tx.memberVerification.updateMany({ where: { accountId: account.id, consumedAt: null }, data: { consumedAt: at } });
+        await invalidatePasswordResetRequests(tx, account.id, at);
         return rotate(tx, updated, at);
       });
     },
@@ -251,11 +225,8 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
       if (!binding.member) return refused();
       if (adminPhone(binding.member.phone)) return invalid("Administrator credentials are managed in the environment.");
       if (!phone) return invalid("Enter a valid new mobile number with its country code.");
-      if (!supportedMessageChannels(phone).length) return invalid("Messaging is unavailable for this country. Contact the admin for assistance.");
       const checked = await currentPassword(binding.member, password);
       if (typeof checked !== "string") return checked;
-      if (phone !== binding.member.phone && delivery.recoveryAvailable && !await delivery.recoveryAvailable(phone).catch(() => false))
-        return { status: "unavailable", message: "Password recovery is unavailable for that number. Your account still uses the current phone number." };
       try {
         return await decide<AuthSuccess | AuthFailure>(database, async (tx) => {
           const at = new Date(now());
@@ -263,10 +234,13 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
           if (!account?.phone || account.passwordHash !== checked) return refused();
           // A password cannot establish ownership of a different privileged identity.
           if (phone !== account.phone && adminPhone(phone)) return reserved();
-          if (phone !== account.phone && !canChangePassword(account, at)) return phoneChangeLimit();
+          if (phone !== account.phone && !canChangeMemberPassword(account, at)) return phoneChangeLimit();
           const existing = await tx.memberAccount.findUnique({ where: { phone } });
           if (existing && existing.id !== account.id) return conflict();
-          if (phone !== account.phone) await tx.memberVerification.updateMany({ where: { accountId: account.id, consumedAt: null }, data: { consumedAt: at } });
+          if (phone !== account.phone) {
+            await tx.memberVerification.updateMany({ where: { accountId: account.id, consumedAt: null }, data: { consumedAt: at } });
+            await invalidatePasswordResetRequests(tx, account.id, at);
+          }
           const updated = await tx.memberAccount.update({ where: { id: account.id }, data: { phone, ...(phone !== account.phone
             ? { phoneVerifiedAt: null, memberAdmittedAt: null, whatsappNotificationsAt: null } : {}) } });
           return rotate(tx, updated, at);
@@ -278,13 +252,13 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
     async changePassword(password: unknown, binding: AuthBinding): Promise<AuthSuccess | AuthFailure> {
       if (!binding.member) return refused();
       if (adminPhone(binding.member.phone)) return invalid("Administrator credentials are managed in the environment.");
-      if (typeof password !== "string" || !password || password.length > memberAuthRules.passwordMax)
+      if (!validReplacementPassword(password))
         return invalid(`Enter a new password of up to ${memberAuthRules.passwordMax} characters.`);
       // Check authorization/cooldown and reserve a bounded hash attempt before doing password work outside the lock.
       const permission = await database.transaction(async tx => {
         const at = new Date(now()), account = await currentAccount(tx, binding, at);
         if (!account || account.phone !== binding.member!.phone) return refused();
-        if (!canChangePassword(account, at)) return passwordLimit();
+        if (!canChangeMemberPassword(account, at)) return passwordLimit();
         return await takeMemberLimit(tx, config, { purpose: "password-change-account", value: account.id, maximum: 10, windowMs: 15 * 60_000 }, at) ? null : busy();
       }, { isolationLevel: "ReadCommitted" });
       if (permission) return permission;
@@ -293,9 +267,10 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
         const at = new Date(now());
         const account = await currentAccount(tx, binding, at);
         if (!account || account.phone !== binding.member!.phone) return refused();
-        if (!canChangePassword(account, at)) return passwordLimit();
+        if (!canChangeMemberPassword(account, at)) return passwordLimit();
         await tx.memberAccount.update({ where: { id: account.id }, data: { passwordHash, passwordChangedAt: at, lastSignInAt: at } });
         await tx.memberVerification.updateMany({ where: { accountId: account.id, consumedAt: null }, data: { consumedAt: at } });
+        await invalidatePasswordResetRequests(tx, account.id, at);
         return rotate(tx, account, at);
       });
     },
