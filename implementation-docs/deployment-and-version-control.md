@@ -66,6 +66,14 @@ MariaDB verified all 94 migrations with zero pending in production. The producti
 
 Production HTTPS served the expected build. Login, the reset page, the guest session API, Matches and the one-day Matches API returned HTTP 200. The reset page sent `no-store`, `noindex` and `no-referrer`. Guests were redirected to Login from the admin queue and received HTTP 401 from its API. Chrome verified opening and cancelling the request dialog on desktop light, and the missing-link message and new-request dialog on mobile dark. These production browser checks were read-only. A synthetic account exercised the full password-reset journey on staging. The default 30-day Matches API returned HTTP 503 both before and after promotion.
 
+## Mobile account logout staging verification
+
+On 26 November 2026, staging activated `ef1b3663` from a clean, checksummed ZIP. MariaDB verified all 94 migrations before activation. Chrome fixture tests covered member and administrator logout in light and dark themes, ordinary and failing native alert bridges, network retry, old-token rejection and the native HTTP redirect fallback with JavaScript disabled. The 115 focused tests, type checking, lint for changed files and the production-mode build passed.
+
+Hosted HTTPS smoke checks confirmed the new build on Login and Matches. A synthetic account used the visible mobile Chrome menu with a throwing native alert bridge. One logout POST returned HTTP 200, the browser reached Matches and displayed the guest header, and the old cookie no longer resolved to an account.
+
+The release ZIP SHA-256 is `a65829796fd29c05d90d33f73a4d70173cfd5c7f8183e5e3f985e0ab4917c940`. Production promotion awaits staging review.
+
 ## Authentication rollout
 
 On 26 November 2026, staging and production activated `acb7ce34` from the same checksummed ZIP. Both MariaDB databases verified all 93 migrations with zero pending. Production's previous compatible release, `a1e61cde`, is available for rollback.
@@ -100,7 +108,7 @@ Desktop browser checks on a populated fixture verified the two independently scr
 
 On 26 November 2026, the checksummed `8867ad87` release ran in a private staging instance against `ghprod_test`. The staging activation guard detected the public slot's switch to the separate mobile logout release `ef1b3663` during upload. The private instance used the existing staging profile and verified all 94 required MariaDB migrations. The Matches, Slips and Builder pages returned HTTP 200 with `noindex`. The one-day Matches feed, Slips API and guest session endpoint returned HTTP 200 with JSON responses.
 
-Local Chromium checks verified the responsive controls in both themes, the desktop live clock, and share retry and PNG export. The staging profile lacks public odds approval and its archive offered no shareable slips during verification. Isolated fixtures supplied valid odds and published slips for the Builder and sharing checks. Production promotion awaits owner review and rollout coordination.
+Local Chromium checks verified the responsive controls in both themes, the desktop live clock, and share retry and PNG export. Chromium also verified date selection on private staging in dark mode at mobile and desktop widths. The staging profile lacks public odds approval and its archive offered no shareable slips during verification. Isolated fixtures supplied valid odds and published slips for the Builder and sharing checks. Production activated the mobile logout revision while this candidate was under review, so the combined release includes that revision before its own promotion.
 
 The release ZIP SHA-256 is `246c705750b806b093d4345a6b77e97a1f750905d0541eefdc662e55a1e4daaa`.
 

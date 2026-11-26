@@ -8,7 +8,7 @@ Successful signup opens Matches (`/en/matches`) for every entry point. Existing-
 
 Login and Register use the canonical Account URLs. A signed-out Subscribe visit redirects to Login; verification-only and reset-only sessions resume their required Account form. Pricing and subscription availability do not decide whether someone is signed in. Failed session reads show the existing unavailable message instead of treating the visitor as signed out. An authenticated member opening Login/Register goes to Matches (or their shared slip); the plain Account URL still opens their account workspace. Verification's Back to login clears the restricted session and returns to Login, while ordinary logout returns to Matches.
 
-Account writes have a bounded request deadline, retain inline server errors, and handle non-JSON proxy failures without navigating to a malformed URL. The login form allows one in-flight submission and shows connection-specific feedback on transport failures. Identity changes observed on tab focus or page restoration refresh private page content as well as the header.
+Account writes have a bounded request deadline, retain inline server errors, and handle non-JSON proxy failures without navigating to a malformed URL. The login form allows one in-flight submission and shows connection-specific feedback on transport failures. Logout sends one same-origin POST and follows the acknowledged destination. It closes the menu, invalidates cached account state and opens Matches for ordinary logout. The native alert bridge is cleaned up with a bounded wait after the server response. Identity changes observed on tab focus or page restoration refresh private page content as well as the header.
 
 ## Password changes and recovery
 
