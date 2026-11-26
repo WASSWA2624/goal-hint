@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { FilterDateTimeRow, FilterDialogSection, FilterFieldRow, FiltersDialog, FilterSection } from "@/components/ui/advanced-filter-dialog";
 import { SelectInput } from "@/components/ui/controls";
 import { DateTimeField } from "@/components/ui/date-time-field";
@@ -24,7 +24,7 @@ import { createMessages } from "@/i18n/messages";
 import { useDeviceTimeZone } from "@/i18n/use-messages";
 import { draftChanged, queryApplied } from "@/state/feed";
 import { useAppDispatch } from "@/state/hooks";
-import { DateStrip } from "./feed-dates";
+import { DateNavigationFilters, DateStrip, DayStrip } from "./feed-dates";
 import { FeedMarketPickerDialog, feedMarketLabels, type FeedMarketDraft } from "./feed-market-filters";
 import { FeedStatusSelect } from "./feed-query-selects";
 import { feedSortOptions } from "./feed-header";
@@ -32,10 +32,11 @@ import { OptionLogo } from "./filter-parts";
 import { DialogContent, DraftDateFields, LocationFields, Muted, Panel } from "./feed-filter-styles";
 
 /** One applied draft and shared field tree serve every viewport. */
-export function FeedFilters({ query, today, leagues, onApply, searchText, onSearchChange, onSearchSubmit, publishedMarkets, marketsUnavailable,
+export function FeedFilters({ query, today, dateQuery, dateToday, scope, performance, leagues, onApply, searchText, onSearchChange, onSearchSubmit, publishedMarkets, marketsUnavailable,
   onMarketsOpen, subscriberOnly = false, pending = false,
   providerOdds = publicPolicy.features.providerOdds }: {
   query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"]; onApply: (next: FeedQuery) => void;
+  dateQuery: FeedQuery; dateToday: ReportingDate; scope: string; performance: ReactNode;
   searchText: string; onSearchChange: (text: string, composing: boolean) => void; onSearchSubmit: (text: string) => void;
   subscriberOnly?: boolean; pending?: boolean; providerOdds?: boolean;
   publishedMarkets?: readonly FeedMarketPick[] | undefined; marketsUnavailable?: boolean | undefined;
@@ -44,6 +45,7 @@ export function FeedFilters({ query, today, leagues, onApply, searchText, onSear
   const messages = createMessages(query.locale), prefix = useId(), dispatch = useAppDispatch();
   const deviceZone = useDeviceTimeZone();
   const [draft, setDraft] = useState(() => feedFilterDraft(query, today, deviceZone));
+  const [draftScope, setDraftScope] = useState(scope);
   const [open, setOpen] = useState(false);
   const [marketDraft, setMarketDraft] = useState<FeedMarketDraft | null>(null);
   const marketsId = `${prefix}-markets`;
@@ -51,13 +53,19 @@ export function FeedFilters({ query, today, leagues, onApply, searchText, onSear
   const [probabilityFocus, setProbabilityFocus] = useState<"min" | "max" | null>(null);
   const [lastOdds, setLastOdds] = useState<"min" | "max">("max"), [oddsFocus, setOddsFocus] = useState<"min" | "max" | null>(null);
   const snapshot = useRef<FeedFilterDraft | null>(null), form = useRef<HTMLFormElement>(null), composing = useRef(false);
+  if (draftScope !== scope) {
+    setDraftScope(scope);
+    setDraft(feedFilterDraft(query, today, deviceZone));
+    setOpen(false);
+    setMarketDraft(null);
+  }
   const locked = subscriberOnly && draft.query.status !== "finished", live = draft.query.status === "live";
   const oddsEnabled = providerOdds && !locked;
   const complete = useMemo(() => compileFeedFilterDraft(draft, today, oddsEnabled), [draft, today, oddsEnabled]);
   const queryTooLong = useMemo(() => open && !!complete && feedFilterQueryTooLong(complete, today), [open, complete, today]);
   useEffect(() => { dispatch(queryApplied(query)); }, [dispatch, query]);
   useEffect(() => { if (complete) dispatch(draftChanged(complete)); }, [complete, dispatch]);
-  if (draft.zone !== deviceZone) setDraft({ ...feedFilterDraft(complete ?? draft.query, today, deviceZone), probability: draft.probability, odds: draft.odds });
+  if (draftScope === scope && draft.zone !== deviceZone) setDraft({ ...feedFilterDraft(complete ?? draft.query, today, deviceZone), probability: draft.probability, odds: draft.odds });
   const leagueList = useMemo(() => leagueOptions(leagues, createMessages(query.locale).text("match.competitionUnknown")), [leagues, query.locale]);
   const countryList = useMemo(() => countryOptions(leagues), [leagues]);
   const defaultSort = matchFeedPageDefaults.sort;
@@ -81,6 +89,9 @@ export function FeedFilters({ query, today, leagues, onApply, searchText, onSear
   function openFilters() {
     snapshot.current = draft;
     setDraft(feedFilterDraft({ ...query, search: searchText }, today, deviceZone));
+    setLastDate("to");
+    setLastProbability("max");
+    setLastOdds("max");
     setOpen(true);
   }
   function cancel() {
@@ -136,10 +147,14 @@ export function FeedFilters({ query, today, leagues, onApply, searchText, onSear
     }}>
     {native.map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
     <input type="hidden" name="tz" value={draft.zone} />
+    <DayStrip query={dateQuery} today={dateToday} onApply={onApply} filters={
+      <DateNavigationFilters locale={query.locale} dialogId={`${prefix}-filters`} open={open}
+        aria-description={count ? messages.plural("feed.filters.activeCount", count) : undefined}
+        count={count} onClick={openFilters} data-search-filters />
+    } />
+    {performance}
     <SearchBar name="q" maxLength={feedQueryRules.maximumSearchLength} value={searchText} autoComplete="off"
       label={messages.text("feed.filters.search")} submitLabel={messages.text("feed.search.submit")}
-      filters={{ label: messages.text("filters.title"), accessibleLabel: count ? messages.plural("filters.active", count) : messages.text("filters.title"),
-        count, showLabel: true, dialogId: `${prefix}-filters`, open, onOpen: openFilters }}
       onCompositionStart={() => { composing.current = true; }}
       onCompositionEnd={event => { composing.current = false; onSearchChange(event.currentTarget.value, false); }}
       onChange={event => onSearchChange(event.currentTarget.value, composing.current)} />

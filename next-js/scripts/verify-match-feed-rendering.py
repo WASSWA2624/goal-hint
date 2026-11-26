@@ -99,8 +99,11 @@ def verify_filter_form(visible, name):
         match(r'<label\b[^>]*>' + label + r'</label>', filter_form)
     match(r'<legend\b[^>]*>Probability \(%\)</legend>', filter_form)
     filter_button = match(r'<button\b[^>]*data-search-filters="[^"]*"[^>]*>[\s\S]*?</button>', filter_form).group()
-    match(r'\baria-label="Filters(?:, [^"]+ active)?"', filter_button)
-    match(r'<span>Filters</span>', filter_button)
+    match(r'<span\b[^>]*data-mobile-label=""[^>]*>Filters</span>', filter_button)
+    match(r'<span\b[^>]*data-desktop-label=""[^>]*>Advanced Filters</span>', filter_button)
+    assert filter_form.index("data-date-strip-days") < filter_form.index("data-date-strip-calendar") < filter_form.index("data-search-filters")
+    if "data-feed-performance-section" in filter_form:
+        assert filter_form.index("data-search-filters") < filter_form.index("data-feed-performance-section") < filter_form.index("data-feed-search")
     match(r'<button\b[^>]*data-market-trigger="[^"]*"[^>]*>[\s\S]*?<span>Markets</span></button>', filter_form)
     match(r'<div\b[^>]*data-market-choices="[^"]*"', filter_form)
     market_inputs = re.findall(r'<input\b[^>]*type="checkbox"[^>]*\bname="market"[^>]*>', filter_form)

@@ -49,7 +49,7 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
   const [attempt, retry] = useState(0);
   const scope = `${href}:${data.access.tier}:${data.access.signedIn}`;
   const key = `${scope}:${data.performanceVersion}`;
-  const [reply, setReply] = useState<Reply | null>(() => {
+  const readSeed = (): Reply | null => {
     if (seed?.href !== href) return null;
     if (!seed.reply) return { key, scope, attempt: 0, counts: null, asOf: data.asOf, refreshAfter: Infinity, failed: true };
     try {
@@ -58,7 +58,13 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
     } catch {
       return null;
     }
-  });
+  };
+  const [reply, setReply] = useState(readSeed);
+  const [replyScope, setReplyScope] = useState(scope);
+  if (replyScope !== scope) {
+    setReplyScope(scope);
+    setReply(readSeed());
+  }
   const latest = useRef({ query, today, data });
   useEffect(() => { latest.current = { query, today, data }; }, [data, query, today]);
   const { tier, signedIn } = data.access;

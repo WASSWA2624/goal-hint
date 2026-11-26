@@ -24,6 +24,8 @@ Slip numbers are eight-digit, zero-padded database sequences. SlipNumber retains
 
 Existing /s/ tokens continue reading their sealed snapshots, including previously shared custom slips. New custom slips stay in browser memory; their numbering record contains no selections. Published Best Slips use their existing canonical publication URLs. Existing 32-character referral codes and signed 30-day attribution cookies remain valid through legacyReferralCode; current invitations use eight numeric characters, uniqueness constraints and collision retries.
 
+Published Best Slips resolve their original selection by publication date and slip identity during preparation. The archive reader converts MariaDB's unsigned rank before auditing the selected snapshot, so the widened rank column works with existing share links and readable references.
+
 ## Native host and deployment
 
 The Flutter bridge supports canonical referral/shared/publication links and image-only custom slips. Root-document ownership, origin, nonce, visibility/lifecycle, activation and concurrency checks remain intact. It accepts bounded PNG bytes only: 32 files, 4 MiB per file, 12 MiB total, 1080px width and at most 8192px height. It never accepts a filesystem path or remote image. Older hosts fail promptly on unsupported readable-reference payloads.

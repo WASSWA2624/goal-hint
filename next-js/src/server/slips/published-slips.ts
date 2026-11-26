@@ -698,12 +698,12 @@ type PublishedSlipEntry = Readonly<{ row: SlipRow; parent: Publication; snapshot
 async function* readSelectedPublicationPages(tx: Prisma.TransactionClient, parents: ReadonlyMap<string, Publication>,
   batches: ReadonlyMap<string, readonly AppendBatch[]>, sourceSlipId: string) {
   for (const [id, parent] of parents) {
-    const rows = await tx.$queryRaw<SlipRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(snapshotJson AS CHAR),256) AS validIntegrity
+    const rows = await tx.$queryRaw<RawSlipRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(snapshotJson AS CHAR),256) AS validIntegrity
       FROM PublishedSlip WHERE publicationId=${id} AND CAST(JSON_UNQUOTE(JSON_EXTRACT(snapshotJson,'$.slip.id')) AS BINARY)=CAST(${sourceSlipId} AS BINARY)
       ORDER BY \`rank\` LIMIT 1`);
     const row = rows[0];
     if (!row) continue;
-    yield await readAuditedPublicationSnapshots(tx, new Map([[id, parent]]), [row], batches, row.rank - 1);
+    yield await readAuditedPublicationSnapshots(tx, new Map([[id, parent]]), [row], batches, Number(row.rank) - 1);
   }
 }
 

@@ -31,6 +31,12 @@ test("future markets compose explicit period, team, metric and exact lines", () 
   assert.notEqual(bettingShortForms.periods["full-time"].code, bettingShortForms.periods["including-extra-time"].code);
 });
 
+test("goal totals spell out the team and retain the over/under code", () => {
+  assert.equal(formatMarketShortLabel({ market: "total-goals", scope: "away" }), "Away O/U");
+  assert.equal(formatMarketShortLabel({ market: "totals", metric: "goals", scope: "home", period: "first-half" }), "1H Home O/U");
+  assert.equal(formatMarketShortLabel({ market: "total-goals", scope: "total" }), "O/U");
+});
+
 test("source aliases and unknown terminology never invent a market meaning", () => {
   assert.equal(marketShortCode("BTTS"), "BTTS");
   assert.equal(marketShortCode("draw_no_bet"), "DNB");

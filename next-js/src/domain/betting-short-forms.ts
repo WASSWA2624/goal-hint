@@ -142,6 +142,7 @@ const marketAliases: Readonly<Record<string, string>> = Object.freeze({
   spreads: "handicap", "correct-score": "exact-score", "halftime-fulltime": "half-full-result", outrights: "outright",
 });
 const normalise = (value: string) => value.trim().toLowerCase().replace(/[\s_]+/gu, "-");
+const goalTotalScopeLabels = { home: "Home", away: "Away" } as const;
 
 /** Unknown terminology stays readable instead of receiving a guessed code. */
 export function bettingShortForm(dictionary: Readonly<Record<string, BettingShortForm>>, key: string): BettingShortForm | undefined {
@@ -160,7 +161,11 @@ export function formatMarketShortLabel({ market, metric, period, scope, line, fa
 }>): string {
   const code = marketShortCode(market, fallback ?? market);
   const part = (dictionary: Readonly<Record<string, BettingShortForm>>, value?: string) => value ? bettingShortForm(dictionary, value)?.code ?? value : undefined;
-  return [part(periodShortForms, period), scope && scope !== "total" ? part(participantShortForms, scope) : undefined,
+  const side = scope && normalise(scope), marketKey = normalise(market);
+  const goalTotal = marketKey === "total-goals" || (marketKey === "totals" && (!metric || metric === "goals"));
+  const scopeLabel = goalTotal && (side === "home" || side === "away") ? goalTotalScopeLabels[side]
+    : side === "total" ? undefined : part(participantShortForms, scope);
+  return [part(periodShortForms, period), scopeLabel,
     metric && metric !== "goals" ? part(metricShortForms, metric) : undefined, code,
     line !== undefined && Number.isFinite(line) ? String(line) : undefined].filter(Boolean).join(" ");
 }

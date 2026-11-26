@@ -58,6 +58,8 @@ An authorized **Market-implied** extension can retain a separately labeled estim
 
 The desktop layout starts at 64rem (1,024 CSS pixels with a 16px root size). Phones and tablets below that threshold share the compact layouts. The Matches feed has further framing, kickoff and score changes below 48rem. Light and dark themes use the same layout rules. [Theme breakpoints](../next-js/src/styles/theme-foundation.ts), [Desktop layout hook](../next-js/src/components/ui/use-desktop-layout.ts), [Match tile styles](../next-js/src/components/match/team-stack-styles.ts).
 
+Matches and Slips place date tiles, a calendar trigger with the selected day number, and the advanced filter trigger in a single row. The date strip shows fewer tiles on narrow screens. Both pages place outcome totals and percentages immediately below the row. Matches puts its fixture search on the next full-width line. [Date navigation](../next-js/src/components/match/feed-dates.tsx), [Matches layout](../next-js/src/app/_components/feed-surface.tsx), [Slips filters](../next-js/src/components/slips/best-slips-filters.tsx).
+
 | Surface | Available market rows or filters | Desktop and mobile |
 | --- | --- | --- |
 | **Matches** and dated **Predictions** | One displayed pick per fixture, chosen from the applicable stored forecast, approved retrospective view or featured-decision path. Ongoing picks depend on access. | From 64rem, the grid separates **Market** and **Pick**, with the source icon and parenthesized probability in the pick track. Below 64rem, a stacked fixture tile puts the market above the pick with its source and probability. The feed template suppresses decimal odds at both widths. |
@@ -68,6 +70,8 @@ The desktop layout starts at 64rem (1,024 CSS pixels with a 16px root size). Pho
 | **Builder** | The four base families are selected by default, with the **Total goals** filter covering all five binary match goal lines. **Team goals** is opt-in and offers both directions at all five lines separately for Home and Away. Every generated leg needs the corresponding stored forecast and a valid exact quote. | The same filter fields and validated defaults drive both widths. The shared picker shows exact outcomes in family rows, with team totals grouped by Home and Away. Generated cards show the market and outcome for each opened leg. |
 
 The desktop Matches row for a published Local Engine result can read **Market: Match result** and **Pick: 1 (64%)**. On a phone the same market sits above **1 (64%)** in the fixture tile. A Builder or Best Slips leg can read **Total goals · O 3.5**, with the actual bookmaker price where available. `64%` and these example selections are illustrative. [Feed surface](../next-js/src/app/_components/feed-surface.tsx), [Match card](../next-js/src/components/match/match-card.tsx), [Feed market picker](../next-js/src/components/match/feed-market-filters.tsx), [Published outcome read](../next-js/src/server/matches/feed-markets-read.ts), [Slip market subset](../next-js/src/domain/slip-markets.ts), [Best Slips card](../next-js/src/components/slips/best-slip-card.tsx), [Builder market fields](../next-js/src/components/slips/slip-market-filter-fields.tsx).
+
+Compact match market labels use **Home O/U** and **Away O/U** for team goal totals and **O/U** for match totals. [Display vocabulary](../next-js/src/domain/betting-short-forms.ts).
 
 ### Match Details on desktop and mobile
 

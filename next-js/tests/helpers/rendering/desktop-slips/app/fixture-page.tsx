@@ -22,7 +22,7 @@ export default async function FixturePage({ params }: { params: Promise<{ scenar
   const builder = scenario === "builder" || scenario === "builder-auto";
   const automatic = scenario === "best-auto" || scenario === "builder-auto";
   const revoked = automatic && autoControl().mode === "forbidden";
-  const scenarios = ["desktop", "saved", "states", "locked", "locked-member", "responsive", "best-locked", "best-locked-member", "best-full", "builder", "best-auto", "builder-auto"];
+  const scenarios = ["desktop", "saved", "states", "best-states", "locked", "locked-member", "responsive", "best-locked", "best-locked-member", "best-full", "builder", "best-auto", "builder-auto"];
   if (!scenarios.includes(scenario)) notFound();
   const publicResult: BestSlipsResult = { day: parseReportingDate("2026-10-28"), state: "generated",
     slips: [{ rank: 1, totalOdds: "21.95", averageProbability: 0.7237666666666667, estimatedProbability: 0.45, matchCount: 3 }],
@@ -34,6 +34,8 @@ export default async function FixturePage({ params }: { params: Promise<{ scenar
     slip: { ...shownSlip, id: `desktop-best-${index}`, estimatedProbability: 0.45 },
   })) };
   const today = parseReportingDate("2026-10-28");
+  const bestMatchStates = matchStates.map((state, index) => index === 1
+    ? { ...state, liveClock: { phase: "first-half" as const, minute: 45, stoppageMinutes: 2 } } : state);
   return <PageMain><Container $wide><Stack $gap="sm">
     {!best && !builder && <h1>Desktop slip acceptance</h1>}
     <nav aria-label="Acceptance cases">
@@ -49,6 +51,8 @@ export default async function FixturePage({ params }: { params: Promise<{ scenar
           {createMessages("en").text(scenario === "locked-member" ? "account.subscribe" : "auth.signInToAccess")}
         </ButtonLink>
       </DesktopSlipDisclosure> : scenario === "states" ? <DesktopSlip slip={stateSlip} matchStates={matchStates} index={0} locale="en" />
+        : scenario === "best-states" ? <DesktopSlip slip={stateSlip} matchStates={bestMatchStates} index={0} locale="en"
+          shareSource={{ source: "best", day: today, slipId: stateSlip.id }} />
         : scenario === "responsive" ? <SlipCard slip={desktopSlip} index={0} locale="en" />
         : <DesktopSlip slip={desktopSlip} index={0} locale="en" {...(scenario === "saved" ? { results: savedResults } : {})} />}
     </section>
