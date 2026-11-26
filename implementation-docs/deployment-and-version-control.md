@@ -72,7 +72,13 @@ On 26 November 2026, staging activated `ef1b3663` from a clean, checksummed ZIP.
 
 Hosted HTTPS smoke checks confirmed the new build on Login and Matches. A synthetic account used the visible mobile Chrome menu with a throwing native alert bridge. One logout POST returned HTTP 200, the browser reached Matches and displayed the guest header, and the old cookie no longer resolved to an account.
 
-The release ZIP SHA-256 is `a65829796fd29c05d90d33f73a4d70173cfd5c7f8183e5e3f985e0ab4917c940`. Production promotion awaits staging review.
+The release ZIP SHA-256 is `a65829796fd29c05d90d33f73a4d70173cfd5c7f8183e5e3f985e0ab4917c940`.
+
+## Mobile account logout production verification
+
+After owner approval on 26 November 2026, production activated `ef1b3663` from the same staging ZIP. The two releases share the same migration inventory. The production MariaDB ledger verified all 94 migrations with zero pending before and after activation. The previous compatible web release is `8d2e3204`.
+
+Production HTTPS served the expected build. Login, Matches, the guest session endpoint, the password reset page and the one-day Matches feed returned HTTP 200. The reset page kept its privacy headers. Read-only touch Chrome checks showed the guest header in light and dark. The signed-in logout and old-cookie revocation were verified with a synthetic account on staging.
 
 ## Authentication rollout
 
