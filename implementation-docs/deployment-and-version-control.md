@@ -98,6 +98,16 @@ On 26 November 2026, the owner confirmed on the affected phone that logout close
 
 Production HTTPS served the expected build on Matches, Login, Best Slips and the password reset page. The reset page kept `noindex`, `no-store` and `no-referrer`. The guest session and one-day Matches feed returned HTTP 200. A guest logout form POST returned HTTP 303 to Matches with expired session cookies. Signed-in mobile logout and old-session revocation were verified on staging.
 
+## Connection recovery staging verification
+
+On 26 November 2026, staging activated `67ee51c6` (`zGp9X5QC6Y-hmunxB3tW2`) after verifying the release ZIP and all 94 migrations. The migration inventory matches the previous compatible release, `1d97a0c7`. Matches, Login, Best Slips, the guest session, the connection page and its worker and V2 manifest returned HTTP 200. The staging pages retained `noindex`.
+
+Hosted touch Chrome verified all 27 cached entry and asset digests in light and dark. Opening filtered Matches offline showed the connection message. Restoring connectivity and selecting **Try again** reopened the live page with the full original query. The worker made no fixture snapshot or write request. A separate signed-in test showed **Login** while the single logout POST was held. The server returned HTTP 303 to Matches and rejected the old synthetic session cookie.
+
+Local verification passed 164 focused web tests, six proxy checks, 19 Chrome authentication journey checks and 94 Flutter unit tests. Browser checks covered slow and stalled requests, exact-URL retry, guest header during logout, and the connection page at phone and desktop widths in both themes. Type checking, lint for changed files and the production-mode build passed. The updated native multi-process WebView scenarios require separate device or installed-host execution.
+
+The ZIP SHA-256 is `29df4039f8f4bf36c0f942df2d09a4031d9a251f59ab7a85eddd48fa68327177`.
+
 ## Authentication rollout
 
 On 26 November 2026, staging and production activated `acb7ce34` from the same checksummed ZIP. Both MariaDB databases verified all 93 migrations with zero pending. Production's previous compatible release, `a1e61cde`, is available for rollback.
