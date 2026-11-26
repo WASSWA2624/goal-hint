@@ -230,9 +230,9 @@ def subscription_discovery(origin):
 
 def trial_visibility(origin):
     for route in ("account", "subscribe"):
-        for state in ("trial-eligible", "trial-disabled", "off-trial-eligible", "member-free", "off-trial-active"):
+        for state in ("trial-eligible", "trial-disabled", "off-trial-eligible", "legacy-free-flag", "off-trial-active"):
             html = visible_html(request(origin, f"/en/{route}?state={state}").text)
-            if state == "trial-eligible":
+            if state in ("trial-eligible", "legacy-free-flag"):
                 match(r'data-free-trial="available"', html)
                 match("Your one-time trial runs for 30 days from account creation", html)
                 match("Activate free trial", html)
