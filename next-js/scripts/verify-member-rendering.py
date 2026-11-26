@@ -407,7 +407,8 @@ def checkout_journey(origin):
     headers = {"Cookie": "goal-hint-member=" + "a" * 43 + "; member-fixture-subscription=free"}
     match_page = visible_html(request(origin, path, headers=headers).text)
     destination = f"/en/subscribe?return={quote(path, safe='')}"
-    match(rf'href="{re.escape(destination)}"[^>]*data-unlock-link|data-unlock-link[^>]*href="{re.escape(destination)}"', match_page)
+    unlock = re.escape(destination + "&amp;checkout=1")
+    match(rf'<a\b(?=[^>]*\bdata-unlock-link)(?=[^>]*\bhref="{unlock}")[^>]*>', match_page)
     for state, label in [("free", "Restoring checkout"), ("wallet-only", "Restoring checkout"),
             ("off-inactive", "Subscriptions are not open yet"), ("no-plan", "Plans are unavailable"),
             ("no-payment-method", "No payment method is available")]:

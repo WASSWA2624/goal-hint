@@ -110,7 +110,7 @@ export async function verifyAuthenticationJourneys(page, { origin } = {}) {
   checks.push("Regular signup opens Matches and Account with a full session");
 
   await fresh("register");
-  await scenario("duplicate-phone");
+  await cookie("member-fixture-scenario", "duplicate-phone");
   await credentials();
   await submit();
   await confirmSignup();
