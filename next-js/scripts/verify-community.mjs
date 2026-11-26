@@ -115,7 +115,7 @@ async function verifyInvitations(page, origin, intercept, { screenshotDirectory 
   assert.ok(browser, "a second browser context is needed to check cross-device behavior");
   const devices = await Promise.all([browser.newContext(), browser.newContext()]);
   await Promise.all(devices.map(device => device.route(url => url.protocol === "https:" && externalHosts.has(url.hostname), intercept)));
-  const [guestDevice, otherDevice] = devices;
+  const [guestDevice] = devices;
   const [primary, other] = await Promise.all(devices.map(device => device.newPage()));
   for (const devicePage of [primary, other]) devicePage.setDefaultTimeout(12_000);
 
