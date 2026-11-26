@@ -56,6 +56,14 @@ Production verified signup confirmation and cancellation using one reserved synt
 
 The release ZIP SHA-256 is `8bd4d0400aa3da369ea67b9bfcae4d6604a28783e360f9f0ba1c29b2b12c7dbc`.
 
+## Default Matches API staging verification
+
+On 26 November 2026, the default 30-day API hit the application deadline in production, while the one-day request succeeded. Comparing opaque fixture IDs under different collations prevented efficient historical exclusion. The fix uses byte comparisons and avoids replay reads for fixtures without matching pointers. A populated MySQL test reduced the 30-day exact count from 138.3 seconds to 258–438 milliseconds, returning 2,033 matches. A staging MariaDB check with 14,173 temporary fixture IDs reduced combined historical membership from over 10 seconds to 36 milliseconds. A smaller MariaDB check verified equal counts for the old and new queries.
+
+The checksummed `21068d1b` ZIP ran in a private staging instance with `ghprod_test`, which verified all 93 migrations. Two requests each to the default and one-day feeds returned HTTP 200 with the expected 30-day and one-day bounds, 50 per page, and private caching headers. The first requests took 246 and 35 milliseconds. Both responses reported no fixtures and unavailable coverage in the staging database. The public staging slot served the separate Match Details release `816ffbbc` during these checks. Production promotion is pending review.
+
+The candidate ZIP SHA-256 is `1e36e69dddcb02ea54e24055fa367a7f7352b85e64c3af314d12bc6da56ebb18`.
+
 ## Verification limits
 
 The 26 November 2026 release record documents staging verification of `a1e61cde` with migration status and a synthetic worker check, with production promotion pending at that time. The application overview in this checkout records the earlier production verification of `ee5f6a44`. This audit did not query the hosted deployments, GitHub settings or the actual scheduler. The runbooks document manual approval, upload and activation, with scripts for validation and recurring jobs. Any host-side automation beyond those records needs confirmation from the host operator. [Staging verification record](https://github.com/WASSWA2624/goal-hint/commit/8fd09bfb18cae147d8d9729f01f2b10424908c28), [earlier rollout evidence](../APP_OVERVIEW.md), [release and worker runbooks](../next-js/docs/deployment/how-to-deploy.md).
