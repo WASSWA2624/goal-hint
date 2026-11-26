@@ -150,8 +150,8 @@ def main():
                                 assert bool(unlock_card) == (not free_fixture and not forecastless), (viewer, url, "locked preview state")
                                 if not free_fixture:
                                     assert 'data-fixture-id=' in text, (viewer, url, "unfinished public match preview")
-                            if not full and not free_fixture and not url.startswith("/en/matches?q="):
-                                assert 'data-match-access-required' in text and 'Unlock predictions' in text
+                            if not full and not free_fixture and not forecastless and not url.startswith("/en/matches?q="):
+                                assert 'data-match-access-required' in text and 'Unlock predictions' in text, (viewer, url, "prediction unlock")
                                 assert 'data-featured-pick="top"' not in text
                                 assert 'return=%2Fen%2Fmatches%2F' in text and 'checkout=1' in text
                             if url.startswith("/en/matches?q="):
