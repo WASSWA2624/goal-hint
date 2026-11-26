@@ -15,8 +15,12 @@ locale context without changing the URL contract.
 
 Historical inclusion and exclusion compare stored fixture IDs as bytes so
 JSON membership can use a consistent comparison across database collations.
-Replay validation only reads fixtures with a matching stored replay pointer.
-Counts and pagination use the same eligible fixtures in the same snapshot.
+Replay validation reads matching stored pointers in batches of up to 100
+fixture IDs. Each batch starts at the replay projection's primary key before
+joining fixture, cycle, publication and lifecycle records. It extracts the
+decision clock and team IDs together from the sealed JSON. The reader verifies
+the replay seal and occurrence before hydrating the projection. Counts and
+pagination use the same eligible fixtures in the same snapshot.
 
 ## Parameters and pagination
 

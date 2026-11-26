@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import test from 'node:test';
+import mariadb from 'mariadb';
 import { localFirstGoalMarketDefinitions, registeredForecastGoalMarkets } from '../src/domain/goal-market-definitions.ts';
+import { binaryFeaturedSettlement, localFeaturedDecisionVersion } from '../src/domain/local-featured-decision.ts';
 import { sameCardFixture } from '../src/domain/match-card.ts';
 import { currentFeaturedOutcome } from '../src/domain/match-details.ts';
 import { feedMarketPickId, feedMarketPickIdentity } from '../src/domain/feed-market-picks.ts';
@@ -14,6 +17,7 @@ import { LOCAL_FIRST_FORECAST_CASCADE } from '../src/server/fallback/fallback-co
 import { resolveFallbackCandidate } from '../src/server/fallback/fallback-resolution.ts';
 import { readNovemberReplayProjections } from '../src/server/intelligence/november-replay-store.ts';
 import { encodeShadowArchive } from '../src/server/intelligence/shadow-store.ts';
+import { createMatchFeedHandler } from '../src/server/matches/feed-http.ts';
 import { createMatchFeedService } from '../src/server/matches/feed-service.ts';
 import { readStoredFeedMarkets } from '../src/server/matches/feed-markets-read.ts';
 import { feedSql } from '../src/server/matches/feed-read.ts';
@@ -38,11 +42,52 @@ import { resultHash } from './helpers/result-sync-fixtures.mjs';
 import { savePageScenarios } from './helpers/page-capture.mjs';
 import { withPredictionPipeline } from './prediction-pipeline.mjs';
 
+function utcSqlDateTime(value) {
+  return new Date(value).toISOString().replace('T', ' ').replace('Z', '');
+}
 function sqlDate(value) {
-  return `'${new Date(value).toISOString().replace('T', ' ').replace('Z', '')}'`;
+  return `'${utcSqlDateTime(value)}'`;
 }
 function sqlArchive(value) {
   return `JSON_EXTRACT(CONVERT(X'${Buffer.from(encodeShadowArchive(value)).toString('hex')}' USING utf8mb4), '$')`;
+}
+
+async function seedFeedReplays(instance, reference, definition, fixtures) {
+  await instance.assertOwnership();
+  const database = await mariadb.createConnection({ host: '127.0.0.1', port: instance.port, database: instance.databaseName,
+    user: 'root', timezone: '+00:00', sessionVariables: { time_zone: '+00:00' } });
+  try {
+    const { homeTeamId, awayTeamId, seasonId } = reference;
+    const selected = { marketKey: definition.key, selection: 'away', probability: 0.8 };
+    const markets = [{ definition, selected: { selection: selected.selection, probability: selected.probability },
+      selections: definition.selections.map(({ key }) => ({ key, outcomes: binaryFeaturedSettlement(key === 'away' ? 0.8 : 0.1) })) }];
+    const rows = fixtures.map(({ id, kickoff, status, staleTeams }, index) => {
+      const evidenceCutoffAt = kickoff - 20 * 60_000, generatedAt = kickoff + 15 * 60_000, activatedAt = kickoff + 20 * 60_000;
+      const revisionId = resultHash(`feed-replay-batch:${index}`);
+      const body = encodeShadowArchive({ fixtureId: id, revisionId, sourceRevisionId: null, cycleId: null,
+        kickoffAt: kickoff, scheduleVersion: null, evidenceCutoffAt, generatedAt, activatedAt, markets, selected,
+        featuredDecision: { ...selected, version: localFeaturedDecisionVersion, status: 'forecast-only', reason: 'no-verified-odds' },
+        decisionAt: kickoff - 10 * 60_000, teams: staleTeams ? [awayTeamId, homeTeamId] : [homeTeamId, awayTeamId] });
+      return { id, revisionId, kickoffAt: utcSqlDateTime(kickoff), evidenceCutoffAt: utcSqlDateTime(evidenceCutoffAt),
+        generatedAt: utcSqlDateTime(generatedAt), activatedAt: utcSqlDateTime(activatedAt), status, body };
+    });
+    await database.batch(`INSERT INTO FootballFixture
+      (id,provider,externalId,homeTeamId,awayTeamId,seasonId,kickoff,eatDate,status,providerStatus,retrievedAt,updatedAt)
+      VALUES (?,'api-football',?,?,?,?,?,DATE(?),?,?,?,?)`, rows.map((row, index) => [row.id, 51_000 + index, homeTeamId, awayTeamId, seasonId,
+      row.kickoffAt, row.kickoffAt, row.status, row.status === 'live' ? '1H' : 'FT', row.activatedAt, row.activatedAt]));
+    // The replay revision supplies the foreign key. The HTTP reader uses the compact projection.
+    await database.batch(`INSERT INTO NovemberReplayRevision
+      (id,fixtureId,kickoffAt,evidenceCutoffAt,evidenceHash,generatedAt,stagedAt,status,integrity,body)
+      VALUES (?,?,?,?,?,?,?,'estimated',SHA2(CAST(JSON_EXTRACT(?,'$') AS CHAR CHARACTER SET utf8mb4),256),JSON_EXTRACT(?,'$'))`,
+    rows.map((row) => [row.revisionId, row.id, row.kickoffAt, row.evidenceCutoffAt, resultHash(`evidence:${row.revisionId}`),
+      row.generatedAt, row.activatedAt, row.body, row.body]));
+    await database.batch(`INSERT INTO NovemberReplayProjection
+      (fixtureId,revisionId,kickoffAt,evidenceCutoffAt,activationOperationId,changedAt,integrity,body)
+      VALUES (?,?,?,?,'feed-replay-batch',?,SHA2(CAST(JSON_EXTRACT(?,'$') AS CHAR CHARACTER SET utf8mb4),256),JSON_EXTRACT(?,'$'))`,
+    rows.map((row) => [row.id, row.revisionId, row.kickoffAt, row.evidenceCutoffAt, row.activatedAt, row.body, row.body]));
+  } finally {
+    await database.end();
+  }
 }
 
 test('published Matches windows can reference replay projections in any date range', () => {
@@ -58,6 +103,22 @@ test('published Matches windows can reference replay projections in any date ran
   assert.equal(hasReplay('2026-11-30', 'Africa/Kampala'), true);
   assert.equal(hasReplay('2026-12-01', 'Africa/Kampala'), true);
   assert.equal(hasReplay('2026-11-18', 'Africa/Kampala', false), false);
+});
+
+test('replay hydration starts at the requested projection keys in bounded batches', async () => {
+  const ids = Array.from({ length: 101 }, (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`);
+  const statements = [];
+  const tx = { $queryRaw: async (statement) => { statements.push(statement); return []; } };
+  const projections = await readNovemberReplayProjections(tx, [...ids, ids[0]]);
+  assert.equal(projections.size, 0);
+  assert.deepEqual(statements.map(({ values }) => values), [ids.slice(0, 100), ids.slice(100)]);
+  for (const { sql } of statements) {
+    assert.match(sql, /SELECT STRAIGHT_JOIN p\.\*,TRUE AS validIntegrity\s+FROM NovemberReplayProjection p FORCE INDEX \(PRIMARY\)/u);
+    assert.match(sql, /WHERE p\.fixtureId IN \([^)]*\) AND p\.revisionId IS NOT NULL/u);
+    assert.match(sql, /p\.integrity=SHA2\(CAST\(p\.body AS CHAR CHARACTER SET utf8mb4\),256\)/u);
+    assert.match(sql, /LEFT JOIN JSON_TABLE\(JSON_UNQUOTE\(JSON_EXTRACT\(p\.body,'\$\.canonicalBody'\)\)/u);
+    assert.equal(sql.match(/JSON_EXTRACT\(p\.body,'\$\.canonicalBody'\)/gu)?.length, 1);
+  }
 });
 
 test('November replay has one display across feed, exact outcome and detail while originals remain reproducible', { timeout: 480_000 }, async (t) => {
@@ -367,5 +428,54 @@ test('November replay has one display across feed, exact outcome and detail whil
     assert.equal(trustedMatch.total, 1);
     assert.equal(trustedMatch.records[0].fixtureId, provider.fixture.id);
     assert.equal(trustedMatch.records[0].filteredPrediction.source, 'api-football');
+
+    await t.test('bare 30-day and one-day HTTP lists keep exact replay-only membership across pages', async () => {
+      p.setTime(Date.parse('2026-11-19T12:00:00Z'));
+      const list = createMatchFeedService({ database: p.a, competitionIds: [39], clock, providerOdds: false, includePerformance: false });
+      const handler = createMatchFeedHandler((parameters, context) => list.query(parameters, {
+        ...context, publishedForecasts: true, predictedMatchesOnly: true,
+      }), clock, async () => free);
+      const read = async (search = '') => {
+        const response = await handler(new Request(`https://example.test/api/matches${search}`));
+        const body = await response.json();
+        assert.equal(response.status, 200, JSON.stringify(body.error));
+        assert.equal(response.headers.get('cache-control'), 'private, no-store');
+        assert.equal(response.headers.get('vary'), 'Cookie');
+        return matchFeedResponseSchema.parse(body);
+      };
+      const before = await read();
+      assert.equal(before.total, before.records.length);
+      const history = Array.from({ length: 105 }, (_, index) => ({ id: randomUUID(),
+        kickoff: Date.parse('2026-11-17T08:00:00Z') + index * 60_000, status: 'finished-regulation' }));
+      const today = [{ id: randomUUID(), kickoff: Date.parse('2026-11-19T08:00:00Z'), status: 'finished-regulation' },
+        { id: randomUUID(), kickoff: Date.parse('2026-11-19T10:00:00Z'), status: 'live' }];
+      const excluded = [{ ...history[0], id: randomUUID(), staleTeams: true },
+        { ...history[0], id: randomUUID(), kickoff: Date.parse('2026-10-20T08:00:00Z') }];
+      const reference = await p.a.query((tx) => tx.footballFixture.findUniqueOrThrow({ where: { id: fixtureId } }));
+      await seedFeedReplays(p.instance, reference, result, [...history, ...today, ...excluded]);
+      const first = await read(), day = await read('?when=today');
+      assert.deepEqual([first.range.from, first.range.to], ['2026-10-21', '2026-11-19']);
+      assert.deepEqual([day.range.from, day.range.to], ['2026-11-19', '2026-11-19']);
+      assert.equal(first.total, before.total + history.length + today.length);
+      assert.equal(first.pageSize, 50);
+      assert.equal(first.records.length, 50);
+      assert.equal(first.nextPage, 2);
+      assert.equal(first.performance, null);
+      assert.equal(day.total, today.length);
+      assert.deepEqual(day.records.map(({ fixtureId }) => fixtureId), [today[1].id, today[0].id]);
+      assert.equal(day.records[0].retrospective, null, 'the guest cannot see a live replay pick');
+      assert.equal(day.records[1].retrospective.pick.selection, 'away-win');
+
+      const second = await read(new URL(first.links.next, 'https://example.test').search);
+      const third = await read(new URL(second.links.next, 'https://example.test').search);
+      const records = [...first.records, ...second.records, ...third.records];
+      assert.equal(second.total, first.total);
+      assert.equal(third.total, first.total);
+      assert.equal(third.links.next, null);
+      assert.equal(records.length, first.total);
+      assert.deepEqual(new Set(records.map(({ fixtureId }) => fixtureId)),
+        new Set([...before.records.map(({ fixtureId }) => fixtureId), ...history.map(({ id }) => id), ...today.map(({ id }) => id)]));
+      assert.equal(third.records.find(({ fixtureId }) => fixtureId === history[0].id)?.retrospective?.pick.selection, 'away-win');
+    });
   }, { migrationTimeoutMs: 300_000 });
 });

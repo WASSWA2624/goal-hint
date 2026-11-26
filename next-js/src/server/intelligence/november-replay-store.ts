@@ -204,35 +204,59 @@ function projectionFromRow(row: HistoryRow): NovemberReplayProjection {
 
 /** Shared eligibility for public batch hydration and SQL outcome filtering. */
 const projectionBody = Prisma.sql`JSON_UNQUOTE(JSON_EXTRACT(p.body,'$.canonicalBody'))`;
-const storedDecisionAt = Prisma.sql`CAST(JSON_UNQUOTE(JSON_EXTRACT(${projectionBody},'$.decisionAt')) AS SIGNED)`;
-const decisionTime = Prisma.sql`COALESCE(TIMESTAMPADD(MICROSECOND,${storedDecisionAt}*1000,'1970-01-01 00:00:00.000'),p.evidenceCutoffAt)`;
+const activeNovemberReplayFixture = Prisma.sql`JOIN FootballFixture f ON f.id=p.fixtureId
+  AND f.activeCycleId<=>p.cycleId AND f.kickoff=p.kickoffAt`;
+
+function activeNovemberReplayScope(storedDecisionAt: Prisma.Sql, homeTeamId: Prisma.Sql, awayTeamId: Prisma.Sql) {
+  const decisionTime = Prisma.sql`COALESCE(TIMESTAMPADD(MICROSECOND,${storedDecisionAt}*1000,'1970-01-01 00:00:00.000'),p.evidenceCutoffAt)`;
+  return {
+    joins: Prisma.sql`LEFT JOIN PredictionCycle c ON c.id=p.cycleId AND c.fixtureId=p.fixtureId AND c.state='closed' AND c.lockedSetId<=>p.sourceRevisionId
+      AND c.scheduleVersion=p.scheduleVersion AND c.kickoffAt=p.kickoffAt AND c.closedAt>=${decisionTime}
+      LEFT JOIN PredictionSet s ON s.id=p.sourceRevisionId AND s.cycleId=p.cycleId AND s.fixtureId=p.fixtureId
+      LEFT JOIN FixtureLifecycleState l ON l.fixtureId=f.id
+      LEFT JOIN PredictionPublicationBarrier b ON b.cycleId=c.id`,
+    conditions: Prisma.sql`p.revisionId IS NOT NULL
+      AND p.integrity=SHA2(CAST(p.body AS CHAR CHARACTER SET utf8mb4),256) AND f.provider='api-football'
+      AND (p.cycleId IS NULL OR c.id IS NOT NULL)
+      AND (p.sourceRevisionId IS NULL OR s.id IS NOT NULL
+        AND JSON_UNQUOTE(JSON_EXTRACT(s.candidateJson,'$.context.context.home.teamId'))=f.homeTeamId
+        AND JSON_UNQUOTE(JSON_EXTRACT(s.candidateJson,'$.context.context.away.teamId'))=f.awayTeamId)
+      AND ((${storedDecisionAt} IS NULL AND p.sourceRevisionId IS NOT NULL) OR (${homeTeamId}=f.homeTeamId AND ${awayTeamId}=f.awayTeamId))
+      AND f.status IN ('live','finished-regulation','finished-extra-time','finished-penalties') AND l.issue IS NULL
+      AND (l.actualStartedAt IS NULL OR l.actualStartedAt>${decisionTime}
+        OR (${storedDecisionAt} IS NULL AND l.actualStartedAt=p.evidenceCutoffAt))
+      AND (b.closedAt IS NULL OR b.closedAt>=${decisionTime})`,
+  };
+}
+
+const broadReplayScope = activeNovemberReplayScope(
+  Prisma.sql`CAST(JSON_UNQUOTE(JSON_EXTRACT(${projectionBody},'$.decisionAt')) AS SIGNED)`,
+  Prisma.sql`JSON_UNQUOTE(JSON_EXTRACT(${projectionBody},'$.teams[0]'))`,
+  Prisma.sql`JSON_UNQUOTE(JSON_EXTRACT(${projectionBody},'$.teams[1]'))`);
+
 export const activeNovemberReplaySql = Prisma.sql`(SELECT p.*,TRUE AS validIntegrity
-  FROM NovemberReplayProjection p JOIN FootballFixture f ON f.id=p.fixtureId AND f.activeCycleId<=>p.cycleId AND f.kickoff=p.kickoffAt
-  LEFT JOIN PredictionCycle c ON c.id=p.cycleId AND c.fixtureId=p.fixtureId AND c.state='closed' AND c.lockedSetId<=>p.sourceRevisionId
-    AND c.scheduleVersion=p.scheduleVersion AND c.kickoffAt=p.kickoffAt AND c.closedAt>=${decisionTime}
-  LEFT JOIN PredictionSet s ON s.id=p.sourceRevisionId AND s.cycleId=p.cycleId AND s.fixtureId=p.fixtureId
-  LEFT JOIN FixtureLifecycleState l ON l.fixtureId=f.id
-  LEFT JOIN PredictionPublicationBarrier b ON b.cycleId=c.id
-  WHERE p.revisionId IS NOT NULL AND p.integrity=SHA2(CAST(p.body AS CHAR CHARACTER SET utf8mb4),256) AND f.provider='api-football'
-    AND (p.cycleId IS NULL OR c.id IS NOT NULL)
-    AND (p.sourceRevisionId IS NULL OR s.id IS NOT NULL
-      AND JSON_UNQUOTE(JSON_EXTRACT(s.candidateJson,'$.context.context.home.teamId'))=f.homeTeamId
-      AND JSON_UNQUOTE(JSON_EXTRACT(s.candidateJson,'$.context.context.away.teamId'))=f.awayTeamId)
-    AND ((${storedDecisionAt} IS NULL AND p.sourceRevisionId IS NOT NULL) OR
-      (JSON_UNQUOTE(JSON_EXTRACT(${projectionBody},'$.teams[0]'))=f.homeTeamId AND
-       JSON_UNQUOTE(JSON_EXTRACT(${projectionBody},'$.teams[1]'))=f.awayTeamId))
-    AND f.status IN ('live','finished-regulation','finished-extra-time','finished-penalties') AND l.issue IS NULL
-    AND (l.actualStartedAt IS NULL OR l.actualStartedAt>${decisionTime}
-      OR (${storedDecisionAt} IS NULL AND l.actualStartedAt=p.evidenceCutoffAt))
-    AND (b.closedAt IS NULL OR b.closedAt>=${decisionTime}))`;
+  FROM NovemberReplayProjection p ${activeNovemberReplayFixture} ${broadReplayScope.joins} WHERE ${broadReplayScope.conditions})`;
+
+const replayFields = Prisma.sql`LEFT JOIN JSON_TABLE(${projectionBody}, '$' COLUMNS (
+  hasDecisionAt TINYINT EXISTS PATH '$.decisionAt',
+  decisionAt VARCHAR(64) PATH '$.decisionAt' NULL ON EMPTY NULL ON ERROR,
+  homeTeamId VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PATH '$.teams[0]' NULL ON EMPTY NULL ON ERROR,
+  awayTeamId VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PATH '$.teams[1]' NULL ON EMPTY NULL ON ERROR
+)) AS replayFields ON TRUE`;
+// Match the original distinction between a missing key and casting a present JSON null.
+const batchReplayScope = activeNovemberReplayScope(
+  Prisma.sql`CAST(CASE WHEN replayFields.hasDecisionAt=1 THEN COALESCE(replayFields.decisionAt,'null') END AS SIGNED)`,
+  Prisma.sql`replayFields.homeTeamId`, Prisma.sql`replayFields.awayTeamId`);
 
 /** The public role reads only the compact projection, under the same fixture snapshot as Matches. */
 export async function readNovemberReplayProjections(tx: Tx, fixtureIds: readonly string[]): Promise<ReadonlyMap<string, NovemberReplayProjection>> {
   const ids = [...new Set(fixtureIds)], values = new Map<string, NovemberReplayProjection>();
   if (ids.some((id) => !historyId.safeParse(id).success)) return deny("invalid-input");
   for (let offset = 0; offset < ids.length; offset += 100) {
-    const rows = await tx.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT p.* FROM ${activeNovemberReplaySql} p
-      WHERE p.fixtureId IN (${Prisma.join(ids.slice(offset, offset + 100))})`);
+    // Start each requested batch at the projection primary key before joining the larger fixture archive.
+    const rows = await tx.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT STRAIGHT_JOIN p.*,TRUE AS validIntegrity
+      FROM NovemberReplayProjection p FORCE INDEX (PRIMARY) ${activeNovemberReplayFixture} ${replayFields} ${batchReplayScope.joins}
+      WHERE p.fixtureId IN (${Prisma.join(ids.slice(offset, offset + 100))}) AND ${batchReplayScope.conditions}`);
     for (const row of rows) {
       const projection = projectionFromRow(row);
       values.set(projection.fixtureId, projection);
