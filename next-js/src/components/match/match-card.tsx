@@ -625,9 +625,10 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   // Only a published eligible family is locked: forecast null means none was published, and the gated families already
   // name the published markets, so a filter outside them shows the subscriber's no-prediction reason.
   const best = snapshotPick?.family ?? featured?.family ?? (suppressPick ? null : bestCardFamily(fixture, eligible, !publishedMarket));
-  const feedLocked = phoneFeed && !offline && (!signedIn || requiresAccess || gatedForecast !== null);
-  const gated = feedLocked || lockedPrediction || (snapshotPick ? requiresAccess || gatedForecast !== null
-    : !isCompletedFixtureStatus(fixture.status) && best !== null && (requiresAccess || gatedForecast !== null));
+  const guestFeed = phoneFeed && !offline && !signedIn;
+  const gated = lockedPrediction || (snapshotPick ? requiresAccess || gatedForecast !== null
+    : !isCompletedFixtureStatus(fixture.status) && best !== null && (requiresAccess || gatedForecast !== null || guestFeed));
+  const feedLocked = phoneFeed && !offline && gated;
   const detailHref = matchHref(fixture.fixtureId, analysisSlug, locale);
   const unlockReturnTo = accessReturnTo ?? detailHref;
   const unlockLabel = accessReturnTo ? "paywall.unlockSlip" : "paywall.unlockPredictions";
