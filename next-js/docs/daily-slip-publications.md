@@ -304,3 +304,11 @@ published legs used distinct fixtures, and all ten new legs met the 30-minute
 kickoff buffer. Pre-cutover archive checksums matched. Matches, Builder, Best
 Slips, public APIs and the apex redirect passed production HTTPS smoke checks.
 The production ledger verified all 92 migrations after promotion.
+
+Staging activated operational-window release `ee5f6a44` on 26 November after
+an isolated MariaDB restore verified the migration. The staging ledger then
+verified all 93 migrations. Matches, Builder, Best Slips, all six band API
+queries and performance pages passed smoke checks. The matching worker could
+read the migrated database. The staging catalog had zero fixtures in the
+current operational window. Genuine MySQL acceptance covered a 20-slip append,
+concurrent fixture claims and preservation of original publications.
