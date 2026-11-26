@@ -256,3 +256,13 @@ database role, and writes its run result to `~/goal-hint-slip-publisher/private/
 The first production run published four slips in the 2.50–5.00 band. The public
 API served all four, and the 14 stored selections satisfied fixture uniqueness
 and the 30-minute kickoff buffer.
+
+On 26 November 2026, staging activated web release `41a1cdf6`. Matches,
+Builder, Best Slips, the corresponding public data reads and the account
+session check returned HTTP 200. The staging Matches response includes
+`noindex`. Both hosted migration ledgers verified all 92 required migrations.
+The staging web role could read the existing lifecycle and publication barrier
+tables. The staging snapshot had no current fixture cohort for a live
+publication run. The isolated MySQL suite passed all 66 publication tests,
+including concurrent writers and immutable archive checks. Production
+promotion remained pending at this verification point.
