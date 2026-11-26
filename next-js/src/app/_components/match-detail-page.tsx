@@ -10,7 +10,7 @@ import type { SubscriptionOffer } from "@/domain/subscription-offer";
 import type { InsightsPreview } from "@/domain/match-insights";
 import type { DetailPageResult } from "@/server/matches/detail-page";
 import { createMessages } from "@/i18n/messages";
-import { PublicShell } from "./public-shell";
+import { PublicFooter, PublicShell } from "./public-shell";
 
 export function MatchDetailPage({ result, today, locale = "en", retryHref, historyResult = result, historyQuery = "", preview = null, previewPromise, showAccount = false, offer = null }: {
   result: DetailPageResult; today: ReportingDate; locale?: string; retryHref: string;
@@ -18,8 +18,9 @@ export function MatchDetailPage({ result, today, locale = "en", retryHref, histo
   showAccount?: boolean; offer?: SubscriptionOffer | null;
 }) {
   const messages = createMessages(locale);
-  return <PublicShell showAccount={showAccount} locale={locale} today={today} app={result.data !== null} current="today">
+  return <PublicShell showAccount={showAccount} locale={locale} today={today} app={result.data !== null} current="today" desktopWorkspace={result.data !== null}>
     {result.data ? <LiveMatchDetail showAccount={showAccount} offer={offer} initial={result.data} today={today} locale={locale} preview={preview}
+      footer={<PublicFooter locale={locale} today={today} wide />}
       {...(previewPromise ? { previewPromise } : {})}>
       <RevisionHistory current={result.data} result={historyResult} query={historyQuery} locale={locale} open />
     </LiveMatchDetail> : <Stack>

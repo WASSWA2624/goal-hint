@@ -2,6 +2,12 @@ import { predictionShortForms } from "../../domain/betting-short-forms.ts";
 
 /** Display codes and their explanations are independent of stored selection identifiers. */
 export const predictionMessages = {
+  "prediction.summary.title": "Top Predictions",
+  "prediction.summary.other": "Other top predictions",
+  "prediction.summary.winning": "Winning",
+  "prediction.summary.losing": "Losing",
+  "prediction.summary.teamToWin": "{team} to win",
+  "prediction.summary.inPlayOdds": "In-play odds",
   "prediction.short.home-win": predictionShortForms["home-win"].code,
   "prediction.short.draw": predictionShortForms["draw"].code,
   "prediction.short.away-win": predictionShortForms["away-win"].code,

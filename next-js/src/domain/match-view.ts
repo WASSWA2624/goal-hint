@@ -8,7 +8,9 @@ import { isMarketFamily, type MarketFamily } from "./markets.ts";
 export const matchSections = ["stats", "h2h", "form", "lineups", "players", "news", "injuries", "context", "referee", "history"] as const;
 export type MatchSection = (typeof matchSections)[number];
 export const matchDetailTabs = ["stats", "markets", "lineups", "form", "analysis", "events", "standings", "players", "news", "venue", "referee", "history"] as const;
-export type MatchDetailTab = (typeof matchDetailTabs)[number];
+export type MatchInformationTab = (typeof matchDetailTabs)[number];
+export const desktopMatchDetailTabs = ["details", "stats", "events", "lineups", "form", "standings", "players", "markets", "analysis", "news", "venue", "referee", "history"] as const satisfies readonly ("details" | MatchInformationTab)[];
+export type MatchDetailTab = MatchInformationTab | "details";
 export const marketCategories = ["popular", "results", "goals", "btts", "double-chance", "draw-no-bet", "handicaps", "corners",
   "cards", "halves", "correct-score", "clean-sheets", "specials"] as const;
 export type MarketCategory = (typeof marketCategories)[number];
@@ -65,7 +67,7 @@ export function parseMatchView(input: Parameters): MatchView {
   const search = (get("mq") ?? "").normalize("NFC").replace(/[\u0000-\u001f\u007f]/gu, "").slice(0, 80);
   const item = get("item"), tab = get("tab"), market = get("market"), competition = get("comp");
   return {
-    panel: oneOf<MatchDetailTab | "">([...matchDetailTabs, ""], get("panel") === "h2h" ? "form" : get("panel"), "") || null,
+    panel: oneOf<MatchDetailTab | "">([...desktopMatchDetailTabs, ""], get("panel") === "h2h" ? "form" : get("panel"), "") || null,
     marketsOpen: get("mk") !== "closed",
     marketCategory: oneOf(marketCategories, get("mcat"), "popular"),
     marketSearch: search,

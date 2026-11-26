@@ -3,6 +3,7 @@
 import { createGlobalStyle, css } from "styled-components";
 import { controlMetrics } from "@/components/ui/control-layout";
 import { themeCssVariables } from "./theme-css";
+import { media } from "./theme";
 
 export const GlobalStyle = createGlobalStyle<{ $windowsHost: boolean }>`
   *,
@@ -23,9 +24,11 @@ export const GlobalStyle = createGlobalStyle<{ $windowsHost: boolean }>`
   }
 
   /* Keep browser navigation aligned, while Windows WebView reserves space only when the document scrolls. */
-  html:has([data-admin-shell], [data-match-detail]) { scrollbar-gutter: ${({ $windowsHost }) => $windowsHost ? "auto" : "stable"}; }
-  /* Match tabs reserve their own space; anchoring a visible footer would move the page instead. */
-  html:has([data-match-detail]) { overflow-anchor: none; }
+  html:has([data-admin-shell]) { scrollbar-gutter: ${({ $windowsHost }) => $windowsHost ? "auto" : "stable"}; }
+  ${media.belowDesktop} {
+    /* Match tabs reserve their own space; anchoring a visible footer would move the page instead. */
+    html:has([data-match-detail]) { scrollbar-gutter: ${({ $windowsHost }) => $windowsHost ? "auto" : "stable"}; overflow-anchor: none; }
+  }
   /* Matches handles deliberate pulls in place. Suppress the browser's own pull and top-edge effect. */
   html:has([data-matches-feed]), body:has([data-matches-feed]) { overscroll-behavior-y: none; }
 

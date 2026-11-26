@@ -270,7 +270,7 @@ function useMarketSearch(value: string) {
 }
 
 /** All Markets & Odds: open initially, with categories, search and a nested panel per market. */
-export const MarketsCard = memo(function MarketsCard({ embedded = false }: { embedded?: boolean }) {
+export const MarketsCard = memo(function MarketsCard({ embedded = false, includeFeatured = false }: { embedded?: boolean; includeFeatured?: boolean }) {
   const { data, messages, view, update } = useDetails();
   const list = useRef<HTMLUListElement>(null);
   useReturnFocus(list, view.market);
@@ -279,14 +279,15 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
   // As on the verdict, only a published forecast is locked.
   if ("gated" in data.history && data.snapshot) return <SubscriberRow><SubscriberNotice kind="markets" signedIn={data.access.signedIn} returnTo={data.route.path} /></SubscriberRow>;
   const replayMarkets = data.selection === "applicable" && data.retrospectiveMarkets?.length ? data.retrospectiveMarkets : null;
-  const current = embedded ? currentFeaturedOutcome(data) : null;
-  const featured = embedded ? current ? current.key === current.family && !current.featuredQuote ? current.family : null : featuredFamily(data) : null;
+  const suppressFeatured = embedded && !includeFeatured;
+  const current = suppressFeatured ? currentFeaturedOutcome(data) : null;
+  const featured = suppressFeatured ? current ? current.key === current.family && !current.featuredQuote ? current.family : null : featuredFamily(data) : null;
+  const publishedFamilies = new Set(snapshot?.markets.map(({ market }) => market.family));
   const goalMarkets = data.extendedMarkets?.markets.filter(({ key, source }) => source !== "market-implied" &&
-    key !== "goal:full-time:totals:total:2.5:binary") ?? [];
+    (key !== "goal:full-time:totals:total:2.5:binary" || includeFeatured && !publishedFamilies.has("total-goals"))) ?? [];
   const published = replayMarkets?.length ?? (snapshot?.markets.filter(entry => entry.market.family !== featured).length ?? 0) + goalMarkets.length;
   const label = (family: MarketFamily) => marketName(messages, family);
-  const publishedFamilies = new Set(snapshot?.markets.map(({ market }) => market.family));
-  const shown = visibleMarkets(view.marketCategory, query, label).filter(family => family !== featured && publishedFamilies.has(family));
+  const shown = visibleMarkets(view.marketCategory, query, label).filter(family => (family !== featured || family === view.market) && publishedFamilies.has(family));
   const needle = query.normalize("NFC").trim().toLocaleLowerCase();
   const shownGoals = goalMarkets.filter((market) => needle
     ? [market.label, ...market.selections.map(({ label }) => label)].some((label) => label.toLocaleLowerCase().includes(needle))

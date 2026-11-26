@@ -4,7 +4,8 @@ Prompt 035 serves `/en/matches/{fixtureId}/{home-v-away}` through the existing
 stored-data detail service. API and page share `readPublicMatchDetail`, the 031
 response cache, permission checks and safe DTO. Server Components call the reader
 directly. Request-scoped React caching shares one stored projection between the
-page and its metadata; no internal HTTP request or client polling is necessary.
+page and its metadata without an internal HTTP request. Once loaded, the browser
+refreshes observations through the existing live detail path.
 
 ## Routing and rendering
 
@@ -15,9 +16,10 @@ a truthful temporary-failure page with an ordinary retry link; they cannot becom
 an unpublished fixture or a false 404. Prompt 036 accepts the bounded API history
 query parameters on this same canonical page; see [revision history](revision-history-page.md).
 
-Initial HTML includes names, EAT kickoff, all four available/unavailable markets,
-selected probabilities, source labels, explanation and score/outcomes. Styled
-components deliver CSS before content. Unique titles, descriptions, canonical URLs
+Initial HTML includes the selected desktop section, with fixture facts and the
+published Top Predictions summary on the default view. The compact scoreboard
+and phone chrome are available before hydration below the desktop breakpoint.
+Styled components deliver CSS before content. Unique titles, descriptions, canonical URLs
 and social metadata use the service identity and bundled 1200×630 brand preview.
 Pages remain `noindex, follow` under the existing prelaunch policy; 042 owns launch
 indexing and structured data.
@@ -51,8 +53,9 @@ indexing and structured data.
 - Exact-score prediction remains excluded by the recorded launch decision and
   disabled public policy. Displaying an actual regulation score does not enable it.
 
-`MatchDetailPage`/`MatchDetail` compose the read-only revision history below the
-primary match content. The optional `history` slot remains available for reuse.
+`MatchDetailPage` and `LiveMatchDetail` provide the read-only revision history to
+Pick History. On desktop, the current-summary link opens the Match Details section.
+On mobile it returns to the scoreboard above the tabs.
 Shared team rows retain native reserved logos, broken-image initials and square
 controls. All public reads remain anonymous and cannot generate predictions,
 call providers, dispatch jobs or settle outcomes.
@@ -73,7 +76,6 @@ For UI-only iterations, `--reuse=.tmp/match-feed-ID` reuses projections beneath 
 validated owned temporary directory with a successful SQL log; it does not rerun
 or claim a new database test. Normal runs always prepare fresh MySQL fixtures.
 
-Browser acceptance checks initial content, disclosures, keyboard use, mobile/zoom,
-broken logos, unsafe URLs and real-detail Back navigation from a filtered
-three-page feed. This completes 034's real-destination handoff. No migration or
-live provider/model/rights/hosting gate changes are introduced.
+Browser acceptance for the responsive workspace uses `scripts/verify-match-tabs.mjs`
+against the match route with stored test projections. It exercises the visual themes,
+independent panes, content links, retained controls and mobile tab behavior.

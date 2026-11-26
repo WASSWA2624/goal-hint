@@ -10,6 +10,7 @@ import { ButtonLink, TextLink } from "@/components/ui/controls";
 import { BodyText, Inline, MutedText, SectionHeading, Stack, Surface } from "@/components/ui/layout";
 import { DetailTime, HistorySnapshot } from "./match-detail-content";
 import { SubscriberNotice } from "@/components/members/subscriber-notice";
+import { MatchSummaryLink } from "@/components/match/details/match-summary-link";
 
 type Cycle = NonNullable<MatchDetailResponse["selectedCycle"]>;
 
@@ -44,7 +45,7 @@ export function RevisionHistory({ current, result, query, locale = "en", open = 
       <BodyText>{messages.text("history.readOnly")}</BodyText>
       <MutedText>{messages.text("history.readClock")}</MutedText>
       <DetailTime label="detail.observed" at={data.asOf} locale={locale} />
-      <TextLink href="#current-match-summary" prefetch={false}>{messages.text("history.backToSummary")}</TextLink>
+      <MatchSummaryLink />
       {result.error && <Surface role="status" data-history-error>
         <Stack $gap="sm">
           <BodyText>{messages.text(result.error === "rate-limited" ? "history.busy" : "history.failed")}</BodyText>

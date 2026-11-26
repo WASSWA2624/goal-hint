@@ -20,7 +20,7 @@ import { useLiveRefresh } from "./use-live-refresh";
 
 type LiveDetailProps = { initial: MatchDetailResponse; today: ReportingDate; locale: string; children?: ReactNode;
   preview?: InsightsPreview | null; previewPromise?: Promise<InsightsPreview | null>;
-  showAccount?: boolean; offer?: SubscriptionOffer | null };
+  showAccount?: boolean; offer?: SubscriptionOffer | null; footer?: ReactNode };
 
 /** Only this invisible boundary waits for optional summaries; the interactive match view stays mounted. */
 function DeferredPreview({ promise, resolve }: { promise: Promise<InsightsPreview | null>; resolve: (preview: InsightsPreview | null) => void }) {
@@ -41,7 +41,7 @@ const shown = (detail: MatchDetailResponse) => JSON.stringify({ ...detail, asOf:
   extendedOdds: detail.extendedOdds && { kind: detail.extendedOdds.kind, selections: detail.extendedOdds.selections },
 });
 
-function LiveDetail({ initial, today, locale, children, preview: initialPreview = null, previewPromise, showAccount = false, offer = null }: LiveDetailProps) {
+function LiveDetail({ initial, today, locale, children, preview: initialPreview = null, previewPromise, showAccount = false, offer = null, footer }: LiveDetailProps) {
   const [data, setData] = useState(initial);
   const [deferredPreview, setDeferredPreview] = useState<{ promise: Promise<InsightsPreview | null> | undefined; value: InsightsPreview | null } | null>(null);
   const resolvePreview = useCallback((value: InsightsPreview | null) => setDeferredPreview({ promise: previewPromise, value }), [previewPromise]);
@@ -90,7 +90,7 @@ function LiveDetail({ initial, today, locale, children, preview: initialPreview 
   const allowed = hasMatchPredictionAccess(data);
   const currentPreview = !allowed ? null : preview && sections !== preview.sections ? { ...preview, sections: sections!, totals: { ...preview.totals, news: sections!.news.items.length } } : preview;
   return <>
-    <MatchDetails showAccount={showAccount} offer={offer} data={data} preview={currentPreview} locale={locale} history={children} />
+    <MatchDetails showAccount={showAccount} offer={offer} data={data} preview={currentPreview} locale={locale} history={children} footer={footer} />
     {previewPromise && <Suspense fallback={null}><DeferredPreview promise={previewPromise} resolve={resolvePreview} /></Suspense>}
   </>;
 }

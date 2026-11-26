@@ -7,7 +7,7 @@ export async function verifyCompetitionView(page, { origin = "http://127.0.0.1:3
   page.on("pageerror", onError); page.on("request", onRequest);
   await page.addInitScript(() => { Date.now = () => Date.parse("2026-10-09T09:00:00Z"); delete Navigator.prototype.serviceWorker; });
   await page.route("**/api/account/session", route => route.fulfill({ json: { phone:null, administrator:false, subscription:null } }));
-  const panel = page.locator("#match-information-panel"), table = panel.locator("[data-competition-table]");
+  const panel = page.locator("#match-information-panel:visible, [data-match-content]:visible"), table = panel.locator("[data-competition-table]");
   const canvas = panel.locator("[data-knockout-canvas]");
   const dropdown = name => panel.getByRole("combobox", { name: new RegExp(`^${name}(?::|$)`, "u") });
   const nativeSelect = name => panel.locator(`select[aria-label="${name}"]`);
@@ -46,7 +46,7 @@ export async function verifyCompetitionView(page, { origin = "http://127.0.0.1:3
     for (const width of [320,390,768,1024,1440]) {
       await page.setViewportSize({width,height:844});
       await page.locator(`[data-match-design="${width < 1024 ? "phone" : "touchline"}"]`).waitFor();
-      const stableHero = await page.locator("[data-verdict]").elementHandle();
+      const stableShell = await page.locator(width < 1024 ? "[data-verdict]" : "[data-match-workspace]").elementHandle();
       await choose("Summary"); await settle();
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}: summary has no page overflow`);
       check(await table.locator("tbody tr").evaluateAll(rows => rows.every(row => row.getBoundingClientRect().height <= 44)), `${width}: every club stays on one compact row`);
@@ -59,7 +59,7 @@ export async function verifyCompetitionView(page, { origin = "http://127.0.0.1:3
         return {overflow:frame.scrollWidth>frame.clientWidth,left:frame.scrollLeft,stable:before[0]===team.getBoundingClientRect().left && before[1]===rank.getBoundingClientRect().left};
       });
       check(sticky.stable && (width >= 768 || sticky.overflow && sticky.left > 0), `${width}: rank and team remain pinned while detailed statistics scroll`);
-      check(await stableHero.evaluate(element=>element.isConnected), `${width}: table controls keep the page shell mounted`);
+      check(await stableShell.evaluate(element=>element.isConnected), `${width}: table controls keep the page shell mounted`);
       if (width === 390) { await choose("Summary"); await capture("standings-summary-mobile"); await choose("Detailed"); await capture("standings-detailed-mobile"); }
     }
     check(navigations.length === innerNavigations, "table controls do not navigate or refetch the server page");
