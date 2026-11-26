@@ -13,7 +13,8 @@ import type { JobQueue } from "../jobs/job-contract.ts";
 import { durableJobId, jobHash, parseJobEnvelope } from "../jobs/job-input.ts";
 import type { CreateCycleInput } from "../predictions/history-contract.ts";
 import { createMysqlPredictionHistoryStore } from "../predictions/history-mysql-store.ts";
-import { FORECAST_JOB_COALESCE_MS, forecastJobIdentity, forecastLineupHash } from "../refresh/forecast-orchestration.ts";
+import { coordinatedLiveDetailDefaults } from "../live-match/live-match-contract.ts";
+import { FORECAST_JOB_COALESCE_MS, forecastJobIdentity, observedForecastLineup } from "../refresh/forecast-orchestration.ts";
 import { DailySelectionError, selectionFail, type CycleSelectionEligibility, type DegradedSelectionAction,
   type SelectionAuthority, type SelectionCoverage, type SelectionEntry, type SelectionImport,
   type SelectionLease, type SelectionManifest, type SelectionPolicy } from "./selection-contract.ts";
@@ -318,11 +319,25 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
           (b.kickoff?.getTime() ?? Number.MAX_SAFE_INTEGER) || a.id.localeCompare(b.id));
         const { now: selectedAt } = await assertOwned(tx, lease);
         const inputByFixture = new Map<string, MaterialInput>();
-        const lineups = new Map<string, string | null>();
+        const lineups = new Map<string, string>();
         if (lifecycle) for (let offset = 0; offset < ids.length; offset += 500) {
+          const mappedTeam = { select: { providers: { where: { provider: "api-football" }, select: { externalId: true }, take: 2 } } } as const;
           const facts = await tx.fixtureFacts.findMany({ where: { fixtureId: { in: ids.slice(offset, offset + 500) },
-            detailsRetrievedAt: { lte: new Date(selectedAt) } }, select: { fixtureId: true, lineups: true } });
-          for (const entry of facts) lineups.set(entry.fixtureId, forecastLineupHash(entry.lineups));
+            updatedAt: { lte: new Date(selectedAt) }, lineups: { not: Prisma.DbNull }, fixture: { provider: "api-football", status: "scheduled",
+              kickoff: { gt: new Date(selectedAt), lte: new Date(selectedAt + coordinatedLiveDetailDefaults.lineupLeadMs) } } },
+          select: { fixtureId: true, providerFixtureId: true, lineups: true, fixture: { select: {
+            externalId: true, kickoff: true, homeTeam: mappedTeam, awayTeam: mappedTeam,
+            activeCycle: { select: { id: true, ordinal: true, openedAt: true } },
+          } } } });
+          for (const { fixtureId, providerFixtureId, fixture, lineups: rows } of facts) {
+            const { kickoff, homeTeam, awayTeam, activeCycle } = fixture;
+            if (providerFixtureId !== fixture.externalId || kickoff === null || homeTeam.providers.length !== 1 || awayTeam.providers.length !== 1) continue;
+            const scope = { kickoffAt: kickoff.getTime(), homeExternalId: Number(homeTeam.providers[0]!.externalId),
+              awayExternalId: Number(awayTeam.providers[0]!.externalId), cycleId: activeCycle?.id ?? null,
+              ...(activeCycle?.ordinal === 1 ? { initialCycleOpenedAt: activeCycle.openedAt.getTime() } : {}) };
+            const verified = observedForecastLineup(rows, scope, selectedAt);
+            if (verified) lineups.set(fixtureId, verified.hash);
+          }
         }
         const forecastKey = (fixtureId: string, cycleId: string) => {
           if (!lifecycle) return null;

@@ -70,9 +70,10 @@ export function goalWinToNilMarket(team: "home" | "away", period: GoalMarketPeri
   return binaryMarket(`win-to-nil:${team}`, period, `${resultLabels[team]} win to nil`, "WTN", (yes) => ({ kind: "win-to-nil", team, yes }));
 }
 function goalAsianHandicapSelections(homeLine: number): Selection[] {
+  const awayLine = homeLine === 0 ? 0 : -homeLine;
   return [
     selected("home", `Home ${homeLine}`, { kind: "asian-handicap", team: "home", line: homeLine }),
-    selected("away", `Away ${-homeLine}`, { kind: "asian-handicap", team: "away", line: -homeLine }),
+    selected("away", `Away ${awayLine}`, { kind: "asian-handicap", team: "away", line: awayLine }),
   ];
 }
 export function goalDrawNoBetMarket(period: GoalMarketPeriod = "full-time"): GoalMarketDefinition {
@@ -139,7 +140,9 @@ export const liveGoalMarketDefinitions: readonly GoalMarketDefinition[] = Object
 
 export const LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE = "local-regulation-count-v1";
 export const LOCAL_FIRST_GOAL_EVALUATION_PROFILE = "local-regulation-count-v2";
-export const localFirstGoalEvaluationProfiles = [LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE, LOCAL_FIRST_GOAL_EVALUATION_PROFILE] as const;
+export const LOCAL_FIRST_SCORE_GOAL_EVALUATION_PROFILE = "local-regulation-score-v1";
+export const localFirstGoalEvaluationProfiles = [LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE, LOCAL_FIRST_GOAL_EVALUATION_PROFILE,
+  LOCAL_FIRST_SCORE_GOAL_EVALUATION_PROFILE] as const;
 export type LocalFirstGoalEvaluationProfile = typeof localFirstGoalEvaluationProfiles[number];
 const additionalFullTimeTotals = [5, 5.25].map((line) => registered("total-goals", goalTotalsMarket(line, "total", "full-time", "asian")));
 const additionalFullTimeTeamTotals = sides.flatMap((team) =>
@@ -206,15 +209,23 @@ const localFirstForecastGoalMarkets = Object.freeze([...legacyLocalFirstForecast
 const localCountFamilies = new Set<RegisteredMarketFamily>([
   "total-goals", "team-goals", "goal-ranges", "exact-goals", "odd-even-goals",
 ]);
+const localScoreFamilies = new Set<RegisteredMarketFamily>([
+  "correct-score", "draw-no-bet", "asian-handicap", "european-handicap", "win-to-nil",
+]);
 function localFirstDefinitions(profile: LocalFirstGoalEvaluationProfile) {
   return Object.freeze(registeredForecastGoalMarkets(profile).flatMap(({ family, definition }) =>
-    definition.period === "full-time" && localCountFamilies.has(family) && isEligibleLocalFirstGoalDefinition(definition, profile) &&
+    definition.period === "full-time" && (localCountFamilies.has(family) ||
+      profile === LOCAL_FIRST_SCORE_GOAL_EVALUATION_PROFILE && localScoreFamilies.has(family)) && isEligibleLocalFirstGoalDefinition(definition, profile) &&
       !definition.key.startsWith("goal:full-time:goal-range:") ? [definition] : []));
 }
 
 export const legacyLocalFirstGoalMarketDefinitions = localFirstDefinitions(LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE);
 export const localFirstGoalMarketDefinitions = localFirstDefinitions(LOCAL_FIRST_GOAL_EVALUATION_PROFILE);
+const regulationScoreDefinitions = localFirstDefinitions(LOCAL_FIRST_SCORE_GOAL_EVALUATION_PROFILE);
+const previouslyPublishedKeys = new Set(localFirstGoalMarketDefinitions.map(({ key }) => key));
+export const localFirstRegulationScoreMarketDefinitions = Object.freeze(regulationScoreDefinitions.filter(({ key }) => !previouslyPublishedKeys.has(key)));
 export function goalDefinitionsForLocalFirstProfile(profile: LocalFirstGoalEvaluationProfile) {
+  if (profile === LOCAL_FIRST_SCORE_GOAL_EVALUATION_PROFILE) return regulationScoreDefinitions;
   return profile === LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE ? legacyLocalFirstGoalMarketDefinitions : localFirstGoalMarketDefinitions;
 }
 

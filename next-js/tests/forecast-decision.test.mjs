@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { getPublicationDeadline } from '../src/domain/calendar.ts';
+import { goalDefinitionsForLocalFirstProfile, LOCAL_FIRST_SCORE_GOAL_EVALUATION_PROFILE } from '../src/domain/goal-market-definitions.ts';
+import { SCORE_LOCAL_FIRST_MARKET_REGISTRY_VERSION } from '../src/domain/market-registry.ts';
+import { marketRules, validateMarketSnapshot } from '../src/domain/markets.ts';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
 import { buildEvidenceSnapshot } from '../src/server/evidence/evidence-snapshot.ts';
-import { buildForecastDecision, forecastDecisionSchema, unavailableForecastMarkets } from '../src/server/predictions/forecast-decision.ts';
+import { SCORE_LOCAL_FIRST_FORECAST_CASCADE } from '../src/server/fallback/fallback-contract.ts';
+import { goalProbabilities, localGoalModelVersion } from '../src/server/intelligence/local-goals-model.ts';
+import { buildForecastDecision, buildLocalFirstForecastDecision, forecastDecisionSchema, unavailableForecastMarkets } from '../src/server/predictions/forecast-decision.ts';
+import { prepareGoalMarketExtension } from '../src/server/predictions/goal-market-store.ts';
 import { evidenceAuthority, evidenceContext, evidenceHash, evidencePolicy, evidenceSource } from './helpers/evidence-fixtures.mjs';
 import { historyCandidate } from './helpers/prediction-history-fixtures.mjs';
 import { emptyCandidate } from './helpers/publication-fixtures.mjs';
@@ -49,4 +55,33 @@ test('abstention keeps only reasons, and late or malformed market content cannot
   assert.ok(hash);
   forged.markets.find(row => row.status === 'estimated').selections[0].outcomes.push = 0.5;
   assert.equal(forecastDecisionSchema.safeParse({ ...forged, hash: evidenceFingerprint(forged) }).success, false);
+});
+
+test('a score-profile decision seals each exact payout and keeps the Local Engine support provisional', async () => {
+  const source = input(), rates = { home: 1.7, away: 1.3 }, evaluationProfile = LOCAL_FIRST_SCORE_GOAL_EVALUATION_PROFILE;
+  const probabilities = goalProbabilities(rates.home, rates.away);
+  const { markets } = validateMarketSnapshot(Object.fromEntries(Object.entries(probabilities).map(([family, values]) => [family, {
+    source: 'local-engine', period: marketRules.period, probabilities: values,
+    ...(family === 'total-goals' ? { line: marketRules.totalGoalsLine } : {}),
+  }])));
+  const candidate = { ...source.candidate,
+    audit: { ...source.candidate.audit, sourceCascade: SCORE_LOCAL_FIRST_FORECAST_CASCADE },
+    markets: Object.fromEntries(Object.entries(markets).map(([family, market]) => [family, {
+      ...market, timestamps: { generatedAt: context.analysisAt, retrievedAt: context.analysisAt, providerUpdatedAt: null },
+      provenance: { kind: 'local-engine', modelVersion: localGoalModelVersion(), historyHash: evidenceHash('training-receipts'),
+        numericalBasis: 'qualified-local-model', sample: { matches: 250, homeEffectiveMatches: 36, awayEffectiveMatches: 39 } },
+    }])) };
+  const extension = prepareGoalMarketExtension({ evaluationProfile, localPoisson: rates,
+    definitions: goalDefinitionsForLocalFirstProfile(evaluationProfile) });
+  const goalExtension = { ...extension, contentHash: evidenceFingerprint(extension) };
+  const sealed = await buildLocalFirstForecastDecision({ ...source, candidate, goalExtension });
+  const decision = forecastDecisionSchema.parse(JSON.parse(JSON.stringify(sealed)));
+  assert.equal(decision.registryVersion, SCORE_LOCAL_FIRST_MARKET_REGISTRY_VERSION);
+  assert.equal(decision.goalExtensionHash, goalExtension.contentHash);
+  const handicap = decision.markets.find(({ marketKey }) => marketKey === 'goal:full-time:asian-handicap:-0.25');
+  assert.equal(handicap.confidence.status, 'provisional');
+  assert.equal(handicap.confidence.calibrationVersion, null);
+  const { outcomes, winProbability } = handicap.selections.find(({ key }) => key === 'home');
+  assert.equal(outcomes.win, winProbability);
+  assert.ok(Number(outcomes['half-loss']) > 0);
 });

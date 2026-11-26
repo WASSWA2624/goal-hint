@@ -22,19 +22,21 @@ const rankingSelection = rankingMarket.selections.element.shape;
 const rankingDerivation = z.discriminatedUnion("available", [z.object({ available: z.literal(false) }),
   z.object({ available: z.literal(true), market: z.object({ definition: z.object({ key: rankingMarket.key,
     label: rankingMarket.label, code: rankingMarket.code }), source: z.enum(["local-poisson", "ai-score-distribution"]),
+    unrepresentedProbability: rankingMarket.selectedProbability.optional(),
     selections: z.array(z.object({ key: rankingMarket.selection, label: rankingMarket.selectionLabel,
       winProbability: rankingMarket.selectedProbability, outcomes: rankingSelection.settlementProbabilities.unwrap() })).min(2).max(1000),
   }) }),
 ]);
 const rankingExtension = z.object({ revisionId: historyId, contentHash: z.string(),
   markets: z.array(z.object({ derivation: rankingDerivation, localDerivation: rankingDerivation.optional() })).max(256) });
-export type FeaturedGoalMarkets = Readonly<{ published: readonly FeaturedGoalMarket[]; local: readonly FeaturedGoalMarket[] }>;
+type FeaturedRankingMarket = FeaturedGoalMarket & Readonly<{ unrepresentedProbability?: number }>;
+export type FeaturedGoalMarkets = Readonly<{ published: readonly FeaturedRankingMarket[]; local: readonly FeaturedRankingMarket[] }>;
 
-function rankingGoalMarket(derivation: z.infer<typeof rankingDerivation>, includeSettlement: boolean): FeaturedGoalMarket | null {
+function rankingGoalMarket(derivation: z.infer<typeof rankingDerivation>): FeaturedRankingMarket | null {
   if (!derivation.available) return null;
-  const { definition, source, selections } = derivation.market;
-  return { ...definition, source, selections: selections.map(({ key, label, winProbability, outcomes }) =>
-    ({ key, label, probability: winProbability, ...(includeSettlement ? { settlementProbabilities: outcomes } : {}) })) };
+  const { definition, source, selections, unrepresentedProbability } = derivation.market;
+  return { ...definition, source, ...(unrepresentedProbability === undefined ? {} : { unrepresentedProbability }),
+    selections: selections.map(({ key, label, winProbability, outcomes }) => ({ key, label, probability: winProbability, settlementProbabilities: outcomes })) };
 }
 
 /** Read the sealed goal sets for one bounded upcoming page and return only ranking inputs. */
@@ -46,10 +48,10 @@ export async function readFeaturedGoalMarkets(tx: Tx, revisionIds: readonly stri
     assertHistorySeal(row.validIntegrity);
     const extension = rankingExtension.parse(historyJson(row.body));
     if (extension.revisionId !== row.revisionId || extension.contentHash !== row.contentHash) return historyFail("invalid-state");
-    const published: FeaturedGoalMarket[] = [], local: FeaturedGoalMarket[] = [];
+    const published: FeaturedRankingMarket[] = [], local: FeaturedRankingMarket[] = [];
     for (const { derivation, localDerivation } of extension.markets) {
-      const primary = rankingGoalMarket(derivation, false);
-      const candidate = rankingGoalMarket(localDerivation ?? derivation, true);
+      const primary = rankingGoalMarket(derivation);
+      const candidate = rankingGoalMarket(localDerivation ?? derivation);
       if (primary) published.push(primary);
       if (candidate?.source === "local-poisson") local.push(candidate);
     }

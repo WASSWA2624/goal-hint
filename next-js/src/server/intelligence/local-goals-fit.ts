@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { LocalGoalConfiguration, LocalGoalInput } from "./intelligence-contract.ts";
+export { poisson } from "../../domain/poisson.ts";
 
 export const localGoalDefaults: LocalGoalConfiguration = Object.freeze({
   lookbackMs: 730 * 86_400_000, halfLifeMs: 180 * 86_400_000, minimumMatches: 30,
@@ -14,11 +15,6 @@ export function parseLocalGoalConfiguration(input: LocalGoalInput["configuration
     !Number.isInteger(value.minimumMatches) || !Number.isInteger(value.maximumIterations) ||
     value.tolerance > 0.01 || value.lookbackMs > 20 * 366 * 86_400_000) throw new Error("Invalid local model configuration.");
   return Object.freeze(value);
-}
-export function poisson(rate: number, maximum: number): number[] {
-  const probabilities = [Math.exp(-rate)];
-  for (let goals = 1; goals <= maximum; goals++) probabilities.push(probabilities[goals - 1]! * rate / goals);
-  return probabilities;
 }
 /** The model and the hourly evidence check use the same ordered, recency-weighted sample. */
 export function weightLocalGoalHistory<Row extends Pick<GoalTrainingRow, "fixtureId" | "kickoffAt" | "homeTeamId" | "awayTeamId">>(

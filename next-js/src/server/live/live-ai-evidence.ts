@@ -237,11 +237,13 @@ export async function readLiveFootballSources(database: DatabaseRuntime, context
     sources.push(freezeEvidence({ ...body, id: evidenceSourceId(body) }));
   }
   for (const team of [context.home, context.away]) {
+    const cutoff = new Date(context.cutoffAt);
     const rows = await database.query((client) => client.footballFixture.findMany({
       where: { provider: "api-football", OR: [{ homeTeamId: team.teamId }, { awayTeamId: team.teamId }],
+        NOT: { lifecycleState: { is: { issue: { not: null } } } },
         id: { not: context.fixtureId }, status: { in: ["finished-regulation", "finished-extra-time", "finished-penalties"] },
-        kickoff: { lt: new Date(context.cutoffAt), gte: new Date(context.cutoffAt - HISTORY_DAYS * 86_400_000) },
-        retrievedAt: { lte: new Date(context.cutoffAt) }, regulationVerifiedAt: { not: null, lte: new Date(context.cutoffAt) },
+        kickoff: { lt: cutoff, gte: new Date(context.cutoffAt - HISTORY_DAYS * 86_400_000) },
+        retrievedAt: { lte: cutoff }, updatedAt: { lte: cutoff }, regulationVerifiedAt: { not: null, lte: cutoff },
         regulationEvidenceRef: { not: null }, regulationHome: { not: null }, regulationAway: { not: null } },
       select: { id: true, externalId: true, dataVersion: true, homeTeamId: true, awayTeamId: true, kickoff: true,
         regulationHome: true, regulationAway: true, regulationEvidenceRef: true, regulationVerifiedAt: true,

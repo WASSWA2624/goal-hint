@@ -103,7 +103,7 @@ export const isArchivedFixtureContext = (value: ArchivedFixtureContext) => issue
 /** Only sealed earlier pages for the exact canonical fixture's league, season and teams are eligible. */
 export async function readArchivedFixtureContext(database: DatabaseRuntime, context: EvidenceContext,
   verifyPrivateUse: () => boolean, signal?: AbortSignal) {
-  if (signal?.aborted || !provenTrue(verifyPrivateUse)) return null;
+  if (signal?.aborted || context.cutoffAt > context.analysisAt || context.analysisAt >= context.kickoffAt || !provenTrue(verifyPrivateUse)) return null;
   const teamMapping = { select: { providers: { where: { provider: "api-football" }, select: { externalId: true }, take: 2 } } } as const;
   const fixture = await database.query((tx) => tx.footballFixture.findUnique({ where: { id: context.fixtureId }, select: {
     externalId: true, provider: true, dataVersion: true, homeTeamId: true, awayTeamId: true, kickoff: true, retrievedAt: true,

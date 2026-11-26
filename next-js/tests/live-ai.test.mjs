@@ -181,6 +181,8 @@ test('stored primary inputs use verified regulation history and original clocks;
   assert.ok(sources.flatMap(source => source.claims).every(claim => !['news', 'injury', 'lineup', 'statistic'].includes(claim.kind)));
   assert.equal(h.queries.length, 2); assert.deepEqual(h.queries[0].where.status.in, ['finished-regulation', 'finished-extra-time', 'finished-penalties']);
   assert.ok(h.queries[0].where.regulationEvidenceRef.not === null);
+  assert.equal(h.queries[0].where.updatedAt.lte.getTime(), context.cutoffAt);
+  assert.deepEqual(h.queries[0].where.NOT, { lifecycleState: { is: { issue: { not: null } } } });
   const snapshot = buildEvidenceSnapshot({ context, policy: liveAiEvidencePolicy(refs), sources }, authorities().evidence);
   assert.equal(snapshot.coverage.sufficient, true); assert.ok(snapshot.missingness.some(item => item.kind === 'injury'));
   const prompt = buildPredictorPrompt({ snapshot, model, authority: { evidence: authorities().evidence, verifyModel: () => true, verifyTransmission: () => true } });

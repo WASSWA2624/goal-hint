@@ -3,7 +3,7 @@ import "server-only";
 import { getPublicationDeadline } from "../../domain/calendar.ts";
 import { total15MarketKey } from "../../domain/extended-markets.ts";
 import { displayMarketOddsPrice } from "../../domain/in-play-odds.ts";
-import { inspectLocalFeaturedQuote, localFeaturedBookmakerBetIds, localFeaturedQuoteScopeReason,
+import { inspectExactLocalFeaturedQuote, localFeaturedBookmakerBetIds, localFeaturedQuoteScopeReason,
   verifiedLocalFeaturedBinding } from "../../domain/local-featured-decision.ts";
 import type { StoredMatchFeedRecord } from "../../domain/match-feed.ts";
 import { additionalSlipGoalMarket, additionalSlipGoalSelection, isSlipMarketSelection, isTotal15SlipSelection,
@@ -25,13 +25,8 @@ type MarketBinding = NonNullable<ReturnType<typeof verifiedLocalFeaturedBinding>
 type PricedFeaturedSelection = SlipSelection & { forecast: SlipForecastReference; offer: EditorialSlipOffer };
 
 function exactOffer(book: Bookmaker, binding: MarketBinding, at: number): EditorialSlipOffer | null {
-  const markets = book.offers.filter(({ betId, betName }) => betId === binding.betId && betName === binding.betName);
-  if (markets.length !== 1) return null;
-  const market = markets[0]!;
-  const values = market.values.filter(({ label }) => label === binding.label);
-  if (values.length !== 1) return null;
-  const inspected = inspectLocalFeaturedQuote(book, market, values[0]!, at);
-  if (!("quote" in inspected)) return null;
+  const inspected = inspectExactLocalFeaturedQuote(book, binding, at);
+  if (!inspected || !("quote" in inspected)) return null;
   const result = editorialSlipOfferSchema.safeParse(inspected.quote);
   return result.success ? result.data : null;
 }
@@ -74,7 +69,11 @@ function featuredSlipCandidates(record: StoredMatchFeedRecord, goals: FeaturedGo
   }
   const offers = exactOffers(quotes, { fixtureId, kickoffAt }, pick.key, pick.selection, at);
   // First prove the site's featured price. Alternatives can only price that same outcome.
-  if (offers.get(pick.featuredQuote.bookmakerId)?.decimal !== pick.odds) return [];
+  const chosen = offers.get(pick.featuredQuote.bookmakerId);
+  if (!chosen) return [];
+  const { snapshotId: _snapshotId, receiptId: _receiptId, ...featuredQuote } = chosen;
+  void _snapshotId; void _receiptId;
+  if (evidenceFingerprint(featuredQuote) !== evidenceFingerprint(pick.featuredQuote)) return [];
   return [...offers.values()].flatMap((offer): PricedFeaturedSelection[] => !offer ? [] : [
     { fixtureId, kickoffAt, homeTeam: record.homeTeam, awayTeam: record.awayTeam, competition: record.competition,
       family, selection, probability: pick.probability, odds: displayMarketOddsPrice(offer.decimal), oddsBasis: "bookmaker",

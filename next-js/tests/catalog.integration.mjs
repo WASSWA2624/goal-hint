@@ -297,7 +297,7 @@ test("canonical football catalog invariants on isolated genuine MySQL", { timeou
       await operation(finals, { store, now: CATALOG_NOW + 3000 }).run(scope);
       const targetId = 8999;
       await operation([catalogFixture(targetId, { competitionId, homeId, awayId })], { store, now: CATALOG_NOW + 4000 }).run(fixtureSelection(targetId));
-      const target = await fixture(targetId), cutoffAt = CATALOG_NOW + 5000;
+      const target = await fixture(targetId), cutoffAt = CATALOG_NOW + 60_001;
       const context = { fixtureId: target.id, fixtureVersion: target.dataVersion, externalFixtureId: targetId,
         home: { teamId: target.homeTeamId }, away: { teamId: target.awayTeamId },
         cutoffAt, analysisAt: cutoffAt, kickoffAt: target.kickoff.getTime() };
@@ -316,11 +316,14 @@ test("canonical football catalog invariants on isolated genuine MySQL", { timeou
       const engine = createLiveLocalEngine(firstDatabase);
       const expected = { context, evidenceHash: catalogHash("live-team-history"), pin: null, jobId: catalogHash("live-team-history-job") };
       assert.equal(await engine({ ...expected, context: { ...context, cutoffAt: CATALOG_NOW } }, ai, () => cutoffAt, () => {}), null);
+      assert.equal(await engine({ ...expected, context: { ...context, cutoffAt: CATALOG_NOW + 5000 } }, ai, () => cutoffAt, () => {}), null,
+        "results retrieved before the cutoff but recorded later do not enter the fit");
       const candidate = await engine(expected, ai, () => cutoffAt, () => {});
       assert.equal(candidate.audit.providerStatus, "not-requested");
       assert.equal(candidate.audit.aiReason, "unconfigured");
       assert.deepEqual(Object.values(candidate.markets).map((entry) => entry.market.source), Array(4).fill("local-engine"));
-      assert.equal(candidate.markets["match-result"].provenance.sample.matches, 50);
+      assert.equal(candidate.markets["match-result"].provenance.sample.matches, 49,
+        "a legacy backfilled already-known fixture lacks an attributable commit receipt");
     });
 
     await t.test("November replay pages include displaced occurrences and freeze the eligible result revisions at lock", async () => {

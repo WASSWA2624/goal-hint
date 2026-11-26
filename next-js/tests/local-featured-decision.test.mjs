@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { assessLocalFeaturedPick, assessLocalFeaturedPickWithHistory, binaryFeaturedSettlement, decideLocalFeaturedPick, legacyLocalFeaturedDecisionVersion,
-  localFeaturedDecisionSchema, localFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion, positiveFeaturedReturn }
+  localFeaturedDecisionSchema, localFeaturedDecisionVersion, oddsFirstTieredFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion, positiveFeaturedReturn }
   from "../src/domain/local-featured-decision.ts";
 import { parseDecimalOdds } from "../src/domain/odds.ts";
 import { preMatchReferenceOddsFreshMs } from "../src/domain/reference-odds.ts";
@@ -175,7 +175,7 @@ test("priced fallback includes 1.01, records signed return and exact clocks, and
   assert.equal(decideCurrent(outcomes, [book(1, totals({ "Under 2.5": "1.0099" }))]).status, "forecast-only");
 });
 
-test("standard qualifies before positive fallback, which qualifies before any break-even or below-value fallback", () => {
+test("standard eligibility stays intact while a priced fallback ranks probability before modeled value", () => {
   const outcomes = [total("full-time", "total", 1.5, 0.65),
     total("full-time", "total", 3.5, 0.97), total("full-time", "total", 4.5, 0.99)];
   const quotes = { "Under 1.5": "1.55", "Under 3.5": "1.06", "Under 4.5": "1.01" };
@@ -184,36 +184,53 @@ test("standard qualifies before positive fallback, which qualifies before any br
   assert.equal(standard.quote.providerSelection, "Under 1.5");
   const fallback = decideCurrent(outcomes.slice(1), [book(1, totals(quotes))]);
   assert.equal(fallback.tier, "priced-fallback");
-  assert.equal(fallback.quote.providerSelection, "Under 3.5");
-  assert.equal(fallback.expectedNetReturn, "0.0282");
+  assert.equal(fallback.quote.providerSelection, "Under 4.5");
+  assert.equal(fallback.expectedNetReturn, "-0.0001");
+  const older = decide(outcomes.slice(1), [book(1, totals(quotes))], undefined, oddsFirstTieredFeaturedDecisionVersion);
+  assert.equal(older.quote.providerSelection, "Under 3.5");
+  assert.deepEqual(localFeaturedDecisionSchema.parse(older), older);
   const breakEven = decideCurrent([total("full-time", "total", 2.5, 0.625)], [book(1, totals({ "Under 2.5": "1.6" }))]);
   assert.equal(breakEven.tier, "priced-fallback");
   assert.equal(breakEven.expectedNetReturn, "0");
 });
 
-test("forecast only prefers common exact model markets without importing adjacent quotes", () => {
+test("forecast-only ranks reliable probability before common market and coverage tie-breaks", () => {
   const common = outcome("goal:full-time:totals:total:1.5:binary", "over", 0.83);
   const extreme = total("full-time", "total", 5.5, 0.9964);
   const books = [book(1, totals({ "Under 6.5": "1.30" }))];
   const result = decideCurrent([extreme, common], books);
-  assert.deepEqual(result, { marketKey: common.marketKey, selection: "over", probability: 0.83,
+  assert.deepEqual(result, { marketKey: extreme.marketKey, selection: "under", probability: 0.9964,
     version: localFeaturedDecisionVersion, status: "forecast-only", reason: "no-comparable-quote" });
   assert.equal(localFeaturedDecisionSchema.safeParse({ ...result, quote: null }).success, false);
-  assert.equal(decideCurrent([extreme, common], books, { coverageByMarket: new Map([[extreme.marketKey, 12]]) }).marketKey, extreme.marketKey);
+  assert.equal(decideCurrent([extreme, common], books, { coverageByMarket: new Map([[common.marketKey, 12]]) }).marketKey, extreme.marketKey);
+  assert.equal(decide([extreme, common], books, undefined, oddsFirstTieredFeaturedDecisionVersion).marketKey, common.marketKey);
   assert.equal(decideCurrent([common], [], { quotes: null, quotesPermitted: false }).reason, "odds-not-permitted");
   assert.equal(decideCurrent([common], [], { quotes: null, decisionAt: kickoffAt }).reason, "invalid-decision-time");
   assert.equal(decideCurrent([total("full-time", "total", 3.5, .599999)], []).reason, "no-modeled-outcome-meets-floor");
   assert.equal(decideCurrent([{ ...common, unrepresentedProbability: .01 }], books).status, "abstained");
 });
 
-test("first standard rung spans market families and books before any fallback", () => {
+test("standard choices compare their exact probabilities before odds inside the same rung", () => {
   const outcomes = [total("full-time", "away", 4.5, 1), outcome("double-chance", "home-or-draw", 0.93),
     total("full-time", "total", 2.5, 0.91), outcome("match-result", "home-win", 0.89)];
   const result = decideCurrent(outcomes, [book(1, offer(17, "Total - Away", { "Under 4.5": "1.09" })),
     book(3, chance({ "Home/Draw": "1.13" })), book(4, totals({ "Under 2.5": "1.17" })),
     book(5, offer(1, "Match Winner", { Home: "2.55" }))]);
   assert.deepEqual([result.tier, result.threshold, result.marketKey, result.quote.bookmakerId, result.quote.decimal],
-    ["standard", 0.90, "goal:full-time:totals:total:2.5:binary", 4, "1.17"]);
+    ["standard", 0.90, "double-chance", 3, "1.13"]);
+});
+
+test("duplicate bookmaker identities never decide a current quote and a v4 seal rejects the wrong exact outcome", () => {
+  const outcomes = [total("full-time", "total", 2.5, 0.90)];
+  const duplicated = [book(4, totals({ "Under 2.5": "1.32" })), book(4, totals({ "Under 2.5": "1.27" }))];
+  assert.deepEqual(decideCurrent(outcomes, duplicated), decideCurrent(outcomes, [...duplicated].reverse()));
+  assert.equal(decideCurrent(outcomes, duplicated).status, "forecast-only");
+  const decision = decideCurrent(outcomes, [...duplicated, book(5, totals({ "Under 2.5": "1.24" }))]);
+  assert.equal(decision.quote.bookmakerId, 5);
+  assert.deepEqual(localFeaturedDecisionSchema.parse(decision), decision);
+  for (const wrong of [{ providerSelection: "Over 2.5" }, { providerSelection: "Under 3.5" }, { betId: 6 }, { betName: "Goals Over/Under First Half" }]) {
+    assert.equal(localFeaturedDecisionSchema.safeParse({ ...decision, quote: { ...decision.quote, ...wrong } }).success, false);
+  }
 });
 
 test("a historical comparison can break an exact-price tie without changing the raw forecast or any price and rung gate", () => {
@@ -222,7 +239,7 @@ test("a historical comparison can break an exact-price tie without changing the 
   const sample = (equalOdds = "1.3") => inputs(outcomes, [book(1,
     totals({ "Under 1.5": equalOdds, "Under 3.5": "2.55", "Under 4.5": "1.05" }), chance({ "Home/Draw": "1.3" }))]);
   const rank = ({ marketKey }) => marketKey === "double-chance" ? 0.87 : 0.84;
-  const base = assessLocalFeaturedPick(sample());
+  const base = assessLocalFeaturedPick(sample(), oddsFirstTieredFeaturedDecisionVersion);
   const comparison = assessLocalFeaturedPickWithHistory(sample(), rank);
   assert.equal(base.decision.marketKey, "goal:full-time:totals:total:1.5:binary");
   assert.deepEqual([comparison.decision.marketKey, comparison.decision.threshold, comparison.decision.probability,

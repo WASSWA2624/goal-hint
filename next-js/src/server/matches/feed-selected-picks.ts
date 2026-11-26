@@ -4,9 +4,9 @@ import { feedMarketPickIdentity } from "../../domain/feed-market-picks.ts";
 import { isAnyMarkets, type FeedQuery } from "../../domain/feed-query.ts";
 import { registeredForecastGoalMarkets } from "../../domain/goal-market-definitions.ts";
 import { legacyGoalMarketIdentities } from "../../domain/legacy-goal-market-identities.ts";
-import { LOCAL_FIRST_MARKET_REGISTRY_VERSION } from "../../domain/market-registry.ts";
+import { LOCAL_FIRST_MARKET_REGISTRY_VERSION, SCORE_LOCAL_FIRST_MARKET_REGISTRY_VERSION } from "../../domain/market-registry.ts";
 import type { MarketSource } from "../../domain/markets.ts";
-import { LOCAL_FIRST_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
+import { LOCAL_FIRST_FORECAST_CASCADE, SCORE_LOCAL_FIRST_FORECAST_CASCADE } from "../fallback/fallback-contract.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { activeNovemberReplaySql } from "../intelligence/november-replay-store.ts";
 import { minimumFixturePrice } from "../odds/odds-read.ts";
@@ -28,12 +28,14 @@ export const exactLegacyFeedPickSource = Prisma.sql`mp.available=TRUE AND (mp.so
       AND receipt.at=accepted.publishedAt AND receipt.outcome='published' AND receipt.reason='accepted'
     WHERE accepted.id=mp.setId AND accepted.fixtureId=f.id AND accepted.cycleId=f.activeCycleId
       AND receipt.integrity=SHA2(CAST(receipt.resultJson AS CHAR),256)
-      AND JSON_UNQUOTE(JSON_EXTRACT(accepted.candidateJson,'$.audit.sourceCascade'))=${LOCAL_FIRST_FORECAST_CASCADE}
+      AND (JSON_UNQUOTE(JSON_EXTRACT(accepted.candidateJson,'$.audit.sourceCascade')),
+        JSON_UNQUOTE(JSON_EXTRACT(receipt.resultJson,'$.forecastDecision.registryVersion'))) IN (
+        (${LOCAL_FIRST_FORECAST_CASCADE},${LOCAL_FIRST_MARKET_REGISTRY_VERSION}),
+        (${SCORE_LOCAL_FIRST_FORECAST_CASCADE},${SCORE_LOCAL_FIRST_MARKET_REGISTRY_VERSION}))
       AND JSON_UNQUOTE(JSON_EXTRACT(mp.payloadJson,'$.provenance.kind'))='api-football'
       AND JSON_UNQUOTE(JSON_EXTRACT(mp.payloadJson,'$.provenance.source.provider'))='api-football'
       AND JSON_UNQUOTE(JSON_EXTRACT(mp.payloadJson,'$.provenance.source.endpoint'))='predictions'
       AND JSON_UNQUOTE(JSON_EXTRACT(mp.payloadJson,'$.provenance.source.externalFixtureId'))=CAST(f.externalId AS CHAR)
-      AND JSON_UNQUOTE(JSON_EXTRACT(receipt.resultJson,'$.forecastDecision.registryVersion'))=${LOCAL_FIRST_MARKET_REGISTRY_VERSION}
       AND JSON_UNQUOTE(JSON_EXTRACT(receipt.resultJson,'$.forecastDecision.version'))='prematch-forecast-decision-v2'
       AND JSON_UNQUOTE(JSON_EXTRACT(receipt.resultJson,'$.forecastDecision.status'))='estimated'
       AND ${decisionAttribute(".source")}='api-football'

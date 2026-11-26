@@ -2,13 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { goalHighestScoringHalfMarket, goalScoringInBothHalvesMarket, liveGoalMarketDefinitions, LOCAL_FIRST_GOAL_EVALUATION_PROFILE,
   legacyLocalFirstGoalMarketDefinitions, LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localFirstGoalMarketDefinitions,
-  registeredForecastGoalMarkets } from '../src/domain/goal-market-definitions.ts';
-import { LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION, LOCAL_FIRST_MARKET_REGISTRY_VERSION, MARKET_REGISTRY_VERSION, marketRegistry } from '../src/domain/market-registry.ts';
+  goalDefinitionsForLocalFirstProfile, LOCAL_FIRST_SCORE_GOAL_EVALUATION_PROFILE, registeredForecastGoalMarkets } from '../src/domain/goal-market-definitions.ts';
+import { LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION, LOCAL_FIRST_MARKET_REGISTRY_VERSION, MARKET_REGISTRY_VERSION, marketRegistry,
+  SCORE_LOCAL_FIRST_MARKET_REGISTRY_VERSION } from '../src/domain/market-registry.ts';
 import { marketRules, validateMarketSnapshot } from '../src/domain/markets.ts';
 import { settleGoalSelection } from '../src/domain/score-distribution-markets.ts';
 import { SCORE_DISTRIBUTION_VERSION } from '../src/domain/score-distribution.ts';
 import { evaluateForecastMarkets, FORECAST_MARKET_EVALUATION_VERSION, legacyForecastMarketKey,
-  LEGACY_LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION, LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION } from '../src/server/predictions/forecast-market-evaluator.ts';
+  LEGACY_LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION, LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION,
+  SCORE_LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION } from '../src/server/predictions/forecast-market-evaluator.ts';
 import { prepareGoalMarketExtension } from '../src/server/predictions/goal-market-store.ts';
 
 const state = (home, away, halfHome, halfAway, probability) => ({ home, away, halfHome, halfAway, probability });
@@ -73,6 +75,25 @@ test('v4 local-first decisions retain their original team totals and historical 
   assert.equal(rows.has('goal:full-time:totals:away:5.25:asian'), false);
   assert.throws(() => prepareGoalMarketExtension({ ...input, definitions: localFirstGoalMarketDefinitions }));
   assert.throws(() => prepareGoalMarketExtension({ ...input, evaluationProfile: LOCAL_FIRST_GOAL_EVALUATION_PROFILE }));
+});
+
+test('the new profile qualifies published regulation score markets without inferring period or statistic probabilities', () => {
+  const localFirst = LOCAL_FIRST_SCORE_GOAL_EVALUATION_PROFILE;
+  const { markets } = prepareGoalMarketExtension({ evaluationProfile: localFirst, localPoisson: { home: 1.7, away: 1.3 },
+    definitions: goalDefinitionsForLocalFirstProfile(localFirst) });
+  const candidateMarkets = resolved('local-engine');
+  const evaluated = evaluateForecastMarkets({ candidateMarkets, localFirst, publishedLocalMarkets: markets });
+  assert.equal(evaluated.registryVersion, SCORE_LOCAL_FIRST_MARKET_REGISTRY_VERSION);
+  assert.equal(evaluated.version, SCORE_LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION);
+  const rows = rowsByKey(evaluated);
+  const handicap = rows.get('goal:full-time:asian-handicap:-0.25');
+  assert.equal(handicap.source, 'local-engine');
+  assert.equal(handicap.status, 'estimated');
+  const home = handicap.selections.find((selection) => selection.key === 'home').outcomes;
+  assert.ok(home.win > 0 && home['half-loss'] > 0 && home.loss > 0);
+  assertNear(home.win + home['half-loss'] + home.loss, 1);
+  assert.equal(rows.get('goal:second-half:totals:total:1.5:binary').reason, 'no-qualified-period-model');
+  assert.equal(rows.get('registry:statistic-totals').detail, 'no-qualified-statistic-model');
 });
 
 test('the sealed legacy candidate survives while every registered family gets an explicit result or abstention', () => {

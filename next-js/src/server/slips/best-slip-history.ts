@@ -3,7 +3,7 @@ import "server-only";
 import { getPublicationDeadline, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { total15MarketKey } from "../../domain/extended-markets.ts";
 import { legacyForecastMarketKey, legacyForecastOutcome } from "../../domain/legacy-goal-market-identities.ts";
-import { localFeaturedDecisionVersion, verifiedLocalFeaturedBinding } from "../../domain/local-featured-decision.ts";
+import { isTieredLocalFeaturedDecision, tieredLocalFeaturedDecisionVersions, verifiedLocalFeaturedBinding } from "../../domain/local-featured-decision.ts";
 import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { isMarketFamily, isMarketSelection, marketRules, type MarketFamily, type MarketSource } from "../../domain/markets.ts";
 import { parseDecimalOdds } from "../../domain/odds.ts";
@@ -179,7 +179,7 @@ function readDecision(row: DecisionRow) {
   assertHistorySeal(row.validRevision);
   const pick = frozenLocalFeaturedPickSchema.parse(historyJson(row.decisionJson));
   const { decision, decisionAt, kickoffAt } = pick;
-  if (decision.status !== "priced" || decision.version !== localFeaturedDecisionVersion ||
+  if (decision.status !== "priced" || !isTieredLocalFeaturedDecision(decision.version) ||
     pick.fixtureId !== row.fixtureId || pick.cycleId !== row.cycleId || pick.revisionId !== row.revisionId ||
     pick.homeTeamId !== row.homeTeamId || pick.awayTeamId !== row.awayTeamId ||
     kickoffAt !== historyTime(row.kickoffAt) || decisionAt >= historyTime(row.cutoffAt) ||
@@ -283,7 +283,7 @@ export async function readBestSlipHistory(database: Pick<DatabaseRuntime, "trans
         WHERE p.publishedAt >= ${new Date(from.getTime() - 14 * dayMs)} AND p.publishedAt < ${before}
           AND ps.kickoffAt >= ${from} AND ps.kickoffAt < ${before} AND o.at < ${before}
           AND JSON_UNQUOTE(JSON_EXTRACT(o.featuredDecisionJson, '$.decision.status')) = 'priced'
-          AND JSON_UNQUOTE(JSON_EXTRACT(o.featuredDecisionJson, '$.decision.version')) = ${localFeaturedDecisionVersion}
+          AND JSON_UNQUOTE(JSON_EXTRACT(o.featuredDecisionJson, '$.decision.version')) IN (${Prisma.join([...tieredLocalFeaturedDecisionVersions])})
           AND NOT EXISTS (SELECT 1 FROM PredictionCycleOperation voided WHERE voided.cycleId = o.cycleId AND voided.kind = 'void' AND voided.at < ${before})
         ORDER BY ps.kickoffAt DESC, p.fixtureId, p.id LIMIT ${maximumDecisions + 1}`);
       }

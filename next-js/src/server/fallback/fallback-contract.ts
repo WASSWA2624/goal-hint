@@ -8,7 +8,10 @@ import type { PredictorCalibrationStatus, PredictorCalibratedOutput } from "../p
 import type { PredictorResult } from "../predictor/predictor-service.ts";
 import type { RecommendationDecision } from "../../domain/recommendation.ts";
 import type { LocalPoissonRates } from "../../domain/score-distribution-markets.ts";
-import { LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE, LOCAL_FIRST_GOAL_EVALUATION_PROFILE } from "../../domain/goal-market-definitions.ts";
+import { LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE, LOCAL_FIRST_GOAL_EVALUATION_PROFILE,
+  LOCAL_FIRST_SCORE_GOAL_EVALUATION_PROFILE } from "../../domain/goal-market-definitions.ts";
+import { LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION, LOCAL_FIRST_MARKET_REGISTRY_VERSION,
+  SCORE_LOCAL_FIRST_MARKET_REGISTRY_VERSION } from "../../domain/market-registry.ts";
 
 /** Identity for one eligible refresh; it never supplies an old published snapshot. */
 export type FallbackContext = Readonly<{ context: EvidenceContext; jobId: string; pin: ModelPin | null; evidenceHash: string }>;
@@ -42,16 +45,22 @@ export const LIVE_FORECAST_CASCADE = "ai-local-provider";
 export const QUALIFIED_FORECAST_CASCADE = "qualified-ai-local-provider-v1";
 export const LEGACY_LOCAL_FIRST_FORECAST_CASCADE = "qualified-local-provider-v1";
 export const LOCAL_FIRST_FORECAST_CASCADE = "qualified-local-provider-v2";
-const localFirstCascades = [LEGACY_LOCAL_FIRST_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE] as const;
+export const SCORE_LOCAL_FIRST_FORECAST_CASCADE = "qualified-local-provider-v3";
+const localFirstCascades = [LEGACY_LOCAL_FIRST_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE, SCORE_LOCAL_FIRST_FORECAST_CASCADE] as const;
 export type LocalFirstForecastCascade = typeof localFirstCascades[number];
 export const forecastCascades = [LIVE_FORECAST_CASCADE, QUALIFIED_FORECAST_CASCADE, ...localFirstCascades] as const;
 export type ForecastCascade = typeof forecastCascades[number];
 export function isLocalFirstForecastCascade(value: unknown): value is LocalFirstForecastCascade {
   return localFirstCascades.some((cascade) => cascade === value);
 }
-export function goalProfileForLocalFirstCascade(value: LocalFirstForecastCascade) {
-  return value === LEGACY_LOCAL_FIRST_FORECAST_CASCADE ? LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE : LOCAL_FIRST_GOAL_EVALUATION_PROFILE;
-}
+const localFirstProfiles = {
+  [LEGACY_LOCAL_FIRST_FORECAST_CASCADE]: [LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE, LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION],
+  [LOCAL_FIRST_FORECAST_CASCADE]: [LOCAL_FIRST_GOAL_EVALUATION_PROFILE, LOCAL_FIRST_MARKET_REGISTRY_VERSION],
+  [SCORE_LOCAL_FIRST_FORECAST_CASCADE]: [LOCAL_FIRST_SCORE_GOAL_EVALUATION_PROFILE, SCORE_LOCAL_FIRST_MARKET_REGISTRY_VERSION],
+} as const;
+
+export const goalProfileForLocalFirstCascade = (value: LocalFirstForecastCascade) => localFirstProfiles[value][0];
+export const registryVersionForLocalFirstCascade = (value: LocalFirstForecastCascade) => localFirstProfiles[value][1];
 export type ForecastQualification = Readonly<{
   verifyAiNumericalBasis?(candidate: Extract<PredictorResult, { status: "candidate" }>, context: FallbackContext, family: SourceGroup): boolean;
   verifyLocalNumericalBasis?(candidate: ResolvedForecastCandidate, context: FallbackContext, family: SourceGroup): boolean;

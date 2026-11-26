@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { bookmakerOddsId, oddsDisplayText } from "./bookmaker-odds.ts";
+import { localFirstRegulationScoreMarketDefinitions } from "./goal-market-definitions.ts";
 import { featuredExpectedReturnSchema, featuredNetReturnSchema, localFeaturedQuoteSchema } from "./local-featured-decision.ts";
 import { parseDecimalOdds } from "./odds.ts";
 import { marketSources } from "./markets.ts";
@@ -72,9 +73,11 @@ const publicFields = {
   result: z.strictObject({ status: z.enum(extendedSettlementStatuses), reason: label,
     correctedAt: z.number().int().nonnegative().nullable() }),
 };
+const localRegulationScoreMarketKeys = new Set(localFirstRegulationScoreMarketDefinitions.map(({ key }) => key));
 function sourceCoherent(market: z.infer<z.ZodObject<typeof publicFields>>): boolean {
   const model = market.source !== "market-implied";
-  if (market.source === "local-poisson" && !/^goal:[^:]+:(?:totals|exact-count|count-range|odd-even):/u.test(market.key)) return false;
+  if (market.source === "local-poisson" && !/^goal:[^:]+:(?:totals|exact-count|count-range|odd-even):/u.test(market.key) &&
+    !localRegulationScoreMarketKeys.has(market.key)) return false;
   return market.key.split(":")[1] === market.period && model === market.key.startsWith("goal:") &&
     market.sourceLabel === extendedMarketSourceLabels[market.source] && model === market.probabilityBasis.startsWith("model-");
 }

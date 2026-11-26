@@ -7,6 +7,7 @@ import { GOAL_MARKET_RULE_VERSION, goalMarketPeriods, type GoalMarketPeriod, typ
 export const MARKET_REGISTRY_VERSION = "football-market-registry-v3";
 export const LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION = "football-market-registry-v4";
 export const LOCAL_FIRST_MARKET_REGISTRY_VERSION = "football-market-registry-v5";
+export const SCORE_LOCAL_FIRST_MARKET_REGISTRY_VERSION = "football-market-registry-v6";
 
 type SelectionSet =
   | Readonly<{ kind: "fixed"; keys: readonly string[] }>

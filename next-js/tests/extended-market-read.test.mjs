@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { publicExtendedMarketSchema } from '../src/domain/extended-markets.ts';
-import { goalResultMarket, goalAsianHandicapMarket, goalDoubleChanceMarket } from '../src/domain/goal-market-definitions.ts';
+import { goalResultMarket, goalAsianHandicapMarket, goalDoubleChanceMarket, goalDefinitionsForLocalFirstProfile,
+  localFirstRegulationScoreMarketDefinitions, LOCAL_FIRST_SCORE_GOAL_EVALUATION_PROFILE } from '../src/domain/goal-market-definitions.ts';
+import { localFeaturedDecisionVersion } from '../src/domain/local-featured-decision.ts';
 import { SCORE_DISTRIBUTION_VERSION } from '../src/domain/score-distribution.ts';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
+import { upcomingFeaturedPick } from '../src/server/matches/upcoming-featured-pick.ts';
+import { freezeCutoffLocalFeaturedPick } from '../src/server/predictions/cutoff-featured.ts';
 import { prepareGoalMarketExtension } from '../src/server/predictions/goal-market-store.ts';
-import { publicGoalMarketExtension, readCurrentExtendedMarkets, readExtendedMarketSnapshot } from '../src/server/predictions/extended-market-read.ts';
+import { publicGoalMarketExtension, readCurrentExtendedMarkets, readExtendedMarketSnapshot, readFeaturedGoalMarkets } from '../src/server/predictions/extended-market-read.ts';
 
 const fixtureId = '10000000-0000-4000-8000-000000000001', cycleId = '20000000-0000-4000-8000-000000000001',
   revisionId = '30000000-0000-4000-8000-000000000001', at = Date.parse('2026-10-12T08:00:00Z');
@@ -41,6 +45,45 @@ test('public goal projection keeps exact published selection and distinct payout
   assert.equal(projected[2].probabilityBasis, 'model-positive-payout');
   assert.equal(projected[2].selections[0].settlementProbabilities['half-loss'], .2);
   assert.equal(projected[1].selections.reduce((sum, selection) => sum + selection.probability, 0), 2);
+});
+
+test('the private featured projection retains the represented grade masses and any unrecovered score tail', async () => {
+  const value = extension();
+  const masses = value.markets[0].derivation.market.selections[0].outcomes;
+  const body = structuredClone(value);
+  body.markets[0].derivation.market.unrepresentedProbability = 1e-14;
+  const tx = { $queryRaw: async () => [{ revisionId, contentHash: body.contentHash, validIntegrity: 1, body }] };
+  const result = (await readFeaturedGoalMarkets(tx, [revisionId])).get(revisionId);
+  assert.equal(result.published[0].unrepresentedProbability, 1e-14);
+  assert.deepEqual(result.published[0].selections[0].settlementProbabilities, masses);
+  assert.equal(publicGoalMarketExtension(value)[0].unrepresentedProbability, undefined);
+});
+
+test('the sealed Local Engine score profile enters featured selection, and cutoff freezes the same exact decision', async () => {
+  const evaluationProfile = LOCAL_FIRST_SCORE_GOAL_EVALUATION_PROFILE;
+  const prepared = prepareGoalMarketExtension({ evaluationProfile, definitions: goalDefinitionsForLocalFirstProfile(evaluationProfile),
+    localPoisson: { home: 2.8, away: 0.2 } });
+  const body = { ...prepared, fixtureId, cycleId, revisionId, recordedAt: at - 500, contentHash: evidenceFingerprint(prepared) };
+  const newKeys = new Set(localFirstRegulationScoreMarketDefinitions.map(({ key }) => key));
+  assert.ok(prepared.markets.some(({ definition, derivation }) => newKeys.has(definition.key) && derivation.available));
+  const tx = { $queryRaw: async () => [{ revisionId, contentHash: body.contentHash, validIntegrity: 1, body }] };
+  const goals = (await readFeaturedGoalMarkets(tx, [revisionId])).get(revisionId);
+  const kickoffAt = at + 3_600_000, homeTeamId = '40000000-0000-4000-8000-000000000001', awayTeamId = '50000000-0000-4000-8000-000000000001';
+  const fixture = { fixtureId, kickoffAt, status: 'scheduled', forecast: { markets: [], publishedAt: at - 1000 } };
+  const newPick = upcomingFeaturedPick(fixture, { ...goals, local: goals.local.filter(({ key }) => newKeys.has(key)) }, undefined, at, false);
+  assert.ok(newPick && newKeys.has(newPick.key));
+  assert.equal(newPick.odds, null);
+  const upcoming = upcomingFeaturedPick(fixture, goals, undefined, at, false);
+  assert.ok(upcoming);
+  assert.equal(upcoming.odds, null);
+  const frozen = await freezeCutoffLocalFeaturedPick(tx, { id: fixtureId, kickoff: new Date(kickoffAt), homeTeamId, awayTeamId },
+    { id: revisionId, cycleId, publishedAt: fixture.forecast.publishedAt,
+      candidate: { markets: {}, context: { context: { kickoffAt, home: { teamId: homeTeamId }, away: { teamId: awayTeamId } } } } },
+    at + 1, at + 1, { extendedMarkets: true, oddsPermitted: () => false });
+  assert.equal(frozen.decision.version, localFeaturedDecisionVersion);
+  assert.equal(frozen.decision.status, 'forecast-only');
+  assert.deepEqual([frozen.decision.marketKey, frozen.decision.selection, frozen.decision.probability],
+    [upcoming.key, upcoming.selection, upcoming.probability]);
 });
 
 test('result corrections project only the same source-qualified revision, market, selection and raw probability', () => {

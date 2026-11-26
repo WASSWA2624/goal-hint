@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { registeredForecastGoalMarkets } from "../src/domain/goal-market-definitions.ts";
 import { assessLocalFeaturedPick, assessLocalFeaturedPickWithHistory, localFeaturedDecisionSchema,
-  localFeaturedDecisionVersion, validLocalFeaturedDecisionTime } from "../src/domain/local-featured-decision.ts";
+  oddsFirstTieredFeaturedDecisionVersion as historicalBaselineVersion, validLocalFeaturedDecisionTime } from "../src/domain/local-featured-decision.ts";
 import { assessLocalFeaturedHistory, historyAdjustedFeaturedProbability, localFeaturedHistoryKey,
   localFeaturedHistoryVersion } from "../src/domain/local-featured-history.ts";
 import { legacyForecastMarketKey } from "../src/domain/legacy-goal-market-identities.ts";
@@ -37,7 +37,7 @@ async function readSealed(workspace, name) {
 async function readReplayTargets(workspace, environment) {
   const audit = await readSealed(workspace, "audit.json");
   const run = await readSealed(workspace, "dry-run.json");
-  if (audit.environment !== environment || audit.featuredDecisionVersion !== localFeaturedDecisionVersion ||
+  if (audit.environment !== environment || audit.featuredDecisionVersion !== historicalBaselineVersion ||
     run.auditHash !== audit.auditHash || !run.summary.finished || run.coverageVersion !== coverageVersion)
     throw new ComparisonInputError("Supply a completed v3 audit from the selected database environment.");
   const names = (await readdir(workspace)).filter((name) => /^page-\d{5}\.json$/u.test(name)).sort();
@@ -72,7 +72,7 @@ function historyIndex(observations) {
 }
 
 function compareSelection({ input, expected, context, marketDefinitions, cohort }, indexed, reasons) {
-  const baseline = assessLocalFeaturedPick(input).decision;
+  const baseline = assessLocalFeaturedPick(input, historicalBaselineVersion).decision;
   if (evidenceFingerprint(baseline) !== evidenceFingerprint(expected)) return reject(reasons, "baseline-not-reproduced");
   const { fixtureId, kickoffAt, decisionAt } = input;
   const cache = new Map();
@@ -149,7 +149,7 @@ async function compareNewer(database, rows, from, contexts, indexed, reasons) {
       const decisionAt = Number(row.effectiveCloseAt) - 1;
       if (decisionAt <= from) { reject(reasons, "cutoff-not-newer"); continue; }
       const context = revision?.candidate.context.context;
-      if (!expected || !revision || expected.version !== localFeaturedDecisionVersion || !validLocalFeaturedDecisionTime(kickoffAt, decisionAt) ||
+      if (!expected || !revision || expected.version !== historicalBaselineVersion || !validLocalFeaturedDecisionTime(kickoffAt, decisionAt) ||
         revision.fixtureId !== fixtureId || revision.publishedAt > decisionAt || revision.recordedAt > decisionAt ||
         !context || context.kickoffAt !== kickoffAt || context.home.teamId !== homeTeamId || context.away.teamId !== awayTeamId ||
         expected.status === "abstained" && expected.reason === "invalid-decision-time") {
@@ -201,7 +201,7 @@ try {
   const truth = await readVerifiedReplayComparisonResults(database, occurrences, evaluatedAt);
   const report = summarizeFeaturedHistoryComparison(comparisons, truth);
   console.log(JSON.stringify({ environment: values.environment, auditHash: audit.auditHash, range: audit.range, auditedAt: audit.auditedAt,
-    evaluatedAt, baselineVersion: localFeaturedDecisionVersion, rankingVersion: localFeaturedHistoryVersion,
+    evaluatedAt, baselineVersion: historicalBaselineVersion, rankingVersion: localFeaturedHistoryVersion,
     scope: { [sealedCohort]: { occurrences: summary.processed, estimates: estimates.length, prospective: summary.prospective,
       precomparisonAbstained: summary.abstained }, [newerCohort]: { storedClosuresInspected: cutoffs.length } }, exclusions: reasons,
     acceptedHistory: history.coverage, resultTruth: truth.size, ...report }, null, 2));

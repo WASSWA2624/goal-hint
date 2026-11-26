@@ -1,9 +1,10 @@
 import "server-only";
 import { createRecommendationQuoteLoader } from "../odds/recommendation-quotes.ts";
-import { legacyLocalFeaturedDecisionVersion } from "../../domain/local-featured-decision.ts";
+import { legacyLocalFeaturedDecisionVersion, localFeaturedDecisionVersion, type LocalFeaturedDecisionVersion } from "../../domain/local-featured-decision.ts";
 import { evidenceFirstRecommendationPolicy } from "../../domain/recommendation.ts";
 import { goalProfileForLocalFirstCascade, LEGACY_LOCAL_FIRST_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE,
-  QUALIFIED_FORECAST_CASCADE, type LocalFirstForecastCascade } from "../fallback/fallback-contract.ts";
+  QUALIFIED_FORECAST_CASCADE, registryVersionForLocalFirstCascade, SCORE_LOCAL_FIRST_FORECAST_CASCADE,
+  type LocalFirstForecastCascade } from "../fallback/fallback-contract.ts";
 
 import { getReportingDayBounds, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION, LOCAL_FIRST_MARKET_REGISTRY_VERSION, MARKET_REGISTRY_VERSION } from "../../domain/market-registry.ts";
@@ -217,15 +218,14 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     if (coordinated && !localFirstForecasts && aiModel?.evaluation.status !== "evaluated") aiModel = null;
     const sourceOrder = coordinated || localFootball ? "ai-first" : liveSourceOrder(policy);
     const localEvidence = localFirstForecasts || sourceOrder === "ai-first";
-    const localFirstLifecycle = (cascade: LocalFirstForecastCascade, featuredPolicy?: typeof legacyLocalFeaturedDecisionVersion) => ({
+    const localFirstLifecycle = (cascade: LocalFirstForecastCascade, featuredPolicy?: LocalFeaturedDecisionVersion) => ({
       engineVersion: evidenceFingerprint([cascade, goalProfileForLocalFirstCascade(cascade),
         evidenceFirstRecommendationPolicy.version, apiFallbackEnabled, LOCAL_GOALS_VERSION, API_FOOTBALL_CONTRACT_VERSION,
         ...(featuredPolicy ? [featuredPolicy] : [])]),
-      marketRegistryVersion: cascade === LEGACY_LOCAL_FIRST_FORECAST_CASCADE ? LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION : LOCAL_FIRST_MARKET_REGISTRY_VERSION,
+      marketRegistryVersion: registryVersionForLocalFirstCascade(cascade),
     });
-    // The v2 featured ladder uses the same published forecast, so ordinary refresh intents retain their existing identity.
     const selection = Object.freeze({ ...selectionPolicy(policy, refs, workload), ...(coordinated || localFirstForecasts ? { forecastLifecycle: {
-      ...(localFirstForecasts ? localFirstLifecycle(LOCAL_FIRST_FORECAST_CASCADE, legacyLocalFeaturedDecisionVersion) : {
+      ...(localFirstForecasts ? localFirstLifecycle(SCORE_LOCAL_FIRST_FORECAST_CASCADE, localFeaturedDecisionVersion) : {
         engineVersion: evidenceFingerprint([QUALIFIED_FORECAST_CASCADE, evidenceFirstRecommendationPolicy.version, aiModel,
           LOCAL_GOALS_VERSION, API_FOOTBALL_CONTRACT_VERSION]),
         marketRegistryVersion: MARKET_REGISTRY_VERSION,
@@ -512,7 +512,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     const refresh = createPredictionRefreshService({ type: LIVE_REFRESH_TYPE, handlerVersion: 1, store: refreshStore,
       selection: selectionStore, authority: authorities.refresh,
       ...(selection.forecastLifecycle ? { forecastLifecycle: selection.forecastLifecycle } : {}),
-      ...(localFirstForecasts ? { compatibleForecastLifecycles: [localFirstLifecycle(LOCAL_FIRST_FORECAST_CASCADE),
+      ...(localFirstForecasts ? { compatibleForecastLifecycles: [localFirstLifecycle(LOCAL_FIRST_FORECAST_CASCADE, legacyLocalFeaturedDecisionVersion),
+        localFirstLifecycle(LOCAL_FIRST_FORECAST_CASCADE),
         localFirstLifecycle(LEGACY_LOCAL_FIRST_FORECAST_CASCADE)] } : {}),
       ...(!localFirstForecasts ? { prepare: async (member, context) => {
         const football = await footballPreparation?.(member, context);
@@ -529,8 +530,12 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
         const sources = fitLiveFootballSources(member.context, liveAiEvidencePolicy(refs), authorities.evidence, history, extra);
         const base = fallbackRefreshPlan(member, refs, workload.pacing);
         const storedEvidence = { ...base, evidence: { ...base.evidence, policy: liveAiEvidencePolicy(refs), cachedSources: sources } };
-        if (localFirstForecasts) return liveLocalFirstPlan(storedEvidence, apiFallbackEnabled,
-          planned?.marketRegistryVersion === LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION ? LEGACY_LOCAL_FIRST_FORECAST_CASCADE : LOCAL_FIRST_FORECAST_CASCADE);
+        if (localFirstForecasts) {
+          const cascade = planned?.marketRegistryVersion === LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION
+            ? LEGACY_LOCAL_FIRST_FORECAST_CASCADE : planned?.marketRegistryVersion === LOCAL_FIRST_MARKET_REGISTRY_VERSION
+              ? LOCAL_FIRST_FORECAST_CASCADE : SCORE_LOCAL_FIRST_FORECAST_CASCADE;
+          return liveLocalFirstPlan(storedEvidence, apiFallbackEnabled, cascade);
+        }
         const reviewed = ai?.configure(member, sources) ?? storedEvidence;
         if (coordinated) return liveCascadePlan({ ...reviewed, recommendationPolicy: evidenceFirstRecommendationPolicy }, false, QUALIFIED_FORECAST_CASCADE);
         return sourceOrder === "ai-first" ? liveCascadePlan(reviewed) : reviewed;

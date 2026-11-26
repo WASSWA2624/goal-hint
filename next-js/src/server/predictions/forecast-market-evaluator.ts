@@ -1,10 +1,10 @@
 import "server-only";
 
 import { goalDefinitionsForLocalFirstProfile, isEligibleLocalFirstGoalDefinition, LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE,
-  LOCAL_FIRST_GOAL_EVALUATION_PROFILE, localFirstGoalEvaluationProfiles, registeredForecastGoalMarkets, type LocalFirstGoalEvaluationProfile,
+  LOCAL_FIRST_GOAL_EVALUATION_PROFILE, LOCAL_FIRST_SCORE_GOAL_EVALUATION_PROFILE, localFirstGoalEvaluationProfiles, registeredForecastGoalMarkets, type LocalFirstGoalEvaluationProfile,
   type RegisteredGoalMarketDefinition } from "../../domain/goal-market-definitions.ts";
 import { LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION, LOCAL_FIRST_MARKET_REGISTRY_VERSION, MARKET_REGISTRY_VERSION, marketRegistry,
-  type RegisteredMarketFamily } from "../../domain/market-registry.ts";
+  SCORE_LOCAL_FIRST_MARKET_REGISTRY_VERSION, type RegisteredMarketFamily } from "../../domain/market-registry.ts";
 import { type MarketFamily, type MarketSource } from "../../domain/markets.ts";
 import { legacyFamilyByGoalKey as legacyByKey, legacyGoalMarketIdentities as legacy } from "../../domain/legacy-goal-market-identities.ts";
 export { canonicalLegacyForecastSelection, legacyForecastMarketKey, legacyForecastOutcome } from "../../domain/legacy-goal-market-identities.ts";
@@ -19,6 +19,13 @@ import type { PublishedGoalMarket } from "./goal-market-store.ts";
 export const FORECAST_MARKET_EVALUATION_VERSION = "forecast-market-evaluation-v1";
 export const LEGACY_LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION = "forecast-market-evaluation-v2";
 export const LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION = "forecast-market-evaluation-v3";
+export const SCORE_LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION = "forecast-market-evaluation-v4";
+
+const versionByProfile = {
+  [LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE]: [LEGACY_LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION, LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION],
+  [LOCAL_FIRST_GOAL_EVALUATION_PROFILE]: [LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION, LOCAL_FIRST_MARKET_REGISTRY_VERSION],
+  [LOCAL_FIRST_SCORE_GOAL_EVALUATION_PROFILE]: [SCORE_LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION, SCORE_LOCAL_FIRST_MARKET_REGISTRY_VERSION],
+} as const;
 
 export type QualifiedForecastGoalModel = Readonly<{
   source: Extract<MarketSource, "ai" | "local-engine">;
@@ -140,7 +147,7 @@ export type ForecastMarketEvaluatorInput = Readonly<{
   goalModel?: QualifiedForecastGoalModel;
   verifyGoalModel?(model: QualifiedForecastGoalModel): boolean;
   localFirst?: true | LocalFirstGoalEvaluationProfile;
-  /** Immutable derived rows of the existing authorized regulation-count profile. */
+  /** Immutable derived rows of the selected Local Engine publication profile. */
   publishedLocalMarkets?: readonly PublishedGoalMarket[];
 }>;
 
@@ -164,7 +171,6 @@ function evaluatePublishedLocalMarket(identity: RowIdentity, definition: GoalMar
 export function evaluateForecastMarkets(input: ForecastMarketEvaluatorInput) {
   const state = qualifiedGoalState(input);
   const profile = input.localFirst === true ? LOCAL_FIRST_GOAL_EVALUATION_PROFILE : input.localFirst;
-  const legacy = profile === LEGACY_LOCAL_FIRST_GOAL_EVALUATION_PROFILE;
   const published = new Map(profile ? input.publishedLocalMarkets?.map((row) => [row.definition.key, row]) ?? [] : []);
   const localKeys = profile ? publishedLocalKeys.get(profile) : undefined;
   const markets = (profile ? registeredForecastGoalMarkets(profile) : goalMarkets).map((row) => {
@@ -189,7 +195,6 @@ export function evaluateForecastMarkets(input: ForecastMarketEvaluatorInput) {
     markets.push(settlement.basis === "unsupported" ? unavailable(identity, "unsupported-settlement", settlement.reason) :
       unavailable(identity, "no-qualified-market-model", models.basis === "unsupported" ? models.reason : undefined));
   }
-  return freezeEvidence({ version: legacy ? LEGACY_LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION :
-    profile ? LOCAL_FIRST_FORECAST_MARKET_EVALUATION_VERSION : FORECAST_MARKET_EVALUATION_VERSION,
-    registryVersion: legacy ? LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION : profile ? LOCAL_FIRST_MARKET_REGISTRY_VERSION : MARKET_REGISTRY_VERSION, markets });
+  const [version, registryVersion] = profile ? versionByProfile[profile] : [FORECAST_MARKET_EVALUATION_VERSION, MARKET_REGISTRY_VERSION];
+  return freezeEvidence({ version, registryVersion, markets });
 }

@@ -4,7 +4,7 @@ import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { marketRules } from "../../domain/markets.ts";
 import { fixtureModelEvidenceBounds, type FixtureModelHistoryRow } from "../evidence/fixture-model-evidence.ts";
 import type { HistoryRow } from "../predictions/history-read.ts";
-import { fixtureResultFromRow } from "../results/result-read.ts";
+import { fixtureResultEvidenceAvailableAt, fixtureResultFromRow } from "../results/result-read.ts";
 import { localGoalDefaults } from "./local-goals-model.ts";
 
 export type LocalGoalHistoryReader = { $queryRaw<T>(query: TemplateStringsArray, ...values: unknown[]): Promise<T> };
@@ -18,14 +18,21 @@ export async function readLiveLocalGoalHistory(tx: LocalGoalHistoryReader, compe
   // Sort and cap the narrow result identities before reading and hashing their sealed bodies.
   const rows = await tx.$queryRaw<HistoryRow[]> `
     SELECT /*+ MAX_EXECUTION_TIME(2500) */ r.*, recent.competitionId, recent.homeTeamId, recent.awayTeamId, recent.kickoff,
+      recent.availableAt, recent.catalogImportId,
       r.integrity = SHA2(CAST(r.body AS CHAR), 256) AS validIntegrity
     FROM (
-      SELECT r.id, f.id AS fixtureId, s.competitionId, f.homeTeamId, f.awayTeamId, f.kickoff
+      SELECT r.id, f.id AS fixtureId, s.competitionId, f.homeTeamId, f.awayTeamId, f.kickoff,
+        GREATEST(r.observedAt,COALESCE(applied.at,receipt.recordedAt)) AS availableAt,
+        CASE WHEN applied.at IS NULL THEN receipt.id ELSE NULL END AS catalogImportId
       FROM FootballSeason s
       JOIN FootballFixture f ON f.seasonId=s.id
       JOIN FixtureResultState state ON state.fixtureId=f.id
       JOIN FixtureResult r FORCE INDEX (PRIMARY) ON r.id=state.resultId AND r.fixtureId=f.id
       LEFT JOIN FixtureLifecycleState life ON life.fixtureId=f.id
+      LEFT JOIN PredictionChangeEvent applied ON applied.fixtureResultId=r.id AND applied.fixtureId=r.fixtureId AND applied.version=r.fixtureVersion
+      LEFT JOIN FootballFixtureAudit audit ON applied.at IS NULL AND audit.fixtureId=r.fixtureId AND audit.dataVersion=r.fixtureVersion
+        AND audit.observedAt=r.observedAt
+      LEFT JOIN FootballImport receipt ON receipt.id=audit.importId AND receipt.provider='api-football'
       WHERE s.competitionId=COALESCE(${competitionId}, (
           SELECT ts.competitionId FROM FootballFixture target
           JOIN FootballSeason ts ON ts.id=target.seasonId
@@ -37,7 +44,7 @@ export async function readLiveLocalGoalHistory(tx: LocalGoalHistoryReader, compe
         AND f.provider='api-football' AND (${targetId} IS NULL OR f.id<>${targetId})
         AND f.kickoff>=${new Date(cutoffAt - localGoalDefaults.lookbackMs)} AND f.kickoff<${cutoff}
         AND f.retrievedAt<=${cutoff} AND (f.providerUpdatedAt IS NULL OR f.providerUpdatedAt<=${cutoff})
-        AND r.observedAt<=${cutoff} AND r.observedAt>f.kickoff
+        AND r.observedAt<=${cutoff} AND r.observedAt>f.kickoff AND COALESCE(applied.at,receipt.recordedAt)<=${cutoff}
         AND f.status IN ('finished-regulation','finished-extra-time','finished-penalties') AND r.status=f.status
         AND r.regulationVerified=TRUE AND r.regulationHome=f.regulationHome AND r.regulationAway=f.regulationAway
         AND f.regulationVerifiedAt<=${cutoff} AND life.issue IS NULL
@@ -48,11 +55,12 @@ export async function readLiveLocalGoalHistory(tx: LocalGoalHistoryReader, compe
   if (rows.length < localGoalDefaults.minimumMatches) return [];
   return rows.flatMap((row) => {
     const result = fixtureResultFromRow(row);
-    if (result.providerUpdatedAt !== null && result.providerUpdatedAt > result.observedAt) return [];
+    const availableAt = fixtureResultEvidenceAvailableAt(result, row);
+    if (availableAt === null || availableAt > cutoffAt) return [];
     return [{
       fixtureId: result.fixtureId, competitionId: String(row.competitionId),
       homeTeamId: String(row.homeTeamId), awayTeamId: String(row.awayTeamId),
-      kickoffAt: utcInstantFromEpochMilliseconds((row.kickoff as Date).getTime()), availableAt: result.observedAt,
+      kickoffAt: utcInstantFromEpochMilliseconds((row.kickoff as Date).getTime()), availableAt,
       homeGoals: result.regulation.home!, awayGoals: result.regulation.away!, period: marketRules.period,
       observationHash: result.id, evidenceRef: result.regulation.evidenceRef!,
       halfTime: result.halfTime ? { home: result.halfTime.home, away: result.halfTime.away } : null,

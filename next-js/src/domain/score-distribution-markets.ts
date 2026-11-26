@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isPlayedFinalStatus, settlementStatuses, type CycleEligibility, type SettlementStatus } from "./market-settlement.ts";
 import { asianPayoutGrade, type ExtendedMarketGrade } from "./market-payout.ts";
+import { poisson } from "./poisson.ts";
 import { parseScoreDistribution, type ScoreDistribution, type ScoreState } from "./score-distribution.ts";
 
 export const GOAL_MARKET_RULE_VERSION = "score-derived-goal-markets-v1";
@@ -99,12 +100,26 @@ function negatedGoalCount(rule: GoalRule): Extract<GoalRule, { kind: "goal-count
   return null;
 }
 
+const localRegulationScoreMaximum = 40;
+const supportedExactScore = (rule: GoalRule) => rule.kind === "exact-score" &&
+  rule.home <= localRegulationScoreMaximum && rule.away <= localRegulationScoreMaximum;
+
+function localRegulationScoreSupport({ period, selections }: GoalMarketDefinition) {
+  if (period !== "full-time") return null;
+  if (selections.every(({ rule }) => supportedExactScore(rule) || rule.kind === "none" && rule.rules.every(supportedExactScore))) return "exact-score";
+  if (selections.every(({ rule }) => rule.kind === "asian-handicap" || rule.kind === "handicap-result")) return "margin";
+  if (selections.every(({ rule }) => rule.kind === "win-to-nil")) return "win-to-nil";
+  return null;
+}
+
 /** The sum of two independent Poisson counts is Poisson. The half rates use the
  * observed first-half shares of each side from verified point-in-time results. */
 export function deriveLocalGoalMarket(rates: LocalPoissonRates, definition: GoalMarketDefinition,
   ranking: "any-win" | "outright-win" = "any-win"): GoalDerivationResult {
   if (ranking === "any-win" && definition.key === "goal:full-time:totals:total:1.5:binary")
     return { available: true, market: deriveLocalPoissonTotal15(rates, definition) };
+  const scoreSupport = ranking === "outright-win" ? localRegulationScoreSupport(definition) : null;
+  if (scoreSupport) return deriveLocalRegulationScoreMarket(rates, definition, scoreSupport);
   const share = rates.firstHalfShare;
   if (definition.period !== "full-time" && share === undefined) return { available: false, reason: "missing-half-time-distribution" };
   const rate = (side: "home" | "away") => rates[side] * (definition.period === "full-time" ? 1
@@ -213,6 +228,83 @@ function grade(state: ScoreState, period: GoalMarketPeriod, rule: GoalRule): Goa
   return won === null ? null : won ? "win" : "loss";
 }
 
+function scoreSelectionMass(definition: GoalMarketDefinition, states: readonly ScoreState[], unrepresentedProbability: number): BoundedGoalDerivationResult {
+  const selections: GoalSelectionMass[] = [];
+  // Partition validity is per score. Overlaps cannot cancel gaps in the aggregate.
+  const membership = definition.group === "partition" ? new Uint16Array(states.length) : null;
+  for (const selection of definition.selections) {
+    const outcomes = Object.fromEntries(grades.map((item) => [item, 0])) as Record<GoalGrade, number>;
+    for (let index = 0; index < states.length; index++) {
+      const state = states[index]!;
+      const value = grade(state, definition.period, selection.rule);
+      if (value === null) return { available: false, reason: "missing-half-time-distribution" };
+      outcomes[value] += state.probability;
+      if (membership && value === "win") membership[index]!++;
+    }
+    // The validated total has a floating-point tolerance. Bound only representational overflow;
+    // never redistribute or discard the explicit unknown mass.
+    const bounded = Object.fromEntries(grades.map((item) => [item, Math.min(1, outcomes[item])])) as Record<GoalGrade, number>;
+    selections.push(Object.freeze({ ...selection, outcomes: Object.freeze(bounded) }));
+  }
+  if (membership?.some((count) => count !== 1)) {
+    return { available: false, reason: "incomplete-partition" };
+  }
+  return Object.freeze({ available: true, ruleVersion: GOAL_MARKET_RULE_VERSION, definition,
+    selections: Object.freeze(selections), unrepresentedProbability });
+}
+
+const localRegulationScores = new WeakMap<LocalPoissonRates, {
+  home: number; away: number; homeMass: readonly number[]; awayMass: readonly number[]; marginStates?: readonly ScoreState[];
+}>();
+const scoreState = (home: number, away: number, probability: number): ScoreState => ({ home, away, halfHome: null, halfAway: null, probability });
+
+function exactScoreStates(definition: GoalMarketDefinition, homeMass: readonly number[], awayMass: readonly number[]) {
+  const states = new Map<string, ScoreState>();
+  for (const { rule } of definition.selections) for (const score of rule.kind === "none" ? rule.rules : [rule]) {
+    if (score.kind !== "exact-score") continue;
+    const { home, away } = score;
+    states.set(`${home}:${away}`, scoreState(home, away, (homeMass[home] ?? 0) * (awayMass[away] ?? 0)));
+  }
+  const exact = [...states.values()];
+  // Every unlisted score has the same grade for exact-score and complementary selections.
+  const other = Math.max(0, 1 - exact.reduce((sum, state) => sum + state.probability, 0));
+  return [...exact, scoreState(1 + Math.max(...exact.map(({ home }) => home)), 0, other)];
+}
+
+function scoreMarginStates(homeMass: readonly number[], awayMass: readonly number[]) {
+  const offset = awayMass.length - 1, masses = Array<number>(homeMass.length + offset).fill(0);
+  for (const [home, homeProbability] of homeMass.entries()) for (const [away, awayProbability] of awayMass.entries()) {
+    masses[home - away + offset]! += homeProbability * awayProbability;
+  }
+  const total = masses.reduce((sum, probability) => sum + probability, 0);
+  return masses.map((probability, index) => scoreState(Math.max(0, index - offset), Math.max(0, offset - index), probability / total));
+}
+
+function deriveLocalRegulationScoreMarket(rates: LocalPoissonRates, definition: GoalMarketDefinition,
+  support: NonNullable<ReturnType<typeof localRegulationScoreSupport>>): GoalDerivationResult {
+  let model = localRegulationScores.get(rates);
+  if (!model || model.home !== rates.home || model.away !== rates.away) {
+    if (!localPoissonRatesSchema.safeParse(rates).success) return { available: false, reason: "invalid-distribution" };
+    // At the maximum supported rate six, either team exceeding 40 goals has joint tail bound < 1.4e-20.
+    model = { home: rates.home, away: rates.away, homeMass: poisson(rates.home, localRegulationScoreMaximum),
+      awayMass: poisson(rates.away, localRegulationScoreMaximum) };
+    localRegulationScores.set(rates, model);
+  }
+  const { homeMass, awayMass } = model;
+  const homeZero = homeMass[0]!, awayZero = awayMass[0]!;
+  const states = support === "margin" ? model.marginStates ??= scoreMarginStates(homeMass, awayMass)
+    : support === "exact-score" ? exactScoreStates(definition, homeMass, awayMass)
+      : [scoreState(0, 0, homeZero * awayZero), scoreState(0, 1, homeZero * (1 - awayZero)),
+        scoreState(1, 0, (1 - homeZero) * awayZero), scoreState(1, 1, (1 - homeZero) * (1 - awayZero))];
+  const result = scoreSelectionMass(definition, states, 0);
+  if (!result.available) return result;
+  const selections = result.selections.map((selection) => Object.freeze({ ...selection, winProbability: selection.outcomes.win }));
+  const selected = selections.reduce((best, item) => item.winProbability > best.winProbability ||
+    item.winProbability === best.winProbability && item.key < best.key ? item : best);
+  return { available: true, market: Object.freeze({ ruleVersion: GOAL_MARKET_RULE_VERSION, source: "local-poisson", definition,
+    selections: Object.freeze(selections), selection: selected.key, selectedProbability: selected.winProbability }) };
+}
+
 function deriveGoalSelectionMass(
   distributionInput: unknown, definitionInput: unknown, allowBoundedTail: boolean,
 ): BoundedGoalDerivationResult {
@@ -222,26 +314,7 @@ function deriveGoalSelectionMass(
   try { distribution = parseScoreDistribution(distributionInput); } catch { return { available: false, reason: "invalid-distribution" }; }
   if (distribution.unrepresentedProbability >= GOAL_DERIVATION_TAIL_BOUND ||
     (!allowBoundedTail && distribution.unrepresentedProbability !== 0)) return { available: false, reason: "unrepresented-score-mass" };
-  const definition = freezeDefinition(parsed.data), selections: GoalSelectionMass[] = [];
-  for (const selection of definition.selections) {
-    const outcomes = Object.fromEntries(grades.map((item) => [item, 0])) as Record<GoalGrade, number>;
-    for (const state of distribution.states) {
-      const value = grade(state, definition.period, selection.rule);
-      if (value === null) return { available: false, reason: "missing-half-time-distribution" };
-      outcomes[value] += state.probability;
-    }
-    // The validated total has a floating-point tolerance. Bound only representational overflow;
-    // never redistribute or discard the explicit unknown mass.
-    const bounded = Object.fromEntries(grades.map((item) => [item, Math.min(1, outcomes[item])])) as Record<GoalGrade, number>;
-    selections.push(Object.freeze({ ...selection, outcomes: Object.freeze(bounded) }));
-  }
-  // Check partition membership per state, not just aggregate mass: overlaps can otherwise cancel gaps.
-  if (definition.group === "partition" && distribution.states.some((state) =>
-      definition.selections.filter(({ rule }) => grade(state, definition.period, rule) === "win").length !== 1)) {
-    return { available: false, reason: "incomplete-partition" };
-  }
-  return Object.freeze({ available: true, ruleVersion: GOAL_MARKET_RULE_VERSION, definition,
-    selections: Object.freeze(selections), unrepresentedProbability: distribution.unrepresentedProbability });
+  return scoreSelectionMass(freezeDefinition(parsed.data), distribution.states, distribution.unrepresentedProbability);
 }
 
 /** Derives complete probabilities for callers that require all joint mass. */

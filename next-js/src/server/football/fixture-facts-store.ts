@@ -3,6 +3,8 @@ import "server-only";
 import type { UtcInstant } from "../../domain/calendar.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
+import { forecastLineupHash, forecastLineupObservationKey, forecastLineupWindow, observedForecastLineup, type ForecastLineupScope }
+  from "../refresh/forecast-orchestration.ts";
 import type { FixtureDetailFacts } from "./fixture-match-details.ts";
 
 export type FixtureFactObservation = Readonly<{ values: FixtureDetailFacts; retrievedAt: UtcInstant }>;
@@ -47,8 +49,42 @@ function liveTeamFacts(previous: unknown, incoming: readonly unknown[] | null): 
   return [...rows, ...updates.values()];
 }
 
+function withoutLineupObservation(rows: readonly unknown[]) {
+  return rows.map((row) => {
+    if (!row || typeof row !== "object" || Array.isArray(row) || !Object.hasOwn(row, forecastLineupObservationKey)) return row;
+    const copy = { ...row } as Record<string, unknown>;
+    delete copy[forecastLineupObservationKey];
+    return copy;
+  });
+}
+
+type FixtureFactTarget = Readonly<{ fixtureId: string; externalId: number; status?: string; kickoffAt?: number | Date | null }>
+  & Partial<Pick<ForecastLineupScope, "homeExternalId" | "awayExternalId" | "cycleId">>;
+
+function withLineupObservation(previous: unknown, incoming: readonly unknown[] | null, target: FixtureFactTarget,
+  retrievedAt: number, now: number, replaceExisting: boolean) {
+  const observations = incoming && withoutLineupObservation(incoming);
+  const merged = replaceExisting ? liveTeamFacts(previous, observations) : archiveTeamFacts(previous, observations, ["startXI", "substitutes"]);
+  if (!merged) return null;
+  const unmarked = withoutLineupObservation(merged);
+  const { kickoffAt, homeExternalId, awayExternalId, cycleId } = target;
+  if (replaceExisting && target.status === "scheduled" && typeof kickoffAt === "number" && homeExternalId !== undefined && awayExternalId !== undefined &&
+    cycleId !== undefined && forecastLineupWindow(kickoffAt, retrievedAt, now)) {
+    const scope = { kickoffAt, homeExternalId, awayExternalId, cycleId }, hash = forecastLineupHash(observations, scope);
+    const old = observedForecastLineup(previous, scope, now);
+    if (old && !hash) return null;
+    // A partial response may preserve display data, but carried-over material cannot attest this receipt.
+    if (hash && hash === forecastLineupHash(unmarked, scope)) {
+      const stamp = { kickoffAt, cycleId, retrievedAt: old?.hash === hash ? old.retrievedAt : retrievedAt };
+      return unmarked.map((row) => ({ ...(row as Record<string, unknown>), [forecastLineupObservationKey]: stamp }));
+    }
+  }
+  // A cosmetic replay or an unrelated supplement cannot refresh the lineup clock.
+  return Array.isArray(previous) && evidenceFingerprint(withoutLineupObservation(previous)) === evidenceFingerprint(unmarked) ? null : unmarked;
+}
+
 /** The caller locks and verifies the canonical fixture before writing its observations. */
-export async function saveFixtureFacts(tx: Prisma.TransactionClient, target: Readonly<{ fixtureId: string; externalId: number }>,
+export async function saveFixtureFacts(tx: Prisma.TransactionClient, target: FixtureFactTarget,
   observation: FixtureFactObservation, now: Date, replaceExisting = true): Promise<boolean> {
   const { events, statistics, lineups, players, info } = observation.values;
   if ((!info && ![events, statistics, lineups, players].some((rows) => rows?.length)) ||
@@ -61,7 +97,7 @@ export async function saveFixtureFacts(tx: Prisma.TransactionClient, target: Rea
   const at = new Date(observation.retrievedAt);
   const eventsHash = events?.length ? evidenceFingerprint(events) : null;
   const teamStatistics = replaceExisting ? liveTeamFacts(previous?.statistics, statistics) : archiveTeamFacts(previous?.statistics, statistics, ["statistics"]);
-  const teamLineups = replaceExisting ? liveTeamFacts(previous?.lineups, lineups) : archiveTeamFacts(previous?.lineups, lineups, ["startXI", "substitutes"]);
+  const teamLineups = withLineupObservation(previous?.lineups, lineups, target, observation.retrievedAt, now.getTime(), replaceExisting);
   const teamPlayers = replaceExisting ? liveTeamFacts(previous?.playerStatistics, players) : archiveTeamFacts(previous?.playerStatistics, players, ["players"]);
   const statisticsHash = teamStatistics?.length ? evidenceFingerprint(teamStatistics) : null;
   const canWrite = (old: Date | null | undefined) => old == null || at >= old;

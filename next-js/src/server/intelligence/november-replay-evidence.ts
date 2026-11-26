@@ -19,7 +19,7 @@ import { statusShowsPlay } from "../predictions/publication-eligibility.ts";
 import type { ForecastDecision } from "../predictions/forecast-decision.ts";
 import { RevisionPublicationError } from "../predictions/publication-contract.ts";
 import { storedPublicationBarrier, storedRefreshResult } from "../predictions/publication-read.ts";
-import { fixtureResultFromRow } from "../results/result-read.ts";
+import { fixtureResultEvidenceAvailableAt, fixtureResultFromRow } from "../results/result-read.ts";
 import type { LocalGoalForecast } from "./intelligence-contract.ts";
 import { estimateLocalGoals, localGoalDefaults, localGoalModelVersion } from "./local-goals-model.ts";
 import { DEFAULT_MONITORING_POLICY } from "./monitoring.ts";
@@ -425,11 +425,9 @@ export async function readNovemberReplayHistory(tx: Pick<Prisma.TransactionClien
   }
   return rows.flatMap((row) => {
     const result = fixtureResultFromRow(row);
-    const kickoffAt = utcInstantFromEpochMilliseconds(Date.parse(String(row.kickoff))), availableAt = historyTime(row.availableAt);
-    const catalogSeed = row.catalogImportId === null || result.observationId === evidenceFingerprint({
-      importId: row.catalogImportId, fixtureId: result.fixtureId, observedAt: result.observedAt });
-    if (!catalogSeed || !isPlayedFinalStatus(result.status) || !result.regulation.verified || result.observedAt <= kickoffAt ||
-      availableAt >= cutoffAt || result.providerUpdatedAt !== null && result.providerUpdatedAt > result.observedAt) return [];
+    const kickoffAt = utcInstantFromEpochMilliseconds(Date.parse(String(row.kickoff))), availableAt = fixtureResultEvidenceAvailableAt(result, row);
+    if (availableAt === null || availableAt >= cutoffAt || !isPlayedFinalStatus(result.status) || !result.regulation.verified ||
+      result.observedAt <= kickoffAt) return [];
     return [{ fixtureId: result.fixtureId, competitionId: String(row.competitionId),
       homeTeamId: String(row.homeTeamId), awayTeamId: String(row.awayTeamId), kickoffAt, availableAt,
       homeGoals: result.regulation.home!, awayGoals: result.regulation.away!, period: marketRules.period,

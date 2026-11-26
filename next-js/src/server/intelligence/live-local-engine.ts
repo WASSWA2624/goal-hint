@@ -36,6 +36,7 @@ export function createLiveLocalEngine(database: DatabaseRuntime, options: Readon
     check: () => void): Promise<ResolvedForecastCandidate | null> => {
     const context = expected.context;
     check();
+    if (context.cutoffAt > context.analysisAt || context.analysisAt >= context.kickoffAt) return null;
     const rows = await database.query((tx) => readLiveLocalGoalHistory(tx, null, context.cutoffAt, {
       fixtureId: context.fixtureId, externalFixtureId: context.externalFixtureId, homeTeamId: context.home.teamId,
       awayTeamId: context.away.teamId, kickoffAt: context.kickoffAt,
@@ -62,7 +63,7 @@ export function createLiveLocalEngine(database: DatabaseRuntime, options: Readon
     const forecast = estimateLocalGoals({ fixture: evidence.fixture, history });
     check();
     const at = clock();
-    if (!forecast.expectedGoals || !forecast.probabilities || at < context.analysisAt) return null;
+    if (!forecast.expectedGoals || !forecast.probabilities || at < context.analysisAt || at >= context.kickoffAt) return null;
     const result = validateMarketSnapshot({
       "match-result": { source: "local-engine", period: marketRules.period, probabilities: forecast.probabilities["match-result"] },
       "total-goals": { source: "local-engine", period: marketRules.period, line: marketRules.totalGoalsLine,

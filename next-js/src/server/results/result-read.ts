@@ -27,6 +27,15 @@ const resultSchema = z.strictObject({ id: historyHash, fixtureId: historyId, fix
     isPlayedFinalStatus(v.status));
 export type StoredFixtureResult = Readonly<z.infer<typeof resultSchema>>;
 
+/** An unlinked legacy catalog import cannot attest when the sealed result became available. */
+export function fixtureResultEvidenceAvailableAt(result: StoredFixtureResult, row: HistoryRow) {
+  if (row.catalogImportId !== null && (typeof row.catalogImportId !== "string" || result.observationId !== evidenceFingerprint({
+    importId: row.catalogImportId, fixtureId: result.fixtureId, observedAt: result.observedAt,
+  })) || result.providerUpdatedAt !== null && result.providerUpdatedAt > result.observedAt) return null;
+  const availableAt = historyTime(row.availableAt);
+  return availableAt >= result.observedAt ? availableAt : null;
+}
+
 export function fixtureResultMatchesCanonical(fixture: Pick<FootballFixture, "status" | "regulationHome" | "regulationAway" | "regulationVerifiedAt" | "regulationEvidenceRef">,
   result: StoredFixtureResult | null, issue: string | null = null): boolean {
   return result !== null && issue === null && result.status === fixture.status &&

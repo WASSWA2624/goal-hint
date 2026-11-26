@@ -19,7 +19,8 @@ export function featuredPrediction<T extends ComparableForecastPick>(outcomes: r
 }
 
 const messages = createMessages("en");
-export function rankFixtureOutcomes(markets: readonly Readonly<{ market: AcceptedMarket; confidence?: ForecastConfidence }>[], goalMarkets: readonly FeaturedGoalMarket[],
+export function rankFixtureOutcomes(markets: readonly Readonly<{ market: AcceptedMarket; confidence?: ForecastConfidence }>[],
+  goalMarkets: readonly (FeaturedGoalMarket & Readonly<{ unrepresentedProbability?: number }>)[],
   prices: PreMatchBookmakerOdds | null, observedOdds?: MarketOddsObservation | null, recommendation?: PublicRecommendation): FeaturedPrediction | null {
   const selected = recommendation?.selected;
   const recommended = selected?.confidence && markets.some(({ market }) => market.family === selected.family && market.source === selected.source &&
@@ -41,7 +42,7 @@ export function rankFixtureOutcomes(markets: readonly Readonly<{ market: Accepte
     }
   }
   for (const market of goalMarkets) {
-    if (market.source === "market-implied" || market.key === "goal:full-time:totals:total:2.5:binary") continue;
+    if (market.source === "market-implied" || market.key === "goal:full-time:totals:total:2.5:binary" || (market.unrepresentedProbability ?? 0) !== 0) continue;
     const source = market.source === "local-poisson" ? "local-engine" : "ai";
     const confidence = forecastSourceConfidence(source);
     const best = featuredPrediction(market.selections.map((selection): FeaturedPrediction & { confidence?: ForecastConfidence } => ({ key: market.key,

@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseReportingDate, validateReportingDateRange } from "../src/domain/calendar.ts";
+import { getPublicationDeadline, parseReportingDate, validateReportingDateRange } from "../src/domain/calendar.ts";
 import { bestCardFamily } from "../src/domain/feed-presentation.ts";
 import { parseFeedQuery } from "../src/domain/feed-query.ts";
 import { featuredFamily } from "../src/domain/match-details.ts";
 import { bestPublishedFamily, rankFixtureOutcomes } from "../src/domain/market-ranking.ts";
+import { preMatchReferenceOddsFreshMs } from "../src/domain/reference-odds.ts";
 import { feedSql } from "../src/server/matches/feed-read.ts";
+import { upcomingFeaturedPick } from "../src/server/matches/upcoming-featured-pick.ts";
 
 const families = ["match-result", "total-goals"];
 const pick = (family, selection, selectedProbability) => ({ market: { family, selection, selectedProbability } });
@@ -92,6 +94,38 @@ test("qualified local extended picks win equal-probability ties over comparably 
   ] }] };
   const result = rankFixtureOutcomes([fallback], [local], prices);
   assert.deepEqual([result.key, result.odds, result.probability, result.source], [local.key, null, 0.7, "local-engine"]);
+});
+
+test("the current fallback prices only the exact timely occurrence and closes at the normal forecast deadline", () => {
+  const now = Date.parse("2026-11-26T08:00:00Z"), kickoffAt = now + 3_600_000;
+  const fixtureId = "9bec2a11-ea91-44a5-b272-de378001cb54";
+  const forecast = { publishedAt: now - 1, markets: [{ market: { family: "match-result", source: "api-football", selection: "home-win",
+    selectedProbability: 0.70, probabilities: { "home-win": 0.7, draw: 0.2, "away-win": 0.1 } } }] };
+  const fixture = { fixtureId, kickoffAt, status: "scheduled", forecast };
+  const quote = { fixtureId, kickoffAt, checkedAt: now, primaryBookmakerId: 1, bookmakers: [{ bookmakerId: 1, bookmakerName: "Test bookmaker",
+    offers: [{ betId: 1, betName: "Match Winner", providerUpdatedAt: null, observedAt: now - 4, checkedAt: now,
+      values: [{ label: "Home", odd: "1.80" }, { label: "Draw", odd: "9.50" }] }] }] };
+  const read = (record = fixture, odds = quote, at = now, permitted = true) => upcomingFeaturedPick(record, undefined, odds, at, permitted);
+  assert.deepEqual([read().selection, read().odds], ["home-win", "1.8"]);
+  for (const drift of [{ fixtureId: "24181605-bcab-4d3d-9a98-a39538bea2d7" }, { kickoffAt: kickoffAt + 1 },
+    { checkedAt: now + 1 }, { provenance: "historical-pre-match" }]) assert.equal(read(fixture, { ...quote, ...drift }).odds, null);
+  const projection = { kind: "pre-match", checkedAt: now - preMatchReferenceOddsFreshMs - 1,
+    prices: { state: "available", markets: [{ family: "match-result", selections: [{ selection: "home-win", price: "1.90" }] }] } };
+  assert.equal(read({ ...fixture, marketOdds: projection }, null).odds, null);
+  assert.equal(read({ ...fixture, marketOdds: { ...projection, checkedAt: now } }, null).odds, "1.90");
+  assert.equal(read(fixture, quote, now, false).odds, null);
+  assert.equal(read(fixture, quote, getPublicationDeadline(kickoffAt)), null);
+  assert.equal(read({ ...fixture, forecast: { ...forecast, publishedAt: now + 1 } }), null);
+});
+
+test("an incomplete privately modeled score distribution cannot choose a featured market", () => {
+  const price = "1.20", probability = .98, market = { key: "goal:full-time:totals:total:5.5:binary", label: "Total goals 5.5",
+    code: "O/U 5.5", source: "local-poisson", unrepresentedProbability: 1e-14,
+    selections: [{ key: "under", label: "Under 5.5", probability }] };
+  assert.equal(rankFixtureOutcomes([], [market], null), null);
+  const offers = { fixtureId: "fixture", kind: "pre-match", checkedAt: 10, books: [{ bookmakerId: 8,
+    markets: [{ betId: 5, name: "Goals Over/Under", selections: [{ label: "Under 5.5", line: null, price }] }] }] };
+  assert.equal(rankFixtureOutcomes([], [{ ...market, unrepresentedProbability: 0 }], offers).probability, probability);
 });
 
 test("public forecast rows require a published market without applying the recommendation decision", () => {

@@ -29,6 +29,7 @@ function storedLocalResults(context) {
     return { id: body.id, fixtureId: body.fixtureId, fixtureVersion: 1n, observedAt: new Date(observedAt), status: body.status,
       regulationVerified: true, regulationHome: regulation.home, regulationAway: regulation.away,
       contentHash: evidenceFingerprint(content), validIntegrity: 1, body: evidenceSerialize(body),
+      availableAt: new Date(observedAt + 1000), catalogImportId: null,
       competitionId: item.competitionId, kickoff: new Date(item.kickoffAt + offset),
       homeTeamId: team(item.homeTeamId), awayTeamId: team(item.awayTeamId) };
   });
@@ -82,6 +83,26 @@ test("authorized archive context is optional when its database read fails", asyn
   assert.equal(selected(value, "match-result").market.source, "local-engine");
   assert.equal(archiveReads, 1);
   assert.equal(setup.collected.length, 0);
+});
+
+test("local forecasts exclude results accepted after the frozen evidence cutoff and refuse invalid clocks", async () => {
+  const setup = fallbackServiceSetup({ reason: "unconfigured" });
+  const expected = setup.expected, { context } = expected;
+  const ai = { aiStatus: "denied", aiReason: "unconfigured" };
+  const rows = storedLocalResults(context);
+  let reads = 0;
+  const engine = createLiveLocalEngine({ query: async (operation) => operation({
+    async $queryRaw(sql, ...params) {
+      reads++;
+      assert.match(sql.join("?"), /COALESCE\(applied\.at,receipt\.recordedAt\)<=\?/u);
+      assert.ok(params.some((value) => value instanceof Date && value.getTime() === context.cutoffAt));
+      return rows.map((row) => ({ ...row, availableAt: new Date(context.cutoffAt + 1) }));
+    },
+  }) });
+  const later = () => context.analysisAt + 2000;
+  assert.equal(await engine(expected, ai, later, () => {}), null);
+  assert.equal(await engine({ ...expected, context: { ...context, cutoffAt: context.analysisAt + 1 } }, ai, later, () => {}), null);
+  assert.equal(reads, 1);
 });
 
 test("live cascade requests API-Football only after stored history falls short", async () => {

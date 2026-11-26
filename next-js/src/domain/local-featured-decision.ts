@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { bookmakerOddsId, oddsDisplayText, oddsVersionSchema, replayBookmakerBetIds } from "./bookmaker-odds.ts";
-import { legacyLocalFirstGoalMarketDefinitions, localFirstGoalMarketDefinitions } from "./goal-market-definitions.ts";
+import { legacyLocalFirstGoalMarketDefinitions, localFirstGoalMarketDefinitions, localFirstRegulationScoreMarketDefinitions } from "./goal-market-definitions.ts";
 import { canonicalLegacyForecastSelection, legacyForecastMarketKey, legacyForecastOutcome } from "./legacy-goal-market-identities.ts";
 import { isMarketFamily } from "./markets.ts";
 import { parseDecimalOdds, type DecimalOdds } from "./odds.ts";
@@ -10,15 +10,19 @@ import type { GoalGrade } from "./score-distribution-markets.ts";
 
 export const legacyLocalFeaturedDecisionVersion = "local-featured-pre-match-v1";
 export const previousLocalFeaturedDecisionVersion = "local-featured-pre-match-v2";
-export const localFeaturedDecisionVersion = "local-featured-pre-match-v3";
+export const oddsFirstTieredFeaturedDecisionVersion = "local-featured-pre-match-v3";
+export const localFeaturedDecisionVersion = "local-featured-pre-match-v4";
+export const tieredLocalFeaturedDecisionVersions = [oddsFirstTieredFeaturedDecisionVersion, localFeaturedDecisionVersion] as const;
 export const localFeaturedBookmakerBetIds = replayBookmakerBetIds;
 const legacyThresholds = [0.95, 0.90, 0.85, 0.80, 0.75] as const;
 const thresholds = [...legacyThresholds, 0.70, 0.65, 0.60] as const;
-const featuredDecisionVersionSchema = z.literal([legacyLocalFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion, localFeaturedDecisionVersion]);
+const featuredDecisionVersionSchema = z.literal([legacyLocalFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion, ...tieredLocalFeaturedDecisionVersions]);
 export type LocalFeaturedDecisionVersion = z.infer<typeof featuredDecisionVersionSchema>;
 const thresholdsByVersion = { [legacyLocalFeaturedDecisionVersion]: legacyThresholds,
-  [previousLocalFeaturedDecisionVersion]: thresholds, [localFeaturedDecisionVersion]: thresholds } as const;
+  [previousLocalFeaturedDecisionVersion]: thresholds, [oddsFirstTieredFeaturedDecisionVersion]: thresholds, [localFeaturedDecisionVersion]: thresholds } as const;
 const thresholdFor = (probability: number, version: LocalFeaturedDecisionVersion) => thresholdsByVersion[version].find((floor) => probability >= floor);
+export const isTieredLocalFeaturedDecision = (version: LocalFeaturedDecisionVersion): version is typeof tieredLocalFeaturedDecisionVersions[number] =>
+  tieredLocalFeaturedDecisionVersions.some((tiered) => tiered === version);
 const minimumPrice = parseDecimalOdds("1.10")!;
 const minimumProbability = 0.60;
 const unitPrice = 10_000n;
@@ -42,17 +46,20 @@ export const localFeaturedDecisionSchema = z.discriminatedUnion("status", [
   z.strictObject({ ...selectionFields, version: featuredDecisionVersionSchema, status: z.literal("priced"),
     tier: z.enum(["standard", "priced-fallback"]).optional(),
     threshold: z.literal(thresholds), expectedNetReturn: featuredNetReturnSchema, quote: localFeaturedQuoteSchema,
-  }).refine(({ probability, threshold, version, tier, expectedNetReturn, quote }) => {
+  }).refine(({ marketKey, selection, probability, threshold, version, tier, expectedNetReturn, quote }) => {
     const price = parseDecimalOdds(quote.decimal);
     const standard = price !== null && price.scaled >= minimumPrice.scaled && featuredExpectedReturnSchema.safeParse(expectedNetReturn).success;
-    return thresholdFor(probability, version) === threshold && (version === localFeaturedDecisionVersion
+    const binding = version === localFeaturedDecisionVersion ? verifiedLocalFeaturedBinding(marketKey, selection) : undefined;
+    if (version === localFeaturedDecisionVersion && (!binding || quote.betId !== binding.betId || quote.betName !== binding.betName
+      || quote.providerSelection !== binding.label)) return false;
+    return thresholdFor(probability, version) === threshold && (isTieredLocalFeaturedDecision(version)
       ? (standard ? tier === "standard" : tier === "priced-fallback") : tier === undefined && standard);
   }),
-  z.strictObject({ ...selectionFields, version: z.literal(localFeaturedDecisionVersion), status: z.literal("forecast-only"),
+  z.strictObject({ ...selectionFields, version: z.literal(tieredLocalFeaturedDecisionVersions), status: z.literal("forecast-only"),
     reason: featuredForecastOnlyReasonSchema }),
   z.strictObject({ version: featuredDecisionVersionSchema, status: z.literal("abstained"),
     reason: z.enum([...featuredForecastOnlyReasonSchema.options, "no-local-forecast", "no-modeled-outcome-meets-floor", "invalid-decision-time"]),
-  }).refine(({ version, reason }) => version === localFeaturedDecisionVersion ||
+  }).refine(({ version, reason }) => isTieredLocalFeaturedDecision(version) ||
     reason !== "no-modeled-outcome-meets-floor" && reason !== "invalid-decision-time"),
 ]);
 export type LocalFeaturedDecision = Readonly<z.infer<typeof localFeaturedDecisionSchema>>;
@@ -192,6 +199,15 @@ export function inspectLocalFeaturedQuote(book: LocalFeaturedBookmaker, offer: L
   return { quote: checked.data, price } as const;
 }
 
+export function inspectExactLocalFeaturedQuote(book: LocalFeaturedBookmaker, binding: NonNullable<ReturnType<typeof verifiedLocalFeaturedBinding>>,
+  decisionAt: number): QuoteInspection | null {
+  const offers = book.offers.filter(({ betId, betName }) => betId === binding.betId && betName === binding.betName);
+  if (offers.length !== 1) return null;
+  const offer = offers[0]!;
+  const values = offer.values.filter(({ label }) => label === binding.label);
+  return values.length === 1 ? inspectLocalFeaturedQuote(book, offer, values[0]!, decisionAt) : null;
+}
+
 const byText = (left: string, right: string) => left < right ? -1 : Number(left > right);
 const byPrice = (left: DecimalOdds, right: DecimalOdds) => left.scaled > right.scaled ? -1 : Number(left.scaled < right.scaled);
 function outcomeOrder(marketKey: string, selection: string) {
@@ -201,12 +217,13 @@ function outcomeOrder(marketKey: string, selection: string) {
 }
 const reviewedGoalDefinitions = new Map([...legacyLocalFirstGoalMarketDefinitions, ...localFirstGoalMarketDefinitions]
   .map((definition) => [definition.key, definition]));
+const reviewedScoreDefinitions = new Map(localFirstRegulationScoreMarketDefinitions.map((definition) => [definition.key, definition]));
 
-function reviewedForecastMarket(marketKey: string, selection: string) {
+function reviewedForecastMarket(marketKey: string, selection: string, includeScoreMarkets: boolean) {
   if (isMarketFamily(marketKey) && canonicalLegacyForecastSelection(marketKey, selection))
     return { key: legacyForecastMarketKey(marketKey), terms: "binary" as const };
   if (legacyForecastOutcome(marketKey, selection)) return { key: marketKey, terms: "binary" as const };
-  const definition = reviewedGoalDefinitions.get(marketKey);
+  const definition = reviewedGoalDefinitions.get(marketKey) ?? (includeScoreMarkets ? reviewedScoreDefinitions.get(marketKey) : undefined);
   return definition?.selections.some(({ key }) => selection === key)
     ? { key: marketKey, terms: definition.group === "payout" ? "asian" as const : "binary" as const } : null;
 }
@@ -237,17 +254,17 @@ function stableSelectionOrder(left: FeaturedSelection, right: FeaturedSelection)
 }
 
 function bestForecastOnlyOutcome(outcomes: readonly LocalFeaturedOutcome[], coverage: ReadonlyMap<string, number> | undefined,
-  rank: RankingProbability | undefined) {
+  rank: RankingProbability | undefined, probabilityFirst: boolean) {
   type Ranked = FeaturedSelection & Readonly<{ coverage: number; commonOrder: number }>;
   let best: Ranked | null = null;
   for (const { marketKey, selection, settlementProbabilities, unrepresentedProbability } of outcomes) {
-    const market = reviewedForecastMarket(marketKey, selection), probability = settlementProbabilities.win;
+    const market = reviewedForecastMarket(marketKey, selection, probabilityFirst), probability = settlementProbabilities.win;
     if (!market || probability < minimumProbability ||
       !representedSettlement(settlementProbabilities, market.terms, unrepresentedProbability)) continue;
     const count = coverage?.get(market.key) ?? 0;
     const candidate: Ranked = { marketKey, selection, probability, commonOrder: commonMarketOrder(market.key),
       coverage: Number.isSafeInteger(count) && count > 0 ? count : 0 };
-    if (!best || (best.coverage - candidate.coverage ||
+    if (!best || ((probabilityFirst ? compareRankingProbability(candidate, best, rank) : 0) || best.coverage - candidate.coverage ||
       (best.coverage ? 0 : candidate.commonOrder - best.commonOrder) ||
       compareRankingProbability(candidate, best, rank) || stableSelectionOrder(candidate, best)) < 0) best = candidate;
   }
@@ -258,12 +275,8 @@ function bestQuote(books: LocalFeaturedBookmakerQuotes["bookmakers"], mapping: N
   let best: { quote: LocalFeaturedQuote; price: DecimalOdds } | null = null;
   let comparable = false;
   for (const book of books) {
-    const markets = book.offers.filter(({ betId, betName }) => betId === mapping.betId && betName === mapping.betName);
-    if (markets.length !== 1) continue;
-    const offer = markets[0]!;
-    const selections = offer.values.filter(({ label }) => label === mapping.label);
-    if (selections.length !== 1) continue;
-    const inspected = inspectLocalFeaturedQuote(book, offer, selections[0]!, decisionAt);
+    const inspected = inspectExactLocalFeaturedQuote(book, mapping, decisionAt);
+    if (!inspected) continue;
     if ("reason" in inspected) {
       if (inspected.reason === "invalid-quote-attribution") comparable = true;
       continue;
@@ -276,7 +289,8 @@ function bestQuote(books: LocalFeaturedBookmakerQuotes["bookmakers"], mapping: N
 
 function assessPick(input: FeaturedDecisionInput, version: LocalFeaturedDecisionVersion, rank?: RankingProbability) {
   const { kickoffAt, decisionAt, outcomes, quotes, quotesPermitted, coverageByMarket } = input;
-  const tiered = version === localFeaturedDecisionVersion;
+  const tiered = isTieredLocalFeaturedDecision(version);
+  const probabilityFirst = version === localFeaturedDecisionVersion;
   const eligible = new Map<PricedDecision["threshold"], number>();
   let comparableQuoteOutcomes = 0, oddsFloorOutcomes = 0, positiveReturnOutcomes = 0;
   const finish = (decision: LocalFeaturedDecision) => ({ decision, diagnostics: {
@@ -287,7 +301,7 @@ function assessPick(input: FeaturedDecisionInput, version: LocalFeaturedDecision
     finish({ version, status: "abstained", reason });
   const withoutPrice = (reason: z.infer<typeof featuredForecastOnlyReasonSchema>) => {
     if (!tiered) return abstain(reason);
-    const forecast = bestForecastOnlyOutcome(outcomes, coverageByMarket, rank);
+    const forecast = bestForecastOnlyOutcome(outcomes, coverageByMarket, rank, probabilityFirst);
     return forecast ? finish({ ...forecast, version, status: "forecast-only", reason }) : abstain("no-modeled-outcome-meets-floor");
   };
   if (!outcomes.length) return abstain("no-local-forecast");
@@ -296,15 +310,20 @@ function assessPick(input: FeaturedDecisionInput, version: LocalFeaturedDecision
   if (!quotesPermitted) return withoutPrice("odds-not-permitted");
   if (!quotes || localFeaturedQuoteScopeReason(input)) return withoutPrice("no-verified-odds");
 
+  const bookmakerOccurrences = new Map<number, number>();
+  if (probabilityFirst) for (const { bookmakerId } of quotes.bookmakers)
+    bookmakerOccurrences.set(bookmakerId, (bookmakerOccurrences.get(bookmakerId) ?? 0) + 1);
+  const books = probabilityFirst ? quotes.bookmakers.filter(({ bookmakerId }) => bookmakerOccurrences.get(bookmakerId) === 1) : quotes.bookmakers;
   type Rated = Readonly<{ decision: PricedDecision; price: DecimalOdds; positive: boolean }>;
-  const rankPriced = (left: Rated, right: Rated) => Number(right.positive) - Number(left.positive) ||
+  const rankPriced = (left: Rated, right: Rated) => (probabilityFirst ? compareRankingProbability(left.decision, right.decision, rank) : 0) ||
+    Number(right.positive) - Number(left.positive) ||
     right.decision.threshold - left.decision.threshold || byPrice(left.price, right.price) ||
     compareRankingProbability(left.decision, right.decision, rank) || stableSelectionOrder(left.decision, right.decision);
   let chosen: Rated | null = null, fallback: Rated | null = null;
   for (const { marketKey, selection, settlementProbabilities, unrepresentedProbability } of outcomes) {
     const mapping = verifiedLocalFeaturedBinding(marketKey, selection);
     if (!mapping) continue;
-    const { best, comparable: hasQuote } = bestQuote(quotes.bookmakers, mapping, decisionAt);
+    const { best, comparable: hasQuote } = bestQuote(books, mapping, decisionAt);
     if (hasQuote) comparableQuoteOutcomes++;
     if (!best) continue;
     const standardPrice = best.price.scaled >= minimumPrice.scaled;
@@ -336,7 +355,7 @@ export function assessLocalFeaturedPick(input: FeaturedDecisionInput, version: L
 
 /** Chronological validation only. Do not publish these candidate decisions as released-policy records. */
 export function assessLocalFeaturedPickWithHistory(input: FeaturedDecisionInput, rankingProbability: RankingProbability) {
-  return assessPick(input, localFeaturedDecisionVersion, rankingProbability);
+  return assessPick(input, oddsFirstTieredFeaturedDecisionVersion, rankingProbability);
 }
 
 /** Keep the qualifying quote frozen with the pick. */
