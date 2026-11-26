@@ -7,7 +7,7 @@ import { isMarketFamily } from "../../domain/markets.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { scheduledSlipMatchStates } from "../../domain/slip-match-state.ts";
-import { buildSlips, hasJointProbabilityBounds, slipBuilderRules, slipCriteriaRange, type SlipCriteria, type SlipMatchRecord } from "../../domain/slip-builder.ts";
+import { buildSlips, hasJointProbabilityBounds, slipBuilderRules, slipCriteriaRange, type BuiltSlip, type SlipCriteria, type SlipMatchRecord } from "../../domain/slip-builder.ts";
 import { additionalSlipGoalMarkets, isSlipGoalExtensionSelection, isTotal15SlipSelection } from "../../domain/slip-markets.ts";
 import { jointSlipBuilder } from "../../domain/joint-slip-model.ts";
 import { slipPricePageSchema, type SlipPricePage } from "../../domain/slip-price-page.ts";
@@ -31,6 +31,7 @@ export function createSlipBuildService(options: Readonly<SlipReadSource & {
   /** Effective public odds policy. Tests alone override it to exercise priced stored projections. */
   providerOdds?: boolean;
   build?: typeof buildSlips;
+  recheck?: (slips: readonly BuiltSlip[], asOf: number) => Promise<ReadonlySet<string>>;
   jointModel?: SlipJointModelBinding | (() => SlipJointModelBinding | null) | null;
 }>) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
@@ -155,12 +156,34 @@ export function createSlipBuildService(options: Readonly<SlipReadSource & {
       const buildCriteria = canQualify && criteria.probMin < minimum ? { ...criteria, probMin: minimum } : criteria;
       const buildRecords = canQualify ? current : [];
       const build = joint ? jointSlipBuilder(joint.model, "exact-odds") : options.build;
-      const data = build ? build(buildCriteria, buildRecords, asOf)
+      let data = build ? build(buildCriteria, buildRecords, asOf)
         : buildSlips(buildCriteria, buildRecords, asOf, undefined, { allowPublishedFallback: true });
+      let checkedAt = completedAt;
+      if (options.recheck && data.slips.length) {
+        readStage = "recheck-selected-fixtures";
+        checkedAt = clock.now();
+        if (checkedAt < completedAt || getReportingDate(checkedAt) !== reportingToday) throw new MatchFeedError("unavailable");
+        const currentFixtures = await options.recheck(data.slips, checkedAt);
+        const stale = new Set<string>();
+        const slips = data.slips.filter((slip) => {
+          let valid = true;
+          for (const { fixtureId } of slip.selections) {
+            if (currentFixtures.has(fixtureId)) continue;
+            stale.add(fixtureId); valid = false;
+          }
+          return valid;
+        });
+        if (!slips.length) throw new MatchFeedError("unavailable");
+        if (stale.size) {
+          const { jointProbabilities } = data;
+          data = { ...data, slips, qualifyingMatches: data.qualifyingMatches - stale.size,
+            ...(jointProbabilities ? { jointProbabilities: Object.fromEntries(slips.map(({ id }) => [id, jointProbabilities[id]!])) } : {}) };
+        }
+      }
       // The bounded search can also cross a kickoff cutoff or the model validity window.
       const returnedAt = clock.now();
       if (joint && !approvedSlipJointModel(joint, returnedAt)) return { ...base, state: "model-unavailable" };
-      if (returnedAt < completedAt || getReportingDate(returnedAt) !== reportingToday
+      if (returnedAt < checkedAt || getReportingDate(returnedAt) !== reportingToday
         || data.slips.some((slip) => slip.selections.some((selection) => returnedAt >= getPublicationDeadline(utcInstantFromEpochMilliseconds(selection.kickoffAt))))) {
         throw new MatchFeedError("unavailable");
       }

@@ -6,6 +6,7 @@ import { storedMatchFeedResponseSchema } from "../src/domain/match-feed.ts";
 import { slipCohortSchema } from "../src/domain/slip-cohort.ts";
 import { defaultSlipCriteria } from "../src/domain/slip-builder.ts";
 import { marketRules, validateMarketSnapshot } from "../src/domain/markets.ts";
+import { currentSlipFixtures } from "../src/server/slips/slip-cohort.ts";
 import { createSlipBuildService } from "../src/server/slips/slip-service.ts";
 import { liveRecord, now, today } from "./helpers/live-refresh-fixtures.mjs";
 
@@ -89,16 +90,25 @@ test("atomic cohort rejects clock/range drift, duplicates, oversized cohorts and
     { selectionPrices: { "fixture-1": [] } })));
 });
 
-test("production cohort uses one RR snapshot, a501-ID probe and bounded ordered hydration without full-period summary scans", () => {
+test("production Builder filters closed and expired fixtures before the bounded cohort probe", () => {
   const script = String.raw`
     import assert from 'node:assert/strict';
     import {mock} from 'node:test';
-    import {addReportingDays} from './src/domain/calendar.ts';
+    import {addReportingDays,calendarRules} from './src/domain/calendar.ts';
     import {liveRecord,now,today} from './tests/helpers/live-refresh-fixtures.mjs';
     const feed=await import('./src/server/matches/feed-read.ts');
     let active=0,peak=0,globalVersion=1,hydrates=0,priceReads=0,transactions=0,empty=false,authoritative=true;
     const tx={version:1,async $queryRaw(query){
-      if(!/LIMIT 1\s*$/u.test(query.sql)) assert.equal(query.values.at(-1),501);
+      if(!/LIMIT 1\s*$/u.test(query.sql)) {
+        assert.equal(query.values.at(-1),501);
+        const eligibility = query.sql.slice(query.sql.lastIndexOf('AND f.kickoff>=?'), query.sql.lastIndexOf('LIMIT'));
+        assert.match(eligibility,/^AND f\.kickoff>=\?\s+AND f\.status='scheduled' AND c\.state='open' AND c\.openedAt<=\? AND c\.cutoffAt>\?/u);
+        assert.match(eligibility,/NOT EXISTS \(SELECT 1 FROM PredictionPublicationBarrier barrier WHERE barrier\.cycleId=f\.activeCycleId AND barrier\.closedAt<=\?\)/u);
+        assert.match(eligibility,/NOT EXISTS \(SELECT 1 FROM FixtureLifecycleState life WHERE life\.fixtureId=f\.id AND\s+\(life\.issue IS NOT NULL OR \(life\.actualStartedAt<=\? AND \(c\.ordinal=1 OR life\.actualStartedAt>=c\.openedAt\)\)\)/u);
+        assert.deepEqual(query.values.slice(-6,-1).map(value=>value.getTime()),[
+          now+calendarRules.cutoffSecondsBeforeKickoff*1000+1, now, now, now, now,
+        ]);
+      }
       assert.ok(!/COUNT\(|GROUP BY/iu.test(query.sql));
       return empty?[]:Array.from({length:501},(_,i)=>({id:'fixture-'+String(i).padStart(4,'0')}));
     }};
@@ -138,4 +148,51 @@ test("production cohort uses one RR snapshot, a501-ID probe and bounded ordered 
     cwd: new URL("../", import.meta.url), env: { ...process.env, NODE_ENV: "test", NODE_NO_WARNINGS: "1" }, encoding: "utf8", timeout: 30_000,
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
+});
+
+test("Builder final fixture read is bounded to distinct selections and rejects changed occurrences", async () => {
+  const selections = [record("current"), record("moved"), record("started"), record("replaced")].map((value) => ({
+    fixtureId: value.fixtureId, kickoffAt: value.kickoffAt, homeTeam: value.homeTeam, awayTeam: value.awayTeam,
+    forecast: { cycleId: value.cycleId, revisionId: value.forecast.revisionId, publishedAt: value.forecast.publishedAt },
+  }));
+  const [current, moved, , replaced] = selections;
+  const row = (selection) => ({ id: selection.fixtureId, kickoff: new Date(selection.kickoffAt), cycleId: selection.forecast.cycleId,
+    revisionId: selection.forecast.revisionId, homeTeamId: selection.homeTeam.id, awayTeamId: selection.awayTeam.id });
+  let queries = 0;
+  const database = { query: (operation) => operation({ $queryRaw: async (query) => {
+    queries++;
+    assert.deepEqual(query.values.slice(0, 4), ["current", "moved", "started", "replaced"]);
+    assert.match(query.sql, /WHERE f\.id IN \(\?,\?,\?,\?\) AND f\.kickoff>=\?/u);
+    assert.match(query.sql, /life\.actualStartedAt<=\?/u);
+    return [row(current), { ...row(moved), kickoff: new Date(moved.kickoffAt + 1000) }, { ...row(replaced), revisionId: "new-revision" }];
+  } }) };
+  const result = await currentSlipFixtures(database, [{ selections }, { selections: [current] }], now);
+  assert.equal(queries, 1);
+  assert.deepEqual([...result], ["current"]);
+});
+
+test("Builder preserves qualifying slips when fixture availability changes after the cohort read", async () => {
+  const records = [record("started"), record("first"), record("second"), record("third")];
+  const readCohort = async (parameters) => cohort(parameters, records);
+  const jointModel = { verifyModel: () => true, model: { calibrationReference: "synthetic-check", correlationReference: "synthetic-check",
+    validFrom: now - 1000, validUntil: now + 1000, estimate: () => 0.5 } };
+  let checks = 0;
+  const service = (available) => createSlipBuildService({ ...options, readCohort, jointModel,
+    recheck: async (slips, asOf) => {
+      checks++;
+      assert.equal(asOf, now);
+      assert.equal(slips.length, 2);
+      return new Set(available);
+    } });
+  const result = await service(["first", "second", "third"]).query(criteria);
+  assert.equal(result.state, "generated");
+  assert.equal(result.data.qualifyingMatches, 3);
+  assert.equal(result.data.slips.length, 1);
+  const [onlySlip] = result.data.slips;
+  assert.ok(onlySlip.selections.every(({ fixtureId }) => fixtureId !== "started"));
+  assert.deepEqual(result.data.jointProbabilities, { [onlySlip.id]: 0.5 });
+  assert.ok(result.matchStates.every(({ fixtureId }) => fixtureId !== "started"));
+  assert.equal((await service([]).query(criteria)).state, "data-unavailable");
+  assert.equal((await service([]).query({ ...criteria, totalMin: 999, totalMax: 999 })).state, "no-combinations");
+  assert.equal(checks, 2);
 });

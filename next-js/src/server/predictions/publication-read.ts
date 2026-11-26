@@ -58,7 +58,11 @@ export async function publicationResult(tx: Prisma.TransactionClient, refresh: R
 export async function storedPublicationBarrier(tx: Prisma.TransactionClient, cycleId: string) {
   const rows = await tx.$queryRaw<Record<string, unknown>[]>`SELECT *,
     integrity = SHA2(CAST(observationJson AS CHAR), 256) AS validIntegrity FROM PredictionPublicationBarrier WHERE cycleId = ${cycleId}`;
-  const row = rows[0]; if (!row) return null;
+  const row = rows[0];
+  return row ? publicationBarrierFromRow(row, cycleId) : null;
+}
+
+export function publicationBarrierFromRow(row: Record<string, unknown>, cycleId: string) {
   try {
     assertHistorySeal(row.validIntegrity);
     const observation = parsePublicationObservation(historyJson(row.observationJson));

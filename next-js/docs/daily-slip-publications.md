@@ -15,7 +15,9 @@ totals on the lines supported by Builder when the Local Engine forecast and
 the same bookmaker offer can be verified. The original goal line, team and
 selection are retained through settlement.
 New slips require scheduled fixtures at least 30 minutes from kickoff at
-selection and commit. The worker uses prices from one verified
+selection and commit. A closed or expired prediction cycle, a sealed early-play
+barrier, or a trusted start in that occurrence rules out the fixture even if
+the fixture feed still says scheduled. The worker uses prices from one verified
 bookmaker per slip. It considers eligible priced picks without adding a
 minimum pick probability. Combined odds are a guide for band placement.
 
@@ -96,6 +98,9 @@ updated publisher and readers. To roll back generation behavior, pause the
 publisher and keep the readers running until a compatible writer is ready.
 Readers must support already committed half-hour batches. Preserve the
 archive, fixture membership and migration ledger during rollback.
+For the early-start eligibility release, the previous append-aware web and
+publisher releases can also be restored using their existing release link and
+launcher. The change adds no migration and writes no historical records.
 
 ## Original-cycle results and public access
 
@@ -106,7 +111,9 @@ eligibility still applies. Original void cycles stay void during replacement
 scheduled/live matches; their replacement scores cannot regrade old selections.
 The latest unresolved correction keeps previously published history visible as
 pending without restoring an older winning score. The stored slip stays visible
-after kickoff and is no longer presented as a new pre-match opportunity.
+after kickoff. Its operational status also reflects an early start when a
+trusted lifecycle record or sealed publication barrier arrives before the
+fixture status feed catches up.
 Cancellation and postponement follow the original cycle's recorded evidence.
 The archive retains original odds. Forecast-cycle voids alone cannot establish
 a bookmaker refund, multiplier, or effective settled price.
@@ -147,12 +154,18 @@ every market of every original slip leg.
 | --- | --- |
 | Matches forecasts, market definitions, display and permissions | **Compliant — leave untouched.** Slip generation consumes stored fixture, forecast and quote evidence. The Matches engine, its publication cutoff, public routes and screen components remain unchanged. |
 | Automatic odds bands and price checks | **Compliant — leave untouched.** Exact odds determine membership before rounding. Same-book prices, the current rights checks, and the six public band definitions remain in force. |
-| Automatic cadence, candidate ranking and kickoff buffer | **Partially compliant — minimal fix.** The hourly worker already appended to available bands. It now checks half-hour slots, uses a 30-minute buffer, defers distant eligible groups and ranks on a conservative bound using stored forecasts. |
-| Automatic fixture reuse | **Missing — targeted extension.** The old combination key permitted separate slips to share fixtures. The publisher now enforces daily fixture ownership across bands, including earlier publications, while retaining the combination key and immutable records. |
-| Published snapshots, availability and settlement | **Partially compliant — minimal fix.** The archive already sealed original legs and odds and resolved results against their original cycles. The operational projection now withholds pre-match status after kickoff or an ineligible observation. **Conflicting/unclear —** the stored results grade forecasts. The app lacks bookmaker settlement evidence to establish a canceled or postponed leg's payout or effective odds. |
-| Builder filters and reuse | **Partially compliant — minimal fix.** The reusable search keeps fixture reuse request-local and distinct from automatic publication. Bounds, supported markets and matching exact prices remain binding. Search and ranking corrections use the verified prices and forecast probabilities within those constraints. **Conflicting/unclear —** `0.01` is the input step. The existing decimal odds minimum is `1.01`. The Builder retains its server-side qualification floor where that policy applies. |
+| Automatic cadence, candidate ranking and kickoff buffer | **Partially compliant — minimal fix.** The baseline already checks half-hour Kampala slots, applies the 30-minute buffer and configured release window, and ranks on a conservative bound. The stored cohort and write-time binder now reject trusted starts even while the fixture still appears scheduled. The existing featured recommendation supplies the pick qualification policy. |
+| Automatic fixture reuse | **Compliant — leave untouched.** The append transaction enforces daily fixture ownership across six bands, including earlier publications. Retries and simultaneous writers share the same allocation scope. |
+| Published snapshots, availability and settlement | **Partially compliant — minimal fix.** The archive already seals original legs and odds and resolves results against their original cycles. The operational projection now also uses trusted early-start evidence while the fixture is still scheduled. **Conflicting/unclear.** The app lacks bookmaker settlement evidence to establish a canceled or postponed leg's payout or effective odds. |
+| Builder filters and reuse | **Partially compliant — minimal fix.** The search already keeps reuse request-local and enforces selected bounds, markets and exact quotes. The Builder now filters closed, expired and already-started fixtures before the bounded cohort read and rechecks selected fixtures once after the search. Unaffected slips remain in the result. **Conflicting/unclear.** `0.01` is the editing step. The existing decimal-odds minimum is `1.01`, and the existing server-side pick qualification floor still applies. |
 
-The reproducible prediction baseline uses the existing Best Slips historical
+The baseline at `507ed247` passed 201 slip tests. The stored-data study on
+the local snapshot at 06:30 Kampala found no eligible forecasts, priced
+fixtures or slates across 14 fit dates and eight holdout dates. Coverage was
+incomplete on every date. The early-start fix changes fixture admission only.
+The study cannot measure its effect on win rate, calibration or ROI.
+
+The earlier reproducible prediction baseline used the existing Best Slips historical
 study on the owned local football snapshot. It uses only sealed forecasts and
 exact bookmaker quotes available by 06:30 Kampala on each day, then reads
 verified outcomes after selections have been frozen. From November 1 through

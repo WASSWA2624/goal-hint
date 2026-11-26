@@ -15,7 +15,7 @@ import { reconstructCutoff, revisionEligibleForLock } from "../predictions/cutof
 import type { CutoffSchedule } from "../predictions/cutoff-contract.ts";
 import { historyFail, type StoredCycle, type StoredRevision } from "../predictions/history-contract.ts";
 import { cycleFromRows, historyTime, revisionFromRows, storedCycle, storedRevision, type HistoryRow } from "../predictions/history-read.ts";
-import { storedPublicationBarrier } from "../predictions/publication-read.ts";
+import { publicationBarrierFromRow, storedPublicationBarrier } from "../predictions/publication-read.ts";
 import { readGoalMarketSettlement, type StoredGoalMarketExtension } from "../predictions/goal-market-store.ts";
 import { fixtureResultFromRow, fixtureResultMatchesCanonical, resultStatus, storedFixtureResult, type StoredFixtureResult } from "../results/result-read.ts";
 import { cycleEligibilityFor, storedSettlementRevision } from "../settlement/settlement-read.ts";
@@ -83,6 +83,13 @@ export function qualifiedEditorialSlipRevision(selection: SlipSelection, revisio
     : (market.market.probabilities as Readonly<Record<string, number>>)[selection.selection] === selection.probability;
 }
 
+function fixtureStartedInCycle(fixture: Fixture, cycle: StoredCycle | null, asOf: number): boolean {
+  const startedAt = fixture.lifecycleState?.actualStartedAt?.getTime();
+  // The fixture cursor retains the earliest known start across replacement cycles.
+  return startedAt !== undefined && startedAt <= asOf && cycle !== null
+    && (cycle.ordinal === 1 || startedAt >= cycle.openedAt);
+}
+
 /** Shared fixture locks block source mutation until commit without requiring canonical UPDATE grants. */
 export async function bindSlipForecasts(tx: Tx, slip: BuiltSlip, at: number): Promise<BuiltSlip | null> {
   const instant = utcInstantFromEpochMilliseconds(at), ids = [...new Set(slip.selections.map((selection) => selection.fixtureId))].sort();
@@ -99,7 +106,7 @@ export async function bindSlipForecasts(tx: Tx, slip: BuiltSlip, at: number): Pr
       fixture.homeTeamId !== selection.homeTeam.id || fixture.awayTeamId !== selection.awayTeam.id || !fixture.activeCycleId) return null;
     const cycle = await storedCycle(tx, fixture.activeCycleId);
     if (!cycle || cycle.fixtureId !== fixture.id || cycle.state !== "open" || cycle.kickoffAt !== selection.kickoffAt ||
-      cycle.openedAt > instant || cycle.cutoffAt <= instant || !cycle.currentSetId) return null;
+      cycle.openedAt > instant || cycle.cutoffAt <= instant || !cycle.currentSetId || fixtureStartedInCycle(fixture, cycle, instant)) return null;
     if (selection.offer) {
       const barrier = await storedPublicationBarrier(tx, cycle.id);
       if (barrier && (barrier.fixtureId !== fixture.id || barrier.closedAt <= instant)) return null;
@@ -120,22 +127,26 @@ const emptyResult = (selection: SlipMatchWatch): SlipResult => ({ fixtureId: sel
   fixtureCompleted: false, regulationVerified: false, regulationHome: null, regulationAway: null });
 
 type HistoricalResult = Readonly<{ result: StoredFixtureResult | null; terminalVoid: boolean; completed?: boolean }>;
+type PublicationBarrier = ReturnType<typeof publicationBarrierFromRow>;
+const editorialVoidPhases = new Map<string, SlipResult["status"]>([
+  ["fixture-canceled", "canceled"], ["formal-postponement", "postponed"],
+  ["fixture-abandoned", "abandoned"], ["fixture-awarded", "awarded"],
+]);
 /** Pure projection of already validated, sealed records. The saved choice never changes to the cutoff's later choice. */
 export function projectSlipForecastResult(selection: SlipMatchWatch, input: Readonly<{
   fixture: Fixture; cycle: StoredCycle | null; revision: StoredRevision | null; schedules: readonly CutoffSchedule[];
   goalExtension?: StoredGoalMarketExtension | null;
+  barrier?: PublicationBarrier | undefined;
   result: StoredFixtureResult | null; historical: HistoricalResult | null; asOf: number; editorial?: boolean;
 }>): SlipResult {
-  const { fixture, cycle, revision, asOf, editorial = false, result } = input;
+  const { fixture, cycle, revision, asOf, editorial = false, result, barrier } = input;
   const status = resultStatus.parse(fixture.status);
-  const sameOccurrence = fixture.activeCycleId === selection.forecast?.cycleId && fixture.homeTeamId === selection.homeTeam.id
-    && fixture.awayTeamId === selection.awayTeam.id;
+  const sameTeams = fixture.homeTeamId === selection.homeTeam.id && fixture.awayTeamId === selection.awayTeam.id;
+  const sameOccurrence = fixture.activeCycleId === selection.forecast?.cycleId && sameTeams;
   const sameSchedule = sameOccurrence && fixture.kickoff?.getTime() === selection.kickoffAt && !fixture.lifecycleState?.issue;
-  const actualStart = fixture.lifecycleState?.actualStartedAt?.getTime();
-  // A replacement forecast cycle can follow a formally postponed occurrence of the same fixture.
-  const started = actualStart !== undefined && actualStart <= asOf && cycle !== null
-    && (cycle.ordinal === 1 || actualStart >= cycle.openedAt);
-  const preMatchUnavailable = editorial && (!sameSchedule || status !== "scheduled" || asOf >= selection.kickoffAt || started);
+  const started = fixtureStartedInCycle(fixture, cycle, asOf);
+  const playRecorded = barrier !== undefined && barrier.fixtureId === fixture.id && barrier.cycleId === cycle?.id && barrier.recordedAt <= asOf;
+  const preMatchUnavailable = editorial && (!sameSchedule || status !== "scheduled" || asOf >= selection.kickoffAt || started || playRecorded);
   // An overdue scheduled feed row cannot confirm the current phase of the original occurrence.
   const projectedStatus = preMatchUnavailable && status === "scheduled" ? "unknown" : status;
   const base: SlipResult = { ...emptyResult(selection), fixtureCompleted: isCompletedFixtureStatus(status),
@@ -144,8 +155,7 @@ export function projectSlipForecastResult(selection: SlipMatchWatch, input: Read
     cycle.openedAt > asOf || !slipRevisionMatches(selection, revision, input.goalExtension, asOf, { editorial }) || revision.publishedAt > asOf) return base;
   if (cycle.state === "void" && cycle.voidedAt !== null && cycle.voidedAt <= asOf) {
     // A sealed original occurrence supplies the match phase, not a bookmaker payout decision.
-    const originalStatus = editorial && cycle.voidReason === "fixture-canceled" ? "canceled"
-      : editorial && cycle.voidReason === "formal-postponement" ? "postponed" : "unknown";
+    const originalStatus = editorial && cycle.voidReason ? editorialVoidPhases.get(cycle.voidReason) ?? "unknown" : "unknown";
     return { ...base, status: originalStatus, completed: true, cycleEligibility: cycleEligibilityFor(cycle),
       ...(editorial ? { preMatchUnavailable: true } : {}) };
   }
@@ -167,6 +177,8 @@ export function projectSlipForecastResult(selection: SlipMatchWatch, input: Read
     return result && result.observedAt <= asOf && isPlayedFinalStatus(result.status)
       ? resultProjection(base, result.status, result, true) : { ...base, completed: input.historical?.completed === true };
   }
+  // A catalog correction can change the teams before it can assign a new cycle.
+  if (editorial && !sameTeams) return base;
   return resultProjection(base, projectedStatus, coherent ? result : null, slipCompletedStatuses.includes(status));
 }
 
@@ -249,6 +261,24 @@ type ForecastCache = Readonly<{
 function* batches(values: readonly string[]) {
   for (let offset = 0; offset < values.length; offset += slipForecastReadRules.batchSize) yield values.slice(offset, offset + slipForecastReadRules.batchSize);
 }
+
+/** Archive reads only need barriers for original cycles that otherwise look upcoming. */
+async function readEditorialBarriers(tx: Tx, selections: readonly SlipMatchWatch[], fixtures: ReadonlyMap<string, Fixture>, asOf: number) {
+  const cycleIds = new Set<string>();
+  for (const { forecast, fixtureId, kickoffAt } of selections) {
+    const fixture = fixtures.get(fixtureId);
+    if (forecast && kickoffAt > asOf && fixture?.status === "scheduled" && fixture.activeCycleId === forecast.cycleId
+      && fixture.kickoff?.getTime() === kickoffAt && !fixture.lifecycleState?.issue) cycleIds.add(forecast.cycleId);
+  }
+  const barriers = new Map<string, PublicationBarrier>();
+  for (const ids of batches([...cycleIds])) {
+    const rows = await tx.$queryRaw<(HistoryRow & { cycleId: string })[]>(Prisma.sql`SELECT *,
+      integrity=SHA2(CAST(observationJson AS CHAR),256) AS validIntegrity FROM PredictionPublicationBarrier
+      WHERE cycleId IN (${Prisma.join(ids)}) AND recordedAt<=${new Date(asOf)}`);
+    for (const row of rows) barriers.set(row.cycleId, publicationBarrierFromRow(row, row.cycleId));
+  }
+  return barriers;
+}
 function slipGoalRevisionIds(selections: readonly SlipMatchWatch[]) {
   return [...new Set(selections.flatMap((selection) => isSlipGoalExtensionSelection(selection.selection) && selection.forecast
     ? [selection.forecast.revisionId] : []))];
@@ -323,6 +353,7 @@ export async function readSlipForecastResults(tx: Tx, selections: readonly SlipM
   for (const ids of batches(slipGoalRevisionIds(selections))) {
     for (const [id, extension] of await readSlipGoalExtensions(tx, ids)) goalExtensions.set(id, extension);
   }
+  const barriers = editorial ? await readEditorialBarriers(tx, selections, fixtures, asOf) : undefined;
   const history = new Map<string, HistoricalResult | null>(), projected: SlipResult[] = [];
   for (const selection of selections) {
     const fixture = fixtures.get(selection.fixtureId), reference = selection.forecast;
@@ -349,6 +380,7 @@ export async function readSlipForecastResults(tx: Tx, selections: readonly SlipM
     }
     projected.push(projectSlipForecastResult(selection, { fixture, cycle, revision: revisions.get(reference.revisionId) ?? null,
       goalExtension: goalExtensions.get(reference.revisionId) ?? null,
+      barrier: barriers?.get(reference.cycleId),
       schedules: schedules.get(reference.cycleId) ?? [], result, historical: history.get(key) ?? null, asOf, editorial }));
   }
   return projected;

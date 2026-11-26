@@ -8,7 +8,7 @@ import { createMysqlPublicSearchLimiter } from "../matches/search-limit.ts";
 import { publicOddsEnabled } from "../odds/public-odds-policy.ts";
 import { createSlipBuildService, type SlipJointModelBinding } from "./slip-service.ts";
 import { boundJointSlipModel } from "./joint-model.ts";
-import { createStoredSlipCohort } from "./slip-cohort.ts";
+import { createStoredSlipCohort, currentSlipFixtures } from "./slip-cohort.ts";
 
 /** One bounded stored snapshot uses the match feed's exact scope, filters, order and public projections.
  * Database initialization stays lazy while the public odds feature is disabled. */
@@ -19,7 +19,9 @@ export function createStoredSlipBuild({ database, competitionIds, consume, joint
 }>) {
   return function readStoredSlipBuild(criteria: SlipCriteria, clock?: Clock, locale = "en", build: typeof buildSlips = buildSlips) {
     const providerOdds = oddsEnabled();
-    return createSlipBuildService({ ...(clock ? { clock } : {}), ...(build !== buildSlips ? { build } : {}), jointModel, providerOdds,
+    return createSlipBuildService({ ...(clock ? { clock } : {}), ...(build !== buildSlips ? { build } : {
+      recheck: (slips, asOf) => currentSlipFixtures(database(), slips, asOf),
+    }), jointModel, providerOdds,
       readCohort: createStoredSlipCohort({ database, competitionIds, providerOdds }),
       consume: consume ?? (() => createMysqlPublicSearchLimiter(database()).consume()),
     }).query(criteria, locale);

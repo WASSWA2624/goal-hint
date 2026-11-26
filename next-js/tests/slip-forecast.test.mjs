@@ -48,6 +48,20 @@ test('server binding preserves the exact published revision and refuses source d
   assert.equal(await bindSlipForecasts(tx, f.slip, f.at), null);
 });
 
+test('editorial binding excludes an observed start while the current fixture still says scheduled', async () => {
+  const f = slipForecastFixture({ localQualification: 'qualified' }), selection = bound(f), tx = transaction(f);
+  const { offer } = pricedEditorialSelection(1, { odds: selection.odds, at: f.at });
+  const editorial = { ...f.slip, selections: [{ ...selection, offer }] };
+  assert.ok(await bindSlipForecasts(tx, editorial, f.at));
+  f.fixture.lifecycleState = { issue: null, actualStartedAt: new Date(f.at - 1_000) };
+  assert.equal(await bindSlipForecasts(tx, editorial, f.at), null);
+
+  f.cycle.ordinal = 2;
+  assert.equal(await bindSlipForecasts(tx, editorial, f.at), null);
+  f.fixture.lifecycleState.actualStartedAt = new Date(f.cycle.openedAt.getTime() - 1);
+  assert.ok(await bindSlipForecasts(tx, editorial, f.at), 'a historical start from an earlier occurrence does not block the replacement');
+});
+
 test('an editorial quote cannot publish after a sealed early-play barrier or a postponement', async () => {
   const f = slipForecastFixture({ localQualification: 'qualified' }), selection = bound(f), tx = transaction(f);
   const { offer } = pricedEditorialSelection(1, { odds: selection.odds, at: f.at });
@@ -136,17 +150,43 @@ test('published slip status expires at kickoff or after schedule drift without s
     lifecycleState: { issue: null, actualStartedAt: new Date(early.at - 86_400_000) } } }).status, 'not-started');
 });
 
-test('sealed cancellation and postponement retain their original phase through rescheduling', () => {
+test('an editorial read uses sealed early-play evidence before the canonical scheduled status changes', async () => {
+  const f = slipForecastFixture(), selection = bound(f), tx = transaction(f);
+  const { fixtureId, kickoffAt, forecast: { cycleId } } = selection;
+  const snapshot = { ...f.slip, selections: [selection] };
+  const observation = { provider: 'api-football', fixtureId, externalFixtureId: 1, cycleId, kickoffAt, status: 'live',
+    retrievedAt: f.at, providerUpdatedAt: null, actualStartedAt: f.at - 1000, evidenceRef: 'synthetic-early-play' };
+  f.barrier = { cycleId, fixtureId, observationJson: evidenceSerialize(observation), validIntegrity: 1,
+    closedAt: new Date(observation.actualStartedAt), recordedAt: new Date(f.at) };
+  let barrierReads = 0;
+  const queryRaw = tx.$queryRaw;
+  tx.$queryRaw = async (query) => {
+    if (query.sql?.includes('FROM PredictionPublicationBarrier')) barrierReads++;
+    return queryRaw(query);
+  };
+  const read = (asOf, editorial) => readSlipForecastResults(tx, [selection], asOf, { editorial });
+  assert.equal(slipSnapshotStatus(snapshot, await read(f.at - 1, true)), 'not-started', 'future receipts are ignored');
+  const current = await read(f.at, true);
+  assert.equal(current[0].preMatchUnavailable, true);
+  assert.equal(slipSnapshotStatus(snapshot, current), 'pending');
+  assert.equal(slipSnapshotStatus(snapshot, await read(f.at, false)), 'not-started');
+  assert.equal(slipSnapshotStatus(snapshot, await read(kickoffAt, true)), 'pending');
+  assert.equal(barrierReads, 2, 'personal and past-kickoff reads do not need barrier lookups');
+});
+
+test('sealed cancellation, postponement and other terminal decisions retain their original phase', () => {
   const f = slipForecastFixture(), selection = bound(f), input = projection(f);
   const snapshot = { ...f.slip, selections: [selection] };
-  for (const [voidReason, status, slipStatus] of [['fixture-canceled', 'canceled', 'cancelled'], ['formal-postponement', 'postponed', 'void']]) {
-    const observed = projectSlipForecastResult(selection, { ...input, cycle: cycleFromRows(f.cycle, f.schedule),
-      editorial: true, fixture: { ...f.fixture, status } });
-    assert.equal(observed.status, status);
-    assert.equal(observed.completed, false);
-    assert.equal(slipSnapshotStatus(snapshot, [observed]), 'pending');
-    assert.equal(slipResultView('original', '', snapshot, [observed]), null);
-
+  for (const [voidReason, status, slipStatus] of [['fixture-canceled', 'canceled', 'cancelled'], ['formal-postponement', 'postponed', 'void'],
+    ['fixture-abandoned', 'abandoned', 'void'], ['fixture-awarded', 'awarded', 'void']]) {
+    if (status === 'canceled' || status === 'postponed') {
+      const observed = projectSlipForecastResult(selection, { ...input, cycle: cycleFromRows(f.cycle, f.schedule),
+        editorial: true, fixture: { ...f.fixture, status } });
+      assert.equal(observed.status, status);
+      assert.equal(observed.completed, false);
+      assert.equal(slipSnapshotStatus(snapshot, [observed]), 'pending');
+      assert.equal(slipResultView('original', '', snapshot, [observed]), null);
+    }
     const cycle = { ...input.cycle, state: 'void', voidedAt: input.asOf - 1000, voidReason };
     const outcome = projectSlipForecastResult(selection, { ...input, cycle, editorial: true,
       fixture: { ...f.fixture, status: 'scheduled', activeCycleId: randomUUID(), kickoff: new Date(selection.kickoffAt + 86_400_000) } });
@@ -169,6 +209,9 @@ test('a superseded but cutoff-eligible saved selection is graded unchanged; a re
     regulationVerifiedAt: new Date(result.regulationVerifiedAt), regulationEvidenceRef: 'synthetic-proof' };
   const outcome = projectSlipForecastResult(selection, { ...input, fixture, result });
   assert.equal(slipResultView('saved', '', { ...f.slip, selections: [selection] }, [outcome]).outcome, 'won');
+  const correctedTeams = projectSlipForecastResult(selection, { ...input, fixture: { ...fixture, homeTeamId: randomUUID() }, result, editorial: true });
+  assert.equal(correctedTeams.preMatchUnavailable, true);
+  assert.equal(slipResultView('original', '', { ...f.slip, selections: [selection] }, [correctedTeams]), null);
   const replaced = { ...fixture, activeCycleId: randomUUID(), status: 'live' };
   assert.equal(projectSlipForecastResult(selection, { ...input, fixture: replaced, result }).completed, false);
   const historical = projectSlipForecastResult(selection, { ...input, fixture: replaced, result: null,

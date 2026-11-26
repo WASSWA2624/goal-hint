@@ -286,17 +286,18 @@ behavior. If fewer slips can be produced, only qualifying slips are returned.
 
 ## Stored reads, bounded work and result states
 
-`src/server/slips/slip-service.ts` reads the existing public stored feed with one
+`src/server/slips/slip-service.ts` reads the public stored cohort with one
 pinned request clock, selected market families, scheduled status and highest
-probability order. Per-selection probability and odds bounds are applied in the
-engine, so feed selection of its best displayed family cannot exclude another
-qualifying requested family. The database scan reads at most 500 fixtures in
-pages of 100 and rechecks every loaded page for cohort or record drift. These
-sequential reads are not claimed to be one atomic global database snapshot.
-Changing, malformed or unavailable data produces an explicit unavailable state
-instead of a partially mixed result. Matches entering the cutoff while the read
-finishes are excluded before generation. The service checks the cutoff again
-after the bounded combination search.
+probability order. The repeatable-read transaction selects at most 500 fixtures
+and hydrates their forecasts and prices. The selection query excludes fixtures
+at or past the kickoff cutoff, closed prediction cycles, and current occurrences
+with a publication barrier, observed start or unresolved lifecycle issue before
+applying the limit. Per-selection probability and odds bounds remain in the
+engine, which evaluates every requested family and outcome. Matches entering
+the cutoff during the read are excluded before generation. After the search,
+one fresh read checks the selected fixtures. Slips whose fixture status,
+schedule or forecast changed during the build are withheld. Other qualifying
+slips can still be returned. The service checks the cutoff again before return.
 
 The pure engine retains at most 800 qualifying selection candidates, keeping a
 quote per outcome before spending the remaining budget on quote alternatives.
