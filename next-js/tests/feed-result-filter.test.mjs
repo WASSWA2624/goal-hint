@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { adjustPerformanceAvailability, displayedFeedResult, filterFeedResult, resultOverridesFor } from '../src/server/matches/feed-result-filter.ts';
+import { adjustPerformanceAvailability, displayedFeedResult, filterFeedResult, readFeedResultOverrides, resultOverridesFor } from '../src/server/matches/feed-result-filter.ts';
 import { feedSql } from '../src/server/matches/feed-read.ts';
 import { parseFeedQuery, resolveFeedDates } from '../src/domain/feed-query.ts';
 import { parseReportingDate } from '../src/domain/calendar.ts';
@@ -34,6 +34,22 @@ test('no prediction is not a pending prediction; empty outcomes cannot broaden t
   assert.match(filtered.where.sql, /AND FALSE$/); assert.match(filtered.cohortWhere.sql, /AND FALSE$/);
 });
 
+test('a played local fixture without a replay pointer is suppressed without reading replay rows', async () => {
+  const id = '00000000-0000-4000-8000-000000000001';
+  let queries = 0;
+  const tx = { $queryRaw: async (statement) => {
+    assert.equal(++queries, 1);
+    assert.match(statement.sql, /pointer\.kickoffAt=f\.kickoff\) AS hasReplay/u);
+    return [{ id, kickoff: new Date(1), cycleState: 'closed', fixtureStatus: 'finished-regulation',
+      publishedRevisionId: '00000000-0000-4000-8000-000000000002', legacyAvailable: 1,
+      hasLocal: 1, hasFrozen: 0, hasReplay: 0, occurrenceVoid: 0, marketKey: null, selection: null }];
+  } };
+  const overrides = await readFeedResultOverrides(tx, sql, {
+    publishedForecasts: true, useDefaultFeatured: true, includeSettlements: false,
+  });
+  assert.deepEqual([...overrides], [[id, { baseline: 'pending', result: 'unavailable', hasPrediction: false }]]);
+});
+
 test('the displayed exact grade replaces archive membership, including picks without a legacy market', async () => {
   const overrides = new Map([
     ['projected-loss', { baseline: 'pending', result: 'lost' }],
@@ -43,7 +59,7 @@ test('the displayed exact grade replaces archive membership, including picks wit
     ['suppressed', { baseline: 'pending', result: 'unavailable' }],
   ]);
   const tx = { $queryRaw: async (statement) => {
-    assert.match(statement.sql, /NOT IN \(\s*SELECT matched.id FROM JSON_TABLE/u);
+    assert.match(statement.sql, /CAST\(f\.id AS BINARY\) NOT IN \(\s*SELECT CAST\(matched\.id AS BINARY\) FROM JSON_TABLE/u);
     assert.deepEqual(JSON.parse(statement.values.at(-1)), [...overrides.keys()]);
     return [{ id: 'legacy-win', kickoff: new Date(1), cycleState: 'closed', fixtureStatus: 'finished-regulation' }];
   } };
