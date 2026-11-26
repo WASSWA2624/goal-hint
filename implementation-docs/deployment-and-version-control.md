@@ -47,6 +47,12 @@ Hosted staging and production load distinct private web env files through the Pa
 
 The targeted odds refresh is a worker-only rollout. The football worker needs its existing durable-job and odds permissions. The publisher needs read access to the durable job ID and state. Deploy and enable the football worker first, then enable the publisher check once the targeted schedule is active. To roll back, disable the publisher check first and then disable the targeted job. [Worker rollout and verification](../next-js/docs/daily-slip-publications.md#targeted-odds-refresh).
 
+## Targeted Best Slips odds refresh rollout
+
+On 27 November 2026 at 01:58 Kampala time, production selected worker release `af233216` for the next natural football-worker restart. Both versioned worker releases passed checksum and read-only production preflight. The live role read the targeted fixture cohort, and the publisher role read the durable job state with its existing grants. Isolated MySQL covered pricing, scoped empty imports and candidate selection. The production crontab checksum matched before and after the handoff.
+
+The existing worker holds an exclusive lock and runs in a separate process namespace. Its watchdog is expected to release the lock for the 20:00 Kampala cron start on 27 November. The publisher launcher checks the new worker's readiness before switching automatically to the gated publisher. At 02:00, the deferred launcher ran the original publisher, which reported zero eligible selections. The football heartbeat still reported the 03:00 broad sweep. Production verification of the first paired refresh and publication remains pending. Both previous launchers and the previous football release are available for rollback.
+
 ## Default Matches API rollout
 
 On 27 November 2026, the bare production Matches request returned HTTP 503 after 31.48 seconds. The indexed replay query in `f9a3cba2` reduced SQL time in a bounded comparison, but the hosted request still timed out. A read-only trace saw full replay hydration batches and another candidate query at 29.9 seconds, before the exact count.
