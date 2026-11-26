@@ -1,4 +1,4 @@
-import { bestSlipsRules } from "./best-slips.ts";
+import { maximumBestSlipPublicRank } from "./best-slip-odds-bands.ts";
 import { slipStatusCategory, type SlipStatus } from "./slip-status.ts";
 
 /** Descriptive publication outcomes, separate from forecast-quality claims and bookmaker payouts. */
@@ -41,7 +41,7 @@ export function summarizeSlipPerformance(samples: readonly SlipPerformanceSample
   for (const sample of samples) {
     const category = sample.status === undefined ? sample.outcome : slipStatusCategory(sample.status);
     if (!sample.id || ids.has(sample.id) || !Number.isSafeInteger(sample.publishedAt) ||
-      sample.rank !== undefined && (!Number.isInteger(sample.rank) || sample.rank < 1 || sample.rank > bestSlipsRules.count) ||
+      sample.rank !== undefined && (!Number.isInteger(sample.rank) || sample.rank < 1 || sample.rank > maximumBestSlipPublicRank) ||
       !["won", "lost", "void", "pending"].includes(sample.outcome) || (category === "cancelled" ? "void" : category) !== sample.outcome) {
       throw new RangeError("Invalid slip performance cohort.");
     }

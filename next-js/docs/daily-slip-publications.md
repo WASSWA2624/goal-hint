@@ -7,8 +7,9 @@ account erasure. Personal saved slips retain their separate privacy lifecycle.
 
 ## Publication boundary
 
-`createDailySlipPublisher` takes one bounded Kampala-day cohort from the stored
-Matches forecast and exact featured-pick reader. Forecast and quote rights,
+`createDailySlipPublisher` reads the stored Matches forecasts and exact featured
+picks in kickoff order. It follows a bounded kickoff cursor and excludes
+allocated fixtures before loading each page. Forecast and quote rights,
 original-cycle settlement support, and verified bookmaker offers still apply.
 The automatic publisher accepts exact featured full-time match and team goal
 totals on the lines supported by Builder when the Local Engine forecast and
@@ -27,28 +28,33 @@ total. It ranks eligible new combinations using a conservative whole-slip
 probability bound derived from the original pick probabilities. No assumption
 of independence is needed, and the bound is used internally for ranking. Each
 fixture can appear in one new automatic slip across all six bands for the same
-Kampala day. Earlier published appearances count even if a slip later becomes
-unavailable or void. Historical overlap remains in the archive.
+operational set. The adjacent sets also retain their claims when a fixture is
+rescheduled across a boundary. Earlier published appearances count even if a
+slip later becomes unavailable or void. Historical overlap remains in the archive.
 
-At midnight and every 30 minutes in Kampala, the worker checks every band
-with capacity. Ten per band is the existing ceiling. Sparse bands can finish
-the day with fewer slips or none. A combination waits until its earliest leg
-is within the configured release window, six hours by default. Within an
-eligible slot, the worker prefers cohesive kickoff times among otherwise
-comparable combinations. It appends qualifying
-slips at new ranks after the last stored rank. Earlier slips,
-ranks, prices and forecast revisions stay sealed. Full bands skip generation
-for the rest of the day. An empty or sparse band can accept later batches
-until the reporting day ends. The public page shows the accumulated count
-for the selected band, plus separate filter counts where applicable.
+At midnight in Kampala the worker begins the new dated set. Its fixture
+window runs from 03:00 inclusive through the next day's 03:00 exclusive.
+It checks both open sets before 03:00, starting with the closing set,
+and continues to check every half hour. The Today view can include still
+actionable rows from the closing set with their original day and rank.
+Explicit dates continue to browse their original publications.
+
+The worker searches adaptive groups in kickoff order. It uses the conservative
+whole-slip probability bound within a group, then favors safer constituents
+when that bound ties. It can consider a wider combination when closer fixtures
+cannot satisfy the band and releases a slip when its earliest leg is within
+the release lookahead. Each commit appends at most 32 slips per band and slot
+to bound transaction work. The daily set has no publication quota. Later
+checks can append new qualifying slips after any prior count. Search limits
+are reported in the run and recorded on affected batches.
 
 The first anchor, the append batch, slip snapshots and normalized original
 forecast membership commit together. Each band can commit one nonempty
 batch per half-hour slot. The transaction checks the slot, current fixture
 eligibility and kickoff, odds rights, exact stored offers, and existing daily
-fixture membership before committing. Both publication paths lock the Kampala
-date in the existing indexed combination ledger before reading prior
-membership. A conflicting transaction rolls back with its batch and fixture
+fixture membership before committing. The automatic append locks the set and
+its adjacent dates in the existing indexed combination ledger before reading
+prior membership. A conflicting transaction rolls back with its batch and fixture
 allocations. The combination identity also guards exact duplicates.
 Settlement uses the original sealed picks and updates visible outcomes.
 New slips show combined odds and average pick probability. Archived
@@ -60,13 +66,18 @@ private model qualification study continues separately.
 Migration `20261122190000_hourly_best_slip_appends` adds
 `DailyBestSlipAppendBatch` and associates appended slips with its immutable
 hour and rank range. Versions one and two retain their existing limits and
-rank links. Version three can append to an incomplete current-day band with
-the old snapshot untouched. Version four anchors new hourly bands. Each
-current band holds up to ten slips. The public rank stride remains 20.
+rank links. Versions three and four anchor the original capped append workflow.
 
 Migration `20261124120000_half_hour_best_slip_appends` replaces the append
 slot validation trigger in both MySQL and MariaDB. It admits half-hour slots
 and retains the historic hourly envelope. It changes no rows or table shape.
+
+Migration `20261126120000_operational_best_slip_windows` widens persisted rank
+and batch ranges and admits version-five anchors and version-two append batches.
+Earlier publications and their first 20 public rank slots per band retain their
+original addresses. Extended ranks use numeric addresses after the reserved
+rank range. Legacy batches retain their original validation. The migration
+changes constraints and trigger definitions while preserving the sealed rows.
 
 Use the verified migration role and a current backup of the affected archive
 tables. The dedicated publisher needs SELECT and INSERT on
@@ -87,8 +98,7 @@ The stored binding verifies database approval and public odds rights against
 the private register. The worker reads existing data and consumes no provider
 quota. A trusted local binding can be supplied with `--binding` instead.
 Schedule the one-shot command at `*-*-* *:00,30:00 Africa/Kampala`. A continuous
-`--stored` process waits for the same boundaries and sleeps to the next
-reporting day after all bands fill. Pause the old publisher before changing
+`--stored` process waits for the same boundaries throughout the day. Pause the old publisher before changing
 the trigger and switching writers. Verify both boundaries and archive reads
 on staging before enabling the production schedule. Archive pages and APIs
 read committed data.
@@ -96,7 +106,8 @@ read committed data.
 To roll back cadence alone, return the one-shot timer to `:00` and keep the
 updated publisher and readers. To roll back generation behavior, pause the
 publisher and keep the readers running until a compatible writer is ready.
-Readers must support already committed half-hour batches. Preserve the
+After version-two batches are published, keep the compatible reader active
+during a worker rollback. Preserve the
 archive, fixture membership and migration ledger during rollback.
 For the early-start eligibility release, the previous append-aware web and
 publisher releases can also be restored using their existing release link and
@@ -147,6 +158,24 @@ existing history validators. This avoids a separate database round trip for
 every market of every original slip leg.
 
 ## Verification
+
+### Operational window addendum audit
+
+| Area | Baseline and implementation |
+| --- | --- |
+| Schedule and eligibility | The existing half-hour schedule, verified offers and 30-minute buffer still apply. The worker now queries exact Kampala 03:00 boundaries and checks both eligible sets after midnight. |
+| Selection | The existing probability bound and exact odds checks still apply. The selector now sweeps kickoff groups based on observed gaps and uses constituent risk to distinguish equally reliable candidates. |
+| Publication limits and reuse | The daily cap existed in the worker, archive validation, SQL checks and read limits. The new envelopes support continuing appends and bounded reads. The existing allocation transaction also checks adjacent sets for rescheduled fixtures. |
+| Archive and access | The previous addresses, sealed snapshots and access checks still apply. Numeric addresses after the reserved slots identify additional slips. Today can carry actionable closing-set slips without changing their recorded dates. |
+
+On a controlled 500-fixture cohort, both selectors returned 32 slips. Median
+kickoff span was 309 minutes before and one minute after. The maximum was 590
+minutes before and 26 minutes after. Median search time across three warm runs
+was 521 ms and 454 ms respectively. Both searches reported a bounded search.
+The cohort measures selection mechanics and timing. It contains no settlement
+outcomes. The local point-in-time baseline found zero usable priced slates across
+14 fit dates and eight holdout dates, so comparative accuracy and returns remain
+unmeasured.
 
 ### Targeted optimization audit
 

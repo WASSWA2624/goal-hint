@@ -1,11 +1,10 @@
-import { defaultSlipCriteria, buildSlips, slipCombinationIdentity as bestSlipCombinationIdentity,
+import { defaultSlipCriteria, buildSlips, slipCombinationIdentity as bestSlipCombinationIdentity, slipSelectionIdentity as bestSlipSelectionIdentity,
   type BuiltSlip, type EditorialSlipSearch, type SlipCriteria, type SlipSelection } from "./slip-builder.ts";
-export { bestSlipCombinationIdentity };
-export { slipSelectionIdentity as bestSlipSelectionIdentity } from "./slip-builder.ts";
+export { bestSlipCombinationIdentity, bestSlipSelectionIdentity };
 import { oddsRules, parseDecimalOdds } from "./odds.ts";
 import { jointSlipBuilder, jointSlipRanking, qualifiedJointModel, type JointSlipModel } from "./joint-slip-model.ts";
 export { jointSlipProbability, qualifiedJointModel, type JointSlipModel } from "./joint-slip-model.ts";
-import type { ReportingDate } from "./calendar.ts";
+import { addReportingDays, type ReportingDate } from "./calendar.ts";
 import type { SlipBuildState } from "./slip-page.ts";
 import type { PerformanceSummaryCounts } from "./performance-summary.ts";
 import { slipMatchStateForSelection, type SlipMatchState } from "./slip-match-state.ts";
@@ -16,7 +15,7 @@ import type { CardSnapshotPick } from "./match-card.ts";
 import type { PeriodPerformance } from "./browse-period.ts";
 import type { ContentAccess } from "./paywall.ts";
 import { bestSlipBand, bestSlipBandLimit, bestSlipExactRange, bestSlipOddsBands, dailyBestSlipBandLimit, defaultBestSlipOddsBand, type BestSlipOddsBand } from "./best-slip-odds-bands.ts";
-import { bestSlipKickoffBufferMs, bestSlipPreferredKickoffWindowMs } from "./best-slip-publication-hour.ts";
+import { bestSlipFixtureWindow, bestSlipKickoffBufferMs, bestSlipPreferredKickoffWindowMs, bestSlipPublicationIntervalMs } from "./best-slip-publication-hour.ts";
 import { slipMarketFamilies } from "./slip-markets.ts";
 import { slipProbabilityLowerBound } from "./slip-probability.ts";
 
@@ -100,24 +99,78 @@ function cachedPriceOrder() {
   return (left: BuiltSlip, right: BuiltSlip) => compareBestSlipPrices(exactPrice(left), exactPrice(right));
 }
 
-/** The union bound gives a joint lower bound without assuming independent selections. */
+function kickoffGroups(selections: readonly SlipSelection[]) {
+  const kickoffs = [...new Set(selections.map(({ kickoffAt }) => kickoffAt))];
+  const gaps = kickoffs.slice(1).map((kickoffAt, index) => kickoffAt - kickoffs[index]!);
+  const sortedGaps = [...gaps].sort((left, right) => left - right);
+  let nearbyGap = bestSlipPublicationIntervalMs;
+  if (sortedGaps.length >= 4) {
+    const last = sortedGaps.length - 1, firstQuartile = sortedGaps[Math.floor(last / 4)]!, thirdQuartile = sortedGaps[Math.floor(last * 3 / 4)]!;
+    // Break on unusually long gaps in this slate. The cadence remains the fallback for sparse fixtures.
+    nearbyGap = Math.min(nearbyGap, thirdQuartile + 1.5 * (thirdQuartile - firstQuartile));
+  }
+  let group = 0;
+  return new Map(kickoffs.map((kickoffAt, index) => {
+    if (index > 0 && gaps[index - 1]! > nearbyGap) group++;
+    return [kickoffAt, group];
+  }));
+}
+
+/** Sweep actual kickoff groups in order. A wider combination can qualify when nearby selections cannot meet the band. */
 export function buildHourlyBestSlips(day: ReportingDate, band: BestSlipOddsBand, capacity: number, asOf: number,
   editorial: Omit<EditorialSlipSearch, "exclusiveMaximum" | "combinationIdentity">, priorCombinations: ReadonlySet<string>,
-  preferredKickoffWindowMs = bestSlipPreferredKickoffWindowMs) {
+  releaseLookaheadMs = bestSlipPreferredKickoffWindowMs) {
+  const { startInclusive, endExclusive } = bestSlipFixtureWindow(day);
+  const byKickoff = (left: SlipSelection, right: SlipSelection) => left.kickoffAt - right.kickoffAt;
+  const eligible = editorial.selections.filter(({ fixtureId, kickoffAt }) => !editorial.priorFixtures?.has(fixtureId)
+    && kickoffAt >= startInclusive && kickoffAt < endExclusive && kickoffAt - asOf >= bestSlipKickoffBufferMs).sort(byKickoff);
+  const groups = kickoffGroups(eligible), marketPrices = new Map<string, bigint>();
+  for (const selection of eligible) {
+    const key = bestSlipSelectionIdentity(selection), price = parseDecimalOdds(selection.odds)?.scaled;
+    const current = marketPrices.get(key);
+    if (price !== undefined && (current === undefined || price < current)) marketPrices.set(key, price);
+  }
+  // A different quote for the same outcome does not change the outcome's risk.
+  const selectionPrices = new Map(eligible.map((selection) => [selection, marketPrices.get(bestSlipSelectionIdentity(selection)) ?? 0n]));
+
+  // The shared search creates each combination in kickoff order.
+  const firstKickoff = (slip: BuiltSlip) => slip.selections[0]!.kickoffAt;
+  function summarize(slip: BuiltSlip) {
+    const first = firstKickoff(slip), last = slip.selections.at(-1)!.kickoffAt;
+    let maximumPrice = 0n, weakestProbability = 1;
+    for (const selection of slip.selections) {
+      const price = selectionPrices.get(selection)!;
+      if (price > maximumPrice) maximumPrice = price;
+      weakestProbability = Math.min(weakestProbability, selection.probability);
+    }
+    return { first, span: last - first, firstGroup: groups.get(first)!, lastGroup: groups.get(last)!, maximumPrice, weakestProbability,
+      // The Fréchet bound uses the stored marginals without assuming independent legs.
+      lowerBound: slipProbabilityLowerBound(slip.averageProbability * slip.selections.length, slip.selections.length) };
+  }
+  const scores = new WeakMap<BuiltSlip, ReturnType<typeof summarize>>();
+  const score = (slip: BuiltSlip) => {
+    const current = scores.get(slip);
+    if (current) return current;
+    const summary = summarize(slip);
+    scores.set(slip, summary);
+    return summary;
+  };
   const comparePrice = cachedPriceOrder();
-  const earliestKickoff = (slip: BuiltSlip) => Math.min(...slip.selections.map(({ kickoffAt }) => kickoffAt));
-  const cohesive = (slip: BuiltSlip) => Math.max(...slip.selections.map(({ kickoffAt }) => kickoffAt)) - earliestKickoff(slip) <= preferredKickoffWindowMs;
-  const lowerBound = (slip: BuiltSlip) => slipProbabilityLowerBound(slip.averageProbability * slip.selections.length, slip.selections.length);
-  const bestAvailable = editorial.selections.filter(({ fixtureId, kickoffAt }) => !editorial.priorFixtures?.has(fixtureId)
-    && kickoffAt - asOf >= bestSlipKickoffBufferMs);
-  const compare = (left: BuiltSlip, right: BuiltSlip) => lowerBound(right) - lowerBound(left)
-    || right.averageProbability - left.averageProbability || comparePrice(left, right)
-    || left.selections.length - right.selections.length || Number(cohesive(right)) - Number(cohesive(left)) || left.id.localeCompare(right.id);
-  const result = buildSlips({ ...bestSlipDailyCriteria(day, band), markets: [...slipMarketFamilies], slips: capacity }, [], asOf, {
-    // Let a later check consider far-out combinations when at least one leg enters the release window.
-    accepts: (slip) => earliestKickoff(slip) - asOf <= preferredKickoffWindowMs && !priorCombinations.has(bestSlipCombinationIdentity(slip.selections)),
+  const compare = (left: BuiltSlip, right: BuiltSlip) => {
+    const a = score(left), b = score(right);
+    return a.lastGroup - b.lastGroup || b.firstGroup - a.firstGroup
+      || b.lowerBound - a.lowerBound || b.weakestProbability - a.weakestProbability || right.averageProbability - left.averageProbability
+      || (a.maximumPrice < b.maximumPrice ? -1 : a.maximumPrice > b.maximumPrice ? 1 : 0)
+      || left.selections.length - right.selections.length || a.span - b.span || a.first - b.first
+      || comparePrice(left, right) || left.id.localeCompare(right.id);
+  };
+  const result = buildSlips({ ...bestSlipDailyCriteria(day, band), dateTo: addReportingDays(day, 1),
+    markets: [...slipMarketFamilies], slips: capacity }, [], asOf, {
+    accepts: (slip) => firstKickoff(slip) - asOf <= releaseLookaheadMs
+      && (!priorCombinations.size || !priorCombinations.has(bestSlipCombinationIdentity(slip.selections))),
     compare,
-  }, { editorial: { ...editorial, selections: bestAvailable, prioritizeRank: true,
+  }, { editorial: { ...editorial, selections: eligible, prioritizeRank: true,
+    order: (selections) => [...(editorial.order?.(selections) ?? selections)].sort(byKickoff),
     combinationIdentity: bestSlipCombinationIdentity, exclusiveMaximum: bestSlipExactRange(band).exclusiveMaximum } });
   return { ...result, slips: [...result.slips].sort(compare) };
 }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { addReportingDays, parseReportingDate } from '../src/domain/calendar.ts';
 import { bestSlipsQueryRules, parseBestSlipsQuery, resolveBestSlipsDates } from '../src/domain/best-slips-query.ts';
+import { bestSlipPublicRank } from '../src/domain/best-slip-odds-bands.ts';
 import { createBestSlipsBrowseService } from '../src/server/slips/best-slips-browse.ts';
 import { createPublishedSlips, slipPublicationIdentity } from '../src/server/slips/published-slips.ts';
 import { gateBestSlips } from '../src/server/slips/best-slips.ts';
@@ -15,7 +16,7 @@ const uuid = (number) => `20000000-0000-4000-8000-${String(number).padStart(12, 
 function fixture(days = 1, daily = 4, replacementCycles = false, valuesForRank = () => ({ averageProbability: 0.7, totalOdds: '4.00' })) {
   const publications = [], slips = [], legs = [], outcomes = new Map(), reads = [], resultBatches = [], source = liveRecord();
   const batches = [];
-  let corrupt = false;
+  let corrupt = false, asOf = now;
   for (let dateIndex = 0; dateIndex < days; dateIndex++) {
     const day = addReportingDays(today, -dateIndex), publicationId = evidenceFingerprint({ kind: 'daily-best-slips', version: 1, day });
     const publishedAt = Date.parse(`${day}T00:00:01+03:00`), modelId = 'a'.repeat(64);
@@ -42,7 +43,7 @@ function fixture(days = 1, daily = 4, replacementCycles = false, valuesForRank =
     async $queryRaw(query, ...arguments_) {
       const sql = Array.isArray(query) ? { text: query.join('?'), values: arguments_ } : { text: query.sql, values: query.values };
       reads.push(sql);
-      if (sql.text.includes('UTC_TIMESTAMP')) return [{ at: new Date(now) }];
+      if (sql.text.includes('UTC_TIMESTAMP')) return [{ at: new Date(asOf) }];
       if (sql.text.includes('FROM DailyBestSlipAppendBatch')) return batches.filter(row => sql.values.includes(row.publicationId))
         .sort((left, right) => left.publicationId.localeCompare(right.publicationId) || left.firstRank - right.firstRank)
         .map(row => ({ ...row, validIntegrity: corrupt ? 0 : 1 }));
@@ -58,9 +59,15 @@ function fixture(days = 1, daily = 4, replacementCycles = false, valuesForRank =
         rows = rows.filter(row => sql.values.includes(row.oddsBand ?? 'legacy') || row.oddsBand === undefined);
         return rows.sort((a, b) => +b.eatDate - +a.eatDate).slice(0, sql.values.at(-1)).map((row) => ({ ...row, validIntegrity: corrupt ? 0 : 1 }));
       }
-      if (sql.text.includes('FROM PublishedSlip')) return slips.filter((row) => sql.values.includes(row.publicationId))
-        .sort((a, b) => a.publicationId.localeCompare(b.publicationId) || a.rank - b.rank)
-        .slice(0, sql.text.includes('LIMIT') ? sql.values.at(-1) : undefined).map((row) => ({ ...row, validIntegrity: corrupt ? 0 : 1 }));
+      if (sql.text.includes('FROM PublishedSlip')) {
+        return slips.filter((row) => sql.values.includes(row.publicationId)
+          && (!sql.text.includes('`rank`>') || row.rank > sql.values[1])
+          && (!sql.text.includes('`rank`=') || row.rank === sql.values[1])
+          && (!sql.text.includes('JSON_UNQUOTE') || row.snapshotJson.slip.id === sql.values[1]))
+          .sort((a, b) => a.publicationId.localeCompare(b.publicationId) || a.rank - b.rank)
+          .slice(0, sql.text.includes('LIMIT 1') ? 1 : sql.text.includes('LIMIT') ? sql.values.at(-1) : undefined)
+          .map((row) => ({ ...row, validIntegrity: corrupt ? 0 : 1 }));
+      }
       assert.fail(sql.text);
     },
   };
@@ -80,7 +87,7 @@ function fixture(days = 1, daily = 4, replacementCycles = false, valuesForRank =
         completed: true, status: 'finished-regulation', regulationHome: result.regulationAway, regulationAway: result.regulationHome })), ...results] : results;
     },
   });
-  return { store, reads, resultBatches, outcomes, publications, slips, legs, batches, corrupt() { corrupt = true; } };
+  return { store, reads, resultBatches, outcomes, publications, slips, legs, batches, advance(value) { asOf = value; }, corrupt() { corrupt = true; } };
 }
 const query = (input = {}) => parseBestSlipsQuery({ period: 'last30', ...input }, today);
 
@@ -97,6 +104,95 @@ test('publication pages show 20 slips and preserve every original rank across pa
     assert.deepEqual(rows.map((view) => view.rank), Array.from({ length: count }, (_, index) => index + 1));
     assert.equal(new Set(rows.map((view) => view.id)).size, count);
   }
+});
+
+test('extended publications page every sealed slot and keep canonical links across the old stride', async () => {
+  const f = fixture(1, 67), oddsBand = '1.5-5', parent = f.publications[0];
+  const midnight = Date.parse(`${today}T00:00:00+03:00`), firstAt = midnight + 10_000;
+  const kickoffAt = Date.parse(`${today}T20:00:00+03:00`);
+  Object.assign(parent, { id: slipPublicationIdentity(today, oddsBand), oddsBand, publishedAt: new Date(firstAt), modelId: null });
+  Object.assign(parent.bodyJson, { version: 5, oddsBand, publishedAt: firstAt, count: 0, model: null,
+    criteria: `dateFrom=${today}&dateTo=${today}&totalMin=2.50&totalMax=5.00` });
+  for (const [index, firstRank] of [1, 33, 65].entries()) {
+    const count = Math.min(32, f.slips.length - firstRank + 1), hourAt = midnight + index * 1_800_000, at = hourAt + 10_000;
+    const id = evidenceFingerprint({ kind: 'hourly-best-slip-append', publicationId: parent.id, hourAt });
+    f.batches.push({ id, publicationId: parent.id, hourAt: new Date(hourAt), publishedAt: new Date(at), firstRank, count,
+      bodyJson: { version: 2, hourAt, publishedAt: at, firstRank, count, searchLimited: false, partialCoverage: false } });
+    for (const row of f.slips.slice(firstRank - 1, firstRank - 1 + count)) {
+      const leg = f.legs.find(leg => leg.slipId === row.id), snapshot = row.snapshotJson;
+      snapshot.slip.selections = [pricedEditorialSelection(row.rank, { fixtureId: leg.fixtureId, cycleId: leg.cycleId,
+        revisionId: leg.revisionId, at, kickoffAt, probability: snapshot.slip.averageProbability })];
+      delete snapshot.estimatedProbability;
+      row.publicationId = parent.id;
+      row.appendBatchId = id;
+      row.id = evidenceFingerprint({ publicationId: parent.id, rank: row.rank, snapshot });
+      leg.slipId = row.id;
+      f.outcomes.set(leg.fixtureId, 'won');
+    }
+  }
+  f.advance(midnight + 2 * 3_600_000);
+  const expected = f.slips.map(({ rank }) => bestSlipPublicRank(oddsBand, rank));
+  const listed = [], archived = [];
+  let cursor;
+  for (let page = 1; page <= 4; page++) {
+    const dated = await f.store.browse(query({ period: 'today', page: String(page) }), today);
+    assert.equal(dated.browse.total, 67);
+    listed.push(...dated.slips.map(({ rank }) => rank));
+    const scan = await f.store.browse(query({ period: 'all', page: String(page), ...(cursor ? { cursor } : {}) }), today);
+    archived.push(...scan.slips.map(({ rank }) => rank));
+    cursor = scan.browse.nextCursor;
+  }
+  assert.deepEqual(listed, expected);
+  assert.deepEqual(archived, expected);
+  assert.equal(cursor, null);
+  for (const rank of [1, 20, 21, 65, 67]) {
+    const [direct] = (await f.store.byRank(today, expected[rank - 1])).slips;
+    assert.equal(direct.id, f.slips[rank - 1].id);
+    assert.equal(direct.rank, expected[rank - 1]);
+  }
+  assert.equal(await f.store.byRank(today, bestSlipPublicRank('5-10', 1)), null);
+  const shares = await f.store.day(today, false, undefined, f.slips[65].snapshotJson.slip.id);
+  assert.deepEqual(shares.slips.map(({ id }) => id), [f.slips[65].id]);
+  assert.equal(f.resultBatches.at(-1), 1, 'share lookup only resolves the selected snapshot');
+  const history = await f.store.history({ from: today, to: today, page: 4, pageSize: 20 });
+  assert.equal(history.total, 67);
+  assert.equal(history.records.length, 7);
+  assert.equal(history.statistics.won, 67);
+});
+
+test('Today includes only actionable previous-set legs during the midnight handoff', async () => {
+  const f = fixture(2, 4), previous = addReportingDays(today, -1);
+  const at = (time) => Date.parse(`${today}T${time}:00+03:00`);
+  const update = (row, kickoffAt, outcome) => {
+    const selection = row.snapshotJson.slip.selections[0], leg = f.legs.find(leg => leg.slipId === row.id);
+    selection.kickoffAt = kickoffAt;
+    row.id = evidenceFingerprint({ publicationId: row.publicationId, rank: row.rank, snapshot: row.snapshotJson });
+    leg.slipId = row.id;
+    f.outcomes.set(selection.fixtureId, outcome);
+  };
+  const previousRows = f.slips.filter(({ publicationId }) => publicationId === f.publications[1].id);
+  [ ['02:00', 'pending'], ['00:05', 'pending'], ['02:30', 'in-progress'], ['03:00', 'pending'] ].forEach(([time, outcome], i) =>
+    update(previousRows[i], at(time), outcome));
+  const currentRows = f.slips.filter(({ publicationId }) => publicationId === f.publications[0].id);
+  currentRows.forEach((row) => update(row, at('10:00'), 'pending'));
+  f.advance(at('00:15'));
+  const request = query({ period: 'today', status: 'pending' });
+  const active = await f.store.browse(request, today);
+  assert.equal(active.browse.total, 5);
+  assert.equal(active.browse.bandTotal, 5);
+  assert.equal(active.statistics.pending, 5);
+  assert.deepEqual(active.slips.map(({ publicationDay }) => publicationDay), [previous, today, today, today, today]);
+  const [overlap] = active.slips;
+  assert.equal(overlap.id, previousRows[0].id);
+  assert.deepEqual((await f.store.byRank(previous, overlap.rank)).slips, [overlap]);
+  assert.deepEqual((await f.store.browse(query({ period: 'yesterday' }), today)).slips.map(({ publicationDay }) => publicationDay),
+    [previous, previous, previous, previous]);
+  assert.equal((await f.store.browse(query({ period: 'custom', from: today, to: today }), today)).browse.total, 4);
+  const [protectedPrior] = gateBestSlips(active, free).slips;
+  assert.equal(protectedPrior.slip, undefined);
+  assert.equal(protectedPrior.preview[0].pick, null);
+  f.advance(at('03:00'));
+  assert.ok((await f.store.browse(request, today)).slips.every(({ publicationDay }) => publicationDay === today));
 });
 
 test('publication browsing filters original outcomes before pagination and retains whole-period counts', async () => {
@@ -158,8 +254,8 @@ test('void, cancelled and pending progress categories filter before pagination w
 test('exact custom ranges resolve forecast results in bounded batches without truncating older publications', async () => {
   const f = fixture(64, 4), result = await f.store.browse(query({ period: 'custom', from: addReportingDays(today, -63), to: today, status: 'lost' }), today);
   assert.equal(result.browse.total, 64); assert.equal(result.slips.length, bestSlipsQueryRules.pageSize); assert.equal(result.browse.hasMore, true);
-  assert.equal(result.statistics.total, 256); assert.deepEqual(f.resultBatches, [124, 124, 8]);
-  assert.ok(f.reads.filter((read) => read.text.includes('FROM PublishedSlip')).every((read) => read.values.at(-1) === 3721));
+  assert.equal(result.statistics.total, 256); assert.deepEqual(f.resultBatches, [128, 128]);
+  assert.ok(f.reads.filter((read) => read.text.includes('FROM PublishedSlip')).every((read) => read.values.at(-1) <= 65));
 });
 
 test('All dates continues within publication ranks without skipping and never claims a partial total', async () => {
@@ -274,7 +370,7 @@ test('an unpublished odds range today differs from an empty result filter or arc
   assert.equal(unpublished.state, 'awaiting-publication');
   assert.deepEqual(unpublished.slips, []);
   assert.equal(unpublished.browse.bandTotal, 0);
-  assert.equal(unpublished.browse.dailyBandLimit, 10);
+  assert.equal(unpublished.browse.dailyBandLimit, undefined);
   const paged = await service(full, query({ period: 'today', page: '2' }));
   assert.equal(paged.state, 'generated');
   assert.deepEqual(paged.slips, []);
@@ -337,11 +433,11 @@ test('modern browsing uses the sealed rank and the exact band before display rou
     [[1, '5.00', 0.7, 0.8], [2, '4.00', 0.6, 0.95]]);
   assert.ok(lower.slips.every(view => view.slip.selections.every(selection => selection.offer === undefined)));
   assert.equal(lower.browse.bandTotal, 2);
-  assert.equal(lower.browse.dailyBandLimit, 10);
+  assert.equal(lower.browse.dailyBandLimit, undefined);
   const filtered = await f.store.browse(query({ period: 'custom', from: today, to: today, oddsBand, probMin: '95' }), today);
   assert.equal(filtered.browse.total, 1);
   assert.equal(filtered.browse.bandTotal, 2);
-  assert.equal(filtered.browse.dailyBandLimit, 10);
+  assert.equal(filtered.browse.dailyBandLimit, undefined);
   assert.equal((await f.store.browse(query({ period: 'today', oddsBand: '5-10' }), today)).browse.bandTotal, 0);
 });
 
@@ -388,7 +484,7 @@ test('hourly records extend v3 and v4 bands with stable ranks, their own publica
     assert.deepEqual(after.slips, [first]);
     assert.equal(after.browse.total, 1);
     assert.equal(after.browse.bandTotal, 2);
-    assert.equal(after.browse.dailyBandLimit, 10);
+    assert.equal(after.browse.dailyBandLimit, undefined);
     assert.notEqual(after.browse.version, before.browse.version);
     const both = await f.store.browse({ ...request, status: 'all' }, today);
     assert.deepEqual(both.slips.map(view => [view.rank, view.publishedAt]), [[1, firstAt], [2, secondAt]]);

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { addReportingDays, getReportingDayBounds } from '../src/domain/calendar.ts';
 import { bestSlipOddsBands } from '../src/domain/best-slip-odds-bands.ts';
-import { bestSlipPublicationHour } from '../src/domain/best-slip-publication-hour.ts';
+import { bestSlipFixtureWindow, bestSlipPublicationHour } from '../src/domain/best-slip-publication-hour.ts';
 import { bestSlipViews } from '../src/domain/best-slips.ts';
 import { gateBestSlips } from '../src/server/slips/best-slips.ts';
 import { createPublishedSlips, parsePublishedSlipHistoryQuery, slipPublicationIdentity } from '../src/server/slips/published-slips.ts';
@@ -30,7 +31,8 @@ function fixture() {
   const statement = (query, values) => Array.isArray(query) ? { text: query.join('?'), values } : { text: query.sql, values: query.values };
   const tx = {
     dailySlipPublication: { async findUnique({ where }) { return parents.find(row => +row.eatDate === +where.eatDate) ?? null; } },
-    publishedSlipLeg: { async createMany({ data }) { legs.push(...data); afterMembership(); }, async findMany() { return legs; } },
+    publishedSlipLeg: { async createMany({ data }) { legs.push(...data); afterMembership(); },
+      async findMany({ where }) { return legs.filter(leg => where.slipId.in.includes(leg.slipId)); } },
     async $queryRaw(query, ...values) {
       const sql = statement(query, values);
       if (sql.text.includes('UTC_TIMESTAMP')) return [{ at: new Date(at) }];
@@ -44,11 +46,26 @@ function fixture() {
       }
       if (sql.text.includes('FROM DailyBestSlipCombination')) return combinations.filter(([date, key]) =>
         +date === +sql.values[0] && key === sql.values[1]).map(([, , slipId]) => ({ slipId }));
+      if (sql.text.includes('SELECT DISTINCT l.fixtureId')) {
+        const [from, to, after, limit] = sql.values;
+        const published = new Set(parents.filter(parent => +parent.eatDate === +from || +parent.eatDate === +to).map(parent => parent.id));
+        const slipIds = new Set(rows.filter(row => published.has(row.publicationId)).map(row => row.id));
+        return [...new Set(legs.filter(leg => slipIds.has(leg.slipId) && leg.fixtureId > after).map(leg => leg.fixtureId))]
+          .sort().slice(0, limit).map(fixtureId => ({ fixtureId }));
+      }
       if (sql.text.includes('JOIN PublishedSlip s')) return rows.filter(row =>
         parents.some(parent => parent.id === row.publicationId && +parent.eatDate === +sql.values[0]))
         .map(row => ({ ...row, validIntegrity: corrupted ? 0 : 1 }));
-      if (sql.text.includes('FROM DailySlipPublication')) return parents.filter(row => !sql.text.includes('oddsBand') || !sql.values.some(value => bestSlipOddsBands.some(band => band.id === value)) || sql.values.includes(row.oddsBand)).map(row => ({ ...row, validIntegrity: corrupted ? 0 : 1 }));
-      if (sql.text.includes('FROM PublishedSlip')) return rows.filter(row => sql.values.includes(row.publicationId)).map(row => ({ ...row, validIntegrity: corrupted ? 0 : 1 }));
+      if (sql.text.includes('FROM DailySlipPublication')) return parents.filter(row =>
+        (!sql.text.includes('eatDate=?') || +row.eatDate === +sql.values[0]) &&
+        (!sql.values.some(value => bestSlipOddsBands.some(band => band.id === value)) || sql.values.includes(row.oddsBand)))
+        .map(row => ({ ...row, validIntegrity: corrupted ? 0 : 1 }));
+      if (sql.text.includes('FROM PublishedSlip')) {
+        let matches = rows.filter(row => sql.values.includes(row.publicationId));
+        if (sql.text.includes('`rank`>?')) matches = matches.filter(row => row.rank > sql.values[1]).sort((a, b) => a.rank - b.rank).slice(0, sql.values[2]);
+        if (sql.text.includes('`rank`=?')) matches = matches.filter(row => row.rank === sql.values[1]);
+        return matches.map(row => ({ ...row, validIntegrity: corrupted ? 0 : 1 }));
+      }
       assert.fail(sql.text);
     },
     async $executeRaw(query, ...values) {
@@ -211,14 +228,14 @@ test('larger custom-slip storage limits do not widen the daily publication match
 });
 
 
-const modelFreeSlip = (indices, { odds = '4.00', oddsPerLeg = '4.00', at = now, bookmakerId = 8 } = {}) => ({
+const modelFreeSlip = (indices, { odds = '4.00', oddsPerLeg = '4.00', at = now, bookmakerId = 8, kickoffAt = now + 6 * 3_600_000 } = {}) => ({
   id: `hourly-${indices.join('-')}`, totalOdds: odds, oddsBasis: 'bookmaker', averageProbability: 0.75,
-  selections: indices.map(index => pricedEditorialSelection(index, { odds: oddsPerLeg, at, bookmakerId, kickoffAt: now + 6 * 3_600_000 })),
+  selections: indices.map(index => pricedEditorialSelection(index, { odds: oddsPerLeg, at, bookmakerId, kickoffAt })),
 });
 const hourlyInput = (at, slips, oddsBand = '1.5-5') => ({ ...bestSlipPublicationHour(at), slips, oddsBand,
   searchLimited: false, partialCoverage: false, verifyPublicOdds: () => true });
 
-test('hourly append fills a modern band through distinct frozen batches without changing its initial legacy ranks', async () => {
+test('incremental publication grows past ten and twenty through sealed batches while preserving the archive', async () => {
   const f = fixture(); await f.publish();
   const previous = structuredClone(f.rows[0]), parent = structuredClone(f.parents[0]);
   const later = bestSlipPublicationHour(now).nextAt; f.advance(later + 30_000);
@@ -234,12 +251,45 @@ test('hourly append fills a modern band through distinct frozen batches without 
 
   const next = later + 3_600_000; f.advance(next + 30_000);
   const proposals = Array.from({ length: 10 }, (_, i) => modelFreeSlip([i + 10], { at: next }));
-  assert.deepEqual(await f.store.append(hourlyInput(next, proposals)), { status: 'published', appended: 8 });
-  assert.deepEqual(f.rows.map(row => row.rank), Array.from({ length: 10 }, (_, i) => i + 1));
+  assert.deepEqual(await f.store.append(hourlyInput(next, proposals)), { status: 'published', appended: 10 });
+  const subsequent = next + 3_600_000;
+  f.advance(subsequent + 30_000);
+  const additions = Array.from({ length: 20 }, (_, i) => modelFreeSlip([i + 31], { at: subsequent }));
+  assert.deepEqual(await f.store.append(hourlyInput(subsequent, additions)), { status: 'published', appended: 20 });
+  const bulkSlot = bestSlipPublicationHour(subsequent).nextAt;
+  f.advance(bulkSlot);
+  const more = Array.from({ length: 32 }, (_, i) => modelFreeSlip([i + 100], { at: bulkSlot }));
+  assert.deepEqual(await f.store.append(hourlyInput(bulkSlot, more)), { status: 'published', appended: 32 });
+  const finalSlot = bestSlipPublicationHour(bulkSlot).nextAt;
+  f.advance(finalSlot);
+  assert.deepEqual(await f.store.append(hourlyInput(finalSlot, [modelFreeSlip([150], { at: finalSlot })])), { status: 'published', appended: 1 });
+  assert.deepEqual(f.rows.map(row => row.rank), Array.from({ length: 65 }, (_, i) => i + 1));
   assert.deepEqual(f.rows[0], previous); assert.deepEqual(f.parents[0], parent);
-  f.advance(next + 3_600_000 + 30_000);
-  assert.deepEqual(await f.store.append(hourlyInput(next + 3_600_000, [modelFreeSlip([31], { at: next + 3_600_000 })])),
-    { status: 'full', appended: 0 });
+  assert.equal((await f.store.day(today, false, '1.5-5')).slips.length, 65);
+  assert.equal((await f.store.hourlyState(today)).counts.get('1.5-5'), 65);
+});
+
+test('midnight appends to both operational dates without reusing a rescheduled fixture', async () => {
+  const f = fixture(), previous = addReportingDays(today, -1);
+  const at = getReportingDayBounds(today).startInclusive, { startInclusive, endExclusive } = bestSlipFixtureWindow(today);
+  f.advance(at);
+  await assert.rejects(() => f.store.append(hourlyInput(at, [modelFreeSlip([1], { at, kickoffAt: startInclusive - 1 })])), /invalid-input/u);
+  await assert.rejects(() => f.store.append(hourlyInput(at, [modelFreeSlip([1], { at, kickoffAt: endExclusive })])), /invalid-input/u);
+  const early = modelFreeSlip([1], { at, kickoffAt: startInclusive - 1 });
+  assert.deepEqual(await f.store.append({ ...hourlyInput(at, [early]), day: previous }), { status: 'published', appended: 1 });
+  assert.equal(f.parents[0].bodyJson.version, 5);
+  assert.equal(f.parents[0].bodyJson.day, previous);
+  assert.equal(f.parents[0].publishedAt.getTime(), at);
+  const moved = modelFreeSlip([1], { at, kickoffAt: startInclusive });
+  assert.deepEqual(await f.store.append(hourlyInput(at, [moved])), { status: 'no-qualifying', appended: 0 });
+  const opening = modelFreeSlip([2], { at, kickoffAt: startInclusive });
+  const ending = modelFreeSlip([3], { at, kickoffAt: endExclusive - 1 });
+  assert.deepEqual(await f.store.append(hourlyInput(at, [opening, ending])), { status: 'published', appended: 2 });
+  assert.equal((await f.store.hourlyState(previous)).fixtures.size, 3);
+  assert.equal((await f.store.hourlyState(today)).fixtures.size, 3);
+  assert.equal(f.rows[0].snapshotJson.slip.selections[0].kickoffAt, startInclusive - 1);
+  f.advance(startInclusive);
+  await assert.rejects(() => f.store.append({ ...hourlyInput(startInclusive, [early]), day: previous }), /invalid-input/u);
 });
 
 test('incremental batches reject any repeated fixture within a batch and across all six bands', async () => {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { summarizeSlipPerformance } from "../src/domain/slip-performance.ts";
-import { bestSlipBandLimit, bestSlipOddsBands } from "../src/domain/best-slip-odds-bands.ts";
+import { maximumBestSlipPublicRank } from "../src/domain/best-slip-odds-bands.ts";
 
 const sample = (id, outcome, totalOdds = "5.00", publishedAt = Number(id)) => ({ id, outcome, totalOdds, publishedAt });
 
@@ -69,7 +69,7 @@ test("a simultaneous daily publication uses original slip rank before row identi
     { ...sample("b", "won", "2.00", 0), rank: 2 },
   ]);
   assert.equal(result.longestLosingStreak, 1); assert.equal(result.currentLosingStreak, 1);
-  const maximumRank = bestSlipOddsBands.length * bestSlipBandLimit;
+  const maximumRank = maximumBestSlipPublicRank;
   assert.equal(summarizeSlipPerformance([{ ...sample("1", "won"), rank: maximumRank }]).won, 1);
   assert.throws(() => summarizeSlipPerformance([{ ...sample("1", "won"), rank: maximumRank + 1 }]), RangeError);
 });

@@ -39,25 +39,26 @@ export function createBestSlipsService({ read = readPublicSlipBuild, model = nul
   };
 }
 
-type PublishedBestSlipsReader = (day: ReportingDate, locale: string, completedOnly: boolean, oddsBand?: BestSlipOddsBand | null) => Promise<BestSlipsResult | null>;
-const readPublishedDay: PublishedBestSlipsReader = async (day, _locale, completedOnly, oddsBand = defaultBestSlipOddsBand) => {
+type PublishedBestSlipsReader = (day: ReportingDate, locale: string, completedOnly: boolean, oddsBand?: BestSlipOddsBand | null, rank?: number) => Promise<BestSlipsResult | null>;
+const readPublishedDay: PublishedBestSlipsReader = async (day, _locale, completedOnly, oddsBand = defaultBestSlipOddsBand, rank) => {
   const database = getDatabase();
   if (isDevelopmentDemo()) {
     const { ensureDemoSlipDates } = await import("../demo/slips-seed.ts");
     await ensureDemoSlipDates(database, [day]);
   }
-  return createPublishedSlips(database).day(day, completedOnly, oddsBand ?? undefined);
+  const store = createPublishedSlips(database);
+  return rank === undefined ? store.day(day, completedOnly, oddsBand ?? undefined) : store.byRank(day, rank);
 };
 
 /** Canonical ranks address the original complete day, independently of current browsing bounds. */
 export function createPublicBestSlipDayService({ read = readPublishedDay, providerOdds }: {
   read?: PublishedBestSlipsReader; providerOdds?: boolean;
 } = {}) {
-  return async (access: ViewerAccess, { from: day }: BestSlipsQuery & { from: ReportingDate }, locale = "en"): Promise<BestSlipsResult> => {
+  return async (access: ViewerAccess, { from: day, rank }: BestSlipsQuery & { from: ReportingDate; rank?: number }, locale = "en"): Promise<BestSlipsResult> => {
     const empty = { day, slips: [], searchLimited: false, partialCoverage: false } as const;
     if (!(providerOdds ?? publicOddsEnabled())) return gateBestSlips({ ...empty, state: "odds-unavailable" }, access);
     try {
-      const result = await read(day, locale, false, null);
+      const result = rank === undefined ? await read(day, locale, false, null) : await read(day, locale, false, null, rank);
       return gateBestSlips(result ?? { ...empty, state: "data-unavailable" }, access);
     } catch { return gateBestSlips({ ...empty, state: "data-unavailable" }, access); }
   };

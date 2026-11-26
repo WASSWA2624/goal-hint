@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createLocalSlipShare, sharedSlipSchema, shareSlipSourceSchema } from '../src/domain/shared-slips.ts';
+import { maximumBestSlipPublicRank } from '../src/domain/best-slip-odds-bands.ts';
 import { createShareSlipHandler } from '../src/server/slips/shared-slips-http.ts';
 import { createSlipNumberHandler } from '../src/server/slips/slip-numbers-http.ts';
 import { slipShareCaption } from '../src/domain/slip-share-caption.ts';
@@ -21,7 +22,9 @@ function fixture(access = async () => ({ tier: 'full' }), count = 1) {
     $queryRaw: async () => [{ number: 1 }], $executeRaw: async (_query, key) => { keys.push(key); return 1; },
     rateLimitBucket: { findUniqueOrThrow: async () => ({ count }) },
   }) } });
-  const handle = createShareSlipHandler({ access, members, services, published: () => ({ day: async () => { reads++; return {
+  const handle = createShareSlipHandler({ access, members, services, published: () => ({ day: async (day, completedOnly, band, id) => {
+    assert.deepEqual([day, completedOnly, band, id], [today, false, undefined, slip.id]);
+    reads++; return {
       slips: [{ id: 'a'.repeat(64), rank: 21, publicationDay: today, publishedAt: now, slip }] }; } }) });
   const number = createSlipNumberHandler({ access, members, services, now: () => now });
   return { handle, number, keys, reads: () => reads };
@@ -45,6 +48,9 @@ test('published sharing resolves an existing canonical link with only a minimal 
   assert.equal(response.status, 200); const shared = await response.json();
   assert.ok(shared.url.endsWith(`/en/best-slips/${today}/21`)); assert.equal(f.reads(), 1);
   assert.equal('estimatedProbability' in shared.slip, false);
+  const extended = `https://goalhint.com/en/best-slips/${today}/${maximumBestSlipPublicRank}`;
+  assert.equal(sharedSlipSchema.parse({ ...shared, url: extended }).url, extended);
+  assert.equal(sharedSlipSchema.safeParse({ ...shared, url: extended + '1' }).success, false);
 });
 test('public access permits anonymous published sharing and custom image numbering under address budgets', async () => {
   const off = async () => ({ tier: 'full', signedIn: false, mode: 'off' });

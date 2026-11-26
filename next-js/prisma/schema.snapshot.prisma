@@ -344,8 +344,8 @@ model DailyBestSlipAppendBatch {
   publicationId String               @db.Char(64)
   hourAt        DateTime             @db.DateTime(3)
   publishedAt   DateTime             @db.DateTime(3)
-  firstRank     Int                  @db.UnsignedTinyInt
-  count         Int                  @db.UnsignedTinyInt
+  firstRank     Int                  @db.UnsignedInt
+  count         Int                  @db.UnsignedInt
   bodyJson      Json
   integrity     String               @db.Char(64)
   publication   DailySlipPublication @relation(fields: [publicationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
@@ -360,7 +360,7 @@ model PublishedSlip {
   id            String               @id @db.Char(64)
   publicationId String               @db.Char(64)
   appendBatchId String?              @db.Char(64)
-  rank          Int                  @db.UnsignedTinyInt
+  rank          Int                  @db.UnsignedInt
   snapshotJson  Json
   integrity     String               @db.Char(64)
   publication   DailySlipPublication @relation(fields: [publicationId], references: [id], onDelete: Restrict, onUpdate: Restrict)

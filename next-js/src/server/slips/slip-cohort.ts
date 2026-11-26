@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import { calendarRules, getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock } from "../../domain/calendar.ts";
+import { addReportingDays, calendarRules, getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock, type ReportingDate } from "../../domain/calendar.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { feedQueryRules, getFeedToday, maximumCompetitionScope, resolveFeedDates, type FeedParameters } from "../../domain/feed-query.ts";
 import { storedMatchFeedRecordSchema, type StoredMatchFeedRecord } from "../../domain/match-feed.ts";
@@ -22,9 +22,12 @@ import { readFeaturedSlipSelections } from "./best-slip-recommendations.ts";
 import { storedSlipPricePools } from "./price-read.ts";
 import { storedSlipGoalForecasts } from "./slip-goal-forecast.ts";
 
+export type FeaturedSlipCursor = Readonly<{ kickoffAt: number; fixtureId: string }>;
+
 export type SlipCohortReader = (parameters: FeedParameters,
   context: Readonly<{ locale?: string; primaryBookmakerOnly?: boolean; featured?: boolean; total15?: "include" | "only";
     minimumKickoffLeadMs?: number; includeAdditionalFeaturedGoals?: boolean;
+    automaticPage?: Readonly<{ day: ReportingDate; after?: FeaturedSlipCursor }>;
     additionalGoals?: Readonly<{ keys: readonly AdditionalSlipGoalMarketKey[]; only: boolean }> }>, clock: Clock) => Promise<SlipCohort>;
 
 function preMatchSlipEligibility(asOf: number, leadMs = 0) {
@@ -88,8 +91,20 @@ export function createStoredSlipCohort(options: Readonly<{
       const where = extendedOnly ? extended : hasExtendedGoals ? Prisma.sql`((${sql.where}) OR (${extended}))` : sql.where;
       // Expired rows can still be scheduled in storage. Exclude them before counting toward the decision cohort.
       const eligibility = preMatchSlipEligibility(asOf, context.minimumKickoffLeadMs);
-      const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT f.id ${sql.joins} ${goals} ${sql.searchJoin} WHERE (${where}) AND ${eligibility}
-        ORDER BY ${sql.order} LIMIT ${slipCohortRules.maximumRecords + 1}`);
+      const automatic = featured ? context.automaticPage : undefined;
+      const after = automatic?.after;
+      const cursor = after ? Prisma.sql`AND (f.kickoff > ${new Date(after.kickoffAt)}
+        OR (f.kickoff = ${new Date(after.kickoffAt)} AND f.id > ${after.fixtureId}))` : Prisma.empty;
+      // Skip allocated fixtures before the page limit. An adjacent cycle can retain a rescheduled fixture.
+      const unused = automatic ? Prisma.sql`AND NOT EXISTS (
+        SELECT 1 FROM PublishedSlipLeg leg JOIN PublishedSlip slip ON slip.id=leg.slipId
+        JOIN DailySlipPublication publication ON publication.id=slip.publicationId
+        WHERE leg.fixtureId=f.id AND publication.eatDate BETWEEN ${new Date(`${addReportingDays(automatic.day, -1)}T00:00:00Z`)}
+          AND ${new Date(`${addReportingDays(automatic.day, 1)}T00:00:00Z`)})` : Prisma.empty;
+      const order = automatic ? Prisma.sql`f.kickoff ASC, f.id ASC` : sql.order;
+      const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT f.id ${sql.joins} ${goals} ${sql.searchJoin}
+        WHERE (${where}) AND ${eligibility} ${cursor} ${unused}
+        ORDER BY ${order} LIMIT ${slipCohortRules.maximumRecords + 1}`);
       if (rows.length > slipCohortRules.maximumRecords + 1 || new Set(rows.map((row) => row.id)).size !== rows.length) {
         throw new MatchFeedError("unavailable");
       }

@@ -5,7 +5,7 @@ import { BestSlipCard } from "@/components/slips/best-slip-card";
 import { TextLink } from "@/components/ui/controls";
 import { Stack } from "@/components/ui/layout";
 import { bestSlipsQueryRules } from "@/domain/best-slips-query";
-import { bestSlipsRules } from "@/domain/best-slips";
+import { parseBestSlipPublicRank } from "@/domain/best-slip-odds-bands";
 import { parseReportingDate } from "@/domain/calendar";
 import { bestSlipsHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
@@ -19,12 +19,13 @@ export function createPublicBestSlipRoute({ read = readPublicBestSlipDay, access
     const { locale, day, rank } = await params;
     let date;
     try { date = parseReportingDate(day); } catch { notFound(); }
-    if (!/^[1-9]\d{0,2}$/u.test(rank) || Number(rank) > bestSlipsRules.count) notFound();
-    const query = { period: "custom", from: date, to: date, status: "all", page: Math.ceil(Number(rank) / bestSlipsQueryRules.pageSize) } as const;
+    const publicRank = parseBestSlipPublicRank(rank);
+    if (publicRank === null) notFound();
+    const query = { period: "custom", from: date, to: date, status: "all", rank: publicRank, page: Math.ceil(publicRank / bestSlipsQueryRules.pageSize) } as const;
     const initial = await access();
     let result = await read(initial, query, locale), viewer = await access();
     if (initial.tier !== viewer.tier) { result = await read(viewer, query, locale); viewer = await access(); }
-    const view = gateBestSlips(result, viewer).slips.find((slip) => slip.rank === Number(rank));
+    const view = gateBestSlips(result, viewer).slips.find((slip) => slip.rank === publicRank);
     if (!view) notFound();
     return <PublicShell locale={locale} current="best-slips" app compact><Stack $gap="md">
       <BestSlipCard view={view} day={day} locale={locale} signedIn={viewer.signedIn} />

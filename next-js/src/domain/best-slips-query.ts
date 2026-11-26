@@ -1,8 +1,7 @@
 import { addReportingDays, parseReportingDate, validateReportingDateRange, type ReportingDate } from "./calendar.ts";
-import { bestSlipsRules } from "./best-slips.ts";
 import { slipPageSize } from "./slip-pagination.ts";
 import { formatProbabilityValue, parseProbabilityValue } from "./feed-query.ts";
-import { bestSlipOddsBands, defaultBestSlipOddsBand, type BestSlipOddsBand } from "./best-slip-odds-bands.ts";
+import { bestSlipOddsBands, defaultBestSlipOddsBand, parseBestSlipPublicRank, type BestSlipOddsBand } from "./best-slip-odds-bands.ts";
 
 export const bestSlipsPeriods = ["today", "yesterday", "tomorrow", "last3", "last7", "last30", "next3", "next7", "next30", "all", "custom"] as const;
 export const bestSlipsStatuses = ["all", "won", "lost", "pending", "void", "cancelled"] as const;
@@ -57,12 +56,12 @@ export function resolveBestSlipsDates(query: BestSlipsQuery, today: ReportingDat
 
 /** Public continuation identity contains only a publication date and its original rank. */
 export function parseBestSlipsCursor(value: string): Readonly<{ day: ReportingDate; rank: number }> {
-  const match = /^(\d{4}-\d{2}-\d{2}):([1-9]\d{0,2})$/u.exec(value);
+  const match = /^(\d{4}-\d{2}-\d{2}):([1-9]\d{0,10})$/u.exec(value);
   if (!match) return fail("invalid-query");
   let day: ReportingDate;
   try { day = parseReportingDate(match[1]); } catch { return fail("invalid-query"); }
-  const rank = Number(match[2]);
-  if (rank > bestSlipsRules.count) return fail("invalid-query");
+  const rank = parseBestSlipPublicRank(match[2]!);
+  if (rank === null) return fail("invalid-query");
   return { day, rank };
 }
 

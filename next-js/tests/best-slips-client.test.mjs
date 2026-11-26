@@ -135,6 +135,19 @@ test('equivalent explicit date ranges can reuse a complete cohort, while unrelat
   assert.equal(findBestSlipsSnapshot(emptyCache(source), source, true, query({ period: 'tomorrow' })), null);
 });
 
+test('a midnight handoff cohort cannot fill an exact-date view or survive a post-handoff observation', () => {
+  const source = daily();
+  const at = (time) => Date.parse(`${day}T${time}:00+03:00`);
+  const current = query(), custom = query({ period: 'custom', from: day, to: day });
+  const overlap = { ...source, summary: { from: day, to: day, asOf: at('01:00'), statistics: source.statistics } };
+  assert.notEqual(bestSlipsRangeKey(current, day, at('01:00')), bestSlipsRangeKey(custom, day, at('01:00')));
+  assert.equal(bestSlipsRangeKey(current, day, at('03:00')), bestSlipsRangeKey(custom, day, at('03:00')));
+  assert.equal(findBestSlipsSnapshot(emptyCache(overlap), overlap, true, custom), null);
+  const after = { ...page(source, custom), summary: { ...overlap.summary, asOf: at('03:00') } };
+  const cache = rememberBestSlipsSnapshot(emptyCache(overlap), overlap, custom, after);
+  assert.equal(findBestSlipsSnapshot(cache, overlap, true, current).data.summary.asOf, at('03:00'));
+});
+
 test('snapshot reuse keeps different probability and match-count denominators isolated', () => {
   const source = daily(), narrow = query({ probMin: 80, matchesMax: 2 });
   const cache = rememberBestSlipsSnapshot(emptyCache(source), source, narrow, page(source, narrow));

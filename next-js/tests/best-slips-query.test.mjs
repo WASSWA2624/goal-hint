@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseReportingDate } from '../src/domain/calendar.ts';
+import { bestSlipBandRank, bestSlipOddsBands, bestSlipPublicRank, maximumBestSlipLocalRank, maximumBestSlipPublicRank } from '../src/domain/best-slip-odds-bands.ts';
 import { BestSlipsQueryError, bestSlipsPageSearch, bestSlipsQueryRules, defaultBestSlipsQuery, matchesBestSlipsRanges,
   parseBestSlipsQuery, resolveBestSlipsDates, selectBestSlipsDates, selectSlipSummaryResult, serializeBestSlipsQuery } from '../src/domain/best-slips-query.ts';
 
@@ -76,10 +77,27 @@ test('inclusive average probability and match ranges survive deep links and outc
 test('All dates cursors retain within-publication ranks and reject arbitrary cursor data', () => {
   const query = parseBestSlipsQuery({ period: 'all', status: 'pending', page: '2', cursor: '2026-10-28:120' }, today);
   assert.deepEqual(parseBestSlipsQuery(serializeBestSlipsQuery(query), today), query);
-  for (const cursor of ['2026-10-28:0', '2026-10-28:121', '2026-02-30:3', '2026-10-28:1;DROP TABLE', '2026-10-28:01']) {
+  for (const rank of [121, 1000, maximumBestSlipPublicRank]) {
+    assert.equal(parseBestSlipsQuery({ period: 'all', cursor: `2026-10-28:${rank}` }, today).cursor, `2026-10-28:${rank}`);
+  }
+  for (const cursor of ['2026-10-28:0', `2026-10-28:${maximumBestSlipPublicRank + 1}`, '2026-02-30:3', '2026-10-28:1;DROP TABLE', '2026-10-28:01']) {
     assert.throws(() => parseBestSlipsQuery({ period: 'all', cursor }, today), BestSlipsQueryError);
   }
   assert.throws(() => parseBestSlipsQuery({ period: 'today', cursor: '2026-10-28:1' }, today), BestSlipsQueryError);
+});
+
+test('extended band ranks decode without moving or colliding with any original address', () => {
+  const ranks = new Set();
+  for (const [index, { id: band }] of bestSlipOddsBands.entries()) {
+    for (const rank of [...Array.from({ length: 200 }, (_, offset) => offset + 1), maximumBestSlipLocalRank]) {
+      const address = bestSlipPublicRank(band, rank);
+      if (rank <= 20) assert.equal(address, index * 20 + rank);
+      else assert.ok(address > 120);
+      assert.ok(!ranks.has(address));
+      ranks.add(address);
+      assert.deepEqual(bestSlipBandRank(address), { band, rank });
+    }
+  }
 });
 
 test('the date picker keeps the filters, clears the archive cursor and links to absolute publication dates', () => {

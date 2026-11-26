@@ -3,6 +3,7 @@ import { publicPolicy } from "./public-policy.ts";
 import { slipSnapshotRules, slipSnapshotSchema } from "./slip-snapshot.ts";
 import { modelIndependentSlip, type BuiltSlip } from "./slip-builder.ts";
 import type { SlipStatus } from "./slip-status.ts";
+import { parseBestSlipPublicRank } from "./best-slip-odds-bands.ts";
 
 export type SlipSharePresentation = Readonly<{
   status?: SlipStatus;
@@ -42,8 +43,9 @@ export const sharedSlipSchema = z.strictObject({
 }).refine((value) => {
   if (value.url === sharedSlipUrl(value.id)) return true;
   const url = new URL(value.url);
+  const rank = /^\/en\/best-slips\/\d{4}-\d{2}-\d{2}\/(\d+)$/u.exec(url.pathname)?.[1];
   return url.origin === publicPolicy.origin && !url.username && !url.password && !url.search && !url.hash
-    && /^\/en\/best-slips\/\d{4}-\d{2}-\d{2}\/[1-9]\d{0,2}$/u.test(url.pathname);
+    && rank !== undefined && parseBestSlipPublicRank(rank) !== null;
 }, "The public slip URL must identify a publication.")
   .transform((value): SharedSlip => ({ id: value.id, url: value.url, createdAt: value.createdAt, slip: value.slip as BuiltSlip,
     ...(value.number !== undefined ? { number: value.number } : {}), ...(value.status !== undefined ? { status: value.status } : {}),

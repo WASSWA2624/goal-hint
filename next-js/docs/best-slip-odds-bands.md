@@ -13,19 +13,21 @@ the outcome filter and pagination. All dates uses bounded archive traversal and
 reports complete-range totals only when the read can establish them. Empty states
 name the selected band.
 
-Current automatic publication checks at midnight and every 30 minutes in
-Kampala. Each band holds up to ten slips. Every leg must have a kickoff on that
-day at least 30 minutes away and a current exact featured price. All legs of a
-slip share a verified bookmaker, and one fixture can be allocated to one slip
-across the daily bands. Ranking uses the original pick probabilities, exact
-combined odds, match count and kickoff timing. Cards retain the arithmetic
+Automatic publication starts at midnight and checks every 30 minutes in
+Kampala. Each dated set covers 03:00 to the next 03:00. The Today view can also
+show still-actionable slips from the closing set during the first three hours.
+Each new leg requires at least 30 minutes before kickoff and a current exact
+featured price. All legs share a verified bookmaker. Fixture allocation spans
+all six bands, and each set grows with its qualified fixture pool. The worker
+searches nearby kickoff groups in order and ranks qualified combinations by a
+conservative whole-slip probability bound and constituent risk. Cards retain the arithmetic
 average pick probability and any qualified whole-slip win probability already
 in the archive. Original result corrections follow the sealed pick, even if
 the fixture was later rescheduled.
 
-Persisted band IDs and canonical ranks remain stable. Rank links reserve twenty
-positions per band. Older banded publications can still contain twenty slips,
-and old unbanded daily publications can contain up to one hundred. Adjacent
+Persisted band IDs and canonical ranks remain stable. Each band keeps its
+original twenty public rank addresses. Additional ranks follow the reserved
+addresses. Old unbanded daily publications can contain up to one hundred. Adjacent
 bands continue to surface older boundary quotes, including 100.00. The new
 migration and hosted qualification requirements are covered in the
 [publication runbook](daily-slip-publications.md).

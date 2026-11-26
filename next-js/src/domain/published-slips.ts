@@ -1,11 +1,10 @@
 import type { ReportingDate } from "./calendar.ts";
 import type { SlipResultView } from "./slip-snapshot.ts";
 import type { SlipPerformanceSummary } from "./slip-performance.ts";
-import { bestSlipsRules } from "./best-slips.ts";
 import type { BestSlipOddsBand } from "./best-slip-odds-bands.ts";
 import type { PredictionResult } from "./performance-summary.ts";
 
-export const publishedSlipRules = Object.freeze({ maximumDays: 31, maximumDailySlips: bestSlipsRules.count, maximumPageSize: 50, pageSize: 10 });
+export const publishedSlipRules = Object.freeze({ maximumDays: 31, maximumPageSize: 50, pageSize: 10 });
 export type PublishedSlipView = SlipResultView & Readonly<{
   publicationDay: ReportingDate; publishedAt: string; modelId?: string; rank: number; estimatedProbability?: number;
 }>;

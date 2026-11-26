@@ -2,6 +2,7 @@ import type { SlipsBrowseResult } from "./best-slips.ts";
 import { bestSlipsQueryRules, bestSlipsRangeFields, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "./best-slips-query.ts";
 import { slipStatusCategory } from "./slip-status.ts";
 import { defaultBestSlipOddsBand } from "./best-slip-odds-bands.ts";
+import { bestSlipActivePublicationDays } from "./best-slip-publication-hour.ts";
 
 export type BestSlipsSnapshot = Readonly<{ query: BestSlipsQuery; data: SlipsBrowseResult }>;
 export type BestSlipsBrowseCache = Readonly<{
@@ -16,9 +17,10 @@ export function bestSlipsStatisticsMatch(left: SlipsBrowseResult, right: SlipsBr
     .every((key) => (a[key] ?? 0) === (b[key] ?? 0));
 }
 
-export function bestSlipsRangeKey(query: BestSlipsQuery, day: SlipsBrowseResult["day"]): string {
+export function bestSlipsRangeKey(query: BestSlipsQuery, day: SlipsBrowseResult["day"], asOf?: number): string {
   const dates = resolveBestSlipsDates(query, day);
-  return [dates.from ?? "all", dates.to ?? "all", query.oddsBand ?? defaultBestSlipOddsBand,
+  const active = query.period === "today" && asOf !== undefined ? bestSlipActivePublicationDays(asOf) : [];
+  return [active.length === 2 && active[1] === day ? "overlap" : "", dates.from ?? "all", dates.to ?? "all", query.oddsBand ?? defaultBestSlipOddsBand,
     ...bestSlipsRangeFields.map((field) => query[field] ?? "")].join(":");
 }
 
@@ -27,7 +29,7 @@ export function projectBestSlipsSnapshot(snapshot: BestSlipsSnapshot, query: Bes
   const { data, query: original } = snapshot, browse = data.browse;
   if (original.summary !== query.summary || data.state !== "generated" || original.status !== "all" || original.page !== 1 || original.cursor || query.cursor
     || original.period === "all" || query.period === "all" || !data.statistics || data.statistics.total !== data.slips.length
-    || bestSlipsRangeKey(original, data.day) !== bestSlipsRangeKey(query, data.day)
+    || bestSlipsRangeKey(original, data.day, data.summary?.asOf) !== bestSlipsRangeKey(query, data.day, data.summary?.asOf)
     || browse && (browse.total === null || browse.total !== data.slips.length || browse.hasMore)) return null;
   const slips = data.slips.filter((view) => query.status === "all"
     || (view.status ? slipStatusCategory(view.status) : view.outcome ?? "pending") === query.status);
@@ -56,9 +58,11 @@ export function findBestSlipsSnapshot(cache: BestSlipsBrowseCache, source: Slips
   const seed = source.entitled === entitled && source.state === "generated" ? [{
     query: source.browse?.query ?? { period: "today" as const, status: "all" as const, page: 1 }, data: source,
   }] : [];
-  const range = bestSlipsRangeKey(query, source.day), key = serializeBestSlipsQuery(query).toString();
+  const asOf = [source, ...snapshots.map(({ data }) => data)].reduce<number | undefined>((latest, data) =>
+    data.summary?.asOf === undefined ? latest : Math.max(latest ?? data.summary.asOf, data.summary.asOf), undefined);
+  const range = bestSlipsRangeKey(query, source.day, asOf), key = serializeBestSlipsQuery(query).toString();
   const candidates = [...snapshots, ...seed].filter((item) => item.data.day === source.day
-    && bestSlipsRangeKey(item.query, source.day) === range);
+    && bestSlipsRangeKey(item.query, source.day, item.data.summary?.asOf ?? asOf) === range);
   const latest = candidates[0];
   if (!latest) return null;
   for (const snapshot of candidates) {

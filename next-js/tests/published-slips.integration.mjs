@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { getReportingDate, addReportingDays, utcInstantFromEpochMilliseconds } from '../src/domain/calendar.ts';
+import { getReportingDate, getReportingDayBounds, addReportingDays, utcInstantFromEpochMilliseconds } from '../src/domain/calendar.ts';
 import { defaultBestSlipsQuery } from '../src/domain/best-slips-query.ts';
-import { bestSlipPublicationHour } from '../src/domain/best-slip-publication-hour.ts';
+import { bestSlipFixtureWindow, bestSlipPublicationHour } from '../src/domain/best-slip-publication-hour.ts';
 import { createPublishedSlips, slipPublicationIdentity } from '../src/server/slips/published-slips.ts';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
 import { liveRecord } from './helpers/live-refresh-fixtures.mjs';
@@ -56,6 +56,7 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
   await root.query(await migration('20261122180000_daily_best_slip_combinations'));
   await root.query(await migration('20261122190000_hourly_best_slip_appends'));
   await root.query(await migration('20261124120000_half_hour_best_slip_appends'));
+  await root.query(await migration('20261126120000_operational_best_slip_windows'));
   assert.deepEqual(await root.query('SELECT bodyJson,integrity FROM DailySlipPublication'),before);
   assert.equal((await root.query("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('SavedSlip','SavedSlipFixture')")).length,0);
   assert.equal(await database.query(tx=>tx.slipConfiguration.count()),1);
@@ -65,10 +66,11 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
   await root.query("GRANT SELECT ON goal_hint_test.FootballFixture TO 'paid_application'@'127.0.0.1'");
   await root.query("GRANT SELECT ON goal_hint_test.FixtureOddsState TO 'paid_application'@'127.0.0.1'");
   // Keep the genuine transactions and role, with a deterministic database clock inside a :30 slot.
+  let decisionAt = at;
   const clockedDatabase = { transaction: (run, options) => database.transaction(tx => run(new Proxy(tx, {
     get(target, key, receiver) {
       if (key === '$queryRaw') return (query, ...values) => Array.isArray(query) && query.join('').includes('UTC_TIMESTAMP(3) AS at')
-        ? Promise.resolve([{ at: new Date(at) }]) : target.$queryRaw(query, ...values);
+        ? Promise.resolve([{ at: new Date(decisionAt) }]) : target.$queryRaw(query, ...values);
       return Reflect.get(target, key, receiver);
     },
   })), options) };
@@ -78,8 +80,15 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
   for(const table of ['DailySlipPublication','PublishedSlip','PublishedSlipLeg','SharedSlip']) await assert.rejects(root.query(`DELETE FROM ${table}`),/append-only|permanent/);
   const kickoffAt=Date.parse(`${day}T20:59:00Z`);
   const probability = 0.68;
+  const scheduledFixture = async () => {
+    const occurrence = { fixtureId: randomUUID(), cycleId: randomUUID(), revisionId: randomUUID() };
+    await root.query('INSERT INTO FootballFixture(id) VALUES (?)', [occurrence.fixtureId]);
+    await root.query('INSERT INTO PredictionSet(id,cycleId,fixtureId) VALUES (?,?,?)', [occurrence.revisionId, occurrence.cycleId, occurrence.fixtureId]);
+    return occurrence;
+  };
+  const scheduled = await scheduledFixture();
   const current={...slip,averageProbability:probability,estimatedProbability:probability,
-    selections:[pricedEditorialSelection(1,{odds:'4.00',kickoffAt,at,fixtureId,cycleId,revisionId,probability})]};
+    selections:[pricedEditorialSelection(1,{odds:'4.00',kickoffAt,at,...scheduled,probability})]};
   const input={day,slips:[current],searchLimited:false,partialCoverage:false,model:{...model,estimate:()=>probability},verifyModel:()=>true,verifyPublicOdds:()=>true};
   const other = { fixtureId: randomUUID(), cycleId: randomUUID(), revisionId: randomUUID() };
   await root.query('INSERT INTO FootballFixture(id) VALUES (?)', [other.fixtureId]);
@@ -92,7 +101,7 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
   assert.deepEqual((await Promise.all([store.publish(input),store.publish(input)])).sort(),['already-published','published']);
   assert.equal((await store.browse(defaultBestSlipsQuery(),day)).slips.length,1);
   assert.equal((await store.history({from:day,to:day,page:1,pageSize:10})).records[0].outcome,'lost');
-  const high={...current,totalOdds:'7.00',selections:[pricedEditorialSelection(1,{odds:'7.00',kickoffAt,at,fixtureId,cycleId,revisionId,probability})]};
+  const high={...current,totalOdds:'7.00',selections:[pricedEditorialSelection(1,{odds:'7.00',kickoffAt,at,...scheduled,probability})]};
   await assert.rejects(() => store.publish({...input,oddsBand:'5-10',slips:[high]}));
   assert.equal((await store.day(day,false,'5-10')).slips.length,0);
 
@@ -127,6 +136,35 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
     ['already-published', 'no-qualifying']);
   assert.equal((await root.query('SELECT fixtureId FROM PublishedSlipLeg WHERE fixtureId=?', [shared.fixtureId])).length, 1);
   assert.equal(await database.query(tx => tx.dailyBestSlipAppendBatch.count()), 2);
+
+  const additions = [];
+  decisionAt += 1_800_000;
+  for (let index = 0; index < 20; index++) {
+    additions.push({ ...additionalSlip, id: `additional-${index}`, selections: [pricedEditorialSelection(index, {
+      kickoffAt, at: decisionAt, ...await scheduledFixture(), probability,
+    })] });
+  }
+  const unlimited = { ...hourly, hourAt: bestSlipPublicationHour(decisionAt).hourAt, slips: additions };
+  assert.deepEqual(await store.append(unlimited), { status: 'published', appended: 20 });
+  assert.equal((await store.hourlyState(day)).counts.get('1.5-5'), 22);
+  assert.equal((await store.day(day, false, '1.5-5')).slips.at(-1).rank, 127);
+  assert.deepEqual((await store.day(day, false, '1.5-5')).slips.slice(0, 2), entries);
+
+  // Two workers saw opposite sides of a reschedule at the midnight handoff.
+  const nextDay = addReportingDays(day, 2), previousDay = addReportingDays(nextDay, -1);
+  const crossover = await scheduledFixture();
+  decisionAt = getReportingDayBounds(nextDay).startInclusive + 60_000;
+  const { startInclusive } = bestSlipFixtureWindow(nextDay), hourAt = bestSlipPublicationHour(decisionAt).hourAt;
+  const adjacentClaims = [[previousDay, startInclusive - 1], [nextDay, startInclusive]].map(([publicationDay, kickoff]) => ({
+    ...hourly, day: publicationDay, hourAt, slips: [{ ...additionalSlip, id: `handoff-${publicationDay}`,
+      selections: [pricedEditorialSelection(27, { kickoffAt: kickoff, at: decisionAt, ...crossover, probability })] }],
+  }));
+  const concurrent = await Promise.all(adjacentClaims.map(input => store.append(input)));
+  assert.equal(concurrent.filter(({ status }) => status === 'published').length, 1);
+  assert.ok(concurrent.some(({ status }) => status === 'no-qualifying' || status === 'stale'));
+  const retried = await Promise.all(adjacentClaims.map(input => store.append(input)));
+  assert.deepEqual(retried.map(({ status }) => status).sort(), ['already-published', 'no-qualifying']);
+  assert.equal((await root.query('SELECT fixtureId FROM PublishedSlipLeg WHERE fixtureId=?', [crossover.fixtureId])).length, 1);
 
   await assert.rejects(root.query('DELETE FROM DailyBestSlipAppendBatch'), /batches are immutable/u);
   await assert.rejects(root.query('DELETE FROM DailyBestSlipCombination'), /membership is immutable/u);
