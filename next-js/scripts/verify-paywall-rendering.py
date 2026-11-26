@@ -101,6 +101,7 @@ def main():
             checks = 0
             headers = {"x-test-viewer": viewer}
             full = viewer in FULL_VIEWERS
+            builder_path = "/en/slips?build=1&markets=match-result"
             for name, scenario in scenarios.items():
                 detail = scenario["detail"]
                 fixture_id, path = detail["fixture"]["fixtureId"], detail["route"]["path"]
@@ -144,11 +145,9 @@ def main():
                                 if not full and not free_fixture and not forecastless:
                                     assert "return=%2Fen%2Fmatches%2F" in text and "checkout=1" in text and "Unlock predictions" in text
                             if url.startswith("/en/matches?q=") and not full:
-                                assert 'Subscribers only' in text
                                 assert re.search(r'<option(?=[^>]*value="probability-desc")(?=[^>]*disabled)[^>]*>', text)
-                                # The card element's state, not the stylesheet's selectors.
-                                states = set(re.findall(r'<div\b[^>]*\bdata-pick-state="([a-z]+)"', text))
-                                assert ("subscriber" in states) == (not free_fixture and not forecastless), (viewer, url, "locked preview state")
+                                unlock_card = re.search(r'<a\b[^>]*\bdata-unlock-card(?:\s|=)', text)
+                                assert bool(unlock_card) == (not free_fixture and not forecastless), (viewer, url, "locked preview state")
                                 if not free_fixture:
                                     assert 'data-fixture-id=' in text, (viewer, url, "unfinished public match preview")
                             if not full and not free_fixture and not url.startswith("/en/matches?q="):
@@ -184,7 +183,7 @@ def main():
                         and safe_query.get("sort") == [sort["by"]] and direction == [sort["direction"]]), (
                             viewer, oracle, "safe redirect retains public page defaults")
                     checks += 2
-                slips = request(server.origin, "/en/slips?build=1", headers=headers)
+                slips = request(server.origin, builder_path, headers=headers)
                 assert slips.status == 200 and not re.search(SENTINELS, slips.text)
                 builder = document(slips.text).root
                 actions = builder.nodes(attr="data-criteria-actions")
@@ -205,11 +204,11 @@ def main():
                         assert parse_qs(destination.query).get("view") == ["login"], (viewer, "Slip Builder guests open login")
                 checks += 1
             else:
-                slips = request(server.origin, "/en/slips?build=1", headers=headers)
+                slips = request(server.origin, builder_path, headers=headers)
                 assert slips.status == 200 and 'data-slip-state="generated"' in slips.text and "SENTINEL-BUILDER-RESULT" in slips.text, viewer
                 assert document(slips.text).root.nodes("button", "data-slip-access-action")
                 checks += 1
-            flight_build = request(server.origin, "/en/slips?build=1&_rsc", headers={**headers, "RSC": "1"})
+            flight_build = request(server.origin, builder_path + "&_rsc", headers={**headers, "RSC": "1"})
             assert flight_build.status == 200 and ("SENTINEL-BUILDER-RESULT" in flight_build.text) == full, viewer
             checks += 1
             for path, extra in [("/en/best-slips", {}), ("/en/best-slips?_rsc", {"RSC": "1"}), ("/api/best-slips", {})]:

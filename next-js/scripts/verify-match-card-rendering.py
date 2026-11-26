@@ -187,11 +187,11 @@ def verify_feed_cards(origin):
     match("Score after 90 minutes", cards["feed-incomplete"])
     no_match("data-shootout-score", cards["feed-incomplete"])
     match(r'data-match-status="correct"[^>]*>[\s\S]*?data-pick-value[^>]*>Won FT</span>', cards["feed-missing-odds"])
-    for fixture_id, route, view in [("feed-gated", "/en/account", "login"),
-            ("feed-guest-completed", "/en/account", "login"), ("feed-expired", "/en/subscribe", None)]:
+    for fixture_id, route, view in [("feed-gated", "/en/account", "login"), ("feed-expired", "/en/subscribe", None)]:
         body = cards[fixture_id]
         params = {"view": view} if view else {}
         params["return"] = f"/en/matches/{fixture_id}/example-home-v-away"
+        params["checkout"] = "1"
         target = f"{route}?{urlencode(params)}"
         links = re.findall(r'<a\b([^>]*)>([\s\S]*?)</a>', body)
         assert links and all(unescape(match(r'\bhref="([^"]+)"', attrs).group(1)) == target for attrs, _ in links), (
@@ -202,8 +202,11 @@ def verify_feed_cards(origin):
         assert len(unlocks) == 1, f"{fixture_id}: one visible unlock button"
         match(r'<svg\b[^>]*aria-hidden="true"[^>]*>[\s\S]*?</svg>[\s\S]*?>Unlock predictions</span>', unlocks[0])
         no_match(r'data-pick-selection=|data-pick-probability=|data-forecast-source=|data-prediction="home-win"', body)
-    full_access_link = match(r'<a\b(?=[^>]*\bdata-match-open)(?=[^>]*\bhref="([^"]+)")[^>]*>', cards["feed-live"])
-    assert full_access_link.group(1) == "/en/matches/feed-live/example-home-v-away"
+    for fixture_id in ("feed-live", "feed-guest-completed", "feed-upcoming"):
+        details_link = match(r'<a\b(?=[^>]*\bdata-match-open)(?=[^>]*\bhref="([^"]+)")[^>]*>', cards[fixture_id])
+        assert details_link.group(1) == f"/en/matches/{fixture_id}/example-home-v-away"
+        no_match(r'\bdata-mobile-locked=|\bdata-unlock-card=', tags[fixture_id] + cards[fixture_id])
+    match(r'data-pick-selection', cards["feed-guest-completed"])
     match(r'data-match-status="delayed"[^>]*>[\s\S]*?data-pick-value[^>]*>Delayed</span>', cards["feed-overdue"])
     match(r'data-match-status="upcoming"', cards["feed-upcoming"])
     no_match(r'data-score-(?:home|away)|Final score:|Live score:', cards["feed-upcoming"])
