@@ -84,13 +84,19 @@ Production HTTPS served the expected build. Login, Matches, the guest session en
 
 The reported mobile Chrome error appeared while the earlier account menu remained open. Staging recorded HTTP 200 for both logout requests in the reported time window. The browser-side error was unavailable. The updated flow closes the menu on submit and uses the server's form redirect after revoking the session.
 
-On 26 November 2026, staging activated `e43ec537` from a clean, checksummed ZIP based on the active Matches and Slips release `4de9046f`. MariaDB verified all 94 migrations with zero pending. Login, Matches, Best Slips and the guest session endpoint returned HTTP 200 with `noindex`. The pages served build `-uCqH9D4_dXyawOfxyJ-I`. The previous compatible staging release is `4de9046f`, which also runs in production pending review of the follow-up on the reported phone.
+On 26 November 2026, staging activated `e43ec537` from a clean, checksummed ZIP based on the active Matches and Slips release `4de9046f`. MariaDB verified all 94 migrations with zero pending. Login, Matches, Best Slips and the guest session endpoint returned HTTP 200 with `noindex`. The pages served build `-uCqH9D4_dXyawOfxyJ-I`. The previous compatible staging release is `4de9046f`.
 
 On hosted staging, touch Chrome without a native bridge closed the header menu while the synthetic account's single form POST was held. The server then returned HTTP 303. Matches opened with the guest Login control and the old session cookie resolved to an anonymous session.
 
 The combined release passed 144 focused tests, type checking, lint for the changed files and a production-mode build. All 19 isolated browser journey checks passed, including menu closure before the held response, rejection of the old session, another tab updating to the signed-out state and the restricted Back to Login redirect. Focused touch Chrome checks covered both themes and failing or stalled native alert cleanup.
 
 The release ZIP SHA-256 is `65f52770599f9cb59c30d068d3bd024fca8e335ac813fbbc8035689df6c33eaf`.
+
+## Mobile logout form production verification
+
+On 26 November 2026, the owner confirmed on the affected phone that logout closed the menu and returned to Matches as a guest. Production then activated `e43ec537` directly from the same verified staging ZIP. The migration inventory matched the previous release and MariaDB verified all 94 migrations with zero pending. The previous compatible web release is `4de9046f`.
+
+Production HTTPS served the expected build on Matches, Login, Best Slips and the password reset page. The reset page kept `noindex`, `no-store` and `no-referrer`. The guest session and one-day Matches feed returned HTTP 200. A guest logout form POST returned HTTP 303 to Matches with expired session cookies. Signed-in mobile logout and old-session revocation were verified on staging.
 
 ## Authentication rollout
 
