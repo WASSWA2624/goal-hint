@@ -112,9 +112,19 @@ Local Chromium checks verified the responsive controls in both themes, the deskt
 
 The private candidate ZIP SHA-256 is `246c705750b806b093d4345a6b77e97a1f750905d0541eefdc662e55a1e4daaa`.
 
-Public staging activated the combined release `4de9046f`, which includes the production mobile logout revision. The host verified all 94 required migrations before and after activation. Matches, Slips and Builder returned HTTP 200 with `noindex`. The one-day Matches feed, Slips API and guest session endpoint returned HTTP 200 with JSON. Chromium verified that applying a date updates the Slips calendar numeral and archive URL at 390px and 1440px in dark mode. The combined build, lint and focused account and sharing tests passed. Production promotion awaits owner review.
+Public staging activated the combined release `4de9046f`, which includes the production mobile logout revision. The host verified all 94 required migrations before and after activation. Matches, Slips and Builder returned HTTP 200 with `noindex`. The one-day Matches feed, Slips API and guest session endpoint returned HTTP 200 with JSON. Chromium verified that applying a date updates the Slips calendar numeral and archive URL at 390px and 1440px in dark mode. The combined build, lint and focused account and sharing tests passed.
 
 The public staging release ZIP SHA-256 is `10918c1b83d1ef3cfd6f198b6892d91c6b235a861cb4977ec4b1b073b081c697`.
+
+## Matches and Slips production verification
+
+On 26 November 2026, after owner approval, production activated `4de9046f` from the same checksummed ZIP used on staging. The active build metadata matched across the two environments. Production verified all 94 required MariaDB migrations before and after activation. The previous compatible release `ef1b3663` is retained for rollback.
+
+The public Matches page served the expected build identifier. Matches, Slips and Builder returned HTTP 200, as did the one-day Matches feed, the Slips API and the guest session endpoint. A bounded Builder request returned HTTP 200 and displayed one generated slip.
+
+Production Chromium checks covered both pages at 390px and 1440px in light and dark mode. The date controls, filter labels, performance cards and Matches search placement passed. The browser opened and dismissed the calendar and filter dialogs in light mobile and dark desktop layouts.
+
+Sharing a completed public slip returned HTTP 200 from the production share endpoint. The browser decoded the generated 1080px PNG preview and enabled Download image and Share.
 
 ## Verification limits
 
