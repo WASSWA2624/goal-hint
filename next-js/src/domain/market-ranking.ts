@@ -19,12 +19,18 @@ export function featuredPrediction<T extends ComparableForecastPick>(outcomes: r
 }
 
 const messages = createMessages("en");
+/** Rank upcoming outcomes with a verified price for the exact selection. */
 export function rankFixtureOutcomes(markets: readonly Readonly<{ market: AcceptedMarket; confidence?: ForecastConfidence }>[],
   goalMarkets: readonly (FeaturedGoalMarket & Readonly<{ unrepresentedProbability?: number }>)[],
   prices: PreMatchBookmakerOdds | null, observedOdds?: MarketOddsObservation | null, recommendation?: PublicRecommendation): FeaturedPrediction | null {
+  const preMatchPrices = prices?.kind === "pre-match" ? prices : null;
+  const preMatchObservation = observedOdds?.kind === "pre-match" ? observedOdds : null;
+  const corePrice = (family: MarketFamily, selection: string) => bookmakerMarketPrice(preMatchPrices, family, selection) ??
+    marketOddsPrice(preMatchObservation, family, selection);
   const selected = recommendation?.selected;
   const recommended = selected?.confidence && markets.some(({ market }) => market.family === selected.family && market.source === selected.source &&
-    (market.probabilities as Readonly<Record<string, number>>)[selected.selection] === selected.probability) ? selected : null;
+    (market.probabilities as Readonly<Record<string, number>>)[selected.selection] === selected.probability) &&
+    corePrice(selected.family, selected.selection) !== null ? selected : null;
   const outcomes: (FeaturedPrediction & { confidence?: ForecastConfidence })[] = [];
   for (const family of publicPolicy.markets) {
     if (recommended && family !== recommended.family) continue;
@@ -35,22 +41,23 @@ export function rankFixtureOutcomes(markets: readonly Readonly<{ market: Accepte
     const tied = recommended ? [[recommended.selection, recommended.probability] as const]
       : Object.entries(entry.market.probabilities).filter(([, probability]) => probability === entry.market.selectedProbability);
     for (const [selection, probability] of tied) {
+      const odds = corePrice(family, selection);
+      if (odds === null) continue;
       outcomes.push({ key: family, family, label: messages.text(`market.family.${family}`), code: null, selection,
-        selectionLabel: predictionText(messages, selection), probability, source,
-        odds: bookmakerMarketPrice(prices, family, selection) ??
-          (observedOdds?.kind === "pre-match" ? marketOddsPrice(observedOdds, family, selection) : null), ...(confidence ? { confidence } : {}) });
+        selectionLabel: predictionText(messages, selection), probability, source, odds, ...(confidence ? { confidence } : {}) });
     }
   }
   for (const market of goalMarkets) {
     if (market.source === "market-implied" || market.key === "goal:full-time:totals:total:2.5:binary" || (market.unrepresentedProbability ?? 0) !== 0) continue;
     const source = market.source === "local-poisson" ? "local-engine" : "ai";
     const confidence = forecastSourceConfidence(source);
-    const best = featuredPrediction(market.selections.map((selection): FeaturedPrediction & { confidence?: ForecastConfidence } => ({ key: market.key,
-      family: "total-goals", label: market.label,
-      code: market.code, selection: selection.key, selectionLabel: selection.label,
-      probability: selection.settlementProbabilities?.win ?? selection.probability,
-      source, odds: bookmakerGoalPrice(prices, market.key, selection.key), ...(confidence ? { confidence } : {}) })));
-    if (best) outcomes.push(best);
+    for (const selection of market.selections) {
+      const odds = bookmakerGoalPrice(preMatchPrices, market.key, selection.key);
+      if (odds === null) continue;
+      outcomes.push({ key: market.key, family: "total-goals", label: market.label, code: market.code,
+        selection: selection.key, selectionLabel: selection.label, probability: selection.settlementProbabilities?.win ?? selection.probability,
+        source, odds, ...(confidence ? { confidence } : {}) });
+    }
   }
   const best = featuredPrediction(outcomes);
   if (!best) return null;

@@ -1,6 +1,7 @@
 import type { InsightResult } from "./match-insights.ts";
 import type { MarketCategory } from "./match-view.ts";
 import type { MatchDetailResponse } from "./match-detail.ts";
+import { getPublicationDeadline } from "./calendar.ts";
 import { fullDetailSnapshot } from "./detail-snapshot.ts";
 import { marketSelections, type MarketFamily, type MarketSelection } from "./markets.ts";
 import { publicPolicy } from "./public-policy.ts";
@@ -13,6 +14,7 @@ import { forecastExpectedReturn } from "./forecast-value.ts";
 import { resultFor } from "./match-insight-presentation.ts";
 import { recommendationFamily } from "./recommendation-view.ts";
 import { isFeaturedPickSuppressed } from "./fixture-snapshot.ts";
+import { preMatchReferenceOddsFreshMs } from "./reference-odds.ts";
 
 /**
  * Pure presentation rules for the match-details screen. Every value is read from the stored
@@ -77,6 +79,7 @@ export function selectedDetailPrice(data: MatchDetailResponse, family: MarketFam
 export function featuredFamily(data: MatchDetailResponse): MarketFamily | null {
   if (data.selection === "applicable") {
     if (isFeaturedPickSuppressed(data.fixture)) return null;
+    if (data.fixture.status === "scheduled") return currentFeaturedOutcome(data)?.family ?? null;
     const featured = data.fixture.retrospective?.pick ?? data.fixture.featuredPrediction;
     if (featured) return featured.family;
   }
@@ -93,16 +96,19 @@ export function featuredFamily(data: MatchDetailResponse): MarketFamily | null {
 
 export function currentFeaturedOutcome(data: MatchDetailResponse) {
   const snapshot = fullDetailSnapshot(data);
+  const { fixture, asOf, bookmakerOdds } = data;
   if (data.selection !== "applicable") return null;
-  if (data.fixture.retrospective) return data.fixture.retrospective.pick;
-  if (isFeaturedPickSuppressed(data.fixture)) return null;
-  if (data.fixture.featuredDecisionFrozen) return data.fixture.featuredPrediction ?? null;
-  if (!snapshot || data.fixture.status !== "scheduled") return null;
-  if (data.fixture.featuredPrediction !== undefined && (snapshot.applicability === "current" || snapshot.applicability === "locked"))
-    return data.fixture.featuredPrediction;
-  if (snapshot.applicability !== "current") return null;
-  return rankFixtureOutcomes(snapshot.markets, data.extendedMarkets?.markets ?? [],
-    data.bookmakerOdds?.kind === "pre-match" ? data.bookmakerOdds : null, data.fixture.marketOdds, snapshot.recommendation);
+  if (fixture.retrospective) return fixture.retrospective.pick;
+  if (isFeaturedPickSuppressed(fixture)) return null;
+  if (fixture.featuredDecisionFrozen) return fixture.featuredPrediction ?? null;
+  if (snapshot?.applicability !== "current" || fixture.status !== "scheduled" || fixture.kickoffAt === null ||
+    asOf >= getPublicationDeadline(fixture.kickoffAt)) return null;
+  if (fixture.featuredPrediction !== undefined) return fixture.featuredPrediction?.odds ? fixture.featuredPrediction : null;
+  const fresh = ({ checkedAt }: { checkedAt: number }) => checkedAt <= asOf && asOf - checkedAt <= preMatchReferenceOddsFreshMs;
+  const books = bookmakerOdds?.fixtureId === fixture.fixtureId && bookmakerOdds.kickoffAt === fixture.kickoffAt && fresh(bookmakerOdds)
+    ? bookmakerOdds : null;
+  const observation = fixture.marketOdds && fresh(fixture.marketOdds) ? fixture.marketOdds : null;
+  return rankFixtureOutcomes(snapshot.markets, data.extendedMarkets?.markets ?? [], books, observation, snapshot.recommendation);
 }
 
 export type LiveStanding = "on-track" | "off-track";

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { legacyLocalFirstGoalMarketDefinitions } from "../src/domain/goal-market-definitions.ts";
-import { legacyLocalFeaturedDecisionVersion, localFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion } from "../src/domain/local-featured-decision.ts";
+import { legacyLocalFeaturedDecisionVersion, localFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion,
+  probabilityFirstTieredFeaturedDecisionVersion } from "../src/domain/local-featured-decision.ts";
 import { LEGACY_LOCAL_FIRST_MARKET_REGISTRY_VERSION, LOCAL_FIRST_MARKET_REGISTRY_VERSION } from "../src/domain/market-registry.ts";
 import { marketSelections } from "../src/domain/markets.ts";
 import { compareForecastPicks } from "../src/domain/recommendation.ts";
@@ -199,22 +200,26 @@ test("reviewed replay persists verified evidence and only its owner can reverse 
     await assert.rejects(store.activate({ revisionId: unchangedDelta.id, operationId: "unchanged-policy-delta",
       expectedProjectionRevisionId: revised.id }), denied("no-featured-display-change"));
     assert.deepEqual((await readProjection()).get(fixtureId), active);
-    const { evidence: v3Evidence, result: forecastOnly } = await p.a.query((tx) =>
-      preparePricedNovemberReplay(tx, occurrence, replayAsOf, undefined, localFeaturedDecisionVersion));
+    const current = await p.a.query((tx) => preparePricedNovemberReplay(tx, occurrence, replayAsOf));
+    assert.equal(current.result.featuredDecision.version, localFeaturedDecisionVersion);
+    assert.equal(current.result.featuredDecision.status, "abstained");
+    assert.equal(current.result.selected, null);
+    const { evidence: archivedEvidence, result: forecastOnly } = await p.a.query((tx) =>
+      preparePricedNovemberReplay(tx, occurrence, replayAsOf, undefined, probabilityFirstTieredFeaturedDecisionVersion));
     const covered = await p.a.query((tx) =>
-      preparePricedNovemberReplay(tx, occurrence, replayAsOf, undefined, localFeaturedDecisionVersion, undefined, "counts"));
+      preparePricedNovemberReplay(tx, occurrence, replayAsOf, undefined, probabilityFirstTieredFeaturedDecisionVersion, undefined, "counts"));
     assert.deepEqual(covered.result, forecastOnly);
     assert.ok(covered.diagnostic.counts.validModeledOutcomes > 0);
     assert.equal(forecastOnly.featuredDecision.status, "forecast-only");
     assert.ok(forecastOnly.selected.probability >= 0.6);
     assert.equal(forecastOnly.featuredDecision.quote, undefined);
-    const v3 = await store.stage({ ...stage, ...forecastOnly, replayAsOf, generatedAt: p.now(),
-      teams: [occurrence.homeTeamId, occurrence.awayTeamId], evidenceCutoffAt: v3Evidence.cutoffAt,
-      evidenceHash: v3Evidence.evidenceHash, evidenceReceiptIds: v3Evidence.evidenceReceiptIds });
-    await store.activate({ revisionId: v3.id, operationId: "forecast-only-policy", expectedProjectionRevisionId: revised.id });
-    const v3Projection = (await readProjection()).get(fixtureId);
-    assert.deepEqual(v3Projection?.selected, forecastOnly.selected);
-    assert.deepEqual(v3Projection?.featuredDecision, forecastOnly.featuredDecision);
+    const forecastOnlyRevision = await store.stage({ ...stage, ...forecastOnly, replayAsOf, generatedAt: p.now(),
+      teams: [occurrence.homeTeamId, occurrence.awayTeamId], evidenceCutoffAt: archivedEvidence.cutoffAt,
+      evidenceHash: archivedEvidence.evidenceHash, evidenceReceiptIds: archivedEvidence.evidenceReceiptIds });
+    await store.activate({ revisionId: forecastOnlyRevision.id, operationId: "forecast-only-policy", expectedProjectionRevisionId: revised.id });
+    const forecastOnlyProjection = (await readProjection()).get(fixtureId);
+    assert.deepEqual(forecastOnlyProjection?.selected, forecastOnly.selected);
+    assert.deepEqual(forecastOnlyProjection?.featuredDecision, forecastOnly.featuredDecision);
     await store.rollback({ fixtureId, operationId: "restore-before-forecast-only-policy", activationOperationId: "forecast-only-policy" });
     assert.deepEqual((await readProjection()).get(fixtureId), active);
     assert.deepEqual(await p.history.findRevision(sourceRevisionId), published.revision);

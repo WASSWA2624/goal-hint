@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import mariadb from 'mariadb';
 import { localFirstGoalMarketDefinitions, registeredForecastGoalMarkets } from '../src/domain/goal-market-definitions.ts';
-import { binaryFeaturedSettlement, localFeaturedDecisionVersion } from '../src/domain/local-featured-decision.ts';
+import { binaryFeaturedSettlement, localFeaturedDecisionVersion, probabilityFirstTieredFeaturedDecisionVersion }
+  from '../src/domain/local-featured-decision.ts';
 import { sameCardFixture } from '../src/domain/match-card.ts';
 import { currentFeaturedOutcome } from '../src/domain/match-details.ts';
 import { feedMarketPickId, feedMarketPickIdentity } from '../src/domain/feed-market-picks.ts';
@@ -66,7 +67,7 @@ async function seedFeedReplays(instance, reference, definition, fixtures) {
       const revisionId = resultHash(`feed-replay-batch:${index}`);
       const featuredDecision = abstained
         ? { version: localFeaturedDecisionVersion, status: 'abstained', reason: 'no-local-forecast' }
-        : { ...selected, version: localFeaturedDecisionVersion, status: 'forecast-only', reason: 'no-verified-odds' };
+        : { ...selected, version: probabilityFirstTieredFeaturedDecisionVersion, status: 'forecast-only', reason: 'no-verified-odds' };
       const body = encodeShadowArchive({ fixtureId: id, revisionId, sourceRevisionId: null, cycleId: null,
         kickoffAt: kickoff, scheduleVersion: null, evidenceCutoffAt, generatedAt, activatedAt, markets,
         selected: abstained ? null : selected, featuredDecision,

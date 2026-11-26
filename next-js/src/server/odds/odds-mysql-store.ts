@@ -232,7 +232,9 @@ async function storedBookmakerQuotes(tx: Tx, fixtures: readonly BookmakerFixture
       return { bookmakerId, bookmakerName, offers: snapshots.map(({ id, betId, betName, values, retrievedAt, providerUpdatedAt }) =>
         ({ betId, betName: betName!, values, providerUpdatedAt: scope.providerUpdatedAt ??
           (providerUpdatedAt === null ? null : utcInstantFromEpochMilliseconds(providerUpdatedAt)),
-        snapshotId: id, observedAt: utcInstantFromEpochMilliseconds(retrievedAt), checkedAt: scope.checkedAt, receiptId: scope.receiptId })) };
+        // A current receipt proves these exact snapshot values were observed again.
+        snapshotId: id, observedAt: closing ? utcInstantFromEpochMilliseconds(retrievedAt) : scope.checkedAt,
+        checkedAt: scope.checkedAt, receiptId: scope.receiptId })) };
     });
     if (bookmakers.length) found.set(fixtureId, { fixtureId, kickoffAt: scope.kickoffAt, checkedAt: scope.checkedAt,
       primaryBookmakerId: scope.primaryBookmakerId, policyHash: scope.policyHash, bookmakers });

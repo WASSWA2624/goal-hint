@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { featuredPredictionSchema, featuredPriceValue, retrospectivePredictionSchema } from '../src/domain/extended-markets.ts';
-import { binaryFeaturedSettlement, modeledFeaturedReturn } from '../src/domain/local-featured-decision.ts';
+import { binaryFeaturedSettlement, localFeaturedDecisionVersion, modeledFeaturedReturn } from '../src/domain/local-featured-decision.ts';
 import { parseDecimalOdds } from '../src/domain/odds.ts';
 import { fixtureSnapshotSchema } from '../src/domain/fixture-snapshot.ts';
 import { gateFixture } from '../src/domain/paywall.ts';
@@ -36,6 +36,7 @@ test('forecast-only preserves the selection and names the actual odds restrictio
   assert.equal(pick.featuredQuote, undefined);
   assert.equal(featuredPredictionSchema.safeParse({ ...pick, odds: '1.25' }).success, false);
   assert.equal(featuredPredictionSchema.safeParse({ ...pick, forecastOnlyReason: undefined }).success, false);
+  assert.equal(toFeaturedLocalDecision({ ...fallback, version: localFeaturedDecisionVersion }, 'en', false), null);
 });
 
 test('the shared featured V threshold uses the exact covered quote and is inclusive at 5%', () => {

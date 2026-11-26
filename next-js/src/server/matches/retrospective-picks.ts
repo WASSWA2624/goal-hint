@@ -3,6 +3,7 @@ import "server-only";
 import { isVerifiedPreMatchObservation, replayBookmakerBetIds, replayBookmakerQuote } from "../../domain/bookmaker-odds.ts";
 import type { RetrospectivePrediction } from "../../domain/extended-markets.ts";
 import type { StoredFixtureSnapshot } from "../../domain/fixture-snapshot.ts";
+import { localFeaturedDecisionVersion } from "../../domain/local-featured-decision.ts";
 import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { formatOddsHundredths } from "../../domain/odds.ts";
 import type { NovemberReplayProjection } from "../intelligence/november-replay-store.ts";
@@ -29,8 +30,8 @@ export function projectRetrospectiveForecast(fixture: StoredFixtureSnapshot, rep
   locale: string, shown?: Pick<FeedSelectedPick, "marketKey" | "selection">, providerOdds = false) {
   if (!replay || fixture.fixtureId !== replay.fixtureId || fixture.cycleId !== replay.cycleId ||
       fixture.kickoffAt !== replay.kickoffAt || (fixture.forecast?.revisionId ?? null) !== replay.sourceRevisionId) return null;
-  const wanted = shown ?? replay.selected;
   const decision = replay.featuredDecision;
+  const wanted = shown ?? (!providerOdds && decision?.version === localFeaturedDecisionVersion ? null : replay.selected);
   const quote = providerOdds && decision?.status === "priced" ? decision.quote : null;
   const entries = replay.markets.flatMap(({ definition, selected, selections }) => {
     const exact = wanted?.marketKey === definition.key && selections?.find(({ key }) => key === wanted.selection);

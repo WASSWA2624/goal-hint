@@ -4,7 +4,8 @@ import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { openForecastDatabase } from "./lib/forecast-database-target.mjs";
 import { LOCAL_FIRST_MARKET_REGISTRY_VERSION, reconcileOddsCatalog } from "../src/domain/market-registry.ts";
-import { legacyLocalFeaturedDecisionVersion, localFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion } from "../src/domain/local-featured-decision.ts";
+import { legacyLocalFeaturedDecisionVersion, localFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion,
+  probabilityFirstTieredFeaturedDecisionVersion } from "../src/domain/local-featured-decision.ts";
 import { inclusiveReplayEvidenceCutoff, novemberReplayRange, replaySuppressionClocks, resolveReplayRange } from "../src/domain/november-replay.ts";
 import { evidenceFingerprint } from "../src/server/evidence/evidence-input.ts";
 import { localGoalModelVersion } from "../src/server/intelligence/local-goals-model.ts";
@@ -24,6 +25,7 @@ const validOperationId = (value) => /^[a-z0-9][a-z0-9._:-]{0,95}$/iu.test(value 
 const deltaManifestFile = "policy-delta.json";
 const deltaDiffFile = "policy-delta-activation-diff.json";
 const coverageVersion = "november-market-coverage-v1";
+const replayAuditVersions = [localFeaturedDecisionVersion, probabilityFirstTieredFeaturedDecisionVersion];
 // This optimization is only valid when the new rule adds lower rungs to the same gates.
 const deltaDecisionVersion = previousLocalFeaturedDecisionVersion;
 class ReplayCommandError extends Error {}
@@ -70,7 +72,7 @@ async function inspectOccurrence(database, audit, occurrence, original, training
       evidenceHash: evidenceFingerprint({ auditedAt: audit.auditedAt, original }) };
   }
   const { evidence, result, diagnostic, priceGates, inventoryClock } = await database.query((tx) =>
-    preparePricedNovemberReplay(tx, occurrence, audit.auditedAt, training, localFeaturedDecisionVersion, undefined, trace ? "trace" : "counts"));
+    preparePricedNovemberReplay(tx, occurrence, audit.auditedAt, training, audit.featuredDecisionVersion, undefined, trace ? "trace" : "counts"));
   const { fixtureId, kickoffAt } = occurrence;
   const input = result ? { fixtureId, kickoffAt, cycleId: evidence.scheduleVersion === null ? null : occurrence.cycleId,
     scheduleVersion: evidence.scheduleVersion, sourceRevisionId: evidence.scheduleVersion === null ? null : original?.sourceRevisionId ?? null,
@@ -460,7 +462,7 @@ try {
     const path = join(workspace, "audit.json");
     const existing = await readSealed(path).catch((error) => { if (!missingFile(error)) throw error; });
     const audit = existing ?? { ...await auditNovemberReplay(database, scope, range), environment: values.environment };
-    if (audit.environment !== values.environment || audit.featuredDecisionVersion !== localFeaturedDecisionVersion ||
+    if (audit.environment !== values.environment || !replayAuditVersions.includes(audit.featuredDecisionVersion) ||
         evidenceFingerprint(audit.range) !== evidenceFingerprint(range.window))
       throw new ReplayCommandError("The audit workspace belongs to another target, date range or decision policy.");
     if (!existing) await sealOnce(path, audit);
@@ -471,7 +473,7 @@ try {
   } else {
     const audit = await readSealed(join(workspace, "audit.json"));
     const versionMatches = delta ? audit.featuredDecisionVersion === legacyLocalFeaturedDecisionVersion :
-      audit.featuredDecisionVersion === localFeaturedDecisionVersion ||
+      replayAuditVersions.includes(audit.featuredDecisionVersion) ||
         action === "rollback" && [legacyLocalFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion].includes(audit.featuredDecisionVersion);
     if (audit.environment !== values.environment || audit.engineVersion !== localGoalModelVersion() ||
       audit.registryVersion !== LOCAL_FIRST_MARKET_REGISTRY_VERSION || !versionMatches)

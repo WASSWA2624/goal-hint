@@ -49,7 +49,7 @@ export function upcomingFeaturedPick(fixture: Pick<StoredFixtureSnapshot, "fixtu
   if (!forecast || fixture.status !== "scheduled" || kickoffAt === null || goals === null) return null;
   const deadline = getPublicationDeadline(kickoffAt);
   if (decisionAt >= deadline || forecast.publishedAt > decisionAt || forecast.publishedAt >= deadline) return null;
-  const currentQuotes = quotes?.provenance !== "historical-pre-match"
+  const currentQuotes = quotes && decisionAt - quotes.checkedAt <= preMatchReferenceOddsFreshMs && quotes.provenance !== "historical-pre-match"
     && !localFeaturedQuoteScopeReason({ fixtureId, kickoffAt, decisionAt, quotes, quotesPermitted }) ? quotes : null;
   const candidates = collectUpcomingLocalFeaturedCandidates(forecast, goals);
   if (!candidates) {
@@ -60,7 +60,7 @@ export function upcomingFeaturedPick(fixture: Pick<StoredFixtureSnapshot, "fixtu
   }
   const decision = decideLocalFeaturedPick({ fixtureId, kickoffAt, decisionAt, outcomes: candidates.map(({ outcome }) => outcome),
     quotes: currentQuotes, quotesPermitted });
-  if (decision.status === "abstained") return null;
+  if (decision.status !== "priced") return null;
   const candidate = candidates.find(({ outcome }) => outcome.marketKey === decision.marketKey && outcome.selection === decision.selection);
   return candidate ? toFeaturedLocalDecision(decision, "en", quotesPermitted, candidate.pick) : null;
 }

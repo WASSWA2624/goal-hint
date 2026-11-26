@@ -658,12 +658,12 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     : featured || fixture.status === "live" ? null : selectedCardPrice(fixture, coreFamily, !publishedMarket);
   const replayPick = retrospective?.pick;
   const historicalReplayPrice = !phoneFeed && selection && replayPick?.historicalOdds && replayPick.odds ? displayMarketOddsPrice(replayPick.odds) : null;
-  const confirmedPrice = retrospective ? historicalReplayPrice : filtered ? filtered.odds : featured?.featuredQuote && preMatchPrice
+  const confirmedPrice = retrospective ? historicalReplayPrice : filtered ? filtered.odds : featured?.odds && preMatchPrice
     ? displayMarketOddsPrice(preMatchPrice) : fixture.status === "live" ? livePrice : preMatchPrice;
   const price = phoneFeed || !selection ? null : snapshotPick ? { price: snapshotPick.odds }
     : confirmedPrice ? { price: confirmedPrice } : storedPrice;
   const oddsKind = historicalReplayPrice ? "historical-pre-match"
-    : (price === storedPrice ? storedPrice?.recovery?.kind : undefined) ?? observation?.kind ?? ((featured?.featuredQuote || filtered) && price ? "pre-match" : undefined);
+    : (price === storedPrice ? storedPrice?.recovery?.kind : undefined) ?? observation?.kind ?? ((featured?.odds || filtered) && price ? "pre-match" : undefined);
   const oddsCaption = messages.text("details.odds");
   const stackOddsCaption = `${oddsCaption}:`;
   const stackProbabilityCaption = `${messages.text("match.columns.probabilityCompact")}:`;

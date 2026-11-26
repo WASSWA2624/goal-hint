@@ -79,7 +79,7 @@ test("reports stale, post-decision, suspended and ambiguous odds without promoti
   assert.equal(audit.counts["priceReason:post-decision-quote"], 1);
   assert.equal(audit.counts["priceReason:duplicate-provider-selection"], 2);
   assert.equal(audit.counts["priceReason:duplicate-bookmaker-market"], 2);
-  assert.equal(decideLocalFeaturedPick(setup).status, "forecast-only");
+  assert.equal(decideLocalFeaturedPick(setup).status, "abstained");
   const changed = auditLocalFeaturedCoverage({ ...setup, quotes: { ...setup.quotes, kickoffAt: kickoffAt + 60_000 } });
   assert.equal(changed.counts["quoteScope:different-fixture-occurrence"], 1);
   assert.equal(changed.counts["priceReason:different-fixture-occurrence"], 6);

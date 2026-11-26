@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { bookmakerMarketPrice, bookmakerMarketQuote, bookmakerReferencePrice } from "../src/domain/bookmaker-odds.ts";
 import { mergeLiveDetail } from "../src/domain/live-refresh.ts";
+import { binaryFeaturedSettlement, decideLocalFeaturedPick } from "../src/domain/local-featured-decision.ts";
 import { matchDetailResponseSchema } from "../src/domain/match-detail.ts";
 import { gateDetailResponse } from "../src/domain/paywall.ts";
+import { preMatchReferenceOddsFreshMs } from "../src/domain/reference-odds.ts";
 import { projectBookmakerOdds, storedPreMatchCatalogCoverage } from "../src/server/odds/bookmaker-odds-read.ts";
 import { mapInPlayOdds, reviewedInPlayCatalog } from "../src/server/odds/in-play-odds-mapping.ts";
-import { oddsValuesHash, storedCurrentBookmakerQuotes } from "../src/server/odds/odds-mysql-store.ts";
+import { oddsValuesHash, storedClosingBookmakerQuotes, storedCurrentBookmakerQuotes } from "../src/server/odds/odds-mysql-store.ts";
 import { liveDetail, liveRecord, now } from "./helpers/live-refresh-fixtures.mjs";
 
 const detail = liveDetail(liveRecord({ kickoffAt: now + 3_600_000 }));
@@ -52,8 +54,35 @@ test("one sealed receipt exposes exact partial and alternate-line prices separat
   const reference = bookmakerReferencePrice(extensivePolicy, { betId: 5, betName: "Goals Over/Under" }, "Over 2.5", "full-time");
   assert.equal(reference.actualBookmakerId, 3);
   assert.equal(reference.fallback, "configured");
-  assert.equal(reference.offer.observedAt, checkedAt - 30_000);
+  assert.equal(reference.offer.observedAt, checkedAt);
   assert.equal(bookmakerReferencePrice(extensivePolicy, { betId: 5, betName: "Goals Over/Under" }, "Over 2.5", "half-time").state, "unavailable");
+});
+
+test("a current receipt renews an unchanged exact quote with independent provider freshness", async () => {
+  const originalAt = asOf - preMatchReferenceOddsFreshMs - 1;
+  const original = snapshot(hash("1"), 8, secondaryQuotes);
+  const catalog = batch(catalogId, "bets", { catalog: [{ id: 5, name: "Goals Over/Under" }] });
+  const receipt = batch(receiptId, "prices", { pages: [{ provider: "api-football", endpoint: "odds", fromCache: false, retrievedAt: checkedAt,
+    providerUpdatedAt: null, currentPage: 1, totalPages: 1, requestParameters: {}, contractVersion: "direct-v3-odds-2026-10-10" }],
+    fixtures: [{ externalId: 11, observationHash: hash("f"), outcome: "apply", quoteManifest: book(8, [bet(secondaryQuotes)]) }] });
+  const database = (providerAt = null, originalProviderAt = null) => {
+    const state = { fixtureId, externalId: 11n, kickoff: new Date(kickoffAt), latestBatchId: receiptId, policyHash,
+      lastRetrievedAt: new Date(checkedAt), lastProviderUpdatedAt: providerAt === null ? null : new Date(providerAt) };
+    const results = [[state], [catalog], [receipt], [{ ...original, body: { ...original.body, retrievedAt: originalAt,
+      providerUpdatedAt: originalProviderAt } }]];
+    return { $queryRaw: async () => results.shift() };
+  };
+  const fixture = { fixtureId, kickoffAt };
+  const outcomes = [{ marketKey: "total-goals", selection: "over-2.5", settlementProbabilities: binaryFeaturedSettlement(0.8) }];
+  const quotes = (await storedCurrentBookmakerQuotes(database(checkedAt - 300), [fixture], asOf)).get(fixtureId);
+  const decision = decideLocalFeaturedPick({ ...fixture, decisionAt: asOf, outcomes, quotes, quotesPermitted: true });
+  assert.equal(decision.status, "priced");
+  assert.deepEqual(decision.quote, { bookmakerId: 8, bookmakerName: "Primary", betId: 5, betName: "Goals Over/Under", decimal: "2.0123",
+    providerSelection: "Over 2.5", snapshotId: original.id, receiptId, observedAt: checkedAt, checkedAt, providerUpdatedAt: checkedAt - 300 });
+  assert.equal((await storedCurrentBookmakerQuotes(database(originalAt), [fixture], asOf)).size, 0);
+  assert.equal((await storedCurrentBookmakerQuotes(database(null, originalAt), [fixture], asOf)).size, 0);
+  const closing = await storedClosingBookmakerQuotes(database(), fixture, kickoffAt);
+  assert.equal(closing.bookmakers[0].offers[0].observedAt, originalAt);
 });
 
 test("the private catalog report exposes named, renamed, unknown and unnamed sealed observations", async () => {

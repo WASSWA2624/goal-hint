@@ -11,18 +11,23 @@ import type { GoalGrade } from "./score-distribution-markets.ts";
 export const legacyLocalFeaturedDecisionVersion = "local-featured-pre-match-v1";
 export const previousLocalFeaturedDecisionVersion = "local-featured-pre-match-v2";
 export const oddsFirstTieredFeaturedDecisionVersion = "local-featured-pre-match-v3";
-export const localFeaturedDecisionVersion = "local-featured-pre-match-v4";
-export const tieredLocalFeaturedDecisionVersions = [oddsFirstTieredFeaturedDecisionVersion, localFeaturedDecisionVersion] as const;
+export const probabilityFirstTieredFeaturedDecisionVersion = "local-featured-pre-match-v4";
+export const localFeaturedDecisionVersion = "local-featured-pre-match-v5";
+const forecastOnlyDecisionVersions = [oddsFirstTieredFeaturedDecisionVersion, probabilityFirstTieredFeaturedDecisionVersion] as const;
+export const tieredLocalFeaturedDecisionVersions = [...forecastOnlyDecisionVersions, localFeaturedDecisionVersion] as const;
 export const localFeaturedBookmakerBetIds = replayBookmakerBetIds;
 const legacyThresholds = [0.95, 0.90, 0.85, 0.80, 0.75] as const;
 const thresholds = [...legacyThresholds, 0.70, 0.65, 0.60] as const;
 const featuredDecisionVersionSchema = z.literal([legacyLocalFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion, ...tieredLocalFeaturedDecisionVersions]);
 export type LocalFeaturedDecisionVersion = z.infer<typeof featuredDecisionVersionSchema>;
 const thresholdsByVersion = { [legacyLocalFeaturedDecisionVersion]: legacyThresholds,
-  [previousLocalFeaturedDecisionVersion]: thresholds, [oddsFirstTieredFeaturedDecisionVersion]: thresholds, [localFeaturedDecisionVersion]: thresholds } as const;
+  [previousLocalFeaturedDecisionVersion]: thresholds, [oddsFirstTieredFeaturedDecisionVersion]: thresholds,
+  [probabilityFirstTieredFeaturedDecisionVersion]: thresholds, [localFeaturedDecisionVersion]: thresholds } as const;
 const thresholdFor = (probability: number, version: LocalFeaturedDecisionVersion) => thresholdsByVersion[version].find((floor) => probability >= floor);
 export const isTieredLocalFeaturedDecision = (version: LocalFeaturedDecisionVersion): version is typeof tieredLocalFeaturedDecisionVersions[number] =>
   tieredLocalFeaturedDecisionVersions.some((tiered) => tiered === version);
+const probabilityFirstRanking = (version: LocalFeaturedDecisionVersion) =>
+  version === probabilityFirstTieredFeaturedDecisionVersion || version === localFeaturedDecisionVersion;
 const minimumPrice = parseDecimalOdds("1.10")!;
 const minimumProbability = 0.60;
 const unitPrice = 10_000n;
@@ -49,13 +54,14 @@ export const localFeaturedDecisionSchema = z.discriminatedUnion("status", [
   }).refine(({ marketKey, selection, probability, threshold, version, tier, expectedNetReturn, quote }) => {
     const price = parseDecimalOdds(quote.decimal);
     const standard = price !== null && price.scaled >= minimumPrice.scaled && featuredExpectedReturnSchema.safeParse(expectedNetReturn).success;
-    const binding = version === localFeaturedDecisionVersion ? verifiedLocalFeaturedBinding(marketKey, selection) : undefined;
-    if (version === localFeaturedDecisionVersion && (!binding || quote.betId !== binding.betId || quote.betName !== binding.betName
-      || quote.providerSelection !== binding.label)) return false;
+    if (probabilityFirstRanking(version)) {
+      const binding = verifiedLocalFeaturedBinding(marketKey, selection);
+      if (!binding || quote.betId !== binding.betId || quote.betName !== binding.betName || quote.providerSelection !== binding.label) return false;
+    }
     return thresholdFor(probability, version) === threshold && (isTieredLocalFeaturedDecision(version)
       ? (standard ? tier === "standard" : tier === "priced-fallback") : tier === undefined && standard);
   }),
-  z.strictObject({ ...selectionFields, version: z.literal(tieredLocalFeaturedDecisionVersions), status: z.literal("forecast-only"),
+  z.strictObject({ ...selectionFields, version: z.literal(forecastOnlyDecisionVersions), status: z.literal("forecast-only"),
     reason: featuredForecastOnlyReasonSchema }),
   z.strictObject({ version: featuredDecisionVersionSchema, status: z.literal("abstained"),
     reason: z.enum([...featuredForecastOnlyReasonSchema.options, "no-local-forecast", "no-modeled-outcome-meets-floor", "invalid-decision-time"]),
@@ -290,7 +296,7 @@ function bestQuote(books: LocalFeaturedBookmakerQuotes["bookmakers"], mapping: N
 function assessPick(input: FeaturedDecisionInput, version: LocalFeaturedDecisionVersion, rank?: RankingProbability) {
   const { kickoffAt, decisionAt, outcomes, quotes, quotesPermitted, coverageByMarket } = input;
   const tiered = isTieredLocalFeaturedDecision(version);
-  const probabilityFirst = version === localFeaturedDecisionVersion;
+  const probabilityFirst = probabilityFirstRanking(version);
   const eligible = new Map<PricedDecision["threshold"], number>();
   let comparableQuoteOutcomes = 0, oddsFloorOutcomes = 0, positiveReturnOutcomes = 0;
   const finish = (decision: LocalFeaturedDecision) => ({ decision, diagnostics: {
@@ -300,7 +306,7 @@ function assessPick(input: FeaturedDecisionInput, version: LocalFeaturedDecision
   const abstain = (reason: Extract<LocalFeaturedDecision, { status: "abstained" }>["reason"]) =>
     finish({ version, status: "abstained", reason });
   const withoutPrice = (reason: z.infer<typeof featuredForecastOnlyReasonSchema>) => {
-    if (!tiered) return abstain(reason);
+    if (version !== oddsFirstTieredFeaturedDecisionVersion && version !== probabilityFirstTieredFeaturedDecisionVersion) return abstain(reason);
     const forecast = bestForecastOnlyOutcome(outcomes, coverageByMarket, rank, probabilityFirst);
     return forecast ? finish({ ...forecast, version, status: "forecast-only", reason }) : abstain("no-modeled-outcome-meets-floor");
   };

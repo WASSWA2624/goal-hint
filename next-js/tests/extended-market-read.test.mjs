@@ -6,7 +6,7 @@ import { goalResultMarket, goalAsianHandicapMarket, goalDoubleChanceMarket, goal
 import { localFeaturedDecisionVersion } from '../src/domain/local-featured-decision.ts';
 import { SCORE_DISTRIBUTION_VERSION } from '../src/domain/score-distribution.ts';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
-import { upcomingFeaturedPick } from '../src/server/matches/upcoming-featured-pick.ts';
+import { collectUpcomingLocalFeaturedCandidates, upcomingFeaturedPick } from '../src/server/matches/upcoming-featured-pick.ts';
 import { freezeCutoffLocalFeaturedPick } from '../src/server/predictions/cutoff-featured.ts';
 import { prepareGoalMarketExtension } from '../src/server/predictions/goal-market-store.ts';
 import { publicGoalMarketExtension, readCurrentExtendedMarkets, readExtendedMarketSnapshot, readFeaturedGoalMarkets } from '../src/server/predictions/extended-market-read.ts';
@@ -59,7 +59,7 @@ test('the private featured projection retains the represented grade masses and a
   assert.equal(publicGoalMarketExtension(value)[0].unrepresentedProbability, undefined);
 });
 
-test('the sealed Local Engine score profile enters featured selection, and cutoff freezes the same exact decision', async () => {
+test('the sealed Local Engine score profile stays available while upcoming and cutoff featured picks require a price', async () => {
   const evaluationProfile = LOCAL_FIRST_SCORE_GOAL_EVALUATION_PROFILE;
   const prepared = prepareGoalMarketExtension({ evaluationProfile, definitions: goalDefinitionsForLocalFirstProfile(evaluationProfile),
     localPoisson: { home: 2.8, away: 0.2 } });
@@ -70,20 +70,13 @@ test('the sealed Local Engine score profile enters featured selection, and cutof
   const goals = (await readFeaturedGoalMarkets(tx, [revisionId])).get(revisionId);
   const kickoffAt = at + 3_600_000, homeTeamId = '40000000-0000-4000-8000-000000000001', awayTeamId = '50000000-0000-4000-8000-000000000001';
   const fixture = { fixtureId, kickoffAt, status: 'scheduled', forecast: { markets: [], publishedAt: at - 1000 } };
-  const newPick = upcomingFeaturedPick(fixture, { ...goals, local: goals.local.filter(({ key }) => newKeys.has(key)) }, undefined, at, false);
-  assert.ok(newPick && newKeys.has(newPick.key));
-  assert.equal(newPick.odds, null);
-  const upcoming = upcomingFeaturedPick(fixture, goals, undefined, at, false);
-  assert.ok(upcoming);
-  assert.equal(upcoming.odds, null);
+  assert.ok(collectUpcomingLocalFeaturedCandidates(fixture.forecast, goals).some(({ pick }) => newKeys.has(pick.key)));
+  assert.equal(upcomingFeaturedPick(fixture, goals, undefined, at, false), null);
   const frozen = await freezeCutoffLocalFeaturedPick(tx, { id: fixtureId, kickoff: new Date(kickoffAt), homeTeamId, awayTeamId },
     { id: revisionId, cycleId, publishedAt: fixture.forecast.publishedAt,
       candidate: { markets: {}, context: { context: { kickoffAt, home: { teamId: homeTeamId }, away: { teamId: awayTeamId } } } } },
     at + 1, at + 1, { extendedMarkets: true, oddsPermitted: () => false });
-  assert.equal(frozen.decision.version, localFeaturedDecisionVersion);
-  assert.equal(frozen.decision.status, 'forecast-only');
-  assert.deepEqual([frozen.decision.marketKey, frozen.decision.selection, frozen.decision.probability],
-    [upcoming.key, upcoming.selection, upcoming.probability]);
+  assert.deepEqual(frozen.decision, { version: localFeaturedDecisionVersion, status: 'abstained', reason: 'odds-not-permitted' });
 });
 
 test('result corrections project only the same source-qualified revision, market, selection and raw probability', () => {

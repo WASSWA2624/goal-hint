@@ -1,6 +1,6 @@
 import "server-only";
 import { createRecommendationQuoteLoader } from "../odds/recommendation-quotes.ts";
-import { legacyLocalFeaturedDecisionVersion, localFeaturedDecisionVersion, type LocalFeaturedDecisionVersion } from "../../domain/local-featured-decision.ts";
+import { legacyLocalFeaturedDecisionVersion, probabilityFirstTieredFeaturedDecisionVersion, type LocalFeaturedDecisionVersion } from "../../domain/local-featured-decision.ts";
 import { evidenceFirstRecommendationPolicy } from "../../domain/recommendation.ts";
 import { goalProfileForLocalFirstCascade, LEGACY_LOCAL_FIRST_FORECAST_CASCADE, LOCAL_FIRST_FORECAST_CASCADE,
   QUALIFIED_FORECAST_CASCADE, registryVersionForLocalFirstCascade, SCORE_LOCAL_FIRST_FORECAST_CASCADE,
@@ -228,7 +228,8 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       marketRegistryVersion: registryVersionForLocalFirstCascade(cascade),
     });
     const selection = Object.freeze({ ...selectionPolicy(policy, refs, workload), ...(coordinated || localFirstForecasts ? { forecastLifecycle: {
-      ...(localFirstForecasts ? localFirstLifecycle(SCORE_LOCAL_FIRST_FORECAST_CASCADE, localFeaturedDecisionVersion) : {
+      // The featured policy changes selection at read and cutoff without changing the accepted forecast.
+      ...(localFirstForecasts ? localFirstLifecycle(SCORE_LOCAL_FIRST_FORECAST_CASCADE, probabilityFirstTieredFeaturedDecisionVersion) : {
         engineVersion: evidenceFingerprint([QUALIFIED_FORECAST_CASCADE, evidenceFirstRecommendationPolicy.version, aiModel,
           LOCAL_GOALS_VERSION, API_FOOTBALL_CONTRACT_VERSION]),
         marketRegistryVersion: MARKET_REGISTRY_VERSION,

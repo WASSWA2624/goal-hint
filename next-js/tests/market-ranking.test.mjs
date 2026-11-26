@@ -3,7 +3,7 @@ import test from "node:test";
 import { getPublicationDeadline, parseReportingDate, validateReportingDateRange } from "../src/domain/calendar.ts";
 import { bestCardFamily } from "../src/domain/feed-presentation.ts";
 import { parseFeedQuery } from "../src/domain/feed-query.ts";
-import { featuredFamily } from "../src/domain/match-details.ts";
+import { currentFeaturedOutcome, featuredFamily } from "../src/domain/match-details.ts";
 import { bestPublishedFamily, rankFixtureOutcomes } from "../src/domain/market-ranking.ts";
 import { preMatchReferenceOddsFreshMs } from "../src/domain/reference-odds.ts";
 import { feedSql } from "../src/server/matches/feed-read.ts";
@@ -15,7 +15,7 @@ const price = (family, selection, value) => ({ family, selection, price: value }
 const tied = [pick("match-result", "home-win", 0.7), pick("total-goals", "over-2.5", 0.7)];
 const prices = [price("match-result", "home-win", "1.90"), price("total-goals", "over-2.5", "2.10")];
 
-test("upcoming featured selection takes the strongest supported outcome and uses only its exact goal period and line", () => {
+test("upcoming featured selection ranks priced outcomes and uses only the exact goal period and line", () => {
   const launch = [{ market: { family: "match-result", source: "ai", selection: "home-win", selectedProbability: 0.65,
     probabilities: { "home-win": 0.65, draw: 0.2, "away-win": 0.15 } } }];
   const goal = (period, probability) => ({ key: `goal:${period}:totals:total:4.5:binary`, label: "Goals 4.5", code: "O/U 4.5",
@@ -26,10 +26,13 @@ test("upcoming featured selection takes the strongest supported outcome and uses
     { betId: 5, name: "Goals Over/Under", selections: [{ label: "Under 4.5", line: null, price: "1.2" }] }] }] };
   const priced = rankFixtureOutcomes(launch, [goals[0]], offers);
   assert.deepEqual([priced.key, priced.odds], [goals[0].key, "1.2"]);
-  assert.deepEqual([rankFixtureOutcomes(launch, [], offers).selection, rankFixtureOutcomes(launch, [], offers).odds], ["home-win", null]);
-  const unpriced = rankFixtureOutcomes(launch, goals, offers);
-  assert.equal(unpriced.key, goals[1].key);
-  assert.equal(unpriced.odds, null);
+  assert.equal(rankFixtureOutcomes(launch, [], offers), null);
+  assert.equal(rankFixtureOutcomes(launch, goals, offers).key, goals[0].key);
+  const [over, under] = goals[0].selections;
+  const alternate = rankFixtureOutcomes(launch, [{ ...goals[0], selections: [
+    { ...over, probability: 0.75 }, { ...under, probability: 0.25 },
+  ] }], offers);
+  assert.deepEqual([alternate.selection, alternate.probability], ["under", 0.25]);
 });
 
 test("rank unrounded probability ahead of price availability and amount", () => {
@@ -84,7 +87,7 @@ test("confidence breaks exact probability ties before odds, followed by a stable
   assert.equal(bestPublishedFamily(same.reverse(), [], [...families, "double-chance"]), "double-chance");
 });
 
-test("qualified local extended picks win equal-probability ties over comparably priced fallback picks", () => {
+test("qualified local extended picks win equal-probability ties only when the exact selection is priced", () => {
   const fallback = { market: { family: "match-result", source: "api-football", selection: "home-win", selectedProbability: 0.7,
     probabilities: { "home-win": 0.7, draw: 0.2, "away-win": 0.1 } } };
   const local = { key: "goal:full-time:totals:total:4.5:binary", label: "Total goals 4.5", code: "O/U 4.5", source: "local-poisson",
@@ -93,7 +96,10 @@ test("qualified local extended picks win equal-probability ties over comparably 
     { betId: 1, name: "Match Winner", selections: [{ label: "Home", line: null, price: "1.9" }] },
   ] }] };
   const result = rankFixtureOutcomes([fallback], [local], prices);
-  assert.deepEqual([result.key, result.odds, result.probability, result.source], [local.key, null, 0.7, "local-engine"]);
+  assert.deepEqual([result.key, result.odds, result.probability, result.source], ["match-result", "1.9", 0.7, "api-football"]);
+  prices.books[0].markets.push({ betId: 5, name: "Goals Over/Under", selections: [{ label: "Under 4.5", line: null, price: "1.3" }] });
+  const pricedLocal = rankFixtureOutcomes([fallback], [local], prices);
+  assert.deepEqual([pricedLocal.key, pricedLocal.odds, pricedLocal.source], [local.key, "1.3", "local-engine"]);
 });
 
 test("the current fallback prices only the exact timely occurrence and closes at the normal forecast deadline", () => {
@@ -108,14 +114,37 @@ test("the current fallback prices only the exact timely occurrence and closes at
   const read = (record = fixture, odds = quote, at = now, permitted = true) => upcomingFeaturedPick(record, undefined, odds, at, permitted);
   assert.deepEqual([read().selection, read().odds], ["home-win", "1.8"]);
   for (const drift of [{ fixtureId: "24181605-bcab-4d3d-9a98-a39538bea2d7" }, { kickoffAt: kickoffAt + 1 },
-    { checkedAt: now + 1 }, { provenance: "historical-pre-match" }]) assert.equal(read(fixture, { ...quote, ...drift }).odds, null);
+    { checkedAt: now + 1 }, { checkedAt: now - preMatchReferenceOddsFreshMs - 1 },
+    { provenance: "historical-pre-match" }]) assert.equal(read(fixture, { ...quote, ...drift }), null);
   const projection = { kind: "pre-match", checkedAt: now - preMatchReferenceOddsFreshMs - 1,
     prices: { state: "available", markets: [{ family: "match-result", selections: [{ selection: "home-win", price: "1.90" }] }] } };
-  assert.equal(read({ ...fixture, marketOdds: projection }, null).odds, null);
+  assert.equal(read({ ...fixture, marketOdds: projection }, null), null);
   assert.equal(read({ ...fixture, marketOdds: { ...projection, checkedAt: now } }, null).odds, "1.90");
-  assert.equal(read(fixture, quote, now, false).odds, null);
+  assert.equal(read(fixture, quote, now, false), null);
   assert.equal(read(fixture, quote, getPublicationDeadline(kickoffAt)), null);
   assert.equal(read({ ...fixture, forecast: { ...forecast, publishedAt: now + 1 } }), null);
+});
+
+test("an unpriced stored recommendation leaves the best priced market eligible in Matches and Match Details", () => {
+  const now = Date.parse("2026-11-26T08:00:00Z"), kickoffAt = now + 3_600_000;
+  const result = { family: "match-result", source: "ai", selection: "home-win", selectedProbability: 0.80,
+    probabilities: { "home-win": 0.80, draw: 0.12, "away-win": 0.08 } };
+  const total = { family: "total-goals", source: "ai", selection: "under-2.5", selectedProbability: 0.65,
+    probabilities: { "under-2.5": 0.65, "over-2.5": 0.35 } };
+  const forecast = { markets: [{ market: result }, { market: total }], publishedAt: now - 1,
+    recommendation: { selected: { family: result.family, source: result.source, selection: result.selection,
+      probability: result.selectedProbability, confidence: "calibrated" } } };
+  const fixture = { fixtureId: "fixture", kickoffAt, status: "scheduled", forecast, marketOdds: { kind: "pre-match", checkedAt: now,
+    prices: { state: "available", markets: [{ family: total.family, selections: [{ selection: total.selection, price: "1.75" }] }] } } };
+  const pick = upcomingFeaturedPick(fixture, undefined, null, now, true);
+  assert.deepEqual([pick.key, pick.selection, pick.odds], [total.family, total.selection, "1.75"]);
+  const detail = { fixture, asOf: now, selection: "applicable", snapshot: { ...forecast, applicability: "current" } };
+  assert.deepEqual(currentFeaturedOutcome(detail), pick);
+  assert.deepEqual(currentFeaturedOutcome({ ...detail, fixture: { ...fixture, featuredPrediction: pick } }), pick);
+  const noPrice = { ...detail, fixture: { ...fixture, marketOdds: null } };
+  assert.equal(currentFeaturedOutcome(noPrice), null);
+  assert.equal(featuredFamily(noPrice), null);
+  assert.equal(featuredFamily({ ...detail, selection: "revision" }), result.family);
 });
 
 test("an incomplete privately modeled score distribution cannot choose a featured market", () => {

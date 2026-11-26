@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { registeredForecastGoalMarkets } from "../src/domain/goal-market-definitions.ts";
-import { localFeaturedDecisionVersion as version } from "../src/domain/local-featured-decision.ts";
+import { oddsFirstTieredFeaturedDecisionVersion as version } from "../src/domain/local-featured-decision.ts";
 import {
   featuredEvaluationOccurrence, summarizeFeaturedHistoryComparison,
 } from "../src/server/intelligence/local-featured-history-evaluation.ts";

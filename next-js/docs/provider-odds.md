@@ -51,7 +51,11 @@ verified bookmakers for supported published outcomes at 75% or higher.
 Each date sweep records the bookmaker scope in its job and stores
 the observed books and bet hashes in the sealed fixture receipt. The existing
 quota gate and page ceiling apply to that sweep. Current reads accept only
-offers reconfirmed by the latest receipt. A complete sweep can withdraw absent
+offers reconfirmed by the latest receipt. A verified current receipt supplies
+the observation time when it reconfirms the exact values of a retained
+snapshot. The receipt and snapshot remain attributable, and an independently
+stale provider update still excludes the quote. Closing and historical
+readers use their point-in-time evidence. A complete sweep can withdraw absent
 fixtures and prices, while a partial sweep preserves fixtures it did not see.
 
 The pre-match catalog can contain an explicitly unnamed ID. The importer

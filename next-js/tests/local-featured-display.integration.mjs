@@ -122,18 +122,16 @@ test('Matches and Match Details preserve one exact Local Engine featured quote a
     assert.deepEqual(currentFeaturedOutcome(matchDetailResponseSchema.parse(gateDetailResponse(detail, full))), pick);
     assert.equal(record(matchFeedResponseSchema.parse(gateFeedResponse(feed, free))).featuredPrediction, null);
     assert.equal(matchDetailResponseSchema.parse(gateDetailResponse(detail, free)).fixture.featuredPrediction, null);
-    const noRights = record(await readFeed(false)).featuredPrediction;
-    assert.equal(noRights.tier, 'forecast-only');
-    assert.equal(noRights.forecastOnlyReason, 'odds-not-permitted');
-    assert.equal(noRights.odds, null);
-    assert.deepEqual((await readDetail(false)).fixture.featuredPrediction, noRights);
+    const noRights = record(await readFeed(false));
+    assert.equal(noRights.featuredPrediction, null);
+    assert.equal(noRights.forecast.revisionId, published.revision.id);
+    assert.equal((await readDetail(false)).fixture.featuredPrediction, null);
     const unavailableQuotes = { query: p.a.query, transaction(operation, options) {
       if (options?.timeout === 5000) return Promise.reject(new Error('Synthetic current quotes timeout'));
       return p.a.transaction(operation, options);
     } };
     const noQuotes = record(await readFeed(true, unavailableQuotes)).featuredPrediction;
-    assert.equal(noQuotes.tier, 'forecast-only');
-    assert.equal(noQuotes.forecastOnlyReason, 'no-verified-odds');
+    assert.equal(noQuotes, null);
     assert.deepEqual((await readDetail(true, unavailableQuotes)).fixture.featuredPrediction, noQuotes);
 
     const newRungAt = await store([book(7, 'Synthetic away book', 17, 'Total - Away', 'Under 1.5', '1.6001')]);
@@ -181,9 +179,7 @@ test('Matches and Match Details preserve one exact Local Engine featured quote a
     assert.equal(locked.odds, '1.1546');
     assert.deepEqual(currentFeaturedOutcome(gateDetailResponse(lockedDetail, full)), locked);
     const lockedWithoutOdds = record(await readFeed(false)).featuredPrediction;
-    assert.equal(lockedWithoutOdds.key, locked.key);
-    assert.equal(lockedWithoutOdds.forecastOnlyReason, 'odds-not-permitted');
-    assert.equal(lockedWithoutOdds.featuredQuote, undefined);
+    assert.equal(lockedWithoutOdds, null);
     assert.deepEqual((await readDetail(false)).fixture.featuredPrediction, lockedWithoutOdds);
     await store([book(8, 'After-lock synthetic book', 16, 'Total - Home', 'Under 4.5', '1.5099')]);
     assert.deepEqual(await cutoff.close(p.target(target)), closed);
@@ -195,7 +191,7 @@ test('Matches and Match Details preserve one exact Local Engine featured quote a
     await lifecycle.observe(lifecycleInput(canceledTarget, p.now(), { status: 'CANC', actualStartedAt: null }));
     const canceledCard = (await readFeed()).records.find(({ fixtureId }) => fixtureId === canceledTarget.fixture.id);
     const canceledDetail = await createMatchDetailService({ database: p.a, clock, providerOdds: true }).query(canceledTarget.fixture.id);
-    assert.deepEqual([canceledCard.status, canceledCard.featuredDecisionFrozen, canceledCard.featuredPrediction.settlementStatus], ['canceled', true, 'void']);
+    assert.deepEqual([canceledCard.status, canceledCard.featuredDecisionFrozen, canceledCard.featuredPrediction], ['canceled', true, null]);
     assert.deepEqual(canceledCard.featuredPrediction, canceledDetail.fixture.featuredPrediction);
     for (const [status, expected, elapsed] of [['1H', 'live', 30_000], ['FT', 'finished-regulation', 7_200_000]]) {
       p.setTime(kickoffAt + elapsed);

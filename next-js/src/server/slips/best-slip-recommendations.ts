@@ -4,7 +4,7 @@ import { getPublicationDeadline } from "../../domain/calendar.ts";
 import { total15MarketKey, type FeaturedPrediction } from "../../domain/extended-markets.ts";
 import { displayMarketOddsPrice } from "../../domain/in-play-odds.ts";
 import { decideLocalFeaturedPick, inspectExactLocalFeaturedQuote, localFeaturedBookmakerBetIds, localFeaturedQuoteScopeReason,
-  verifiedLocalFeaturedBinding } from "../../domain/local-featured-decision.ts";
+  probabilityFirstTieredFeaturedDecisionVersion, verifiedLocalFeaturedBinding } from "../../domain/local-featured-decision.ts";
 import type { StoredMatchFeedRecord } from "../../domain/match-feed.ts";
 import { additionalSlipGoalMarket, additionalSlipGoalSelection, isSlipMarketSelection, isTotal15SlipSelection,
   total15Direction, type SlipTotal15Forecast } from "../../domain/slip-markets.ts";
@@ -145,7 +145,9 @@ export async function readPotentialFeaturedSlipFixtures(tx: Prisma.TransactionCl
       return supported && qualifiedEditorialSlipRevision({ ...reference, ...supported }, revisions.get(revisionId), extension, at)
         ? [outcome] : [];
     });
-    const decision = decideLocalFeaturedPick({ ...reference, decisionAt: at, outcomes: outcomes ?? [], quotes: null, quotesPermitted: true });
+    // Target odds collection for forecasts that could qualify once a quote arrives.
+    const decision = decideLocalFeaturedPick({ ...reference, decisionAt: at, outcomes: outcomes ?? [], quotes: null, quotesPermitted: true },
+      probabilityFirstTieredFeaturedDecisionVersion);
     return decision.status === "forecast-only" ? [record.fixtureId] : [];
   });
 }

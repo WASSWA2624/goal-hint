@@ -102,9 +102,7 @@ export const Verdict = memo(function Verdict() {
   if ("gated" in data.history && snapshot) {
     return <Box><UnlockPanel locale={locale} signedIn={data.access.signedIn} returnTo={data.route.path} /></Box>;
   }
-  const supplied = data.fixture.featuredPrediction;
-  const selected = supplied?.tier || supplied?.featuredQuote || data.fixture.featuredDecisionFrozen || data.fixture.retrospective
-    ? currentFeaturedOutcome(data) : null;
+  const selected = currentFeaturedOutcome(data);
   const featured = selected?.family ?? featuredFamily(data), row = featured && !selected ? marketRow(data, featured) : null;
   if (!featured || !selected && !row?.item) return <Box aria-labelledby="verdict-title" data-featured-pick="none">
     <Eyebrow><h2 id="verdict-title">{messages.text(data.fixture.retrospectiveSuppression ? "touchline.retrospective" : "details.verdict")}</h2></Eyebrow>
