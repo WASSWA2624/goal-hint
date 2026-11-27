@@ -273,6 +273,115 @@ test('allocation uses the shortest feasible span band and carries unused fixture
   assert.deepEqual(slips, [selections.slice(0, 2), selections.slice(3)].map(group => group.map(({ fixtureId }) => fixtureId)));
 });
 
+const minute = 60_000;
+const lookaheadRange = bestSlipFixtureWindow(today);
+
+function lookaheadPick(id, minutes, probability, odds = '1.80', bookmakerId = 8) {
+  const at = lookaheadRange.startInclusive;
+  return pricedEditorialSelection(id, { at, kickoffAt: at + minutes * minute, odds, probability, bookmakerId });
+}
+
+function lookaheadPublisher(selections, openBands = ['1.5-5']) {
+  let at = lookaheadRange.startInclusive;
+  const batches = [], fixtures = new Set(), combinations = new Set(), publishedHours = new Map();
+  const closed = new Set(bestSlipOddsBands.map(({ id }) => id).filter(id => !openBands.includes(id)));
+  const publisher = createDailySlipPublisher({ database: {}, competitionIds: [], now: () => at, verifyPublicOdds: () => true,
+    store: { hourlyState: async () => ({ publishedHours, closed, fixtures, combinations }), async append(input) {
+      batches.push(input);
+      const hours = publishedHours.get(input.oddsBand) ?? new Set();
+      hours.add(input.hourAt);
+      publishedHours.set(input.oddsBand, hours);
+      for (const slip of input.slips) {
+        combinations.add(bestSlipCombinationIdentity(slip.selections));
+        for (const { fixtureId } of slip.selections) fixtures.add(fixtureId);
+      }
+      return { status: 'published', appended: input.slips.length };
+    } },
+    read: async () => ({ today, asOf: at, range: lookaheadRange, records: [], featuredSelections: selections,
+      searchLimited: false, partialCoverage: false }) });
+  return { batches, fixtures, publish(minutes = 0) {
+    at = lookaheadRange.startInclusive + minutes * minute;
+    return publisher.publish(at);
+  } };
+}
+
+const publishedLookaheadFixtures = batches => batches.flatMap(({ slips }) =>
+  slips.map(({ selections }) => selections.map(({ fixtureId }) => fixtureId)));
+
+test('a weaker future-only pair does not defer the stronger released slip', async () => {
+  const [early, first, last] = [lookaheadPick(1, 120, 0.96), lookaheadPick(2, 390, 0.90), lookaheadPick(3, 400, 0.85)];
+  const { batches, publish } = lookaheadPublisher([early, first, last]);
+  const result = await publish();
+  assert.equal(result.status, 'published');
+  assert.equal(result.bandResults.find(({ band }) => band === '1.5-5').deferredForUpcoming, 0);
+  assert.deepEqual(publishedLookaheadFixtures(batches), [[early.fixtureId, first.fixtureId]]);
+});
+
+test('a distant bridge waits for a narrower future-only pair with at least the same probability bound', async () => {
+  for (const earlyProbability of [0.87, 0.93]) {
+    const [early, first, last] = [lookaheadPick(1, 120, earlyProbability), lookaheadPick(2, 390, 0.93), lookaheadPick(3, 400, 0.93)];
+    const { batches, fixtures, publish } = lookaheadPublisher([early, first, last]);
+    const deferred = await publish();
+    const band = deferred.bandResults.find(({ band }) => band === '1.5-5');
+    assert.equal(deferred.status, 'no-qualifying');
+    assert.equal(band.reason, 'deferred-for-closer-upcoming-slip');
+    assert.deepEqual([band.feasibleBeforeAllocation, band.deferredForUpcoming, band.selected, band.published], [2, 2, 0, 0]);
+    assert.equal(batches.length, 0);
+    assert.equal(fixtures.size, 0);
+
+    const released = await publish(30);
+    assert.equal(released.newSlips, 1);
+    assert.deepEqual(publishedLookaheadFixtures(batches), [[first.fixtureId, last.fixtureId]]);
+    assert.equal(fixtures.has(early.fixtureId), false);
+  }
+});
+
+test('quotes from different books cannot prove a future-only pair', async () => {
+  const [early, first, last] = [lookaheadPick(1, 120, 0.86), lookaheadPick(2, 390, 0.94), lookaheadPick(3, 400, 0.93, '1.80', 9)];
+  const { batches, publish } = lookaheadPublisher([early, first, last]);
+  assert.equal((await publish()).newSlips, 1);
+  assert.deepEqual(publishedLookaheadFixtures(batches), [[early.fixtureId, first.fixtureId]]);
+});
+
+test('a narrower future-only pair outside the exact odds band cannot defer a released slip', async () => {
+  const [early, first, last] = [lookaheadPick(1, 120, 0.86), lookaheadPick(2, 390, 0.94, '2.20'), lookaheadPick(3, 400, 0.93, '2.30')];
+  const { batches, publish } = lookaheadPublisher([early, first, last], ['1.5-5', '5-10']);
+  assert.equal((await publish()).newSlips, 1);
+  assert.deepEqual(batches.map(({ oddsBand }) => oddsBand), ['1.5-5']);
+  assert.deepEqual(publishedLookaheadFixtures(batches), [[early.fixtureId, first.fixtureId]]);
+});
+
+test('a later released pair keeps its closer step ahead of a wide bridge', async () => {
+  const [early, first, last] = [lookaheadPick(1, 120, 0.96), lookaheadPick(2, 330, 0.92), lookaheadPick(3, 340, 0.88)];
+  const { batches, fixtures, publish } = lookaheadPublisher([early, first, last]);
+  assert.equal((await publish()).newSlips, 1);
+  assert.deepEqual(publishedLookaheadFixtures(batches), [[first.fixtureId, last.fixtureId]]);
+  assert.equal(fixtures.has(early.fixtureId), false);
+});
+
+test('a future pair whose separation equals its step width can be claimed by a released slip', async () => {
+  const early = lookaheadPick(1, 120, 0.93);
+  const first = lookaheadPick(2, 370, 0.96);
+  const last = lookaheadPick(3, 378, 0.98);
+  const nearer = lookaheadPick(4, 355, 0.96, '1.80', 9);
+  const otherBook = lookaheadPick(3, 378, 0.98, '1.80', 9);
+  const { batches, publish } = lookaheadPublisher([early, first, last, nearer, otherBook]);
+  assert.equal((await publish()).newSlips, 2);
+  assert.deepEqual(publishedLookaheadFixtures(batches), [[nearer.fixtureId, last.fixtureId], [early.fixtureId, first.fixtureId]]);
+});
+
+test('a deferred bridge is reconsidered when a later claim invalidates its only future proof', async () => {
+  const early = lookaheadPick(1, 350, 0.91);
+  const first = lookaheadPick(2, 370, 0.96);
+  const last = lookaheadPick(3, 380, 0.96);
+  const nearer = lookaheadPick(4, 355, 0.88, '1.80', 9);
+  const otherBook = lookaheadPick(3, 380, 0.96, '1.80', 9);
+  const { batches, fixtures, publish } = lookaheadPublisher([early, first, last, nearer, otherBook]);
+  assert.equal((await publish()).newSlips, 2);
+  assert.deepEqual(publishedLookaheadFixtures(batches), [[early.fixtureId, first.fixtureId], [nearer.fixtureId, last.fixtureId]]);
+  assert.equal(fixtures.size, 4);
+});
+
 test('sparse odds bands stop at the eligible disjoint count and respect prior membership', () => {
   const selections = Array.from({ length: 5 }, (_, index) => pricedEditorialSelection(index, { odds: '1.80', probability: 0.61 }));
   const initial = buildHourlyBestSlips(today, '1.5-5', 10, now, { selections }, new Set());

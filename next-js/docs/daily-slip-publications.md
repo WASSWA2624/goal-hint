@@ -56,6 +56,15 @@ record the selected and committed counts, the retained feasible alternatives
 before allocation, fixture conflicts, and why a band did not publish. Branch
 counts describe bounded search work and can include repeated branches.
 
+When a wide candidate reaches beyond the earliest-leg release horizon, the worker
+can compare a tighter upcoming alternative in the same exact odds band using the
+stored verified quotes. It leaves the shared fixtures available for that upcoming
+alternative when every leg is unclaimed, its narrower span step is shorter than
+the gap to the wide candidate's latest released kickoff, and its conservative
+win-probability bound matches or exceeds the wide candidate's bound. An eligible
+wider slip with the stronger bound can be published in the current slot. Each
+later slot makes a fresh decision from the current fixture and price evidence.
+
 The first anchor, the append batch, slip snapshots and normalized original
 forecast membership commit together. Each band can commit one nonempty
 batch per half-hour slot. The transaction checks the slot, current fixture

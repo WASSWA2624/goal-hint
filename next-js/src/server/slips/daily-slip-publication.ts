@@ -3,9 +3,9 @@ import "server-only";
 import { setTimeout as sleep } from "node:timers/promises";
 import { bestSlipOddsBands, type BestSlipOddsBand } from "../../domain/best-slip-odds-bands.ts";
 import { bestSlipActivePublicationDays, bestSlipAppendBatchSize, bestSlipFixtureInterval, bestSlipFixtureWindow,
-  bestSlipKickoffBufferMs, bestSlipPreferredKickoffWindowMs, bestSlipPublicationHour,
+  bestSlipKickoffBufferMs, bestSlipKickoffSpanStepMs, bestSlipPreferredKickoffWindowMs, bestSlipPublicationHour,
   bestSlipPublicationIntervalMs } from "../../domain/best-slip-publication-hour.ts";
-import { automaticBestSlipPriority, bestSlipCombinationIdentity, buildHourlyBestSlips,
+import { automaticBestSlipPriority, bestSlipCombinationIdentity, buildHourlyBestSlips, buildUpcomingBestSlipProofs,
   compareAutomaticBestSlipPriority } from "../../domain/best-slips.ts";
 import { utcInstantFromEpochMilliseconds, type ReportingDate, type UtcInstant } from "../../domain/calendar.ts";
 import { feedQueryRules } from "../../domain/feed-query.ts";
@@ -18,13 +18,15 @@ import { createPublishedSlips } from "./published-slips.ts";
 import { createStoredSlipCohort, type FeaturedSlipCursor, type SlipCohortReader } from "./slip-cohort.ts";
 
 type BandSearch = ReturnType<typeof buildHourlyBestSlips>;
+type UpcomingProofs = ReturnType<typeof buildUpcomingBestSlipProofs>;
 type BandPublicationResult = Readonly<{
   day: ReportingDate; band: BestSlipOddsBand; eligibleFixtures: number; exactOffers: number;
   fixturesWithoutForecast: number; forecastFixturesWithoutQualifiedOffer: number; priorFixtureConflicts: number;
   feasibleBeforeAllocation: number; selected: number; published: number; fixtureConflicts: number;
-  searchLimited: boolean; search?: BandSearch["searchDiagnostics"];
+  deferredForUpcoming: number; searchLimited: boolean; upcomingSearchLimited?: boolean; search?: BandSearch["searchDiagnostics"];
   reason: "published" | "partially-published" | "already-published" | "no-eligible-fixtures" | "no-eligible-prices" |
-    "release-window" | "no-eligible-slip" | "search-limited" | "fixture-conflict" | "eligibility-recheck" | "unavailable";
+    "release-window" | "no-eligible-slip" | "search-limited" | "fixture-conflict" | "eligibility-recheck" |
+    "deferred-for-closer-upcoming-slip" | "unavailable";
 }>;
 
 export type DailySlipPublicationResult = Readonly<{ day: string; status:
@@ -43,7 +45,8 @@ function usesFixtures(slip: BuiltSlip, fixtures: ReadonlySet<string>) {
 }
 
 /** Allocate retained alternatives from the narrowest span step before considering wider slips. */
-function allocateBandSlips(plans: readonly BandPlan[], hourAt: number) {
+function allocateBandSlips(plans: readonly BandPlan[], hourAt: number, releaseCutoff: number,
+  buildUpcoming: (band: BestSlipOddsBand) => UpcomingProofs) {
   const rotation = Math.floor(hourAt / bestSlipPublicationIntervalMs) % bestSlipOddsBands.length;
   const bandOrder = (band: BestSlipOddsBand) => (bestSlipOddsBands.findIndex(({ id }) => id === band)
     + bestSlipOddsBands.length - rotation) % bestSlipOddsBands.length;
@@ -52,13 +55,43 @@ function allocateBandSlips(plans: readonly BandPlan[], hourAt: number) {
     return candidates.map(slip => ({ band, order, slip, priority: automaticBestSlipPriority(slip) }));
   }).sort((a, b) => compareAutomaticBestSlipPriority(a.priority, b.priority) || a.order - b.order);
   const selected = new Map(plans.map(({ band }) => [band, new Set<BuiltSlip>()])), fixtures = new Set<string>();
-  for (const { band, slip } of ranked) {
-    const picks = selected.get(band)!;
-    if (picks.size >= bestSlipAppendBatchSize || usesFixtures(slip, fixtures)) continue;
-    picks.add(slip);
+  const futureByBand = new Map<BestSlipOddsBand, UpcomingProofs>();
+  type RankedSlip = typeof ranked[number];
+  const canSelect = ({ band, slip }: RankedSlip) => selected.get(band)!.size < bestSlipAppendBatchSize && !usesFixtures(slip, fixtures);
+  const select = ({ band, slip }: RankedSlip) => {
+    selected.get(band)!.add(slip);
     for (const { fixtureId } of slip.selections) fixtures.add(fixtureId);
+  };
+  function protectsUpcoming({ band, slip, priority }: RankedSlip) {
+    if (priority.spanBucket === 1 || slip.selections.at(-1)!.kickoffAt <= releaseCutoff) return false;
+    const lastReleased = slip.selections.reduce((latest, { kickoffAt }) =>
+      kickoffAt <= releaseCutoff ? Math.max(latest, kickoffAt) : latest, slip.selections[0]!.kickoffAt);
+    const upcoming = futureByBand.get(band) ?? buildUpcoming(band);
+    futureByBand.set(band, upcoming);
+    return slip.selections.some(({ fixtureId, kickoffAt }) => kickoffAt > releaseCutoff
+      && upcoming.byFixture.get(fixtureId)?.some(({ slip: later, priority: laterPriority }) =>
+        laterPriority.spanBucket < priority.spanBucket && laterPriority.lowerBound >= priority.lowerBound
+        && later.selections[0]!.kickoffAt - lastReleased > laterPriority.spanBucket * bestSlipKickoffSpanStepMs
+        && !usesFixtures(later, fixtures)));
   }
-  return { selected, fixtures };
+  const held: RankedSlip[] = [];
+  for (const candidate of ranked) {
+    if (!canSelect(candidate)) continue;
+    if (protectsUpcoming(candidate)) held.push(candidate);
+    else select(candidate);
+  }
+  // A later allocation can invalidate the evidence behind an earlier deferral.
+  const deferred = new Map<BestSlipOddsBand, number>();
+  for (const candidate of held) {
+    if (!canSelect(candidate)) continue;
+    if (protectsUpcoming(candidate)) {
+      const { band } = candidate;
+      deferred.set(band, (deferred.get(band) ?? 0) + 1);
+    } else {
+      select(candidate);
+    }
+  }
+  return { selected, fixtures, deferred, futureByBand };
 }
 
 async function readPublicationCohort(read: SlipCohortReader, day: ReportingDate, calendarDay: ReportingDate, asOf: UtcInstant) {
@@ -106,7 +139,8 @@ export function createDailySlipPublisher({ database, competitionIds, verifyPubli
   async function publishDay(day: ReportingDate, asOf: UtcInstant, slot: ReturnType<typeof bestSlipPublicationHour>): Promise<DailySlipPublicationResult> {
     const bandResults = new Map<BestSlipOddsBand, BandPublicationResult>();
     const empty = { eligibleFixtures: 0, exactOffers: 0, fixturesWithoutForecast: 0, forecastFixturesWithoutQualifiedOffer: 0,
-      priorFixtureConflicts: 0, feasibleBeforeAllocation: 0, selected: 0, published: 0, fixtureConflicts: 0, searchLimited: false };
+      priorFixtureConflicts: 0, feasibleBeforeAllocation: 0, selected: 0, published: 0,
+      fixtureConflicts: 0, deferredForUpcoming: 0, searchLimited: false };
     const report = (band: BestSlipOddsBand, reason: BandPublicationResult["reason"], values: Partial<BandPublicationResult> = {}) =>
       bandResults.set(band, { ...empty, ...values, day, band, reason });
     const summarize = () => bestSlipOddsBands.map(({ id }) => bandResults.get(id)!);
@@ -151,7 +185,8 @@ export function createDailySlipPublisher({ database, competitionIds, verifyPubli
         preferredKickoffWindowMs, { includeAlternatives: true });
       return { band, search, candidates: search.alternatives ?? search.slips };
     });
-    const allocation = allocateBandSlips(plans, slot.hourAt);
+    const allocation = allocateBandSlips(plans, slot.hourAt, evaluatedAt + preferredKickoffWindowMs,
+      band => buildUpcomingBestSlipProofs(day, band, evaluatedAt, selections, combinations, preferredKickoffWindowMs));
     let searchLimited = cohort.searchLimited;
 
     let newBands = 0, newSlips = 0, alreadyPublished = false, unavailable = false;
@@ -159,12 +194,15 @@ export function createDailySlipPublisher({ database, competitionIds, verifyPubli
       const picks = allocation.selected.get(band);
       const chosen = candidates.filter(slip => picks?.has(slip));
       const limited = search.searchLimited || search.slips.length === bestSlipAppendBatchSize;
+      const upcoming = allocation.futureByBand.get(band);
       searchLimited ||= limited;
       const details = { ...observed, feasibleBeforeAllocation: candidates.length, selected: chosen.length,
         fixtureConflicts: candidates.filter(slip => !picks?.has(slip) && usesFixtures(slip, allocation.fixtures)).length,
+        deferredForUpcoming: allocation.deferred.get(band) ?? 0, ...(upcoming ? { upcomingSearchLimited: upcoming.searchLimited } : {}),
         searchLimited: cohort.searchLimited || limited, search: search.searchDiagnostics };
       if (!chosen.length) {
-        report(band, candidates.length ? "fixture-conflict" : details.searchLimited ? "search-limited" : "no-eligible-slip", details);
+        report(band, details.deferredForUpcoming ? "deferred-for-closer-upcoming-slip"
+          : candidates.length ? "fixture-conflict" : details.searchLimited ? "search-limited" : "no-eligible-slip", details);
         continue;
       }
       const current = now();

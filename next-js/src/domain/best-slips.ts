@@ -15,7 +15,7 @@ import type { CardSnapshotPick } from "./match-card.ts";
 import type { PeriodPerformance } from "./browse-period.ts";
 import type { ContentAccess } from "./paywall.ts";
 import { bestSlipBand, bestSlipBandLimit, bestSlipExactRange, bestSlipOddsBands, dailyBestSlipBandLimit, defaultBestSlipOddsBand, type BestSlipOddsBand } from "./best-slip-odds-bands.ts";
-import { bestSlipFixtureWindow, bestSlipKickoffBufferMs, bestSlipKickoffSpanMs, bestSlipKickoffSpanStepMs,
+import { bestSlipAppendBatchSize, bestSlipFixtureWindow, bestSlipKickoffBufferMs, bestSlipKickoffSpanMs, bestSlipKickoffSpanStepMs,
   bestSlipPreferredKickoffWindowMs, bestSlipPublicationIntervalMs } from "./best-slip-publication-hour.ts";
 import { slipMarketFamilies } from "./slip-markets.ts";
 import { slipProbabilityLowerBound } from "./slip-probability.ts";
@@ -214,6 +214,31 @@ export function buildHourlyBestSlips(day: ReportingDate, band: BestSlipOddsBand,
   if (!editorialSearch) return { ...result, slips };
   const { alternatives, ...diagnostics } = editorialSearch;
   return { ...result, slips, alternatives, searchDiagnostics: { ...diagnostics, priorCombinationConflicts } };
+}
+
+type UpcomingBestSlipProof = Readonly<{ slip: BuiltSlip; priority: ReturnType<typeof automaticBestSlipPriority> }>;
+
+/** Find currently qualified combinations beyond the release horizon for comparison only. */
+export function buildUpcomingBestSlipProofs(day: ReportingDate, band: BestSlipOddsBand, asOf: number,
+  selections: readonly SlipSelection[], priorCombinations: ReadonlySet<string>, releaseLookaheadMs = bestSlipPreferredKickoffWindowMs):
+  Readonly<{ byFixture: ReadonlyMap<string, readonly UpcomingBestSlipProof[]>; searchLimited: boolean }> {
+  const { endExclusive } = bestSlipFixtureWindow(day);
+  const releaseThrough = asOf + releaseLookaheadMs;
+  const upcoming = selections.filter(({ kickoffAt }) => kickoffAt > releaseThrough && kickoffAt < endExclusive);
+  const byFixture = new Map<string, UpcomingBestSlipProof[]>();
+  if (!upcoming.length) return { byFixture, searchLimited: false };
+
+  const search = buildHourlyBestSlips(day, band, bestSlipAppendBatchSize, asOf, { selections: upcoming }, priorCombinations,
+    endExclusive - asOf, { includeAlternatives: true });
+  for (const slip of search.alternatives ?? search.slips) {
+    const proof = { slip, priority: automaticBestSlipPriority(slip) };
+    for (const { fixtureId } of slip.selections) {
+      const matches = byFixture.get(fixtureId);
+      if (matches) matches.push(proof);
+      else byFixture.set(fixtureId, [proof]);
+    }
+  }
+  return { byFixture, searchLimited: search.searchLimited };
 }
 
 export function buildDailyBestSlips(day: ReportingDate, band: BestSlipOddsBand, model: JointSlipModel, asOf: number,

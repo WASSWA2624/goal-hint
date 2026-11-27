@@ -86,4 +86,10 @@ The replay used an in-memory publication store. Focused tests cover exact 15-, 3
 
 Staging activated `ddc66aa7` and returned HTTP 200 from the app and all six Best Slips band queries. The matching private worker passed 220 tests and verified 95 completed migrations. Its staging preflight found an empty operational cohort and a closed odds gate. [Staging release](../../../implementation-docs/deployment-and-version-control.md#15-minute-best-slips-staging-release).
 
+## Distant carryover comparison
+
+In a synthetic 03:00 Kampala slot, the released 05:00–09:30 slip had a 270-minute span and the upcoming 09:30–09:40 alternative had a 10-minute span. The two shared the 09:30 fixture and both priced at 3.24 from the same bookmaker. With conservative bounds of 86% and 75%, the released slip won. With bounds of 80% and 86%, the publisher left the upcoming fixtures unclaimed and selected them in the 03:30 slot. An exact probability tie also deferred for the tighter alternative.
+
+The regression cases also cover mismatched bookmakers or odds bands, a gap equal to the upcoming step width, and reconsideration when a later allocation claims a fixture needed by the upcoming slip. The fixed production-cohort replay retained its three selections at spans of 0, 30 and 60 minutes. That snapshot contained zero retained candidates crossing the release horizon.
+
 [Automatic selection](../../../implementation-docs/automatic-slips.md) · [Featured policy](../../../implementation-docs/prediction-engine.md)
