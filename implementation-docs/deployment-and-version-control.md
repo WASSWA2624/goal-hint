@@ -366,3 +366,11 @@ The release ZIP SHA-256 is `d4e210a36379b26eb929ddd47faf1e7d0e2b5c184ba238a2bc0d
 ## Verification limits
 
 The 26 November 2026 release record documents staging verification of `a1e61cde` with migration status and a synthetic worker check, with production promotion pending at that time. The application overview in this checkout records the earlier production verification of `ee5f6a44`. This audit did not query the hosted deployments, GitHub settings or the actual scheduler. The runbooks document manual approval, upload and activation, with scripts for validation and recurring jobs. Any host-side automation beyond those records needs confirmation from the host operator. [Staging verification record](https://github.com/WASSWA2624/goal-hint/commit/8fd09bfb18cae147d8d9729f01f2b10424908c28), [earlier rollout evidence](../APP_OVERVIEW.md), [release and worker runbooks](../next-js/docs/deployment/how-to-deploy.md).
+
+## Best Slips selection staging release
+
+On 27 November 2026, staging activated `0b7d1f7d` and served Next build `6Z5klNMZIB555yj-7hM9C`. The release ZIP SHA-256 is `f590e1745d223e80e811ae146c6efd4b087b261b0ea9432d02caf0f111f7ea7f`. The migration inventory was identical and the host verified all 95 required migrations. The exact previous staging ZIP from `db2f8ea5` was preserved and its immutable files matched the prior hosted receipt.
+
+Matches, Best Slips and Builder returned HTTP 200 with `noindex`. The Matches and guest session APIs returned HTTP 200. All six Best Slips band queries returned HTTP 200 with the existing staging `odds-unavailable` status. The corresponding staging-private publisher passed 213 focused tests. Its read-only preflight verified the staging database and exercised the closed odds gate. Eligible publication was exercised on isolated MySQL and in the replay, because staging had no operational fixtures or public odds approval. [Baseline and replay](../next-js/docs/reports/best-slips-canonical-selection-2026-11-27.md).
+
+Production promotion of this release awaits owner approval. If a cutoff worker starts sealing `local-featured-pre-match-v6`, use a rollback web release that accepts both v5 and v6 sealed decisions. The v5-only reader predates that format.

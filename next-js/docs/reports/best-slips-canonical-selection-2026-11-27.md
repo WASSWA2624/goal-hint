@@ -21,6 +21,8 @@ The old count is its independently selected disjoint batch before cross-band exc
 
 Each band searched from the same 261 stored offers. The new selector retained 157 candidates after applying its automatic input bounds. In ascending band order, bounded kickoff branch exits were 8,272 / 182 / 28 / 0 / 0 / 0, bookmaker exits were 69,398 / 664 / 48 / 0 / 0 / 0, and exact-odds exits were 7,329 / 1,502 / 596 / 16 / 16 / 16. These are search-work counters and can include repeated branches. Forecast and price qualification upstream yielded offers for 83 of 129 inspected fixtures, and the capture did not subdivide the remaining 46 by individual forecast, price or risk gate.
 
+The release horizon plus the kickoff cap retained 52 distinct fixtures across the 157 offers. An independent odds-only upper bound on that pool found a maximum same-book product of 3.6512563 over at most eight fixtures within 30 minutes. The five higher bands were infeasible in this sample even before ranking and allocation.
+
 The two old planned spans were 105 and 150 minutes. Their median, 95th percentile and maximum were 127.5, 150 and 150 minutes. The new plan used two 30-minute slips, with zero above 30.
 
 | Plan | Exact-price display | Legs | Mean leg probability | Internal joint lower bound | Kickoff span |
@@ -32,10 +34,22 @@ The two old planned spans were 105 and 150 minutes. Their median, 95th percentil
 
 The new plan's mean leg probabilities rose, and its median internal lower bound fell by 1.22 percentage points. The lower bound ranks the combinations without a joint calibration model. The replay used forecasts and quotes available at the captured clock.
 
+## Featured-pick replay
+
+At 15:57:29 Kampala time, a separate production read-only transaction sampled the earliest 350 scheduled fixtures in the next 24 hours and reached the sample limit. It found 201 priced picks, including 163 standard and 23 fallback Local Engine picks and 15 legacy provider picks. Of the 186 priced Local Engine picks, 128 had another modeled outcome with exactly the selected win probability. Running both policies on that evidence yielded the same chosen outcomes, prices and tiers. The 58 remaining Local Engine picks had no tied outcome. The results support keeping the support preference at an exact probability tie with the current evidence.
+
 ## Synthetic regression cases
 
 - A three-fixture slate has a plausible 5.00–10.00 pair that shares a fixture with the lowest band. Old allocation filled one of the two feasible bands. The new allocation filled both with two slips and three distinct fixtures. The remaining four bands could not reach their exact odds. All selected fixtures started together.
 - A 21-fixture slate has independent feasible candidates in all six bands. The old selector chose `[17, 1, 0, 0, 0, 0]` in ascending band order. The new selector chose `[2, 1, 1, 1, 1, 1]`, using 19 different fixtures and dropping the 04:00–14:00 pair. Total slips fell from 18 to 7, while populated bands rose from 2 to 6. The old median, 95th percentile and maximum spans were 0, 600 and 600 minutes. The new values were 25, 30 and 30. Neither search exhausted its budget.
 - At an identical 90% Local Engine forecast, the old featured policy chose Under 5.5 at 1.29 with one verified exact book and modeled net return of +0.161 per unit. The new policy chose a separately modeled Over 1.5 at 1.25 with three verified exact books and modeled return of +0.125. A 93% Under 5.5 still ranks ahead. The standard tier retains the 1.10 and positive-return requirements. A priced fallback at 1.01 can still qualify, with its signed modeled return preserved.
+
+## Verification
+
+Focused regression checks covered the exact 30-minute and +1 ms boundaries, timestamps across midnight, drift under the publication lock, original wide-slip archive reads, same-book exact products, cross-band allocation and readiness skips. The publication integration ran on isolated MySQL 8.4.11 and exercised concurrent claims. Lint, type checking, schema validation and the theme contract passed. The default JavaScript suite passed 3,568 tests with 15 failures and one skip. The Python script suite passed 215 with one failure in the November replay trigger assertion. All 16 failures reproduced on the pre-change `aa971eeb` source.
+
+The private staging publisher candidate from `0b7d1f7d` passed 213 focused tests. Its read-only preflight verified 95 completed migrations and found zero operational fixtures and zero append batches. The staging odds gate returned `odds-unavailable` before a cohort read or publication write. Staging therefore verifies the host runtime and guard, with eligible-publication cases exercised by synthetic fixtures and isolated MySQL.
+
+The checksummed staging web artifact activated the same `0b7d1f7d` commit and served build `6Z5klNMZIB555yj-7hM9C`. The three app pages, the Matches and guest session APIs, and all six Best Slips band queries returned HTTP 200. Staging retained `noindex`. Its migration ledger verified all 95 entries. Production promotion awaits owner approval. [Staging release](../../../implementation-docs/deployment-and-version-control.md#best-slips-selection-staging-release).
 
 [Automatic selection](../../../implementation-docs/automatic-slips.md) · [Featured policy](../../../implementation-docs/prediction-engine.md)
