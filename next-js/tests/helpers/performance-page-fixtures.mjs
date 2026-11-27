@@ -48,6 +48,7 @@ export const performancePageScenarios = {
     history: { ...history, records: [], total: 0, statistics: summarizeSlipPerformance([]) } },
   unavailable: { locale: "en", filters, report: null, history: null },
   pinned: { locale: "en", filters: { ...filters, source: "ai", model: modelVersion().id, version: "synthetic-version" }, report: report(), history },
+  "leagues-first": { locale: "en", filters, report: leagueReport(1), history },
   leagues: { locale: "en", filters: { ...filters, leaguePage: 2 }, report: leagueReport(2), history },
   "league-outside": { locale: "en", filters: { ...filters, leaguePage: 3 }, report: leagueReport(3), history },
 };

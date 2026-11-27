@@ -545,6 +545,7 @@ test("normal private documents, RSC, account APIs and mutations are never persis
     assert.equal(await host.request(path), undefined);
     assert.equal(await host.request(path, { method: "POST" }), undefined);
   }
+  assert.equal(await host.request("/en/subscribe", { method: "POST", mode: "navigate" }), undefined);
   const allKeys = [...host.storage.stores.values()].flatMap((cache) => [...cache.entries.keys()]);
   assert.ok(allKeys.every((key) => !/account|api\/matches|_rsc/.test(key)));
   const allBodies = await Promise.all([...host.storage.stores.values()].flatMap((cache) => [...cache.entries.values()].map((response) => response.clone().text())));
@@ -557,8 +558,20 @@ test("HTTP authorization errors remain authoritative while an unavailable server
     host.network.navigationStatus = code;
     assert.equal((await host.request("/en/account", { mode: "navigate" })).status, code);
   }
-  host.network.navigationStatus = 503;
-  assert.equal(await (await host.request("/en/matches", { mode: "navigate" })).text(), initial.entryBody);
+  const path = "/en/matches?result=won&when=today";
+  host.network.navigationStatus = 500;
+  assert.equal(await (await host.request(path, { mode: "navigate" })).text(), initial.entryBody);
+  for (const code of [502, 503, 504]) {
+    host.network.navigationStatus = code;
+    const fallback = await host.request(path, { mode: "navigate" });
+    assert.equal(host.calls.at(-1).url, absolute(path));
+    assert.equal(fallback.status, 200);
+    assert.equal(fallback.headers.get("cache-control"), "no-store");
+    assert.equal(await fallback.text(), initial.entryBody.replace("<html>", '<html data-goalhint-offline-reason="server-unavailable">'));
+  }
+  host.network.offline = true;
+  assert.equal(await (await host.request(path, { mode: "navigate" })).text(), initial.entryBody,
+    "The server reason must not be stored in the verified connection page.");
 });
 
 test("slow live documents take precedence over the connection page while a stalled request falls back", async (t) => {

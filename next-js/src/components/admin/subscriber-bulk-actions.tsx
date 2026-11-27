@@ -86,7 +86,7 @@ export function SubscriberBulkDialog({ operation, plans, action, onSuccess, onCl
     <Submit type="submit" form={id} $variant="primary" disabled={!confirmed || action.busy}>{label}</Submit>
   </>}>
     <CompactForm id={id} onSubmit={submit} data-subscriber-bulk-confirm>
-      <MutedText>This action applies to <strong>{count} {count === 1 ? "account" : "accounts"}</strong> selected on this page.</MutedText>
+      <MutedText>This action applies to <strong>{count} {count === 1 ? "account" : "accounts"}</strong> selected from the loaded list.</MutedText>
       {destructive && <MutedText>{kind === "delete"
         ? "Permanently deletes eligible accounts and linked records. Retained accounting and audit records may prevent deletion."
         : "Erases identifying data and signs out devices. Payment amounts and access history are retained."}</MutedText>}

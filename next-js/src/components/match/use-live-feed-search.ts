@@ -18,12 +18,12 @@ const initialSearch = (scope: string, text: string): SearchState => ({ scope, te
 const browserHref = () => window.location.pathname + window.location.search;
 
 /** Keep a live list overlay within one server-owned filter, calendar and access scope. */
-export function useLiveFeedSearch({ query, today, data, suspended, navigate, refresh }: {
-  query: FeedQuery; today: ReportingDate; data: MatchFeedResponse | null; suspended: boolean;
+export function useLiveFeedSearch({ query, today, data, access, suspended, navigate, refresh }: {
+  query: FeedQuery; today: ReportingDate; data: MatchFeedResponse | null; access: MatchFeedResponse["access"]; suspended: boolean;
   navigate: (next: FeedQuery) => void; refresh: () => void;
 }) {
   const dispatch = useAppDispatch();
-  const scope = `${feedQueryHref(query, today)}:${today}:${data?.access.tier}:${data?.access.signedIn}`;
+  const scope = `${feedQueryHref(query, today)}:${today}:${access.tier}:${access.signedIn}`;
   const [state, setState] = useState(() => initialSearch(scope, query.search));
   const current = state.scope === scope ? state : initialSearch(scope, query.search);
   if (state !== current) setState(current);

@@ -15,7 +15,18 @@ export type SubscriberDirectoryPaging = Readonly<{ page: number; pages: number; 
 export type SubscriberDirectoryPage = SubscriberDirectoryPaging & Readonly<{
   accounts: readonly SubscriberDirectoryAccount[];
   asOf: string;
+  hasMore?: boolean;
 }>;
+export type SubscriberDirectoryCursor = Pick<SubscriberDirectoryAccount, "id" | "lastSignInAt">;
+
+export function parseSubscriberDirectoryCursor(value: unknown): SubscriberDirectoryCursor | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const { id, lastSignInAt } = value as Partial<SubscriberDirectoryCursor>;
+  if (typeof id !== "string" || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/iu.test(id)
+    || typeof lastSignInAt !== "string" || lastSignInAt.length !== 24 || !Number.isFinite(Date.parse(lastSignInAt))
+    || new Date(lastSignInAt).toISOString() !== lastSignInAt) return null;
+  return { id: id.toLowerCase(), lastSignInAt };
+}
 
 export const emptySubscriberDirectoryQuery: SubscriberDirectoryQuery = Object.freeze({
   search: "", status: "all", access: "all", plan: "all", recent: "all",

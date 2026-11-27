@@ -25,7 +25,7 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
   const invalidTarget = params.paymentId !== undefined && !paymentId;
   const db = page.services.database;
   const [data, plans] = db ? await Promise.all([
-    createPaymentReview(db).list(undefined, paymentId, { filters, page: Number(params.page ?? 1), search: typeof params.search === "string" ? params.search : "",
+    createPaymentReview(db).list(undefined, paymentId, { filters, appendable: true, page: Number(params.page ?? 1), search: typeof params.search === "string" ? params.search : "",
       ...(uuid(params.focus) ? { focus: params.focus } : {}) }).catch(() => null),
     plansServiceFor(db).list().catch(() => []),
   ]) : [null, []] as const;

@@ -104,6 +104,8 @@ export const slipsMessages = {
   "bestSlips.filters.lost": "Lost",
   "bestSlips.filters.pending": "Pending",
   "bestSlips.filters.void": "Void",
+  "bestSlips.filters.others": "Others",
+  "bestSlips.filters.mobileOddsRange": "Odds Range",
   "bestSlips.filters.cancelled": "Cancelled",
   "performance.cancelled": "Cancelled",
   "bestSlips.filters.allDates": "All dates",

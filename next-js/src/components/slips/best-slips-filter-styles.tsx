@@ -27,10 +27,10 @@ export const FiltersPanel = styled.section`
     gap: var(--gh-spacing-3); padding-block: var(--gh-spacing-1);
     background: ${({ theme }) => theme.color.page};
     [data-performance-summary] { background: transparent; }
-    [data-performance-heading] { padding-block-start: var(--gh-spacing-0_5); }
+    [data-performance-heading] { padding-block-start: 0; }
   }
   ${media.belowDesktop} {
-    /* Keep the title's existing top spacing while joining the results caption to its slip list. */
+    [data-performance-heading] { padding-block-start: 0; }
     &&& { padding-block-end: 0; }
     &:has(+ div > [data-slip-list]) { margin-block-end: calc(-1 * var(--gh-spacing-1)); }
   }
@@ -56,6 +56,10 @@ export const AppliedSummary = styled.div`
   [data-applied-result] { color: ${({ theme }) => theme.color.text}; }
   [data-best-slips-summary] { grid-column: -2 / -1; grid-row: 1; text-align: end; white-space: nowrap; font-variant-numeric: tabular-nums; }
   [data-best-slips-summary] > span { display: block; }
+  ${media.belowDesktop} {
+    grid-template-columns: minmax(0, 1fr);
+    [data-best-slips-summary] { display: none; }
+  }
   ${media.desktop} {
     padding: 0; background: transparent; font-size: var(--gh-font-secondary);
   }

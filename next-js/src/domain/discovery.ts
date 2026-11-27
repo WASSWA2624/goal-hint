@@ -22,7 +22,8 @@ export function feedDiscovery(query: FeedQuery, today: ReportingDate) {
   const order = matchFeedPageDefaults.sort;
   const defaultOrder = query.sort.direction === order.direction && query.sort.by === order.by;
   const matchesToday = query.dates.kind === "today";
-  const filtered = Boolean(query.zone) || activeFeedFilterCount(query) > 0 || !defaultOrder ||
+  const defaultOutcome = matchesToday && query.result === matchFeedPageDefaults.result;
+  const filtered = Boolean(query.zone) || activeFeedFilterCount(query) > Number(defaultOutcome) || !defaultOrder ||
     query.pageSize !== feedQueryRules.pageSize || range.dayCount !== 1 && query.dates.kind !== defaultFeedDatePreset;
   const page = query.page === 1 ? "" : `?page=${query.page}`;
   const path = filtered || query.dates.kind === defaultFeedDatePreset ? feedQueryHref(query, today)

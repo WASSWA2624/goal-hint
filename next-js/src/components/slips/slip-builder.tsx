@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, useTransition, type FormEvent } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ComponentProps, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { trackEvent } from "@/components/analytics/tracker";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
@@ -10,8 +10,7 @@ import { FilterDialogTrigger } from "@/components/ui/filter-dialog-trigger";
 import { LockIcon, ResetIcon, SlipIcon } from "@/components/ui/icons";
 import { MarketFilterControl, MarketFilterDialog } from "@/components/ui/market-filter-dialog";
 import { EmptyState } from "@/components/ui/feedback";
-import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
-import { PagePaginationSection } from "@/components/ui/pagination-styles";
+import { ShowMore } from "@/components/ui/show-more";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import { getDateInTimeZone } from "@/domain/device-calendar";
@@ -40,6 +39,12 @@ import { Actions, BuildActionLabel, BuildButton, BuildLink, BuilderFeedback, Bui
   CriteriaForm, CriteriaOptions, FieldGroup, Note, Results, SlipHeading, SlipList, SlipStack } from "./slip-styles";
 
 export type { SlipCriteriaIssue } from "./slip-criteria-fields";
+
+const BuilderResultCard = memo(function BuilderResultCard({ shareCriteria, ...card }: Omit<ComponentProps<typeof SlipCard>, "shareSource"> & {
+  shareCriteria: string;
+}) {
+  return <SlipCard {...card} shareSource={{ source: "builder", criteria: shareCriteria, slipId: card.slip.id }} />;
+});
 
 export function SlipAccessRequired({ locale, showAccount = false, signedIn = false }: { locale: string; showAccount?: boolean; signedIn?: boolean }) {
   return <SlipStack><AppBrandBar locale={locale} showAccount={showAccount} />
@@ -349,9 +354,10 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   const data = result?.data, generated = result?.state === "generated" && data !== null && data !== undefined;
   const slips = data?.slips;
   const pageCount = Math.ceil((slips?.length ?? 0) / slipPageSize);
-  const page = Math.min(pagination.page, Math.max(1, pageCount)), offset = (page - 1) * slipPageSize;
+  const page = Math.min(pagination.page, Math.max(1, pageCount));
   const orderedSlips = useMemo(() => slips ? [...slips].sort(compareSlipDisplayProbability) : [], [slips]);
-  const shownSlips = useMemo(() => orderedSlips.slice(offset, offset + slipPageSize), [orderedSlips, offset]);
+  const shownSlips = useMemo(() => orderedSlips.slice(0, page * slipPageSize), [orderedSlips, page]);
+  const shareCriteria = generated ? serializeSlipCriteria(criteria).toString() : "";
   const emptyState = result?.state === "generated" ? "data-unavailable" : result?.state;
   const accessRequired = <UnlockPanel locale={locale} signedIn={signedIn} returnTo={action} guestView="login" label="paywall.unlockSlipBuilder" />;
   const { targets, limits: limitsFields, kickoff: kickoffFields, markets: marketFields, reuse: reuseField } = renderSlipCriteriaFields({
@@ -448,18 +454,15 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
           {...(result.matchStates ? { initialStates: result.matchStates } : {})}>
         <SlipList data-slip-list>{shownSlips.map((slip, index) => {
           const estimatedProbability = data.jointProbabilities?.[slip.id];
-          return <SlipCard key={slip.id} slip={slip} index={offset + index} locale={locale} {...(result.matchStates ? { matchStates: result.matchStates } : {})}
+          return <BuilderResultCard key={slip.id} slip={slip} index={index} locale={locale} {...(result.matchStates ? { matchStates: result.matchStates } : {})}
             publishedAt={result.asOf}
-            shareSource={{ source: "builder", criteria: serializeSlipCriteria(criteria).toString(), slipId: slip.id }}
+            shareCriteria={shareCriteria}
             {...(estimatedProbability !== undefined ? { estimatedProbability } : {})} />;
         })}</SlipList>
         </SlipMatchRefreshProvider>
-        {pageCount > 1 && <Note>{messages.text("history.showing", { first: messages.number(offset + 1), last: messages.number(offset + shownSlips.length), total: messages.number(data.slips.length) })}</Note>}
-        {pageCount > 1 && <PagePaginationSection>
-          <NumberedPagination page={page} pages={pageCount} disabled={pending}
-            labels={numberedPaginationLabels(messages, messages.text("slips.generated"))}
-            onPage={(next) => { resultsRef.current?.scrollIntoView({ block: "start" }); setPagination({ result, page: next }); }} />
-        </PagePaginationSection>}
+        <ShowMore messages={messages} hasMore={page < pageCount} disabled={pending}
+          onShowMore={() => setPagination({ result, page: page + 1 })} />
+        {pageCount > 1 && <Note>{messages.text("history.showing", { first: messages.number(1), last: messages.number(shownSlips.length), total: messages.number(data.slips.length) })}</Note>}
       </> : <BuilderFeedback>{emptyState ? <EmptyState headingLevel={3} title={messages.text(`slips.state.${emptyState}.title`)}
         description={messages.text(`slips.state.${emptyState}.description`)} /> : <p>{messages.text("slips.emptyPrompt")}</p>}</BuilderFeedback>}
       {result?.searchLimited && <Note>{messages.text("slips.limited")}</Note>}

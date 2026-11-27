@@ -4,7 +4,7 @@ import { FloatingField } from "@/components/ui/floating-field";
 
 import type { ComponentPropsWithoutRef } from "react";
 import { feedDatePresets, feedFilterStatuses, parseFeedStatus, type FeedStatus, type FeedQuery } from "@/domain/feed-query";
-import { predictionResults } from "@/domain/performance-summary";
+import { predictionResultFilters } from "@/domain/performance-summary";
 import { createMessages } from "@/i18n/messages";
 
 type SelectProps = Omit<ComponentPropsWithoutRef<"select">, "children" | "value" | "onChange"> & { locale: string };
@@ -16,9 +16,9 @@ export function FeedStatusSelect({ locale, value, result, onResultChange, onChan
   const messages = createMessages(locale);
   if (result && onResultChange) return <FloatingField label={messages.text("feed.filters.result")}>
     <select {...props} name="result" data-feed-result aria-label={messages.text("feed.filters.result")} value={result}
-      onChange={(event) => onResultChange(predictionResults.find((item) => item === event.target.value))}>
+      onChange={(event) => onResultChange(predictionResultFilters.find((item) => item === event.target.value))}>
       <option value="all">{messages.text("performance.summary.all")}</option>
-      {predictionResults.map((item) => <option key={item} value={item}>{messages.text(`performance.${item}`)}</option>)}
+      {predictionResultFilters.filter(item => item !== "others" || result === "others").map((item) => <option key={item} value={item}>{messages.text(`performance.${item}`)}</option>)}
     </select>
   </FloatingField>;
   const retained = !feedFilterStatuses.some((status) => status === value);

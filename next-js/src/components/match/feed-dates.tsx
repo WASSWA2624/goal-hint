@@ -180,7 +180,7 @@ const CalendarButton = styled.button`
     > svg { font-size: var(--gh-size-7); }
     > b {
       font-size: var(--gh-font-caption); font-weight: var(--gh-weight-bold); line-height: var(--gh-leading-tight);
-      transform: translateY(var(--gh-size-1_25));
+      transform: translateY(var(--gh-size-1));
     }
   }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.fieldHover}; } }
@@ -365,7 +365,7 @@ export function DateStrip({ locale, today, from, to, hrefForDay, onDatesChange, 
       onClick={event => { event.currentTarget.focus({ preventScroll: true }); setCalendarOpen(true); }}
       aria-description={filters && selected ? messages.reportingDate(selected) : undefined}
       aria-label={startDate !== endDate ? messages.text("feed.date.rangeCurrent", { range: messages.reportingDateSpan(startDate, endDate) }) : messages.text("feed.date.rangeOpen")}>
-      <CalendarIcon />
+      <CalendarIcon strokeWidth={1.5} />
       {filters && <b aria-hidden="true">{messages.reportingDayParts(anchor).day}</b>}
     </CalendarButton>
     {filters}

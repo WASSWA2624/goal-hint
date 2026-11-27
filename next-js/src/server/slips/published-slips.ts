@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getReportingDate, getReportingDayBounds, parseReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange } from "../../domain/calendar.ts";
 import { bestSlipCombinationIdentity, bestSlipDailyCriteria, bestSlipExactTotal, bestSlipView, compareBestSlips, jointSlipProbability, qualifiedJointModel, type BestSlip, type BestSlipView, type BestSlipsResult, type JointSlipModel } from "../../domain/best-slips.ts";
 import { bestSlipBandRank, bestSlipExactRange, bestSlipOddsBands, bestSlipBandLimit, bestSlipOddsBandFor, bestSlipPublicationBands, bestSlipPublicRank, dailyBestSlipBandLimit, defaultBestSlipOddsBand, maximumBestSlipLocalRank, maximumBestSlipPublicRank, type BestSlipOddsBand } from "../../domain/best-slip-odds-bands.ts";
-import { bestSlipsQueryRules, matchesBestSlipsRanges, parseBestSlipsCursor, parseBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "../../domain/best-slips-query.ts";
+import { bestSlipsQueryRules, matchesBestSlipsRanges, matchesBestSlipsStatus, parseBestSlipsCursor, parseBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "../../domain/best-slips-query.ts";
 import type { ReportingDate } from "../../domain/calendar.ts";
 import { bestSlipActivePublicationDays, bestSlipAppendBatchSize, bestSlipFixtureInterval, bestSlipFixtureWindow, bestSlipKickoffBufferMs, bestSlipPublicationHour, bestSlipPublicationIntervalMs } from "../../domain/best-slip-publication-hour.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
@@ -615,7 +615,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
             const category = slipStatusCategory(status);
             statistics.total++; statistics[category]++;
             if (cursor && (parent.day > cursor.day || parent.day === cursor.day && publicRank(parent, row.rank) <= cursor.rank)) continue;
-            if (query.status !== "all" && category !== query.status) continue;
+            if (!matchesBestSlipsStatus(category, query.status)) continue;
             membership.push(row.id);
             const position = total++;
             if (allDates ? views.length > bestSlipsQueryRules.pageSize : position < offset || position >= offset + bestSlipsQueryRules.pageSize) continue;

@@ -1,7 +1,7 @@
 "use client";
 
 import { DateTimeField } from "@/components/ui/date-time-field";
-import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
+import { ShowMore } from "@/components/ui/show-more";
 import { useId, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
@@ -18,13 +18,13 @@ import { createMessages } from "@/i18n/messages";
 import { FloatingField } from "./floating-field";
 import { EmptyPanel } from "./desk-styles";
 import { RecordBack, RecordBody, RecordCard, RecordDetailHead, RecordDetails, RecordFeedback, RecordFooter, RecordItem, RecordList,
-  RecordListFooter, RecordItemTitle, RecordRowContent, RecordScroll, RecordWorkspace, useRecordView } from "./record-workspace";
+  RecordItemTitle, RecordRowContent, RecordScroll, RecordWorkspace, useRecordView } from "./record-workspace";
 import { AuditDay, AuditEvents, AuditFeed, EventFacts, EventIcon, EventLink,
   EventTime, FilterBody } from "./audit-styles";
 import { RecordPrimaryAction, RecordToolbar } from "./record-toolbar";
 
 const pageSize = 20;
-const paginationLabels = numberedPaginationLabels(createMessages("en"), "Audit pages");
+const messages = createMessages("en");
 const categoryIcons = { security: ShieldIcon, accounts: UserIcon, payments: CardIcon, access: GiftIcon,
   plans: LayersIcon, settings: SlidersIcon, system: SlidersIcon, other: DocumentIcon };
 const dateFormat = new Intl.DateTimeFormat("en-GB", { timeZone: publicPolicy.reportingTimeZone, day: "numeric", month: "short", year: "numeric" });
@@ -54,20 +54,24 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
   const filtersId = useId();
   const [draft, setDraft] = useState({ category, action, period, startDate, endDate });
   const [rangeError, setRangeError] = useState<string | null>(null);
-  const [pageIndex, setPageIndex] = useState(0);
+  const cohort = `${action}:${period}:${startDate}:${endDate}`;
+  const [reveal, setReveal] = useState({ cohort, count: pageSize });
+  const shown = reveal.cohort === cohort ? reveal.count : pageSize;
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [pending, startNavigation] = useTransition();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const matches = useMemo(() => filterAuditRows(rows, { search, category }), [rows, search, category]);
-  const pageCount = Math.max(1, Math.ceil(matches.length / pageSize));
-  const currentPage = Math.min(pageIndex, pageCount - 1);
-  const pageRows = matches.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
-  const selected = pageRows.find(row => row.id === selectedId) ?? pageRows[0];
+  const visible = matches.slice(0, shown);
+  const selected = visible.find(row => row.id === selectedId) ?? visible[0];
   const selectedLink = selected ? auditEventLink(selected) : null;
   const selectedReference = selected ? auditReference(selected) : null;
   const groups = new Map<string, OwnerAuditRow[]>();
-  for (const row of pageRows) { const day = auditDay(row.at); groups.set(day, [...(groups.get(day) ?? []), row]); }
+  for (const row of visible) {
+    const day = auditDay(row.at), group = groups.get(day);
+    if (group) group.push(row);
+    else groups.set(day, [row]);
+  }
   const filtered = search !== "" || category !== "" || period !== "all" || action !== "";
   const activeFilters = [category !== "", action !== "", period !== "all"].filter(Boolean).length;
   const eventOptions = [...actions].sort((a, b) => auditActionLabel(a).localeCompare(auditActionLabel(b)));
@@ -77,7 +81,7 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
     if (nextAction) params.set("action", nextAction);
     if (nextPeriod !== "all") params.set("period", nextPeriod);
     if (nextPeriod === "custom") { params.set("startDate", nextStart); params.set("endDate", nextEnd); }
-    setPageIndex(0); setSelectedId(null); setExportStatus(null);
+    setReveal({ cohort, count: pageSize }); setSelectedId(null); setExportStatus(null);
     startNavigation(() => router.push(`/admin/audit${params.size ? `?${params}` : ""}`, { scroll: false }));
   }
   function applyFilters() {
@@ -85,17 +89,9 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
       try { auditDateBounds({ period: "custom", startDate: draft.startDate, endDate: draft.endDate }); }
       catch { setRangeError("Enter valid dates with the end date on or after the start date."); return; }
     }
-    setCategory(draft.category); setPageIndex(0); setSelectedId(null); setExportStatus(null); setFiltersOpen(false);
+    setCategory(draft.category); setReveal({ cohort, count: pageSize }); setSelectedId(null); setExportStatus(null); setFiltersOpen(false);
     if (draft.action !== action || draft.period !== period || draft.startDate !== startDate || draft.endDate !== endDate)
       changeFilters(draft.action, draft.period, draft.startDate, draft.endDate);
-  }
-  function paginate(next: number) {
-    setPageIndex(next - 1);
-    requestAnimationFrame(() => {
-      const feed = document.getElementById("audit-results");
-      feed?.focus({ preventScroll: true });
-      feed?.scrollTo({ top: 0 });
-    });
   }
   function download() {
     if (!matches.length || pending) return;
@@ -113,7 +109,7 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
     <RecordToolbar><h1>Audit</h1>
       <div role="search" aria-label="Find audit activity">
         <SearchBar id="audit-search" label="Search recent activity" value={search} maxLength={160} autoComplete="off" disabled={pending}
-          onChange={event => { setSearch(event.target.value); setPageIndex(0); setExportStatus(null); }}
+          onChange={event => { setSearch(event.target.value); setReveal({ cohort, count: pageSize }); setExportStatus(null); }}
           filters={{ label: "Advanced filters", dialogId: filtersId, open: filtersOpen, count: activeFilters,
             onOpen: () => { setDraft({ category, action, period, startDate, endDate }); setRangeError(null); setFiltersOpen(true); } }}
           trailingAction={<RecordPrimaryAction label="Export CSV" icon={<DownloadIcon />} disabled={!matches.length || pending}
@@ -164,10 +160,9 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
               })}
             </AuditEvents>
           </div>)}
+        <ShowMore hasMore={visible.length < matches.length} messages={messages} disabled={pending}
+          onShowMore={() => setReveal({ cohort, count: shown + pageSize })} />
       </AuditFeed>
-      {pageCount > 1 && <RecordListFooter>
-        <NumberedPagination compact page={currentPage + 1} pages={pageCount} labels={paginationLabels} disabled={pending} onPage={paginate} />
-      </RecordListFooter>}
     </RecordList>
     <RecordDetails id="audit-record-detail" aria-label="Selected audit event">
       <RecordBack onClick={closeDetail} disabled={pending}>Back to audit</RecordBack>

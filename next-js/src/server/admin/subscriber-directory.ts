@@ -1,6 +1,6 @@
 import "server-only";
 
-import { emptySubscriberDirectoryQuery, subscriberDirectoryPageSize, subscriberSearchTerms, type SubscriberDirectoryAccount,
+import { emptySubscriberDirectoryQuery, subscriberDirectoryPageSize, subscriberSearchTerms, type SubscriberDirectoryAccount, type SubscriberDirectoryCursor,
   type SubscriberDirectoryPage, type SubscriberDirectoryQuery } from "../../domain/subscriber-directory.ts";
 import { normalizePhone } from "../../domain/phone.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
@@ -45,16 +45,23 @@ export function subscriberDirectoryWhere(query: SubscriberDirectoryQuery, at: Da
 
 /** Count and page in the same snapshot, fetching only the fields needed for the directory. */
 export async function readSubscriberDirectory(database: DatabaseRuntime, query: SubscriberDirectoryQuery = emptySubscriberDirectoryQuery,
-  requestedPage = 1, now: (() => number) | number = Date.now):
+  requestedPage = 1, now: (() => number) | number = Date.now, after?: SubscriberDirectoryCursor):
   Promise<SubscriberDirectoryPage & Readonly<{ adminPhone?: string }>> {
   const at = new Date(typeof now === "function" ? now() : now), where = subscriberDirectoryWhere(query, at);
   return database.transaction(async client => {
     const total = await client.memberAccount.count({ where });
     const pages = Math.max(1, Math.ceil(total / subscriberDirectoryPageSize));
     const page = Math.min(requestedPage, pages);
-    const rows = total === 0 ? [] : await client.memberAccount.findMany({ where,
-      orderBy: [{ lastSignInAt: "desc" }, { id: "asc" }], skip: (page - 1) * subscriberDirectoryPageSize, take: subscriberDirectoryPageSize,
+    const lastSignInAt = after ? new Date(after.lastSignInAt) : undefined;
+    const window = after && lastSignInAt ? { AND: [where, { OR: [
+      { lastSignInAt: { lt: lastSignInAt } }, { lastSignInAt, id: { gt: after.id } },
+    ] }] } : where;
+    const rows = total === 0 ? [] : await client.memberAccount.findMany({ where: window,
+      orderBy: [{ lastSignInAt: "desc" }, { id: "asc" }], skip: after ? 0 : (page - 1) * subscriberDirectoryPageSize,
+      take: subscriberDirectoryPageSize + Number(Boolean(after)),
       select: { id: true, phone: true, blockedAt: true, erasedAt: true, lastSignInAt: true } });
+    const hasMore = rows.length > subscriberDirectoryPageSize;
+    if (hasMore) rows.pop();
     // The earliest current period distinguishes active from queued with one result per account.
     const periods = rows.length ? await client.accessCode.groupBy({ by: ["accountId"],
       where: { ...currentAccess(at), accountId: { in: rows.map(row => row.id) } }, _min: { startsAt: true } }) : [];
@@ -65,6 +72,7 @@ export async function readSubscriberDirectory(database: DatabaseRuntime, query: 
         lastSignInAt: row.lastSignInAt.toISOString(), access: startsAt ? startsAt <= at ? "active" : "queued" : "none" };
     });
     const phone = !accounts.length && query.search ? normalizePhone(query.search) : null;
-    return { accounts, page, pages, total, asOf: at.toISOString(), ...(phone && isMemberAdminPhone(phone) ? { adminPhone: phone } : {}) };
+    return { accounts, page, pages, total, asOf: at.toISOString(), ...(after ? { hasMore } : {}),
+      ...(phone && isMemberAdminPhone(phone) ? { adminPhone: phone } : {}) };
   }, { isolationLevel: "RepeatableRead" });
 }

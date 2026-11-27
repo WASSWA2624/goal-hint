@@ -54,8 +54,9 @@ export function SubscriberDirectoryFilters({ query, plans, onQueryChange, traili
 }
 
 /** The identity link has its own space beside the bulk checkbox and account menu. */
-export function SubscriberAccountRow({ account, asOf, selected, href, checked, disabled, onCheck, actionHref, onAccountClick }: {
+export function SubscriberAccountRow({ account, asOf, selected, href, checked, disabled, checkDisabled, onCheck, actionHref, onAccountClick }: {
   account: SubscriberDirectoryAccount; asOf: Date; selected: boolean; href: string; checked: boolean; disabled: boolean;
+  checkDisabled: boolean;
   onCheck: (checked: boolean) => void; actionHref: (action: SubscriberIndividualAction) => string;
   onAccountClick: (event: React.MouseEvent<HTMLAnchorElement>, action?: SubscriberIndividualAction) => void;
 }) {
@@ -64,7 +65,7 @@ export function SubscriberAccountRow({ account, asOf, selected, href, checked, d
   const menuAction = account.status === "erased" ? "delete" : "note";
   const signedIn = new Date(account.lastSignInAt || "");
   return <ManageableRow data-subscriber-row={account.id} data-current={selected || undefined}>
-    <RowCheck><input type="checkbox" aria-label={`Select ${identity}`} checked={checked} disabled={disabled}
+    <RowCheck><input type="checkbox" aria-label={`Select ${identity}`} checked={checked} disabled={disabled || checkDisabled}
       onChange={event => onCheck(event.currentTarget.checked)} /></RowCheck>
     <Identity as={Link} href={href} prefetch={false} scroll={false} aria-current={selected ? "true" : undefined}
       data-subscriber-open onClick={event => onAccountClick(event)}>

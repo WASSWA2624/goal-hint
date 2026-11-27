@@ -70,8 +70,8 @@ export async function verifySearchPerformance(page, origin, widths = [320, 390, 
       assert(figures.periodCount === 1 && figures.periodInHeader, 'Exactly one period appears, inside the header');
       assert(figures.aligned && figures.headerGap >= 0 && figures.headerGap <= 4, 'Cards align with the header and retain minimal spacing');
       assert(figures.valueIcons === 0 && figures.labelIcons === 3, 'Outcome icons belong to labels rather than values');
-      for (const status of ['won', 'lost', 'pending', 'void', 'cancelled', 'all']) {
-        const action = page.locator(`#theme-filters [data-summary-result="${status}"]`);
+      for (const status of (mobile ? ['won', 'pending', 'lost', 'others'] : ['all', 'won', 'lost', 'pending', 'void', 'cancelled'])) {
+        const action = page.locator(`#theme-filters [data-summary-result="${status}"]:visible`);
         await action.click();
         assert(await action.getAttribute('aria-pressed') === 'true', `Best Slips selects ${status} through the shared component`);
       }
@@ -128,7 +128,8 @@ export async function verifyFeedSearchFilters(page, origin, pathname = '/en/matc
     await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'hidden' });
     const summary = page.locator('[data-performance-summary="matches"]');
     await page.locator('[data-feed-performance-state="ready"]').waitFor();
-    assert(await summary.locator('[data-summary-card]').count() === 6, 'The feed uses all six shared cards');
+    const outcomes = await summary.locator('[data-summary-card]:visible').evaluateAll(cards => cards.map(card => card.dataset.summaryCard).join(','));
+    assert(outcomes === (desktop ? 'all,won,lost,pending,void,cancelled' : 'won,pending,lost,others'), 'Each layout displays the expected feed outcomes in reading order');
     if (!desktop) assert(await summary.locator('svg').evaluateAll(icons => icons.every(icon => getComputedStyle(icon).display === 'none')), 'Feed mobile cards hide icons');
     await summary.locator('[data-summary-result="won"]').click();
     await page.waitForURL(url => url.searchParams.get('result') === 'won' && url.searchParams.get('q') === 'Arsenal');

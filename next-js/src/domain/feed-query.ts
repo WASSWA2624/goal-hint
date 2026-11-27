@@ -8,7 +8,7 @@ import { canonicalFeedMarketPicks, type FeedMarketPick } from "./feed-market-pic
 import { isMarketFamily, type MarketFamily } from "./markets.ts";
 import { formatOddsRange, oddsRules, parseOddsRange, type OddsRange } from "./odds.ts";
 import { publicPolicy } from "./public-policy.ts";
-import { predictionResults, type PredictionResult } from "./performance-summary.ts";
+import { predictionResultFilters, type PredictionResultFilter } from "./performance-summary.ts";
 import { resolveLocale, type Locale } from "../i18n/locales.ts";
 
 export const feedStatuses = ["all", "scheduled", "live", "finished", "postponed", "canceled", "abandoned", "awarded", "unknown"] as const;
@@ -41,7 +41,7 @@ export type ProbabilityRange = Readonly<{ min: number; max: number; minExclusive
 export type PicksFilter = "all" | "only";
 export type FeedQuery = Readonly<{
   summary?: "today" | "yesterday" | undefined;
-  result?: PredictionResult | undefined;
+  result?: PredictionResultFilter | undefined;
   locale: Locale;
   dates: DateSelection;
   search: string;
@@ -89,7 +89,8 @@ export const matchFeedPageDefaults = Object.freeze({
   pageSize: feedQueryRules.pageSize,
   picks: "all",
   probability: anyProbability,
-} as const satisfies Pick<FeedQuery, "dates" | "sort" | "pageSize" | "picks" | "probability">);
+  result: "pending",
+} as const satisfies Pick<FeedQuery, "dates" | "sort" | "pageSize" | "picks" | "probability" | "result">);
 export const feedDefaults = Object.freeze({
   today: Object.freeze({ dayOffset: 0, status: "all" }),
   results: Object.freeze({ dayOffset: -1, status: "finished" }),
@@ -242,7 +243,7 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
   const values = parameters(input);
   const get = (key: string) => values.get(key);
   const result = get("result");
-  if (result !== undefined && result !== "all" && !predictionResults.includes(result as PredictionResult)) fail();
+  if (result !== undefined && result !== "all" && !predictionResultFilters.includes(result as PredictionResultFilter)) fail();
   const summary = get("summary");
   if (summary !== undefined && summary !== "today" && summary !== "yesterday") fail();
   const date = get("date");
@@ -291,7 +292,7 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
   if (by !== "live-first" && by !== "kickoff" && by !== "probability" ||
       direction !== undefined && direction !== "desc" && (direction !== "asc" || by === "live-first")) fail();
   return {
-    locale: resolveLocale(context.locale), ...(summary ? { summary } : {}), ...(result && result !== "all" ? { result: result as PredictionResult } : {}), dates, search, ...(zone === undefined ? {} : { zone }), ...(time ? { time } : {}), ...(interval ? { interval } : {}),
+    locale: resolveLocale(context.locale), ...(summary ? { summary } : {}), ...(result && result !== "all" ? { result: result as PredictionResultFilter } : {}), dates, search, ...(zone === undefined ? {} : { zone }), ...(time ? { time } : {}), ...(interval ? { interval } : {}),
     leagues, countries, status: parseFeedStatus(get("status")), markets, ...(marketPicks.length ? { marketPicks } : {}),
     probability: probabilityRange(get("prob")), odds: oddsRange(get("odds"), context.providerOdds ?? publicPolicy.features.providerOdds), picks,
     sort: { by, direction: direction ?? defaultSortDirection[by] },
@@ -313,6 +314,9 @@ export function applyFeedPageDefaults(query: FeedQuery, input: FeedParameters,
   const dates: DateSelection = dated || explicitDates ? query.dates : summary ? { kind: summary } : matchFeedPageDefaults.dates;
   return { ...scope,
     pageSize: matchFeedPageDefaults.pageSize,
+    ...(query.result === undefined && !dated && query.status === "all" && !has("result")
+      && (!explicitDates || dates.kind !== defaultFeedDatePreset)
+      ? { result: matchFeedPageDefaults.result } : {}),
     dates,
     sort: has("sort") || has("dir") ? query.sort : matchFeedPageDefaults.sort,
     picks: has("picks") ? query.picks : matchFeedPageDefaults.picks,
@@ -399,6 +403,8 @@ export function feedQueryHref(query: FeedQuery, today: ReportingDate): string {
     parameters.delete("date"); parameters.delete("from");
   } else {
     path += "/matches";
+    // The Matches route defaults to Pending; an explicit All selection must survive a reload.
+    if (query.result === undefined && query.status === "all" && dates.kind !== defaultFeedDatePreset) parameters.set("result", "all");
     // Keep the API's rolling date choice explicit on Matches.
     if (dates.kind === defaultFeedDatePreset) parameters.set("when", dates.kind);
   }

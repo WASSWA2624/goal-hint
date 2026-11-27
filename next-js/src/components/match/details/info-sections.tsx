@@ -1,5 +1,6 @@
 "use client";
 
+import { ShowMore } from "@/components/ui/show-more";
 import { SubscriberNotice } from "@/components/members/subscriber-notice";
 
 import Link from "@/components/navigation/navigation-link";
@@ -9,14 +10,13 @@ import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calend
 import { CountryLabel } from "@/components/ui/country-label";
 import { CompetitionLogo } from "@/components/match/competition-media";
 import type { InsightResult, InsightSections } from "@/domain/match-insights";
-import { pageOf } from "@/domain/match-insight-presentation";
 import { fullDetailSnapshot } from "@/domain/detail-snapshot";
 import { openItem } from "@/domain/match-view";
 import { matchHref } from "@/domain/navigation";
 import { plainClick } from "@/components/match/filter-parts";
 import { ContextIcon, ExternalIcon, HistoryIcon, NewsIcon, RefereeIcon } from "./details-icons";
 import {
-  ChoiceGroup, Crest, Facts, Note, Pager, PanelBar, Pill, RowButton, RowList, SectionState, Strong, desktop, focusRing, size, useDetails, useStableDetails,
+  ChoiceGroup, Crest, Facts, Note, PanelBar, Pill, RowButton, RowList, SectionState, Strong, desktop, focusRing, size, useDetailListPages, useDetails, useStableDetails,
 } from "./details-ui";
 import { ItemPanel, SectionCard, useReturnFocus } from "./section-card";
 import { RecordPanel } from "./team-sections";
@@ -85,7 +85,7 @@ export const NewsSection = memo(function NewsSection({ omitPredictionAnalysis = 
   const items = omitPredictionAnalysis ? supplied.filter(item => item.kind !== "analysis" || !predictionTexts.has(item.title)) : supplied;
   const total = omitPredictionAnalysis ? items.length : news.data?.items.length ?? preview?.totals.news ?? 0;
   const kind = (["report", "analysis"] as const).find((entry) => entry === view.tab) ?? null;
-  const filtered = items.filter((item) => kind === null || item.kind === kind), paged = pageOf(filtered, view.page, 10);
+  const filtered = items.filter((item) => kind === null || item.kind === kind), paged = useDetailListPages(view, filtered, 10);
   const selected = view.item ? supplied.find((item) => item.id === view.item) ?? null : null;
   const list = useRef<HTMLDivElement>(null);
   useReturnFocus(list, view.item);
@@ -114,7 +114,7 @@ export const NewsSection = memo(function NewsSection({ omitPredictionAnalysis = 
             { value: "analysis", label: messages.text("details.newsKind.analysis") }]} />
       </PanelBar>
       {paged.items.length ? <RowList><NewsRows items={paged.items} /></RowList> : <Note>{messages.text("details.newsNone")}</Note>}
-      <Pager page={paged.page} pages={paged.pages} onPage={(page) => update((current) => ({ ...current, page }), "replace")} />
+      <ShowMore messages={messages} {...paged.more} />
       {limited && <Note>{messages.text("match.limitedNews")}</Note>}
       <Note>{messages.text("details.newsBasis")}</Note>
     </div>}

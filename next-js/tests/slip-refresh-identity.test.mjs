@@ -7,6 +7,19 @@ const state = (fixtureId, changes = {}) => ({ fixtureId, family: "match-result",
   forecast: { cycleId: `cycle-${fixtureId}`, revisionId: `revision-${fixtureId}`, publishedAt: 1 },
   status: "live", outcome: "pending", score: { home: 1, away: 0 }, liveClock: null, ...changes });
 
+test("rotating oversized slip observations keep unpolled and newer server seeds visible", () => {
+  const first = state("1"), second = state("2"), third = state("3");
+  const newer = state("2", { score: { home: 3, away: 1 } });
+  const snapshot = { states: [], revoked: false, batches: [
+    { asOf: 9, states: [state("1", { score: { home: 8, away: 7 } })] },
+    { asOf: 11, states: [newer] },
+  ] };
+  const visible = currentSlipMatchStates([first, second, third], 10, snapshot);
+  assert.equal(visible.find(({ fixtureId }) => fixtureId === "1"), first);
+  assert.equal(visible.find(({ fixtureId }) => fixtureId === "2"), newer);
+  assert.equal(visible.find(({ fixtureId }) => fixtureId === "3"), third);
+});
+
 test("unchanged slip polls retain the context snapshot and skip redundant subscriber updates", () => {
   const store = createSlipMatchObservationStore("cohort");
   let notifications = 0;

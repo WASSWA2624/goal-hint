@@ -1,4 +1,5 @@
 import { createFeedRoute } from "@/app/_components/feed-route";
+import { cookies } from "next/headers";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { parseFeedQuery } from "@/domain/feed-query";
 import { feedFixture, summaryFixture } from "../../feed-fixture";
@@ -8,10 +9,14 @@ export const metadata = { title: "Synthetic match loading", robots: { index: fal
 
 export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { fail, ...input } = await searchParams;
+  const feedUnavailable = fail === "feed" || (await cookies()).get("synthetic-feed-unavailable")?.value === "1";
   const at = utcInstantFromEpochMilliseconds(Date.now()), today = getReportingDate(at);
   const route = createFeedRoute({ instant: async () => at, policy: () => ({ deployment: "staging", index: false }),
     document: async () => true, resolveAccess: async () => ({ tier: "full", signedIn: false, mode: "off" }),
-    read: async parameters => feedFixture(parseFeedQuery(parameters, { today })),
+    read: async parameters => {
+      if (feedUnavailable) throw new Error("Synthetic match feed outage");
+      return feedFixture(parseFeedQuery(parameters, { today }));
+    },
     readSummary: async parameters => {
       await new Promise(resolve => setTimeout(resolve, 1_800));
       if (fail === "1") throw new Error("Synthetic summary outage");

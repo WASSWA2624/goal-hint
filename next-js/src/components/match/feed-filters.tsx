@@ -70,7 +70,7 @@ export function FeedFilters({ query, today, dateQuery, dateToday, scope, perform
   const leagueList = useMemo(() => leagueOptions(leagues, createMessages(query.locale).text("match.competitionUnknown")), [leagues, query.locale]);
   const countryList = useMemo(() => countryOptions(leagues), [leagues]);
   const defaultSort = matchFeedPageDefaults.sort;
-  const count = panelFilterCount(query) + Number(query.status !== "all") + Number(!!query.result)
+  const count = panelFilterCount(query) + Number(query.status !== "all") + Number(!!query.result && query.result !== matchFeedPageDefaults.result)
     + Number(query.dates.kind !== matchFeedPageDefaults.dates.kind)
     + Number(query.picks !== matchFeedPageDefaults.picks)
     + Number(query.sort.by !== defaultSort.by || query.sort.direction !== defaultSort.direction);
@@ -131,15 +131,17 @@ export function FeedFilters({ query, today, dateQuery, dateToday, scope, perform
         setLastOdds(field); setDraft(current => ({ ...current, odds: { ...current.odds, [field]: value } }));
       }} /></FloatingField>;
   }
+  const resultFilter = draft.query.result === matchFeedPageDefaults.result && draft.query.status === "all"
+    ? undefined : draft.query.result;
   const native = useMemo(() => {
     const parameters = serializeFeedQuery({ ...(complete ?? query), search: "", page: 1 }, today);
     for (const key of ["q", "date", "from", "to", "when", "start", "end", "timeFrom", "timeTo", "tz", "status", "result", "league", "country", "market", "marketPick"]) parameters.delete(key);
-    if (draft.query.result) parameters.set("status", draft.query.status);
+    if (resultFilter) parameters.set("status", draft.query.status);
     if (!parameters.has("prob")) parameters.set("prob", "0-100");
     parameters.set("picks", draft.query.picks);
     parameters.set("sort", draft.query.sort.by); parameters.set("dir", draft.query.sort.direction);
     return [...parameters];
-  }, [complete, draft.query, query, today]);
+  }, [complete, draft.query, query, resultFilter, today]);
   return <Panel ref={form} data-feed-filters action={matchesHref(query.locale)} method="get" aria-label={messages.text("feed.filters.form")} aria-busy={pending}
     onReset={event => { event.preventDefault(); reset(); }} onSubmit={event => {
       event.preventDefault();
@@ -164,7 +166,7 @@ export function FeedFilters({ query, today, dateQuery, dateToday, scope, perform
       applyError={queryTooLong ? messages.text("feed.filters.queryTooLong") : undefined}>
       <DialogContent data-feed-dialog>
         <FilterDialogSection><FilterFieldRow data-fields data-status-sort-fields>
-          <FeedStatusSelect name="status" locale={query.locale} value={draft.query.status} result={draft.query.result}
+          <FeedStatusSelect name="status" locale={query.locale} value={draft.query.status} result={resultFilter}
             onResultChange={result => setDraft(current => ({ ...current, query: { ...current.query, result, page: 1 } }))}
             onChange={status => { setDraft(current => {
               const compiled = compileFeedFilterDraft(current, today, oddsEnabled) ?? current.query;

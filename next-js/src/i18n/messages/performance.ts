@@ -52,6 +52,7 @@ export const performanceMessages = {
   "performance.lost": "Lost",
   "performance.pending": "Pending",
   "performance.void": "Void",
+  "performance.others": "Others",
   "performance.settled": "Settled sample",
   "performance.hitRate": "Observed win rate",
   "performance.brier": "Brier score",

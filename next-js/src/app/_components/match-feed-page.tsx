@@ -3,17 +3,17 @@ import type { ReactNode } from "react";
 import type { ReportingDate } from "@/domain/calendar";
 import type { FeedQuery } from "@/domain/feed-query";
 import type { FeedPerformanceSeed } from "@/domain/feed-performance-summary";
-import type { FeedPageResult } from "@/server/matches/feed-page";
+import type { FeedPageResult, MatchFeedResponse } from "@/domain/match-feed";
 import { FeedSurface } from "./feed-surface";
 import { PublicShell } from "./public-shell";
 
 /** Server reads stay authoritative; the persistent surface owns UI transitions. */
 export function MatchFeedPage(props: {
-  query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode; showAccount?: boolean; subscriberOnly?: boolean;
+  query: FeedQuery; today: ReportingDate; result: FeedPageResult; access?: MatchFeedResponse["access"]; controls?: ReactNode; pagination?: ReactNode; showAccount?: boolean;
   summary?: Promise<FeedPerformanceSeed>; providerOdds?: boolean;
 }) {
-  const { query, today } = props;
+  const { query, today, access = props.result.data?.access ?? { tier: "free", signedIn: false } } = props;
   return <PublicShell locale={query.locale} today={today} zone={query.zone ?? query.time?.zone ?? null} current="today" showAccount={props.showAccount === true} app compact>
-    <FeedSurface key={`${props.subscriberOnly ?? props.result.data?.access.tier}:${props.result.data?.access.signedIn}`} {...props} />
+    <FeedSurface {...props} access={access} />
   </PublicShell>;
 }

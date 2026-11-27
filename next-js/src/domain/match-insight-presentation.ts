@@ -61,10 +61,10 @@ export function injuryStatus(type: string | null): "out" | "doubtful" | "unknown
   return value.includes("missing") ? "out" : value.includes("questionable") || value.includes("doubtful") ? "doubtful" : "unknown";
 }
 
-/** One page of a complete collection; callers expose every page. */
-export function pageOf<T>(items: readonly T[], page: number, size: number) {
+/** An addressable starting page with optional subsequent rows from the same collection. */
+export function pageOf<T>(items: readonly T[], page: number, size: number, additionalPages = 0) {
   const pages = Math.max(1, Math.ceil(items.length / size)), current = Math.min(Math.max(1, page), pages);
-  return { items: items.slice((current - 1) * size, current * size), page: current, pages, total: items.length };
+  return { items: items.slice((current - 1) * size, (current + additionalPages) * size), page: current, pages, total: items.length };
 }
 
 /** First rows shown on overview cards; the full collections load when a section opens. */

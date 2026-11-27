@@ -2,14 +2,13 @@ import "server-only";
 
 import type { Clock, ReportingDate } from "../../domain/calendar.ts";
 import { serializeFeedQuery, type FeedQuery } from "../../domain/feed-query.ts";
-import type { MatchFeedResponse } from "../../domain/match-feed.ts";
+import type { FeedPageResult } from "../../domain/match-feed.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import { readPublicMatchFeed } from "./public-feed.ts";
 import { createGatedReads, type AccessResolver } from "../members/gated-reads.ts";
 import { resolveViewerAccess } from "../members/viewer-access.ts";
 
-export type FeedPageResult = Readonly<{ data: MatchFeedResponse; error: null } |
-  { data: null; error: "rate-limited" | "unavailable" | "subscription-required" }>;
+export type { FeedPageResult } from "../../domain/match-feed.ts";
 
 /** Failure cannot become an empty fixture list or a fabricated run count. */
 export async function loadMatchFeedPage(query: FeedQuery, today: ReportingDate, clock: Clock,

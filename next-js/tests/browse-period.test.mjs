@@ -15,12 +15,14 @@ test('Best Slips and Matches default to today', () => {
   assert.deepEqual(resolveBestSlipsDates(slips, today), { from: today, to: today });
   assert.deepEqual(parseBestSlipsQuery(serializeBestSlipsQuery(slips), today), slips);
   const matches = applyFeedPageDefaults(parseFeedQuery({}, { today }), {});
-  assert.equal(matches.pageSize, 50); assert.equal(matches.summary, undefined);
+  assert.equal(matches.pageSize, 50); assert.equal(matches.summary, undefined); assert.equal(matches.result, "pending");
   assert.deepEqual(matches.sort, { by: 'live-first', direction: 'desc' });
   const range = resolveFeedDates(matches, today);
   assert.equal(range.startDate, today); assert.equal(range.endDate, today);
   const summary = performanceFeedQuery({ ...matches, page: 3 });
-  assert.deepEqual(summary, { ...matches, sort: { by: 'kickoff', direction: 'desc' } });
+  const scope = { ...matches };
+  delete scope.result;
+  assert.deepEqual(summary, { ...scope, sort: { by: 'kickoff', direction: 'desc' } });
   assert.match(feedQueryHref({ ...matches, page: 3 }, today), /when=today/);
   const filtered = selectFeedDates(matches, { kind: 'date', date: '2026-10-01' }, today);
   assert.deepEqual(performanceFeedQuery(filtered).dates, filtered.dates);

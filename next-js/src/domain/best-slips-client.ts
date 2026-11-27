@@ -1,5 +1,5 @@
 import type { SlipsBrowseResult } from "./best-slips.ts";
-import { bestSlipsQueryRules, bestSlipsRangeFields, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "./best-slips-query.ts";
+import { bestSlipsQueryRules, bestSlipsRangeFields, matchesBestSlipsStatus, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "./best-slips-query.ts";
 import { slipStatusCategory } from "./slip-status.ts";
 import { defaultBestSlipOddsBand } from "./best-slip-odds-bands.ts";
 import { bestSlipActivePublicationDays } from "./best-slip-publication-hour.ts";
@@ -31,8 +31,7 @@ export function projectBestSlipsSnapshot(snapshot: BestSlipsSnapshot, query: Bes
     || original.period === "all" || query.period === "all" || !data.statistics || data.statistics.total !== data.slips.length
     || bestSlipsRangeKey(original, data.day, data.summary?.asOf) !== bestSlipsRangeKey(query, data.day, data.summary?.asOf)
     || browse && (browse.total === null || browse.total !== data.slips.length || browse.hasMore)) return null;
-  const slips = data.slips.filter((view) => query.status === "all"
-    || (view.status ? slipStatusCategory(view.status) : view.outcome ?? "pending") === query.status);
+  const slips = data.slips.filter((view) => matchesBestSlipsStatus(view.status ? slipStatusCategory(view.status) : view.outcome ?? "pending", query.status));
   const pageSize = bestSlipsQueryRules.pageSize, offset = (query.page - 1) * pageSize;
   return { query, data: { ...data, slips: slips.slice(offset, offset + pageSize),
     browse: { query, total: slips.length, pageSize, hasMore: offset + pageSize < slips.length, nextCursor: null,

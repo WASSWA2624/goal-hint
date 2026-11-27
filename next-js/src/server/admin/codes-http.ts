@@ -9,6 +9,7 @@ import type { PaymentNotifications } from "../members/payment-notifications.ts";
 import { createCheckoutReview } from "./checkout-review.ts";
 import { checkoutOpenStatuses } from "../../domain/checkout.ts";
 import { readPaymentReversal } from "../../domain/payment-reversal.ts";
+import { readPaymentFilters } from "../../domain/payment-queue-filters.ts";
 import { auditTextErrors } from "./audit.ts";
 
 export const storageUnavailable = () => json({ message: "Member storage is unavailable. Try again shortly." }, 503);
@@ -76,6 +77,17 @@ export function createReviewHandlers({ notifications }: { notifications?: Paymen
         const id = paymentId(request);
         if (id && uuid(id)) return json(await createCheckoutReview(services.database).detail(id, new URL(request.url).searchParams.get("view") !== "compact"));
         const params = new URL(request.url).searchParams;
+        if (params.has("afterId") || params.has("afterAt")) {
+          const id = params.get("afterId"), at = params.get("afterAt");
+          if (!uuid(id) || at?.length !== 24 || !Number.isFinite(Date.parse(at))) return invalidAction();
+          const submittedAt = new Date(at);
+          if (submittedAt.toISOString() !== at) return invalidAction();
+          return json(await createPaymentReview(services.database).list(undefined, undefined, {
+            filters: readPaymentFilters(params.get("status"), params.get("provider")),
+            page: Number(params.get("page") ?? 1), search: params.get("search") ?? "",
+            after: { id: id.toLowerCase(), submittedAt }, appendable: true,
+          }));
+        }
         return json(await createPaymentReview(services.database).list(params.get("tab") ?? "pending", undefined,
           { page: Number(params.get("page") ?? 1), search: params.get("search") ?? "" })); } catch { return storageUnavailable(); }
     },

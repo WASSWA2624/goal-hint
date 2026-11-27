@@ -1,5 +1,5 @@
 /** Browser acceptance against /best-slips/browse in the synthetic slip rendering fixture. */
-export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 768, 1024, 1440]) {
+export async function verifyBestSlipsFilters(page, origin, widths = [320, 360, 390, 768, 1024, 1440]) {
   const assert = (value, message) => { if (!value) throw new Error(message); };
   const results = [], errors = [];
   const recordError = error => errors.push(error.message);
@@ -26,14 +26,14 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 7
         }).length;
         const selection = bar.querySelector("[data-applied-selection]"), count = bar.querySelector("[data-best-slips-summary]").getBoundingClientRect();
         const heading = summary.querySelector("[data-performance-heading]"), title = heading.querySelector("h2").getBoundingClientRect();
-        const fiveDigitsFit = [...figures.children].every(card => {
+        const fiveDigitsFit = [...figures.children].filter(card => card.getClientRects().length).every(card => {
           const label = card.querySelector("dt"), values = card.querySelector("dd"), count = values.firstElementChild, percentage = values.lastElementChild;
           const oldCount = count.textContent, oldPercentage = percentage.textContent;
           count.textContent = "15,000";
           if (percentage !== count) percentage.textContent = "(99.9%)";
           const cardBox = card.getBoundingClientRect(), countBox = count.getBoundingClientRect(), percentBox = percentage.getBoundingClientRect();
           const metrics = label.getBoundingClientRect().bottom <= countBox.top
-            && Math.abs(countBox.top + countBox.bottom - percentBox.top - percentBox.bottom) < 2
+            && (innerWidth < 1024 || Math.abs(countBox.top + countBox.bottom - percentBox.top - percentBox.bottom) < 2)
             && countBox.left >= cardBox.left && percentBox.right <= cardBox.right;
           count.textContent = oldCount;
           if (percentage !== count) percentage.textContent = oldPercentage;
@@ -42,6 +42,9 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 7
         return { sameRow: Math.abs(action.top - date.top) < 1 && Math.abs(date.top - list.top) < 1 && Math.abs(action.height - date.height) < 1,
           inOrder: summary.getBoundingClientRect().bottom <= list.top && list.right < date.left && date.right < action.left,
           visibleTiles, calendarDay: calendar.textContent.trim(), columns: getComputedStyle(figures).gridTemplateColumns.split(" ").length, fiveDigitsFit,
+          order: [...figures.children].filter(card => card.getClientRects().length).map(card => card.dataset.summaryCard).join(","),
+          numeralPadded: calendar.querySelector("b").getBoundingClientRect().top > date.top && calendar.querySelector("b").getBoundingClientRect().bottom < date.bottom,
+          calendarStroke: calendar.querySelector("svg").getAttribute("stroke-width"),
           separation: bounds.top - cards.bottom, countAtEnd: bounds.right - count.right <= 9,
           firstSlipGap: document.querySelector("[data-slip-list]").getBoundingClientRect().top - bounds.bottom,
           summaryPaddingEnd: parseFloat(getComputedStyle(bar).paddingBottom),
@@ -56,17 +59,22 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 7
       });
       assert(geometry.sameRow && geometry.inOrder && geometry.calendarDay === "13" && geometry.visibleTiles >= 3
         && (width !== 320 || geometry.visibleTiles === 3), `${mode}/${width}: date navigation layout ${JSON.stringify(geometry)}`);
-      assert(geometry.columns === (width >= 1024 ? 6 : 3) && geometry.fiveDigitsFit, `${mode}/${width}: performance cards fit two lines`);
-      assert(geometry.fits && geometry.countAtEnd && geometry.height >= geometry.controlHeight, "Controls and result counts fit shared metrics");
+      assert(geometry.columns === (width >= 1024 ? 6 : 4) && geometry.fiveDigitsFit, `${mode}/${width}: performance cards fit two lines`);
+      assert(geometry.fits && (width < 1024 || geometry.countAtEnd) && geometry.height >= geometry.controlHeight, "Controls and result counts fit shared metrics");
       assert(geometry.title === "Today’s performance" && geometry.titleAligned && geometry.labelsAligned, "Section labels align with the outer card rail");
       assert(geometry.headingGap <= 1.5 && geometry.headingGap >= 0 && geometry.headingPaddingEnd === 0, "The heading and date sit directly above the performance cards");
-      assert(geometry.headingPaddingStart === (width >= 1024 ? 2 : 8), "Top spacing above the heading is preserved");
+      assert(geometry.headingPaddingStart <= 4 && geometry.numeralPadded && geometry.calendarStroke === "1.5", "The calendar numeral has a lighter outline with room around it");
+      assert(geometry.order === (width >= 1024 ? "all,won,lost,pending,void,cancelled" : "won,pending,lost,others"), "Result cards follow the visible layout order");
       assert(await page.locator("[data-best-slips-publication]").count() === 0, "The duplicate publication date is removed");
       if (width >= 1024) {
         assert(geometry.background === "rgba(0, 0, 0, 0)" && geometry.separation >= 15.5, "Desktop browsing labels sit on the page with a distinct gap below cards");
         assert(geometry.period === "13-Oct-2026 · 11:00 EAT", "Today's cards show the actual 24-hour EAT snapshot time");
       }
       const checkCount = async count => {
+        if (width < 1024) {
+          assert(!await bar.locator("[data-best-slips-summary]").isVisible(), "Mobile hides the publication and record counts");
+          return;
+        }
         assert((await page.locator("[data-best-slips-band-count]").innerText()).trim() === "3 of 10 slips published",
           "The published band count stays independent of the active filters on every screen");
         const matching = page.locator("[data-best-slips-match-count]");
@@ -79,9 +87,9 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 7
         assert(actual.join(",") === expected.join(","), `Slip results match the selected filter: ${expected.join(", ")}`);
       };
       const checkPending = async () => {
-        assert(await bar.locator("[data-applied-result]").innerText() === "Pending", "The applied results label shows Pending");
+        assert(await bar.locator("[data-applied-result]").isVisible() === (width >= 1024), "The duplicate Pending label is desktop only");
         assert(await page.locator('[data-slip-result="pending"]').getAttribute("aria-pressed") === "true", "The Pending performance control is selected");
-        assert(await page.locator('[data-summary-count="all"]').innerText() === "3", "Today's performance denominator includes every result");
+        assert(await page.locator('[data-summary-count="all"]').textContent() === "3", "Today's performance denominator includes every result");
         await checkCount(1);
         await checkOutcomes("pending");
       };
@@ -89,7 +97,7 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 7
       assert((await bar.innerText()).includes("2.50–5.00"), "The default odds retain two decimal places");
       if (width < 1024) {
         const text = await bar.innerText();
-        assert(text.includes("13-Oct-2026") && !text.includes("All slips") && !text.includes("EAT") && !text.includes("Browsing"), "The mobile summary keeps the applied date without repeating the browsing and All labels");
+        assert(text.includes("13-Oct-2026") && !text.includes("All slips") && !text.includes("EAT") && !text.includes("Browsing") && !text.includes("Pending") && !text.includes("published"), "The mobile summary keeps the applied date without repeating the browsing and All labels");
         assert(geometry.background === "rgba(0, 0, 0, 0)" && geometry.summaryPaddingEnd === 0 && geometry.firstSlipGap <= 2.5 && geometry.firstSlipGap >= 0, "The mobile summary sits on the body background directly above the first slip");
       }
       await page.locator("[data-best-slips-filters]").screenshot({ path: `output/playwright/best-slips-${mode}-${width}${geometry.coarse ? "-touch" : ""}.png` });
@@ -127,8 +135,15 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 7
         await checkPending();
         await page.locator('[data-slip-result="won"]').click(); await settled();
         await checkCount(1); await checkOutcomes("won");
-        assert(await page.locator('[data-summary-count="all"]').innerText() === "3", "Today's performance denominator stays independent of the selected result");
-        await page.locator('[data-slip-result="all"]').click(); await settled();
+        assert(await page.locator('[data-summary-count="all"]').textContent() === "3", "Today's performance denominator stays independent of the selected result");
+        if (width >= 1024) await page.locator('[data-slip-result="all"]').click();
+        else {
+          await open();
+          await dialog.getByRole("combobox", { name: /^Status:/ }).click();
+          await dialog.getByRole("option", { name: "All slips", exact: true }).click();
+          await apply();
+        }
+        await settled();
         assert(new URL(page.url()).searchParams.get("status") === "all", "All results is preserved in the shareable URL");
         await checkCount(3); await checkOutcomes("lost", "pending", "won");
         await open(); await dialog.locator("[data-dialog-reset]").click();
@@ -158,20 +173,31 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 390, 7
           await apply(); await settled();
           assert(new URL(page.url()).searchParams.get("period") === "yesterday", "Applying the date updates the shareable URL");
           assert(new URL(page.url()).searchParams.get("probMin") === "80" && new URL(page.url()).searchParams.get("matchesMin") === "2", "The URL pins the numeric filters");
-          assert((await bar.innerText()).includes("12-Oct-2026") && (await bar.innerText()).includes("Lost"), "The results bar reports the applied archive date and status");
+          assert((await bar.innerText()).includes("12-Oct-2026") && (await bar.innerText()).includes("Lost") === (width >= 1024), "The results bar reports the archive date with desktop-only status");
           await checkCount(1);
           assert(await page.locator("[data-whole-slip-probability]").count() === 1, "The archived model-backed slip retains its original estimate");
-          assert(await page.locator('[data-summary-count="all"]').innerText() === "2", "The date and range restrictions apply before result drilldown counts");
+          assert(await page.locator('[data-summary-count="all"]').textContent() === "2", "The date and range restrictions apply before result drilldown counts");
           await page.reload(); await checkCount(1);
           await open(); await dialog.locator("[data-dialog-reset]").click(); await apply(); await settled();
           assert(new URL(page.url()).search === "", "Resetting and applying restores the clean today URL");
           await page.goBack(); await settled(); await checkCount(1);
           assert(new URL(page.url()).searchParams.get("status") === "lost", "Back restores the audited query and its count");
+          if (width < 1024) {
+            await page.goto(`${origin}/best-slips/browse?period=custom&from=2026-09-05&to=2026-09-05`);
+            await page.locator('[data-summary-result="others"]').click();
+            await settled();
+            assert(new URL(page.url()).searchParams.get("status") === "others", "The combined status is shareable");
+            const outcomes = await page.locator("[data-slip-key] [data-slip-status]").evaluateAll(items => items.map(item => item.dataset.slipStatusValue).sort());
+            assert(outcomes.join(",") === "cancelled,void", "Others preserves the two individual record statuses");
+            await page.setViewportSize({ width: 1440, height: 900 });
+            assert(await page.locator('[data-summary-result="void"]:visible, [data-summary-result="cancelled"]:visible').count() === 2, "Resizing restores both separate actions");
+            await page.setViewportSize({ width, height: 900 });
+          }
           await page.goto(`${origin}/best-slips/browse?period=all&status=all`);
-          await page.getByRole("button", { name: "Older slips" }).click(); await settled();
-          assert(new URL(page.url()).searchParams.has("cursor"), "Archive continuation is addressable");
-          await page.getByRole("button", { name: "First archive page" }).click(); await settled();
-          assert(!new URL(page.url()).searchParams.has("cursor"), "The first archive page removes the cursor");
+          const firstBatch = await page.locator("[data-slip-key]").count(), archiveHref = page.url();
+          await page.getByRole("button", { name: "Show More" }).click();
+          await page.waitForFunction(count => document.querySelectorAll("[data-slip-key]").length > count, firstBatch);
+          assert(page.url() === archiveHref, "Archive append retains the addressable initial query");
           await page.goto(`${origin}/best-slips/browse`);
         }
         const retained = await bar.innerText();

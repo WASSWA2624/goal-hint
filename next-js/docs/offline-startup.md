@@ -1,8 +1,10 @@
 # Connection recovery
 
-Goal Hint gives slow live document requests time to respond. If a request fails or the server does not send headers within 15 seconds, the service worker can display the prepared connection page at the original URL. **Try again** starts a new browser request for that URL, including its filters. A direct visit to `/offline` sends the retry to Matches after hydration. The connection page renders a heading and a retry action in the active light or dark theme.
+Goal Hint gives slow live document requests time to respond. If a GET navigation fails, receives a server error, or waits more than 15 seconds for headers, the service worker can display the prepared connection page at the original URL. An observed HTTP 502, 503 or 504 shows the temporary service message. An explicit browser offline signal shows the Wi-Fi or mobile data guidance. Other failures show neutral connection guidance. The branded page uses the same layout in the active light or dark theme.
 
-An open Matches page keeps the rows currently displayed if a filter change stalls. At 15 seconds the busy controls become available and a retry link retains the requested filters. That timeout is separate from the document request deadline. Background refreshes stay quiet.
+**Try again** reloads the original document with its filters and blocks duplicate activation while navigation is pending. A direct visit to `/offline` sends the retry to Matches after hydration. The fallback can retry once on a browser offline-to-online event for Matches, Best Slips, Performance and the Builder entry page. Explicit builds, checkout and other account or action pages require manual recovery.
+
+An open Matches page keeps the last confirmed rows if a filter read stalls or fails for the same verified viewer scope. At 15 seconds a stalled navigation offers a retry for the requested filters. If the feed itself is unavailable, **Try again** reads the exact applied query with a 40-second deadline to allow the server read and mobile transfer to finish. One quiet retry can run after five seconds or when the browser reconnects, whichever starts a request first. A rate-limited read stays manual. Revealed rows and query state still depend on the viewer’s current access.
 
 ## Preparation and storage
 
@@ -10,7 +12,7 @@ An open Matches page keeps the rows currently displayed if a filter change stall
 
 The root-scope `/offline-worker.js?connection-page=1` worker fetches assets without credentials. It validates public response headers, limits, schema and digests before switching the active cache. An interrupted or rejected bundle leaves the verified previous bundle available. A matching asset can be reused after integrity verification. Preparation starts after page load and idle time, runs only for a visible document, and never replaces the active document. Failure retries back off at 5, 15, 30 and 60 seconds, then five minutes. A successful check waits five minutes. Server `Retry-After` values are bounded.
 
-The worker prepares the static entry and assets only. Live documents, fixture data, account/session data, private APIs and personalized RSC responses are excluded. A write always goes through the normal request flow. No write can be queued or replayed by this worker. A live document that has sent headers can continue streaming. Authorization responses remain authoritative.
+The worker prepares the static entry and assets only. The server-failure marker is added to the outgoing fallback and its verified cached bytes stay intact. Live documents, fixture data, account/session data, private APIs and personalized RSC responses are excluded. A write always goes through the normal request flow. No write can be queued or replayed by this worker. A live document that has sent headers can continue streaming. Authorization responses remain authoritative.
 
 | Resource | Limit |
 | --- | --- |

@@ -4,22 +4,22 @@ import styled from "styled-components";
 import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type Ref } from "react";
 import { Button } from "@/components/ui/controls";
 import { ResetIcon, ShieldIcon, UserIcon } from "@/components/ui/icons";
-import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
+import { ShowMore } from "@/components/ui/show-more";
 import { formatPhone } from "@/domain/phone";
 import type { SubscriberIndividualAction } from "@/domain/subscriber-actions";
-import { subscriberDirectoryFiltered, type SubscriberDirectoryAccount, type SubscriberDirectoryQuery } from "@/domain/subscriber-directory";
+import { subscriberDirectoryFiltered, subscriberDirectoryPageSize, type SubscriberDirectoryAccount, type SubscriberDirectoryQuery } from "@/domain/subscriber-directory";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { createMessages } from "@/i18n/messages";
 import { ActionButton, FieldError } from "./admin-form";
 import { EmptyPanel } from "./desk-styles";
-import { RecordListFooter, RecordListScroll, RecordListTools } from "./record-workspace";
+import { RecordListScroll, RecordListTools } from "./record-workspace";
 import { SubscriberAccountRow } from "./subscriber-directory-parts";
 import { DirectoryRoot } from "./subscriber-styles";
 import type { CodeAction } from "./code-tools";
 import { SubscriberActionMenu, SubscriberMenuButton } from "./subscriber-action-menu";
 import { SubscriberBulkDialog, subscriberBulkChoices, type SubscriberBulkOperation, type SubscriberBulkResult } from "./subscriber-bulk-actions";
 
-const pagingLabels = numberedPaginationLabels(createMessages("en"), "Subscriber pages");
+const messages = createMessages("en");
 
 export type SubscriberDirectoryProps = Readonly<{
   accounts: readonly SubscriberDirectoryAccount[];
@@ -36,7 +36,7 @@ export type SubscriberDirectoryProps = Readonly<{
   action: CodeAction;
   selectionScope: string;
   plans: readonly SubscriptionPlanView[];
-  paging?: { page: number; pages: number; total: number; onPage: (page: number) => void };
+  paging?: { hasMore: boolean; total: number; failed: boolean; loading: boolean; onShowMore: () => void };
 }>;
 
 /** Search remains available while the latest directory request is in flight. */
@@ -56,13 +56,17 @@ export function SubscriberDirectory({ accounts, asOf, selectedId, query, loading
   }
   const checkedIds = currentScope ? new Set(selection.ids.filter(id => visibleIds.has(id))) : new Set<string>();
   const selected = accounts.filter(account => checkedIds.has(account.id));
-  const selectedCount = selected.length, allSelected = accounts.length > 0 && selectedCount === accounts.length;
+  const selectedCount = selected.length;
+  const selectable = accounts.slice(0, subscriberDirectoryPageSize);
+  const capped = selectedCount >= subscriberDirectoryPageSize;
+  const allSelected = selectable.length > 0 && selectable.every(account => checkedIds.has(account.id));
   const disabled = loading || !!error || action.busy;
   const choices = subscriberBulkChoices(selected);
   useLayoutEffect(() => {
     if (selectAll.current) selectAll.current.indeterminate = selectedCount > 0 && !allSelected;
   }, [selectedCount, allSelected]);
   function checkAccount(id: string, checked: boolean) {
+    if (checked && capped) return;
     const selectedIds = selected.map(account => account.id);
     setSelection({ scope: selectionScope, ids: checked ? [...selectedIds, id] : selectedIds.filter(value => value !== id) });
   }
@@ -82,8 +86,8 @@ export function SubscriberDirectory({ accounts, asOf, selectedId, query, loading
     <RecordListTools>
       <SelectionToolbar role="group" aria-label="Subscriber selection" data-subscriber-selection>
         <SelectPage><input ref={selectAll} type="checkbox" checked={allSelected} disabled={disabled || !accounts.length}
-          onChange={event => setSelection({ scope: selectionScope, ids: event.currentTarget.checked ? accounts.map(account => account.id) : [] })} />
-          <span>Select all</span></SelectPage>
+          onChange={event => setSelection({ scope: selectionScope, ids: event.currentTarget.checked ? selectable.map(account => account.id) : [] })} />
+          <span>{accounts.length > subscriberDirectoryPageSize ? `Select first ${subscriberDirectoryPageSize} loaded` : "Select all loaded"}</span></SelectPage>
         <SelectionCount role="status" aria-live="polite" data-subscriber-count>{totalLabel}</SelectionCount>
         <SelectionCount role="status" aria-live="polite" data-subscriber-selected-count>{selectedCount ? `${selectedCount} selected` : ""}</SelectionCount>
         <ListActions>
@@ -107,15 +111,13 @@ export function SubscriberDirectory({ accounts, asOf, selectedId, query, loading
     <RecordListScroll ref={listRef} data-subscriber-results data-review-subscriber-list aria-label="Subscriber accounts" aria-busy={loading} tabIndex={0}>
       {accounts.length ? accounts.map(account => <li key={account.id}><SubscriberAccountRow account={account} asOf={referenceDate} selected={selectedId === account.id}
         href={accountHref(account.id)} onAccountClick={(event, next) => onAccountClick(event, account.id, next)}
-        checked={checkedIds.has(account.id)} disabled={disabled} onCheck={checked => checkAccount(account.id, checked)}
+        checked={checkedIds.has(account.id)} disabled={disabled} checkDisabled={capped && !checkedIds.has(account.id)} onCheck={checked => checkAccount(account.id, checked)}
         actionHref={next => accountHref(account.id, next)} /></li>)
         : !loading && !error && <li><EmptyPanel data-subscriber-empty><UserIcon /><p>{filtered ? "No matching subscribers." : "No subscriber accounts yet."}</p></EmptyPanel></li>}
       {adminPhone && <li><AdminNumber><ShieldIcon /><span><strong>+{formatPhone(adminPhone)}</strong> is an administrator number. Its password is managed in the environment.</span></AdminNumber></li>}
+      {paging?.hasMore && <li><ShowMore hasMore messages={messages} disabled={disabled} loading={paging.loading} failed={paging.failed}
+        onShowMore={paging.onShowMore} /></li>}
     </RecordListScroll>
-    <RecordListFooter>
-      {paging && paging.pages > 1 && <NumberedPagination compact page={paging.page} pages={paging.pages} labels={pagingLabels}
-        disabled={disabled} onPage={paging.onPage} />}
-    </RecordListFooter>
     {operation && <SubscriberBulkDialog key={operation.requestId} operation={operation} plans={plans} action={action} onSuccess={completeBulk}
       onClose={() => { if (!action.busy) { action.clearFeedback(); setOperation(null); } }} />}
   </DirectoryRoot>;

@@ -101,7 +101,7 @@ test("home resolves the rolling last 30 calendar days inclusively across month, 
   assert.equal(resolveFeedDates(explicit, tomorrow).startDate, "2026-09-10");
   assert.equal(resolveFeedDates(explicit, tomorrow).endDate, today);
   assert.equal(feedQueryHref(explicit, today), "/en/predictions/2026-09-10?to=2026-10-09&picks=all&sort=kickoff");
-  assert.equal(feedQueryHref(query("when=today"), today), "/en/matches?when=today&picks=all&sort=kickoff");
+  assert.equal(feedQueryHref(query("when=today"), today), "/en/matches?when=today&picks=all&result=all&sort=kickoff");
   assert.equal(resolveFeedDates(query("when=today"), today).dayCount, 1);
 });
 
@@ -116,7 +116,7 @@ test("recent-day presets stay relative across leap-day and year boundaries", () 
     const range = resolveFeedDates(selected, current), shifted = resolveFeedDates(selected, nextDay);
     assert.equal(range.startDate, from); assert.equal(range.endDate, to); assert.equal(range.dayCount, count);
     assert.equal(shifted.startDate, nextFrom); assert.equal(shifted.endDate, nextTo); assert.equal(shifted.dayCount, count);
-    assert.equal(feedQueryHref(selected, current), `/en/matches?when=${kind}&picks=all&sort=kickoff`);
+    assert.equal(feedQueryHref(selected, current), `/en/matches?when=${kind}&picks=all&result=all&sort=kickoff`);
     assert.notEqual(feedQueryKey(selected, current), feedQueryKey(selected, nextDay));
   }
   const newYear = parseReportingDate("2026-01-02");

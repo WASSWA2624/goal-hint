@@ -11,11 +11,12 @@ import { useLiveRefresh, useMatchesPullToRefresh } from "@/components/match/use-
 import { feedRefreshInterval } from "@/domain/live-refresh";
 import { FeedPagination } from "@/components/match/feed-pagination";
 import { useFeedPagination } from "@/components/match/use-feed-pagination";
+import { useFeedRecovery } from "@/components/match/use-feed-recovery";
 import { useLiveFeedSearch } from "@/components/match/use-live-feed-search";
 import { usePublishedFeedMarkets } from "@/components/match/use-published-feed-markets";
 import { MatchCard } from "@/components/match/match-card";
 import { MatchCardList, MatchListDivider } from "@/components/match/match-card-list";
-import { ButtonLink, TextButton, TextLink } from "@/components/ui/controls";
+import { DocumentButtonLink, TextButton, TextLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
 import { joinedDesktopSections, Stack } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
@@ -28,11 +29,10 @@ import { feedQueryHref, isFeedDatePreset, resolveFeedDates, type FeedQuery } fro
 import { synchronizeFeedStatusDates } from "@/domain/feed-controls";
 import { publicPolicy } from "@/domain/public-policy";
 import { feedRowNumber, latestPredictionPublication } from "@/domain/feed-presentation";
-import type { MatchFeedResponse } from "@/domain/match-feed";
+import type { FeedPageResult, MatchFeedResponse } from "@/domain/match-feed";
 import { canonicalMatchSlug } from "@/domain/match-slug";
 import { feedReturnStorageKey } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
-import type { FeedPageResult } from "@/server/matches/feed-page";
 import { FeedStateProvider } from "@/state/provider";
 import { media } from "@/styles/theme";
 
@@ -46,7 +46,7 @@ const FeedStack = styled(Stack)`
 /** Separate the performance figures from the heading for the browsed results. */
 const PerformanceSection = styled.div`
   min-inline-size: 0;
-  [data-performance-heading] { padding-block-start: var(--gh-spacing-1); }
+  [data-performance-heading] { padding-block-start: var(--gh-spacing-0_5); }
 `;
 const MatchResults = styled.div`
   display: grid;
@@ -83,7 +83,8 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
   const messages = createMessages(query.locale, undefined, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone);
   const router = useRouter();
   const canRefresh = enabled && !searchPending;
-  const { view, phase, error, root, retry, refresh, refreshInPlace } = useFeedPagination({ data: initial, query, today, enabled: canRefresh, onStatus });
+  const { view, phase, error, root, retry, refresh, refreshInPlace, showMore, appendError } = useFeedPagination({ data: initial, query, today, enabled: canRefresh, onStatus });
+  const foreground = phase === "refresh" || phase === "restore";
   const { data, records } = view;
   // Refresh the summary from the same list observation without remounting its controls.
   useLayoutEffect(() => {
@@ -102,8 +103,8 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
   // Row number of the first similar search result, when this search has any.
   const similarFrom = data.search && data.search.similar > 0 ? data.search.exact + 1 : null;
   return <FeedStack $gap="sm" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
-    aria-busy={phase !== null} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
-    <MatchResults data-feed-match-results aria-busy={searchPending || phase !== null}>
+    aria-busy={foreground} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
+    <MatchResults data-feed-match-results aria-busy={searchPending || foreground}>
       <ResultsToolbar query={query} today={today} total={data.total} first={first}
         last={first + records.length - 1} publishedAt={latestPredictionPublication(records)} />
       {data.state !== "ready" && data.state !== "insufficient-data" && <EmptyState title={messages.text(`feed.state.${data.state}`)} description={data.message} />}
@@ -122,7 +123,9 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
         </Fragment>)}
       </MatchCardList>}
     </MatchResults>
-    {enabled && <FeedPagination firstPage={view.firstPage} shown={records.length} query={query} today={today} data={data} busy={searchPending || phase !== null} error={error} onRetry={retry} />}
+    {enabled && <FeedPagination firstPage={view.firstPage} shown={records.length} locale={query.locale} data={data}
+      busy={searchPending || foreground} loadingMore={phase === "append"} appendError={appendError}
+      onShowMore={showMore} error={error} onRetry={retry} />}
   </FeedStack>;
 });
 
@@ -137,12 +140,16 @@ function searchAnnouncement(data: MatchFeedResponse, query: FeedQuery): string {
 }
 
 /** Successful server projections remain visible if a later navigation fails. */
-function FeedSurfaceContent({ query, today, result, controls, pagination, showAccount = false, subscriberOnly = result.data?.access.tier === "free", summary,
+function FeedSurfaceContent({ query, today, result: initial, access, controls, pagination, showAccount = false, summary,
   providerOdds = publicPolicy.features.providerOdds }: {
-  query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode; showAccount?: boolean; subscriberOnly?: boolean;
+  query: FeedQuery; today: ReportingDate; result: FeedPageResult; access: MatchFeedResponse["access"]; controls?: ReactNode; pagination?: ReactNode; showAccount?: boolean;
   summary?: Promise<FeedPerformanceSeed>; providerOdds?: boolean;
 }) {
   const router = useRouter(), [transitionPending, startTransition] = useTransition();
+  const refresh = useCallback(() => { router.refresh(); }, [router]);
+  const recovery = useFeedRecovery({ initial, query, today, access, suspended: transitionPending, recheckAccess: refresh });
+  const { result, cancel: cancelRecovery } = recovery;
+  const subscriberOnly = access.tier === "free";
   const [navigation, setNavigation] = useState<{ href: string; overdue?: true } | null>(null);
   useEffect(() => {
     if (!transitionPending || !navigation || navigation.overdue) return;
@@ -159,12 +166,13 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
   const [confirmed, setConfirmed] = useState<FeedPerformanceSeed | null>(null);
   const [observation, setObservation] = useState<FeedObservation | null>(null);
   if (result.data && previous?.data !== result.data) setPrevious({ query, today, data: result.data });
-  const visible = result.data ? { query, today, data: result.data } : previous;
+  const visible = result.data ? { query, today, data: result.data } : result.error === "subscription-required" ? null : previous;
   const markets = usePublishedFeedMarkets(subscriberOnly || visible?.data.access.tier !== "full");
   const messages = createMessages(query.locale);
   const href = feedQueryHref(query, today), leagues = result.data?.leagues ?? previous?.data.leagues ?? noLeagues;
   const failed = result.error !== null;
   const navigate = useCallback((next: FeedQuery) => {
+    cancelRecovery();
     const nextHref = feedQueryHref(synchronizeFeedStatusDates(next, today), today);
     setNavigation({ href: nextHref });
     startTransition(() => {
@@ -172,10 +180,9 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
       if (nextHref === href && failed && !pending) router.refresh();
       else router.push(nextHref, { scroll: false });
     });
-  }, [failed, href, pending, router, today]);
-  const refresh = useCallback(() => { router.refresh(); }, [router]);
+  }, [cancelRecovery, failed, href, pending, router, today]);
   const { accepted, cancel, edit, error: searchError, pending: searchPending, search, text, reset } = useLiveFeedSearch({
-    query, today, data: result.data, suspended: pending, navigate, refresh,
+    query, today, data: result.data, access, suspended: pending, navigate, refresh,
   });
   const displayed = accepted ? { ...accepted, today } : visible;
   const displayedHref = displayed ? feedQueryHref(displayed.query, displayed.today) : href;
@@ -198,8 +205,12 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
   const onSearchSubmit = useCallback((value: string) => { setPaginationStatus(null); search(value, true); }, [search]);
   const searchFailure = searchError ? messages.text(searchError === "rate-limited" ? "feed.rateLimited" : "feed.unavailable") : null;
   const navigationFailure = retryHref ? messages.text("feed.filters.slow") : null;
-  const announcement = pending || searchPending ? messages.text("feed.filters.loading") : navigationFailure ?? searchFailure ?? (result.error
-    ? messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")
+  const rateLimited = result.error === "rate-limited";
+  const unavailableTitle = rateLimited ? "feed.rateLimitedTitle" : recovery.offline ? "feed.offlineTitle" : "feed.unavailableTitle";
+  const unavailableDescription = rateLimited ? "feed.rateLimited" : recovery.offline ? "feed.offlineHint" : "feed.recoveryHint";
+  const announcement = pending || searchPending ? messages.text("feed.filters.loading") : recovery.foreground ? messages.text("feed.retrying")
+    : navigationFailure ?? searchFailure ?? (result.error
+    ? messages.text(unavailableDescription)
     : paginationStatus?.href === displayedHref ? paginationStatus.message
     : displayed ? searchAnnouncement(displayed.data, displayed.query) : messages.text("feed.state.data-unavailable"));
   return <FeedStack $gap="sm" data-matches-feed>
@@ -220,10 +231,12 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
         <TextLink href={retryHref} prefetch={false} onClick={event => plainClick(event, () => window.location.assign(retryHref))}>
           {messages.text("feed.retry")}</TextLink></FeedNote>}
       {!visible && <MatchResults><ResultsToolbar query={query} today={today} total={null} first={0} last={0} /></MatchResults>}
-      {result.error && <EmptyState title={messages.text(result.error === "rate-limited" ? "feed.rateLimitedTitle" : "feed.unavailableTitle")}
-        description={messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")}
-        action={<ButtonLink href={href} prefetch={false} variant="secondary"
-          onClick={(event) => plainClick(event, () => apply(query))}>{messages.text("feed.retry")}</ButtonLink>} />}
+      {result.error && <EmptyState data-feed-list-recovery title={messages.text(unavailableTitle)}
+        description={messages.text(unavailableDescription)} aria-busy={recovery.pending}
+        data-navigation-passive={recovery.pending && !recovery.foreground ? true : undefined}
+        action={<DocumentButtonLink href={href} variant="secondary" aria-disabled={recovery.pending || transitionPending}
+          onClick={(event) => plainClick(event, () => { void recovery.retry(); })}>
+          {messages.text(recovery.pending ? "feed.retrying" : "feed.retry")}</DocumentButtonLink>} />}
       {result.error && visible && <Stack $gap="sm">
         <PreviousNote>{messages.text("feed.filters.previous")}</PreviousNote>
         <FeedAppliedSummary query={visible.query} leagues={visible.data.leagues} />
@@ -240,7 +253,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
 export function FeedSurface(props: Parameters<typeof FeedSurfaceContent>[0]) {
   // Cards render from server props and the store reads only the draft, so the bootstrap skips
   // validating the page's records again during hydration.
-  return <FeedStateProvider key={`${props.result.data?.access.tier}:${props.result.data?.access.signedIn}:${props.query.locale}:${props.query.zone ?? props.query.time?.zone ?? "reporting"}`} initial={{ query: props.query, today: props.today, data: null }}>
+  return <FeedStateProvider key={`${props.access.tier}:${props.access.signedIn}:${props.query.locale}:${props.query.zone ?? props.query.time?.zone ?? "reporting"}`} initial={{ query: props.query, today: props.today, data: null }}>
     <FeedSurfaceContent {...props} />
   </FeedStateProvider>;
 }

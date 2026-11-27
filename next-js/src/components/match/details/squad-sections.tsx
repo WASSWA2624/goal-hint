@@ -1,17 +1,17 @@
 "use client";
 
+import { ShowMore } from "@/components/ui/show-more";
 import { memo, useId, useRef } from "react";
 import styled from "styled-components";
 import { RadioGroup } from "@/components/ui/radio-group";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { horizontalPitchPositions, parsePlayerKey, playerKey, positionGroup, type PositionGroup } from "@/domain/match-details";
 import type { InsightSections } from "@/domain/match-insights";
-import { pageOf } from "@/domain/match-insight-presentation";
 import { openItem, type TeamFocus } from "@/domain/match-view";
 import { media } from "@/styles/theme";
 import { InjuryIcon, LineupIcon, PlayerIcon } from "./details-icons";
 import {
-  ChoiceGroup, Crest, Facts, Note, Pager, PanelBar, Pill, RowButton, RowList, SectionState, Strong, focusRing, size, useDetails, type Messages,
+  ChoiceGroup, Crest, Facts, Note, PanelBar, Pill, RowButton, RowList, SectionState, Strong, focusRing, size, useDetailListPages, useDetails, type Messages,
 } from "./details-ui";
 import { ItemPanel, SectionCard, useReturnFocus } from "./section-card";
 import { useInsightSection, useOpenByDefault } from "./use-match-view";
@@ -289,7 +289,7 @@ export const PlayersSection = memo(function PlayersSection() {
   useReturnFocus(list, view.item);
   const group = (["G", "D", "M", "F"] as const).find((entry) => entry === view.tab) ?? null;
   const filtered = lookup.allPlayers.filter((player) => (view.team === "both" || player.team === view.team) && (group === null || positionGroup(player.position) === group));
-  const paged = pageOf(filtered, view.page, 15);
+  const paged = useDetailListPages(view, filtered, 15);
   const injuryFor = (player: Player) => lookup.allInjuries.find((entry) => entry.team === player.team && entry.playerId === player.id) ?? null;
   const total = lookup.allPlayers.length || preview?.totals.players || 0;
   const row = (player: Player) => {
@@ -313,7 +313,7 @@ export const PlayersSection = memo(function PlayersSection() {
             ...(["G", "D", "M", "F"] as PositionGroup[]).map((value) => ({ value, label: messages.text(`details.positionGroup.${value}`) }))]} />
       </PanelBar>
       {paged.items.length ? <RowList>{paged.items.map(row)}</RowList> : <Note>{messages.text(lookup.allPlayers.length ? "details.noFilteredPlayers" : "details.playersNone")}</Note>}
-      <Pager page={paged.page} pages={paged.pages} onPage={(page) => update((current) => ({ ...current, page }), "replace")} />
+      <ShowMore messages={messages} {...paged.more} />
       <Note>{messages.text("details.playerStatsMissing")}</Note>
     </div>}
   </SectionCard>;

@@ -5,7 +5,7 @@ import { desktopSectionFrame } from "@/components/ui/layout";
 import { controlHeight } from "@/components/ui/control-layout";
 import { SectionHeader, sectionHeaderMetadata } from "@/components/ui/section-header";
 import { CheckIcon, ClockIcon, CloseIcon } from "@/components/ui/icons";
-import { predictedPerformanceSummary, type PerformanceSummaryCounts, type PredictionResult } from "@/domain/performance-summary";
+import { predictedPerformanceSummary, type PerformanceSummaryCounts, type PredictionResult, type PredictionResultFilter } from "@/domain/performance-summary";
 import { createMessages } from "@/i18n/messages";
 import { performanceResultColors } from "@/styles/performance-result-colors";
 import { media } from "@/styles/theme";
@@ -25,9 +25,15 @@ const Header = styled(SectionHeader)<{ $compactHeader: boolean }>`
   ${({ $compactHeader }) => $compactHeader && css`padding-block-end: 0; padding-inline: 0;`}
   > p { ${sectionHeaderMetadata} margin-inline-start: auto; text-align: end; }
 `;
-const Counts = styled.dl<{ $compact: boolean }>`
+const Counts = styled.dl<{ $compact: boolean; $mobileOutcomes: boolean }>`
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--gh-spacing-1); min-inline-size: 0; margin: 0;
+  ${({ $mobileOutcomes }) => $mobileOutcomes && css`
+    ${media.belowDesktop} {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--gh-spacing-0_75);
+    }
+  `}
   ${media.desktop} {
     gap: var(--gh-spacing-1_5);
     ${({ $compact, theme }) => $compact ? "grid-template-columns: repeat(6, minmax(0, 1fr));" : css`
@@ -36,10 +42,11 @@ const Counts = styled.dl<{ $compact: boolean }>`
   }
 `;
 
-type Status = PredictionResult | "all";
-const Count = styled.div<{ $status: Status; $compact: boolean }>`
+type Status = PredictionResultFilter | "all";
+type Visibility = "desktop" | "mobile" | undefined;
+const Count = styled.div<{ $status: Status; $compact: boolean; $visibility: Visibility; $mobileOutcomes: boolean }>`
   ${({ theme, $status }) => {
-    const tone = performanceResultColors(theme, $status);
+    const tone = performanceResultColors(theme, $status === "others" ? "void" : $status);
     return `--summary-text: ${tone.text}; --summary-background: ${tone.background};`;
   }}
   ${controlHeight}
@@ -51,6 +58,8 @@ const Count = styled.div<{ $status: Status; $compact: boolean }>`
   dd { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: var(--gh-spacing-1); min-inline-size: 0; max-inline-size: 100%; margin: 0; font-size: var(--gh-font-emphasis); font-weight: var(--gh-weight-bold); font-variant-numeric: tabular-nums; }
   dt, [data-summary-count] { max-inline-size: 100%; overflow-wrap: anywhere; text-align: center; }
   dt > svg { display: none; }
+  ${({ $visibility }) => $visibility === "desktop" && css`${media.belowDesktop} { display: none; }`}
+  ${({ $visibility }) => $visibility === "mobile" && css`${media.desktop} { display: none; }`}
   ${media.desktop} { dt > svg { display: block; flex: none; font-size: var(--gh-font-secondary); } }
   ${({ $compact, theme }) => $compact && css`
     dt { font-size: var(--gh-font-body); }
@@ -62,6 +71,14 @@ const Count = styled.div<{ $status: Status; $compact: boolean }>`
     }
     ${media.desktop} {
       dd { font-size: var(--gh-font-reading); }
+    }
+  `}
+  ${({ $mobileOutcomes }) => $mobileOutcomes && css`
+    ${media.belowDesktop} {
+      padding-inline: var(--gh-spacing-0_75);
+      dt { font-size: var(--gh-font-secondary); }
+      dd { flex-wrap: wrap; gap: 0 var(--gh-spacing-0_5); }
+      dd > span { flex: none; }
     }
   `}
 `;
@@ -101,15 +118,26 @@ const outcomes = [
   { key: "cancelled", message: "performance.cancelled" },
 ] as const;
 
-/** Shared period outcomes; null counts remain unknown and all six statuses stay visible. */
+const [all, won, lost, pending, voided, cancelled] = outcomes;
+const others = { key: "others", message: "performance.others" } as const;
+// Keep the visible reading and keyboard order aligned in both layouts.
+const responsiveOutcomes = [
+  { outcome: all, visibility: "desktop" }, { outcome: won, visibility: undefined },
+  { outcome: lost, visibility: "desktop" }, { outcome: pending, visibility: undefined },
+  { outcome: lost, visibility: "mobile" }, { outcome: voided, visibility: "desktop" },
+  { outcome: cancelled, visibility: "desktop" }, { outcome: others, visibility: "mobile" },
+] as const;
+const defaultOutcomes = outcomes.map(outcome => ({ outcome, visibility: undefined }));
+
+/** Shared period outcomes including optional compact browsing filters. */
 export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title, period, headingLevel = 2,
-  showCoverage = true, showAll = true, activeResult, onResult, disabled = false, loading = false, resultAttributes, compactHeader = false }: {
+  showCoverage = true, showAll = true, activeResult, onResult, onOthers, disabled = false, loading = false, resultAttributes, compactHeader = false }: {
   counts: PerformanceSummaryCounts | null; locale: string; kind: "matches" | "slips" | "predictions";
   title?: string | undefined; period?: string | undefined; headingLevel?: 2 | 3 | undefined;
   compactHeader?: boolean;
   loading?: boolean | "background";
   showCoverage?: boolean | undefined; showAll?: boolean;
-  activeResult?: PredictionResult | undefined; onResult?: ((result: PredictionResult | undefined) => void) | undefined; disabled?: boolean;
+  activeResult?: PredictionResultFilter | undefined; onOthers?: (() => void) | undefined; onResult?: ((result: PredictionResult | undefined) => void) | undefined; disabled?: boolean;
   resultAttributes?: ((result: PredictionResult | undefined) => Record<`data-${string}`, string>) | undefined;
 }) {
   const m = createMessages(locale), label = title ?? m.text("performance.summary.title"), unknown = suppliedCounts === null;
@@ -117,28 +145,33 @@ export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title
   const predicted = kind === "matches" ? predictedPerformanceSummary(counts) : null;
   const showPredicted = predicted && !showAll;
   const number = (value: number) => unknown ? "—" : m.number(value);
+  const cards = onOthers ? responsiveOutcomes : defaultOutcomes;
   return <Panel role="group" aria-label={label} aria-busy={loading ? true : undefined}
     data-navigation-passive={loading === "background" ? "" : undefined} data-performance-summary={kind}>
     <Content $compactHeader={compactHeader}>
       <Header $compactHeader={compactHeader} data-performance-heading>{headingLevel === 3 ? <h3>{label}</h3> : <h2>{label}</h2>}
         {period && <p data-performance-period>{period}</p>}
       </Header>
-      <Counts $compact={compactHeader} data-performance-figures>
-        {outcomes.map((outcome) => {
+      <Counts $compact={compactHeader} $mobileOutcomes={!!onOthers} data-performance-figures>
+        {cards.map(({ outcome, visibility }) => {
           const { key } = outcome, result = key === "all" ? undefined : key;
           const label = m.text(key === "all" && !showAll ? `performance.summary.${kind}` : outcome.message);
-          const count = key === "all" ? (showAll && predicted ? predicted.total : counts.total) : counts[key] ?? 0;
+          const count = key === "all" ? (showAll && predicted ? predicted.total : counts.total)
+            : key === "others" ? (counts.void ?? 0) + (counts.cancelled ?? 0) : counts[key] ?? 0;
           const fraction = key === "all" ? null : predicted
             ? (predicted.total > 0 ? count / predicted.total : null) : counts.total > 0 ? count / counts.total : null;
           const percentage = !unknown && fraction !== null && fraction !== undefined
             ? m.number(fraction, { style: "percent", maximumFractionDigits: 1 }) : null;
           const Icon = "icon" in outcome ? outcome.icon : null;
-          return <Count key={key} $status={key} $compact={compactHeader} data-summary-card={key} data-summary-outcome={"tone" in outcome ? outcome.tone : undefined}>
+          const action = result === "others" ? onOthers : onResult && (() => onResult(result));
+          const attributes = result === "others" ? undefined : resultAttributes?.(result);
+          return <Count key={`${key}:${visibility ?? "shared"}`} $status={key} $compact={compactHeader} $visibility={visibility}
+            $mobileOutcomes={!!onOthers} data-summary-card={key} data-summary-outcome={"tone" in outcome ? outcome.tone : undefined}>
             <dt>{Icon && <Icon aria-hidden="true" />}{label}</dt><dd><span data-summary-count={key}>{number(count)}</span>
               {key !== "all" && <Percentage $compact={compactHeader} data-summary-percentage={"tone" in outcome ? outcome.tone : key}>{percentage ? `(${percentage})` : "—"}</Percentage>}
             </dd>
-            {onResult && <Action type="button" aria-label={`${label}: ${number(count)}`} aria-pressed={activeResult === result}
-              disabled={disabled || unknown} data-summary-result={key} {...resultAttributes?.(result)} onClick={() => onResult(result)} />}
+            {action && <Action type="button" aria-label={`${label}: ${number(count)}`} aria-pressed={activeResult === result}
+              disabled={disabled || unknown} data-summary-result={key} {...attributes} onClick={action} />}
           </Count>;
         })}
       </Counts>

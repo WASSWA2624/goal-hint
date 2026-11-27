@@ -26,13 +26,19 @@ preserves each original selection's kickoff, teams, pick, probability and price;
 it never substitutes the current top pick or constructs missing forecast groups.
 Saved leg outcomes and regulation scores are displayed only when supplied.
 The shared navigation includes Slip builder; its More menu holds the items that exceed the compact primary
-navigation. Controls use shared themed components. The builder settings use the
-selected square Compact toolbar treatment, consistent with Matches filters.
+navigation. Controls use shared themed components.
 
 ## Responsive criteria layout
 
-The toolbar shows settings for the next build alongside **Filters** and
-**Build slips**. Filters uses one editable form across screen sizes. It groups
+The settings panel shows the criteria for the next build. On desktop, the
+summary tiles use four columns, and **Filters** and **Build slips** stack to the
+right of a divider. On compact screens, a blue header with a subtitle introduces
+a row of three tiles and a row of two tiles. Match reuse, the date and time
+window, and Markets use full-width rows. The actions sit side by side at the
+bottom. Combined probability appears when enabled or when the applied criteria
+include its bounds.
+
+Filters uses one editable form across screen sizes. It groups
 slip targets, individual odds and probability limits, the kickoff window,
 match reuse and Markets. Related fields share a row where there is space.
 Controls use the shared height and theme. Numeric bounds use floating labels,
@@ -419,6 +425,6 @@ unknown. `tests/slip-card.test.mjs` also verifies immutable original values,
 saved regulation scores, supplied outcomes and probability boundary labels.
 Its `--serve` option keeps the fixture available for browser inspection.
 
-The selected Compact toolbar's implementation checks and the four independently
+The earlier Compact toolbar's implementation checks and the four independently
 confirmed full-suite baseline failures are recorded in
 [`122-compact-slip-builder-toolbar.md`](../dev-plan/122-compact-slip-builder-toolbar.md).

@@ -330,13 +330,24 @@ async function offlineDocument() {
   } catch { return null; }
 }
 
+async function unavailableDocument(saved) {
+  // Only annotate the outgoing copy. The verified static entry remains byte-identical in storage.
+  const html = await saved.text();
+  const headers = new Headers(saved.headers);
+  headers.set("cache-control", "no-store");
+  return new Response(html.replace(/<html(?=[\s>])/i, '<html data-goalhint-offline-reason="server-unavailable"'), { headers });
+}
+
 async function navigate(request) {
   try {
     // Give slow live documents time to return headers. Once they arrive, the
     // response body can keep streaming without the offline deadline.
     const response = await boundedFetch(request, {}, NAVIGATION_RESPONSE_TIMEOUT_MS, request.signal);
     // Authorization and application 4xx responses remain server-owned.
-    return response.status >= 500 && !request.signal.aborted ? await offlineDocument() ?? response : response;
+    if (response.status < 500 || request.signal.aborted) return response;
+    const saved = await offlineDocument();
+    if (!saved) return response;
+    return response.status === 502 || response.status === 503 || response.status === 504 ? await unavailableDocument(saved) : saved;
   } catch (error) {
     if (request.signal.aborted) throw error;
     const saved = await offlineDocument();

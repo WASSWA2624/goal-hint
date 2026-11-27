@@ -24,16 +24,15 @@ def audit_rendering(harness, origin):
     match(r"data-search-bar", html)
     match(r"data-search-filters", html)
     assert re.findall(r'data-audit-event="([^"]+)"', html) == [str(10_000 + index) for index in range(20)]
-    pagination = match(r'<nav\b(?=[^>]*aria-label="Audit pages")[^>]*>([\s\S]*?)</nav>', html)
-    match(r'data-page-count="5"', pagination.group(0))
-    match(r'data-current-page="1"', pagination.group(0))
-    assert re.findall(r'data-pagination-end="([^"]+)"', pagination.group(1)) == ["first", "last"]
-    assert html.index("data-audit-export") < html.index("data-record-list-footer")
+    match(r'<button\b[^>]*data-show-more[^>]*>[\s\S]*?Show More', html)
+    no_match(r"data-numbered-pagination", html)
+    assert html.index("data-audit-export") < html.index("data-show-more")
     no_match(r"data-audit-count|Up to 100 recent", html)
     # Historical entries lie outside the default loaded window; the date query must select them first.
     historical = visible_html(harness.request(origin,
         "/admin/audit?period=custom&startDate=2025-01-15&endDate=2025-01-15").text)
     assert re.findall(r'data-audit-event="([^"]+)"', historical) == ["20001", "20000"]
+    no_match(r"data-show-more", historical)
     match(r"2025-01-15", historical)
     match(r"data-audit-applied-range", historical)
     combined = visible_html(harness.request(origin,
@@ -76,7 +75,7 @@ def main():
     harness = owner_harness()
     with Server(directory, env, ready="/api/fixture/health") as server:
         audit_rendering(harness, server.origin)
-        print("PASS Audit production rendering, compact floating filters, first/last controls and historical EAT date queries before the loaded-window limit.", flush=True)
+        print("PASS Audit production rendering, compact floating filters, Show More and historical EAT date queries before the loaded-window limit.", flush=True)
         if args.serve:
             print(f"Audit browser entry: {server.origin}/api/fixture/session?page=audit", flush=True)
             server.serve()

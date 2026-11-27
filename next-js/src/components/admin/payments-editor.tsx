@@ -2,11 +2,12 @@
 
 import { SearchBar } from "@/components/ui/search-bar";
 import { AdvancedFilterDialog } from "@/components/ui/advanced-filter-dialog";
-import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
+import { ShowMore } from "@/components/ui/show-more";
 import { SelectMenu } from "@/components/ui/select-menu";
+import { appendUniqueRecords, useAppendRequest } from "@/components/ui/use-append-request";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { stopReviewSound } from "./payment-alert-sound";
-import { useEffect, useId, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CheckIcon, ChevronLeftIcon } from "@/components/ui/icons";
 import { goHistoryBack } from "@/components/navigation/context-history";
@@ -14,7 +15,7 @@ import { checkoutOpenStatuses } from "@/domain/checkout";
 import { formatPhone } from "@/domain/phone";
 import { defaultPaymentFilters, maximumPaymentQueuePage, paymentProviderLabels, paymentQueueStatusLabels, paymentStatusLabels, type PaymentFilters } from "@/domain/payment-queue-filters";
 import { formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
-import type { OwnerPayment, PaymentQueue } from "@/domain/owner-members";
+import type { OwnerPayment, PaymentQueue, PaymentQueueCursor } from "@/domain/owner-members";
 import { createMessages } from "@/i18n/messages";
 import { CheckField } from "./admin-form";
 import { ActionNotices, useCodeAction } from "./code-tools";
@@ -29,7 +30,9 @@ import { PaymentFeedback, PaymentHead, PaymentLayout, QueueBar, QueueEmpty, Queu
 import { RecordItemTitle, RecordRowContent } from "./record-workspace";
 
 const openStatuses: readonly string[] = checkoutOpenStatuses;
-const paginationLabels = numberedPaginationLabels(createMessages("en"), "Payment pages");
+const messages = createMessages("en");
+type PaymentAppend = Readonly<{ scope: string; page: number; payments: PaymentQueue["payments"];
+  continuation: PaymentQueueCursor | null; nextPendingId: string | undefined }>;
 const ticketDate = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Kampala", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 /** Day and time only: the review header carries the full EAT timestamp. */
 function ticketTime(instant: string) {
@@ -50,6 +53,16 @@ function paymentParams(filters: PaymentFilters, sort: PaymentSort, search = "", 
 function paymentQueueHref(filters: PaymentFilters, sort: PaymentSort, search?: string, page?: number) {
   const params = paymentParams(filters, sort, search, page);
   return `/admin/payments${params.size ? `?${params}` : ""}`;
+}
+
+function isPaymentBatch(value: unknown): value is PaymentQueue & { continuation: PaymentQueueCursor | null } {
+  if (!value || typeof value !== "object") return false;
+  const { payments, continuation, nextPendingId } = value as Partial<PaymentQueue>;
+  return (continuation === null || typeof continuation?.id === "string" && typeof continuation.submittedAt === "string"
+    && Number.isFinite(Date.parse(continuation.submittedAt)))
+    && (nextPendingId === undefined || typeof nextPendingId === "string")
+    && Array.isArray(payments) && payments.every(payment => typeof payment?.id === "string" && typeof payment.status === "string"
+      && typeof payment.reference === "string" && Number.isFinite(Date.parse(payment.submittedAt)) && Array.isArray(payment.checks));
 }
 
 function FilterChoices<T extends string>({ label, options, selected, onChange }: {
@@ -82,7 +95,12 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
   const [selectedId, setSelectedId] = useState<string | null>(initialPaymentId ?? queue.payments[0]?.id ?? "");
   const filtersId = useId(), [filtersOpen, setFiltersOpen] = useState(false);
   const [filterDraft, setFilterDraft] = useState(filters);
-  const [detailOpen, setDetailOpen] = useState(!!initialPaymentId), [completed, setCompleted] = useState<Record<string, string>>({});
+  const [detailOpen, setDetailOpen] = useState(!!initialPaymentId);
+  const [completed, setCompleted] = useState<Record<string, { status: string; version: number }>>({});
+  const [queueSnapshot, setQueueSnapshot] = useState({ queue, version: 0 });
+  const version = queueSnapshot.version + Number(queueSnapshot.queue !== queue);
+  if (queueSnapshot.queue !== queue) setQueueSnapshot({ queue, version });
+  const [added, setAdded] = useState<PaymentAppend | null>(null);
   const [recoveries, setRecoveries] = useState<Record<string, PaymentRecovery>>({});
   const [actionReference, setActionReference] = useState(""), [opened, setOpened] = useState(!!initialPaymentId);
   const focusNext = useRef(false), backButton = useRef<HTMLButtonElement>(null);
@@ -103,17 +121,25 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
     }
   }
   const page = queue.page ?? 1, previousPage = useRef(page);
-  const pages = queue.pageSize ? Math.min(maximumPaymentQueuePage, Math.ceil((queue.total ?? 0) / queue.pageSize)) : 0;
-  const completedRows = queue.payments.filter(payment => completed[payment.id] === payment.status);
-  const payments = sortPayments(queue.payments.filter(payment => completed[payment.id] !== payment.status), sort);
+  const scope = `${paymentQueueHref(filters, sort, queue.search, page)}:${initialPaymentId ?? ""}`;
+  const append = useAppendRequest(scope);
+  const tail = added?.scope === scope ? added : null;
+  const continuation = tail ? tail.continuation : queue.continuation;
+  const lastPage = tail?.page ?? page;
+  const loaded = useMemo(() => appendUniqueRecords(sortPayments(queue.payments, sort), tail?.payments ?? [], payment => payment.id),
+    [queue.payments, sort, tail]);
+  const payments = useMemo(() => loaded.filter(payment => completed[payment.id]?.status !== payment.status), [loaded, completed]);
   const selected = selectedId === null ? undefined : payments.find(payment => payment.id === selectedId) ?? payments[0];
   const selectedKey = selected?.id, index = selected ? payments.indexOf(selected) : -1;
   const reviewing = detailOpen && !!selected;
   const nextPending = payments.slice(index + 1).find(payment => payment.status === "pending")
     ?? payments.slice(0, Math.max(0, index)).find(payment => payment.status === "pending");
-  const nextPagePending = !nextPending && queue.nextPendingId && queue.nextPendingId !== selectedKey
-    && completed[queue.nextPendingId] !== "pending" ? queue.nextPendingId : undefined;
-  const pendingCount = Math.max(0, queue.pendingCount - completedRows.filter(payment => openStatuses.includes(payment.status)).length);
+  const following = tail ? tail.nextPendingId : queue.nextPendingId;
+  const nextPagePending = !nextPending && following && following !== selectedKey && completed[following]?.status !== "pending" ? following : undefined;
+  const pendingCount = useMemo(() => Math.max(0,
+    queue.pendingCount - loaded.filter(payment => completed[payment.id]?.version === version
+      && completed[payment.id]?.status === payment.status && openStatuses.includes(payment.status)).length),
+  [queue.pendingCount, loaded, completed, version]);
   const queueChanged = liveCount !== null && liveCount !== pendingCount;
   const singleStatus = filters.statuses.length === 1 ? filters.statuses[0] : undefined;
   const showsPending = filters.statuses.includes("pending") || filters.statuses.includes("all");
@@ -168,7 +194,7 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
       if (lastHash.current === id) return;
       const previous = lastHash.current;
       lastHash.current = id;
-      if (queue.payments.some(payment => payment.id === id)) { setSelectedId(id); setDetailOpen(true); setOpened(true); }
+      if (loaded.some(payment => payment.id === id)) { setSelectedId(id); setDetailOpen(true); setOpened(true); }
       else if (!id && previous) {
         setDetailOpen(false); setDirtyId(undefined);
         if (!queueOrigin.current) requestAnimationFrame(() => restoreQueueFocus(previous));
@@ -180,7 +206,7 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
       window.removeEventListener("hashchange", readHash);
       window.removeEventListener("popstate", readHash);
     };
-  }, [queue.payments]);
+  }, [loaded]);
 
   useEffect(() => {
     if (!focusNext.current || !desktop && action.busy) return;
@@ -230,7 +256,7 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
   function resolved(id: string, approved = false) {
     stopReviewSound();
     setDirtyId(undefined);
-    if (selected) setCompleted(shown => ({ ...shown, [id]: selected.status }));
+    if (selected) setCompleted(shown => ({ ...shown, [id]: { status: selected.status, version } }));
     const next = approved ? nextPending : payments.find(payment => payment.id !== id);
     if (approved && nextPagePending) {
       const params = paymentParams(filters, sort, queue.search, page);
@@ -252,11 +278,35 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
   function navigate(nextFilters: PaymentFilters, nextSort: PaymentSort, search = queue.search, page?: number) {
     const href = paymentQueueHref(nextFilters, nextSort, search, page);
     if (`${window.location.pathname}${window.location.search}${window.location.hash}` === href) return;
+    append.cancel();
+    setAdded(null);
     queueOrigin.current = null;
     if (queueScroll.current) queueScroll.current.scrollTop = 0;
     setSelectedId(current => current ?? "");
     setDetailOpen(false); setDirtyId(undefined); setRefreshMessage("");
     startNavigation(() => router.push(href, { scroll: false }));
+  }
+  function appendQueue() {
+    if (!continuation || lastPage >= maximumPaymentQueuePage || action.busy) return;
+    const next = lastPage + 1, params = paymentParams(filters, sort, queue.search, next);
+    params.set("afterId", continuation.id);
+    params.set("afterAt", continuation.submittedAt);
+    void append.append(async signal => {
+      const response = await fetch(`/api/admin/payments?${params}`, { signal, cache: "no-store", headers: { Accept: "application/json" } });
+      if (signal.aborted) return;
+      if (response.status === 401) {
+        router.refresh();
+        throw new Error();
+      }
+      if (!response.ok) throw new Error();
+      const batch: unknown = await response.json();
+      if (signal.aborted) return;
+      if (!isPaymentBatch(batch) || (batch.continuation?.id === continuation.id && batch.continuation.submittedAt === continuation.submittedAt)) throw new Error();
+      setAdded(current => ({
+        scope, page: next, continuation: batch.continuation, nextPendingId: batch.nextPendingId,
+        payments: appendUniqueRecords(current?.scope === scope ? current.payments : [], sortPayments(batch.payments, sort), payment => payment.id),
+      }));
+    });
   }
   const feedback = { ...action, notice: action.notice && `${actionReference ? `${actionReference} · ` : ""}${action.notice}`,
     message: refreshMessage || (action.message && `${actionReference ? `${actionReference} · ` : ""}${action.message}`) };
@@ -318,12 +368,13 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
             secondary={<span data-ticket-meta><span title={packageName} data-ticket-plan>{packageName}</span>
               <time dateTime={paidAt ?? payment.submittedAt} title={date} data-ticket-time>{date}</time></span>} />
         </TicketItem></li>;
-      })}</TicketTray> : <QueueEmpty data-payment-empty><CheckIcon /><strong>{queue.search || filteredProvider ? "No matching payments" : singleStatus === "pending" ? "No payments waiting" : "No payments here yet"}</strong>
+      })}
+        {continuation && lastPage < maximumPaymentQueuePage && <li><ShowMore hasMore disabled={action.busy}
+          messages={messages} loading={append.loading} failed={append.failed} onShowMore={appendQueue} /></li>}
+      </TicketTray> : <QueueEmpty data-payment-empty><CheckIcon /><strong>{queue.search || filteredProvider ? "No matching payments" : singleStatus === "pending" ? "No payments waiting" : "No payments here yet"}</strong>
       </QueueEmpty>}
-      {(pages > 1 || showActivity) && <QueueFooter data-payment-queue-footer>
-        {pages > 1 && <NumberedPagination compact page={page} pages={pages} labels={paginationLabels} disabled={action.busy}
-          href={target => paymentQueueHref(filters, sort, queue.search, target)} />}
-        {showActivity && <span role="status" data-payment-queue-updated>New queue activity</span>}
+      {showActivity && <QueueFooter data-payment-queue-footer>
+        <span role="status" data-payment-queue-updated>New queue activity</span>
       </QueueFooter>}
     </QueuePanel>
     <ReviewSection id="payment-review" aria-label="Review payment" tabIndex={-1} $reviewing={reviewing}

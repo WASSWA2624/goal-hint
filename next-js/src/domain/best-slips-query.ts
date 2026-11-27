@@ -1,12 +1,16 @@
 import { addReportingDays, parseReportingDate, validateReportingDateRange, type ReportingDate } from "./calendar.ts";
+import { matchesPredictionResult, predictionResultFilters, type PredictionResult } from "./performance-summary.ts";
 import { slipPageSize } from "./slip-pagination.ts";
 import { formatProbabilityValue, parseProbabilityValue } from "./feed-query.ts";
 import { bestSlipOddsBands, defaultBestSlipOddsBand, parseBestSlipPublicRank, type BestSlipOddsBand } from "./best-slip-odds-bands.ts";
 
 export const bestSlipsPeriods = ["today", "yesterday", "tomorrow", "last3", "last7", "last30", "next3", "next7", "next30", "all", "custom"] as const;
-export const bestSlipsStatuses = ["all", "won", "lost", "pending", "void", "cancelled"] as const;
+export const bestSlipsStatuses = ["all", ...predictionResultFilters] as const;
 export type BestSlipsPeriod = typeof bestSlipsPeriods[number];
 export type BestSlipsStatus = typeof bestSlipsStatuses[number];
+export function matchesBestSlipsStatus(result: PredictionResult, filter: BestSlipsStatus): boolean {
+  return filter === "all" || matchesPredictionResult(result, filter);
+}
 export const bestSlipsQueryRules = Object.freeze({ maximumDays: 366, pageSize: slipPageSize, scanDays: 31, maximumPage: 9999 });
 export type BestSlipsQuery = Readonly<{
   period: BestSlipsPeriod; status: BestSlipsStatus; oddsBand?: BestSlipOddsBand; from?: ReportingDate; to?: ReportingDate;

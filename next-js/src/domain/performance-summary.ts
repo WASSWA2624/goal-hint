@@ -1,5 +1,11 @@
 export const predictionResults = ["won", "lost", "pending", "void", "cancelled"] as const;
 export type PredictionResult = typeof predictionResults[number];
+export const predictionResultFilters = [...predictionResults, "others"] as const;
+export type PredictionResultFilter = typeof predictionResultFilters[number];
+
+export function matchesPredictionResult(result: PredictionResult | "unavailable", filter: PredictionResultFilter): boolean {
+  return filter === "others" ? result === "void" || result === "cancelled" : result === filter;
+}
 
 /** Outcome counts for an entire selected cohort, independent of visible pagination. */
 export type PerformanceSummaryCounts = Readonly<{

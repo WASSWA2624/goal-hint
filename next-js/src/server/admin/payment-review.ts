@@ -70,7 +70,9 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
   notifications?: PaymentNotifications;
 } = {}) {
   return {
-    async list(tab = "pending", paymentId?: string, options: { page?: number; search?: string; filters?: PaymentFilters; focus?: string } = {}): Promise<PaymentQueue & Readonly<{ tab?: string; targetFound?: boolean }>> {
+    async list(tab = "pending", paymentId?: string, options: {
+      page?: number; search?: string; filters?: PaymentFilters; focus?: string; appendable?: boolean; after?: { id: string; submittedAt: Date };
+    } = {}): Promise<PaymentQueue & Readonly<{ tab?: string; targetFound?: boolean }>> {
       return database.query(async tx => {
         // An old audit event may describe a payment whose status has since changed.
         const target = paymentId ? await tx.paymentSubmission.findUnique({ where: { id: paymentId }, select: paymentSelect }) : null;
@@ -98,9 +100,17 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
           const before = await tx.paymentSubmission.count({ where: { AND: [where, relativeTo(focus, oldest, false)] } });
           page = Math.min(maximumPaymentQueuePage, Math.floor(before / pageSize) + 1);
         }
-        const rows = await tx.paymentSubmission.findMany({ where, orderBy, take: pageSize, skip: (page - 1) * pageSize, select: paymentSelect });
+        const after = options.after;
+        const window = after ? { AND: [where, relativeTo(after, oldest, true)] } : where;
+        const rows = await tx.paymentSubmission.findMany({ where: window, orderBy, take: pageSize + Number(Boolean(after)),
+          skip: after ? 0 : (page - 1) * pageSize, select: paymentSelect });
+        const hasNext = after ? rows.length > pageSize : total > page * pageSize;
+        if (rows.length > pageSize) rows.pop();
         // Keep the queue bounded while making the exact historical report available.
-        if (target && !rows.some(row => row.id === target.id)) rows.splice(pageSize - 1, rows.length >= pageSize ? 1 : 0, target);
+        const includeTarget = target && !rows.some(row => row.id === target.id) ? target : null;
+        const displaced = !!includeTarget && rows.length === pageSize;
+        const cursor = displaced ? rows.at(-2) : rows.at(-1);
+        if (includeTarget) rows.splice(pageSize - 1, displaced ? 1 : 0, includeTarget);
         const last = rows.at(-1);
         // A report without a transaction ID (null key) matches no other report's ID; only real keys are compared.
         const keys = [...new Set(rows.flatMap(r => r.claimedTxnKey ? [r.claimedTxnKey] : []))], hashes = [...new Set(rows.flatMap(r => r.imageSha256 ? [r.imageSha256] : []))], phones = [...new Set(rows.flatMap(r => r.payerPhone ? [r.payerPhone] : []))];
@@ -116,6 +126,7 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
         ]);
         return { pendingCount, page, pageSize, total, search, ...(paymentId ? { tab: selected, targetFound: !!target } : {}),
           ...(nextPending ? { nextPendingId: nextPending.id } : {}), ...(focus && rows.some(row => row.id === focus.id) ? { focusId: focus.id } : {}),
+          ...(options.appendable ? { continuation: cursor && (hasNext || displaced) ? { id: cursor.id, submittedAt: cursor.submittedAt.toISOString() } : null } : {}),
           payments: rows.map(r => ({ id: r.id, workflowVersion: r.workflowVersion, reference: formatPaymentReference(r.reference), accountId: r.accountId, accountPhone: r.account.phone,
           payerPhone: r.payerPhone, network: r.claimedNetwork, transactionId: normalizeTransactionId(r.claimedTxnRef ?? ""), amount: r.claimedAmountUgx,
           purpose: r.purpose === "topup" ? "topup" as const : "plan" as const, accountCreditUgx: r.account.creditUgx, planId: r.planId,

@@ -9,6 +9,7 @@ const modules = {
   '@/components/slips/best-slips-loading': empty(['BestSlipsLoading']),
   '@/components/slips/slip-styles': empty(['CriteriaPanel']),
   '@/components/ui/controls': empty(['TextLink']),
+  '@/components/ui/visually-hidden': empty(['VisuallyHidden']),
   '@/components/ui/layout': empty(['Inline', 'Stack']),
   '@/server/slips/best-slips-browse': 'export const readBestSlipsBrowseSnapshot = async () => null;',
   '@/server/slips/slip-preview': 'export const gateBestSlips = (value, viewer) => ({ ...value, entitled: viewer.tier === "full" });',
@@ -32,7 +33,7 @@ test('the dedicated Best Slips route streams its valid shell before access or da
     read: async () => { calls.push('read'); return null; } });
   // Root and locale-home redirects are exercised by home-routes.test.mjs.
   const shell = await route.Page(props());
-  const boundary = shell.props.children;
+  const boundary = shell.props.children[1];
   assert.equal(boundary.type, Symbol.for('react.suspense'));
   assert.equal(boundary.props.fallback.type.name, 'BestSlipsLoading');
   assert.deepEqual(calls, [], 'The shell must not wait for viewer or slip reads.');
@@ -45,7 +46,7 @@ test('Best Slips reads the published cohort once and projects it after the lates
     return { day: '2026-11-03', state: 'generated', slips: [], searchLimited: false, partialCoverage: false };
   }, access: async () => { calls.push('access'); return { tier: 'free', signedIn: true }; } });
   const shell = await route.Page(props());
-  const content = shell.props.children.props.children.props.children;
+  const content = shell.props.children[1].props.children.props.children;
   const rendered = await content.type(content.props);
   assert.deepEqual(calls, ['read:today:en', 'access']);
   const slips = rendered.props.children.props.children[0];

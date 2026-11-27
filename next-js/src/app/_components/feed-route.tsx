@@ -93,13 +93,14 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
     async Page(props: Props) {
       const { query, today, result, access, discovery, summary, providerOdds } = await resolve(props, true);
       const messages = createMessages(query.locale);
+      const { tier, signedIn } = result.data?.access ?? access;
       const structured = !discovery.eligible || discovery.home ? null : breadcrumbStructuredData([{ name: publicPolicy.name, path: homeHref(query.locale) },
         { name: dated ? messages.text("metadata.breadcrumbArchive", { date: messages.reportingDate(discovery.range.startDate) }) : messages.text("navigation.matches") }]);
       return <>
         {discovery.home && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(homeStructuredData()) }} />}
         {structured && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(structured) }} />}
-        <MatchFeedPage query={query} today={today} result={result} showAccount
-          subscriberOnly={(result.data?.access ?? access).tier === "free"} providerOdds={providerOdds}
+        <MatchFeedPage query={query} today={today} result={result} access={{ tier, signedIn }} showAccount
+          providerOdds={providerOdds}
           {...(summary ? { summary } : {})} />
       </>;
     },

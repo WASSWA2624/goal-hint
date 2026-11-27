@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { feedPaginationRules } from "./feed-pagination.ts";
 import { feedQueryRules } from "./feed-query.ts";
 
 export const restorationRules = Object.freeze({ maximumEntries: 20, maximumAgeMilliseconds: 30 * 60 * 1000 });
@@ -11,7 +10,7 @@ export const feedCheckpointSchema = z.strictObject({
   scrollY: z.number().finite().min(0).max(feedNavigationRules.maximumScroll),
   focusFixtureId: z.string().max(128).regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/u).nullable(),
   paginationVersion: z.string().regex(/^[a-f0-9]{64}$/u).nullable(), createdAt: z.number().int().nonnegative(),
-}).refine((value) => value.lastPage >= value.firstPage && value.lastPage - value.firstPage < feedPaginationRules.maximumLoadedPages);
+}).refine((value) => value.lastPage >= value.firstPage);
 export type FeedCheckpoint = z.infer<typeof feedCheckpointSchema>;
 const recordsSchema = z.strictObject({ version: z.literal(1), entries: z.array(feedCheckpointSchema).max(restorationRules.maximumEntries) });
 function current(checkpoint: FeedCheckpoint, now: number) {

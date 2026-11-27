@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import styled from "styled-components";
 import { goHistoryBack, writeContextHistory } from "@/components/navigation/context-history";
 import { UserIcon, UserPlusIcon } from "@/components/ui/icons";
+import { appendUniqueRecords, useAppendRequest } from "@/components/ui/use-append-request";
 import { emptySubscriberDirectoryQuery, parseSubscriberDirectoryPage, parseSubscriberDirectoryQuery, type SubscriberDirectoryAccount,
   type SubscriberDirectoryPage, type SubscriberDirectoryPaging, type SubscriberDirectoryQuery } from "@/domain/subscriber-directory";
 import { parseSubscriberIndividualAction, type SubscriberIndividualAction } from "@/domain/subscriber-actions";
@@ -40,6 +41,8 @@ type Props = {
 };
 type DirectoryLocation = Readonly<{ query: SubscriberDirectoryQuery; page: number }>;
 type RecordLocation = Readonly<{ accountId: string | null; action: SubscriberIndividualAction | null }>;
+type DirectoryAppend = Readonly<{ scope: string; accounts: readonly SubscriberDirectoryAccount[];
+  cursor: SubscriberDirectoryAccount | null; hasMore: boolean; total: number }>;
 const directoryPath = "/admin/subscribers";
 const directoryApi = "/api/admin/subscribers";
 const queryKey = (query: SubscriberDirectoryQuery) => JSON.stringify(parseSubscriberDirectoryQuery(query) ?? emptySubscriberDirectoryQuery);
@@ -67,14 +70,16 @@ function writeLocation(location: DirectoryLocation, record: RecordLocation, mode
 
 function isDirectoryPage(value: unknown): value is SubscriberDirectoryPage {
   if (!value || typeof value !== "object") return false;
-  const { accounts, page, pages, total, asOf } = value as Partial<SubscriberDirectoryPage>;
+  const { accounts, page, pages, total, asOf, hasMore } = value as Partial<SubscriberDirectoryPage>;
   return Array.isArray(accounts) && accounts.every(account => account && typeof account.id === "string"
       && (typeof account.phone === "string" || account.phone === null) && typeof account.status === "string"
+      && typeof account.lastSignInAt === "string" && Number.isFinite(Date.parse(account.lastSignInAt))
       && ["active", "queued", "none"].includes(account.access))
     && typeof asOf === "string" && Number.isFinite(Date.parse(asOf))
     && typeof page === "number" && Number.isSafeInteger(page) && page >= 1
     && typeof pages === "number" && Number.isSafeInteger(pages) && pages >= page
-    && typeof total === "number" && Number.isSafeInteger(total) && total >= accounts.length;
+    && typeof total === "number" && Number.isSafeInteger(total) && total >= accounts.length
+    && (hasMore === undefined || typeof hasMore === "boolean");
 }
 
 function useSubscriberRead(error = "") {
@@ -114,6 +119,7 @@ export function SubscribersWorkspace({ accounts, detail: initialDetail, plans: s
   const router = useRouter(), parameters = useSearchParams().toString(), id = useId();
   const [location, setLocation] = useState<DirectoryLocation>({ query: initialQuery, page: initialRequestedPage ?? initialPaging?.page ?? 1 });
   const [directory, setDirectory] = useState<SubscriberDirectoryPage>({ accounts, asOf: initialDirectoryAsOf, page: 1, pages: 1, total: accounts.length, ...initialPaging });
+  const [added, setAdded] = useState<DirectoryAppend | null>(null);
   const [record, setRecord] = useState<RecordLocation>({ accountId: selectedExplicitly ? initialAccountId ?? initialDetail?.id ?? null : null, action: initialAction ?? null });
   const [detail, setDetail] = useState(initialDetail);
   const [plans, setPlans] = useState(seedPlans);
@@ -125,7 +131,11 @@ export function SubscribersWorkspace({ accounts, detail: initialDetail, plans: s
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const detailsPane = useRef<HTMLElement>(null), listScroll = useRef<HTMLOListElement>(null);
   const openedFrom = useRef<{ id: string; url: string; scrollTop: number } | null>(null);
-  const { query } = location, { accounts: listed, page, pages, total } = directory;
+  const { query } = location, scope = locationKey(location);
+  const append = useAppendRequest(scope);
+  const tail = added?.scope === scope ? added : null;
+  const listed = tail ? appendUniqueRecords(directory.accounts, tail.accounts, account => account.id) : directory.accounts;
+  const hasMore = tail?.hasMore ?? directory.page < directory.pages;
   const formId = `${id}-add-subscriber`;
 
   function replaceDetail(next: OwnerSubscriber | null) {
@@ -136,9 +146,10 @@ export function SubscribersWorkspace({ accounts, detail: initialDetail, plans: s
   function checkSession(response: Response, signal: AbortSignal) {
     if (signal.aborted || response.status !== 401) return;
     clearTimeout(searchTimer.current);
-    listRead.cancel(); detailRead.cancel(); plansRead.cancel();
+    listRead.cancel(); detailRead.cancel(); plansRead.cancel(); append.cancel();
     replaceDetail(null);
     setDirectory({ accounts: [], asOf: "", page: 1, pages: 1, total: 0 });
+    setAdded(null);
     setAdminPhone(null);
     setPlans([]);
     setAdding(false);
@@ -167,6 +178,7 @@ export function SubscribersWorkspace({ accounts, detail: initialDetail, plans: s
 
   function loadDirectory() {
     clearTimeout(searchTimer.current);
+    append.cancel();
     const requested = currentLocation.current;
     return listRead.read(async signal => {
       const response = await fetch(directoryApi, { method: "POST", cache: "no-store", signal,
@@ -178,6 +190,7 @@ export function SubscribersWorkspace({ accounts, detail: initialDetail, plans: s
       if (signal.aborted) return;
       if (!isDirectoryPage(body)) throw new Error();
       setDirectory(body);
+      setAdded(null);
       setAdminPhone("adminPhone" in body && typeof body.adminPhone === "string" ? body.adminPhone : null);
       if (body.page !== requested.page) {
         const accepted = { ...requested, page: body.page };
@@ -186,6 +199,29 @@ export function SubscribersWorkspace({ accounts, detail: initialDetail, plans: s
         writeLocation(accepted, currentRecord.current);
       }
     }, "Subscribers could not be loaded. Try again.");
+  }
+
+  function appendDirectory() {
+    const frontier = tail ? tail.cursor : directory.accounts.at(-1);
+    if (!hasMore || !frontier || listRead.busy || listRead.error || sessionEnded) return;
+    const requested = currentLocation.current;
+    const { id, lastSignInAt } = frontier;
+    void append.append(async signal => {
+      const response = await fetch(directoryApi, { method: "POST", cache: "no-store", signal,
+        headers: { ...requestHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({ ...requested.query, page: requested.page, after: { id, lastSignInAt } }) });
+      checkSession(response, signal);
+      if (signal.aborted) return;
+      if (!response.ok) throw new Error();
+      const batch: unknown = await response.json();
+      if (signal.aborted || scope !== locationKey(currentLocation.current)) return;
+      if (!isDirectoryPage(batch) || typeof batch.hasMore !== "boolean" || (batch.hasMore && !batch.accounts.length)) throw new Error();
+      const { hasMore } = batch;
+      setAdded(current => ({
+        scope, hasMore, total: batch.total, cursor: batch.accounts.at(-1) ?? null,
+        accounts: appendUniqueRecords(current?.scope === scope ? current.accounts : [], batch.accounts, account => account.id),
+      }));
+    });
   }
 
   function loadPlans() {
@@ -213,6 +249,8 @@ export function SubscribersWorkspace({ accounts, detail: initialDetail, plans: s
     setLocation(next);
     if (write && changed) writeLocation(next, currentRecord.current);
     if (!changed) return;
+    append.cancel();
+    setAdded(null);
     if (listScroll.current) listScroll.current.scrollTop = 0;
     clearTimeout(searchTimer.current);
     if (debounce) {
@@ -314,6 +352,7 @@ export function SubscribersWorkspace({ accounts, detail: initialDetail, plans: s
     replaceDetail(null);
     detailTarget.current = null;
     setDirectory(previous => ({ ...previous, accounts: previous.accounts.filter(account => account.id !== accountId) }));
+    setAdded(previous => previous && ({ ...previous, accounts: previous.accounts.filter(account => account.id !== accountId) }));
     const next = { accountId: null, action: null };
     currentRecord.current = next;
     setRecord(next);
@@ -334,8 +373,8 @@ export function SubscribersWorkspace({ accounts, detail: initialDetail, plans: s
     </RecordFeedback>}
     <SubscriberDirectory accounts={listed} asOf={directory.asOf} selectedId={record.accountId ?? detail?.id ?? null} query={query}
       loading={listRead.busy} error={sessionEnded ? authCopy.administratorSessionEnded : listRead.error}
-      action={action} plans={plans} selectionScope={locationKey(location)} listRef={listScroll}
-      paging={{ page, pages, total, onPage: next => updateLocation({ ...currentLocation.current, page: next }) }}
+      action={action} plans={plans} selectionScope={scope} listRef={listScroll}
+      paging={{ hasMore, total: tail?.total ?? directory.total, loading: append.loading, failed: append.failed, onShowMore: appendDirectory }}
       adminPhone={adminPhone} accountHref={accountHref} onAccountClick={selectAccount} onRefresh={sessionEnded ? undefined : () => { void loadDirectory(); }} />
     <DetailColumn ref={detailsPane} aria-label="Account details" aria-busy={detailRead.busy || plansRead.busy || undefined}>
       <RecordBack disabled={action.busy} onClick={backToDirectory}>Back to subscribers</RecordBack>

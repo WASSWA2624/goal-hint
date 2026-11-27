@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { appendFeedPage, applyServerFeedPage, checkedFeedPage, feedPageApiHref, feedPageHref, initialLoadedFeed, replaceFeedPages } from '../src/domain/feed-pagination.ts';
+import { appendFeedPage, applyServerFeedPage, checkedFeedPage, feedPageApiHref, feedPageHref, initialLoadedFeed, observeFeedPage, replaceFeedPages } from '../src/domain/feed-pagination.ts';
+import { nextLoadedPage } from '../src/domain/browse-period.ts';
 import { feedCheckpointSchema, matchingFeedCheckpoint, readFeedCheckpoints, restorationRules, writeFeedCheckpoint } from '../src/domain/feed-navigation.ts';
-import { resolveFeedDates, feedQueryKey } from '../src/domain/feed-query.ts';
+import { resolveFeedDates, feedQueryKey, feedQueryRules } from '../src/domain/feed-query.ts';
 import { matchFeedResponseSchema } from '../src/domain/match-feed.ts';
 import { fixture, query, today, now } from './helpers/client-state-fixtures.mjs';
 
@@ -73,20 +74,37 @@ test('a same-route server refresh shows new fixtures in place and ignores an old
   assert.equal(applyServerFeedPage(updated, previous.data), updated);
   assert.throws(() => replaceFeedPages(updated, [previous.data]), error => error.code === 'stale-data');
 });
-test('continuous browsing retains a bounded page window and can restore that window after navigation', () => {
+
+test('passive browsing rotates one loaded page and accepts observations only for existing fixture IDs', () => {
+  let position = null;
+  const pages = Array.from({ length: 5 }, () => (position = nextLoadedPage(position, 2, 4)));
+  assert.deepEqual(pages, [2, 3, 4, 2, 3]);
+  const original = appendFeedPage(initialLoadedFeed(page(1, ['a', 'b'])), page(2, ['c', 'd']));
+  const second = page(2, ['c', 'new'], otherVersion, { asOf: now + 10 });
+  second.records[0] = record('c', '10', 'Updated');
+  const observed = observeFeedPage(original, second);
+  assert.deepEqual(observed.records.map(({ fixtureId }) => fixtureId), ['a', 'b', 'c', 'd']);
+  assert.equal(observed.records[0], original.records[0]);
+  assert.equal(observed.records[2].homeTeam.name, 'Updated');
+  assert.equal(observed.data.paginationVersion, version);
+  assert.equal(observed.data.nextPage, original.data.nextPage);
+  assert.equal(observeFeedPage(observed, original.data), observed);
+});
+test('continuous browsing retains all appended pages and can restore them after navigation', () => {
   const batch = (number) => page(number, [`a-${number}`, `b-${number}`], version, {
     total: 26, totalPages: 13, coverage: { ...page(1, ["a", "b"]).coverage, knownFixtures: 26 }, nextPage: number < 13 ? number + 1 : null,
     links: { next: number < 13 ? `/api/matches?page=${number + 1}` : null, previous: number > 1 ? `/api/matches?page=${number - 1}` : null },
   });
   let view = initialLoadedFeed(batch(1));
   for (let number = 2; number <= 12; number++) view = appendFeedPage(view, batch(number));
-  assert.equal(view.pages, 10); assert.equal(view.firstPage, 3); assert.equal(view.lastPage, 12);
-  assert.equal(view.records.length, 20); assert.equal(view.records[0].fixtureId, 'a-3');
-  const checkpoint = { entryId: 'window', queryKey: 'cohort', href: '/en/matches', firstPage: 3, lastPage: 12,
+  assert.equal(view.pages, 12); assert.equal(view.firstPage, 1); assert.equal(view.lastPage, 12);
+  assert.equal(view.records.length, 24); assert.equal(view.records[0].fixtureId, 'a-1');
+  assert.equal(applyServerFeedPage(view, batch(1)), view, 'a single server page cannot discard an appended cohort');
+  const checkpoint = { entryId: 'window', queryKey: 'cohort', href: '/en/matches', firstPage: 1, lastPage: 12,
     scrollY: 2500, focusFixtureId: 'a-12', paginationVersion: version, createdAt: now };
   assert.equal(feedCheckpointSchema.safeParse(checkpoint).success, true);
   assert.equal(matchingFeedCheckpoint([checkpoint], 'window', 'cohort', '/en/matches', 1), checkpoint);
-  assert.equal(replaceFeedPages(view, Array.from({ length: 10 }, (_, index) => batch(index + 3))).records.length, 20);
+  assert.equal(replaceFeedPages(view, Array.from({ length: 12 }, (_, index) => batch(index + 1))).records.length, 24);
 });
 test('restoration records contain bounded positions only, scoped to entry, query, initial page and expiry', () => {
   const checkpoint={entryId:'entry-a',queryKey:feedQueryKey(query(),today),href:'/en',firstPage:1,lastPage:3,scrollY:15000,
@@ -100,6 +118,6 @@ test('restoration records contain bounded positions only, scoped to entry, query
   assert.deepEqual(readFeedCheckpoints(encoded,now-1),[]);
   for(let i=0;i<25;i++) { encoded=writeFeedCheckpoint(readFeedCheckpoints(encoded,now+i),{...checkpoint,entryId:`entry-${i}`,createdAt:now+i},now+i); }
   assert.equal(readFeedCheckpoints(encoded,now+25).length,20);
-  for(const value of [{...checkpoint,lastPage:11},{...checkpoint,scrollY:Infinity},{...checkpoint,records:[]},{...checkpoint,firstPage:0}]) assert.equal(feedCheckpointSchema.safeParse(value).success,false);
+  for(const value of [{...checkpoint,lastPage:feedQueryRules.maximumPage + 1},{...checkpoint,scrollY:Infinity},{...checkpoint,records:[]},{...checkpoint,firstPage:0}]) assert.equal(feedCheckpointSchema.safeParse(value).success,false);
   for(const serialized of ['not json','x'.repeat(65537),JSON.stringify({version:1,entries:[checkpoint,checkpoint]})]) assert.deepEqual(readFeedCheckpoints(serialized,now),[]);
 });

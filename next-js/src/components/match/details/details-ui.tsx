@@ -2,13 +2,13 @@
 
 import { AppLoading } from "@/components/navigation/navigation-progress";
 
-import { createContext, useContext, useEffect, useRef, type CSSProperties, type HTMLAttributes, type ReactNode, type Ref } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode, type Ref } from "react";
 import styled, { css, type DefaultTheme } from "styled-components";
 import { CheckIcon, ChevronRightIcon } from "@/components/ui/icons";
-import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { ClockIcon } from "@/components/match/match-icons";
 import { TeamLogo } from "@/components/match/team-logo";
+import { pageOf } from "@/domain/match-insight-presentation";
 import type { FormLetter, LiveStanding } from "@/domain/match-details";
 import type { SubscriptionOffer } from "@/domain/subscription-offer";
 import type { MatchDetailResponse } from "@/domain/match-detail";
@@ -397,12 +397,18 @@ export function Crest({ name, url, size = 20, eager = false }: { name: string | 
   return <CrestBox $size={size}><TeamLogo name={name} url={url ?? undefined} eager={eager} size={size} /></CrestBox>;
 }
 
-/** Every page of a section's complete collection; the URL keeps the page for Back and refresh. */
-export function Pager({ page, pages, onPage }: { page: number; pages: number; onPage: (page: number) => void }) {
-  const { messages } = useStableDetails();
-  if (pages <= 1) return null;
-  return <NumberedPagination page={page} pages={pages} compact onPage={onPage}
-    labels={numberedPaginationLabels(messages, messages.text("details.pages"))} />;
+/** Keep the addressable starting page and grow only the visible window within that section. */
+export function useDetailListPages<T>(view: MatchView, items: readonly T[], pageSize: number) {
+  const { fixtureId } = useStableDetails();
+  const key = JSON.stringify([fixtureId, view.section, view.page, view.tab, view.team, view.venue, view.window, view.competition]);
+  const [loaded, setLoaded] = useState({ key, additionalPages: 0 });
+  const additionalPages = loaded.key === key ? loaded.additionalPages : 0;
+  if (loaded.key !== key) setLoaded({ key, additionalPages });
+  const page = pageOf(items, view.page, pageSize, additionalPages);
+  return { items: page.items, more: {
+    hasMore: page.page + additionalPages < page.pages,
+    onShowMore: () => setLoaded({ key, additionalPages: additionalPages + 1 }),
+  } };
 }
 
 /** Rows that open nested panels are buttons laid out as compact grids. */

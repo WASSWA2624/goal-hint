@@ -7,7 +7,6 @@ import { matchFeedResponseSchema, type MatchFeedRecord, type MatchFeedResponse }
 
 export { FeedPaginationError } from "./feed-pagination-error.ts";
 
-export const feedPaginationRules = Object.freeze({ maximumLoadedPages: 10 });
 export type LoadedFeed = Readonly<{ data: MatchFeedResponse; records: readonly MatchFeedRecord[]; firstPage: number; lastPage: number; pages: number }>;
 export function pinnedFeedQuery(query: FeedQuery, today: ReportingDate): FeedQuery {
   const range = resolveFeedDates(query, today);
@@ -49,10 +48,12 @@ export function appendFeedPage(view: LoadedFeed, page: MatchFeedResponse): Loade
   }
   const known = new Set(view.records.map((record) => record.fixtureId));
   // Overlap under an allegedly stable cohort is unsafe: dedup alone could hide a gap.
-  if (page.records.some((record) => known.has(record.fixtureId))) throw new FeedPaginationError("changed");
-  const drop = view.pages >= feedPaginationRules.maximumLoadedPages;
-  return { ...view, data: page, records: [...view.records.slice(drop ? page.pageSize : 0), ...page.records],
-    firstPage: view.firstPage + Number(drop), lastPage: page.page, pages: Math.min(view.pages + 1, feedPaginationRules.maximumLoadedPages) };
+  for (const record of page.records) {
+    if (known.has(record.fixtureId)) throw new FeedPaginationError("changed");
+    known.add(record.fixtureId);
+  }
+  const data = page.asOf >= view.data.asOf ? page : { ...page, asOf: view.data.asOf, run: view.data.run };
+  return { ...view, data, records: [...view.records, ...page.records], lastPage: page.page, pages: view.pages + 1 };
 }
 export function replaceFeedPages(previous: LoadedFeed, pages: readonly MatchFeedResponse[]): LoadedFeed {
   if (pages.some((page) => page.access.tier !== previous.data.access.tier || page.access.signedIn !== previous.data.access.signedIn)) throw new FeedPaginationError("changed");
@@ -72,10 +73,26 @@ export function replaceFeedPages(previous: LoadedFeed, pages: readonly MatchFeed
   return { ...next, records };
 }
 
-/** A same-route server refresh replaces the visible page in place. */
+/** One observation updates matching fixtures without applying partial offset membership. */
+export function observeFeedPage(previous: LoadedFeed, page: MatchFeedResponse): LoadedFeed {
+  if (page.page < previous.firstPage || page.page > previous.lastPage || page.asOf < previous.data.asOf
+    || page.access.tier !== previous.data.access.tier || page.access.signedIn !== previous.data.access.signedIn) return previous;
+  const observed = new Map(page.records.map((record) => [record.fixtureId, record]));
+  const records = previous.records.map((record) => {
+    const next = observed.get(record.fixtureId);
+    if (!next) return record;
+    const order = fixtureAdvance(record, next);
+    return order > 0 ? next : order === 0 ? mergeFixtureObservation(record, next) : record;
+  });
+  return { ...previous, data: { ...previous.data, asOf: page.asOf, run: page.run },
+    records: records.some((record, index) => record !== previous.records[index]) ? records : previous.records };
+}
+
+/** A single server page cannot replace an appended cohort. */
 export function applyServerFeedPage(previous: LoadedFeed, page: MatchFeedResponse): LoadedFeed {
   if (page === previous.data || page.page !== previous.firstPage) return previous;
   if (page.access.tier !== previous.data.access.tier || page.access.signedIn !== previous.data.access.signedIn) return initialLoadedFeed(page);
+  if (previous.pages > 1) return previous;
   try { return replaceFeedPages(previous, [page]); }
   catch (error) { if (error instanceof FeedPaginationError && error.code === "stale-data") return previous; throw error; }
 }

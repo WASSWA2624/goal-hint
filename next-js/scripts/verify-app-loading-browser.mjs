@@ -9,7 +9,7 @@ export async function verifyAppLoading(page, origin) {
   const onRequest = request => { if (new URL(request.url()).pathname === '/api/matches/summary') summaryRequests++; };
   page.on('request', onRequest);
   try {
-    for (const theme of ['light', 'dark']) for (const width of [320, 390, 768, 1440]) {
+    for (const theme of ['light', 'dark']) for (const width of [320, 360, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
       summaryRequests = 0;
@@ -30,8 +30,9 @@ export async function verifyAppLoading(page, origin) {
       assert(Math.abs(readyHeight - height) < 1, `${theme}/${width}: summary height changed (${height} → ${readyHeight})`);
       assert(await summary.evaluate(element => getComputedStyle(element).backgroundColor) === background, `${theme}/${width}: loading colors differ from the selected theme`);
       assert(summaryRequests === 0, 'The streamed summary must not trigger an immediate duplicate API read');
-      assert(await summary.locator('[data-summary-count="all"]').innerText() === '55'
-        && await page.locator('[data-fixture-id]').count() === 50, 'All counts predictions across pages and excludes the unavailable fixture');
+      assert(await summary.locator('[data-summary-count="all"]').textContent() === '55'
+        && await page.locator('[data-fixture-id]').count() === 37, 'The full-period count stays at 55 while Pending shows 37 fixtures');
+      assert(await summary.locator('[data-summary-result="pending"]').getAttribute('aria-pressed') === 'true', 'Matches starts on Pending');
       assert(await summary.locator('[data-summary-predicted], [data-summary-unavailable]').count() === 0, 'Coverage has no separate summary row');
       assert(await summary.locator('[data-summary-result="won"]').getAttribute('aria-label') === 'Won: 10', 'Audited figures must replace unknown counts');
       assert(await page.evaluate(() => document.querySelectorAll('main').length === 1 && document.documentElement.scrollWidth <= innerWidth), `${theme}/${width}: landmark or viewport overflow`);

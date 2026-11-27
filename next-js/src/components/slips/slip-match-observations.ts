@@ -1,10 +1,18 @@
 import type { SlipMatchState } from "../../domain/slip-match-state.ts";
+import { slipMatchSelectionKey, type SlipMatchRefreshResponse } from "../../domain/slip-match-refresh.ts";
 import { shareUnchanged } from "../../domain/structural-sharing.ts";
 
-type ObservationSnapshot = Readonly<{ states: readonly SlipMatchState[]; revoked: boolean; asOf?: number }> | null;
+type ObservationSnapshot = Readonly<{ states: readonly SlipMatchState[]; revoked: boolean; asOf?: number;
+  batches?: readonly SlipMatchRefreshResponse[] }> | null;
 
 /** An older accepted poll cannot replace a newer server snapshot of the same editorial cohort. */
 export function currentSlipMatchStates(initialStates: readonly SlipMatchState[], initialAsOf: number | undefined, snapshot: ObservationSnapshot) {
+  if (snapshot?.batches && !snapshot.revoked) {
+    const observed = snapshot.batches.filter(({ asOf }) => initialAsOf === undefined || asOf > initialAsOf).flatMap(({ states }) => states);
+    if (!observed.length) return initialStates;
+    const keys = new Set(observed.map(slipMatchSelectionKey));
+    return [...initialStates.filter((state) => !keys.has(slipMatchSelectionKey(state))), ...observed];
+  }
   if (snapshot && (snapshot.revoked || initialAsOf === undefined || (snapshot.asOf ?? -Infinity) > initialAsOf)) return snapshot.states;
   return initialStates;
 }

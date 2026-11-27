@@ -113,7 +113,7 @@ def directory_rendering(origin: str) -> None:
     tools = directory.one(attribute="data-record-list-tools")
     toolbar = tools.one(attribute="data-subscriber-selection")
     assert directory.children.index(tools) < directory.children.index(results)
-    assert toolbar.one(tag="label").text() == "Select all"
+    assert toolbar.one(tag="label").text() == "Select all loaded"
     select_all = toolbar.one(tag="input")
     assert select_all.attributes.get("type") == "checkbox" and "checked" not in select_all.attributes
     manage = [button for button in toolbar.all("button") if button.text() == "Manage"]
@@ -215,7 +215,8 @@ def directory_api(origin: str) -> None:
     assert not ids(access="queued"), "A queued renewal does not override an active period."
     assert ids(search="active", status="open", access="active", plan="Monthly") == {PRIMARY}
     assert not ids(search="active", status="blocked")
-    for invalid in [{"status": "online"}, {"access": "online"}, {"recent": "3"}, {"search": "x" * 121}, {"query": BASE_QUERY}, {"page": 0}, {"pageSize": 500}]:
+    for invalid in [{"status": "online"}, {"access": "online"}, {"recent": "3"}, {"search": "x" * 121}, {"query": BASE_QUERY},
+                    {"page": 0}, {"pageSize": 500}, {"after": {"id": PRIMARY, "lastSignInAt": "invalid"}}]:
         status, _ = fixture_json(origin, "/api/admin/subscribers", {**BASE_QUERY, **invalid})
         assert status == 400, invalid
     assert fixture_json(origin, "/api/admin/subscribers", BASE_QUERY, headers={"Sec-Fetch-Site": "cross-site"})[0] == 403
@@ -225,22 +226,33 @@ def directory_api(origin: str) -> None:
 def page_and_action_api(origin: str) -> None:
     state = "/api/fixture/subscribers"
     assert fixture_json(origin, state, {"pagination": True})[0] == 200
-    ids = []
+    ids, batches = [], []
     for page_number, expected in [(1, 100), (2, 100), (3, 1)]:
         query = {"search": "Synthetic paging fixture", "page": page_number}
         status, reply = fixture_json(origin, "/api/admin/subscribers", {**BASE_QUERY, **query})
         assert status == 200 and reply["page"] == page_number and reply["pages"] == 3 and reply["total"] == 201
         assert len(reply["accounts"]) == expected
+        batches.append(reply["accounts"])
         ids.extend(row["id"] for row in reply["accounts"])
         rendered = page(origin, {**query, "accountId": PRIMARY})
         assert len(rendered.all(attribute="data-subscriber-row")) == expected
         assert rendered.one(attribute="data-subscriber-count").text() == "201 subscribers"
         detail = rendered.one(attribute="data-subscriber-detail")
         assert PRIMARY in detail.text()
-        pager = next(nav for nav in rendered.all("nav") if nav.attributes.get("aria-label") == "Subscriber pages")
-        active = next(button for button in pager.all("button") if button.attributes.get("aria-current") == "page")
-        assert active.text() == str(page_number)
+        show_more = rendered.all(attribute="data-show-more")
+        assert len(show_more) == (1 if page_number < 3 else 0)
+        if show_more:
+            assert show_more[0].text() == "Show More"
     assert len(ids) == len(set(ids)) == 201
+    def after(batch):
+        anchor = {key: batch[-1][key] for key in ("id", "lastSignInAt")}
+        status, reply = fixture_json(origin, "/api/admin/subscribers",
+            {**BASE_QUERY, "search": "Synthetic paging fixture", "after": anchor})
+        assert status == 200
+        return reply["accounts"], reply["hasMore"]
+    assert after(batches[0]) == (batches[1], True)
+    assert after(batches[1]) == (batches[2], False)
+    assert after(batches[2]) == ([], False)
     status, final = fixture_json(origin, "/api/admin/subscribers", {**BASE_QUERY, "search": "Synthetic paging fixture", "page": 100})
     assert status == 200 and final["page"] == 3 and len(final["accounts"]) == 1
     route = "/api/admin/subscribers/bulk"
@@ -250,6 +262,7 @@ def page_and_action_api(origin: str) -> None:
     assert status == 200 and reply["succeeded"] == reply["failed"] == 1
     assert reply["results"] == [{"accountId": PRIMARY, "status": "failed", "message": "Payment records must be retained for this account."},
                                 {"accountId": ids[0], "status": "saved"}]
+    assert after(batches[0]) == (batches[1], True), "Removing a loaded record must not move the append boundary."
     assert fixture_json(origin, route, {**mutation, "confirmed": True}, headers={"Cookie": ""})[0] == 401
     status, reply = fixture_json(origin, f"/api/admin/subscribers/{PRIMARY}", {"action": "password-reset"})
     assert status == 200 and set(reply) == {"status", "requestId"}
@@ -295,7 +308,7 @@ def verify(origin: str) -> None:
         page_and_action_api(origin)
     finally:
         assert fixture_json(origin, "/api/fixture/subscribers", {})[0] == 200
-    print("PASS Subscribers rows, fixed 100-record pages, scoped list and detail failures, secure reset entry, removal confirmation, partial bulk results, filters and administrator guards.", flush=True)
+    print("PASS Subscribers rows, 100-record windows, stable Show More boundaries, scoped failures, secure reset entry, removal confirmation, partial bulk results, filters and administrator guards.", flush=True)
 
 
 def main():

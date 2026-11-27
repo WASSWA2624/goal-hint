@@ -83,6 +83,8 @@ export const matchFeedResponseSchema = z.strictObject({ ...storedFeedBaseSchema.
 export type StoredMatchFeedResponse = z.infer<typeof storedMatchFeedResponseSchema>;
 export type StoredMatchFeedRecord = z.infer<typeof storedMatchFeedRecordSchema>;
 export type MatchFeedResponse = z.infer<typeof matchFeedResponseSchema>;
+export type FeedPageResult = Readonly<{ data: MatchFeedResponse; error: null } |
+  { data: null; error: "rate-limited" | "unavailable" | "subscription-required" }>;
 export type MatchFeedRecord = z.infer<typeof matchFeedRecordSchema>;
 export const matchFeedErrorSchema = z.strictObject({ error: z.strictObject({
   code: z.enum(["invalid-query", "not-found", "rate-limited", "unavailable", "subscription-required"]), message: z.string().max(256),

@@ -3,6 +3,7 @@ import test from 'node:test';
 import { bestSlipsRangeKey, findBestSlipsSnapshot, projectBestSlipsSnapshot, rememberBestSlipsSnapshot } from '../src/domain/best-slips-client.ts';
 import { slipStatusCategory } from '../src/domain/slip-status.ts';
 import { slipPageSize } from '../src/domain/slip-pagination.ts';
+import { appendSlipPage, nextSlipPageQuery, observeSlipPage, slipBrowseWindow } from '../src/domain/slip-browse-window.ts';
 
 const day = '2026-10-30';
 const query = (overrides = {}) => ({ period: 'today', status: 'all', page: 1, ...overrides });
@@ -20,6 +21,51 @@ const emptyCache = (source, entitled = source.entitled) => ({ source, entitled, 
 function page(source, selected = query(), total = source.slips.length, hasMore = false) {
   return { ...source, browse: { query: selected, total, hasMore, pageSize: slipPageSize, nextCursor: null, from: day, to: day } };
 }
+
+test('appending a Best Slips batch preserves the deep-link page and rejects drift, incomplete pages and duplicate publication IDs', () => {
+  const source = daily(Array.from({ length: 46 }, () => 'won'));
+  const makePage = (number, slips) => ({ ...page({ ...source, slips }, query({ page: number }), 46, number < 3),
+    browse: { ...page(source, query({ page: number }), 46, number < 3).browse, version: 'stable' } });
+  const first = makePage(2, source.slips.slice(20, 40)), last = makePage(3, source.slips.slice(40));
+  const used = appendSlipPage([first], last), joined = slipBrowseWindow(used);
+  assert.equal(joined.browse.query.page, 2);
+  assert.equal(joined.browse.firstPage, 2);
+  assert.equal(joined.statistics, source.statistics);
+  assert.equal(joined.slips[0], first.slips[0]);
+  assert.deepEqual(joined.slips, source.slips.slice(20));
+  assert.equal(nextSlipPageQuery(last), null);
+  for (const invalid of [makePage(3, source.slips.slice(40, 44)), makePage(3, source.slips.slice(20, 26)),
+    { ...last, browse: { ...last.browse, version: 'changed' } }, { ...last, entitled: false }]) {
+    assert.throws(() => appendSlipPage([first], invalid), /changed/);
+  }
+});
+
+test('an empty Best Slips archive batch can advance its cursor without dropping rows or changing the displayed query', () => {
+  const firstQuery = query({ period: 'all' });
+  const first = page(daily(['won']), firstQuery, null, true);
+  first.browse.nextCursor = '2026-10-30:1';
+  const second = page(daily([]), nextSlipPageQuery(first), null, true);
+  second.browse.nextCursor = '2026-10-29:3';
+  const accumulated = appendSlipPage([first], second);
+  assert.deepEqual(slipBrowseWindow(accumulated).slips, first.slips);
+  assert.equal(slipBrowseWindow(accumulated).browse.query, firstQuery);
+  assert.deepEqual(nextSlipPageQuery(second), query({ period: 'all', page: 3, cursor: '2026-10-29:3' }));
+});
+
+test('a passive Best Slips read keeps loaded offsets and merges updates by stable publication ID', () => {
+  const source = daily(Array.from({ length: 25 }, () => 'pending'));
+  const first = page({ ...source, slips: source.slips.slice(0, 20) }, query(), 25, true);
+  const last = page({ ...source, slips: source.slips.slice(20) }, query({ page: 2 }), 25);
+  const pages = appendSlipPage([first], last);
+  const refreshed = { ...last, slips: [{ ...source.slips[2], outcome: 'won' }, { ...source.slips[23], id: 'unloaded' }],
+    browse: { ...last.browse, version: 'new', total: 2, bandTotal: 30 } };
+  const observed = slipBrowseWindow(observeSlipPage(pages, refreshed));
+  assert.deepEqual(observed.slips.map(({ id }) => id), source.slips.map(({ id }) => id));
+  assert.equal(observed.slips[2].outcome, 'won');
+  assert.equal(observed.slips[3], source.slips[3]);
+  assert.equal(observed.browse.total, 25);
+  assert.equal(observed.browse.bandTotal, 30);
+});
 
 test('a complete daily cohort projects every status instantly while pending groups all unsettled progress', () => {
   const source = daily(), snapshot = { query: query(), data: source };

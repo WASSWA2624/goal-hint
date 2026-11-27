@@ -5,7 +5,7 @@ import { createPasswordRecovery } from "../members/password-recovery.ts";
 import { json } from "../http/private-http.ts";
 import { readJsonBody, type AdminContext } from "./admin-http.ts";
 import { createSubscribers } from "./subscribers.ts";
-import { parseSubscriberDirectoryPage, parseSubscriberDirectoryQuery, subscriberDirectoryPageSize } from "../../domain/subscriber-directory.ts";
+import { parseSubscriberDirectoryCursor, parseSubscriberDirectoryPage, parseSubscriberDirectoryQuery, subscriberDirectoryPageSize } from "../../domain/subscriber-directory.ts";
 import { readSubscriberDirectory } from "./subscriber-directory.ts";
 import { codeAnswer, invalidAction, readManualGrant, storageUnavailable, uuid } from "./codes-http.ts";
 import { auditTextErrors } from "./audit.ts";
@@ -33,10 +33,11 @@ export function createSubscriberHandlers() {
       if (!services.database) return storageUnavailable();
       try {
         if (id === undefined) {
-          const { page: requestedPage, ...filters } = body;
+          const { page: requestedPage, after, ...filters } = body;
           const query = parseSubscriberDirectoryQuery(filters), page = parseSubscriberDirectoryPage(requestedPage);
-          if (!query || page === null) return invalidAction();
-          return json(await readSubscriberDirectory(services.database, query, page));
+          const cursor = parseSubscriberDirectoryCursor(after);
+          if (!query || page === null || (after !== undefined && !cursor)) return invalidAction();
+          return json(await readSubscriberDirectory(services.database, query, page, Date.now, cursor ?? undefined));
         }
         if (body.action === "grant") {
           const grant = readManualGrant(body);

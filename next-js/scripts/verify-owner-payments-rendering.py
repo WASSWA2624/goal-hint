@@ -6,6 +6,7 @@ from html import unescape
 from pathlib import Path
 from runpy import run_path
 from urllib.error import HTTPError
+from urllib.parse import urlencode
 from urllib.request import Request as HttpRequest, urlopen
 from lib.rendering import Server, build_fixture, create_fixture, environment, match, no_match, parse_args, request as raw_request, visible_html
 from lib.runtime import ROOT, main_guard
@@ -497,7 +498,7 @@ def payments_queue_rendering(origin):
         assert response.status == 200 and "no-store" in response.headers.get("Cache-Control", "")
         editor = match(r'<div\b(?=[^>]*data-payments-editor)[^>]*>', html).group(0)
         match(r'data-layout="balanced"', editor)
-        no_match(r'data-payment-count|aria-label="Payment pages"', html, "A single page has no summary or pager.")
+        no_match(r'data-payment-count|data-show-more', html, "A single batch has no summary or append button.")
         assert html.count("data-payment-queue-scroll") == 1
         assert html.count("data-payment-review-scroll") == 1
         no_match(r'data-payment-summary-count|Ready for manual review', html)
@@ -525,20 +526,28 @@ def payment_filters_rendering(origin):
         second, second_ids = queue("?page=2")
         assert len(first_ids) == 30 and len(second_ids) == 2 and not set(first_ids) & set(second_ids)
         no_match(r'data-payment-count|30 of 32 requests', first)
-        match(r'<nav[^>]+aria-label="Payment pages"[^>]+data-page-count="2"[^>]+data-current-page="1"', first)
-        match(r'<nav[^>]+aria-label="Payment pages"[^>]+data-page-count="2"[^>]+data-current-page="2"', second)
-        assert first.index("data-payment-queue-scroll") < first.index('aria-label="Payment pages"') < first.index('id="payment-review"')
+        match(r'<button\b[^>]*data-show-more[^>]*>[\s\S]*?Show More', first)
+        no_match(r'data-show-more|data-numbered-pagination', second)
+        assert first.index("data-payment-queue-scroll") < first.index('data-show-more') < first.index('id="payment-review"')
+        legacy = [payment for page in (1, 2) for payment in fixture_json(origin, f"/api/admin/payments?tab=pending&page={page}")[1]["payments"]]
+        anchor = next(payment for payment in legacy if payment["id"] == first_ids[-1])
+        append = "/api/admin/payments?" + urlencode({"afterId": anchor["id"], "afterAt": anchor["submittedAt"]})
+        status, batch = fixture_json(origin, append)
+        assert status == 200 and batch["continuation"] is None
+        assert [payment["id"] for payment in batch["payments"]] == second_ids
+        assert fixture_json(origin, append, headers={"Cookie": ""})[0] == 401
+        assert fixture_json(origin, "/api/admin/payments?afterId=invalid&afterAt=invalid")[0] == 400
         assert queue("?page=99")[1] == second_ids, "Out-of-range pages show the last available results."
         focused, focused_ids = queue("?focus=" + second_ids[1])
         assert focused_ids == second_ids
-        match(r'<nav[^>]+aria-label="Payment pages"[^>]+data-current-page="2"', focused)
+        no_match(r'data-show-more', focused)
         match(r'data-payment-review="' + re.escape(second_ids[1]) + r'"', focused)
         criteria = "status=pending%2Capproved&provider=mtn%2Cairtel&sort=amount&search=256700000118"
         criteria_html, criteria_ids = queue("?" + criteria)
         next_html, next_ids = queue("?" + criteria + "&page=2")
         assert len(criteria_ids) == 30 and len(next_ids) == 3 and not set(criteria_ids) & set(next_ids)
-        match(r'href="/admin/payments\?' + re.escape(criteria.replace("&", "&amp;")) + r'&amp;page=2"', criteria_html)
-        match(r'href="/admin/payments\?' + re.escape(criteria.replace("&", "&amp;")) + r'"', next_html)
+        match(r'data-show-more', criteria_html)
+        no_match(r'data-show-more', next_html)
         filtered, filtered_ids = queue("?status=remaining,approved&provider=airtel&search=PFILTER0")
         assert filtered_ids == ["00000000-0000-4000-8000-000000000800"]
         match(r'data-ticket-amount[^>]*>UGX 2,000', filtered)
@@ -629,7 +638,7 @@ def main():
         overview_notices(server.origin)
         subscriber_directory(server.origin)
         for path,labels in [("/admin/payments",["Payments"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or reference"]),("/admin",["Active paid subscribers","Revenue this week","Revenue this month","Pending payments","Trials this week",
-            "Upload alerts this week","Credit held by members","Message notices to check"]),("/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100",["Search subscribers","Grant access / add subscriber","Change number","Save note","Delete or erase"]),("/admin/audit",["Audit"])]:
+            "Upload alerts this week","Credit held by members","Message notices to check"]),("/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100",["Search subscribers","Grant access / add subscriber","Change number","Delete or erase"]),("/admin/audit",["Audit"])]:
             response=request(server.origin,path);html=visible_html(response.text)
             assert response.status==200,(path,response.status)
             for label in labels:assert label in html,(path,label)
@@ -638,6 +647,8 @@ def main():
             for removed in ["#code=", 'href="sms:', 'href="https://wa.me/', "Reissue"]:
                 assert removed not in html, (path, removed)
             if path=="/admin/payments":assert "(1) Payments" in response.text
+        note = request(server.origin, "/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100&action=note")
+        assert note.status == 200 and "Save note" in visible_html(note.text)
         for action in ["approve", "manual"]:
             endpoint = "/api/admin/payments/00000000-0000-4000-8000-000000000200" if action == "approve" else "/api/admin/codes"
             body = {"action": action, "id": "00000000-0000-4000-8000-000000000100", "phone": "256700000101", "planId": "00000000-0000-4000-8000-000000000001", "amount": 0, "note": "Synthetic acceptance grant"}

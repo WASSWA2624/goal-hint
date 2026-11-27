@@ -4,12 +4,12 @@ import { parseReportingDate } from '../src/domain/calendar.ts';
 import { defaultBestSlipsQuery, selectSlipSummaryResult } from '../src/domain/best-slips-query.ts';
 import { applyFeedPageDefaults, parseFeedQuery, serializeFeedQuery, feedQueryHref, getFeedToday, resolveFeedDates } from '../src/domain/feed-query.ts';
 import { performanceFeedQuery, selectFeedSummaryResult } from '../src/domain/feed-performance-summary.ts';
-import { predictionResults } from '../src/domain/performance-summary.ts';
+import { matchesPredictionResult, predictionResults, predictionResultFilters } from '../src/domain/performance-summary.ts';
 import { resetFeedFilters } from '../src/domain/feed-controls.ts';
 
 const today = parseReportingDate('2026-11-03');
 test('every Best Slips result chip retains its period and odds band and restarts pagination', () => {
-  for (const oddsBand of ['1.5-5', '5-10', '10-20', '20-50', '50-100']) for (const status of predictionResults) {
+  for (const oddsBand of ['1.5-5', '5-10', '10-20', '20-50', '50-100', '100-200']) for (const status of predictionResultFilters) {
     const applied = { ...defaultBestSlipsQuery(), oddsBand, page: 4 };
     const selected = selectSlipSummaryResult(applied, status);
     assert.deepEqual(selected, { period: 'today', oddsBand, status, page: 1 });
@@ -28,7 +28,7 @@ test('every Best Slips result chip retains its period and odds band and restarts
 test('Matches summary links retain their cohort filters and select the actual result before paging', () => {
   const input = new URLSearchParams('q=Club&country=England&market=total-goals&status=finished&tz=Africa%2FKampala&page=5');
   const original = applyFeedPageDefaults(parseFeedQuery(input, { today }), input);
-  for (const result of predictionResults) {
+  for (const result of predictionResultFilters) {
     const next = selectFeedSummaryResult(original, result);
     assert.equal(next.result, result); assert.equal(next.summary, undefined); assert.equal(next.page, 1);
     assert.deepEqual(next.dates, { kind: 'today' }); assert.equal(next.zone, 'Africa/Kampala');
@@ -39,8 +39,18 @@ test('Matches summary links retain their cohort filters and select the actual re
     const restored = parseFeedQuery(serializeFeedQuery(next, today), { today });
     assert.equal(restored.result, result); assert.deepEqual(restored.dates, next.dates); assert.equal(restored.zone, next.zone);
     assert.deepEqual(performanceFeedQuery(next), { ...original, page: 1, sort: { by: 'kickoff', direction: 'desc' } });
-    assert.equal(resetFeedFilters(next).result, undefined);
+    assert.equal(resetFeedFilters(next).result, 'pending');
   }
+});
+
+test('Others groups only Void and Cancelled and desktop All survives a reload', () => {
+  assert.deepEqual([...predictionResults, 'unavailable'].filter(result => matchesPredictionResult(result, 'others')), ['void', 'cancelled']);
+  assert.equal(parseFeedQuery({ result: 'others' }, { today }).result, 'others');
+  const pending = applyFeedPageDefaults(parseFeedQuery({}, { today }), {});
+  assert.equal(pending.result, 'pending');
+  const url = new URL(feedQueryHref(selectFeedSummaryResult(pending, undefined), today), 'https://goalhint.com');
+  assert.equal(url.searchParams.get('result'), 'all');
+  assert.equal(applyFeedPageDefaults(parseFeedQuery(url.searchParams, { today }), url.searchParams).result, undefined);
 });
 
 test('today result navigation retains the browsing zone across a date boundary', () => {

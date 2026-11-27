@@ -92,12 +92,6 @@ export const QueueFilters = styled.div`
 export const QueueFooter = styled(RecordListFooter)`
   display: grid; row-gap: 0;
   ${media.desktop} { padding-block: 0; }
-  /* Inset the visible button faces inside the shared pointer targets. */
-  [data-numbered-pagination] :is([data-pagination-end], [data-pagination-page], [data-pagination-scroll]) {
-    padding-block: var(--gh-spacing-1);
-    background-clip: content-box;
-    &:focus-visible { outline-offset: calc(-1 * var(--gh-spacing-1_5)); }
-  }
   > [data-payment-queue-updated] { color: ${({ theme }) => theme.color.link}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
 `;
 

@@ -14,7 +14,7 @@ import { CriteriaPanel, SlipList, SlipStack } from "./slip-styles";
 import { BestSlipCard } from "./best-slip-card";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { BestSlipsFilters } from "./best-slips-filters";
-import { BestSlipsArchivePagination, BestSlipsPagination, BestSlipsSummary } from "./best-slips-browse-presentation";
+import { BestSlipsPagination, BestSlipsSummary } from "./best-slips-browse-presentation";
 import { slipViewKey } from "@/domain/slip-browse-window";
 import { FilterButton } from "./best-slips-filter-styles";
 import { useBestSlipsBrowse } from "./use-best-slips-browse";
@@ -26,10 +26,10 @@ export function BestSlips({ result, locale, signedIn = false }: { result: SlipsB
   const desktop = useDesktopLayout();
   const [, startRefresh] = useTransition();
   const recheckAccess = useCallback(() => { startRefresh(() => router.refresh()); }, [router]);
-  const { root, ...browse } = useBestSlipsBrowse(result, recheckAccess, "/api/best-slips");
+  const browse = useBestSlipsBrowse(result, recheckAccess, "/api/best-slips");
   const content = browse.result;
   const oddsRange = bestSlipBand(browse.displayQuery.oddsBand).label, listWindow = content.browse;
-  const searchContinues = listWindow?.total === null && listWindow.hasMore;
+  const searchContinues = listWindow?.total === null && browse.hasMore;
   const pageOutOfBounds = listWindow?.total != null && listWindow.query.page > 1
     && (listWindow.query.page - 1) * listWindow.pageSize >= listWindow.total;
   const watchedSlips = useMemo(() => content.slips.flatMap((view) => view.slip ? [view.slip] : []), [content.slips]);
@@ -58,13 +58,11 @@ export function BestSlips({ result, locale, signedIn = false }: { result: SlipsB
     </Stack></CriteriaPanel> :
       <SlipMatchRefreshProvider slips={watchedSlips} initialStates={initialStates} enabled={desktop && browse.entitled} editorial onAccessRevoked={browse.revokeAccess}
         {...(content.summary?.asOf !== undefined ? { initialAsOf: content.summary.asOf } : {})}>
-        <div ref={root} tabIndex={-1} aria-busy={browse.updating}><SlipList data-slip-list>{content.slips.map(view => <div key={slipViewKey(view)} data-slip-key={slipViewKey(view)}>
+        <div tabIndex={-1} aria-busy={browse.updating}><SlipList data-slip-list>{content.slips.map(view => <div key={slipViewKey(view)} data-slip-key={slipViewKey(view)}>
           <MemoBestSlipCard view={view} day={content.day} locale={locale} signedIn={content.access?.signedIn ?? signedIn} />
         </div>)}</SlipList></div>
       </SlipMatchRefreshProvider>}
-    {listWindow && (listWindow.total === null ? <BestSlipsArchivePagination query={listWindow.query} nextCursor={listWindow.nextCursor}
-      onFirst={browse.goToFirstPage} onOlder={browse.goToOlder} busy={browse.navigating} locale={locale} />
-      : <BestSlipsPagination onPage={browse.goToPage} total={listWindow.total} page={browse.displayQuery.page}
-        busy={browse.navigating} locale={locale} />)}
+    <BestSlipsPagination onShowMore={browse.showMore} hasMore={browse.hasMore} loading={browse.loadingMore}
+      failed={browse.appendError} disabled={browse.updating} locale={locale} />
   </SlipStack>;
 }

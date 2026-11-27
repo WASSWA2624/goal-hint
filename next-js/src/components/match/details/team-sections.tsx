@@ -1,5 +1,6 @@
 "use client";
 
+import { ShowMore } from "@/components/ui/show-more";
 import Link from "@/components/navigation/navigation-link";
 import { memo, useRef } from "react";
 import styled from "styled-components";
@@ -9,7 +10,7 @@ import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calend
 import { formLetters } from "@/domain/match-details";
 import type { InsightResult } from "@/domain/match-insights";
 import {
-  combinedFormRecords, comparisonMetrics, formRecords, headToHead, pageOf, perMatchValue, resultFor, teamComparison,
+  combinedFormRecords, comparisonMetrics, formRecords, headToHead, perMatchValue, resultFor, teamComparison,
   type ComparisonMetric,
 } from "@/domain/match-insight-presentation";
 import { formWindows, openItem, type FormWindow, type MatchSection, type VenueFocus } from "@/domain/match-view";
@@ -17,8 +18,8 @@ import { matchHref } from "@/domain/navigation";
 import { plainClick } from "@/components/match/filter-parts";
 import { CompareIcon, FormIcon, HeadToHeadIcon } from "./details-icons";
 import {
-  Bar, ChoiceGroup, Crest, Facts, FormLetters, MiniForm, Note, Pager, PanelBar, RowButton, RowList, SectionState, Strong,
-  desktop, size, useDetails, useStableDetails, type Messages,
+  Bar, ChoiceGroup, Crest, Facts, FormLetters, MiniForm, Note, PanelBar, RowButton, RowList, SectionState, Strong,
+  desktop, size, useDetailListPages, useDetails, useStableDetails, type Messages,
 } from "./details-ui";
 import { ItemPanel, SectionCard, useEmbeddedSection, useReturnFocus } from "./section-card";
 import { useInsightSection } from "./use-match-view";
@@ -244,7 +245,7 @@ export const FormSection = memo(function FormSection({ sharedFilters = false }: 
   const records = view.team === "both" ? combinedFormRecords(all, team("home").id, team("away").id, view.venue, view.window)
     : formRecords(all[view.team], team(view.team).id, view.venue, view.window);
   const summary = view.team === "both" ? null : teamComparison(records, [], team(view.team).id, "").home;
-  const paged = pageOf(records, view.page, pageSize);
+  const paged = useDetailListPages(view, records, pageSize);
   const record = view.item ? [...all.home, ...all.away].find((entry) => entry.fixtureId === view.item) ?? null : null;
   const list = useRef<HTMLDivElement>(null);
   useReturnFocus(list, view.item);
@@ -266,7 +267,7 @@ export const FormSection = memo(function FormSection({ sharedFilters = false }: 
           scored: messages.number(summary.goalsFor), conceded: messages.number(summary.goalsAgainst), count: messages.plural("details.sampleResults", records.length) })
           : messages.plural("details.sampleResults", records.length)}</Note>
         <ResultRows records={paged.items} section="form" />
-        <Pager page={paged.page} pages={paged.pages} onPage={(page) => update((current) => ({ ...current, page }), "replace")} />
+        <ShowMore messages={messages} {...paged.more} />
       </> : <Note>{messages.text("details.noStoredResults")}</Note>}
     </div>}
   </SectionCard>;
@@ -289,7 +290,7 @@ export const H2HSection = memo(function H2HSection({ filters = true }: { filters
   const competitions = [...new Map(meetings.map((meeting) => [meeting.competition.id, meeting.competition.name ?? messages.text("match.competitionUnknown")])).entries()];
   const filtered = meetings.filter((meeting) => (view.venue === "all" || (view.venue === "home" ? meeting.home.id === homeId : meeting.away.id === homeId)) &&
     (view.competition === null || meeting.competition.id === view.competition)).slice(0, view.window || 20);
-  const totals = headToHead(filtered, homeId), paged = pageOf(filtered, view.page, pageSize);
+  const totals = headToHead(filtered, homeId), paged = useDetailListPages(view, filtered, pageSize);
   const record = view.item ? meetings.find((entry) => entry.fixtureId === view.item) ?? null : null;
   const list = useRef<HTMLDivElement>(null);
   useReturnFocus(list, view.item);
@@ -322,7 +323,7 @@ export const H2HSection = memo(function H2HSection({ filters = true }: { filters
           options={[{ value: "", label: messages.text("details.allCompetitions") }, ...competitions.map(([id, name]) => ({ value: id, label: name }))]} />}
       </PanelBar>}
       {paged.items.length ? <ResultRows records={paged.items} section="h2h" /> : <Note>{messages.text(meetings.length ? "details.noFilteredMeetings" : "details.noMeetings")}</Note>}
-      <Pager page={paged.page} pages={paged.pages} onPage={(page) => update((current) => ({ ...current, page }), "replace")} />
+      <ShowMore messages={messages} {...paged.more} />
       <Note>{messages.text("details.h2hBasis")}</Note>
     </div>}
   </SectionCard>;

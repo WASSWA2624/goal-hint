@@ -19,7 +19,7 @@ def main():
         write_json(directory / "app/scenarios.json", json.loads(result.stdout))
         build_fixture(directory, env, timeout=300)
     with Server(directory, env, ready="/en/performance") as server:
-        for state in ["unapproved", "reviewed", "priced-picks", "second", "outside", "empty", "unavailable", "pinned", "leagues", "league-outside"]:
+        for state in ["unapproved", "reviewed", "priced-picks", "second", "outside", "empty", "unavailable", "pinned", "leagues-first", "leagues", "league-outside"]:
             response = request(server.origin, f"/en/performance?state={state}")
             assert response.status == 200, (state, response.status)
             html = visible_html(response.text)
@@ -54,21 +54,28 @@ def main():
                 published = re.search(r'<article\b[^>]*data-published-slip=[\s\S]*?</article>', html).group()
                 assert html.count('data-published-slip=') == 1 and 'data-slip-outcome="void"' in published and "Void" in published
                 assert "data-score-home" not in published and "data-score-away" not in published
+                assert 'data-show-more' not in html
             elif state == "outside":
                 assert "This publication page is outside the selected period" in html and "View first page" in html
             elif state == "empty":
                 assert "No predictions in this period" in html and "No completed publications in this period" in html
             elif state == "unavailable":
                 assert "Prediction performance is temporarily unavailable" in html and "Published-slip history is temporarily unavailable" in html
-            elif state == "leagues":
-                assert "Results by league" in html and "Unknown league" in html and "League result pages" in html
-                assert html.count('data-league-performance=') == 3 and "the same source, market and review rules" in html
-                assert "leaguePage=1" not in html and "leaguePage=2" in html
-                assert "&lt;script&gt;synthetic-league-marker&lt;/script&gt;" in html, "competition names must render as escaped text"
+            elif state in ["leagues-first", "leagues"]:
+                section = re.search(r'<section\b[^>]*aria-labelledby="league-performance"[\s\S]*?'
+                                    r'(?=<section\b[^>]*aria-labelledby="published-performance")', html).group()
+                assert "Results by league" in section and "the same source, market and review rules" in section
+                assert 'data-numbered-pagination' not in section
+                if state == "leagues-first":
+                    assert section.count('data-league-performance=') == 10 and 'data-show-more' in section
+                else:
+                    assert section.count('data-league-performance=') == 3 and 'data-show-more' not in section
+                    assert "Unknown league" in section
+                    assert "&lt;script&gt;synthetic-league-marker&lt;/script&gt;" in section, "competition names must render as escaped text"
             elif state == "league-outside":
                 assert "This league page is outside the selected period" in html and "View first league page" in html
             assert 'href="/en/performance' in html
-        print("PASS 10 production performance states: reviewed/unapproved metrics, separate pick/slip returns, missing quotes, slip/league pagination, unknown league, empty/outage states, active-quote omission and native filter reset.", flush=True)
+        print("PASS 11 production performance states: reviewed/unapproved metrics, separate pick/slip returns, missing quotes, slip/league Show More and direct links, unknown league, empty/outage states, active-quote omission and native filter reset.", flush=True)
         if args.serve:
             server.serve()
 

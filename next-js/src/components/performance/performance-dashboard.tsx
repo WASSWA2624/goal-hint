@@ -1,6 +1,7 @@
 "use client";
 
 import { DateTimeField } from "@/components/ui/date-time-field";
+import { loadPerformanceLeagues, loadPerformancePublications } from "@/app/_components/performance-load-more";
 
 import { Suspense, use, useCallback, useEffect, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -20,7 +21,8 @@ import { marketName, pickLabel } from "@/components/match/details/labels";
 import { Button, ButtonLink, SelectInput, TextLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
 import { BodyText, DesktopInset, Inline, MutedText, PageHeading, SectionHeading, Stack, Surface } from "@/components/ui/layout";
-import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
+import { ShowMore } from "@/components/ui/show-more";
+import { appendUniqueRecords, useAppendRequest } from "@/components/ui/use-append-request";
 import { SlipCard } from "@/components/slips/slip-card";
 import { SlipList } from "@/components/slips/slip-styles";
 import { PerformanceSummary } from "./performance-summary";
@@ -142,6 +144,29 @@ const performancePeriod = (m: Messages, filters: PerformancePageFilters) =>
   `${m.reportingDateRangeCompact(parseReportingDate(filters.from), parseReportingDate(filters.to))} · EAT`;
 
 type SectionProps = Pick<PerformanceDashboardProps, "locale" | "filters">;
+type PerformanceWindow<T> = Readonly<{ page: number; pageSize: number; total: number; records: readonly T[] }>;
+
+function usePerformanceAppend<T>(source: object | null, initial: PerformanceWindow<T> | null, key: (item: T) => string | null,
+  load: (nextPage: number) => Promise<PerformanceWindow<T> | null>) {
+  const request = useAppendRequest(source);
+  const [accepted, setAccepted] = useState<{ source: object | null; window: PerformanceWindow<T> } | null>(null);
+  const current = accepted?.source === source ? accepted.window : initial;
+  const hasMore = !!current && current.page < Math.min(9999, Math.ceil(current.total / current.pageSize));
+  function next() {
+    if (!current || !hasMore) return;
+    const page = current.page + 1;
+    void request.append(async signal => {
+      const batch = await load(page);
+      if (signal.aborted) return;
+      if (!batch || batch.page !== page || batch.pageSize !== current.pageSize
+        || batch.records.length !== Math.max(0, Math.min(batch.pageSize, batch.total - (page - 1) * batch.pageSize))) throw new Error();
+      const records = appendUniqueRecords(current.records, batch.records, key);
+      if (records.length !== current.records.length + batch.records.length) throw new Error();
+      setAccepted({ source, window: { ...batch, records } });
+    });
+  }
+  return { ...request, hasMore, next, records: current?.records ?? [] };
+}
 
 /** Independent reads stream into their existing positions; filters and headings render immediately. */
 export function PerformanceDashboard({ locale, filters, report, history, reportPromise, historyPromise, historyPage }: PerformanceDashboardProps) {
@@ -197,6 +222,12 @@ function PredictionSections({ locale, filters, report, page, loading = false }: 
   const leaguePages = report ? Math.ceil(report.leagues.totalGroups / report.leagues.pageSize) : 0;
   const leagueOutOfRange = Boolean(report && report.leagues.page > Math.max(1, leaguePages));
   const leagueHref = (next: number) => performancePageHref({ ...filters, leaguePage: next }, page, locale);
+  const leagues = report?.leagues;
+  const append = usePerformanceAppend(leagues ?? null, leagues ? { ...leagues, total: leagues.totalGroups } : null, league => league.competition.id,
+    async next => {
+      const batch = await loadPerformanceLeagues(filters, next);
+      return { ...batch, total: batch.totalGroups };
+    });
   return <>
     <DesktopInset as="section" aria-labelledby="individual-performance"><Stack>
       <SectionHeading id="individual-performance">{m.text("performance.pickHeading")}</SectionHeading><MutedText>{m.text("performance.pickBasis")}</MutedText>
@@ -208,11 +239,10 @@ function PredictionSections({ locale, filters, report, page, loading = false }: 
     </Stack></DesktopInset>
     {(report || loading) && <DesktopInset as="section" aria-labelledby="league-performance"><Stack>
       <SectionHeading id="league-performance">{m.text("performance.leagueHeading")}</SectionHeading><MutedText>{m.text("performance.leagueBasis")}</MutedText>
-      {loading ? <PerformanceSummary counts={null} locale={locale} kind="matches" period={performancePeriod(m, filters)} loading /> : report!.leagues.records.length ? report!.leagues.records.map((league) => <LeagueCard key={league.competition.id ?? "unknown"} league={league} locale={locale} />)
+      {loading ? <PerformanceSummary counts={null} locale={locale} kind="matches" period={performancePeriod(m, filters)} loading /> : append.records.length ? append.records.map((league) => <LeagueCard key={league.competition.id ?? "unknown"} league={league} locale={locale} />)
         : <EmptyState headingLevel={3} title={m.text(leagueOutOfRange ? "performance.leaguePageUnavailable" : "performance.noLeagueGroups")}
           {...(leagueOutOfRange ? { action: <ButtonLink href={leagueHref(1)}>{m.text("performance.firstLeaguePage")}</ButtonLink> } : {})} />}
-      {leaguePages > 1 && !leagueOutOfRange && <NumberedPagination page={report!.leagues.page} pages={leaguePages}
-        labels={numberedPaginationLabels(m, m.text("performance.leaguePagination"))} href={leagueHref} />}
+      <ShowMore hasMore={append.hasMore && !leagueOutOfRange} messages={m} loading={append.loading} failed={append.failed} onShowMore={append.next} />
     </Stack></DesktopInset>}
   </>;
 }
@@ -223,7 +253,9 @@ function HistorySection({ locale, filters, history, loading = false }: SectionPr
   const m = createMessages(locale), pages = history ? Math.ceil(history.total / history.pageSize) : 0;
   const outOfRange = Boolean(history && history.page > Math.max(1, pages));
   const href = (page: number) => performancePageHref(filters, page, locale);
+  const append = usePerformanceAppend(history, history, slip => slip.id, next => loadPerformancePublications(filters, next));
   const selectResult = (slipStatus: PredictionResult | undefined) => {
+    append.cancel();
     startTransition(() => router.push(performancePageHref({ ...filters, slipStatus }, 1, locale), { scroll: false }));
   };
   return (
@@ -232,12 +264,13 @@ function HistorySection({ locale, filters, history, loading = false }: SectionPr
       {history?.statistics ? <SlipMetrics summary={history.statistics} locale={locale} period={performancePeriod(m, filters)}
         activeResult={filters.slipStatus} onResult={selectResult} disabled={pending || loading} />
         : loading ? <PerformanceSummary counts={null} locale={locale} kind="slips" period={performancePeriod(m, filters)} loading /> : <MutedText>{m.text("performance.statisticsUnavailable")}</MutedText>}
-      {history?.records.length ? <SlipList $inset={false} data-slip-list>{history.records.map((item) => <article key={item.id} data-published-slip={item.id}>
+      {append.records.length ? <SlipList $inset={false} data-slip-list>{append.records.map((item) => <article key={item.id} data-published-slip={item.id}>
         <SlipCard slip={item.slip} index={item.rank - 1} wholeSlipProbability={item.estimatedProbability} results={item.results} locale={locale}
           publicationDay={item.publicationDay} publishedAt={Date.parse(item.publishedAt)} outcome={item.outcome} {...(item.status ? { status: item.status } : {})} />
       </article>)}</SlipList> : loading && history === null ? null : <EmptyState headingLevel={3} title={m.text(history === null ? "performance.historyUnavailable" : outOfRange ? "performance.pageUnavailable" : "performance.historyEmpty")}
         {...(outOfRange ? { action: <ButtonLink href={href(1)}>{m.text("performance.firstPage")}</ButtonLink> } : {})} />}
-      {pages > 1 && !outOfRange && <NumberedPagination page={history!.page} pages={pages} labels={numberedPaginationLabels(m, m.text("performance.historyPagination"))} href={href} />}
+      <ShowMore hasMore={append.hasMore && !outOfRange} messages={m} loading={append.loading} failed={append.failed}
+        onShowMore={append.next} disabled={pending || loading} />
     </Stack></DesktopInset>
   );
 }

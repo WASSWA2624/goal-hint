@@ -122,7 +122,8 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
   return <FiltersPanel aria-label={m.text("bestSlips.filters.title")} aria-busy={busy} data-best-slips-filters>
     <PerformanceSummary locale={locale} kind="slips" title={m.text(todayScope ? "bestSlips.performance.today" : "performance.summary.title")} counts={statistics ?? null} period={desktop ? desktopPerformancePeriod : performancePeriod}
       compactHeader showCoverage={false} activeResult={appliedQuery.status === "all" ? undefined : appliedQuery.status}
-      onResult={(result) => onChange(selectSlipSummaryResult(appliedQuery, result ?? "all"))} disabled={busy}
+      onResult={(result) => onChange(selectSlipSummaryResult(appliedQuery, result ?? "all"))}
+      onOthers={() => onChange(selectSlipSummaryResult(appliedQuery, "others"))} disabled={busy}
       resultAttributes={(result) => ({ "data-slip-result": result ?? "all" })} />
     <DateStrip locale={locale} today={today} {...bounds} label={m.text("bestSlips.filters.slipDate")}
       filters={<DateNavigationFilters locale={locale} ref={opener} aria-disabled={busy} data-best-slips-filter-trigger
@@ -131,12 +132,13 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
       onDatesChange={(from, to) => onChange(selectDates(from, to))} />
     <AppliedSummary data-best-slips-applied aria-live="polite" aria-atomic="true">
       <AppliedSelection data-applied-selection>
-        <span data-browse-scope="mobile">{currentRange ?? m.text("bestSlips.filters.allDates")}</span>
+        <span data-browse-scope="mobile">{performanceDates}</span>
         <span data-browse-scope="desktop">{m.text("history.browsing")}: {currentRange ?? m.text("bestSlips.filters.allDates")}</span>
-        <span data-applied-result data-browse-scope={appliedQuery.status === "all" ? "desktop" : undefined}>{m.text(`bestSlips.filters.${appliedQuery.status}`)}</span>
-        <span>{m.text("bestSlips.filters.oddsRange")}: {oddsLabel}</span>
-        {probabilityRange && <span>{probabilityLabel} {probabilityRange}</span>}
-        {matchCountRange && <span>{matchCountLabel} {matchCountRange}</span>}
+        <span data-applied-result data-browse-scope="desktop">{m.text(`bestSlips.filters.${appliedQuery.status}`)}</span>
+        <span data-browse-scope="mobile">{m.text("bestSlips.filters.mobileOddsRange")}: {oddsLabel}</span>
+        <span data-browse-scope="desktop">{m.text("bestSlips.filters.oddsRange")}: {oddsLabel}</span>
+        {probabilityRange && <span data-browse-scope="desktop">{probabilityLabel} {probabilityRange}</span>}
+        {matchCountRange && <span data-browse-scope="desktop">{matchCountLabel} {matchCountRange}</span>}
       </AppliedSelection>
       {countSummary}
     </AppliedSummary>
@@ -156,7 +158,7 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
           </SelectInput>
           <SelectInput label={m.text("slips.header.status")} name="status" value={draft.status}
             onChange={event => edit("status", event.currentTarget.value as BestSlipsStatus)}>
-            {bestSlipsStatuses.map(status => <option key={status} value={status}>{m.text(`bestSlips.filters.${status}`)}</option>)}
+            {bestSlipsStatuses.filter(status => status !== "others" || draft.status === "others").map(status => <option key={status} value={status}>{m.text(`bestSlips.filters.${status}`)}</option>)}
           </SelectInput>
         </FilterFieldRow>
         {draft.period === "custom" && <FilterSection>

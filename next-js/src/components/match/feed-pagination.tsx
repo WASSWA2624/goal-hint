@@ -3,11 +3,9 @@
 import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { desktopContentPadding } from "@/components/ui/layout";
-import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
+import { ShowMore } from "@/components/ui/show-more";
 import { PagePaginationSection } from "@/components/ui/pagination-styles";
-import type { ReportingDate } from "@/domain/calendar";
-import { feedPageHref, type FeedPaginationError } from "@/domain/feed-pagination";
-import { feedQueryRules, type FeedQuery } from "@/domain/feed-query";
+import type { FeedPaginationError } from "@/domain/feed-pagination";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
@@ -21,32 +19,25 @@ const Bar = styled(PagePaginationSection)`
   padding-block-start: var(--gh-spacing-3);
   background: ${({ theme }) => theme.color.page};
   border-block-start: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};
-  ${desktop} {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--gh-spacing-2) var(--gh-spacing-4);
-  }
+  overflow-anchor: none;
   > p { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); ${desktop} { font-size: var(--gh-font-emphasis); } }
-  > nav { inline-size: 100%; min-inline-size: 0; ${desktop} { flex: 1 1 var(--gh-size-64); inline-size: auto; max-inline-size: 100%; } }
 `;
 
-/** Numbers navigate; the surrounding arrows only scroll through the sequential number rail. */
-export function FeedPagination({ query, today, data, busy, error, onRetry, firstPage = data.page, shown = data.records.length }: {
+export function FeedPagination({ locale, data, busy, loadingMore, appendError, onShowMore, error, onRetry,
+  firstPage = data.page, shown = data.records.length }: {
   firstPage?: number; shown?: number;
-  query: FeedQuery; today: ReportingDate; data: MatchFeedResponse; busy: boolean; error: FeedPaginationError["code"] | null; onRetry: () => void;
+  locale: string; data: MatchFeedResponse; busy: boolean; loadingMore: boolean; appendError: boolean;
+  onShowMore: () => void; error: FeedPaginationError["code"] | null; onRetry: () => void;
 }) {
-  const messages = createMessages(query.locale), page = data.page, total = data.totalPages;
+  const messages = createMessages(locale);
   const first = data.total === 0 ? 0 : (firstPage - 1) * data.pageSize + 1, last = Math.min(data.total, (firstPage - 1) * data.pageSize + shown);
   const changed = error === "changed" || error === "stale-data";
-  if (total < 1) return null;
+  if (data.totalPages < 1 && !error) return null;
   return <Bar data-feed-pagination>
+    <ShowMore hasMore={data.nextPage !== null} onShowMore={onShowMore} messages={messages}
+      disabled={busy} loading={loadingMore} failed={appendError} />
     <p>{messages.text("feed.results.showing", { shown: `${messages.number(first)}–${messages.number(last)}`, total: messages.number(data.total) })}</p>
     {error && <p role="alert">{messages.text(changed ? "feed.pagination.changed" : error === "rate-limited" ? "feed.pagination.busy" : "feed.pagination.failed")}
       {" "}<Button variant="quiet" onClick={onRetry} disabled={busy} data-pagination-retry>{messages.text(changed ? "feed.pagination.refresh" : "feed.pagination.retry")}</Button></p>}
-    <NumberedPagination page={page} pages={Math.min(total, feedQueryRules.maximumPage)}
-      labels={numberedPaginationLabels(messages, messages.text("feed.pagination.navigation"))}
-      href={(target) => feedPageHref(query, today, target)} />
   </Bar>;
 }

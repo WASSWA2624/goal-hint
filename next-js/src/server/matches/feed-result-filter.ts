@@ -1,7 +1,7 @@
 import "server-only";
 
 import { isPlayedFinalStatus, playedFinalFixtureStatuses, type SettlementStatus } from "../../domain/market-settlement.ts";
-import type { PredictionResult } from "../../domain/performance-summary.ts";
+import { matchesPredictionResult, type PredictionResult, type PredictionResultFilter } from "../../domain/performance-summary.ts";
 import type { GoalSettlement } from "../../domain/score-distribution-markets.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { readNovemberReplayProjectionPicks, readNovemberReplayProjections } from "../intelligence/november-replay-store.ts";
@@ -100,13 +100,13 @@ export async function readFeedResultOverrides(tx: Prisma.TransactionClient, sql:
   return overrides;
 }
 
-export function resultOverridesFor(overrides: FeedResultOverrides, result: PredictionResult | null | undefined): FeedResultOverrides {
-  return result ? new Map([...overrides].filter(([, outcome]) => outcome.result === result)) : overrides;
+export function resultOverridesFor(overrides: FeedResultOverrides, result: PredictionResultFilter | null | undefined): FeedResultOverrides {
+  return result ? new Map([...overrides].filter(([, outcome]) => matchesPredictionResult(outcome.result, result))) : overrides;
 }
 
 /** Resolve membership from the same selected-pick audit as the summary, before count and pagination.
  * Open or corrected settlements stay pending. Scores/status alone never manufacture a win or loss. */
-export async function filterFeedResult(tx: Prisma.TransactionClient, sql: ReturnType<typeof feedSql>, result: PredictionResult,
+export async function filterFeedResult(tx: Prisma.TransactionClient, sql: ReturnType<typeof feedSql>, result: PredictionResultFilter,
   audit = readFeedPerformance, overrides: FeedResultOverrides = new Map()) {
   const legacy = restrictFeedResultSql(sql, [...overrides.keys()], false);
   const outcomes = new Map<string, PredictionResult>();
@@ -133,8 +133,8 @@ export async function filterFeedResult(tx: Prisma.TransactionClient, sql: Return
     outcomes.set(id, outcome);
   });
   const ids = [
-    ...[...outcomes].flatMap(([id, outcome]) => outcome === result ? [id] : []),
-    ...[...overrides].flatMap(([id, outcome]) => outcome.result === result ? [id] : []),
+    ...[...outcomes].flatMap(([id, outcome]) => matchesPredictionResult(outcome, result) ? [id] : []),
+    ...[...overrides].flatMap(([id, outcome]) => matchesPredictionResult(outcome.result, result) ? [id] : []),
   ];
   return restrictFeedResultSql(sql, ids, true);
 }
