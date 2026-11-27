@@ -30,16 +30,18 @@ navigation. Controls use shared themed components.
 
 ## Responsive criteria layout
 
-The settings panel shows the criteria for the next build. On desktop, the
-summary tiles use four columns, and **Filters** and **Build slips** stack to the
-right of a divider. On compact screens, a blue header with a subtitle introduces
-a row of three tiles and a row of two tiles. Match reuse, the date and time
-window, and Markets use full-width rows. The actions sit side by side at the
-bottom. Combined probability appears when enabled or when the applied criteria
-include its bounds.
+The settings panel shows the criteria for the next build. Each tile aligns its
+unpadded icon with the stacked label and value. On desktop, the summary tiles form a
+compact four-column grid, and **Filters** and **Build slips** stack to the right
+of a divider. On compact screens, a blue header with a subtitle introduces a
+row of three tiles and a row of two tiles. Match reuse, the date and time window,
+and Markets use full-width rows. Narrow phones rearrange the tiles and stack
+the date and time value beneath its label. The actions sit side by side at the bottom.
+Combined probability appears when enabled or when the applied criteria include
+its bounds.
 
-The Markets value stays on one line. When the full text exceeds the available
-width, the panel shortens it with an ellipsis and shows a trailing `+`.
+Labels and values each use one line. When the Markets value exceeds the
+available width, the panel shortens it with an ellipsis and shows a trailing `+`.
 Assistive technology receives the full value.
 
 Filters uses one editable form across screen sizes. It groups

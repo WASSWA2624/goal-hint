@@ -68,7 +68,7 @@ export const BuilderPanel = styled(Surface)`
   }
   [data-criteria-dialog] { ${filterDialogSurface} }
   ${media.desktop} {
-    --builder-panel-inset: var(--gh-spacing-6);
+    --builder-panel-inset: var(--gh-spacing-4);
     && {
       border: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid color-mix(in srgb, ${({ theme }) => theme.color.brand} calc(var(--gh-opacity-18) * 100%), ${({ theme }) => theme.color.border});
     }
@@ -113,7 +113,7 @@ export const CriteriaForm = styled.form`
   display: flex; flex-direction: column; gap: var(--gh-spacing-1_5);
   min-inline-size: 0;
   padding: var(--gh-spacing-2) var(--builder-panel-inset);
-  ${media.desktop} { padding-block: var(--gh-spacing-1_5) var(--gh-spacing-5_5); }
+  ${media.desktop} { padding-block: var(--gh-spacing-1_5) var(--gh-spacing-3); }
   > [role="alert"] { margin: 0; }
 `;
 export const FieldGroup = styled.fieldset`
