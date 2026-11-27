@@ -99,7 +99,7 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
   const upperDay = await store.day(day, false, '100-200');
   assert.equal(upperDay.slips[0].rank, 101); assert.equal(upperDay.slips[0].totalOdds, '150.00');
   assert.deepEqual((await Promise.all([store.publish(input),store.publish(input)])).sort(),['already-published','published']);
-  assert.equal((await store.browse(defaultBestSlipsQuery(),day)).slips.length,1);
+  assert.equal((await store.browse({ ...defaultBestSlipsQuery(), status: 'all' }, day)).slips.length, 1);
   assert.equal((await store.history({from:day,to:day,page:1,pageSize:10})).records[0].outcome,'lost');
   const high={...current,totalOdds:'7.00',selections:[pricedEditorialSelection(1,{odds:'7.00',kickoffAt,at,...scheduled,probability})]};
   await assert.rejects(() => store.publish({...input,oddsBand:'5-10',slips:[high]}));
@@ -107,14 +107,17 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
 
   const lateAt = at;
   const appendClock = bestSlipPublicationHour(lateAt);
-  const additional = { fixtureId: randomUUID(), cycleId: randomUUID(), revisionId: randomUUID() };
-  await root.query('INSERT INTO FootballFixture(id) VALUES (?)', [additional.fixtureId]);
-  await root.query('INSERT INTO PredictionSet(id,cycleId,fixtureId) VALUES (?,?,?)',
-    [additional.revisionId, additional.cycleId, additional.fixtureId]);
+  const additional = await scheduledFixture(), nearby = await scheduledFixture();
+  const nearbyKickoff = kickoffAt + 1_800_000;
   const additionalSlip = { ...slip, id: 'model-free-editorial', averageProbability: probability,
-    selections: [pricedEditorialSelection(3, { odds: '4.00', kickoffAt, at: lateAt, ...additional, probability })] };
+    selections: [pricedEditorialSelection(3, { odds: '2.00', kickoffAt, at: lateAt, ...additional, probability }),
+      pricedEditorialSelection(4, { odds: '2.00', kickoffAt: nearbyKickoff, at: lateAt, ...nearby, probability })] };
   const hourly = { day, oddsBand: '1.5-5', hourAt: appendClock.hourAt, slips: [additionalSlip],
     verifyPublicOdds: () => true, searchLimited: false, partialCoverage: false };
+  const [opening, closing] = additionalSlip.selections;
+  const wide = { ...additionalSlip, selections: [opening, { ...closing, kickoffAt: nearbyKickoff + 1 }] };
+  await assert.rejects(() => store.append({ ...hourly, slips: [wide] }), /invalid-input/u);
+  assert.equal(await database.query(tx => tx.dailyBestSlipAppendBatch.count()), 0);
   const raced = await Promise.all([store.append(hourly), store.append(hourly)]);
   assert.equal(raced.filter(({ status }) => status === 'published').length, 1);
   assert.ok(raced.some(({ status }) => status === 'already-published' || status === 'stale'));

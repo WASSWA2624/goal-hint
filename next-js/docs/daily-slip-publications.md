@@ -39,19 +39,25 @@ and continues to check every half hour. The Today view can include still
 actionable rows from the closing set with their original day and rank.
 Explicit dates continue to browse their original publications.
 
-The worker searches adaptive groups in kickoff order. It uses the conservative
-whole-slip probability bound within a group, then favors safer constituents
-when that bound ties. It can consider a wider combination when closer fixtures
-cannot satisfy the band and releases a slip when its earliest leg is within
-the release lookahead. Each commit appends at most 32 slips per band and slot
+The worker searches overlapping kickoff windows. The earliest leg must be
+inside the release lookahead. The latest leg can start at most 30 minutes
+after the earliest, including across midnight. It uses the conservative
+whole-slip probability bound and constituent risk first. At comparable risk,
+it prefers wider verified exact bookmaker support, then closer kickoff times.
+Each open band searches the same pool. The worker reserves disjoint slips for
+as many feasible bands as its bounded allocation search can cover, then fills
+remaining positions in ranked rounds. Each commit appends at most 32 slips per band and slot
 to bound transaction work. The daily set has no publication quota. Later
 checks can append new qualifying slips after any prior count. Search limits
-are reported in the run and recorded on affected batches.
+are reported in the run and recorded on affected batches. Private `bandResults`
+record the selected and committed counts, the retained feasible alternatives
+before allocation, fixture conflicts, and why a band did not publish. Branch
+counts describe bounded search work and can include repeated branches.
 
 The first anchor, the append batch, slip snapshots and normalized original
 forecast membership commit together. Each band can commit one nonempty
 batch per half-hour slot. The transaction checks the slot, current fixture
-eligibility and kickoff, odds rights, exact stored offers, and existing daily
+eligibility, kickoff and within-slip span, odds rights, exact stored offers, and existing daily
 fixture membership before committing. The automatic append locks the set and
 its adjacent dates in the existing indexed combination ledger before reading
 prior membership. A conflicting transaction rolls back with its batch and fixture

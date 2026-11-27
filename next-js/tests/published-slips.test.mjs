@@ -22,6 +22,7 @@ function slip(last = 1) {
 const priceSelection = (selection, odds) => ({ ...selection, odds, offer: { ...selection.offer, decimal: parseDecimalOdds(odds).text } });
 function fixture() {
   const parents = [], batches = [], rows = [], legs = [], combinations = [], bound = [], outcomes = new Map(), fixtureCompletion = new Map(), fixtureStatuses = new Map();
+  const reboundKickoffs = new Map();
   let at = now, corrupted = false, ignored = false, normalized = false, afterMembership = () => {};
   const databaseSnapshot = json => {
     const snapshot = JSON.parse(json);
@@ -110,6 +111,7 @@ function fixture() {
     async bindForecasts(_tx, value) {
       bound.push(value.id);
       return { ...value, selections: value.selections.map(item => ({ ...item,
+        kickoffAt: reboundKickoffs.get(item.fixtureId) ?? item.kickoffAt,
         forecast: { cycleId: fixtureId(90), revisionId: fixtureId(91), publishedAt: now - 100 } })) };
     },
     async resolveResults(_tx, selections, asOf, { editorial } = {}) {
@@ -124,7 +126,7 @@ function fixture() {
   });
   const publish = (changes = {}) => store.publish({ day: today, slips: [slip()], model,
     searchLimited: false, partialCoverage: false, verifyModel: () => true, verifyPublicOdds: () => true, ...changes });
-  return { store, publish, parents, batches, rows, legs, bound, outcomes, fixtureCompletion, fixtureStatuses, advance(value) { at = value; }, corrupt() { corrupted = true; },
+  return { store, publish, parents, batches, rows, legs, bound, outcomes, fixtureCompletion, fixtureStatuses, reboundKickoffs, advance(value) { at = value; }, corrupt() { corrupted = true; },
     ignoreInsert() { ignored = true; }, normalizeNumbers() { normalized = true; }, afterMembership(callback) { afterMembership = callback; } };
 }
 const query = { from: today, to: today, page: 1, pageSize: 1 };
@@ -324,6 +326,53 @@ test('incremental batches reject any repeated fixture within a batch and across 
   assert.equal(state.counts.get('1.5-5'), 2);
   assert.equal(state.fixtures.size, 3);
   assert.equal(state.combinations.size, 2);
+});
+
+test('automatic append checks the full kickoff span across Kampala midnight', async () => {
+  const f = fixture(), midnight = getReportingDayBounds(today).endExclusive, at = midnight - 7_200_000;
+  f.advance(at);
+  const ready = modelFreeSlip([1, 2], { oddsPerLeg: '2.00', at, kickoffAt: midnight - 900_000 });
+  const [early, late] = ready.selections;
+  const wide = { ...ready, selections: [{ ...late, kickoffAt: midnight + 900_001 }, early] };
+  await assert.rejects(() => f.store.append(hourlyInput(at, [wide])), /invalid-input/u);
+  assert.equal(f.bound.length, 0);
+  assert.equal(f.rows.length, 0);
+
+  const atLimit = { ...ready, selections: [{ ...late, kickoffAt: midnight + 900_000 }, early] };
+  assert.deepEqual(await f.store.append(hourlyInput(at, [atLimit])), { status: 'published', appended: 1 });
+});
+
+test('automatic append rechecks the kickoff span after locked forecast binding', async () => {
+  const f = fixture(), at = bestSlipPublicationHour(now).hourAt + 300_000;
+  f.advance(at);
+  const moved = modelFreeSlip([1, 2], { oddsPerLeg: '2.00', at });
+  f.reboundKickoffs.set(fixtureId(2), moved.selections[1].kickoffAt + 1_800_001);
+  assert.deepEqual(await f.store.append(hourlyInput(at, [moved])), { status: 'no-qualifying', appended: 0 });
+  assert.deepEqual(f.bound, [moved.id]);
+  assert.deepEqual([f.parents.length, f.batches.length, f.rows.length, f.legs.length], [0, 0, 0, 0]);
+  f.reboundKickoffs.clear();
+  assert.deepEqual(await f.store.append(hourlyInput(at, [moved])), { status: 'published', appended: 1 });
+});
+
+test('preexisting wide append batches still read with their original kickoff times and rank', async () => {
+  const f = fixture(), at = bestSlipPublicationHour(now).hourAt + 300_000;
+  f.advance(at);
+  const prior = modelFreeSlip([1, 2], { oddsPerLeg: '2.00', at });
+  await f.store.append(hourlyInput(at, [prior]));
+  const [row] = f.rows, previousId = row.id;
+  // Recreate an append sealed under the earlier policy.
+  const archived = row.snapshotJson.slip.selections;
+  archived[1].kickoffAt += 7_200_000;
+  row.id = evidenceFingerprint({ publicationId: row.publicationId, rank: row.rank, snapshot: row.snapshotJson });
+  f.legs.filter(leg => leg.slipId === previousId).forEach(leg => { leg.slipId = row.id; });
+
+  const sealed = structuredClone(row);
+  const [view] = (await f.store.day(today, false, '1.5-5')).slips;
+  assert.equal(view.id, row.id);
+  assert.equal(view.rank, row.rank);
+  assert.deepEqual(view.slip.selections.map(({ kickoffAt }) => kickoffAt), archived.map(({ kickoffAt }) => kickoffAt));
+  assert.equal((await f.store.hourlyState(today)).counts.get('1.5-5'), 1);
+  assert.deepEqual(row, sealed);
 });
 
 test('crossing a Kampala half-hour slot after durable writes rolls back the new batch and anchor', async () => {

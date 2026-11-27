@@ -75,6 +75,14 @@ export type SlipBuildResult = Readonly<{
   jointProbabilities?: Readonly<Record<string, number>>;
   /** Examined combinations excluded because the joint estimator supplied no valid estimate. */
   excludedUnestimated?: number;
+  /** Retained alternatives and branch counts from the bounded editorial search. */
+  editorialSearch?: Readonly<{
+    alternatives: readonly BuiltSlip[];
+    candidateOffers: number;
+    kickoffPrunedBranches: number;
+    bookmakerPrunedBranches: number;
+    oddsPrunedBranches: number;
+  }>;
 }>;
 export type SlipRanking = Readonly<{
   accepts: (slip: BuiltSlip) => boolean;
@@ -405,6 +413,8 @@ export type EditorialSlipSearch = Readonly<{
   order?: (values: readonly SlipSelection[]) => readonly SlipSelection[];
   combinationIdentity?: (values: readonly SlipSelection[]) => string;
   prioritizeRank?: boolean;
+  maximumKickoffSpanMs?: number;
+  includeAlternatives?: boolean;
 }>;
 
 export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRecord[], asOf: number, ranking?: SlipRanking,
@@ -521,6 +531,11 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
     const bySelection = new Map(candidates.map((candidate) => [candidate.selection, candidate]));
     candidates = options.editorial.order(candidates.map(({ selection }) => selection)).map((selection) => bySelection.get(selection)!);
   }
+  const maximumKickoffSpanMs = options.editorial?.maximumKickoffSpanMs;
+  if (maximumKickoffSpanMs !== undefined) {
+    // Chronological suffixes let a search stop when the first leg's window closes.
+    candidates.sort((left, right) => left.selection.kickoffAt - right.selection.kickoffAt);
+  }
   if (candidates.length > slipBuilderRules.maximumCandidates) {
     if (options.editorial) {
       // Preserve one ranked offer per fixture before spending the rest of the existing budget on alternatives.
@@ -572,6 +587,8 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
   const diversificationWork = Math.floor(slipBuilderRules.maximumSearchWork / 4);
   let diversificationLimited = false;
   const selected: Candidate[] = [], fixtures = new Set<string>();
+  const alternatives: BuiltSlip[] | undefined = options.editorial?.includeAlternatives ? [] : undefined;
+  let kickoffPrunedBranches = 0, bookmakerPrunedBranches = 0, oddsPrunedBranches = 0;
   function setRetained(index: number, value: Combination) {
     retained[index] = value;
     retainedPriceGroups?.set(value.priceGroup, index);
@@ -636,8 +653,12 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
   function enumerate(pool: readonly Candidate[], prices: CompletionBounds, start: number, target: number, product: bigint,
     diversifying = false): boolean {
     const remaining = target - selected.length, minimum = prices.minimum(start, remaining), maximum = prices.maximum(start, remaining);
-    if (minimum === undefined || maximum === undefined || product * maximum * 100n < minimumProducts[target]!
-      || maximumProducts !== null && isAboveMaximum(product * minimum * 100n, maximumProducts[target]!)) return false;
+    if (minimum === undefined || maximum === undefined) return false;
+    if (product * maximum * 100n < minimumProducts[target]!
+      || maximumProducts !== null && isAboveMaximum(product * minimum * 100n, maximumProducts[target]!)) {
+      oddsPrunedBranches++;
+      return false;
+    }
     if (selected.length === target) {
       // Compact candidate indexes keep the bounded seed memo small and prevent duplicate model estimates.
       const seedKey = !criteria.reuse ? selected.map((candidate) => candidateIndexes.get(candidate)!).join(",") : "";
@@ -646,7 +667,13 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
       if (diversifying) seedResults.set(seedKey, accepted);
       return accepted;
     }
+    const first = selected[0]?.selection;
     for (let index = start; index < pool.length && !exhausted; index++) {
+      const candidate = pool[index]!;
+      if (maximumKickoffSpanMs !== undefined && first && candidate.selection.kickoffAt - first.kickoffAt > maximumKickoffSpanMs) {
+        kickoffPrunedBranches++;
+        break;
+      }
       // Preserve the former <=8-leg node allowance while charging longer paths for materialization work.
       const weight = Math.max(1, Math.ceil(target / 8));
       if (diversifying && (searchNodes >= diversificationBudget || searchWork + weight > diversificationWork)) {
@@ -656,11 +683,16 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
         exhausted = true; searchLimited = true; break;
       }
       searchNodes++; searchWork += weight;
-      const candidate = pool[index]!;
-      if (fixtures.has(candidate.selection.fixtureId) || selected.length > 0 && (candidate.selection.oddsBasis !== selected[0]!.selection.oddsBasis ||
-        options.editorial && candidate.selection.bookmaker?.id !== selected[0]!.selection.bookmaker?.id)) continue;
+      if (fixtures.has(candidate.selection.fixtureId) || first && candidate.selection.oddsBasis !== first.oddsBasis) continue;
+      if (first && options.editorial && candidate.selection.bookmaker?.id !== first.bookmaker?.id) {
+        bookmakerPrunedBranches++;
+        continue;
+      }
       const nextProduct = product * candidate.scaledOdds, denominator = SCALE ** BigInt(selected.length + 1);
-      if (criteria.totalMax !== undefined && isAboveMaximum(nextProduct * 100n, BigInt(criteria.totalMax) * denominator)) continue;
+      if (criteria.totalMax !== undefined && isAboveMaximum(nextProduct * 100n, BigInt(criteria.totalMax) * denominator)) {
+        oddsPrunedBranches++;
+        continue;
+      }
       selected.push(candidate); fixtures.add(candidate.selection.fixtureId);
       const accepted = enumerate(pool, prices, index + 1, target, nextProduct, diversifying);
       selected.pop(); fixtures.delete(candidate.selection.fixtureId);
@@ -685,6 +717,9 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
       }
       combinations = [...best.values()];
       seed = diversified.map((item) => best.get(identity(item))!);
+    }
+    if (alternatives) {
+      for (const { slip } of combinations) alternatives.push(slip);
     }
     if (criteria.reuse) return combinations.slice(0, criteria.slips).map((item) => item.slip);
     if (options.editorial?.prioritizeRank) {
@@ -720,6 +755,8 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
   // A stronger whole-slip probability can favour a longer combination.
   const slips = select();
   return { slips, qualifyingMatches: qualifying.size, excludedMissingOdds, excludedMissingForecast, searchLimited,
+    ...(alternatives ? { editorialSearch: { alternatives, candidateOffers: candidates.length,
+      kickoffPrunedBranches, bookmakerPrunedBranches, oddsPrunedBranches } } : {}),
     ...(ranking?.probability ? { jointProbabilities: Object.fromEntries(slips.map((slip) => [slip.id, ranking.probability!(slip)!])) } : {}) };
 }
 

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assessLocalFeaturedPick, assessLocalFeaturedPickWithHistory, binaryFeaturedSettlement, decideLocalFeaturedPick, legacyLocalFeaturedDecisionVersion,
-  localFeaturedDecisionSchema, localFeaturedDecisionVersion, oddsFirstTieredFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion,
-  probabilityFirstTieredFeaturedDecisionVersion, positiveFeaturedReturn }
+import { assessLocalFeaturedPick, assessLocalFeaturedPickWithHistory, binaryFeaturedSettlement, decideLocalFeaturedPick,
+  firstPricedOnlyLocalFeaturedDecisionVersion, legacyLocalFeaturedDecisionVersion, localFeaturedDecisionSchema, localFeaturedDecisionVersion,
+  oddsFirstTieredFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion, probabilityFirstTieredFeaturedDecisionVersion, positiveFeaturedReturn }
   from "../src/domain/local-featured-decision.ts";
 import { parseDecimalOdds } from "../src/domain/odds.ts";
 import { preMatchReferenceOddsFreshMs } from "../src/domain/reference-odds.ts";
@@ -237,6 +237,47 @@ test("standard choices compare their exact probabilities before odds inside the 
     ["standard", 0.90, "double-chance", 3, "1.13"]);
 });
 
+test("equally probable standard outcomes favor more distinct exact offers before the highest price", () => {
+  const under = total("full-time", "total", 5.5, 0.90);
+  const over = outcome("goal:full-time:totals:total:1.5:binary", "over", 0.90);
+  const outcomes = [under, over];
+  const books = [book(1, totals({ "Under 5.5": "1.29", "Over 1.5": "1.21" })),
+    book(2, totals({ "Over 1.5": "1.25" })), book(3, totals({ "Over 1.5": "1.23" }))];
+  const previous = decide(outcomes, books, {}, firstPricedOnlyLocalFeaturedDecisionVersion);
+  assert.deepEqual([previous.quote.providerSelection, previous.expectedNetReturn], ["Under 5.5", "0.161"]);
+  assert.deepEqual(localFeaturedDecisionSchema.parse(JSON.parse(JSON.stringify(previous))), previous);
+  const current = decideCurrent(outcomes, books);
+  assert.deepEqual([current.quote.providerSelection, current.quote.bookmakerId, current.quote.decimal, current.expectedNetReturn],
+    ["Over 1.5", 2, "1.25", "0.125"]);
+  assert.deepEqual(decideCurrent([...outcomes].reverse(), [...books].reverse()), current);
+  assert.equal(decideCurrent([total("full-time", "total", 5.5, 0.93), over], books).quote.providerSelection, "Under 5.5");
+});
+
+test("bookmaker support excludes ambiguous, inexact and unusable offers", () => {
+  const outcomes = [total("full-time", "total", 5.5, 0.90),
+    outcome("goal:full-time:totals:total:1.5:binary", "over", 0.90)];
+  const exact = totals({ "Over 1.5": "1.25" });
+  const unavailable = (flags) => ({ ...exact, values: [{ ...exact.values[0], ...flags }] });
+  const books = [book(1, totals({ "Under 5.5": "1.29", "Over 1.5": "1.25" })),
+    book(2, totals({ "Over 2.5": "1.25", "Under 1.5": "1.25" })),
+    book(3, offer(6, "Goals Over/Under First Half", { "Over 1.5": "1.25" })),
+    book(4, offer(16, "Total - Home", { "Over 1.5": "1.25" })),
+    book(5, totals({ "Over 1.5": "1.25" }, { ...clocks, observedAt: decisionAt - preMatchReferenceOddsFreshMs - 1 })),
+    book(6, unavailable({ suspended: true })), book(7, unavailable({ permitted: false })),
+    book(8, totals({ "Over 1.5": "1.0099" })), book(9, exact), book(9, exact), book(10, exact, exact)];
+  assert.equal(decideCurrent(outcomes, books).quote.providerSelection, "Under 5.5");
+  assert.equal(decideCurrent(outcomes, [...books, book(11, exact)]).quote.providerSelection, "Over 1.5");
+});
+
+test("positive priced fallback keeps precedence over greater support at the same probability", () => {
+  const outcomes = [total("full-time", "total", 5.5, 0.95),
+    outcome("goal:full-time:totals:total:1.5:binary", "over", 0.95)];
+  const books = [book(1, totals({ "Under 5.5": "1.06" })),
+    book(2, totals({ "Over 1.5": "1.02" })), book(3, totals({ "Over 1.5": "1.02" }))];
+  const current = decideCurrent(outcomes, books);
+  assert.deepEqual([current.tier, current.quote.providerSelection, current.expectedNetReturn], ["priced-fallback", "Under 5.5", "0.007"]);
+});
+
 test("probability-first versions reject duplicate bookmaker identities and mismatched sealed quotes", () => {
   const outcomes = [total("full-time", "total", 2.5, 0.90)];
   const duplicated = [book(4, totals({ "Under 2.5": "1.32" })), book(4, totals({ "Under 2.5": "1.27" }))];
@@ -244,7 +285,7 @@ test("probability-first versions reject duplicate bookmaker identities and misma
   assert.equal(decideCurrent(outcomes, duplicated).status, "abstained");
   const decision = decideCurrent(outcomes, [...duplicated, book(5, totals({ "Under 2.5": "1.24" }))]);
   assert.equal(decision.quote.bookmakerId, 5);
-  for (const version of [probabilityFirstTieredFeaturedDecisionVersion, localFeaturedDecisionVersion]) {
+  for (const version of [probabilityFirstTieredFeaturedDecisionVersion, firstPricedOnlyLocalFeaturedDecisionVersion, localFeaturedDecisionVersion]) {
     const sealed = { ...decision, version };
     assert.deepEqual(localFeaturedDecisionSchema.parse(sealed), sealed);
     for (const wrong of [{ providerSelection: "Over 2.5" }, { providerSelection: "Under 3.5" }, { betId: 6 }, { betName: "Goals Over/Under First Half" }]) {

@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { openForecastDatabase } from "./lib/forecast-database-target.mjs";
 import { LOCAL_FIRST_MARKET_REGISTRY_VERSION, reconcileOddsCatalog } from "../src/domain/market-registry.ts";
-import { legacyLocalFeaturedDecisionVersion, localFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion,
+import { firstPricedOnlyLocalFeaturedDecisionVersion, legacyLocalFeaturedDecisionVersion, localFeaturedDecisionVersion, previousLocalFeaturedDecisionVersion,
   probabilityFirstTieredFeaturedDecisionVersion } from "../src/domain/local-featured-decision.ts";
 import { inclusiveReplayEvidenceCutoff, novemberReplayRange, replaySuppressionClocks, resolveReplayRange } from "../src/domain/november-replay.ts";
 import { evidenceFingerprint } from "../src/server/evidence/evidence-input.ts";
@@ -25,7 +25,7 @@ const validOperationId = (value) => /^[a-z0-9][a-z0-9._:-]{0,95}$/iu.test(value 
 const deltaManifestFile = "policy-delta.json";
 const deltaDiffFile = "policy-delta-activation-diff.json";
 const coverageVersion = "november-market-coverage-v1";
-const replayAuditVersions = [localFeaturedDecisionVersion, probabilityFirstTieredFeaturedDecisionVersion];
+const replayAuditVersions = [localFeaturedDecisionVersion, firstPricedOnlyLocalFeaturedDecisionVersion, probabilityFirstTieredFeaturedDecisionVersion];
 // This optimization is only valid when the new rule adds lower rungs to the same gates.
 const deltaDecisionVersion = previousLocalFeaturedDecisionVersion;
 class ReplayCommandError extends Error {}

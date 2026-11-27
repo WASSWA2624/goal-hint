@@ -3,32 +3,100 @@ import "server-only";
 import { setTimeout as sleep } from "node:timers/promises";
 import { bestSlipOddsBands, type BestSlipOddsBand } from "../../domain/best-slip-odds-bands.ts";
 import { bestSlipActivePublicationDays, bestSlipAppendBatchSize, bestSlipFixtureInterval, bestSlipFixtureWindow,
-  bestSlipKickoffBufferMs, bestSlipPreferredKickoffWindowMs, bestSlipPublicationHour } from "../../domain/best-slip-publication-hour.ts";
+  bestSlipKickoffBufferMs, bestSlipPreferredKickoffWindowMs, bestSlipPublicationHour,
+  bestSlipPublicationIntervalMs } from "../../domain/best-slip-publication-hour.ts";
 import { bestSlipCombinationIdentity, buildHourlyBestSlips } from "../../domain/best-slips.ts";
 import { utcInstantFromEpochMilliseconds, type ReportingDate, type UtcInstant } from "../../domain/calendar.ts";
 import { feedQueryRules } from "../../domain/feed-query.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
-import type { SlipSelection } from "../../domain/slip-builder.ts";
+import type { BuiltSlip, SlipSelection } from "../../domain/slip-builder.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { SlipOddsRefreshStatus } from "../odds/slip-odds-refresh-slot.ts";
 import { provenTrue } from "../shared/authority-proof.ts";
 import { createPublishedSlips } from "./published-slips.ts";
 import { createStoredSlipCohort, type FeaturedSlipCursor, type SlipCohortReader } from "./slip-cohort.ts";
 
+type BandSearch = ReturnType<typeof buildHourlyBestSlips>;
+type BandPublicationResult = Readonly<{
+  day: ReportingDate; band: BestSlipOddsBand; eligibleFixtures: number; exactOffers: number;
+  fixturesWithoutForecast: number; forecastFixturesWithoutQualifiedOffer: number; priorFixtureConflicts: number;
+  feasibleBeforeAllocation: number; selected: number; published: number; fixtureConflicts: number;
+  searchLimited: boolean; search?: BandSearch["searchDiagnostics"];
+  reason: "published" | "partially-published" | "already-published" | "no-eligible-fixtures" | "no-eligible-prices" |
+    "release-window" | "no-eligible-time-cohesive-slip" | "search-limited" | "fixture-conflict" | "eligibility-recheck" | "unavailable";
+}>;
+
 export type DailySlipPublicationResult = Readonly<{ day: string; status:
   "published" | "already-published" | "odds-unavailable" | "no-qualifying" | "unavailable";
   eligibleSelections?: number; newBands?: number; newSlips?: number; dayComplete?: boolean; searchLimited?: boolean;
+  bandResults?: readonly BandPublicationResult[];
   oddsRefresh?: Readonly<{ publicationSlot: string; status: SlipOddsRefreshStatus }>;
 }>;
 
 const automaticCohortPagesPerSlot = 4;
+const maximumBandReservationTrials = 4_096;
+
+type BandPlan = Readonly<{ band: BestSlipOddsBand; search: BandSearch; candidates: readonly BuiltSlip[] }>;
+
+function usesFixtures(slip: BuiltSlip, fixtures: ReadonlySet<string>) {
+  return slip.selections.some(({ fixtureId }) => fixtures.has(fixtureId));
+}
+
+/** Reserve one ranked candidate per represented band before filling the remaining batch positions. */
+function allocateBandSlips(plans: readonly BandPlan[], hourAt: number) {
+  const rotation = Math.floor(hourAt / bestSlipPublicationIntervalMs) % bestSlipOddsBands.length;
+  const bandOrder = (band: BestSlipOddsBand) => (bestSlipOddsBands.findIndex(({ id }) => id === band)
+    + bestSlipOddsBands.length - rotation) % bestSlipOddsBands.length;
+  const ordered = plans.filter(({ candidates }) => candidates.length).sort((a, b) =>
+    a.candidates.length - b.candidates.length || bandOrder(a.band) - bandOrder(b.band));
+  const reserved = new Map<BestSlipOddsBand, BuiltSlip>(), fixtures = new Set<string>();
+  let best = new Map<BestSlipOddsBand, BuiltSlip>(), trials = 0, limited = false;
+
+  function reserve(index: number) {
+    if (reserved.size > best.size) best = new Map(reserved);
+    if (reserved.size + ordered.length - index <= best.size || limited) return;
+    const { band, candidates } = ordered[index]!;
+    for (const slip of candidates) {
+      if (trials++ >= maximumBandReservationTrials) { limited = true; return; }
+      if (usesFixtures(slip, fixtures)) continue;
+      reserved.set(band, slip);
+      for (const { fixtureId } of slip.selections) fixtures.add(fixtureId);
+      reserve(index + 1);
+      for (const { fixtureId } of slip.selections) fixtures.delete(fixtureId);
+      reserved.delete(band);
+      if (limited || best.size === ordered.length) return;
+    }
+    reserve(index + 1);
+  }
+
+  reserve(0);
+  const selected = new Map([...best].map(([band, slip]) => [band, new Set([slip])]));
+  for (const slip of best.values()) for (const { fixtureId } of slip.selections) fixtures.add(fixtureId);
+  const filling = ordered.map(({ band, candidates }) => ({ picks: selected.get(band), candidates, next: 0 }));
+  for (let round = 1; round < bestSlipAppendBatchSize; round++) {
+    let added = false;
+    for (const entry of filling) {
+      if (!entry.picks) continue;
+      while (entry.next < entry.candidates.length) {
+        const slip = entry.candidates[entry.next++]!;
+        if (usesFixtures(slip, fixtures)) continue;
+        entry.picks.add(slip);
+        for (const { fixtureId } of slip.selections) fixtures.add(fixtureId);
+        added = true;
+        break;
+      }
+    }
+    if (!added) break;
+  }
+  return { selected, fixtures, limited };
+}
 
 async function readPublicationCohort(read: SlipCohortReader, day: ReportingDate, calendarDay: ReportingDate, asOf: UtcInstant) {
   const interval = bestSlipFixtureInterval(day), window = bestSlipFixtureWindow(day);
   const parameters = new URLSearchParams({ start: interval.from, end: interval.to, status: "scheduled",
     market: publicPolicy.markets.join(","), sort: "kickoff", dir: "asc", pageSize: String(feedQueryRules.maximumPageSize) });
   const selections: SlipSelection[] = [], seen = new Set<string>();
-  let after: FeaturedSlipCursor | undefined, hasForecast = false, partialCoverage = false, searchLimited = false;
+  let after: FeaturedSlipCursor | undefined, forecastFixtures = 0, partialCoverage = false, searchLimited = false;
   for (let page = 0; page < automaticCohortPagesPerSlot; page++) {
     const cohort = await read(parameters, { featured: true, includeAdditionalFeaturedGoals: true,
       minimumKickoffLeadMs: bestSlipKickoffBufferMs, automaticPage: { day, ...(after ? { after } : {}) } }, { now: () => asOf });
@@ -37,8 +105,9 @@ async function readPublicationCohort(read: SlipCohortReader, day: ReportingDate,
     selections.push(...cohort.featuredSelections.filter(({ fixtureId, kickoffAt }) => !seen.has(fixtureId)
       && kickoffAt >= window.startInclusive && kickoffAt < window.endExclusive));
     for (const { fixtureId, forecast } of cohort.records) {
+      if (seen.has(fixtureId)) continue;
       seen.add(fixtureId);
-      hasForecast ||= forecast !== null;
+      if (forecast !== null) forecastFixtures++;
     }
     partialCoverage ||= cohort.partialCoverage;
     searchLimited = cohort.searchLimited;
@@ -48,7 +117,7 @@ async function readPublicationCohort(read: SlipCohortReader, day: ReportingDate,
       || tail.kickoffAt === after.kickoffAt && tail.fixtureId <= after.fixtureId)) throw new Error("Invalid automatic slip cohort cursor.");
     after = { kickoffAt: tail.kickoffAt, fixtureId: tail.fixtureId };
   }
-  return { selections, hasForecast, partialCoverage, searchLimited };
+  return { selections, fixtures: seen.size, forecastFixtures, partialCoverage, searchLimited };
 }
 
 /** Check the current set and the closing set during the midnight handoff. */
@@ -65,7 +134,16 @@ export function createDailySlipPublisher({ database, competitionIds, verifyPubli
   const storedRead = read ?? createStoredSlipCohort({ database: () => database, competitionIds: () => competitionIds, providerOdds });
 
   async function publishDay(day: ReportingDate, asOf: UtcInstant, slot: ReturnType<typeof bestSlipPublicationHour>): Promise<DailySlipPublicationResult> {
-    if (asOf + bestSlipKickoffBufferMs >= bestSlipFixtureWindow(day).endExclusive) return { day, status: "no-qualifying" };
+    const bandResults = new Map<BestSlipOddsBand, BandPublicationResult>();
+    const empty = { eligibleFixtures: 0, exactOffers: 0, fixturesWithoutForecast: 0, forecastFixturesWithoutQualifiedOffer: 0,
+      priorFixtureConflicts: 0, feasibleBeforeAllocation: 0, selected: 0, published: 0, fixtureConflicts: 0, searchLimited: false };
+    const report = (band: BestSlipOddsBand, reason: BandPublicationResult["reason"], values: Partial<BandPublicationResult> = {}) =>
+      bandResults.set(band, { ...empty, ...values, day, band, reason });
+    const summarize = () => bestSlipOddsBands.map(({ id }) => bandResults.get(id)!);
+    if (asOf + bestSlipKickoffBufferMs >= bestSlipFixtureWindow(day).endExclusive) {
+      for (const { id } of bestSlipOddsBands) report(id, "no-eligible-fixtures");
+      return { day, status: "no-qualifying", bandResults: summarize() };
+    }
     let stored = await store.hourlyState(day);
     let fixtures = new Set(stored.fixtures), combinations = new Set(stored.combinations);
     const reload = async () => {
@@ -75,37 +153,70 @@ export function createDailySlipPublisher({ database, competitionIds, verifyPubli
     };
     const canAppend = (id: BestSlipOddsBand) => !stored.closed.has(id) && !stored.publishedHours.get(id)?.has(slot.hourAt);
     const openBands = bestSlipOddsBands.filter(({ id }) => canAppend(id));
-    if (!openBands.length) return { day, status: "already-published" };
+    for (const { id } of bestSlipOddsBands) if (!canAppend(id)) report(id, "already-published");
+    if (!openBands.length) return { day, status: "already-published", bandResults: summarize() };
 
     const cohort = await readPublicationCohort(storedRead, day, slot.day, asOf);
-    const available = (at: number) => cohort.selections.filter(({ fixtureId, kickoffAt }) => !fixtures.has(fixtureId)
-      && kickoffAt - at >= bestSlipKickoffBufferMs);
-    const eligibleSelections = new Set(available(now()).map(({ fixtureId }) => fixtureId)).size;
-    let searchLimited = cohort.searchLimited;
-    if (!eligibleSelections) return { day, status: !cohort.selections.length && cohort.hasForecast ? "odds-unavailable" : "no-qualifying",
-      eligibleSelections, searchLimited };
+    const evaluatedAt = now();
+    const selections = cohort.selections.filter(({ fixtureId, kickoffAt }) => !fixtures.has(fixtureId)
+      && kickoffAt - evaluatedAt >= bestSlipKickoffBufferMs);
+    const eligibleSelections = new Set(selections.map(({ fixtureId }) => fixtureId)).size;
+    const pricedFixtures = new Set(cohort.selections.map(({ fixtureId }) => fixtureId));
+    const observed = { eligibleFixtures: eligibleSelections, exactOffers: selections.length,
+      fixturesWithoutForecast: cohort.fixtures - cohort.forecastFixtures,
+      forecastFixturesWithoutQualifiedOffer: Math.max(0, cohort.forecastFixtures - pricedFixtures.size),
+      priorFixtureConflicts: [...pricedFixtures].filter(id => fixtures.has(id)).length, searchLimited: cohort.searchLimited };
+    const earlyReason = bestSlipPublicationHour(evaluatedAt).hourAt !== slot.hourAt || !oddsEnabled() ? "unavailable"
+      : !eligibleSelections ? cohort.forecastFixtures && !pricedFixtures.size ? "no-eligible-prices" : "no-eligible-fixtures"
+      : !selections.some(({ kickoffAt }) => kickoffAt - evaluatedAt <= preferredKickoffWindowMs) ? "release-window" : null;
+    if (earlyReason) {
+      for (const { id } of openBands) report(id, earlyReason, observed);
+      const status = earlyReason === "unavailable" ? "unavailable" : earlyReason === "no-eligible-prices" ? "odds-unavailable" : "no-qualifying";
+      return { day, status, eligibleSelections, searchLimited: cohort.searchLimited, bandResults: summarize() };
+    }
+
+    // Evaluate every open band at the same clock against the same unallocated pool.
+    const plans = openBands.map(({ id: band }): BandPlan => {
+      const search = buildHourlyBestSlips(day, band, bestSlipAppendBatchSize, evaluatedAt, { selections }, combinations,
+        preferredKickoffWindowMs, { includeAlternatives: true });
+      return { band, search, candidates: search.alternatives ?? search.slips };
+    });
+    const allocation = allocateBandSlips(plans, slot.hourAt);
+    let searchLimited = cohort.searchLimited || allocation.limited;
 
     let newBands = 0, newSlips = 0, alreadyPublished = false, unavailable = false;
-    for (const { id } of openBands) {
-      const current = now();
-      if (bestSlipPublicationHour(current).hourAt !== slot.hourAt || !oddsEnabled()) { unavailable = true; break; }
-      if (!canAppend(id)) continue;
-
-      const selections = available(current);
-      if (!selections.some(({ kickoffAt }) => kickoffAt - current <= preferredKickoffWindowMs)) break;
-      const result = buildHourlyBestSlips(day, id, bestSlipAppendBatchSize, current, { selections }, combinations, preferredKickoffWindowMs);
-      const limited = result.searchLimited || result.slips.length === bestSlipAppendBatchSize;
+    for (const { band, search, candidates } of plans) {
+      const picks = allocation.selected.get(band);
+      const chosen = candidates.filter(slip => picks?.has(slip));
+      const limited = search.searchLimited || search.slips.length === bestSlipAppendBatchSize || allocation.limited;
       searchLimited ||= limited;
-      if (!result.slips.length) continue;
+      const details = { ...observed, feasibleBeforeAllocation: candidates.length, selected: chosen.length,
+        fixtureConflicts: candidates.filter(slip => !picks?.has(slip) && usesFixtures(slip, allocation.fixtures)).length,
+        searchLimited: cohort.searchLimited || limited, search: search.searchDiagnostics };
+      if (!chosen.length) {
+        report(band, candidates.length ? "fixture-conflict" : details.searchLimited ? "search-limited" : "no-eligible-time-cohesive-slip", details);
+        continue;
+      }
+      const current = now();
+      if (bestSlipPublicationHour(current).hourAt !== slot.hourAt || !oddsEnabled()) {
+        unavailable = true;
+        report(band, "unavailable", details);
+        continue;
+      }
+      if (!canAppend(band)) { alreadyPublished = true; report(band, "already-published", details); continue; }
+      const slips = chosen.filter(slip => !usesFixtures(slip, fixtures) && !combinations.has(bestSlipCombinationIdentity(slip.selections))
+        && slip.selections.every(({ kickoffAt }) => kickoffAt - current >= bestSlipKickoffBufferMs));
+      if (!slips.length) { report(band, "eligibility-recheck", details); continue; }
       try {
-        const appended = await store.append({ day, oddsBand: id, hourAt: slot.hourAt, slips: result.slips, verifyPublicOdds,
-          searchLimited: cohort.searchLimited || limited, partialCoverage: cohort.partialCoverage });
+        const appended = await store.append({ day, oddsBand: band, hourAt: slot.hourAt, slips, verifyPublicOdds,
+          searchLimited: details.searchLimited, partialCoverage: cohort.partialCoverage });
         if (appended.status === "published") {
           newBands++;
           newSlips += appended.appended;
-          if (appended.appended !== result.slips.length) await reload();
+          report(band, appended.appended === chosen.length ? "published" : "partially-published", { ...details, published: appended.appended });
+          if (appended.appended !== slips.length) await reload();
           else {
-            for (const slip of result.slips) {
+            for (const slip of slips) {
               combinations.add(bestSlipCombinationIdentity(slip.selections));
               for (const { fixtureId } of slip.selections) fixtures.add(fixtureId);
             }
@@ -113,15 +224,17 @@ export function createDailySlipPublisher({ database, competitionIds, verifyPubli
         } else if (appended.status !== "no-qualifying") {
           alreadyPublished ||= appended.status === "already-published" || appended.status === "full";
           unavailable ||= appended.status === "stale";
+          report(band, appended.status === "stale" ? "unavailable" : "already-published", details);
           await reload();
-        }
+        } else report(band, "eligibility-recheck", details);
       } catch {
         // Drift or a concurrent append in this band need not block another band.
         unavailable = true;
+        if (!bandResults.has(band)) report(band, "unavailable", details);
       }
     }
     return { day, status: newBands ? "published" : unavailable ? "unavailable" : alreadyPublished ? "already-published" : "no-qualifying",
-      newBands, newSlips, eligibleSelections, searchLimited };
+      newBands, newSlips, eligibleSelections, searchLimited, bandResults: summarize() };
   }
 
   return Object.freeze({
@@ -140,7 +253,8 @@ export function createDailySlipPublisher({ database, competitionIds, verifyPubli
       return { day: slot.day, status, newBands: results.reduce((sum, result) => sum + (result.newBands ?? 0), 0),
         newSlips: results.reduce((sum, result) => sum + (result.newSlips ?? 0), 0),
         eligibleSelections: results.reduce((sum, result) => sum + (result.eligibleSelections ?? 0), 0),
-        searchLimited: results.some(result => result.searchLimited), dayComplete: false };
+        searchLimited: results.some(result => result.searchLimited), dayComplete: false,
+        bandResults: results.flatMap(result => result.bandResults ?? []) };
     },
   });
 }

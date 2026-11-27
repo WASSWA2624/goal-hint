@@ -4,8 +4,19 @@ import { publicPolicy } from "./public-policy.ts";
 
 export const bestSlipPublicationIntervalMs = 30 * 60_000;
 export const bestSlipKickoffBufferMs = 30 * 60_000;
+export const bestSlipMaximumKickoffSpanMs = 30 * 60_000;
 export const bestSlipPreferredKickoffWindowMs = 6 * 3_600_000;
 export const bestSlipAppendBatchSize = 32;
+
+export function bestSlipKickoffSpanMs(selections: readonly Readonly<{ kickoffAt: number }>[]): number {
+  if (selections.length < 2) return 0;
+  let earliest = selections[0]!.kickoffAt, latest = earliest;
+  for (const { kickoffAt } of selections) {
+    earliest = Math.min(earliest, kickoffAt);
+    latest = Math.max(latest, kickoffAt);
+  }
+  return latest - earliest;
+}
 
 /** Feed intervals use inclusive local minutes. The last minute ends at 03:00 exactly. */
 export function bestSlipFixtureInterval(day: ReportingDate): DateTimeInterval {

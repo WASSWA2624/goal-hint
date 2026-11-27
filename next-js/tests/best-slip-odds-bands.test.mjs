@@ -197,6 +197,38 @@ test('automatic publishing submits the available 2, 10, or 24 qualifying slips i
   }
 });
 
+test('every band sees the same cohort and a scarce high-odds slip keeps its fixtures', async () => {
+  const range = bestSlipFixtureWindow(today), at = range.startInclusive;
+  const pick = (id, odds, bookmakerId, probability) => pricedEditorialSelection(id,
+    { at, kickoffAt: at + 3_600_000, odds, bookmakerId, probability });
+  const selections = [pick(1, '4.00', 8, 0.96), pick(2, '3.25', 8, 0.94), pick(3, '2.60', 9, 0.93)];
+  const batches = [];
+  const publisher = createDailySlipPublisher({ database: {}, competitionIds: [], now: () => at, verifyPublicOdds: () => true,
+    store: { hourlyState: async () => ({ counts: new Map(), publishedHours: new Map(),
+      closed: new Set(), fixtures: new Set(), combinations: new Set() }),
+    async append(input) { batches.push(input); return { status: 'published', appended: input.slips.length }; } },
+    read: async () => ({ today, asOf: at, range, records: [], featuredSelections: selections,
+      searchLimited: false, partialCoverage: false }) });
+
+  const result = await publisher.publish();
+  assert.equal(result.newSlips, 2);
+  assert.deepEqual(batches.map(({ oddsBand, slips }) => [oddsBand, slips.map(slip => slip.totalOdds)]),
+    [['1.5-5', ['2.60']], ['10-20', ['13.00']]]);
+  assert.deepEqual(result.bandResults.map(({ band, eligibleFixtures, exactOffers, feasibleBeforeAllocation, selected, published, reason }) =>
+    [band, eligibleFixtures, exactOffers, feasibleBeforeAllocation, selected, published, reason]), [
+    ['1.5-5', 3, 3, 3, 1, 1, 'published'],
+    ['5-10', 3, 3, 0, 0, 0, 'no-eligible-time-cohesive-slip'],
+    ['10-20', 3, 3, 1, 1, 1, 'published'],
+    ['20-50', 3, 3, 0, 0, 0, 'no-eligible-time-cohesive-slip'],
+    ['50-100', 3, 3, 0, 0, 0, 'no-eligible-time-cohesive-slip'],
+    ['100-200', 3, 3, 0, 0, 0, 'no-eligible-time-cohesive-slip'],
+  ]);
+  assert.equal(result.bandResults[0].fixtureConflicts, 2);
+  const fixtures = batches.flatMap(({ slips }) => slips.flatMap(({ selections }) => selections.map(({ fixtureId }) => fixtureId)));
+  assert.deepEqual(new Set(fixtures), new Set(selections.map(({ fixtureId }) => fixtureId)));
+  assert.equal(fixtures.length, 3);
+});
+
 test('sparse odds bands stop at the eligible disjoint count and respect prior membership', () => {
   const selections = Array.from({ length: 5 }, (_, index) => pricedEditorialSelection(index, { odds: '1.80', probability: 0.61 }));
   const initial = buildHourlyBestSlips(today, '1.5-5', 10, now, { selections }, new Set());

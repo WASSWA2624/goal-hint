@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { localFeaturedQuoteSchema } from "./local-featured-decision.ts";
+import { preMatchReferenceOddsFreshMs } from "./reference-odds.ts";
 
 export const slipQuoteOddsSchema = z.string().regex(/^[1-9]\d{0,3}\.\d{2,4}$/u);
 export const slipBookmakerSchema = z.strictObject({
@@ -13,3 +14,8 @@ export const editorialSlipOfferSchema = localFeaturedQuoteSchema.safeExtend({
   receiptId: localFeaturedQuoteSchema.shape.receiptId.unwrap(),
 });
 export type EditorialSlipOffer = Readonly<z.infer<typeof editorialSlipOfferSchema>>;
+
+export function isEditorialSlipOfferFresh(offer: EditorialSlipOffer, at: number): boolean {
+  return offer.checkedAt <= at && at - offer.observedAt <= preMatchReferenceOddsFreshMs
+    && (offer.providerUpdatedAt === null || at - offer.providerUpdatedAt <= preMatchReferenceOddsFreshMs);
+}

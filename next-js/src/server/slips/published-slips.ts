@@ -6,8 +6,7 @@ import { bestSlipCombinationIdentity, bestSlipDailyCriteria, bestSlipExactTotal,
 import { bestSlipBandRank, bestSlipExactRange, bestSlipOddsBands, bestSlipBandLimit, bestSlipOddsBandFor, bestSlipPublicationBands, bestSlipPublicRank, dailyBestSlipBandLimit, defaultBestSlipOddsBand, maximumBestSlipLocalRank, maximumBestSlipPublicRank, type BestSlipOddsBand } from "../../domain/best-slip-odds-bands.ts";
 import { bestSlipsQueryRules, matchesBestSlipsRanges, parseBestSlipsCursor, parseBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "../../domain/best-slips-query.ts";
 import type { ReportingDate } from "../../domain/calendar.ts";
-import { preMatchReferenceOddsFreshMs } from "../../domain/reference-odds.ts";
-import { bestSlipActivePublicationDays, bestSlipAppendBatchSize, bestSlipFixtureInterval, bestSlipFixtureWindow, bestSlipKickoffBufferMs, bestSlipPublicationHour, bestSlipPublicationIntervalMs } from "../../domain/best-slip-publication-hour.ts";
+import { bestSlipActivePublicationDays, bestSlipAppendBatchSize, bestSlipFixtureInterval, bestSlipFixtureWindow, bestSlipKickoffBufferMs, bestSlipKickoffSpanMs, bestSlipMaximumKickoffSpanMs, bestSlipPublicationHour, bestSlipPublicationIntervalMs } from "../../domain/best-slip-publication-hour.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { publishedSlipRules, type PublishedSlipHistory, type PublishedSlipHistoryQuery } from "../../domain/published-slips.ts";
 import { completedSlipFixtureIds, indexSlipResults, slipCompleted, slipSnapshotOutcome, slipSnapshotStatus, slipSnapshotSchema, slipResultView, type SlipResult } from "../../domain/slip-snapshot.ts";
@@ -16,6 +15,7 @@ import { predictionResults } from "../../domain/performance-summary.ts";
 import { summarizeSlipPerformance } from "../../domain/slip-performance.ts";
 import { slipMatchStatesFromResults } from "../../domain/slip-match-state.ts";
 import { compareSlipDisplayProbability } from "../../domain/slip-pagination.ts";
+import { isEditorialSlipOfferFresh } from "../../domain/slip-quote.ts";
 import { parseSlipCriteria, serializeSlipCriteria, type BuiltSlip, type SlipCriteria } from "../../domain/slip-builder.ts";
 import { DatabaseOperationError, getDatabase, type DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
@@ -164,9 +164,12 @@ function reviewedSlipOffers(slip: BuiltSlip, at: number) {
 
 function offerStillEligible(selection: BuiltSlip["selections"][number], at: number) {
   const { offer, kickoffAt } = selection;
-  return offer && offer.checkedAt <= at && at - offer.observedAt <= preMatchReferenceOddsFreshMs &&
-    (offer.providerUpdatedAt === null || at - offer.providerUpdatedAt <= preMatchReferenceOddsFreshMs) &&
-    kickoffAt - at >= bestSlipKickoffBufferMs;
+  return offer && isEditorialSlipOfferFresh(offer, at) && kickoffAt - at >= bestSlipKickoffBufferMs;
+}
+
+function automaticSlipStillEligible({ selections }: BuiltSlip, at: number) {
+  return bestSlipKickoffSpanMs(selections) <= bestSlipMaximumKickoffSpanMs
+    && selections.every(selection => offerStillEligible(selection, at));
 }
 
 function publicEditorialSlip(slip: BuiltSlip): BuiltSlip {
@@ -292,6 +295,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         if (proposed.has(key) || snapshot.selections.length < criteria.teamsMin
           || criteria.teamsMax !== undefined && snapshot.selections.length > criteria.teamsMax
           || !exactSlipOdds(snapshot, range) || !reviewedSlipOffers(snapshot, Number.MAX_SAFE_INTEGER)
+          || bestSlipKickoffSpanMs(snapshot.selections) > bestSlipMaximumKickoffSpanMs
           || Math.abs(average - snapshot.averageProbability) > Number.EPSILON * snapshot.selections.length * 2
           || snapshot.selections.some(({ fixtureId, kickoffAt }) => proposedFixtures.has(fixtureId)
             || kickoffAt < window.startInclusive || kickoffAt >= window.endExclusive))
@@ -327,7 +331,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           }
           const at = await databaseTime(tx);
           if (!authorized(at)) return emptyAppend("stale");
-          const fresh = eligible.filter(({ selections }) => selections.every(selection => offerStillEligible(selection, at)));
+          const fresh = eligible.filter(slip => automaticSlipStillEligible(slip, at));
           if (!fresh.length) return emptyAppend("no-qualifying");
           const publishable = await verifyOffers(tx, fresh.flatMap(({ selections }) => selections), at) ? fresh : [];
           if (publishable !== fresh) {
@@ -387,7 +391,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
             })) });
           }
           const commitAt = await databaseTime(tx);
-          if (!authorized(commitAt) || publishable.some(({ selections }) => !selections.every(selection => offerStillEligible(selection, commitAt))))
+          if (!authorized(commitAt) || publishable.some(slip => !automaticSlipStillEligible(slip, commitAt)))
             return rollback();
           return { status: "published", appended: publishable.length } as const;
         }, { isolationLevel: "RepeatableRead", timeout: 30_000 });

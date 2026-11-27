@@ -12,9 +12,12 @@ export const legacyLocalFeaturedDecisionVersion = "local-featured-pre-match-v1";
 export const previousLocalFeaturedDecisionVersion = "local-featured-pre-match-v2";
 export const oddsFirstTieredFeaturedDecisionVersion = "local-featured-pre-match-v3";
 export const probabilityFirstTieredFeaturedDecisionVersion = "local-featured-pre-match-v4";
-export const localFeaturedDecisionVersion = "local-featured-pre-match-v5";
+export const firstPricedOnlyLocalFeaturedDecisionVersion = "local-featured-pre-match-v5";
+export const localFeaturedDecisionVersion = "local-featured-pre-match-v6";
 const forecastOnlyDecisionVersions = [oddsFirstTieredFeaturedDecisionVersion, probabilityFirstTieredFeaturedDecisionVersion] as const;
-export const tieredLocalFeaturedDecisionVersions = [...forecastOnlyDecisionVersions, localFeaturedDecisionVersion] as const;
+export const tieredLocalFeaturedDecisionVersions = [
+  ...forecastOnlyDecisionVersions, firstPricedOnlyLocalFeaturedDecisionVersion, localFeaturedDecisionVersion,
+] as const;
 export const localFeaturedBookmakerBetIds = replayBookmakerBetIds;
 const legacyThresholds = [0.95, 0.90, 0.85, 0.80, 0.75] as const;
 const thresholds = [...legacyThresholds, 0.70, 0.65, 0.60] as const;
@@ -22,12 +25,15 @@ const featuredDecisionVersionSchema = z.literal([legacyLocalFeaturedDecisionVers
 export type LocalFeaturedDecisionVersion = z.infer<typeof featuredDecisionVersionSchema>;
 const thresholdsByVersion = { [legacyLocalFeaturedDecisionVersion]: legacyThresholds,
   [previousLocalFeaturedDecisionVersion]: thresholds, [oddsFirstTieredFeaturedDecisionVersion]: thresholds,
-  [probabilityFirstTieredFeaturedDecisionVersion]: thresholds, [localFeaturedDecisionVersion]: thresholds } as const;
+  [probabilityFirstTieredFeaturedDecisionVersion]: thresholds, [firstPricedOnlyLocalFeaturedDecisionVersion]: thresholds,
+  [localFeaturedDecisionVersion]: thresholds } as const;
 const thresholdFor = (probability: number, version: LocalFeaturedDecisionVersion) => thresholdsByVersion[version].find((floor) => probability >= floor);
 export const isTieredLocalFeaturedDecision = (version: LocalFeaturedDecisionVersion): version is typeof tieredLocalFeaturedDecisionVersions[number] =>
   tieredLocalFeaturedDecisionVersions.some((tiered) => tiered === version);
+export const isPricedOnlyLocalFeaturedDecision = (version: LocalFeaturedDecisionVersion | undefined) =>
+  version === firstPricedOnlyLocalFeaturedDecisionVersion || version === localFeaturedDecisionVersion;
 const probabilityFirstRanking = (version: LocalFeaturedDecisionVersion) =>
-  version === probabilityFirstTieredFeaturedDecisionVersion || version === localFeaturedDecisionVersion;
+  version === probabilityFirstTieredFeaturedDecisionVersion || isPricedOnlyLocalFeaturedDecision(version);
 const minimumPrice = parseDecimalOdds("1.10")!;
 const minimumProbability = 0.60;
 const unitPrice = 10_000n;
@@ -280,6 +286,7 @@ function bestForecastOnlyOutcome(outcomes: readonly LocalFeaturedOutcome[], cove
 function bestQuote(books: LocalFeaturedBookmakerQuotes["bookmakers"], mapping: NonNullable<ReturnType<typeof verifiedLocalFeaturedBinding>>, decisionAt: number) {
   let best: { quote: LocalFeaturedQuote; price: DecimalOdds } | null = null;
   let comparable = false;
+  let supportingBookmakers = 0;
   for (const book of books) {
     const inspected = inspectExactLocalFeaturedQuote(book, mapping, decisionAt);
     if (!inspected) continue;
@@ -288,9 +295,10 @@ function bestQuote(books: LocalFeaturedBookmakerQuotes["bookmakers"], mapping: N
       continue;
     }
     comparable = true;
+    supportingBookmakers++;
     if (!best || (byPrice(inspected.price, best.price) || book.bookmakerId - best.quote.bookmakerId) < 0) best = inspected;
   }
-  return { best, comparable };
+  return { best, comparable, supportingBookmakers };
 }
 
 function assessPick(input: FeaturedDecisionInput, version: LocalFeaturedDecisionVersion, rank?: RankingProbability) {
@@ -319,17 +327,19 @@ function assessPick(input: FeaturedDecisionInput, version: LocalFeaturedDecision
   const bookmakerOccurrences = new Map<number, number>();
   if (probabilityFirst) for (const { bookmakerId } of quotes.bookmakers)
     bookmakerOccurrences.set(bookmakerId, (bookmakerOccurrences.get(bookmakerId) ?? 0) + 1);
+  // Discard ambiguous bookmaker rows before counting usable exact offers.
   const books = probabilityFirst ? quotes.bookmakers.filter(({ bookmakerId }) => bookmakerOccurrences.get(bookmakerId) === 1) : quotes.bookmakers;
-  type Rated = Readonly<{ decision: PricedDecision; price: DecimalOdds; positive: boolean }>;
+  type Rated = Readonly<{ decision: PricedDecision; price: DecimalOdds; positive: boolean; supportingBookmakers: number }>;
   const rankPriced = (left: Rated, right: Rated) => (probabilityFirst ? compareRankingProbability(left.decision, right.decision, rank) : 0) ||
     Number(right.positive) - Number(left.positive) ||
+    (version === localFeaturedDecisionVersion ? right.supportingBookmakers - left.supportingBookmakers : 0) ||
     right.decision.threshold - left.decision.threshold || byPrice(left.price, right.price) ||
     compareRankingProbability(left.decision, right.decision, rank) || stableSelectionOrder(left.decision, right.decision);
   let chosen: Rated | null = null, fallback: Rated | null = null;
   for (const { marketKey, selection, settlementProbabilities, unrepresentedProbability } of outcomes) {
     const mapping = verifiedLocalFeaturedBinding(marketKey, selection);
     if (!mapping) continue;
-    const { best, comparable: hasQuote } = bestQuote(books, mapping, decisionAt);
+    const { best, comparable: hasQuote, supportingBookmakers } = bestQuote(books, mapping, decisionAt);
     if (hasQuote) comparableQuoteOutcomes++;
     if (!best) continue;
     const standardPrice = best.price.scaled >= minimumPrice.scaled;
@@ -346,7 +356,7 @@ function assessPick(input: FeaturedDecisionInput, version: LocalFeaturedDecision
     const decision: PricedDecision = { version, status: "priced",
       ...(tiered ? { tier: standard ? "standard" as const : "priced-fallback" as const } : {}),
       marketKey, selection, expectedNetReturn, probability, threshold, quote: best.quote };
-    const rated = { decision, price: best.price, positive };
+    const rated = { decision, price: best.price, positive, supportingBookmakers };
     if (standard && (!chosen || rankPriced(rated, chosen) < 0)) chosen = rated;
     if (!standard && (!fallback || rankPriced(rated, fallback) < 0)) fallback = rated;
   }
