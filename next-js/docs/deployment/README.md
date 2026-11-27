@@ -14,8 +14,9 @@ npm run package:cpanel -- --commit <full-sha>
 
 The packager exports the approved Git commit to a temporary directory. A fresh
 build runs `npm ci` and compiles the Next.js standalone runtime. Use
-`--reuse <prior-full-sha>` when the existing verified local ZIP and its build
-inputs match. Both modes publish `../deploy/goal-hint-nextjs-1.0.0.zip` and its
+`--reuse <prior-full-sha>` when the verified local ZIP and its build inputs
+match. Add `--previous-archive <local-zip>` to read the prior ZIP and checksum
+from a different path. Both modes publish `../deploy/goal-hint-nextjs-1.0.0.zip` and its
 adjacent `.zip.sha256` locally. The package includes `.env.example`. Private
 settings and approval records are supplied by each hosted environment.
 

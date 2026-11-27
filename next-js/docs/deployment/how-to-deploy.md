@@ -331,6 +331,11 @@ binary through the native release process when the shell itself changes.
    Keep legitimate application data, uploads, private settings, worker files,
    and unrelated resources out of deployment cleanup.
 
+After changes to hosted database grants, confirm that both web and migration
+accounts can connect over TLS to their intended database and that a zero-row
+query against the other environment is denied. Check both migration ledgers
+and repeat the HTTPS smoke checks.
+
 For code recovery, package the earlier clean GitHub commit and run the same
 commands with `--restore --commit <earlier-full-sha>`. The earlier commit must
 be reachable from the current environment branches and its migration inventory
@@ -425,6 +430,13 @@ and requires TLS. Before switching hosts, run the launcher with `--check` to
 verify policy and the database connection without calling the provider. Disable
 the former production worker before starting the new one. Staging provider jobs
 remain disabled.
+
+For confirmed obsolete worker packages, run
+[`prune-hosted-workers.py`](../../scripts/prune-hosted-workers.py) as the hosted
+production account. Pass `--football FULL_COMMIT` or `--publisher FULL_COMMIT`
+once per candidate. The default previews the selection. `--apply` rechecks
+launcher references, package ownership and both worker locks before deletion.
+Keep any package used by the current, shadow or fallback launchers.
 
 The owner confirmed publication rights and authorized quota use on production.
 `GOAL_HINT_FOOTBALL_EXISTING_PREPAID=true` uses the current direct prepaid term
