@@ -158,8 +158,8 @@ export function createMysqlLiveMatchStore(options: Readonly<{ database: Database
       if (policy.coverage.length === 0) return [];
       try {
         const scope = JSON.stringify(policy.coverage);
-        const firstLineupTeam = Prisma.sql`JSON_VALUE(ff.lineups,'$[0].team.id' RETURNING UNSIGNED)`;
-        const secondLineupTeam = Prisma.sql`JSON_VALUE(ff.lineups,'$[1].team.id' RETURNING UNSIGNED)`;
+        const firstLineupTeam = Prisma.sql`CAST(JSON_VALUE(ff.lineups,'$[0].team.id') AS UNSIGNED)`;
+        const secondLineupTeam = Prisma.sql`CAST(JSON_VALUE(ff.lineups,'$[1].team.id') AS UNSIGNED)`;
         const confirmedLineups = Prisma.sql`(ff.detailsRetrievedAt >= TIMESTAMPADD(MICROSECOND,
           ${-coordinatedLiveDetailDefaults.lineupLeadMs * 1000}, f.kickoff) AND
           ${firstLineupTeam} <> ${secondLineupTeam} AND ${firstLineupTeam} IN (h.externalId,a.externalId) AND

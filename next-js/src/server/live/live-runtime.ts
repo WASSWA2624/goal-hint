@@ -80,7 +80,7 @@ import { liveAiEvidencePolicy } from "./live-ai-plan.ts";
 import { canRunLiveRefresh } from "./live-refresh-quota.ts";
 import { fallbackRefreshPlan, LIVE_REFRESH_TYPE, liveCascadePlan, liveLocalFirstPlan, liveReferences, liveWorkload,
   resultSyncPolicy, selectionPolicy, cutoffPolicy, lifecyclePolicy, providerFallbackPolicy, publicationPolicy,
-  oddsPolicy, oddsImportBounds, oddsCatalogBounds, oddsMaxRequests, ODDS_FRESHNESS_MS, teamCodeBounds, teamCodeImportsEnabled,
+  oddsPolicy, oddsImportBounds, oddsFixtureBounds, oddsCatalogBounds, oddsMaxRequests, ODDS_FRESHNESS_MS, teamCodeBounds, teamCodeImportsEnabled,
   refreshEnvelopeFor } from "./live-plan.ts";
 import { oddsFail } from "../odds/odds-contract.ts";
 import { approvedOddsDisplay } from "../odds/public-odds-policy.ts";
@@ -642,8 +642,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
           const timeoutMs = request.reconciliationDeadlineAt === undefined ? slipOddsRefreshRequestTimeoutMs : ODDS_RECONCILIATION_REQUEST_TIMEOUT_MS;
           const slotEnd = request.reconciliationDeadlineAt ?? request.slot + SLIP_ODDS_REFRESH_WAIT_MS;
           const deadline = utcInstantFromEpochMilliseconds(Math.min(slotEnd, Date.now() + timeoutMs, providerDay.endsAt));
-          return { ...oddsImportBounds(deadline, 1), timeoutMs, maxRequests: 1, maxRows: 1,
-            retry: { maxAttempts: 1, baseDelayMs: 0, maxDelayMs: 0 } };
+          return oddsFixtureBounds(deadline, timeoutMs);
         }
         const end = request.recovery ? oddsHistoryDeadline(request.slot, quota.current()?.startsAt ?? oddsFail("unavailable")) :
           request.kind === "prices" ? request.slot + request.policy.sweepMs : request.slot + DAY_MS;

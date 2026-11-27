@@ -5,6 +5,7 @@ import { parseUtcInstant } from "../src/domain/calendar.ts";
 import { createApiFootballAdapter } from "../src/server/football/api-football-adapter.ts";
 import { API_FOOTBALL_ORIGIN } from "../src/server/football/api-football-contract.ts";
 import { createQuotaGateway } from "../src/server/football/quota-gateway.ts";
+import { oddsFixtureBounds } from "../src/server/live/live-plan.ts";
 
 // Every response/account/permission in this file is a labeled synthetic fixture.
 // The fetch dependency is replaced; no credential or live provider call is used.
@@ -52,7 +53,7 @@ function setup({ respond = (url) => jsonResponse(url), decision, completionDecis
   const limiter = {
     async reserve(request) {
       events.push("reserve"); reservations.push(request);
-      return decision ?? { status: "reserved", permit: {
+      return (typeof decision === "function" ? decision(reservations.length) : decision) ?? { status: "reserved", permit: {
         requestId: request.requestId, periodId: hash("synthetic-period"), ownerToken: hash(request.requestId),
         dispatchedAt: now, launchBefore: now + 1000,
       } };
@@ -1202,6 +1203,29 @@ test("rolling second and minute windows that name their reopening are retried li
   const { adapter, reservations } = queuedRetryAdapter([{ status: "denied", reason: "minute-limit" }]);
   await adapter.evidence.fixtures({ fixtureId: 101 }, bounds({ retry: { maxAttempts: 3, baseDelayMs: 10, maxDelayMs: 100 } }));
   assert.equal(reservations.length, 1, "a minute limit without a reopening time is not retried");
+});
+
+test("fixture odds wait for shared admission and spend at most one provider dispatch", async () => {
+  const waits = [{ status: "denied", reason: "priority-wait" }, { status: "denied", reason: "pacing", retryAt: NOW + 300 }];
+  const scope = { fixtureId: 7, allBookmakers: true };
+  const limits = oddsFixtureBounds(NOW + 8_000, 8_000);
+  const ready = setup({ decision: (attempt) => waits[attempt - 1], respond: (url) => jsonResponse(url, [], { paging: { current: 1, total: 0 } }) });
+  const imported = await ready.adapter.odds.prices(scope, limits);
+  assert.equal(imported.status, "complete");
+  assert.equal(ready.reservations.length, 3);
+  assert.equal(new Set(ready.reservations.map(({ requestId }) => requestId)).size, 1);
+  assert.equal(ready.network.length, 1);
+
+  const limited = setup({ respond: (url) => jsonResponse(url, [], { status: 429 }) });
+  const rejected = await limited.adapter.odds.prices(scope, limits);
+  assert.equal(rejected.error.reason, "rate-limited");
+  assert.equal(limited.network.length, 1, "a provider reply already spends the fixture's only dispatch");
+
+  const exhausted = setup({ decision: { status: "denied", reason: "daily-limit" } });
+  const denied = await exhausted.adapter.odds.prices(scope, limits);
+  assert.equal(denied.error.quotaReason, "daily-limit");
+  assert.equal(exhausted.reservations.length, 1);
+  assert.equal(exhausted.network.length, 0);
 });
 
 test("a caller that stops waiting releases its queued request, bounded by its workflow deadline", async () => {

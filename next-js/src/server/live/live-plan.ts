@@ -181,6 +181,9 @@ export function oddsImportBounds(deadlineAt: UtcInstant, maxPages: number, recov
     // Re-size from the counted odds trial's bytes-per-page evidence.
     maxResponseBytes: 8_000_000, retry: { maxAttempts: 3, baseDelayMs: SECOND, maxDelayMs: 10 * SECOND }, cacheMaxAgeMs: 0 });
 }
+export function oddsFixtureBounds(deadlineAt: UtcInstant, timeoutMs: number): ApiFootballBounds {
+  return single("enrichment", deadlineAt, timeoutMs, 8_000_000);
+}
 export function oddsCatalogBounds(deadlineAt: UtcInstant): ApiFootballBounds {
   return Object.freeze({ priority: "enrichment", deadlineAt, timeoutMs: 30 * SECOND, maxRequests: oddsMaxRequests("bets", 1), maxPages: 1, maxRows: 2000,
     maxResponseBytes: 2_000_000, retry: { maxAttempts: 3, baseDelayMs: SECOND, maxDelayMs: 10 * SECOND }, cacheMaxAgeMs: 0 });
