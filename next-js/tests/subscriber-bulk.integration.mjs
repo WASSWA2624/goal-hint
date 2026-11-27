@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
+import { emptySubscriberDirectoryQuery } from "../src/domain/subscriber-directory.ts";
 import { createAdminPasswordRequestHandlers } from "../src/server/admin/password-requests-http.ts";
+import { readSubscriberDirectory } from "../src/server/admin/subscriber-directory.ts";
 import { createSubscriberBulkHandler, createSubscriberHandlers } from "../src/server/admin/subscribers-http.ts";
 import { memberTokenHash } from "../src/server/members/member-sessions.ts";
 import { createAuthenticatedTestSessions } from "./helpers/member-fixtures.mjs";
@@ -73,6 +75,29 @@ test("subscriber bulk actions and secure reset initiation use the existing accou
     const accounts = new Map((await rows(ids)).map(row => [row.id, row]));
     assert.equal(accounts.get(first.accountId).blockedAt, null);
     assert.ok(accounts.get(second.accountId).blockedAt);
+  });
+
+  await t.test("one complete directory page can be managed in a single confirmed request", async () => {
+    const search = "Synthetic full directory page", at = new Date();
+    const data = Array.from({ length: 101 }, () => ({ id: randomUUID(), phone: `25670000${++phoneSuffix}`,
+      createdAt: at, lastSignInAt: at, ownerNote: search }));
+    await database.query(tx => tx.memberAccount.createMany({ data }));
+    const filter = { ...emptySubscriberDirectoryQuery, search, status: "open" };
+    const firstPage = await readSubscriberDirectory(database, filter);
+    assert.deepEqual([firstPage.page, firstPage.pages, firstPage.total, firstPage.accounts.length], [1, 2, 101, 100]);
+
+    const ids = firstPage.accounts.map(row => row.id), checksBefore = authorizationChecks;
+    const response = await submit("block", ids, { value: "Synthetic full page review" });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.succeeded, 100);
+    assert.equal(result.failed, 0);
+    assert.equal(authorizationChecks - checksBefore, 100);
+    assert.ok((await rows(ids)).every(row => row.blockedAt !== null));
+
+    const remaining = await readSubscriberDirectory(database, filter, 2);
+    assert.deepEqual([remaining.page, remaining.pages, remaining.total, remaining.accounts.length], [1, 1, 1, 1]);
+    assert.ok(!ids.includes(remaining.accounts[0].id));
   });
 
   await t.test("bulk grants are free, account-scoped and idempotent across a concurrent retry", async () => {

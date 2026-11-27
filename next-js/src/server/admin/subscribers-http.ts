@@ -1,8 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { normalizePhone } from "../../domain/phone.ts";
 import { createAccessCodes } from "../members/access-codes.ts";
-import { isMemberAdminPhone } from "../members/member-admin.ts";
 import { createPasswordRecovery } from "../members/password-recovery.ts";
 import { json } from "../http/private-http.ts";
 import { readJsonBody, type AdminContext } from "./admin-http.ts";
@@ -14,23 +12,31 @@ import { auditTextErrors } from "./audit.ts";
 import { requireOwner } from "./owner-auth.ts";
 
 const subscriberActions = new Set(["grant", "password-reset", "change-number", "credit-adjust", "note", "sign-out-selected", "sign-out-all", "auto-renew-off", "block", "unblock", "erase", "delete"]);
+const subscriberId = (request: Request) => new URL(request.url).pathname.match(/\/subscribers\/([^/]+)$/u)?.[1];
 
 export function createSubscriberHandlers() {
   return {
+    async GET({ request, services }: AdminContext) {
+      const id = subscriberId(request);
+      if (!uuid(id)) return invalidAction();
+      if (!services.database) return storageUnavailable();
+      try {
+        const detail = await createSubscribers(services.database).detail(id.toLowerCase());
+        return detail ? json({ detail }) : json({ message: "This subscriber could not be found." }, 404);
+      } catch { return storageUnavailable(); }
+    },
     async POST(context: AdminContext) {
       const { services, owner, request } = context;
       const read = await readJsonBody(request); if ("refusal" in read) return read.refusal;
-      const body = read.body, id = new URL(request.url).pathname.match(/\/subscribers\/([^/]+)$/u)?.[1];
+      const body = read.body, id = subscriberId(request);
       if (id === undefined ? body.action !== undefined : !uuid(id) || typeof body.action !== "string" || !subscriberActions.has(body.action)) return invalidAction();
       if (!services.database) return storageUnavailable();
-      const service = createSubscribers(services.database, Date.now, services.config);
       try {
         if (id === undefined) {
           const { page: requestedPage, ...filters } = body;
           const query = parseSubscriberDirectoryQuery(filters), page = parseSubscriberDirectoryPage(requestedPage);
           if (!query || page === null) return invalidAction();
-          const result = await readSubscriberDirectory(services.database, query, page), phone = query.search ? normalizePhone(query.search) : null;
-          return json({ ...result, ...(result.accounts.length === 0 && phone && isMemberAdminPhone(phone) ? { adminPhone: phone } : {}) });
+          return json(await readSubscriberDirectory(services.database, query, page));
         }
         if (body.action === "grant") {
           const grant = readManualGrant(body);
@@ -54,7 +60,7 @@ export function createSubscriberHandlers() {
           return codeAnswer(await createAccessCodes({ database: services.database, config: services.config }).adjustCredit(id, body.amount, body.note, owner.username));
         }
         if (typeof body.action !== "string" || ["erase", "delete"].includes(body.action) && body.confirmed !== true) return invalidAction();
-        return codeAnswer(await service.action(id, body.action, body.value, owner.username));
+        return codeAnswer(await createSubscribers(services.database, Date.now, services.config).action(id, body.action, body.value, owner.username));
       } catch { return storageUnavailable(); }
     },
   };

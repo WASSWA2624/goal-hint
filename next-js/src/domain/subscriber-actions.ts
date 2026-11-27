@@ -1,4 +1,4 @@
-export const subscriberIndividualActions = ["grant", "number", "block", "devices", "password-reset", "erase", "delete"] as const;
+export const subscriberIndividualActions = ["grant", "number", "block", "devices", "password-reset", "note", "erase", "delete"] as const;
 
 export type SubscriberIndividualAction = (typeof subscriberIndividualActions)[number];
 
@@ -13,6 +13,7 @@ export function subscriberActionLabel(action: SubscriberIndividualAction, blocke
     block: blocked ? "Unblock account" : "Block account",
     devices: "Log out devices",
     "password-reset": "Reset password",
+    note: "Edit admin note",
     erase: "Erase personal data",
     delete: "Permanently delete account",
   }[action];

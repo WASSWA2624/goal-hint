@@ -1,24 +1,23 @@
 "use client";
 
-import { authCopy } from "@/i18n/messages/auth";
-import { useCallback, useEffect, useId, useRef, useState, useTransition, type MouseEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useEffectEvent, useId, useRef, useState, type MouseEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import styled from "styled-components";
+import { goHistoryBack, writeContextHistory } from "@/components/navigation/context-history";
 import { UserIcon, UserPlusIcon } from "@/components/ui/icons";
-import { media } from "@/styles/theme";
+import { emptySubscriberDirectoryQuery, parseSubscriberDirectoryPage, parseSubscriberDirectoryQuery, type SubscriberDirectoryAccount,
+  type SubscriberDirectoryPage, type SubscriberDirectoryPaging, type SubscriberDirectoryQuery } from "@/domain/subscriber-directory";
+import { parseSubscriberIndividualAction, type SubscriberIndividualAction } from "@/domain/subscriber-actions";
 import type { OwnerSubscriber } from "@/domain/owner-members";
-import { emptySubscriberDirectoryQuery, parseSubscriberDirectoryQuery, type SubscriberDirectoryAccount, type SubscriberDirectoryPage,
-  type SubscriberDirectoryPaging, type SubscriberDirectoryQuery } from "@/domain/subscriber-directory";
-import type { SubscriberIndividualAction } from "@/domain/subscriber-actions";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
-import { Hint } from "./admin-form";
+import { authCopy } from "@/i18n/messages/auth";
+import { media } from "@/styles/theme";
+import { ActionButton, FieldError, Hint } from "./admin-form";
 import { ActionNotices, ManualCodeForm, useCodeAction } from "./code-tools";
 import { RecordBack, RecordCard, RecordEmpty, RecordFeedback, RecordScroll } from "./record-workspace";
-import { goHistoryBack } from "@/components/navigation/context-history";
 import { SubscriberDirectory } from "./subscriber-directory";
 import { SubscriberDirectoryFilters } from "./subscriber-directory-parts";
 import { SubscriberDetail } from "./subscriber-detail";
-import { subscriberPresentation } from "./subscriber-presentation-styles";
 import { RecordFormDialog, RecordPrimaryAction } from "./record-toolbar";
 import { AccountColumn, Workspace, WorkspaceTitle } from "./subscriber-styles";
 
@@ -28,170 +27,333 @@ type Props = {
   plans: readonly SubscriptionPlanView[];
   initialQuery?: SubscriberDirectoryQuery;
   initialPaging?: SubscriberDirectoryPaging;
+  initialDirectoryAsOf?: string;
+  initialRequestedPage?: number;
+  initialAccountId?: string;
   initialAction?: SubscriberIndividualAction;
+  initialDirectoryError?: string;
+  initialDetailError?: string;
+  initialPlansError?: string;
+  initialAdminPhone?: string;
   selectedExplicitly?: boolean;
   canManagePasswords?: boolean;
 };
-const queryKey = (query: SubscriberDirectoryQuery) => JSON.stringify(parseSubscriberDirectoryQuery(query) ?? emptySubscriberDirectoryQuery);
 type DirectoryLocation = Readonly<{ query: SubscriberDirectoryQuery; page: number }>;
+type RecordLocation = Readonly<{ accountId: string | null; action: SubscriberIndividualAction | null }>;
+const directoryPath = "/admin/subscribers";
+const directoryApi = "/api/admin/subscribers";
+const queryKey = (query: SubscriberDirectoryQuery) => JSON.stringify(parseSubscriberDirectoryQuery(query) ?? emptySubscriberDirectoryQuery);
 const locationKey = ({ query, page }: DirectoryLocation) => `${queryKey(query)}:${page}`;
+const requestHeaders = { Accept: "application/json" };
 
-/** Server-owned record navigation with cancellable directory queries and shared action forms. */
-export function SubscribersWorkspace({ accounts, detail: selected, plans, initialQuery = emptySubscriberDirectoryQuery,
-  initialPaging, initialAction, selectedExplicitly = false, canManagePasswords = false }: Props) {
-  const router = useRouter(), id = useId();
-  const seedPage = initialPaging?.page ?? 1, seedPages = initialPaging?.pages ?? 1, seedTotal = initialPaging?.total ?? accounts.length;
-  const [location, setLocation] = useState<DirectoryLocation>({ query: initialQuery, page: seedPage });
-  const [directory, setDirectory] = useState<SubscriberDirectoryPage>({ accounts, page: seedPage, pages: seedPages, total: seedTotal });
-  const [loading, setLoading] = useState(false), [error, setError] = useState("");
-  const [navigating, startNavigation] = useTransition();
-  const [adminPhone, setAdminPhone] = useState<string | null>(null), [adding, setAdding] = useState(false), [deletedId, setDeletedId] = useState<string | null>(null);
-  const currentLocation = useRef(location), request = useRef<AbortController | null>(null), generation = useRef(0);
-  const key = locationKey(location), seedKey = locationKey({ query: initialQuery, page: seedPage });
-  const previousSeed = useRef(seedKey), lastQuery = useRef(seedKey);
-  const restoringHistory = useRef(false);
-  const detailsPane = useRef<HTMLElement>(null);
-  const openedFrom = useRef<{ id: string; url: string; scrollTop: number } | null>(null);
-  const { query } = location, { accounts: listed, page, pages, total } = directory, formId = `${id}-add-subscriber`;
+function subscriberHref({ query, page }: DirectoryLocation, { accountId, action }: RecordLocation) {
+  const params = new URLSearchParams();
+  const normalized = parseSubscriberDirectoryQuery(query) ?? emptySubscriberDirectoryQuery;
+  for (const name of Object.keys(normalized) as (keyof SubscriberDirectoryQuery)[]) {
+    if (normalized[name] !== emptySubscriberDirectoryQuery[name]) params.set(name, normalized[name]);
+  }
+  if (page > 1) params.set("page", String(page));
+  if (accountId) params.set("accountId", accountId);
+  if (accountId && action) params.set("action", action);
+  return params.size ? `${directoryPath}?${params}` : directoryPath;
+}
 
-  const loadDirectory = useCallback(async () => {
-    const version = ++generation.current;
-    request.current?.abort();
-    const controller = new AbortController(); request.current = controller;
-    const requested = currentLocation.current;
-    let failureMessage = "Subscribers could not be loaded. Try again.";
-    setLoading(true); setError("");
+function writeLocation(location: DirectoryLocation, record: RecordLocation, mode: "replace" | "push" = "replace") {
+  const href = subscriberHref(location, record);
+  if (window.location.pathname === directoryPath && window.location.pathname + window.location.search !== href) {
+    writeContextHistory({}, href, mode);
+  }
+}
+
+function isDirectoryPage(value: unknown): value is SubscriberDirectoryPage {
+  if (!value || typeof value !== "object") return false;
+  const { accounts, page, pages, total, asOf } = value as Partial<SubscriberDirectoryPage>;
+  return Array.isArray(accounts) && accounts.every(account => account && typeof account.id === "string"
+      && (typeof account.phone === "string" || account.phone === null) && typeof account.status === "string"
+      && ["active", "queued", "none"].includes(account.access))
+    && typeof asOf === "string" && Number.isFinite(Date.parse(asOf))
+    && typeof page === "number" && Number.isSafeInteger(page) && page >= 1
+    && typeof pages === "number" && Number.isSafeInteger(pages) && pages >= page
+    && typeof total === "number" && Number.isSafeInteger(total) && total >= accounts.length;
+}
+
+function useSubscriberRead(error = "") {
+  const [status, setStatus] = useState({ busy: false, error });
+  const active = useRef<AbortController | null>(null);
+  const cancel = useCallback((busy = false) => {
+    active.current?.abort();
+    active.current = null;
+    setStatus({ busy, error: "" });
+  }, []);
+  useEffect(() => () => { active.current?.abort(); }, []);
+
+  async function read(load: (signal: AbortSignal) => Promise<void>, failed: string) {
+    active.current?.abort();
+    const controller = new AbortController();
+    active.current = controller;
+    setStatus({ busy: true, error: "" });
     try {
-      const response = await fetch("/api/admin/subscribers", { method: "POST", cache: "no-store", credentials: "same-origin", signal: controller.signal,
-        headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ ...requested.query, page: requested.page }) });
-      if (response.status === 401 || response.status === 403) {
-        if (version === generation.current) { setDirectory({ accounts: [], page: 1, pages: 1, total: 0 }); router.refresh(); }
-        failureMessage = authCopy.administratorSessionEnded;
-        throw new Error(failureMessage);
+      await load(controller.signal);
+      if (!controller.signal.aborted) setStatus({ busy: false, error: "" });
+      return true;
+    } catch (error) {
+      if (controller.signal.aborted) return true;
+      setStatus({ busy: false, error: error instanceof SubscriberReadError ? error.message : failed });
+      return false;
+    }
+  }
+  return { ...status, read, cancel };
+}
+
+class SubscriberReadError extends Error {}
+
+/** Directory and record reads update their own pane. Account links remain navigable URLs. */
+export function SubscribersWorkspace({ accounts, detail: initialDetail, plans: seedPlans, initialQuery = emptySubscriberDirectoryQuery,
+  initialPaging, initialDirectoryAsOf = "", initialRequestedPage, initialAccountId, initialAction, initialDirectoryError, initialDetailError, initialPlansError,
+  initialAdminPhone, selectedExplicitly = false, canManagePasswords = false }: Props) {
+  const router = useRouter(), parameters = useSearchParams().toString(), id = useId();
+  const [location, setLocation] = useState<DirectoryLocation>({ query: initialQuery, page: initialRequestedPage ?? initialPaging?.page ?? 1 });
+  const [directory, setDirectory] = useState<SubscriberDirectoryPage>({ accounts, asOf: initialDirectoryAsOf, page: 1, pages: 1, total: accounts.length, ...initialPaging });
+  const [record, setRecord] = useState<RecordLocation>({ accountId: selectedExplicitly ? initialAccountId ?? initialDetail?.id ?? null : null, action: initialAction ?? null });
+  const [detail, setDetail] = useState(initialDetail);
+  const [plans, setPlans] = useState(seedPlans);
+  const [adminPhone, setAdminPhone] = useState(initialAdminPhone ?? null);
+  const [adding, setAdding] = useState(false), [sessionEnded, setSessionEnded] = useState(false);
+  const listRead = useSubscriberRead(initialDirectoryError), detailRead = useSubscriberRead(initialDetailError), plansRead = useSubscriberRead(initialPlansError);
+  const currentLocation = useRef(location), currentRecord = useRef(record), displayedDetail = useRef(detail);
+  const detailTarget = useRef(initialAccountId ?? initialDetail?.id ?? null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const detailsPane = useRef<HTMLElement>(null), listScroll = useRef<HTMLOListElement>(null);
+  const openedFrom = useRef<{ id: string; url: string; scrollTop: number } | null>(null);
+  const { query } = location, { accounts: listed, page, pages, total } = directory;
+  const formId = `${id}-add-subscriber`;
+
+  function replaceDetail(next: OwnerSubscriber | null) {
+    displayedDetail.current = next;
+    setDetail(next);
+  }
+
+  function checkSession(response: Response, signal: AbortSignal) {
+    if (signal.aborted || response.status !== 401) return;
+    clearTimeout(searchTimer.current);
+    listRead.cancel(); detailRead.cancel(); plansRead.cancel();
+    replaceDetail(null);
+    setDirectory({ accounts: [], asOf: "", page: 1, pages: 1, total: 0 });
+    setAdminPhone(null);
+    setPlans([]);
+    setAdding(false);
+    setSessionEnded(true);
+    router.refresh();
+  }
+
+  function loadDetail(accountId: string) {
+    detailTarget.current = accountId;
+    return detailRead.read(async signal => {
+      const response = await fetch(`${directoryApi}/${encodeURIComponent(accountId)}`, { cache: "no-store", headers: requestHeaders, signal });
+      checkSession(response, signal);
+      if (signal.aborted) return;
+      if (response.status === 404) {
+        if (displayedDetail.current?.id === accountId) replaceDetail(null);
+        throw new SubscriberReadError("This subscriber account is no longer available.");
       }
+      if (!response.ok) throw new Error();
+      const body: { detail?: OwnerSubscriber } = await response.json();
+      if (signal.aborted) return;
+      if (body?.detail?.id !== accountId || !Array.isArray(body.detail.codes) || !Array.isArray(body.detail.submissions)
+        || !Array.isArray(body.detail.devices) || !Array.isArray(body.detail.wallet)) throw new Error();
+      replaceDetail(body.detail);
+    }, "Account details could not be loaded. Try again.");
+  }
+
+  function loadDirectory() {
+    clearTimeout(searchTimer.current);
+    const requested = currentLocation.current;
+    return listRead.read(async signal => {
+      const response = await fetch(directoryApi, { method: "POST", cache: "no-store", signal,
+        headers: { ...requestHeaders, "Content-Type": "application/json" }, body: JSON.stringify({ ...requested.query, page: requested.page }) });
+      checkSession(response, signal);
+      if (signal.aborted) return;
+      if (!response.ok) throw new Error();
       const body: unknown = await response.json();
-      if (!response.ok || !body || typeof body !== "object" || !("accounts" in body) || !Array.isArray(body.accounts)
-        || !body.accounts.every(account => account && typeof account === "object" && typeof account.id === "string" && Array.isArray(account.planNames)
-          && ["active", "queued", "none"].includes(account.access))
-        || !("page" in body) || typeof body.page !== "number" || !Number.isSafeInteger(body.page) || body.page < 1
-        || !("pages" in body) || typeof body.pages !== "number" || !Number.isSafeInteger(body.pages) || body.pages < body.page
-        || !("total" in body) || typeof body.total !== "number" || !Number.isSafeInteger(body.total) || body.total < body.accounts.length) {
-        throw new Error(failureMessage);
-      }
-      if (version !== generation.current || controller.signal.aborted) return true;
-      setDirectory({ accounts: body.accounts as SubscriberDirectoryAccount[], page: body.page, pages: body.pages, total: body.total });
+      if (signal.aborted) return;
+      if (!isDirectoryPage(body)) throw new Error();
+      setDirectory(body);
+      setAdminPhone("adminPhone" in body && typeof body.adminPhone === "string" ? body.adminPhone : null);
       if (body.page !== requested.page) {
         const accepted = { ...requested, page: body.page };
-        currentLocation.current = accepted; lastQuery.current = locationKey(accepted); setLocation(accepted);
+        currentLocation.current = accepted;
+        setLocation(accepted);
+        writeLocation(accepted, currentRecord.current);
       }
-      setAdminPhone("adminPhone" in body && typeof body.adminPhone === "string" ? body.adminPhone : null);
-      return true;
-    } catch {
-      // A newer request owns the result; superseding a refresh is not an action failure.
-      if (version !== generation.current || controller.signal.aborted) return true;
-      setError(failureMessage);
-      return false;
-    } finally { if (version === generation.current) setLoading(false); }
-  }, [router]);
-  const action = useCodeAction(async () => { if (!await loadDirectory()) throw new Error("Directory refresh failed"); });
+    }, "Subscribers could not be loaded. Try again.");
+  }
 
+  function loadPlans() {
+    return plansRead.read(async signal => {
+      const response = await fetch("/api/admin/plans", { cache: "no-store", headers: requestHeaders, signal });
+      checkSession(response, signal);
+      if (signal.aborted) return;
+      if (!response.ok) throw new Error();
+      const body: { plans?: SubscriptionPlanView[] } = await response.json();
+      if (signal.aborted) return;
+      if (!Array.isArray(body?.plans)) throw new Error();
+      setPlans(body.plans);
+    }, "Subscription plans could not be loaded. Try again.");
+  }
+
+  const action = useCodeAction(async () => {
+    const accountId = detailTarget.current;
+    const results = await Promise.all([loadDirectory(), accountId ? loadDetail(accountId) : true]);
+    if (results.includes(false)) throw new Error("Subscriber data could not be refreshed.");
+  });
+
+  function updateLocation(next: DirectoryLocation, { write = true, debounce = false } = {}) {
+    const changed = locationKey(next) !== locationKey(currentLocation.current);
+    currentLocation.current = next;
+    setLocation(next);
+    if (write && changed) writeLocation(next, currentRecord.current);
+    if (!changed) return;
+    if (listScroll.current) listScroll.current.scrollTop = 0;
+    clearTimeout(searchTimer.current);
+    if (debounce) {
+      listRead.cancel(true);
+      searchTimer.current = setTimeout(() => { void loadDirectory(); }, 180);
+    }
+    else void loadDirectory();
+  }
+
+  function updateRecord(next: RecordLocation) {
+    currentRecord.current = next;
+    setRecord(next);
+    const target = next.accountId ?? displayedDetail.current?.id ?? listed[0]?.id ?? null;
+    if (target === detailTarget.current && !(target && detailRead.error && target !== displayedDetail.current?.id)) return;
+    if (target && target !== displayedDetail.current?.id) { void loadDetail(target); return; }
+    detailRead.cancel();
+    detailTarget.current = target;
+  }
+
+  // Native history handles record deep links and browser Back without reloading the other pane.
+  const syncHistory = useEffectEvent((encoded: string) => {
+    const params = new URLSearchParams(encoded);
+    const query = parseSubscriberDirectoryQuery({
+      ...emptySubscriberDirectoryQuery,
+      ...Object.fromEntries(Object.keys(emptySubscriberDirectoryQuery).flatMap(key => params.has(key) ? [[key, params.get(key)]] : [])),
+    }) ?? emptySubscriberDirectoryQuery;
+    const nextLocation = { query, page: parseSubscriberDirectoryPage(params.get("page") ?? undefined) ?? 1 };
+    if (locationKey(nextLocation) !== locationKey(currentLocation.current)) updateLocation(nextLocation, { write: false });
+    const requested = params.get("accountId");
+    const accountId = requested && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/iu.test(requested) ? requested.toLowerCase() : null;
+    const nextAction = accountId ? parseSubscriberIndividualAction(params.get("action")) : null;
+    if (accountId !== currentRecord.current.accountId || nextAction !== currentRecord.current.action) {
+      updateRecord({ accountId, action: nextAction });
+    }
+  });
+  const lastParameters = useRef(parameters);
   useEffect(() => {
-    const restore = () => { restoringHistory.current = true; };
-    window.addEventListener("popstate", restore);
-    return () => window.removeEventListener("popstate", restore);
+    if (lastParameters.current === parameters) return;
+    lastParameters.current = parameters;
+    // A newer search or click can already have updated the browser before this commit.
+    if (parameters === new URLSearchParams(window.location.search).toString()) syncHistory(parameters);
+  }, [parameters]);
+  useEffect(() => {
+    const restoreRecord = () => {
+      if (window.location.pathname === directoryPath) syncHistory(window.location.search);
+    };
+    window.addEventListener("popstate", restoreRecord);
+    return () => window.removeEventListener("popstate", restoreRecord);
   }, []);
-  // A completed record navigation must not replace a newer search being typed.
-  useEffect(() => {
-    const current = locationKey(currentLocation.current);
-    if (restoringHistory.current || current === previousSeed.current || current === seedKey) {
-      generation.current += 1; request.current?.abort();
-      const seed = { query: initialQuery, page: seedPage };
-      currentLocation.current = seed; lastQuery.current = seedKey;
-      setLocation(seed); setDirectory({ accounts, page: seedPage, pages: seedPages, total: seedTotal });
-      setAdminPhone(null); setLoading(false); setError("");
-    }
-    restoringHistory.current = false;
-    previousSeed.current = seedKey;
-  }, [accounts, initialQuery, seedKey, seedPage, seedPages, seedTotal]);
-  useEffect(() => {
-    if (lastQuery.current === key) return;
-    lastQuery.current = key;
-    const timer = setTimeout(() => { void loadDirectory(); }, 180);
-    return () => clearTimeout(timer);
-  }, [key, loadDirectory]);
-  useEffect(() => () => { generation.current += 1; request.current?.abort(); }, []);
+  useEffect(() => () => clearTimeout(searchTimer.current), []);
 
-  function changeQuery(next: SubscriberDirectoryQuery) {
-    const current = currentLocation.current;
-    updateLocation({ query: next, page: queryKey(next) === queryKey(current.query) ? current.page : 1 });
-  }
-  function updateLocation(next: DirectoryLocation) {
-    if (locationKey(next) !== locationKey(currentLocation.current)) {
-      generation.current += 1; request.current?.abort(); setLoading(true); setError("");
-    }
-    currentLocation.current = next; setLocation(next);
-  }
-  function accountHref(accountId?: string, requestedAction?: SubscriberIndividualAction) {
-    const parameters = new URLSearchParams();
-    for (const [name, value] of Object.entries(query)) if (value && value !== "all") parameters.set(name, value);
-    if (location.page > 1) parameters.set("page", String(location.page));
-    if (accountId) parameters.set("accountId", accountId);
-    if (accountId && requestedAction) parameters.set("action", requestedAction);
-    return `/admin/subscribers${parameters.size ? `?${parameters}` : ""}`;
-  }
-  const detail = selected?.id === deletedId || key !== seedKey && !listed.some(account => account.id === selected?.id) ? null : selected;
-  const selectedNetwork = listed.find(account => account.id === detail?.id)?.network ?? null;
-  const openedId = selectedExplicitly ? detail?.id : undefined;
-  const lastOpened = useRef(openedId);
-
+  const lastOpened = useRef(record.accountId);
   useEffect(() => {
     const previous = lastOpened.current;
-    lastOpened.current = openedId;
-    if (previous === openedId || window.matchMedia(media.desktop.replace(/^@media\s+/u, "")).matches) return;
-    if (openedId) {
+    lastOpened.current = record.accountId;
+    if (previous === record.accountId || window.matchMedia(media.desktop.replace(/^@media\s+/u, "")).matches) return;
+    if (record.accountId) {
       detailsPane.current?.querySelector<HTMLElement>("[data-record-back]")?.focus({ preventScroll: true });
     } else {
-      const origin = openedFrom.current;
-      const list = detailsPane.current?.closest("[data-record-workspace]")?.querySelector<HTMLElement>("[data-record-list-scroll]");
+      const origin = openedFrom.current, list = listScroll.current;
       if (!list?.getClientRects().length) return;
       if (origin) list.scrollTop = origin.scrollTop;
       const row = list.querySelector<HTMLElement>(`[data-subscriber-row="${CSS.escape(origin?.id ?? previous ?? "")}"] [data-subscriber-open]`);
       (row ?? list).focus({ preventScroll: true });
     }
-  }, [openedId]);
+  }, [record.accountId]);
 
-  function selectAccount(event: MouseEvent<HTMLAnchorElement>, accountId: string) {
+  function accountHref(accountId: string, requestedAction?: SubscriberIndividualAction) {
+    return subscriberHref(location, { accountId, action: requestedAction ?? null });
+  }
+
+  function selectAccount(event: MouseEvent<HTMLAnchorElement>, accountId: string, requestedAction?: SubscriberIndividualAction) {
     if (action.busy) { event.preventDefault(); return; }
     if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
-    openedFrom.current = {
-      id: accountId, url: window.location.pathname + window.location.search,
-      scrollTop: event.currentTarget.closest<HTMLElement>("[data-record-list-scroll]")?.scrollTop ?? 0,
-    };
+    event.preventDefault();
+    if (requestedAction) action.clearFeedback();
+    const changed = currentRecord.current.accountId !== accountId;
+    if (changed) openedFrom.current = { id: accountId, url: window.location.pathname + window.location.search, scrollTop: listScroll.current?.scrollTop ?? 0 };
+    const next = { accountId, action: requestedAction ?? null };
+    writeLocation(currentLocation.current, next, changed ? "push" : "replace");
+    updateRecord(next);
   }
 
   function backToDirectory() {
-    const origin = openedFrom.current, href = accountHref();
-    if (origin?.id === openedId && origin?.url === href) goHistoryBack();
-    else startNavigation(() => router.replace(href, { scroll: false }));
+    const origin = openedFrom.current, next = { accountId: null, action: null };
+    if (origin?.id === record.accountId && origin.url === subscriberHref(currentLocation.current, next)) { goHistoryBack(); return; }
+    writeLocation(currentLocation.current, next);
+    updateRecord(next);
   }
 
-  return <LiveWorkspace aria-busy={action.busy || loading || navigating || undefined} $compact $detailOpen={!!openedId} data-subscriber-workspace data-analytics-ignore>
-    <WorkspaceTitle><h1>Subscribers</h1><SubscriberDirectoryFilters query={query} plans={plans} onQueryChange={changeQuery}
-      trailingAction={<RecordPrimaryAction label="Grant access / add subscriber" icon={<UserPlusIcon />} disabled={action.busy} aria-haspopup="dialog"
-        onClick={() => { action.clearFeedback(); setAdding(true); }} />} /></WorkspaceTitle>
-    {(action.notice || action.message) && <RecordFeedback><ActionNotices action={action} /></RecordFeedback>}
-    <SubscriberDirectory accounts={listed.filter(account => account.id !== deletedId)} selectedId={detail?.id ?? null} query={query} loading={loading} error={error}
-      action={action} plans={plans} selectionScope={key} canManagePasswords={canManagePasswords}
-      paging={{ page, pages, total, onPage: next => updateLocation({ query: currentLocation.current.query, page: next }) }}
-      adminPhone={adminPhone} accountHref={accountHref} onAccountClick={selectAccount} onRetry={() => { void loadDirectory(); }} />
-    <AccountColumn ref={detailsPane}>
-      <RecordBack disabled={action.busy || navigating} onClick={backToDirectory}>Back to subscribers</RecordBack>
-      {detail ? <SubscriberDetail key={`${detail.id}:${initialAction ?? ""}`} account={detail} plans={plans} action={action} presentation="compact-dialog" network={selectedNetwork}
-        canManagePasswords={canManagePasswords} {...(initialAction ? { initialAction,
-          onInitialActionDismissed: () => router.replace(accountHref(detail.id), { scroll: false }) } : {})}
-        onDeleted={() => { setDeletedId(detail.id); router.replace(accountHref(), { scroll: false }); }} />
-        : <RecordCard><RecordScroll><RecordEmpty><UserIcon /><h2>Select an account</h2><p>Choose a matching subscriber to manage their access and details.</p></RecordEmpty></RecordScroll></RecordCard>}
-    </AccountColumn>
+  function dismissAction() {
+    const next = { ...currentRecord.current, action: null };
+    writeLocation(currentLocation.current, next);
+    updateRecord(next);
+  }
+
+  function removeAccount(accountId: string) {
+    detailRead.cancel();
+    replaceDetail(null);
+    detailTarget.current = null;
+    setDirectory(previous => ({ ...previous, accounts: previous.accounts.filter(account => account.id !== accountId) }));
+    const next = { accountId: null, action: null };
+    currentRecord.current = next;
+    setRecord(next);
+    writeLocation(currentLocation.current, next);
+  }
+
+  const requestedDetail = !record.accountId || detail?.id === record.accountId;
+  const detailsError = sessionEnded ? authCopy.administratorSessionEnded : detailRead.error;
+  return <LiveWorkspace aria-busy={action.busy || undefined} $compact $detailOpen={!!record.accountId} data-subscriber-workspace data-analytics-ignore>
+    <WorkspaceTitle><h1>Subscribers</h1><SubscriberDirectoryFilters query={query} plans={plans} onQueryChange={next => {
+      const current = currentLocation.current;
+      updateLocation({ query: next, page: queryKey(next) === queryKey(current.query) ? current.page : 1 }, { debounce: next.search !== current.query.search });
+    }} trailingAction={<RecordPrimaryAction label="Grant access / add subscriber" icon={<UserPlusIcon />} disabled={action.busy || sessionEnded} aria-haspopup="dialog"
+      onClick={() => { action.clearFeedback(); setAdding(true); }} />} /></WorkspaceTitle>
+    {(action.notice || action.message || plansRead.error) && <RecordFeedback>
+      <ActionNotices action={action} />
+      {plansRead.error && <ReadError message={plansRead.error} label="Retry subscription plans" onRetry={() => { void loadPlans(); }} />}
+    </RecordFeedback>}
+    <SubscriberDirectory accounts={listed} asOf={directory.asOf} selectedId={record.accountId ?? detail?.id ?? null} query={query}
+      loading={listRead.busy} error={sessionEnded ? authCopy.administratorSessionEnded : listRead.error}
+      action={action} plans={plans} selectionScope={locationKey(location)} listRef={listScroll}
+      paging={{ page, pages, total, onPage: next => updateLocation({ ...currentLocation.current, page: next }) }}
+      adminPhone={adminPhone} accountHref={accountHref} onAccountClick={selectAccount} onRefresh={sessionEnded ? undefined : () => { void loadDirectory(); }} />
+    <DetailColumn ref={detailsPane} aria-label="Account details" aria-busy={detailRead.busy || plansRead.busy || undefined}>
+      <RecordBack disabled={action.busy} onClick={backToDirectory}>Back to subscribers</RecordBack>
+      <DetailContent>
+        {detailsError && <ReadError message={detailsError} label="Retry account details" onRetry={sessionEnded ? undefined : () => {
+          if (detailTarget.current) void loadDetail(detailTarget.current);
+        }} />}
+        {detail ? <DetailRecord inert={!requestedDetail || undefined}>
+          <SubscriberDetail key={detail.id} account={detail} plans={plans} action={action} presentation="workspace"
+            canManagePasswords={canManagePasswords} showNoteAction={!listed.some(account => account.id === detail.id)}
+            {...(requestedDetail && record.action ? { initialAction: record.action, onInitialActionDismissed: dismissAction } : {})}
+            onDeleted={() => removeAccount(detail.id)} />
+        </DetailRecord> : <RecordCard><RecordScroll><RecordEmpty><UserIcon />
+          {!detailsError && <><h2>{detailRead.busy ? "Loading account details" : "Select an account"}</h2>
+            {!detailRead.busy && <p>Choose a matching subscriber to manage their access and details.</p>}</>}
+        </RecordEmpty></RecordScroll></RecordCard>}
+      </DetailContent>
+    </DetailColumn>
     {adding && <RecordFormDialog id={`${id}-grant-dialog`} title="Grant access / add subscriber" submitLabel="Grant access" formId={formId}
       busy={action.busy} onClose={() => { if (!action.busy) setAdding(false); }}>
       <Hint as="p">A new number creates an account with access.</Hint>
@@ -200,6 +362,25 @@ export function SubscribersWorkspace({ accounts, detail: selected, plans, initia
   </LiveWorkspace>;
 }
 
+function ReadError({ message, label, onRetry }: { message: string; label: string; onRetry?: (() => void) | undefined }) {
+  return <PaneError role="alert"><FieldError>{message}</FieldError>
+    {onRetry && <ActionButton type="button" aria-label={label} onClick={onRetry}>Retry</ActionButton>}
+  </PaneError>;
+}
+
+const DetailColumn = styled(AccountColumn)`
+  [data-record-workspace][data-record-detail-open] > & { grid-template-rows: auto minmax(0, 1fr); }
+  ${media.desktop} { [data-record-workspace] > && { grid-template-rows: minmax(0, 1fr); } }
+`;
 const LiveWorkspace = styled(Workspace)`
-  ${subscriberPresentation}
+  &[data-record-compact] { --record-list-default: 37%; }
+`;
+const DetailContent = styled.div`
+  display: grid; grid-template-rows: minmax(0, 1fr); min-block-size: 0; min-inline-size: 0;
+  &:has(> [role="alert"]) { grid-template-rows: auto minmax(0, 1fr); }
+`;
+const DetailRecord = styled.div`display: grid; min-block-size: 0; min-inline-size: 0;`;
+const PaneError = styled.div`
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-2);
+  padding: var(--gh-spacing-1_5) ${({ theme }) => theme.layout.sectionPadding};
 `;

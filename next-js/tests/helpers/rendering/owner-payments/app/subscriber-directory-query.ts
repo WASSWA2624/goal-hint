@@ -77,11 +77,7 @@ export function fixtureSubscriberDirectoryCount(state: FixtureState, where: Pris
 
 /** Exercise the real directory predicates and paging against isolated account, code and payment fixtures. */
 export function fixtureSubscriberDirectory(state: FixtureState, query: SubscriberDirectoryFixtureQuery) {
-  const codeSelection = query.select?.codes;
-  if (!codeSelection || typeof codeSelection !== "object") throw new Error("Select the directory's current codes.");
   const rows = matchingAccounts(state, query.where), offset = query.skip ?? 0;
   return ordered(rows, query.orderBy).slice(offset, offset + (query.take ?? rows.length))
-    .map(row => ({ id: row.id, phone: row.phone, blockedAt: row.blockedAt, erasedAt: row.erasedAt, lastSignInAt: row.lastSignInAt,
-      codes: ordered(row.codes.filter(code => matches(code, codeSelection.where)), codeSelection.orderBy)
-        .slice(0, codeSelection.take ?? row.codes.length).map(code => ({ planName: code.planName, startsAt: code.startsAt })) }));
+    .map(({ id, phone, blockedAt, erasedAt, lastSignInAt }) => ({ id, phone, blockedAt, erasedAt, lastSignInAt }));
 }

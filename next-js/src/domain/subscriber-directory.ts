@@ -1,12 +1,8 @@
 import type { OwnerAccount } from "./owner-members.ts";
-import { normalizePhone, type MobileNetwork } from "./phone.ts";
+import { normalizePhone } from "./phone.ts";
 
 export type SubscriberAccess = "active" | "queued" | "none";
-export type SubscriberDirectoryAccount = OwnerAccount & Readonly<{
-  access: SubscriberAccess;
-  planNames: readonly string[];
-  network: MobileNetwork | null;
-}>;
+export type SubscriberDirectoryAccount = OwnerAccount & Readonly<{ access: SubscriberAccess }>;
 export type SubscriberDirectoryQuery = Readonly<{
   search: string;
   status: "all" | "open" | "blocked" | "erased";
@@ -14,9 +10,12 @@ export type SubscriberDirectoryQuery = Readonly<{
   plan: string;
   recent: "all" | "1" | "7" | "30";
 }>;
+export const subscriberDirectoryPageSize = 100;
 export type SubscriberDirectoryPaging = Readonly<{ page: number; pages: number; total: number }>;
-export type SubscriberDirectoryPage = SubscriberDirectoryPaging & Readonly<{ accounts: readonly SubscriberDirectoryAccount[] }>;
-export const subscriberDirectoryPageSize = 25;
+export type SubscriberDirectoryPage = SubscriberDirectoryPaging & Readonly<{
+  accounts: readonly SubscriberDirectoryAccount[];
+  asOf: string;
+}>;
 
 export const emptySubscriberDirectoryQuery: SubscriberDirectoryQuery = Object.freeze({
   search: "", status: "all", access: "all", plan: "all", recent: "all",

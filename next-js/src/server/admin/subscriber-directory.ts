@@ -2,15 +2,16 @@ import "server-only";
 
 import { emptySubscriberDirectoryQuery, subscriberDirectoryPageSize, subscriberSearchTerms, type SubscriberDirectoryAccount,
   type SubscriberDirectoryPage, type SubscriberDirectoryQuery } from "../../domain/subscriber-directory.ts";
-import { networkForPrefix } from "../../domain/phone.ts";
+import { normalizePhone } from "../../domain/phone.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
+import { isMemberAdminPhone } from "../members/member-admin.ts";
 
-const currentCodeLimit = 100;
+const currentAccess = (at: Date) => ({ revokedAt: null, endsAt: { gt: at } }) satisfies Prisma.AccessCodeWhereInput;
 
-/** SQL predicates compose before counting and paging; one bounded relation selection enriches each page. */
+/** SQL predicates compose before counting and paging. */
 export function subscriberDirectoryWhere(query: SubscriberDirectoryQuery, at: Date): Prisma.MemberAccountWhereInput {
-  const current: Prisma.AccessCodeWhereInput = { revokedAt: null, endsAt: { gt: at } };
+  const current = currentAccess(at);
   const active: Prisma.AccessCodeWhereInput = { ...current, startsAt: { lte: at } };
   const queued: Prisma.AccessCodeWhereInput = { ...current, startsAt: { gt: at } };
   const conditions: Prisma.MemberAccountWhereInput[] = [];
@@ -42,9 +43,10 @@ export function subscriberDirectoryWhere(query: SubscriberDirectoryQuery, at: Da
   return conditions.length ? { AND: conditions } : {};
 }
 
-/** Carrier artwork is used only when an explicitly configured prefix table identifies it. */
+/** Count and page in the same snapshot, fetching only the fields needed for the directory. */
 export async function readSubscriberDirectory(database: DatabaseRuntime, query: SubscriberDirectoryQuery = emptySubscriberDirectoryQuery,
-  requestedPage = 1, now: (() => number) | number = Date.now): Promise<SubscriberDirectoryPage> {
+  requestedPage = 1, now: (() => number) | number = Date.now):
+  Promise<SubscriberDirectoryPage & Readonly<{ adminPhone?: string }>> {
   const at = new Date(typeof now === "function" ? now() : now), where = subscriberDirectoryWhere(query, at);
   return database.transaction(async client => {
     const total = await client.memberAccount.count({ where });
@@ -52,12 +54,17 @@ export async function readSubscriberDirectory(database: DatabaseRuntime, query: 
     const page = Math.min(requestedPage, pages);
     const rows = total === 0 ? [] : await client.memberAccount.findMany({ where,
       orderBy: [{ lastSignInAt: "desc" }, { id: "asc" }], skip: (page - 1) * subscriberDirectoryPageSize, take: subscriberDirectoryPageSize,
-      select: { id: true, phone: true, blockedAt: true, erasedAt: true, lastSignInAt: true,
-        codes: { where: { revokedAt: null, endsAt: { gt: at } }, orderBy: [{ startsAt: "asc" }, { id: "asc" }], take: currentCodeLimit,
-          select: { planName: true, startsAt: true } } } });
-    const accounts = rows.map<SubscriberDirectoryAccount>(row => ({ id: row.id, phone: row.phone, status: row.erasedAt ? "erased" : row.blockedAt ? "blocked" : "open",
-      lastSignInAt: row.lastSignInAt.toISOString(), access: row.codes.some(code => code.startsAt <= at) ? "active" : row.codes.length ? "queued" : "none",
-      planNames: [...new Set(row.codes.map(code => code.planName))], network: row.phone ? networkForPrefix(row.phone) : null }));
-    return { accounts, page, pages, total };
+      select: { id: true, phone: true, blockedAt: true, erasedAt: true, lastSignInAt: true } });
+    // The earliest current period distinguishes active from queued with one result per account.
+    const periods = rows.length ? await client.accessCode.groupBy({ by: ["accountId"],
+      where: { ...currentAccess(at), accountId: { in: rows.map(row => row.id) } }, _min: { startsAt: true } }) : [];
+    const firstStart = new Map(periods.map(period => [period.accountId, period._min.startsAt]));
+    const accounts = rows.map<SubscriberDirectoryAccount>(row => {
+      const startsAt = firstStart.get(row.id);
+      return { id: row.id, phone: row.phone, status: row.erasedAt ? "erased" : row.blockedAt ? "blocked" : "open",
+        lastSignInAt: row.lastSignInAt.toISOString(), access: startsAt ? startsAt <= at ? "active" : "queued" : "none" };
+    });
+    const phone = !accounts.length && query.search ? normalizePhone(query.search) : null;
+    return { accounts, page, pages, total, asOf: at.toISOString(), ...(phone && isMemberAdminPhone(phone) ? { adminPhone: phone } : {}) };
   }, { isolationLevel: "RepeatableRead" });
 }

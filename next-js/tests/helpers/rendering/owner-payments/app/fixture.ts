@@ -44,7 +44,8 @@ type FixtureNotice = { id: string; accountId: string; targetType: string; decisi
   createdAt: Date; startedAt: Date | null; finishedAt: Date | null };
 export type FixtureState = { accounts: FixtureAccount[]; codes: FixtureCode[]; devices: FixtureDevice[];
   plans: FixturePlan[]; payments: FixturePayment[]; audits: FixtureAudit[]; counter: number; paymentsExpanded?: boolean; paymentsQueueExpanded?: boolean;
-  passwordRequests: MemberPasswordResetRequest[]; movedAccountIds?: string[]; notices?: FixtureNotice[] };
+  passwordRequests: MemberPasswordResetRequest[]; movedAccountIds?: string[]; notices?: FixtureNotice[];
+  subscriberFailure?: "list" | "detail" | null };
 const fixtureGlobal = globalThis as typeof globalThis & { goalHintOwnerFixture?: FixtureState; goalHintAnalytics?: Promise<AnalyticsServices>;
   goalHintOwnerServices?: Map<boolean, AnalyticsServices> };
 
@@ -350,12 +351,18 @@ function createClient(emptySubscribers: boolean) {
     paymentAlertEndpoint: { findMany: async () => [] },
     paymentReviewEvent: { findMany: async () => [] },
     // No fixture account holds credit; the wallet columns read as a new account's.
-    memberAccount: { findUnique: async (query: { where: { id: string } }) => { const row = recoveryAccount(query.where.id);
-      return row ? { creditUgx: 0, autoRenew: false, autoRenewPlan: null, ...row } : null; },
+    memberAccount: { findUnique: async (query: { where: { id: string }; select?: { ownerNote?: boolean } }) => {
+      if (state.subscriberFailure === "detail" && query.select?.ownerNote) throw new Error("Synthetic subscriber detail failure.");
+      const row = recoveryAccount(query.where.id);
+      return row ? { creditUgx: 0, autoRenew: false, autoRenewPlan: null, ...row } : null;
+    },
       aggregate: async () => ({ _sum: { creditUgx: null } }),
-      count: async (query: SubscriberDirectoryFixtureQuery = {}) => emptySubscribers ? 0 : fixtureSubscriberDirectoryCount(state, query.where),
+      count: async (query: SubscriberDirectoryFixtureQuery = {}) => {
+        if (state.subscriberFailure === "list") throw new Error("Synthetic subscriber list failure.");
+        return emptySubscribers ? 0 : fixtureSubscriberDirectoryCount(state, query.where);
+      },
       findMany: async (query: AccountQuery | SubscriberDirectoryFixtureQuery = {}) => {
-        if ("select" in query && query.select?.codes) return emptySubscribers ? [] : fixtureSubscriberDirectory(state, query);
+        if ("skip" in query && typeof query.take === "number") return emptySubscribers ? [] : fixtureSubscriberDirectory(state, query);
         const where = query.where as AccountQuery["where"];
         const rows = emptySubscribers ? [] : [...state.accounts].sort((a, b) => +b.lastSignInAt - +a.lastSignInAt);
         if (typeof where?.phone === "string") return rows.filter(row => row.phone === where.phone);
@@ -373,6 +380,15 @@ function createClient(emptySubscribers: boolean) {
     paymentNotificationOutbox: { findMany: async () => (state.notices ?? []).map(row => ({ ...row, account: { phone: phoneFor(row.accountId) } })),
       count: async () => state.notices?.length ?? 0 },
     accessCode: { findMany: async (query?: OwnedQuery) => ownedRows(state.codes, query).map(row => ({ ...row, account: { phone: phoneFor(row.accountId) } })),
+      groupBy: async ({ where }: { where: { accountId: { in: string[] }; endsAt: { gt: Date } } }) => {
+        const accountIds = new Set(where.accountId.in), grouped = new Map<string, Date>();
+        for (const code of state.codes) {
+          if (!accountIds.has(code.accountId) || code.revokedAt || code.endsAt <= where.endsAt.gt) continue;
+          const earliest = grouped.get(code.accountId);
+          if (!earliest || code.startsAt < earliest) grouped.set(code.accountId, code.startsAt);
+        }
+        return Array.from(grouped, ([accountId, startsAt]) => ({ accountId, _min: { startsAt } }));
+      },
       aggregate: async () => ({ _sum: { amountReceivedUgx: 3000 } }),
       count: async (query?: OwnedQuery) => ownedRows(state.codes, query).filter(row => !query?.where?.planId || row.planId === query.where.planId).length },
     subscriptionSettings: { findUnique: async () => settings, findUniqueOrThrow: async () => settings },

@@ -96,18 +96,6 @@ export const QuickActions = styled.div`
     > button:first-child { grid-column: auto; }
   }
 `;
-/** The action panel's heading takes focus when it opens; it is not a control, so it shows no ring. */
-export const ActionPanel = styled(Panel)`
-  h2[tabindex="-1"]:focus { outline: none; }
-`;
-export const ActionBody = styled.div`
-  display: grid;
-  gap: var(--gh-spacing-3);
-  min-inline-size: 0;
-  padding: var(--gh-spacing-3_5);
-  ${formSurface}
-  ${media.desktop} { padding: var(--gh-spacing-3_5) var(--gh-spacing-4) var(--gh-spacing-4); }
-`;
 export const DetailTabs = styled(Segmented)`
   ${media.desktop} { justify-self: start; }
   @container (max-width: ${({ theme }) => theme.viewport[30]}) { > button { padding-inline: var(--gh-spacing-2); } }

@@ -23,6 +23,12 @@ export function formatShortDay(instant: Date): string {
   return shortDayFormat.format(instant);
 }
 
+/** Show only the hour and minute when the instant is on the current Kampala date. */
+export function formatCompactKampalaTimestamp(instant: Date, reference: Date): string {
+  const date = dayFormat.format(instant), time = timeFormat.format(instant);
+  return Number.isFinite(+reference) && date === dayFormat.format(reference) ? time : `${date}, ${time}`;
+}
+
 /** Whole remaining units, rounded down; null for expired or invalid instants. */
 export function subscriptionTimeRemaining(instant: Date, now: number): Readonly<{ days: number; hours: number; minutes: number }> | null {
   const left = instant.getTime() - now;

@@ -4,12 +4,12 @@ import { useId, useState } from "react";
 import styled from "styled-components";
 import { ChevronLeftIcon, UserPlusIcon } from "@/components/ui/icons";
 import { localUgandaPhone } from "@/domain/phone";
-import type { SubscriberDirectoryQuery, SubscriberDirectoryAccount } from "@/domain/subscriber-directory";
+import type { SubscriberDirectoryQuery } from "@/domain/subscriber-directory";
 import { media } from "@/styles/theme";
 import { ActionButton } from "../admin-form";
 import { ActionNotices, ManualCodeForm, useCodeAction } from "../code-tools";
 import { TextAction } from "../desk-styles";
-import { SubscriberAccountRow, SubscriberDirectoryFilters } from "../subscriber-directory-parts";
+import { SubscriberDirectoryFilters, SubscriberReviewAccountRow, type SubscriberReviewAccount } from "../subscriber-directory-parts";
 import { RecordCard, RecordDetails, RecordEmpty, RecordFeedback, RecordHead,
   RecordList, RecordListFooter, RecordListScroll, RecordListTools, RecordWorkspace } from "../record-workspace";
 import { SubscriberDetail } from "../subscriber-detail";
@@ -59,8 +59,8 @@ export function SubscriberReviewWorkbench({ variant, demo }: { variant: string; 
       <RecordListScroll aria-label="Subscribers" data-review-subscriber-list tabIndex={0}>
         {listed.length ? listed.map(record => {
           const period = accessFor(record);
-          const account: SubscriberDirectoryAccount = { ...record, access: period?.status === "active" ? "active" : period?.status === "queued" ? "queued" : "none", planNames: period ? [period.planName] : [] };
-          return <li key={record.id}><SubscriberAccountRow account={account} selected={selected?.id === record.id} onSelect={() => select(record)} /></li>;
+          const account: SubscriberReviewAccount = { ...record, access: period?.status === "active" ? "active" : period?.status === "queued" ? "queued" : "none", planNames: period ? [period.planName] : [] };
+          return <li key={record.id}><SubscriberReviewAccountRow account={account} selected={selected?.id === record.id} onSelect={() => select(record)} /></li>;
         }) : <li><RecordEmpty><h2>No matching subscribers</h2><p>Try another search or clear the filters.</p></RecordEmpty></li>}
       </RecordListScroll>
       <RecordListFooter><span role="status" aria-live="polite">{listed.length} of {demo.subscribers.length} subscribers</span>{filtered && <TextAction type="button" onClick={() => { setSearch(""); setFilters(emptyFilters); }}>Clear filters</TextAction>}</RecordListFooter>

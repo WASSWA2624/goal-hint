@@ -12,7 +12,7 @@ For stability checks, keep references to the banner and main DOM nodes while nav
 
 Queue refresh uses a guarded Server Action plus the small pending-count endpoint. To exercise transport failure, return a synthetic 503 for the current page's POST carrying the `Next-Action` header; the existing review, draft and button focus should remain, and retry should recover without a document request. Clear only the fixture's member cookie to verify that an expired session redirects to `/en/account?view=login` and removes the private screen. The isolated fixture intentionally does not implement that login destination.
 
-- `/admin/subscribers` shows six synthetic records with Open, Blocked and Erased account states and different last sign-in dates.
+- `/admin/subscribers` shows six synthetic records. Rows show an identity, current access, last login, a selection checkbox and More actions. Review blocked or erased status in the selected account.
 - `/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100` preserves the original account detail and management actions.
 - `/admin/subscribers?accountId=00000000-0000-4000-8000-000000000103` selects the blocked account.
 - `/admin/subscribers?accountId=00000000-0000-4000-8000-000000000104` selects the erased account.
@@ -24,13 +24,15 @@ Subscriber actions now persist in memory across refreshes. The script exercises 
 
 Focused browser checks:
 
-- At desktop width, confirm the selected account's narrow directory, compact summary, the remaining account action buttons and five tabs. At phone width, use **Find account** and confirm the forms fit the viewport.
+- At desktop width in both themes, check the single search toolbar, side-by-side directory and account panes, compact identity rows and account action footer. At phone width, use **Find account** and check that controls and dialogs fit the viewport.
+- A same-origin POST with `{"pagination":true}` to the fixture endpoint adds 201 records. Search `Synthetic paging fixture` to check numbered pages with 100, 100 and one record, the first/last controls, and Select all on each page.
+- POST `{"failure":"list"}` or `{"failure":"detail"}` to fail the corresponding storage read. List refresh retains the prior rows and selected account tab. A failed account selection retains the list and previous detail. POST `{"failure":null}` and use the matching Retry button to recover.
 - Switch tabs with clicks and arrow keys; only the selected tab's content should be mounted. Open each action, cancel it, and confirm focus returns to its toolbar button.
-- Save a changed note, block/unblock with a reason and sign out the two synthetic devices. Refresh to confirm updated state.
+- Open **Edit admin note** from More actions, save a changed note, block/unblock with a reason and sign out the two synthetic devices. Refresh to confirm updated state.
 - Grant access to the selected fixed phone, then use Access to extend/revoke a period. **Add subscriber** can create a synthetic record for `256700000999`.
 - Use Change number with `256700000777`, a verification method and confirmation. Remaining access moves to that new account; the old phone stays on its old account with revoked periods and locked devices.
 - Confirm the retired `/admin/password-resets` route returns 404 and former subscriber password actions return 400.
-- Delete account opens a contextual panel with an unchecked confirmation. **Erase personal data instead** retains accounting history; permanent deletion removes the selected account's related synthetic records. Reset the fixture afterward.
+- **Delete or erase** opens the protected flow with an unchecked confirmation. **Erase personal data instead** retains accounting history. Permanent deletion removes the selected account's related synthetic records. Reset the fixture afterward.
 
 Open `/api/fixture/session?page=password-requests` to review a pending synthetic password request using the production screen, authorization and recovery service. Verify ownership, generate a link, inspect both prepared native drafts, and use **Mark as Sent** to record a test declaration. Reload the page and reopen the request to verify that its link and declaration persist. Replace the link and check that the new one has a fresh 24-hour window. The browser uses synthetic data and manual draft actions for these checks. POST `{"scenario":"baseline"}` to `/api/fixture/payments` to restore the pending request.
 

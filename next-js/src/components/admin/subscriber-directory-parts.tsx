@@ -8,19 +8,23 @@ import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { MobileMoneyLogo } from "@/components/members/mobile-money-logo";
 import { GlobeIcon, MoreIcon } from "@/components/ui/icons";
-import { ButtonLink } from "@/components/ui/controls";
-import { subscriberActionLabel, subscriberIndividualActions, type SubscriberIndividualAction } from "@/domain/subscriber-actions";
-import { formatPhone } from "@/domain/phone";
-import type { SubscriberDirectoryAccount, SubscriberDirectoryQuery } from "@/domain/subscriber-directory";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { subscriberActionLabel, type SubscriberIndividualAction } from "@/domain/subscriber-actions";
+import { formatPhone, type MobileNetwork } from "@/domain/phone";
+import type { SubscriberAccess, SubscriberDirectoryAccount, SubscriberDirectoryQuery } from "@/domain/subscriber-directory";
 import { formatPeriodEnd } from "@/domain/subscription-period";
+import { formatCompactKampalaTimestamp, formatSubscriptionExpiry } from "@/domain/subscription-expiry";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { Badge } from "./admin-form";
 import { FloatingField } from "./floating-field";
-import { RecordItem, RecordItemTitle, RecordRowContent } from "./record-workspace";
+import { RecordItem, RecordItemMeta, RecordItemTitle, RecordRowContent } from "./record-workspace";
 import { SubscriberActionMenu, SubscriberMenuLink } from "./subscriber-action-menu";
 
 const statusLabels: Readonly<Record<string, string>> = { open: "Open", blocked: "Blocked", erased: "Erased" };
 const accessLabels = { active: "Active access", queued: "Queued access", none: "No current access" } as const;
+export type SubscriberReviewAccount = SubscriberDirectoryAccount & {
+  access: SubscriberAccess; planNames: readonly string[]; network: MobileNetwork | null;
+};
 
 export function SubscriberDirectoryFilters({ query, plans, onQueryChange, trailingAction }: {
   query: SubscriberDirectoryQuery; plans: readonly SubscriptionPlanView[]; onQueryChange: (query: SubscriberDirectoryQuery) => void; trailingAction?: ReactNode;
@@ -49,57 +53,72 @@ export function SubscriberDirectoryFilters({ query, plans, onQueryChange, traili
   </Filters>;
 }
 
-/** Use the same identity row for native navigation and local sample selection. */
-export function SubscriberAccountRow({ account, selected, href, onSelect, onAccountClick, controls }: {
-  account: SubscriberDirectoryAccount; selected: boolean; href?: string; onSelect?: () => void;
-  onAccountClick?: React.MouseEventHandler<HTMLAnchorElement>;
-  controls?: { checked: boolean; disabled: boolean; canManagePasswords: boolean; onCheck: (checked: boolean) => void;
-    actionHref: (action: SubscriberIndividualAction) => string };
+/** The identity link has its own space beside the bulk checkbox and account menu. */
+export function SubscriberAccountRow({ account, asOf, selected, href, checked, disabled, onCheck, actionHref, onAccountClick }: {
+  account: SubscriberDirectoryAccount; asOf: Date; selected: boolean; href: string; checked: boolean; disabled: boolean;
+  onCheck: (checked: boolean) => void; actionHref: (action: SubscriberIndividualAction) => string;
+  onAccountClick: (event: React.MouseEvent<HTMLAnchorElement>, action?: SubscriberIndividualAction) => void;
+}) {
+  const identity = account.phone ? `+${formatPhone(account.phone)}` : account.status === "erased"
+    ? `Erased account ${account.id}` : `Account ${account.id}`;
+  const menuAction = account.status === "erased" ? "delete" : "note";
+  const signedIn = new Date(account.lastSignInAt || "");
+  return <ManageableRow data-subscriber-row={account.id} data-current={selected || undefined}>
+    <RowCheck><input type="checkbox" aria-label={`Select ${identity}`} checked={checked} disabled={disabled}
+      onChange={event => onCheck(event.currentTarget.checked)} /></RowCheck>
+    <Identity as={Link} href={href} prefetch={false} scroll={false} aria-current={selected ? "true" : undefined}
+      data-subscriber-open onClick={event => onAccountClick(event)}>
+      <span>{identity}</span>
+      <RowMetadata data-subscriber-row-meta>
+        <span>{account.access === "none" ? "No access" : accessLabels[account.access]}</span><span aria-hidden="true"> · </span>
+        <span data-subscriber-last-sign-in>{Number.isFinite(+signedIn) ? <>{authCopy.lastLogin} <time dateTime={account.lastSignInAt}>
+          <span aria-hidden="true">{formatCompactKampalaTimestamp(signedIn, asOf)}</span>
+          <VisuallyHidden>{formatSubscriptionExpiry(signedIn)}</VisuallyHidden>
+        </time></> : "No login recorded"}</span>
+      </RowMetadata>
+    </Identity>
+    <SubscriberActionMenu label={`More actions for ${identity}`} icon={<MoreIcon />} disabled={disabled}>
+      {close => <SubscriberMenuLink href={actionHref(menuAction)} prefetch={false} scroll={false}
+        onClick={event => { close(); onAccountClick(event, menuAction); }}>{subscriberActionLabel(menuAction)}</SubscriberMenuLink>}
+    </SubscriberActionMenu>
+  </ManageableRow>;
+}
+
+export function SubscriberReviewAccountRow({ account, selected, onSelect }: {
+  account: SubscriberReviewAccount; selected: boolean; onSelect: () => void;
 }) {
   const networkLabel = account.network === "mtn" ? "MTN network" : account.network === "airtel" ? "Airtel network" : "Network unknown";
-  const identity = account.phone ? `+${formatPhone(account.phone)}` : `Erased account ${account.id}`;
   const content = <RecordRowContent
     icon={<span data-review-network role="img" aria-label={networkLabel} title={networkLabel}>{account.network ? <MobileMoneyLogo network={account.network} /> : <GlobeIcon />}</span>}
     primary={<><RecordItemTitle data-review-phone>{account.phone ? `+${formatPhone(account.phone)}` : "Erased account"}</RecordItemTitle>
       <Badge data-review-row-status data-subscriber-status={account.status} $tone={account.status === "open" ? "good" : account.status === "blocked" ? "warning" : "muted"}>{statusLabels[account.status] ?? "Unknown"}</Badge></>}
     secondary={<span data-review-row-meta>{account.planNames.length ? account.planNames.join(", ") : accessLabels[account.access]} · <span data-subscriber-last-sign-in>{authCopy.lastLogin} <time dateTime={account.lastSignInAt}>{formatPeriodEnd(new Date(account.lastSignInAt))}</time></span></span>} />;
   const attributes = { "data-review-subscriber-row": account.id, "data-subscriber-row": account.id };
-  if (href && controls) {
-    const actions = subscriberIndividualActions.filter(action => account.status === "erased" ? action === "delete"
-      : action !== "password-reset" || controls.canManagePasswords && account.status !== "blocked");
-    return <ManageableRow {...attributes} data-current={selected || undefined}>
-      <RowCheck><input type="checkbox" aria-label={`Select ${identity}`} checked={controls.checked} disabled={controls.disabled}
-        onChange={event => controls.onCheck(event.currentTarget.checked)} /></RowCheck>
-      {content}
-      <OpenAccount href={href} prefetch={false} scroll={false} variant="quiet" aria-label={`Open ${identity}`}
-        aria-current={selected ? "page" : undefined} data-subscriber-open {...(onAccountClick ? { onClick: onAccountClick } : {})}>Open</OpenAccount>
-      <SubscriberActionMenu label={`More actions for ${identity}`} icon={<MoreIcon />} disabled={controls.disabled}>
-        {close => actions.map(action => <SubscriberMenuLink key={action} href={controls.actionHref(action)} prefetch={false} scroll={false}
-          onClick={event => { close(); onAccountClick?.(event); }}>{subscriberActionLabel(action, account.status === "blocked")}</SubscriberMenuLink>)}
-      </SubscriberActionMenu>
-    </ManageableRow>;
-  }
-  return href ? <Row {...attributes} as={Link} href={href} prefetch={false} scroll={false} onClick={event => onAccountClick?.(event)} aria-current={selected ? "page" : undefined}>{content}</Row>
-    : <Row {...attributes} type="button" aria-current={selected ? "true" : undefined} onClick={onSelect}>{content}</Row>;
+  return <RecordItem {...attributes} type="button" aria-current={selected ? "true" : undefined} onClick={onSelect}>{content}</RecordItem>;
 }
 
-const Filters = styled.div`display: grid; min-inline-size: 0;`;
+const Filters = styled.div`
+  display: grid; min-inline-size: 0;
+  [data-admin-toolbar] & > [data-search-bar] { flex-wrap: wrap; }
+  [data-admin-toolbar] & > [data-search-bar] > [data-feed-search] { flex-basis: var(--gh-size-44); }
+`;
 const FilterFields = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-2_5) var(--gh-spacing-2); min-inline-size: 0;
 `;
-const Row = styled(RecordItem)`
-  text-decoration: none;
-  &[aria-current="page"] { background: ${({ theme }) => theme.color.brandSoft}; box-shadow: none; }
-`;
 const ManageableRow = styled.div`
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; min-inline-size: 0;
-  gap: var(--gh-spacing-1); min-block-size: var(--form-control-height); padding: var(--gh-spacing-1_5) var(--gh-spacing-2_5);
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; min-inline-size: 0;
+  gap: var(--gh-spacing-1); min-block-size: var(--form-control-height); padding-inline: var(--gh-spacing-2_5);
   &[data-current] { background: ${({ theme }) => theme.color.brandSoft}; }
 `;
+const Identity = styled(RecordItemTitle)`
+  display: grid; align-content: center; align-self: stretch; gap: var(--gh-spacing-0_25);
+  min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-1);
+  color: ${({ theme }) => theme.color.text}; text-decoration: none; font-variant-numeric: tabular-nums;
+  &:hover > :first-child { color: ${({ theme }) => theme.color.link}; text-decoration: underline; }
+  &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
+`;
+const RowMetadata = styled(RecordItemMeta)`font-weight: var(--gh-weight-body); line-height: var(--gh-leading-label);`;
 const RowCheck = styled.label`
   display: grid; place-items: center; min-inline-size: var(--gh-size-8); min-block-size: var(--form-control-height); cursor: pointer;
   > input { inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); margin: 0; accent-color: ${({ theme }) => theme.color.link}; }
-`;
-const OpenAccount = styled(ButtonLink)`
-  && { min-inline-size: 0; padding-inline: var(--gh-spacing-1_5); }
 `;

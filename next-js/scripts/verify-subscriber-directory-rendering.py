@@ -1,4 +1,4 @@
-"""Production Balanced compact Subscribers acceptance with isolated owner fixtures."""
+"""Production Subscribers rendering and management with isolated owner fixtures."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -95,7 +95,6 @@ def page(origin: str, query=None) -> Element:
 def directory_rendering(origin: str) -> None:
     document = page(origin, {"accountId": PRIMARY})
     workspace = document.one(attribute="data-subscriber-workspace")
-    assert workspace.one(tag="h1").text() == "Subscribers"
     add = [button for button in workspace.all("button") if button.text() == "Grant access / add subscriber"]
     assert len(add) == 1 and add[0].attributes.get("aria-haspopup") == "dialog"
     directory = workspace.one(attribute="data-subscriber-directory")
@@ -114,41 +113,47 @@ def directory_rendering(origin: str) -> None:
     tools = directory.one(attribute="data-record-list-tools")
     toolbar = tools.one(attribute="data-subscriber-selection")
     assert directory.children.index(tools) < directory.children.index(results)
-    assert toolbar.one(tag="label").text() == "Select all on this page"
+    assert toolbar.one(tag="label").text() == "Select all"
     select_all = toolbar.one(tag="input")
     assert select_all.attributes.get("type") == "checkbox" and "checked" not in select_all.attributes
-    assert toolbar.one(attribute="data-subscriber-selected-count").text() == "0 selected"
-    manage = toolbar.one(tag="button")
-    assert manage.text() == "Manage" and "disabled" in manage.attributes
+    manage = [button for button in toolbar.all("button") if button.text() == "Manage"]
+    assert len(manage) == 1 and "disabled" in manage[0].attributes
+    assert any(button.attributes.get("aria-label") == "Refresh subscriber list" for button in tools.all("button"))
+    count = tools.one(attribute="data-subscriber-count")
+    assert count.attributes.get("aria-live") == "polite" and count.text() == "6 subscribers"
     rows = results.all(attribute="data-subscriber-row")
     assert len(rows) == 6 and all(row.tag == "div" for row in rows)
-    assert sorted(row.one(attribute="data-subscriber-status").attributes["data-subscriber-status"] for row in rows) == ["blocked", "erased", "open", "open", "open", "open"]
     for row in rows:
-        assert row.attributes["data-review-subscriber-row"] == row.attributes["data-subscriber-row"]
-        assert row.one(attribute="data-review-network").attributes.get("aria-label") == "Network unknown"
-        assert not row.all(attribute="data-payment-logo"), "Unknown carriers must not borrow a payment network logo."
-        row.one(attribute="data-review-phone")
-        row.one(attribute="data-review-row-meta").one(tag="time")
+        for removed in ("data-review-network", "data-subscriber-status"):
+            assert not row.all(attribute=removed)
+        assert "No access" in row.one(attribute="data-subscriber-row-meta").text()
+        last_login = row.one(attribute="data-subscriber-last-sign-in")
+        assert "Last login" in last_login.text() and last_login.one(tag="time").attributes.get("datetime")
         assert row.one(tag="input").attributes.get("type") == "checkbox"
         open_account = row.one(tag="a", attribute="data-subscriber-open")
-        assert open_account.text() == "Open" and row.attributes["data-subscriber-row"] in open_account.attributes["href"]
+        assert "Open" not in open_account.text() and row.attributes["data-subscriber-row"] in open_account.attributes["href"]
         assert not open_account.all("button") and not open_account.all("input"), "Account tools are sibling controls."
         more = row.one(tag="button")
         assert more.attributes.get("aria-expanded") == "false" and more.attributes.get("aria-label", "").startswith("More actions for")
         assert more.one(tag="svg")
     selected = next(row for row in rows if row.attributes["data-subscriber-row"] == PRIMARY)
-    assert selected.one(attribute="data-subscriber-open").attributes.get("aria-current") == "page"
-    count = directory.one(attribute="data-subscriber-count")
-    assert count.attributes.get("aria-live") == "polite" and count.text() == "6 accounts"
+    assert selected.one(attribute="data-subscriber-open").attributes.get("aria-current") == "true"
+    erased = next(row for row in rows if row.attributes["data-subscriber-row"].endswith("104"))
+    assert "Erased account" in erased.one(attribute="data-subscriber-open").text()
     detail = workspace.one(attribute="data-subscriber-detail")
-    assert detail.attributes.get("data-subscriber-presentation") == "compact-dialog"
     summary = detail.one(attribute="data-subscriber-summary")
-    stats = summary.one(attribute="data-subscriber-stats")
-    assert [term.text() for term in stats.all("dt")] == ["Signed-in devices", "Access periods", "Credit"]
+    assert "Last login" in summary.text() and not summary.all(attribute="data-subscriber-stats")
+    overview = [section for section in detail.all() if section.attributes.get("role") == "tabpanel" and "hidden" not in section.attributes]
+    assert len(overview) == 1
+    for label in ("Credit balance", "Account ID", PRIMARY):
+        assert label in overview[0].text()
+    assert "Synthetic owner note" not in overview[0].text()
+    assert not any("Account ID" in disclosure.text() for disclosure in overview[0].all("summary"))
+    assert len([button for button in detail.all("button") if button.text() == "Delete or erase"]) == 1
     actions = detail.one(attribute="data-record-footer").one(attribute="data-subscriber-actions").all("button")
     assert not summary.all(attribute="data-subscriber-actions")
     assert [button.text() for button in actions] == ["Grant access", "Change number", "Block account", "Log out devices", "Reset password"]
-    assert all(button.attributes.get("aria-haspopup") == "dialog" and button.attributes.get("aria-expanded") == "false" for button in actions)
+    assert all(button.attributes.get("aria-haspopup") == "dialog" and button.attributes.get("aria-expanded") != "true" for button in actions)
     tabs = detail.one(attribute="data-subscriber-tabs")
     assert [re.sub(r" \(\d+\)$", "", button.text()) for button in tabs.all("button")] == ["Overview", "Access", "Payments", "Credit", "Devices"]
     assert sum(button.attributes.get("aria-selected") == "true" for button in tabs.all("button")) == 1
@@ -158,7 +163,7 @@ def directory_rendering(origin: str) -> None:
     assert not any(control.attributes.get("name") in {"reason", "newPhone", "verifiedBy", "planId", "days"} for control in detail.all("input") + detail.all("select"))
     filtered = page(origin, {"status": "blocked"}).one(attribute="data-subscriber-workspace")
     assert [row.attributes["data-subscriber-row"] for row in filtered.all(attribute="data-subscriber-row")] == [BLOCKED]
-    assert filtered.one(attribute="data-subscriber-count").text() == "1 account"
+    assert filtered.one(attribute="data-subscriber-count").text() == "1 subscriber"
     assert filtered.one(attribute="data-search-filters").one(tag="b").text() == "1"
     empty = page(origin, {"search": "NoMatchingSubscriberFixture"}).one(attribute="data-subscriber-directory")
     assert empty.one(attribute="data-subscriber-empty").text() == "No matching subscribers."
@@ -177,9 +182,8 @@ def directory_api(origin: str) -> None:
         assert status == 200 and isinstance(reply.get("accounts"), list), (query, status, reply)
         assert reply["page"] == reply["pages"] == 1 and reply["total"] == len(reply["accounts"])
         for account in reply["accounts"]:
-            assert set(account) == {"id", "phone", "status", "lastSignInAt", "access", "planNames", "network"}
+            assert set(account) == {"id", "phone", "status", "lastSignInAt", "access"}
             assert account["status"] in {"open", "blocked", "erased"} and account["access"] in {"active", "queued", "none"}
-            assert isinstance(account["planNames"], list) and account["network"] is None
         return reply["accounts"]
 
     def ids(**query):
@@ -205,14 +209,13 @@ def directory_api(origin: str) -> None:
     for plan in ["00000000-0000-4000-8000-000000000001", "00000000-0000-4000-8000-000000000003"]:
         status, grant = fixture_json(origin, "/api/admin/codes", {"action": "manual", "phone": "0700000101", "planId": plan, "amount": 0, "note": "Synthetic directory acceptance grant"})
         assert status == 201 and grant.get("status") == "granted", (status, grant)
-    enriched = next(row for row in accounts() if row["id"] == PRIMARY)
-    assert enriched["access"] == "active" and enriched["planNames"] == ["Weekly", "Monthly"]
+    assert next(row for row in accounts() if row["id"] == PRIMARY)["access"] == "active"
     assert ids(access="active") == ids(plan="Weekly") == ids(plan="Monthly") == {PRIMARY}
     assert PRIMARY not in ids(access="none") and PRIMARY not in ids(plan="none")
     assert not ids(access="queued"), "A queued renewal does not override an active period."
     assert ids(search="active", status="open", access="active", plan="Monthly") == {PRIMARY}
     assert not ids(search="active", status="blocked")
-    for invalid in [{"status": "online"}, {"access": "online"}, {"recent": "3"}, {"search": "x" * 121}, {"query": BASE_QUERY}, {"page": 0}]:
+    for invalid in [{"status": "online"}, {"access": "online"}, {"recent": "3"}, {"search": "x" * 121}, {"query": BASE_QUERY}, {"page": 0}, {"pageSize": 500}]:
         status, _ = fixture_json(origin, "/api/admin/subscribers", {**BASE_QUERY, **invalid})
         assert status == 400, invalid
     assert fixture_json(origin, "/api/admin/subscribers", BASE_QUERY, headers={"Sec-Fetch-Site": "cross-site"})[0] == 403
@@ -223,15 +226,23 @@ def page_and_action_api(origin: str) -> None:
     state = "/api/fixture/subscribers"
     assert fixture_json(origin, state, {"pagination": True})[0] == 200
     ids = []
-    for page_number, expected in [(1, 25), (2, 1)]:
-        status, reply = fixture_json(origin, "/api/admin/subscribers", {**BASE_QUERY, "search": "Synthetic paging fixture", "page": page_number})
-        assert status == 200 and reply["page"] == page_number and reply["pages"] == 2 and reply["total"] == 26
+    for page_number, expected in [(1, 100), (2, 100), (3, 1)]:
+        query = {"search": "Synthetic paging fixture", "page": page_number}
+        status, reply = fixture_json(origin, "/api/admin/subscribers", {**BASE_QUERY, **query})
+        assert status == 200 and reply["page"] == page_number and reply["pages"] == 3 and reply["total"] == 201
         assert len(reply["accounts"]) == expected
         ids.extend(row["id"] for row in reply["accounts"])
-        rendered = page(origin, {"search": "Synthetic paging fixture", "page": page_number})
+        rendered = page(origin, {**query, "accountId": PRIMARY})
         assert len(rendered.all(attribute="data-subscriber-row")) == expected
-        assert rendered.one(attribute="data-subscriber-selected-count").text() == "0 selected"
-    assert len(ids) == len(set(ids)) == 26
+        assert rendered.one(attribute="data-subscriber-count").text() == "201 subscribers"
+        detail = rendered.one(attribute="data-subscriber-detail")
+        assert PRIMARY in detail.text()
+        pager = next(nav for nav in rendered.all("nav") if nav.attributes.get("aria-label") == "Subscriber pages")
+        active = next(button for button in pager.all("button") if button.attributes.get("aria-current") == "page")
+        assert active.text() == str(page_number)
+    assert len(ids) == len(set(ids)) == 201
+    status, final = fixture_json(origin, "/api/admin/subscribers", {**BASE_QUERY, "search": "Synthetic paging fixture", "page": 100})
+    assert status == 200 and final["page"] == 3 and len(final["accounts"]) == 1
     route = "/api/admin/subscribers/bulk"
     mutation = {"action": "delete", "accountIds": [PRIMARY, ids[0]], "count": 2}
     assert fixture_json(origin, route, {**mutation, "confirmed": False})[0] == 400
@@ -249,6 +260,29 @@ def page_and_action_api(origin: str) -> None:
     assert opened.status == 200 and "no-store" in opened.headers.get("Cache-Control", "") and 'data-password-requests' in opened.text
 
 
+def scoped_failures(origin: str) -> None:
+    fixture = "/api/fixture/subscribers"
+    collection = "/api/admin/subscribers"
+    detail = f"{collection}/{PRIMARY}"
+    assert fixture_json(origin, detail, headers={"Cookie": ""})[0] == 401
+    assert fixture_json(origin, f"{collection}/00000000-0000-4000-8000-000000000000")[0] == 404
+    assert fixture_json(origin, fixture, {"failure": "list"})[0] == 200
+    assert fixture_json(origin, collection, BASE_QUERY)[0] == 503
+    assert fixture_json(origin, detail)[1]["detail"]["id"] == PRIMARY
+    rendered = page(origin, {"accountId": PRIMARY})
+    assert any(button.text() == "Retry" for button in rendered.one(attribute="data-subscriber-directory").all("button"))
+    assert PRIMARY in rendered.one(attribute="data-subscriber-detail").text()
+
+    assert fixture_json(origin, fixture, {"failure": "detail"})[0] == 200
+    assert fixture_json(origin, detail)[0] == 503
+    assert fixture_json(origin, collection, BASE_QUERY)[0] == 200
+    rendered = page(origin, {"accountId": PRIMARY})
+    assert len(rendered.all(attribute="data-subscriber-row")) == 6
+    assert any(button.text() == "Retry" for button in rendered.one(attribute="data-subscriber-workspace").all("button"))
+    assert fixture_json(origin, fixture, {"failure": None})[0] == 200
+    assert fixture_json(origin, detail)[1]["detail"]["id"] == PRIMARY
+
+
 def verify(origin: str) -> None:
     """Verify a running production owner-payments fixture without starting another build."""
     origin = local_origin(origin)
@@ -256,10 +290,12 @@ def verify(origin: str) -> None:
     try:
         directory_rendering(origin)
         directory_api(origin)
+        assert fixture_json(origin, "/api/fixture/subscribers", {})[0] == 200
+        scoped_failures(origin)
         page_and_action_api(origin)
     finally:
         assert fixture_json(origin, "/api/fixture/subscribers", {})[0] == 200
-    print("PASS Subscribers rows, selection toolbar, paging, secure reset entry, removal confirmation, partial bulk results, filtered directory and administrator guards.", flush=True)
+    print("PASS Subscribers rows, fixed 100-record pages, scoped list and detail failures, secure reset entry, removal confirmation, partial bulk results, filters and administrator guards.", flush=True)
 
 
 def main():

@@ -1,8 +1,9 @@
 "use client";
 
 import styled from "styled-components";
-import { useLayoutEffect, useRef, useState, type MouseEvent } from "react";
-import { ShieldIcon, UserIcon } from "@/components/ui/icons";
+import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type Ref } from "react";
+import { Button } from "@/components/ui/controls";
+import { ResetIcon, ShieldIcon, UserIcon } from "@/components/ui/icons";
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
 import { formatPhone } from "@/domain/phone";
 import type { SubscriberIndividualAction } from "@/domain/subscriber-actions";
@@ -22,36 +23,39 @@ const pagingLabels = numberedPaginationLabels(createMessages("en"), "Subscriber 
 
 export type SubscriberDirectoryProps = Readonly<{
   accounts: readonly SubscriberDirectoryAccount[];
+  asOf: string;
   selectedId?: string | null;
   query: SubscriberDirectoryQuery;
   loading?: boolean;
   error?: string;
   adminPhone?: string | null;
   accountHref: (id: string, action?: SubscriberIndividualAction) => string;
-  onAccountClick: (event: MouseEvent<HTMLAnchorElement>, id: string) => void;
-  onRetry?: () => void;
+  onAccountClick: (event: MouseEvent<HTMLAnchorElement>, id: string, action?: SubscriberIndividualAction) => void;
+  onRefresh?: (() => void) | undefined;
+  listRef?: Ref<HTMLOListElement>;
   action: CodeAction;
   selectionScope: string;
   plans: readonly SubscriptionPlanView[];
-  canManagePasswords?: boolean;
   paging?: { page: number; pages: number; total: number; onPage: (page: number) => void };
 }>;
 
 /** Search remains available while the latest directory request is in flight. */
-export function SubscriberDirectory({ accounts, selectedId, query, loading = false, error, adminPhone, accountHref, onAccountClick, onRetry,
-  action, selectionScope, plans, canManagePasswords = false, paging }: SubscriberDirectoryProps) {
+export function SubscriberDirectory({ accounts, asOf, selectedId, query, loading = false, error, adminPhone, accountHref, onAccountClick, onRefresh,
+  action, selectionScope, plans, paging, listRef }: SubscriberDirectoryProps) {
   const [selection, setSelection] = useState<{ scope: string; ids: readonly string[] }>({ scope: selectionScope, ids: [] });
   const [operation, setOperation] = useState<SubscriberBulkOperation | null>(null);
   const [result, setResult] = useState<SubscriberBulkResult | null>(null);
   const selectAll = useRef<HTMLInputElement>(null);
+  const visibleIds = useMemo(() => new Set(accounts.map(account => account.id)), [accounts]);
   const currentScope = selection.scope === selectionScope;
   if (!currentScope) {
     setSelection({ scope: selectionScope, ids: [] });
     if (!action.busy) setOperation(null);
-  } else if (!loading && !error && selection.ids.some(id => !accounts.some(account => account.id === id))) {
-    setSelection({ scope: selectionScope, ids: selection.ids.filter(id => accounts.some(account => account.id === id)) });
+  } else if (!loading && !error && selection.ids.some(id => !visibleIds.has(id))) {
+    setSelection({ scope: selectionScope, ids: selection.ids.filter(id => visibleIds.has(id)) });
   }
-  const selected = currentScope ? accounts.filter(account => selection.ids.includes(account.id)) : [];
+  const checkedIds = currentScope ? new Set(selection.ids.filter(id => visibleIds.has(id))) : new Set<string>();
+  const selected = accounts.filter(account => checkedIds.has(account.id));
   const selectedCount = selected.length, allSelected = accounts.length > 0 && selectedCount === accounts.length;
   const disabled = loading || !!error || action.busy;
   const choices = subscriberBulkChoices(selected);
@@ -71,37 +75,44 @@ export function SubscriberDirectory({ accounts, selectedId, query, loading = fal
       : { scope: current.scope, ids: current.ids.filter(id => !succeeded.has(id)) });
   }
   const filtered = subscriberDirectoryFiltered(query);
-  const visibleCount = paging && paging.pages > 1 ? `${accounts.length} of ${paging.total} accounts` : `${accounts.length} account${accounts.length === 1 ? "" : "s"}`;
+  const total = paging?.total ?? accounts.length;
+  const referenceDate = new Date(asOf);
+  const totalLabel = `${total.toLocaleString("en-UG")} subscriber${total === 1 ? "" : "s"}`;
   return <DirectoryRoot aria-label="Find subscriber" data-subscriber-directory data-review-directory>
     <RecordListTools>
-      {error && <DirectoryError role="alert"><FieldError>{error}</FieldError>{onRetry && <ActionButton type="button" onClick={onRetry}>Retry</ActionButton>}</DirectoryError>}
       <SelectionToolbar role="group" aria-label="Subscriber selection" data-subscriber-selection>
         <SelectPage><input ref={selectAll} type="checkbox" checked={allSelected} disabled={disabled || !accounts.length}
           onChange={event => setSelection({ scope: selectionScope, ids: event.currentTarget.checked ? accounts.map(account => account.id) : [] })} />
-          <span>Select all on this page</span></SelectPage>
-        <span role="status" aria-live="polite" data-subscriber-selected-count>{selectedCount} selected</span>
+          <span>Select all</span></SelectPage>
+        <SelectionCount role="status" aria-live="polite" data-subscriber-count>{totalLabel}</SelectionCount>
+        <SelectionCount role="status" aria-live="polite" data-subscriber-selected-count>{selectedCount ? `${selectedCount} selected` : ""}</SelectionCount>
+        <ListActions>
         <SubscriberActionMenu key={selectionScope} label="Manage" disabled={disabled || !selectedCount}>
           {close => choices.map(choice => <SubscriberMenuButton key={choice.action} onClick={() => {
             close(); action.clearFeedback(); setResult(null); setOperation({ ...choice, requestId: crypto.randomUUID() });
           }}>{choice.label}{choice.accounts.length < selectedCount ? ` (${choice.accounts.length})` : ""}</SubscriberMenuButton>)}
         </SubscriberActionMenu>
+        <RefreshButton type="button" variant="quiet" aria-label="Refresh subscriber list" title="Refresh"
+          disabled={!onRefresh || loading || action.busy} onClick={onRefresh}><ResetIcon /></RefreshButton>
+        </ListActions>
       </SelectionToolbar>
+      {error && <DirectoryError role="alert"><FieldError>{error}</FieldError>{onRefresh && <ActionButton type="button"
+        aria-label="Retry subscriber list" onClick={onRefresh}>Retry</ActionButton>}</DirectoryError>}
       {result && <BulkOutcome data-subscriber-bulk-result>
         <p role="status">{result.succeeded} succeeded · {result.failures.length} failed</p>
         {!!result.failures.length && <ul aria-label="Accounts with failed actions">{result.failures.map(item =>
           <li key={item.accountId}><strong>{item.identity}</strong> · {item.message}</li>)}</ul>}
       </BulkOutcome>}
     </RecordListTools>
-    <RecordListScroll data-subscriber-results data-review-subscriber-list aria-label="Subscriber accounts" aria-busy={loading} tabIndex={0}>
-      {accounts.length ? accounts.map(account => <li key={account.id}><SubscriberAccountRow account={account} selected={selectedId === account.id}
-        href={accountHref(account.id)} onAccountClick={event => onAccountClick(event, account.id)}
-        controls={{ checked: selected.some(item => item.id === account.id), disabled, canManagePasswords, onCheck: checked => checkAccount(account.id, checked),
-          actionHref: next => accountHref(account.id, next) }} /></li>)
-        : !loading && <li><EmptyPanel data-subscriber-empty><UserIcon /><p>{filtered ? "No matching subscribers." : "No subscriber accounts yet."}</p></EmptyPanel></li>}
+    <RecordListScroll ref={listRef} data-subscriber-results data-review-subscriber-list aria-label="Subscriber accounts" aria-busy={loading} tabIndex={0}>
+      {accounts.length ? accounts.map(account => <li key={account.id}><SubscriberAccountRow account={account} asOf={referenceDate} selected={selectedId === account.id}
+        href={accountHref(account.id)} onAccountClick={(event, next) => onAccountClick(event, account.id, next)}
+        checked={checkedIds.has(account.id)} disabled={disabled} onCheck={checked => checkAccount(account.id, checked)}
+        actionHref={next => accountHref(account.id, next)} /></li>)
+        : !loading && !error && <li><EmptyPanel data-subscriber-empty><UserIcon /><p>{filtered ? "No matching subscribers." : "No subscriber accounts yet."}</p></EmptyPanel></li>}
       {adminPhone && <li><AdminNumber><ShieldIcon /><span><strong>+{formatPhone(adminPhone)}</strong> is an administrator number. Its password is managed in the environment.</span></AdminNumber></li>}
     </RecordListScroll>
     <RecordListFooter>
-      <span data-subscriber-count role="status" aria-live="polite">{visibleCount}</span>
       {paging && paging.pages > 1 && <NumberedPagination compact page={paging.page} pages={paging.pages} labels={pagingLabels}
         disabled={disabled} onPage={paging.onPage} />}
     </RecordListFooter>
@@ -115,6 +126,15 @@ const SelectionToolbar = styled.div`
   min-block-size: var(--form-control-height);
   > :last-child { margin-inline-start: auto; }
 `;
+const SelectionCount = styled.span`
+  color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary);
+  &:empty { display: none; }
+`;
+const ListActions = styled.div`display: flex; gap: var(--gh-spacing-1); align-items: center;`;
+const RefreshButton = styled(Button)`
+  && { inline-size: var(--form-control-height); min-inline-size: var(--form-control-height); padding-inline: 0; }
+  > svg { font-size: var(--gh-font-section); }
+`;
 const SelectPage = styled.label`
   display: inline-flex; align-items: center; gap: var(--gh-spacing-1_5); min-block-size: var(--form-control-height);
   cursor: pointer; font-size: var(--gh-font-secondary);
@@ -123,7 +143,7 @@ const SelectPage = styled.label`
 const BulkOutcome = styled.div`
   display: grid; min-inline-size: 0; gap: var(--gh-spacing-1);
   font-size: var(--gh-font-secondary);
-  > ul { margin: 0; padding-inline-start: var(--gh-spacing-4); }
+  > ul { margin: 0; padding-inline-start: var(--gh-spacing-4); max-block-size: var(--gh-size-32); overflow-y: auto; }
   li { overflow-wrap: anywhere; }
 `;
 const DirectoryError = styled.div`display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-2); min-inline-size: 0; > span { flex: 1 1 var(--gh-size-48); }`;

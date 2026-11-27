@@ -14,70 +14,76 @@ import { formatCredit, formatCreditChange, walletKindLabels, walletRules } from 
 import { PhoneInput } from "@/components/ui/phone-input";
 import { MobileMoneyLogo } from "@/components/members/mobile-money-logo";
 import { media } from "@/styles/theme";
-import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
-import { ChevronDownIcon, GiftIcon, Icon, KeyIcon, ShieldIcon, SignOutIcon, TrashIcon, type IconProps } from "@/components/ui/icons";
-import { ActionButton, Badge, ButtonRow, CheckField, DangerButton, FieldBlock, FieldRow } from "./admin-form";
+import { ChevronDownIcon, GiftIcon, Icon, KeyIcon, MoreIcon, ShieldIcon, SignOutIcon, TrashIcon, type IconProps } from "@/components/ui/icons";
+import { ActionButton, Badge, CheckField, DangerButton, FieldBlock, FieldRow } from "./admin-form";
 import { ActionNotices, CodeActions, ManualCodeForm, type CodeAction } from "./code-tools";
-import { Drawer, MetaLine, Panel, PanelHead, RowList, RowMeta, RowTitle, TextAction, ZoneLabel } from "./desk-styles";
+import { Drawer, FactList, MetaLine, Panel, RowList, RowMeta, RowTitle, TextAction, ZoneLabel } from "./desk-styles";
+import { SubscriberActionMenu, SubscriberMenuButton } from "./subscriber-action-menu";
 import { SubscriberReviewDialog } from "./subscriber-review-dialog";
 import { RecordBody, RecordCard, RecordFooter, RecordScroll } from "./record-workspace";
-import { AccountStats, AccountTop, ActionBody, ActionPanel, Badges, BlockedNote, CompactForm, DetailTabs, DrawerPanel, History, Mono, MutedText,
+import { AccountStats, AccountTop, Badges, BlockedNote, CompactForm, DetailTabs, DrawerPanel, History, Mono, MutedText,
   NoteFooter, PlainDrawer, QuickActions, RecordRow, SensitiveOptions, SpreadRow, TabBody } from "./subscriber-styles";
 
 const SwapIcon = (props: IconProps) => <Icon {...props}><path d="M7 7h12l-3-3M17 17H5l3 3" /></Icon>;
 const BanIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="12" r="8" /><path d="m6.5 6.5 11 11" /></Icon>;
 
 type Removal = "delete" | "erase";
-type AccountAction = Exclude<SubscriberIndividualAction, Removal>;
+type FooterAction = Exclude<SubscriberIndividualAction, Removal | "note">;
 type Tab = "overview" | "access" | "payments" | "credit" | "devices";
 const tabs: readonly Tab[] = ["overview", "access", "payments", "credit", "devices"];
 const tabLabels = { overview: "Overview", access: "Access", payments: "Payments", credit: "Credit", devices: "Devices" };
 const codeTones = { active: "good", queued: "warning" } as const;
 const paymentTones = { approved: "good", pending: "warning" } as const;
+const submitLabels: Partial<Record<SubscriberIndividualAction, string>> = {
+  grant: "Grant access manually", number: "Change number and move access", note: "Save note", "password-reset": "Open password request",
+};
 
 /**
  * The summary identifies the account, tabs show its records, and account actions return focus to their trigger.
  */
-export function SubscriberDetail({ account, plans, action, onDeleted, back, presentation, network, initialAction, onInitialActionDismissed, canManagePasswords = false }: {
+export function SubscriberDetail({ account, plans, action, onDeleted, back, presentation = "compact-dialog", network, initialAction, onInitialActionDismissed,
+  canManagePasswords = false, showNoteAction = false }: {
   account: OwnerSubscriber; plans: readonly SubscriptionPlanView[]; action: CodeAction; onDeleted: () => void;
   back?: ReactNode;
-  presentation?: "compact-dialog"; network?: MobileNetwork | null;
+  presentation?: "compact-dialog" | "workspace"; network?: MobileNetwork | null;
   initialAction?: SubscriberIndividualAction; onInitialActionDismissed?: () => void; canManagePasswords?: boolean;
+  showNoteAction?: boolean;
 }) {
-  const desktop = useDesktopLayout(), router = useRouter();
-  const dialogMode = presentation === "compact-dialog", externalActionControls = desktop || dialogMode;
+  const router = useRouter(), workspace = presentation === "workspace";
   const erased = !!account.erasedAt;
   const canReset = canManagePasswords && !account.blockedAt && !erased && account.phone !== null;
   const [tab, setTab] = useState<Tab>("overview");
-  const [active, setActive] = useState<AccountAction | null>(() =>
-    !initialAction || erased || initialAction === "erase" || initialAction === "delete" || initialAction === "password-reset" && !canReset ? null : initialAction);
-  const [removal, setRemoval] = useState<Removal | null>(() => initialAction === "delete" || initialAction === "erase" && !erased ? initialAction : null);
+  const [previousInitialAction, setPreviousInitialAction] = useState(initialAction);
+  const [dialogAction, setDialogAction] = useState<SubscriberIndividualAction | undefined>(initialAction);
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<readonly string[]>([]);
-  const [noteDirty, setNoteDirty] = useState(false), [creditOpen, setCreditOpen] = useState(false), [creditReady, setCreditReady] = useState(false), [removalConfirmed, setRemovalConfirmed] = useState(false);
-  const id = useId(), heading = useRef<HTMLHeadingElement>(null), removalSummary = useRef<HTMLElement>(null), removalBody = useRef<HTMLDivElement>(null);
+  const [noteDirty, setNoteDirty] = useState(false), [creditOpen, setCreditOpen] = useState(false), [removalConfirmed, setRemovalConfirmed] = useState(false);
+  const id = useId(), removalBody = useRef<HTMLDivElement>(null);
+  if (initialAction !== previousInitialAction) {
+    setPreviousInitialAction(initialAction);
+    setDialogAction(initialAction);
+    setNoteDirty(false);
+    setRemovalConfirmed(false);
+    setSelectedDeviceIds([]);
+  }
+  const permitted = (!erased || dialogAction === "delete") && (dialogAction !== "password-reset" || canReset);
+  const active = permitted ? dialogAction : undefined;
+  const removal = active === "erase" || active === "delete" ? active : undefined;
   const path = `/api/admin/subscribers/${account.id}`;
   const selectedDevices = account.devices.filter(device => selectedDeviceIds.includes(device.id));
   const access = account.codes.some(code => code.status === "active") ? "Active access" : account.codes.some(code => code.status === "queued") ? "Queued access" : "No current access";
-  useEffect(() => { if (active) heading.current?.focus(); }, [active]);
-  useEffect(() => { if (removal === "erase") removalBody.current?.focus(); }, [removal]);
+  const identity = account.phone ? `+${formatPhone(account.phone)}` : erased ? "Erased account" : `Account ${account.id}`;
+  const accessBadge = <Badge $tone={access === "Active access" ? "good" : "muted"}>{access}</Badge>;
   function closeAction() {
     if (action.busy) return;
-    const previous = active;
-    setActive(null); requestAnimationFrame(() => document.getElementById(`${id}-action-${previous}`)?.focus());
-    if (previous === initialAction) onInitialActionDismissed?.();
+    setDialogAction(undefined);
+    if (initialAction) onInitialActionDismissed?.();
   }
-  function closeRemoval() {
-    if (action.busy) return;
-    setRemoval(null); setRemovalConfirmed(false); requestAnimationFrame(() => removalSummary.current?.focus());
-    if (initialAction === "erase" || initialAction === "delete") onInitialActionDismissed?.();
-  }
-  function chooseRemoval(value: Removal | null) {
-    if (value) { setActive(null); setCreditOpen(false); }
-    setRemovalConfirmed(false); setRemoval(value);
-  }
-  function chooseCredit(open: boolean) {
-    if (open) { setActive(null); setRemoval(null); setRemovalConfirmed(false); }
-    setCreditOpen(open);
+  function openAction(value: SubscriberIndividualAction) {
+    action.clearFeedback();
+    setSelectedDeviceIds([]);
+    setNoteDirty(false);
+    setRemovalConfirmed(false);
+    setDialogAction(value);
   }
   async function signOutDevices(all: boolean) {
     if (action.busy || !all && !selectedDevices.length) return;
@@ -92,13 +98,9 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
     const next = (event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[tabs.length - 1] : tabs[(index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length])!;
     setTab(next); document.getElementById(`${id}-tab-${next}`)?.focus();
   }
-  function task(value: AccountAction, label: string, icon: ReactNode, disabled = false) {
-    return <ActionButton id={`${id}-action-${value}`} type="button" disabled={action.busy || disabled} aria-expanded={active === value} aria-controls={!dialogMode || active === value ? `${id}-action-panel` : undefined} aria-haspopup={dialogMode ? "dialog" : undefined}
-      {...value === "grant" ? { $variant: "primary" as const } : {}} onClick={() => {
-        if (dialogMode) action.clearFeedback();
-        if (active === value) closeAction();
-        else { setRemoval(null); setRemovalConfirmed(false); setCreditOpen(false); setSelectedDeviceIds([]); setActive(value); }
-      }}>{icon}{label}</ActionButton>;
+  function task(value: FooterAction, label: string, icon: ReactNode) {
+    return <ActionButton type="button" disabled={action.busy} aria-haspopup="dialog"
+      {...value === "grant" ? { $variant: "primary" as const } : {}} onClick={() => openAction(value)}>{icon}{label}</ActionButton>;
   }
   const deviceButtons = <>
     <ActionButton type="button" disabled={action.busy} onClick={() => void signOutDevices(true)}>{authCopy.logoutAllDevices}</ActionButton>
@@ -106,9 +108,10 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
       onClick={() => void signOutDevices(false)}>{authCopy.logoutSelectedDevices}</ActionButton>}
   </>;
   const actionFields = <>
-    {active === "grant" && <ManualCodeForm formId={`${id}-form-grant`} externalActions={externalActionControls} plans={plans} action={action}
+    {active === "grant" && <ManualCodeForm formId={`${id}-form-grant`} externalActions plans={plans} action={action}
       {...(action.localOnly ? {} : { accountId: account.id })} phone={account.phone ?? ""} compact fixedPhone onSaved={closeAction} />}
-    {active === "number" && <ChangeNumber formId={`${id}-form-number`} externalActions={externalActionControls} path={path} action={action} onSaved={closeAction} />}
+    {active === "number" && <ChangeNumber formId={`${id}-form-number`} path={path} action={action} onSaved={closeAction} />}
+    {active === "note" && <OwnerNote account={account} action={action} formId={`${id}-form-note`} onDirtyChange={setNoteDirty} onSaved={closeAction} />}
     {active === "password-reset" && <CompactForm id={`${id}-form-password-reset`} method="post" action={action.localOnly ? "#" : path} onSubmit={async event => {
       event.preventDefault();
       if (!canReset || action.busy) return;
@@ -118,7 +121,6 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
       }
     }}>
       <MutedText>Continue to Password Requests to verify the registered number and create a one-time reset link.</MutedText>
-      {!externalActionControls && <ActionButton type="submit" $variant="primary" disabled={action.busy || !canReset}>Open password request</ActionButton>}
     </CompactForm>}
     {active === "block" && <CompactForm id={`${id}-form-block`} method="post" action={action.localOnly ? "#" : path} onSubmit={async event => {
       event.preventDefault(); if (action.busy) return;
@@ -126,7 +128,7 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
       if (reply.ok) closeAction();
     }}><MutedText>{account.blockedAt ? authCopy.unblockHelp : authCopy.blockHelp}</MutedText>
       <FieldBlock label={"Reason"}><input name="reason" required maxLength={200} disabled={action.busy} /></FieldBlock>
-      {!externalActionControls && <ActionButton type="submit" $variant="primary" disabled={action.busy}>{account.blockedAt ? "Unblock account" : "Block account"}</ActionButton>}</CompactForm>}
+    </CompactForm>}
     {active === "devices" && <>
       <MutedText>{authCopy.devicesLoginHelp}</MutedText>
       {account.devices.length ? <div role="group" aria-label={authCopy.signedInDevices}>
@@ -138,18 +140,17 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
           <span><DeviceDetails device={device} number={index + 1} /></span>
         </CheckField>)}
       </div> : <MutedText>{authCopy.noSignedInDevices}</MutedText>}
-      {!externalActionControls && <ButtonRow>{deviceButtons}</ButtonRow>}
     </>}
   </>;
   const activeTitle = active ? subscriberActionLabel(active, !!account.blockedAt) : "";
-  const submitTitle = active === "grant" ? "Grant access manually" : active === "number" ? "Change number and move access"
-    : active === "password-reset" ? "Open password request" : activeTitle;
-  const footer = removal ? <><ActionButton type="button" disabled={action.busy} onClick={closeRemoval}>Cancel</ActionButton><DangerButton type="submit" form={`${id}-remove`} disabled={action.busy || !removalConfirmed}>{subscriberActionLabel(removal)}</DangerButton></>
-      : active ? <><ActionButton type="button" disabled={action.busy} onClick={closeAction}>Cancel</ActionButton>{active === "devices"
-        ? deviceButtons
-        : <ActionButton type="submit" form={`${id}-form-${active}`} $variant="primary" disabled={action.busy}>{submitTitle}</ActionButton>}</>
-        : !erased && tab === "overview" ? <ActionButton type="submit" form={`${id}-note`} disabled={action.busy || !noteDirty}>Save note</ActionButton>
-          : !erased && tab === "credit" && creditOpen ? <><ActionButton type="button" disabled={action.busy} onClick={() => setCreditOpen(false)}>Cancel</ActionButton><ActionButton type="submit" form={`${id}-credit`} $variant="primary" disabled={action.busy || !creditReady}>Save correction</ActionButton></> : null;
+  const footer = active && <>
+    <ActionButton type="button" disabled={action.busy} onClick={closeAction}>Cancel</ActionButton>
+    {removal ? <DangerButton type="submit" form={`${id}-remove`} disabled={action.busy || !removalConfirmed}>{activeTitle}</DangerButton>
+      : active === "devices" ? deviceButtons
+      : <ActionButton type="submit" form={`${id}-form-${active}`} $variant="primary" disabled={action.busy || active === "note" && !noteDirty}>
+        {submitLabels[active] ?? activeTitle}
+      </ActionButton>}
+  </>;
   const accountActions = !erased && <QuickActions role="group" aria-label="Account actions" data-subscriber-actions>
     {task("grant", "Grant access", <GiftIcon />)}
     {task("number", "Change number", <SwapIcon />)}
@@ -157,22 +158,25 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
     {task("devices", authCopy.logoutDevices, <SignOutIcon />)}
     {canReset && task("password-reset", subscriberActionLabel("password-reset"), <KeyIcon />)}
   </QuickActions>;
-  const removalFields = removal && <div ref={removalBody} tabIndex={-1}>
-    <ConfirmedRemoval formId={`${id}-remove`} externalActions={externalActionControls} confirmed={removalConfirmed} onConfirmedChange={setRemovalConfirmed}
-      key={removal} kind={removal} account={account} action={action} onSaved={removal === "delete" ? onDeleted : closeRemoval} />
+  const removalFields = removal && <div ref={removalBody}>
+    <ConfirmedRemoval formId={`${id}-remove`} confirmed={removalConfirmed} onConfirmedChange={setRemovalConfirmed}
+      kind={removal} account={account} action={action} onSaved={removal === "delete" ? onDeleted : closeAction} />
     {removal === "delete" && !erased && <SensitiveOptions><MutedText>Keep payment amounts and access history for accounting?</MutedText>
-      <ActionButton type="button" disabled={action.busy} onClick={() => chooseRemoval("erase")}>Erase personal data instead</ActionButton></SensitiveOptions>}
+      <ActionButton type="button" disabled={action.busy} onClick={() => {
+        openAction("erase"); requestAnimationFrame(() => removalBody.current?.querySelector("input")?.focus());
+      }}>Erase personal data instead</ActionButton></SensitiveOptions>}
   </div>;
-  const summary = <Panel aria-label="Subscriber account" data-subscriber-summary>
+  const login = <MetaLine>{authCopy.lastLogin} <time dateTime={account.lastSignInAt}>{formatPeriodEnd(new Date(account.lastSignInAt))}</time></MetaLine>;
+  const studySummary = !workspace && <Panel aria-label="Subscriber account" data-subscriber-summary>
     <AccountTop>
       <div>
-        <h2>{dialogMode && network && <MobileMoneyLogo network={network} />}{account.phone ? `+${formatPhone(account.phone)}` : "Erased account"}</h2>
-        <MetaLine>{authCopy.lastLogin} {formatPeriodEnd(new Date(account.lastSignInAt))}</MetaLine>
+        <h2>{network && <MobileMoneyLogo network={network} />}{identity}</h2>
+        {login}
         {account.blockedReason && <BlockedNote role="note">Blocked: {account.blockedReason}</BlockedNote>}
       </div>
       <Badges>
         <Badge $tone={erased ? "muted" : account.blockedAt ? "warning" : "good"}>{erased ? "Erased" : account.blockedAt ? "Blocked" : "Open"}</Badge>
-        <Badge $tone={access === "Active access" ? "good" : "muted"}>{access}</Badge>
+        {accessBadge}
       </Badges>
     </AccountTop>
     <AccountStats $columns={4} data-subscriber-stats>
@@ -180,35 +184,58 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
       <div><dt>Access periods</dt><dd>{account.codes.length}</dd></div>
       <div><dt>Credit</dt><dd data-subscriber-credit>{formatCredit(account.creditUgx)}</dd></div>
     </AccountStats>
-    {!dialogMode && accountActions}
   </Panel>;
-  return <DetailCard $compact={dialogMode} data-subscriber-detail={account.id} data-subscriber-presentation={presentation}>
+  const Tabs = workspace ? WorkspaceTabs : DetailTabs;
+  const accountTabs = <Tabs role="tablist" aria-label="Subscriber details" onKeyDown={tabKey} data-subscriber-tabs>
+    {tabs.map(value => <button key={value} type="button" role="tab" id={`${id}-tab-${value}`} aria-controls={`${id}-view-${value}`}
+      aria-selected={tab === value} tabIndex={tab === value ? 0 : -1} onClick={() => setTab(value)}>
+      {tabLabels[value]}{!workspace && value === "payments" && ` (${account.submissions.length})`}
+    </button>)}
+  </Tabs>;
+  return <DetailCard $workspace={workspace} data-subscriber-detail={account.id} data-subscriber-presentation={presentation}>
     <RecordScroll>
     {back}
-    {!action.localOnly && summary}
+    {workspace && <>
+      <WorkspaceAccountTop aria-label="Subscriber account" data-subscriber-summary>
+        <div><h2>{identity}</h2>{login}</div>
+        {!erased && <NoteMenuSlot $onDesktop={showNoteAction}>
+          <SubscriberActionMenu label={`More actions for ${identity}`} icon={<MoreIcon />} disabled={action.busy}>
+            {() => <SubscriberMenuButton type="button" onClick={() => openAction("note")}>Edit admin note</SubscriberMenuButton>}
+          </SubscriberActionMenu>
+        </NoteMenuSlot>}
+      </WorkspaceAccountTop>
+      {accountTabs}
+    </>}
     <RecordBody>
-    {action.localOnly && summary}
-    {active && !dialogMode && <ActionPanel id={`${id}-action-panel`} role="region" aria-labelledby={`${id}-action-title`} aria-busy={action.busy} data-subscriber-action-panel={active}
-      onKeyDown={event => { if (event.key === "Escape" && !action.busy && !event.defaultPrevented) { event.preventDefault(); closeAction(); } }}>
-      <PanelHead><h2 id={`${id}-action-title`} tabIndex={-1} ref={heading}>{activeTitle}</h2>
-        <TextAction type="button" disabled={action.busy} onClick={closeAction}>Cancel</TextAction></PanelHead>
-      <ActionBody>{actionFields}</ActionBody>
-    </ActionPanel>}
-    <DetailTabs role="tablist" aria-label="Subscriber details" onKeyDown={tabKey} data-subscriber-tabs>
-      {tabs.map(value => <button key={value} type="button" role="tab" id={`${id}-tab-${value}`} aria-controls={`${id}-view-${value}`}
-        aria-selected={tab === value} tabIndex={tab === value ? 0 : -1} onClick={() => setTab(value)}>{tabLabels[value]}{value === "payments" && ` (${account.submissions.length})`}</button>)}
-    </DetailTabs>
+    {studySummary}
+    {!workspace && accountTabs}
     <Panel as="div" role="tabpanel" id={`${id}-view-${tab}`} aria-labelledby={`${id}-tab-${tab}`} tabIndex={0} data-subscriber-tab={tab}>
       {tab === "overview" && <TabBody>
-        {!erased ? <OwnerNote key={account.ownerNote} account={account} action={action} formId={`${id}-note`} externalActions={desktop && !dialogMode} onDirtyChange={setNoteDirty} /> : <MutedText>Personal data has been erased. Accounting history is retained.</MutedText>}
-        <PlainDrawer><summary>Account ID<ChevronDownIcon /></summary><div><Mono>{account.id}</Mono></div></PlainDrawer>
+        {workspace ? <AccountFacts>
+          {(erased || account.blockedAt) && <div><dt>Account status</dt><dd>
+            <Badge $tone={erased ? "muted" : "warning"}>{erased ? "Erased" : "Blocked"}</Badge>
+            {account.blockedReason && <BlockedNote role="note">{account.blockedReason}</BlockedNote>}
+          </dd></div>}
+          <div><dt>Credit balance</dt><dd data-subscriber-credit>{formatCredit(account.creditUgx)}</dd></div>
+          <div><dt>Account ID</dt><dd><Mono as="span">{account.id}</Mono></dd></div>
+        </AccountFacts> : <>
+          {!erased && <OwnerNote key={account.ownerNote} account={account} action={action} formId={`${id}-note`} />}
+          <PlainDrawer><summary>Account ID<ChevronDownIcon /></summary><div><Mono>{account.id}</Mono></div></PlainDrawer>
+        </>}
+        {erased && <MutedText>Personal data has been erased. Accounting history is retained.</MutedText>}
       </TabBody>}
-      {tab === "access" && (account.codes.length ? <RowList>{account.codes.map(code => <RecordRow key={code.id}>
+      {tab === "access" && <>
+        {workspace && <TabBody><AccountFacts>
+          <div><dt>Current access</dt><dd>{accessBadge}</dd></div>
+          <div><dt>Access periods</dt><dd>{account.codes.length}</dd></div>
+        </AccountFacts></TabBody>}
+        {account.codes.length ? <RowList>{account.codes.map(code => <RecordRow key={code.id}>
         <div><RowTitle>{code.planName} · {code.reference}<Badge $tone={codeTones[code.status as keyof typeof codeTones] ?? "muted"}>{code.status}</Badge></RowTitle>
           <RowMeta>{code.status === "expired" ? `Ended ${formatPeriodEnd(new Date(code.endsAt))}` : code.status === "revoked" ? `Was due to end ${formatPeriodEnd(new Date(code.endsAt))}`
             : `${code.daysLeft} day${code.daysLeft === 1 ? "" : "s"} left · Until ${formatPeriodEnd(new Date(code.endsAt))}`}</RowMeta></div>
         {!erased && code.status !== "revoked" && <CodeActions code={code} action={action} compact />}
-      </RecordRow>)}</RowList> : <TabBody><MutedText>No access periods.</MutedText></TabBody>)}
+        </RecordRow>)}</RowList> : !workspace && <TabBody><MutedText>No access periods.</MutedText></TabBody>}
+      </>}
       {tab === "payments" && (account.submissions.length ? <RowList>{account.submissions.map(payment => <RecordRow key={payment.id}><div>
         <RowTitle>{action.localOnly ? payment.reference : <Link href={`/admin/payments?paymentId=${encodeURIComponent(payment.id)}`} prefetch={false}>{payment.reference}</Link>}
           <Badge $tone={paymentTones[payment.status as keyof typeof paymentTones] ?? "muted"}>{payment.status}</Badge></RowTitle>
@@ -219,37 +246,38 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
           {!erased && account.autoRenew && <TextAction type="button" disabled={action.busy} onClick={() => void action.send(path, { action: "auto-renew-off" }, "Auto-renewal turned off.")}>Turn off auto-renewal</TextAction>}</SpreadRow>
         <MutedText>{account.creditUgx < 0 ? "A reversed payment's credit was already spent. Spending stays blocked until a top-up clears the balance."
           : "Plan-only and non-refundable. Approved top-ups and amounts paid above a plan's price add to it."}</MutedText>
-        {!erased && <CreditAdjust path={path} action={action} formId={`${id}-credit`} externalActions={desktop && !dialogMode} open={creditOpen} onOpenChange={chooseCredit} onReadyChange={setCreditReady} />}
+        {!erased && <CreditAdjust path={path} action={action} formId={`${id}-credit`} open={creditOpen} onOpenChange={setCreditOpen} />}
         <ZoneLabel as="h3">History</ZoneLabel>
         {account.wallet.length ? <History data-subscriber-wallet>{account.wallet.map(entry => <li key={entry.id}>
           <span><strong>{walletKindLabels[entry.kind]} · {formatCreditChange(entry.amountUgx)}</strong>
             <RowMeta>{[entry.payment, entry.period, entry.note].filter(Boolean).join(" · ") || (entry.actor === "system" ? "Automatic" : entry.actor === "member" ? "By the member" : "By the owner")} · {formatPeriodEnd(new Date(entry.createdAt))}</RowMeta></span>
           <span>{formatCredit(entry.balanceAfter)}</span></li>)}</History> : <MutedText>No credit history.</MutedText>}
       </TabBody>}
-      {tab === "devices" && (account.devices.length ? <RowList>{account.devices.map((device, index) => <RecordRow key={device.id}><div>
-        <DeviceDetails device={device} number={index + 1} />
-      </div></RecordRow>)}</RowList> : <TabBody><MutedText>{authCopy.noSignedInDevices}</MutedText></TabBody>)}
+      {tab === "devices" && <>
+        {workspace && <TabBody><AccountFacts><div><dt>{authCopy.signedInDevices}</dt><dd>{account.devices.length}</dd></div></AccountFacts></TabBody>}
+        {account.devices.length ? <RowList>{account.devices.map((device, index) => <RecordRow key={device.id}><div>
+          <DeviceDetails device={device} number={index + 1} />
+        </div></RecordRow>)}</RowList> : !workspace && <TabBody><MutedText>{authCopy.noSignedInDevices}</MutedText></TabBody>}
+      </>}
     </Panel>
     {tabs.filter(value => value !== tab).map(value => <div key={value} role="tabpanel" hidden id={`${id}-view-${value}`} aria-labelledby={`${id}-tab-${value}`} />)}
-    <DrawerPanel as="div">
-      <Drawer $tone="danger" open={!dialogMode && !!removal} onToggle={event => { const open = event.currentTarget.open; if (!dialogMode && open !== !!removal) chooseRemoval(open ? "delete" : null); }}
-        onKeyDown={event => { if (event.key === "Escape" && removal && !event.defaultPrevented) { event.preventDefault(); closeRemoval(); } }}>
-        <summary ref={removalSummary} aria-haspopup={dialogMode ? "dialog" : undefined} onClick={event => {
-          if (!dialogMode && !action.busy) return;
+    {workspace ? <RemovalTrigger type="button" aria-haspopup="dialog" disabled={action.busy} onClick={() => openAction("delete")}>
+      <TrashIcon />{erased ? "Delete account" : "Delete or erase"}
+    </RemovalTrigger> : <DrawerPanel as="div">
+      <Drawer $tone="danger" open={false}>
+        <summary aria-haspopup="dialog" onClick={event => {
           event.preventDefault();
-          if (!action.busy) { action.clearFeedback(); chooseRemoval("delete"); }
+          if (!action.busy) openAction("delete");
         }}><TrashIcon />{erased ? "Delete account" : "Delete or erase"}<ChevronDownIcon /></summary>
-        {!dialogMode && removalFields}
       </Drawer>
-    </DrawerPanel>
+    </DrawerPanel>}
     </RecordBody>
     </RecordScroll>
-    {dialogMode && accountActions && <AccountActionsFooter>{accountActions}</AccountActionsFooter>}
-    {desktop && footer && !dialogMode && <RecordFooter data-subscriber-footer-action={removal ?? active ?? tab}><span data-record-summary>{account.phone ? `+${formatPhone(account.phone)}` : "Erased account"}</span>{footer}</RecordFooter>}
-    {dialogMode && (active || removal) && <SubscriberReviewDialog id={`${id}-action-panel`} open title={removal ? subscriberActionLabel(removal) : activeTitle}
-      busy={action.busy} onClose={removal ? closeRemoval : closeAction} footer={footer}>
-      <div data-subscriber-action-dialog={removal ?? active}>
-        <MutedText>{account.phone ? `Account +${formatPhone(account.phone)}` : `Erased account ${account.id}`}</MutedText>
+    {accountActions && <AccountActionsFooter $workspace={workspace}>{accountActions}</AccountActionsFooter>}
+    {active && <SubscriberReviewDialog id={`${id}-action-panel`} open title={activeTitle}
+      busy={action.busy} onClose={closeAction} footer={footer}>
+      <div data-subscriber-action-dialog={active}>
+        <MutedText>{account.phone ? `Account ${identity}` : erased ? `Erased account ${account.id}` : identity}</MutedText>
         {action.message && <ActionNotices action={action} />}{removal ? removalFields : actionFields}
       </div>
     </SubscriberReviewDialog>}
@@ -261,27 +289,39 @@ function DeviceDetails({ device, number }: { device: OwnerSubscriber["devices"][
     <RowMeta>Last seen {formatPeriodEnd(new Date(device.lastSeenAt))} · Expires {formatPeriodEnd(new Date(device.expiresAt))}</RowMeta></>;
 }
 
-const AccountActionsFooter = styled(RecordFooter)`
+const AccountActionsFooter = styled(RecordFooter)<{ $workspace: boolean }>`
   && > [data-subscriber-actions] { padding-inline: 0; }
   ${media.desktop} { && > [data-subscriber-actions] { padding-block: 0; } }
   ${media.belowDesktop} { && { padding-block: 0; } }
+  ${({ $workspace }) => $workspace && css`
+    justify-content: flex-start;
+    && > [data-subscriber-actions] {
+      gap: var(--gh-spacing-1_5);
+      > button { font-size: var(--gh-font-secondary); }
+    }
+  `}
 `;
 
-function OwnerNote({ account, action, formId, externalActions, onDirtyChange }: { account: OwnerSubscriber; action: CodeAction; formId: string; externalActions: boolean; onDirtyChange: (dirty: boolean) => void }) {
+function OwnerNote({ account, action, formId, onDirtyChange, onSaved }: {
+  account: OwnerSubscriber; action: CodeAction; formId: string; onDirtyChange?: (dirty: boolean) => void; onSaved?: () => void;
+}) {
   const [note, setNote] = useState(account.ownerNote ?? "");
-  useEffect(() => { onDirtyChange(note !== (account.ownerNote ?? "")); }, [account.ownerNote, note, onDirtyChange]);
+  const dirty = note !== (account.ownerNote ?? "");
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
   return <CompactForm id={formId} method="post" action={action.localOnly ? "#" : `/api/admin/subscribers/${account.id}`} onSubmit={async event => {
-    event.preventDefault(); if (!action.busy) await action.send(`/api/admin/subscribers/${account.id}`, { action: "note", value: note }, "Owner note saved.");
-  }}><FieldBlock label={"Owner note"}><textarea name="note" rows={2} maxLength={500} value={note} onChange={event => setNote(event.currentTarget.value)} disabled={action.busy} placeholder="Add a private note…" /></FieldBlock>
-    <NoteFooter><span>{note.length}/500 · Admin only</span>{!externalActions && <ActionButton type="submit" disabled={action.busy || note === (account.ownerNote ?? "")}>Save note</ActionButton>}</NoteFooter>
+    event.preventDefault();
+    if (action.busy || !dirty) return;
+    const reply = await action.send(`/api/admin/subscribers/${account.id}`, { action: "note", value: note }, "Owner note saved.");
+    if (reply.ok) onSaved?.();
+  }}><FieldBlock label={onDirtyChange ? "Admin note" : "Owner note"}><textarea name="note" rows={2} maxLength={500} value={note} onChange={event => setNote(event.currentTarget.value)} disabled={action.busy} placeholder="Add a private note…" /></FieldBlock>
+    <NoteFooter><span>{note.length}/500 · Admin only</span>{!onDirtyChange && <ActionButton type="submit" disabled={action.busy || !dirty}>Save note</ActionButton>}</NoteFooter>
   </CompactForm>;
 }
 
 /** A correction with a reason the ledger keeps; a negative amount takes credit away but never below zero. */
-function CreditAdjust({ path, action, formId, externalActions, open, onOpenChange, onReadyChange }: { path: string; action: CodeAction; formId: string; externalActions: boolean; open: boolean; onOpenChange: (open: boolean) => void; onReadyChange: (ready: boolean) => void }) {
+function CreditAdjust({ path, action, formId, open, onOpenChange }: { path: string; action: CodeAction; formId: string; open: boolean; onOpenChange: (open: boolean) => void }) {
   const [amount, setAmount] = useState(""), [note, setNote] = useState(""), [confirmed, setConfirmed] = useState(false);
   const value = Number(amount), valid = /^-?\d+$/u.test(amount.trim()) && value !== 0 && Math.abs(value) <= walletRules.adjustmentMaxUgx && !!note.trim();
-  useEffect(() => { onReadyChange(valid && confirmed); }, [confirmed, onReadyChange, valid]);
   return <PlainDrawer data-subscriber-credit-adjust open={open} onToggle={event => { if (event.currentTarget.open !== open) onOpenChange(event.currentTarget.open); }}><summary>Correct credit<ChevronDownIcon /></summary><div><CompactForm id={formId} method="post" action={action.localOnly ? "#" : path} onSubmit={async event => {
     event.preventDefault(); if (action.busy || !valid || !confirmed) return;
     const reply = await action.send(path, { action: "credit-adjust", amount: value, note, confirmed }, `Credit ${value > 0 ? "added" : "removed"}.`);
@@ -290,11 +330,11 @@ function CreditAdjust({ path, action, formId, externalActions, open, onOpenChang
     <FieldRow><FieldBlock label={"Amount · UGX"}><input name="amount" inputMode="numeric" required value={amount} disabled={action.busy} onChange={event => setAmount(event.currentTarget.value)} placeholder="e.g. 5000 or -5000" /></FieldBlock>
       <FieldBlock label={"Reason"}><input name="note" required maxLength={200} value={note} disabled={action.busy} onChange={event => setNote(event.currentTarget.value)} placeholder="Shown in the credit history" /></FieldBlock></FieldRow>
     <label><input type="checkbox" name="confirmed" required checked={confirmed} disabled={action.busy} onChange={event => setConfirmed(event.target.checked)} /> I checked this correction.</label>
-    {!externalActions && <ActionButton type="submit" $variant="primary" disabled={action.busy || !valid || !confirmed}>Save correction</ActionButton>}
+    <ActionButton type="submit" $variant="primary" disabled={action.busy || !valid || !confirmed}>Save correction</ActionButton>
   </CompactForm></div></PlainDrawer>;
 }
 
-function ChangeNumber({ path, action, onSaved, formId, externalActions }: { path: string; action: CodeAction; onSaved: () => void; formId: string; externalActions: boolean }) {
+function ChangeNumber({ path, action, onSaved, formId }: { path: string; action: CodeAction; onSaved: () => void; formId: string }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (action.busy) return;
     const data = new FormData(event.currentTarget);
@@ -305,12 +345,11 @@ function ChangeNumber({ path, action, onSaved, formId, externalActions }: { path
     <FieldRow><PhoneInput label="New phone number" name="newPhone" lookup required disabled={action.busy} hint="" />
       <FieldBlock label={"Verified by"}><select name="verifiedBy" required disabled={action.busy}><option value="">Choose verification</option><option value="old-number">Old number</option><option value="payment-details">Payment details</option></select></FieldBlock></FieldRow>
     <label><input type="checkbox" name="confirmed" required disabled={action.busy} /> I verified this request.</label>
-    {!externalActions && <ActionButton type="submit" $variant="primary" disabled={action.busy}>Change number and move access</ActionButton>}
   </CompactForm>;
 }
 
 /** The account it removes is named in the header above; the checkbox is the confirmation. */
-function ConfirmedRemoval({ kind, account, action, onSaved, formId, externalActions, confirmed, onConfirmedChange }: { kind: Removal; account: OwnerSubscriber; action: CodeAction; onSaved: () => void; formId: string; externalActions: boolean; confirmed: boolean; onConfirmedChange: (confirmed: boolean) => void }) {
+function ConfirmedRemoval({ kind, account, action, onSaved, formId, confirmed, onConfirmedChange }: { kind: Removal; account: OwnerSubscriber; action: CodeAction; onSaved: () => void; formId: string; confirmed: boolean; onConfirmedChange: (confirmed: boolean) => void }) {
   const deleting = kind === "delete";
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!confirmed || action.busy) return;
@@ -321,13 +360,64 @@ function ConfirmedRemoval({ kind, account, action, onSaved, formId, externalActi
     <MutedText>{deleting ? "Permanently removes the account and eligible linked records. Receipts and other records that must be retained can prevent deletion. Removing eligible payments changes their dashboard totals. This cannot be undone."
       : `Clears numbers, passwords, notes, sessions and screenshots.${account.creditUgx > 0 ? ` The ${formatCredit(account.creditUgx)} credit is forfeited.` : ""} Payment amounts, IDs and access history remain for accounting. This cannot be undone.`}</MutedText>
     <label><input type="checkbox" name="confirmed" required checked={confirmed} disabled={action.busy} onChange={event => onConfirmedChange(event.target.checked)} /> I verified this account and understand this cannot be undone.</label>
-    {!externalActions && <DangerButton type="submit" disabled={action.busy || !confirmed}>{deleting ? "Permanently delete account" : "Erase personal data"}</DangerButton>}
   </CompactForm>;
 }
 
-/** Only the optional review presentation compresses summary and action geometry. */
-const DetailCard = styled(RecordCard)<{ $compact: boolean }>`
-  ${({ $compact }) => $compact && css`
+const WorkspaceAccountTop = styled(AccountTop)`
+  flex-direction: row; justify-content: space-between; align-items: center;
+  gap: var(--gh-spacing-2);
+  > div:first-child { min-inline-size: 0; }
+  h2 { font-size: var(--gh-font-subheading); }
+  ${media.desktop} { padding-block: var(--gh-spacing-3); }
+`;
+const NoteMenuSlot = styled.div<{ $onDesktop: boolean }>`
+  flex: none;
+  ${({ $onDesktop }) => !$onDesktop && css`${media.desktop} { display: none; }`}
+`;
+const WorkspaceTabs = styled(DetailTabs)`
+  justify-self: stretch;
+  gap: var(--gh-spacing-1);
+  padding-inline: var(--gh-spacing-2);
+  border-block-end: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
+  border-radius: ${({ theme }) => theme.radius.none};
+  > button, > button[aria-selected="true"] {
+    flex: 0 0 auto;
+    font-size: var(--gh-font-secondary);
+    background: transparent;
+    border-block-end: var(--gh-stroke-strong) solid transparent;
+  }
+  > button[aria-selected="true"] {
+    color: ${({ theme }) => theme.color.link};
+    border-block-end-color: currentColor;
+  }
+`;
+const AccountFacts = styled(FactList)`
+  && > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    align-content: center;
+    min-block-size: var(--form-control-height);
+    background: transparent;
+    border-block-end: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
+  }
+  dd { text-align: start; overflow-wrap: anywhere; }
+`;
+const RemovalTrigger = styled(DangerButton)`
+  justify-self: start;
+`;
+const DetailCard = styled(RecordCard)<{ $workspace: boolean }>`
+  ${({ $workspace }) => $workspace ? css`
+    background: ${({ theme }) => theme.color.surface};
+    ${RecordBody} { gap: var(--gh-spacing-2_5); padding: var(--gh-spacing-2_5) ${({ theme }) => theme.layout.sectionPadding}; }
+    [data-subscriber-tab] { border-radius: ${({ theme }) => theme.radius.none}; }
+    ${TabBody} { padding: var(--gh-spacing-1) 0 0; }
+    ${RecordRow} { padding-inline: 0; }
+    ${QuickActions} {
+      display: flex; flex-wrap: wrap;
+      > button { flex: 0 1 auto; inline-size: auto; padding-inline: var(--gh-spacing-2_5); }
+      ${media.belowDesktop} { > button { flex: 1 1 auto; } }
+    }
+  ` : css`
     ${AccountTop} {
       h2 { display: flex; align-items: center; gap: var(--gh-spacing-2); font-size: var(--gh-font-section); }
       [data-payment-logo] { inline-size: var(--gh-size-7); block-size: var(--gh-size-5); }
