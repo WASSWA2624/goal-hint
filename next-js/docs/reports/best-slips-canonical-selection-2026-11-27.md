@@ -84,4 +84,6 @@ With the same 83 eligible fixtures and 261 offers, the selector planned three di
 
 The replay used an in-memory publication store. Focused tests cover exact 15-, 30- and 45-minute boundaries, highest probability within the same step, fallback to wider spans, fixture carryover and selection across midnight. An isolated MySQL check verified append of a 90-minute pair across Kampala midnight.
 
+Staging activated `ddc66aa7` and returned HTTP 200 from the app and all six Best Slips band queries. The matching private worker passed 220 tests and verified 95 completed migrations. Its staging preflight found an empty operational cohort and a closed odds gate. [Staging release](../../../implementation-docs/deployment-and-version-control.md#15-minute-best-slips-staging-release).
+
 [Automatic selection](../../../implementation-docs/automatic-slips.md) · [Featured policy](../../../implementation-docs/prediction-engine.md)
