@@ -33,6 +33,9 @@ export const CheckIcon = (props: IconProps) => <Icon {...props}><path d="m5 12.5
 export const SortIcon = (props: IconProps) => <Icon {...props}><path d="M7 4v16M3.5 16.5 7 20l3.5-3.5M17 20V4M13.5 7.5 17 4l3.5 3.5" /></Icon>;
 export const FilterIcon = (props: IconProps) => <Icon {...props}><path d="M4 5h16l-6.5 7.5V19l-3 1.5v-8L4 5Z" /></Icon>;
 export const ResetIcon = (props: IconProps) => <Icon {...props}><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5" /></Icon>;
+export const RepeatIcon = (props: IconProps) => <Icon {...props}>
+  <path d="M3 11a9 9 0 0 1 15.4-5.4L21 8m0-4v4h-4M21 13a9 9 0 0 1-15.4 5.4L3 16m0 4v-4h4" />
+</Icon>;
 export const InfoIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 7.5h.01" /></Icon>;
 export const CircleMinusIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /></Icon>;
 export const ChipIcon = (props: IconProps) => <Icon {...props}><rect x="6" y="6" width="12" height="12" rx="1" /><path d="M9 3v3m6-3v3m-6 12v3m6-3v3M3 9h3m-3 6h3m12-6h3m-3 6h3m-11-5h4v4h-4z" /></Icon>;
@@ -40,6 +43,10 @@ export const PlugIcon = (props: IconProps) => <Icon {...props}><path d="M9 3v6m6
 export const SparklesIcon = (props: IconProps) => <Icon {...props}><path d="M11 3l1.9 5.1L18 10l-5.1 1.9L11 17l-1.9-5.1L4 10l5.1-1.9L11 3Zm7 12v6m-3-3h6m-2-15v4m-2-2h4" /></Icon>;
 export const HelpIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 0 1 5 .5c0 1.5-2.5 2-2.5 3.5M12 16.5h.01" /></Icon>;
 export const ShieldIcon = (props: IconProps) => <Icon {...props}><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z" /></Icon>;
+export const ShieldCheckIcon = (props: IconProps) => <Icon {...props}>
+  <path d="M12 3c-2.2 1.8-4.5 2.8-8 3v4c0 5 3 8.6 8 11 5-2.4 8-6 8-11V6c-3.5-.2-5.8-1.2-8-3Z" />
+  <path d="m8.5 12 2.2 2.2 4.8-4.6" />
+</Icon>;
 export const DocumentIcon = (props: IconProps) => <Icon {...props}><path d="M14 3H5v18h14V8l-5-5ZM14 3v5h5M8 12h8M8 16h8" /></Icon>;
 export const MailIcon = (props: IconProps) => <Icon {...props}><rect x="3" y="5" width="18" height="14" /><path d="m3 6 9 7 9-7" /></Icon>;
 export const HomeIcon = (props: IconProps) => <Icon {...props}><path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4v-8.5Z" /></Icon>;
@@ -52,6 +59,10 @@ export const ResultsIcon = (props: IconProps) => <Icon {...props}><circle cx="12
 /** A selection slip: square paper with compact checked rows. */
 export const SlipIcon = (props: IconProps) => <Icon {...props}><path d="M5 3h14v18H5zM8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5" /></Icon>;
 export const WrenchIcon = (props: IconProps) => <Icon {...props}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-8 8l-7 7a2.1 2.1 0 0 1-3-3l7-7a6 6 0 0 1 8-8l-3.8 3.8Z" /></Icon>;
+export const GearIcon = (props: IconProps) => <Icon {...props}>
+  <path d="M10 2.5h4l.6 2.7c.6.2 1.2.5 1.8.8L19 5l2 3.4-2.1 1.8a7.4 7.4 0 0 1 0 3.6l2.1 1.8-2 3.4-2.6-1a7.6 7.6 0 0 1-1.8.8l-.6 2.7h-4l-.6-2.7a7.6 7.6 0 0 1-1.8-.8L5 19l-2-3.4 2.1-1.8a7.4 7.4 0 0 1 0-3.6L3 8.4 5 5l2.6 1a7.6 7.6 0 0 1 1.8-.8L10 2.5Z" />
+  <circle cx="12" cy="12" r="3" />
+</Icon>;
 export const MoreIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" /></Icon>;
 /** Get access page: copy a wallet number, call/chat for help, paste an SMS, attach a screenshot. */
 export const CopyIcon = (props: IconProps) => <Icon {...props}><rect x="9" y="9" width="12" height="12" /><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" /></Icon>;
@@ -74,8 +85,31 @@ export const CardIcon = (props: IconProps) => <Icon {...props}><rect x="3" y="5"
 export const WalletIcon = (props: IconProps) => <Icon {...props}><path d="M3 7a2 2 0 0 1 2-2h13v2M3 7h18v12H3Zm18 4h-5a2 2 0 0 0 0 4h5m-4-2h.01" /></Icon>;
 export const TicketIcon = (props: IconProps) => <Icon {...props}><path d="M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4V7ZM14 7v10" /></Icon>;
 export const LayersIcon = (props: IconProps) => <Icon {...props}><path d="m12 3 9 5-9 5-9-5 9-5ZM3 13l9 5 9-5" /></Icon>;
+export const LayersStackIcon = (props: IconProps) => <Icon {...props}>
+  <path d="M12 3 21 8l-9 5-9-5 9-5ZM6.6 10 3 12l9 5 9-5-3.6-2M6.6 14 3 16l9 5 9-5-3.6-2" />
+</Icon>;
 export const ListIcon = (props: IconProps) => <Icon {...props}><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" /></Icon>;
 export const ChartIcon = (props: IconProps) => <Icon {...props}><path d="M4 20V4M4 20h16M9 16v-5M14 16V8M19 16v-3" /></Icon>;
+export const BarChartIcon = (props: IconProps) => <Icon {...props}>
+  <path d="M5 20v-4m4.7 4v-8m4.6 8V8m4.7 12V4" />
+</Icon>;
+export const MarketChartIcon = (props: IconProps) => <Icon {...props}>
+  <path d="M3 21h18" />
+  <rect x="4" y="13" width="3" height="5" rx="1.5" />
+  <rect x="10.5" y="3" width="3" height="15" rx="1.5" />
+  <rect x="17" y="9" width="3" height="9" rx="1.5" />
+</Icon>;
+export const TargetIcon = (props: IconProps) => <Icon {...props}>
+  <path d="M10.5 3a9 9 0 1 0 10.1 10.3M10.8 7a5 5 0 1 0 6.2 6.2M12 12l7.5-7.5m0-2v2h2" />
+</Icon>;
+export const ScaleIcon = (props: IconProps) => <Icon {...props}>
+  <path d="M12 4v16m-4 0h8M4 7h16M6 7l-3 7h6L6 7Zm12 0-3 7h6l-3-7ZM3 14a3 3 0 0 0 6 0m6 0a3 3 0 0 0 6 0" />
+</Icon>;
+export const SoccerBallIcon = (props: IconProps) => <Icon {...props}>
+  <circle cx="12" cy="12" r="9" />
+  <path fill="currentColor" stroke="none" d="m12 8.5 3.3 2.4-1.3 3.9h-4l-1.3-3.9L12 8.5Z" />
+  <path strokeWidth={1.5} d="M12 8.5V3m3.3 7.9 5.2-1.7M14 14.8l3.2 4.5M10 14.8l-3.2 4.5m1.9-8.4L3.5 9.2" />
+</Icon>;
 export const ArrowUpIcon = (props: IconProps) => <Icon {...props}><path d="M12 19V5M6 11l6-6 6 6" /></Icon>;
 export const ArrowDownIcon = (props: IconProps) => <Icon {...props}><path d="M12 5v14M6 13l6 6 6-6" /></Icon>;
 export const PencilIcon = (props: IconProps) => <Icon {...props}><path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4" /></Icon>;

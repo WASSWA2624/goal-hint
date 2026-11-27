@@ -35,12 +35,15 @@ panels account for their border width. Keep the page gutter outside individual
 cards to avoid doubling nested card padding.
 Match lists and selections inside slips retain their joined edges; spacing
 between separate slip cards comes from `theme.layout.slipGap` (20px).
-Best Slips, Matches and Slip Builder use the shared `pageFilterPanel` treatment
+Best Slips and Matches use the shared `pageFilterPanel` treatment
 so their outer controls align with the app header's left/right rails at every
 width. It takes horizontal spacing from `contentGutter`, avoiding a second
 inset inside the app shell. Vertical filter spacing and other panel/footer
 content insets use `theme.layout.sectionPadding` (8px). Filter controls scroll
 with their page content.
+
+The Slip Builder settings panel follows the same outer rails. It uses the shared
+surface radius around its settings header, summary tiles and actions.
 
 Use a semantic token directly, for example:
 

@@ -1,23 +1,12 @@
 "use client";
 
-import { controlBodyHeight } from "@/components/ui/control-layout";
-import styled, { css } from "styled-components";
+import styled from "styled-components";
 import { FilterFieldRow } from "@/components/ui/advanced-filter-dialog";
-import { Button, ButtonLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
-import { filterPanelColors, pageFilterPanel } from "@/components/ui/filter-chrome";
+import { filterPanelColors } from "@/components/ui/filter-chrome";
 import { desktopContentPadding, desktopSectionFrame, joinedDesktopSections, PageHeading, Stack, Surface } from "@/components/ui/layout";
 import { media } from "@/styles/theme";
 import { filterDialogSurface } from "@/components/ui/dialog-surfaces";
-
-const compactControlHeight = "var(--form-control-height)";
-export const slipToolbarControl = css`
-  ${controlBodyHeight}
-  min-block-size: ${compactControlHeight}; min-inline-size: 0; padding: var(--gh-spacing-1) var(--gh-spacing-2);
-  border-radius: ${({ theme }) => theme.radius.control}; gap: var(--gh-spacing-1_25); font-size: var(--gh-font-secondary); line-height: var(--gh-leading-label);
-  > svg { flex: none; font-size: var(--gh-font-emphasis); }
-  @media (pointer: coarse) { min-block-size: var(--gh-size-11); }
-`;
 
 export const BuildActionLabel = styled.span`
   > [data-action-label="desktop"] { display: none; }
@@ -69,26 +58,30 @@ export const CriteriaPanel = styled(Surface)`
   ${media.desktop} { && { padding: var(--gh-spacing-2_5); } }
   && { ${desktopSectionFrame} ${desktopContentPadding(true)} }
 `;
-export const BuilderPanel = styled(CriteriaPanel)`
-  && { background: ${({ theme }) => theme.color.surface}; }
+export const BuilderPanel = styled(Surface)`
   ${filterPanelColors}
-  && { padding: var(--gh-spacing-2); border-radius: ${({ theme }) => theme.radius.surface}; }
+  --builder-panel-inset: var(--gh-spacing-2);
+  && {
+    padding: 0;
+    background: ${({ theme }) => theme.color.surface};
+    border-radius: ${({ theme }) => theme.radius.surface};
+  }
   [data-criteria-dialog] { ${filterDialogSurface} }
-  ${pageFilterPanel}
-  && { ${desktopSectionFrame} ${desktopContentPadding(true)} }
+  ${media.desktop} {
+    --builder-panel-inset: var(--gh-spacing-6);
+    && {
+      border: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid color-mix(in srgb, ${({ theme }) => theme.color.brand} calc(var(--gh-opacity-18) * 100%), ${({ theme }) => theme.color.border});
+    }
+  }
   ${media.belowDesktop} {
-    && { padding-block: ${({ theme }) => theme.layout.sectionPadding}; }
-    && [data-slip-builder-options] { gap: var(--gh-spacing-1); padding-block-start: var(--gh-spacing-1); }
-    && :is([data-criteria-trigger], [data-saved-filters-trigger]) {
+    && :where([data-criteria-dialog]) :is([data-criteria-trigger], [data-saved-filters-trigger]) {
       min-block-size: var(--form-control-height); padding-inline: var(--gh-spacing-1_5);
       font-size: var(--gh-font-secondary); line-height: var(--gh-leading-control);
     }
-    && [data-criteria-trigger] > svg { font-size: var(--gh-font-micro); }
+    && :where([data-criteria-dialog]) [data-criteria-trigger] > svg { font-size: var(--gh-font-micro); }
     &&& [data-criteria-count] {
       min-inline-size: var(--gh-size-3_25); block-size: var(--gh-size-3_25); padding-inline: var(--gh-spacing-0_5); font-size: var(--gh-font-caption);
     }
-    && [data-criteria-actions] { flex: 1 0 100%; margin-inline-start: 0; }
-    && [data-slip-criteria-summary] { font-size: clamp(var(--gh-font-micro), 3.125vw, var(--gh-font-caption)); line-height: var(--gh-size-3_375); }
     && [data-criteria-dialog] > header, && [data-criteria-dialog] > footer { padding: var(--gh-spacing-2) var(--gh-spacing-2_5); }
     && [data-criteria-dialog] > header > h2 { font-size: var(--gh-font-emphasis); }
     && [data-criteria-dialog] > header button { min-block-size: var(--form-control-height); min-inline-size: var(--gh-size-9); }
@@ -119,44 +112,9 @@ export const BuilderHeader = styled.div`
 export const CriteriaForm = styled.form`
   display: flex; flex-direction: column; gap: var(--gh-spacing-1_5);
   min-inline-size: 0;
+  padding: var(--gh-spacing-2) var(--builder-panel-inset);
+  ${media.desktop} { padding-block: var(--gh-spacing-1_5) var(--gh-spacing-5_5); }
   > [role="alert"] { margin: 0; }
-`;
-export const BuilderOptions = styled.div`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center;
-  gap: var(--gh-spacing-1_5); min-inline-size: 0;
-  &:has(> [hidden]) { grid-template-columns: minmax(0, 1fr); }
-  > div > :is(button, a) { inline-size: 100%; }
-  ${media.desktop} {
-    display: flex; flex-wrap: wrap;
-    > div > :is(button, a) { inline-size: auto; }
-  }
-`;
-export const CriteriaOptions = styled.div`
-  display: flex; flex: none;
-  &[hidden] { display: none; }
-`;
-export const CriteriaSummaryPanel = styled.section`
-  display: grid; gap: var(--gh-spacing-1_5); min-inline-size: 0;
-  margin-block-end: var(--gh-spacing-1);
-  > h2 {
-    margin: 0; color: ${({ theme }) => theme.color.text};
-    font-size: var(--gh-font-body); font-weight: var(--gh-weight-bold); line-height: var(--gh-leading-label);
-  }
-`;
-export const CriteriaSummary = styled.dl`
-  display: flex; flex-wrap: wrap; gap: var(--gh-spacing-1_5);
-  margin: 0; min-inline-size: 0;
-  font-size: var(--gh-font-secondary); line-height: var(--gh-leading-compact); overflow-wrap: anywhere;
-  > div {
-    display: flex; align-items: baseline; justify-content: space-between; gap: var(--gh-spacing-2);
-    flex: 1 1 auto; min-inline-size: 0; max-inline-size: 100%;
-    padding: var(--gh-spacing-1_25) var(--gh-spacing-2);
-    background: color-mix(in srgb, ${({ theme }) => theme.color.field} calc(var(--gh-opacity-60) * 100%), transparent);
-  }
-  > [data-summary-wide] { justify-content: flex-start; }
-  ${media.belowDesktop} { > [data-summary-wide] { flex-basis: 100%; } }
-  dt { flex: none; color: ${({ theme }) => theme.color.mutedText}; }
-  dd { min-inline-size: 0; margin: 0; color: ${({ theme }) => theme.color.text}; font-weight: var(--gh-weight-medium); font-variant-numeric: tabular-nums; }
 `;
 export const FieldGroup = styled.fieldset`
   border: 0; padding: 0; margin: 0; min-inline-size: 0;
@@ -186,15 +144,6 @@ export const ReuseRow = styled.div`
   }
   input[type="checkbox"] { inline-size: var(--gh-size-4); block-size: var(--gh-size-4); accent-color: ${({ theme }) => theme.color.brand}; }
   > ${Note} { margin: 0; }
-`;
-export const Actions = styled.div`
-  display: flex; min-inline-size: 0;
-`;
-export const BuildButton = styled(Button)`
-  && { ${slipToolbarControl} }
-`;
-export const BuildLink = styled(ButtonLink)`
-  && { ${slipToolbarControl} }
 `;
 export const CriteriaError = styled.p`color: ${({ theme }) => theme.color.outcome.incorrect.text}; font-size: var(--gh-font-body);`;
 export const Results = styled.section`

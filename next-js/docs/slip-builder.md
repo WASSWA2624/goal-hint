@@ -38,6 +38,10 @@ window, and Markets use full-width rows. The actions sit side by side at the
 bottom. Combined probability appears when enabled or when the applied criteria
 include its bounds.
 
+The Markets value stays on one line. When the full text exceeds the available
+width, the panel shortens it with an ellipsis and shows a trailing `+`.
+Assistive technology receives the full value.
+
 Filters uses one editable form across screen sizes. It groups
 slip targets, individual odds and probability limits, the kickoff window,
 match reuse and Markets. Related fields share a row where there is space.

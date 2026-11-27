@@ -6,7 +6,7 @@
 
 ## Inputs and validation
 
-The settings panel shows the applied criteria. Desktop uses four columns of summary tiles with **Filters** and **Build slips** stacked to the right of a divider. On compact screens, a blue heading introduces two rows of tiles, followed by full-width rows for match reuse, the date and time window, and Markets. The actions sit side by side below the summary. [Criteria summary](../next-js/src/components/slips/slip-criteria-summary.tsx).
+The settings panel shows the applied criteria. Desktop uses four columns of summary tiles with **Filters** and **Build slips** stacked to the right of a divider. On compact screens, a blue heading introduces two rows of tiles, followed by full-width rows for match reuse, the date and time window, and Markets. The actions sit side by side below the summary. The Markets value stays on one line and ends with a `+` when shortened. Assistive technology receives the full value. [Criteria summary](../next-js/src/components/slips/slip-criteria-summary.tsx).
 
 **Filters** opens a draft with slip targets, individual odds and probability limits, the kickoff window, reuse and Markets. **Apply Filters** validates the draft and updates the criteria summary for the next build. Ordinary edits can leave the previous generated slips visible. Reset stages the standard defaults and clears the selected preset. Applying that reset or a changed preset also clears the previous display. Cancel or Escape restores the values from before the dialog opened. Backdrop clicks leave the dialog open. [Builder controls](../next-js/src/components/slips/slip-builder.tsx), [shared dialog](../next-js/src/components/ui/criteria-dialog.tsx).
 

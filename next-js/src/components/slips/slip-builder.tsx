@@ -6,7 +6,6 @@ import { trackEvent } from "@/components/analytics/tracker";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
 import { FilterDialogContent, FilterDialogSection, FiltersDialog, FilterSection } from "@/components/ui/advanced-filter-dialog";
 import { ButtonLink } from "@/components/ui/controls";
-import { FilterDialogTrigger } from "@/components/ui/filter-dialog-trigger";
 import { LockIcon, ResetIcon, SlipIcon } from "@/components/ui/icons";
 import { MarketFilterControl, MarketFilterDialog } from "@/components/ui/market-filter-dialog";
 import { EmptyState } from "@/components/ui/feedback";
@@ -31,12 +30,13 @@ import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { allSlipMarketsAutomatic, commitNumericParameters, criteriaDraft, isDateTimeField, isNumericRange, renderSlipCriteriaFields, slipMarketFilterSummary,
   type BuilderIssue, type NumericRangeField, type SlipCriteriaIssue } from "./slip-criteria-fields";
 import { slipNumberErrorMessage } from "./slip-numeric-input";
-import { SlipCriteriaSummary } from "./slip-criteria-summary";
+import { SlipCriteriaHeading, SlipCriteriaSummary } from "./slip-criteria-summary";
+import { BuildButton, BuildLink, BuilderFilters, BuilderOptions, SettingsLayout } from "./slip-builder-settings-styles";
 import { SavedSlipConfigurations, type ConfigurationChoice } from "./saved-slip-configurations";
 import { canonicalSlipConfigurationParameters, datedSlipConfiguration, slipConfigurationCriteria, slipConfigurationHref, slipConfigurationIdSchema, type SlipConfiguration } from "@/domain/slip-configurations";
 import { UnlockPanel } from "@/components/members/prediction-unlock";
-import { Actions, BuildActionLabel, BuildButton, BuildLink, BuilderFeedback, BuilderHeader, BuilderOptions, BuilderPanel, CriteriaError,
-  CriteriaForm, CriteriaOptions, FieldGroup, Note, Results, SlipHeading, SlipList, SlipStack } from "./slip-styles";
+import { BuildActionLabel, BuilderFeedback, BuilderHeader, BuilderPanel, CriteriaError, CriteriaForm, FieldGroup, Note, Results, SlipHeading,
+  SlipList, SlipStack } from "./slip-styles";
 
 export type { SlipCriteriaIssue } from "./slip-criteria-fields";
 
@@ -387,7 +387,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       <SlipHeading>{messages.text("slips.title")}</SlipHeading>
     </BuilderHeader>
     <BuilderPanel data-slip-builder-toolbar aria-labelledby={`${prefix}-criteria`}>
-      <VisuallyHidden as="h2" id={`${prefix}-criteria`}>{messages.text("slips.criteria")}</VisuallyHidden>
+      <SlipCriteriaHeading id={`${prefix}-criteria`} locale={locale} />
       <CriteriaForm id={formId} data-enhanced={enhanced} action={action} method="get" ref={formRef} onSubmit={submit} noValidate>
         <input type="hidden" name="build" value="1" />
         {selectedConfiguration && <input type="hidden" name="configuration" value={selectedConfiguration.id} />}
@@ -424,25 +424,27 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
           {matches => <>{errorMessage("markets")}{marketFields(matches)}</>}
         </MarketFilterDialog>
         {errorMessage(null)}
-        <SlipCriteriaSummary locale={locale} criteria={appliedCriteria}
-          showJoint={jointEstimates || appliedCriteria.totalProbMin !== undefined || appliedCriteria.totalProbMax !== undefined} />
-        <BuilderOptions data-slip-builder-options>
-          <CriteriaOptions data-slip-criteria-options hidden={!enhanced}>
-            <FilterDialogTrigger data-criteria-trigger="advanced" dialogId={advancedId} open={activeDialog !== null}
-              count={advancedCount} aria-label={advancedCount ? messages.plural("filters.active", advancedCount) : filtersTitle}
-              aria-invalid={!!errorGroup || undefined}
-              disabled={pending} onClick={() => openDialog("advanced")}>
-              {filtersTitle}
-            </FilterDialogTrigger>
-          </CriteriaOptions>
-          <Actions data-criteria-actions data-toolbar-group="actions">
-            {subscriberOnly ? <BuildLink data-slip-access-action href={subscriberHref(signedIn, action, "login")} prefetch={false}>
-              <LockIcon /><SlipBuildActionLabel locale={locale} restricted />
-            </BuildLink> : <BuildButton data-slip-access-action type="submit" disabled={pending}>
-              <SlipIcon /><SlipBuildActionLabel locale={locale} restricted={false} />
-            </BuildButton>}
-          </Actions>
-        </BuilderOptions>
+        <SettingsLayout>
+          <SlipCriteriaSummary locale={locale} criteria={appliedCriteria}
+            showJoint={jointEstimates || appliedCriteria.totalProbMin !== undefined || appliedCriteria.totalProbMax !== undefined} />
+          <BuilderOptions data-slip-builder-options>
+            <div data-slip-criteria-options hidden={!enhanced}>
+              <BuilderFilters data-criteria-trigger="advanced" dialogId={advancedId} open={activeDialog !== null}
+                count={advancedCount} aria-label={advancedCount ? messages.plural("filters.active", advancedCount) : filtersTitle}
+                aria-invalid={!!errorGroup || undefined}
+                disabled={pending} onClick={() => openDialog("advanced")}>
+                {filtersTitle}
+              </BuilderFilters>
+            </div>
+            <div data-criteria-actions data-toolbar-group="actions">
+              {subscriberOnly ? <BuildLink data-slip-access-action href={subscriberHref(signedIn, action, "login")} prefetch={false}>
+                <LockIcon /><SlipBuildActionLabel locale={locale} restricted />
+              </BuildLink> : <BuildButton data-slip-access-action type="submit" disabled={pending}>
+                <SlipIcon /><SlipBuildActionLabel locale={locale} restricted={false} />
+              </BuildButton>}
+            </div>
+          </BuilderOptions>
+        </SettingsLayout>
       </CriteriaForm>
     </BuilderPanel>
     <Results ref={resultsRef} data-slip-state={result?.state ?? "idle"} aria-busy={pending} aria-label={messages.text("slips.generated")}>

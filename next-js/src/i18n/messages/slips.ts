@@ -38,6 +38,7 @@ export const slipsMessages = {
   "slips.summary.marketsLabel": "Markets",
   "slips.summary.selectionLabel": "Selection",
   "slips.summary.title": "Settings for your next build",
+  "slips.summary.subtitle": "Choose how to build your prediction slips",
   "slips.summary.reuseLabel": "Match reuse",
   "slips.summary.reuseEnabled": "On",
   "slips.summary.reuseDisabled": "Off",
