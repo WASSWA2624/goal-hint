@@ -92,4 +92,6 @@ In a synthetic 03:00 Kampala slot, the released 05:00–09:30 slip had a 270-min
 
 The regression cases also cover mismatched bookmakers or odds bands, a gap equal to the upcoming step width, and reconsideration when a later allocation claims a fixture needed by the upcoming slip. The fixed production-cohort replay retained its three selections at spans of 0, 30 and 60 minutes. That snapshot contained zero retained candidates crossing the release horizon.
 
+Staging activated `68436794`. The app and all six band API queries returned HTTP 200, and the matching private publisher passed 227 tests. Its read-only preflight verified 95 applied migrations, an empty eligible cohort and a closed odds gate. [Staging release](../../../implementation-docs/deployment-and-version-control.md#distant-carryover-staging-release).
+
 [Automatic selection](../../../implementation-docs/automatic-slips.md) · [Featured policy](../../../implementation-docs/prediction-engine.md)
