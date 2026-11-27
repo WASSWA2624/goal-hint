@@ -94,4 +94,10 @@ The regression cases also cover mismatched bookmakers or odds bands, a gap equal
 
 Staging activated `68436794`. The app and all six band API queries returned HTTP 200, and the matching private publisher passed 227 tests. Its read-only preflight verified 95 applied migrations, an empty eligible cohort and a closed odds gate. [Staging release](../../../implementation-docs/deployment-and-version-control.md#distant-carryover-staging-release).
 
+## Production promotion
+
+Production activated the same `68436794` web artifact and publisher source after owner approval. The 17:30 Kampala slot passed the paired odds refresh and sealed ranks 35 and 36 in the 2.50–5.00 band. Rank 35 used eight legs, displayed 2.52, and spanned 22:30–22:45. Rank 36 used seven legs, displayed 2.54, and spanned 20:00–20:30. Each slip used one verified bookmaker and met the exact odds band and minimum kickoff lead. The 15 fixture legs were distinct. The run reported a search limit and zero upcoming carryover deferrals.
+
+Read-only snapshots around the cutover matched every preexisting row in the publication, append batch, published slip, leg and combination tables. The slip count rose from 121 to 123 and the leg count from 541 to 556. All six production band queries passed after retrying intermittent HTTP 503s. Staging and production verified the same build and 95 required migrations. [Production release](../../../implementation-docs/deployment-and-version-control.md#distant-carryover-production-release).
+
 [Automatic selection](../../../implementation-docs/automatic-slips.md) · [Featured policy](../../../implementation-docs/prediction-engine.md)

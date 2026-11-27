@@ -383,6 +383,14 @@ Matches, Best Slips and Builder returned HTTP 200 with `noindex`. The Matches an
 
 ## Distant carryover staging release
 
-On 27 November 2026, staging activated `68436794` and served Next build `MeeJr6HnIAsb94iXb0AHW`. Its ZIP has SHA-256 `0cc9c6265de4ae49ba3fbab25e20d7613f03925f706c7aeab02730ea7c15e714`. The host verified all 95 required migrations. The exact `ddc66aa7` staging ZIP is available for rollback. A read-only check confirmed production was serving `db2f8ea5`. Production promotion awaits owner approval.
+On 27 November 2026, staging activated `68436794` and served Next build `MeeJr6HnIAsb94iXb0AHW`. Its ZIP has SHA-256 `0cc9c6265de4ae49ba3fbab25e20d7613f03925f706c7aeab02730ea7c15e714`. The host verified all 95 required migrations. The exact `ddc66aa7` staging ZIP is available for rollback.
 
 Matches, Best Slips and Builder returned HTTP 200 with `noindex`. The Matches and guest session APIs and all six Best Slips band queries returned HTTP 200. The matching private staging publisher passed 227 tests, including the same-band upcoming comparison regressions. Its read-only preflight found zero operational fixtures and append batches and confirmed the closed staging odds gate. [Carryover replay and verification](../next-js/docs/reports/best-slips-canonical-selection-2026-11-27.md#distant-carryover-comparison).
+
+## Distant carryover production release
+
+After owner approval on 27 November 2026, production activated `68436794` from the same checksummed staging ZIP and served Next build `MeeJr6HnIAsb94iXb0AHW`. Its migration ledger verified all 95 required migrations. The previous production web ZIP `db2f8ea5` and publisher release `32613d5f` were retained for rollback. The football cutoff writer on `c84cb0a8` still seals v5 decisions, which both web builds read.
+
+At 17:29 Kampala time, the dedicated production Best Slips publisher switched to the matching `68436794` source under its existing lock. The launcher wrapper, football scheduler, half-hour cadence and paired refresh gate checksums matched their pre-promotion values. The 17:30 refresh succeeded. The publisher evaluated 58 fixtures and 187 exact offers, then sealed two slips in the 2.50–5.00 odds band. Their kickoff spans were 15 and 30 minutes. The five other bands yielded zero eligible alternatives in this slot. The result recorded bounded search.
+
+The production app, Matches and session APIs, and all six Best Slips band queries returned HTTP 200 in the completed smoke checks. Initial band probes returned intermittent HTTP 503s and passed on retry. A read-only comparison preserved the fingerprints of all pre-promotion rows across the five publication tables, including 121 sealed slips. The first slot added one append batch, two slips and 15 distinct fixture legs. [Publication and archive verification](../next-js/docs/reports/best-slips-canonical-selection-2026-11-27.md#production-promotion).
