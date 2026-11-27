@@ -176,8 +176,8 @@ def migration_lock(defaults_file, database):
     import fcntl
 
     path = defaults_file.parent / f".goal-hint-migrations-{database}.lock"
-    fd = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as lock:
+    fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "r+", encoding="utf-8") as lock:
         info = os.fstat(lock.fileno())
         if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) & 0o077:
             raise MigrationError("Migration lock must be owned by the release account and private.")
@@ -185,7 +185,15 @@ def migration_lock(defaults_file, database):
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as error:
             raise MigrationError("A migration process already owns this database.") from error
-        yield
+        yield lock
+
+
+def record_overlay_attempt(lock, name):
+    lock.seek(0)
+    lock.write(name)
+    lock.truncate()
+    lock.flush()
+    os.fsync(lock.fileno())
 
 
 def target_options(environment, database, defaults_file):
@@ -204,19 +212,38 @@ def target_options(environment, database, defaults_file):
     return defaults_file
 
 
-def migrate(database, migrations, adopted, status_only):
+def migrate(database, migrations, adopted, status_only, lock, resolve_overlay=None):
     database.verify_target()
     pending = pending_migrations(database.ledger(), migrations, adopted)
+    # A MariaDB overlay usually records its ledger row after DDL. A crash or
+    # failed statement can leave a partially changed schema with no ledger row.
+    lock.seek(0)
+    attempted = lock.read(256)
+    if resolve_overlay is not None and (not attempted or attempted != resolve_overlay):
+        raise MigrationError("The requested overlay does not match the interrupted migration marker.")
+    if attempted:
+        if not any(migration.overlay is not None and migration.name == attempted for migration in migrations):
+            raise MigrationError("The database migration lock contains an invalid overlay marker.")
+        if resolve_overlay is None and any(migration.name == attempted for migration in pending):
+            raise MigrationError(f"Overlay {attempted} may have stopped after committing DDL. Inspect and reconcile the schema before resolving it.")
+        record_overlay_attempt(lock, "")
+    if resolve_overlay is not None:
+        print(f"Cleared the reviewed overlay marker for {resolve_overlay}.")
+        return 0
     if status_only:
         for migration in pending:
             print(f"Pending {migration.name}")
         if pending:
             return 2
     for index, migration in enumerate(pending):
+        if migration.overlay is not None:
+            record_overlay_attempt(lock, migration.name)
         database.apply(migration)
         remaining = pending_migrations(database.ledger(), migrations, adopted)
         if remaining != pending[index + 1:]:
             raise MigrationError(f"Migration {migration.name} was not recorded in the target ledger.")
+        if migration.overlay is not None:
+            record_overlay_attempt(lock, "")
         print(f"Applied {migration.name}", flush=True)
     print(f"MariaDB migration ledger verified ({len(migrations)} required migrations).")
     return 0
@@ -229,7 +256,9 @@ def main(argv=None):
     parser.add_argument("--defaults-file", required=True, type=Path)
     parser.add_argument("--port", type=int, default=3306)
     parser.add_argument("--prisma-dir", type=Path, default=Path(__file__).resolve().parents[1] / "prisma")
-    parser.add_argument("--status", action="store_true", help="Report pending migrations without changing the database.")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--status", action="store_true", help="Report pending migrations without changing the database.")
+    mode.add_argument("--resolve-overlay", metavar="NAME", help="Clear the exact interrupted overlay marker after manual schema reconciliation. Executes no migrations.")
     args = parser.parse_args(argv)
     try:
         if not 1 <= args.port <= 65535:
@@ -237,8 +266,8 @@ def main(argv=None):
         defaults_file = target_options(args.environment, args.database, args.defaults_file)
         migrations, adopted = release_migrations(args.prisma_dir)
         database = MariaDb(defaults_file, args.database, args.port)
-        with migration_lock(defaults_file, args.database):
-            return migrate(database, migrations, adopted, args.status)
+        with migration_lock(defaults_file, args.database) as lock:
+            return migrate(database, migrations, adopted, args.status, lock, args.resolve_overlay)
     except MigrationError as error:
         print(error, file=sys.stderr)
     except (OSError, ValueError):

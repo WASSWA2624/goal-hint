@@ -1,26 +1,23 @@
-# Deploying Goal Hint to cPanel
+# Goal Hint web release package
 
 `goal-hint-nextjs-1.0.0.zip` contains a self-contained production build of the website for
 cPanel's **Setup Node.js App** (Phusion Passenger). Everything the server needs,
 including its `node_modules`, is already inside. You don't need to run `npm install`
 or a build on the server.
 
-Build or rebuild the zip from `next-js/` in a full checkout with the pinned Node.js 24.18.1:
+Build the ZIP from `next-js/` in a clean checkout with the pinned Node.js and
+npm versions:
 
 ```sh
-npm run package:cpanel
+npm run package:cpanel -- --commit <full-sha>
 ```
 
-The script copies the working tree to a temporary directory without git-ignored
-files, so only the tracked `.env.example` is included. Private settings and
-`.goal-hint/` stay outside the release.
-It then runs `npm ci` and a `standalone` Next.js build, and writes
-`../deploy/goal-hint-nextjs-1.0.0.zip`. The zip itself is git-ignored.
-Its adjacent `.zip.sha256` file records the archive checksum. Temporary publication
-files live under `../deploy/.staging/` and are removed after success or failure.
-All release archives live in the repository's root `deploy/` directory. Keep this
-version at 1.0.0 until the first production release; later version changes are
-explicit edits to `package.json` and the lockfile.
+The packager exports the approved Git commit to a temporary directory. A fresh
+build runs `npm ci` and compiles the Next.js standalone runtime. Use
+`--reuse <prior-full-sha>` when the existing verified local ZIP and its build
+inputs match. Both modes publish `../deploy/goal-hint-nextjs-1.0.0.zip` and its
+adjacent `.zip.sha256` locally. The package includes `.env.example`. Private
+settings and approval records are supplied by each hosted environment.
 
 ## Package layout
 
@@ -30,7 +27,7 @@ goal-hint/
   package.json      no dependencies; "Run NPM Install" is unnecessary
   BUILD_INFO.json   commit, build versions and migration inventory fingerprint
   prisma/           ordered MySQL migrations, MariaDB overlays and adopted checksums
-  scripts/          hosted activation and MariaDB migration verification
+  scripts/          MariaDB migration verification and legacy activation entry
   DEPLOY.md         this guide
   .env.example      every supported setting, with comments
   standalone/       Next.js server, .next/, public/ and traced node_modules
@@ -45,38 +42,27 @@ own virtual-environment link.
 - cPanel with **Setup Node.js App** and **Node.js 24** (the build uses 24.18.1).
 - Linux hosting with `/usr/bin/convert` (ImageMagick) and WebP support for badge
   conversion. The package excludes platform-specific Sharp binaries.
-- A **MySQL 8.4** database for features that read stored data. Many cPanel hosts
-  provide MariaDB instead. Confirm the server version with your host, because the
-  application baseline is MySQL 8.4 ([database runbook](../database.md)).
+- A persistent database for stored data. Local schema development targets
+  MySQL 8.4. The Ubuntu VPS uses MariaDB with reviewed compatibility overlays.
+  [Database runbook](../database.md).
 - With no environment variables, the site runs in its safe default state: database
   and providers off, and indexing off.
 
 ## Deploying
 
-The current VPS runs staging with private `.env.test` and production with private
-`.env.production` at promotion. The existing production deployment keeps its
-legacy settings until that promotion. Follow the [VPS activation procedure](how-to-deploy.md#vps-staging-and-release-promotion)
-for migration verification and HTTPS acceptance. The shared-host procedure below
-documents the earlier deployment.
+Use `python scripts/deploy-hosted.py` from `next-js/` for operator and automated
+deployments. It verifies the local ZIP, sends changed files over SSH, and checks
+the target's migration ledger and served build. Stage and verify the approved
+commit before promoting the same archive to production. The VPS keeps a single
+active installation per environment. The application ZIP stays local and the
+VPS removes the superseded release after acceptance. [VPS commands and
+verification](how-to-deploy.md#vps-staging-and-release-promotion).
 
-For a manual upload, extract the ZIP and upload the contents of its `goal-hint/`
-folder to the cPanel application root, outside the public document root. In
-**Setup Node.js App**, select Node.js 24, production mode and startup file
-`app.js`, configure the domain, then restart. Supply private runtime settings and
-the approval register through the configuration procedure below; they are
-deliberately excluded from the ZIP. Apply reviewed database migrations and run
-workers separately when those features are enabled.
-For a manual installation, place `.env.production.local` and
-`.goal-hint/owner-approvals.json` inside the application's `standalone/` directory,
-which is the server's working directory. Keep a separate private backup and
-restore these settings when replacing the application files.
-
-Use `python scripts/deploy-cpanel.py` from `next-js/` in a full checkout. Its first run creates the
-**Setup Node.js App** entry (Node.js 24, application root `goal-hint`, startup file
-`app.js`). Every run uploads the zip into a new release under `~/goal-hint-releases/`
-and switches `~/goal-hint/standalone` to it. The step-by-step guide, including the
-database, is [how-to-deploy.md](how-to-deploy.md). Don't run cPanel's `npm install`:
-the root `package.json` has no dependencies.
+Staging uses the private `.env.test` profile and production uses
+`.env.production`. Each has its own database credentials and approval register.
+The Ubuntu VPS connects to MariaDB through verified loopback TLS. The
+[former shared host procedure](how-to-deploy.md#former-shared-host) records
+the earlier cPanel deployment setup.
 
 ## Configuration
 
@@ -98,16 +84,9 @@ local `.env.development` values won't work as they are, because production mode 
 stricter checks than development.
 
 Android, iOS, Windows, macOS and Linux release shells and browser installations
-all use the HTTPS app. Database configuration is private
-to the Next.js server. With the intended private production handoff files already
-present, run `python scripts/deploy-cpanel.py --check-database-config` from
-`next-js/` to check the production profile, database setting names and matching
-approval references without making a network connection. Production may supply
-`GOAL_HINT_DEPLOYMENT_ENVIRONMENT=production` through the process environment.
-For the live connectivity and account-schema check, run `npm run db:health` on
-the host in the configured production runtime and require `Database readiness:
-ready`. From a browser, confirm the public HTTPS feed returns the expected
-fixture cohort and `/manifest.webmanifest` launches `/en/matches`.
+all use the HTTPS app. Database configuration is private to the Next.js server.
+Confirm the public HTTPS feed returns the expected fixture cohort and
+`/manifest.webmanifest` launches `/en/matches`.
 
 The runtime policy validates every setting when the server starts. If a value is
 invalid or a prerequisite is missing, every request returns 500 and the log lists
@@ -117,22 +96,22 @@ Passenger assigns the listening socket. Database refusals at request time (appro
 register, credentials, TLS, `DEBUG`) are not logged: pages show "data unavailable"
 and `/api/*` answers 503.
 
-Put these lines in `~/goal-hint-private/.env.production.local`, editing it over SSH with
-`python scripts/deploy-cpanel.py --config-pull` / `--config-push`. The deploy script
-copies that file into each release, where Next.js loads it at startup. Keep secrets
-out of the cPanel **Environment variables** screen: it writes values into the
-domain's `.htaccess`, and any variable set there overrides the file. Never commit
-the file or place it under the domain's document root.
+Set production values in `~/goal-hint-private/.env.production` and staging
+values in `~/goal-hint-test-private/.env.test`. The deploy script copies each
+environment's file into its active release, where Passenger loads it at
+startup. Use the supported [hosted settings sync](how-to-deploy.md#update-hosted-web-settings)
+for eligible changes and keep secrets outside version control and the public
+document root.
 
 Production database access also verifies the exact `database-access` and
 `budget-approval` references against the private operator register already used
-by the live runner. Keep the reviewed register at
-`~/goal-hint-private/.goal-hint/owner-approvals.json`; the deploy script copies it
-into the release, whose `standalone/` directory is the server's working directory.
+by the live runner. Keep each reviewed register at
+`.goal-hint/owner-approvals.json` in the environment's private directory. The
+deploy script copies it into the active `standalone/` directory.
 Migration commands and workers look for `.goal-hint/owner-approvals.json` under
 their own working directory. Never include it in the deployment ZIP or version control.
-Files saved directly under `~/goal-hint/standalone/` belong to one release and are
-replaced on the next deploy or `--restart`.
+Files saved directly under the active `standalone/` directory belong to that
+release. Update the canonical private settings to carry changes forward.
 
 Use only recorded, verified decisions for the actual deployment target and budget.
 Missing, malformed or mismatched records deny access; reference strings alone do
@@ -142,17 +121,18 @@ next web database access, even if the process already has a connection pool.
 
 ## Updating
 
-Run `python scripts/deploy-cpanel.py --build` to rebuild and deploy, and
-`--rollback` to return to the previously active release. `--status` shows the
-deployed `BUILD_INFO.json`. See [how-to-deploy.md](how-to-deploy.md).
+Use the local release package and the same staging-first workflow for updates
+and `--restore` code recovery. Apply pending migrations only after reviewing
+compatibility and handling any required writer pause. The staging and production
+databases retain their own data and migration ledgers. [VPS release
+promotion](how-to-deploy.md#vps-staging-and-release-promotion).
 
 ## Not included
 
-- **Database migrations.** Apply schema changes from a full checkout with the
-  `db:*` commands described in the [database runbook](../database.md). Those
-  commands require the verified private operator register for remote/production
-  targets, a compatible server and separate migration credentials. The web ZIP
-  does not include migration tooling or grant approval to a database target.
+- **Database records and recovery copies.** The ZIP includes the reviewed
+  migration inventory and runner. The environment supplies the migration role
+  and persistent database. The independent backup operator manages backups
+  outside the VPS.
 - **Background workers** (`npm run live`, `worker:*`, `recovery`, `monitoring`).
   The website only reads stored data. Shared cPanel hosting usually stops
   long-running background processes, so run the live runner on a host that can keep

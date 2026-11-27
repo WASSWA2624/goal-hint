@@ -1,17 +1,10 @@
 # How to deploy
 
-The first sections describe the previous shared host. See [VPS staging and
-release promotion](#vps-staging-and-release-promotion) for the Ubuntu VPS.
+Use [VPS staging and release promotion](#vps-staging-and-release-promotion)
+for current deployments. The shared-host setup, update, settings and
+troubleshooting commands record the former hosting procedure.
 
-The owner confirmed that the public domains moved to `104.207.86.22` on or
-before 24 November 2026. The new host uses SSH port `21098`. Production runs
-under `ghprod` with `ghprod_prod`, `~/goal-hint`, and
-`~/goal-hint-private`. Staging uses the same system account with `ghprod_test`,
-`~/goal-hint-test`, and `~/goal-hint-test-private`. Release directories follow
-the corresponding `goal-hint-releases` or `goal-hint-test-releases` name.
-`activate-hosted.sh` accepts both verified layouts with their separate
-migration credentials and profiles. The older commands below still describe
-the former `209.74.80.202` VPS where indicated.
+## Former shared host
 
 | | |
 | --- | --- |
@@ -109,9 +102,9 @@ For each schema change:
    `finished_at` set and `rolled_back_at` unset. Compare original SQL checksums,
    allowing only verified line-ending differences. Investigate unfinished records
    before executing more DDL.
-2. Pause writers for changes that rebuild or lock tables. Take a private backup
-   including triggers, record its checksum and verify restoration to a separate
-   target. Keep backups outside the public document root.
+2. Pause writers for changes that rebuild or lock tables. Review migration
+   compatibility and coordinate any required recovery verification with the
+   independent backup operator outside the VPS.
 3. Review only the pending migration. MariaDB uses `DROP CONSTRAINT` where MySQL
    uses `DROP CHECK`. Reviewed scripts in `prisma/mariadb/` cover the goal-market
    extension, eight-date manifest and analytics migrations, and the append-only
@@ -208,16 +201,19 @@ existing migration ledger when schema verification reports it current.
 On 14 October 2026, a private backup was taken before the corrective migration
 `20261014161000_transactional_storage` converted the seven analytics tables and
 `OperationsMonitorState` from MyISAM to InnoDB. Prisma's history table was converted
-as separate maintenance. All 81 tables now use InnoDB, and 26 migrations are
-recorded as completed. Keep that backup until the release and recovery checks are
-accepted.
+as separate maintenance. The associated verification at the time found all 81
+tables on InnoDB and 26 completed migrations.
 
 If a migration fails, stop further attempts and retain its history and diagnostics.
 MariaDB DDL can commit individual statements, so inspect what actually changed
-before preparing a forward repair. Do not mark a failed migration applied simply
-to clear the error. Application rollback switches releases and keeps database
-schema and data. Restore a verified backup through an explicit recovery plan that
-accounts for newer writes; never drop all production tables as routine recovery.
+before preparing a forward repair. The runner records an overlay attempt in its
+private migration lock before executing DDL. If the ledger cannot confirm
+completion, the marker blocks subsequent deployments. Once the actual schema
+and ledger have been reconciled, run the same `deploy-mariadb.py` command with
+`--resolve-overlay <migration-name>` to clear that exact marker without
+executing migrations. Then verify status before resuming the release. Code
+recovery keeps database schema and records. Coordinate any database recovery
+with the independent backup operator and account for writes since the failure.
 
 Retain enabled database access, direct connection mode, bounded pool size, verified
 TLS and matching access/budget approvals. Use `.env.example` and the
@@ -267,75 +263,80 @@ the matching source release, its own database grants, and a private reviewed
 model binding. See [daily slip publications](../daily-slip-publications.md) for
 its activation prerequisites and status checks.
 
-`https://test.goalhint.com` runs under the `ghstage` cPanel account on the
-Ubuntu VPS. Apache serves the Next.js bundle through Passenger using the
-repository's pinned Node.js. The VPS keeps MariaDB on loopback. The staging
-database uses separate application and migration accounts with verified TLS.
-Staging uses the verified 12 November 2026 snapshot of the active local football
-database. The app's member sign-in is active and provider jobs are disabled.
+The Ubuntu VPS at `server2.goalhint.com` (`104.207.86.22`) serves both hosted
+sites through Apache and Passenger with the pinned Node.js version. Connect on
+SSH port `21098` as `ghprod`, with the operator key in the SSH agent and the
+verified host key in `~/.ssh/goalhint_hypernova_known_hosts`.
 
-`https://goalhint.com` runs under the separate `ghprod` cPanel account and uses
-`ghprod_prod` with its own TLS application and migration credentials. The initial
-production load copied 240,229 fixtures and related browsing and historical data
-from staging. Accounts, wallets, and payments start fresh. AutoSSL covers both
-production hostnames, and `www.goalhint.com` redirects to `goalhint.com`.
-The production football worker uses the existing direct API-Football account.
-Paid checkout is off. Password recovery uses the configured public support
-directory and the Password Requests workspace for manual delivery.
+| Branch | URL | Active application path | Private settings | Persistent database |
+| --- | --- | --- | --- | --- |
+| `development` | Localhost | `next-js/` in the local checkout | `.env.development` | Designated local development database |
+| `staging` | `https://test.goalhint.com` | `~/goal-hint-test` | `~/goal-hint-test-private/.env.test` | `ghprod_test` |
+| `production` | `https://goalhint.com` | `~/goal-hint` | `~/goal-hint-private/.env.production` | `ghprod_prod` |
 
-Develop on `localhost` with the private `.env.development`, then verify the
-release on `test.goalhint.com`. Promote the same tested release to `goalhint.com`
-after the owner reviews test and authorizes production. Each environment has its
-own database and configuration. Routine release promotions carry application
-code and reviewed schema migrations.
+Each hosted environment has its own approval register and MariaDB migration
+credentials. Application and migration accounts use verified TLS on loopback.
+The Flutter app is a separate build of the web host shell. A web deployment
+updates the website used by installed Flutter clients. Publish a new Flutter
+binary through the native release process when the shell itself changes.
 
-1. Build the release with `npm run package:cpanel` from a clean checkout of the
-   intended commit. Keep the ZIP and its SHA-256 together.
-2. Verify the ZIP after upload. Unpack it into
-   `~/goal-hint-releases/<commit>` under the staging account. Copy private
-   `.env.test` and the approval register from `~/goal-hint-private/` into the
-   release's `standalone/` directory with account-only permissions. Passenger
-   loads `.env.test` explicitly while Next.js runs in production mode. Production
-   uses `.env.production` and its own approval register. Keep the existing hosted
-   settings when migrating filenames.
-3. Use the packaged activation script from the VPS operator account. It checks
-   the app's target, connects with the separate MariaDB migration account over
-   TLS, validates the Prisma ledger and runs all pending migrations in order.
-   When there are pending changes, pause any affected writers, verify a private
-   backup and set `GOAL_HINT_MIGRATION_BACKUP` to its SHA-256 manifest. The
-   script verifies zero pending migrations before switching the release and
-   restarting Passenger. A migration failure leaves the current release active.
-
-   For the manual recovery rollout, create `MemberPasswordResetRequest` through
-   the reviewed migration and verify the application account has the required
-   privileges before switching the release. Apply the table grant for accounts
-   with table-scoped privileges. Use the same existing private keying secret
-   across app processes in each environment, and keep staging and production
-   secrets separate. See [table grants](manual-account-grants.sql).
+1. Work on `development`, run the applicable tests, and push the approved
+   commit to GitHub. Build it locally from `next-js/` with the pinned Node.js
+   and npm versions. The package contains the standalone runtime dependencies.
 
    ```sh
-   bash "$release/scripts/activate-hosted.sh" staging "$release" ghstage \
-     "$node_binary" "$migration_client_options" ghstage_localcopy
+   npm run package:cpanel -- --commit <full-sha>
    ```
 
-   Use `production`, `ghprod` and `ghprod_prod` with the production account's
-   private settings and migration options after production authorization.
-4. Check the public HTTPS Matches page and `/api/matches`, and verify the
-   staging page returns a `noindex` directive. Review the release online before
-   promoting the same ZIP to production with production's own configuration
-   and database.
-5. Load the agreed production data. If migrating existing hosted accounts,
-   verify the old production backup and its restore first. Check migration
-   history, row counts, database constraints, and the new origin's app and API
-   before routing public traffic to it.
-6. For the initial VPS cutover, update the existing apex A record in Namecheap
-   Advanced DNS. Keep the `www` alias, staging record, and mail records in
-   place. Run AutoSSL for `ghprod`, verify HTTPS on both production names, and
-   confirm HTTP redirects to HTTPS.
+   When the application, dependencies and build inputs match the prior archive,
+   `--reuse <prior-full-sha>` verifies that archive and reuses its standalone
+   build. Keep the resulting local ZIP and SHA-256 together for promotion.
+2. Advance `staging` to the approved commit. Preview the release, review the
+   detected additions, updates and removals, and apply it to staging.
 
-Keep the prior app release available for rollback. Switching releases does
-not roll back the database. The shared-host deployment commands above target
-the previous production host.
+   ```sh
+   python scripts/deploy-hosted.py staging --commit <full-sha>
+   python scripts/deploy-hosted.py staging --commit <full-sha> --apply
+   ```
+
+   Use `--archive <local-zip>` when using a nondefault local path. The tool
+   serializes deployments with the environment's private release lock, verifies
+   artifact contents and sends the required changes. It reuses unchanged
+   application files and dependencies and creates a short-lived candidate for
+   safe activation. After switching and verifying Passenger, the tool removes
+   the replaced release. The VPS needs no ordinary application build, npm
+   install, stored release ZIP or historical release copy.
+3. If the migration ledger reports pending migrations, review the SQL,
+   required grants and compatibility with the current app. Handle required
+   writer pauses, then add `--apply-migrations` to the intended apply command.
+   Check that the same target has zero pending entries and verify the affected
+   schema objects and application privileges. Preserve each target's records
+   in its own database. Any backup or restore rehearsal belongs to the
+   independent backup process outside the VPS.
+4. Qualify staging over HTTPS, including the Matches page, Matches API,
+   unauthenticated Account session, served build and staging `noindex`. Verify
+   release-specific behavior and applicable stored data or worker readiness.
+   After staging passes, advance `production` to the same Git commit and use
+   the exact same verified ZIP for production.
+
+   ```sh
+   python scripts/deploy-hosted.py production --commit <full-sha>
+   python scripts/deploy-hosted.py production --commit <full-sha> --apply
+   ```
+
+   Production requires the staging verification for that artifact and repeats
+   schema and HTTPS checks with its own private settings and database.
+5. Review storage after acceptance. Use `--prune-release <audited-dir>` for
+   each confirmed inactive application release that is eligible for removal.
+   Keep legitimate application data, uploads, private settings, worker files,
+   and unrelated resources out of deployment cleanup.
+
+For code recovery, package the earlier clean GitHub commit and run the same
+commands with `--restore --commit <earlier-full-sha>`. The earlier commit must
+be reachable from the current environment branches and its migration inventory
+must verify against the current database. Qualify the restored build on staging
+before production. Keep branch tips and database schema and records in place.
+Investigate and repair any partially applied DDL before resuming deployment.
 
 ### Update hosted web settings
 
@@ -351,8 +352,9 @@ disabled.
 Use `npm run env:check` to verify the local layouts and target labels without
 displaying any values.
 
-From `next-js/`, use the authorized VPS operator SSH key and review a dry run
-before applying. Supply `--key` once per setting you want to update.
+From `next-js/`, use the authorized VPS SSH agent and review a dry run before
+applying. Use `--identity <path>` for a specific operator key. Supply `--key`
+once per setting you want to update.
 
 ```sh
 npm run env:sync -- --target staging --key YOOLA_SMS_SENDER
@@ -397,22 +399,14 @@ and secret configured for that sandbox deployment.
 Hosted database credentials, permissions, approval files and football worker
 settings remain managed through their respective deployment procedures.
 
-An apply backs up the hosted settings privately, updates the canonical file
-and its active copy under the release lock, and reloads Passenger. It checks
-the public Matches page, Matches API and Account session endpoint and restores
-the original files if the smoke check fails. If a process interruption leaves
-the copies out of sync, recover both from the same private backup under the
-release lock before retrying.
+An apply updates the canonical file and its active copy under the release
+lock, requests a Passenger restart, and verifies the public Matches page,
+Matches API and Account session endpoint. The command holds the original
+settings in memory during the operation and restores them after a recoverable
+failure. If interrupted between writes, reconcile both copies with the reviewed
+settings under the release lock and verify HTTPS before retrying.
 The shared-host `--config-push` and `--config-pull` commands still refer to
 the legacy host.
-
-To refresh staging data, take a consistent data-only MySQL export into a new
-cPanel database with the verified MariaDB table definitions. Load the data
-before restoring the staging triggers, and preserve the target's Prisma history.
-Apply the MariaDB numeric JSON projection overlay where the durable-job check
-still compares extracted values as text. Verify row counts, constraints, and
-the app against the new database before switching the staging release. Keep
-the previous database for rollback. See the [durable-job overlay](../../prisma/mariadb/20261009123830_durable_job_numeric_projection.sql).
 
 Apply the [expanded goal markets overlay](../../prisma/mariadb/20261113140000_expand_local_goal_markets.sql)
 after verifying `20261111170100_local_goal_market_source` and its current check

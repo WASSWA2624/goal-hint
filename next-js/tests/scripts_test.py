@@ -188,12 +188,20 @@ await sealBackup(input.node,backupText('Synthetic Node backup.'),{...options,met
             (source / "prisma/migrations").mkdir(parents=True)
             (source / "prisma/mariadb").mkdir()
             (source / "prisma/adopted-migrations.json").write_bytes(b"[]\n")
-            (root / "scripts").mkdir()
-            (root / "scripts/activate-hosted.sh").write_bytes(b"#!/usr/bin/env bash\r\nset -euo pipefail\r\n")
-            (root / "scripts/deploy-mariadb.py").write_bytes(b"# Synthetic migration script\n")
-            with mock.patch.object(packager, "ROOT", root):
-                packager.prepare_hosted_activation(source, bundle)
+            (source / "scripts").mkdir()
+            (source / "scripts/activate-hosted.sh").write_bytes(b"#!/usr/bin/env bash\r\nset -euo pipefail\r\n")
+            (source / "scripts/deploy-mariadb.py").write_bytes(b"# Synthetic migration script\n")
+            packager.prepare_hosted_activation(source, bundle)
             self.assertEqual((bundle / "scripts/activate-hosted.sh").read_bytes(), b"#!/usr/bin/env bash\nset -euo pipefail\n")
+
+    def test_build_reuse_rejects_changed_source_schema_and_lock_inputs(self):
+        packager = load_script("package-cpanel")
+        changed = (".gitattributes", "next-js/src/app/page.tsx", "next-js/next.config.ts",
+                   "next-js/prisma/schema.prisma", "next-js/package-lock.json", "next-js/public/logo.svg")
+        for path in changed:
+            with self.subTest(path=path), mock.patch.object(packager, "git", return_value=path + "\0"):
+                with self.assertRaisesRegex(packager.CommandError, "package again without --reuse"):
+                    packager.reuse_standalone(Path("unused.zip"), Path("unused"), "a" * 40, "b" * 40, "24.18.1", "c" * 64)
 
     def test_web_publication_checksums_and_cleans_staging_after_failed_copy(self):
         packager = load_script("package-cpanel")

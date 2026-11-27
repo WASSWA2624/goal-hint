@@ -5,6 +5,7 @@ from dataclasses import replace
 import io
 from pathlib import Path
 import runpy
+from tempfile import TemporaryFile
 import unittest
 
 
@@ -33,6 +34,11 @@ class MigrationDatabase:
 
 def ledger_entry(migration):
     return f"{migration.name}\t{migration.checksum}\t1\t0"
+
+
+def migrate(database, migrations, adopted, status_only):
+    with TemporaryFile("w+", encoding="utf-8") as lock:
+        return HOSTED["migrate"](database, migrations, adopted, status_only, lock)
 
 
 class DeployMariaDbTests(unittest.TestCase):
@@ -94,7 +100,7 @@ class DeployMariaDbTests(unittest.TestCase):
                 existing = [ledger_entry(migration) for migration in baseline]
                 existing.extend(ledger_entry(by_name[name]) for name in completed)
                 database = MigrationDatabase(existing)
-                self.assertEqual(HOSTED["migrate"](database, inventory, self.adopted, False), 0)
+                self.assertEqual(migrate(database, inventory, self.adopted, False), 0)
                 self.assertEqual(database.applied, expected)
                 self.assertEqual(database.ledger(), existing + [ledger_entry(by_name[name]) for name in expected])
 
@@ -128,12 +134,12 @@ class DeployMariaDbTests(unittest.TestCase):
         current = [ledger_entry(row) for row in self.migrations[:-2]]
         db = MigrationDatabase(current)
         with redirect_stdout(io.StringIO()) as output:
-            self.assertEqual(HOSTED["migrate"](db, self.migrations, self.adopted, True), 2)
+            self.assertEqual(migrate(db, self.migrations, self.adopted, True), 2)
         self.assertIn(f"Pending {first.name}", output.getvalue())
         self.assertEqual(db.applied, [])
         with redirect_stdout(io.StringIO()):
-            self.assertEqual(HOSTED["migrate"](db, self.migrations, self.adopted, False), 0)
-            self.assertEqual(HOSTED["migrate"](db, self.migrations, self.adopted, True), 0)
+            self.assertEqual(migrate(db, self.migrations, self.adopted, False), 0)
+            self.assertEqual(migrate(db, self.migrations, self.adopted, True), 0)
         self.assertEqual(db.applied, [first.name, second.name])
 
     def test_first_unrecorded_migration_stops_release(self):
@@ -141,8 +147,35 @@ class DeployMariaDbTests(unittest.TestCase):
         first = self.migrations[-2]
         db = MigrationDatabase(current, fail=first.name)
         with self.assertRaises(MigrationError):
-            HOSTED["migrate"](db, self.migrations, self.adopted, False)
+            migrate(db, self.migrations, self.adopted, False)
         self.assertEqual(db.applied, [first.name])
+
+    def test_interrupted_overlay_blocks_retries_until_the_exact_marker_is_resolved(self):
+        overlay = next(row for row in reversed(self.migrations) if row.overlay is not None)
+        current = [ledger_entry(row) for row in self.migrations if row.name < overlay.name]
+        db = MigrationDatabase(current, fail=overlay.name)
+        with TemporaryFile("w+", encoding="utf-8") as lock, redirect_stdout(io.StringIO()):
+            run = HOSTED["migrate"]
+            with self.assertRaisesRegex(MigrationError, "was not recorded"):
+                run(db, self.migrations, self.adopted, False, lock)
+            for status_only in (True, False):
+                with self.assertRaisesRegex(MigrationError, "may have stopped after committing DDL"):
+                    run(db, self.migrations, self.adopted, status_only, lock)
+            with self.assertRaisesRegex(MigrationError, "does not match"):
+                run(db, self.migrations, self.adopted, False, lock, self.migrations[0].name)
+            self.assertEqual(run(db, self.migrations, self.adopted, False, lock, overlay.name), 0)
+            self.assertEqual(db.applied, [overlay.name])
+            self.assertEqual(run(db, self.migrations, self.adopted, True, lock), 2)
+
+    def test_completed_overlay_with_stale_marker_is_not_reapplied(self):
+        db = MigrationDatabase([ledger_entry(row) for row in self.migrations])
+        overlay = next(row for row in reversed(self.migrations) if row.overlay is not None)
+        with TemporaryFile("w+", encoding="utf-8") as lock, redirect_stdout(io.StringIO()):
+            HOSTED["record_overlay_attempt"](lock, overlay.name)
+            self.assertEqual(HOSTED["migrate"](db, self.migrations, self.adopted, True, lock), 0)
+            lock.seek(0)
+            self.assertEqual(lock.read(), "")
+        self.assertEqual(db.applied, [])
 
     def test_rejects_cross_environment_schema_before_opening_credentials(self):
         for environment, database in [("production", "ghstage_localcopy"), ("production", "ghprod_test"), ("staging", "ghprod_prod"), ("staging", "ghstage_x;SQL")]:

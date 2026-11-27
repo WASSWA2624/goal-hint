@@ -1,15 +1,16 @@
 import { spawnSync } from "node:child_process";
-import { closeSync, constants, fchownSync, fstatSync, fsyncSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, renameSync, rmdirSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { closeSync, constants, fchownSync, fstatSync, fsyncSync, lstatSync, mkdtempSync, openSync, readFileSync, realpathSync, renameSync, rmdirSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { posix } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs, parseEnv } from "node:util";
 
-const address = "209.74.80.202";
+const { basename, dirname, join } = posix;
+const address = "104.207.86.22";
+const sshPort = "21098";
 const node = "/opt/node-v24.18.1-linux-x64/bin/node";
 const targets = {
-  staging: { account: "ghstage", database: "ghstage_localcopy", file: ".env.test", host: "test.goalhint.com" },
-  production: { account: "ghprod", database: "ghprod_prod", file: ".env.production", host: "goalhint.com" },
+  staging: { account: "ghprod", application: "goal-hint-test", database: "ghprod_test", file: ".env.test", host: "test.goalhint.com" },
+  production: { account: "ghprod", application: "goal-hint", database: "ghprod_prod", file: ".env.production", host: "goalhint.com" },
 };
 const flutterwaveWebhookPath = "/api/payments/flutterwave/webhook";
 const flutterwaveWebhookSecretKey = "GOAL_HINT_FLUTTERWAVE_WEBHOOK_SECRET";
@@ -214,14 +215,16 @@ function identity(settings, environment, database) {
     url.password && !url.search && !url.hash && databaseName === database, "The hosted settings do not match the pinned environment and database.");
 }
 
+function targetPaths({ account, application }) {
+  const home = `/home/${account}`;
+  return { home, privateDir: join(home, `${application}-private`), active: join(home, application), releaseRoot: join(home, `${application}-releases`) };
+}
+
 function hostedFiles(environment, target) {
   const { account, database, file } = target;
-  const home = `/home/${account}`;
-  const privateDir = join(home, "goal-hint-private");
-  const active = join(home, "goal-hint");
+  const { home, privateDir, active, releaseRoot } = targetPaths(target);
   const release = realpathSync(active);
-  const expectedRoot = join(home, "goal-hint-releases");
-  ensure(lstatSync(active).isSymbolicLink() && dirname(release) === expectedRoot && realpathSync(expectedRoot) === expectedRoot &&
+  ensure(lstatSync(active).isSymbolicLink() && dirname(release) === releaseRoot && realpathSync(releaseRoot) === releaseRoot &&
     lstatSync(join(release, "app.js")).isFile(), "The active release is outside the pinned account's release directory.");
   const accountInfo = run("/usr/bin/getent", ["passwd", account]);
   const fields = accountInfo.stdout?.trim().split(":");
@@ -249,9 +252,17 @@ function hostedFiles(environment, target) {
   ensure(originals[0].equals(originals[1]), "The canonical and effective hosted settings differ. Reconcile them before syncing.");
   const settings = envText(originals[0]);
   identity(parseEnv(settings), environment, database);
-  const databaseResult = run("/usr/bin/mariadb", ["--defaults-file=/root/.my.cnf", "--protocol=socket", "--batch", "--skip-column-names",
-    `--database=${database}`, "--execute=SELECT DATABASE()"]);
-  ensure(databaseResult.status === 0 && databaseResult.stdout?.trim() === database, "The pinned hosted database could not be verified.");
+  const migrationOptions = join(privateDir, `mariadb-migrate-${environment}.cnf`);
+  const options = readFile(migrationOptions, owner).toString("utf8");
+  const unsupportedOption = /^(?:force|init-command|init-command-add|skip-ssl|skip-ssl-verify-server-cert)(?:[=\s]|$)|^!include/u;
+  ensure(options.split("\n").every((line) => !unsupportedOption.test(line.trim().toLowerCase().replace(/^-+/u, "").replaceAll("_", "-"))),
+    "The target's MariaDB options contain an unsupported client setting.");
+  const databaseResult = run("/usr/bin/mariadb", [`--defaults-file=${migrationOptions}`, "--host=127.0.0.1", "--port=3306", "--protocol=tcp",
+    "--ssl", "--ssl-verify-server-cert", "--batch", "--raw", "--skip-column-names", "--local-infile=0", "--skip-reconnect", "--connect-timeout=5",
+    `--database=${database}`, "--execute=SELECT DATABASE(); SHOW SESSION STATUS LIKE 'Ssl_cipher';"]);
+  const [connectedDatabase, cipher] = databaseResult.stdout?.trim().split("\n") ?? [];
+  ensure(databaseResult.status === 0 && connectedDatabase === database && /^Ssl_cipher\t\S+$/u.test(cipher ?? ""),
+    "The pinned hosted database could not be verified over TLS.");
   return { active, release, canonical, effective, restart, originals, owner, settings, commit: build.commit };
 }
 
@@ -276,21 +287,6 @@ function atomicWrite(path, bytes, owner) {
   }
 }
 
-function backupFiles(environment, originals) {
-  const base = "/root/goalhint-setup/config-backups";
-  const parent = join(base, environment);
-  for (const directory of [base, parent]) {
-    if (!lstatSync(directory, { throwIfNoEntry: false })) mkdirSync(directory, { mode: 0o700 });
-    const info = lstatSync(directory);
-    ensure(info.isDirectory() && info.uid === 0 && (info.mode & 0o777) === 0o700, "The private config backup directory is invalid.");
-  }
-  const stamp = new Date().toISOString().replace(/[-:.]/gu, "");
-  const backup = mkdtempSync(join(parent, `${stamp}-`));
-  writePrivate(join(backup, "canonical.env"), originals[0]);
-  writePrivate(join(backup, "effective.env"), originals[1]);
-  return backup;
-}
-
 function smoke(target, environment) {
   for (const path of ["/en/matches", "/api/matches", "/api/account/session"]) {
     const result = run("/usr/bin/curl", ["--silent", "--fail", "--noproxy", "*", "--max-time", "8",
@@ -304,43 +300,22 @@ function smoke(target, environment) {
   return true;
 }
 
-export function passengerProcesses(appRoot) {
-  const status = run("/usr/sbin/passenger-status", ["--show=xml"], {
-    env: { ...process.env, PASSENGER_INSTANCE_REGISTRY_DIR: "/opt/cpanel/ea-passenger/run/passenger-instreg" },
-  });
-  if (status.status !== 0) return null;
-  const query = `import json, sys, xml.etree.ElementTree as E
-root = E.parse(sys.stdin).getroot()
-groups = [g for g in root.findall(".//supergroup/group") if g.findtext("app_root") == sys.argv[1]]
-if len(groups) != 1:
-    raise SystemExit(1)
-print(json.dumps([int(p.findtext("spawn_end_time")) for p in groups[0].findall("./processes/process")
-    if p.findtext("life_status") == "ALIVE" and p.findtext("enabled") == "ENABLED"]))`;
-  const result = run("/usr/bin/python3", ["-c", query, appRoot], { input: status.stdout, stdio: ["pipe", "pipe", "pipe"] });
-  if (result.status !== 0) return null;
-  try { return JSON.parse(result.stdout); } catch { return null; }
-}
-
-function smokeAfterRestart(target, environment, active, restartTime) {
+function smokeAfterRestart(target, environment) {
   for (let attempt = 0; attempt < 4; attempt++) {
     Atomics.wait(wait, 0, 0, attempt === 0 ? 1_000 : 2_000);
-    if (!smoke(target, environment)) continue;
-    const processes = passengerProcesses(active);
-    if (processes?.length && processes.every((spawnTime) => spawnTime >= restartTime)) return true;
+    if (smoke(target, environment)) return true;
   }
   return false;
 }
 
-export function applyConfig({ paths, originals, updated, verify, backup, write, restart, smoke }) {
+export function applyConfig({ paths, originals, updated, verify, write, restart, smoke }) {
   verify();
   ensure(smoke(false), "Hosted HTTPS smoke failed before changes. No config was written.");
   verify();
-  const backupPath = backup();
   try {
     for (const path of paths) write(path, updated);
     restart();
     ensure(smoke(true), "Hosted HTTPS smoke failed after restart.");
-    return backupPath;
   } catch {
     let recovered = true;
     for (const [index, path] of paths.entries()) {
@@ -349,8 +324,8 @@ export function applyConfig({ paths, originals, updated, verify, backup, write, 
     if (recovered) {
       try { restart(); recovered = smoke(true); } catch { recovered = false; }
     }
-    ensure(recovered, `Config sync failed and recovery needs attention. Private backup: ${backupPath}`);
-    throw new SyncError(`Config sync failed. Both settings files were restored and HTTPS recovered. Private backup: ${backupPath}`);
+    ensure(recovered, "Config sync failed. Reconcile the canonical and effective settings and verify HTTPS before retrying.");
+    throw new SyncError("Config sync failed. Both settings files were restored and HTTPS recovered.");
   }
 }
 
@@ -361,7 +336,7 @@ function verifySeparateWebhookSecret(environment, changes) {
   if (!update) return;
   const otherEnvironment = environment === "staging" ? "production" : "staging";
   const other = targets[otherEnvironment];
-  const path = `/home/${other.account}/goal-hint-private/${other.file}`;
+  const path = join(targetPaths(other).privateDir, other.file);
   const settings = parseEnv(envText(readFile(path, { mode: 0o600, privateFile: true })));
   ensure(update.value !== settings[flutterwaveWebhookSecretKey], `${flutterwaveWebhookSecretKey} must differ across hosted environments.`);
 }
@@ -390,27 +365,22 @@ export function remoteMain(request) {
     const details = [`Verified ${environment} / ${target.database} / ${state.commit.slice(0, 12)}.`, ...patch.summary];
     if (apply && !updated.equals(state.originals[0])) {
       const paths = [state.canonical, state.effective];
-      let restartTime;
       const verify = () => {
         ensure(realpathSync(state.active) === state.release, "The active release changed during config verification.");
         ensure(paths.every((path, index) => readFile(path, state.owner).equals(state.originals[index])),
           "Hosted settings changed during config verification. Retry after checking the active target.");
       };
-      const backupPath = applyConfig({
+      applyConfig({
         paths, originals: state.originals, updated, verify,
-        backup: () => backupFiles(environment, state.originals),
         write: (path, bytes) => atomicWrite(path, bytes, state.owner),
         restart: () => {
           ensure(realpathSync(state.active) === state.release, "The active release changed before Passenger restart.");
           const now = new Date();
-          restartTime = now.getTime() * 1000;
           utimesSync(state.restart, now, now);
         },
-        smoke: (restarted) => restarted
-          ? smokeAfterRestart(target, environment, state.active, restartTime)
-          : smoke(target, environment) && Boolean(passengerProcesses(state.active)?.length),
+        smoke: (restarted) => restarted ? smokeAfterRestart(target, environment) : smoke(target, environment),
       });
-      details.push("Settings applied. HTTPS smoke passed.", `Private backup: ${backupPath}`);
+      details.push("Settings applied. Passenger restart requested and HTTPS smoke passed.");
     } else {
       details.push(apply ? "No changes needed. Passenger was not restarted." : "Dry-run. No hosted files changed.");
     }
@@ -420,21 +390,22 @@ export function remoteMain(request) {
   }
 }
 
-function sshRequest(request) {
+function sshRequest(request, identityFile) {
   const target = targets[request.environment];
   // Lock both targets in one order when comparing webhook secrets. Read-only descriptors keep dry runs from creating files.
   const lockTargets = webhookSecretUpdate(request.changes) ? Object.values(targets) : [target];
-  const locks = lockTargets.map(({ account }) => `/home/${account}/goal-hint-private/.release.lock`);
+  const locks = lockTargets.map((entry) => join(targetPaths(entry).privateDir, ".release.lock"));
   const verifyLocks = locks.map(lock => `test -f ${lock} && test ! -L ${lock}`).join(" && ");
   const holdLocks = locks.map((_, index) => `/usr/bin/flock --exclusive --wait 20 ${9 - index}`).join(" && ");
   const descriptors = locks.map((lock, index) => `${9 - index}<${lock}`).join(" ");
   const remote = `${verifyLocks} && { ${holdLocks} && exec /usr/bin/env -i PATH=/usr/bin:/bin ${node} --input-type=module -; } ${descriptors}`;
   const source = readFileSync(fileURLToPath(import.meta.url), "utf8");
   const input = `${source}\nremoteMain(${JSON.stringify(request)});\n`;
-  const options = ["-F", "none", "-T", "-i", join(homedir(), ".ssh", "goalhint_vps_setup"),
-    "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=yes",
+  const options = ["-F", "none", "-T", "-p", sshPort,
+    "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "UserKnownHostsFile=~/.ssh/goalhint_hypernova_known_hosts",
     "-o", "ConnectTimeout=20", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3"];
-  const result = spawnSync("ssh", [...options, `root@${address}`, remote], { input, encoding: "utf8", maxBuffer: 64 * 1024, windowsHide: true });
+  if (identityFile) options.push("-i", identityFile, "-o", "IdentitiesOnly=yes");
+  const result = spawnSync("ssh", [...options, `${target.account}@${address}`, remote], { input, encoding: "utf8", maxBuffer: 64 * 1024, windowsHide: true });
   ensure(result.status === 0, "The pinned VPS or its release lock could not be reached over strict SSH.");
   let response;
   try { response = JSON.parse(result.stdout); } catch { throw new SyncError("The VPS did not return a valid config result."); }
@@ -447,10 +418,11 @@ function sshRequest(request) {
 function main() {
   const { values } = parseArgs({ options: {
     target: { type: "string" }, key: { type: "string", multiple: true, default: [] },
-    clear: { type: "string", multiple: true, default: [] }, apply: { type: "boolean" }, help: { type: "boolean" },
+    clear: { type: "string", multiple: true, default: [] }, identity: { type: "string" },
+    apply: { type: "boolean" }, help: { type: "boolean" },
   } });
   if (values.help) {
-    console.log("Usage: npm run env:sync -- --target staging|production --key KEY [--key KEY ...] [--clear OPTIONAL_KEY ...] [--apply]");
+    console.log("Usage: npm run env:sync -- --target staging|production --key KEY [--key KEY ...] [--clear OPTIONAL_KEY ...] [--identity PATH] [--apply]");
     console.log("Reads next-js/.env.test for staging or next-js/.env.production for production. Dry-run is the default.");
     console.log(`Web keys: ${[...webKeys].join(", ")}`);
     console.log(`Flutterwave keys (sandbox for staging, live for production): ${[...flutterwaveKeys].join(", ")}`);
@@ -464,7 +436,7 @@ function main() {
     throw new SyncError(`Read the private next-js/${target.file} file before syncing.`);
   }
   const changes = localChanges(text, values.target, values.key, values.clear);
-  const lines = sshRequest({ environment: values.target, changes, apply: values.apply === true });
+  const lines = sshRequest({ environment: values.target, changes, apply: values.apply === true }, values.identity);
   for (const line of lines) console.log(line);
 }
 

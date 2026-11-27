@@ -115,7 +115,6 @@ function transaction({ healthy = () => true, failWrite } = {}) {
   const args = {
     paths, originals, updated: "changed",
     verify: () => calls.push("verify"),
-    backup: () => { calls.push("backup"); return "/private/backup"; },
     write: (path, value) => {
       calls.push(`write ${path} ${value}`);
       if (failWrite?.(path, value)) throw new Error("private write failure");
@@ -127,14 +126,14 @@ function transaction({ healthy = () => true, failWrite } = {}) {
   return { files, calls, args };
 }
 
-test("apply requires a healthy baseline and makes both private backups before any write", () => {
+test("apply verifies a healthy baseline before atomically updating both settings files", () => {
   const unhealthy = transaction({ healthy: () => false });
   assert.throws(() => applyConfig(unhealthy.args), /before changes/u);
   assert.deepEqual(unhealthy.calls, ["verify", "smoke before changes"]);
 
   const healthy = transaction();
-  assert.equal(applyConfig(healthy.args), "/private/backup");
-  assert.deepEqual(healthy.calls, ["verify", "smoke before changes", "verify", "backup", "write canonical changed", "write effective changed", "restart", "smoke after restart"]);
+  applyConfig(healthy.args);
+  assert.deepEqual(healthy.calls, ["verify", "smoke before changes", "verify", "write canonical changed", "write effective changed", "restart", "smoke after restart"]);
   assert.deepEqual([...healthy.files.values()], ["changed", "changed"]);
 });
 
@@ -150,13 +149,13 @@ test("smoke and partial write failures restore both originals and restart again"
   assert.deepEqual([...partial.files.values()], partial.args.originals);
 });
 
-test("rollback attempts both originals and retains the private backup path if recovery fails", () => {
+test("rollback attempts both originals and reports the needed reconciliation if recovery fails", () => {
   const failed = transaction({
     healthy: (after) => !after,
     failWrite: (path, value) => path === "canonical" && value === "canonical-original",
   });
   assert.throws(() => applyConfig(failed.args), (error) =>
-    error.message === "Config sync failed and recovery needs attention. Private backup: /private/backup");
+    error.message === "Config sync failed. Reconcile the canonical and effective settings and verify HTTPS before retrying.");
   assert.deepEqual([...failed.files.values()], ["changed", "effective-original"]);
   assert.deepEqual(failed.calls.slice(-2), ["write canonical canonical-original", "write effective effective-original"]);
 });

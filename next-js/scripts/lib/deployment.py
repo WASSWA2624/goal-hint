@@ -1,10 +1,10 @@
 """Shared repository-level deployment paths for the web release tools."""
-from datetime import datetime
 import hashlib
 import json
 import re
 import shutil
 import subprocess
+import tarfile
 import tempfile
 import zipfile
 from pathlib import Path
@@ -15,8 +15,9 @@ DEPLOY_ROOT = ROOT.parent / "deploy"
 PRIVATE_ROOT = DEPLOY_ROOT / ".private" / "nextjs"
 
 
-def web_archive(*, development: bool = False) -> Path:
-    version = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
+def web_archive(*, development: bool = False, version: str | None = None) -> Path:
+    if version is None:
+        version = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
     suffix = "-dev" if development else ""
     return DEPLOY_ROOT / f"goal-hint-nextjs-{version}{suffix}.zip"
 
@@ -25,18 +26,49 @@ def git(*args: str) -> str:
     return subprocess.check_output(["git", *args], cwd=ROOT, encoding="utf-8", creationflags=hidden_process())
 
 
+EXCLUDED_SOURCE_DIRECTORIES = {".git", ".private", ".goal-hint", ".app-downloads", ".next", "node_modules",
+                               "__pycache__", "deploy", "build", "out", "dist", "coverage", "test-results",
+                               "playwright-report", "output", ".tmp", ".vercel"}
+
+
+def include_source(relative: Path) -> bool:
+    if re.search(r"(^|/)\.env(?!\.example$)[^/]*$", relative.as_posix()):
+        raise CommandError(f"Refusing to stage an environment file: {relative.as_posix()}")
+    return not (EXCLUDED_SOURCE_DIRECTORIES.intersection(relative.parts) or
+                relative.parts[:3] == ("src", "server", "generated"))
+
+
+def export_commit(destination: Path, commit: str) -> None:
+    """Copy exact committed application bytes without reading working-tree files."""
+    command = ["git", "-c", "core.autocrlf=false", "-c", "core.eol=lf", "archive", "--format=tar", commit]
+    with subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE,
+                          creationflags=hidden_process()) as process:
+        try:
+            with process.stdout, tarfile.open(fileobj=process.stdout, mode="r|") as archive:
+                for member in archive:
+                    relative = Path(member.name)
+                    if relative.is_absolute() or ".." in relative.parts:
+                        raise CommandError("Git returned a file outside the application source tree.")
+                    if not include_source(relative) or member.isdir():
+                        continue
+                    if not member.isfile():
+                        raise CommandError(f"Unsupported source file: {member.name}")
+                    target = destination / relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    with archive.extractfile(member) as source, target.open("wb") as output:
+                        shutil.copyfileobj(source, output)
+            if process.wait():
+                raise CommandError("Git could not export the approved application source.")
+        except tarfile.TarError:
+            raise CommandError("Git could not export the approved application source.") from None
+
 
 def stage_source(destination: Path) -> None:
     """Export Git-visible application files without private or generated state."""
-    excluded = {".git", ".private", ".goal-hint", ".app-downloads", ".next", "node_modules", "__pycache__",
-                "deploy", "build", "out", "dist", "coverage", "test-results", "playwright-report",
-                "output", ".tmp", ".vercel"}
     destination.mkdir(parents=True, exist_ok=True)
     for name in filter(None, git("ls-files", "-z", "--cached", "--others", "--exclude-standard").split("\0")):
         relative = Path(name)
-        if re.search(r"(^|/)\.env(?!\.example$)[^/]*$", relative.as_posix()):
-            raise CommandError(f"Refusing to stage an environment file: {name}")
-        if any(part in excluded for part in relative.parts) or relative.parts[:3] == ("src", "server", "generated"):
+        if not include_source(relative):
             continue
         original, target = ROOT / relative, destination / relative
         if not original.exists():
@@ -66,7 +98,7 @@ def write_zip(directory: Path, target: Path, prefix: str = "goal-hint") -> int:
         for item in [directory, *entries]:
             relative = item.relative_to(directory).as_posix() if item != directory else ""
             name = prefix + "/" + relative + ("/" if item.is_dir() and relative else "")
-            info = zipfile.ZipInfo(name, datetime.now().timetuple()[:6])
+            info = zipfile.ZipInfo(name)
             info.create_system = 3
             info.external_attr = ((0o40755 if item.is_dir() else 0o100644) << 16) | (0x10 if item.is_dir() else 0)
             info.compress_type = zipfile.ZIP_DEFLATED
