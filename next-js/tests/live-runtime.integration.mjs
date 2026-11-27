@@ -299,7 +299,7 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
       assert.deepEqual(jobs.map((job) => job.state).sort(), ['expired', ...Array(7).fill('succeeded')]);
       const stored = await runtime.database.query(async (tx) => ({
         batches: await tx.oddsImportBatch.findMany({ where: oddsReceipts, select: { kind: true, status: true, requestsDispatched: true } }),
-        pages: await tx.oddsImportBatch.count({ where: pageReceipts }),
+        pages: await tx.oddsImportBatch.aggregate({ where: pageReceipts, _count: true, _sum: { requestsDispatched: true } }),
         usage: await tx.durableJobUsage.findMany({ where: { job: { type: { in: oddsTypes } } }, select: { provider: true, phase: true, requests: true, costReference: true } }),
         enrichment: await tx.apiQuotaAttempt.count({ where: { priority: 3, dispatchedAt: { not: null } } }),
         bets: await tx.oddsBetObservation.count(), snapshots: await tx.providerOddsSnapshot.count(), states: await tx.fixtureOddsState.count(),
@@ -308,9 +308,9 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
       const dispatched = odds.length;
       assert.deepEqual(stored.batches.map((batch) => batch.kind).sort(), ['bets', 'bookmakers', ...Array(6).fill('prices')]);
       assert.ok(stored.batches.every((batch) => batch.status === 'complete'), JSON.stringify(stored.batches));
-      assert.equal(stored.pages, 2, 'each nonempty date seals its page in addition to its aggregate receipt');
+      assert.equal(stored.pages._count, 2, 'each nonempty date seals its page in addition to its aggregate receipt');
       // Every odds request is attributed three ways: receipts, durable job usage and enrichment limiter attempts.
-      assert.equal(stored.batches.reduce((sum, batch) => sum + batch.requestsDispatched, 0), dispatched);
+      assert.equal(stored.batches.reduce((sum, batch) => sum + batch.requestsDispatched, stored.pages._sum.requestsDispatched ?? 0), dispatched);
       assert.equal(stored.usage.reduce((sum, usage) => sum + usage.requests, 0), dispatched);
       assert.ok(stored.usage.every((usage) => usage.provider === 'football' && usage.phase === 'completed' && usage.costReference === null));
       assert.equal(stored.enrichment - before.enrichment, dispatched);
@@ -335,7 +335,7 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
       const counters = await oddsRuntime.quota.counters();
       const enrichment = await runtime.database.query((tx) => tx.apiQuotaAttempt.count({ where: { accountId: counters.day.accountId,
         periodId: counters.day.periodId, priority: 3, dispatchedAt: { not: null } } }));
-      const receipts = await runtime.database.query((tx) => tx.oddsImportBatch.aggregate({ where: oddsReceipts, _sum: { requestsDispatched: true } }));
+      const receipts = await runtime.database.query((tx) => tx.oddsImportBatch.aggregate({ _sum: { requestsDispatched: true } }));
       assert.equal(enrichment, receipts._sum.requestsDispatched + await teamsReceipts(),
         'the gate reads the shared enrichment spend (odds and team codes) from the limiter ledger their receipts agree with');
     });

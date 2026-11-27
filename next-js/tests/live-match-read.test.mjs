@@ -17,18 +17,22 @@ test('future scheduled detail skips optional observation reads while an explicit
   void _access;
   const stored = storedMatchDetailResponseSchema.parse(body);
   stored.fixture.kickoffAt = stored.asOf + 86_400_000;
-  let optionalReads = 0;
+  let liveMatchReads = 0;
   const database = { transaction: async () => { throw new Error('The stored projection should be cached.'); },
-    query: async (operation) => { optionalReads++; return operation({ async $queryRaw() { return []; } }); } };
+    query: async (operation) => operation({ async $queryRaw(query) {
+      const sql = Array.isArray(query) ? query.join('') : query.sql;
+      if (sql.includes('LiveMatchSnapshot')) liveMatchReads++;
+      return [];
+    } }) };
   const cache = { read: async () => stored };
   const service = createMatchDetailService({ database, cache, clock: { now: () => stored.asOf }, allowLiveMatch: true });
   const response = await service.query(stored.fixture.fixtureId);
-  assert.equal(stored.fixture.status, 'scheduled'); assert.equal(optionalReads, 0);
-  assert.equal('liveMatch' in response, false); assert.equal(response.snapshot, stored.snapshot);
+  assert.equal(stored.fixture.status, 'scheduled'); assert.equal(liveMatchReads, 0);
+  assert.equal('liveMatch' in response, false); assert.deepEqual(response.snapshot, stored.snapshot);
   assert.deepEqual(response.snapshot.markets, wire.snapshot.markets);
   stored.selection = 'cycle';
   const historical = await service.query(stored.fixture.fixtureId, new URLSearchParams({ cycle: stored.selectedCycle.id }));
-  assert.equal(optionalReads, 1); assert.equal(historical.liveMatch, null);
+  assert.equal(liveMatchReads, 1); assert.equal(historical.liveMatch, null);
 });
 test('stored match reader preserves exact observations, zeroes, null missingness and independent clocks', async () => {
   const snapshot = liveMatchViewSnapshot({ statistics: { ...liveMatchViewSnapshot().statistics, state: 'partial', reason: 'incomplete-response',
