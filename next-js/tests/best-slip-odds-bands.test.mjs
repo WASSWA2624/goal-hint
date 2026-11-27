@@ -229,11 +229,11 @@ test('every band sees the same cohort and scarce bands cannot displace stronger 
   assert.equal(fixtures.length, 3);
 });
 
-test('a stronger higher-band slip retains shared fixtures even with a longer span', async () => {
+test('a stronger higher-band slip wins shared fixtures inside the same 15-minute span band', async () => {
   const range = bestSlipFixtureWindow(today), at = range.startInclusive;
-  const pick = (id, odds, probability, kickoffHours, bookmakerId = 8) => pricedEditorialSelection(id,
-    { at, kickoffAt: at + kickoffHours * 3_600_000, odds, bookmakerId, probability });
-  const selections = [pick(1, '2.40', 0.99, 1), pick(2, '2.40', 0.98, 4), pick(3, '1.50', 0.80, 1), pick(4, '2.70', 0.91, 1, 9)];
+  const pick = (id, odds, probability, kickoffMinutes, bookmakerId = 8) => pricedEditorialSelection(id,
+    { at, kickoffAt: at + kickoffMinutes * 60_000, odds, bookmakerId, probability });
+  const selections = [pick(1, '2.40', 0.99, 60), pick(2, '2.40', 0.98, 75), pick(3, '1.50', 0.80, 60), pick(4, '2.70', 0.91, 60, 9)];
   const batches = [];
   const publisher = createDailySlipPublisher({ database: {}, competitionIds: [], now: () => at, verifyPublicOdds: () => true,
     store: { hourlyState: async () => ({ counts: new Map(), publishedHours: new Map(),
@@ -248,6 +248,29 @@ test('a stronger higher-band slip retains shared fixtures even with a longer spa
     [['1.5-5', ['2.70']], ['5-10', ['5.76']]]);
   assert.deepEqual(batches[1].slips[0].selections.map(({ fixtureId }) => fixtureId), selections.slice(0, 2).map(({ fixtureId }) => fixtureId));
   assert.equal(result.bandResults[0].fixtureConflicts, 2);
+});
+
+test('allocation uses the shortest feasible span band and carries unused fixtures to wider bands', async () => {
+  const range = bestSlipFixtureWindow(today), at = range.startInclusive;
+  const pick = (id, odds, probability, kickoffMinutes, bookmakerId) => pricedEditorialSelection(id,
+    { at, kickoffAt: at + kickoffMinutes * 60_000, odds, bookmakerId, probability });
+  const selections = [pick(1, '2.40', 0.99, 60, 8), pick(2, '1.50', 0.80, 60, 8), pick(3, '2.40', 0.98, 105, 8),
+    pick(4, '1.80', 0.91, 120, 9), pick(5, '1.70', 0.90, 165, 9)];
+  const batches = [];
+  const publisher = createDailySlipPublisher({ database: {}, competitionIds: [], now: () => at, verifyPublicOdds: () => true,
+    store: { hourlyState: async () => ({ counts: new Map(), publishedHours: new Map(),
+      closed: new Set(), fixtures: new Set(), combinations: new Set() }),
+    async append(input) { batches.push(input); return { status: 'published', appended: input.slips.length }; } },
+    read: async () => ({ today, asOf: at, range, records: [], featuredSelections: selections,
+      searchLimited: false, partialCoverage: false }) });
+
+  const result = await publisher.publish();
+  assert.equal(result.newSlips, 2);
+  assert.deepEqual(batches.map(({ oddsBand, slips }) => [oddsBand, slips.map(slip => slip.totalOdds)]),
+    [['1.5-5', ['3.60', '3.06']]]);
+  assert.equal(result.bandResults.find(({ band }) => band === '5-10').reason, 'fixture-conflict');
+  const slips = batches[0].slips.map(({ selections }) => selections.map(({ fixtureId }) => fixtureId));
+  assert.deepEqual(slips, [selections.slice(0, 2), selections.slice(3)].map(group => group.map(({ fixtureId }) => fixtureId)));
 });
 
 test('sparse odds bands stop at the eligible disjoint count and respect prior membership', () => {

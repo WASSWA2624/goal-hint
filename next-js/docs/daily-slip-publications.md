@@ -40,13 +40,15 @@ actionable rows from the closing set with their original day and rank.
 Explicit dates continue to browse their original publications.
 
 The earliest leg must be inside the release lookahead. Later legs can kick off
-through the end of the operational set. The engine ranks by the conservative
-whole-slip probability bound. At the same bound, a shorter span between the
-first and last verified kickoffs ranks higher, including across midnight.
-Within a band, constituent risk, exact bookmaker support and price distinguish
-remaining ties. Each open band searches the same pool. Candidates sharing
-fixtures compete by bound and then span, with band precedence rotating at exact
-ties. Each commit appends at most 32 slips per band and slot
+through the end of the operational set. The engine searches 0–15 minutes between
+the first and last verified kickoffs, then over 15 through 30, then over 30
+through 45, continuing in 15-minute steps. These are elapsed spans, including
+across midnight. Within each step, the conservative whole-slip probability bound
+ranks first, followed by the exact shortest span. Constituent risk, exact
+bookmaker support and price distinguish remaining ties within an odds band.
+Each open band searches the same pool. The publisher allocates fixtures to the
+narrowest eligible span step first and carries unused fixtures forward. Odds
+band precedence rotates at exact ties. Each commit appends at most 32 slips per band and slot
 to bound transaction work. The daily set has no publication quota. Later
 checks can append new qualifying slips after any prior count. Search limits
 are reported in the run and recorded on affected batches. Private `bandResults`

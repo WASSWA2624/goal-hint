@@ -1,6 +1,6 @@
 # Best Slips selection verification, 27 November 2026
 
-The initial staging trial used a 30-minute maximum. This report retains its measurements as historical evidence. The corrected policy ranks by the conservative win-probability bound first, then shortest kickoff span at the same bound. Any span allowed by the operational set can qualify.
+The initial staging trial used a 30-minute maximum. The current selection policy widens in 15-minute kickoff-span steps and ranks by the conservative win-probability bound within each step. Any span allowed by the operational set can qualify. The earlier measurements remain below for comparison.
 
 ## Production baseline
 
@@ -52,9 +52,9 @@ Focused regression checks covered the exact 30-minute and +1 ms boundaries, time
 
 The private staging publisher candidate from `0b7d1f7d` passed 213 focused tests. Its read-only preflight verified 95 completed migrations and found zero operational fixtures and zero append batches. The staging odds gate returned `odds-unavailable` before a cohort read or publication write. Staging therefore verifies the host runtime and guard, with eligible-publication cases exercised by synthetic fixtures and isolated MySQL.
 
-The checksummed staging web artifact activated the same `0b7d1f7d` commit and served build `6Z5klNMZIB555yj-7hM9C`. The three app pages, the Matches and guest session APIs, and all six Best Slips band queries returned HTTP 200. Staging retained `noindex`. Its migration ledger verified all 95 entries. Production promotion awaits owner approval. [Staging release](../../../implementation-docs/deployment-and-version-control.md#best-slips-selection-staging-release).
+The checksummed staging web artifact activated the same `0b7d1f7d` commit and served build `6Z5klNMZIB555yj-7hM9C`. The three app pages, the Matches and guest session APIs, and all six Best Slips band queries returned HTTP 200. Staging retained `noindex`. Its migration ledger verified all 95 entries. This capped trial ran only on staging. [Staging release](../../../implementation-docs/deployment-and-version-control.md#best-slips-selection-staging-release).
 
-## Probability-first correction
+## Intermediate probability-first comparison
 
 The corrected selector replayed the same 83 eligible fixture outcomes and 261 exact offers at the captured clock. It selected two 2.50–5.00 slips with kickoff spans of 270 and 105 minutes and conservative probability bounds of 42.99% and 30.97%. The capped trial selected two 30-minute slips with bounds of 36.67% and 26.61%. The wider 2.54 slip in the corrected plan covers 17:00 to 21:30 Kampala time. Its larger bound took priority over the shorter alternatives.
 
@@ -67,6 +67,21 @@ The corrected selector replayed the same 83 eligible fixture outcomes and 261 ex
 | 50.00–100.00 | 0 | 0 | No eligible slip in the sampled pool. |
 | 100.00–200.00 | 0 | 0 | No eligible slip in the sampled pool. |
 
-Selection and allocation both prefer the highest conservative bound, then the smallest span at that bound. Tests cover a higher-bound wide pair, a shorter pair winning an equal-bound comparison, cross-band fixture conflicts, late legs within the operational set and an eligible 90-minute append across Kampala midnight in isolated MySQL. The replay uses stored snapshots and an in-memory publication store.
+The intermediate build ranked all candidates by the highest conservative bound, then the smallest span at that bound. It was built and tested privately. It was superseded before web activation by the 15-minute widening policy. The replay used stored snapshots and an in-memory publication store.
+
+## 15-minute widening replay
+
+With the same 83 eligible fixtures and 261 offers, the selector planned three disjoint 2.50–5.00 slips. It first selected six simultaneous 20:00 kickoffs, then a seven-leg slip from 20:30 to 21:00 and a six-leg slip from 18:00 to 19:00. Their spans were **0, 30 and 60 minutes**, and their conservative bounds were 25.90%, 38.16% and 40.89%. These plans illustrate shorter-span precedence and carryover of unused fixtures at wider steps.
+
+| Exact odds band | Retained alternatives | Selected | Outcome |
+| --- | ---: | ---: | --- |
+| 2.50–5.00 | 1,739 | 3 | The remaining alternatives conflicted with selected fixtures. The search reached a bound. |
+| 5.00–10.00 | 0 | 0 | Feasibility remained unresolved at the search limit. |
+| 10.00–20.00 | 0 | 0 | No eligible slip found within the inspected pool. |
+| 20.00–50.00 | 0 | 0 | No eligible slip found within the inspected pool. |
+| 50.00–100.00 | 0 | 0 | No eligible slip found within the inspected pool. |
+| 100.00–200.00 | 0 | 0 | No eligible slip found within the inspected pool. |
+
+The replay used an in-memory publication store. Focused tests cover exact 15-, 30- and 45-minute boundaries, highest probability within the same step, fallback to wider spans, fixture carryover and selection across midnight. An isolated MySQL check verified append of a 90-minute pair across Kampala midnight.
 
 [Automatic selection](../../../implementation-docs/automatic-slips.md) · [Featured policy](../../../implementation-docs/prediction-engine.md)

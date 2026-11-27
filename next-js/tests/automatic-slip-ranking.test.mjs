@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { bestSlipKickoffSpanMs } from '../src/domain/best-slip-publication-hour.ts';
-import { buildHourlyBestSlips } from '../src/domain/best-slips.ts';
+import { automaticBestSlipPriority, buildHourlyBestSlips } from '../src/domain/best-slips.ts';
 import { getReportingDayBounds } from '../src/domain/calendar.ts';
 import { pricedEditorialSelection } from './helpers/best-slip-publication-fixtures.mjs';
 
@@ -28,10 +28,10 @@ test('probability ranks eligible kickoff groups and the release horizon defers l
   assert.deepEqual(fixtureIds(build([...early, ...later, ...refreshed], 3, asOf, new Set(ids(...early, ...later)))), [ids(...evening)]);
 });
 
-test('the stronger probability bound wins even when kickoffs are ten hours apart', () => {
+test('an eligible narrow step wins ahead of stronger probability ten hours apart', () => {
   const wide = [selection(1, 240, '2.00', 0.97), selection(2, 840, '2.05', 0.98)];
   const nearby = [selection(3, 295, '2.00', 0.94, { bookmakerId: 9 }), selection(4, 300, '2.00', 0.95, { bookmakerId: 9 })];
-  assert.deepEqual(fixtureIds(build([...nearby, ...wide])), [ids(...wide)]);
+  assert.deepEqual(fixtureIds(build([...nearby, ...wide], 2)), [ids(...nearby), ids(...wide)]);
   assert.equal(bestSlipKickoffSpanMs(wide), 600 * minute);
 });
 
@@ -42,7 +42,7 @@ test('stronger probability ranks ahead of an earlier adaptive kickoff group', ()
   assert.deepEqual(fixtureIds(build([...early, ...later])), [ids(later[0], later[1])]);
 });
 
-test('in the same kickoff group probability outranks price, span and selection count', () => {
+test('within 15 minutes probability outranks price, exact span and selection count', () => {
   const single = selection(1, 200, '4.60', 0.82);
   const pair = [selection(2, 196, '2.04', 0.93), selection(3, 205, '2.01', 0.92)];
   const [slip] = build([single, ...pair]);
@@ -77,6 +77,28 @@ test('equally qualified pairs prefer simultaneous, 15 minute and 30 minute start
   const nearby = [selection(3, 255, '1.90', 0.90), selection(4, 270, '1.90', 0.90)];
   const simultaneous = [selection(5, 310, '2.10', 0.90), selection(6, 310, '2.10', 0.90)];
   assert.deepEqual(fixtureIds(build([...spread, ...nearby, ...simultaneous], 3)), [ids(...simultaneous), ids(...nearby), ids(...spread)]);
+});
+
+test('elapsed windows include 15, 30 and 45 exactly and expand just beyond each boundary', () => {
+  const minuteSpans = [0, 15, 15 + 1 / minute, 30, 30 + 1 / minute, 45, 45 + 1 / minute];
+  const probabilities = [0.85, 0.96, 0.86, 0.97, 0.87, 0.98, 0.99];
+  const pairs = minuteSpans.map((span, index) => {
+    const bookmakerId = index + 1;
+    const first = selection(2 * index + 1, 240, '2.00', probabilities[index], { bookmakerId });
+    const last = selection(2 * index + 2, 240 + span, '2.00', probabilities[index],
+      { bookmakerId, kickoffAt: first.kickoffAt + Math.round(span * minute) });
+    return [first, last];
+  });
+  const slips = build(pairs.flat().reverse(), pairs.length);
+  assert.deepEqual(fixtureIds(slips), [pairs[1], pairs[0], pairs[3], pairs[2], pairs[5], pairs[4], pairs[6]].map(pair => ids(...pair)));
+  assert.deepEqual(slips.map(slip => automaticBestSlipPriority(slip).spanBucket), [1, 1, 2, 2, 3, 3, 4]);
+});
+
+test('used fixtures are excluded and remaining fixtures carry into wider steps', () => {
+  const picks = [240, 248, 275, 320].map((kickoff, index) => selection(index + 1, kickoff, '2.00', 0.96 - index * 0.01));
+  const slips = build(picks, 2);
+  assert.deepEqual(fixtureIds(slips), [ids(...picks.slice(0, 2)), ids(...picks.slice(2))]);
+  assert.deepEqual(slips.map(slip => automaticBestSlipPriority(slip).spanBucket), [1, 3]);
 });
 
 test('shorter span decides equal bounds ahead of stronger constituents, more bookmakers and price', () => {
@@ -137,13 +159,33 @@ test('the bounded selector accepts every distinct qualifying slip up to its requ
   }
 });
 
-test('bounded full-day search reaches strong late legs before broad enumeration exhausts the budget', () => {
-  const anchor = selection(1, 240, '1.90', 0.94);
-  const weaker = Array.from({ length: 47 }, (_, index) => selection(index + 2, 500 + index * 7, '1.90', 0.85));
-  const stronger = Array.from({ length: 7 }, (_, index) => selection(index + 49, 1000 + index * 10, '1.90', 0.99));
-  const result = buildHourlyBestSlips(day, '100-200', 1, midnight, { selections: [...weaker, anchor, ...stronger] }, new Set(), undefined,
+test('bounded full-day search reaches the narrow step before spending the budget on wide alternatives', () => {
+  const short = Array.from({ length: 8 }, (_, index) => selection(index + 1, 240 + 2 * index, '1.90', 0.90));
+  const wide = Array.from({ length: 47 }, (_, index) => selection(index + 9, 500 + index * 7, '1.90', 0.99));
+  const result = buildHourlyBestSlips(day, '100-200', 1, midnight, { selections: [...wide, ...short] }, new Set(), undefined,
     { includeAlternatives: true });
   assert.equal(result.searchLimited, true);
-  assert.deepEqual(fixtureIds(result.slips), [ids(anchor, ...stronger)]);
-  assert.deepEqual(fixtureIds(result.alternatives.slice(0, 1)), [ids(anchor, ...stronger)]);
+  assert.deepEqual(fixtureIds(result.slips), [ids(...short)]);
+  assert.deepEqual(fixtureIds(result.alternatives.slice(0, 1)), [ids(...short)]);
+});
+
+test('the disjoint reserve carries a wider slip past a full retained heap of narrow alternatives', () => {
+  const narrow = Array.from({ length: 16 }, (_, index) => selection(index + 1, 240, '1.60', 0.90));
+  const wide = [selection(17, 240, '3.30', 0.90, { bookmakerId: 9 }), selection(18, 285, '3.30', 0.90, { bookmakerId: 9 })];
+  const result = buildHourlyBestSlips(day, '10-20', 4, midnight, { selections: [...wide, ...narrow] }, new Set(), undefined,
+    { includeAlternatives: true });
+  assert.equal(result.searchLimited, true);
+  assert.equal(result.slips.length, 4);
+  assert.deepEqual(fixtureIds(result.slips.slice(-1)), [ids(...wide)]);
+});
+
+test('the bounded widening search can prove an odds band is infeasible across many books', () => {
+  const selections = Array.from({ length: 210 }, (_, index) => selection(index + 1, 240 + index % 7,
+    '1.90', 0.90, { bookmakerId: 1 + Math.floor(index / 7) }));
+  const result = buildHourlyBestSlips(day, '100-200', 4, midnight, { selections }, new Set(), undefined,
+    { includeAlternatives: true });
+  assert.deepEqual(result.slips, []);
+  assert.equal(result.searchDiagnostics.candidateOffers, 210);
+  assert.equal(result.searchDiagnostics.bookmakerPrunedBranches, 0);
+  assert.equal(result.searchLimited, false);
 });

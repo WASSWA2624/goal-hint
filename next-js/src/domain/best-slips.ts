@@ -15,7 +15,7 @@ import type { CardSnapshotPick } from "./match-card.ts";
 import type { PeriodPerformance } from "./browse-period.ts";
 import type { ContentAccess } from "./paywall.ts";
 import { bestSlipBand, bestSlipBandLimit, bestSlipExactRange, bestSlipOddsBands, dailyBestSlipBandLimit, defaultBestSlipOddsBand, type BestSlipOddsBand } from "./best-slip-odds-bands.ts";
-import { bestSlipFixtureWindow, bestSlipKickoffBufferMs, bestSlipKickoffSpanMs,
+import { bestSlipFixtureWindow, bestSlipKickoffBufferMs, bestSlipKickoffSpanMs, bestSlipKickoffSpanStepMs,
   bestSlipPreferredKickoffWindowMs, bestSlipPublicationIntervalMs } from "./best-slip-publication-hour.ts";
 import { slipMarketFamilies } from "./slip-markets.ts";
 import { slipProbabilityLowerBound } from "./slip-probability.ts";
@@ -126,13 +126,14 @@ type HourlyBestSlipResult = Omit<SlipBuildResult, "editorialSearch"> & Readonly<
 /** The Fréchet bound ranks stored marginal probabilities without assuming independent legs. */
 export function automaticBestSlipPriority(slip: BuiltSlip) {
   const probabilitySum = slip.selections.reduce((sum, { probability }) => sum + probability, 0);
-  return { lowerBound: slipProbabilityLowerBound(probabilitySum, slip.selections.length),
-    span: bestSlipKickoffSpanMs(slip.selections) };
+  const span = bestSlipKickoffSpanMs(slip.selections);
+  return { spanBucket: Math.max(1, Math.ceil(span / bestSlipKickoffSpanStepMs)),
+    lowerBound: slipProbabilityLowerBound(probabilitySum, slip.selections.length), span };
 }
 
 export function compareAutomaticBestSlipPriority(left: ReturnType<typeof automaticBestSlipPriority>,
   right: ReturnType<typeof automaticBestSlipPriority>) {
-  return right.lowerBound - left.lowerBound || left.span - right.span;
+  return left.spanBucket - right.spanBucket || right.lowerBound - left.lowerBound || left.span - right.span;
 }
 
 /** Rank same-book combinations whose first kickoff is within the slot's release horizon. */
@@ -207,7 +208,7 @@ export function buildHourlyBestSlips(day: ReportingDate, band: BestSlipOddsBand,
     },
     compare,
   }, { editorial: { ...editorial, selections: eligible, prioritizeRank: true,
-    latestFirstKickoffAt, includeAlternatives: options.includeAlternatives === true,
+    latestFirstKickoffAt, kickoffSpanStepMs: bestSlipKickoffSpanStepMs, includeAlternatives: options.includeAlternatives === true,
     combinationIdentity: bestSlipCombinationIdentity, exclusiveMaximum: bestSlipExactRange(band).exclusiveMaximum } });
   const slips = [...result.slips].sort(compare);
   if (!editorialSearch) return { ...result, slips };

@@ -286,6 +286,18 @@ export function serializeSlipCriteria(criteria: SlipCriteria): URLSearchParams {
 }
 
 type Candidate = { selection: SlipSelection; scaledOdds: bigint; key: string };
+type KickoffSpanLayer = Readonly<{ lowerExclusive: number; upperInclusive: number }>;
+type KickoffSpanWindow = Readonly<{ terminalStart: number; end: number }>;
+
+function firstCandidateAfter(pool: readonly Candidate[], start: number, kickoffAt: number): number {
+  let end = pool.length;
+  while (start < end) {
+    const middle = Math.floor((start + end) / 2);
+    if (pool[middle]!.selection.kickoffAt <= kickoffAt) start = middle + 1;
+    else end = middle;
+  }
+  return start;
+}
 type QuotedPrice = { quote: SlipSelectionPrice; scaled: bigint };
 type UnpricedPick = Omit<SlipSelection, "odds" | "oddsBasis" | "bookmaker" | "forecast"> & { forecast: SlipForecastReference };
 type Combination = { slip: BuiltSlip; product: bigint; denominator: bigint; key: string; probabilityLowerBound: number; priceGroup: string };
@@ -413,6 +425,7 @@ export type EditorialSlipSearch = Readonly<{
   combinationIdentity?: (values: readonly SlipSelection[]) => string;
   prioritizeRank?: boolean;
   latestFirstKickoffAt?: number;
+  kickoffSpanStepMs?: number;
   includeAlternatives?: boolean;
 }>;
 
@@ -531,6 +544,7 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
     candidates = options.editorial.order(candidates.map(({ selection }) => selection)).map((selection) => bySelection.get(selection)!);
   }
   const latestFirstKickoffAt = options.editorial?.latestFirstKickoffAt;
+  const kickoffSpanStepMs = options.editorial?.kickoffSpanStepMs;
   if (latestFirstKickoffAt !== undefined) {
     // Put first legs inside the release horizon ahead of later legs. Preserve candidate order within both groups.
     candidates.sort((left, right) => Number(left.selection.kickoffAt > latestFirstKickoffAt)
@@ -567,6 +581,26 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
     candidates.sort(compareCandidates);
     alternativePrices.clear();
   }
+  if (kickoffSpanStepMs !== undefined) {
+    if (!Number.isSafeInteger(kickoffSpanStepMs) || kickoffSpanStepMs < 1) throw new RangeError("Invalid kickoff span step.");
+    candidates.sort((left, right) => left.selection.kickoffAt - right.selection.kickoffAt);
+  }
+  let candidateGroups = [candidates];
+  if (kickoffSpanStepMs !== undefined) {
+    // A same-book slip never needs completion bounds or branch visits from another bookmaker.
+    const byBookmaker = new Map<number, Candidate[]>();
+    for (const candidate of candidates) {
+      const bookmakerId = candidate.selection.bookmaker!.id;
+      const group = byBookmaker.get(bookmakerId);
+      if (group) group.push(candidate);
+      else byBookmaker.set(bookmakerId, [candidate]);
+    }
+    candidateGroups = [...byBookmaker.values()];
+  }
+  const pools = candidateGroups.map((values) => {
+    const bounds = completionBounds(values);
+    return { candidates: values, bounds, available: values, availableBounds: bounds, reservedFixtures: 0 };
+  });
   const retained: Combination[] = [], diversified: Combination[] = [], diversifiedFixtures = new Set<string>();
   const retainedPriceGroups = hasAlternativePrices ? new Map<string, number>() : null;
   const probability = ranking?.probability;
@@ -577,7 +611,7 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
       : right.probabilityLowerBound - left.probabilityLowerBound) || compareCombinationPrices(left, right);
   let searchNodes = 0, searchWork = 0, exhausted = false, retainedSelections = 0;
   const availableFixtures = new Set(candidates.map((candidate) => candidate.selection.fixtureId)).size;
-  const maximumSelections = Math.min(criteria.teamsMax ?? availableFixtures, availableFixtures), bounds = completionBounds(candidates);
+  const maximumSelections = Math.min(criteria.teamsMax ?? availableFixtures, availableFixtures);
   const denominators = Array.from({ length: maximumSelections + 1 }, (_, count) => SCALE ** BigInt(count));
   const minimumProducts = denominators.map((denominator) => BigInt(criteria.totalMin) * denominator);
   const maximumProducts = criteria.totalMax === undefined ? null : denominators.map((denominator) => BigInt(criteria.totalMax!) * denominator);
@@ -651,8 +685,12 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
     return true;
   }
   function enumerate(pool: readonly Candidate[], prices: CompletionBounds, start: number, target: number, product: bigint,
-    diversifying = false): boolean {
-    const remaining = target - selected.length, minimum = prices.minimum(start, remaining), maximum = prices.maximum(start, remaining);
+    diversifying = false, layer?: KickoffSpanLayer, window?: KickoffSpanWindow): boolean {
+    const remaining = target - selected.length;
+    const from = window && remaining === 1 ? Math.max(start, window.terminalStart) : start;
+    const end = window ? window.end - remaining + 1 : pool.length;
+    if (remaining > 0 && from >= end) return false;
+    const minimum = prices.minimum(from, remaining), maximum = prices.maximum(from, remaining);
     if (minimum === undefined || maximum === undefined) return false;
     if (product * maximum * 100n < minimumProducts[target]!
       || maximumProducts !== null && isAboveMaximum(product * minimum * 100n, maximumProducts[target]!)) {
@@ -668,9 +706,17 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
       return accepted;
     }
     const first = selected[0]?.selection;
-    for (let index = start; index < pool.length && !exhausted; index++) {
+    for (let index = from; index < end && !exhausted; index++) {
       const candidate = pool[index]!;
       if (!first && latestFirstKickoffAt !== undefined && candidate.selection.kickoffAt > latestFirstKickoffAt) break;
+      let nextWindow = window;
+      if (!first && layer && target > 1) {
+        const kickoffAt = candidate.selection.kickoffAt;
+        const terminalStart = firstCandidateAfter(pool, index + 1, kickoffAt + layer.lowerExclusive);
+        const windowEnd = firstCandidateAfter(pool, terminalStart, kickoffAt + layer.upperInclusive);
+        if (terminalStart >= windowEnd || windowEnd - index < target) continue;
+        nextWindow = { terminalStart, end: windowEnd };
+      }
       // Preserve the former <=8-leg node allowance while charging longer paths for materialization work.
       const weight = Math.max(1, Math.ceil(target / 8));
       if (diversifying && (searchNodes >= diversificationBudget || searchWork + weight > diversificationWork)) {
@@ -691,7 +737,7 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
         continue;
       }
       selected.push(candidate); fixtures.add(candidate.selection.fixtureId);
-      const accepted = enumerate(pool, prices, index + 1, target, nextProduct, diversifying);
+      const accepted = enumerate(pool, prices, index + 1, target, nextProduct, diversifying, layer, nextWindow);
       selected.pop(); fixtures.delete(candidate.selection.fixtureId);
       if (diversifying && (accepted || diversificationLimited)) return accepted;
     }
@@ -732,22 +778,43 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
     const batch = compatibleBatch(combinations, criteria.slips, seed); searchLimited ||= batch.limited;
     return prior?.size && compareSlips ? batch.slips.sort(compareSlips) : batch.slips;
   }
-  if (!criteria.reuse) {
-    for (let count = criteria.teamsMin; count <= maximumSelections && diversified.length < criteria.slips && !diversificationLimited; count++) {
-      while (diversified.length < criteria.slips && !diversificationLimited) {
-        const available = candidates.filter((candidate) => !diversifiedFixtures.has(candidate.selection.fixtureId));
-        const prior = options.editorial?.priorFixtures;
-        if (prior?.size) {
-          const unused = available.filter(({ selection }) => !prior.has(selection.fixtureId));
-          if (unused.length !== available.length && enumerate(unused, completionBounds(unused), 0, count, 1n, true)) continue;
-          if (diversificationLimited) break;
+  function search(layer?: KickoffSpanLayer) {
+    const minimumCount = layer && layer.lowerExclusive >= 0 ? Math.max(2, criteria.teamsMin) : criteria.teamsMin;
+    if (!criteria.reuse) {
+      for (let count = minimumCount; count <= maximumSelections && diversified.length < criteria.slips && !diversificationLimited; count++) {
+        for (const pool of pools) {
+          while (diversified.length < criteria.slips && !diversificationLimited) {
+            if (pool.reservedFixtures !== diversifiedFixtures.size) {
+              pool.available = pool.candidates.filter(({ selection }) => !diversifiedFixtures.has(selection.fixtureId));
+              pool.availableBounds = completionBounds(pool.available);
+              pool.reservedFixtures = diversifiedFixtures.size;
+            }
+            const prior = options.editorial?.priorFixtures;
+            if (prior?.size) {
+              const unused = pool.available.filter(({ selection }) => !prior.has(selection.fixtureId));
+              if (unused.length !== pool.available.length && enumerate(unused, completionBounds(unused), 0, count, 1n, true, layer)) continue;
+              if (diversificationLimited) break;
+            }
+            if (!enumerate(pool.available, pool.availableBounds, 0, count, 1n, true, layer)) break;
+          }
         }
-        if (!enumerate(available, completionBounds(available), 0, count, 1n, true)) break;
+      }
+    }
+    for (let count = minimumCount; count <= maximumSelections && !exhausted; count++) {
+      for (const pool of pools) {
+        if (exhausted) break;
+        enumerate(pool.candidates, pool.bounds, 0, count, 1n, false, layer);
       }
     }
   }
-  for (let count = criteria.teamsMin; count <= maximumSelections && !exhausted; count++) {
-    enumerate(candidates, bounds, 0, count, 1n);
+  if (kickoffSpanStepMs !== undefined && candidates.length) {
+    const span = candidates.at(-1)!.selection.kickoffAt - candidates[0]!.selection.kickoffAt;
+    const buckets = Math.max(1, Math.ceil(span / kickoffSpanStepMs));
+    for (let bucket = 1; bucket <= buckets && !exhausted; bucket++) {
+      search({ lowerExclusive: bucket === 1 ? -1 : (bucket - 1) * kickoffSpanStepMs, upperInclusive: bucket * kickoffSpanStepMs });
+    }
+  } else {
+    search();
   }
   // A stronger whole-slip probability can favour a longer combination.
   const slips = select();

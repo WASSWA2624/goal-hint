@@ -42,7 +42,7 @@ function usesFixtures(slip: BuiltSlip, fixtures: ReadonlySet<string>) {
   return slip.selections.some(({ fixtureId }) => fixtures.has(fixtureId));
 }
 
-/** Every band has been searched independently. Shared fixtures go to stronger slips first. */
+/** Allocate retained alternatives from the narrowest span step before considering wider slips. */
 function allocateBandSlips(plans: readonly BandPlan[], hourAt: number) {
   const rotation = Math.floor(hourAt / bestSlipPublicationIntervalMs) % bestSlipOddsBands.length;
   const bandOrder = (band: BestSlipOddsBand) => (bestSlipOddsBands.findIndex(({ id }) => id === band)

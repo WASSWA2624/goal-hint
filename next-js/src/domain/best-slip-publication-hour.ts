@@ -4,6 +4,7 @@ import { publicPolicy } from "./public-policy.ts";
 
 export const bestSlipPublicationIntervalMs = 30 * 60_000;
 export const bestSlipKickoffBufferMs = 30 * 60_000;
+export const bestSlipKickoffSpanStepMs = 15 * 60_000;
 export const bestSlipPreferredKickoffWindowMs = 6 * 3_600_000;
 export const bestSlipAppendBatchSize = 32;
 
