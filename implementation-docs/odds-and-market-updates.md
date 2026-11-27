@@ -4,7 +4,7 @@ Goal Hint pulls bookmaker offers from API-Football through a private worker. The
 
 ## Collection schedule
 
-These are the schedules implemented in source. The production measurements below describe the prior release.
+The table documents source schedules. The observations below record the prior and new production workers.
 
 | Work | Normal cadence | Fetch and scope |
 | --- | --- | --- |
@@ -53,3 +53,11 @@ The sample covers 08:00 Kampala time on 26 November through 08:00 on 27 November
 One fixture with offers in all eight broad slots, API-Football fixture `1509228`, was reconfirmed between 09:01 on 26 November and 06:01 on 27 November. Its consecutive retrieval gaps ranged from 2 hours 59 minutes 12 seconds to 3 hours and 47 seconds. In the last sweep, the receipt was retrieved at 06:01:10 and the provider price update was timestamped 03:08:17. A reconfirmation can retain the same price. [Pre-match import and receipt rules](../next-js/src/server/odds/odds-service.ts).
 
 A signed-out Match Details check around 07:59 returned eligible stored closing and recovered pre-match prices for three finished matches. Their closing observations were checked at 18:01–18:02 on 26 November. Their recovered observations were checked at 00:02 on 27 November. The responses preserved the two price types and their separate observation clocks. Current pre-match delivery for subscribers was outside this signed-out check. [Production detail example](https://goalhint.com/api/matches/fd15442b-526e-8c2e-bf40-ae9c6e7ff4d6), [27 November odds audit](deployment-and-version-control.md#priced-only-featured-picks-rollout), [Targeted refresh handoff](deployment-and-version-control.md#targeted-best-slips-odds-refresh-rollout).
+
+## Worker rollout, 27 November 2026
+
+The final broad slot before the switch covered 15 Kampala dates with 13 complete and two partial receipts across 124 provider pages. The 13:28 production baseline covered 163 fixtures starting within six hours, with fresh, nonwithdrawn odds state on 95 and fresh public-price records on 59. These fixture counts include the effects of upcoming kickoffs, provider coverage and public eligibility.
+
+The first selective workload on the new schedule had one local admission refusal and one fixture schema error. The retry at 13:51:58 selected 24 fixtures and recorded 23 completed checks. Twenty-one of those returned empty, and one fixture check failed. The associated coverage report counted 934 complete fixtures, 2,298 missing odds, 202 missing a market and 60 missing a selection, with no stale near-kickoff quotes. The 95th-percentile quote age was about 10 hours 36 minutes. Five verified fixture pages contained 381 eligible bookmaker-market records, and all 381 matched stored content hashes. An admission failure before dispatch also blocked the paired Best Slips refresh for 14:00. The worker hotfix uses bounded backoff within the fixture deadline to handle transient local refusals. [Production rollout](deployment-and-version-control.md#football-worker-reliability).
+
+The first selective slot on the hotfix retried after an initial handler failure before dispatch. On the retry it checked all 24 selected fixtures. Twenty-two returned empty, one contained eligible offers and one returned invalid data. The job recorded `invalid-output` while preserving verified offers from the other responses. The sealed page with offers matched 183 of 183 bookmaker-market records. The coverage scan counted 5,819 scheduled fixtures, of which 920 had the expected markets and selections, 4,637 lacked odds, 202 lacked a market and 60 lacked a selection. At 14:31, 105 of the next 162 six-hour fixtures had fresh nonwithdrawn odds state and 49 had fresh public prices. The paired refresh for 14:30 succeeded on its first attempt. The publisher evaluated its normal eligible selections and found no qualifying slip within its search limit. The 14:35 selective slot also reached all 24 selected fixtures, with one failed check and 21 verified empty responses.

@@ -431,6 +431,18 @@ verify policy and the database connection without calling the provider. Disable
 the former production worker before starting the new one. Staging provider jobs
 remain disabled.
 
+For a release on the same host, verify the candidate with the existing
+launcher's `--check`. Select its versioned directory atomically between Best
+Slips publication slots. The deployment SSH session may see the worker lock
+while the process is visible only in the host console. Before graceful
+shutdown, verify its service account, Node entry point and exact release
+directory, including the matching CageFS bind mount when applicable. The
+existing cron starts the selected release after the old worker releases the
+lock. Verify the new ready signal, attached pollers and the next paired
+publication. Keep the prior worker release available for rollback. Resolve the
+active release’s `node_modules` before pruning older packages, since compatible
+releases can share one installed dependency directory.
+
 For confirmed obsolete worker packages, run
 [`prune-hosted-workers.py`](../../scripts/prune-hosted-workers.py) as the hosted
 production account. Pass `--football FULL_COMMIT` or `--publisher FULL_COMMIT`
