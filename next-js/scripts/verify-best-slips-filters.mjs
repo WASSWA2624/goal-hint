@@ -39,12 +39,20 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 360, 3
           if (percentage !== count) percentage.textContent = oldPercentage;
           return metrics;
         });
+        const glyph = calendar.querySelector("svg"), numeral = glyph.querySelector("text");
+        const frame = glyph.querySelector("rect").getBBox(), divider = glyph.querySelector("line").getBBox();
+        const halfStroke = Number(glyph.getAttribute("stroke-width")) / 2;
+        const font = getComputedStyle(numeral), context = document.createElement("canvas").getContext("2d");
+        context.font = `${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
+        const ink = context.measureText(numeral.textContent.trim()), baseline = numeral.getStartPositionOfChar(0).y;
+        const scale = glyph.getScreenCTM().d;
+        const gapAbove = scale * (baseline - ink.actualBoundingBoxAscent - divider.y - halfStroke);
+        const gapBelow = scale * (frame.y + frame.height - halfStroke - baseline - ink.actualBoundingBoxDescent);
         return { sameRow: Math.abs(action.top - date.top) < 1 && Math.abs(date.top - list.top) < 1 && Math.abs(action.height - date.height) < 1,
           inOrder: summary.getBoundingClientRect().bottom <= list.top && list.right < date.left && date.right < action.left,
           visibleTiles, calendarDay: calendar.textContent.trim(), columns: getComputedStyle(figures).gridTemplateColumns.split(" ").length, fiveDigitsFit,
           order: [...figures.children].filter(card => card.getClientRects().length).map(card => card.dataset.summaryCard).join(","),
-          numeralPadded: calendar.querySelector("b").getBoundingClientRect().top > date.top && calendar.querySelector("b").getBoundingClientRect().bottom < date.bottom,
-          calendarStroke: calendar.querySelector("svg").getAttribute("stroke-width"),
+          gapAbove, gapBelow, calendarStroke: glyph.getAttribute("stroke-width"),
           separation: bounds.top - cards.bottom, countAtEnd: bounds.right - count.right <= 9,
           firstSlipGap: document.querySelector("[data-slip-list]").getBoundingClientRect().top - bounds.bottom,
           summaryPaddingEnd: parseFloat(getComputedStyle(bar).paddingBottom),
@@ -63,7 +71,9 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 360, 3
       assert(geometry.fits && (width < 1024 || geometry.countAtEnd) && geometry.height >= geometry.controlHeight, "Controls and result counts fit shared metrics");
       assert(geometry.title === "Today’s performance" && geometry.titleAligned && geometry.labelsAligned, "Section labels align with the outer card rail");
       assert(geometry.headingGap <= 1.5 && geometry.headingGap >= 0 && geometry.headingPaddingEnd === 0, "The heading and date sit directly above the performance cards");
-      assert(geometry.headingPaddingStart <= 4 && geometry.numeralPadded && geometry.calendarStroke === "1.5", "The calendar numeral has a lighter outline with room around it");
+      assert(geometry.headingPaddingStart <= 4 && geometry.calendarStroke === "1.5", "Heading spacing and the light outline are preserved");
+      assert(geometry.gapAbove >= 2 && geometry.gapBelow >= 2 && Math.abs(geometry.gapAbove - geometry.gapBelow) <= 2,
+        `The numeral has balanced padding inside the calendar outline: ${geometry.gapAbove}px above, ${geometry.gapBelow}px below`);
       assert(geometry.order === (width >= 1024 ? "all,won,lost,pending,void,cancelled" : "won,pending,lost,others"), "Result cards follow the visible layout order");
       assert(await page.locator("[data-best-slips-publication]").count() === 0, "The duplicate publication date is removed");
       if (width >= 1024) {
@@ -267,7 +277,7 @@ export async function verifyBestSlipsCalendar(page, origin, widths = [390, 1440]
     assert(page.url() === original, "Cancelling restores the picker focus and leaves the active date unchanged");
     await selectDates(12);
     await strip.locator('li[data-date="2026-10-12"] > a[aria-current="date"]').waitFor();
-    assert(await picker.innerText() === "12", "The calendar button shows the selected day");
+    assert(await picker.locator("svg text").textContent() === "12", "The calendar button shows the selected day");
     await selectDates(12, 14);
     await page.goBack();
     await strip.locator('li[data-date="2026-10-12"] > a[aria-current="date"]').waitFor();

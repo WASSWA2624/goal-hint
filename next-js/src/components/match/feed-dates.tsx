@@ -5,7 +5,7 @@ import Link from "@/components/navigation/navigation-link";
 import dynamic from "next/dynamic";
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import styled, { css } from "styled-components";
-import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, Icon } from "@/components/ui/icons";
 import { controlRow } from "@/components/ui/control-layout";
 import { FilterDialogTrigger } from "@/components/ui/filter-dialog-trigger";
 import { RangeFields, RangeFieldset, RangeHelp, RangeLegend } from "./feed-range-fields";
@@ -176,11 +176,11 @@ const CalendarButton = styled.button`
   > svg { font-size: var(--gh-font-title); }
   [data-date-navigation-row] & {
     margin-inline-start: 0;
-    > svg, > b { grid-area: 1 / 1; align-self: center; }
-    > svg { font-size: var(--gh-size-7); }
-    > b {
-      font-size: var(--gh-font-caption); font-weight: var(--gh-weight-bold); line-height: var(--gh-leading-tight);
-      transform: translateY(var(--gh-size-1));
+    > svg { font-size: var(--gh-size-8); }
+    text {
+      font-size: var(--gh-font-micro);
+      font-weight: var(--gh-weight-bold);
+      font-variant-numeric: tabular-nums;
     }
   }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.fieldHover}; } }
@@ -365,8 +365,14 @@ export function DateStrip({ locale, today, from, to, hrefForDay, onDatesChange, 
       onClick={event => { event.currentTarget.focus({ preventScroll: true }); setCalendarOpen(true); }}
       aria-description={filters && selected ? messages.reportingDate(selected) : undefined}
       aria-label={startDate !== endDate ? messages.text("feed.date.rangeCurrent", { range: messages.reportingDateSpan(startDate, endDate) }) : messages.text("feed.date.rangeOpen")}>
-      <CalendarIcon strokeWidth={1.5} />
-      {filters && <b aria-hidden="true">{messages.reportingDayParts(anchor).day}</b>}
+      {filters ? <Icon strokeWidth={1.5}>
+        <rect x="3" y="5" width="18" height="17" />
+        <path d="M7 2v5M17 2v5" />
+        <line x1="3" x2="21" y1="9" y2="9" />
+        <text x="12" y="19.5" textAnchor="middle" fill="currentColor" stroke="none">
+          {messages.reportingDayParts(anchor).day}
+        </text>
+      </Icon> : <CalendarIcon strokeWidth={1.5} />}
     </CalendarButton>
     {filters}
   </Strip>
