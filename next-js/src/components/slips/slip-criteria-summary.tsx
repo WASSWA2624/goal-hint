@@ -32,10 +32,10 @@ function Setting({ field, tile, label, value, icon: CompactIcon, desktopIcon: De
   return <div data-settings-field={field} data-settings-tile={tile}>
     <dt>
       <span data-settings-symbol>
-        <CompactIcon data-settings-icon={DesktopIcon ? "compact" : undefined} />
-        {DesktopIcon && <DesktopIcon data-settings-icon="desktop" />}
+        <CompactIcon viewBox="1 1 22 22" data-settings-icon={DesktopIcon ? "compact" : undefined} />
+        {DesktopIcon && <DesktopIcon viewBox="1 1 22 22" data-settings-icon="desktop" />}
       </span>
-      {label}
+      <span data-settings-label>{label}</span>
     </dt>
     <dd>{value}</dd>
   </div>;
