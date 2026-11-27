@@ -6,12 +6,7 @@ import { Button, ButtonLink } from "@/components/ui/controls";
 import { FilterDialogTrigger } from "@/components/ui/filter-dialog-trigger";
 import { media, type AccentName } from "@/styles/theme";
 
-const actionFill = css`
-  linear-gradient(180deg, ${({ theme }) => theme.gradient.action}, ${({ theme }) => theme.gradient.actionHover})
-`;
-
 export const SettingsHeader = styled.header`
-  --builder-header-tint: color-mix(in srgb, ${({ theme }) => theme.color.accent.blue.solid} calc(var(--gh-opacity-30) * 100%), transparent);
   display: flex;
   align-items: center;
   gap: var(--gh-spacing-2_5);
@@ -19,20 +14,18 @@ export const SettingsHeader = styled.header`
   padding: var(--gh-spacing-2) calc(var(--builder-panel-inset) + var(--gh-spacing-0_75));
   border-start-start-radius: inherit;
   border-start-end-radius: inherit;
-  background:
-    radial-gradient(ellipse at 102% 126%, var(--builder-header-tint) 58%, transparent 59%) right / 24% 100% no-repeat,
-    radial-gradient(ellipse at 103% 36%, var(--builder-header-tint) 56%, transparent 57%) right / 18% 100% no-repeat,
-    ${actionFill};
-  color: ${({ theme }) => theme.color.onAction};
+  background: color-mix(in srgb, ${({ theme }) => theme.color.section} calc(var(--gh-opacity-60) * 100%), ${({ theme }) => theme.color.surface});
+  color: ${({ theme }) => theme.color.text};
 
   h2, p { margin: 0; }
   h2 {
     font-size: var(--gh-font-reading);
-    font-weight: var(--gh-weight-heavy);
+    font-weight: var(--gh-weight-semibold);
     line-height: var(--gh-leading-heading);
   }
   p {
     margin-block-start: var(--gh-spacing-0_75);
+    color: ${({ theme }) => theme.color.mutedText};
     font-size: var(--gh-font-secondary);
     line-height: var(--gh-leading-caption);
   }
@@ -40,10 +33,8 @@ export const SettingsHeader = styled.header`
   ${media.desktop} {
     gap: var(--gh-spacing-3);
     padding: var(--gh-spacing-1_5) var(--builder-panel-inset);
-    background: linear-gradient(100deg, ${({ theme }) => theme.color.brandSoft}, ${({ theme }) => theme.color.section});
-    color: ${({ theme }) => theme.color.text};
     p { display: none; }
-    h2 { font-size: var(--gh-font-headline); letter-spacing: var(--gh-tracking-tighter); }
+    h2 { font-size: var(--gh-font-lead); }
   }
 `;
 
@@ -64,15 +55,11 @@ export const SettingsHeaderIcon = styled.span`
   block-size: var(--gh-size-9);
   font-size: var(--gh-font-headline);
   border-radius: ${({ theme }) => theme.radius.surface};
-  background: color-mix(in srgb, ${({ theme }) => theme.color.accent.blue.solid} calc(var(--gh-opacity-60) * 100%), transparent);
+  background: ${({ theme }) => theme.color.brandSoft};
+  color: ${({ theme }) => theme.color.link};
 
   ${media.desktop} {
     inline-size: var(--gh-size-10);
-    block-size: var(--gh-size-9);
-    font-size: var(--gh-font-headline);
-    background: color-mix(in srgb, ${({ theme }) => theme.color.accent.blue.soft} calc(var(--gh-opacity-70) * 100%), transparent);
-    box-shadow: inset 0 0 0 ${({ theme }) => theme.phoneCardFrame.ruleWidth} ${({ theme }) => theme.color.border};
-    color: ${({ theme }) => theme.color.link};
   }
 `;
 
@@ -89,7 +76,7 @@ export const SettingsLayout = styled.div`
 
 const summaryTone = (tone: AccentName) => css`
   --builder-setting-accent: ${({ theme }) => theme.color.accent[tone].solid};
-  --builder-setting-tint: ${({ theme }) => theme.color.accent[tone].soft};
+  --builder-setting-tint: color-mix(in srgb, ${({ theme }) => theme.color.accent[tone].soft} calc(var(--gh-opacity-35) * 100%), ${({ theme }) => theme.color.surface});
 `;
 
 export const CriteriaSummary = styled.dl`
@@ -122,7 +109,7 @@ export const CriteriaSummary = styled.dl`
     min-block-size: var(--gh-size-11);
     padding: var(--gh-spacing-1_5) var(--gh-spacing-0_5);
     padding-inline-start: calc(var(--builder-setting-inset) + var(--builder-setting-icon-size) + var(--builder-setting-icon-gap));
-    background: color-mix(in srgb, var(--builder-setting-tint) calc(var(--gh-opacity-60) * 100%), ${({ theme }) => theme.color.surface});
+    background: var(--builder-setting-tint);
     border-radius: ${({ theme }) => theme.radius.surface};
   }
   dt {
@@ -137,7 +124,7 @@ export const CriteriaSummary = styled.dl`
     margin: 0;
     color: ${({ theme }) => theme.color.text};
     font-size: var(--builder-setting-value-size);
-    font-weight: var(--gh-weight-heavy);
+    font-weight: var(--gh-weight-medium);
     font-variant-numeric: tabular-nums;
     line-height: var(--builder-setting-value-line);
   }
@@ -162,8 +149,6 @@ export const CriteriaSummary = styled.dl`
     --builder-setting-icon-gap: var(--gh-spacing-1);
     grid-column: span 2;
   }
-  [data-settings-tile="half"] [data-settings-symbol] { background: var(--builder-setting-tint); }
-
   [data-settings-tile="row"] {
     --builder-setting-label-size: var(--gh-font-secondary);
     --builder-setting-value-size: var(--gh-font-micro);
@@ -182,16 +167,14 @@ export const CriteriaSummary = styled.dl`
     padding-inline-end: var(--builder-setting-inset);
     background: ${({ theme }) => theme.color.section};
   }
-  [data-settings-tile="row"] dt { color: ${({ theme }) => theme.color.text}; }
   [data-settings-tile="row"] dd {
     justify-self: end;
     padding: var(--builder-setting-pill-padding) var(--gh-spacing-1_5);
     border-radius: ${({ theme }) => theme.radius.control};
-    background: var(--builder-setting-tint);
+    background: ${({ theme }) => theme.color.surface};
   }
   [data-settings-field="reuse"] dd {
     padding-inline: var(--gh-spacing-2_5);
-    background: ${({ theme }) => theme.color.field};
   }
   [data-settings-symbol] {
     ${responsiveIcons}
@@ -203,8 +186,7 @@ export const CriteriaSummary = styled.dl`
     place-items: center;
     inline-size: var(--builder-setting-icon-size);
     block-size: var(--builder-setting-icon-size);
-    color: var(--builder-setting-accent);
-    border-radius: ${({ theme }) => theme.radius.control};
+    color: color-mix(in srgb, var(--builder-setting-accent) calc(var(--gh-opacity-60) * 100%), ${({ theme }) => theme.color.mutedText});
     > svg { inline-size: 100%; block-size: 100%; }
   }
 
@@ -248,19 +230,12 @@ export const CriteriaSummary = styled.dl`
     [data-settings-field="kickoff"], [data-settings-field="markets"] {
       --builder-setting-value-size: var(--gh-font-secondary);
     }
-    [data-settings-tile="row"] dt { color: ${({ theme }) => theme.color.mutedText}; }
     [data-settings-tile="row"] dd {
       justify-self: stretch;
       padding: 0;
       background: transparent;
     }
-    dd {
-      font-weight: var(--gh-weight-bold);
-    }
-    [data-settings-symbol], [data-settings-tile="half"] [data-settings-symbol] {
-      background: ${({ theme }) => theme.color.surface};
-      color: ${({ theme }) => theme.color.link};
-    }
+    [data-settings-symbol] { color: ${({ theme }) => theme.color.mutedText}; }
   }
 `;
 
@@ -305,13 +280,12 @@ const builderAction = css`
   padding: var(--gh-spacing-0_5) var(--gh-spacing-1_5);
   border-radius: ${({ theme }) => theme.radius.control};
   font-size: var(--gh-font-emphasis);
-  font-weight: var(--gh-weight-heavy);
+  font-weight: var(--gh-weight-semibold);
   line-height: var(--gh-leading-control);
   > svg { flex: none; font-size: var(--gh-font-title); }
 
   ${media.desktop} {
     gap: var(--gh-spacing-2);
-    font-size: var(--gh-font-section);
     > svg { font-size: var(--gh-font-heading); }
   }
 `;
@@ -320,10 +294,11 @@ export const BuilderFilters = styled(FilterDialogTrigger)`
   && {
     ${builderAction}
     &:enabled {
-      background: linear-gradient(180deg, ${({ theme }) => theme.color.section}, ${({ theme }) => theme.color.brandSoft});
+      background: ${({ theme }) => theme.color.section};
+      color: ${({ theme }) => theme.color.mutedText};
       box-shadow: inset 0 0 0 ${({ theme }) => theme.phoneCardFrame.ruleWidth} ${({ theme }) => theme.color.border};
     }
-    ${media.hover} { &:enabled:hover { background: ${({ theme }) => theme.color.brandSoft}; } }
+    ${media.hover} { &:enabled:hover { background: ${({ theme }) => theme.color.fieldHover}; } }
     &:enabled:active { background: ${({ theme }) => theme.color.fieldHover}; }
     > b {
       display: inline-grid;
@@ -332,9 +307,10 @@ export const BuilderFilters = styled(FilterDialogTrigger)`
       min-block-size: var(--gh-size-4_5);
       padding: 0 var(--gh-spacing-0_75);
       border-radius: ${({ theme }) => theme.radius.pill};
-      background: ${({ theme }) => theme.gradient.action};
-      color: ${({ theme }) => theme.color.onAction};
+      background: ${({ theme }) => theme.color.surface};
+      color: ${({ theme }) => theme.color.mutedText};
       font-size: var(--gh-font-secondary);
+      font-weight: var(--gh-weight-medium);
       font-variant-numeric: tabular-nums;
     }
     ${media.desktop} {
@@ -344,12 +320,8 @@ export const BuilderFilters = styled(FilterDialogTrigger)`
 `;
 
 const buildAction = css`
-  && {
-    ${builderAction}
-    &:not(:disabled) { background: ${actionFill}; }
-    ${media.hover} { &:not(:disabled):hover { background: ${({ theme }) => theme.gradient.actionHover}; } }
-  }
+  && { ${builderAction} }
 `;
 
-export const BuildButton = styled(Button)`${buildAction}`;
-export const BuildLink = styled(ButtonLink)`${buildAction}`;
+export const BuildButton = styled(Button).attrs({ variant: "secondary" as const })`${buildAction}`;
+export const BuildLink = styled(ButtonLink).attrs({ variant: "secondary" as const })`${buildAction}`;

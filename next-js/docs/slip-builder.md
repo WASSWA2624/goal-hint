@@ -30,13 +30,15 @@ navigation. Controls use shared themed components.
 
 ## Responsive criteria layout
 
-The settings panel shows the criteria for the next build. Each tile aligns its
-unpadded icon with the stacked label and value. On desktop, the summary tiles form a
-compact four-column grid, and **Filters** and **Build slips** stack to the right
-of a divider. On compact screens, a blue header with a subtitle introduces a
-row of three tiles and a row of two tiles. Match reuse, the date and time window,
-and Markets use full-width rows. Narrow phones rearrange the tiles and stack
-the date and time value beneath its label. The actions sit side by side at the bottom.
+The settings panel shows the criteria for the next build beneath a softly shaded
+heading. Each tile aligns its thin-stroke icon with the stacked label and
+medium-weight value. On desktop, the summary tiles form a compact four-column
+grid, and **Filters** and **Build slips** stack to the right of a divider. On
+compact screens, the heading includes a subtitle above a row of three tiles and
+a row of two tiles. Match reuse, the date and time window, and Markets use
+full-width rows. Narrow phones rearrange the tiles and stack the date and time
+value beneath its label. The actions sit side by side at the bottom.
+**Build slips** uses a blue tint, and **Filters** uses the neutral section color.
 Combined probability appears when enabled or when the applied criteria include
 its bounds.
 

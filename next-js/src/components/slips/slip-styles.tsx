@@ -66,11 +66,14 @@ export const BuilderPanel = styled(Surface)`
     background: ${({ theme }) => theme.color.surface};
     border-radius: ${({ theme }) => theme.radius.surface};
   }
+  > header svg, [data-settings-symbol] svg, [data-slip-builder-options] svg {
+    stroke-width: calc((var(--gh-stroke-thin) + var(--gh-stroke-strong)) / 2);
+  }
   [data-criteria-dialog] { ${filterDialogSurface} }
   ${media.desktop} {
     --builder-panel-inset: var(--gh-spacing-4);
     && {
-      border: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid color-mix(in srgb, ${({ theme }) => theme.color.brand} calc(var(--gh-opacity-18) * 100%), ${({ theme }) => theme.color.border});
+      border: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.color.border};
     }
   }
   ${media.belowDesktop} {
