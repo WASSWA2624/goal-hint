@@ -79,7 +79,6 @@ export type SlipBuildResult = Readonly<{
   editorialSearch?: Readonly<{
     alternatives: readonly BuiltSlip[];
     candidateOffers: number;
-    kickoffPrunedBranches: number;
     bookmakerPrunedBranches: number;
     oddsPrunedBranches: number;
   }>;
@@ -413,7 +412,7 @@ export type EditorialSlipSearch = Readonly<{
   order?: (values: readonly SlipSelection[]) => readonly SlipSelection[];
   combinationIdentity?: (values: readonly SlipSelection[]) => string;
   prioritizeRank?: boolean;
-  maximumKickoffSpanMs?: number;
+  latestFirstKickoffAt?: number;
   includeAlternatives?: boolean;
 }>;
 
@@ -531,10 +530,11 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
     const bySelection = new Map(candidates.map((candidate) => [candidate.selection, candidate]));
     candidates = options.editorial.order(candidates.map(({ selection }) => selection)).map((selection) => bySelection.get(selection)!);
   }
-  const maximumKickoffSpanMs = options.editorial?.maximumKickoffSpanMs;
-  if (maximumKickoffSpanMs !== undefined) {
-    // Chronological suffixes let a search stop when the first leg's window closes.
-    candidates.sort((left, right) => left.selection.kickoffAt - right.selection.kickoffAt);
+  const latestFirstKickoffAt = options.editorial?.latestFirstKickoffAt;
+  if (latestFirstKickoffAt !== undefined) {
+    // Put first legs inside the release horizon ahead of later legs. Preserve candidate order within both groups.
+    candidates.sort((left, right) => Number(left.selection.kickoffAt > latestFirstKickoffAt)
+      - Number(right.selection.kickoffAt > latestFirstKickoffAt));
   }
   if (candidates.length > slipBuilderRules.maximumCandidates) {
     if (options.editorial) {
@@ -588,7 +588,7 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
   let diversificationLimited = false;
   const selected: Candidate[] = [], fixtures = new Set<string>();
   const alternatives: BuiltSlip[] | undefined = options.editorial?.includeAlternatives ? [] : undefined;
-  let kickoffPrunedBranches = 0, bookmakerPrunedBranches = 0, oddsPrunedBranches = 0;
+  let bookmakerPrunedBranches = 0, oddsPrunedBranches = 0;
   function setRetained(index: number, value: Combination) {
     retained[index] = value;
     retainedPriceGroups?.set(value.priceGroup, index);
@@ -670,10 +670,7 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
     const first = selected[0]?.selection;
     for (let index = start; index < pool.length && !exhausted; index++) {
       const candidate = pool[index]!;
-      if (maximumKickoffSpanMs !== undefined && first && candidate.selection.kickoffAt - first.kickoffAt > maximumKickoffSpanMs) {
-        kickoffPrunedBranches++;
-        break;
-      }
+      if (!first && latestFirstKickoffAt !== undefined && candidate.selection.kickoffAt > latestFirstKickoffAt) break;
       // Preserve the former <=8-leg node allowance while charging longer paths for materialization work.
       const weight = Math.max(1, Math.ceil(target / 8));
       if (diversifying && (searchNodes >= diversificationBudget || searchWork + weight > diversificationWork)) {
@@ -756,7 +753,7 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
   const slips = select();
   return { slips, qualifyingMatches: qualifying.size, excludedMissingOdds, excludedMissingForecast, searchLimited,
     ...(alternatives ? { editorialSearch: { alternatives, candidateOffers: candidates.length,
-      kickoffPrunedBranches, bookmakerPrunedBranches, oddsPrunedBranches } } : {}),
+      bookmakerPrunedBranches, oddsPrunedBranches } } : {}),
     ...(ranking?.probability ? { jointProbabilities: Object.fromEntries(slips.map((slip) => [slip.id, ranking.probability!(slip)!])) } : {}) };
 }
 

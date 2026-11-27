@@ -15,7 +15,7 @@ import type { CardSnapshotPick } from "./match-card.ts";
 import type { PeriodPerformance } from "./browse-period.ts";
 import type { ContentAccess } from "./paywall.ts";
 import { bestSlipBand, bestSlipBandLimit, bestSlipExactRange, bestSlipOddsBands, dailyBestSlipBandLimit, defaultBestSlipOddsBand, type BestSlipOddsBand } from "./best-slip-odds-bands.ts";
-import { bestSlipFixtureWindow, bestSlipKickoffBufferMs, bestSlipKickoffSpanMs, bestSlipMaximumKickoffSpanMs,
+import { bestSlipFixtureWindow, bestSlipKickoffBufferMs, bestSlipKickoffSpanMs,
   bestSlipPreferredKickoffWindowMs, bestSlipPublicationIntervalMs } from "./best-slip-publication-hour.ts";
 import { slipMarketFamilies } from "./slip-markets.ts";
 import { slipProbabilityLowerBound } from "./slip-probability.ts";
@@ -123,19 +123,31 @@ type HourlyBestSlipResult = Omit<SlipBuildResult, "editorialSearch"> & Readonly<
   searchDiagnostics?: Omit<NonNullable<SlipBuildResult["editorialSearch"]>, "alternatives"> & Readonly<{ priorCombinationConflicts: number }>;
 }>;
 
-/** Rank same-book combinations from overlapping kickoff windows within the slot's release horizon. */
+/** The Fréchet bound ranks stored marginal probabilities without assuming independent legs. */
+export function automaticBestSlipPriority(slip: BuiltSlip) {
+  const probabilitySum = slip.selections.reduce((sum, { probability }) => sum + probability, 0);
+  return { lowerBound: slipProbabilityLowerBound(probabilitySum, slip.selections.length),
+    span: bestSlipKickoffSpanMs(slip.selections) };
+}
+
+export function compareAutomaticBestSlipPriority(left: ReturnType<typeof automaticBestSlipPriority>,
+  right: ReturnType<typeof automaticBestSlipPriority>) {
+  return right.lowerBound - left.lowerBound || left.span - right.span;
+}
+
+/** Rank same-book combinations whose first kickoff is within the slot's release horizon. */
 export function buildHourlyBestSlips(day: ReportingDate, band: BestSlipOddsBand, capacity: number, asOf: number,
   editorial: Omit<EditorialSlipSearch, "exclusiveMaximum" | "combinationIdentity">, priorCombinations: ReadonlySet<string>,
   releaseLookaheadMs = bestSlipPreferredKickoffWindowMs, options: Readonly<{ includeAlternatives?: boolean }> = {}): HourlyBestSlipResult {
   const { startInclusive, endExclusive } = bestSlipFixtureWindow(day);
-  const latestKickoff = asOf + releaseLookaheadMs + bestSlipMaximumKickoffSpanMs;
+  const latestFirstKickoffAt = asOf + releaseLookaheadMs;
   type SelectionSupport = { minimumPrice: bigint; bookmakers: Set<number> };
   const eligible: SlipSelection[] = [], supportByOutcome = new Map<string, SelectionSupport>();
   const selectionSupport = new Map<SlipSelection, SelectionSupport>();
   for (const selection of editorial.selections) {
     const { fixtureId, kickoffAt, bookmaker, offer } = selection;
     if (editorial.priorFixtures?.has(fixtureId) || kickoffAt < startInclusive || kickoffAt >= endExclusive
-      || kickoffAt - asOf < bestSlipKickoffBufferMs || kickoffAt > latestKickoff || !bookmaker || !offer
+      || kickoffAt - asOf < bestSlipKickoffBufferMs || !bookmaker || !offer
       || bookmaker.id !== offer.bookmakerId || !isEditorialSlipOfferFresh(offer, asOf)) continue;
     const price = parseDecimalOdds(selection.odds)?.scaled;
     if (price === undefined || price !== parseDecimalOdds(offer.decimal)?.scaled) continue;
@@ -162,10 +174,8 @@ export function buildHourlyBestSlips(day: ReportingDate, band: BestSlipOddsBand,
       minimumSupport = Math.min(minimumSupport, bookmakers.size);
       totalSupport += bookmakers.size;
     }
-    return { first, span: bestSlipKickoffSpanMs(slip.selections), firstGroup: groups.get(first)!, lastGroup: groups.get(last)!,
-      maximumPrice, weakestProbability, minimumSupport, meanSupport: totalSupport / slip.selections.length,
-      // The Fréchet bound uses the stored marginals without assuming independent legs.
-      lowerBound: slipProbabilityLowerBound(slip.averageProbability * slip.selections.length, slip.selections.length) };
+    return { ...automaticBestSlipPriority(slip), first, firstGroup: groups.get(first)!, lastGroup: groups.get(last)!,
+      maximumPrice, weakestProbability, minimumSupport, meanSupport: totalSupport / slip.selections.length };
   }
   const scores = new WeakMap<BuiltSlip, ReturnType<typeof summarize>>();
   const score = (slip: BuiltSlip) => {
@@ -178,8 +188,8 @@ export function buildHourlyBestSlips(day: ReportingDate, band: BestSlipOddsBand,
   const comparePrice = cachedPriceOrder();
   const compare = (left: BuiltSlip, right: BuiltSlip) => {
     const a = score(left), b = score(right);
-    return b.lowerBound - a.lowerBound || b.weakestProbability - a.weakestProbability || right.averageProbability - left.averageProbability
-      || b.minimumSupport - a.minimumSupport || b.meanSupport - a.meanSupport || a.span - b.span
+    return compareAutomaticBestSlipPriority(a, b) || b.weakestProbability - a.weakestProbability
+      || right.averageProbability - left.averageProbability || b.minimumSupport - a.minimumSupport || b.meanSupport - a.meanSupport
       || (a.maximumPrice < b.maximumPrice ? -1 : a.maximumPrice > b.maximumPrice ? 1 : 0)
       || left.selections.length - right.selections.length || a.lastGroup - b.lastGroup || b.firstGroup - a.firstGroup || a.first - b.first
       || comparePrice(left, right) || left.id.localeCompare(right.id);
@@ -188,7 +198,7 @@ export function buildHourlyBestSlips(day: ReportingDate, band: BestSlipOddsBand,
   const { editorialSearch, ...result } = buildSlips({ ...bestSlipDailyCriteria(day, band), dateTo: addReportingDays(day, 1),
     markets: [...slipMarketFamilies], slips: capacity }, [], asOf, {
     accepts: (slip) => {
-      if (firstKickoff(slip) - asOf > releaseLookaheadMs || bestSlipKickoffSpanMs(slip.selections) > bestSlipMaximumKickoffSpanMs) return false;
+      if (firstKickoff(slip) > latestFirstKickoffAt) return false;
       if (priorCombinations.size && priorCombinations.has(bestSlipCombinationIdentity(slip.selections))) {
         priorCombinationConflicts++;
         return false;
@@ -197,7 +207,7 @@ export function buildHourlyBestSlips(day: ReportingDate, band: BestSlipOddsBand,
     },
     compare,
   }, { editorial: { ...editorial, selections: eligible, prioritizeRank: true,
-    maximumKickoffSpanMs: bestSlipMaximumKickoffSpanMs, includeAlternatives: options.includeAlternatives === true,
+    latestFirstKickoffAt, includeAlternatives: options.includeAlternatives === true,
     combinationIdentity: bestSlipCombinationIdentity, exclusiveMaximum: bestSlipExactRange(band).exclusiveMaximum } });
   const slips = [...result.slips].sort(compare);
   if (!editorialSearch) return { ...result, slips };

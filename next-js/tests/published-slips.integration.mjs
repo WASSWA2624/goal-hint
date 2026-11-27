@@ -107,22 +107,19 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
 
   const lateAt = at;
   const appendClock = bestSlipPublicationHour(lateAt);
-  const additional = await scheduledFixture(), nearby = await scheduledFixture();
-  const nearbyKickoff = kickoffAt + 1_800_000;
+  const additional = await scheduledFixture(), later = await scheduledFixture();
+  const laterKickoff = kickoffAt + 5_400_000;
   const additionalSlip = { ...slip, id: 'model-free-editorial', averageProbability: probability,
     selections: [pricedEditorialSelection(3, { odds: '2.00', kickoffAt, at: lateAt, ...additional, probability }),
-      pricedEditorialSelection(4, { odds: '2.00', kickoffAt: nearbyKickoff, at: lateAt, ...nearby, probability })] };
+      pricedEditorialSelection(4, { odds: '2.00', kickoffAt: laterKickoff, at: lateAt, ...later, probability })] };
   const hourly = { day, oddsBand: '1.5-5', hourAt: appendClock.hourAt, slips: [additionalSlip],
     verifyPublicOdds: () => true, searchLimited: false, partialCoverage: false };
-  const [opening, closing] = additionalSlip.selections;
-  const wide = { ...additionalSlip, selections: [opening, { ...closing, kickoffAt: nearbyKickoff + 1 }] };
-  await assert.rejects(() => store.append({ ...hourly, slips: [wide] }), /invalid-input/u);
-  assert.equal(await database.query(tx => tx.dailyBestSlipAppendBatch.count()), 0);
   const raced = await Promise.all([store.append(hourly), store.append(hourly)]);
   assert.equal(raced.filter(({ status }) => status === 'published').length, 1);
   assert.ok(raced.some(({ status }) => status === 'already-published' || status === 'stale'));
   const entries = (await store.day(day, false, '1.5-5')).slips;
   assert.deepEqual(entries.map(({ rank, estimatedProbability }) => [rank, estimatedProbability]), [[1, 0.68], [2, undefined]]);
+  assert.deepEqual(entries[1].slip.selections.map(({ kickoffAt }) => kickoffAt), [kickoffAt, laterKickoff]);
   assert.equal(await database.query(tx => tx.dailyBestSlipAppendBatch.count()), 1);
   assert.equal((await store.hourlyState(day)).counts.get('1.5-5'), 2);
   assert.equal(new Date(appendClock.hourAt).getUTCMinutes(), 30);

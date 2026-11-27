@@ -5,7 +5,8 @@ import { bestSlipOddsBands, type BestSlipOddsBand } from "../../domain/best-slip
 import { bestSlipActivePublicationDays, bestSlipAppendBatchSize, bestSlipFixtureInterval, bestSlipFixtureWindow,
   bestSlipKickoffBufferMs, bestSlipPreferredKickoffWindowMs, bestSlipPublicationHour,
   bestSlipPublicationIntervalMs } from "../../domain/best-slip-publication-hour.ts";
-import { bestSlipCombinationIdentity, buildHourlyBestSlips } from "../../domain/best-slips.ts";
+import { automaticBestSlipPriority, bestSlipCombinationIdentity, buildHourlyBestSlips,
+  compareAutomaticBestSlipPriority } from "../../domain/best-slips.ts";
 import { utcInstantFromEpochMilliseconds, type ReportingDate, type UtcInstant } from "../../domain/calendar.ts";
 import { feedQueryRules } from "../../domain/feed-query.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
@@ -23,7 +24,7 @@ type BandPublicationResult = Readonly<{
   feasibleBeforeAllocation: number; selected: number; published: number; fixtureConflicts: number;
   searchLimited: boolean; search?: BandSearch["searchDiagnostics"];
   reason: "published" | "partially-published" | "already-published" | "no-eligible-fixtures" | "no-eligible-prices" |
-    "release-window" | "no-eligible-time-cohesive-slip" | "search-limited" | "fixture-conflict" | "eligibility-recheck" | "unavailable";
+    "release-window" | "no-eligible-slip" | "search-limited" | "fixture-conflict" | "eligibility-recheck" | "unavailable";
 }>;
 
 export type DailySlipPublicationResult = Readonly<{ day: string; status:
@@ -34,7 +35,6 @@ export type DailySlipPublicationResult = Readonly<{ day: string; status:
 }>;
 
 const automaticCohortPagesPerSlot = 4;
-const maximumBandReservationTrials = 4_096;
 
 type BandPlan = Readonly<{ band: BestSlipOddsBand; search: BandSearch; candidates: readonly BuiltSlip[] }>;
 
@@ -42,53 +42,23 @@ function usesFixtures(slip: BuiltSlip, fixtures: ReadonlySet<string>) {
   return slip.selections.some(({ fixtureId }) => fixtures.has(fixtureId));
 }
 
-/** Reserve one ranked candidate per represented band before filling the remaining batch positions. */
+/** Every band has been searched independently. Shared fixtures go to stronger slips first. */
 function allocateBandSlips(plans: readonly BandPlan[], hourAt: number) {
   const rotation = Math.floor(hourAt / bestSlipPublicationIntervalMs) % bestSlipOddsBands.length;
   const bandOrder = (band: BestSlipOddsBand) => (bestSlipOddsBands.findIndex(({ id }) => id === band)
     + bestSlipOddsBands.length - rotation) % bestSlipOddsBands.length;
-  const ordered = plans.filter(({ candidates }) => candidates.length).sort((a, b) =>
-    a.candidates.length - b.candidates.length || bandOrder(a.band) - bandOrder(b.band));
-  const reserved = new Map<BestSlipOddsBand, BuiltSlip>(), fixtures = new Set<string>();
-  let best = new Map<BestSlipOddsBand, BuiltSlip>(), trials = 0, limited = false;
-
-  function reserve(index: number) {
-    if (reserved.size > best.size) best = new Map(reserved);
-    if (reserved.size + ordered.length - index <= best.size || limited) return;
-    const { band, candidates } = ordered[index]!;
-    for (const slip of candidates) {
-      if (trials++ >= maximumBandReservationTrials) { limited = true; return; }
-      if (usesFixtures(slip, fixtures)) continue;
-      reserved.set(band, slip);
-      for (const { fixtureId } of slip.selections) fixtures.add(fixtureId);
-      reserve(index + 1);
-      for (const { fixtureId } of slip.selections) fixtures.delete(fixtureId);
-      reserved.delete(band);
-      if (limited || best.size === ordered.length) return;
-    }
-    reserve(index + 1);
+  const ranked = plans.flatMap(({ band, candidates }) => {
+    const order = bandOrder(band);
+    return candidates.map(slip => ({ band, order, slip, priority: automaticBestSlipPriority(slip) }));
+  }).sort((a, b) => compareAutomaticBestSlipPriority(a.priority, b.priority) || a.order - b.order);
+  const selected = new Map(plans.map(({ band }) => [band, new Set<BuiltSlip>()])), fixtures = new Set<string>();
+  for (const { band, slip } of ranked) {
+    const picks = selected.get(band)!;
+    if (picks.size >= bestSlipAppendBatchSize || usesFixtures(slip, fixtures)) continue;
+    picks.add(slip);
+    for (const { fixtureId } of slip.selections) fixtures.add(fixtureId);
   }
-
-  reserve(0);
-  const selected = new Map([...best].map(([band, slip]) => [band, new Set([slip])]));
-  for (const slip of best.values()) for (const { fixtureId } of slip.selections) fixtures.add(fixtureId);
-  const filling = ordered.map(({ band, candidates }) => ({ picks: selected.get(band), candidates, next: 0 }));
-  for (let round = 1; round < bestSlipAppendBatchSize; round++) {
-    let added = false;
-    for (const entry of filling) {
-      if (!entry.picks) continue;
-      while (entry.next < entry.candidates.length) {
-        const slip = entry.candidates[entry.next++]!;
-        if (usesFixtures(slip, fixtures)) continue;
-        entry.picks.add(slip);
-        for (const { fixtureId } of slip.selections) fixtures.add(fixtureId);
-        added = true;
-        break;
-      }
-    }
-    if (!added) break;
-  }
-  return { selected, fixtures, limited };
+  return { selected, fixtures };
 }
 
 async function readPublicationCohort(read: SlipCohortReader, day: ReportingDate, calendarDay: ReportingDate, asOf: UtcInstant) {
@@ -182,19 +152,19 @@ export function createDailySlipPublisher({ database, competitionIds, verifyPubli
       return { band, search, candidates: search.alternatives ?? search.slips };
     });
     const allocation = allocateBandSlips(plans, slot.hourAt);
-    let searchLimited = cohort.searchLimited || allocation.limited;
+    let searchLimited = cohort.searchLimited;
 
     let newBands = 0, newSlips = 0, alreadyPublished = false, unavailable = false;
     for (const { band, search, candidates } of plans) {
       const picks = allocation.selected.get(band);
       const chosen = candidates.filter(slip => picks?.has(slip));
-      const limited = search.searchLimited || search.slips.length === bestSlipAppendBatchSize || allocation.limited;
+      const limited = search.searchLimited || search.slips.length === bestSlipAppendBatchSize;
       searchLimited ||= limited;
       const details = { ...observed, feasibleBeforeAllocation: candidates.length, selected: chosen.length,
         fixtureConflicts: candidates.filter(slip => !picks?.has(slip) && usesFixtures(slip, allocation.fixtures)).length,
         searchLimited: cohort.searchLimited || limited, search: search.searchDiagnostics };
       if (!chosen.length) {
-        report(band, candidates.length ? "fixture-conflict" : details.searchLimited ? "search-limited" : "no-eligible-time-cohesive-slip", details);
+        report(band, candidates.length ? "fixture-conflict" : details.searchLimited ? "search-limited" : "no-eligible-slip", details);
         continue;
       }
       const current = now();

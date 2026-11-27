@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { bestSlipKickoffSpanMs } from '../src/domain/best-slip-publication-hour.ts';
 import { buildHourlyBestSlips } from '../src/domain/best-slips.ts';
 import { getReportingDayBounds } from '../src/domain/calendar.ts';
 import { pricedEditorialSelection } from './helpers/best-slip-publication-fixtures.mjs';
@@ -17,22 +18,21 @@ const ids = (...selections) => selections.map(({ fixtureId }) => fixtureId);
 
 test('probability ranks eligible kickoff groups and the release horizon defers later fixtures', () => {
   const early = [selection(1, 185, '2.00', 0.88), selection(2, 190, '2.00', 0.89)];
-  const later = [selection(3, 295, '2.00', 0.94), selection(4, 300, '2.00', 0.95)];
-  const evening = [selection(5, 1100, '2.00', 0.90), selection(6, 1110, '2.00', 0.91)];
+  const later = [selection(3, 295, '2.00', 0.94, { bookmakerId: 9 }), selection(4, 300, '2.00', 0.95, { bookmakerId: 9 })];
+  const evening = [selection(5, 1100, '2.00', 0.90, { bookmakerId: 10 }), selection(6, 1110, '2.00', 0.91, { bookmakerId: 10 })];
   const offers = [evening[0], later[1], ...early, later[0], evening[1]];
   assert.deepEqual(fixtureIds(build(offers, 3)), [ids(...later), ids(...early)]);
   const asOf = midnight + 900 * minute;
-  const refreshed = [selection(5, 1100, '2.00', 0.90, { at: asOf }), selection(6, 1110, '2.00', 0.91, { at: asOf })];
+  const refreshed = [selection(5, 1100, '2.00', 0.90, { at: asOf, bookmakerId: 10 }),
+    selection(6, 1110, '2.00', 0.91, { at: asOf, bookmakerId: 10 })];
   assert.deepEqual(fixtureIds(build([...early, ...later, ...refreshed], 3, asOf, new Set(ids(...early, ...later)))), [ids(...evening)]);
 });
 
-test('nearby selections can cross clock boundaries and wide pairs never qualify', () => {
-  const early = selection(1, 185, '2.00', 0.99);
-  const nearby = [selection(2, 295, '2.00', 0.81), selection(3, 300, '2.00', 0.82)];
-  assert.deepEqual(fixtureIds(build([early, ...nearby])), [ids(...nearby)]);
-  const distant = selection(4, 610, '2.05', 0.94);
-  assert.deepEqual(build([early, distant]), []);
-  assert.deepEqual(build([early, nearby[0]]), []);
+test('the stronger probability bound wins even when kickoffs are ten hours apart', () => {
+  const wide = [selection(1, 240, '2.00', 0.97), selection(2, 840, '2.05', 0.98)];
+  const nearby = [selection(3, 295, '2.00', 0.94, { bookmakerId: 9 }), selection(4, 300, '2.00', 0.95, { bookmakerId: 9 })];
+  assert.deepEqual(fixtureIds(build([...nearby, ...wide])), [ids(...wide)]);
+  assert.equal(bestSlipKickoffSpanMs(wide), 600 * minute);
 });
 
 test('stronger probability ranks ahead of an earlier adaptive kickoff group', () => {
@@ -79,35 +79,45 @@ test('equally qualified pairs prefer simultaneous, 15 minute and 30 minute start
   assert.deepEqual(fixtureIds(build([...spread, ...nearby, ...simultaneous], 3)), [ids(...simultaneous), ids(...nearby), ids(...spread)]);
 });
 
-test('every band permits exactly 30 minutes and rejects a single millisecond beyond it', () => {
+test('shorter span decides equal bounds ahead of stronger constituents, more bookmakers and price', () => {
+  const nearby = [selection(1, 240, '2.10', 0.9375), selection(2, 255, '2.10', 0.8125)];
+  const wide = [selection(3, 240, '1.80', 0.875, { bookmakerId: 9 }), selection(4, 840, '1.80', 0.875, { bookmakerId: 9 })];
+  const extraOffers = [selection(3, 240, '1.80', 0.875, { bookmakerId: 10 }),
+    selection(4, 840, '1.80', 0.875, { bookmakerId: 10 })];
+  assert.deepEqual(fixtureIds(build([...wide, ...extraOffers, ...nearby], 2)), [ids(...nearby), ids(...wide)]);
+});
+
+test('every band can publish a wide pair when it is the only eligible combination', () => {
   for (const [band, price] of [['1.5-5', '2.00'], ['5-10', '2.50'], ['10-20', '3.50'], ['20-50', '5.00'],
     ['50-100', '8.00'], ['100-200', '11.00']]) {
-    const first = selection(1, 200, price, 0.90), last = selection(2, 230, price, 0.90);
-    const run = (end) => buildHourlyBestSlips(day, band, 1, midnight, { selections: [end, first] }, new Set(), undefined,
+    const first = selection(1, 240, price, 0.90), last = selection(2, 840, price, 0.90);
+    const result = buildHourlyBestSlips(day, band, 1, midnight, { selections: [last, first] }, new Set(), undefined,
       { includeAlternatives: true });
-    assert.deepEqual(fixtureIds(run(last).slips), [ids(first, last)]);
-    const tooWide = run({ ...last, kickoffAt: last.kickoffAt + 1 });
-    assert.deepEqual(tooWide.slips, []);
-    assert.ok(tooWide.searchDiagnostics.kickoffPrunedBranches > 0);
+    assert.deepEqual(fixtureIds(result.slips), [ids(first, last)]);
+    assert.deepEqual(fixtureIds(result.alternatives), [ids(first, last)]);
+    assert.equal(result.searchLimited, false);
   }
 });
 
-test('overlapping kickoff windows retain ranked alternatives from each window', () => {
+test('overlapping fixtures retain all eligible alternatives in deterministic span order', () => {
   const picks = [180, 195, 210, 225].map((at, index) => selection(index + 1, at, '2.00', 0.90));
   const run = (selections) => buildHourlyBestSlips(day, '5-10', 1, midnight, { selections }, new Set(), undefined,
     { includeAlternatives: true });
   const result = run([...picks].reverse());
-  assert.deepEqual(fixtureIds(result.alternatives), [ids(...picks.slice(0, 3)), ids(...picks.slice(1))]);
+  assert.deepEqual(fixtureIds(result.alternatives), [ids(...picks.slice(0, 3)), ids(...picks.slice(1)),
+    ids(picks[0], picks[1], picks[3]), ids(picks[0], picks[2], picks[3])]);
   assert.deepEqual(fixtureIds(result.slips), [ids(...picks.slice(0, 3))]);
   assert.deepEqual(run(picks), result);
 });
 
-test('kickoff cohesion uses elapsed time across midnight and preserves an earliest-leg release horizon', () => {
+test('kickoff ranking uses elapsed time across midnight and only the first leg must be released', () => {
   const at = nextMidnight - 6 * 60 * minute;
   const before = selection(1, 1430, '2.00', 0.87, { at });
   const after = selection(2, 1460, '2.00', 0.89, { at });
-  assert.deepEqual(fixtureIds(build([after, before], 1, at)), [ids(before, after)]);
-  assert.deepEqual(build([after, { ...before, kickoffAt: before.kickoffAt - 1 }], 1, at), []);
+  const wide = [selection(3, 1290, '2.00', 0.87, { at, bookmakerId: 9 }), selection(4, 1500, '2.00', 0.89, { at, bookmakerId: 9 })];
+  assert.deepEqual(fixtureIds(build([after, ...wide, before], 2, at)), [ids(before, after), ids(...wide)]);
+  assert.equal(bestSlipKickoffSpanMs([after, before]), 30 * minute);
+  assert.deepEqual(build([after, { ...before, kickoffAt: nextMidnight + 1 }], 1, at), []);
 });
 
 test('fixture ownership includes 03:00 exactly and stops before the next 03:00', () => {
@@ -125,4 +135,15 @@ test('the bounded selector accepts every distinct qualifying slip up to its requ
     const offers = Array.from({ length: count }, (_, index) => selection(index + 1, 200, '4.00', 0.83));
     assert.equal(new Set(fixtureIds(build(offers, 32)).flat()).size, count);
   }
+});
+
+test('bounded full-day search reaches strong late legs before broad enumeration exhausts the budget', () => {
+  const anchor = selection(1, 240, '1.90', 0.94);
+  const weaker = Array.from({ length: 47 }, (_, index) => selection(index + 2, 500 + index * 7, '1.90', 0.85));
+  const stronger = Array.from({ length: 7 }, (_, index) => selection(index + 49, 1000 + index * 10, '1.90', 0.99));
+  const result = buildHourlyBestSlips(day, '100-200', 1, midnight, { selections: [...weaker, anchor, ...stronger] }, new Set(), undefined,
+    { includeAlternatives: true });
+  assert.equal(result.searchLimited, true);
+  assert.deepEqual(fixtureIds(result.slips), [ids(anchor, ...stronger)]);
+  assert.deepEqual(fixtureIds(result.alternatives.slice(0, 1)), [ids(anchor, ...stronger)]);
 });
