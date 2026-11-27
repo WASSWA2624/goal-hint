@@ -20,28 +20,32 @@ Keep policy, response/retention, status mapping, regulation-score and provider
 operation approvals independent. Production uses `createPolicyApiFootballAdapter`
 with the account-wide durable limiter.
 
-No production binding, credentials or polling horizons are supplied here.
-`parseResultSyncPolicy` refuses missing approach thresholds, active windows,
-unresolved/correction tiers, resource bounds, lease or outage bounds. Synthetic
-test policies do not select operating values. Approved competition/season
-coverage, retention and provider rights, batching support, account evidence,
-hosting/worker identity and existing lifecycle policies remain live gates.
+The hosted football worker binds this service through `createLiveRuntime`.
+`parseResultSyncPolicy` requires approach and active windows, unresolved and
+correction tiers, and resource, lease and outage bounds. Approved competition and
+season coverage, retention and provider rights, batching support, account
+evidence, and existing lifecycle policies remain live gates.
 
 ## Cadence and quotas
 
-| Work | Normal cadence | Request and safety |
+| Work | Coordinated cadence | Request and safety |
 | --- | --- | --- |
-| Live | 15 seconds during the approved approach/active window | One `/fixtures?live=all&timezone=Africa/Kampala`; filter canonical coverage locally. Pause outside the window. |
-| Current EAT date | 60 seconds, including while live is idle | `/fixtures?date=YYYY-MM-DD&timezone=Africa/Kampala`; validate boundaries and paging. |
-| Missing-live/cross-midnight | 60 seconds during the active/result window | At most 20 IDs per group, excluding fixtures refreshed by another response or catalog caller. |
-| Long unresolved | Approved progressively slower tiers after the active window | Finite horizon; retain visible records after checks stop. |
+| Shared live summary | Every 10 seconds while eligible fixtures are in play, one minute around kickoff, and five minutes while idle | One `/fixtures?live=all&timezone=Africa/Kampala` covers scores, status and available events. Filter the response to canonical coverage. |
+| Current Kampala date | Hourly | `/fixtures?date=YYYY-MM-DD&timezone=Africa/Kampala`; validate boundaries and paging. |
+| Active or missing-live verification | Every minute when due, including incomplete finals in their first 15 minutes | At most 20 IDs per group. A complete live response that omits a tracked fixture advances its next verification. |
+| Long unresolved | Hourly through 48 hours from kickoff or first tracking, then daily | Preserve the pending result and record the investigation state. |
 | Final/correction | Approved progressively slower tiers after first observed final | Fixed anchor survives restart and corrections; existing catalog final observations retain their original anchor. |
 
-The policy's optional `cadence` (`liveMs`, `dateMs`, `activeMs`) defaults to the
-15/60/60-second spec cadence and its original policy hash. Budget-limited plans
-may poll more slowly; `liveMs: null` disables the shared live feed so date sync
-observes live status. The [live runner](live-operations.md) sizes it from the
-verified account limit.
+`GOAL_HINT_FOOTBALL_ACTIVE_POLL_SECONDS` selects the coordinated in-play target
+from 10 through 60 seconds. `GOAL_HINT_FOOTBALL_APPROACH_POLL_SECONDS` accepts
+60 through 300 seconds and `GOAL_HINT_FOOTBALL_IDLE_POLL_SECONDS` accepts 300
+through 1,800 seconds. The approach window is 15 minutes either side of kickoff
+for a scheduled match. An active fixture may accelerate the next shared poll.
+Suspended and interrupted matches use the slower cadence when no eligible match
+is in play. The live runner stretches intervals
+under account pressure. An omitted noncoordinated `cadence` still uses the
+15/60/60-second defaults for live, date and active ID checks. A `null` live
+interval disables the shared feed so date sync observes live status. [Live runner](live-operations.md)
 
 Tier `untilAgeMs` boundaries are exclusive; intervals strictly increase and are
 at least 60 seconds. Unresolved tier age starts after `activeWindowMs`, measured
@@ -52,17 +56,16 @@ remain ineligible for played-match settlement. Exhaustion records
 invented. Shared date responses can still supply corrections without extra
 individual requests. Missing live entries never establish full time.
 
-IDs use `results-cutoff`; historical finals run before optional feeds. Date
-requests carrying covered finals within their correction horizon also use that
-priority. Other live/date work uses `live-date-sync`. Every attempt/retry passes
-through the existing adapter/limiter: 12/second, 720/minute, 120,000/day and the
-protected 20,000 essential reserve. Batches and operation requests are bounded.
-Unverified batching falls back to bounded single-ID adapter requests.
+Coordinated live summaries, current fixture ID checks, and date requests with
+due finals use `results-cutoff`. Routine date requests use `live-date-sync` and
+coordinated archive checks use `historical-backfill`. The shared limiter caps
+requests at 10 per rolling second, 600 per rolling minute and 120,000 per verified
+provider day, subject to tighter configuration and provider limits. The 20,000
+essential reserve applies at the 120,000 ceiling. Unverified batching falls back
+to bounded single-ID requests. [Quota contract](quota-limiter.md)
 
-The coordinated runtime serves active live and current-date work before archive
-repair. Its default shared live cadence is one minute while active and five
-minutes while idle, with hourly date discovery. Overdue fixtures and incomplete
-finals can receive one historical ID group per tick after current work.
+The coordinated runtime serves current live, date and result verification work
+before one eligible historical ID group per tick.
 The scheduled archive fixtures job walks backward from yesterday in
 `Africa/Kampala`, using at most one date request from its six-request budget.
 It keeps independent season and round checkpoints, resumes saved date
@@ -70,10 +73,12 @@ observations through the catalog after a partial write, and uses the same
 protected quota. Missing fixture IDs keep their own recheck path.
 
 Failures and quota denials retain sanitized reasons, use capped exponential
-backoff and honor longer provider/limiter retry times. Per-channel backoff and
-fixture attempts survive restart. Private `health()` exposes channel errors/due
-times; result state exposes actual sync, attempt, next check, failures and delay
-reason. Stored projections remain usable during outages.
+backoff with jitter on repeated coordinated failures, and honor longer provider
+or limiter retry times. Per-channel backoff and fixture attempts survive restart.
+Private `health()` exposes channel errors and due times. The result state retains
+sync times, attempts, next checks, failures and delay reasons. Each `result-poll`
+log reports channel, outcome, requests, applied fixtures and changes to live
+events, with a retrieval-to-database latency sample when observations were applied.
 
 The provider's [optimization guide](https://www.api-football.com/news/post/how-to-optimize-api-sports-calls-and-quota-usage)
 documents centralized reuse and at most 20 hyphen-separated IDs. Its
@@ -97,8 +102,10 @@ held over provider I/O.
 Reserve the next cadence before dispatch. Save `ResultSyncBatch` before applying
 fixtures. Its sealed body retains normalized lifecycle projections, original
 retrieval/update clocks, policy hash, requested IDs/date, request count and error.
-No raw payloads or secrets are stored. Only `completedAt` is mutable. Recovery
-drains pending batches before new requests. An empty sealed receipt can be
+Authorized coordinated batches can also seal changed normalized live events for
+verified occurrences. The lease-owned apply writes them with the accepted result
+and preserves compatible statistics and lineup observations. Only `completedAt`
+is mutable. Recovery drains pending batches before new requests. An empty sealed receipt can be
 completed after a policy change because it has no fixture observations to apply.
 The live worker also authorizes older sealed observations when their actor,
 evidence reference and exact competition-seasons still match the active policy.

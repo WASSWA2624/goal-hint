@@ -49,9 +49,9 @@ in-play offers separately. Custom Builder selects exact current quotes across
 verified bookmakers for supported published outcomes at 75% or higher.
 
 Each date sweep records the bookmaker scope in its job and stores
-the observed books and bet hashes in the sealed fixture receipt. The existing
-quota gate and page ceiling apply to that sweep. Current reads accept only
-offers reconfirmed by the latest receipt. A verified current receipt supplies
+the observed books and bet hashes in the sealed fixture receipt. The shared
+quota gate admits each resumed page within the active sweep. Current reads accept
+only offers reconfirmed by the latest receipt. A verified current receipt supplies
 the observation time when it reconfirms the exact values of a retained
 snapshot. The receipt and snapshot remain attributable, and an independently
 stale provider update still excludes the quote. Closing and historical
@@ -70,6 +70,9 @@ snapshots without repeating a fixture sweep.
   it to `true` with the verified `GOAL_HINT_ODDS_BOOKMAKER_ID` on the worker
   after confirming the provider plan and ordinary-quota spare. The Free plan
   remains ineligible.
+- `GOAL_HINT_ODDS_SWEEP_HOURS` sets the broad interval to 2, 3, 4 or 6 hours.
+  The default is three hours. `GOAL_HINT_ODDS_RECONCILIATION_MINUTES` sets the
+  selective interval to 15, 30 or 60 minutes. The default is 30 minutes.
 - In other runtimes, `GOAL_HINT_ODDS_BOOKMAKER_SCOPE=all` requests every
   available bookmaker in the same date sweep. The default setting is `primary`.
   Both scopes require the verified
@@ -114,22 +117,28 @@ replaces that check with a `_v2`.
 ## Import flow
 
 1. `odds.catalog` refreshes the pre-match references once per UTC day.
-   `odds.import` schedules the nearest dates first in each three-hour slot.
-   The authorized production worker also schedules lower-priority dates out to
-   14 days ahead, the provider's usual pre-match availability window.
-   Separate `odds.history` jobs cover the seven preceding Kampala dates,
-   prioritizing expiry. Each UTC quota day can resume the same date and reuse
-   the completed page receipts keyed to the provider account and date. The
-   worker reuses a complete receipt without another request. All dates still
-   share the `enrichment` allowance and can be deferred when quota or fixture
-   coverage is unavailable. [API-Football odds guide](https://www.api-football.com/news/post/how-to-get-started-with-api-football-the-complete-beginners-guide)
-2. All provider I/O happens **before** any transaction, and the walk ends 180
-   seconds into the 300-second job so the writes keep their own budget.
-   Validation rechecks authorization, policy, retention, exact selectors, page
-   order and each row's retrieval and update times.
-3. The receipt is written first: `INSERT IGNORE`, then a sealed re-read must
-   reproduce the exact body. The store keeps the verified body for the
-   per-fixture writes of that import, so the receipt is read once per import.
+   `odds.import` schedules the nearest dates first, two minutes after the
+   nominal broad slot. Under the authorized recovery configuration, fixture
+   discovery and odds reach today through day 14 in Kampala. Separate
+   `odds.history` jobs cover the seven preceding Kampala dates, prioritize
+   expiry and become eligible 30 minutes after the nominal broad slot when
+   quota permits. They reuse complete receipts and can resume saved historical
+   pages across provider days. [API-Football odds guide](https://www.api-football.com/news/post/how-to-get-started-with-api-football-the-complete-beginners-guide)
+2. Each provider page is fetched outside the write transaction. An attempt
+   has a 180-second provider window inside its 300-second job timeout and can
+   collect up to 150 new pages. Validation rechecks authorization, policy,
+   retention, exact selectors, page order and each row's retrieval and update
+   times. The provider returns up to ten fixtures per `/odds` page and accepts
+   a single fixture filter for selective collection.
+3. The worker commits each page receipt and applicable snapshots atomically.
+   The next attempt resumes the same job from its first uncommitted page.
+   The complete aggregate receipt requires all reported pages. Empty later
+   pages, short nonfinal pages, changed page totals and duplicate fixtures in
+   current sweeps are recorded as incomplete. A current checkpoint more than
+   30 minutes old cannot resume an unfinished sweep. A sweep beyond the
+   1,000-page safety limit remains partial. A retryable interruption defers
+   completion within the slot. A verified first-page empty response records
+   the empty result and leaves stored prices in place.
 4. Each fixture is classified before any write. A current price requires the
    exact scheduled kickoff. A dated `/odds` response may also carry old
    pre-match offers for live or completed fixtures, which are retained with
@@ -137,11 +146,31 @@ replaces that check with a `_v2`.
    kickoff can retain offers privately while the public read awaits verified
    live or final status. Unknown identities and kickoff mismatches are counted
    and skipped. A historical date never withdraws an offer.
-5. The authorized worker commits each page checkpoint and the applicable
-   snapshots atomically. Both current and recovered snapshots bind their
-   fixture observation hash to the page's original retrieval time. The legacy
-   current importer retains its per-fixture write path. Either path keeps
-   provider I/O outside the transaction and leaves the catalog lock free.
+5. Current and recovered snapshots bind each fixture observation hash to its
+   page's original retrieval time. The aggregate receipt confirms sweep
+   coverage. Only a complete current date sweep with applied observations can
+   withdraw unseen fixtures in that date. Historical imports and fixture checks
+   keep their own scope.
+
+### Selective price reconciliation
+
+The recovery-enabled worker enqueues `odds.reconcile` at `:05` and `:35` Kampala
+by default. Each attempt selects up to 24 eligible scheduled fixtures through
+day 14 and issues at most one query per selected fixture. It checks the existing
+mapped markets and exact selection prices. A new fixture or a fixture with
+missing odds, markets, or selections can become due. The job also checks prices
+older than three hours within 90 minutes of kickoff. It prioritizes approaching
+kickoffs and older checks, and shares the configured quota admission with broad
+imports. Verified empty responses defer checks for up to three hours away from
+kickoff or 30 minutes near kickoff. Transient failures can use the durable
+job's shorter retry schedule. Stored complete prices skip selective checks
+until a near-kickoff refresh is due.
+
+The `odds-reconciliation` event distinguishes missing odds, markets or selections,
+stale near-kickoff prices, empty provider results, request failures, deferred work
+and backlog. It includes request count, duration and p95 age for observed prices.
+A verified empty response establishes the outcome of that check at its recorded
+time. Coverage with the provider can change on later checks.
 
 ### Targeted refresh for Best Slips
 
@@ -159,7 +188,7 @@ The provider publishes pre-match updates on its own three-hour cadence.
 Fixture-scoped receipts verify the provider fixture selector and the occurrence.
 They apply the existing atomic price storage and authority checks. An empty
 result confirms the check without withdrawing prices for the date. The broad
-date sweeps, catalogs and historical imports follow their existing schedules.
+date sweeps, catalogs and historical imports run separately.
 The matching publication slot waits for the targeted job's durable success.
 
 ### Append-only chain

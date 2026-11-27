@@ -121,3 +121,29 @@ test("hourly forward season discovery resumes completed scopes across slots and 
   assert.equal(finished.deferredScopes, 0);
   assert.equal(new Set(calls).size, 4);
 });
+
+test("odds horizon discovery extends the forecast scope and resumes verified date receipts within the same slot", async () => {
+  const calls = [], observations = [];
+  const controller = new AbortController();
+  const client = {
+    dailyRun: { findFirst: async () => ({ leaseExpiresAt: new Date(slot + 120_000) }) },
+    footballImport: { findMany: async () => observations },
+  };
+  const policy = { competitionIds: [39], windowDays: 8, retentionEvidenceRef: "synthetic-retention", importBounds: {
+    priority: "daily-inputs", deadlineMs: 60_000, timeoutMs: 1000, maxRequests: 2, maxPages: 1,
+    maxRows: 100, maxResponseBytes: 100_000, retry: { maxAttempts: 1, baseDelayMs: 0, maxDelayMs: 0 }, cacheMaxAgeMs: 0,
+  } };
+  const importer = { async import(request) {
+    const { date } = request.selection.query;
+    calls.push(date);
+    observations.push(receipt(request.id, request.selection, { date }, [], { scopeKey: catalogScopeKey(request.selection) }));
+    if (calls.length === 2) controller.abort();
+    return { status: "complete", requestsDispatched: 1, rejectedCount: 0, changedFixtureIds: [] };
+  } };
+  const create = () => createHourlyFixtureReconciler({ database: { query: (operation) => operation(client) }, importer, policy, clock });
+  assert.deepEqual(await create().sweepOddsHorizon(lease, slot, 15, controller.signal),
+    { complete: 2, partial: 0, failed: 0, deferred: 5, requests: 2, changed: 0 });
+  assert.deepEqual(await create().sweepOddsHorizon(lease, slot, 15),
+    { complete: 7, partial: 0, failed: 0, deferred: 0, requests: 5, changed: 0 });
+  assert.deepEqual(calls, ["2026-10-17", "2026-10-18", "2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23"]);
+});

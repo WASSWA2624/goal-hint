@@ -223,6 +223,7 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
 
     // Odds (052): synthetic bookmaker 8 prices for two imported fixtures and one fixture the catalog never imported.
     const oddsTypes = [ODDS_IMPORT_TYPE, ODDS_CATALOG_TYPE], slot = latestOddsSlot(Date.now()), today = getReportingDate(slot);
+    const pageReceipts = { scopeKey: { startsWith: 'price-pages:' } }, oddsReceipts = { NOT: pageReceipts };
     const slotDates = oddsSlotDates(slot, 7), oddsCalls = () => network.filter((entry) => entry.startsWith('/odds')).length;
     const oddsJobs = () => runtime.database.query((tx) => tx.durableJob.findMany({ where: { type: { in: oddsTypes } },
       select: { idempotencyKey: true, type: true, state: true, terminalReason: true } }));
@@ -297,7 +298,8 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
       const jobs = await oddsJobs();
       assert.deepEqual(jobs.map((job) => job.state).sort(), ['expired', ...Array(7).fill('succeeded')]);
       const stored = await runtime.database.query(async (tx) => ({
-        batches: await tx.oddsImportBatch.findMany({ select: { kind: true, status: true, requestsDispatched: true } }),
+        batches: await tx.oddsImportBatch.findMany({ where: oddsReceipts, select: { kind: true, status: true, requestsDispatched: true } }),
+        pages: await tx.oddsImportBatch.count({ where: pageReceipts }),
         usage: await tx.durableJobUsage.findMany({ where: { job: { type: { in: oddsTypes } } }, select: { provider: true, phase: true, requests: true, costReference: true } }),
         enrichment: await tx.apiQuotaAttempt.count({ where: { priority: 3, dispatchedAt: { not: null } } }),
         bets: await tx.oddsBetObservation.count(), snapshots: await tx.providerOddsSnapshot.count(), states: await tx.fixtureOddsState.count(),
@@ -306,6 +308,7 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
       const dispatched = odds.length;
       assert.deepEqual(stored.batches.map((batch) => batch.kind).sort(), ['bets', 'bookmakers', ...Array(6).fill('prices')]);
       assert.ok(stored.batches.every((batch) => batch.status === 'complete'), JSON.stringify(stored.batches));
+      assert.equal(stored.pages, 2, 'each nonempty date seals its page in addition to its aggregate receipt');
       // Every odds request is attributed three ways: receipts, durable job usage and enrichment limiter attempts.
       assert.equal(stored.batches.reduce((sum, batch) => sum + batch.requestsDispatched, 0), dispatched);
       assert.equal(stored.usage.reduce((sum, usage) => sum + usage.requests, 0), dispatched);
@@ -332,7 +335,7 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
       const counters = await oddsRuntime.quota.counters();
       const enrichment = await runtime.database.query((tx) => tx.apiQuotaAttempt.count({ where: { accountId: counters.day.accountId,
         periodId: counters.day.periodId, priority: 3, dispatchedAt: { not: null } } }));
-      const receipts = await runtime.database.query((tx) => tx.oddsImportBatch.aggregate({ _sum: { requestsDispatched: true } }));
+      const receipts = await runtime.database.query((tx) => tx.oddsImportBatch.aggregate({ where: oddsReceipts, _sum: { requestsDispatched: true } }));
       assert.equal(enrichment, receipts._sum.requestsDispatched + await teamsReceipts(),
         'the gate reads the shared enrichment spend (odds and team codes) from the limiter ledger their receipts agree with');
     });
@@ -391,7 +394,8 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
     await t.test('team codes are on by default on Pro, run only on the enrichment worker and spend nothing past the reserve', async () => {
       assert.equal(runtime.teamCodes.enabled, true, 'default on, and Pro has the odds spare');
       assert.deepEqual(runtime.teamCodes.registry.types.map((entry) => entry.type), [TEAM_CODES_TYPE]);
-      assert.deepEqual(runtime.enrichment.registry.types.map((entry) => entry.type), [...oddsTypes, TEAM_CODES_TYPE, 'football.history']);
+      assert.deepEqual(runtime.enrichment.registry.types.map((entry) => entry.type),
+        [...oddsTypes, 'odds.slips-refresh', 'odds.reconcile', TEAM_CODES_TYPE, 'football.history']);
       assert.ok(runtime.registry.types.every((entry) => entry.type !== TEAM_CODES_TYPE), 'refresh and cutoff workers never claim team-code jobs');
       const off = await createLiveRuntime(parseRuntimePolicy({ ...policyEnv, GOAL_HINT_TEAM_CODES_IMPORT_ENABLED: 'false' }), { fetcher, approvals });
       try { assert.equal(off.teamCodes.enabled, false); } finally { await off.close(); }

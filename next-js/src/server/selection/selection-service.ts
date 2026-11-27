@@ -26,6 +26,7 @@ export function createDailySelectionService(options: Readonly<{
   cutoff: Readonly<{ scheduleRun(runId: string): Promise<unknown> }>;
   reconcileHourly?(lease: SelectionLease, scheduledFor: number, signal?: AbortSignal, replayOnly?: boolean): Promise<readonly string[]>;
   sweepUpcoming?(lease: SelectionLease, scheduledFor: number, signal?: AbortSignal): Promise<void>;
+  sweepOddsHorizon?(lease: SelectionLease, scheduledFor: number, signal?: AbortSignal): Promise<void>;
   onDateImportFailure?(date: string, hourly: boolean, reason: string): void;
 }>) {
   const policy = parseSelectionPolicy(options.policy);
@@ -106,6 +107,10 @@ export function createDailySelectionService(options: Readonly<{
       await checkpoint();
       if (!hourly) {
         await options.cutoff.scheduleRun(lease.runId);
+        await checkpoint();
+      }
+      if (options.sweepOddsHorizon) {
+        await options.sweepOddsHorizon(lease, scheduledFor, signal);
         await checkpoint();
       }
       return { status: "committed" as const, runId: lease.runId, ...progress };

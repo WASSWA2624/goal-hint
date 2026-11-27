@@ -24,7 +24,7 @@ import type { PublicationPolicy } from "../predictions/publication-contract.ts";
 import { refreshReference } from "../refresh/refresh-input.ts";
 import { refreshFail, type RefreshMember, type RefreshPlan } from "../refresh/refresh-contract.ts";
 import type { ResultSyncPolicy } from "../results/result-sync-contract.ts";
-import type { LiveMatchPolicy } from "../live-match/live-match-contract.ts";
+import { coordinatedLiveDetailDefaults, type LiveMatchPolicy } from "../live-match/live-match-contract.ts";
 import type { SelectionPolicy } from "../selection/selection-contract.ts";
 
 const SECOND = 1000, MINUTE = 60 * SECOND, HOUR = 60 * MINUTE, DAY = 24 * HOUR;
@@ -54,9 +54,11 @@ export type RefreshPacing = "standard" | "slow";
  * spends from the same spare under the same gate and eligibility, so together they never exceed it. */
 export type OddsWorkload = Readonly<{ floor: number; spare: number; reserve: number; eligible: boolean; sweepMs: number; dates: number; maxPages: number }>;
 export type LiveDetailsWorkload = Readonly<{ eligible: boolean; requests: number; floor: number; reserve: number;
-  intervalMs: number; finalIntervalMs: number; finalWindowMs: number; maxFixturesPerTick: number }>;
+  intervalMs: number; finalIntervalMs: number; finalWindowMs: number; maxFixturesPerTick: number;
+  lineupLeadMs?: number; lineupIntervalMs?: number }>;
 export type LiveWorkload = Readonly<{
   dailyLimit: number; refreshCapacity: number; refreshFloor: number; workers: number; importDays: number;
+  fixtureDiscoveryDays?: number;
   pacing: RefreshPacing; refreshLeadMs: number; odds: OddsWorkload;
   primaryEnabled: boolean; refreshRequestsPerJob: number;
   liveDetails: LiveDetailsWorkload;
@@ -69,7 +71,7 @@ export function projectedCriticalRequests(workload: LiveWorkload, remainingMs: n
   const remaining = Math.max(0, remainingMs);
   const scheduled = (interval: number | null): number => interval === null ? 0 : Math.ceil(remaining / interval);
   return scheduled(cadence.liveMs) + scheduled(cadence.dateMs) + scheduled(cadence.activeMs) +
-    scheduled(HOUR) * 2 * workload.importDays;
+    scheduled(HOUR) * 2 * Math.max(workload.importDays, workload.fixtureDiscoveryDays ?? 0);
 }
 export function remainingCriticalReserve(providerDailyLimit: number, criticalRequests: number): number {
   return Math.ceil(criticalRequests * criticalWorkReserveRatio) + Math.ceil(providerDailyLimit * providerDayReserveRatio);
@@ -83,7 +85,7 @@ export function assessLiveCapacity(workload: LiveWorkload, remainingMs: number, 
   let critical = projectedCriticalRequests(workload, remainingMs, cadence);
   for (const interval of capacityCadenceSteps) {
     if (critical <= capacity) break;
-    cadence = { liveMs: workload.cadence.liveMs === null ? null : Math.max(interval, workload.cadence.liveMs),
+    cadence = { ...workload.cadence, liveMs: workload.cadence.liveMs === null ? null : Math.max(interval, workload.cadence.liveMs),
       dateMs: Math.max(interval, workload.cadence.dateMs), activeMs: Math.max(interval, workload.cadence.activeMs) };
     critical = projectedCriticalRequests(workload, remainingMs, cadence);
   }
@@ -286,9 +288,12 @@ export function resultSyncPolicy(refs: LiveReferences, workload: LiveWorkload,
 export function liveMatchPolicy(refs: LiveReferences, workload: LiveWorkload, coverage: LiveMatchPolicy["coverage"], batch = false,
   coordinated = false): LiveMatchPolicy {
   return Object.freeze({ version: 1, evidenceRef: `${refs.freshness}#live-match-details`, coverage,
-    ...(coordinated ? { coordinated: true as const } : batch ? { stopAfterFinal: true as const } : {}),
+    ...(coordinated ? { coordinated: true as const,
+      ...(workload.liveDetails.lineupLeadMs === undefined ? {} : { lineupLeadMs: workload.liveDetails.lineupLeadMs }),
+      ...(workload.liveDetails.lineupIntervalMs === undefined ? {} : { lineupIntervalMs: workload.liveDetails.lineupIntervalMs }),
+    } : batch ? { stopAfterFinal: true as const } : {}),
     intervalMs: workload.liveDetails.intervalMs, finalIntervalMs: workload.liveDetails.finalIntervalMs,
-    finalWindowMs: workload.liveDetails.finalWindowMs, staleAfterMs: 5 * MINUTE,
+    finalWindowMs: workload.liveDetails.finalWindowMs, staleAfterMs: coordinatedLiveDetailDefaults.staleAfterMs,
     leaseMs: MINUTE, tickMs: 5 * SECOND, maxFixturesPerTick: batch ? 20 : workload.liveDetails.maxFixturesPerTick, requestWindowMs: 25 * SECOND,
     request: { timeoutMs: 20 * SECOND, maxRequests: 1, maxPages: 1, maxRows: 500, maxResponseBytes: batch ? 8_000_000 : 1_000_000,
       retry: { maxAttempts: 8, baseDelayMs: 250, maxDelayMs: 2 * SECOND }, cacheMaxAgeMs: 0 } });

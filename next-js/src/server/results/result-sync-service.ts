@@ -4,16 +4,25 @@ import { randomBytes } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { setTimeout as sleep } from "node:timers/promises";
 import { getReportingDate, utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
+import type { LiveMatchEvents } from "../../domain/live-match.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import type { createApiFootballAdapter } from "../football/api-football-adapter.ts";
 import { API_FOOTBALL_CONTRACT_VERSION, type ApiFootballBounds, type ApiFootballFallbackWorkflow, type ApiFootballResult } from "../football/api-football-contract.ts";
-import type { NormalizedFixture } from "../football/api-football-normalize.ts";
+import type { NormalizedEvent, NormalizedFixture } from "../football/api-football-normalize.ts";
+import { projectMatchEvents } from "../live-match/live-match-service.ts";
 import { parseLifecycleInput } from "../predictions/lifecycle-input.ts";
 import { historyHash } from "../predictions/history-input.ts";
 import { ResultSyncError, resultSyncFail, type AppliedResultObservation, type PollChannel, type PollLease, type ResultSyncAuthority, type ResultSyncBatch,
   type ResultSyncStore, type TrackedResultFixture } from "./result-sync-contract.ts";
-import { coordinatedResultDefaults, failureDelay, finalStatus, incompleteResultEvidence, liveDiscoveryInterval, missingFromLiveFeed, nextLiveCheckAfterDate, parseResultSyncPolicy,
+import { activelyPlaying, coordinatedResultDefaults, failureDelay, finalStatus, incompleteResultEvidence, liveDiscoveryInterval, missingFromLiveFeed, nextLiveCheckAfterDate, parseResultSyncPolicy,
   pollingInterval, requiresResultInvestigation, resultAwaitingVerification, resultCadence, sharedLiveFixtures, unresolvedInvestigation } from "./result-sync-policy.ts";
+
+export type ResultPollReport = Readonly<{ channel: PollChannel; requests: number; fixtures: number; applied: number;
+  liveEvents: number; status: "completed" | "partial" | "failed" | "deferred"; providerToDatabaseMs: number | null }>;
+
+function hasEmbeddedEvents(fixture: NormalizedFixture): fixture is NormalizedFixture & { matchEvents: readonly NormalizedEvent[] } {
+  return "matchEvents" in fixture && Array.isArray(fixture.matchEvents) && fixture.matchEvents.length > 0;
+}
 
 export function createResultSyncService(options: Readonly<{
   accountId: string; ownerId?: string; policy: unknown; authority: ResultSyncAuthority; store: ResultSyncStore;
@@ -22,6 +31,8 @@ export function createResultSyncService(options: Readonly<{
   onDiscoveredFixtures?: (response: ApiFootballResult<NormalizedFixture>, context: Readonly<{
     channel: "live" | "date"; unknownIds: readonly number[]; signal?: AbortSignal;
   }>) => Promise<void>;
+  verifyLiveEvents?: (response: ApiFootballResult<NormalizedFixture>) => boolean;
+  onPoll?: (report: ResultPollReport) => void;
   clock?: Clock; onState?: (state: "active" | "idle" | "delayed" | "standby") => void;
 }>) {
   const policy = parseResultSyncPolicy(options.policy), policyHash = evidenceFingerprint(policy);
@@ -35,13 +46,22 @@ export function createResultSyncService(options: Readonly<{
     fixture.delayReason === missingFromLiveFeed || fixture.delayReason === incompleteResultEvidence ? fixture.delayReason : null;
   const currentFixtures = () => store.tracked(policy, clock.now(), policy.coordinated ? "current" : undefined);
   let lease: PollLease | null = null, busy = false, monotonicUntil = 0, delayed = false;
-  let nextArchiveAt = 0;
+  let observedLiveEvents = new Map<string, string>();
+  let nextArchiveAt = 0, scheduledLiveAt = 0;
   function authorize() {
     try {
       if (authority.authorize() !== undefined || authority.verifyPolicy(policy) !== true) return resultSyncFail("unauthorized");
     } catch { return resultSyncFail("unauthorized"); }
   }
   const emit = (state: Parameters<NonNullable<typeof options.onState>>[0]) => { try { options.onState?.(state); } catch {} };
+  function liveCadence(fixtures: readonly TrackedResultFixture[], now: number) {
+    const candidates = sharedLiveFixtures(fixtures, policy, now);
+    return liveDiscoveryInterval(policy, candidates.some(({ status, providerStatus }) => activelyPlaying(status, providerStatus)), candidates.length > 0);
+  }
+  function retryDelay(failures: number) {
+    const delay = failureDelay(policy, failures);
+    return policy.coordinated && failures > 1 ? Math.min(policy.failureMaxMs, delay + Math.floor(Math.random() * policy.tickMs)) : delay;
+  }
   async function renew() {
     authorize();
     if (!lease) return resultSyncFail("lost-lease");
@@ -71,7 +91,7 @@ export function createResultSyncService(options: Readonly<{
     await renew();
     const requestedAt = clock.now(), date = channel === "date" ? getReportingDate(requestedAt) : null;
     const { liveMs, dateMs, activeMs } = resultCadence(policy);
-    const cadence = channel === "live" ? liveDiscoveryInterval(policy, sharedLiveFixtures(tracked, policy, requestedAt).length > 0) ?? dateMs
+    const cadence = channel === "live" ? liveCadence(tracked, requestedAt) ?? dateMs
       : channel === "date" ? dateMs : activeMs;
     const previousFailures = channel === "live" ? lease!.liveFailures : channel === "date" ? lease!.dateFailures : Math.max(0, ...tracked.map((fixture) => fixture.failures));
     // Reserve the cadence before dispatch; a crash never immediately repeats it.
@@ -110,13 +130,14 @@ export function createResultSyncService(options: Readonly<{
       page.requestParameters.timezone === "Africa/Kampala" && (channel === "live" ? page.requestParameters.live === "all"
         : channel === "date" ? page.requestParameters.date === date :
           (page.requestParameters.ids ?? page.requestParameters.id ?? "").split("-").every((id) => ids.includes(Number(id)))));
-    const error = response.error?.quotaReason ?? response.error?.reason ?? (validPages ? null : "pagination-incomplete");
+    const pageError = response.error?.quotaReason ?? response.error?.reason ?? (validPages && response.provenance.length > 0 ? null : "pagination-incomplete");
     // A verified complete poll with no in-scope effects has nothing to recover.
     // Cadence/attempt state and the counted quota dispatch still commit below.
     // Partial/error polls retain their original recovery receipt, even if empty.
     const complete = validPages && response.provenance.length > 0 &&
-      response.status === "complete" && response.completeness.complete && response.error === null && error === null &&
+      response.status === "complete" && response.completeness.complete && pageError === null &&
       response.completeness.invalidRows === 0 && response.completeness.missingIds.length === 0 && response.completeness.reasons.length === 0;
+    const error = complete ? null : pageError ?? "incomplete-provider-response";
     let byExternalId = new Map(tracked.map((fixture) => [fixture.externalId, fixture]));
     const scoped = validPages ? response.data.filter((fixture) => (policy.coverage.some((entry) =>
       entry.competitionId === fixture.competition.id && entry.season === fixture.competition.season) ||
@@ -138,6 +159,23 @@ export function createResultSyncService(options: Readonly<{
       return canonical ? [parseLifecycleInput({ fixtureId: canonical.fixtureId, fixture, actualStartedAt: null,
         actor: "fixture-result-sync", evidenceRef: policy.evidenceRef })] : [];
     });
+    const liveEvents: { fixtureId: string; events: LiveMatchEvents }[] = [];
+    const currentEventHashes = new Map<string, string>();
+    let captureLiveEvents = false;
+    if (policy.coordinated && channel === "live" && complete) {
+      try { captureLiveEvents = options.verifyLiveEvents?.(response) === true; } catch { /* Live detail authorization is independent of scores. */ }
+    }
+    if (captureLiveEvents) for (const fixture of scoped) {
+      const canonical = byExternalId.get(fixture.id);
+      if (!canonical || fixture.status !== "live" || !hasEmbeddedEvents(fixture)) continue;
+      const events = projectMatchEvents(fixture.matchEvents, { homeExternalId: fixture.homeTeam.id, awayExternalId: fixture.awayTeam.id,
+        previous: null, eventsCoverage: true }, fixture.source);
+      if (events.items.length === 0) continue;
+      const hash = evidenceFingerprint({ kickoff: fixture.kickoff, home: fixture.homeTeam.id,
+        away: fixture.awayTeam.id, state: events.state, items: events.items });
+      currentEventHashes.set(canonical.fixtureId, hash);
+      if (observedLiveEvents.get(canonical.fixtureId) !== hash) liveEvents.push({ fixtureId: canonical.fixtureId, events });
+    }
     const foundLive = new Set(response.data.map(fixture => fixture.id));
     const missingLiveFixtures = policy.coordinated && channel === "live" && complete ? tracked.filter(fixture =>
       fixture.status === "live" && fixture.firstFinalAt === null && !foundLive.has(fixture.externalId) &&
@@ -150,15 +188,19 @@ export function createResultSyncService(options: Readonly<{
       const batchValue = { accountId, policyHash, channel, date, requestedIds: ids, observations,
         receivedAt: clock.now(), error, requestsDispatched: response.requestsDispatched,
         ...(policy.coordinated ? { coordinated: true as const } : {}),
-        ...(missingLiveFixtures.length > 0 ? { missingLiveFixtures } : {}) };
+        ...(missingLiveFixtures.length > 0 ? { missingLiveFixtures } : {}), ...(liveEvents.length > 0 ? { liveEvents } : {}) };
       const batch: ResultSyncBatch = { id: evidenceFingerprint(batchValue), ...batchValue };
       await store.save(lease!, batch);
       applied = await store.apply(lease!, batch);
     }
+    if (captureLiveEvents) {
+      const accepted = new Set(applied.filter(row => row.liveEvents).map(({ fixtureId }) => fixtureId));
+      observedLiveEvents = new Map([...currentEventHashes].filter(([id, hash]) => observedLiveEvents.get(id) === hash || accepted.has(id)));
+    }
     const failures = error ? previousFailures + 1 : 0;
-    const delay = error ? Math.max(cadence, failureDelay(policy, failures), response.error?.retryAfterMs ?? 0,
+    const delay = error ? Math.max(cadence, retryDelay(failures), response.error?.retryAfterMs ?? 0,
       response.error?.retryAt === undefined ? 0 : response.error.retryAt - clock.now()) :
-      channel === "live" && scoped.some(fixture => fixture.status === "live") ? liveMs ?? cadence : cadence;
+      channel === "live" && scoped.some(({ status, providerStatus }) => activelyPlaying(status, providerStatus)) ? liveMs ?? cadence : cadence;
     if (channel === "ids") {
       const refreshed = new Map(applied.map(observation => [observation.fixtureId, observation]));
       const returned = new Set(observations.map(observation => observation.fixtureId));
@@ -168,7 +210,7 @@ export function createResultSyncService(options: Readonly<{
         const now = clock.now(), interval = pollingInterval(current, policy, now);
         const investigate = policy.coordinated && requiresResultInvestigation(current, now);
         const attempts = failures || fixture.failures + 1;
-        const computedAt = now + (row ? interval ?? delay : policy.coordinated ? Math.max(interval ?? delay, delay, failureDelay(policy, attempts)) : delay);
+        const computedAt = now + (row ? interval ?? delay : policy.coordinated ? Math.max(interval ?? delay, delay, retryDelay(attempts)) : delay);
         const investigationAt = (current.kickoffAt ?? current.firstTrackedAt) + coordinatedResultDefaults.investigateAfterMs;
         const nextAt = row && policy.coordinated && resultAwaitingVerification(current) && now < investigationAt ? Math.min(computedAt, investigationAt) : computedAt;
         return { fixtureId: fixture.fixtureId, nextAt, failures: row ? 0 : attempts,
@@ -176,8 +218,17 @@ export function createResultSyncService(options: Readonly<{
             investigate ? unresolvedInvestigation : null : reasonForConfirmation(fixture) ?? (investigate ? unresolvedInvestigation :
               error ?? (returned.has(fixture.fixtureId) ? "unverified-provider-fixture" : "missing-provider-fixture")) };
       }));
-    } else await store.schedule(lease!, channel, clock.now() + delay, failures, error);
+    } else {
+      const nextAt = policy.coordinated && channel === "live" && complete ? Math.max(clock.now() + 1, requestedAt + delay) : clock.now() + delay;
+      await store.schedule(lease!, channel, nextAt, failures, error);
+      if (channel === "live") scheduledLiveAt = nextAt;
+    }
     if (error) { delayed = true; emit("delayed"); }
+    try { options.onPoll?.({ channel, requests: response.requestsDispatched, fixtures: scoped.length, applied: applied.length,
+      liveEvents: applied.filter(row => row.liveEvents === "written").length,
+      status: complete ? "completed" : response.error?.quotaReason ? "deferred" : response.status === "failed" ? "failed" : "partial",
+      providerToDatabaseMs: applied.length === 0 ? null : Math.max(0, clock.now() - Math.min(...applied.map(row => row.retrievedAt))) }); }
+    catch { /* Telemetry cannot invalidate a persisted poll. */ }
     if (channel !== "date" || !complete) return null;
     const verified = new Map(applied.map(({ fixtureId, retrievedAt }) => [fixtureId, retrievedAt]));
     return new Map(observations.flatMap(({ fixtureId, externalFixtureId }) => {
@@ -194,6 +245,7 @@ export function createResultSyncService(options: Readonly<{
       if (!lease) lease = await store.acquire(ownerId, policy.leaseMs);
       if (!lease) { emit("standby"); return false; }
       await renew();
+      scheduledLiveAt = lease.nextLiveAt;
       if (!await recover(signal)) { emit("delayed"); return true; }
       let fixtures = await currentFixtures();
       let remainingBatches = policy.maxBatchesPerTick;
@@ -213,10 +265,10 @@ export function createResultSyncService(options: Readonly<{
       if (!policy.coordinated && lease!.nextDateAt <= clock.now()) {
         observedToday = await poll("date", fixtures, [], signal); fixtures = await currentFixtures();
       }
-      const liveFixtures = sharedLiveFixtures(fixtures, policy, clock.now()), live = liveFixtures.length > 0;
-      const liveInterval = liveDiscoveryInterval(policy, live);
-      const accelerated = policy.coordinated && live && liveInterval !== null && lease!.liveFailures === 0 && lease!.nextLiveAt > clock.now() + liveInterval;
-      if ((live || policy.coordinated) && liveInterval !== null && (lease!.nextLiveAt <= clock.now() || accelerated)) {
+      const liveFixtures = sharedLiveFixtures(fixtures, policy, clock.now()), relevant = liveFixtures.length > 0;
+      const liveInterval = liveCadence(fixtures, clock.now());
+      const accelerated = policy.coordinated && relevant && liveInterval !== null && lease!.liveFailures === 0 && lease!.nextLiveAt > clock.now() + liveInterval;
+      if ((relevant || policy.coordinated) && liveInterval !== null && (lease!.nextLiveAt <= clock.now() || accelerated)) {
         const cadence = resultCadence(policy).liveMs;
         const nextAt = cadence === null || policy.coordinated ? null : nextLiveCheckAfterDate(liveFixtures, observedToday, cadence, clock.now());
         if (nextAt !== null) {
@@ -244,19 +296,23 @@ export function createResultSyncService(options: Readonly<{
         (fixture.firstFinalAt !== null || clock.now() - (fixture.kickoffAt ?? fixture.firstTrackedAt) >= policy.activeWindowMs));
       if (exhausted.length) await store.attempts(lease!, exhausted.map((fixture) => ({ fixtureId: fixture.fixtureId,
         nextAt: null, failures: fixture.failures, error: "polling-horizon-exhausted" })));
+      const playing = policy.coordinated && sharedLiveFixtures(fixtures, policy, currentAt)
+        .some(({ status, providerStatus }) => activelyPlaying(status, providerStatus));
+      const liveSlotDueSoon = () => playing && scheduledLiveAt <= clock.now() + policy.tickMs;
       for (let offset = 0; offset < dueCurrent.length && remainingBatches > 0; offset += 20, remainingBatches--) {
+        if (offset > 0 && liveSlotDueSoon()) break;
         const group = dueCurrent.slice(offset, offset + 20);
         await poll("ids", group, group.map((fixture) => fixture.externalId), signal);
       }
       // Bound archive work between live slots. Quota admission reuses the protected shared account.
       const archiveAt = clock.now();
-      if (policy.coordinated && remainingBatches > 0 && archiveAt >= nextArchiveAt && !signal?.aborted) {
+      if (policy.coordinated && remainingBatches > 0 && archiveAt >= nextArchiveAt && !signal?.aborted && !liveSlotDueSoon()) {
         const archived = await store.tracked(policy, archiveAt, "archive");
         const group = archived.filter(fixture => archive(fixture, archiveAt) && due(fixture, archiveAt)).slice(0, 20);
         nextArchiveAt = archiveAt + (group.length === 0 ? coordinatedResultDefaults.idleLiveMs : coordinatedResultDefaults.activeMs);
         if (group.length > 0) await poll("ids", group, group.map(fixture => fixture.externalId), signal);
       }
-      emit(delayed ? "delayed" : live ? "active" : "idle"); return true;
+      emit(delayed ? "delayed" : relevant ? "active" : "idle"); return true;
     } catch (error) {
       lease = null; emit("delayed");
       if (signal?.aborted) return false;
@@ -269,7 +325,9 @@ export function createResultSyncService(options: Readonly<{
     try {
       while (!signal.aborted) {
         await runOnce(signal);
-        if (!signal.aborted) await sleep(policy.tickMs, undefined, { signal }).catch(() => {});
+        const untilLive = scheduledLiveAt - clock.now();
+        const delay = policy.coordinated && untilLive > 0 ? Math.min(policy.tickMs, untilLive) : policy.tickMs;
+        if (!signal.aborted) await sleep(delay, undefined, { signal }).catch(() => {});
       }
     } finally { await stop(); }
   } });

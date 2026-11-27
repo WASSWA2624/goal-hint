@@ -18,8 +18,8 @@ const schema = z.strictObject({ version: z.literal(1), evidenceRef: z.string().t
   approachMs: duration, activeWindowMs: duration, unresolved: tiers, corrections: tiers,
   skipConfirmedFinals: z.literal(true).exactOptional(),
   // Omitted keeps the spec cadence and its original policy hash; budget-limited accounts may poll more slowly.
-  cadence: z.strictObject({ liveMs: duration.min(15_000).nullable(), dateMs: duration.min(60_000), activeMs: duration.min(60_000),
-    idleLiveMs: duration.min(60_000).exactOptional() }).exactOptional(),
+  cadence: z.strictObject({ liveMs: duration.min(10_000).nullable(), dateMs: duration.min(60_000), activeMs: duration.min(60_000),
+    idleLiveMs: duration.min(60_000).exactOptional(), approachLiveMs: duration.min(60_000).exactOptional() }).exactOptional(),
   leaseMs: duration, tickMs: duration.max(10_000), maxBatchesPerTick: z.number().int().min(1).max(100),
   failureBaseMs: duration.min(60_000), failureMaxMs: duration, requestWindowMs: duration,
   request: z.strictObject({ timeoutMs: duration, maxRequests: z.number().int().min(1).max(100),
@@ -49,17 +49,20 @@ export function resultRecoveryMatchesPolicy(batch: ResultSyncBatch, policy: Resu
 }
 const specCadence = Object.freeze({ liveMs: 15_000, dateMs: 60_000, activeMs: 60_000 });
 const minute = 60_000, hour = 60 * minute, day = 24 * hour;
-export const coordinatedResultDefaults = Object.freeze({ liveMs: minute, idleLiveMs: 5 * minute, dateMs: hour, activeMs: minute,
-  approachMs: 15 * minute, investigateAfterMs: 48 * hour, unresolvedRecentMs: hour, unresolvedLaterMs: day });
+export const coordinatedResultDefaults = Object.freeze({ liveMs: 10_000, approachLiveMs: minute, idleLiveMs: 5 * minute,
+  dateMs: hour, activeMs: minute, approachMs: 15 * minute, investigateAfterMs: 48 * hour,
+  unresolvedRecentMs: hour, unresolvedLaterMs: day, finalVerificationWindowMs: 15 * minute });
 export const missingFromLiveFeed = "missing-from-live-feed";
 export const unresolvedInvestigation = "unresolved-investigation";
 export const incompleteResultEvidence = "incomplete-result-evidence";
 export function resultCadence(policy: ResultSyncPolicy): NonNullable<ResultSyncPolicy["cadence"]> {
   return policy.cadence ?? (policy.coordinated ? coordinatedResultDefaults : specCadence);
 }
-export function liveDiscoveryInterval(policy: ResultSyncPolicy, active: boolean): number | null {
-  const { liveMs, idleLiveMs } = resultCadence(policy);
-  return liveMs === null || active || !policy.coordinated ? liveMs : Math.max(liveMs, idleLiveMs ?? coordinatedResultDefaults.idleLiveMs);
+export function liveDiscoveryInterval(policy: ResultSyncPolicy, active: boolean, approaching = false): number | null {
+  const { liveMs, idleLiveMs, approachLiveMs } = resultCadence(policy);
+  if (liveMs === null || active || !policy.coordinated) return liveMs;
+  return Math.max(liveMs, approaching ? approachLiveMs ?? coordinatedResultDefaults.approachLiveMs
+    : idleLiveMs ?? coordinatedResultDefaults.idleLiveMs);
 }
 export function finalStatus(status: string) {
   return ["finished-regulation", "finished-extra-time", "finished-penalties", "canceled", "abandoned", "awarded"].includes(status);
@@ -79,6 +82,9 @@ export function pollingInterval(fixture: TrackedResultFixture, policy: ResultSyn
   const age = now - (fixture.kickoffAt ?? fixture.firstTrackedAt);
   if (policy.coordinated) {
     if (fixture.status === "live" && age < policy.activeWindowMs) return resultCadence(policy).activeMs;
+    if (fixture.firstFinalAt !== null && age < policy.activeWindowMs &&
+        now - fixture.firstFinalAt < coordinatedResultDefaults.finalVerificationWindowMs)
+      return resultCadence(policy).activeMs;
     if (age < 0) return null;
     return requiresResultInvestigation(fixture, now) ? coordinatedResultDefaults.unresolvedLaterMs : coordinatedResultDefaults.unresolvedRecentMs;
   }
@@ -90,11 +96,15 @@ export function shouldPollLive(fixtures: readonly TrackedResultFixture[], policy
   return sharedLiveFixtures(fixtures, policy, now).length > 0;
 }
 
+export function activelyPlaying(status: string, providerStatus: string | null | undefined) {
+  return status === "live" && providerStatus !== "SUSP" && providerStatus !== "INT";
+}
+
 export function sharedLiveFixtures(fixtures: readonly TrackedResultFixture[], policy: ResultSyncPolicy, now: number) {
   if (resultCadence(policy).liveMs === null) return [];
   if (policy.coordinated) return fixtures.filter((fixture) => fixture.firstFinalAt === null &&
     (fixture.status === "live" && now - (fixture.kickoffAt ?? fixture.firstTrackedAt) < policy.activeWindowMs ||
-    fixture.status === "scheduled" && fixture.kickoffAt !== null && fixture.kickoffAt >= now && fixture.kickoffAt <= now + policy.approachMs));
+    fixture.status === "scheduled" && fixture.kickoffAt !== null && Math.abs(now - fixture.kickoffAt) <= policy.approachMs));
   return fixtures.filter((fixture) => fixture.firstFinalAt === null && now - (fixture.kickoffAt ?? fixture.firstTrackedAt) < policy.activeWindowMs &&
     !(fixture.kickoffAt !== null && now - fixture.kickoffAt < -policy.approachMs) &&
     (fixture.status === "live" || fixture.status === "scheduled" && fixture.kickoffAt !== null &&

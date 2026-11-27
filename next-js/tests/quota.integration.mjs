@@ -25,6 +25,7 @@ const execFileAsync = promisify(execFile);
 const workspace = fileURLToPath(new URL("../", import.meta.url));
 const databaseScript = fileURLToPath(new URL("../scripts/database.py", import.meta.url));
 const initialNow = Date.parse("2026-10-08T12:00:00.000Z");
+const standardPaceMs = 100;
 const id = (value) => createHash("sha256").update(value).digest("hex");
 
 function isolatedEnvironment(applicationUrl, migrationUrl) {
@@ -146,30 +147,44 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
     const firstDatabase = replica();
     const secondDatabase = replica();
 
-    await t.test("the daily report separates account usage from local launches and attributes HTTP retries", async () => {
+    await t.test("the daily report separately attributes account usage, local launches, retries and measured peaks", async () => {
       const dayLength = 86_400_000;
       const [{ at }] = await firstDatabase.query((tx) => tx.$queryRaw`SELECT UTC_TIMESTAMP(3) AS at`);
-      const startsAt = Math.floor(at.getTime() / dayLength) * dayLength;
-      const observedAt = Math.max(startsAt + 1_000, at.getTime() - 5_000);
+      const startsAt = Math.floor(at.getTime() / dayLength) * dayLength - dayLength;
+      const observedAt = startsAt + 200;
       const f = fixture(firstDatabase, "daily-usage", { startsAt, endsAt: startsAt + dayLength,
         subscriptionExpiresAt: startsAt + dayLength * 2, dailyRemaining: 149_923, observedAt });
       f.clock.now = observedAt;
       await f.initialize();
       const first = await dispatch(f.limiter, f.request("enrichment", { endpoint: "/odds/live" }));
       await f.limiter.complete(first, { kind: "rate-limited", retryAfterMs: 1 });
-      f.clock.now += 1_000;
+      f.clock.now += 200;
       const retry = await dispatch(f.limiter, f.request("enrichment", { endpoint: "/odds/live", retry: true }));
       await f.limiter.complete(retry, { kind: "success" });
+      for (const elapsed of [1_000, 60_000, 3_600_000]) {
+        f.clock.now = startsAt + elapsed;
+        const completed = await dispatch(f.limiter, f.request("enrichment", { endpoint: "/odds/live" }));
+        await f.limiter.complete(completed, { kind: "success" });
+      }
+      f.clock.now += 200;
+      const unlaunched = await f.limiter.reserve(f.request("enrichment", { endpoint: "/odds/live" }));
+      assert.equal(unlaunched.status, "reserved");
 
       const report = await readLocalFootballUsage(secondDatabase, 2);
-      assert.deepEqual(report.days[0].provider, { observedAt: new Date(observedAt).toISOString(),
+      const day = report.days[1];
+      assert.deepEqual(day.provider, { observedAt: new Date(observedAt).toISOString(),
         limit: 150_000, used: 77, remaining: 149_923 });
-      assert.equal(report.days[0].resetsAt, new Date(startsAt + dayLength).toISOString());
-      assert.deepEqual(report.days[0].local.breakdown, [{ endpoint: "/odds/live", workload: "enrichment",
-        launches: 2, retries: 1, rateLimited: 1, uncertain: 0, providerErrors: 0 }]);
-      assert.equal(report.days[0].local.remaining, 119_921);
-      assert.equal(report.freshness.latestInPlayPoll, new Date(f.clock.now).toISOString());
-      assert.equal(report.days[1].local.launches, 0);
+      assert.equal(day.resetsAt, new Date(startsAt + dayLength).toISOString());
+      assert.deepEqual(day.local.breakdown, [{ endpoint: "/odds/live", workload: "enrichment",
+        launches: 5, retries: 1, rateLimited: 1, uncertain: 0, providerErrors: 0 }]);
+      assert.equal(day.local.remaining, 119_917);
+      assert.deepEqual(day.local.launchRate, { peakSecond: 2, peakMinute: 3, peakHour: 4, hourly: [
+        { startsAt: new Date(startsAt).toISOString(), launches: 4 },
+        { startsAt: new Date(startsAt + 3_600_000).toISOString(), launches: 1 },
+      ] });
+      assert.equal(report.freshness.latestInPlayPoll, new Date(startsAt + 3_600_000).toISOString());
+      assert.equal(report.days[0].local.launches, 0);
+      assert.deepEqual(report.days[0].local.launchRate, { peakSecond: 0, peakMinute: 0, peakHour: 0, hourly: [] });
     });
 
     await t.test("separate application replicas serialize one account and deduplicate the same work", async () => {
@@ -188,7 +203,7 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       assert.equal(claims.filter((result) => result.status === "claimed").length, 1);
       assert.equal(claims.filter((result) => result.status === "denied").length, 1);
       await f.limiter.complete(winner.permit, { kind: "success" });
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       const unique = await Promise.all(Array.from({ length: 8 }, (_, index) =>
         (index % 2 ? second : f.limiter).reserve(f.request())));
       assert.equal(unique.filter((result) => result.status === "reserved").length, 1);
@@ -227,26 +242,26 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       denied(await upgraded.limiter.reserve(upgraded.request('live-details')), 'workload-budget');
     });
 
-    await t.test("725 accepted dispatches remain evenly paced within every rolling second and minute", { timeout: 300000 }, async (subtest) => {
+    await t.test("605 accepted dispatches remain evenly paced within every rolling second and minute", { timeout: 300000 }, async (subtest) => {
       const f = fixture(firstDatabase, "rolling");
       await f.initialize();
       const dispatchTimes = [];
-      for (let index = 0; index < 725; index++) {
+      for (let index = 0; index < 605; index++) {
         subtest.signal.throwIfAborted();
         const permit = await dispatch(f.limiter, f.request());
         dispatchTimes.push(permit.dispatchedAt);
-        f.clock.now += 84;
+        f.clock.now += standardPaceMs;
       }
-      assert.equal((await f.state()).period.used, 725);
+      assert.equal((await f.state()).period.used, 605);
       let secondStart = 0;
       let minuteStart = 0;
       for (let index = 0; index < dispatchTimes.length; index++) {
         const current = dispatchTimes[index];
         while (dispatchTimes[secondStart] <= current - 1000) secondStart++;
         while (dispatchTimes[minuteStart] <= current - 60000) minuteStart++;
-        assert.ok(index - secondStart + 1 <= 12);
-        assert.ok(index - minuteStart + 1 <= 720);
-        if (index) assert.ok(current - dispatchTimes[index - 1] >= 84);
+        assert.ok(index - secondStart + 1 <= 10);
+        assert.ok(index - minuteStart + 1 <= 600);
+        if (index) assert.ok(current - dispatchTimes[index - 1] >= standardPaceMs);
       }
     });
 
@@ -275,6 +290,26 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       assert.equal(state.period.minuteLimit, 4);
     });
 
+    await t.test("lower configured caps tighten an already open day for every replica", async () => {
+      const f = fixture(firstDatabase, "configured-rates");
+      await f.initialize();
+      const first = await dispatch(f.limiter, f.request());
+      await f.limiter.complete(first, { kind: "success" });
+      const stricter = createQuotaLimiter({ accountId: f.accountId, store: clockStore(secondDatabase, f.clock),
+        verifyEvidence: () => true, shortWindowCaps: { secondLimit: 3, minuteLimit: 120 } });
+      assert.equal((await stricter.initialize(f.evidence)).status, "initialized");
+      f.clock.now += 499;
+      const next = f.request();
+      assert.deepEqual(await f.limiter.reserve(next), { status: "denied", reason: "pacing", retryAt: initialNow + 500 });
+      f.clock.now += 1;
+      await dispatch(stricter, next);
+      await f.initialize();
+      const { period } = await f.state();
+      assert.equal(period.secondLimit, 3);
+      assert.equal(period.minuteLimit, 120);
+      assert.equal(period.used, 2);
+    });
+
     await t.test("unknown account limits enforce one shared dispatch and a distinct lower historical rate", async () => {
       const f = fixture(firstDatabase, "unknown-rates", { secondLimit: 1, minuteLimit: 5, shortWindowKnown: false });
       await f.initialize();
@@ -299,14 +334,14 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       assert.equal((await f.state()).period.used, 99999);
       const ordinary = await dispatch(f.limiter, f.request("enrichment"));
       await f.limiter.complete(ordinary, { kind: "success" });
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       denied(await f.limiter.reserve(f.request("daily-inputs")), "essential-reserve");
       const essential = await dispatch(f.limiter, f.request("results-cutoff"));
       await f.limiter.complete(essential, { kind: "success", dailyRemaining: 30001 });
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       const final = await dispatch(f.limiter, f.request("recovery"));
       await f.limiter.complete(final, { kind: "success", dailyRemaining: 30000 });
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       denied(await f.limiter.reserve(f.request("results-cutoff")), "daily-limit");
       const state = await f.state();
       // Header evidence also imports usage from other account callers. The
@@ -322,7 +357,7 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       await f.initialize();
       const permit = await dispatch(f.limiter, f.request());
       await f.limiter.complete(permit, { kind: "success", dailyRemaining: 30000 });
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       denied(await f.limiter.reserve(f.request()), "daily-limit");
       assert.equal((await f.state()).period.used, 120000);
       assert.equal((await f.state()).period.dayRemaining, 0);
@@ -334,7 +369,7 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       const first = await dispatch(f.limiter, f.request("daily-inputs"));
       // 25,000/day keeps a proportional 4,166 essential reserve; 21,000 used enters it.
       await f.limiter.complete(first, { kind: "success", dailyLimit: 25000, dailyRemaining: 4000 });
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       denied(await f.limiter.reserve(f.request("enrichment")), "essential-reserve");
       const second = await dispatch(f.limiter, f.request("near-kickoff-fallback"));
       await f.limiter.complete(second, { kind: "success", dailyLimit: 150000, dailyRemaining: 140000 });
@@ -404,7 +439,7 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       const f = fixture(firstDatabase, "headers");
       await f.initialize();
       const earlier = await dispatch(f.limiter, f.request());
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       const later = await dispatch(f.limiter, f.request());
       await f.limiter.complete(later, { kind: "success", dailyRemaining: 30010, minuteRemaining: 3 });
       const firstState = await f.state();
@@ -414,10 +449,10 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       const staleState = await f.state();
       assert.ok(staleState.period.dayRemaining <= firstState.period.dayRemaining);
       assert.ok(staleState.period.minuteRemaining <= firstState.period.minuteRemaining);
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       const following = await dispatch(f.limiter, f.request());
       await f.limiter.complete(following, { kind: "success", minuteRemaining: 0 });
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       const queued = f.request();
       denied(await f.limiter.reserve(queued), "minute-limit");
       f.clock.now += 60000;
@@ -470,7 +505,7 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       denied(await untrusted.confirmReset(probe.permit.requestId, { ...candidate, dailyRemaining: 149999 }), "invalid-reset-evidence");
       const confirmation = await f.limiter.confirmReset(probe.permit.requestId, { ...candidate, dailyRemaining: 149999 });
       assert.equal(confirmation.status, "confirmed", JSON.stringify(confirmation));
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       await dispatch(f.limiter, f.request("daily-inputs"));
       assert.equal((await f.state(candidate.periodId)).period.used, 2);
       assert.equal((await f.state()).period.used, 120000);
@@ -584,7 +619,7 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       assert.equal(after.dayRemaining, before.dayRemaining);
       assert.equal(after.minuteRemaining, 0);
       assert.equal(after.minuteFloorUntil, f.clock.now + 60000);
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       const queued = f.request();
       denied(await f.limiter.reserve(queued), "minute-limit");
       f.clock.now = after.minuteFloorUntil;
@@ -607,7 +642,7 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       f.clock.now = initialNow - 1;
       denied(await f.limiter.reserve(f.request()), "clock-regression");
       assert.equal((await f.state()).period.used, 1);
-      f.clock.now = pending.permit.launchBefore + 84;
+      f.clock.now = pending.permit.launchBefore + standardPaceMs;
       await dispatch(f.limiter, f.request());
       assert.equal((await f.state()).period.used, 2);
 
@@ -627,11 +662,11 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       const safety = f.request("results-cutoff");
       denied(await f.limiter.reserve(enrichment), "pacing");
       denied(await f.limiter.reserve(safety), "pacing");
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       denied(await f.limiter.reserve(enrichment), "priority-wait");
       const safetyPermit = await dispatch(f.limiter, safety);
       await f.limiter.complete(safetyPermit, { kind: "success" });
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       await dispatch(f.limiter, enrichment);
     });
 
@@ -643,7 +678,7 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       const gone = f.request("results-cutoff"), next = f.request("daily-inputs");
       denied(await f.limiter.reserve(gone), "pacing");
       denied(await f.limiter.reserve(next), ["pacing", "priority-wait"]);
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       denied(await f.limiter.reserve(next), "priority-wait");
       const before = (await f.state()).period.used;
       assert.deepEqual(await f.limiter.abandon(gone.requestId), { status: "abandoned" });
@@ -669,7 +704,7 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       assert.equal(promoted.essential, true);
       assert.equal(promoted.priority, "results-cutoff");
       assert.equal((await f.state()).period.used, 99999);
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       await dispatch(f.limiter, enrichment);
       assert.equal((await f.state()).period.used, 100000);
       assert.equal((await f.state()).period.ordinaryUsed, 99998);
@@ -679,7 +714,7 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       const f = fixture(firstDatabase, "lower-before-launch");
       await f.initialize();
       const earlier = await dispatch(f.limiter, f.request("results-cutoff"));
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       const ordinary = await f.limiter.reserve(f.request("daily-inputs"));
       assert.equal(ordinary.status, "reserved");
       // 20,000/day keeps a proportional 3,333 essential reserve; 17,000 used enters it.
@@ -744,7 +779,7 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       f.clock.now += 1;
       const retry = await dispatch(second, waiting);
       await second.complete(retry, { kind: "credential-failure" });
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       denied(await f.limiter.reserve(f.request()), "credential-failure");
       assert.equal((await f.state()).period.used, 2);
 
@@ -752,7 +787,7 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       await expired.initialize();
       const last = await dispatch(expired.limiter, expired.request());
       await expired.limiter.complete(last, { kind: "subscription-expired" });
-      expired.clock.now += 84;
+      expired.clock.now += standardPaceMs;
       denied(await expired.limiter.reserve(expired.request()), "subscription-expired");
       assert.equal((await expired.state()).period.used, 1);
     });
@@ -894,7 +929,7 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       assert.equal((await f.state()).period.used, 2);
       assert.equal((await f.state()).period.ordinaryUsed, 2);
 
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       await withTrialJournal(directory, trialPlan, async (session) => {
         assert.deepEqual(session.read().tasks[0].observation, persistedObservation);
         assert.deepEqual(await runProviderTrial(session, runtimeFor(secondLimiter), { clock }), { reason: "budget-exhausted" });
@@ -972,7 +1007,7 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       assert.equal(firstAttempt.responseKind, "uncertain");
       assert.ok(firstAttempt.launchedAt !== null);
 
-      f.clock.now += 84;
+      f.clock.now += standardPaceMs;
       const secondLimiter = createQuotaLimiter({ accountId: f.accountId,
         store: clockStore(secondDatabase, f.clock), verifyEvidence: () => true });
       const second = await adapterFor(secondLimiter).evidence.liveFixtures(bounds());

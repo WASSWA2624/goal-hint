@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { parseUtcInstant } from "../src/domain/calendar.ts";
 import { maximumCompetitionScope } from "../src/domain/feed-query.ts";
 import { liveMatchSnapshotSchema } from "../src/domain/live-match.ts";
@@ -123,7 +123,7 @@ test("a coordinated collector reuses fresh events from the broad sweep and batch
   const state = setup({ options: { policy: policy({ coordinated: true }),
     async batchDetails(ids, _bounds, workflow) {
       workflow.check(); requests.push(ids);
-      return response("fixtures", [{ ...detail, matchEvents: null, matchStatistics: [statistic(10), statistic(20)] }], {
+      return response("fixtures", [{ ...detail, matchEvents: [], matchStatistics: [statistic(10), statistic(20)] }], {
         provenance: [{ ...response("fixtures").provenance[0], requestParameters: { id: "101", timezone: "Africa/Kampala" } }],
       });
     },
@@ -136,7 +136,8 @@ test("a coordinated collector reuses fresh events from the broad sweep and batch
   assert.equal(state.calls.length, 0, "the live timeline already arrived in the broad response");
   assert.equal(state.saved[0].snapshot.events.items[0].elapsed, 45);
   assert.equal(state.saved[0].snapshot.events.items[0].extra, 2);
-  assert.equal(state.saved[0].nextAt, NOW + 120_000);
+  assert.equal(state.saved[0].snapshot.events.retrievedAt, NOW);
+  assert.equal(state.saved[0].nextAt, NOW + 60_000);
 });
 
 test("complete broad live details avoid the follow-up batch entirely", async () => {
@@ -153,10 +154,41 @@ test("complete broad live details avoid the follow-up batch entirely", async () 
   assert.equal(state.calls.length, 0);
 });
 
+test("unsupported statistics batching uses one bulk fixture request and at most four concurrent single-fixture fallbacks", async () => {
+  let pending = 0, peak = 0;
+  const batches = [], checked = [];
+  const state = setup({ options: { policy: policy({ coordinated: true, maxFixturesPerTick: 6 }),
+    async batchDetails(ids) {
+      batches.push(ids);
+      return response("fixtures", ids.map(id => ({ id, kickoff: NOW - 3_600_000, homeTeam: { id: 10 }, awayTeam: { id: 20 },
+        source: source("batch"), matchStatistics: null, matchEvents: null,
+        facts: { statistics: null, events: null, lineups: null, players: null } })), {
+        provenance: [{ ...response("fixtures").provenance[0], requestParameters: { ids: ids.join("-"), timezone: "Africa/Kampala" } }],
+      });
+    } }, adapter: { async statistics(id, _bounds, workflow) {
+      workflow.check(); checked.push(id); peak = Math.max(peak, ++pending);
+      await new Promise(resolve => setImmediate(resolve));
+      pending--;
+      return response("statistics", [statistic(10), statistic(20)], {
+        provenance: [{ ...response("statistics").provenance[0], requestParameters: { fixture: String(id) } }],
+      });
+    } } });
+  const ids = [101, 102, 103, 104, 105, 106];
+  state.targets.splice(0, 1, ...ids.map(externalId => target({ externalId, fixtureId: randomUUID(),
+    occurrenceId: hash(String(externalId)), eventsCoverage: false })));
+  assert.equal(await state.service.runOnce(), true);
+  assert.deepEqual(batches, [ids]);
+  assert.deepEqual(checked.sort((a, b) => a - b), ids);
+  assert.equal(peak, 4);
+  assert.equal(state.saved.length, ids.length);
+  assert.ok(state.saved.every(row => row.snapshot.statistics.state === "available" && row.nextAt === NOW + 60_000));
+});
+
 test("coordinated details retry missing lineups every fifteen minutes and run both final reconciliations", () => {
   const config = policy({ coordinated: true, finalWindowMs: 3 * 86_400_000 });
   const scheduled = target({ status: "scheduled", kickoffAt: NOW + 90 * 60_000 });
   assert.equal(coordinatedLiveDetailNextAt(scheduled, config, NOW, false), NOW + 15 * 60_000);
+  assert.equal(coordinatedLiveDetailNextAt(scheduled, { ...config, lineupIntervalMs: 10 * 60_000 }, NOW, false), NOW + 10 * 60_000);
   const final = target({ status: "finished-regulation", firstFinalAt: NOW });
   assert.equal(coordinatedLiveDetailNextAt(final, config, NOW + 15 * 60_000, true), NOW + 86_400_000);
   assert.equal(coordinatedLiveDetailNextAt(final, config, NOW + 86_400_000, true), NOW + config.finalWindowMs + config.finalIntervalMs);

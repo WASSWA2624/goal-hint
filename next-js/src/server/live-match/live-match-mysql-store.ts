@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { maximumCompetitionScope } from "../../domain/feed-query.ts";
 import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
-import { liveMatchRules, liveMatchSnapshotSchema, type LiveMatchSnapshot } from "../../domain/live-match.ts";
+import { liveMatchRules, liveMatchSnapshotSchema, type LiveMatchEvents, type LiveMatchSnapshot } from "../../domain/live-match.ts";
 import { settlementStatuses, type SettlementStatus } from "../../domain/market-settlement.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
@@ -24,8 +24,9 @@ const at = async (tx: Tx) => utcInstantFromEpochMilliseconds((await tx.$queryRaw
 type FixtureRow = Readonly<{ fixtureId: string; externalId: bigint; cycleId: string | null; kickoffAt: Date | null;
   homeTeamId: string; awayTeamId: string; homeExternalId: bigint; awayExternalId: bigint; status: string; firstFinalAt?: Date | null }>;
 type SnapshotRow = Readonly<{ receivedAt: Date | null; bodyJson: unknown; validIntegrity: bigint | number | null; failures: number | bigint }>;
+type FixtureOccurrence = Pick<FixtureRow, "fixtureId" | "cycleId" | "kickoffAt" | "homeTeamId" | "awayTeamId">;
 /** Canonical participants are included so even an identity correction without a prediction cycle starts a new occurrence. */
-function occurrence(row: FixtureRow): string {
+function occurrence(row: FixtureOccurrence): string {
   return evidenceFingerprint({ fixtureId: row.fixtureId, cycleId: row.cycleId, kickoffAt: stamp(row.kickoffAt),
     homeTeamId: row.homeTeamId, awayTeamId: row.awayTeamId });
 }
@@ -42,6 +43,45 @@ function coverage(value: unknown, name: string): boolean | null {
   const parsed = historyJson(value);
   return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) &&
     typeof (parsed as Record<string, unknown>)[name] === "boolean" ? (parsed as Record<string, boolean>)[name]! : null;
+}
+
+function newerSource(previous: LiveMatchSnapshot["events"] | LiveMatchSnapshot["statistics"],
+  incoming: LiveMatchSnapshot["events"] | LiveMatchSnapshot["statistics"]) {
+  return incoming.retrievedAt !== null && previous.retrievedAt !== null && incoming.retrievedAt < previous.retrievedAt ||
+    incoming.providerUpdatedAt !== null && previous.providerUpdatedAt !== null && incoming.providerUpdatedAt < previous.providerUpdatedAt;
+}
+
+/** The result transaction already holds the verified fixture lock before touching its current occurrence. */
+export async function saveLiveSummaryEvents(tx: Tx, fixture: FixtureOccurrence, events: LiveMatchEvents) {
+  const id = occurrence(fixture), target = { ...fixture, kickoffAt: stamp(fixture.kickoffAt) };
+  const row = (await tx.$queryRaw<SnapshotRow[]>`SELECT receivedAt, bodyJson, failures,
+    integrity=SHA2(CAST(bodyJson AS CHAR),256) AS validIntegrity FROM LiveMatchSnapshot WHERE id=${id} FOR UPDATE`)[0];
+  let previous;
+  try { previous = row ? snapshot(row, target) : null; } catch { return "rejected" as const; }
+  if (previous?.status === "live" && previous.events.state === events.state &&
+      evidenceFingerprint(previous.events.items) === evidenceFingerprint(events.items)) return "unchanged" as const;
+  if (previous?.status === "live" && previous.events.state === "available" && previous.events.items.length > 0 && events.state === "partial")
+    return "unchanged" as const;
+  const now = await at(tx);
+  if (events.retrievedAt === null || events.retrievedAt > now || previous && (now <= previous.collectedAt || newerSource(previous.events, events)))
+    return "rejected" as const;
+  const value = liveMatchSnapshotSchema.parse({ version: 1, fixtureId: target.fixtureId, cycleId: target.cycleId,
+    kickoffAt: target.kickoffAt, status: "live", collectedAt: now,
+    staleAfterMs: previous?.staleAfterMs ?? coordinatedLiveDetailDefaults.staleAfterMs, events,
+    statistics: previous?.status === "live" ? previous.statistics :
+      { state: "unavailable", retrievedAt: null, providerUpdatedAt: null, reason: "not-collected", items: [] } });
+  const body = evidenceSerialize(value);
+  if (Buffer.byteLength(body) > liveMatchRules.maxSnapshotBytes) return "rejected" as const;
+  const collectedAt = new Date(value.collectedAt);
+  await tx.$executeRaw`INSERT INTO LiveMatchSnapshot
+    (id, fixtureId, cycleId, kickoffAt, homeTeamId, awayTeamId, receivedAt, bodyJson, integrity, attemptedAt, nextPollAt)
+    VALUES (${id},${fixture.fixtureId},${fixture.cycleId},${fixture.kickoffAt},${fixture.homeTeamId},${fixture.awayTeamId},${collectedAt},
+      JSON_EXTRACT(${body},'$'),SHA2(CAST(JSON_EXTRACT(${body},'$') AS CHAR),256),${collectedAt},${collectedAt})
+    ON DUPLICATE KEY UPDATE receivedAt=${collectedAt}, bodyJson=JSON_EXTRACT(${body},'$'),
+      integrity=SHA2(CAST(JSON_EXTRACT(${body},'$') AS CHAR),256),
+      nextPollAt=IF(${previous?.status === "live"},LiveMatchSnapshot.nextPollAt,
+        GREATEST(LiveMatchSnapshot.attemptedAt,LEAST(LiveMatchSnapshot.nextPollAt,${collectedAt})))`;
+  return "written" as const;
 }
 
 /** One stable account lease serializes the collector across restarts and provider-day changes. */
@@ -118,10 +158,14 @@ export function createMysqlLiveMatchStore(options: Readonly<{ database: Database
       if (policy.coverage.length === 0) return [];
       try {
         const scope = JSON.stringify(policy.coverage);
+        const firstLineupTeam = Prisma.sql`JSON_VALUE(ff.lineups,'$[0].team.id' RETURNING UNSIGNED)`;
+        const secondLineupTeam = Prisma.sql`JSON_VALUE(ff.lineups,'$[1].team.id' RETURNING UNSIGNED)`;
         const confirmedLineups = Prisma.sql`(ff.detailsRetrievedAt >= TIMESTAMPADD(MICROSECOND,
           ${-coordinatedLiveDetailDefaults.lineupLeadMs * 1000}, f.kickoff) AND
-          COALESCE(JSON_LENGTH(JSON_EXTRACT(ff.lineups,'$[0].startXI')),0) >= 11 AND
-          COALESCE(JSON_LENGTH(JSON_EXTRACT(ff.lineups,'$[1].startXI')),0) >= 11)`;
+          ${firstLineupTeam} <> ${secondLineupTeam} AND ${firstLineupTeam} IN (h.externalId,a.externalId) AND
+          ${secondLineupTeam} IN (h.externalId,a.externalId) AND
+          COALESCE(JSON_LENGTH(JSON_EXTRACT(ff.lineups,'$[0].startXI')),0) = 11 AND
+          COALESCE(JSON_LENGTH(JSON_EXTRACT(ff.lineups,'$[1].startXI')),0) = 11)`;
         const factsJoin = policy.coordinated ? Prisma.sql`LEFT JOIN FixtureFacts ff ON ff.fixtureId=f.id` : Prisma.empty;
         const factsColumns = policy.coordinated ? Prisma.sql`${confirmedLineups} AS lineupsKnown,
           (JSON_TYPE(JSON_EXTRACT(ff.statistics,'$[0].statistics_1h')) = 'ARRAY' AND
@@ -130,7 +174,7 @@ export function createMysqlLiveMatchStore(options: Readonly<{ database: Database
             JSON_TYPE(JSON_EXTRACT(ff.statistics,'$[1].statistics_2h')) = 'ARRAY') AS halfStatisticsKnown`
           : Prisma.sql`0 AS lineupsKnown, 0 AS halfStatisticsKnown`;
         const upcoming = policy.coordinated ? Prisma.sql`(f.status='scheduled'
-          AND f.kickoff > ${new Date(now)} AND f.kickoff <= ${new Date(now + coordinatedLiveDetailDefaults.lineupLeadMs)}
+          AND f.kickoff > ${new Date(now)} AND f.kickoff <= ${new Date(now + (policy.lineupLeadMs ?? coordinatedLiveDetailDefaults.lineupLeadMs))}
           AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(s.coverage,'$."fixtures.lineups"')),'') <> 'false'
           AND NOT COALESCE(${confirmedLineups},0)) OR` : Prisma.empty;
         const rows = await database.query((tx) => tx.$queryRaw<(FixtureRow & SnapshotRow & {
@@ -159,7 +203,8 @@ export function createMysqlLiveMatchStore(options: Readonly<{ database: Database
               AND (${policy.coordinated === true || policy.stopAfterFinal !== true} OR
                 (f.kickoff >= ${new Date(now - policy.finalWindowMs)} AND
                   (l.firstFinalAt IS NOT NULL OR l.bodyJson IS NULL OR JSON_UNQUOTE(JSON_EXTRACT(l.bodyJson,'$.status')) <> f.status)))))
-            AND (l.nextPollAt IS NULL OR l.nextPollAt <= ${new Date(now)})
+            AND (l.nextPollAt IS NULL OR l.nextPollAt <= ${new Date(now)} OR
+              (${policy.coordinated === true} AND l.bodyJson IS NOT NULL AND JSON_UNQUOTE(JSON_EXTRACT(l.bodyJson,'$.status')) <> f.status))
             AND NOT EXISTS (SELECT 1 FROM FootballTeamProvider otherHome WHERE otherHome.teamId=f.homeTeamId
               AND otherHome.provider='api-football' AND otherHome.externalId<>h.externalId)
             AND NOT EXISTS (SELECT 1 FROM FootballTeamProvider otherAway WHERE otherAway.teamId=f.awayTeamId
@@ -173,6 +218,7 @@ export function createMysqlLiveMatchStore(options: Readonly<{ database: Database
           if (![target.externalId, target.homeExternalId, target.awayExternalId].every((v) => bounded(v, Number.MAX_SAFE_INTEGER)))
             return liveMatchFail("unavailable");
           return { ...target, previous: snapshot(row, target), ...(policy.coordinated ? {
+            coordinated: true as const,
             firstFinalAt: finalStatuses.has(target.status) ? stamp(row.firstFinalAt ?? null) : null,
             season: row.season, lineupsKnown: Number(row.lineupsKnown) === 1,
             lineupsCoverage: coverage(row.seasonCoverage, "fixtures.lineups"),
@@ -196,8 +242,8 @@ export function createMysqlLiveMatchStore(options: Readonly<{ database: Database
       });
     },
     save(lease, target, input, nextAt, failures, facts) {
-      const value = liveMatchSnapshotSchema.parse(input), body = evidenceSerialize(value);
-      if (Buffer.byteLength(body) > liveMatchRules.maxSnapshotBytes || value.fixtureId !== target.fixtureId || value.cycleId !== target.cycleId ||
+      const value = liveMatchSnapshotSchema.parse(input);
+      if (Buffer.byteLength(evidenceSerialize(value)) > liveMatchRules.maxSnapshotBytes || value.fixtureId !== target.fixtureId || value.cycleId !== target.cycleId ||
         value.kickoffAt !== target.kickoffAt || value.status !== target.status || !Number.isSafeInteger(failures) || failures < 0 || failures > 16)
         return liveMatchFail("invalid-request");
       date(nextAt);
@@ -205,15 +251,19 @@ export function createMysqlLiveMatchStore(options: Readonly<{ database: Database
         const { now } = await locked(tx, lease); await current(tx, target);
         const row = (await tx.$queryRaw<(SnapshotRow & { attemptedAt: Date })[]>`SELECT receivedAt,bodyJson,attemptedAt,failures,
           integrity=SHA2(CAST(bodyJson AS CHAR),256) AS validIntegrity FROM LiveMatchSnapshot WHERE id=${target.occurrenceId} FOR UPDATE`)[0];
-        if (!row || value.collectedAt > now || value.collectedAt < row.attemptedAt.getTime() ||
-          row.receivedAt !== null && value.collectedAt < row.receivedAt.getTime() || nextAt < row.attemptedAt.getTime()) return liveMatchFail("invalid-request");
+        if (!row || value.collectedAt > now || value.collectedAt < row.attemptedAt.getTime() || nextAt < row.attemptedAt.getTime() ||
+          !target.coordinated && row.receivedAt !== null && value.collectedAt < row.receivedAt.getTime())
+          return liveMatchFail("invalid-request");
         const previous = snapshot(row, target);
-        if (previous && (["statistics", "events"] as const).some((section) => {
-          const old = previous[section], next = value[section];
-          return next.retrievedAt !== null && old.retrievedAt !== null && next.retrievedAt < old.retrievedAt ||
-            next.providerUpdatedAt !== null && old.providerUpdatedAt !== null && next.providerUpdatedAt < old.providerUpdatedAt;
-        })) return liveMatchFail("invalid-request");
-        await tx.$executeRaw`UPDATE LiveMatchSnapshot SET receivedAt=${new Date(value.collectedAt)},bodyJson=JSON_EXTRACT(${body},'$'),
+        if (previous && (newerSource(previous.statistics, value.statistics) || !target.coordinated && newerSource(previous.events, value.events)))
+          return liveMatchFail("invalid-request");
+        const retainEvents = target.coordinated && previous && (newerSource(previous.events, value.events) || previous.events.items.length > 0 &&
+          (value.events.items.length === 0 || previous.events.state === "available" && value.events.state === "partial"));
+        const collectedAt = target.coordinated && previous && previous.collectedAt >= value.collectedAt ? await at(tx) : value.collectedAt;
+        if (previous && collectedAt <= previous.collectedAt) return liveMatchFail("invalid-request");
+        const body = evidenceSerialize({ ...value, collectedAt, events: retainEvents ? previous.events : value.events });
+        if (Buffer.byteLength(body) > liveMatchRules.maxSnapshotBytes) return liveMatchFail("invalid-request");
+        await tx.$executeRaw`UPDATE LiveMatchSnapshot SET receivedAt=${new Date(collectedAt)},bodyJson=JSON_EXTRACT(${body},'$'),
           integrity=SHA2(CAST(JSON_EXTRACT(${body},'$') AS CHAR),256),nextPollAt=${new Date(nextAt)},failures=${failures}
           WHERE id=${target.occurrenceId}`;
         if (facts) {

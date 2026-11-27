@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { UtcInstant } from "../../domain/calendar.ts";
+import type { LiveMatchEvents } from "../../domain/live-match.ts";
 import type { ApiFootballBounds, ApiFootballResult } from "../football/api-football-contract.ts";
 import type { NormalizedFixture } from "../football/api-football-normalize.ts";
 import type { LifecycleObservation } from "../predictions/lifecycle-contract.ts";
@@ -25,7 +26,7 @@ export type ResultSyncPolicy = Readonly<{
   /** Skip dedicated rechecks of settled outcomes while still observing shared date sweeps. */
   skipConfirmedFinals?: true;
   /** Omitted uses the spec cadence. Live null disables the shared live feed; date sync still observes today's statuses. */
-  cadence?: Readonly<{ liveMs: number | null; dateMs: number; activeMs: number; idleLiveMs?: number }>;
+  cadence?: Readonly<{ liveMs: number | null; dateMs: number; activeMs: number; idleLiveMs?: number; approachLiveMs?: number }>;
   leaseMs: number; tickMs: number; maxBatchesPerTick: number;
   failureBaseMs: number; failureMaxMs: number;
   requestWindowMs: number;
@@ -46,6 +47,7 @@ export type PollLease = Readonly<{
 export type TrackedResultFixture = Readonly<{
   fixtureId: string; externalId: number; competitionId: number; season: number;
   kickoffAt: number | null; status: string; retrievedAt: number;
+  providerStatus?: string | null;
   firstTrackedAt: number; firstFinalAt: number | null;
   lastSyncAt: number | null; nextCheckAt: number | null; failures: number;
   lastVerifiedAt?: number | null;
@@ -54,6 +56,7 @@ export type TrackedResultFixture = Readonly<{
 }>;
 export type AppliedResultObservation = Readonly<{
   fixtureId: string; kickoffAt: number | null; status: string; retrievedAt: number; firstFinalAt: number | null; finalConfirmed: boolean;
+  liveEvents?: "written" | "unchanged";
 }>;
 export type ResultSyncBatch = Readonly<{
   id: string; accountId: string; policyHash: string; receivedAt: UtcInstant;
@@ -61,6 +64,8 @@ export type ResultSyncBatch = Readonly<{
   observations: readonly LifecycleObservation[];
   /** Sent by the coordinated poller. A missing live ID queues confirmation, never a result. */
   missingLiveFixtures?: readonly Readonly<{ fixtureId: string; competitionId: number; season: number }>[];
+  /** Verified embedded events are sealed with the score observation for crash-safe application. */
+  liveEvents?: readonly Readonly<{ fixtureId: string; events: LiveMatchEvents }>[];
   coordinated?: true;
   error: string | null; requestsDispatched: number;
 }>;

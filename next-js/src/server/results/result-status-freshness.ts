@@ -2,7 +2,9 @@ import "server-only";
 
 import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
 import { isPlayedFinalStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
-import { coordinatedResultDefaults } from "./result-sync-policy.ts";
+
+// Keep the public freshness window independent of the worker's faster retry target.
+const liveStatusStaleAfterMs = 60_000;
 
 type StatusFreshnessInput = Readonly<{
   status: SettlementStatus; providerStatus: string | null; kickoffAt: number | null; asOf: UtcInstant;
@@ -26,7 +28,7 @@ export function projectFixtureStatusFreshness(input: StatusFreshnessInput) {
   const nextCheckAt = clock(input.nextCheckAt);
   const overdue = kickoffAt !== null && kickoffAt <= asOf;
   const scheduleUnconfirmed = status === "scheduled" && (providerStatus === "TBD" || overdue) || status === "unknown" && overdue;
-  const liveStale = status === "live" && lastVerifiedAt !== null && asOf - lastVerifiedAt > coordinatedResultDefaults.liveMs;
+  const liveStale = status === "live" && lastVerifiedAt !== null && asOf - lastVerifiedAt > liveStatusStaleAfterMs;
   const missingResult = isPlayedFinalStatus(status) && !hasVerifiedRegulation;
   const state = delayed || scheduleUnconfirmed || liveStale || missingResult ? "awaiting-update"
     : lastVerifiedAt === null || status === "unknown" ? "unverified" : "current";

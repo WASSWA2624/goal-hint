@@ -50,6 +50,8 @@ export type OddsImportRequest = Readonly<{
   policy: OddsPolicy;
   /** API-Football fixture selector for a targeted pre-match import. */
   fixtureId?: number;
+  /** A targeted repair uses its durable reconciliation window, independently of publication readiness. */
+  reconciliationDeadlineAt?: UtcInstant;
   /** Backfill of provider pre-match quotes retrieved after the fixture began. */
   recovery?: true;
 }>;
@@ -98,7 +100,7 @@ export type ValidatedOddsObservation = Readonly<{
 }>;
 /** Per-fixture receipt outcome decided before any price is applied. */
 export type OddsFixtureOutcome = "apply" | "recover" | "unknown-fixture" | "after-kickoff" | "kickoff-mismatch" |
-  "not-scheduled" | "awaiting-start";
+  "not-scheduled" | "awaiting-start" | "no-provider-odds" | "invalid-provider-odds";
 export type OddsBookmakerManifest = Readonly<{ bookmakerId: number; kickoffAt: UtcInstant | null;
   bets: readonly Readonly<{ betId: number; betName: string | null; valuesHash: string }>[];
 }>;
@@ -140,4 +142,6 @@ export type OddsImportSummary = Readonly<{
   error: Readonly<{ reason: string; retryable: boolean }> | null;
   /** A bounded continuation should resume this job without re-reading its committed pages. */
   continuation?: boolean;
+  /** A verified successful provider response with no fixture prices. */
+  providerEmpty?: true;
 }>;

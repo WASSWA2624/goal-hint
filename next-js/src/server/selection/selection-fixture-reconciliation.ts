@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getReportingDate, utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
+import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
 import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { CatalogInputError, catalogScopeKey, parseCatalogImportRequest } from "../football/catalog-input.ts";
@@ -56,6 +56,56 @@ export function createHourlyFixtureReconciler(options: Readonly<{
   async function owns(lease: SelectionLease) {
     return database.query((client) => client.dailyRun.findFirst({ where: { id: lease.runId, ownerId: lease.ownerId,
       fence: lease.fence, leaseExpiresAt: { gt: new Date(clock.now()) } }, select: { leaseExpiresAt: true } }));
+  }
+
+  async function sweepOddsHorizon(lease: SelectionLease, scheduledFor: number, horizonDays: number,
+    signal = new AbortController().signal) {
+    const forecastDays = policy.importDays ?? policy.windowDays ?? 7;
+    const today = getReportingDate(utcInstantFromEpochMilliseconds(scheduledFor));
+    const targets = Array.from({ length: Math.max(0, horizonDays - forecastDays) }, (_, offset) => {
+      const date = addReportingDays(today, forecastDays + offset);
+      const selection = { kind: "fixtures", query: { date } } as const;
+      return { date, selection, scopeKey: catalogScopeKey(selection) };
+    });
+    const report = { complete: 0, partial: 0, failed: 0, deferred: targets.length, requests: 0, changed: 0 };
+    const slotEnd = utcInstantFromEpochMilliseconds(scheduledFor + hourMs);
+    if (targets.length === 0 || signal.aborted || clock.now() >= slotEnd) return report;
+    const receipts = await database.query((client) => client.footballImport.findMany({ where: {
+      provider, kind: "fixtures", scopeKey: { in: targets.map(({ scopeKey }) => scopeKey) },
+      observedAt: { gte: new Date(scheduledFor), lt: new Date(slotEnd) }, status: "complete", rejectedCount: 0, requestsDispatched: { gt: 0 },
+    }, select: { scopeKey: true, observedAt: true, provenance: true } }));
+    const completed = new Set(receipts.filter((receipt) => {
+      const target = targets.find(({ scopeKey }) => scopeKey === receipt.scopeKey);
+      return target && verifiedFixturePage(receipt.provenance, { date: target.date }, receipt.observedAt.getTime());
+    }).map(({ scopeKey }) => scopeKey));
+    report.complete = completed.size;
+    report.deferred -= completed.size;
+    for (const { selection, scopeKey } of targets) {
+      if (completed.has(scopeKey)) continue;
+      if (signal.aborted || clock.now() >= slotEnd) break;
+      const owner = await owns(lease);
+      if (!owner?.leaseExpiresAt) break;
+      const deadlineAt = utcInstantFromEpochMilliseconds(Math.min(slotEnd, clock.now() + deadlineMs, owner.leaseExpiresAt.getTime()));
+      const check = () => {
+        if (signal.aborted || clock.now() >= deadlineAt) throw new CatalogStoreError("unavailable");
+      };
+      try {
+        const receipt = await importer.import({ id: batchId(lease.runId, `odds-discovery:${scopeKey}`), selection,
+          retentionEvidenceRef: policy.retentionEvidenceRef, bounds: { ...bounds, deadlineAt: slotEnd } }, undefined, { signal, deadlineAt, check });
+        if (receipt.requestsDispatched === 0 && receipt.status === "failed") break;
+        report.deferred--;
+        report.requests += receipt.requestsDispatched;
+        report.changed += receipt.changedFixtureIds.length;
+        if (receipt.status === "complete" && receipt.rejectedCount === 0) report.complete++;
+        else if (receipt.status === "partial" || receipt.status === "degraded") report.partial++;
+        else report.failed++;
+      } catch (error) {
+        if (signal.aborted || error instanceof HourlyScheduleQuotaUnavailable) break;
+        report.deferred--; report.failed++;
+        options.onLookupFailure?.(lookupFailure(error) ?? "unavailable", 0);
+      }
+    }
+    return report;
   }
 
   async function sweepUpcoming(lease: SelectionLease, scheduledFor: number, signal = new AbortController().signal): Promise<ForwardFixtureSweep> {
@@ -133,6 +183,7 @@ export function createHourlyFixtureReconciler(options: Readonly<{
 
   return Object.freeze({
     sweepUpcoming,
+    sweepOddsHorizon,
     async reconcile(lease: SelectionLease, scheduledFor: number, signal = new AbortController().signal, replayOnly = false): Promise<readonly string[]> {
       const nextSlot = utcInstantFromEpochMilliseconds(scheduledFor + hourMs);
       const attemptIds = Array.from({ length: batches }, (_, index) => batchId(lease.runId, index));

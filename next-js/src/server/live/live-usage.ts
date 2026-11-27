@@ -21,6 +21,7 @@ type AttemptGroup = Pick<DayPeriod, "accountId" | "periodId"> & Readonly<{
   latestSuccess: number | bigint | null;
 }>;
 type Breakdown = Totals & { endpoint: string; workload: string };
+type HourlyLaunchRate = Readonly<{ launchHour: bigint; launches: bigint; peakSecond: bigint; peakMinute: bigint }>;
 const empty = (): Totals => ({ launches: 0, retries: 0, rateLimited: 0, uncertain: 0, providerErrors: 0 });
 const counterKeys = Object.keys(empty()) as (keyof Totals)[];
 
@@ -47,6 +48,23 @@ function countsByDay(rows: readonly AttemptGroup[], startByPeriod: ReadonlyMap<s
   return days;
 }
 
+function launchRatesByDay(rows: readonly HourlyLaunchRate[]) {
+  const days = new Map<number, {
+    peakSecond: number; peakMinute: number; peakHour: number; hourly: { startsAt: string; launches: number }[];
+  }>();
+  for (const row of rows) {
+    const start = Number(row.launchHour) * HOUR, day = Math.floor(start / DAY) * DAY;
+    const rates = days.get(day) ?? { peakSecond: 0, peakMinute: 0, peakHour: 0, hourly: [] };
+    const launches = Number(row.launches);
+    rates.peakSecond = Math.max(rates.peakSecond, Number(row.peakSecond));
+    rates.peakMinute = Math.max(rates.peakMinute, Number(row.peakMinute));
+    rates.peakHour = Math.max(rates.peakHour, launches);
+    rates.hourly.push({ startsAt: iso(start), launches });
+    days.set(day, rates);
+  }
+  return days;
+}
+
 /** Reads the local quota ledger and freshness projections. All activity is DB-only. */
 export async function readLocalFootballUsage(database: DatabaseRuntime, days: number) {
   if (!Number.isSafeInteger(days) || days < 1 || days > 14) throw new Error("Choose 1–14 provider days.");
@@ -63,6 +81,7 @@ export async function readLocalFootballUsage(database: DatabaseRuntime, days: nu
       LIMIT 113
     `).map(decodePeriod);
     if (periods.length > 112) throw new Error("The quota history exceeds the supported local scope.");
+    const scope = periods.length === 0 ? Prisma.empty : Prisma.join(periods.map((period) => Prisma.sql`(${period.accountId}, ${period.id})`));
     const attempts = periods.length === 0 ? [] : await tx.$queryRaw<AttemptGroup[]>(Prisma.sql`
       SELECT accountId, periodId,
         JSON_UNQUOTE(JSON_EXTRACT(payloadJson, '$.endpoint')) AS endpoint,
@@ -75,11 +94,31 @@ export async function readLocalFootballUsage(database: DatabaseRuntime, days: nu
         MAX(CASE WHEN JSON_UNQUOTE(JSON_EXTRACT(payloadJson, '$.responseKind')) = 'success'
           THEN CAST(JSON_UNQUOTE(JSON_EXTRACT(payloadJson, '$.launchedAt')) AS UNSIGNED) END) AS latestSuccess
       FROM ApiQuotaAttempt
-      WHERE (accountId, periodId) IN (${Prisma.join(periods.map((period) => Prisma.sql`(${period.accountId}, ${period.id})`))})
+      WHERE (accountId, periodId) IN (${scope})
         AND JSON_TYPE(JSON_EXTRACT(payloadJson, '$.launchedAt')) IN ('INTEGER', 'UNSIGNED INTEGER', 'DOUBLE')
       GROUP BY accountId, periodId, endpoint, workload
     `);
+    // Aggregate calendar buckets at the database, returning at most 24 rows per provider day.
+    const rates = periods.length === 0 ? [] : await tx.$queryRaw<HourlyLaunchRate[]>(Prisma.sql`
+      WITH launched AS (
+        SELECT CAST(JSON_UNQUOTE(JSON_EXTRACT(payloadJson, '$.launchedAt')) AS UNSIGNED) AS launchMs
+        FROM ApiQuotaAttempt
+        WHERE (accountId, periodId) IN (${scope})
+          AND JSON_TYPE(JSON_EXTRACT(payloadJson, '$.launchedAt')) IN ('INTEGER', 'UNSIGNED INTEGER', 'DOUBLE')
+      ), launch_seconds AS (
+        SELECT launchMs DIV 1000 AS launchSecond, COUNT(*) AS launches
+        FROM launched WHERE launchMs >= ${first} AND launchMs < ${today + DAY}
+        GROUP BY launchSecond
+      ), launch_minutes AS (
+        SELECT launchSecond DIV 60 AS launchMinute, SUM(launches) AS launches, MAX(launches) AS peakSecond
+        FROM launch_seconds GROUP BY launchMinute
+      )
+      SELECT launchMinute DIV 60 AS launchHour, CAST(SUM(launches) AS UNSIGNED) AS launches,
+        MAX(peakSecond) AS peakSecond, CAST(MAX(launches) AS UNSIGNED) AS peakMinute
+      FROM launch_minutes GROUP BY launchHour ORDER BY launchHour
+    `);
     const byDay = countsByDay(attempts, new Map(periods.map((period) => [`${period.accountId}:${period.id}`, period.startsAt])));
+    const launchRates = launchRatesByDay(rates);
     const latestInPlay = attempts.reduce((latest, attempt) => attempt.endpoint === "/odds/live"
       ? Math.max(latest, Number(attempt.latestSuccess ?? 0)) : latest, 0);
     const current = (await tx.$queryRaw<{
@@ -117,7 +156,8 @@ export async function readLocalFootballUsage(database: DatabaseRuntime, days: nu
           startsAt: iso(start), resetsAt: iso(start + DAY),
           provider: mostRecent ? { observedAt: iso(mostRecent.usage.observedAt), limit: mostRecent.usage.limit,
             used: mostRecent.usage.limit - mostRecent.usage.remaining, remaining: mostRecent.usage.remaining } : null,
-          local: { ...totals, breakdown, limit, essentialReserve: essentialReserveFor(limit), remaining: period?.dayRemaining ?? null },
+          local: { ...totals, breakdown, limit, essentialReserve: essentialReserveFor(limit), remaining: period?.dayRemaining ?? null,
+            launchRate: launchRates.get(start) ?? { peakSecond: 0, peakMinute: 0, peakHour: 0, hourly: [] } },
         };
       }),
     };

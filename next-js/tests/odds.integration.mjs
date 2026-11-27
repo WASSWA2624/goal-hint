@@ -13,6 +13,7 @@ import { createMysqlOddsStore, fixtureQuoteManifests, oddsValuesHash, storedClos
   storedCurrentBookmakerQuotes, storedPointInTimeFeaturedBookmakerQuotes,
   storedRecoveredBookmakerQuotes } from '../src/server/odds/odds-mysql-store.ts';
 import { storedFixtureOddsGroups, storedFixturePrices } from '../src/server/odds/odds-read.ts';
+import { createOddsReconciliationCandidates } from '../src/server/odds/odds-reconciliation.ts';
 import { createOddsImportService } from '../src/server/odds/odds-service.ts';
 import { createMatchDetailService } from '../src/server/matches/detail-service.ts';
 import { gateDetailResponse } from '../src/domain/paywall.ts';
@@ -169,7 +170,7 @@ test('odds import persistence on isolated genuine MySQL', { timeout: 300_000 }, 
         const summary = await importDate(NEXT);
         assert.equal(summary.status, 'complete'); assert.equal(summary.requestsDispatched, 1); assert.equal(summary.error, null);
         assert.deepEqual(summary.outcomes, { apply: 3, recover: 0, 'unknown-fixture': 1, 'after-kickoff': 0, 'awaiting-start': 0, 'kickoff-mismatch': 1, 'not-scheduled': 1,
-          changed: 3, unchanged: 0, skipped: 0, withdrawn: 0 });
+          'no-provider-odds': 0, 'invalid-provider-odds': 0, changed: 3, unchanged: 0, skipped: 0, withdrawn: 0 });
         privateBatch = summary.batchId; firstRetrieval = p.now();
         assert.equal(await catalog.fixtureByProviderId(UNKNOWN), null, 'unknown fixtures are counted, never created');
         assert.equal(await count('ProviderOddsSnapshot'), 15, 'every bet of the documented bookmaker is kept');
@@ -218,6 +219,25 @@ test('odds import persistence on isolated genuine MySQL', { timeout: 300_000 }, 
           expectedPolicyHash: oddsPolicyHash(policy), verifyInternalUse: () => false });
         assert.deepEqual(await deniedLoader(context), []);
         assert.deepEqual(await load({ ...context, cutoffAt: context.cutoffAt - 1 }), [], 'post-cutoff odds cannot enter an earlier analysis');
+      });
+
+      await t.test('selective reconciliation uses current sealed quotes and spaces a verified empty target across restarts', async () => {
+        const inspect = () => createOddsReconciliationCandidates({ database: a, competitionIds: [39], policy });
+        const before = await inspect()(p.now(), 24);
+        assert.equal(before.coverage.complete, 3);
+        assert.equal(before.captured, 3);
+        assert.equal(before.priceAgeP95Ms, MINUTE);
+        assert.deepEqual(before.candidates.map(({ fixtureId }) => fixtureId), [ids.M, ids.S, ids.E, ids.G]);
+        odds.state.respond = (url) => oddsResponse(url, [], { total: 0 });
+        const empty = await service.importFixture({ ...oddsRequest('prices', slot(), { date: NEXT, policy, id: oddsHash('empty-reconciliation-target') }),
+          fixtureId: ids.M, reconciliationDeadlineAt: p.now() + 30 * MINUTE });
+        odds.state.respond = null;
+        assert.equal(empty.providerEmpty, true);
+        const restarted = await inspect()(p.now(), 24);
+        assert.equal(restarted.providerEmpty, 1);
+        assert.equal(restarted.deferred, 1);
+        assert.deepEqual(restarted.candidates.map(({ fixtureId }) => fixtureId), [ids.S, ids.E, ids.G]);
+        assert.deepEqual(await untouched(), baseline);
       });
 
       await t.test('identical re-imports add nothing; one price change appends one chained snapshot; concurrent applies write once', async () => {

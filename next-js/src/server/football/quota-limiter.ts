@@ -14,6 +14,10 @@ import {
 type Denial = Extract<QuotaDecision, { status: "denied" }>;
 type Context = { account: QuotaAccountState; period: QuotaPeriodState; now: UtcInstant };
 const limits = operatingRules.football;
+export type QuotaShortWindowCaps = Readonly<{ secondLimit: number; minuteLimit: number }>;
+const defaultShortWindowCaps: QuotaShortWindowCaps = {
+  secondLimit: limits.requestsPerRollingSecond, minuteLimit: limits.requestsPerRollingMinute,
+};
 // A permit allows two durable transactions to commit before bounded I/O. This
 // freshness window is independent of the rolling-rate interval; claimLaunch
 // rechecks actual account pacing/windows and never books a future dispatch.
@@ -32,7 +36,7 @@ const validInstant = (value: unknown): value is UtcInstant =>
 const spacing = (period: QuotaPeriodState): number =>
   Math.ceil(Math.max(1_000 / period.secondLimit, 60_000 / period.minuteLimit));
 const providerWindowAllowance = (limit: number): number => Math.floor(limit * providerShortWindowShare);
-function shortWindowLimits(evidence: QuotaPeriodEvidence) {
+function shortWindowLimits(evidence: QuotaPeriodEvidence, caps: QuotaShortWindowCaps) {
   const unknown = evidence.shortWindowKnown === false;
   // Integer rolling-second counts still allow one request when the budget is fractional.
   // The corresponding rolling-minute ceiling preserves that smaller average rate.
@@ -40,8 +44,8 @@ function shortWindowLimits(evidence: QuotaPeriodEvidence) {
   const minuteLimit = unknown ? Math.min(unknownProviderRequestsPerMinute, evidence.minuteLimit) :
     Math.max(1, Math.min(providerWindowAllowance(evidence.minuteLimit), providerWindowAllowance(evidence.secondLimit * 60)));
   return {
-    secondLimit: Math.min(limits.requestsPerRollingSecond, secondLimit),
-    minuteLimit: Math.min(limits.requestsPerRollingMinute, minuteLimit),
+    secondLimit: Math.min(defaultShortWindowCaps.secondLimit, caps.secondLimit, secondLimit),
+    minuteLimit: Math.min(defaultShortWindowCaps.minuteLimit, caps.minuteLimit, minuteLimit),
     ...(unknown && { singleConcurrent: true }),
   };
 }
@@ -71,13 +75,13 @@ function recordProviderUsage(period: QuotaPeriodState, evidence: QuotaPeriodEvid
     period.providerUsage = { observedAt: evidence.observedAt, limit: evidence.providerDailyLimit, remaining: evidence.dailyRemaining };
   }
 }
-function newPeriod(evidence: QuotaPeriodEvidence, kind: QuotaPeriodState["kind"]): QuotaPeriodState {
+function newPeriod(evidence: QuotaPeriodEvidence, kind: QuotaPeriodState["kind"], caps: QuotaShortWindowCaps): QuotaPeriodState {
   const dayLimit = Math.min(limits.requestsPerProviderDay, evidence.providerDailyLimit);
   const used = kind === "candidate" ? 0 : evidence.providerDailyLimit - evidence.dailyRemaining;
   const period: QuotaPeriodState = {
     id: evidence.periodId, kind, startsAt: evidence.startsAt, endsAt: evidence.endsAt,
     subscriptionExpiresAt: evidence.subscriptionExpiresAt, providerDailyLimit: evidence.providerDailyLimit,
-    ...shortWindowLimits(evidence),
+    ...shortWindowLimits(evidence, caps),
     dayLimit, used, ordinaryUsed: used, dayRemaining: Math.max(0, Math.min(evidence.dailyRemaining, dayLimit - used)),
     minuteRemaining: null, minuteFloorUntil: null, probeRequestId: null,
     evidenceRef: evidence.evidenceRef, observationRevision: 0, priorityUsed: {},
@@ -108,8 +112,9 @@ export function createQuotaLimiter(options: {
   store: QuotaStore;
   verifyEvidence?: QuotaEvidenceVerifier;
   admit?: QuotaAdmission;
+  shortWindowCaps?: QuotaShortWindowCaps;
 }) {
-  const { accountId, store, verifyEvidence } = options;
+  const { accountId, store, verifyEvidence, shortWindowCaps = defaultShortWindowCaps } = options;
   async function transact<Result>(operation: (tx: QuotaTransaction) => Promise<Result>): Promise<Result | Denial> {
     if (!identifier.test(accountId)) return denied("unverified-account");
     try { return await store.transaction(accountId, operation); }
@@ -270,13 +275,13 @@ export function createQuotaLimiter(options: {
               period.endsAt !== evidence.endsAt || now >= period.endsAt) return denied("invalid-reset-evidence");
           period.providerDailyLimit = Math.min(period.providerDailyLimit, evidence.providerDailyLimit);
           period.dayLimit = Math.min(period.dayLimit, period.providerDailyLimit);
-          const window = shortWindowLimits(evidence);
+          const window = shortWindowLimits(evidence, shortWindowCaps);
           period.secondLimit = Math.min(period.secondLimit, window.secondLimit);
           period.minuteLimit = Math.min(period.minuteLimit, window.minuteLimit);
           if (window.singleConcurrent) period.singleConcurrent = true;
           period.subscriptionExpiresAt = instant(Math.min(period.subscriptionExpiresAt, evidence.subscriptionExpiresAt));
           const unresolved = await tx.unresolvedBefore(period.id, 2_147_483_647);
-          const spent = Math.max(0, period.providerDailyLimit - evidence.dailyRemaining) + unresolved;
+          const spent = evidence.providerDailyLimit - evidence.dailyRemaining + unresolved;
           const extra = Math.max(0, spent - period.used);
           period.used += extra;
           period.ordinaryUsed += extra;
@@ -293,7 +298,7 @@ export function createQuotaLimiter(options: {
         }
         if (now < evidence.startsAt || now >= evidence.endsAt) return denied("invalid-reset-evidence");
         if (now >= evidence.subscriptionExpiresAt) return denied("subscription-expired");
-        const period = newPeriod(evidence, "confirmed");
+        const period = newPeriod(evidence, "confirmed", shortWindowCaps);
         await tx.savePeriod(period);
         await tx.saveAccount({
           activePeriodId: period.id, candidatePeriodId: null, nextDispatchAt: now,
@@ -470,7 +475,7 @@ export function createQuotaLimiter(options: {
         if (period && (period.kind !== "candidate" || period.probeRequestId !== null ||
             period.startsAt !== evidence.startsAt || period.endsAt !== evidence.endsAt)) return denied("reset-unconfirmed");
         if (!period) {
-          period = newPeriod(evidence, "candidate");
+          period = newPeriod(evidence, "candidate", shortWindowCaps);
           // A candidate cannot raise previously confirmed plan limits.
           period.secondLimit = Math.min(period.secondLimit, ctx.period.secondLimit);
           period.minuteLimit = Math.min(period.minuteLimit, ctx.period.minuteLimit);
@@ -500,7 +505,7 @@ export function createQuotaLimiter(options: {
             probe.responseKind !== "success" || probe.launchedAt === null || probe.launchedAt < candidate.startsAt ||
             evidence.startsAt !== candidate.startsAt || evidence.endsAt !== candidate.endsAt ||
             ctx.now < evidence.startsAt || ctx.now >= evidence.endsAt || evidence.subscriptionExpiresAt <= ctx.now) return denied("invalid-reset-evidence");
-        const confirmed = newPeriod(evidence, "confirmed");
+        const confirmed = newPeriod(evidence, "confirmed", shortWindowCaps);
         // A reset is not approval to undo lower terms or provider floors learned
         // from its own probe. Account upgrades require a separate trusted change.
         confirmed.providerDailyLimit = Math.min(confirmed.providerDailyLimit, candidate.providerDailyLimit);

@@ -36,7 +36,8 @@ const batchSchema = z.strictObject({
   checkpoint: z.strictObject({ page: z.number().int().positive().max(1000), totalPages: z.number().int().positive() }).optional(),
   fixtures: z.array(z.strictObject({ externalId: z.number().int().positive(), observationHash: hash,
     quoteManifest: quoteManifestSchema.optional(), additionalQuoteManifests: z.array(quoteManifestSchema).max(200).optional(),
-    outcome: z.enum(["apply", "recover", "unknown-fixture", "after-kickoff", "awaiting-start", "kickoff-mismatch", "not-scheduled"]) }).refine(({ quoteManifest, additionalQuoteManifests }) =>
+    outcome: z.enum(["apply", "recover", "unknown-fixture", "after-kickoff", "awaiting-start", "kickoff-mismatch", "not-scheduled",
+      "no-provider-odds", "invalid-provider-odds"]) }).refine(({ quoteManifest, additionalQuoteManifests }) =>
     !additionalQuoteManifests || !!quoteManifest && new Set([quoteManifest.bookmakerId, ...additionalQuoteManifests.map(({ bookmakerId }) => bookmakerId)]).size
       === additionalQuoteManifests.length + 1 && additionalQuoteManifests.every(({ kickoffAt }) => kickoffAt === quoteManifest.kickoffAt))).max(10_000),
   catalog: z.array(z.strictObject({ id: z.number().int().positive(), name: z.string().min(1).max(256) })).max(5_000),
@@ -46,7 +47,8 @@ const batchSchema = z.strictObject({
   .refine(({ kind, recovery, fixtures, checkpoint, pages, scopeKey }) => (!recovery || kind === "prices" && fixtures.every(({ outcome }) => outcome !== "apply")) &&
     fixtures.every(({ outcome, quoteManifest }) => outcome !== "recover" || kind === "prices" && (!checkpoint || quoteManifest !== undefined)) &&
     pages.every((page) => page.totalPages !== 0 || kind === "prices" && !checkpoint && !fixtures.length && page.currentPage === 1 &&
-      (recovery || scopeKey.startsWith(`fixture:${page.requestParameters.fixture}:date:`) && /^[1-9]\d*$/u.test(page.requestParameters.fixture ?? ""))));
+      (recovery || scopeKey.startsWith(`date:${page.requestParameters.date}:`) ||
+        scopeKey.startsWith(`fixture:${page.requestParameters.fixture}:date:`) && /^[1-9]\d*$/u.test(page.requestParameters.fixture ?? ""))));
 export const storedOddsBatchSchema = batchSchema;
 const snapshotValues = z.array(z.strictObject({ label: z.string().min(1).max(64), odd: z.string().min(1).max(12) })).min(1).max(1_000);
 export const storedOddsSnapshotSchema = z.strictObject({ id: hash, fixtureId: z.uuid(), previousId: hash.nullable(), bookmakerId: z.number().int().positive(),
@@ -971,7 +973,8 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
       // Candidate reads use the same transactional clock as the per-fixture re-check below.
       const { batch, candidates } = await write(async (tx) => {
         const batch = await sealedBatch(tx, input.batchId);
-        if (!batch || batch.recovery || batch.checkpoint || batch.kind !== "prices" || batch.status !== "complete" || batch.date !== input.date ||
+        if (!batch || batch.recovery || batch.checkpoint || batch.kind !== "prices" || batch.status !== "complete" ||
+          !batch.fixtures.some(({ outcome }) => outcome === "apply") || batch.date !== input.date ||
           !batch.scopeKey.startsWith(`date:${input.date}:`)) return oddsFail("invalid-request");
         return { batch, candidates: await tx.$queryRaw<{ fixtureId: string }[]>`SELECT s.fixtureId FROM FixtureOddsState s
           JOIN FootballFixture f ON f.id = s.fixtureId

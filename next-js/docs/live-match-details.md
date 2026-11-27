@@ -101,23 +101,25 @@ stored fixtures in the configured competitions, including fixtures that received
 no prediction. Scores/results and detail collection share that competition scope.
 No page, HTTP endpoint or browser can enqueue a provider request.
 
-Collection defaults off. After applying the reviewed additive migrations
+Collection defaults off. Apply the reviewed additive migrations
 `20261025170000_live_match_details` and
-`20261025171000_provider_workload_budget`, set
+`20261025171000_provider_workload_budget`, then set
 `GOAL_HINT_LIVE_DETAILS_ENABLED=true` in the private runner configuration and
 restart the quota-sharing processes together. Existing football private-use,
 public-display and freshness authorities are rechecked at collection boundaries.
-This implementation has not applied either migration or enabled a live runner.
 
-The collector uses `/fixtures/statistics?fixture=<id>` and
-`/fixtures/events?fixture=<id>` independently. Each endpoint gets one dispatch,
-one page and explicit time/row/byte bounds. Pacing retries may wait for a limiter
-slot, but cannot launch a second provider request. The official
+In coordinated mode the result poller writes authorized changes to live events
+from `/fixtures?live=all` alongside the accepted result. The detail poller reuses
+available event evidence from that response. It refreshes due statistics and
+other detail sections through `/fixtures?ids=` with up to 20 fixture IDs. Where
+coverage and missing sections warrant a supplement, the statistics, events,
+lineups and player endpoints each accept one fixture. The noncoordinated
+collector also uses separate single-fixture statistics and event requests.
+Each request has explicit time, row and byte bounds. The official
 [endpoint guide](https://www.api-football.com/news/post/how-to-get-started-with-api-football-the-complete-beginners-guide)
-documents per-minute statistics and 15-second event updates; these frequencies
-are indicative, and the [v3 coverage contract](https://www.api-football.com/documentation_v3)
-does not guarantee every fixture's coverage. This collector polls no faster than
-once a minute and assumes no batching for either endpoint.
+documents per-minute statistics and 15-second event updates. The
+[v3 coverage contract](https://www.api-football.com/documentation-v3)
+describes how availability varies by competition and fixture.
 
 Eligible paid plans reserve up to 20% of the verified usable UTC provider day for
 details, before optional odds and team codes. Free plans, plans below 7,500 daily
@@ -144,12 +146,19 @@ shared locks. Trigger-driven fixture cache generations need the migration's
 normal trigger-definer privileges; no per-minute invalidation journal is added.
 Web roles need only SELECT on the new snapshot table and canonical identities.
 
-Active observations are due every minute; recent final/abandoned observations are
-rechecked every 15 minutes for up to three days after their first final timestamp.
-Failures back off, and oldest attempted fixtures are served first. A final
-correction replaces the same occurrence's bounded body. Rescheduling creates a
-new occurrence and retains the old one. Existing result, lifecycle, forecast and
-settlement audit chains are not deleted or compacted.
+Coordinated live statistics are due every 60 seconds by default. Set
+`GOAL_HINT_FOOTBALL_LIVE_STATISTICS_SECONDS` to pace collection from 60 through
+300 seconds. Quota pressure can extend the interval further. Scheduled fixture
+lineups become eligible 90 minutes before kickoff and are normally due every
+15 minutes until both teams' eligible lineups are stored or the fixture becomes
+ineligible. `GOAL_HINT_FOOTBALL_LINEUP_LEAD_MINUTES` accepts 30 through 90 minutes,
+and `GOAL_HINT_FOOTBALL_LINEUP_POLL_MINUTES` accepts 15 through 30 minutes.
+Coordinated finals become due at 15 minutes and again at 24 hours
+after first observed final, with eligible missing sections retried within three
+days. The noncoordinated collector rechecks recent finals every 15 minutes
+within its three-day window. Failures back off and older attempted fixtures can
+advance through the due set. A final correction updates the same occurrence.
+Rescheduling creates a new occurrence and preserves the prior audit history.
 
 ## Verification
 

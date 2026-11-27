@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { fixtureUpdateSchema } from '../src/domain/fixture-snapshot.ts';
 import { settleMarketSelection } from '../src/domain/market-settlement.ts';
-import { coordinatedResultDefaults } from '../src/server/results/result-sync-policy.ts';
 import { projectFixtureStatusFreshness } from '../src/server/results/result-status-freshness.ts';
 
 const asOf = Date.parse('2026-11-20T23:00:00Z'), minute = 60_000;
@@ -24,7 +23,7 @@ test('a passed scheduled kickoff is awaiting an update while its source status a
 
 test('live status freshness uses the verified clock and keeps the persisted retry separate', () => {
   const live = { ...scheduled, status: 'live', providerStatus: '2H', nextCheckAt: asOf - minute,
-    canonicalRetrievedAt: asOf - 2 * minute, lastVerifiedAt: asOf - coordinatedResultDefaults.liveMs };
+    canonicalRetrievedAt: asOf - 2 * minute, lastVerifiedAt: asOf - minute };
   const fresh = projectFixtureStatusFreshness(live);
   assert.equal(fresh.state, 'current');
   assert.equal(fresh.lastVerifiedAt, live.lastVerifiedAt);

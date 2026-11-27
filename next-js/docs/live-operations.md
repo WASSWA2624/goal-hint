@@ -5,7 +5,7 @@ daily selection at 00:00 EAT, primary/fallback prediction refreshes, cutoff lock
 polling, settlement and public-cache maintenance. Visitor requests still never call the
 provider. The web app only reads what the runner stores in MySQL.
 
-## Current operating mode
+## October 2026 operating record
 
 Owner decisions through 13 October 2026, recorded in the ignored `.goal-hint/owner-approvals.json`:
 
@@ -20,6 +20,10 @@ Owner decisions through 13 October 2026, recorded in the ignored `.goal-hint/own
 Confirm API-Sports terms for public display/redistribution before any public deployment.
 
 ## Setup
+
+The current hosted football launcher, dedicated database role and staging
+isolation are documented in the deployment runbook. Use simulated provider
+responses for worker qualification on staging. [Hosted worker runbook](deployment/how-to-deploy.md#vps-live-football-worker)
 
 1. Put the API-Football key (from dashboard.api-football.com) in `API_FOOTBALL_KEY` in `.env.development`.
 2. `npm run db:deploy` applies the migrations, including `20261010170000_fallback_only_refresh_intent`.
@@ -85,36 +89,43 @@ period models and context effects require independent chronological qualificatio
 
 - **Schedule:** it enqueues the daily selection for the latest 21:00 UTC occurrence on start and at each
   occurrence (one durable job per EAT run date). A missed night runs as soon as the runner starts.
-- **Selection:** it imports eight EAT dates with `/fixtures?date=` on plans that support them. The edge day covers
-  today plus six visitor-local dates across time zones. Every fixture is stored and shown; the nearest
-  kickoffs up to the plan's refresh capacity get prediction cycles. Later fixtures are recorded as
-  `refresh-capacity` exclusions. After three failed attempts, known coverage is finalized as partial.
+- **Selection and discovery.** Eligible plans keep the eight-date forecast window
+  and the hourly reconciliation job. The authorized extended odds setup uses
+  the same catalog path to discover fixtures through Kampala day 14, including
+  an incremental forward check after the hourly schedule commits. The odds
+  horizon adds stored fixtures beyond the existing forecast selection window.
 - **Refresh:** one job per selected fixture. When AI is enabled, up to two bounded team-history imports finish
   before the immutable analysis cutoff; the pinned OpenAI attempt uses stored verified regulation history and
   derived form. The API-Football prediction is then always requested (inside the job's reserved fallback
   request) and, under the default provider-first order, publishes the match result. A fresh
   `/fixtures?id=` status read precedes atomic publication before the five-minute cutoff. Jobs wait (retryably)
   instead of spending the reserve kept for result checks.
-- **Results:** a leased poller covers the competitions with prediction cycles in the window. Settlement and
-  cache reconciliation run every 30 seconds without provider calls.
+- **Results.** A leased poller covers the configured competitions, including
+  fixtures without forecasts. The coordinated runner targets a 10-second live
+  summary, a one-minute approach poll and a five-minute idle poll. The detail
+  poller targets one-minute live statistics. Settlement and cache maintenance
+  use stored data on the 30-second maintenance tick. [Result cadence](fixture-result-sync.md#cadence-and-quotas), [Detail cadence](live-match-details.md#central-collection-and-request-budget)
 
 ## Plan-aware workload
 
-Limits come from the provider's own `/status` (free of quota) at startup, every 10 minutes and at each
-UTC provider day. Nothing is hard-coded to a plan.
-Uncertain dispatches count toward the daily budget. Only dispatches in the preceding minute can lower a
-newly observed remaining-minute value.
+The runner validates the plan and account usage from `/status` at startup,
+approximately every 10 minutes, and after provider day rollover. It applies
+observed quota headers and shared local ceilings of 10 per rolling second, 600
+per rolling minute, and 120,000 per verified provider day. The short-window
+ceilings can be lowered in the private runner profile. Uncertain reservations
+count toward the budget. [Quota contract](quota-limiter.md)
 
 | Plan (daily limit) | Refreshes/day | Workers | Live feed | Date poll | Odds floor / spare per day |
 | --- | --- | --- | --- | --- | --- |
-| Free (100) | 10 | 1 | off (date sync shows live status) | ~58 min | 97 / 3 — never eligible |
-| Pro (7,500) | 1,214 | 2 | off | 1 min | 7,497 / 3 — never eligible |
-| Ultra (75,000) | 2,000 | 3 | 15 s | 1 min | 34,266 / 40,734 |
-| Mega (150,000; app ceiling 120,000) | 2,000 | 6 | 15 s | 60 s | 50,016 / 69,984 |
+| Free (100) | 5 | 1 | Off | 58 min | 97 / 3 |
+| Pro (7,500) | 326 | 2 | Off | 1 min | 6,749 / 751 |
+| Ultra (75,000) | 2,000 | 3 | 15 s | 1 min | 57,266 / 17,734 |
+| Mega (150,000, app ceiling 120,000) | 2,000 | 6 | 15 s | 1 min | 82,016 / 37,984 |
 
-This table assumes AI is enabled and reserves four football requests per
-refresh: two history imports, fallback and status. Fallback-only refreshes
-reserve two. The odds column is explained in [Odds imports](#odds-imports-052) below.
+These are base work-plan values with eligible live details enabled. The
+coordinated runner applies its own poll cadence and assigns dedicated schedule,
+forecast, cutoff and enrichment workers. Measured requests depend on fixture
+coverage, quota and actual worker outcomes. [Odds allowance](#odds-imports-052)
 
 **Slow plans (under 60 requests/minute, e.g. Free at 10/minute).** A provider call may have to wait most of a
 rolling minute for a limiter slot. Refresh jobs on these plans get a 5-minute timeout and a 200-second reserve, and
@@ -127,13 +138,12 @@ pacing and eight minutes on slow pacing, keeping the same fallback reserves;
 history imports and primary generation must fit before that reserve. These
 settings apply to runs created after the runner restarts.
 
-On upgrade, the runner detects the new plan within 10 minutes and rebuilds its workload from the new limits;
-no code change is needed. The essential quota reserve is 20,000 of the 120,000 ceiling (spec) and the same
+When the provider plan changes, the runner rebuilds its workload from verified
+limits. The account keeps the same durable UTC provider-day ledger, so recorded
+usage survives restarts and same-day plan changes. A reverified open day can
+tighten capacity. A higher limit can apply after the next verified provider-day
+reset. The essential reserve is 20,000 at the 120,000 ceiling, with the same
 one-sixth share on smaller plans.
-
-Each account, plan and UTC provider day uses its own durable limiter account, seeded from the provider's
-remaining count. Missed days, restarts and upgrades therefore reconcile from verified usage. A new day opens
-one minute after 00:00 UTC, so rolling windows cannot overlap.
 
 The free plan's season restrictions are the provider's; a date the plan cannot serve is recorded as failed or
 partial coverage, never as "no fixtures".
@@ -148,81 +158,64 @@ Odds imports default to **off**. The storage, mapping and rights rules are in
 | Key | Default | Effect |
 | --- | --- | --- |
 | `GOAL_HINT_ODDS_IMPORT_ENABLED` | `false` | The owner switch. Even when `true`, the runner imports odds only on an eligible plan. |
+| `GOAL_HINT_ODDS_SWEEP_HOURS` | `3` | Broad date sweep interval in hours. Accepts `2`, `3`, `4` or `6`. |
+| `GOAL_HINT_ODDS_RECONCILIATION_MINUTES` | `30` | Selective odds check interval in minutes. Accepts `15`, `30` or `60`. |
 | `GOAL_HINT_SLIP_ODDS_REFRESH_ENABLED` | `false` | Enables the `:25`/`:55` Kampala targeted refresh on the odds-enabled football worker. Set it separately on the publisher to wait for the paired job. |
 | `GOAL_HINT_ODDS_BOOKMAKER_ID` | empty | The verified primary bookmaker. Required whenever imports are enabled. |
 | `GOAL_HINT_ODDS_BOOKMAKER_SCOPE` | `primary` | Use `all` to acquire all bookmakers in the same bounded date sweep. The primary bookmaker still supplies Matches and Best Slips. |
 | `GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF` | empty | The odds display-rights reference (OP-36). It never blocks the runner. Without an owner-recorded `football-odds-rights` approval for this exact reference, every price stays private. |
 
-**Eligibility.** Odds run only when all three hold: the switch is `true`, a bookmaker is configured, and the
-verified plan is eligible. A plan is eligible when its pacing is standard (60 or more requests per minute) and
-at least 200 requests per day remain above the odds floor. The floor is every ordinary need of the provider day:
-the results share, the reserve, every refresh job (capacity × 4 with AI, × 2 without AI) and the 16 selection requests. Refresh
-jobs run 21:00–24:00 UTC, at the end of the UTC provider day, so the floor protects all of them, not just the
-refresh floor. The Free plan (1 spare request per day, 10 per minute) is never eligible. On upgrade, the runner
-rebuilds its workload and picks up eligibility without a code change.
+**Eligibility.** Odds require the owner switch, a verified bookmaker and a
+verified plan with standard pacing and at least 200 requests per day above
+the odds floor. The floor accounts for results, reserves, forecast refreshes,
+selection and the eligible live-detail allocation. Free remains ineligible.
 
-**Schedule.** At each 3-hour UTC slot (00:00, 03:00 … 21:00) the runner enqueues the UTC day's `odds.catalog`
-(`/odds/bets` and `/odds/bookmakers`, one durable row per day), then one `odds.import` per EAT date in the
-window: today first, up to `min(7, importDays)` dates. The catalog has priority over date imports, so it is stored
-before that day's sweeps. Each sweep walks up to 150 pages from `/odds` at the
-`enrichment` quota priority without using cached responses. The primary scope adds `bookmaker=…`
-to the date query. The all-bookmaker scope sends only the date and reporting timezone.
-A job expires when its slot ends, and the next slot sweeps again.
-Enqueueing is idempotent, so restarts and plan rebuilds re-enqueue the same rows.
-The optional [Best Slips refresh](daily-slip-publications.md#targeted-odds-refresh)
-queues a separate higher-priority job five minutes before each half-hour slot.
-It uses the same enrichment worker and quota gate.
+**Schedule.** At two minutes past each nominal three-hour slot, the runner
+enqueues the UTC day's catalog and one `odds.import` per Kampala date. The base
+horizon is today through day six. Authorized recovery extends it through day
+14. The catalog job has priority over the date imports. The primary scope
+adds a bookmaker filter. The all-bookmaker scope uses the date and reporting
+timezone. The default recovery-enabled selective check runs at `:05` and `:35`
+for new fixtures and unresolved or stale prices. Historical work starts no
+earlier than 30 minutes after the broad slot and yields under quota pressure.
+The optional Best Slips refresh still runs five minutes before each half-hour
+publication, through the same enrichment worker. [Provider odds runbook](provider-odds.md#import-flow), [Best Slips refresh](daily-slip-publications.md#targeted-odds-refresh)
 
-**Quota gate.** Odds have their own budget: the spare. Before any provider call the job reads the open
-provider day's durable counters and needs both:
+**Quota gate.** Broad price work checks the spare and remaining ordinary need
+before starting or resuming. It admits pages incrementally. Catalogs check
+their bounded request allowance. The shared MySQL limiter then checks each
+attempt atomically against the day, rolling windows and workload reserves.
+The live runner counts optional collection and historical backfill together
+against the spare. Uncertain attempts are included. Essential-reserve and daily
+quota exhaustion defer or end the odds slot. [Quota contract](quota-limiter.md#reservation-and-dispatch)
 
-- **Spare left:** odds requests already dispatched today (the period's `enrichment` attempts in
-  `ApiQuotaAttempt`, uncertain dispatches included) plus the operation's ceiling must fit in the spare. The
-  ceiling is 154 for a sweep (150 pages plus four retries) and 3 for a catalog import.
-- **Ordinary need covered:** after the ceiling, `remaining` must still cover the ordinary need left today
-  (the floor minus the ordinary requests already used) and never drop below the reserve.
+**Freshness.** Price availability depends on the provider's update clock,
+fixture and bookmaker coverage, and when the worker reconfirms it. A slot can
+run out of the spare before reaching every date. The targeted check prioritizes
+approaching kickoffs; closing prices still require eligible stored evidence.
 
-Ordinary requests already spent count once, not twice, so the one-minute date poll on Pro no longer closes the
-gate by midday. On Pro odds can spend up to 861 requests a day, and the last sweep starts while at least 154 of
-them are unspent. The second check binds only when the provider reports fewer requests left than the limiter
-counted, or when ordinary work has run past its plan.
+**Time budget.** Each broad attempt has 300 seconds, including up to 180 seconds
+for provider pages. A page receipt and its prices commit together. A retry or
+restart continues from the first uncommitted page while the slot and checkpoint
+remain valid. A verified full page chain is required for a complete receipt.
 
-A refused job **expires** with `eligibility-expired`. It does not fail and makes no provider call: the gate's
-slack never grows during a provider day, and a slot never spans two. Odds therefore stop for the rest of the day
-once the spare is spent, nearest dates first. The limiter's essential reserve (one sixth of the day) still
-applies on top. Between 00:00 UTC and the moment the new provider day opens (about one minute later), a job
-waits and retries within its slot.
-
-**Freshness on Pro.** A price stays fresh for 12 hours after its last reconfirmation. Evening kickoffs
-(18:00–24:00 UTC) are reconfirmed by the 06:00–21:00 slots only while the spare lasts. How many slots it covers
-depends on pages per date: seven dates of ten pages (70 requests a slot) cover all eight slots, but large
-`/odds?date=` responses spend the spare in the morning. Late fixtures then go stale before kickoff and get no
-closing price. The counted trial's pages-per-date evidence decides whether league-scoped queries are needed.
-
-**Time budget.** Each odds job has 300 seconds. The provider walk ends 180 seconds after the attempt starts (or
-at the slot's end), so the receipt and the per-fixture writes keep at least two minutes. The store verifies the
-receipt once per import and writes each fixture's changed bets in multi-row statements. A job aborted during the
-writes keeps the fixtures already applied. Its retry walks the pages again, and those requests count against
-the spare.
-
-**Worker.** `npm run live` starts one dedicated enrichment worker beside the refresh workers; it runs the odds
-and [team-code](#team-codes) jobs one at a time (log events `enrichment-job-*`). When idle it polls every 10
-seconds instead of every second, since sweeps run at most hourly. Odds jobs (priority 8 to 1) claim before
-team-code jobs (priority 0). These job types are registered only on that worker, so they never occupy a refresh
-or cutoff worker. The worker runs even while odds are off, so any queued odds job expires instead of stalling. Write-time staleness (`expire`) runs on every
-maintenance tick and makes no provider call. Without verified display rights it also stales every fresh price,
-closing prices included ([provider-odds.md](provider-odds.md#public-projection)).
+**Worker.** One enrichment worker serializes odds, team-code and eligible
+archive jobs and polls every 10 seconds when idle. The queue keeps this work
+off the forecast and cutoff workers. Write-time price staleness runs on each
+maintenance tick using stored data. Missing display rights stale fresh prices,
+including closing prices. [Public price projection](provider-odds.md#public-projection)
 
 **Failures.** Transport, 429, deadline and pacing failures retry within the slot (at most eight attempts). An
 essential-reserve or daily-limit denial expires the job. Credential, subscription, authorization and
 malformed-request failures fail the job, so the failed-jobs alert fires. Schema, coverage, pagination and size
 failures keep their failed or partial receipt and do not repeat. A partial sweep never withdraws fixtures.
 
-**Attribution.** Every odds request is counted three ways: `OddsImportBatch.requestsDispatched`,
-`DurableJobUsage` rows (provider `football`, no cost reference) and `ApiQuotaAttempt` rows at priority 3
-(`enrichment`). Odds and team codes are the only live callers at that priority, so the gate counts them
-together against one spare. Monitoring reports the odds lookback total as `odds-requests`. Football money stays the flat plan price (`API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS`, at most
-US$45 a month): odds add requests, not spend, and never enter the AI or research ledgers.
+**Attribution.** The quota ledger records dispatches and their outcomes. Odds
+receipts and `DurableJobUsage` record scoped collection work. Current odds use
+`enrichment` and historical odds use `historical-backfill`. The worker logs
+receipt status, requests and continuations for broad imports, and coverage,
+backlog and price age for selective checks. Monitoring reports the odds lookback
+total as `odds-requests`. [Operations monitoring](operations-monitoring.md)
 
 `npm run live:status` prints the odds block: `enabled`, `eligible`, `bookmakerConfigured`, `imports` (all
 three together), `displayRightsRecorded`, the floor, spare and reserve per day, sweep hours, dates and pages per date.
@@ -239,21 +232,17 @@ runner fills `FootballTeam.code` through `/teams?league&season`
 
 **Switch and eligibility.** `GOAL_HINT_TEAM_CODES_IMPORT_ENABLED` defaults to `true` (set `false` in
 `.env.operations` to keep imports off). Imports also need the odds eligibility: a verified plan with at least
-200 spare requests and standard pacing. They are therefore off on Free and slow plans whatever the switch says.
-On Free (100 a day, 10 a minute) the ordinary floor is 99 requests, so the spare is 1 and pacing is slow: no
-import runs until the plan upgrade, and phone cards use their fallback for codeless teams meanwhile
-([match card](match-card.md)). The owner asked for "slow on Free", so "off on Free" is an open owner decision.
-The options are to accept it, or to add a separately gated trickle of one league a day after the day's refresh jobs.
-See "Owner actions" under team codes in [development progress](development-progress.md). On a 7,500-a-day plan the
-spare is 859 in fallback-only mode, so team codes can take up to 8 requests an hour (about 96 leagues a day) beside odds. The `ready`
-log line reports `teamCodes` (running) and `teamCodesSwitch`; `npm run live:status` prints a `teamCodes` block with
-`enabled`, `eligible` and `imports`.
+200 spare requests and standard pacing. Free and slow plans stay ineligible.
+Team codes use up to eight requests per eligible hourly slot from the same
+spare as odds. The `ready` log reports `teamCodes` and `teamCodesSwitch`.
+`npm run live:status` reports `enabled`, `eligible` and `imports` in its
+`teamCodes` block.
 
 **Schedule and gate.** At each new UTC hour the maintenance loop enqueues one `teams.codes` job for that slot
 (`team-codes-scheduled`); the job expires when its slot ends. The enrichment worker runs it after any odds job.
 Before any provider call it applies the odds gate (`oddsQuotaAllows`) with the slot's whole ceiling of 8
-requests (four leagues, one page plus one retry each). Team codes and odds share the day's spare, so together
-they never exceed it, and neither ever takes the ordinary reserve. A refused slot expires with
+requests (four leagues, one page plus one retry each). Team codes and odds share
+the day's spare and preserve the ordinary reserve. A refused slot expires with
 `eligibility-expired`, without a provider call, and the next hour checks again.
 
 **What a sweep does.** It takes up to four competition-seasons with codeless teams kicking off from 3 hours
@@ -305,7 +294,10 @@ Team codes are on by default on that Pro-sized plan. A queued sweep runs only on
 imports the one league with codeless clubs, and is attributed by receipt, job usage and limiter attempt; odds
 attribution then counts both. Past the reserve, the live gate refuses before any `/teams` request.
 
-## Not yet live
+## October 2026 release checklist
 
-Counted OpenAI activation, licensed research/news (011), shadow qualification (047), release readiness (048),
-hosted deployment and scheduling (046/049), the recovery watchdog binding (043) and monitoring delivery (044).
+The October operating record left counted OpenAI activation, licensed
+research/news (011), shadow qualification (047), release readiness (048), hosted
+deployment and scheduling (046/049), the recovery watchdog binding (043) and
+monitoring delivery (044) pending. The current hosted status and deployment
+history are maintained separately. [Deployment history](../../implementation-docs/deployment-and-version-control.md)

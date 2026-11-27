@@ -14,8 +14,9 @@ const fixture = (overrides = {}) => ({ fixtureId: "6998da8a-27b0-4586-910d-513c6
   competitionId: 39, season: 2026, kickoffAt: at - 10 * minute, status: "live", retrievedAt: at,
   firstTrackedAt: at - hour, firstFinalAt: null, lastSyncAt: at, nextCheckAt: null, failures: 0, delayReason: null, ...overrides });
 
-function setup(rows, respond, discovery, firstLiveAt = 0, accept = () => true) {
-  const clock = { now: () => at }, provider = resultProvider(clock, { accountId, respond }), events = [];
+function setup(rows, respond, discovery, firstLiveAt = 0, accept = () => true, captureEvents = false) {
+  let now = at;
+  const clock = { now: () => now }, provider = resultProvider(clock, { accountId, respond }), events = [], reports = [];
   let owned;
   const apply = async (_lease, batch) => {
     events.push(["apply", batch]);
@@ -26,6 +27,7 @@ function setup(rows, respond, discovery, firstLiveAt = 0, accept = () => true) {
     return batch.observations.filter(accept).map(({ fixtureId, kickoffAt, status, retrievedAt, regulationScore }) => ({
       fixtureId, kickoffAt, status, retrievedAt, firstFinalAt: finalStatus(status) ? retrievedAt : null,
       finalConfirmed: finalStatus(status) && regulationScore?.verified === true,
+      ...(batch.liveEvents?.some(row => row.fixtureId === fixtureId) ? { liveEvents: "written" } : {}),
     }));
   };
   const store = {
@@ -40,8 +42,9 @@ function setup(rows, respond, discovery, firstLiveAt = 0, accept = () => true) {
     async attempts(_lease, records) { events.push(["attempts", records]); },
   };
   const service = createResultSyncService({ accountId, clock, policy, store, authority: resultAuthority(),
-    adapter: provider.adapter.evidence, onDiscoveredFixtures: discovery });
-  return { service, events, network: provider.network };
+    adapter: captureEvents ? { ...provider.adapter.evidence, liveFixtures: provider.adapter.evidence.liveFixtureDetails } : provider.adapter.evidence,
+    verifyLiveEvents: () => captureEvents, onDiscoveredFixtures: discovery, onPoll: report => reports.push(report) });
+  return { service, events, network: provider.network, reports, advance(ms) { now += ms; } };
 }
 
 test("idle discovery runs every five minutes and a fixture entering its 15-minute approach resumes the one-minute cadence", async () => {
@@ -52,10 +55,23 @@ test("idle discovery runs every five minutes and a fixture entering its 15-minut
   const candidate = fixture({ status: "scheduled", kickoffAt: at + 15 * minute });
   const paused = setup([candidate], url => catalogResponse(url, []), undefined, at + 4 * minute);
   assert.deepEqual(sharedLiveFixtures([candidate], policy, at), [candidate]);
-  assert.equal(liveDiscoveryInterval(policy, true), minute);
+  assert.equal(liveDiscoveryInterval(policy, true), 10_000);
+  assert.equal(liveDiscoveryInterval(policy, false, true), minute);
   assert.equal(await paused.service.runOnce(), true);
   assert.equal(paused.network.length, 1);
   assert.deepEqual(paused.events.at(-1), ["live", at + minute, null]);
+  const started = fixture();
+  const active = setup([started], url => catalogResponse(url, [catalogFixture(101, {
+    kickoff: new Date(started.kickoffAt).toISOString(), status: "1H",
+  })]), undefined, at + minute);
+  assert.equal(await active.service.runOnce(), true);
+  assert.equal(active.network.length, 1);
+  assert.deepEqual(active.events.at(-1), ["live", at + 10_000, null]);
+  const interrupted = setup([fixture({ providerStatus: "SUSP" })], url => catalogResponse(url, [catalogFixture(101, {
+    kickoff: new Date(started.kickoffAt).toISOString(), status: "SUSP",
+  })]));
+  assert.equal(await interrupted.service.runOnce(), true);
+  assert.deepEqual(interrupted.events.at(-1), ["live", at + minute, null]);
 });
 
 test("a verified disappearance persists before requesting fixture identity and never manufactures full time", async () => {
@@ -88,7 +104,28 @@ test("verified discovery imports unknown in-scope rows using the already-counted
   assert.equal(await state.service.runOnce(), true);
   assert.equal(state.network.length, 1);
   assert.equal(state.events.find(([kind]) => kind === "save")[1].observations[0].fixtureId, unknown.fixtureId);
-  assert.deepEqual(state.events.filter(([kind]) => kind === "live").at(-1), ["live", at + minute, null]);
+  assert.deepEqual(state.events.filter(([kind]) => kind === "live").at(-1), ["live", at + 10_000, null]);
+});
+
+test("a shared live sweep seals changed timelines across matches and does not archive unchanged copies", async () => {
+  const first = fixture(), second = fixture({ fixtureId: "57cc86b9-0d27-47ec-9eec-d10c7be7a996", externalId: 102 });
+  let elapsed = 5;
+  const state = setup([first, second], url => catalogResponse(url, [first, second].map((row, index) => ({
+    ...catalogFixture(row.externalId, { kickoff: new Date(row.kickoffAt).toISOString(), status: "1H" }),
+    events: [{ time: { elapsed: index === 0 ? elapsed : 9, extra: null }, team: { id: 10 }, type: "Goal", detail: "Normal Goal" }],
+  }))), undefined, 0, undefined, true);
+  assert.equal(await state.service.runOnce(), true);
+  assert.equal(state.network.length, 1);
+  assert.deepEqual(state.events.find(([kind]) => kind === "save")[1].liveEvents.map(row => row.events.items[0].elapsed), [5, 9]);
+  assert.deepEqual(state.reports[0], { channel: "live", requests: 1, fixtures: 2, applied: 2, liveEvents: 2,
+    status: "completed", providerToDatabaseMs: 0 });
+  state.advance(10_000);
+  assert.equal(await state.service.runOnce(), true);
+  assert.equal(state.events.filter(([kind]) => kind === "save").at(-1)[1].liveEvents, undefined);
+  elapsed = 6;
+  state.advance(10_000);
+  assert.equal(await state.service.runOnce(), true);
+  assert.deepEqual(state.events.filter(([kind]) => kind === "save").at(-1)[1].liveEvents.map(row => row.fixtureId), [first.fixtureId]);
 });
 
 test("overdue fixtures stay queued hourly through 48 hours and daily thereafter", () => {
@@ -102,6 +139,7 @@ test("overdue fixtures stay queued hourly through 48 hours and daily thereafter"
   assert.equal(pollingInterval(longUnresolved, policy, at), 24 * hour);
   const finalWithoutRegulation = { ...longUnresolved, status: "finished-extra-time", firstFinalAt: at - 65 * 24 * hour, finalConfirmed: false };
   assert.equal(pollingInterval(finalWithoutRegulation, policy, at), 24 * hour);
+  assert.equal(pollingInterval({ ...finalWithoutRegulation, kickoffAt: at - 2 * hour, firstFinalAt: at - minute }, policy, at), minute);
   assert.equal(requiresResultInvestigation(finalWithoutRegulation, at), true);
   assert.equal(pollingInterval({ ...finalWithoutRegulation, finalConfirmed: true }, policy, at), null);
 });

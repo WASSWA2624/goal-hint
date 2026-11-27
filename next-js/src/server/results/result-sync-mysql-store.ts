@@ -2,10 +2,12 @@ import "server-only";
 
 import { z } from "zod";
 import { getReportingDate, getReportingDayBounds, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { liveMatchEventsSchema } from "../../domain/live-match.ts";
 import { isPlayedFinalStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
+import { saveLiveSummaryEvents } from "../live-match/live-match-mysql-store.ts";
 import { createMysqlPredictionHistoryStore } from "../predictions/history-mysql-store.ts";
 import { historyHash, historyInstant } from "../predictions/history-input.ts";
 import { assertHistorySeal, historyJson } from "../predictions/history-read.ts";
@@ -20,7 +22,7 @@ import { projectFixtureResult } from "./result-write.ts";
 type Tx = Prisma.TransactionClient;
 type TrackedFixtureRow = Readonly<{
   fixtureId: string; externalId: bigint; competitionId: bigint; season: number; kickoff: Date | null;
-  status: string; retrievedAt: Date; createdAt: Date; regulationVerifiedAt: Date | null;
+  status: string; providerStatus: string | null; retrievedAt: Date; createdAt: Date; regulationVerifiedAt: Date | null;
   firstTrackedAt: Date | null; firstFinalAt: Date | null; lastSyncAt: Date | null; lastVerifiedAt: Date | null;
   nextCheckAt: Date | null; failures: bigint | number | null;
   delayReason: string | null;
@@ -31,8 +33,18 @@ const batchSchema = z.strictObject({ id: historyHash, accountId: historyHash, po
   requestedIds: z.array(z.number().int().positive()), observations: z.array(lifecycleObservationSchema),
   error: z.string().max(128).nullable(), requestsDispatched: z.number().int().nonnegative(), coordinated: z.literal(true).exactOptional(),
   missingLiveFixtures: z.array(z.strictObject({ fixtureId: z.uuid(), competitionId: z.number().int().positive(), season: z.number().int().positive() })).exactOptional(),
+  liveEvents: z.array(z.strictObject({ fixtureId: z.uuid(), events: liveMatchEventsSchema })).exactOptional(),
 }).refine(batch => !batch.missingLiveFixtures || batch.channel === "live" && batch.coordinated === true && batch.error === null &&
-  new Set(batch.missingLiveFixtures.map(row => row.fixtureId)).size === batch.missingLiveFixtures.length);
+  new Set(batch.missingLiveFixtures.map(row => row.fixtureId)).size === batch.missingLiveFixtures.length).refine(batch => {
+    if (!batch.liveEvents) return true;
+    const observations = new Map(batch.observations.map(row => [row.fixtureId, row]));
+    return batch.channel === "live" && batch.coordinated === true && batch.error === null &&
+      new Set(batch.liveEvents.map(row => row.fixtureId)).size === batch.liveEvents.length && batch.liveEvents.every(({ fixtureId, events }) => {
+        const observation = observations.get(fixtureId);
+        return events.state !== "unavailable" && events.items.length > 0 && observation?.status === "live" &&
+          events.retrievedAt === observation.retrievedAt && events.providerUpdatedAt === observation.providerUpdatedAt;
+      });
+  });
 const now = async (tx: Tx) => utcInstantFromEpochMilliseconds((await tx.$queryRaw<{ at: Date }[]>`SELECT UTC_TIMESTAMP(3) AS at`)[0]!.at.getTime());
 const epoch = new Date(0);
 const confirmedFinal = (status: string, verifiedAt: Date | null) => finalStatus(status) &&
@@ -116,6 +128,7 @@ export function createMysqlResultSyncStore(options: Readonly<{
         // A result observed at the end of its unresolved window can still need corrections.
         const correctionLower = new Date(lower.getTime() - (policy.corrections.at(-1)?.untilAgeMs ?? 0));
         const upper = new Date(at + policy.approachMs);
+        const approachFrom = new Date(at - policy.approachMs);
         const scope = JSON.stringify(policy.coverage);
         const archivedCompetitions = JSON.stringify(work === "current" ? [] : policy.archiveCompetitionIds ?? []);
         const older = new Date(at - coordinatedResultDefaults.investigateAfterMs), current = new Date(at);
@@ -167,7 +180,7 @@ export function createMysqlResultSyncStore(options: Readonly<{
             ORDER BY ${overdueOrder}
             LIMIT ${work === "archive" ? 20 : policy.maxBatchesPerTick * 20}
           )
-          SELECT f.id AS fixtureId, f.externalId, s.competitionId, s.year AS season, f.kickoff, f.status, f.retrievedAt,
+          SELECT f.id AS fixtureId, f.externalId, s.competitionId, s.year AS season, f.kickoff, f.status, f.providerStatus, f.retrievedAt,
             f.createdAt, f.regulationVerifiedAt, r.firstTrackedAt, r.firstFinalAt, r.lastSyncAt, r.lastVerifiedAt, r.nextCheckAt, r.failures, r.delayReason,
             ${policy.coordinated ? verifiedPlayedResult : Prisma.sql`NULL`} AS canonicalResultVerified
           FROM FootballFixture f JOIN coveredSeasons s ON s.id = f.seasonId
@@ -187,7 +200,7 @@ export function createMysqlResultSyncStore(options: Readonly<{
             OR (${policy.coordinated !== true} AND r.nextCheckAt <= ${current}
               AND COALESCE(f.kickoff,r.firstTrackedAt,f.createdAt) < ${lower})
             OR (${policy.coordinated === true} AND (f.status = 'live' AND COALESCE(f.kickoff,f.createdAt) >= ${liveWindow}
-              OR f.status = 'scheduled' AND f.kickoff BETWEEN ${current} AND ${upper})))
+              OR f.status = 'scheduled' AND f.kickoff BETWEEN ${approachFrom} AND ${upper})))
             OR f.id IN (SELECT id FROM overdue)
           )`;
         return freezeEvidence(fixtures.map((fixture) => ({ fixtureId: fixture.fixtureId, externalId: Number(fixture.externalId),
@@ -199,7 +212,7 @@ export function createMysqlResultSyncStore(options: Readonly<{
           lastSyncAt: fixture.lastSyncAt?.getTime() ?? null,
           nextCheckAt: fixture.firstTrackedAt === null ? 0 : fixture.nextCheckAt?.getTime() ?? null,
           failures: Number(fixture.failures ?? 0), ...(policy.coordinated ? {
-            delayReason: fixture.delayReason, lastVerifiedAt: fixture.lastVerifiedAt?.getTime() ?? null,
+            delayReason: fixture.delayReason, lastVerifiedAt: fixture.lastVerifiedAt?.getTime() ?? null, providerStatus: fixture.providerStatus,
           } : {}),
           ...(policy.coordinated || policy.skipConfirmedFinals ? { finalConfirmed: confirmedFinal(fixture.status, fixture.regulationVerifiedAt) &&
             (!policy.coordinated || !isPlayedFinalStatus(fixture.status as SettlementStatus) || Boolean(fixture.canonicalResultVerified)) } : {}) })));
@@ -226,6 +239,7 @@ export function createMysqlResultSyncStore(options: Readonly<{
       const batch = await transaction(async (tx) => { await locked(tx, lease); return sealedBatch(tx, input.id); });
       const renewalMs = await transaction(async (tx) => { const { row, at } = await locked(tx, lease); return row.leaseUntil.getTime() - at; });
       const verified: AppliedResultObservation[] = [];
+      const eventsByFixture = new Map(batch.liveEvents?.map(({ fixtureId, events }) => [fixtureId, events]));
       for (const observation of batch.observations) {
         const projection = await transaction(async (tx) => {
           const { at, row } = await locked(tx, lease);
@@ -280,9 +294,13 @@ export function createMysqlResultSyncStore(options: Readonly<{
                     ? incompleteResultEvidence : outcome === "stale" ? "older-observation" : receipt.reason }) };
             await tx.fixtureResultState.upsert({ where: { fixtureId: fixture.id },
               create: { fixtureId: fixture.id, firstTrackedAt: new Date(at), nextCheckAt: epoch, ...data }, update: data });
+            const events = eventsByFixture.get(fixture.id);
+            const liveEvents = accepted && fixture.status === "live" && events ? await saveLiveSummaryEvents(tx, {
+              fixtureId: fixture.id, cycleId: fixture.activeCycleId, kickoffAt: fixture.kickoff, homeTeamId: fixture.homeTeamId, awayTeamId: fixture.awayTeamId,
+            }, events) : null;
             await record(outcome, resultId);
             return accepted ? { fixtureId: fixture.id, kickoffAt, status: fixture.status, retrievedAt: observation.retrievedAt,
-              firstFinalAt: firstFinalAt?.getTime() ?? null, finalConfirmed } : null;
+              firstFinalAt: firstFinalAt?.getTime() ?? null, finalConfirmed, ...(liveEvents && liveEvents !== "rejected" ? { liveEvents } : {}) } : null;
           }, tx);
           await locked(tx, lease);
           return saved;

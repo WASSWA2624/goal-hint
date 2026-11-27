@@ -172,6 +172,8 @@ export type NormalizedOddsBookmaker = Readonly<{
   /** Bets quarantined for a malformed or numeric price, a non-string, padded, over-long or duplicate label,
    * or an empty or over-long value list. A blank, over-long or control-character name is null instead. */
   rejectedBets: readonly number[];
+  /** All valid selection labels were explicitly suspended by the provider. */
+  suspendedBets?: readonly number[];
 }>;
 /** Pre-match prices for one fixture. Labels stay verbatim; lines are parsed only by versioned domain mappings. */
 export type NormalizedFixtureOdds = Readonly<{
@@ -682,7 +684,7 @@ function oddsName(value: string | null | undefined, limit: number): string | nul
   return value == null || value.trim() === "" || value.length > limit || /\p{Cc}/u.test(value) ? null : value;
 }
 /** Bet-level quarantine: one malformed value drops its bet, never the fixture or the page. */
-function oddsBet(raw: z.infer<typeof oddsBetSchema>): NormalizedOddsBet | null {
+function oddsBet(raw: z.infer<typeof oddsBetSchema>): NormalizedOddsBet | "suspended" | null {
   const labels = new Set<string>(), values: NormalizedOddsValue[] = [];
   // Stored snapshots hold 1..1,000 selections per bet, keyed by an unsigned 32-bit bet id.
   if (raw.id > 4_294_967_295 || raw.values.length === 0 || raw.values.length > 1_000) return null;
@@ -697,7 +699,7 @@ function oddsBet(raw: z.infer<typeof oddsBetSchema>): NormalizedOddsBet | null {
     if (odds === null) return null;
     values.push({ label, odd: odds.text });
   }
-  return values.length ? { id: raw.id, name: oddsName(raw.name, oddsNameLimits.bet), values } : null;
+  return values.length ? { id: raw.id, name: oddsName(raw.name, oddsNameLimits.bet), values } : "suspended";
 }
 
 /** One /odds row: one fixture, the requested bookmaker(s) and every bet they publish. */
@@ -720,12 +722,13 @@ export function normalizeOdds(raw: unknown, context: NormalizationContext): Norm
   for (const bookmaker of input.bookmakers) {
     if (bookmakerIds.has(bookmaker.id)) return invalid();
     bookmakerIds.add(bookmaker.id);
-    const betIds = new Set<number>(), bets: NormalizedOddsBet[] = [], rejectedBets: number[] = [];
+    const betIds = new Set<number>(), bets: NormalizedOddsBet[] = [], rejectedBets: number[] = [], suspendedBets: number[] = [];
     for (const rawBet of bookmaker.bets) {
       if (betIds.has(rawBet.id)) return invalid();
       betIds.add(rawBet.id);
       const bet = oddsBet(rawBet);
       if (bet === null) { rejectedBets.push(rawBet.id); missing.push(`odds-bet-rejected:${bookmaker.id}:${rawBet.id}`); continue; }
+      if (bet === "suspended") { suspendedBets.push(rawBet.id); continue; }
       if (bet.name === null) missing.push(`odds-bet-name:${bookmaker.id}:${bet.id}`);
       bets.push(bet);
     }
@@ -733,7 +736,8 @@ export function normalizeOdds(raw: unknown, context: NormalizationContext): Norm
     if (name === null) missing.push(`odds-bookmaker-name:${bookmaker.id}`);
     if (bets.length === 0) missing.push(`odds-bookmaker-bets:${bookmaker.id}`);
     bets.sort((left, right) => left.id - right.id);
-    bookmakers.push({ id: bookmaker.id, name, bets, rejectedBets: rejectedBets.sort((left, right) => left - right) });
+    bookmakers.push({ id: bookmaker.id, name, bets, rejectedBets: rejectedBets.sort((left, right) => left - right),
+      ...(suspendedBets.length > 0 && { suspendedBets: suspendedBets.sort((left, right) => left - right) }) });
   }
   if (bookmakers.length === 0) missing.push("odds-bookmakers");
   bookmakers.sort((left, right) => left.id - right.id);

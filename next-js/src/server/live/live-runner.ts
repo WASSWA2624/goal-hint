@@ -13,7 +13,8 @@ import { createJobRegistry } from "../jobs/job-registry.ts";
 import { createJobWorker } from "../jobs/job-worker.ts";
 import { resultCadence } from "../results/result-sync-policy.ts";
 import { DAILY_SELECTION_TYPE, dailySelectionEnvelope, HOURLY_SELECTION_TYPE, hourlySelectionEnvelope, latestHourlySelectionOccurrence } from "../selection/selection-trigger.ts";
-import { latestOddsSlot, oddsHistoryScheduleEnvelopes, oddsScheduleEnvelopes, ODDS_SWEEP_MS } from "../odds/odds-jobs.ts";
+import { latestOddsSlot, oddsHistoryScheduleEnvelopes, oddsScheduleEnvelopes } from "../odds/odds-jobs.ts";
+import { latestOddsReconciliationSlot, oddsReconciliationEnvelope } from "../odds/odds-reconciliation.ts";
 import { dueSlipOddsRefreshSlot, slipOddsRefreshEnvelope } from "../odds/slip-odds-refresh-slot.ts";
 import { latestTeamCodesSlot, teamCodesEnvelope, TEAM_CODES_SLOT_MS } from "../teams/team-code-jobs.ts";
 import { LiveAccountError } from "./live-account.ts";
@@ -23,6 +24,8 @@ import { createLiveRuntime, LiveConfigurationError, type LiveRuntime } from "./l
 
 const MINUTE = 60_000, DAY = 86_400_000;
 const MAINTENANCE_INTERVAL_MS = 30_000, POLLER_REVIEW_MS = 5 * MINUTE;
+const ODDS_SWEEP_OFFSET_MS = 2 * MINUTE;
+const ODDS_HISTORY_OFFSET_MS = 30 * MINUTE;
 const [runHour = 21, runMinute = 0] = calendarRules.dailyRunUtcCron.split(" ").slice(0, 2).reverse().map(Number);
 const RUN_OFFSET = runHour * 3_600_000 + runMinute * MINUTE;
 export type LiveEvent = Readonly<Record<string, string | number | boolean | null>>;
@@ -56,10 +59,19 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
   let quotaObservation: Readonly<{ periodId: string; at: number; remaining: number; used: number }> | null = null;
   let hourlyScheduled: number | null = null, historyScheduled = 0;
   let currentDayScheduled = -1, recoveredForecastSlot = -1;
-  let historicalOddsScheduled = -1;
+  let historicalOddsScheduled = -1, oddsReconciliationScheduled = -1;
   let capacity: ReturnType<typeof assessLiveCapacity> | null = null, capacityWarning: string | null = null;
-  type Poller = Readonly<{ controller: AbortController; done: Promise<void>; policy: unknown }>;
+  type Poller = { controller: AbortController; done: Promise<void>; policy: unknown; stopped: boolean };
   const owned: { poller: Poller | null; details: Poller | null } = { poller: null, details: null };
+  function startPoller(current: { policy: unknown; service: { run(signal: AbortSignal): Promise<void> } }, name: string): Poller {
+    const controller = new AbortController();
+    const pollSignal = AbortSignal.any([signal, controller.signal]);
+    const poller: Poller = { controller, policy: current.policy, stopped: false,
+      done: Promise.resolve().then(() => current.service.run(pollSignal)).catch((error: unknown) => {
+        log({ event: `${name}-stopped`, reason: reason(error) });
+      }).finally(() => { poller.stopped = true; }) };
+    return poller;
+  }
   const plan = runtime.day.status.plan, dailyLimit = runtime.day.status.dailyLimit;
   try {
     while (!signal.aborted) {
@@ -143,11 +155,12 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
       // Odds: the UTC day's catalog, then one import per EAT date for each 3-hour slot (nearest date first).
       // Durable idempotency keys make restarts, plan rebuilds and a retried tick re-enqueue the same rows.
       if (runtime.odds.enabled) {
-        const slot = latestOddsSlot(now);
-        if (slot !== oddsScheduled && slot % (ODDS_SWEEP_MS * enrichmentMultiplier) === 0) {
+        const sweepMs = runtime.odds.sweepMs;
+        const slot = latestOddsSlot(now, sweepMs);
+        if (slot !== oddsScheduled && now >= slot + ODDS_SWEEP_OFFSET_MS && slot % (sweepMs * enrichmentMultiplier) === 0) {
           try {
             const envelopes = oddsScheduleEnvelopes(now, runtime.odds.horizonDays, runtime.odds.bookmakerScope,
-              runtime.odds.recoveryEnabled ? { providerLookahead: true } : undefined);
+              { sweepMs, ...(runtime.odds.recoveryEnabled ? { providerLookahead: true } : {}) });
             for (const envelope of envelopes) await runtime.queue.enqueue(envelope);
             oddsScheduled = slot; log({ event: "odds-scheduled", slot: new Date(slot).toISOString(), dates: envelopes.length - 1 });
           } catch (error) { log({ event: "odds-schedule-failed", reason: reason(error) }); }
@@ -160,11 +173,23 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
             }
           } catch (error) { log({ event: "pre-match-catalog-coverage-unavailable", reason: reason(error) }); }
         }
-        if (runtime.odds.recoveryEnabled && slot !== historicalOddsScheduled && oddsScheduled === slot) {
+        if (runtime.odds.recoveryEnabled && capacity?.archiveAllowed !== false && now >= slot + ODDS_HISTORY_OFFSET_MS &&
+            slot !== historicalOddsScheduled && oddsScheduled === slot) {
           try {
             for (const envelope of oddsHistoryScheduleEnvelopes(now)) await runtime.queue.enqueue(envelope);
             historicalOddsScheduled = slot;
           } catch (error) { log({ event: "historical-odds-schedule-failed", reason: reason(error) }); }
+        }
+        if (runtime.odds.recoveryEnabled) {
+          const interval = runtime.odds.reconciliationMs;
+          const targetSlot = latestOddsReconciliationSlot(now, interval);
+          if (targetSlot !== oddsReconciliationScheduled && Math.floor(targetSlot / interval) % enrichmentMultiplier === 0) {
+            try {
+              const job = await runtime.enrichment.registry.enqueue(runtime.queue, oddsReconciliationEnvelope(targetSlot, interval));
+              oddsReconciliationScheduled = targetSlot;
+              log({ event: "odds-reconciliation-scheduled", slot: new Date(targetSlot).toISOString(), state: job.state });
+            } catch (error) { log({ event: "odds-reconciliation-schedule-failed", reason: reason(error) }); }
+          }
         }
       }
       // Team codes: one sweep per hourly slot, below every odds job on the shared enrichment worker. The durable
@@ -197,33 +222,31 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
         const inPlay = Math.floor(now / MAINTENANCE_INTERVAL_MS) % enrichmentMultiplier === 0 ? await runtime.inPlayOdds?.poll() : null;
         if (inPlay && (inPlay.requests > 0 || inPlay.changed > 0)) log({ event: "in-play-odds", ...inPlay });
       } catch (error) { log({ event: "in-play-odds-failed", reason: reason(error) }); }
-      if (now - pollerCheckedAt >= POLLER_REVIEW_MS) {
-        pollerCheckedAt = now;
+      const reviewPollers = now - pollerCheckedAt >= POLLER_REVIEW_MS;
+      if (reviewPollers) pollerCheckedAt = now;
+      if (reviewPollers || owned.poller?.stopped) {
         try {
           const current = await runtime.resultPoller(capacity?.cadence);
-          if (current?.policy !== owned.poller?.policy) {
+          if (current?.policy !== owned.poller?.policy || owned.poller?.stopped) {
             if (owned.poller) { owned.poller.controller.abort(); await owned.poller.done; }
             owned.poller = null;
             if (current) {
-              const controller = new AbortController();
-              const done: Promise<void> = current.service.run(AbortSignal.any([signal, controller.signal]))
-                .catch((error: unknown) => log({ event: "result-poller-stopped", reason: reason(error) }));
-              owned.poller = { controller, done, policy: current.policy };
+              owned.poller = startPoller(current, "result-poller");
               const cadence = resultCadence(current.policy);
-              log({ event: "result-poller", competitions: current.policy.coverage.length, liveMs: cadence.liveMs, dateMs: cadence.dateMs });
+              log({ event: "result-poller", competitions: current.policy.coverage.length, liveMs: cadence.liveMs, dateMs: cadence.dateMs,
+                approachLiveMs: cadence.approachLiveMs ?? null, idleLiveMs: cadence.idleLiveMs ?? null });
             }
           }
         } catch (error) { log({ event: "result-poller-failed", reason: reason(error) }); }
+      }
+      if (reviewPollers || owned.details?.stopped) {
         try {
           const current = await runtime.liveMatchPoller(enrichmentMultiplier);
-          if (current?.policy !== owned.details?.policy) {
+          if (current?.policy !== owned.details?.policy || owned.details?.stopped) {
             if (owned.details) { owned.details.controller.abort(); await owned.details.done; }
             owned.details = null;
             if (current) {
-              const controller = new AbortController();
-              const done = current.service.run(AbortSignal.any([signal, controller.signal]))
-                .catch((error: unknown) => log({ event: "live-details-stopped", reason: reason(error) }));
-              owned.details = { controller, done, policy: current.policy };
+              owned.details = startPoller(current, "live-details");
               log({ event: "live-details-poller", competitions: current.policy.coverage.length,
                 intervalMs: current.policy.intervalMs, finalIntervalMs: current.policy.finalIntervalMs });
             }
@@ -244,11 +267,11 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
         heartbeatAt = finishedAt;
         const activeDay = runtime.quota.current();
         const quota = activeDay?.periodId === quotaObservation?.periodId ? quotaObservation : null;
-        const oddsCadence = ODDS_SWEEP_MS * enrichmentMultiplier;
+        const oddsCadence = runtime.odds.sweepMs * enrichmentMultiplier;
         log({ event: "football-worker-heartbeat", at: finishedAt, coordinated: runtime.coordinated,
           maintenanceMs: Math.max(0, finishedAt - now), nextDailySelectionAt: latestSelectionOccurrence(finishedAt) + DAY,
-          nextOddsSweepAt: runtime.odds.enabled ? (Math.floor(finishedAt / oddsCadence) + 1) * oddsCadence : null,
-          resultPollerAttached: owned.poller !== null, liveDetailPollerAttached: owned.details !== null,
+          nextOddsSweepAt: runtime.odds.enabled ? (Math.floor((finishedAt - ODDS_SWEEP_OFFSET_MS) / oddsCadence) + 1) * oddsCadence + ODDS_SWEEP_OFFSET_MS : null,
+          resultPollerAttached: owned.poller !== null && !owned.poller.stopped, liveDetailPollerAttached: owned.details !== null && !owned.details.stopped,
           providerQuotaObservedAt: quota?.at ?? null, providerDayResetAt: activeDay?.endsAt ?? null,
           quotaUsed: quota?.used ?? null, quotaRemaining: quota?.remaining ?? null,
           estimatedReserve: quota ? capacity?.reserve ?? null : null });
@@ -271,6 +294,12 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
       onHistoryDetailBatch: (report) => log({ event: "history-detail-batch", ...report }),
       onHourlyLookupFailure: (reason, fixtureCount) => log({ event: "hourly-fixture-reconcile-failed", reason, fixtureCount }),
       onForwardFixtureSweep: (report) => log({ event: "hourly-fixture-forward-sweep", ...report }),
+      onOddsHorizonDiscovery: (report) => log({ event: "odds-horizon-fixture-discovery", ...report }),
+      onOddsReconciliation: ({ coverage, ...report }) => log({ event: "odds-reconciliation", ...report, ...coverage }),
+      onOddsImport: (request, summary) => log({ event: "pre-match-odds-import", date: request.date, slot: request.slot,
+        kind: request.kind, status: summary.status, reason: summary.error?.reason ?? null, requests: summary.requestsDispatched,
+        continuation: summary.continuation ?? false, providerEmpty: summary.providerEmpty ?? false, ...summary.outcomes }),
+      onResultPoll: (report) => log({ event: "result-poll", ...report }),
       onHistoricalOdds: (date, summary, state) => {
         if (state === "stored") return;
         const unavailable = summary ? summary.outcomes["unknown-fixture"] + summary.outcomes["awaiting-start"] +
@@ -300,6 +329,8 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
     // Bound background claim concurrency so browsing can share it during a large catch-up.
     const workersPerRun = localFootball ? Math.min(2, workload.workers) : workload.workers;
     log({ event: "ready", plan: runtime.day.status.plan, dailyLimit: workload.dailyLimit, usedToday: runtime.day.status.usedToday,
+      providerMinuteLimit: runtime.day.status.minuteLimit, configuredSecondLimit: policy.choices.footballScheduler.secondLimit,
+      configuredMinuteLimit: policy.choices.footballScheduler.minuteLimit,
       refreshCapacity: workload.refreshCapacity, workers: runtime.coordinated ? runtime.forecastConcurrency + 2 : workersPerRun,
       forecastConcurrency: runtime.coordinated ? runtime.forecastConcurrency : null, localFirstForecasts: runtime.localFirstForecasts,
       apiPredictionFallback: runtime.localFirstForecasts ? runtime.apiFallbackEnabled : null, liveMs: workload.cadence.liveMs, dateMs: workload.cadence.dateMs,
@@ -343,9 +374,16 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
     const storedOdds = runtime.odds.projectAuthorizedStored().then((result) => {
       if (result) log({ event: "odds-retained-projected", ...result });
     }, (error) => log({ event: "odds-retained-projection-failed", reason: reason(error) }));
-    try {
-      await Promise.all([...workers, enrichmentWorker, storedOdds,
-        maintain(runtime, stop, () => epoch.abort(), log, localFootball, slipOddsRefreshScheduled).finally(() => epoch.abort())]);
+    const tasks = [...workers, enrichmentWorker, storedOdds,
+      maintain(runtime, stop, () => epoch.abort(), log, localFootball, slipOddsRefreshScheduled).finally(() => epoch.abort())];
+    let failed = false;
+    try { await Promise.all(tasks); }
+    catch (error) {
+      failed = true;
+      epoch.abort();
+      await Promise.allSettled(tasks);
+      log({ event: "football-worker-restarting", reason: reason(error) });
     } finally { await runtime.close().catch(() => {}); }
+    if (failed) await pause(MAINTENANCE_INTERVAL_MS, signal);
   }
 }

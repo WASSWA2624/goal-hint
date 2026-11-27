@@ -89,21 +89,24 @@ test('live details on genuine MySQL use fenced stable ownership, bounded occurre
   });
   await t.test('coordinated schedules offer missing lineups within 90 minutes and delay initial final details 15 minutes', async () => {
     const settings = { ...policy, coordinated: true }, minute = 60_000;
-    const [upcoming, confirmed, outside, mature] = await Promise.all([
-      seed(130, 'scheduled'), seed(131, 'scheduled'), seed(132, 'scheduled'), seed(133, 'finished-regulation', -16 * minute),
+    const [upcoming, confirmed, outside, mature, unrelated] = await Promise.all([
+      seed(130, 'scheduled'), seed(131, 'scheduled'), seed(132, 'scheduled'), seed(133, 'finished-regulation', -16 * minute), seed(134, 'scheduled'),
     ]);
-    for (const [fixture, minutes] of [[upcoming, 90], [confirmed, 60], [outside, 91]]) {
+    for (const [fixture, minutes] of [[upcoming, 90], [confirmed, 60], [outside, 91], [unrelated, 60]]) {
       await root.query('UPDATE FootballFixture SET kickoff=? WHERE id=?', [new Date(initial + minutes * minute), fixture.id]);
     }
     const lineups = [10, 20].map(id => ({ team: { id }, startXI: Array.from({ length: 11 }, (_, index) => ({ player: { id: id * 100 + index } })) }));
     await root.query('INSERT INTO FixtureFacts (fixtureId,lineups,detailsRetrievedAt) VALUES (?,?,?)', [confirmed.id, JSON.stringify(lineups), new Date(initial)]);
+    await root.query('INSERT INTO FixtureFacts (fixtureId,lineups,detailsRetrievedAt) VALUES (?,?,?)', [unrelated.id,
+      JSON.stringify([lineups[0], { ...lineups[1], team: { id: 30 } }]), new Date(initial)]);
     const dueNow = new Set((await store.due(settings, initial, 100)).map(value => value.fixtureId));
-    assert.ok(dueNow.has(upcoming.id) && dueNow.has(mature.id));
+    assert.ok(dueNow.has(upcoming.id) && dueNow.has(mature.id) && dueNow.has(unrelated.id));
     assert.ok(!dueNow.has(confirmed.id) && !dueNow.has(outside.id) && !dueNow.has(final.id));
+    assert.ok(!(await store.due({ ...settings, lineupLeadMs: 60 * minute }, initial, 100)).some(row => row.fixtureId === upcoming.id));
     const later = new Set((await store.due(settings, initial + 15 * minute, 100)).map(value => value.fixtureId));
     assert.ok(later.has(final.id));
-    await root.query('DELETE FROM FixtureFacts WHERE fixtureId=?', [confirmed.id]);
-    for (const fixture of [upcoming, confirmed, outside, mature]) await root.query('DELETE FROM FootballFixture WHERE id=?', [fixture.id]);
+    for (const fixture of [confirmed, unrelated]) await root.query('DELETE FROM FixtureFacts WHERE fixtureId=?', [fixture.id]);
+    for (const fixture of [upcoming, confirmed, outside, mature, unrelated]) await root.query('DELETE FROM FootballFixture WHERE id=?', [fixture.id]);
   });
   await t.test('snapshots replace a single bounded body, preserve zeros and invalidate cached detail only on data change', async () => {
     const item = await target(live.id); await store.schedule(lease, item, await now() + 60_000);

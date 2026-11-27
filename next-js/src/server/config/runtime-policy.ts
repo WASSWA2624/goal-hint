@@ -63,8 +63,8 @@ export const operatingRules = freeze({
     monthlyPayableCeilingUsdCents: 4_500,
     advertisedMonthlyUsdCents: 3_900,
     advertisedRequestsPerDay: 150_000,
-    requestsPerRollingSecond: 12,
-    requestsPerRollingMinute: 720,
+    requestsPerRollingSecond: 10,
+    requestsPerRollingMinute: 600,
     requestsPerProviderDay: 120_000,
     essentialReserveRequests: 20_000,
     unusedDailyHeadroomRequests: 30_000,
@@ -95,6 +95,8 @@ const token = optional(z.string().min(1).regex(/^\S+$/));
 const flutterwaveSetting = optional(z.string());
 const integer = z.string().regex(/^(0|[1-9]\d*)$/).transform(Number).pipe(z.int().nonnegative());
 const count = optional(integer.refine((value) => value > 0));
+const boundedCount = (minimum: number, maximum: number, fallback: number) =>
+  optional(integer.pipe(z.int().min(minimum).max(maximum))).transform((value) => value ?? fallback);
 const money = optional(integer);
 const tolerance = optional(
   z.string().regex(/^(0|1)(\.\d+)?$/).transform(Number).pipe(z.number().gt(0).lt(1)),
@@ -203,6 +205,26 @@ const environmentSchema = z.object({
   GOAL_HINT_HISTORY_IMPORT_ENABLED: enabled.describe("Use true on the production football worker to resume historical imports under its verified spare quota."),
   GOAL_HINT_FOOTBALL_RESPONSE_ARCHIVE_ENABLED: enabled.describe("Use true on a qualified private football worker to retain replayable provider response envelopes."),
   GOAL_HINT_COORDINATED_FOOTBALL_ENABLED: enabled.describe("Enable qualified coordinated football work on the dedicated worker."),
+  GOAL_HINT_FOOTBALL_REQUESTS_PER_SECOND: boundedCount(1, operatingRules.football.requestsPerRollingSecond, operatingRules.football.requestsPerRollingSecond)
+    .describe("Lower the shared API-Football rolling-second ceiling from 10."),
+  GOAL_HINT_FOOTBALL_REQUESTS_PER_MINUTE: boundedCount(1, operatingRules.football.requestsPerRollingMinute, operatingRules.football.requestsPerRollingMinute)
+    .describe("Lower the shared API-Football rolling-minute ceiling from 600."),
+  GOAL_HINT_FOOTBALL_ACTIVE_POLL_SECONDS: boundedCount(10, 60, 10)
+    .describe("Seconds between coordinated live summaries when eligible matches are active."),
+  GOAL_HINT_FOOTBALL_APPROACH_POLL_SECONDS: boundedCount(60, 300, 60)
+    .describe("Seconds between coordinated live summaries near an expected kickoff."),
+  GOAL_HINT_FOOTBALL_IDLE_POLL_SECONDS: boundedCount(300, 1800, 300)
+    .describe("Seconds between coordinated live discovery checks during an idle window."),
+  GOAL_HINT_FOOTBALL_LIVE_STATISTICS_SECONDS: boundedCount(60, 300, 60)
+    .describe("Seconds between coordinated live statistics checks."),
+  GOAL_HINT_FOOTBALL_LINEUP_LEAD_MINUTES: boundedCount(30, 90, 90)
+    .describe("Minutes before kickoff to begin coordinated lineup checks."),
+  GOAL_HINT_FOOTBALL_LINEUP_POLL_MINUTES: boundedCount(15, 30, 15)
+    .describe("Minutes between coordinated lineup checks until confirmed."),
+  GOAL_HINT_ODDS_SWEEP_HOURS: z.enum(["2", "3", "4", "6"]).default("3").transform(Number)
+    .describe("Hours between UTC-aligned pre-match odds sweeps."),
+  GOAL_HINT_ODDS_RECONCILIATION_MINUTES: z.enum(["15", "30", "60"]).default("30").transform(Number)
+    .describe("Minutes between selective pre-match odds checks."),
   GOAL_HINT_FOOTBALL_FORECAST_CONCURRENCY: optional(integer.pipe(z.int().min(1).max(6))).transform(value => value ?? 1)
     .describe("Number of concurrently leased forecasts on a qualified coordinated worker (default one)."),
   GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS: money.describe("Use an explicitly approved separate AI cap in integer US cents (010)."),
@@ -373,6 +395,17 @@ function assemble(settings: z.output<typeof environmentSchema>) {
       footballResponseArchive: { enabled: settings.GOAL_HINT_FOOTBALL_RESPONSE_ARCHIVE_ENABLED },
       coordinatedFootball: { enabled: settings.GOAL_HINT_COORDINATED_FOOTBALL_ENABLED,
         forecastConcurrency: settings.GOAL_HINT_FOOTBALL_FORECAST_CONCURRENCY },
+      footballScheduler: {
+        secondLimit: settings.GOAL_HINT_FOOTBALL_REQUESTS_PER_SECOND, minuteLimit: settings.GOAL_HINT_FOOTBALL_REQUESTS_PER_MINUTE,
+        activePollMs: settings.GOAL_HINT_FOOTBALL_ACTIVE_POLL_SECONDS * 1_000,
+        approachPollMs: settings.GOAL_HINT_FOOTBALL_APPROACH_POLL_SECONDS * 1_000,
+        idlePollMs: settings.GOAL_HINT_FOOTBALL_IDLE_POLL_SECONDS * 1_000,
+        liveStatisticsMs: settings.GOAL_HINT_FOOTBALL_LIVE_STATISTICS_SECONDS * 1_000,
+        lineupLeadMs: settings.GOAL_HINT_FOOTBALL_LINEUP_LEAD_MINUTES * 60_000,
+        lineupIntervalMs: settings.GOAL_HINT_FOOTBALL_LINEUP_POLL_MINUTES * 60_000,
+        oddsSweepMs: settings.GOAL_HINT_ODDS_SWEEP_HOURS * 3_600_000,
+        oddsReconciliationMs: settings.GOAL_HINT_ODDS_RECONCILIATION_MINUTES * 60_000,
+      },
       budgets: {
         aiBillingMode: settings.GOAL_HINT_AI_BILLING_MODE,
         aiMonthlyUsdCents: settings.GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS,

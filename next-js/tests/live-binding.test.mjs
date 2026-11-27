@@ -84,6 +84,10 @@ test('account status parsing keeps a stable credential-free identity and documen
   assert.equal(parseAccountStatus(unknown, NOW).shortWindowKnown, false);
   assert.equal(parseAccountStatus(unknown, NOW, 30).minuteLimit, 30, 'a provider header can establish the missing limit');
   assert.equal(parseAccountStatus(status(), NOW, 9).minuteLimit, 9, 'a header can tighten documented terms');
+  const tighter = parseAccountStatus(status({ requests: { current: 10, limit_day: 100 } }), NOW, 9, { limit: 80, remaining: 65 });
+  assert.deepEqual([tighter.dailyLimit, tighter.usedToday], [80, 15]);
+  const looser = parseAccountStatus(status({ requests: { current: 10, limit_day: 100 } }), NOW, 99, { limit: 130, remaining: 130 });
+  assert.deepEqual([looser.dailyLimit, looser.usedToday], [100, 10]);
   assert.equal(parseAccountStatus(status({ requests: { current: 500, limit_day: 100 } }), NOW).usedToday, 100);
   assert.throws(() => parseAccountStatus({ errors: { token: 'synthetic rejection' }, response: [] }, NOW),
     (error) => error instanceof LiveAccountError && error.reason === 'credential-failure');
@@ -182,7 +186,7 @@ test('prepaid operation requires an active paid plan with a future expiry on eve
   }
 });
 
-test('quota router opens one durable limiter per account plan and settled UTC provider day', async () => {
+test('quota router shares one durable limiter across plan changes and opens after the UTC day settles', async () => {
   const clock = { now: Date.parse('2026-10-10T00:00:30.000Z') }, store = memoryQuotaStore(clock);
   let body = status();
   const router = createQuotaRouter({ store, clock: { now: () => clock.now }, readStatus: async () => parseAccountStatus(body, clock.now) });
@@ -203,7 +207,8 @@ test('quota router opens one durable limiter per account plan and settled UTC pr
   await router.refresh(); assert.equal(await router.remaining(), 60, 'a higher provider count cannot restore spent capacity');
   body = status({ subscription: { plan: 'Pro', end: '2027-01-01T00:00:00+00:00', active: true }, requests: { current: 41, limit_day: 7500 } });
   const upgraded = await router.refresh();
-  assert.notEqual(upgraded.accountId, first.accountId); assert.equal(await router.remaining(), 7459, 'an upgrade is seeded from verified usage');
+  assert.equal(upgraded.accountId, first.accountId);
+  assert.equal(await router.remaining(), 59, 'an upgrade counts verified use without expanding the shared open day');
   clock.now = first.endsAt + PROVIDER_DAY_SETTLE_MS;
   assert.equal(router.current(), null);
   body = status({ subscription: { plan: 'Pro', end: '2027-01-01T00:00:00+00:00', active: true }, requests: { current: 0, limit_day: 7500 } });

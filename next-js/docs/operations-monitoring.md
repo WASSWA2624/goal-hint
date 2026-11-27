@@ -7,11 +7,15 @@ Each API-Football provider day resets at 03:00 Kampala time.
 
 The account-wide figures come from the last successful account status check
 stored by the live worker. Local launches come from its MySQL quota ledger and
-are grouped by endpoint and workload. The report separates retries,
-rate-limited responses, provider errors, and unresolved attempts, and shows
-result backlog and recent football data observations. Imports recorded before
-endpoint tracking are labelled `unattributed`. The command reads the verified
-local database without making API-Football requests.
+are grouped by endpoint and workload. Each provider day includes peak launches
+in calendar seconds, minutes, and hours. The JSON output also gives launch
+counts for each active hour. These figures count recorded launch claims. The
+limiter separately counts reservations and enforces rolling windows. The
+report separates retries, rate-limited responses, provider errors, and
+unresolved attempts, and shows result backlog and recent football data
+observations. Imports recorded before endpoint tracking are labelled
+`unattributed`. The command reads the verified local database without making
+API-Football requests.
 
 Optional verified storage evidence now supports `storage-cap` and `storage-growth`
 through the same bounded outbox. The private `npm run db:storage` command measures

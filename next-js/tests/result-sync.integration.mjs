@@ -3,6 +3,7 @@ import { execFile } from "./helpers/command-runtime.mjs";
 import { promisify } from 'node:util';
 import test from 'node:test';
 import { getReportingDate } from '../src/domain/calendar.ts';
+import { storedLiveMatchSnapshot } from '../src/server/live-match/live-match-read.ts';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
 import { createFootballCatalogImporter } from '../src/server/football/catalog-service.ts';
 import { createFootballCatalogStore } from '../src/server/football/catalog-mysql-store.ts';
@@ -96,6 +97,28 @@ test('shared result synchronization on isolated genuine MySQL', { timeout: 420_0
         s.source.state.rows[0].fixture.status.short = 'FT'; s.source.state.rows[0].score.fulltime = score(1,0);
         advance(45_000); await restarted.runOnce();
         assert.equal(channels(s.source, 'date').length, 3); assert.equal(channels(s.source, 'live').length, 1);
+      });
+      await t.test('a coordinated score poll commits verified live events with the canonical result and preserves them on provider-empty replies', async () => {
+        await p.instance.executeAdmin("GRANT SELECT, INSERT, UPDATE ON goal_hint_test.LiveMatchSnapshot TO 'cutoff_app'@'127.0.0.1';");
+        const now = p.now(), kickoff = now - 10 * 60_000, row = catalogFixture(10090, { kickoff: new Date(kickoff).toISOString(), status: '1H' });
+        const s = await seed([row], { coordinated: true });
+        const homeId = row.teams.home.id;
+        s.source.state.rows[0].events = [{ time: { elapsed: 10, extra: null }, team: { id: homeId }, type: 'Goal', detail: 'Normal Goal' }];
+        const reporter = [];
+        const poller = s.make({ adapter: { ...s.source.adapter.evidence, liveFixtures: s.source.adapter.evidence.liveFixtureDetails },
+          verifyLiveEvents: () => true, onPoll: report => reporter.push(report) });
+        const { id: fixtureId } = await s.fixture();
+        const timeline = () => a.query(tx => storedLiveMatchSnapshot(tx, { fixtureId, cycleId: null, kickoffAt: kickoff, asOf: p.now() }));
+        assert.equal(await poller.runOnce(), true);
+        assert.equal(channels(s.source, 'live').length, 1);
+        assert.equal((await timeline()).events.items[0].elapsed, 10);
+        assert.equal(reporter.find(row => row.channel === 'live').liveEvents, 1);
+        s.source.state.rows[0].events = [];
+        advance(10_000);
+        assert.equal(await poller.runOnce(), true);
+        assert.equal(channels(s.source, 'live').length, 2);
+        assert.equal((await timeline()).events.items[0].elapsed, 10);
+        await poller.stop();
       });
       await t.test('many concurrent ticks and a competing replica cannot multiply provider requests', async () => {
         const s = await seed([catalogFixture(10003, { kickoff: new Date(p.now() + 10_000).toISOString() })]);

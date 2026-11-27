@@ -8,8 +8,10 @@ import { createOddsJobDefinitions, latestOddsSlot, ODDS_CATALOG_TYPE, ODDS_HISTO
   oddsCatalogEnvelope, oddsHistoryScheduleEnvelopes, oddsHistoryScopeId, oddsImportEnvelope, oddsJobOutcome, oddsQuotaAllows, oddsScheduleEnvelopes, oddsSlotDates,
   oddsSlotEnvelopes } from '../src/server/odds/odds-jobs.ts';
 import { canonicalOddsValues, oddsValuesHash, storedOddsBatchSchema } from '../src/server/odds/odds-mysql-store.ts';
+import { createOddsReconciliationJob, latestOddsReconciliationSlot, oddsReconciliationDue, oddsReconciliationEnvelope,
+  ODDS_RECONCILIATION_FIXTURE_LIMIT, preMatchOddsCoverage } from '../src/server/odds/odds-reconciliation.ts';
 import { classifyHistoricalOddsRow, classifyOddsRow, createOddsImportService } from '../src/server/odds/odds-service.ts';
-import { createSyntheticOddsAdapter, launchBetCatalog, oddsAuthority, oddsBounds, oddsHash, oddsPolicy, oddsRequest, oddsResponse, offsetTime,
+import { createSyntheticOddsAdapter, launchBetCatalog, launchBets, oddsAuthority, oddsBounds, oddsHash, oddsPolicy, oddsRequest, oddsResponse, offsetTime,
   rawOddsRow } from './helpers/odds-fixtures.mjs';
 
 // Synthetic policies, envelopes and prices only (prompt 052). The real adapter runs over a fake transport.
@@ -121,9 +123,9 @@ test('an unrestricted price sweep resumes sealed pages and withdraws only after 
   const pages = new Map(), receipts = new Map(), withdrawals = [];
   const store = {
     async pricePageBatches() { return [...pages.values()]; },
-    async resolveFixtures() { return new Map(); },
+    async resolveFixtures(ids) { return new Map(ids.includes(200) ? [[200, { fixtureId: '200', kickoff: KICKOFF, status: 'scheduled' }]] : []); },
     async saveAndApplyPricePage(batch, applications) {
-      assert.equal(applications.length, 0, 'unknown fixtures never become public offers');
+      assert.ok(applications.every(({ fixtureId }) => fixtureId === '200'), 'unknown fixtures never become public offers');
       assert.ok(batch.checkpoint && !pages.has(batch.checkpoint.page));
       pages.set(batch.checkpoint.page, batch);
       return { batch, outcomes: [] };
@@ -141,17 +143,75 @@ test('an unrestricted price sweep resumes sealed pages and withdraws only after 
   assert.equal(oddsJobOutcome(partial).retryable, true);
   assert.equal(withdrawals.length, 0);
   assert.equal(pages.size, 1);
+  const initialRows = h.odds.state.rows;
+  h.odds.state.rows = initialRows.slice(0, 20);
+  const inconsistent = await service(2).importDate(request);
+  assert.equal(inconsistent.status, 'partial');
+  assert.equal(inconsistent.error.reason, 'pagination-incomplete');
+  assert.equal(oddsJobOutcome(inconsistent).retryable, true);
+  assert.equal(pages.size, 1, 'a changing provider listing cannot checkpoint the failed page');
+  h.odds.state.rows = initialRows;
   const complete = await service(2).importDate(request);
   assert.equal(complete.status, 'complete');
-  assert.equal(complete.outcomes['unknown-fixture'], 23);
+  assert.equal(complete.outcomes['unknown-fixture'], 22);
   assert.equal(complete.requestsDispatched, 2);
   assert.equal(withdrawals.length, 1);
   const queries = h.odds.network.map((entry) => new URL(entry.url ?? entry));
-  assert.deepEqual(queries.map((query) => query.searchParams.get('page')), ['1', '2', '3']);
+  assert.deepEqual(queries.map((query) => query.searchParams.get('page')), ['1', '2', '2', '3']);
   assert.ok(queries.every((query) => !query.searchParams.has('bookmaker') && !query.searchParams.has('bet')));
   assert.equal((await service(2).importDate(request)).batchId, complete.batchId, 'successful retry reuses the exact terminal receipt');
-  assert.equal(h.odds.network.length, 3);
-  assert.equal(receipts.size, 2);
+  assert.equal(h.odds.network.length, 4);
+  assert.equal(receipts.size, 3);
+});
+
+test('a corrupt page is never checkpointed and a stale continuation cannot withdraw fixture prices', async () => {
+  const h = harness(), request = oddsRequest('prices', NOW, { date: DATE }), pages = [];
+  const rows = Array.from({ length: 11 }, (_, index) => row(200 + index));
+  const store = {
+    async pricePageBatches() { return [...pages]; },
+    async resolveFixtures() { return new Map(); },
+    async saveAndApplyPricePage(batch) { pages.push(batch); return { batch, outcomes: [] }; },
+    async saveBatch(batch) { return batch; },
+    async markWithdrawn() { assert.fail('an incomplete sweep cannot withdraw fixture prices'); },
+  };
+  const service = createOddsImportService({ adapter: h.odds.adapter.odds, store, authority: oddsAuthority(),
+    accountId: () => oddsHash('account'), bounds: () => oddsBounds(h.clock.now(), { maxPages: 1 }), clock: h.clock, resumePricePages: true });
+  h.odds.state.respond = (url) => oddsResponse(url, [...rows.slice(0, 9), { broken: true }], { total: 2 });
+  const failed = await service.importDate(request);
+  assert.equal(failed.status, 'failed');
+  assert.equal(failed.error.reason, 'schema-error');
+  assert.equal(pages.length, 0);
+  h.odds.state.respond = undefined;
+  h.odds.state.rows = rows;
+  assert.equal((await service.importDate(request)).continuation, true);
+  assert.equal(pages.length, 1);
+  h.set(NOW + HOUR);
+  const stale = await service.importDate(request);
+  assert.equal(stale.status, 'partial');
+  assert.equal(stale.error.reason, 'stale-page-checkpoint');
+  assert.equal(stale.requestsDispatched, 0);
+  assert.deepEqual(h.odds.network.map((url) => url.searchParams.get('page')), ['1', '1']);
+});
+
+test('verified empty date pages record provider unavailability without withdrawing existing prices', async () => {
+  const h = harness(), request = oddsRequest('prices', NOW, { date: DATE }), receipts = [];
+  const store = {
+    async pricePageBatches() { return []; },
+    async resolveFixtures() { return new Map(); },
+    async saveAndApplyPricePage() { assert.fail('no fixture data was observed'); },
+    async saveBatch(batch) { storedOddsBatchSchema.parse(batch); receipts.push(batch); return batch; },
+    async markWithdrawn() { assert.fail('verified empty responses do not withdraw a date'); },
+  };
+  for (const [total, resumePricePages] of [[0, true], [1, true], [0, false]]) {
+    h.odds.state.respond = (url) => oddsResponse(url, [], { total });
+    const service = createOddsImportService({ adapter: h.odds.adapter.odds, store, authority: oddsAuthority(),
+      accountId: () => oddsHash('account'), bounds: () => oddsBounds(h.clock.now()), clock: h.clock, resumePricePages });
+    const result = await service.importDate(request);
+    assert.equal(result.status, 'complete');
+    assert.equal(result.providerEmpty, true);
+    assert.equal(receipts.at(-1).pages[0].totalPages, total);
+    assert.deepEqual(receipts.at(-1).fixtures, []);
+  }
 });
 
 test('targeted refreshes apply only the selected fixture and never withdraw a date', async () => {
@@ -193,6 +253,23 @@ test('targeted refreshes apply only the selected fixture and never withdraw a da
   h.odds.state.respond = (url) => oddsResponse(url, [row(104), row(102)]);
   assert.equal((await service.importFixture(request(104))).status, 'failed');
   assert.deepEqual(writes, [101]);
+
+  h.odds.state.respond = (url) => oddsResponse(url, [{ ...row(105), bookmakers: [] }]);
+  const missing = await service.importFixture(request(105));
+  assert.equal(missing.providerEmpty, true);
+  assert.equal(missing.outcomes['no-provider-odds'], 1);
+  h.odds.state.respond = (url) => oddsResponse(url, [row(106, { bets: [{ id: 1, name: 'Match Winner', values: [{ value: 'Home', odd: '0' }] }] })]);
+  const invalid = await service.importFixture(request(106));
+  assert.equal(invalid.providerEmpty, undefined);
+  assert.equal(invalid.outcomes['invalid-provider-odds'], 1);
+  assert.deepEqual(writes, [101], 'empty and invalid observations cannot change the odds state');
+
+  h.odds.state.respond = (url) => oddsResponse(url, [row(107, { bets: [{ id: 1, name: 'Match Winner',
+    values: [{ value: 'Home', odd: '0', suspended: true }] }] })]);
+  const suspended = await service.importFixture(request(107));
+  assert.equal(suspended.providerEmpty, undefined);
+  assert.equal(suspended.outcomes.apply, 1);
+  assert.deepEqual(writes, [101, 107], 'a verified suspension changes current availability');
 });
 
 test('bet catalogs validate as sorted unique names without prices', async () => {
@@ -326,6 +403,68 @@ test('canonical snapshot values ignore provider ordering', () => {
   assert.notEqual(oddsValuesHash(values), oddsValuesHash([{ label: 'Home', odd: '1.9' }, ...values.slice(1)]));
 });
 
+test('reconciliation distinguishes usable odds, missing bets, partial selections, and stale near-kickoff prices', () => {
+  const offers = launchBets().map(({ id: betId, name: betName, values }) => ({ betId, betName,
+    values: values.map(({ value: label, odd }) => ({ label, odd })) }));
+  const quote = { checkedAt: NOW - HOUR, bookmakers: [{ offers }] };
+  assert.equal(preMatchOddsCoverage(undefined, true, NOW), 'missing-odds');
+  assert.equal(preMatchOddsCoverage({ ...quote, bookmakers: [{ offers: offers.slice(1) }] }, true, NOW), 'missing-market');
+  assert.equal(preMatchOddsCoverage({ ...quote, bookmakers: [{ offers: [{ ...offers[0], values: offers[0].values.slice(1) }, ...offers.slice(1)] }] },
+    true, NOW), 'missing-selection');
+  assert.equal(preMatchOddsCoverage(quote, true, NOW), 'complete');
+  assert.equal(preMatchOddsCoverage({ ...quote, checkedAt: NOW - 3 * HOUR }, true, NOW), 'stale-near-kickoff');
+  assert.equal(preMatchOddsCoverage({ ...quote, checkedAt: NOW - 3 * HOUR }, false, NOW), 'complete');
+});
+
+test('new fixtures are immediately due while empty odds and failures have independent retry pacing', () => {
+  const future = { kickoffAt: NOW + 12 * HOUR, observedAt: null };
+  const near = { ...future, kickoffAt: NOW + HOUR };
+  const prior = (ms, status, providerEmpty = false) => ({ lastCheck: { receivedAt: new Date(NOW - ms), status, providerEmpty } });
+  assert.equal(oddsReconciliationDue(NOW, future), true);
+  assert.equal(oddsReconciliationDue(NOW, { ...future, ...prior(HOUR, 'complete', true) }), false);
+  assert.equal(oddsReconciliationDue(NOW, { ...future, ...prior(3 * HOUR, 'complete', true) }), true);
+  assert.equal(oddsReconciliationDue(NOW, { ...near, ...prior(HOUR / 2, 'complete', true) }), true);
+  assert.equal(oddsReconciliationDue(NOW, { ...near, ...prior(10_000, 'failed') }), false);
+  assert.equal(oddsReconciliationDue(NOW, { ...near, ...prior(60_000, 'failed') }), true);
+  assert.equal(oddsReconciliationDue(NOW, { ...near, ...prior(60_000, 'failed'), observedAt: NOW - 30_000 }), false);
+  assert.equal(oddsReconciliationDue(NOW, { ...near, kickoffAt: NOW }), false);
+});
+
+test('reconciliation uses one fenced job per staggered slot, reports provider empties, and retries a transient failure', async () => {
+  const now = NOW + 5 * 60_000;
+  const slot = latestOddsReconciliationSlot(now);
+  const envelope = oddsReconciliationEnvelope(slot);
+  assert.equal(slot, now);
+  assert.equal(latestOddsReconciliationSlot(now - 1), now - HOUR / 2);
+  assert.equal(oddsReconciliationEnvelope(latestOddsReconciliationSlot(now + 5_000)).idempotencyKey, envelope.idempotencyKey);
+  const requests = [], records = [], reports = [];
+  const service = { async importFixture(request) {
+    requests.push(request);
+    return request.fixtureId === 101 ? oddsSummary({ requestsDispatched: 1, providerEmpty: true }) :
+      oddsSummary({ status: 'failed', requestsDispatched: 1, error: { reason: 'rate-limited', retryable: true } });
+  } };
+  const dependencies = { enabled: () => true, now: () => now, policy: () => oddsPolicy(), service,
+    candidates: async (at, limit) => {
+      assert.equal(at, now); assert.equal(limit, ODDS_RECONCILIATION_FIXTURE_LIMIT);
+      return { candidates: [101, 102, 103].map(fixtureId => ({ fixtureId, date: DATE, kickoffAt: KICKOFF, reason: 'missing-odds' })),
+        coverage: { 'missing-odds': 3 }, backlog: 0 };
+    },
+    usage: async () => ({ remaining: 100, used: 10, oddsUsed: 2 }), allowance: { floor: 50, spare: 20, reserve: 5 },
+    report: (report) => reports.push(report),
+  };
+  const context = { lease: { jobId: oddsHash('reconciliation-job'), attemptId: oddsHash('first-attempt') }, signal: new AbortController().signal,
+    async checkpoint() {}, async recordUsage(record) { records.push(record); }, remainingMs: () => 300_000 };
+  const job = createOddsReconciliationJob(dependencies);
+  assert.deepEqual(await job.handle(envelope.payload, context), { status: 'failed', reason: 'rate-limited', retryable: true });
+  assert.deepEqual(requests.map(({ fixtureId, reconciliationDeadlineAt }) => [fixtureId, reconciliationDeadlineAt]),
+    [[101, envelope.expiresAt], [102, envelope.expiresAt]]);
+  assert.deepEqual(records.map(({ requests, phase }) => [requests, phase]), [[1, 'completed'], [1, 'completed']]);
+  assert.deepEqual(reports.map(({ selected, completed, empty, failed, requests }) => [selected, completed, empty, failed, requests]), [[3, 1, 1, 1, 2]]);
+  const deferred = createOddsReconciliationJob({ ...dependencies, usage: async () => ({ remaining: 3, used: 100, oddsUsed: 5 }) });
+  assert.deepEqual(await deferred.handle(envelope.payload, context), { status: 'failed', reason: 'rate-limited', retryable: false });
+  assert.equal(requests.length, 2);
+});
+
 test('odds envelopes carry only the slot and date; nearest dates run first and expire with their slot', () => {
   const slot = latestOddsSlot(NOW + 1_000);
   assert.equal(slot, NOW); assert.equal(slot % ODDS_SWEEP_MS, 0);
@@ -384,6 +523,23 @@ test('extended pre-match collection keeps the reviewed near-date priorities and 
     '2026-10-23', '2026-10-24', '2026-10-25']);
   assert.ok(extra.every(({ type, priority, payload }) => type === ODDS_IMPORT_TYPE && priority === 0 && payload.bookmakerScope === 'all'));
   assert.equal(new Set(expanded.map(({ idempotencyKey }) => idempotencyKey)).size, 16);
+});
+
+test('a configurable sweep pins its UTC slot and expires previous cadence jobs', async () => {
+  const sweepMs = 2 * HOUR;
+  const base = oddsScheduleEnvelopes(NOW, 7, 'all');
+  assert.deepEqual(oddsScheduleEnvelopes(NOW, 7, 'all', { sweepMs: ODDS_SWEEP_MS }), base);
+  const [, configured] = oddsScheduleEnvelopes(NOW + 2 * HOUR, 7, 'all', { sweepMs });
+  assert.equal(configured.notBefore, NOW + 2 * HOUR);
+  assert.equal(configured.expiresAt, NOW + 4 * HOUR);
+  assert.equal(configured.payload.sweepMs, sweepMs);
+  assert.notEqual(configured.idempotencyKey, base[1].idempotencyKey);
+  const job = oddsJobHarness({ policy: oddsPolicy({ bookmakerScope: 'all', sweepMs }), at: configured.notBefore });
+  assert.deepEqual(await job.importJob.handle(base[1].payload, job.context), EXPIRED);
+  assert.equal(job.calls.length, 0);
+  assert.deepEqual(await job.importJob.handle(configured.payload, job.context), { status: 'succeeded' });
+  assert.equal(job.calls.length, 1);
+  assert.throws(() => oddsScheduleEnvelopes(NOW, 7, 'all', { sweepMs: 5 * HOUR }), RangeError);
 });
 
 function oddsSummary(changes = {}) {
@@ -546,8 +702,10 @@ test('receipt outcomes: transient failures retry in the slot, exhausted quota ex
   const outcome = (status, reason, retryable) => oddsJobOutcome({ status, error: reason === null ? null : { reason, retryable } });
   assert.deepEqual(outcome('complete', null), { status: 'succeeded' });
   for (const reason of ['transport-error', 'rate-limited', 'quota-denied', 'deadline-exceeded', 'shared-work-pending']) {
-    assert.deepEqual(outcome('partial', reason, true), { status: 'succeeded' }, `a partial ${reason} sweep keeps what it retrieved`);
+    assert.deepEqual(outcome('partial', reason, true), { status: 'failed', retryable: true,
+      reason: ['rate-limited', 'quota-denied'].includes(reason) ? 'rate-limited' : 'handler-failed' });
   }
+  assert.deepEqual(outcome('partial', null), { status: 'failed', reason: 'invalid-output', retryable: false });
   assert.deepEqual(outcome('failed', 'transport-error', true), { status: 'failed', reason: 'handler-failed', retryable: true });
   assert.deepEqual(outcome('failed', 'deadline-exceeded', false), { status: 'failed', reason: 'handler-failed', retryable: true });
   assert.deepEqual(outcome('failed', 'rate-limited', true), { status: 'failed', reason: 'rate-limited', retryable: true });
@@ -557,7 +715,7 @@ test('receipt outcomes: transient failures retry in the slot, exhausted quota ex
     assert.deepEqual(outcome('failed', reason, false), { status: 'failed', reason: 'non-retryable', retryable: false }, reason);
   }
   for (const reason of ['schema-error', 'coverage-error', 'pagination-incomplete', 'response-too-large', 'request-budget-exhausted']) {
-    assert.deepEqual(outcome('failed', reason, false), { status: 'succeeded' }, `${reason} keeps its failed receipt instead of repeating`);
+    assert.deepEqual(outcome('failed', reason, false), { status: 'failed', reason: 'invalid-output', retryable: false });
   }
   const h = oddsJobHarness({ summary: oddsSummary({ status: 'failed', requestsDispatched: 2, error: { reason: 'quota-denied', retryable: false } }) });
   assert.deepEqual(await h.importJob.handle({ slot: NOW, date: DATE }, h.context), EXPIRED);

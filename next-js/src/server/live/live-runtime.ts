@@ -84,8 +84,9 @@ import { fallbackRefreshPlan, LIVE_REFRESH_TYPE, liveCascadePlan, liveLocalFirst
   refreshEnvelopeFor } from "./live-plan.ts";
 import { oddsFail } from "../odds/odds-contract.ts";
 import { approvedOddsDisplay } from "../odds/public-odds-policy.ts";
-import { createOddsJobDefinitions, oddsHistoryDeadline, oddsHistoryScopeId, oddsQuotaAllows, ODDS_PROVIDER_WINDOW_MS, ODDS_SWEEP_MS,
+import { createOddsJobDefinitions, oddsHistoryDeadline, oddsHistoryScopeId, oddsQuotaAllows, ODDS_PROVIDER_WINDOW_MS, PRE_MATCH_PROVIDER_LOOKAHEAD_DAYS,
   type OddsQuotaUsage, type OddsJobDependencies } from "../odds/odds-jobs.ts";
+import { createOddsReconciliationCandidates, createOddsReconciliationJob, ODDS_RECONCILIATION_REQUEST_TIMEOUT_MS } from "../odds/odds-reconciliation.ts";
 import { createMysqlOddsStore } from "../odds/odds-mysql-store.ts";
 import { storedPreMatchCatalogCoverage } from "../odds/bookmaker-odds-read.ts";
 import { oddsPolicyHash } from "../odds/odds-input.ts";
@@ -98,7 +99,7 @@ import { createTeamCodeJobDefinitions } from "../teams/team-code-jobs.ts";
 import { createMysqlTeamCodeStore } from "../teams/team-code-mysql-store.ts";
 import { createTeamCodeService } from "../teams/team-code-service.ts";
 import { Prisma } from "../generated/prisma/client.ts";
-import { coordinatedLiveDetailDefaults, type LiveMatchPolicy } from "../live-match/live-match-contract.ts";
+import type { LiveMatchPolicy } from "../live-match/live-match-contract.ts";
 import { createLiveMatchService } from "../live-match/live-match-service.ts";
 import { createMysqlLiveMatchStore } from "../live-match/live-match-mysql-store.ts";
 import { createLiveQuotaAdmission } from "./live-detail-quota.ts";
@@ -160,6 +161,10 @@ export type LiveRuntimeOverrides = Readonly<{
   onPollerState?: (kind: "results" | "match-details", state: string) => void;
   onHourlyLookupFailure?: (reason: string, fixtureCount: number) => void;
   onForwardFixtureSweep?: (report: ForwardFixtureSweep) => void;
+  onOddsHorizonDiscovery?: (report: Awaited<ReturnType<ReturnType<typeof createHourlyFixtureReconciler>["sweepOddsHorizon"]>>) => void;
+  onOddsReconciliation?: Parameters<typeof createOddsReconciliationJob>[0]["report"];
+  onOddsImport?: OddsJobDependencies["report"];
+  onResultPoll?: Parameters<typeof createResultSyncService>[0]["onPoll"];
   onHistoricalOdds?: NonNullable<OddsJobDependencies["historical"]>["report"];
   onHistoryDetailBatch?: Parameters<ReturnType<typeof createFootballHistoryDetails>>[1];
   onDateImportFailure?: Parameters<typeof createDailySelectionService>[0]["onDateImportFailure"];
@@ -177,6 +182,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     (policy.mode === "development" && databaseTarget.pathname === "/goal_hint_test" ||
       policy.mode === "production" && smokeName.test(databaseTarget.pathname.slice(1)) && smokeName.test(decodeURIComponent(databaseTarget.username)));
   const productionTarget = policy.mode === "production" && process.env.GOAL_HINT_DEPLOYMENT_ENVIRONMENT === "production";
+  const settings = policy.choices.footballScheduler;
   const privateRetention = verify(refs.retention, "football-private-use");
   const productionHistory = !localFootball && archiveEnabled && privateRetention && (syntheticArchive || productionTarget);
   const coordinated = policy.choices.coordinatedFootball.enabled && (productionTarget || syntheticArchive || localFootball);
@@ -199,22 +205,33 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     let stableAccountKey: string | null = null;
     const quota = createQuotaRouter({ store: createMysqlQuotaStore(database), readStatus: createAccountStatusReader({ policy, verifyEvidence: verify, ...fetcher,
       ...(providerArchive ? { observeStatus: providerArchive.observeStatus } : {}) }),
+      shortWindowCaps: settings,
       admit: createLiveQuotaAdmission(() => activeWorkload, () => stableAccountKey, productionHistory || coordinated) });
     const day: QuotaDay = await quota.refresh();
     stableAccountKey = day.status.accountKey;
-    const baselineWorkload = liveWorkload(day.status.dailyLimit, day.status.secondLimit, day.status.plan, day.status.minuteLimit,
+    const baselineWorkload = liveWorkload(day.status.dailyLimit, day.status.secondLimit, day.status.plan, Math.min(day.status.minuteLimit, settings.minuteLimit),
       policy.capabilities.ai, policy.choices.liveDetails.enabled);
-    const workload = coordinated ? { ...baselineWorkload,
-      cadence: { liveMs: coordinatedResultDefaults.liveMs, dateMs: coordinatedResultDefaults.dateMs,
-        activeMs: Math.max(coordinatedResultDefaults.activeMs, baselineWorkload.cadence.activeMs) },
-      liveDetails: { ...baselineWorkload.liveDetails, intervalMs: coordinatedLiveDetailDefaults.liveMs },
-    } : baselineWorkload;
+    const oddsRecoveryCapable = privateRetention && (productionTarget || syntheticArchive || coordinated);
+    const fullOddsHorizon = oddsRecoveryCapable && policy.choices.odds.enabled && baselineWorkload.odds.eligible;
+    const oddsHorizon = fullOddsHorizon ? PRE_MATCH_PROVIDER_LOOKAHEAD_DAYS + 1 : baselineWorkload.odds.dates;
+    const workload: LiveWorkload = { ...baselineWorkload, odds: { ...baselineWorkload.odds, sweepMs: settings.oddsSweepMs },
+      ...(fullOddsHorizon ? { fixtureDiscoveryDays: oddsHorizon } : {}),
+      ...(coordinated ? {
+        cadence: { liveMs: baselineWorkload.cadence.liveMs === null ? coordinatedResultDefaults.approachLiveMs : settings.activePollMs,
+          approachLiveMs: settings.approachPollMs, idleLiveMs: settings.idlePollMs,
+          dateMs: coordinatedResultDefaults.dateMs, activeMs: Math.max(coordinatedResultDefaults.activeMs, baselineWorkload.cadence.activeMs) },
+        liveDetails: { ...baselineWorkload.liveDetails, intervalMs: settings.liveStatisticsMs,
+          lineupLeadMs: settings.lineupLeadMs, lineupIntervalMs: settings.lineupIntervalMs },
+      } : {}),
+    };
     activeWorkload = workload;
     const statusEvidenceRef = `${refs.freshness}#status`;
     let results: ResultSyncPolicy | null = null;
     let liveDetailsPolicy: LiveMatchPolicy | null = null;
     // Odds use the same workload inputs as their authority, so a policy can never verify against a different plan.
     const odds = oddsPolicy(policy, refs, workload, localFootball || coordinated || productionTarget && privateRetention);
+    const oddsEnabled = policy.choices.odds.enabled && workload.odds.eligible && odds !== null;
+    const oddsRecoveryEnabled = oddsEnabled && oddsRecoveryCapable;
     let aiModel: ReturnType<typeof liveAiModel> | null = null;
     if (policy.capabilities.ai) try { aiModel = liveAiModel(policy); } catch { /* An unsupported optional model leaves the baseline active. */ }
     // New local-first intents omit AI. Retain the configured model for compatible sealed legacy intents.
@@ -478,6 +495,13 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     const dailySelection = createDailySelectionService({ policy: selection, authority: authorities.selection, store: selectionStore, importer, cutoff,
       ...(overrides.onDateImportFailure ? { onDateImportFailure: overrides.onDateImportFailure } : {}),
       ...(hourlyFixtureReconciler ? { hourlyImporter, reconcileHourly: hourlyFixtureReconciler.reconcile,
+        ...(oddsRecoveryEnabled ? { sweepOddsHorizon: async (lease, slot, signal) => {
+          try {
+            const report = await hourlyFixtureReconciler.sweepOddsHorizon(lease, slot, oddsHorizon, signal);
+            overrides.onOddsHorizonDiscovery?.(report);
+          }
+          catch (error) { overrides.onHourlyLookupFailure?.(error instanceof DatabaseOperationError ? error.code : "odds-horizon-unavailable", 0); }
+        } } : {}),
         ...(coordinated ? { sweepUpcoming: async (...args: Parameters<typeof hourlyFixtureReconciler.sweepUpcoming>) => {
           try {
             const report = await hourlyFixtureReconciler.sweepUpcoming(...args);
@@ -605,12 +629,9 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
 
     // Odds (052): imported only when the owner enables them AND the verified plan leaves spare ordinary quota.
     // A separate registry runs on its own worker, so odds never occupy refresh or cutoff workers.
-    const oddsEnabled = policy.choices.odds.enabled && workload.odds.eligible && odds !== null;
     const slipOddsRefreshEnabled = oddsEnabled && policy.choices.odds.slipRefreshEnabled;
     const hostedOddsArchive = oddsEnabled && privateRetention && (productionTarget || syntheticArchive);
-    const resumePricePages = coordinated || hostedOddsArchive;
-    const oddsRecoveryCapable = privateRetention && (productionTarget || syntheticArchive || coordinated);
-    const oddsRecoveryEnabled = oddsEnabled && oddsRecoveryCapable;
+    const resumePricePages = oddsEnabled;
     const oddsStore = createMysqlOddsStore(database);
     const oddsService = createOddsImportService({ adapter: adapter.odds, store: oddsStore, authority: authorities.odds,
       resumePricePages, recoverFromCurrentPages: oddsRecoveryEnabled,
@@ -618,13 +639,14 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       bounds: (request) => {
         if (request.fixtureId !== undefined) {
           const providerDay = quota.current() ?? oddsFail("unavailable");
-          const deadline = utcInstantFromEpochMilliseconds(Math.min(request.slot + SLIP_ODDS_REFRESH_WAIT_MS,
-            Date.now() + slipOddsRefreshRequestTimeoutMs, providerDay.endsAt));
-          return { ...oddsImportBounds(deadline, 1), timeoutMs: slipOddsRefreshRequestTimeoutMs, maxRequests: 1, maxRows: 1,
+          const timeoutMs = request.reconciliationDeadlineAt === undefined ? slipOddsRefreshRequestTimeoutMs : ODDS_RECONCILIATION_REQUEST_TIMEOUT_MS;
+          const slotEnd = request.reconciliationDeadlineAt ?? request.slot + SLIP_ODDS_REFRESH_WAIT_MS;
+          const deadline = utcInstantFromEpochMilliseconds(Math.min(slotEnd, Date.now() + timeoutMs, providerDay.endsAt));
+          return { ...oddsImportBounds(deadline, 1), timeoutMs, maxRequests: 1, maxRows: 1,
             retry: { maxAttempts: 1, baseDelayMs: 0, maxDelayMs: 0 } };
         }
         const end = request.recovery ? oddsHistoryDeadline(request.slot, quota.current()?.startsAt ?? oddsFail("unavailable")) :
-          request.kind === "prices" ? request.slot + ODDS_SWEEP_MS : request.slot + DAY_MS;
+          request.kind === "prices" ? request.slot + request.policy.sweepMs : request.slot + DAY_MS;
         // The provider walk ends early enough that the receipt and per-fixture writes keep their own part of the job timeout.
         const deadline = utcInstantFromEpochMilliseconds(Math.min(Date.now() + ODDS_PROVIDER_WINDOW_MS, end));
         return request.kind === "prices" ? oddsImportBounds(deadline, workload.odds.maxPages, request.recovery) : oddsCatalogBounds(deadline);
@@ -634,6 +656,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     async function oddsUsage(): Promise<OddsQuotaUsage | null> {
       const counters = await quota.counters();
       if (counters === null) return null;
+      if (counters.enrichmentUsed !== null) return Object.freeze({ remaining: counters.remaining, used: counters.used, oddsUsed: counters.enrichmentUsed });
       const { accountId, periodId } = counters.day;
       const [row] = await database.query((tx) => tx.$queryRaw<{ spent: bigint | number }[]>`SELECT COUNT(*) AS spent FROM ApiQuotaAttempt
         WHERE accountId = ${accountId} AND periodId = ${periodId}
@@ -680,6 +703,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
     }
     const oddsDefinitions = createOddsJobDefinitions({ service: oddsService, policy: () => odds ?? oddsFail("unverified-policy"), resumePricePages,
       enabled: () => oddsEnabled, usage: oddsUsage, allowance: enrichmentAllowance,
+      ...(overrides.onOddsImport ? { report: overrides.onOddsImport } : {}),
       ...(oddsRecoveryCapable ? { historical: { scopeId: (date: string) => oddsHistoryScopeId(day.status.accountKey, date),
         ...(overrides.onHistoricalOdds ? { report: overrides.onHistoricalOdds } : {}) } } : {}),
       maxRequests: (kind) => oddsMaxRequests(kind, workload.odds.maxPages) });
@@ -690,6 +714,13 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       candidates: odds ? createSlipOddsRefreshCandidates({ database, competitionIds: policy.choices.competitionIds ?? [], policy: odds })
         : async () => [],
       usage: oddsUsage, allowance: enrichmentAllowance, service: oddsService,
+    });
+    const oddsReconciliation = createOddsReconciliationJob({ enabled: () => oddsRecoveryEnabled,
+      policy: () => odds ?? oddsFail("unverified-policy"),
+      candidates: odds ? createOddsReconciliationCandidates({ database, competitionIds: policy.choices.competitionIds ?? [], policy: odds })
+        : () => oddsFail("unverified-policy"),
+      usage: oddsUsage, allowance: enrichmentAllowance, service: oddsService,
+      ...(overrides.onOddsReconciliation ? { report: overrides.onOddsReconciliation } : {}),
     });
 
     // Team codes: on unless the owner turns them off, but only on plans with the odds spare (never Free or slow). Each
@@ -775,7 +806,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       } : {},
     });
     // The same worker serializes these gates. Odds and team codes claim before the archive.
-    const enrichmentRegistry = createJobRegistry([...oddsDefinitions, slipOddsRefresh, ...teamCodeDefinitions, historyJob,
+    const enrichmentRegistry = createJobRegistry([...oddsDefinitions, slipOddsRefresh, oddsReconciliation, ...teamCodeDefinitions, historyJob,
       ...(currentDayContext ? [currentDayContext] : [])]);
     const retainInPlayOdds = coordinated || hostedOddsArchive;
     const inPlayOdds = localFootball || retainInPlayOdds ? createInPlayOddsPoller({
@@ -823,6 +854,10 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
           return latestDetails;
         } } : adapter.evidence,
         ...(discoverFixtures ? { onDiscoveredFixtures: discoverFixtures } : {}),
+        ...(coordinated && workload.liveDetails.eligible ? { verifyLiveEvents: (response: ApiFootballResult<unknown>) => {
+          authorities.liveMatch.authorize(); return authorities.liveMatch.verifyResponse(response);
+        } } : {}),
+        ...(overrides.onResultPoll ? { onPoll: overrides.onResultPoll } : {}),
         ...(overrides.onPollerState ? { onState: (state) => overrides.onPollerState?.("results", state) } : {}),
         store: createMysqlResultSyncStore({ database, accountId: current.accountId, lifecycle }) }) });
       return poller;
@@ -852,6 +887,7 @@ export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: L
       coordinated, forecastConcurrency, forecastRecovery, localFirstForecasts, apiFallbackEnabled, currentDayContextEnabled: currentDayContext !== null,
       odds: Object.freeze({ enabled: oddsEnabled, slipRefreshEnabled: slipOddsRefreshEnabled, recoveryEnabled: oddsRecoveryEnabled,
         registry: oddsRegistry, horizonDays: workload.odds.dates,
+        sweepMs: settings.oddsSweepMs, reconciliationMs: settings.oddsReconciliationMs,
         bookmakerScope: odds?.bookmakerScope,
         requalifyLocal: requalifyLocalOdds, projectAuthorizedStored: projectAuthorizedStoredOdds,
         catalogCoverage: (asOf: number) => database.query((tx) => storedPreMatchCatalogCoverage(tx, asOf)),

@@ -20,6 +20,7 @@ function render(report) {
       provider === null ? "Account-wide usage was unobserved for this provider day."
         : `Account-wide  ${quantity(provider.used)} used / ${quantity(provider.limit)} daily limit  ·  ${quantity(provider.remaining)} remaining (observed ${at(provider.observedAt)})`,
       `Local launches  ${quantity(local.launches)}  ·  Retries ${quantity(local.retries)}  ·  Rate-limited ${quantity(local.rateLimited)}  ·  Provider errors ${quantity(local.providerErrors)}  ·  Unresolved ${quantity(local.uncertain)}`,
+      `Peak launches (calendar buckets)  ${quantity(local.launchRate.peakSecond)}/second  ·  ${quantity(local.launchRate.peakMinute)}/minute  ·  ${quantity(local.launchRate.peakHour)}/hour`,
       `Local limiter  ${quantity(local.remaining)} remaining under the ${quantity(local.limit)} ceiling, including an essential reserve of up to ${quantity(local.essentialReserve)}`);
     for (const group of local.breakdown) {
       lines.push(`  ${quantity(group.launches).padStart(7)}  ${group.endpoint}  ${group.workload}`);

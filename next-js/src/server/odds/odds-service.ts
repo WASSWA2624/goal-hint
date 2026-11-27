@@ -22,6 +22,7 @@ export type OddsProvider = Readonly<{
 const MAX_RETAINED_COVERAGE = 1_000;
 const PRICE_PAGE_SIZE = 10;
 const MAX_COMMITTED_PRICE_PAGES = 1_000;
+const ACTIVE_PAGE_MAX_AGE_MS = 30 * 60_000;
 
 /** Pure receipt classification; prices for unknown, started, rescheduled or non-scheduled fixtures are never applied. */
 export function classifyOddsRow(row: NormalizedFixtureOdds, target: OddsFixtureTarget | undefined): OddsFixtureOutcome {
@@ -29,6 +30,9 @@ export function classifyOddsRow(row: NormalizedFixtureOdds, target: OddsFixtureT
   if (target.status !== "scheduled") return "not-scheduled";
   if (target.kickoff === null || row.kickoff === null || target.kickoff !== row.kickoff) return "kickoff-mismatch";
   if (target.kickoff <= row.source.retrievedAt) return "after-kickoff";
+  if (!row.bookmakers.some(({ bets, suspendedBets }) => bets.length > 0 || suspendedBets?.length)) {
+    return row.bookmakers.some(({ rejectedBets }) => rejectedBets.length > 0) ? "invalid-provider-odds" : "no-provider-odds";
+  }
   return "apply";
 }
 export function classifyHistoricalOddsRow(row: NormalizedFixtureOdds, target: OddsFixtureTarget | undefined): OddsFixtureOutcome {
@@ -41,7 +45,7 @@ const providerError = (result: ApiFootballResult<unknown>) => result.error === n
   : Object.freeze({ reason: result.error.reason, retryable: result.error.retryable });
 function emptyOutcomes(): Record<OddsImportSummary["outcomes"] extends Readonly<Record<infer Key, number>> ? Key : never, number> {
   return { apply: 0, recover: 0, "unknown-fixture": 0, "after-kickoff": 0, "kickoff-mismatch": 0, "not-scheduled": 0,
-    "awaiting-start": 0, changed: 0, unchanged: 0, skipped: 0, withdrawn: 0 };
+    "awaiting-start": 0, "no-provider-odds": 0, "invalid-provider-odds": 0, changed: 0, unchanged: 0, skipped: 0, withdrawn: 0 };
 }
 
 /** Quota-limited odds imports. The coordinated worker seals each page with its fixture snapshots after the
@@ -115,12 +119,16 @@ export function createOddsImportService(options: Readonly<{
     }
     let totalPages = expected, requestsDispatched = 0, countedInPages = 0;
     let error: OddsImportSummary["error"] = null;
+    if (committed.some(({ status }) => status !== "complete")) error = { reason: "pagination-incomplete", retryable: false };
+    if (!request.recovery && expected !== undefined && committed.length < expected &&
+      clock.now() - committed[0]!.receivedAt > ACTIVE_PAGE_MAX_AGE_MS) error = { reason: "stale-page-checkpoint", retryable: false };
     let verifiedEmpty: ValidatedOddsObservation | null = null;
     const outcomes = emptyOutcomes();
     const providerWorkflow = workflow(bounds, signal);
     const publicDisplay = !request.recovery && verified(() => options.authority.verifyPublicDisplay());
     const catalog = publicDisplay ? await options.store.latestBetCatalog() : null;
-    while (totalPages === undefined || committed.length < totalPages) {
+    const retryPageDrift = !request.recovery && request.fixtureId === undefined;
+    while (error === null && (totalPages === undefined || committed.length < totalPages)) {
       if (signal?.aborted) return oddsFail("unavailable");
       if (clock.now() >= bounds.deadlineAt || requestsDispatched >= bounds.maxRequests || committed.length - previouslyCommitted >= bounds.maxPages) {
         error = { reason: "request-budget-exhausted", retryable: true }; break;
@@ -134,17 +142,18 @@ export function createOddsImportService(options: Readonly<{
       requestsDispatched += result.requestsDispatched;
       const observation = validateOddsObservation(request, result, pageBounds, options.authority, clock, page);
       const pages = observation.provenance[0]?.totalPages;
-      if (observation.status === "failed" || pages == null || request.fixtureId !== undefined && observation.status !== "complete") {
+      if (observation.status !== "complete" || pages == null) {
         error = providerError(result) ?? { reason: "schema-error", retryable: false };
+        if (retryPageDrift && error.reason === "pagination-incomplete") error = { ...error, retryable: true };
         break;
       }
-      if (pages === 0 && (request.recovery || request.fixtureId !== undefined) && page === 1 && observation.status === "complete") {
+      if (page === 1 && pages <= 1 && observation.rows.length === 0) {
         verifiedEmpty = observation; totalPages = 0; break;
       }
       const repeated = observation.rows.some(({ fixtureId }) => known.has(fixtureId));
       if (totalPages !== undefined && pages !== totalPages || !request.recovery && repeated ||
-        page < pages && observation.rows.length !== PRICE_PAGE_SIZE && observation.status === "complete") {
-        error = { reason: "pagination-incomplete", retryable: false }; break;
+        observation.rows.length === 0 || page < pages && observation.rows.length !== PRICE_PAGE_SIZE) {
+        error = { reason: "pagination-incomplete", retryable: retryPageDrift }; break;
       }
       if (request.recovery && repeated) repeatedHistoryFixture = true;
       totalPages = pages;
@@ -181,13 +190,14 @@ export function createOddsImportService(options: Readonly<{
     if (signal?.aborted) return oddsFail("unavailable");
     const batch = await options.store.saveBatch({ id: evidenceFingerprint(content), ...content });
     for (const { outcome } of fixtures) outcomes[outcome]++;
-    if (complete && !request.recovery && request.fixtureId === undefined) {
+    if (complete && outcomes.apply > 0 && !request.recovery && request.fixtureId === undefined) {
       const targets = await options.store.resolveFixtures([...known]);
       outcomes.withdrawn = await options.store.markWithdrawn({ batchId: batch.id, date: request.date!,
         seenFixtureIds: [...targets.values()].map((target) => target.fixtureId) });
     }
+    const providerEmpty = verifiedEmpty || request.fixtureId !== undefined && outcomes["no-provider-odds"] > 0;
     return Object.freeze({ batchId: batch.id, status: batch.status, requestsDispatched, outcomes: Object.freeze(outcomes), error,
-      continuation: error?.retryable === true });
+      continuation: error?.retryable === true, ...(providerEmpty && { providerEmpty: true as const }) });
   }
   return Object.freeze({
     /** One bounded EAT date sweep. Returns counts only; prices stay in the store. */
@@ -216,10 +226,10 @@ export function createOddsImportService(options: Readonly<{
           fixtureId: target!.fixtureId, row, publicDisplay, catalog })]++;
       }
       // Partial sweeps never withdraw: absence from an incomplete response proves nothing.
-      if (batch.status === "complete") outcomes.withdrawn = await options.store.markWithdrawn({ batchId: batch.id, date: request.date,
+      if (batch.status === "complete" && outcomes.apply > 0) outcomes.withdrawn = await options.store.markWithdrawn({ batchId: batch.id, date: request.date,
         seenFixtureIds: classified.flatMap(({ target }) => target ? [target.fixtureId] : []) });
       return Object.freeze({ batchId: batch.id, status: batch.status, requestsDispatched: batch.requestsDispatched, outcomes: Object.freeze(outcomes),
-        error: providerError(result) });
+        error: providerError(result), ...(batch.status === "complete" && classified.length === 0 && { providerEmpty: true as const }) });
     },
     /** One scheduled fixture. Atomic page receipts never imply that another fixture's odds were withdrawn. */
     async importFixture(input: OddsImportRequest, signal?: AbortSignal, checkpoint?: () => Promise<void>): Promise<OddsImportSummary> {

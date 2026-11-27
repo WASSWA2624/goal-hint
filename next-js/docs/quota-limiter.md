@@ -16,6 +16,12 @@ the allowance and is unsupported. Uncontrolled calls outside this gateway cannot
 be accounted for prospectively; imported provider usage reduces remaining local
 capacity conservatively.
 
+The hosted quota router derives one ledger identity from the verified provider
+account and UTC provider day. A plan change keeps that day's ledger and
+preserves its recorded usage. Existing hosted Mega ledgers retain their stored
+identifiers. Updated evidence can tighten an open day. A higher limit can take
+effect when the next provider day is verified.
+
 `QuotaPeriodEvidence` supplies a unique period ID, absolute UTC start/end,
 subscription expiry, active daily/second/minute limits, daily remaining allowance
 and a private evidence reference. A required trusted verifier inspects the actual
@@ -35,16 +41,19 @@ bounded transaction. MySQL UTC time is authoritative. A backwards clock pauses
 dispatch until the last recorded instant. External I/O never runs inside a
 database transaction.
 
-Effective limits are the lower of verified account terms and 12 requests per
-rolling second, 720 per rolling 60 seconds and 120,000 per verified provider day.
-The rolling windows are `(now - duration, now]`. Default dispatch spacing is
-`ceil(max(1000 / 12, 60000 / 720)) = 84 ms`; lower limits increase spacing. The
-day ceiling includes a protected 20,000 essential allowance, leaving ordinary
-work at most 100,000 requests under the default ceiling and preserving the stated
-30,000 Mega headroom. Imported prior usage and uncertain attempts consume the
-same ceiling. Smaller verified plans keep the same one-sixth essential share
-(`essentialReserveFor`): 16 of a 100-request free day, 1,250 of a 7,500-request
-day, so ordinary daily inputs still run on every plan.
+The application caps dispatch at 10 requests per rolling second, 600 per
+rolling 60 seconds, and 120,000 per verified provider day. Live workers can lower
+the short-window ceilings with `GOAL_HINT_FOOTBALL_REQUESTS_PER_SECOND` and
+`GOAL_HINT_FOOTBALL_REQUESTS_PER_MINUTE`. Verified provider terms can lower the
+effective limits further. The confirmed short-window policy uses 80% of the
+provider limit as an additional cap. The rolling windows are
+`(now - duration, now]`. At the default application ceilings the minimum dispatch
+spacing is 100 ms. The day ceiling includes a protected 20,000 essential
+allowance, leaving ordinary work at most 100,000 requests and preserving 30,000
+requests of headroom on a verified 150,000-request Mega plan. Imported prior
+usage and uncertain attempts consume the same ceiling. Smaller verified plans
+keep the same one-sixth essential share (`essentialReserveFor`), including 16 of
+a 100-request Free day and 1,250 of a 7,500-request Pro day.
 
 | Priority | Order | May consume essential reserve |
 | --- | --- | --- |
@@ -52,28 +61,18 @@ day, so ordinary daily inputs still run on every plan.
 | Near-kickoff fallback | 1 | Yes |
 | Live/date synchronization | 1 | No |
 | Daily inputs | 2 | No |
-| Optional enrichment | 3 | No |
+| Live details and enrichment | 3 | No |
+| Historical backfill | 4 | No |
 
-Provider odds imports (prompt 052) and the team-code import (`/teams?league&season`, through the catalog importer)
-are the only live callers at `enrichment` priority. They share one spare under the same gate, which counts
-both. No new priority was added, so these three enums stay unchanged: `quota-mysql-store`, `catalog-input` and
-`provider-trial-input`.
-The limiter's essential reserve still binds odds, but odds stop much earlier. The floor is every ordinary need
-of the provider day: the results share, the reserve, refresh capacity × 2 and 14 selection requests. Odds get
-the spare above it: 861 requests on a 7,500-request day and 73,986 under the 120,000 ceiling. Before any
-dispatch, the odds job checks two things against the open provider day's durable counters:
-
-- `oddsUsed + ceiling <= spare`, where `oddsUsed` is the count of dispatched `enrichment` attempts in the
-  period and the ceiling is 154 for a sweep or 3 for a catalog;
-- `remaining - ceiling >= max(reserve, floor - ordinaryUsed)`, where `ordinaryUsed = used - oddsUsed`.
-
-Ordinary requests already spent are therefore counted once: they lower `remaining` and the ordinary need still
-to come by the same amount. The second check binds only when the provider reports fewer requests left than the
-limiter counted, or when ordinary work has run past its plan; odds then still leave the reserve (750 on Pro).
-A sweep starts only while its whole ceiling fits, so odds spend at most the spare per day; the last sweep
-starts once odds have spent 707 or fewer on Pro. The Free plan has 1 spare request, so odds are never eligible
-on it. A gated or reserve-denied odds job expires for the slot instead of retrying, because the gate's slack
-never grows within a provider day. See [live-operations.md](live-operations.md#odds-imports-052).
+The runner budgets `enrichment` and `historical-backfill` together, covering
+odds, team codes and other optional collection. Live details have a separate
+allowance. An odds job reads the current day's counters before dispatch. The
+requested allowance must fit in the remaining spare and leave room for outstanding
+ordinary work and the reserve. Resumable price work checks admission one page at
+a time. The limiter rechecks every actual attempt atomically, including retries.
+Uncertain attempts count toward the budget. Historical backfill can use at most
+20% of the effective rolling-minute allowance and yields when the remaining
+quota is needed for scheduled critical work. [Live operations](live-operations.md#odds-imports-052)
 
 `QuotaRequest` requires a unique attempt ID, canonical work hash, trusted priority,
 absolute UTC deadline and bounded timeout in milliseconds. Job owners supply
@@ -94,8 +93,8 @@ clearing its successor's work key.
 
 `reserve` commits a counted attempt and returns a permit with a freshness window
 of at most one second, shortened by its lease/deadline. This window allows durable
-coordination to commit; it is independent of the 84 ms default rate interval. The gateway
-must obtain `claimLaunch` immediately; it checks current limits and returns a
+coordination to commit. The gateway must obtain `claimLaunch` immediately. It
+checks current limits and returns a
 single-use claim and remaining lease timeout. Delayed, reused, unauthorized or
 expired claims cannot dispatch. Unused reservations, process crashes, timeouts
 and aborted requests are never refunded. The gateway also checks elapsed

@@ -16,7 +16,10 @@ export const ODDS_HISTORY_TYPE = "odds.history";
 export const ODDS_HANDLER_VERSION = 1;
 /** Fixed sweep slot (3 hours, UTC-aligned). The date and bookmaker scope pin the work across restarts. */
 export const ODDS_SWEEP_MS = 3 * HOUR;
-export const oddsImportPayload = z.strictObject({ slot: jobInstant, date: z.iso.date(), bookmakerScope: z.literal("all").optional() });
+const validSweepInterval = (interval: number) => Number.isSafeInteger(interval) && interval >= HOUR && interval <= 6 * HOUR &&
+  interval % HOUR === 0 && DAY % interval === 0;
+export const oddsImportPayload = z.strictObject({ slot: jobInstant, date: z.iso.date(), bookmakerScope: z.literal("all").optional(),
+  sweepMs: z.number().refine(validSweepInterval).optional() });
 export const oddsCatalogPayload = z.strictObject({ utcDay: z.iso.date() });
 const oddsHistoryPayload = z.strictObject({ date: z.iso.date(), providerDay: jobInstant }).refine(({ providerDay }) => providerDay % DAY === 0);
 export const PRE_MATCH_HISTORY_DAYS = 7;
@@ -38,27 +41,33 @@ export function oddsSlotDates(slot: number, horizonDays: number): string[] {
   return Array.from({ length: Math.max(0, Math.min(7, horizonDays)) }, (_, offset) => addReportingDays(today, offset));
 }
 /** One odds import per (slot, EAT date). Nearest dates run first; the job expires when its slot ends. */
-export function oddsImportEnvelope(slot: number, date: string, offset: number, bookmakerScope?: OddsPolicy["bookmakerScope"]): JobEnvelope {
-  if (!Number.isSafeInteger(slot) || slot % ODDS_SWEEP_MS !== 0 || !Number.isSafeInteger(offset) || offset < 0 || offset > 6) throw new RangeError("Invalid odds slot.");
-  return priceEnvelope(slot, date, 7 - offset, bookmakerScope);
+export function oddsImportEnvelope(slot: number, date: string, offset: number, bookmakerScope?: OddsPolicy["bookmakerScope"],
+  sweepMs = ODDS_SWEEP_MS): JobEnvelope {
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > 6) throw new RangeError("Invalid odds slot.");
+  return priceEnvelope(slot, date, 7 - offset, sweepMs, bookmakerScope);
 }
-function priceEnvelope(slot: number, date: string, priority: number, bookmakerScope?: OddsPolicy["bookmakerScope"]): JobEnvelope {
-  const payload = oddsImportPayload.parse({ slot, date: parseReportingDate(date), ...(bookmakerScope === undefined ? {} : { bookmakerScope }) });
+function priceEnvelope(slot: number, date: string, priority: number, sweepMs: number, bookmakerScope?: OddsPolicy["bookmakerScope"]): JobEnvelope {
+  if (!validSweepInterval(sweepMs) || !Number.isSafeInteger(slot) || slot % sweepMs !== 0) throw new RangeError("Invalid odds slot.");
+  const payload = oddsImportPayload.parse({ slot, date: parseReportingDate(date), ...(bookmakerScope === undefined ? {} : { bookmakerScope }),
+    ...(sweepMs === ODDS_SWEEP_MS ? {} : { sweepMs }) });
   return parseJobEnvelope({ ...envelopeBounds, version: 1, type: ODDS_IMPORT_TYPE, handlerVersion: ODDS_HANDLER_VERSION,
     idempotencyKey: evidenceFingerprint({ type: ODDS_IMPORT_TYPE, ...payload }), payload, refresh: null,
-    notBefore: slot, expiresAt: slot + ODDS_SWEEP_MS, priority });
+    notBefore: slot, expiresAt: slot + sweepMs, priority });
 }
 /** Every import of one slot, nearest EAT date first. */
-export function oddsSlotEnvelopes(slot: number, horizonDays: number, bookmakerScope?: OddsPolicy["bookmakerScope"]): readonly JobEnvelope[] {
-  return Object.freeze(oddsSlotDates(slot, horizonDays).map((date, offset) => oddsImportEnvelope(slot, date, offset, bookmakerScope)));
+export function oddsSlotEnvelopes(slot: number, horizonDays: number, bookmakerScope?: OddsPolicy["bookmakerScope"],
+  sweepMs = ODDS_SWEEP_MS): readonly JobEnvelope[] {
+  return Object.freeze(oddsSlotDates(slot, horizonDays).map((date, offset) => oddsImportEnvelope(slot, date, offset, bookmakerScope, sweepMs)));
 }
 /** What the live runner enqueues at each new slot: the UTC day's catalog (one row per day, however often it is
  * re-enqueued), then the slot's imports. The catalog goes first so the worker cannot claim a sweep before it exists. */
-export function oddsScheduleEnvelopes(now: number, horizonDays: number, bookmakerScope?: OddsPolicy["bookmakerScope"], options?: { providerLookahead: true }): readonly JobEnvelope[] {
-  const slot = latestOddsSlot(now), near = oddsSlotEnvelopes(slot, horizonDays, bookmakerScope);
+export function oddsScheduleEnvelopes(now: number, horizonDays: number, bookmakerScope?: OddsPolicy["bookmakerScope"],
+  options?: { providerLookahead?: true; sweepMs?: number }): readonly JobEnvelope[] {
+  const sweepMs = options?.sweepMs ?? ODDS_SWEEP_MS;
+  const slot = latestOddsSlot(now, sweepMs), near = oddsSlotEnvelopes(slot, horizonDays, bookmakerScope, sweepMs);
   const today = getReportingDate(utcInstantFromEpochMilliseconds(slot));
   const distant = options?.providerLookahead ? Array.from({ length: PRE_MATCH_PROVIDER_LOOKAHEAD_DAYS + 1 - near.length }, (_, index) =>
-    priceEnvelope(slot, addReportingDays(today, near.length + index), 0, bookmakerScope)) : [];
+    priceEnvelope(slot, addReportingDays(today, near.length + index), 0, sweepMs, bookmakerScope)) : [];
   return Object.freeze([oddsCatalogEnvelope(now), ...near, ...distant]);
 }
 /** Each provider day can resume an eligible historical date after the shared quota resets. */
@@ -118,6 +127,7 @@ export type OddsJobDependencies = Readonly<{
   resumePricePages?: boolean;
   historical?: Readonly<{ scopeId(date: string): string;
     report?(date: string, summary: OddsImportSummary | null, state: "stored" | "scanned" | "deferred"): void }>;
+  report?: (request: OddsImportRequest, summary: OddsImportSummary) => void;
   now?: () => number;
 }>;
 /** Expired, not failed: the next slot sweeps again, and the failed-jobs alert stays for real faults. */
@@ -128,18 +138,18 @@ const transientReasons = new Set(["transport-error", "rate-limited", "quota-deni
 const refusedReasons = new Set(["invalid-credential", "authentication-error", "subscription-expired", "operation-not-authorized", "invalid-request"]);
 /** The job outcome for a stored receipt. A resumable sweep can retry from its next page within the slot. */
 export function oddsJobOutcome(summary: Pick<OddsImportSummary, "status" | "error" | "continuation">): JobOutcome {
+  if (summary.status === "complete" && summary.error === null) return { status: "succeeded" };
   const error = summary.error;
-  if (summary.continuation && error?.retryable) return { status: "failed",
+  if (error === null) return { status: "failed", reason: "invalid-output", retryable: false };
+  if (summary.continuation && error.retryable) return { status: "failed",
     reason: error.reason === "quota-denied" || error.reason === "rate-limited" ? "rate-limited" : "handler-failed", retryable: true };
-  if (summary.status !== "failed" || error === null) return { status: "succeeded" };
   // The essential reserve and the daily limit only tighten within a provider day, and a slot never spans two.
   if (error.reason === "quota-denied" && !error.retryable) return EXPIRED;
   if (transientReasons.has(error.reason)) {
     return { status: "failed", reason: error.reason === "quota-denied" || error.reason === "rate-limited" ? "rate-limited" : "handler-failed", retryable: true };
   }
   if (refusedReasons.has(error.reason)) return { status: "failed", reason: "non-retryable", retryable: false };
-  // Schema, coverage, pagination and size failures keep their failed receipt for review; retrying repeats them.
-  return { status: "succeeded" };
+  return { status: "failed", reason: "invalid-output", retryable: false };
 }
 async function run(context: JobHandlerContext, dependencies: OddsJobDependencies, request: Omit<OddsImportRequest, "id" | "policy">,
   operation: (request: OddsImportRequest) => Promise<OddsImportSummary>, slotEnd: number, bookmakerScope?: OddsPolicy["bookmakerScope"]): Promise<JobOutcome> {
@@ -148,7 +158,8 @@ async function run(context: JobHandlerContext, dependencies: OddsJobDependencies
   // Disabled definitions stay registered (their eligible() hook is false), so queued jobs expire instead of stalling.
   if (!dependencies.enabled() || now() >= slotEnd) return EXPIRED;
   const policy = dependencies.policy();
-  if (request.kind === "prices" && !request.recovery && policy.bookmakerScope !== bookmakerScope) return EXPIRED;
+  if (request.kind === "prices" && !request.recovery &&
+    (policy.bookmakerScope !== bookmakerScope || policy.sweepMs !== slotEnd - request.slot)) return EXPIRED;
   const fullRequest = { ...request, id: request.recovery ? dependencies.historical!.scopeId(request.date!) : context.lease.jobId, policy };
   if (request.recovery) {
     try {
@@ -187,6 +198,7 @@ async function run(context: JobHandlerContext, dependencies: OddsJobDependencies
     requests: summary.requestsDispatched, durationMs: Math.min(3_600_000, Math.max(0, now() - started)) });
   await context.checkpoint();
   if (request.recovery) dependencies.historical?.report?.(request.date!, summary, "scanned");
+  else dependencies.report?.(fullRequest, summary);
   return oddsJobOutcome(summary);
 }
 
@@ -196,7 +208,7 @@ export function createOddsJobDefinitions(dependencies: OddsJobDependencies): rea
   const importDefinition = defineJob({ type: ODDS_IMPORT_TYPE, handlerVersion: ODDS_HANDLER_VERSION, payload: oddsImportPayload, eligible,
     handle: (payload, context) => run(context, dependencies, { kind: "prices", slot: payload.slot as UtcInstant, date: payload.date },
       (request) => dependencies.service.importDate(request, context.signal, dependencies.resumePricePages ? () => context.checkpoint() : undefined),
-      payload.slot + ODDS_SWEEP_MS, payload.bookmakerScope) });
+      payload.slot + (payload.sweepMs ?? ODDS_SWEEP_MS), payload.bookmakerScope) });
   const catalogDefinition = defineJob({ type: ODDS_CATALOG_TYPE, handlerVersion: ODDS_HANDLER_VERSION, payload: oddsCatalogPayload, eligible,
     async handle(payload, context) {
       const start = Date.parse(`${payload.utcDay}T00:00:00Z`);

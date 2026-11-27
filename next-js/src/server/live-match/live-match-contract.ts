@@ -13,6 +13,7 @@ export type LiveMatchPolicy = Readonly<{
   coordinated?: true;
   stopAfterFinal?: true;
   intervalMs: number; finalIntervalMs: number; finalWindowMs: number; staleAfterMs: number;
+  lineupLeadMs?: number; lineupIntervalMs?: number;
   leaseMs: number; tickMs: number; maxFixturesPerTick: number; requestWindowMs: number;
   request: Omit<ApiFootballBounds, "priority" | "deadlineAt" | "cacheScope">;
 }>;
@@ -21,6 +22,7 @@ export type LiveMatchTarget = Readonly<{
   occurrenceId: string; fixtureId: string; externalId: number; cycleId: string | null; kickoffAt: number | null;
   homeExternalId: number; awayExternalId: number; status: SettlementStatus;
   statisticsCoverage: boolean | null; eventsCoverage: boolean | null;
+  coordinated?: true;
   firstFinalAt?: number | null;
   lineupsKnown?: boolean; lineupsCoverage?: boolean | null;
   playersCoverage?: boolean | null; halfStatisticsKnown?: boolean; season?: number;
@@ -50,5 +52,5 @@ export class LiveMatchError extends Error {
 export const liveMatchFail = (reason: LiveMatchError["reason"]): never => { throw new LiveMatchError(reason); };
 
 const minute = 60_000;
-export const coordinatedLiveDetailDefaults = Object.freeze({ liveMs: 2 * minute, lineupLeadMs: 90 * minute,
-  lineupMs: 15 * minute, finalFirstMs: 15 * minute, finalLastMs: 24 * 60 * minute });
+export const coordinatedLiveDetailDefaults = Object.freeze({ liveMs: minute, lineupLeadMs: 90 * minute,
+  lineupMs: 15 * minute, finalFirstMs: 15 * minute, finalLastMs: 24 * 60 * minute, staleAfterMs: 5 * minute });
