@@ -127,7 +127,8 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
   useEffect(() => {
     if (!automaticRetryScheduled || retried.current === key) return;
     const now = Date.now();
-    const due = Math.min(now + refreshIntervalMs, Math.max(now + automaticRetryDelayMs, retryAt) + Math.floor(Math.random() * 1_000));
+    const earliest = Math.max(now + automaticRetryDelayMs, retryAt);
+    const due = earliest + Math.min(Math.floor(Math.random() * 1_000), Math.max(0, now + refreshIntervalMs - earliest));
     let timer: number;
     const schedule = () => {
       window.clearTimeout(timer);
