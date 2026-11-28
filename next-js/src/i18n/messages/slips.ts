@@ -119,6 +119,8 @@ export const slipsMessages = {
   "bestSlips.filters.rangeTooLong": "Choose a date range of up to {days} days.",
   "bestSlips.filters.loading": "Loading slips…",
   "bestSlips.filters.dataUnavailable": "Slips could not be loaded. Please try again.",
+  "bestSlips.filters.accessUnconfirmed": "Access to slips could not be verified. Please try again.",
+  "bestSlips.filters.resultsChanged": "The requested slip results changed. Please try again.",
   "bestSlips.filters.updateUnavailable": "The requested slips could not be loaded. The previous results are still shown.",
   "bestSlips.filters.rateLimited": "Please wait before trying again. The previous results are still shown.",
   "bestSlips.filters.stale": "Showing the last confirmed slips and performance figures. They may be out of date.",

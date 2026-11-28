@@ -28,11 +28,13 @@ export function isSlipBrowseUnavailable({ state }: SlipsBrowseResult) {
   return state === "data-unavailable" || state === "rate-limited";
 }
 
+export function isUnverifiedSlipBrowseSeed(page: SlipsBrowseResult) {
+  return isSlipBrowseUnavailable(page) && !page.access && page.entitled === undefined && page.slips.length === 0;
+}
+
 export function acceptsSlipBrowseAccess(current: SlipBrowsePage, incoming: SlipsBrowseResult) {
   // An unavailable server seed without a viewer has no accepted private content to carry over.
-  if (!isSlipBrowseUnavailable(current) || current.access || current.entitled !== undefined || current.slips.length !== 0) {
-    return sameSlipBrowseAccess(current, incoming);
-  }
+  if (!isUnverifiedSlipBrowseSeed(current)) return sameSlipBrowseAccess(current, incoming);
   const access = incoming.access;
   return (access?.tier === "full" || access?.tier === "free") && typeof access.signedIn === "boolean"
     && incoming.entitled === (access.tier === "full");

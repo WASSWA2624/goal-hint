@@ -22,12 +22,21 @@ import { gateBestSlips } from "@/server/slips/slip-preview";
 import { bestSlipsMetadata } from "@/server/seo/metadata";
 import { homeBrowseLinks } from "@/server/seo/home-query";
 import { getDiscoveryPolicy } from "@/server/seo/policy";
+import { isDocumentRequest } from "@/server/seo/read-status";
 import { getShellDate, PublicShell } from "./public-shell";
 
 type Props = Readonly<{ params: Promise<{ locale: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }>;
-export function createBestSlipsRoute({ read = readBestSlipsBrowseSnapshot, access = resolveViewerAccessFresh, policy = getDiscoveryPolicy } = {}) {
+function BrowsePredictions({ day, locale }: { day: ReportingDate; locale: string }) {
+  const m = createMessages(locale), links = homeBrowseLinks({ day, slips: [] }, locale);
+  return <CriteriaPanel as="nav" aria-labelledby="browse-predictions"><Stack $gap="sm">
+    <h2 id="browse-predictions">{m.text("bestSlips.browseTitle")}</h2>
+    <Inline>{links.map(([href, label]) => <TextLink key={href} href={href} prefetch={false}>{m.text(label)}</TextLink>)}</Inline>
+  </Stack></CriteriaPanel>;
+}
+
+export function createBestSlipsRoute({ read = readBestSlipsBrowseSnapshot, access = resolveViewerAccessFresh,
+  policy = getDiscoveryPolicy, document = isDocumentRequest } = {}) {
   async function Content({ locale, query, today }: { locale: string; query: BestSlipsQuery; today: ReportingDate }) {
-    const m = createMessages(locale);
     const result = await withDocumentTiming("best-slips-document", async () => {
       const published = await read(query, locale);
       if (published.state === "data-unavailable") return emptySlipBrowsePage(today, query, "data-unavailable");
@@ -35,16 +44,8 @@ export function createBestSlipsRoute({ read = readBestSlipsBrowseSnapshot, acces
       const viewer = await timedRequestPhase("access", access);
       return gateBestSlips(published, viewer);
     }, result => result.state === "data-unavailable").catch(() => emptySlipBrowsePage(today, query, "data-unavailable"));
-    const browse = homeBrowseLinks(result, locale);
-    return <>
-      <Stack $gap="sm">
-        <BestSlips result={result} locale={locale} signedIn={result.access?.signedIn ?? false} />
-        {browse.length > 0 && <CriteriaPanel as="nav" aria-labelledby="browse-predictions"><Stack $gap="sm">
-          <h2 id="browse-predictions">{m.text("bestSlips.browseTitle")}</h2>
-          <Inline>{browse.map(([href, label]) => <TextLink key={href} href={href} prefetch={false}>{m.text(label)}</TextLink>)}</Inline>
-        </Stack></CriteriaPanel>}
-      </Stack>
-    </>;
+    return <BestSlips result={result} locale={locale} signedIn={result.access?.signedIn ?? false}
+      emptyNavigation={<BrowsePredictions day={result.day} locale={locale} />} />;
   }
   return {
     async generateMetadata({ params, searchParams }: Props) {
@@ -59,11 +60,13 @@ export function createBestSlipsRoute({ read = readBestSlipsBrowseSnapshot, acces
         if (error instanceof BestSlipsQueryError) redirect(bestSlipsHref(locale));
         throw error;
       }
+      const direct = await document();
       return <PublicShell locale={locale} today={today} current="best-slips" app compact>
         <VisuallyHidden as="h1">{createMessages(locale).text("bestSlips.title")}</VisuallyHidden>
-        <Suspense fallback={<BestSlipsLoading locale={locale} today={today} query={query} heading={false} />}>
+        {direct ? <Suspense fallback={<BestSlipsLoading locale={locale} today={today} query={query} heading={false} />}>
           <ServerThemeUntilHydrated><Content locale={locale} query={query} today={today} /></ServerThemeUntilHydrated>
-        </Suspense>
+        </Suspense> : <BestSlips result={emptySlipBrowsePage(today, query, "data-unavailable")} locale={locale} initialRead
+          emptyNavigation={<BrowsePredictions day={today} locale={locale} />} />}
       </PublicShell>;
     },
   };

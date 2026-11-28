@@ -182,6 +182,10 @@ The throttled staging follow-up simulated the same public invitation, verified t
 
 The next production attempt stopped at the plain HTTP list check before Chrome could test the initial browser recovery. When the Chrome gate is selected, the receiver now recognizes an explicit busy initial retry and still verifies the bounded guest APIs. The release receipt depends on Chrome accepting the completed list and summary. Plain HTTP-only verification and legacy rollback require accepted list markup.
 
+With the HTTP handoff enabled, the production browser verified 50 Matches rows in 17.78 seconds and coherent counts in 24.75 seconds. It dismissed the live invitation and received the user-initiated Best Slips Flight response with HTTP 200 and the expected content type. The route still missed the 30-second URL commit deadline, and the receiver restored the prior release. Recent server timings included a 22.49-second archive phase followed by 1.55 seconds of viewer access work, together with intermittent archive failures. The server phase samples and Flight response were recorded independently.
+
+Best Slips now commits its validated in-app route, navigation and exact date, band and outcome controls before the archive API read. The initial request runs through the same bounded browse hook and viewer projection as later reads. A transient failure exposes the in-page retry for the same query. Existing history restoration owns the initial read when it has saved page depth. Direct document requests stream the server archive and access result as before. Fifty-six focused Node checks and targeted lint passed.
+
 ## Reproduction
 
 - Run the pinned runtime in `next-js/`. Run the focused tests for worker, account, administrator, Matches, Best Slips, sharing and request timing. Use the disposable MySQL test fixture for database runs.
