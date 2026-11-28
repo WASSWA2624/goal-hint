@@ -55,7 +55,7 @@ ssh -T -p 21098 -o StrictHostKeyChecking=yes \
 ```
 
 The collector reports Linux CPU, available RAM, pressure stalls, interface rate,
-optional disk counters and fixed guest GET route/status counts. Add a second
+optional disk counters and allowlisted GET route/status counts. Add a second
 `--access-log` for the staging log. It reports log coverage and bounded-scan
 truncation. Check both window boundaries before comparing rates. Standard Apache
 combined logs provide no latency data. Missing host counters are represented
