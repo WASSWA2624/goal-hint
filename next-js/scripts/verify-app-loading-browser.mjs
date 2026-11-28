@@ -114,6 +114,85 @@ export async function verifyBrowserMatches(page, origin) {
   }
 }
 
+/** Drive real Next navigation while the authorized archive endpoint cannot finish. */
+export async function verifyBestSlipsNavigation(page, origin) {
+  const assert = (condition, message) => { if (!condition) throw new Error(message); };
+  const errors = [];
+  const onError = error => errors.push(error.message);
+  const archive = url => url.pathname === '/api/best-slips';
+  const screen = page.locator('[data-best-slips-page]');
+  const headerIsStable = () => page.evaluate(() => window.fixtureArchiveHeader instanceof HTMLElement
+    && window.fixtureArchiveHeader === document.querySelector('[data-app-header]'));
+  page.on('pageerror', onError);
+  try {
+    await page.goto(origin);
+    const results = [];
+    for (const { theme, width, fail } of [{ theme: 'light', width: 390, fail: false }, { theme: 'dark', width: 1440, fail: true }]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
+      await page.goto(`${origin}/en/matches`);
+      await page.waitForFunction(mode => document.querySelector('meta[name="color-scheme"]')?.content === mode, theme);
+      await page.evaluate(() => { window.fixtureArchiveHeader = document.querySelector('[data-app-header]'); });
+      const requests = [];
+      const { promise: held, resolve: release } = Promise.withResolvers();
+      let scheduled;
+      const intercept = route => {
+        requests.push(new URL(route.request().url()).search);
+        if (requests.length !== 1) return route.continue();
+        scheduled = held.then(() => fail ? route.fulfill({ status: 503, json: { error: 'unavailable' } }) : route.continue());
+        return scheduled;
+      };
+      await page.route(archive, intercept);
+      try {
+        const navigation = page.locator('[data-responsive-navigation]:visible').first();
+        const link = navigation.locator('a[data-nav-key="best-slips"]:visible').first();
+        if (!await link.isVisible()) await navigation.locator('[data-nav-more] summary:visible').click();
+        const started = performance.now();
+        await Promise.all([page.waitForRequest(request => archive(new URL(request.url()))), link.click()]);
+        await page.waitForURL(url => url.pathname === '/en/best-slips');
+        const pending = screen.and(page.locator('[data-best-slips-initial-loading]'));
+        await pending.waitFor();
+        const shellMs = Math.round(performance.now() - started);
+        assert(await headerIsStable(), 'Best Slips must commit in the existing document and keep the shared header');
+        await pending.locator('[data-slip-result="won"]').waitFor();
+        assert(await pending.getAttribute('aria-busy') === 'true',
+          'The held archive displays its filter shell with a busy state');
+        const pendingCounts = await pending.locator('[data-summary-count]').allTextContents();
+        assert(pendingCounts.length > 0 && pendingCounts.every(count => count === '—')
+          && await pending.locator('[data-slip-key], [role="alert"], [role="status"]').count() === 0,
+          'A pending archive cannot claim results, empty coverage, or an error');
+        const query = '?period=today&status=pending&page=1&oddsBand=1.5-5';
+        assert(requests.length === 1 && requests[0] === query, 'Best Slips starts one exact request for its canonical cohort');
+        release();
+        if (fail) {
+          const unavailable = screen.getByRole('alert');
+          const retry = unavailable.getByRole('button', { name: 'Try again', exact: true });
+          await retry.waitFor();
+          assert(requests.length === 1 && await screen.locator('[data-slip-key]').count() === 0 && await headerIsStable(),
+            'An unavailable archive keeps the header and waits for explicit retry');
+          await retry.click();
+        }
+        const row = screen.locator('[data-slip-key="synthetic-archive-slip"]');
+        await row.waitFor();
+        assert(await pending.count() === 0 && await screen.getByRole('alert').count() === 0, 'Verified rows clear pending and failure feedback');
+        assert(await screen.locator('[data-summary-count="pending"]').textContent() === '1', 'The archive shows its verified count with the row');
+        assert(await headerIsStable(), 'The archive updates within the initial Best Slips document and shared header');
+        assert(requests.length === (fail ? 2 : 1) && requests.every(request => request === query),
+          'The archive uses one request per explicit attempt and keeps its exact query on retry');
+        results.push({ screen: 'best-slips-navigation', theme, width, shellMs, requests: requests.length, retry: fail });
+      } finally {
+        release();
+        await scheduled;
+        await page.unroute(archive, intercept);
+      }
+    }
+    assert(errors.length === 0, errors.join('\n'));
+    return results;
+  } finally {
+    page.off('pageerror', onError);
+  }
+}
+
 /** Run against verify-app-loading-rendering.py's isolated server using a Playwright page. */
 export async function verifyAppLoading(page, origin) {
   const failures = [], results = [];
@@ -183,6 +262,7 @@ export async function verifyAppLoading(page, origin) {
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Homepage viewport overflow');
       results.push({ screen: 'home', theme, width: 390, immediateFilters: true });
     }
+    results.push(...await verifyBestSlipsNavigation(page, origin));
     for (const theme of ['light', 'dark']) {
       await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
       summaryRequests = 0;

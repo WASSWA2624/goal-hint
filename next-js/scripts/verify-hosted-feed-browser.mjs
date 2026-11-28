@@ -9,6 +9,11 @@ const documentStartupTimeout = 20_000;
 const phaseTimeout = 30_000;
 const initialRecoveryTimeout = 45_000;
 const totalTimeout = 115_000;
+const archiveUnavailableTitle = "Slips could not be loaded. Please try again.";
+let initialArchiveFailure;
+const isInitialArchive = (url, origin) => url.origin === origin && url.pathname === "/api/best-slips"
+  && url.searchParams.get("period") === "today" && url.searchParams.get("status") === "pending"
+  && url.searchParams.get("page") === "1" && url.searchParams.get("oddsBand") === "1.5-5";
 
 class ReadinessError extends Error {}
 
@@ -152,17 +157,42 @@ async function verifyStagingCoverage(page, origin, start) {
   "staging-zero-coverage-shape");
 }
 
+async function verifyBestSlipsList(page, origin, start, staging, document) {
+  try {
+    return await phaseState(page, bestSlips, "list", start, staging);
+  } catch (cause) {
+    if (!(cause instanceof ReadinessError) || cause.message !== "best-slips-unavailable" || (!document && !initialArchiveFailure)) throw cause;
+    const failure = initialArchiveFailure;
+    const panel = page.locator('[data-best-slips-page] [role="alert"]')
+      .filter({ has: page.getByRole("heading", { name: archiveUnavailableTitle, exact: true }) });
+    if (!await panel.isVisible()) throw cause;
+    diagnostic.phase = "best-slips-initial-retry";
+    const retryAt = performance.now(), documentStart = await page.evaluate(() => performance.timeOrigin);
+    const response = page.waitForResponse(value => failure ? value.url() === failure.href : isInitialArchive(new URL(value.url()), origin),
+      { timeout: phaseTimeout });
+    const [reply] = await Promise.all([response, panel.getByRole("button", { name: "Try again", exact: true })
+      .click({ timeout: navigationTimeout })]);
+    requireReady(reply.status() === 200, "best-slips-initial-retry-response");
+    const list = await phaseState(page, bestSlips, "list", retryAt, staging);
+    requireReady(await page.evaluate(() => performance.timeOrigin) === documentStart, "best-slips-initial-retry-reloaded");
+    return { ...list, initialArchiveStatus: failure?.status ?? "document-read-unavailable", archiveRecoveryMs: Math.round(performance.now() - retryAt) };
+  }
+}
+
 async function qualify(page, origin, observations, state, name, pathname, open) {
   const start = performance.now();
   state.acceptedList = null;
   state.summaryRequestedAt = 0;
+  initialArchiveFailure = undefined;
   state.phase = `${name}-navigation`;
   const confirmDocument = await open();
   const navigationAt = performance.now();
   const navigationMs = Math.round(navigationAt - start);
   state.phase = `${name}-list`;
   const staging = origin === "https://test.goalhint.com";
-  const list = await phaseState(page, pathname, "list", confirmDocument ? start : navigationAt, staging);
+  const list = name === "best-slips-navigation" || name === "best-slips-cold"
+    ? await verifyBestSlipsList(page, origin, confirmDocument ? start : navigationAt, staging, Boolean(confirmDocument))
+    : await phaseState(page, pathname, "list", confirmDocument ? start : navigationAt, staging);
   const listMs = Math.round(performance.now() - start);
   state.acceptedList = { listMs, ...list };
   let documentReadyMs;
@@ -273,6 +303,9 @@ async function run() {
       const routeHeaders = url.pathname === bestSlips ? response.request().headers() : {};
       const slipFlight = routeHeaders.rsc === "1";
       if (url.origin !== origin || (!slipFlight && !["/api/matches", "/api/matches/summary", "/api/best-slips"].includes(url.pathname))) return;
+      if (isInitialArchive(url, origin) && [502, 503, 504].includes(response.status())
+        && ["best-slips-route-commit", "best-slips-navigation-list", "best-slips-cold-list"].includes(diagnostic.phase))
+        initialArchiveFailure ??= { href: response.url(), status: response.status() };
       const id = headers["x-request-id"], duration = headers["server-timing"]?.match(/\bapp;dur=(\d+)\b/u)?.[1];
       diagnostic.apiResponses.push({ path: url.pathname, status: response.status(),
         ...(slipFlight && { flight: true, prefetch: Boolean(routeHeaders["next-router-prefetch"] || routeHeaders["next-router-segment-prefetch"]),
@@ -295,10 +328,14 @@ async function run() {
       await page.waitForFunction(() => Boolean(document.querySelector("dialog[data-community-invitation][open]")),
         null, { timeout: navigationTimeout });
     }
+    if (option) await page.route(url => isInitialArchive(url, origin),
+      route => route.fulfill({ status: 503, json: { error: "unavailable" } }), { times: 1 });
     const slips = await qualify(page, origin, observations, diagnostic, "best-slips-navigation", bestSlips,
       () => openBestSlips(page, origin));
     if (option) {
       requireReady(diagnostic.communityInvitationDismissed, "staged-community-invitation-not-dismissed");
+      requireReady(observations.some(item => item.phase === "best-slips-navigation" && item.initialArchiveStatus === 503),
+        "staged-best-slips-initial-retry-not-observed");
       await page.unroute(communitySettings);
     }
     const back = await qualify(page, origin, observations, diagnostic, "matches-history-return", matches, async () => {

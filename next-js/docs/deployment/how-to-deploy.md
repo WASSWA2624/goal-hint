@@ -314,6 +314,8 @@ binary through the native release process when the shell itself changes.
    With Chrome enabled, the raw Matches check can pass an explicit busy initial
    list retry to the required browser check after the bounded guest APIs pass.
    Recovery and unavailable coverage still fail their respective readiness checks.
+   Chrome can exercise a known first-read Best Slips retry once. It requires the
+   same query to recover in place and verifies the populated production result.
 3. If the migration ledger reports pending migrations, review the SQL,
    required grants and compatibility with the current app. Handle required
    writer pauses, then add `--apply-migrations` to the intended apply command.

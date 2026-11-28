@@ -186,6 +186,14 @@ With the HTTP handoff enabled, the production browser verified 50 Matches rows i
 
 Best Slips now commits its validated in-app route, navigation and exact date, band and outcome controls before the archive API read. The initial request runs through the same bounded browse hook and viewer projection as later reads. A transient failure exposes the in-page retry for the same query. Existing history restoration owns the initial read when it has saved page depth. Direct document requests stream the server archive and access result as before. Fifty-six focused Node checks and targeted lint passed.
 
+On the production-mode fixture, Chrome opened the Best Slips shell in 0.59 seconds at light 390 px and 0.53 seconds at dark 1,440 px while the archive request was held. The cards showed placeholders during the wait. The successful case used one canonical request and rendered the verified row and count. The injected 503 case kept the same document and header, then recovered with one manual request for the same query. The direct Best Slips server-rendered fixture and protected access tests passed.
+
+Staging activated `87d3c7274462596769a02be1d285d747f77d7aee`, Next build `dSqYoQg1__2OjhfGHzAK7`, from ZIP SHA-256 `bf24d41b3ab3d747dd074f7b08821c0a172e9c87487f9faeca733012fbc44a87`. It verified all 95 migrations. The Best Slips URL committed in 75 ms on desktop and 143 ms on throttled mobile. Chrome reached the staged result in 1.52 and 2.06 seconds respectively. Matches counts, history, the simulated Community invitation and the injected Best Slips data 503 passed with zero uncaught page errors.
+
+A separate hosted staging run delayed the actual initial archive GET by 18 seconds. The Best Slips controls appeared in 1.24 seconds. The pending view and same header persisted while the request was held, and the verified staging result appeared in 20.28 seconds. Chrome issued one request and reported zero page errors.
+
+The first production cutover of this build showed 50 Matches rows in 7.18 seconds and ready counts in 11.56 seconds. Best Slips committed its route and issued its archive request. The archive returned HTTP 503 in 2.77 seconds of application time. The page displayed the inline recovery and the provisional cutover rolled back. The operator check now exercises that exact first-read recovery once, requires the same query's API response and verified list and counts, and checks that the document did not reload.
+
 ## Reproduction
 
 - Run the pinned runtime in `next-js/`. Run the focused tests for worker, account, administrator, Matches, Best Slips, sharing and request timing. Use the disposable MySQL test fixture for database runs.
