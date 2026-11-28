@@ -69,6 +69,8 @@ systemctl list-timers goalhint-watch@production.timer
 
 Use `journalctl -u goalhint-watch@production.service --since today -o cat` for private observations. Add `-p warning` to find new alerts and their suggested actions. Inspect the matching staging service separately. Check `systemctl status goalhint-watch@production.service goalhint-watch@production.timer` if samples stop arriving. Empty or unavailable fields call for checking the source and its permissions. Use WHM/cPanel for web or database recovery and the existing launchers for worker recovery.
 
+Readiness and latency warnings use two recent observations. The latency warning adopts the application's two-second slow-request threshold. A failed durable attempt or expired active lease or deadline opens a worker warning where the scheduler is expected to run. An unavailable database observation preserves any open worker warning. New warnings include an operator action, and subsequent samples report active and resolved conditions. These warnings stay in the private journal.
+
 Stop the affected timer and service before replacing its scripts. When either instance is active, qualify edits to a shared unit definition as a staging-only instance file before updating the shared template. Keep the prior verified source revision available for rollback through the approved release workflow.
 
 ## Roll back

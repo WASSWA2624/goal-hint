@@ -153,7 +153,9 @@ export async function verifyAuthenticationJourneys(page, { origin } = {}) {
   checks.push("Regular signup opens Matches and Account with a full session");
 
   await fresh("register");
-  await cookie("member-fixture-scenario", "duplicate-phone");
+  await page.route(origin + "/api/account/register", route => route.continue({
+    headers: { ...route.request().headers(), "x-member-fixture-scenario": "duplicate-phone" },
+  }), { times: 1 });
   await credentials();
   await submit();
   await confirmSignup();
@@ -284,7 +286,7 @@ export async function verifyAuthenticationJourneys(page, { origin } = {}) {
     await credentials();
     await submit();
     await page.locator('[data-account-auth] [role="alert"]').filter({ hasText: failure === "html"
-      ? "Unable to complete this request." : "Check your internet connection and try again." }).waitFor();
+      ? "Account access is unavailable. Try again later." : "Check your internet connection and try again." }).waitFor();
     assert.equal(await page.locator('[data-account-auth] button[type="submit"]').isEnabled(), true);
     await page.unroute(loginApi);
   }

@@ -42,10 +42,11 @@ monitoring interface is enabled. Synthetic test settings approve nothing live.
 
 ## VPS performance measurements
 
-The staging `goalhint-watch` timer records private HTTPS, database and queue
-samples in the existing system journal every five minutes. The HTTPS checks
-are synthetic. Host resource history continues through Munin and sysstat.
-New availability, latency and job incidents use local journal warnings.
+The staging and production `goalhint-watch` timers record private HTTPS,
+database and queue samples in the existing system journal every five minutes.
+The HTTPS checks are synthetic. Host resource history continues through Munin
+and sysstat. New availability, latency and job incidents use local journal
+warnings.
 [Continuous monitor and access](deployment/vps-watch.md)
 
 Capture host and Apache status measurements privately using the operator SSH

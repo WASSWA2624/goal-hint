@@ -104,6 +104,7 @@ export async function refreshHarness(db, scenarios, changes = {}) {
     const scenario = scenarioFor(member.context.externalFixtureId), deadlineAt = Math.min(member.now + 60_000, member.cycle.cutoffAt);
     const makeJob = (category) => costJob(periods[category], `${member.jobId}:${category}`, { jobId: member.jobId, workKey: member.jobId,
       startsAt: member.now, deadlineAt, timeLimitMs: 60_000, fallbackReserveMs: 20_000,
+      ...(category === 'ai' ? { requestLimit: 1 } : {}),
       costCapUsdPicos: scenario.ai === 'budget' && category === 'ai' ? 0n : 10n * USD });
     const aiJob = makeJob('ai'), researchJob = makeJob('research'), priority = { kind: 'fixture', kickoffAt: member.context.kickoffAt };
     const aiRequest = costRequest(aiJob, member.jobId, { attemptId: refreshReference(member.jobId, 'ai'), provider: model.provider, model: model.model,
