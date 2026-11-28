@@ -311,6 +311,9 @@ binary through the native release process when the shell itself changes.
    from the summary read, within an overall deadline. Production requires populated feeds
    with verified counts. A rejection or missed deadline restores the previous release. The VPS needs
    no ordinary application build, npm install, browser or historical release copy.
+   With Chrome enabled, the raw Matches check can pass an explicit busy initial
+   list retry to the required browser check after the bounded guest APIs pass.
+   Recovery and unavailable coverage still fail their respective readiness checks.
 3. If the migration ledger reports pending migrations, review the SQL,
    required grants and compatibility with the current app. Handle required
    writer pauses, then add `--apply-migrations` to the intended apply command.

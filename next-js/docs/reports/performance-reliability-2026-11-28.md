@@ -180,6 +180,8 @@ The first production cutover of that package verified 50 Matches rows after 18.5
 
 The throttled staging follow-up simulated the same public invitation, verified that Chrome dismissed it through the real control, navigated to Best Slips, returned through history, and recovered from an injected Best Slips data 503. The full follow-up had no uncaught errors.
 
+The next production attempt stopped at the plain HTTP list check before Chrome could test the initial browser recovery. When the Chrome gate is selected, the receiver now recognizes an explicit busy initial retry and still verifies the bounded guest APIs. The release receipt depends on Chrome accepting the completed list and summary. Plain HTTP-only verification and legacy rollback require accepted list markup.
+
 ## Reproduction
 
 - Run the pinned runtime in `next-js/`. Run the focused tests for worker, account, administrator, Matches, Best Slips, sharing and request timing. Use the disposable MySQL test fixture for database runs.

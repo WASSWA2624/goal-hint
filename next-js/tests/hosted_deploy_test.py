@@ -71,6 +71,25 @@ class HostedDeployTest(unittest.TestCase):
             run.return_value.returncode = 28
             self.assertEqual(request(target, "/en/matches", "build-fixture", None), "request deadline")
 
+    def test_initial_list_retry_requires_the_transactional_browser_gate(self):
+        target = SimpleNamespace(host="goalhint.com", environment="production")
+        headers = b"HTTP/2 200\r\n\r\n"
+        shell = b'<main data-app-navigation="matches">build-fixture</main>'
+        retry = b'<div aria-busy="true" data-feed-initial-retry="true"></div>'
+        ending = HOST["FIRST_BYTE_MARKER"] + b"1.25"
+        run = Mock(return_value=SimpleNamespace(returncode=0, stdout=headers + shell + retry + ending))
+        request = HOST["smoke_request"]
+        with patch.object(request.__globals__["subprocess"], "run", run):
+            self.assertIsNone(request(target, "/en/matches", "build-fixture", None, browser_verification=True))
+            self.assertEqual(request(target, "/en/matches", "build-fixture", None), "Matches list unavailable")
+            self.assertEqual(request(target, "/en/matches", "build-fixture", None, legacy_rollback=True,
+                                     browser_verification=True), "Matches list unavailable")
+            for invalid in (retry.replace(b'aria-busy="true"', b'aria-busy="false"'),
+                            retry + b'<div data-feed-list-recovery=""></div>'):
+                run.return_value.stdout = headers + shell + invalid + ending
+                self.assertEqual(request(target, "/en/matches", "build-fixture", None, browser_verification=True),
+                                 "Matches list unavailable")
+
     def test_today_summary_requires_coherent_public_counts_and_generation(self):
         summary = {"performance": {"total": 4, "won": 1, "pending": 2, "lost": 0, "void": 0, "unavailable": 1},
                    "asOf": 1795848819630, "paginationVersion": "a" * 64, "access": {"tier": "free", "signedIn": False}}

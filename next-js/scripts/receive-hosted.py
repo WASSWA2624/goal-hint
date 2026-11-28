@@ -51,6 +51,7 @@ MATCHES_SHELL = rb'<[a-z][^>]*\sdata-app-navigation="matches"'
 MATCHES_LIST = rb'<[a-z][^>]*\sdata-feed-match-results(?=[=\s>])'
 MATCHES_RECOVERY = rb'<[a-z][^>]*\sdata-feed-list-recovery(?=[=\s>])'
 MATCHES_INCOMPLETE = rb'<[a-z][^>]*\sdata-feed-list-state="data-unavailable"'
+MATCHES_INITIAL_RETRY = rb'<[a-z][^>]*\sdata-feed-initial-retry="true"(?=[\s>])[^>]*>'
 MATCHES_PERFORMANCE = rb'<[a-z][^>]*\sdata-feed-performance-state="(ready|loading)"[^>]*>'
 
 
@@ -336,7 +337,7 @@ def healthy_today_summary(body):
     return all(type(count) is int and count >= 0 for count in counts) and counts[0] == sum(counts[1:])
 
 
-def smoke_request(target, path, build, probe, *, legacy_rollback=False):
+def smoke_request(target, path, build, probe, *, legacy_rollback=False, browser_verification=False):
     document = path == MATCHES_SMOKE_PATH
     budget = MATCHES_BODY_SECONDS if document or path == TODAY_SUMMARY_SMOKE_PATH else SMOKE_HEADER_SECONDS
     args = ["curl", "--silent", "--fail", "--noproxy", "*", "--max-time", str(budget), "--include",
@@ -368,14 +369,19 @@ def smoke_request(target, path, build, probe, *, legacy_rollback=False):
             return "missing staging noindex"
         if not re.search(MATCHES_SHELL, body):
             return "Matches shell unavailable"
-        if re.search(MATCHES_RECOVERY, body) or not re.search(MATCHES_LIST, body):
+        if re.search(MATCHES_RECOVERY, body):
             return "Matches list unavailable"
         if target.environment == "production" and re.search(MATCHES_INCOMPLETE, body):
             return "Matches fixture coverage unavailable"
-        performance = re.search(MATCHES_PERFORMANCE, body)
-        if not performance or (performance[1] == b"loading" and
-                (legacy_rollback or b'data-feed-performance-deferred="true"' not in performance[0])):
-            return "Matches summary shell unavailable"
+        if re.search(MATCHES_LIST, body):
+            performance = re.search(MATCHES_PERFORMANCE, body)
+            if not performance or (performance[1] == b"loading" and
+                    (legacy_rollback or b'data-feed-performance-deferred="true"' not in performance[0])):
+                return "Matches summary shell unavailable"
+        else:
+            retry = re.search(MATCHES_INITIAL_RETRY, body) if browser_verification and not legacy_rollback else None
+            if not retry or not re.search(rb'\saria-busy="true"(?=[\s>])', retry[0]):
+                return "Matches list unavailable"
     if path.startswith("/api/") and not re.search(rb"(?im)^content-type:\s*application/json\b", headers):
         return "expected API JSON"
     if path == TODAY_SMOKE_PATH and not healthy_today_feed(body, target.environment):
@@ -385,7 +391,7 @@ def smoke_request(target, path, build, probe, *, legacy_rollback=False):
     return None
 
 
-def smoke(target, release, manifest=None, *, legacy_rollback=False):
+def smoke(target, release, manifest=None, *, legacy_rollback=False, browser_verification=False):
     build = (release / BUILD_ID).read_text().strip()
     require(re.fullmatch(r"[A-Za-z0-9_-]{6,128}", build), "Invalid Next build identity.")
     endpoints = [MATCHES_SMOKE_PATH, TODAY_SMOKE_PATH, "/api/account/session",
@@ -397,7 +403,8 @@ def smoke(target, release, manifest=None, *, legacy_rollback=False):
         endpoints.append(probe)
     for attempt in range(6):
         for path in endpoints:
-            failure = smoke_request(target, path, build, probe, legacy_rollback=legacy_rollback)
+            failure = smoke_request(target, path, build, probe, legacy_rollback=legacy_rollback,
+                                    browser_verification=browser_verification)
             if failure:
                 break
         else:
@@ -466,7 +473,7 @@ def install(target, current, manifest, files, writes, options, stream):
         with tempfile.TemporaryDirectory(prefix=".noop-", dir=target.releases) as directory:
             stage_delta(stream, Path(directory), current, {}, set(), target.uid, target.gid)
         verify_schema(target, current, options, options["node"], manifest)
-        smoke(target, current)
+        smoke(target, current, browser_verification=options.get("verifyBrowser", False))
         require_browser_verification(options, stream)
         return
     name = "live-" + manifest["archiveSha256"][:20]
@@ -482,7 +489,7 @@ def install(target, current, manifest, files, writes, options, stream):
         install_settings(target, stage, manifest, node)
         verify_schema(target, stage, options, node, manifest)
         target.activate(stage)
-        smoke(target, stage, manifest)
+        smoke(target, stage, manifest, browser_verification=options.get("verifyBrowser", False))
         require_browser_verification(options, stream)
         (stage / "standalone/public" / probe_name(manifest)).unlink()
         write_json(stage / RECEIPT, manifest)
