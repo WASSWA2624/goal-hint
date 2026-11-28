@@ -28,6 +28,8 @@ The browser gate exercises up to two available **Show More** operations on each 
 
 On 28 November 2026, staging and production verified the same interactive feed commit `0588238e`, Next build `tPzLJ1CF6-qMgsifX6IwN` and all 95 required MariaDB migrations. Staging passed Chrome and its injected Best Slips failure test before promotion. Production passed the provisional Chrome gate, including populated feeds, counts, history and unique continuation results. The receiver committed the promotion, and the active receipts matched the release checksum on both targets. [Staging and production timings](../next-js/docs/reports/interactive-feed-delivery-2026-11-28.md#hosted-staging).
 
+Later on 28 November, both hosted targets verified the follow-up `fe3a3f6e`, build `mzekNoNtqE71MmomQYtGb`. Staging passed desktop Chrome, the throttled mobile recovery check and 80 timed HTTP requests before promotion. Production completed two consecutive Matches appends and one available Best Slips append. Both receipt checks matched the archive and verified all 95 migrations. [Follow-up rollout and remaining timing variation](../next-js/docs/reports/interactive-feed-delivery-2026-11-28.md#follow-up-production).
+
 [Local launcher](../next-js/scripts/development.py), [database target guards](../next-js/scripts/database.py), [VPS staging and production runbook](../next-js/docs/deployment/how-to-deploy.md#vps-staging-and-release-promotion), [Best Slips worker operations](../next-js/docs/daily-slip-publications.md).
 
 ## Git, checks and packaging

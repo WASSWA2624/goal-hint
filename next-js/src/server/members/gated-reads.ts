@@ -1,8 +1,9 @@
 import "server-only";
 
 import { getReportingDate, utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
+import type { FeedContinuationResult } from "../../domain/feed-continuation.ts";
 import { matchDetailResponseSchema } from "../../domain/match-detail.ts";
-import { matchFeedResponseSchema, type StoredMatchFeedResponse } from "../../domain/match-feed.ts";
+import { matchFeedResponseSchema, type MatchFeedResponse, type StoredMatchFeedResponse } from "../../domain/match-feed.ts";
 import type { FeedParameters } from "../../domain/feed-query.ts";
 import { matchInsightsSchema } from "../../domain/match-insights.ts";
 import { isCompletedFixtureStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
@@ -10,7 +11,7 @@ import { gateDetailResponse, gateFeedResponse, gateInsights, usesPremiumFeedOrac
 import { MatchFeedError } from "../matches/feed-error.ts";
 import { parseMatchFeedQuery, type MatchFeedReadContext } from "../matches/feed-service.ts";
 import { readPublicMatchDetail } from "../matches/public-detail.ts";
-import { readPublicMatchFeed, readPublicMatchFeedWindow } from "../matches/public-feed.ts";
+import { readPublicMatchFeed, readPublicMatchFeedContinuation, readPublicMatchFeedWindow } from "../matches/public-feed.ts";
 import { readPublicMatchInsights } from "../matches/public-insights.ts";
 import { readPublicSlipBuild } from "../slips/public-slips.ts";
 import { resolveViewerAccess, resolveViewerAccessFresh, ViewerAccessUnavailable, type ViewerAccess } from "./viewer-access.ts";
@@ -28,9 +29,10 @@ export async function contentAccess(resolve: AccessResolver): Promise<ViewerAcce
 /** Raw caches stay viewer-independent. Every page/API factory injects only raw readers into this boundary. */
 export function createGatedReads({ resolveAccess = resolveViewerAccess, readFeed = readPublicMatchFeed, readDetail = readPublicMatchDetail,
   readInsights = readPublicMatchInsights, readSlips = readPublicSlipBuild, readStatus = readPublicMatchStatus,
-  readWindow = readPublicMatchFeedWindow }: {
+  readWindow = readPublicMatchFeedWindow, readContinuation = readPublicMatchFeedContinuation }: {
   resolveAccess?: AccessResolver; readFeed?: typeof readPublicMatchFeed; readDetail?: typeof readPublicMatchDetail;
   readWindow?: typeof readPublicMatchFeedWindow;
+  readContinuation?: typeof readPublicMatchFeedContinuation;
   readInsights?: typeof readPublicMatchInsights; readSlips?: typeof readPublicSlipBuild;
   readStatus?: (id: string) => Promise<SettlementStatus>;
 } = {}) {
@@ -60,6 +62,11 @@ export function createGatedReads({ resolveAccess = resolveViewerAccess, readFeed
     async feedWindow(...[parameters, through, context = {}, clock]: Parameters<typeof readPublicMatchFeedWindow>) {
       const { result, access } = await forViewer(parameters, context, clock, (...options) => readWindow(parameters, through, ...options));
       return result.map(page => projectFeed(page, access));
+    },
+    async feedContinuation(...[parameters, prefix, context = {}, clock]: Parameters<typeof readPublicMatchFeedContinuation>):
+      Promise<FeedContinuationResult<MatchFeedResponse>> {
+      const { result, access } = await forViewer(parameters, context, clock, (...options) => readContinuation(parameters, prefix, ...options));
+      return "pages" in result ? { pages: result.pages.map(page => projectFeed(page, access)) } : { page: projectFeed(result.page, access) };
     },
     async detail(...args: Parameters<typeof readPublicMatchDetail>) {
       const response = await readDetail(...args), access = await contentAccess(recheckAccess), result = gateDetailResponse(response, access);

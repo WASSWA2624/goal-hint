@@ -59,7 +59,8 @@ function fixtureWindow({ knownFixtures, fixtures = 105 } = {}) {
     providerOdds: false, includePerformance: false });
   return { service, firstOrder, transactions, selections, hydration, get cached() { return cached; },
     get completedTransactions() { return completedTransactions; },
-    advance() { generation++; }, rotate() { generation++; order = [...order.slice(1), order[0]]; return order; } };
+    advance() { generation++; }, rotate() { generation++; order = [...order.slice(1), order[0]]; return order; },
+    replace(ids) { generation++; order = ids; } };
 }
 
 test('page validation rejects an inconsistent response after the read transaction completes', async () => {
@@ -137,4 +138,30 @@ test('stable checked appends hydrate only the new 50 rows, even when the live ge
   const rebase = await fixture.service.queryWindow(filters, 6);
   assert.deepEqual(rebase.flatMap(page => page.records.map(record => record.fixtureId)), revised);
   assert.deepEqual(fixture.selections.at(-1), { limit: maximumFeedWindowRecords, offset: 0 });
+});
+
+test('an opt-in prefix drift uses the same ordered selection and transaction for the bounded rebase', async () => {
+  const fixture = fixtureWindow({ fixtures: 400, knownFixtures: 400 });
+  const filters = { ...parameters, pageSize: '50', page: '3' };
+  const prefix = { firstPage: 1, hash: await hashFeedContinuation(1, fixture.firstOrder.slice(0, 100)) };
+  const stable = await fixture.service.queryContinuation(filters, prefix);
+  assert.deepEqual(stable.page.records.map(({ fixtureId }) => fixtureId), fixture.firstOrder.slice(100, 150));
+  assert.deepEqual(fixture.hydration.map(batch => batch.length), [50]);
+
+  const drift = fixture.rotate(), rebased = await fixture.service.queryContinuation(filters, prefix);
+  assert.deepEqual(rebased.pages.map(({ page, records }) => [page, records.length]), [[1, 50], [2, 50], [3, 50]]);
+  assert.deepEqual(rebased.pages.flatMap(({ records }) => records.map(({ fixtureId }) => fixtureId)), drift.slice(0, 150));
+  assert.ok(rebased.pages.every(page => page.paginationVersion === rebased.pages[0].paginationVersion && page.asOf === rebased.pages[0].asOf));
+  assert.deepEqual(fixture.hydration.map(batch => batch.length), [50, 100, 50]);
+  assert.deepEqual(fixture.selections, [{ limit: 150, offset: 0 }, { limit: 150, offset: 0 }]);
+  assert.equal(fixture.transactions.length, 2);
+
+  fixture.replace(drift.slice(0, 12));
+  const shrunken = await fixture.service.queryContinuation(filters, prefix);
+  assert.deepEqual(shrunken.pages.map(({ page, nextPage, total, records }) => [page, nextPage, total, records.length]), [[1, null, 12, 12]]);
+  fixture.replace([]);
+  const empty = await fixture.service.queryContinuation(filters, prefix);
+  assert.deepEqual(empty.pages.map(({ page, nextPage, state, records }) => [page, nextPage, state, records.length]), [[1, null, 'no-filter-matches', 0]]);
+  const overBudget = { firstPage: 1, hash: await hashFeedContinuation(1, fixture.firstOrder.slice(0, 300)) };
+  await assert.rejects(fixture.service.queryContinuation({ ...filters, page: '7' }, overBudget), error => error.code === 'changed');
 });

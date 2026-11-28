@@ -157,7 +157,7 @@ test('checked continuation accepts several single pages while the live data revi
     }, { readWindow: fallback, readContinuation: async () => {
       calls.push(nextPage);
       if (nextPage === 3 && calls.at(-2) === 2) throw new FeedPaginationError('unavailable', 0);
-      return batch(nextPage);
+      return { page: batch(nextPage) };
     } });
     assert.ok(old.every((record, index) => record === view.records[index]));
     assert.equal(view.records.length, Math.min(293, 50 * nextPage));
@@ -176,18 +176,38 @@ test('checked continuation verifies a response proof and rebases only if the pre
     const url = new URL(href, 'https://unit.test');
     assert.equal(url.searchParams.get('prefix'), `1:${prefix.hash}`);
     assert.equal(url.searchParams.get('page'), '2');
+    assert.equal(url.searchParams.get('rebase'), '1');
     assert.equal(url.searchParams.has('through'), false);
     return Response.json({ prefix: prefix.hash, page: page(2, ['c', 'd'], otherVersion) });
   });
   const readNext = () => readRefreshFeedContinuation(applied, today, 2, prefix, new AbortController().signal);
-  assert.equal((await readNext()).page, 2);
+  assert.equal((await readNext()).page.page, 2);
   requested.mock.mockImplementation(async () => Response.json({ prefix: 'wrong', page: page(2, ['c', 'd']) }));
   await assert.rejects(readNext(), error => error.code === 'invalid-response');
-  requested.mock.mockImplementation(async () => new Response(null, { status: 409 }));
   const readWindow = async () => [page(1, ['e', 'a'], otherVersion), page(2, ['b', 'c'], otherVersion)];
+  const pages = await readWindow();
+  requested.mock.mockImplementation(async () => Response.json({ prefix: prefix.hash, pages }));
+  const rebased = await continueFeedPages(initial, async () => assert.fail('Legacy page read'), async () => false,
+    { readContinuation: readNext, readWindow: async () => assert.fail('Rebase already arrived with the next-page request') });
+  assert.deepEqual(rebased.records.map(row => row.fixtureId), ['e', 'a', 'b', 'c']);
+  for (const invalid of [pages.slice(1), [pages[0], { ...pages[1], paginationVersion: version }]]) {
+    requested.mock.mockImplementation(async () => Response.json({ prefix: prefix.hash, pages: invalid }));
+    await assert.rejects(readNext(), error => error.code === 'invalid-response');
+  }
+  requested.mock.mockImplementation(async () => new Response(null, { status: 409 }));
   const result = await continueFeedPages(initial, async () => assert.fail('Rebase must stay atomic'), async () => false,
     { readContinuation: readNext, readWindow });
   assert.deepEqual(result.records.map(row => row.fixtureId), ['e', 'a', 'b', 'c']);
+});
+
+test('checked continuation above the window budget requests the stable page without opting in to rebase', async t => {
+  const prefix = { firstPage: 1, hash: 'a'.repeat(64) };
+  t.mock.method(globalThis, 'fetch', async href => {
+    assert.equal(new URL(href, 'https://unit.test').searchParams.has('rebase'), false);
+    return new Response(null, { status: 409 });
+  });
+  await assert.rejects(readRefreshFeedContinuation(query('pageSize=50'), today, 7, prefix, new AbortController().signal),
+    error => error.code === 'changed');
 });
 
 test('an atomic continuation accepts a complete pinned generation or verified real end only', () => {

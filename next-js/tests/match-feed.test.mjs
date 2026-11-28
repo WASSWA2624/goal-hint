@@ -124,9 +124,31 @@ test('a checked continuation strips the prefix option, applies access, and retur
   assert.equal(conflict.status, 409);
   assert.equal(matchFeedErrorSchema.parse(await conflict.json()).error.code, 'changed');
   for (const query of ['prefix=', `prefix=01:${hash}`, `prefix=10001:${hash}`, `prefix=1:${hash}&through=2`,
-    `prefix=1:${hash}&prefix=1:${hash}`, 'prefix=1:bad']) {
+    `prefix=1:${hash}&prefix=1:${hash}`, 'prefix=1:bad', 'rebase=1', `prefix=1:${hash}&rebase=0`,
+    `prefix=1:${hash}&rebase=1&rebase=1`]) {
     assert.equal((await handler(request(query))).status, 400);
   }
+});
+test('opt-in checked continuations gate every page and can return the full rebase in one response', async () => {
+  const hash = 'a'.repeat(64), checks = [];
+  const unused = async () => assert.fail('Opt-in continuation must use its own single stored read');
+  const handler = createMatchFeedHandler(unused, undefined, async () => {
+    checks.push('viewer');
+    return checks.length === 1 ? fullAccess() : { tier: 'free', signedIn: false, mode: 'free' };
+  }, unused, async (parameters, prefix) => {
+    checks.push('continuation');
+    assert.equal(parameters.toString(), 'date=2026-10-09&page=2');
+    assert.deepEqual(prefix, { firstPage: 1, hash });
+    return { pages: [emptyPage()] };
+  });
+  const response = await handler(request(`date=2026-10-09&page=2&leagues=0&prefix=1%3A${hash}&rebase=1`));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  const body = await response.json();
+  assert.deepEqual(checks, ['viewer', 'continuation', 'viewer']);
+  assert.equal(body.prefix, hash);
+  assert.equal(body.pages[0].access.tier, 'free');
+  assert.deepEqual(body.pages[0].leagues, []);
 });
 test('an oversized window fails before returning partial pages', async () => {
   const handler = createMatchFeedHandler(async () => emptyPage(), undefined, fullAccess,

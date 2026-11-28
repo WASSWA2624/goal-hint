@@ -1,6 +1,6 @@
 import type { ReportingDate } from "../domain/calendar.ts";
-import type { FeedContinuationPrefix } from "../domain/feed-continuation.ts";
-import { checkedFeedPage, checkedFeedWindow, FeedPaginationError, feedContinuationApiHref, feedPageApiHref, feedWindowApiHref } from "../domain/feed-pagination.ts";
+import type { FeedContinuationPrefix, FeedContinuationResult } from "../domain/feed-continuation.ts";
+import { checkedFeedPage, checkedFeedWindow, FeedPaginationError, feedContinuationApiHref, feedPageApiHref, feedWindowApiHref, supportsFeedWindow } from "../domain/feed-pagination.ts";
 import type { FeedQuery } from "../domain/feed-query.ts";
 import type { MatchFeedResponse } from "../domain/match-feed.ts";
 import { maximumFeedWindowBytes } from "../domain/match-feed-rules.ts";
@@ -32,11 +32,15 @@ export async function readRefreshFeedWindow(query: FeedQuery, today: ReportingDa
 }
 
 export async function readRefreshFeedContinuation(query: FeedQuery, today: ReportingDate, page: number, prefix: FeedContinuationPrefix,
-  signal: AbortSignal, timeoutMs?: number) {
-  const result = await readFeedJson(feedContinuationApiHref(query, today, page, prefix), signal, timeoutMs);
+  signal: AbortSignal, timeoutMs?: number): Promise<FeedContinuationResult<MatchFeedResponse>> {
+  const rebase = supportsFeedWindow(prefix.firstPage, page, query.pageSize);
+  const result = await readFeedJson(feedContinuationApiHref(query, today, page, prefix, rebase), signal,
+    timeoutMs, rebase ? maximumFeedWindowBytes : undefined);
   if (!result || typeof result !== "object" || Object.keys(result).length !== 2 || !("prefix" in result)
-    || result.prefix !== prefix.hash || !("page" in result)) throw new FeedPaginationError("invalid-response");
-  return checkedFeedPage(result.page, query, today, page);
+    || result.prefix !== prefix.hash) throw new FeedPaginationError("invalid-response");
+  if ("page" in result) return { page: checkedFeedPage(result.page, query, today, page) };
+  if (!rebase || !("pages" in result)) throw new FeedPaginationError("invalid-response");
+  return { pages: checkedFeedWindow({ pages: result.pages }, query, today, prefix.firstPage, page) };
 }
 
 /** Feed-only endpoints share the base cache and do not enter the initial match-detail bundle. */

@@ -1,6 +1,6 @@
 import type { ReportingDate } from "./calendar.ts";
 import { feedDiscovery } from "./discovery.ts";
-import type { FeedContinuationPrefix } from "./feed-continuation.ts";
+import type { FeedContinuationPrefix, FeedContinuationResult } from "./feed-continuation.ts";
 import { FeedPaginationError } from "./feed-pagination-error.ts";
 import { defaultFeedDatePreset, FeedQueryError, feedQueryHref, feedQueryRules, pinnedDateSelection, resolveFeedDates, serializeFeedQuery, type FeedQuery } from "./feed-query.ts";
 import { fixtureAdvance, mergeFixtureObservation } from "./fixture-reconciliation.ts";
@@ -26,8 +26,8 @@ export function feedPageHref(query: FeedQuery, today: ReportingDate, page: numbe
 export function feedPageApiHref(query: FeedQuery, today: ReportingDate, page: number): string {
   return `/api/matches?${serializeFeedQuery({ ...pinnedFeedQuery(query, today), page }, today)}`;
 }
-export function feedContinuationApiHref(query: FeedQuery, today: ReportingDate, page: number, prefix: FeedContinuationPrefix): string {
-  return `${feedPageApiHref(query, today, page)}&leagues=0&prefix=${prefix.firstPage}%3A${prefix.hash}`;
+export function feedContinuationApiHref(query: FeedQuery, today: ReportingDate, page: number, prefix: FeedContinuationPrefix, rebase: boolean): string {
+  return `${feedPageApiHref(query, today, page)}&leagues=0&prefix=${prefix.firstPage}%3A${prefix.hash}${rebase ? "&rebase=1" : ""}`;
 }
 export function supportsFeedWindow(firstPage: number, through: number, pageSize: number): boolean {
   return Number.isSafeInteger(firstPage) && firstPage >= 1 && Number.isSafeInteger(through)
@@ -123,7 +123,7 @@ export async function continueFeedPages(view: LoadedFeed, read: (page: number) =
   waitForRetry: (delayMs: number) => Promise<boolean>, { rebase = false, readWindow, readContinuation }: {
     rebase?: boolean;
     readWindow?: (() => Promise<readonly MatchFeedResponse[]>) | undefined;
-    readContinuation?: (() => Promise<MatchFeedResponse>) | undefined;
+    readContinuation?: (() => Promise<FeedContinuationResult<MatchFeedResponse>>) | undefined;
   } = {}): Promise<LoadedFeed> {
   const nextPage = view.data.nextPage;
   if (nextPage === null) return view;
@@ -138,14 +138,21 @@ export async function continueFeedPages(view: LoadedFeed, read: (page: number) =
       return verified();
     }
   };
-  const readPage = (page: number, load = () => read(page)) => recover(async () => {
-    const result = await load();
+  const readPage = (page: number) => recover(async () => {
+    const result = await read(page);
     if (result.state === "data-unavailable") throw new FeedPaginationError("unavailable");
     return result;
   });
   if (!rebase && (readContinuation || !readWindow)) {
-    try { return appendFeedPage(view, await readPage(nextPage, readContinuation), Boolean(readContinuation)); }
-    catch (error) {
+    try {
+      if (!readContinuation) return appendFeedPage(view, await readPage(nextPage));
+      const result = await recover(async () => {
+        const observed = await readContinuation();
+        if ("page" in observed && observed.page.state === "data-unavailable") throw new FeedPaginationError("unavailable");
+        return observed;
+      });
+      return "pages" in result ? replaceFeedPages(view, result.pages) : appendFeedPage(view, result.page, true);
+    } catch (error) {
       if (!(error instanceof FeedPaginationError) || error.code !== "changed") throw error;
     }
   }

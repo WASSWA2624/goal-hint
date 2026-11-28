@@ -1,6 +1,7 @@
 import { maximumFeedContinuationRecords } from "./match-feed-rules.ts";
 
 export type FeedContinuationPrefix = Readonly<{ firstPage: number; hash: string }>;
+export type FeedContinuationResult<T> = Readonly<{ page: T } | { pages: readonly T[] }>;
 
 export function supportsFeedContinuation(firstPage: number, nextPage: number, pageSize: number): boolean {
   return Number.isSafeInteger(firstPage) && firstPage >= 1 && Number.isSafeInteger(nextPage) && nextPage > firstPage

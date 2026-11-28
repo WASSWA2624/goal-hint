@@ -65,3 +65,29 @@ Matches now renders the controls during the initial read, begins the summary ear
 The archive can return up to three numbered Best Slips pages from one current snapshot when an outcome changes between clicks. For unchanged membership, it transfers only the requested next page. An isolated MySQL test confirmed current counts and guest redaction through shrink and continuation. Across 60 paired warm reads, a 100-revision stored forecast workload reduced p50/p95/p99 from 503/771/1,833 ms to 55/109/217 ms with equal results. Warm reads checked the current evidence seals and omitted about 790 KB of raw forecast and market bodies. Changed metadata and altered evidence did not qualify.
 
 A separate owned MySQL workload used 50 historical fixtures, 3,600 snapshots and 13 receipts. Across 18 alternating reads per variant, the sealed path returned the same odds and reduced returned evidence from 7.50 MB to 2.66 MB. Median latency was similar at 2.60–2.62 seconds. The slowest sample fell from 13.32 to 5.55 seconds in that run. These are isolated data-path results. [Next.js response lifecycle](https://nextjs.org/docs/app/api-reference/functions/after)
+
+### Follow-up staging
+
+The checksummed package for `fe3a3f6e` serves Next build `mzekNoNtqE71MmomQYtGb`, with ZIP SHA-256 `b5a9c33e71412e6c68c136c34e18b68f76f9f2fca60087deb56d317bc3abe086`. Staging transferred 4,278,263 bytes for 553 changed or added files. The HTTPS smoke, 95-migration check and desktop and throttled mobile Chrome flows passed. The mobile fault check recovered from an injected Best Slips 503 in 940 ms. The repeated same-origin HTTP workload served all 80 requests and completion p50/p95/p99 moved from 333/426/779 ms to 340/372/746 ms. A sampled cold staged Matches summary still took about 8.3 seconds in both browser profiles.
+
+Populated production-mode fixtures independently qualified behavior absent from the hosted staging cohort. The Matches shell and controls reached the fixture browser document in 137 ms while its deliberately delayed list arrived in 1.94 seconds. Chrome verified four theme and viewport combinations, a single summary request, legacy generation reconciliation, and two newer public count observations without a list refresh. Best Slips recovered an injected next-page failure without discarding the first 20 slips. The stable append showed 40 slips in 227–289 ms. A changed membership used one response to show 60 unique slips and the revised pending count in 357–391 ms. A separate shrink case showed the remaining 15 slips and removed the continuation control. These timings describe isolated fixture runs.
+
+### Follow-up production
+
+Production activated `fe3a3f6e` after the staging checks. The desktop Chrome gate passed, including two consecutive Matches appends, one available Best Slips append, ready counts and no page errors. Independent checks found matching hosted receipts, no open deployment journals and 95 required migrations on each database. Both monitoring timers were active.
+
+| Observed desktop phase | Prior build | `fe3a3f6e` |
+| --- | ---: | ---: |
+| Cold Matches counts ready | 14.57 s | 11.09 s |
+| Matches history rows | 0.49 s | 0.16 s |
+| Matches first append, 50 to 100 | 8.73 s | 8.32 s |
+| Matches second append, 100 to 150 | 15.14 s | 26.51 s |
+| Best Slips in-app rows | 11.87 s | 15.60 s |
+| Cold Best Slips counts ready | 8.06 s | 5.04 s |
+| Best Slips first append | 2.87 s | 3.93 s |
+
+These are individual flows with changing live data. In the slow desktop append, Apache recorded a rejected page-three prefix after the pending fixture order changed, then a second request for the three-page window. A separate throttled mobile run reached ready Matches counts in 10.29 seconds, down from the prior observation of 14.46 seconds. It appended 50 to 100 and 100 to 150 in 4.53 and 2.44 seconds, each in one request on an unchanged prefix.
+
+### Single-request refresh after a live reorder
+
+The follow-up request opts into rebuilding a changed Matches window of up to 300 records with the IDs already selected by the prefix check. It makes this decision within the same repeatable-read transaction. Stable membership still hydrates only the next page, and older requests retain the existing conflict response. The focused checks exercised a genuine reorder with one snapshot transaction, a stable 50-row continuation, lists shrinking to 12 and zero rows, and the oversized-window conflict. The numbered Best Slips limit also covers up to six pages within the same response byte ceiling. An application test verified a six-page authorized response with 120 unique slips and exact period counts.

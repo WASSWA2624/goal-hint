@@ -156,12 +156,30 @@ test('numbered Best Slips continue from one snapshot and rebase after a status c
 
   const expired = await f.store.browseWindow({ ...filters, page: 3 }, today, false, { through: 4 });
   assert.deepEqual(expired.pages.map(page => [page.browse.query.page, page.slips.length, page.browse.hasMore]), [[3, 0, false]]);
-  for (const parameters of ["through=4", "through=0", "through=2&through=3", "through=2&knownVersion=invalid",
+  for (const parameters of ["through=7", "through=0", "through=2&through=3", "through=2&knownVersion=invalid",
     `knownVersion=${open.browse.version}`]) {
     assert.equal((await handler(new Request(route + '&' + parameters))).status, 400);
   }
   assert.equal((await handler(new Request('https://goalhint.test/api/best-slips?period=all&through=2'))).status, 400);
   assert.equal(accessChecks, 1);
+});
+
+test('a larger numbered archive returns six pages within one authorized bounded response', async () => {
+  const f = fixture(3, 40);
+  for (const id of f.outcomes.keys()) f.outcomes.set(id, "pending");
+  const handler = createBestSlipsHandler({
+    now: () => now,
+    windowSnapshot: (selected, window) => f.store.browseWindow(selected, today, false, window),
+    access: async () => full,
+  });
+  const response = await handler(new Request("https://goalhint.test/api/best-slips?period=last30&status=pending&through=6"));
+  assert.equal(response.status, 200);
+  const { pages, reusedPrefix } = await response.json();
+  assert.equal(reusedPrefix, false);
+  assert.equal(f.transactions.length, 1);
+  assert.deepEqual(pages.map(page => [page.browse.query.page, page.slips.length]), [[1, 20], [2, 20], [3, 20], [4, 20], [5, 20], [6, 20]]);
+  assert.equal(new Set(pages.flatMap(page => page.slips.map(slip => slip.id))).size, 120);
+  assert.ok(pages.every(page => page.statistics.pending === 120 && page.entitled));
 });
 
 test('extended publications page every sealed slot and keep canonical links across the old stride', async () => {

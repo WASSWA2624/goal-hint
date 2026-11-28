@@ -8,9 +8,11 @@ export async function verifyBrowserMatches(page, origin) {
   const recordError = error => errors.push(error.message);
   page.on('pageerror', recordError);
   try {
-    await page.goto(origin);
     for (const theme of ['light', 'dark']) for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: 900 });
+      // A reload of the same entry restores its history and can legitimately
+      // start a list request. Each case here measures a fresh navigation.
+      await page.goto(origin);
       await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
       const testPreload = theme === 'light' && width === 390;
       const updateGeneration = theme === 'dark' && width === 1440;
@@ -54,7 +56,13 @@ export async function verifyBrowserMatches(page, origin) {
           await page.waitForLoadState('domcontentloaded');
         }
         await deferred.waitFor();
-        await progress.waitFor({ state: 'hidden' });
+        try { await progress.waitFor({ state: 'hidden' }); }
+        catch (cause) {
+          const busy = await page.evaluate(() => Array.from(document.querySelectorAll(
+            '[data-navigation-pending], [data-app-loading], main[aria-busy="true"]:not([data-navigation-passive]), main [aria-busy="true"]:not([data-navigation-passive])'
+          ), element => ({ tag: element.tagName, data: Object.keys(element.dataset) })));
+          throw new Error(`${theme}/${width} progress after list settlement: ${JSON.stringify(busy)}`, { cause });
+        }
         await page.waitForFunction(mode => document.querySelector('meta[name="color-scheme"]')?.content === mode, theme);
         if (width === 1440) await list.locator('[data-desktop-row]').first().waitFor();
         await page.evaluate(() => document.fonts.ready);
@@ -94,6 +102,7 @@ export async function verifyBrowserMatches(page, origin) {
     await page.setViewportSize({ width: 390, height: 900 });
     const context = page.context(), cookie = 'synthetic-summary-generation';
     for (const [listGeneration, summaryGeneration, extraWins] of [['a', 'b', 1], ['b', 'c', 2]]) {
+      await page.goto(origin);
       let summaryRequests = 0, listRequests = 0;
       const observe = request => { if (listUrl.test(request.url())) listRequests++; };
       const newerSummary = async route => {
@@ -265,6 +274,7 @@ export async function verifyMatchesContinuation(page, origin) {
   const rows = list.locator('[data-fixture-id]');
   const load = page.locator('[data-feed-pagination] [data-show-more]');
   const guest = 'synthetic-match-history-guest';
+  const shifted = 'synthetic-match-history-shift';
   const results = [];
   async function checkedSize(expected) {
     await page.waitForFunction(size => document.querySelectorAll('[data-feed-match-results] [data-fixture-id]').length === size, expected);
@@ -302,6 +312,7 @@ export async function verifyMatchesContinuation(page, origin) {
   await page.context().addCookies([{ name: guest, value: '1', url: origin }]);
   try {
     for (const { theme, width } of [{ theme: 'light', width: 390 }, { theme: 'dark', width: 1440 }]) {
+      await page.context().clearCookies({ name: shifted });
       await page.goto(origin);
       await page.setViewportSize({ width, height: 900 });
       await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
@@ -322,7 +333,7 @@ export async function verifyMatchesContinuation(page, origin) {
         const pendingMs = Math.round(performance.now() - started);
         assert(await rows.count() === 50, 'Show More keeps the accepted first Matches page visible');
         assert(calls.length === 1 && calls[0].searchParams.get('page') === '2' && calls[0].searchParams.has('prefix')
-          && !calls[0].searchParams.has('through'), 'Show More starts one checked next-page request');
+          && calls[0].searchParams.get('rebase') === '1' && !calls[0].searchParams.has('through'), 'Show More starts one checked next-page request');
         release();
         await checkedSize(100);
         results.push({ screen: 'matches-continuation', theme, width, loadMorePendingMs: pendingMs,
@@ -335,8 +346,10 @@ export async function verifyMatchesContinuation(page, origin) {
         release();
         await checkedSize(100);
       });
-      for (const [next, expected, fault] of [[3, 150, 503], [4, 200, 409], [5, 250, 'connection'], [6, 293, null]]) {
+      for (const [next, expected, fault] of [[3, 150, 503], [4, 200, 'order-changed'], [5, 250, 'connection'], [6, 293, null]]) {
         const calls = [];
+        if (fault === 'order-changed') await page.context().addCookies([{ name: shifted, value: '1', url: origin }]);
+        const initialFirst = await rows.first().getAttribute('data-fixture-id');
         const continuation = url => listEndpoint(url) && (url.searchParams.get('through') === String(next)
           || url.searchParams.get('page') === String(next) && url.searchParams.has('prefix'));
         const intercept = route => {
@@ -357,9 +370,12 @@ export async function verifyMatchesContinuation(page, origin) {
             await load.click();
           }
           await checkedSize(expected);
-          const sequence = fault === 503 ? ['page', 'page'] : fault === 409 ? ['page', 'rebase']
+          const sequence = fault === 503 ? ['page', 'page']
             : fault === 'connection' ? ['page', 'page', 'page'] : ['page'];
           assert(JSON.stringify(calls) === JSON.stringify(sequence), `Page ${next} must read ${sequence.join(', ')} exactly`);
+          if (fault === 'order-changed') {
+            assert(await rows.first().getAttribute('data-fixture-id') !== initialFirst, 'One response replaces a changed visible prefix');
+          }
           results.push({ screen: 'matches-deep-continuation', theme, width, rows: expected, requests: calls.length,
             fault, loadMoreReadyMs: Math.round(performance.now() - started) });
         } finally { await page.unroute(continuation, intercept); }
@@ -369,6 +385,7 @@ export async function verifyMatchesContinuation(page, origin) {
     return results;
   } finally {
     await page.context().clearCookies({ name: guest });
+    await page.context().clearCookies({ name: shifted });
   }
 }
 
@@ -505,6 +522,11 @@ export async function verifyBestSlipsContinuation(page, origin) {
         && updated[0] === "synthetic-archive-slip-5" && await pending() === "61",
       "A live settlement rebases in one request with unique rows and fresh counts");
       const settledMs = Math.round(performance.now() - settledAt);
+      const last = await readWindow(4);
+      await load.waitFor({ state: "hidden" });
+      const complete = await validSlips();
+      assert(last.reusedPrefix && last.pages.length === 1 && complete.length === 61 && new Set(complete).size === 61,
+        "A fourth numbered page can still use the checked window and reach the end");
       await page.context().clearCookies({ name: cookie });
       // Use a new history entry so this case begins with one displayed page.
       await page.goto(origin);
@@ -515,7 +537,7 @@ export async function verifyBestSlipsContinuation(page, origin) {
       await load.waitFor({ state: "hidden" });
       assert(!shrunk.reusedPrefix && shrunk.pages.length === 1 && (await validSlips()).length === 15 && await pending() === "15",
         "A continuation that reaches the new end presents the full current result");
-      results.push({ theme, width, stableMs, settledMs, stableRows: 40, rebasedRows: 60, terminalRows: 15 });
+      results.push({ theme, width, stableMs, settledMs, stableRows: 40, rebasedRows: 60, completedRows: 61, terminalRows: 15 });
     }
     return results;
   } finally { await page.context().clearCookies({ name: cookie }); }

@@ -11,7 +11,7 @@ export type BestSlipsStatus = typeof bestSlipsStatuses[number];
 export function matchesBestSlipsStatus(result: PredictionResult, filter: BestSlipsStatus): boolean {
   return filter === "all" || matchesPredictionResult(result, filter);
 }
-export const bestSlipsQueryRules = Object.freeze({ maximumDays: 366, pageSize: slipPageSize, scanDays: 31, maximumPage: 9999, maximumWindowPages: 3 });
+export const bestSlipsQueryRules = Object.freeze({ maximumDays: 366, pageSize: slipPageSize, scanDays: 31, maximumPage: 9999, maximumWindowPages: 6 });
 export type BestSlipsQuery = Readonly<{
   period: BestSlipsPeriod; status: BestSlipsStatus; oddsBand?: BestSlipOddsBand; from?: ReportingDate; to?: ReportingDate;
   probMin?: number; probMax?: number; matchesMin?: number; matchesMax?: number;

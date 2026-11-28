@@ -156,6 +156,10 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
         const incorrectHash = await hashFeedContinuation(1, originalIds.toReversed());
         await assert.rejects(service.query({ ...input, page: '2' }, { continuation: { firstPage: 1, hash: incorrectHash } }),
           error => error.code === 'changed');
+        const rebased = await service.queryContinuation({ ...input, page: '2' }, { firstPage: 1, hash: incorrectHash });
+        assert.deepEqual(rebased.pages.map(({ page, records }) => [page, records.map(({ fixtureId }) => fixtureId)]),
+          [[1, originalIds], [2, next.records.map(({ fixtureId }) => fixtureId)]]);
+        assert.ok(rebased.pages.every(page => page.paginationVersion === next.paginationVersion && page.asOf === next.asOf));
       } finally { await update(retrievedAt); }
     });
     await t.test('case-insensitive team and league aliases and country search precede pagination', async () => {

@@ -138,9 +138,9 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
             { rebase: rebaseAppend, readWindow: through !== null && supportsFeedWindow(base.firstPage, through, applied.pageSize)
               ? () => fetchWindow(base.firstPage, through) : undefined, readContinuation: hash && through !== null ? async () => {
                 controller.signal.throwIfAborted();
-                const page = await readRefreshFeedContinuation(applied, today, through, { firstPage: base.firstPage, hash }, controller.signal, budget);
-                verifyAccess(page);
-                return page;
+                const result = await readRefreshFeedContinuation(applied, today, through, { firstPage: base.firstPage, hash }, controller.signal, budget);
+                verifyAccess("pages" in result ? result.pages[0]! : result.page);
+                return result;
               } : undefined });
         } else if (mode === "background" && base.pages > 1) {
           backgroundPage.current = nextLoadedPage(backgroundPage.current, base.firstPage, base.lastPage);

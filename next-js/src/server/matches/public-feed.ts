@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { Clock } from "../../domain/calendar.ts";
+import type { FeedContinuationPrefix } from "../../domain/feed-continuation.ts";
 import type { FeedParameters } from "../../domain/feed-query.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { getDatabase } from "../database/client.ts";
@@ -32,6 +33,12 @@ export function readPublicMatchFeedList(parameters: FeedParameters, context: Mat
 /** One authoritative membership snapshot for a bounded continuation or history restore. */
 export async function readPublicMatchFeedWindow(parameters: FeedParameters, through: number, context: MatchFeedReadContext = {}, clock?: Clock) {
   return storedFeedService(clock, false).queryWindow(parameters, through, { ...context, ...publicMatchListProjection });
+}
+
+/** Verify and continue or rebase the ordered list against one stored snapshot. */
+export function readPublicMatchFeedContinuation(parameters: FeedParameters, prefix: FeedContinuationPrefix,
+  context: MatchFeedReadContext = {}, clock?: Clock) {
+  return storedFeedService(clock, false).queryContinuation(parameters, prefix, { ...context, ...publicMatchListProjection });
 }
 
 /** Independently bounded aggregate request; list navigation keeps its 30s limit. */

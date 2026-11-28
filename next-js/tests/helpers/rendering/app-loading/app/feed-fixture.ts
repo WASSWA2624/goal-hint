@@ -6,9 +6,10 @@ import { storedMatchFeedResponseSchema } from "@/domain/match-feed";
 import scenarios from "./scenarios.json";
 
 export const guestHistoryFixture = "synthetic-match-history-guest";
+export const guestHistoryShiftFixture = "synthetic-match-history-shift";
 
 /** Stable synthetic pages let browser checks exercise real filters and the 50-row boundary. */
-function fixtureCohort(query: FeedQuery, clock = Date.now(), deep = false) {
+function fixtureCohort(query: FeedQuery, clock = Date.now(), deep = false, shifted = false) {
   const at = utcInstantFromEpochMilliseconds(clock), today = getFeedToday(query, at), range = resolveFeedDates(query, today);
   const leagues = [{ id: "england", name: "Premier League", country: "England", logoUrl: null, fixtures: 20 },
     { id: "egypt", name: "Egyptian Premier League", country: "Egypt", logoUrl: null, fixtures: 20 },
@@ -28,7 +29,8 @@ function fixtureCohort(query: FeedQuery, clock = Date.now(), deep = false) {
     && (!query.countries.length || query.countries.includes(record.competition.country))
     && (query.status === "all" || query.status === record.status || (query.status === "finished" && record.status === "finished-regulation"))
     && (!query.result || query.result === fixtureResult(record)));
-  return { at, today, range, leagues, selected, knownFixtures: records.length };
+  return { at, today, range, leagues, selected: shifted && selected.length > 1 ? [selected.at(-1)!, ...selected.slice(0, -1)] : selected,
+    knownFixtures: records.length };
 }
 
 function fixtureResult(record: { status: string; score: { home: number; away: number } | null }) {
@@ -42,13 +44,13 @@ export function summaryFixture(query: FeedQuery, deep = false) {
   return feedPerformanceReplySchema.parse({ performance, asOf: at, access: scenarios.feed.access, paginationVersion: scenarios.feed.paginationVersion });
 }
 
-export function fixturePrefixIds(query: FeedQuery, clock: number, firstPage: number, deep: boolean) {
-  const { selected } = fixtureCohort(query, clock, deep);
+export function fixturePrefixIds(query: FeedQuery, clock: number, firstPage: number, deep: boolean, shifted = false) {
+  const { selected } = fixtureCohort(query, clock, deep, shifted);
   return selected.slice((firstPage - 1) * query.pageSize, (query.page - 1) * query.pageSize).map(({ fixtureId }) => fixtureId);
 }
 
-export function feedFixture(query: FeedQuery, clock = Date.now(), deep = false) {
-  const { at, today, range, leagues, selected, knownFixtures } = fixtureCohort(query, clock, deep);
+export function feedFixture(query: FeedQuery, clock = Date.now(), deep = false, shifted = false) {
+  const { at, today, range, leagues, selected, knownFixtures } = fixtureCohort(query, clock, deep, shifted);
   const { access, ...stored } = scenarios.feed; void access;
   const total = selected.length, totalPages = Math.ceil(total / query.pageSize), nextPage = query.page < totalPages ? query.page + 1 : null;
   const previousPage = query.page > 1 ? query.page - 1 : null;
