@@ -206,6 +206,10 @@ The next trial passed all 95 migration checks and the HTTPS gate. Chrome reached
 
 In the isolated production-mode fixture, Chrome held a successful manual retry after a failed direct archive read. At light 390 px and dark 1,440 px, the controls and header stayed visible while pending, the old alert cleared and the same document rendered the verified row and count. Each run observed one quiet attempt and one manual request for the same query. The healthy direct document and adjacent in-app recovery checks also passed.
 
+Staging accepted the corrected commit `39b41e8828fa7239ba097b823001bd2a96bee7fc`, build `xsInnbBBXuMxQOriJIenI`, from archive SHA-256 `972ef985048b4b41401f885a92c6448fdc3cdb83ff62dd63866b7e072bdf24f8`. Chrome verified the configured staging feed states, direct and in-app Best Slips visits, and Matches history with zero uncaught page errors. The Best Slips route committed in 168 ms and its staged archive state settled in 2.54 seconds.
+
+Production then accepted the same checksummed archive through the standard promotion with its built-in migration and HTTPS checks. Optional production Chrome tests were skipped at the operator's request. Both databases verified all 95 migrations with zero pending. Production used its existing `ghprod_prod` database. A post-promotion server audit matched both receipts and found one active release per environment and both recovery journals clear.
+
 ## Reproduction
 
 - Run the pinned runtime in `next-js/`. Run the focused tests for worker, account, administrator, Matches, Best Slips, sharing and request timing. Use the disposable MySQL test fixture for database runs.
