@@ -194,6 +194,12 @@ A separate hosted staging run delayed the actual initial archive GET by 18 secon
 
 The first production cutover of this build showed 50 Matches rows in 7.18 seconds and ready counts in 11.56 seconds. Best Slips committed its route and issued its archive request. The archive returned HTTP 503 in 2.77 seconds of application time. The page displayed the inline recovery and the provisional cutover rolled back. The operator check now exercises that exact first-read recovery once, requires the same query's API response and verified list and counts, and checks that the document did not reload.
 
+Throttled staging Chrome passed the revised browser gate with injected 503s on both the first archive request and a later filter update. The first retry recovered in 0.66 seconds using the same query and document. Chrome also verified history, the configured invitation dismissal and zero uncaught errors.
+
+The subsequent production deployment lost its SSH connection after transfer. Pinned read-only SSH confirmed staging's receipt for `87d3c727` and production's active receipt for the prior release `64aba48b`. The production recovery record persisted and both hosting release locks remained held on repeat checks. The standard preview and apply commands rejected new work while the locks were held. The deploy account could not identify the holder through either the available process view or its lock-owner probes. The 95 migrations were verified in each environment during the rollout attempts and the migration inventory was identical across the packaged releases.
+
+A final read of the live Matches document returned HTTP 200, the previous build and an accepted list. Headers arrived in 23.87 seconds and the body completed in 24.55 seconds. The response did not contain ready outcome counts, so production performance remained unqualified.
+
 ## Reproduction
 
 - Run the pinned runtime in `next-js/`. Run the focused tests for worker, account, administrator, Matches, Best Slips, sharing and request timing. Use the disposable MySQL test fixture for database runs.
