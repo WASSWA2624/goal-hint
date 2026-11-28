@@ -211,6 +211,7 @@ test('browser metadata uses only the canonical route, while a crawler reads the 
   assert.equal(rendered.type, Symbol.for('react.suspense'));
   const content = await rendered.props.children.type(rendered.props.children.props);
   assert.equal(view(content, 'MatchFeedPage').result.error, 'unavailable');
+  assert.equal(view(content, 'MatchFeedPage').retryInitial, true);
   await assert.rejects(feed().generateMetadata(props({})), failed);
 });
 
@@ -227,8 +228,23 @@ test('browser HTML and client navigation reuse the verified list without awaitin
     const rendered = view(content, 'MatchFeedPage');
     assert.equal(rendered.result.error, null);
     assert.equal(rendered.result.data.coverage.knownFixtures, 12);
+    assert.equal(rendered.retryInitial, false);
     assert.equal(rendered.summary, undefined);
     assert.equal(summaryReads, 0);
+  }
+});
+
+test('only the transient initial browser document schedules a quiet retry', async () => {
+  for (const [browserDocument, document, read, code, retryInitial] of [
+    [async () => true, fullDocument, unavailable, 'unavailable', true],
+    [async () => true, fullDocument, async () => { throw new MatchFeedError('rate-limited'); }, 'rate-limited', false],
+    [undefined, rscRequest, unavailable, 'unavailable', false],
+  ]) {
+    const page = createFeedRoute({ browserDocument, document, read, instant: async () => at, policy: closed, resolveAccess: fullAccess });
+    const rendered = await page.Page(props({}));
+    const content = rendered.type === Symbol.for('react.suspense') ? await rendered.props.children.type(rendered.props.children.props) : rendered;
+    assert.equal(view(content, 'MatchFeedPage').result.error, code);
+    assert.equal(view(content, 'MatchFeedPage').retryInitial, retryInitial);
   }
 });
 

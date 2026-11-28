@@ -44,8 +44,9 @@ def verify_matches_document(origin):
     assert any("data-app-loading" in html and "data-feed-match-results" not in html for _, html in filtered)
     assert 'content="noindex, follow"' in filtered[-1][1]
     status, outage = stream(origin, "/browser-matches", {**browser, **failure})
-    assert status == 200 and "data-feed-list-recovery" in outage[-1][1]
-    assert any("data-app-loading" in html and "data-feed-list-recovery" not in html for _, html in outage)
+    assert status == 200 and 'data-feed-initial-retry="true"' in outage[-1][1]
+    assert "data-feed-list-recovery" not in outage[-1][1]
+    assert any("data-app-loading" in html and "data-feed-initial-retry" not in html for _, html in outage)
     assert "data-feed-match-results" not in outage[-1][1]
     status, crawler_healthy = stream(origin, "/browser-matches", crawler)
     assert status == 200 and 'data-feed-performance-state="ready"' in crawler_healthy[-1][1]

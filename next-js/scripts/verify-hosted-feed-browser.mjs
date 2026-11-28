@@ -5,6 +5,7 @@ const targets = new Set(["https://test.goalhint.com", "https://goalhint.com"]);
 const matches = "/en/matches";
 const bestSlips = "/en/best-slips";
 const navigationTimeout = 15_000;
+const documentStartupTimeout = 20_000;
 const phaseTimeout = 30_000;
 const initialRecoveryTimeout = 45_000;
 const totalTimeout = 115_000;
@@ -150,6 +151,14 @@ async function qualify(page, origin, observations, state, name, pathname, open) 
   const list = await phaseState(page, pathname, "list", start, staging);
   const listMs = Math.round(performance.now() - start);
   state.acceptedList = { listMs, ...list };
+  let documentReadyMs;
+  if (confirmDocument) {
+    // A streamed list can be visible before the browser finishes parsing the
+    // document and running its deferred scripts. Measure data after startup.
+    state.phase = `${name}-document-startup`;
+    await page.waitForLoadState("domcontentloaded", { timeout: documentStartupTimeout });
+    documentReadyMs = Math.round(performance.now() - start);
+  }
   state.phase = `${name}-summary`;
   const summary = await phaseState(page, pathname, "summary", performance.now(), staging);
   const summaryMs = Math.round(performance.now() - start);
@@ -164,7 +173,7 @@ async function qualify(page, origin, observations, state, name, pathname, open) 
   }
   requireReady(new URL(page.url()).origin === origin, "unexpected-navigation-origin");
   requireReady(!state.pageErrors, "uncaught-page-error");
-  observations.push({ phase: name, listMs, summaryMs, ...list, ...summary });
+  observations.push({ phase: name, listMs, summaryMs, ...(documentReadyMs !== undefined && { documentReadyMs }), ...list, ...summary });
   return list.rows > 0 && summary.summary === "ready";
 }
 
@@ -217,12 +226,24 @@ async function run() {
   requireReady(!option || staging, "fault-testing-requires-staging");
   const { chromium } = await import(pathToFileURL(playwright).href);
   const browser = await chromium.launch({ channel: "chrome", headless: true });
+  let page;
   try {
     const viewport = option ? { width: 390, height: 844 } : { width: 1440, height: 900 };
     const context = await browser.newContext({ viewport, serviceWorkers: "block", colorScheme: option ? "dark" : "light",
       isMobile: Boolean(option), hasTouch: Boolean(option) });
-    const page = await context.newPage();
+    page = await context.newPage();
     page.on("pageerror", () => { diagnostic.pageErrors++; });
+    page.on("request", request => {
+      const url = new URL(request.url());
+      if (url.origin === origin && url.pathname === "/api/matches/summary") diagnostic.summaryRequests++;
+    });
+    page.on("requestfailed", request => {
+      const url = new URL(request.url());
+      if (url.origin !== origin || !(request.resourceType() === "script" || ["/api/matches", "/api/matches/summary", "/api/best-slips"].includes(url.pathname))) return;
+      diagnostic.failedRequests.push({ path: request.resourceType() === "script" ? "script" : url.pathname,
+        error: request.failure()?.errorText?.match(/^net::ERR_[A-Z_]+$/u)?.[0] ?? "request-failed" });
+      if (diagnostic.failedRequests.length > 8) diagnostic.failedRequests.shift();
+    });
     page.on("response", response => {
       const url = new URL(response.url());
       if (url.origin !== origin || !["/api/matches", "/api/matches/summary", "/api/best-slips"].includes(url.pathname)) return;
@@ -254,11 +275,23 @@ async function run() {
       [["best-slips-yesterday-all", "period=yesterday&status=all"], ["best-slips-today-all", "period=today&status=all"]]);
     requireReady(!diagnostic.pageErrors, "uncaught-page-error");
     return { build, viewport, observations, pageErrors: diagnostic.pageErrors };
+  } catch (cause) {
+    diagnostic.document = await page?.evaluate(() => {
+      const navigation = performance.getEntriesByType("navigation")[0];
+      const summary = document.querySelector("[data-feed-performance-state]")?.getAttribute("data-feed-performance-state");
+      return { state: document.readyState, responseEndMs: Math.round(navigation?.responseEnd ?? 0),
+        domContentLoadedMs: Math.round(navigation?.domContentLoadedEventEnd ?? 0),
+        scriptsCompleted: performance.getEntriesByType("resource").filter(entry => entry.initiatorType === "script").length,
+        clientAppearance: Boolean(document.querySelector('meta[name="goal-hint-appearance"]')),
+        summaryDeferred: Boolean(document.querySelector('[data-feed-performance-deferred="true"]')),
+        ...(["loading", "ready", "unavailable", "stale", "unknown"].includes(summary) && { summary }) };
+    }).catch(() => null);
+    throw cause;
   } finally { await browser.close(); }
 }
 
 const observations = [];
-const diagnostic = { phase: "browser-start", pageErrors: 0, acceptedList: null, apiResponses: [] };
+const diagnostic = { phase: "browser-start", pageErrors: 0, acceptedList: null, apiResponses: [], failedRequests: [], summaryRequests: 0 };
 const watchdog = setTimeout(() => {
   console.error(JSON.stringify({ ok: false, failure: "browser-deadline", ...diagnostic, observations }));
   process.exit(1);

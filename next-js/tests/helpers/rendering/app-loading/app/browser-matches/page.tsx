@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { PersistentAppShell } from "@/components/navigation/public-shell-chrome";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { parseFeedQuery } from "@/domain/feed-query";
+import { MatchFeedError } from "@/server/matches/feed-error";
 import { isBrowserDocumentRequest } from "@/server/seo/read-status";
 import { feedFixture, summaryFixture } from "../feed-fixture";
 
@@ -12,10 +13,13 @@ const route = createFeedRoute({
   policy: () => ({ deployment: "production", index: true }),
   resolveAccess: async () => ({ tier: "full", signedIn: false, mode: "off" }),
   read: async (parameters) => {
-    const failure = (await cookies()).get("synthetic-feed-unavailable")?.value === "1";
+    const failure = (await cookies()).get("synthetic-feed-unavailable")?.value;
     await new Promise(resolve => setTimeout(resolve, 1_800));
-    if (failure) throw new Error("Synthetic stored read failure");
-    return feedFixture(parseFeedQuery(parameters, { today: getReportingDate(await instant()) }));
+    if (failure === "1") throw new Error("Synthetic stored read failure");
+    if (failure === "rate-limited") throw new MatchFeedError("rate-limited", 15);
+    const feed = feedFixture(parseFeedQuery(parameters, { today: getReportingDate(await instant()) }));
+    return failure === "coverage" ? { ...feed, state: "data-unavailable", records: [], total: 0, totalPages: 0,
+      coverage: { ...feed.coverage, partial: true, knownFixtures: 0, matchingWithMarket: 0 } } : feed;
   },
   readSummary: async (parameters) => {
     await new Promise(resolve => setTimeout(resolve, 6_000));

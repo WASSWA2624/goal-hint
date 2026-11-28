@@ -14,6 +14,6 @@ Reproduce production-sized feed and archive reads, navigation and document failu
 
 ## Rollout status
 
-Staging accepted `b0b70301` and verified all 95 required migrations. Production restored `64aba48b` after the candidate's Matches data-readiness check failed. The failing production phase and the PageSpeed reachability error still need qualification.
+Staging accepted `0f6edcc5` and verified all 95 required migrations. The production candidate passed HTTP and schema checks and rendered 50 Matches rows in Chrome. The summary deadline elapsed before a request began, and production restored `64aba48b`. The next verification records document startup and data readiness separately. The broad production Matches API and PageSpeed reachability remain open.
 
 [Implementation evidence and known limits](../docs/reports/performance-reliability-2026-11-28.md).
